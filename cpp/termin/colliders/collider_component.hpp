@@ -4,12 +4,12 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/geom/general_transform3.hpp>
+#include <termin/mesh/tc_mesh_handle.hpp>
 #include "colliders.hpp"
 #include "../collision/collision_world.hpp"
 #include "core/tc_scene.h"
 #include <memory>
 #include <string>
-#include <functional>
 
 extern "C" {
 #include "tc_types.h"
@@ -37,6 +37,9 @@ public:
     bool collider_offset_enabled = false;
     tc_vec3 collider_offset_position = {0, 0, 0};
     tc_vec3 collider_offset_euler = {0, 0, 0};  // Euler degrees (XYZ)
+
+    // Source mesh for ConvexHull collider
+    TcMesh convex_hull_mesh;
 
 private:
     // Owned collider primitive
@@ -77,11 +80,7 @@ public:
     void set_box_size(const tc_vec3& size);
     void set_box_size(double x, double y, double z) { set_box_size(tc_vec3{x, y, z}); }
     Vec3 get_box_size() const { return Vec3{box_size.x, box_size.y, box_size.z}; }
-
-    // Mesh provider callback (set by render_lib to avoid circular dependency)
-    // Given an entity, returns tc_mesh* from its MeshRenderer (or nullptr)
-    using MeshProviderFn = std::function<tc_mesh*(Entity&)>;
-    static MeshProviderFn mesh_provider;
+    void set_convex_hull_mesh(const TcMesh& mesh);
 
 private:
     // Create collider primitive based on current type and parameters
@@ -102,6 +101,10 @@ INSPECT_FIELD_CALLBACK(ColliderComponent, tc_vec3, box_size, "Size", "vec3",
     [](ColliderComponent* c) -> tc_vec3& { return c->box_size; },
     [](ColliderComponent* c, const tc_vec3& value) { c->set_box_size(value); },
     0.001, 1000.0, 0.1)
+
+INSPECT_FIELD_CALLBACK(ColliderComponent, TcMesh, convex_hull_mesh, "Convex Hull Mesh", "tc_mesh",
+    [](ColliderComponent* c) -> TcMesh& { return c->convex_hull_mesh; },
+    [](ColliderComponent* c, const TcMesh& value) { c->set_convex_hull_mesh(value); })
 
 INSPECT_FIELD_CALLBACK(ColliderComponent, bool, collider_offset_enabled, "Collider Offset", "bool",
     [](ColliderComponent* c) -> bool& { return c->collider_offset_enabled; },

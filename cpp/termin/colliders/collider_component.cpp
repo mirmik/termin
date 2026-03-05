@@ -7,9 +7,6 @@
 
 namespace termin {
 
-// Static mesh provider (set by render_lib)
-ColliderComponent::MeshProviderFn ColliderComponent::mesh_provider = nullptr;
-
 // Register collider_type field with enum choices
 static struct _ColliderTypeFieldRegistrar {
     _ColliderTypeFieldRegistrar() {
@@ -137,6 +134,11 @@ void ColliderComponent::set_box_size(const tc_vec3& size) {
     rebuild_collider();
 }
 
+void ColliderComponent::set_convex_hull_mesh(const TcMesh& mesh) {
+    convex_hull_mesh = mesh;
+    rebuild_collider();
+}
+
 std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collider() const {
     if (collider_type == "Box") {
         // Box uses box_size as local size (entity scale applied via transform)
@@ -156,21 +158,9 @@ std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collide
         return std::make_unique<colliders::CapsuleCollider>(radius, half_height);
     }
     else if (collider_type == "ConvexHull") {
-        // Extract vertices from MeshRenderer on same entity via callback
-        if (!mesh_provider) {
-            tc::Log::error("ColliderComponent: ConvexHull mesh_provider not registered (render_lib not loaded?)");
-            return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
-        }
-
-        Entity ent = entity();
-        if (!ent.valid()) {
-            tc::Log::error("ColliderComponent: ConvexHull requires a valid entity");
-            return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
-        }
-
-        tc_mesh* m = mesh_provider(ent);
+        tc_mesh* m = convex_hull_mesh.get();
         if (!m || !m->vertices || m->vertex_count == 0) {
-            tc::Log::error("ColliderComponent: ConvexHull requires MeshRenderer with a loaded mesh on same entity");
+            tc::Log::error("ColliderComponent: ConvexHull requires convex_hull_mesh with loaded vertex data");
             return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
         }
 

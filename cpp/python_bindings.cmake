@@ -35,11 +35,6 @@ nanobind_add_module(_geom_native
 target_compile_options(_geom_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_link_libraries(_geom_native PRIVATE entity_lib)
 
-# Colliders native module (BoxCollider, SphereCollider)
-nanobind_add_module(_colliders_native termin/colliders_bindings.cpp)
-target_link_libraries(_colliders_native PRIVATE entity_lib)
-target_compile_options(_colliders_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-
 # Physics native module (RigidBody, PhysicsWorld, Contact)
 nanobind_add_module(_physics_native termin/physics_bindings.cpp)
 target_link_libraries(_physics_native PRIVATE entity_lib)
@@ -49,11 +44,6 @@ target_compile_options(_physics_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FL
 nanobind_add_module(_voxels_native termin/voxels_bindings.cpp)
 target_compile_options(_voxels_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_link_libraries(_voxels_native PRIVATE entity_lib trent)
-
-# Collision native module (BVH, CollisionWorld, ContactManifold)
-nanobind_add_module(_collision_native termin/collision_bindings.cpp)
-target_link_libraries(_collision_native PRIVATE entity_lib)
-target_compile_options(_collision_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
 # Lighting native module (Light, AttenuationCoefficients, LightComponent)
 nanobind_add_module(_lighting_native termin/lighting_bindings.cpp)
@@ -230,19 +220,11 @@ set_target_properties(_geom_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_colliders_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_physics_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 set_target_properties(_voxels_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_collision_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
@@ -278,10 +260,8 @@ set_target_properties(_native PROPERTIES
 # ============== Install targets ==============
 
 install(TARGETS _geom_native DESTINATION ${TERMIN_PYTHON_PREFIX}/geombase)
-install(TARGETS _colliders_native DESTINATION ${TERMIN_PYTHON_PREFIX}/colliders)
 install(TARGETS _physics_native DESTINATION ${TERMIN_PYTHON_PREFIX}/physics)
 install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_PREFIX}/voxels)
-install(TARGETS _collision_native DESTINATION ${TERMIN_PYTHON_PREFIX}/collision)
 install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_PREFIX}/visualization/animation)
 install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_PREFIX}/navmesh)
 install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_PREFIX}/lighting)

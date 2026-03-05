@@ -13,6 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$SCRIPT_DIR/build_standalone"
 INSTALL_DIR="$SCRIPT_DIR/install"
+SDK_DIR="/opt/termin"
 
 BUILD_TYPE="Release"
 CLEAN=0
@@ -110,12 +111,13 @@ echo "Installing..."
 rm -rf "$INSTALL_DIR"
 cmake --install "$BUILD_DIR"
 
-# Copy shared libraries from termin-base, termin-scene, termin-graphics and termin-inspect
-echo "Copying shared libraries from termin-base, termin-scene, termin-graphics and termin-inspect..."
-TERMIN_BASE_LIBDIR="$ENV_DIR/termin-base/python/tcbase/lib"
-TERMIN_SCENE_LIBDIR="/usr/local/lib"
-TERMIN_GFX_LIBDIR="$ENV_DIR/termin-graphics/python/tgfx/lib"
-TERMIN_INSPECT_LIBDIR="/usr/local/lib"
+# Copy shared libraries from extracted modules
+echo "Copying shared libraries from termin-base, termin-scene, termin-graphics, termin-inspect and termin-collision..."
+TERMIN_BASE_LIBDIR="$SDK_DIR/lib"
+TERMIN_SCENE_LIBDIR="$SDK_DIR/lib"
+TERMIN_GFX_LIBDIR="$SDK_DIR/lib"
+TERMIN_INSPECT_LIBDIR="$SDK_DIR/lib"
+TERMIN_COLLISION_LIBDIR="$SDK_DIR/lib"
 
 if [[ -d "$TERMIN_BASE_LIBDIR" ]]; then
     cp -P "$TERMIN_BASE_LIBDIR"/libtermin_base.so* "$INSTALL_DIR/lib/"
@@ -145,8 +147,15 @@ else
     echo "  WARNING: libtermin_inspect not found in $TERMIN_INSPECT_LIBDIR — skipping libtermin_inspect"
 fi
 
-# Copy Python packages from termin-inspect and termin-scene
-echo "Copying Python packages from termin-inspect and termin-scene..."
+if [[ -d "$TERMIN_COLLISION_LIBDIR" ]] && compgen -G "$TERMIN_COLLISION_LIBDIR/libtermin_collision.so*" > /dev/null; then
+    cp -P "$TERMIN_COLLISION_LIBDIR"/libtermin_collision.so* "$INSTALL_DIR/lib/"
+    echo "  Copied libtermin_collision from $TERMIN_COLLISION_LIBDIR"
+else
+    echo "  WARNING: libtermin_collision not found in $TERMIN_COLLISION_LIBDIR — skipping libtermin_collision"
+fi
+
+# Copy Python packages from extracted modules
+echo "Copying Python packages from termin-inspect, termin-scene and termin-collision..."
 PYTHON_DEST="$INSTALL_DIR/lib/python"
 
 TERMIN_INSPECT_PY="$ENV_DIR/termin-inspect/python"
@@ -181,6 +190,23 @@ if [[ -d "$TERMIN_SCENE_PY/termin/scene" ]]; then
     fi
 else
     echo "  WARNING: $TERMIN_SCENE_PY/termin/scene not found — skipping termin.scene"
+fi
+
+TERMIN_COLLISION_BUILD="$ENV_DIR/termin-collision/build"
+mkdir -p "$PYTHON_DEST/termin/colliders" "$PYTHON_DEST/termin/collision"
+COLLIDERS_SO=$(find "$TERMIN_COLLISION_BUILD" -maxdepth 3 -name "_colliders_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+COLLISION_SO=$(find "$TERMIN_COLLISION_BUILD" -maxdepth 3 -name "_collision_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+if [[ -n "$COLLIDERS_SO" ]]; then
+    cp "$COLLIDERS_SO" "$PYTHON_DEST/termin/colliders/"
+    echo "  Copied _colliders_native from $TERMIN_COLLISION_BUILD"
+else
+    echo "  WARNING: _colliders_native.so not found in $TERMIN_COLLISION_BUILD"
+fi
+if [[ -n "$COLLISION_SO" ]]; then
+    cp "$COLLISION_SO" "$PYTHON_DEST/termin/collision/"
+    echo "  Copied _collision_native from $TERMIN_COLLISION_BUILD"
+else
+    echo "  WARNING: _collision_native.so not found in $TERMIN_COLLISION_BUILD"
 fi
 
 echo ""

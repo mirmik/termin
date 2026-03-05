@@ -19,7 +19,6 @@ cmake --install . --config Release
 echo.
 echo Build complete!
 echo   termin\geombase\_geom_native.pyd
-echo   termin\colliders\_colliders_native.pyd
 echo   termin\physics\_physics_native.pyd
 
 endlocal
