@@ -10,12 +10,11 @@
 #include "termin/tc_scene_render_ext.hpp"
 #include <termin/entity/component.hpp>
 #include "bindings/entity/entity_helpers.hpp"
-#include "mesh/tc_mesh_handle.hpp"
+#include <tgfx/tgfx_mesh_handle.hpp>
 #include "material/tc_material_handle.hpp"
 #include "scene_bindings.hpp"
 #include "render/rendering_manager.hpp"
 #include "render/scene_pipeline_template.hpp"
-#include "colliders/collider_component.hpp"
 #include <termin/geom/ray3.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/vec4.hpp>
@@ -291,7 +290,7 @@ void bind_tc_scene(nb::module_& m) {
         .def("skybox_mesh", [](const SceneRenderState& self) -> TcMesh {
             tc_scene_render_state* state = tc_scene_render_state_get(self._h);
             tc_mesh* mesh = state ? tc_scene_skybox_ensure_mesh(&state->skybox) : nullptr;
-            return TcMesh(mesh);
+            return mesh ? TcMesh(mesh) : TcMesh();
         })
         .def("skybox_material", [](const SceneRenderState& self) -> TcMaterial {
             tc_scene_render_state* state = tc_scene_render_state_get(self._h);

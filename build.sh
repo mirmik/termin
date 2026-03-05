@@ -76,44 +76,63 @@ fi
 # Create build directory
 mkdir -p "$BUILD_DIR"
 
-# Configure
-if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]] || [[ $CLEAN -eq 1 ]]; then
-    echo "Configuring CMake..."
+find_artifact_in_build() {
+    local base_dir="$1"
+    local pattern="$2"
+    local config_dir="$base_dir/$BUILD_TYPE"
+    local result=""
 
-    if [[ $ASAN -eq 1 ]]; then
-        ASAN_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
-        cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
-            -DBUILD_EDITOR_MINIMAL=ON \
-            -DBUILD_LAUNCHER=ON \
-            -DBUNDLE_PYTHON=ON \
-            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-            -DCMAKE_PREFIX_PATH="$SDK_DIR" \
-            -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
-            -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
-            -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
-            -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
-            -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
-            -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
-            -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh" \
-            -DCMAKE_C_FLAGS="$ASAN_FLAGS" \
-            -DCMAKE_CXX_FLAGS="$ASAN_FLAGS" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
-            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address"
-    else
-        cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
-            -DBUILD_EDITOR_MINIMAL=ON \
-            -DBUILD_LAUNCHER=ON \
-            -DBUNDLE_PYTHON=ON \
-            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-            -DCMAKE_PREFIX_PATH="$SDK_DIR" \
-            -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
-            -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
-            -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
-            -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
-            -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
-            -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
-            -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh"
+    if [[ -d "$config_dir" ]]; then
+        result=$(find "$config_dir" -maxdepth 3 -name "$pattern" -not -path "*/CMakeFiles/*" | head -1)
     fi
+
+    if [[ -z "$result" ]]; then
+        result=$(find "$base_dir" -maxdepth 3 -name "$pattern" -not -path "*/CMakeFiles/*" | head -1)
+    fi
+
+    echo "$result"
+}
+
+# Configure
+echo "Configuring CMake..."
+
+if [[ $ASAN -eq 1 ]]; then
+    ASAN_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
+    cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
+        -DBUILD_EDITOR_MINIMAL=ON \
+        -DBUILD_LAUNCHER=ON \
+        -DBUNDLE_PYTHON=ON \
+        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+        -DCMAKE_PREFIX_PATH="$SDK_DIR" \
+        -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
+        -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
+        -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
+        -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
+        -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
+        -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
+        -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
+        -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
+        -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh" \
+        -DCMAKE_C_FLAGS="$ASAN_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$ASAN_FLAGS" \
+        -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address"
+else
+    cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
+        -DBUILD_EDITOR_MINIMAL=ON \
+        -DBUILD_LAUNCHER=ON \
+        -DBUNDLE_PYTHON=ON \
+        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+        -DCMAKE_PREFIX_PATH="$SDK_DIR" \
+        -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
+        -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
+        -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
+        -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
+        -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
+        -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
+        -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
+        -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
+        -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh"
 fi
 
 # Build
@@ -196,7 +215,7 @@ if [[ -d "$TERMIN_INSPECT_PY/termin/inspect" ]]; then
     mkdir -p "$PYTHON_DEST/termin/inspect"
     cp -r "$TERMIN_INSPECT_PY/termin/inspect/"*.py "$PYTHON_DEST/termin/inspect/"
     # Copy _inspect_native shared module
-    INSPECT_SO=$(find "$TERMIN_INSPECT_BUILD" -maxdepth 2 -name "_inspect_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+    INSPECT_SO=$(find_artifact_in_build "$TERMIN_INSPECT_BUILD" "_inspect_native*.so")
     if [[ -n "$INSPECT_SO" ]]; then
         cp "$INSPECT_SO" "$PYTHON_DEST/termin/inspect/"
         echo "  Copied termin.inspect + _inspect_native from $TERMIN_INSPECT_PY"
@@ -213,7 +232,7 @@ if [[ -d "$TERMIN_SCENE_PY/termin/scene" ]]; then
     mkdir -p "$PYTHON_DEST/termin/scene"
     cp -r "$TERMIN_SCENE_PY/termin/scene/"*.py "$PYTHON_DEST/termin/scene/"
     # Copy _scene_native shared module
-    SCENE_SO=$(find "$TERMIN_SCENE_BUILD" -maxdepth 2 -name "_scene_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+    SCENE_SO=$(find_artifact_in_build "$TERMIN_SCENE_BUILD" "_scene_native*.so")
     if [[ -n "$SCENE_SO" ]]; then
         cp "$SCENE_SO" "$PYTHON_DEST/termin/scene/"
         echo "  Copied termin.scene + _scene_native from $TERMIN_SCENE_PY"
@@ -226,8 +245,8 @@ fi
 
 TERMIN_COLLISION_BUILD="$ENV_DIR/termin-collision/build"
 mkdir -p "$PYTHON_DEST/termin/colliders" "$PYTHON_DEST/termin/collision"
-COLLIDERS_SO=$(find "$TERMIN_COLLISION_BUILD" -maxdepth 3 -name "_colliders_native*.so" -not -path "*/CMakeFiles/*" | head -1)
-COLLISION_SO=$(find "$TERMIN_COLLISION_BUILD" -maxdepth 3 -name "_collision_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+COLLIDERS_SO=$(find_artifact_in_build "$TERMIN_COLLISION_BUILD" "_colliders_native*.so")
+COLLISION_SO=$(find_artifact_in_build "$TERMIN_COLLISION_BUILD" "_collision_native*.so")
 if [[ -n "$COLLIDERS_SO" ]]; then
     cp "$COLLIDERS_SO" "$PYTHON_DEST/termin/colliders/"
     echo "  Copied _colliders_native from $TERMIN_COLLISION_BUILD"
@@ -242,7 +261,7 @@ else
 fi
 
 TERMIN_COMPONENTS_COLLISION_BUILD="$ENV_DIR/termin-components-collision/build"
-COMPONENTS_COLLISION_SO=$(find "$TERMIN_COMPONENTS_COLLISION_BUILD" -maxdepth 3 -name "_components_collision_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+COMPONENTS_COLLISION_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_COLLISION_BUILD" "_components_collision_native*.so")
 if [[ -n "$COMPONENTS_COLLISION_SO" ]]; then
     cp "$COMPONENTS_COLLISION_SO" "$PYTHON_DEST/termin/colliders/"
     echo "  Copied _components_collision_native from $TERMIN_COMPONENTS_COLLISION_BUILD"
@@ -251,7 +270,7 @@ else
 fi
 
 TERMIN_COMPONENTS_MESH_BUILD="$ENV_DIR/termin-components-mesh/build"
-COMPONENTS_MESH_SO=$(find "$TERMIN_COMPONENTS_MESH_BUILD" -maxdepth 3 -name "_components_mesh_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+COMPONENTS_MESH_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_MESH_BUILD" "_components_mesh_native*.so")
 if [[ -n "$COMPONENTS_MESH_SO" ]]; then
     mkdir -p "$PYTHON_DEST/termin/mesh"
     cp "$COMPONENTS_MESH_SO" "$PYTHON_DEST/termin/mesh/"

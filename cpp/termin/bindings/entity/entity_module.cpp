@@ -30,6 +30,10 @@ using namespace termin;
 NB_MODULE(_entity_native, m) {
     m.doc() = "Entity native module (Component, Entity, registries)";
 
+    // Import tmesh native module so TcMesh is registered before
+    // SceneRenderState::skybox_mesh() bindings are attached.
+    nb::module_::import_("tmesh._tmesh_native");
+
     // Import _viewport_native for TcViewport type (used by input events)
     nb::module_::import_("termin.viewport._viewport_native");
 

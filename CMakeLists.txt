@@ -160,6 +160,7 @@ if(BUNDLE_PYTHON)
         yaml
         watchdog
         tgfx
+        tmesh
         tcbase
         tcgui
         tcnodegraph
