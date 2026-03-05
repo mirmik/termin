@@ -8,8 +8,8 @@ extern "C" {
 #include "termin_core.h"
 }
 
-#include "termin/geom/mat44.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/geom/mat44.hpp>
+#include <termin/entity/entity.hpp>
 
 namespace termin {
 

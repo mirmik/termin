@@ -10,9 +10,9 @@
  * - UnionCollider (объединение нескольких коллайдеров)
  */
 
-#include "../geom/vec3.hpp"
-#include "../geom/ray3.hpp"
-#include "../geom/aabb.hpp"
+#include <termin/geom/vec3.hpp>
+#include <termin/geom/ray3.hpp>
+#include <termin/geom/aabb.hpp>
 #include <memory>
 
 namespace termin {

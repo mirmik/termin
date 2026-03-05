@@ -1,7 +1,7 @@
 // selection_manager.hpp - Tracks selected and hovered entities
 #pragma once
 
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include <cstdint>
 #include <functional>
 

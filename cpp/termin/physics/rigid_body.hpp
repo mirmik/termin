@@ -12,9 +12,9 @@
  * Угловая динамика учитывает гироскопический момент: τ_gyro = ω × (I·ω)
  */
 
-#include "../geom/vec3.hpp"
-#include "../geom/quat.hpp"
-#include "../geom/pose3.hpp"
+#include <termin/geom/vec3.hpp>
+#include <termin/geom/quat.hpp>
+#include <termin/geom/pose3.hpp>
 #include <cmath>
 
 namespace termin {

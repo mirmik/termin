@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../entity/component.hpp"
-#include "../entity/component_registry.hpp"
+#include <termin/entity/component.hpp>
+#include <termin/entity/component_registry.hpp>
 #include "../viewport/tc_viewport_handle.hpp"
 
 #include <string>

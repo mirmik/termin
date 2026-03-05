@@ -12,9 +12,9 @@ extern "C" {
 #include "termin/render/render_export.hpp"
 #include "termin/render/render_context.hpp"
 #include "termin/render/tc_shader_handle.hpp"
-#include "termin/geom/mat44.hpp"
-#include "termin/entity/entity.hpp"
-#include "termin/entity/component.hpp"
+#include <termin/geom/mat44.hpp>
+#include <termin/entity/entity.hpp>
+#include <termin/entity/component.hpp>
 #include "core/tc_component.h"
 
 namespace termin {

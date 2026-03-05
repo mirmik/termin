@@ -4,7 +4,7 @@
 #include <nanobind/stl/string.h>
 
 #include "termin/camera/orbit_camera_controller.hpp"
-#include "termin/geom/vec3.hpp"
+#include <termin/geom/vec3.hpp>
 #include "termin/input/input_events.hpp"
 #include "termin/bindings/entity/entity_helpers.hpp"
 

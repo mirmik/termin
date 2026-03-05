@@ -28,13 +28,14 @@ extern "C" {
 #include "termin/render/grayscale_pass.hpp"
 #include "termin/render/tonemap_pass.hpp"
 #include "termin/render/tc_shader_handle.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/light.hpp"
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/shadow_settings.hpp"
-#include "termin/tc_scene.hpp"
-#include "termin/viewport/tc_viewport_ref.hpp"
+#include <termin/tc_scene.hpp>
+#include "termin/tc_scene_render_ext.hpp"
+#include "termin/viewport/tc_viewport_handle.hpp"
 #include "core/tc_scene.h"
 #include <tcbase/tc_log.hpp>
 #include <cstdint>
@@ -386,11 +387,11 @@ void bind_frame_pass(nb::module_& m) {
             [](ExecuteContext& ctx, CameraComponent* c) { ctx.camera = c; },
             nb::rv_policy::reference)
         .def_prop_rw("viewport",
-            [](const ExecuteContext& ctx) -> TcViewportRef {
-                return TcViewportRef(ctx.viewport);
+            [](const ExecuteContext& ctx) -> TcViewport {
+                return TcViewport(ctx.viewport);
             },
-            [](ExecuteContext& ctx, TcViewportRef& vp) {
-                ctx.viewport = vp.handle();
+            [](ExecuteContext& ctx, TcViewport& vp) {
+                ctx.viewport = vp.handle_;
             })
         .def_rw("lights", &ExecuteContext::lights)
         .def_rw("layer_mask", &ExecuteContext::layer_mask);

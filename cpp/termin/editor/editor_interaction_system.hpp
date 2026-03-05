@@ -6,7 +6,7 @@
 #include "termin/editor/gizmo_manager.hpp"
 #include "termin/editor/transform_gizmo.hpp"
 #include "tgfx/graphics_backend.hpp"
-#include "termin/geom/general_pose3.hpp"
+#include <termin/geom/general_pose3.hpp>
 #include "termin/input/input_events.hpp"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"

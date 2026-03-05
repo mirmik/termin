@@ -1,7 +1,7 @@
 #include "skeleton_instance.hpp"
-#include "termin/entity/entity.hpp"
-#include "termin/geom/general_transform3.hpp"
-#include "termin/geom/general_pose3.hpp"
+#include <termin/entity/entity.hpp>
+#include <termin/geom/general_transform3.hpp>
+#include <termin/geom/general_pose3.hpp>
 #include <tcbase/tc_log.hpp>
 #include <cstring>
 

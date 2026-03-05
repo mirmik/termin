@@ -11,7 +11,7 @@
 #include <climits>
 
 #include "termin/voxels/voxel_chunk.hpp"
-#include "termin/geom/vec3.hpp"
+#include <termin/geom/vec3.hpp>
 
 namespace termin {
 namespace voxels {

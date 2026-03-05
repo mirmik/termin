@@ -15,8 +15,8 @@
 #include "tgfx/handles.hpp"
 #include "termin/lighting/light.hpp"
 #include "termin/render/shadow_camera.hpp"
-#include "termin/geom/mat44.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/geom/mat44.hpp>
+#include <termin/entity/entity.hpp>
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "tc_inspect_cpp.hpp"

@@ -10,7 +10,7 @@
 
 #include "collider.hpp"
 #include "collider_primitive.hpp"
-#include "../geom/general_transform3.hpp"
+#include <termin/geom/general_transform3.hpp>
 #include "tc_types.h"  // For tc_entity_id
 #include <cassert>
 #include <memory>

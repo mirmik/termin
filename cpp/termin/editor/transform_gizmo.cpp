@@ -1,8 +1,8 @@
 #include "transform_gizmo.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include "termin/render/solid_primitive_renderer.hpp"
 #include "tgfx/graphics_backend.hpp"
-#include "termin/geom/quat.hpp"
+#include <termin/geom/quat.hpp>
 
 #include <cmath>
 

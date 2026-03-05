@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include "termin/camera/camera.hpp"
-#include "termin/geom/vec3.hpp"
+#include <termin/geom/vec3.hpp>
 
 namespace termin {
 

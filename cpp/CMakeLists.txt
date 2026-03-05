@@ -110,6 +110,9 @@ find_package(termin_graphics REQUIRED)
 # termin-inspect (extracted inspect/kind core + python bridge)
 find_package(termin_inspect REQUIRED)
 
+# termin-scene (C ECS core + C++ wrappers: Entity, Component, TcSceneRef)
+find_package(termin_scene REQUIRED)
+
 # Core C library
 if(BUILD_TESTS)
     set(TC_BUILD_TESTS ON CACHE BOOL "" FORCE)
@@ -137,13 +140,9 @@ target_include_directories(Recast PUBLIC
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, KindRegistryCpp, EntityRegistry)
 # are the same instance across all Python extension modules.
 set(ENTITY_LIB_SOURCES
-    termin/entity/entity.cpp
+    # Entity-related sources that remain in termin (not migrated to termin-scene)
     termin/entity/entity_registry.cpp
-    termin/entity/component.cpp
-    termin/entity/component_registry.cpp
     termin/entity/unknown_component.cpp
-    termin/entity/vtable_utils.cpp
-    termin/entity/input_handler.cpp
     termin/camera/camera_component.cpp
     termin/camera/orbit_camera_controller.cpp
     termin/colliders/collider_component.cpp
@@ -151,7 +150,6 @@ set(ENTITY_LIB_SOURCES
     termin/kinematic/rotator_component.cpp
     termin/kinematic/actuator_component.cpp
     termin/lighting/light_component.cpp
-    termin/geom/general_transform3.cpp
     termin/viewport_config.cpp
     termin/tc_collision_c_api.cpp
     termin/collision/collision_world_c.cpp
@@ -183,7 +181,7 @@ target_include_directories(entity_lib PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 if(BUILD_CSHARP_BINDINGS)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect PRIVATE trent)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene PRIVATE trent)
 else()
     # Find nanobind for entity_lib linking
     if(WIN32)
@@ -200,7 +198,7 @@ else()
         )
     endif()
     find_package(nanobind CONFIG REQUIRED)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect PRIVATE trent nanobind-static Python::Python)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene PRIVATE trent nanobind-static Python::Python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
 endif()
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
@@ -246,6 +244,8 @@ set_target_properties(animation_lib PROPERTIES
 # Includes passes with TC_REGISTER_FRAME_PASS for static registration
 # SHARED for Python (consistent RTTI), STATIC for C# (WHOLEARCHIVE needs static lib)
 set(RENDER_LIB_SOURCES
+    # Render extension for TcSceneRef (uses RenderingManager)
+    termin/tc_scene_render_ext.cpp
     termin/render/drawable.cpp
     termin/render/mesh_renderer.cpp
     termin/render/frame_pass.cpp

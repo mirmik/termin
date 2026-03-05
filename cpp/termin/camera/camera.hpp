@@ -1,8 +1,8 @@
 #pragma once
 
-#include "termin/geom/mat44.hpp"
-#include "termin/geom/vec3.hpp"
-#include "termin/geom/quat.hpp"
+#include <termin/geom/mat44.hpp>
+#include <termin/geom/vec3.hpp>
+#include <termin/geom/quat.hpp>
 
 #define _USE_MATH_DEFINES
 #include <cmath>

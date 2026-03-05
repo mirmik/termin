@@ -4,7 +4,7 @@
 #include "termin/render/execute_context.hpp"
 #include "termin/render/wireframe_renderer.hpp"
 #include "tgfx/graphics_backend.hpp"
-#include "termin/geom/mat44.hpp"
+#include <termin/geom/mat44.hpp>
 
 namespace termin {
 namespace colliders { class ConvexHullCollider; }

@@ -1,5 +1,5 @@
 #include "common.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include "core/tc_entity_pool_registry.h"
 
 namespace termin {

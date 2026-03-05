@@ -16,11 +16,11 @@
 #include "termin/editor/frame_graph_debugger_core.hpp"
 #include "termin/render/tc_shader_handle.hpp"
 #include "termin/render/drawable.hpp"
-#include "termin/entity/entity.hpp"
-#include "termin/entity/component.hpp"
+#include <termin/entity/entity.hpp>
+#include <termin/entity/component.hpp>
 #include "termin/entity/cmp_ref.hpp"
 #include "termin/camera/camera_component.hpp"
-#include "termin/geom/mat44.hpp"
+#include <termin/geom/mat44.hpp>
 #include <tcbase/tc_log.hpp>
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"

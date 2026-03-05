@@ -787,7 +787,8 @@ class EditorWindow(QMainWindow):
             return
 
         # Attach scene viewports from viewport_configs
-        if self.scene is not None and self.scene.viewport_configs:
+        from termin.visualization.core.scene import scene_render_mount
+        if self.scene is not None and scene_render_mount(self.scene).viewport_configs:
             self._rendering_controller.attach_scene(self.scene)
 
         # Always refresh viewport list to show editor display

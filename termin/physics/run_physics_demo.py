@@ -13,7 +13,7 @@ from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCa
 from termin.visualization.core.entity import Entity
 from termin.visualization.core.material import Material
 from termin.voxels.voxel_mesh import create_voxel_mesh
-from termin.visualization.core.scene import Scene
+from termin.visualization.core.scene import create_scene
 from termin.visualization.core.world import VisualizationWorld
 from termin.visualization.platform.backends import (
     OpenGLGraphicsBackend,
@@ -30,7 +30,7 @@ from termin.physics import RigidBodyComponent, PhysicsWorldComponent
 
 def build_physics_scene(world):
     """Build a scene with physics objects."""
-    scene = Scene.create(name="physics_demo")
+    scene = create_scene(name="physics_demo")
 
     # Materials
     red_material = Material(color=np.array([0.8, 0.3, 0.3, 1.0], dtype=np.float32))

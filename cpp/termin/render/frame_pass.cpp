@@ -1,7 +1,8 @@
 // frame_pass.cpp - CxxFramePass implementation with embedded tc_pass
 #include "frame_pass.hpp"
 #include "execute_context.hpp"
-#include "termin/tc_scene.hpp"
+#include <termin/tc_scene.hpp>
+#include "termin/tc_scene_render_ext.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/light.hpp"
 #include <tcbase/tc_log.hpp>

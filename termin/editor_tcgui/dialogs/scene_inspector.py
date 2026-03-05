@@ -19,7 +19,7 @@ from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import px
 
 from termin.editor.undo_stack import UndoCommand
-from termin.visualization.core.scene import Scene
+from termin.visualization.core.scene import Scene, scene_render_state, scene_render_mount
 from tcbase import log
 
 
@@ -38,10 +38,12 @@ class ScenePropertyEditCommand(UndoCommand):
         return value
 
     def do(self) -> None:
-        setattr(self._scene, self._property_name, self._clone(self._new_value))
+        rs = scene_render_state(self._scene)
+        setattr(rs, self._property_name, self._clone(self._new_value))
 
     def undo(self) -> None:
-        setattr(self._scene, self._property_name, self._clone(self._old_value))
+        rs = scene_render_state(self._scene)
+        setattr(rs, self._property_name, self._clone(self._old_value))
 
     def merge_with(self, other: UndoCommand) -> bool:
         if not isinstance(other, ScenePropertyEditCommand):
@@ -66,10 +68,10 @@ class SkyboxTypeEditCommand(UndoCommand):
         self._new_type = new_type
 
     def do(self) -> None:
-        self._scene.set_skybox_type(self._new_type)
+        scene_render_state(self._scene).skybox_type = self._new_type
 
     def undo(self) -> None:
-        self._scene.set_skybox_type(self._old_type)
+        scene_render_state(self._scene).skybox_type = self._old_type
 
     def __repr__(self) -> str:
         return f"SkyboxTypeEditCommand({self._old_type} -> {self._new_type})"
@@ -135,6 +137,8 @@ def show_scene_properties_dialog(
     on_changed: Callable[[], None] | None = None,
 ) -> None:
     """Show scene properties dialog."""
+    rs = scene_render_state(scene)
+    rm = scene_render_mount(scene)
     updating = [False]
 
     def _emit():
@@ -158,17 +162,17 @@ def show_scene_properties_dialog(
     bg_lbl.text = "Color:"
     bg_row.add_child(bg_lbl)
 
-    bg_color = scene.background_color
+    bg_color = rs.background_color
     bg_btn = _make_color_button(_color_to_rgba255(bg_color))
 
     def _on_bg_color():
-        current = scene.background_color
+        current = rs.background_color
         initial = _color_to_rgba255(current)
 
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = scene.background_color.copy()
+            old_value = rs.background_color.copy()
             new_value = np.array(
                 [rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0, float(current[3])],
                 dtype=np.float32,
@@ -177,7 +181,7 @@ def show_scene_properties_dialog(
                 cmd = ScenePropertyEditCommand(scene, "background_color", old_value, new_value)
                 push_undo_command(cmd, False)
             else:
-                scene.background_color = new_value
+                rs.background_color = new_value
             _update_color_button(bg_btn, rgba)
             _emit()
 
@@ -198,22 +202,22 @@ def show_scene_properties_dialog(
     ambient_color_lbl.text = "Color:"
     ambient_color_row.add_child(ambient_color_lbl)
 
-    ambient_btn = _make_color_button(_color_to_rgba255(scene.ambient_color))
+    ambient_btn = _make_color_button(_color_to_rgba255(rs.ambient_color))
 
     def _on_ambient_color():
-        current = scene.ambient_color
+        current = rs.ambient_color
         initial = _color_to_rgba255(current)
 
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = scene.ambient_color.copy()
+            old_value = rs.ambient_color.copy()
             new_value = _rgba255_to_float3(rgba)
             if push_undo_command is not None:
                 cmd = ScenePropertyEditCommand(scene, "ambient_color", old_value, new_value)
                 push_undo_command(cmd, False)
             else:
-                scene.ambient_color = new_value
+                rs.ambient_color = new_value
             _update_color_button(ambient_btn, rgba)
             _emit()
 
@@ -231,7 +235,7 @@ def show_scene_properties_dialog(
     intensity_row.add_child(intensity_lbl)
 
     intensity_spin = SpinBox()
-    intensity_spin.value = scene.ambient_intensity
+    intensity_spin.value = rs.ambient_intensity
     intensity_spin.min_value = 0.0
     intensity_spin.max_value = 10.0
     intensity_spin.step = 0.01
@@ -240,12 +244,12 @@ def show_scene_properties_dialog(
     def _on_intensity(val):
         if updating[0]:
             return
-        old_value = scene.ambient_intensity
+        old_value = rs.ambient_intensity
         if push_undo_command is not None:
             cmd = ScenePropertyEditCommand(scene, "ambient_intensity", old_value, val)
             push_undo_command(cmd, True)
         else:
-            scene.ambient_intensity = val
+            rs.ambient_intensity = val
         _emit()
 
     intensity_spin.on_changed = _on_intensity
@@ -266,7 +270,7 @@ def show_scene_properties_dialog(
 
     skybox_combo = ComboBox()
     skybox_combo.items = [label for label, _ in _SKYBOX_TYPES]
-    current_skybox = scene.skybox_type
+    current_skybox = rs.skybox_type
     for i, (_, val) in enumerate(_SKYBOX_TYPES):
         if val == current_skybox:
             skybox_combo.selected_index = i
@@ -281,21 +285,21 @@ def show_scene_properties_dialog(
     solid_lbl.text = "Color:"
     solid_row.add_child(solid_lbl)
 
-    skybox_color_btn = _make_color_button(_color_to_rgba255(scene.skybox_color))
+    skybox_color_btn = _make_color_button(_color_to_rgba255(rs.skybox_color))
 
     def _on_skybox_color():
-        initial = _color_to_rgba255(scene.skybox_color)
+        initial = _color_to_rgba255(rs.skybox_color)
 
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = scene.skybox_color.copy()
+            old_value = rs.skybox_color.copy()
             new_value = _rgba255_to_float3(rgba)
             if push_undo_command is not None:
                 cmd = ScenePropertyEditCommand(scene, "skybox_color", old_value, new_value)
                 push_undo_command(cmd, False)
             else:
-                scene.skybox_color = new_value
+                rs.skybox_color = new_value
             _update_color_button(skybox_color_btn, rgba)
             _emit()
 
@@ -312,21 +316,21 @@ def show_scene_properties_dialog(
     top_lbl.text = "Top:"
     top_row.add_child(top_lbl)
 
-    skybox_top_btn = _make_color_button(_color_to_rgba255(scene.skybox_top_color))
+    skybox_top_btn = _make_color_button(_color_to_rgba255(rs.skybox_top_color))
 
     def _on_skybox_top_color():
-        initial = _color_to_rgba255(scene.skybox_top_color)
+        initial = _color_to_rgba255(rs.skybox_top_color)
 
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = scene.skybox_top_color.copy()
+            old_value = rs.skybox_top_color.copy()
             new_value = _rgba255_to_float3(rgba)
             if push_undo_command is not None:
                 cmd = ScenePropertyEditCommand(scene, "skybox_top_color", old_value, new_value)
                 push_undo_command(cmd, False)
             else:
-                scene.skybox_top_color = new_value
+                rs.skybox_top_color = new_value
             _update_color_button(skybox_top_btn, rgba)
             _emit()
 
@@ -343,21 +347,21 @@ def show_scene_properties_dialog(
     bottom_lbl.text = "Bottom:"
     bottom_row.add_child(bottom_lbl)
 
-    skybox_bottom_btn = _make_color_button(_color_to_rgba255(scene.skybox_bottom_color))
+    skybox_bottom_btn = _make_color_button(_color_to_rgba255(rs.skybox_bottom_color))
 
     def _on_skybox_bottom_color():
-        initial = _color_to_rgba255(scene.skybox_bottom_color)
+        initial = _color_to_rgba255(rs.skybox_bottom_color)
 
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = scene.skybox_bottom_color.copy()
+            old_value = rs.skybox_bottom_color.copy()
             new_value = _rgba255_to_float3(rgba)
             if push_undo_command is not None:
                 cmd = ScenePropertyEditCommand(scene, "skybox_bottom_color", old_value, new_value)
                 push_undo_command(cmd, False)
             else:
-                scene.skybox_bottom_color = new_value
+                rs.skybox_bottom_color = new_value
             _update_color_button(skybox_bottom_btn, rgba)
             _emit()
 
@@ -380,14 +384,14 @@ def show_scene_properties_dialog(
         if updating[0]:
             return
         new_type = _SKYBOX_TYPES[idx][1]
-        old_type = scene.skybox_type
+        old_type = rs.skybox_type
         if new_type == old_type:
             return
         if push_undo_command is not None:
             cmd = SkyboxTypeEditCommand(scene, old_type, new_type)
             push_undo_command(cmd, False)
         else:
-            scene.set_skybox_type(new_type)
+            rs.set_skybox_type(new_type)
         _update_skybox_visibility()
         _emit()
 
@@ -408,7 +412,7 @@ def show_scene_properties_dialog(
     def _refresh_pipelines():
         pipeline_handles.clear()
         items = []
-        for template in scene.scene_pipelines:
+        for template in rm.scene_pipelines:
             if template.is_valid:
                 name = template.name
                 uuid_short = template.uuid[:8] if template.uuid else ""
@@ -448,7 +452,7 @@ def show_scene_properties_dialog(
             return
 
         existing_uuids = set()
-        for template in scene.scene_pipelines:
+        for template in rm.scene_pipelines:
             if template.is_valid:
                 existing_uuids.add(template.uuid)
 

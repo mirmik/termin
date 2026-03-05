@@ -1,13 +1,13 @@
 #pragma once
 
-#include "../export.hpp"
-#include "../entity/component.hpp"
+#include <termin/export.hpp>
+#include <termin/entity/component.hpp>
 #include "../entity/cmp_ref.hpp"
-#include "../entity/input_handler.hpp"
+#include <termin/entity/input_handler.hpp>
 #include "../input/input_events.hpp"
-#include "../geom/vec3.hpp"
-#include "../geom/quat.hpp"
-#include "../geom/pose3.hpp"
+#include <termin/geom/vec3.hpp>
+#include <termin/geom/quat.hpp>
+#include <termin/geom/pose3.hpp>
 #include "camera_component.hpp"
 
 #include <cmath>

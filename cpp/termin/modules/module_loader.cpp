@@ -19,7 +19,7 @@
 #endif
 
 #include "module_loader.hpp"
-#include "../entity/component_registry.hpp"
+#include <termin/entity/component_registry.hpp>
 #include "tc_inspect_cpp.hpp"
 #include <tcbase/tc_log.hpp>
 #include <tc_version.h>

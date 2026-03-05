@@ -6,8 +6,8 @@
 #include <nanobind/stl/tuple.h>
 
 #include "termin/viewport/tc_viewport_handle.hpp"
-#include "termin/entity/entity.hpp"
-#include "termin/entity/component.hpp"
+#include <termin/entity/entity.hpp>
+#include <termin/entity/component.hpp>
 #include "termin/camera/camera_component.hpp"
 #include "termin/bindings/entity/entity_helpers.hpp"
 #include "termin/render/render_pipeline.hpp"

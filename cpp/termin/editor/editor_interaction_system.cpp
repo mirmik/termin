@@ -4,7 +4,7 @@
 #include "core/tc_scene.h"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/camera/camera_component.hpp"
-#include "termin/entity/component.hpp"
+#include <termin/entity/component.hpp>
 #include "editor/tc_editor_interaction.h"
 #include "render/tc_viewport.h"
 #include "render/tc_display.h"

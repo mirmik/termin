@@ -481,7 +481,8 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             return None
         managed_by = self._current_viewport.managed_by_scene_pipeline
         if managed_by and self._current_viewport.scene is not None:
-            return self._current_viewport.scene.get_pipeline(managed_by)
+            from termin.visualization.core.scene import scene_render_mount
+            return scene_render_mount(self._current_viewport.scene).get_pipeline(managed_by)
         return self._current_viewport.pipeline
 
     def _update_fbo_info(self) -> None:

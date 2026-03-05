@@ -91,14 +91,14 @@ class MeshPreviewWidget(QtWidgets.QWidget):
 
     def _init_scene(self) -> None:
         """Create preview scene with camera and light."""
-        from termin.visualization.core.scene import Scene
+        from termin.visualization.core.scene import create_scene
         from termin.visualization.core.entity import Entity
         from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
         from termin.visualization.render.components.light_component import LightComponent
         from termin.lighting import LightType
         from termin.geombase import Pose3
 
-        self._scene = Scene.create(name="mesh_preview")
+        self._scene = create_scene(name="mesh_preview")
 
         # Camera entity
         self._camera_entity = Entity(pose=Pose3.identity(), name="preview_camera")

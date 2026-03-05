@@ -1,6 +1,6 @@
 #pragma once
 
-#include "termin/geom/mat44.hpp"
+#include <termin/geom/mat44.hpp>
 #include "tgfx/types.hpp"
 
 #include <cstdint>

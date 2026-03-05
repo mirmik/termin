@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../entity/component.hpp"
-#include "../entity/component_registry.hpp"
-#include "../entity/entity.hpp"
-#include "../geom/vec3.hpp"
-#include "../geom/quat.hpp"
+#include <termin/entity/component.hpp>
+#include <termin/entity/component_registry.hpp>
+#include <termin/entity/entity.hpp>
+#include <termin/geom/vec3.hpp>
+#include <termin/geom/quat.hpp>
 
 extern "C" {
 #include "tc_types.h"

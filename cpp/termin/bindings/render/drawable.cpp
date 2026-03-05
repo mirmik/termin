@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include "termin/render/drawable.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 extern "C" {
 #include <tgfx/resources/tc_material.h>
 }

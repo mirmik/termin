@@ -11,8 +11,8 @@
  * - O(log n) query operations
  */
 
-#include "termin/geom/aabb.hpp"
-#include "termin/geom/ray3.hpp"
+#include <termin/geom/aabb.hpp>
+#include <termin/geom/ray3.hpp>
 #include "termin/colliders/colliders.hpp"
 #include <vector>
 #include <unordered_map>

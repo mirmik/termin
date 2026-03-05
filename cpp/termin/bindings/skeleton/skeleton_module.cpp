@@ -10,7 +10,7 @@
 #include "termin/skeleton/skeleton_instance.hpp"
 #include "termin/skeleton/tc_skeleton_handle.hpp"
 #include "termin/render/skeleton_controller.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include "termin/inspect/tc_kind.hpp"
 #include "termin/bindings/entity/entity_helpers.hpp"
 #include "../../../trent/trent.h"

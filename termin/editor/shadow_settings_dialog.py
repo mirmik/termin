@@ -108,17 +108,22 @@ class ShadowSettingsDialog(QDialog):
 
     def _load_from_scene(self) -> None:
         """Load current settings from scene."""
-        settings = self._scene.shadow_settings
+        from termin.visualization.core.scene import scene_render_state
+        rs = scene_render_state(self._scene)
+        settings = rs.shadow_settings
         self._method_combo.setCurrentIndex(settings.method)
         self._softness_spin.setValue(settings.softness)
         self._bias_spin.setValue(settings.bias)
 
     def _apply_settings(self) -> None:
         """Apply current widget values to scene."""
-        settings = self._scene.shadow_settings
+        from termin.visualization.core.scene import scene_render_state
+        rs = scene_render_state(self._scene)
+        settings = rs.shadow_settings
         settings.method = self._method_combo.currentIndex()
         settings.softness = self._softness_spin.value()
         settings.bias = self._bias_spin.value()
+        rs.shadow_settings = settings
 
         if self._on_changed is not None:
             self._on_changed()

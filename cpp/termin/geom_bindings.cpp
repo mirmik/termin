@@ -4,7 +4,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/pair.h>
 
-#include "termin/geom/geom.hpp"
+#include <termin/geom/geom.hpp>
 
 namespace nb = nanobind;
 using namespace termin;

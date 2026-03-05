@@ -4,14 +4,14 @@
 #include <set>
 #include <string>
 
-#include "termin/entity/component_registry.hpp"
-#include "termin/entity/component.hpp"
+#include <termin/entity/component_registry.hpp>
+#include <termin/entity/component.hpp>
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/material/tc_material_handle.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
-#include "termin/geom/mat44.hpp"
-#include "termin/geom/quat.hpp"
+#include <termin/geom/mat44.hpp>
+#include <termin/geom/quat.hpp>
 #include <memory>
 
 extern "C" {

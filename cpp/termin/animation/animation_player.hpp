@@ -4,8 +4,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "termin/entity/component.hpp"
-#include "termin/entity/component_registry.hpp"
+#include <termin/entity/component.hpp>
+#include <termin/entity/component_registry.hpp>
 #include "termin/entity/cmp_ref.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"

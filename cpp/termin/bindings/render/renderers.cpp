@@ -3,7 +3,7 @@
 #include "termin/render/skinned_mesh_renderer.hpp"
 #include "termin/render/skeleton_controller.hpp"
 #include "termin/render/render.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include "termin/mesh/tc_mesh_handle.hpp"
 #include "termin/material/tc_material_handle.hpp"
 #include "termin/bindings/entity/entity_helpers.hpp"

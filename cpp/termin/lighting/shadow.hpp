@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-#include "termin/geom/mat44.hpp"
+#include <termin/geom/mat44.hpp>
 #include "termin/lighting/shadow_settings.hpp"
 #include "tgfx/frame_graph_resource.hpp"
 

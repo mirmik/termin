@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Optional
 
 from tcbase import log
+from termin.visualization.core.scene import scene_render_mount
 
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
@@ -229,13 +230,13 @@ class RenderingControllerTcgui:
                 display.remove_viewport(vp)
 
     def sync_viewport_configs_to_scene(self, scene: "Scene") -> None:
-        """Sync current viewport state to scene.viewport_configs.
+        """Sync current viewport state to scene_render_mount(scene).viewport_configs.
 
         Call before saving. Excludes editor display viewports.
         """
         from termin.visualization.core.viewport_config import ViewportConfig
 
-        scene.clear_viewport_configs()
+        scene_render_mount(scene).clear_viewport_configs()
 
         for display in self._manager.displays:
             if display.tc_display_ptr == self._editor_display_ptr:
@@ -274,7 +275,7 @@ class RenderingControllerTcgui:
                     layer_mask=viewport.layer_mask,
                     enabled=viewport.enabled,
                 )
-                scene.add_viewport_config(config)
+                scene_render_mount(scene).add_viewport_config(config)
 
     # ------------------------------------------------------------------
     # Input
@@ -349,7 +350,7 @@ class RenderingControllerTcgui:
         if scene is None:
             return
 
-        if not scene.viewport_configs:
+        if not scene_render_mount(scene).viewport_configs:
             return
 
         # Check if scene already has non-editor viewports (already attached)
@@ -377,7 +378,7 @@ class RenderingControllerTcgui:
         if viewport.camera.entity is not None:
             camera_uuid = viewport.camera.entity.uuid
 
-        for config in scene.viewport_configs:
+        for config in scene_render_mount(scene).viewport_configs:
             if config.display_name == display_name and config.camera_uuid == camera_uuid:
                 return config
 

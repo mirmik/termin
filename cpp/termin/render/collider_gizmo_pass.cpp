@@ -1,11 +1,11 @@
 #include "collider_gizmo_pass.hpp"
 #include "tgfx/handles.hpp"
 #include "termin/camera/camera_component.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include "termin/colliders/collider_component.hpp"
 #include "termin/colliders/convex_hull_collider.hpp"
-#include "termin/geom/quat.hpp"
-#include "termin/geom/mat44.hpp"
+#include <termin/geom/quat.hpp>
+#include <termin/geom/mat44.hpp>
 #include <tcbase/tc_log.hpp>
 
 extern "C" {

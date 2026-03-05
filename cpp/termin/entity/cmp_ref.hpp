@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/tc_entity_pool.h"
-#include "component.hpp"
+#include <termin/entity/component.hpp>
 
 namespace termin {
 

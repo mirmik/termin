@@ -1,5 +1,5 @@
 #include "animation_player.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include "termin/render/skeleton_controller.hpp"
 #include <tcbase/tc_log.hpp>
 

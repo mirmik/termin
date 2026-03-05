@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../export.hpp"
-#include "../entity/component.hpp"
-#include "../geom/vec3.hpp"
+#include <termin/export.hpp>
+#include <termin/entity/component.hpp>
+#include <termin/geom/vec3.hpp>
 #include "light.hpp"
 
 namespace termin {

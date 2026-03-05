@@ -14,8 +14,8 @@
  * Поддерживает fixed timestep с накоплением времени.
  */
 
-#include "../geom/vec3.hpp"
-#include "../geom/pose3.hpp"
+#include <termin/geom/vec3.hpp>
+#include <termin/geom/pose3.hpp>
 #include "../collision/collision_world.hpp"
 #include "rigid_body.hpp"
 #include "contact_solver.hpp"

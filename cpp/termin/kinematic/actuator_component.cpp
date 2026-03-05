@@ -1,5 +1,5 @@
 #include "actuator_component.hpp"
-#include "../geom/quat.hpp"
+#include <termin/geom/quat.hpp>
 #include <cmath>
 
 namespace termin {

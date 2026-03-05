@@ -3,7 +3,7 @@
 #include "termin/render/scene_pipeline_template.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/light_component.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
 
 extern "C" {

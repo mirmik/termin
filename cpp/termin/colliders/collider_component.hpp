@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../entity/component.hpp"
-#include "../entity/component_registry.hpp"
-#include "../entity/entity.hpp"
-#include "../geom/general_transform3.hpp"
+#include <termin/entity/component.hpp>
+#include <termin/entity/component_registry.hpp>
+#include <termin/entity/entity.hpp>
+#include <termin/geom/general_transform3.hpp>
 #include "colliders.hpp"
 #include "../collision/collision_world.hpp"
 #include "core/tc_scene.h"

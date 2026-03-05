@@ -5,7 +5,7 @@
 #include <nanobind/stl/string.h>
 
 #include "termin/collision/collision.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/entity.hpp>
 #include "termin/colliders/collider_component.hpp"
 
 extern "C" {

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../export.hpp"
-#include "../entity/component.hpp"
-#include "../entity/entity.hpp"
-#include "../geom/mat44.hpp"
-#include "../geom/pose3.hpp"
-#include "../geom/general_pose3.hpp"
+#include <termin/export.hpp>
+#include <termin/entity/component.hpp>
+#include <termin/entity/entity.hpp>
+#include <termin/geom/mat44.hpp>
+#include <termin/geom/pose3.hpp>
+#include <termin/geom/general_pose3.hpp>
 #include "../viewport/tc_viewport_handle.hpp"
 #include "camera.hpp"
 

@@ -6,7 +6,7 @@
 #include "termin/render/shader_parser.hpp"
 #include "termin/render/glsl_preprocessor.hpp"
 #include "termin/lighting/shadow.hpp"
-#include "termin/geom/mat44.hpp"
+#include <termin/geom/mat44.hpp>
 #include <tcbase/tc_log.hpp>
 
 extern "C" {

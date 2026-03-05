@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
-#include "termin/entity/component.hpp"
+#include <termin/entity/component.hpp>
 #include "termin/bindings/entity/entity_helpers.hpp"
 
 namespace termin {

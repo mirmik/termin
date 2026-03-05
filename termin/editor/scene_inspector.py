@@ -23,7 +23,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 
 from termin.editor.color_dialog import ColorDialog
 from termin.editor.undo_stack import UndoCommand
-from termin.visualization.core.scene import Scene
+from termin.visualization.core.scene import Scene, scene_render_state, scene_render_mount
 from tcbase import log
 
 
@@ -48,10 +48,12 @@ class ScenePropertyEditCommand(UndoCommand):
         return value
 
     def do(self) -> None:
-        setattr(self._scene, self._property_name, self._clone_value(self._new_value))
+        rs = scene_render_state(self._scene)
+        setattr(rs, self._property_name, self._clone_value(self._new_value))
 
     def undo(self) -> None:
-        setattr(self._scene, self._property_name, self._clone_value(self._old_value))
+        rs = scene_render_state(self._scene)
+        setattr(rs, self._property_name, self._clone_value(self._old_value))
 
     def merge_with(self, other: UndoCommand) -> bool:
         if not isinstance(other, ScenePropertyEditCommand):
@@ -247,20 +249,20 @@ class SceneInspector(QWidget):
         self._updating_from_model = True
         try:
             # Background color (Vec4 doesn't support slicing, extract RGB manually)
-            bg_color = self._scene.background_color
+            bg_color = scene_render_state(self._scene).background_color
             qcolor = _to_qcolor((bg_color[0], bg_color[1], bg_color[2]))
             self._bg_color_btn._set_color(qcolor)
 
             # Ambient color
-            ambient_color = self._scene.ambient_color
+            ambient_color = scene_render_state(self._scene).ambient_color
             qcolor = _to_qcolor(ambient_color)
             self._ambient_color_btn._set_color(qcolor)
 
             # Ambient intensity
-            self._ambient_intensity_spin.setValue(self._scene.ambient_intensity)
+            self._ambient_intensity_spin.setValue(scene_render_state(self._scene).ambient_intensity)
 
             # Skybox type
-            skybox_type = self._scene.skybox_type
+            skybox_type = scene_render_state(self._scene).skybox_type
             index = self._skybox_type_combo.findData(skybox_type)
             if index >= 0:
                 self._skybox_type_combo.setCurrentIndex(index)
@@ -277,16 +279,16 @@ class SceneInspector(QWidget):
             self._skybox_bottom_color_label.setVisible(show_gradient)
 
             # Solid color
-            skybox_color = self._scene.skybox_color
+            skybox_color = scene_render_state(self._scene).skybox_color
             qcolor = _to_qcolor(skybox_color)
             self._skybox_color_btn._set_color(qcolor)
 
             # Gradient colors
-            top_color = self._scene.skybox_top_color
+            top_color = scene_render_state(self._scene).skybox_top_color
             qcolor = _to_qcolor(top_color)
             self._skybox_top_color_btn._set_color(qcolor)
 
-            bottom_color = self._scene.skybox_bottom_color
+            bottom_color = scene_render_state(self._scene).skybox_bottom_color
             qcolor = _to_qcolor(bottom_color)
             self._skybox_bottom_color_btn._set_color(qcolor)
 
@@ -301,7 +303,7 @@ class SceneInspector(QWidget):
         if self._scene is None:
             return
 
-        for template in self._scene.scene_pipelines:
+        for template in scene_render_mount(self._scene).scene_pipelines:
             if template.is_valid:
                 name = template.name
                 uuid_short = template.uuid[:8] if template.uuid else ""
@@ -319,14 +321,14 @@ class SceneInspector(QWidget):
         if self._scene is None:
             return
 
-        current = self._scene.background_color
+        current = scene_render_state(self._scene).background_color
         initial = (float(current[0]), float(current[1]), float(current[2]), 1.0)
 
         result = ColorDialog.get_color(initial, self)
         if result is None:
             return
 
-        old_value = self._scene.background_color.copy()
+        old_value = scene_render_state(self._scene).background_color.copy()
         new_value = np.array([result[0], result[1], result[2], current[3]], dtype=np.float32)
 
         if self._push_undo_command is not None:
@@ -335,7 +337,7 @@ class SceneInspector(QWidget):
             )
             self._push_undo_command(cmd, False)
         else:
-            self._scene.background_color = new_value
+            scene_render_state(self._scene).background_color = new_value
 
         self._refresh_from_scene()
         self.scene_changed.emit()
@@ -345,14 +347,14 @@ class SceneInspector(QWidget):
         if self._scene is None:
             return
 
-        current = self._scene.ambient_color
+        current = scene_render_state(self._scene).ambient_color
         initial = (float(current[0]), float(current[1]), float(current[2]), 1.0)
 
         result = ColorDialog.get_color(initial, self)
         if result is None:
             return
 
-        old_value = self._scene.ambient_color.copy()
+        old_value = scene_render_state(self._scene).ambient_color.copy()
         new_value = np.array([result[0], result[1], result[2]], dtype=np.float32)
 
         if self._push_undo_command is not None:
@@ -361,7 +363,7 @@ class SceneInspector(QWidget):
             )
             self._push_undo_command(cmd, False)
         else:
-            self._scene.ambient_color = new_value
+            scene_render_state(self._scene).ambient_color = new_value
 
         self._refresh_from_scene()
         self.scene_changed.emit()
@@ -371,7 +373,7 @@ class SceneInspector(QWidget):
         if self._updating_from_model or self._scene is None:
             return
 
-        old_value = self._scene.ambient_intensity
+        old_value = scene_render_state(self._scene).ambient_intensity
         new_value = value
 
         if self._push_undo_command is not None:
@@ -380,7 +382,7 @@ class SceneInspector(QWidget):
             )
             self._push_undo_command(cmd, True)  # merge for drag
         else:
-            self._scene.ambient_intensity = new_value
+            scene_render_state(self._scene).ambient_intensity = new_value
 
         self.scene_changed.emit()
 
@@ -390,7 +392,7 @@ class SceneInspector(QWidget):
             return
 
         new_type = self._skybox_type_combo.itemData(index)
-        old_type = self._scene.skybox_type
+        old_type = scene_render_state(self._scene).skybox_type
 
         if new_type == old_type:
             return
@@ -409,7 +411,7 @@ class SceneInspector(QWidget):
             cmd = SkyboxTypeEditCommand(self._scene, old_type, new_type)
             self._push_undo_command(cmd, False)
         else:
-            self._scene.set_skybox_type(new_type)
+            scene_render_state(self._scene).set_skybox_type(new_type)
 
         self.scene_changed.emit()
 
@@ -418,14 +420,14 @@ class SceneInspector(QWidget):
         if self._scene is None:
             return
 
-        current = self._scene.skybox_color
+        current = scene_render_state(self._scene).skybox_color
         initial = (float(current[0]), float(current[1]), float(current[2]), 1.0)
 
         result = ColorDialog.get_color(initial, self)
         if result is None:
             return
 
-        old_value = self._scene.skybox_color.copy()
+        old_value = scene_render_state(self._scene).skybox_color.copy()
         new_value = np.array([result[0], result[1], result[2]], dtype=np.float32)
 
         if self._push_undo_command is not None:
@@ -434,7 +436,7 @@ class SceneInspector(QWidget):
             )
             self._push_undo_command(cmd, False)
         else:
-            self._scene.skybox_color = new_value
+            scene_render_state(self._scene).skybox_color = new_value
 
         self._refresh_from_scene()
         self.scene_changed.emit()
@@ -444,14 +446,14 @@ class SceneInspector(QWidget):
         if self._scene is None:
             return
 
-        current = self._scene.skybox_top_color
+        current = scene_render_state(self._scene).skybox_top_color
         initial = (float(current[0]), float(current[1]), float(current[2]), 1.0)
 
         result = ColorDialog.get_color(initial, self)
         if result is None:
             return
 
-        old_value = self._scene.skybox_top_color.copy()
+        old_value = scene_render_state(self._scene).skybox_top_color.copy()
         new_value = np.array([result[0], result[1], result[2]], dtype=np.float32)
 
         if self._push_undo_command is not None:
@@ -460,7 +462,7 @@ class SceneInspector(QWidget):
             )
             self._push_undo_command(cmd, False)
         else:
-            self._scene.skybox_top_color = new_value
+            scene_render_state(self._scene).skybox_top_color = new_value
 
         self._refresh_from_scene()
         self.scene_changed.emit()
@@ -470,14 +472,14 @@ class SceneInspector(QWidget):
         if self._scene is None:
             return
 
-        current = self._scene.skybox_bottom_color
+        current = scene_render_state(self._scene).skybox_bottom_color
         initial = (float(current[0]), float(current[1]), float(current[2]), 1.0)
 
         result = ColorDialog.get_color(initial, self)
         if result is None:
             return
 
-        old_value = self._scene.skybox_bottom_color.copy()
+        old_value = scene_render_state(self._scene).skybox_bottom_color.copy()
         new_value = np.array([result[0], result[1], result[2]], dtype=np.float32)
 
         if self._push_undo_command is not None:
@@ -486,7 +488,7 @@ class SceneInspector(QWidget):
             )
             self._push_undo_command(cmd, False)
         else:
-            self._scene.skybox_bottom_color = new_value
+            scene_render_state(self._scene).skybox_bottom_color = new_value
 
         self._refresh_from_scene()
         self.scene_changed.emit()
@@ -521,7 +523,7 @@ class SceneInspector(QWidget):
 
         # Filter out already added pipelines
         existing_uuids = set()
-        for template in self._scene.scene_pipelines:
+        for template in scene_render_mount(self._scene).scene_pipelines:
             if template.is_valid:
                 existing_uuids.add(template.uuid)
 
@@ -587,10 +589,10 @@ class SkyboxTypeEditCommand(UndoCommand):
         self._new_type = new_type
 
     def do(self) -> None:
-        self._scene.set_skybox_type(self._new_type)
+        scene_render_state(self._scene).set_skybox_type(self._new_type)
 
     def undo(self) -> None:
-        self._scene.set_skybox_type(self._old_type)
+        scene_render_state(self._scene).set_skybox_type(self._old_type)
 
     def __repr__(self) -> str:
         return f"SkyboxTypeEditCommand({self._old_type} -> {self._new_type})"

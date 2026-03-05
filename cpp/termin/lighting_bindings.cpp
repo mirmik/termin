@@ -6,8 +6,8 @@
 
 #include "termin/lighting/lighting.hpp"
 #include "termin/lighting/light_component.hpp"
-#include "termin/entity/component.hpp"
-#include "termin/geom/vec3.hpp"
+#include <termin/entity/component.hpp>
+#include <termin/geom/vec3.hpp>
 #include "termin/bindings/entity/entity_helpers.hpp"
 
 namespace nb = nanobind;

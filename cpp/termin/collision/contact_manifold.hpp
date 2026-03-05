@@ -1,6 +1,6 @@
 #pragma once
 
-#include "termin/geom/vec3.hpp"
+#include <termin/geom/vec3.hpp>
 #include "termin/colliders/collider.hpp"
 #include <array>
 #include <cstdint>

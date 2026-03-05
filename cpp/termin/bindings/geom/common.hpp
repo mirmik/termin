@@ -7,7 +7,7 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/optional.h>
 
-#include "termin/geom/geom.hpp"
+#include <termin/geom/geom.hpp>
 
 namespace nb = nanobind;
 

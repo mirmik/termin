@@ -5,8 +5,8 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/shared_ptr.h>
 
-#include "termin/geom/geom.hpp"
-#include "termin/geom/general_transform3.hpp"
+#include <termin/geom/geom.hpp>
+#include <termin/geom/general_transform3.hpp>
 #include "termin/colliders/colliders.hpp"
 
 namespace nb = nanobind;

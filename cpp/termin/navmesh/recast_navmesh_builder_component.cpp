@@ -1,6 +1,6 @@
 #include "recast_navmesh_builder_component.hpp"
 #include "../render/mesh_renderer.hpp"
-#include "../geom/mat44.hpp"
+#include <termin/geom/mat44.hpp>
 #include <array>
 #include <cstring>
 #include <cmath>

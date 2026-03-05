@@ -4,9 +4,9 @@
 #include <string>
 #include <memory>
 
-#include "termin/entity/component.hpp"
-#include "termin/entity/component_registry.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/component.hpp>
+#include <termin/entity/component_registry.hpp>
+#include <termin/entity/entity.hpp>
 #include "termin/skeleton/tc_skeleton_handle.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 

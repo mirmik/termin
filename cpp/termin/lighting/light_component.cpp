@@ -1,5 +1,5 @@
 #include "light_component.hpp"
-#include "../entity/component_registry.hpp"
+#include <termin/entity/component_registry.hpp>
 
 #include "tc_inspect_cpp.hpp"
 

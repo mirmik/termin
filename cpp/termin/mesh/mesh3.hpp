@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <cmath>
 
-#include "termin/geom/vec3.hpp"
+#include <termin/geom/vec3.hpp>
 
 namespace termin {
 

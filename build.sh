@@ -145,6 +145,44 @@ else
     echo "  WARNING: libtermin_inspect not found in $TERMIN_INSPECT_LIBDIR — skipping libtermin_inspect"
 fi
 
+# Copy Python packages from termin-inspect and termin-scene
+echo "Copying Python packages from termin-inspect and termin-scene..."
+PYTHON_DEST="$INSTALL_DIR/lib/python"
+
+TERMIN_INSPECT_PY="$ENV_DIR/termin-inspect/python"
+TERMIN_INSPECT_BUILD="$ENV_DIR/termin-inspect/build"
+if [[ -d "$TERMIN_INSPECT_PY/termin/inspect" ]]; then
+    mkdir -p "$PYTHON_DEST/termin/inspect"
+    cp -r "$TERMIN_INSPECT_PY/termin/inspect/"*.py "$PYTHON_DEST/termin/inspect/"
+    # Copy _inspect_native shared module
+    INSPECT_SO=$(find "$TERMIN_INSPECT_BUILD" -maxdepth 2 -name "_inspect_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+    if [[ -n "$INSPECT_SO" ]]; then
+        cp "$INSPECT_SO" "$PYTHON_DEST/termin/inspect/"
+        echo "  Copied termin.inspect + _inspect_native from $TERMIN_INSPECT_PY"
+    else
+        echo "  Copied termin.inspect (WARNING: _inspect_native.so not found)"
+    fi
+else
+    echo "  WARNING: $TERMIN_INSPECT_PY/termin/inspect not found — skipping termin.inspect"
+fi
+
+TERMIN_SCENE_PY="$ENV_DIR/termin-scene/python"
+TERMIN_SCENE_BUILD="$ENV_DIR/termin-scene/build"
+if [[ -d "$TERMIN_SCENE_PY/termin/scene" ]]; then
+    mkdir -p "$PYTHON_DEST/termin/scene"
+    cp -r "$TERMIN_SCENE_PY/termin/scene/"*.py "$PYTHON_DEST/termin/scene/"
+    # Copy _scene_native shared module
+    SCENE_SO=$(find "$TERMIN_SCENE_BUILD" -maxdepth 2 -name "_scene_native*.so" -not -path "*/CMakeFiles/*" | head -1)
+    if [[ -n "$SCENE_SO" ]]; then
+        cp "$SCENE_SO" "$PYTHON_DEST/termin/scene/"
+        echo "  Copied termin.scene + _scene_native from $TERMIN_SCENE_PY"
+    else
+        echo "  Copied termin.scene (WARNING: _scene_native.so not found)"
+    fi
+else
+    echo "  WARNING: $TERMIN_SCENE_PY/termin/scene not found — skipping termin.scene"
+fi
+
 echo ""
 echo "=== Build complete ==="
 echo ""

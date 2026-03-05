@@ -6,11 +6,11 @@
 #include <cstring>
 #include <stdexcept>
 
-#include "termin/entity/entity.hpp"
-#include "termin/entity/component.hpp"
+#include <termin/entity/entity.hpp>
+#include <termin/entity/component.hpp>
 #include "termin/camera/camera_component.hpp"
-#include "termin/geom/vec3.hpp"
-#include "termin/geom/quat.hpp"
+#include <termin/geom/vec3.hpp>
+#include <termin/geom/quat.hpp>
 #include "termin/bindings/tc_value_helpers.hpp"
 #include <tcbase/tc_log.hpp>
 #include "core/tc_entity_pool_registry.h"

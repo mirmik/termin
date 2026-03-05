@@ -1,6 +1,6 @@
 // tc_inspect_component_adapter.cpp - Scene/component adapter for inspect API
 
-#include "../../cpp/termin/entity/component.hpp"
+#include <termin/entity/component.hpp>
 #include "../../cpp/termin/inspect/tc_kind.hpp"
 #include "../../cpp/termin/mesh/tc_mesh_handle.hpp"
 #include "../../cpp/termin/material/tc_material_handle.hpp"

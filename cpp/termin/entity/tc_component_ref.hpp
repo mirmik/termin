@@ -9,7 +9,7 @@
 #include "inspect/tc_inspect_context.h"
 #include "core/tc_scene.h"
 #include "../render/tc_value_trent.hpp"
-#include "component.hpp"
+#include <termin/entity/component.hpp>
 
 namespace termin {
 

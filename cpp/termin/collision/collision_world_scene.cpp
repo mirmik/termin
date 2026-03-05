@@ -1,9 +1,10 @@
 #include "collision_world.hpp"
 #include "physics/tc_collision_world.h"
-#include "termin/entity/component.hpp"
+#include <termin/entity/component.hpp>
 #include "termin/colliders/collider_component.hpp"
-#include "termin/geom/ray3.hpp"
-#include "termin/tc_scene.hpp"
+#include <termin/geom/ray3.hpp>
+#include <termin/tc_scene.hpp>
+#include "termin/tc_scene_render_ext.hpp"
 #include <limits>
 
 namespace termin::collision {

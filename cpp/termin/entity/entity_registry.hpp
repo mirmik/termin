@@ -4,9 +4,9 @@
 #include <unordered_map>
 #include <cstdint>
 #include <utility>
-#include "entity.hpp"
+#include <termin/entity/entity.hpp>
 
-#include "../export.hpp"
+#include <termin/export.hpp>
 
 namespace termin {
 

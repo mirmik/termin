@@ -16,7 +16,7 @@
  */
 
 #include "collider.hpp"
-#include "../geom/general_pose3.hpp"
+#include <termin/geom/general_pose3.hpp>
 #include <memory>
 
 namespace termin {

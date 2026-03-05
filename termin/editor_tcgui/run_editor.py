@@ -235,13 +235,13 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     # Create world and scene
     from termin.visualization.core.world import World
-    from termin.visualization.core.scene import Scene
+    from termin.visualization.core.scene import create_scene
 
     world = World()
     if no_scene:
         initial_scene = None
     else:
-        initial_scene = Scene.create(name="default")
+        initial_scene = create_scene(name="default")
         world.add_scene(initial_scene)
 
     # Create tcgui UI

@@ -188,9 +188,16 @@ class EditorCameraManager:
             ent.serializable = True
             try:
                 # Serialize only components (not the entity itself)
+                import traceback
                 components_data = []
                 for ref in ent.tc_components:
-                    comp_data = ref.serialize()
+                    print(f"[DEBUG] serializing {ref.type_name} on '{ent.name}'", flush=True)
+                    try:
+                        comp_data = ref.serialize()
+                    except Exception as e:
+                        print(f"[DEBUG] FAILED {ref.type_name}: {e}", flush=True)
+                        traceback.print_exc()
+                        continue
                     if comp_data:
                         components_data.append(comp_data)
                 if components_data:

@@ -190,7 +190,14 @@ NB_MODULE(_native, m) {
     nb::module_ tcbase = nb::module_::import_("tcbase._tcbase_native");
     m.attr("log") = tcbase.attr("log");
     termin::bind_kind(kind_module);
-    termin::bind_tc_component_python(component_module);
+
+    // TcComponent is registered in _scene_native — re-export it
+    nb::module_ scene_native = nb::module_::import_("termin.scene._scene_native");
+    component_module.attr("TcComponent") = scene_native.attr("TcComponent");
+
+    // Initialize termin-specific drawable and input callbacks
+    termin::init_python_component_callbacks();
+
     termin::bind_assets(assets_module);
 
     // Picking utilities (id <-> rgb conversion with cache)

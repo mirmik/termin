@@ -3,7 +3,7 @@
 #include <memory>
 #include <cstdint>
 
-#include "termin/geom/mat44.hpp"
+#include <termin/geom/mat44.hpp>
 #include "tgfx/types.hpp"
 #include "tgfx/handles.hpp"
 #include "termin/render/tc_shader_handle.hpp"

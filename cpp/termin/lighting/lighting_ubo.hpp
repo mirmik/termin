@@ -8,7 +8,7 @@
 #include "termin/lighting/shadow.hpp"
 #include "tgfx/handles.hpp"
 #include "tgfx/graphics_backend.hpp"
-#include "termin/geom/vec3.hpp"
+#include <termin/geom/vec3.hpp>
 
 namespace termin {
 

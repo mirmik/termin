@@ -24,7 +24,7 @@
 #include <memory>
 #include <functional>
 
-#include "../export.hpp"
+#include <termin/export.hpp>
 
 namespace termin {
 

@@ -7,12 +7,12 @@ import numpy as np
 from termin.geombase import Pose3
 from termin.visualization import (
     Entity,
-    Scene,
     Material,
     VisualizationWorld,
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
+from termin.visualization.core.scene import create_scene
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.render.components import MeshRenderer, LineRenderer
 from tgfx import TcShader
@@ -100,7 +100,7 @@ void main() {
 
 def build_scene(world: VisualizationWorld, mesh: "Mesh") -> tuple[Scene, PerspectiveCameraComponent]:
 
-    scene = Scene.create(name="mesh_viewer")
+    scene = create_scene(name="mesh_viewer")
 
     mesh_tc = create_voxel_mesh(
         vertices=mesh.vertices,

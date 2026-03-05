@@ -22,9 +22,11 @@ def show_shadow_settings_dialog(
 ) -> None:
     """Show shadow settings dialog. Changes apply immediately.
 
-    Uses scene.shadow_settings property (read/write) on TcSceneRef.
+    Uses SceneRenderState.shadow_settings property (read/write).
     """
-    ss = scene.shadow_settings
+    from termin.visualization.core.scene import scene_render_state
+    rs = scene_render_state(scene)
+    ss = rs.shadow_settings
 
     content = VStack()
     content.spacing = 8
@@ -72,11 +74,11 @@ def show_shadow_settings_dialog(
     content.add_child(bias_row)
 
     def _apply():
-        ss = scene.shadow_settings
+        ss = rs.shadow_settings
         ss.method = method_combo.selected_index
         ss.softness = softness_spin.value
         ss.bias = bias_spin.value
-        scene.shadow_settings = ss
+        rs.shadow_settings = ss
         if on_changed:
             on_changed()
 

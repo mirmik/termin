@@ -1,69 +1,29 @@
-/**
- * Entity native module (_entity_native).
- *
- * Contains Component, Entity, EntityRegistry, ComponentRegistry.
- * Separated from _native to allow other modules (like _native with MeshRenderer)
- * to properly inherit from Component.
- */
+// Entity native module (_entity_native).
+//
+// Core types (Entity, Component, ComponentRegistry, TcScene, TcComponentRef,
+// TcComponent, SoA) are registered in _scene_native and re-exported here.
+// This module adds domain-specific bindings: EntityRegistry, CameraComponent,
+// OrbitCameraController, ColliderComponent, InputEvents, ModuleLoader, lighting.
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
-#include <nanobind/ndarray.h>
-#include <nanobind/trampoline.h>
-#include <unordered_set>
-#include <iostream>
-#include <cstdio>
-#include <functional>
 
 #include <tcbase/tc_log.hpp>
-#include "entity_helpers.hpp"
 
-extern "C" {
-#include "inspect/tc_binding.h"
-#include "core/tc_archetype.h"
-}
-#include "termin/soa/soa_components.hpp"
-#include "entity_bindings.hpp"
 #include "../camera/camera_bindings.hpp"
 #include "../camera/orbit_camera_bindings.hpp"
 #include "../colliders/collider_bindings.hpp"
 #include "../input/input_events_bindings.hpp"
 #include "../../scene_bindings.hpp"
 
-#ifdef _WIN32
-#define NOMINMAX
-#include <windows.h>
-#undef near
-#undef far
-
-inline bool check_heap_entity() {
-    HANDLE heaps[100];
-    DWORD numHeaps = GetProcessHeaps(100, heaps);
-    for (DWORD i = 0; i < numHeaps; i++) {
-        if (!HeapValidate(heaps[i], 0, nullptr)) {
-            std::cerr << "[HEAP CORRUPT] Heap " << i << " is corrupted!" << std::endl;
-            return false;
-        }
-    }
-    return true;
-}
-#else
-inline bool check_heap_entity() { return true; }
-#endif
-
-#include "termin/entity/component.hpp"
-#include "termin/entity/component_registry_python.hpp"
-#include "termin/entity/vtable_utils.hpp"
-#include "termin/entity/entity.hpp"
+#include <termin/entity/component.hpp>
+#include <termin/entity/component_registry.hpp>
+#include <termin/entity/entity.hpp>
 #include "termin/entity/entity_registry.hpp"
-#include "termin/geom/general_transform3.hpp"
-#include "termin/geom/pose3.hpp"
 #include "termin/inspect/tc_kind.hpp"
-#include "termin/bindings/tc_value_helpers.hpp"
 #include "termin/modules/module_loader.hpp"
-#include "termin/tc_scene.hpp"
 
 namespace nb = nanobind;
 using namespace termin;
@@ -77,113 +37,28 @@ NB_MODULE(_entity_native, m) {
     // Import tcbase for Action, MouseButton, Mods enums (used by input events)
     nb::module_::import_("tcbase._tcbase_native");
 
-    // --- Scene (TcScene, ViewportConfig) - must be before Entity bindings ---
+    // Import _scene_native — canonical owner of core types
+    nb::module_ scene_native = nb::module_::import_("termin.scene._scene_native");
+
+    // Re-export core types from _scene_native
+    m.attr("TcScene") = scene_native.attr("TcScene");
+    m.attr("Component") = scene_native.attr("Component");
+    m.attr("ComponentRegistry") = scene_native.attr("ComponentRegistry");
+    m.attr("TcComponentRef") = scene_native.attr("TcComponentRef");
+    m.attr("TcComponent") = scene_native.attr("TcComponent");
+    m.attr("Entity") = scene_native.attr("Entity");
+    m.attr("_EntityAncestorIterator") = scene_native.attr("_EntityAncestorIterator");
+    m.attr("get_standalone_pool") = scene_native.attr("get_standalone_pool");
+    m.attr("migrate_entity") = scene_native.attr("migrate_entity");
+    m.attr("component_registry_get_all_info") = scene_native.attr("component_registry_get_all_info");
+    m.attr("component_registry_type_count") = scene_native.attr("component_registry_type_count");
+    m.attr("soa_registry_get_all_info") = scene_native.attr("soa_registry_get_all_info");
+    m.attr("soa_registry_type_count") = scene_native.attr("soa_registry_type_count");
+
+    // --- TcScene render extensions (ViewportConfig, background_color, pipelines, etc.) ---
+    // TcScene base is in _scene_native; bind_tc_scene extends it with render methods
     bind_tc_scene(m);
     bind_tc_scene_lighting(m);
-
-    // --- CxxComponent (also exported as Component for compatibility) ---
-    nb::class_<CxxComponent>(m, "Component", nb::dynamic_attr())
-        .def("__init__", [](nb::handle self) {
-            cxx_component_init<CxxComponent>(self);
-        })
-        .def("start", &CxxComponent::start)
-        .def("update", &CxxComponent::update)
-        .def("fixed_update", &CxxComponent::fixed_update)
-        .def("on_destroy", &CxxComponent::on_destroy)
-        .def("on_editor_start", &CxxComponent::on_editor_start)
-        .def("setup_editor_defaults", &CxxComponent::setup_editor_defaults)
-        .def("on_added_to_entity", &CxxComponent::on_added_to_entity)
-        .def("on_removed_from_entity", &CxxComponent::on_removed_from_entity)
-        .def("on_added", &CxxComponent::on_added)
-        .def("on_removed", &CxxComponent::on_removed)
-        .def("on_scene_inactive", &CxxComponent::on_scene_inactive)
-        .def("on_scene_active", &CxxComponent::on_scene_active)
-        .def("type_name", &CxxComponent::type_name)
-        .def_prop_rw("enabled", &CxxComponent::enabled, &CxxComponent::set_enabled)
-        .def_prop_rw("active_in_editor", &CxxComponent::active_in_editor, &CxxComponent::set_active_in_editor)
-        .def_prop_ro("started", &CxxComponent::started)
-        .def_prop_rw("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
-        .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
-        .def_prop_ro("is_input_handler", &CxxComponent::is_input_handler)
-        .def_prop_ro("entity",
-            [](CxxComponent& c) -> nb::object {
-                Entity ent = c.entity();
-                if (ent.valid()) {
-                    return nb::cast(ent);
-                }
-                return nb::none();
-            })
-        .def("c_component_ptr", [](CxxComponent& c) -> uintptr_t {
-            return reinterpret_cast<uintptr_t>(c.c_component());
-        })
-        .def("serialize", [](CxxComponent& c) -> nb::dict {
-            tc_value v = c.serialize();
-            nb::object result = tc_value_to_py(&v);
-            tc_value_free(&v);
-            return nb::cast<nb::dict>(result);
-        })
-        .def("serialize_data", [](CxxComponent& c) -> nb::dict {
-            tc_value v = c.serialize_data();
-            nb::object result = tc_value_to_py(&v);
-            tc_value_free(&v);
-            return nb::cast<nb::dict>(result);
-        })
-        .def("deserialize_data", [](CxxComponent& c, nb::dict data) {
-            tc_value v = py_to_tc_value(data);
-            c.deserialize_data(&v);
-            tc_value_free(&v);
-        }, nb::arg("data"))
-        .def("__eq__", [](CxxComponent& self, nb::object other) -> bool {
-            if (!nb::isinstance<CxxComponent>(other)) return false;
-            CxxComponent& other_c = nb::cast<CxxComponent&>(other);
-            return self.c_component() == other_c.c_component();
-        })
-        .def("__hash__", [](CxxComponent& self) -> size_t {
-            return reinterpret_cast<size_t>(self.c_component());
-        });
-
-    // --- ComponentRegistry ---
-    // Note: register_native is not exposed to Python - it takes C function pointers.
-    // Python components should use register_python instead.
-    nb::class_<ComponentRegistry>(m, "ComponentRegistry")
-        .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
-        .def("register_python", [](ComponentRegistry&, const std::string& name, nb::object cls, nb::object parent) {
-            if (parent.is_none()) {
-                ComponentRegistryPython::register_python(name, cls, nullptr);
-            } else {
-                std::string parent_str = nb::cast<std::string>(parent);
-                ComponentRegistryPython::register_python(name, cls, parent_str.c_str());
-            }
-        }, nb::arg("name"), nb::arg("cls"), nb::arg("parent") = nb::none())
-        .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
-        .def("has", &ComponentRegistry::has, nb::arg("name"))
-        .def_prop_ro("component_names", [](ComponentRegistry& reg) {
-            return reg.list_all();
-        })
-        .def("list_all", &ComponentRegistry::list_all)
-        .def("list_native", &ComponentRegistry::list_native)
-        .def("list_python", [](ComponentRegistry& /*self*/) {
-            return ComponentRegistryPython::list_python();
-        })
-        .def("clear", &ComponentRegistry::clear)
-        .def_static("set_drawable", &ComponentRegistry::set_drawable,
-            nb::arg("name"), nb::arg("is_drawable"),
-            "Mark a component type as drawable (can render geometry)")
-        .def_static("set_input_handler", &ComponentRegistry::set_input_handler,
-            nb::arg("name"), nb::arg("is_input_handler"),
-            "Mark a component type as input handler")
-        .def_static("get_input_handler_types", []() {
-            const char* types[64];
-            size_t count = tc_component_registry_get_input_handler_types(types, 64);
-            std::vector<std::string> result;
-            for (size_t i = 0; i < count; i++) {
-                result.push_back(types[i]);
-            }
-            return result;
-        }, "Get all input handler type names");
-
-    // --- Entity (in separate file for faster compilation) ---
-    bind_entity_class(m);
 
     // --- CameraComponent ---
     bind_camera_component(m);
@@ -270,75 +145,6 @@ NB_MODULE(_entity_native, m) {
         [](CxxComponent* c) { return c->enabled(); },
         [](CxxComponent* c, bool v) { c->set_enabled(v); }
     );
-
-    // --- Pool utilities ---
-
-    m.def("get_standalone_pool", []() {
-        return reinterpret_cast<uintptr_t>(Entity::standalone_pool());
-    }, "Get the global standalone entity pool as uintptr_t");
-
-    m.def("migrate_entity", [](Entity& entity, uintptr_t dst_pool_ptr) -> Entity {
-        tc_entity_pool* dst_pool = reinterpret_cast<tc_entity_pool*>(dst_pool_ptr);
-        return migrate_entity_to_pool(entity, dst_pool);
-    }, nb::arg("entity"), nb::arg("dst_pool"),
-       "Migrate entity to destination pool. Returns new Entity, old becomes invalid.");
-
-    // Component registry info for debug viewer
-    m.def("component_registry_get_all_info", []() {
-        nb::list result;
-        size_t count = tc_component_registry_type_count();
-        for (size_t i = 0; i < count; i++) {
-            const char* type_name = tc_component_registry_type_at(i);
-            if (!type_name) continue;
-
-            nb::dict info;
-            info["name"] = type_name;
-            info["language"] = tc_component_registry_get_kind(type_name) == TC_CXX_COMPONENT ? "C++" : "Python";
-
-            const char* parent = tc_component_registry_get_parent(type_name);
-            info["parent"] = parent ? nb::str(parent) : nb::none();
-
-            // Get descendants
-            const char* descendants[64];
-            size_t desc_count = tc_component_registry_get_type_and_descendants(type_name, descendants, 64);
-            nb::list desc_list;
-            for (size_t j = 1; j < desc_count; j++) {  // Skip first (self)
-                desc_list.append(descendants[j]);
-            }
-            info["descendants"] = desc_list;
-
-            // Is drawable
-            info["is_drawable"] = tc_component_registry_is_drawable(type_name);
-
-            result.append(info);
-        }
-        return result;
-    });
-
-    m.def("component_registry_type_count", []() {
-        return tc_component_registry_type_count();
-    });
-
-    // --- SoA type registry info (for CoreRegistryViewer) ---
-    m.def("soa_registry_get_all_info", []() {
-        nb::list result;
-        tc_soa_type_registry* reg = tc_soa_global_registry();
-        for (size_t i = 0; i < reg->count; i++) {
-            nb::dict info;
-            info["id"] = (int)i;
-            info["name"] = reg->types[i].name ? reg->types[i].name : "(unnamed)";
-            info["element_size"] = (int)reg->types[i].element_size;
-            info["alignment"] = (int)reg->types[i].alignment;
-            info["has_init"] = reg->types[i].init != nullptr;
-            info["has_destroy"] = reg->types[i].destroy != nullptr;
-            result.append(info);
-        }
-        return result;
-    });
-
-    m.def("soa_registry_type_count", []() {
-        return (int)tc_soa_global_registry()->count;
-    });
 
     // --- ModuleLoader (hot-reload system for C++ modules) ---
     nb::class_<ModuleDescriptor>(m, "ModuleDescriptor")

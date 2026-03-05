@@ -8,7 +8,7 @@ from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtWidgets import QApplication
 
 from termin.editor.editor_window import EditorWindow
-from termin.visualization.core.scene import Scene
+from termin.visualization.core.scene import create_scene
 from termin.visualization.core.world import World
 from termin.visualization.platform.backends import (
     OpenGLGraphicsBackend,
@@ -18,7 +18,7 @@ from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindo
 
 
 def build_scene(world):
-    scene = Scene.create(name="default")
+    scene = create_scene(name="default")
     world.add_scene(scene)
     return scene
 

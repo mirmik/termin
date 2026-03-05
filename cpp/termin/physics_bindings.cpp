@@ -3,7 +3,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include "termin/geom/geom.hpp"
+#include <termin/geom/geom.hpp>
 #include "termin/physics/physics.hpp"
 #include "termin/collision/collision_world.hpp"
 

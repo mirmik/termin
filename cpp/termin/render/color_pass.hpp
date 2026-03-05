@@ -19,9 +19,9 @@
 #include "termin/lighting/lighting_ubo.hpp"
 #include "termin/camera/camera.hpp"
 #include "termin/camera/camera_component.hpp"
-#include "termin/geom/mat44.hpp"
-#include "termin/entity/entity.hpp"
-#include "termin/entity/component.hpp"
+#include <termin/geom/mat44.hpp>
+#include <termin/entity/entity.hpp>
+#include <termin/entity/component.hpp>
 #include "termin/entity/cmp_ref.hpp"
 #include "tc_inspect_cpp.hpp"
 #include "core/tc_scene.h"

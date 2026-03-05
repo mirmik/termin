@@ -10,7 +10,7 @@
  * 3. Накапливаем импульсы с ограничением (clamping)
  */
 
-#include "../geom/vec3.hpp"
+#include <termin/geom/vec3.hpp>
 #include "../colliders/collider.hpp"
 #include "rigid_body.hpp"
 #include <algorithm>

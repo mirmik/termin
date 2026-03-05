@@ -5,7 +5,7 @@
 #include <string>
 #include <optional>
 #include <limits>
-#include "termin/geom/vec3.hpp"
+#include <termin/geom/vec3.hpp>
 #include "termin/lighting/attenuation.hpp"
 
 #ifndef M_PI

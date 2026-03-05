@@ -3,8 +3,8 @@
 // RecastNavMeshBuilderComponent - C++ component for building NavMesh using Recast.
 // Provides debug data capture and visualization of intermediate stages.
 
-#include "../entity/component.hpp"
-#include "../entity/component_registry.hpp"
+#include <termin/entity/component.hpp>
+#include <termin/entity/component_registry.hpp>
 #include "../render/drawable.hpp"
 #include "../mesh/tc_mesh_handle.hpp"
 #include "../material/tc_material_handle.hpp"

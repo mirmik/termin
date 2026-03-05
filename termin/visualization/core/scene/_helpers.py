@@ -64,14 +64,7 @@ def dispatch_input(
     """
     # Fast path: use C-level dispatch when no filter is needed
     if filter_fn is None:
-        if event_name == "on_mouse_button":
-            scene.dispatch_mouse_button(event)
-        elif event_name == "on_mouse_move":
-            scene.dispatch_mouse_move(event)
-        elif event_name == "on_scroll":
-            scene.dispatch_scroll(event)
-        elif event_name == "on_key":
-            scene.dispatch_key(event)
+        scene.dispatch_input(event_name, event)
         return
 
     # Slow path with filter: iterate components and call methods

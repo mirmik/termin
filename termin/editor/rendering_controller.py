@@ -357,7 +357,8 @@ class RenderingController:
         if viewport.camera.entity is not None:
             camera_uuid = viewport.camera.entity.uuid
 
-        for config in scene.viewport_configs:
+        from termin.visualization.core.scene import scene_render_mount
+        for config in scene_render_mount(scene).viewport_configs:
             if config.display_name == display_name and config.camera_uuid == camera_uuid:
                 return config
 
@@ -410,8 +411,10 @@ class RenderingController:
             scene: Scene to update viewport_configs for.
         """
         from termin.visualization.core.viewport_config import ViewportConfig
+        from termin.visualization.core.scene import scene_render_mount
+        rm = scene_render_mount(scene)
 
-        scene.clear_viewport_configs()
+        rm.clear_viewport_configs()
 
         for display in self._manager.displays:
             # Skip editor display - it's managed separately
@@ -454,7 +457,7 @@ class RenderingController:
                     layer_mask=viewport.layer_mask,
                     enabled=viewport.enabled,
                 )
-                scene.add_viewport_config(config)
+                rm.add_viewport_config(config)
 
     def detach_scene(self, scene: "Scene") -> None:
         """

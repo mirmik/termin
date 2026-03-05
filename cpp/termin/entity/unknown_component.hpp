@@ -1,6 +1,6 @@
 #pragma once
 
-#include "component.hpp"
+#include <termin/entity/component.hpp>
 #include <string>
 
 namespace termin {
