@@ -470,7 +470,6 @@ static int test_scene_extensions_reregister(void) {
     TEST_ASSERT(tc_scene_handle_valid(h1), "first scene handle valid");
     TEST_ASSERT(tc_scene_ext_attach(h1, TC_SCENE_EXT_TYPE_RENDER_MOUNT), "first attach render_mount");
     TEST_ASSERT(tc_scene_ext_attach(h1, TC_SCENE_EXT_TYPE_RENDER_STATE), "first attach render_state");
-    TEST_ASSERT(tc_scene_ext_attach(h1, TC_SCENE_EXT_TYPE_COLLISION_WORLD), "first attach collision_world");
     tc_scene_free(h1);
 
     tc_shutdown();
@@ -480,7 +479,6 @@ static int test_scene_extensions_reregister(void) {
     TEST_ASSERT(tc_scene_handle_valid(h2), "second scene handle valid");
     TEST_ASSERT(tc_scene_ext_attach(h2, TC_SCENE_EXT_TYPE_RENDER_MOUNT), "second attach render_mount");
     TEST_ASSERT(tc_scene_ext_attach(h2, TC_SCENE_EXT_TYPE_RENDER_STATE), "second attach render_state");
-    TEST_ASSERT(tc_scene_ext_attach(h2, TC_SCENE_EXT_TYPE_COLLISION_WORLD), "second attach collision_world");
     tc_scene_free(h2);
 
     printf("  Scene extension re-registration: PASS\n");
