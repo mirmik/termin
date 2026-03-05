@@ -30,10 +30,22 @@ jobs:
       - name: Install Python dependencies
         run: pip install nanobind
 
-      - name: Download full SDK
+      - name: Download all SDK artifacts
         env:
           GH_TOKEN: ${{ secrets.CLONETOKEN }}
         run: |
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-base -p sdk-base.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-base.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-mesh -p sdk-mesh.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-mesh.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-inspect -p sdk-inspect.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-inspect.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-scene -p sdk-scene.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-scene.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-graphics -p sdk-graphics.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-graphics.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-collision -p sdk-collision.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-collision.tar.gz -C /
           gh release download sdk-latest -R ${{ github.repository_owner }}/termin-components -p sdk-components.tar.gz -D /tmp
           sudo tar xzf /tmp/sdk-components.tar.gz -C /
 
@@ -71,10 +83,22 @@ jobs:
       - name: Install Python dependencies
         run: pip install nanobind
 
-      - name: Download full SDK
+      - name: Download all SDK artifacts
         env:
           GH_TOKEN: ${{ secrets.CLONETOKEN }}
         run: |
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-base -p sdk-base.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-base.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-mesh -p sdk-mesh.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-mesh.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-inspect -p sdk-inspect.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-inspect.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-scene -p sdk-scene.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-scene.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-graphics -p sdk-graphics.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-graphics.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-collision -p sdk-collision.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-collision.tar.gz -C /
           gh release download sdk-latest -R ${{ github.repository_owner }}/termin-components -p sdk-components.tar.gz -D /tmp
           sudo tar xzf /tmp/sdk-components.tar.gz -C /
 
@@ -104,10 +128,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential cmake python3-dev libgl1-mesa-dev libsdl2-dev qt6-base-dev
 
-      - name: Download full SDK
+      - name: Download all SDK artifacts
         env:
           GH_TOKEN: ${{ secrets.CLONETOKEN }}
         run: |
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-base -p sdk-base.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-base.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-mesh -p sdk-mesh.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-mesh.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-inspect -p sdk-inspect.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-inspect.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-scene -p sdk-scene.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-scene.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-graphics -p sdk-graphics.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-graphics.tar.gz -C /
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-collision -p sdk-collision.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-collision.tar.gz -C /
           gh release download sdk-latest -R ${{ github.repository_owner }}/termin-components -p sdk-components.tar.gz -D /tmp
           sudo tar xzf /tmp/sdk-components.tar.gz -C /
 
