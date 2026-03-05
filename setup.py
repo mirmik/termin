@@ -1,76 +1,7 @@
 #!/usr/bin/env python3
 
-from setuptools import setup, Extension, find_packages
-from setuptools.command.build_ext import build_ext
-from distutils.util import get_platform
-from pathlib import Path
-import shutil
-import subprocess
-import sys
+from setuptools import setup, find_packages
 import os
-
-
-class CMakeBuildExt(build_ext):
-    """
-    Build pybind11 extensions via CMake (cpp/CMakeLists.txt).
-    CMake builds all native modules in one go, then installs them into build_lib/termin/*.
-
-    Use --debug flag to build with debug symbols: pip install -e . --config-settings="--build-option=--debug"
-    Or: python setup.py build_ext --debug
-    """
-
-    user_options = build_ext.user_options + [
-        ("debug", None, "Build with debug symbols"),
-    ]
-
-    def initialize_options(self):
-        super().initialize_options()
-        self.debug = False
-
-    def finalize_options(self):
-        super().finalize_options()
-        # Also check sys.argv for --debug (for pip install -e . --debug workaround)
-        if "--debug" in sys.argv:
-            self.debug = True
-            sys.argv.remove("--debug")
-
-    def run(self):
-        try:
-            subprocess.check_output(["cmake", "--version"])
-        except OSError as exc:
-            raise RuntimeError("CMake is required to build native extensions") from exc
-
-        source_dir = Path(directory) / "cpp"
-        build_temp = Path(self.build_temp)
-        build_temp.mkdir(parents=True, exist_ok=True)
-
-        build_lib = Path(self.build_lib)
-        install_prefix = (build_lib / "termin").resolve()
-        install_prefix.mkdir(parents=True, exist_ok=True)
-
-        cfg = "Debug" if self.debug else "Release"
-        cmake_prefix_path = os.environ.get("CMAKE_PREFIX_PATH", "/opt/termin")
-        cmake_args = [
-            str(source_dir),
-            f"-DCMAKE_BUILD_TYPE={cfg}",
-            f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
-            f"-DCMAKE_PREFIX_PATH={cmake_prefix_path}",
-            f"-DPython_EXECUTABLE={sys.executable}",
-        ]
-
-        subprocess.check_call(["cmake", *cmake_args], cwd=build_temp)
-        subprocess.check_call(["cmake", "--build", ".", "--config", cfg, "--parallel"], cwd=build_temp)
-        subprocess.check_call(["cmake", "--install", ".", "--config", cfg], cwd=build_temp)
-
-        # Nothing else to do; CMake produced the .so/.pyd into build_lib already.
-        # Mark build as done so setuptools continues.
-        for ext in self.extensions:
-            self._built_objects = getattr(self, "_built_objects", [])  # satisfy setuptools expectations
-
-        # Native modules are installed by CMake into build_lib/termin/.
-        # For editable installs, setuptools handles sys.path so that
-        # build_lib is importable — no need to copy anything into source tree.
-
 
 directory = os.path.dirname(os.path.realpath(__file__))
 
@@ -93,38 +24,9 @@ if __name__ == "__main__":
         classifiers=[],
         package_data={
             "termin": [
-                # Shared libraries (Windows DLLs, Linux .so)
-                "*.dll",
-                "*.so",
-                "*.dylib",
-                # Import libraries for external modules (Windows)
-                "lib/*.lib",
                 # Header files for external C++ module compilation
                 "include/**/*.h",
                 "include/**/*.hpp",
-                # Subpackages
-                "ga201/*",
-                "physics/*",
-                "colliders/*",
-                "collision/*",
-                "fem/*",
-                "kinematic/*",
-                "geombase/*",
-                "utils/*",
-                "geomalgo/*",
-                "linalg/*",
-                "lighting/*",
-                "robot/*",
-                "loaders/*",
-                "visualization/*",
-                "chronosquad/*",
-                "chronosquad/**/*",
-                "visualization/**/*",
-                "mesh/*",
-                "assets/*",
-                "core/*",
-                "editor/*",
-                "tests/__init__.py",
                 # Standard library (shaders, materials, etc.)
                 "resources/**/*",
             ]
@@ -140,23 +42,5 @@ if __name__ == "__main__":
             "scipy",
             "PyQt6>=6.4",
         ],
-        extras_require={
-        },
-        ext_modules=[
-            # Only modules built by termin's own CMake.
-            # External modules (colliders, collision, mesh, texture, graphics)
-            # come from SDK via __path__ extension.
-            Extension("termin.physics._physics_native", sources=[]),
-            Extension("termin.voxels._voxels_native", sources=[]),
-            Extension("termin.visualization.animation._animation_native", sources=[]),
-            Extension("termin.viewport._viewport_native", sources=[]),
-            Extension("termin.entity._entity_native", sources=[]),
-            Extension("termin.lighting._lighting_native", sources=[]),
-            Extension("termin.skeleton._skeleton_native", sources=[]),
-            Extension("termin.navmesh._navmesh_native", sources=[]),
-            Extension("termin._native", sources=[]),  # unified render module
-            Extension("termin.tests._cpp_tests", sources=[]),
-        ],
-        cmdclass={"build_ext": CMakeBuildExt},
         zip_safe=False,
     )

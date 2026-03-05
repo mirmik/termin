@@ -8,6 +8,11 @@ NavMesh generation from voxel grids.
 4. Триангулируем полигоны
 """
 
+import os as _os
+_sdk_dir = _os.path.join(_os.sep, "opt", "termin", "lib", "python", "termin", "navmesh")
+if _os.path.isdir(_sdk_dir) and _sdk_dir not in __path__:
+    __path__.append(_sdk_dir)
+
 from termin.navmesh.types import NavPolygon, NavMesh, NavMeshConfig
 from termin.navmesh.polygon_builder import PolygonBuilder
 from termin.navmesh.persistence import NavMeshPersistence
