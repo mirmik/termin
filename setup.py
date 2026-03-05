@@ -49,10 +49,12 @@ class CMakeBuildExt(build_ext):
         install_prefix.mkdir(parents=True, exist_ok=True)
 
         cfg = "Debug" if self.debug else "Release"
+        cmake_prefix_path = os.environ.get("CMAKE_PREFIX_PATH", "/opt/termin")
         cmake_args = [
             str(source_dir),
             f"-DCMAKE_BUILD_TYPE={cfg}",
             f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
+            f"-DCMAKE_PREFIX_PATH={cmake_prefix_path}",
             f"-DPython_EXECUTABLE={sys.executable}",
         ]
 
