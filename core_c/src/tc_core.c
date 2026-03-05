@@ -1,6 +1,6 @@
 // tc_core.c - Library initialization, utilities, version info
 #include "termin_core.h"
-#include <tgfx/tgfx_intern_string.h>
+#include <tcbase/tgfx_intern_string.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

@@ -5,7 +5,7 @@
 #include <math.h>
 #include "termin_core.h"
 #include "physics/tc_collision_world.h"
-#include <tgfx/tc_resource_map.h>
+#include <tcbase/tc_resource_map.h>
 
 #define TEST_ASSERT(cond, msg) \
     do { \

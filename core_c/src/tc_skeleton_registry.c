@@ -1,7 +1,7 @@
 // tc_skeleton_registry.c - Skeleton registry with pool + hash table
 #include "resources/tc_skeleton_registry.h"
-#include <tgfx/tc_pool.h>
-#include <tgfx/tc_resource_map.h>
+#include <tcbase/tc_pool.h>
+#include <tcbase/tc_resource_map.h>
 #include <tgfx/tc_registry_utils.h>
 #include <tcbase/tc_log.h>
 #include "termin_core.h"
