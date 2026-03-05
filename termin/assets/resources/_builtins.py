@@ -27,6 +27,8 @@ BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.physics.fem_revolute_joint_component", "FEMRevoluteJointComponent"),
     # Коллайдеры
     ("termin.colliders.collider_component", "ColliderComponent"),
+    # Меш
+    ("termin.mesh.mesh_component", "MeshComponent"),
     # Воксели
     ("termin.voxels.voxelizer_component", "VoxelizerComponent"),
     ("termin.voxels.display_component", "VoxelDisplayComponent"),
