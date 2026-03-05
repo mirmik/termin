@@ -24,10 +24,16 @@ def _setup_dll_paths():
         return
     _initialized = True
 
-    # Add SDK Python packages to sys.path
+    # Add SDK Python packages to sys.path and extend termin.__path__
+    # so that subpackages from external repos (termin.scene, termin.inspect, etc.)
+    # installed into /opt/termin/lib/python/termin/ are discoverable.
     sdk_python_dir = os.path.join(os.sep, "opt", "termin", "lib", "python")
     if os.path.isdir(sdk_python_dir) and sdk_python_dir not in sys.path:
         sys.path.insert(0, sdk_python_dir)
+    sdk_termin_dir = os.path.join(sdk_python_dir, "termin")
+    import termin as _termin_pkg
+    if os.path.isdir(sdk_termin_dir) and sdk_termin_dir not in _termin_pkg.__path__:
+        _termin_pkg.__path__.append(sdk_termin_dir)
 
     if sys.platform != "win32":
         return
