@@ -2,6 +2,7 @@
 #include "render/tc_display.h"
 #include "tc_gpu.h"
 #include <tcbase/tc_log.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
