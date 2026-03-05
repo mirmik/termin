@@ -154,7 +154,6 @@ extern void tc_scene_ext_registry_init(void);
 extern void tc_scene_ext_registry_shutdown(void);
 extern void tc_scene_render_mount_extension_init(void);
 extern void tc_scene_render_state_extension_init(void);
-extern void tc_collision_world_extension_init(void);
 
 void tc_init(void) {
     if (g_initialized) return;
@@ -170,7 +169,6 @@ void tc_init(void) {
     tc_scene_ext_registry_init();
     tc_scene_render_mount_extension_init();
     tc_scene_render_state_extension_init();
-    tc_collision_world_extension_init();
     g_initialized = true;
 }
 
