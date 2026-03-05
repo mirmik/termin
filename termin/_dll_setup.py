@@ -24,6 +24,11 @@ def _setup_dll_paths():
         return
     _initialized = True
 
+    # Add SDK Python packages to sys.path
+    sdk_python_dir = os.path.join(os.sep, "opt", "termin", "lib", "python")
+    if os.path.isdir(sdk_python_dir) and sdk_python_dir not in sys.path:
+        sys.path.insert(0, sdk_python_dir)
+
     if sys.platform != "win32":
         return
 
