@@ -17,7 +17,6 @@ option(TC_USE_EXTERNAL_INSPECT "Use external termin_inspect package for inspect/
 # in cpp/termin/tc_collision_c_api.cpp instead.
 set(TC_SOURCES
     src/tc_animation_registry.c
-    src/tc_collision_world.c
     src/tc_core.c
     src/tc_display.c
     src/tc_input_manager.c

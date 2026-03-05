@@ -6,11 +6,15 @@
 
 extern "C" {
 #include <tcbase/tc_log.h>
+#include <termin_scene/termin_scene.h>
+#include <termin_collision/termin_collision.h>
 }
 
 namespace termin {
 
 EngineCore::EngineCore() {
+    termin_scene_runtime_init();
+    termin_collision_runtime_init();
     tc_engine_core_set_instance(reinterpret_cast<tc_engine_core*>(this));
     tc_log(TC_LOG_INFO, "[EngineCore] Created");
 }
@@ -19,6 +23,8 @@ EngineCore::~EngineCore() {
     if (tc_engine_core_instance() == reinterpret_cast<tc_engine_core*>(this)) {
         tc_engine_core_set_instance(nullptr);
     }
+    termin_collision_runtime_shutdown();
+    termin_scene_runtime_shutdown();
     tc_log(TC_LOG_INFO, "[EngineCore] Destroyed");
 }
 
