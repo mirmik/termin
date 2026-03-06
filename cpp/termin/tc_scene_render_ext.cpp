@@ -6,15 +6,23 @@
 #include "render/scene_pipeline_template.hpp"
 #include "render/tc_value_trent.hpp"
 #include "core/tc_scene_extension.h"
+#include <termin_scene/termin_scene.h>
+#include <termin_collision/termin_collision.h>
 #include "physics/tc_collision_world.h"
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
 
 static void ensure_builtin_scene_extensions_registered() {
+    static bool runtime_inited = false;
+    if (!runtime_inited) {
+        termin_scene_runtime_init();
+        termin_collision_runtime_init();
+        runtime_inited = true;
+    }
+
     tc_scene_render_mount_extension_init();
     tc_scene_render_state_extension_init();
-    tc_collision_world_extension_init();
 }
 
 TcSceneRef create_scene_with_render(const std::string& name, const std::string& uuid) {

@@ -11,6 +11,8 @@ extern "C" {
 #include "core/tc_scene_extension.h"
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_render_state.h"
+#include <termin_scene/termin_scene.h>
+#include <termin_collision/termin_collision.h>
 #include "physics/tc_collision_world.h"
 #include <tcbase/tc_log.h>
 }
@@ -18,9 +20,15 @@ extern "C" {
 namespace termin {
 
 static void ensure_builtin_scene_extensions_registered() {
+    static bool runtime_inited = false;
+    if (!runtime_inited) {
+        termin_scene_runtime_init();
+        termin_collision_runtime_init();
+        runtime_inited = true;
+    }
+
     tc_scene_render_mount_extension_init();
     tc_scene_render_state_extension_init();
-    tc_collision_world_extension_init();
 }
 
 SceneManager::SceneManager() {
