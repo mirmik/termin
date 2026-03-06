@@ -21,6 +21,17 @@ endif()
 
 # C# SWIG bindings option (must be declared early to skip nanobind when ON)
 option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings (termin.dll)" OFF)
+option(TERMIN_BUILD_PYTHON "Build Python/nanobind bindings" ON)
+
+# Current build graph uses different linkage model for Python and C# modes:
+# - Python mode expects shared render/navmesh libs and nanobind modules.
+# - C# mode expects static render/navmesh libs for WHOLEARCHIVE linkage.
+# Keep the constraint explicit instead of silently disabling one side.
+if(TERMIN_BUILD_PYTHON AND BUILD_CSHARP_BINDINGS)
+    message(FATAL_ERROR
+        "TERMIN_BUILD_PYTHON=ON and BUILD_CSHARP_BINDINGS=ON are currently incompatible. "
+        "Use one mode per build directory.")
+endif()
 
 # Install prefix for Python modules
 # For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
@@ -109,7 +120,7 @@ find_package(termin_base REQUIRED)
 find_package(termin_graphics REQUIRED)
 # termin-inspect (extracted inspect/kind core + python bridge)
 find_package(termin_inspect REQUIRED)
-if(NOT BUILD_CSHARP_BINDINGS AND NOT TARGET termin_inspect::termin_inspect_python)
+if(TERMIN_BUILD_PYTHON AND NOT TARGET termin_inspect::termin_inspect_python)
     message(FATAL_ERROR "termin Python build requires termin_inspect::termin_inspect_python. Rebuild/install termin-inspect with TERMIN_BUILD_PYTHON=ON.")
 endif()
 
@@ -182,9 +193,7 @@ target_include_directories(entity_lib PUBLIC
     $<INSTALL_INTERFACE:include/cpp>
     $<INSTALL_INTERFACE:include>
 )
-if(BUILD_CSHARP_BINDINGS)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic PRIVATE trent)
-else()
+if(TERMIN_BUILD_PYTHON)
     # Find nanobind for entity_lib linking
     if(WIN32)
         execute_process(
@@ -206,6 +215,8 @@ else()
     target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic PRIVATE trent nanobind Python::Python)
     target_link_libraries(entity_lib PUBLIC termin_inspect::termin_inspect_python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
+else()
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic PRIVATE trent)
 endif()
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
@@ -411,7 +422,7 @@ else()
 endif()
 
 # ============== Python bindings (nanobind) ==============
-if(NOT BUILD_CSHARP_BINDINGS)
+if(TERMIN_BUILD_PYTHON)
     include(${CMAKE_CURRENT_SOURCE_DIR}/python_bindings.cmake)
 endif()
 
