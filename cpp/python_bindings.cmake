@@ -1,20 +1,6 @@
 # Python bindings using nanobind
 # This file is only included when NOT building C# bindings
 
-# Find nanobind via pip
-if(WIN32)
-    execute_process(
-        COMMAND python -m nanobind --cmake_dir
-        OUTPUT_VARIABLE nanobind_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-else()
-    execute_process(
-        COMMAND python3 -m nanobind --cmake_dir
-        OUTPUT_VARIABLE nanobind_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-endif()
 find_package(nanobind CONFIG REQUIRED)
 
 # ============== Small utility modules ==============
@@ -247,6 +233,3 @@ install(TARGETS _skeleton_native DESTINATION ${TERMIN_PYTHON_PREFIX}/skeleton)
 install(TARGETS _viewport_native DESTINATION ${TERMIN_PYTHON_PREFIX}/viewport)
 install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_PREFIX}/entity)
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_PREFIX})
-if(TARGET nanobind)
-    install(TARGETS nanobind DESTINATION ${TERMIN_PYTHON_PREFIX})
-endif()

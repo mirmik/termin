@@ -194,24 +194,7 @@ target_include_directories(entity_lib PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 if(TERMIN_BUILD_PYTHON)
-    # Find nanobind for entity_lib linking
-    if(WIN32)
-        execute_process(
-            COMMAND python -m nanobind --cmake_dir
-            OUTPUT_VARIABLE nanobind_DIR
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-    else()
-        execute_process(
-            COMMAND python3 -m nanobind --cmake_dir
-            OUTPUT_VARIABLE nanobind_DIR
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-    endif()
     find_package(nanobind CONFIG REQUIRED)
-    if(NOT TARGET nanobind)
-        nanobind_build_library(nanobind)
-    endif()
     target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic PRIVATE trent nanobind Python::Python)
     target_link_libraries(entity_lib PUBLIC termin_inspect::termin_inspect_python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
@@ -562,15 +545,6 @@ install(TARGETS trent entity_lib termin_core render_lib engine_lib navmesh_lib R
     LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}
     ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib
 )
-
-if(TARGET nanobind)
-    install(TARGETS nanobind
-        EXPORT terminTargets
-        RUNTIME DESTINATION ${TERMIN_PYTHON_PREFIX}
-        LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}
-        ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib
-    )
-endif()
 
 if(WIN32 AND SDL2_DLL)
     install(FILES ${SDL2_DLL} DESTINATION ${TERMIN_PYTHON_PREFIX})

@@ -27,13 +27,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential cmake python3-dev libgl1-mesa-dev libsdl2-dev qt6-base-dev
 
-      - name: Install Python dependencies
-        run: pip install nanobind
-
       - name: Download all SDK artifacts
         env:
           GH_TOKEN: ${{ secrets.CLONETOKEN }}
         run: |
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-nanobind-sdk -p sdk-nanobind.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-nanobind.tar.gz -C /
           gh release download sdk-latest -R ${{ github.repository_owner }}/termin-base -p sdk-base.tar.gz -D /tmp
           sudo tar xzf /tmp/sdk-base.tar.gz -C /
           gh release download sdk-latest -R ${{ github.repository_owner }}/termin-mesh -p sdk-mesh.tar.gz -D /tmp
@@ -80,13 +79,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential cmake python3-dev libgl1-mesa-dev libsdl2-dev qt6-base-dev
 
-      - name: Install Python dependencies
-        run: pip install nanobind
-
       - name: Download all SDK artifacts
         env:
           GH_TOKEN: ${{ secrets.CLONETOKEN }}
         run: |
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-nanobind-sdk -p sdk-nanobind.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-nanobind.tar.gz -C /
           gh release download sdk-latest -R ${{ github.repository_owner }}/termin-base -p sdk-base.tar.gz -D /tmp
           sudo tar xzf /tmp/sdk-base.tar.gz -C /
           gh release download sdk-latest -R ${{ github.repository_owner }}/termin-mesh -p sdk-mesh.tar.gz -D /tmp
@@ -132,6 +130,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.CLONETOKEN }}
         run: |
+          gh release download sdk-latest -R ${{ github.repository_owner }}/termin-nanobind-sdk -p sdk-nanobind.tar.gz -D /tmp
+          sudo tar xzf /tmp/sdk-nanobind.tar.gz -C /
           gh release download sdk-latest -R ${{ github.repository_owner }}/termin-base -p sdk-base.tar.gz -D /tmp
           sudo tar xzf /tmp/sdk-base.tar.gz -C /
           gh release download sdk-latest -R ${{ github.repository_owner }}/termin-mesh -p sdk-mesh.tar.gz -D /tmp
@@ -148,7 +148,7 @@ jobs:
           sudo tar xzf /tmp/sdk-components.tar.gz -C /
 
       - name: Install Python dependencies
-        run: pip install nanobind numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6 pysdl2 /opt/termin/wheels/*.whl
+        run: pip install numpy pytest Pillow scipy pyassimp PyOpenGL glfw PyQt6 pysdl2 /opt/termin/wheels/*.whl
 
       - name: Build native modules
         run: ./build.sh
