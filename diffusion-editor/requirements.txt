@@ -2,3 +2,5 @@ Pillow
 numpy
 simple-lama-inpainting
 diffusers
+transformers
+pysdl2
