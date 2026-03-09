@@ -1,0 +1,21 @@
+site_name: Termin
+site_description: Documentation Hub — монорепозиторий 3D-движка Termin
+repo_url: https://github.com/mirmik/termin-monorepo
+repo_name: mirmik/termin-monorepo
+docs_dir: docs
+theme:
+  name: material
+  language: ru
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+  - attr_list
+nav:
+  - Главная: index.md

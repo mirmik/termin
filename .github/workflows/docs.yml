@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - 'docs/**'
+      - 'mkdocs.yml'
       - 'termin/docs/**'
       - 'termin/mkdocs.yml'
       - 'termin-collision/docs/**'
@@ -45,9 +46,7 @@ jobs:
           pip install mkdocs mkdocs-material
 
       - name: Build hub page
-        run: |
-          mkdir -p _site
-          cp docs/index.html _site/
+        run: mkdocs build -d _site
 
       - name: Build MkDocs projects
         run: |
