@@ -144,7 +144,47 @@ build_termin_cpp_only() {
     echo "termin (C/C++ only) installed to ${SDK_PREFIX}"
 }
 
+build_nanobind_sdk() {
+    echo ""
+    echo "========================================"
+    echo "  Building termin-nanobind-sdk ($BUILD_TYPE)"
+    echo "========================================"
+    echo ""
+
+    cd "$SCRIPT_DIR/termin-nanobind-sdk"
+
+    local build_dir="build/${BUILD_TYPE}"
+    if [[ $CLEAN -eq 1 ]]; then
+        echo "Cleaning $build_dir..."
+        rm -rf "$build_dir"
+    fi
+
+    mkdir -p "$build_dir"
+
+    local py_exec
+    py_exec="$(command -v python3 || true)"
+    if [[ -z "$py_exec" ]]; then
+        py_exec="$(command -v python || true)"
+    fi
+
+    if ! "$py_exec" -c "import nanobind" >/dev/null 2>&1; then
+        echo "Installing nanobind Python package for SDK bootstrap..."
+        pip install nanobind
+    fi
+
+    cmake -S . -B "$build_dir" \
+        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+        -DCMAKE_INSTALL_PREFIX="$SDK_PREFIX" \
+        -DPython_EXECUTABLE="$py_exec"
+
+    cmake --build "$build_dir" --parallel "$BUILD_JOBS"
+    sudo cmake --install "$build_dir"
+
+    echo "termin-nanobind-sdk installed to ${SDK_PREFIX}"
+}
+
 # Build chain (C/C++ only)
+build_nanobind_sdk
 build_cmake_lib_cpp "termin-base" "$SCRIPT_DIR/termin-base"
 build_cmake_lib_cpp "termin-mesh" "$SCRIPT_DIR/termin-mesh"
 build_cmake_lib_cpp "termin-graphics" "$SCRIPT_DIR/termin-graphics"
