@@ -62,6 +62,19 @@ build_cmake_lib_cpp() {
 
     mkdir -p "$build_dir"
 
+    local extra_args=()
+    if [[ "$name" == "termin-base" ]]; then
+        extra_args+=(-DTERMIN_BASE_BUILD_TESTS=ON)
+    elif [[ "$name" == "termin-graphics" ]]; then
+        extra_args+=(-DBUILD_TESTS=ON)
+    elif [[ "$name" == "termin-inspect" ]]; then
+        extra_args+=(-DTI_BUILD_TESTS=ON)
+    elif [[ "$name" == "termin-scene" ]]; then
+        extra_args+=(-DTERMIN_SCENE_BUILD_TESTS=ON)
+    elif [[ "$name" == "termin-collision" ]]; then
+        extra_args+=(-DTERMIN_COLLISION_BUILD_TESTS=ON)
+    fi
+
     cmake -S . -B "$build_dir" \
         -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
         -DCMAKE_INSTALL_PREFIX="$SDK_PREFIX" \
@@ -77,9 +90,18 @@ build_cmake_lib_cpp() {
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
         -Dtermin_components_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_components_mesh" \
-        -Dtermin_components_kinematic_DIR="$SDK_PREFIX/lib/cmake/termin_components_kinematic"
+        -Dtermin_components_kinematic_DIR="$SDK_PREFIX/lib/cmake/termin_components_kinematic" \
+        "${extra_args[@]}"
 
     cmake --build "$build_dir" --parallel "$BUILD_JOBS"
+
+    if [[ ${#extra_args[@]} -gt 0 ]]; then
+        echo "Running tests for $name..."
+        cd "$build_dir"
+        ctest --output-on-failure
+        cd "$dir"
+    fi
+
     sudo cmake --install "$build_dir"
 
     echo "$name installed to ${SDK_PREFIX}"
