@@ -1,0 +1,8 @@
+{
+  "name": "cpp_demo",
+  "type": "cpp",
+  "build": {
+    "command": "cmake -S . -B build && cmake --build build",
+    "output": "build/libcpp_demo.so"
+  }
+}

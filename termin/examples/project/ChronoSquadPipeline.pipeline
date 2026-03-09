@@ -1,0 +1,154 @@
+{
+  "name": "ChronoSquadPipeline",
+  "passes": [
+    {
+      "type": "SkyBoxPass",
+      "pass_name": "Skybox",
+      "enabled": true,
+      "passthrough": false,
+      "data": {
+        "input_res": "empty",
+        "output_res": "skybox"
+      }
+    },
+    {
+      "type": "ColorPass",
+      "pass_name": "Color",
+      "enabled": true,
+      "data": {
+        "input_res": "skybox",
+        "output_res": "color",
+        "shadow_res": "shadow_maps",
+        "phase_mark": "opaque",
+        "sort_by_distance": false,
+        "clear_depth": false
+      }
+    },
+    {
+      "type": "ColorPass",
+      "pass_name": "TransparentPass",
+      "enabled": true,
+      "data": {
+        "input_res": "color",
+        "output_res": "color+transparent",
+        "shadow_res": "shadow_maps",
+        "phase_mark": "transparent",
+        "sort_by_distance": true,
+        "clear_depth": false
+      }
+    },
+    {
+      "type": "ResolvePass",
+      "pass_name": "ResolvePass",
+      "enabled": true,
+      "passthrough": false,
+      "data": {
+        "input_res": "color+transparent",
+        "output_res": "resolved"
+      }
+    },
+    {
+      "type": "PostProcessPass",
+      "pass_name": "PostFX",
+      "enabled": true,
+      "passthrough": false,
+      "data": {
+        "input_res": "resolved",
+        "output_res": "color_pp",
+        "internal_format": "rgba16f",
+        "effects": [
+          {
+            "type": "MaterialPostEffect",
+            "name": "TimeSpection",
+            "data": {
+              "_material_handle": {
+                "type": "uuid",
+                "uuid": "16cc8c42-4d8b-4cea-8b8a-173ecc39217e",
+                "name": "TimeSpection"
+              },
+              "_required_depth": false,
+              "extra_resources_str": "depth:u_depth_texture, normal:u_normal_texture"
+            }
+          },
+          {
+            "type": "BloomEffect",
+            "name": "bloom",
+            "data": {
+              "threshold": 1.0,
+              "soft_threshold": 0.5,
+              "intensity": 1.0,
+              "mip_levels": 5.0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "DepthPass",
+      "pass_name": "DepthPass",
+      "enabled": true,
+      "data": {
+        "input_res": "empty_depth",
+        "output_res": "depth"
+      }
+    },
+    {
+      "type": "PresentToScreenPass",
+      "pass_name": "Present",
+      "enabled": true,
+      "passthrough": false,
+      "data": {
+        "input_res": "color_pp",
+        "output_res": "DISPLAY"
+      }
+    },
+    {
+      "type": "ShadowPass",
+      "pass_name": "ShadowPass",
+      "enabled": true,
+      "data": {
+        "output_res": "shadow_maps",
+        "default_resolution": 1024.0,
+        "max_shadow_distance": 50.0,
+        "ortho_size": 20.0,
+        "near": 0.10000000149011612,
+        "far": 100.0,
+        "caster_offset": 50.0
+      }
+    },
+    {
+      "type": "NormalPass",
+      "pass_name": "NormalPass",
+      "enabled": true,
+      "data": {
+        "input_res": "empty_normal",
+        "output_res": "normal"
+      }
+    }
+  ],
+  "pipeline_specs": [
+    {
+      "resource": "empty",
+      "resource_type": "fbo",
+      "clear_color": [
+        0.1,
+        0.1,
+        0.1,
+        1.0
+      ],
+      "clear_depth": 1.0,
+      "format": "rgba16f",
+      "samples": 8
+    },
+    {
+      "resource": "color_pp",
+      "resource_type": "fbo",
+      "format": "rgba16f"
+    },
+    {
+      "resource": "resolved",
+      "resource_type": "fbo",
+      "format": "rgba16f"
+    }
+  ]
+}

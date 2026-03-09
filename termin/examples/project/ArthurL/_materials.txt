@@ -1,0 +1,21 @@
+# Materials from GLB
+
+Material: eyebrow001
+  Texture Index: 0
+
+Material: eyelashes01
+  Texture Index: 1
+
+Material: jammers3
+  Base Color: (0.025, 0.024, 0.023, 1.000)
+
+Material: low-poly
+  Texture Index: 2
+
+Material: male_muscle_13290
+
+Material: mens_tanks_elv1f
+  Texture Index: 3
+
+Material: spiky
+  Base Color: (0.605, 0.441, 0.093, 1.000)

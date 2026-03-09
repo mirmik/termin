@@ -1,0 +1,25 @@
+site_name: termin-collision
+site_description: Collision detection library documentation
+repo_url: https://github.com/mirmik/termin-collision
+repo_name: mirmik/termin-collision
+theme:
+  name: material
+  language: ru
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+nav:
+  - Главная: index.md
+  - Архитектура: architecture.md
+  - Коллайдеры: colliders.md
+  - Алгоритмы: algorithms.md
+  - CollisionWorld: collision-world.md
+  - C API: c-api.md
+  - Python API: python-api.md

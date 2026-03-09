@@ -1,0 +1,13 @@
+{
+  "uuid": "d6ea4df7-29d6-4bcf-ad15-a41d5ff50f09",
+  "shader": "SkinnedShader",
+  "uniforms": {
+    "u_color": [
+      0.45540550351142883,
+      0.27786678075790405,
+      0.27786678075790405,
+      1.0
+    ],
+    "u_shininess": 32.0
+  }
+}

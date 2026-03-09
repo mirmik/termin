@@ -1,0 +1,60 @@
+"""
+Voxel system for navmesh generation.
+
+Provides chunked voxel grid with visualization and serialization support.
+"""
+
+# Setup DLL paths before importing native extensions
+from termin import _dll_setup  # noqa: F401
+
+import os as _os
+_sdk_dir = _os.path.join(_os.sep, "opt", "termin", "lib", "python", "termin", "voxels")
+if _os.path.isdir(_sdk_dir) and _sdk_dir not in __path__:
+    __path__.append(_sdk_dir)
+
+from termin.voxels._voxels_native import (
+    VoxelChunk,
+    VoxelGrid,
+    VoxelGridHandle,
+    CHUNK_SIZE,
+)
+from termin.voxels.component import VoxelGridComponent
+from termin.voxels.visualization import VoxelVisualizer
+from termin.voxels.voxelizer import (
+    MeshVoxelizer,
+    SceneVoxelizer,
+    voxelize_scene,
+    VOXEL_EMPTY,
+    VOXEL_SOLID,
+    VOXEL_SURFACE,
+)
+from termin.voxels.persistence import (
+    VoxelPersistence,
+    VOXEL_FILE_EXTENSION,
+)
+from termin.voxels.voxelizer_component import VoxelizerComponent, VoxelizeMode
+from termin.voxels.display_component import VoxelDisplayComponent
+from termin.voxels.voxel_shader import voxel_display_shader
+from termin.voxels.voxel_mesh import create_voxel_mesh
+
+__all__ = [
+    "VoxelChunk",
+    "VoxelGrid",
+    "VoxelGridHandle",
+    "VoxelGridComponent",
+    "VoxelVisualizer",
+    "MeshVoxelizer",
+    "SceneVoxelizer",
+    "voxelize_scene",
+    "VoxelPersistence",
+    "VoxelizerComponent",
+    "VoxelizeMode",
+    "VoxelDisplayComponent",
+    "create_voxel_mesh",
+    "CHUNK_SIZE",
+    "VOXEL_EMPTY",
+    "VOXEL_SOLID",
+    "VOXEL_SURFACE",
+    "VOXEL_FILE_EXTENSION",
+    "voxel_display_shader",
+]

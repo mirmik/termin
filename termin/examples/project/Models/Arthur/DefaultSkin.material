@@ -1,0 +1,14 @@
+{
+  "uuid": "2045ce7a-2b74-4f87-9bf0-125ac1e2c511",
+  "shader": "DefaultShader",
+  "uniforms": {
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_ambient": 0.8999999761581421,
+    "u_shininess": 256.0
+  }
+}

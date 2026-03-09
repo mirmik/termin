@@ -1,0 +1,8 @@
+<UserControl x:Class="Termin.WpfTest.Controls.TerminSceneViewerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:glWpf="clr-namespace:OpenTK.Wpf;assembly=GLWpfControl">
+    <Grid>
+        <glWpf:GLWpfControl x:Name="GlControl" Render="GlControl_Render" />
+    </Grid>
+</UserControl>

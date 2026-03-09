@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "root": {
+    "name": "APrefab",
+    "priority": 0,
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "visible": true,
+    "active": true,
+    "pickable": true,
+    "selectable": true,
+    "pose": {
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "components": [],
+    "children": []
+  },
+  "resources": {
+    "materials": {},
+    "meshes": {}
+  }
+}

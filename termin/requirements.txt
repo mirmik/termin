@@ -1,0 +1,11 @@
+numpy
+PyOpenGL>=3.1
+glfw>=2.5.0
+Pillow>=9.0
+pyassimp
+scipy
+PyQt6>=6.4
+PyYAML>=6.0
+pysdl2
+pysdl2-dll
+watchdog>=3.0

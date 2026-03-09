@@ -1,0 +1,521 @@
+// test_main.c - Tests for Termin Core
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include "termin_core.h"
+#include "physics/tc_collision_world.h"
+#include <tcbase/tc_resource_map.h>
+
+#define TEST_ASSERT(cond, msg) \
+    do { \
+        if (!(cond)) { \
+            printf("FAIL: %s (line %d)\n", msg, __LINE__); \
+            return 1; \
+        } \
+    } while(0)
+
+#define EPSILON 1e-9
+
+// ============================================================================
+// Vec3 tests
+// ============================================================================
+
+static int test_vec3(void) {
+    printf("Testing Vec3...\n");
+
+    tc_vec3 a = {1.0, 2.0, 3.0};
+    tc_vec3 b = {4.0, 5.0, 6.0};
+
+    tc_vec3 sum = tc_vec3_add(a, b);
+    TEST_ASSERT(fabs(sum.x - 5.0) < EPSILON, "vec3 add x");
+    TEST_ASSERT(fabs(sum.y - 7.0) < EPSILON, "vec3 add y");
+    TEST_ASSERT(fabs(sum.z - 9.0) < EPSILON, "vec3 add z");
+
+    tc_vec3 diff = tc_vec3_sub(b, a);
+    TEST_ASSERT(fabs(diff.x - 3.0) < EPSILON, "vec3 sub x");
+    TEST_ASSERT(fabs(diff.y - 3.0) < EPSILON, "vec3 sub y");
+    TEST_ASSERT(fabs(diff.z - 3.0) < EPSILON, "vec3 sub z");
+
+    double dot = tc_vec3_dot(a, b);
+    TEST_ASSERT(fabs(dot - 32.0) < EPSILON, "vec3 dot");
+
+    tc_vec3 cross = tc_vec3_cross(a, b);
+    TEST_ASSERT(fabs(cross.x - (-3.0)) < EPSILON, "vec3 cross x");
+    TEST_ASSERT(fabs(cross.y - 6.0) < EPSILON, "vec3 cross y");
+    TEST_ASSERT(fabs(cross.z - (-3.0)) < EPSILON, "vec3 cross z");
+
+    double len = tc_vec3_length(a);
+    TEST_ASSERT(fabs(len - sqrt(14.0)) < EPSILON, "vec3 length");
+
+    tc_vec3 norm = tc_vec3_normalize(a);
+    TEST_ASSERT(fabs(tc_vec3_length(norm) - 1.0) < EPSILON, "vec3 normalize");
+
+    printf("  Vec3: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// Quat tests
+// ============================================================================
+
+static int test_quat(void) {
+    printf("Testing Quat...\n");
+
+    tc_quat q = tc_quat_identity();
+    TEST_ASSERT(fabs(q.w - 1.0) < EPSILON, "quat identity w");
+    TEST_ASSERT(fabs(q.x) < EPSILON, "quat identity x");
+    TEST_ASSERT(fabs(q.y) < EPSILON, "quat identity y");
+    TEST_ASSERT(fabs(q.z) < EPSILON, "quat identity z");
+
+    // Rotate around Y axis by 90 degrees
+    tc_quat rot = tc_quat_from_axis_angle((tc_vec3){0, 1, 0}, M_PI / 2.0);
+    tc_vec3 v = {1, 0, 0};
+    tc_vec3 rotated = tc_quat_rotate(rot, v);
+
+    // Should be approximately (0, 0, -1)
+    TEST_ASSERT(fabs(rotated.x) < 0.01, "quat rotate x");
+    TEST_ASSERT(fabs(rotated.y) < 0.01, "quat rotate y");
+    TEST_ASSERT(fabs(rotated.z - (-1.0)) < 0.01, "quat rotate z");
+
+    // Test multiplication
+    tc_quat q2 = tc_quat_mul(rot, rot);  // 180 degrees
+    tc_vec3 rotated2 = tc_quat_rotate(q2, v);
+    TEST_ASSERT(fabs(rotated2.x - (-1.0)) < 0.01, "quat mul rotate x");
+
+    printf("  Quat: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// Entity Pool tests
+// ============================================================================
+
+static int test_entity_pool(void) {
+    printf("Testing Entity Pool...\n");
+
+    tc_entity_pool* pool = tc_entity_pool_create(16);
+    TEST_ASSERT(pool != NULL, "pool create");
+    TEST_ASSERT(tc_entity_pool_count(pool) == 0, "initial count is 0");
+
+    // Allocate entity
+    tc_entity_id e1 = tc_entity_pool_alloc(pool, "Entity1");
+    TEST_ASSERT(tc_entity_id_valid(e1), "alloc returns valid id");
+    TEST_ASSERT(tc_entity_pool_alive(pool, e1), "entity is alive");
+    TEST_ASSERT(tc_entity_pool_count(pool) == 1, "count is 1");
+
+    // Check name
+    const char* name = tc_entity_pool_name(pool, e1);
+    TEST_ASSERT(strcmp(name, "Entity1") == 0, "entity name");
+
+    // Check UUID
+    const char* uuid = tc_entity_pool_uuid(pool, e1);
+    TEST_ASSERT(uuid != NULL && strlen(uuid) > 0, "entity has uuid");
+
+    // Find by UUID
+    tc_entity_id found = tc_entity_pool_find_by_uuid(pool, uuid);
+    TEST_ASSERT(tc_entity_id_eq(found, e1), "find by uuid");
+
+    // Test flags
+    TEST_ASSERT(tc_entity_pool_visible(pool, e1) == true, "visible default");
+    TEST_ASSERT(tc_entity_pool_enabled(pool, e1) == true, "enabled default");
+
+    tc_entity_pool_set_visible(pool, e1, false);
+    TEST_ASSERT(tc_entity_pool_visible(pool, e1) == false, "set visible");
+
+    // Test transform
+    double pos[3] = {1.0, 2.0, 3.0};
+    tc_entity_pool_set_local_position(pool, e1, pos);
+
+    double out_pos[3];
+    tc_entity_pool_get_local_position(pool, e1, out_pos);
+    TEST_ASSERT(fabs(out_pos[0] - 1.0) < EPSILON, "position x");
+    TEST_ASSERT(fabs(out_pos[1] - 2.0) < EPSILON, "position y");
+    TEST_ASSERT(fabs(out_pos[2] - 3.0) < EPSILON, "position z");
+
+    // Free entity
+    tc_entity_pool_free(pool, e1);
+    TEST_ASSERT(!tc_entity_pool_alive(pool, e1), "freed entity not alive");
+    TEST_ASSERT(tc_entity_pool_count(pool) == 0, "count back to 0");
+
+    // Old ID should be invalid (generation mismatch)
+    tc_entity_id e2 = tc_entity_pool_alloc(pool, "Entity2");
+    TEST_ASSERT(e2.index == e1.index, "slot reused");
+    TEST_ASSERT(e2.generation > e1.generation, "generation incremented");
+
+    tc_entity_pool_destroy(pool);
+
+    printf("  Entity Pool: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// Entity Hierarchy tests
+// ============================================================================
+
+static int test_entity_hierarchy(void) {
+    printf("Testing Entity Hierarchy...\n");
+
+    tc_entity_pool* pool = tc_entity_pool_create(16);
+
+    tc_entity_id parent = tc_entity_pool_alloc(pool, "Parent");
+    tc_entity_id child = tc_entity_pool_alloc(pool, "Child");
+
+    // Set positions
+    double parent_pos[3] = {10.0, 0.0, 0.0};
+    double child_pos[3] = {5.0, 0.0, 0.0};
+    tc_entity_pool_set_local_position(pool, parent, parent_pos);
+    tc_entity_pool_set_local_position(pool, child, child_pos);
+
+    // Set parent
+    tc_entity_pool_set_parent(pool, child, parent);
+
+    TEST_ASSERT(tc_entity_id_eq(tc_entity_pool_parent(pool, child), parent), "child has parent");
+    TEST_ASSERT(tc_entity_pool_children_count(pool, parent) == 1, "parent has 1 child");
+    TEST_ASSERT(tc_entity_id_eq(tc_entity_pool_child_at(pool, parent, 0), child), "child at 0");
+
+    // Update transforms
+    tc_entity_pool_update_transforms(pool);
+
+    // Check world position
+    double world_pos[3];
+    tc_entity_pool_get_global_position(pool, child, world_pos);
+    TEST_ASSERT(fabs(world_pos[0] - 15.0) < EPSILON, "child world pos x");
+
+    tc_entity_pool_destroy(pool);
+
+    printf("  Entity Hierarchy: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// UUID tests
+// ============================================================================
+
+static int test_uuid(void) {
+    printf("Testing UUID...\n");
+
+    char uuid1[40];
+    char uuid2[40];
+
+    tc_generate_uuid(uuid1);
+    tc_generate_uuid(uuid2);
+
+    TEST_ASSERT(strlen(uuid1) == 36, "uuid1 length");
+    TEST_ASSERT(strlen(uuid2) == 36, "uuid2 length");
+    TEST_ASSERT(strcmp(uuid1, uuid2) != 0, "uuids are unique");
+
+    // Check format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    TEST_ASSERT(uuid1[8] == '-', "uuid format dash 1");
+    TEST_ASSERT(uuid1[13] == '-', "uuid format dash 2");
+    TEST_ASSERT(uuid1[18] == '-', "uuid format dash 3");
+    TEST_ASSERT(uuid1[23] == '-', "uuid format dash 4");
+
+    printf("  UUID: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// tc_inspect dispatcher mock tests
+
+// ============================================================================
+// Inspect dispatcher mock tests
+// ============================================================================
+
+typedef struct {
+    int64_t value;
+    bool action_called;
+} mock_dispatch_obj;
+
+static bool mock_has_type(const char* type_name, void* ctx) {
+    (void)ctx;
+    return type_name && strcmp(type_name, "MockDispatchType") == 0;
+}
+
+static const char* mock_get_parent(const char* type_name, void* ctx) {
+    (void)type_name;
+    (void)ctx;
+    return NULL;
+}
+
+static size_t mock_field_count(const char* type_name, void* ctx) {
+    (void)ctx;
+    if (!type_name || strcmp(type_name, "MockDispatchType") != 0) return 0;
+    return 1;
+}
+
+static bool mock_get_field(const char* type_name, size_t index, tc_field_info* out, void* ctx) {
+    (void)ctx;
+    if (!out || !type_name || strcmp(type_name, "MockDispatchType") != 0 || index != 0) return false;
+    out->path = "value";
+    out->label = "Value";
+    out->kind = "int";
+    out->min = 0.0;
+    out->max = 10000.0;
+    out->step = 1.0;
+    out->is_serializable = true;
+    out->is_inspectable = true;
+    out->choices = NULL;
+    out->choice_count = 0;
+    return true;
+}
+
+static bool mock_find_field(const char* type_name, const char* path, tc_field_info* out, void* ctx) {
+    (void)ctx;
+    if (!out || !type_name || !path) return false;
+    if (strcmp(type_name, "MockDispatchType") != 0) return false;
+    if (strcmp(path, "value") != 0) return false;
+    return mock_get_field(type_name, 0, out, ctx);
+}
+
+static tc_value mock_get(void* obj, const char* type_name, const char* path, void* ctx) {
+    (void)ctx;
+    if (!obj || !type_name || !path) return tc_value_nil();
+    if (strcmp(type_name, "MockDispatchType") != 0 || strcmp(path, "value") != 0) return tc_value_nil();
+    mock_dispatch_obj* m = (mock_dispatch_obj*)obj;
+    return tc_value_int(m->value);
+}
+
+static void mock_set(void* obj, const char* type_name, const char* path, tc_value value, void* context, void* ctx) {
+    (void)context;
+    (void)ctx;
+    if (!obj || !type_name || !path) return;
+    if (strcmp(type_name, "MockDispatchType") != 0 || strcmp(path, "value") != 0) return;
+    mock_dispatch_obj* m = (mock_dispatch_obj*)obj;
+    if (value.type == TC_VALUE_INT) m->value = value.data.i;
+    else if (value.type == TC_VALUE_FLOAT) m->value = (int64_t)value.data.f;
+    else if (value.type == TC_VALUE_DOUBLE) m->value = (int64_t)value.data.d;
+}
+
+static void mock_action(void* obj, const char* type_name, const char* path, void* ctx) {
+    (void)ctx;
+    if (!obj || !type_name || !path) return;
+    if (strcmp(type_name, "MockDispatchType") != 0 || strcmp(path, "value") != 0) return;
+    mock_dispatch_obj* m = (mock_dispatch_obj*)obj;
+    m->action_called = true;
+}
+
+static int test_inspect_dispatcher_mock(void) {
+    printf("Testing inspect dispatcher mock...\n");
+
+    tc_inspect_lang_vtable vtable = {
+        mock_has_type,
+        mock_get_parent,
+        mock_field_count,
+        mock_get_field,
+        mock_find_field,
+        mock_get,
+        mock_set,
+        mock_action,
+        NULL
+    };
+    tc_inspect_set_lang_vtable(TC_INSPECT_LANG_C, &vtable);
+
+    TEST_ASSERT(tc_inspect_has_type("MockDispatchType"), "mock type registered");
+    TEST_ASSERT(tc_inspect_type_lang("MockDispatchType") == TC_INSPECT_LANG_C, "mock type language");
+    TEST_ASSERT(tc_inspect_field_count("MockDispatchType") == 1, "mock field count");
+
+    tc_field_info info;
+    TEST_ASSERT(tc_inspect_find_field_info("MockDispatchType", "value", &info), "mock field lookup");
+    TEST_ASSERT(strcmp(info.kind, "int") == 0, "mock field kind");
+
+    mock_dispatch_obj obj = { .value = 11, .action_called = false };
+    tc_value v = tc_inspect_get(&obj, "MockDispatchType", "value");
+    TEST_ASSERT(v.type == TC_VALUE_INT, "mock get type int");
+    TEST_ASSERT(v.data.i == 11, "mock get value");
+    tc_value_free(&v);
+
+    tc_value set_v = tc_value_int(77);
+    tc_inspect_set(&obj, "MockDispatchType", "value", set_v, NULL);
+    tc_value_free(&set_v);
+    TEST_ASSERT(obj.value == 77, "mock set value");
+
+    tc_inspect_action(&obj, "MockDispatchType", "value");
+    TEST_ASSERT(obj.action_called, "mock action called");
+
+    tc_value serialized = tc_inspect_serialize(&obj, "MockDispatchType");
+    tc_value* val_ptr = tc_value_dict_get(&serialized, "value");
+    TEST_ASSERT(val_ptr && val_ptr->type == TC_VALUE_INT && val_ptr->data.i == 77, "mock serialize");
+    tc_value_free(&serialized);
+
+    tc_value data = tc_value_dict_new();
+    tc_value_dict_set(&data, "value", tc_value_int(1234));
+    tc_inspect_deserialize(&obj, "MockDispatchType", &data, NULL);
+    tc_value_free(&data);
+    TEST_ASSERT(obj.value == 1234, "mock deserialize");
+
+    tc_inspect_cleanup();
+
+    printf("  Inspect dispatcher mock: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// Kind handler tests
+// ============================================================================
+
+static int test_kind_handler(void) {
+    printf("Testing kind handlers...\n");
+
+    char container[32], element[32];
+    bool ok = tc_kind_parse("list[entity_handle]", container, sizeof(container), element, sizeof(element));
+    TEST_ASSERT(ok, "parse list[entity_handle]");
+    TEST_ASSERT(strcmp(container, "list") == 0, "container is list");
+    TEST_ASSERT(strcmp(element, "entity_handle") == 0, "element is entity_handle");
+
+    ok = tc_kind_parse("float", container, sizeof(container), element, sizeof(element));
+    TEST_ASSERT(!ok, "float is not parameterized");
+
+    printf("  Kind handlers: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// Resource map tests
+// ============================================================================
+
+typedef struct {
+    int value;
+} TestResource;
+
+static void test_resource_free(void* ptr) {
+    free(ptr);
+}
+
+static int test_resource_map(void) {
+    printf("Testing Resource Map...\n");
+
+    tc_resource_map* map = tc_resource_map_new(test_resource_free);
+    TEST_ASSERT(map != NULL, "map create");
+    TEST_ASSERT(tc_resource_map_count(map) == 0, "initial count is 0");
+
+    // Add resources
+    TestResource* r1 = malloc(sizeof(TestResource));
+    r1->value = 42;
+    TEST_ASSERT(tc_resource_map_add(map, "res-001", r1), "add r1");
+    TEST_ASSERT(tc_resource_map_count(map) == 1, "count is 1");
+
+    TestResource* r2 = malloc(sizeof(TestResource));
+    r2->value = 100;
+    TEST_ASSERT(tc_resource_map_add(map, "res-002", r2), "add r2");
+
+    // Get
+    TestResource* got = tc_resource_map_get(map, "res-001");
+    TEST_ASSERT(got == r1, "get returns r1");
+    TEST_ASSERT(got->value == 42, "r1 value");
+
+    // Contains
+    TEST_ASSERT(tc_resource_map_contains(map, "res-001"), "contains res-001");
+    TEST_ASSERT(!tc_resource_map_contains(map, "res-999"), "not contains res-999");
+
+    // Duplicate rejected
+    TestResource* dup = malloc(sizeof(TestResource));
+    TEST_ASSERT(!tc_resource_map_add(map, "res-001", dup), "duplicate rejected");
+    free(dup);
+
+    // Remove (destructor called)
+    TEST_ASSERT(tc_resource_map_remove(map, "res-001"), "remove");
+    TEST_ASSERT(tc_resource_map_count(map) == 1, "count is 1 after remove");
+    TEST_ASSERT(!tc_resource_map_contains(map, "res-001"), "removed gone");
+
+    tc_resource_map_free(map);
+
+    printf("  Resource Map: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// Vertex layout tests
+// ============================================================================
+
+static int test_vertex_layout(void) {
+    printf("Testing Vertex Layout...\n");
+
+    tc_vertex_layout layout;
+    tc_vertex_layout_init(&layout);
+
+    TEST_ASSERT(layout.stride == 0, "initial stride is 0");
+    TEST_ASSERT(layout.attrib_count == 0, "initial attrib count is 0");
+
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
+    TEST_ASSERT(layout.stride == 12, "stride is 12 after position");
+
+    tc_vertex_layout_add(&layout, "normal", 3, TC_ATTRIB_FLOAT32, 1);
+    TEST_ASSERT(layout.stride == 24, "stride is 24 after normal");
+
+    tc_vertex_layout_add(&layout, "uv", 2, TC_ATTRIB_FLOAT32, 2);
+    TEST_ASSERT(layout.stride == 32, "stride is 32 after uv");
+
+    const tc_vertex_attrib* pos = tc_vertex_layout_find(&layout, "position");
+    TEST_ASSERT(pos != NULL && pos->offset == 0, "position at offset 0");
+
+    const tc_vertex_attrib* uv = tc_vertex_layout_find(&layout, "uv");
+    TEST_ASSERT(uv != NULL && uv->offset == 24, "uv at offset 24");
+
+    tc_vertex_layout mesh3 = tc_vertex_layout_pos_normal_uv();
+    TEST_ASSERT(mesh3.stride == 32, "predefined mesh3 layout");
+
+    printf("  Vertex Layout: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// Scene extension re-registration test
+// ============================================================================
+
+static int test_scene_extensions_reregister(void) {
+    printf("Testing scene extension re-registration...\n");
+
+    tc_scene_handle h1 = tc_scene_new();
+    TEST_ASSERT(tc_scene_handle_valid(h1), "first scene handle valid");
+    TEST_ASSERT(tc_scene_ext_attach(h1, TC_SCENE_EXT_TYPE_RENDER_MOUNT), "first attach render_mount");
+    TEST_ASSERT(tc_scene_ext_attach(h1, TC_SCENE_EXT_TYPE_RENDER_STATE), "first attach render_state");
+    tc_scene_free(h1);
+
+    tc_shutdown();
+    tc_init();
+
+    tc_scene_handle h2 = tc_scene_new();
+    TEST_ASSERT(tc_scene_handle_valid(h2), "second scene handle valid");
+    TEST_ASSERT(tc_scene_ext_attach(h2, TC_SCENE_EXT_TYPE_RENDER_MOUNT), "second attach render_mount");
+    TEST_ASSERT(tc_scene_ext_attach(h2, TC_SCENE_EXT_TYPE_RENDER_STATE), "second attach render_state");
+    tc_scene_free(h2);
+
+    printf("  Scene extension re-registration: PASS\n");
+    return 0;
+}
+
+// ============================================================================
+// Main
+// ============================================================================
+
+int main(void) {
+    printf("=== Termin Core Tests ===\n");
+    printf("Version: %s\n\n", tc_version());
+
+    tc_init();
+
+    int result = 0;
+
+    result |= test_vec3();
+    result |= test_quat();
+    result |= test_entity_pool();
+    result |= test_entity_hierarchy();
+    result |= test_uuid();
+    result |= test_inspect_dispatcher_mock();
+    result |= test_kind_handler();
+    result |= test_resource_map();
+    result |= test_vertex_layout();
+    result |= test_scene_extensions_reregister();
+
+    tc_shutdown();
+
+    printf("\n");
+    if (result == 0) {
+        printf("=== ALL TESTS PASSED ===\n");
+    } else {
+        printf("=== SOME TESTS FAILED ===\n");
+    }
+
+    return result;
+}

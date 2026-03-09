@@ -1,0 +1,172 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "",
+    "background_color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.07999999821186066,
+      1.0
+    ],
+    "entities": [],
+    "layer_names": {},
+    "flag_names": {},
+    "viewport_configs": [],
+    "scene_pipelines": [],
+    "light_direction": [
+      0.30000001192092896,
+      1.0,
+      -0.5
+    ],
+    "light_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_intensity": 0.10000000149011612,
+    "shadow_settings": {
+      "method": 1,
+      "softness": 1.0,
+      "bias": 0.004999999888241291
+    },
+    "skybox_type": "gradient",
+    "skybox_color": [
+      0.5,
+      0.699999988079071,
+      0.8999999761581421
+    ],
+    "skybox_top_color": [
+      0.4000000059604645,
+      0.6000000238418579,
+      0.8999999761581421
+    ],
+    "skybox_bottom_color": [
+      0.6000000238418579,
+      0.5,
+      0.4000000059604645
+    ]
+  },
+  "editor": {
+    "camera": {
+      "position": [
+        8.709087371826172,
+        1.7842315435409546,
+        12.320849418640137
+      ],
+      "rotation": [
+        -0.470566885836698,
+        -0.302098580702875,
+        0.44787951936223597,
+        0.6976440278731794
+      ],
+      "radius": 16.5,
+      "editor_entities": {
+        "camera": [
+          {
+            "type": "CameraComponent",
+            "data": {
+              "near_clip": 0.1,
+              "far_clip": 100.0,
+              "ortho_size": 5.0
+            }
+          },
+          {
+            "type": "OrbitCameraController",
+            "data": {
+              "display_name": "",
+              "enabled": true,
+              "radius": 16.5,
+              "min_radius": 1,
+              "max_radius": 100
+            }
+          },
+          {
+            "type": "ViewportHintComponent",
+            "data": {
+              "display_name": "",
+              "enabled": true,
+              "pipeline_name": "(Editor)",
+              "layer_mask": "0xff"
+            }
+          }
+        ],
+        "editor_ui": [
+          {
+            "type": "UIComponent",
+            "data": {
+              "display_name": "",
+              "enabled": true
+            }
+          },
+          {
+            "type": "EditorCameraUIController",
+            "data": {
+              "display_name": "",
+              "enabled": true,
+              "colliders_enabled": true,
+              "wireframe_enabled": false,
+              "ortho_enabled": false
+            }
+          }
+        ]
+      }
+    }
+  },
+  "resources": {
+    "textures": {
+      "Image": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\textures\\Image.png"
+      },
+      "6830-1745580165": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
+      },
+      "Dalan": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\Dalan.png"
+      },
+      "eye_in_space.002": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eye_in_space.002.png"
+      },
+      "eyebrow001_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyebrow001_png.png"
+      },
+      "eyelashes01_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyelashes01_png.png"
+      },
+      "toptex1_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\toptex1_png.png"
+      },
+      "young_lightskinned_male_diffuse2_png.001": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
+      },
+      "Ground_Dirt_009_BaseColor": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_BaseColor.jpg"
+      },
+      "Ground_Dirt_009_Height": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Height.png"
+      },
+      "Ground_Dirt_009_Normal": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Normal.jpg"
+      },
+      "Ground_Dirt_009_Roughness": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Materials\\Ground\\Ground_Dirt_009_Roughness.jpg"
+      }
+    }
+  }
+}

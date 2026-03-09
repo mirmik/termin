@@ -1,0 +1,7 @@
+{
+  "name": "python_demo",
+  "type": "python",
+  "dependencies": ["cpp_demo"],
+  "root": ".",
+  "packages": ["python_demo"]
+}

@@ -1,0 +1,9 @@
+# Ensure ctest uses a sensible default configuration when none is provided.
+# This fixes the "Test not available without configuration" issue with multi-config generators (MSVC).
+if(NOT DEFINED CTEST_CONFIGURATION_TYPE OR CTEST_CONFIGURATION_TYPE STREQUAL "")
+  if(DEFINED ENV{CONFIGURATION})
+    set(CTEST_CONFIGURATION_TYPE "$ENV{CONFIGURATION}")
+  else()
+    set(CTEST_CONFIGURATION_TYPE "@DEFAULT_CTEST_CONFIG@")
+  endif()
+endif()

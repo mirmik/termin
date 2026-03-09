@@ -1,0 +1,12 @@
+{
+  "uuid": "ecb3c324-8fa5-4cfd-83c1-fbcde5efcb45",
+  "shader": "FOV_View",
+  "uniforms": {
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

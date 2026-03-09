@@ -1,0 +1,7 @@
+{
+  "uuid": "8ea1c94c-9960-4541-9083-01531d967c10",
+  "shader": "AdvancedPBR",
+  "phase_marks": [
+    "transparent"
+  ]
+}

@@ -1,0 +1,29 @@
+site_name: termin-scene
+site_description: ECS scene-core library documentation
+repo_url: https://github.com/mirmik/termin-scene
+repo_name: mirmik/termin-scene
+theme:
+  name: material
+  language: ru
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+nav:
+  - Главная: index.md
+  - Быстрый старт: getting-started.md
+  - Философия и контекст: philosophy.md
+  - Архитектура: architecture.md
+  - Lifecycle: lifecycle.md
+  - Handles и валидность: handles.md
+  - Владение и память: ownership.md
+  - SoA и архетипы: soa.md
+  - Scene Extensions: extensions.md
+  - API Reference: api.md
+  - Ограничения и подводные камни: gotchas.md

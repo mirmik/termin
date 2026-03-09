@@ -1,0 +1,20 @@
+{
+  "uuid": "997249bf-9de4-40fc-829c-08146e5bed0e",
+  "shader": "AdvancedPBR",
+  "phase_marks": [
+    "transparent"
+  ],
+  "uniforms": {
+    "u_color": [
+      0.18672464787960052,
+      0.48322269320487976,
+      0.17854581773281097,
+      0.6589999794960022
+    ],
+    "u_metallic": 0.0,
+    "u_roughness": 0.5,
+    "u_subsurface": 0.0,
+    "u_time": 0.0,
+    "u_shininess": 32.0
+  }
+}

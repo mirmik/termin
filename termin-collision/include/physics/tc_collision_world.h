@@ -1,0 +1,46 @@
+// tc_collision_world.h - C API for collision world
+// Implementation in cpp/termin/collision/collision_world_c.cpp
+#ifndef TC_COLLISION_WORLD_H
+#define TC_COLLISION_WORLD_H
+
+#include "tc_types.h"
+#include "core/tc_scene_pool.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Opaque handle to collision world (C++ CollisionWorld*)
+typedef void tc_collision_world;
+
+// Builtin scene extension type id for collision world state.
+#define TC_SCENE_EXT_TYPE_COLLISION_WORLD UINT64_C(0x636f6c6c6973696f)
+
+// Function pointer types for collision world allocation
+typedef tc_collision_world* (*tc_collision_world_alloc_fn)(void);
+typedef void (*tc_collision_world_free_fn)(tc_collision_world* cw);
+
+// Register collision world allocator/deallocator functions
+// Called by entity_lib during initialization
+TC_API void tc_collision_world_set_allocator(
+    tc_collision_world_alloc_fn alloc_fn,
+    tc_collision_world_free_fn free_fn
+);
+
+// Internal functions used by tc_scene.c (use registered allocators)
+TC_API tc_collision_world* tc_collision_world_new(void);
+TC_API void tc_collision_world_free(tc_collision_world* cw);
+
+// Register builtin collision-world extension type in scene-extension registry.
+// Safe to call multiple times.
+TC_API void tc_collision_world_extension_init(void);
+
+// Scene-extension access helpers for collision world storage.
+TC_API tc_collision_world* tc_collision_world_get_scene(tc_scene_handle scene);
+TC_API bool tc_collision_world_set_scene(tc_scene_handle scene, tc_collision_world* cw);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // TC_COLLISION_WORLD_H

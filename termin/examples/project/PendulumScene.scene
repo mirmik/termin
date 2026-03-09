@@ -1,0 +1,385 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "3ca7f2b4-e515-45df-a50d-e3c0540cbfad",
+    "background_color": [
+      0.05000000074505806,
+      0.05000000074505806,
+      0.07999999821186066,
+      1.0
+    ],
+    "entities": [
+      {
+        "uuid": "11ef01b6-9bd0-4699-9611-0eaa3ec7f096",
+        "name": "FEMWorld",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "gravity": [
+                0.0,
+                0.0,
+                -9.81
+              ],
+              "time_step": 0.01,
+              "substeps": 1
+            },
+            "type": "FEMPhysicsWorldComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "ce0baa14-741b-4248-a46c-af1f1cffaec5",
+        "name": "Anchor",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "body_entity_name": "Body1"
+            },
+            "type": "FEMFixedJointComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "8c5563bf-166f-40c2-a804-7303994722b9",
+        "name": "Body1",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            2.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "inertia_diagonal": [
+                0.1,
+                0.1,
+                0.1
+              ]
+            },
+            "type": "FEMRigidBodyComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "a2790484-0fc5-4048-84e0-9acafd8af1f1",
+        "name": "Joint1",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "body_a_entity_name": "Body1",
+              "body_b_entity_name": "Body2"
+            },
+            "type": "FEMRevoluteJointComponent"
+          }
+        ],
+        "children": []
+      },
+      {
+        "uuid": "fa87c002-ce87-4085-9219-dffd033e4c33",
+        "name": "Body2",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            4.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          },
+          {
+            "data": {
+              "enabled": true,
+              "mass": 1.0,
+              "inertia_diagonal": [
+                0.1,
+                0.1,
+                0.1
+              ]
+            },
+            "type": "FEMRigidBodyComponent"
+          }
+        ],
+        "children": []
+      }
+    ],
+    "layer_names": {},
+    "flag_names": {},
+    "light_direction": [
+      0.30000001192092896,
+      1.0,
+      -0.5
+    ],
+    "light_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ambient_intensity": 0.1,
+    "shadow_settings": {
+      "method": 1,
+      "softness": 1.0,
+      "bias": 0.005
+    },
+    "skybox_type": "gradient",
+    "skybox_color": [
+      0.5,
+      0.699999988079071,
+      0.8999999761581421
+    ],
+    "skybox_top_color": [
+      0.4000000059604645,
+      0.6000000238418579,
+      0.8999999761581421
+    ],
+    "skybox_bottom_color": [
+      0.6000000238418579,
+      0.5,
+      0.4000000059604645
+    ]
+  },
+  "editor": {
+    "camera": {
+      "target": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "radius": 10.0,
+      "azimuth": 1.5044738152191128,
+      "elevation": 0.6213372137099814
+    },
+    "displays": [
+      {
+        "name": "Editor",
+        "editor_only": true,
+        "input_mode": "editor",
+        "block_input_in_editor": false,
+        "viewports": [
+          {
+            "uuid": "28eede85-5a3b-4a15-a384-26a254cd862f",
+            "camera_entity": "camera",
+            "rect": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "depth": 0
+          }
+        ]
+      },
+      {
+        "name": "Display 0",
+        "editor_only": false,
+        "input_mode": "simple",
+        "block_input_in_editor": true,
+        "viewports": [
+          {
+            "uuid": "d425c55c-a081-45eb-9986-7784fbf1a3b3",
+            "camera_entity": "camera",
+            "rect": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "depth": 0
+          }
+        ]
+      }
+    ],
+    "expanded_entities": [
+      "EditorEntities",
+      "camera"
+    ]
+  },
+  "resources": {
+    "textures": {
+      "Image": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\ArthurL\\textures\\Image.png"
+      },
+      "6830-1745580165": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\6830-1745580165.jpg"
+      },
+      "Dalan": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\Dalan.png"
+      },
+      "eye_in_space.002": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eye_in_space.002.png"
+      },
+      "eyebrow001_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyebrow001_png.png"
+      },
+      "eyelashes01_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\eyelashes01_png.png"
+      },
+      "toptex1_png": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\toptex1_png.png"
+      },
+      "young_lightskinned_male_diffuse2_png.001": {
+        "type": "file",
+        "source_path": "C:\\Users\\mirmik\\project\\termin\\examples\\project\\Assets\\young_lightskinned_male_diffuse2_png.001.png"
+      }
+    }
+  }
+}

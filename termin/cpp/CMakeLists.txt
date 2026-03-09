@@ -1,0 +1,644 @@
+cmake_minimum_required(VERSION 3.16)
+project(termin_native LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# Ensure standard install dir variables (CMAKE_INSTALL_INCLUDEDIR, etc.) are set.
+include(GNUInstallDirs)
+
+# Project root - either from parent CMakeLists.txt or compute from here
+if(NOT DEFINED TERMIN_ROOT)
+    set(TERMIN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
+endif()
+
+# Standalone build mode (C++ app with embedded Python)
+option(BUILD_STANDALONE "Build as standalone C++ application" OFF)
+if(BUILD_EDITOR_MINIMAL OR BUILD_EDITOR_EXE)
+    set(BUILD_STANDALONE ON)
+endif()
+
+# C# SWIG bindings option (must be declared early to skip nanobind when ON)
+option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings (termin.dll)" OFF)
+option(TERMIN_BUILD_PYTHON "Build Python/nanobind bindings" ON)
+
+# Current build graph uses different linkage model for Python and C# modes:
+# - Python mode expects shared render/navmesh libs and nanobind modules.
+# - C# mode expects static render/navmesh libs for WHOLEARCHIVE linkage.
+# Keep the constraint explicit instead of silently disabling one side.
+if(TERMIN_BUILD_PYTHON AND BUILD_CSHARP_BINDINGS)
+    message(FATAL_ERROR
+        "TERMIN_BUILD_PYTHON=ON and BUILD_CSHARP_BINDINGS=ON are currently incompatible. "
+        "Use one mode per build directory.")
+endif()
+
+# Install prefix for Python modules
+# For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
+if(BUILD_STANDALONE)
+    set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}/lib/python/termin")
+else()
+    set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}")
+endif()
+
+# Default to Release build for single-config generators
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# Put all binaries into a flat bin/ directory so tests don't depend on config subdirs
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+if(CMAKE_CONFIGURATION_TYPES)
+    foreach(cfg ${CMAKE_CONFIGURATION_TYPES})
+        string(TOUPPER ${cfg} cfg_upper)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${cfg_upper} ${CMAKE_BINARY_DIR}/bin)
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${cfg_upper} ${CMAKE_BINARY_DIR}/bin)
+        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${cfg_upper} ${CMAKE_BINARY_DIR}/bin)
+    endforeach()
+endif()
+
+# Platform-specific optimization flags
+if(MSVC)
+    set(CMAKE_CXX_FLAGS_DEBUG "/Zi /Od /DEBUG /FS")
+    set(CMAKE_C_FLAGS_DEBUG "/Zi /Od /DEBUG /FS")
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
+    set(OPTIMIZE_FLAGS /O2 /fp:fast)
+else()
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer")
+    set(CMAKE_C_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
+    set(OPTIMIZE_FLAGS -O3 -march=native -ffast-math)
+endif()
+
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
+
+# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
+# ============== Trent library ==============
+# trent library - STATIC on Windows (avoids DLL import library issues), SHARED on Linux
+if(WIN32)
+    add_library(trent STATIC
+        trent/trent.cpp
+        trent/trent_path.cpp
+        trent/string_ext.cpp
+        trent/yaml.cpp
+        trent/json.cpp
+    )
+else()
+    add_library(trent SHARED
+        trent/trent.cpp
+        trent/trent_path.cpp
+        trent/string_ext.cpp
+        trent/yaml.cpp
+        trent/json.cpp
+    )
+endif()
+target_compile_options(trent PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+set_target_properties(trent PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin
+    ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
+    INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
+)
+
+# ============== External dependencies ==============
+
+# Find OpenGL
+find_package(OpenGL REQUIRED)
+
+# termin-base (provides shared enums: MouseButton, Action, Mods)
+find_package(termin_base REQUIRED)
+
+# termin-graphics (provides tgfx types, gpu_ops, opengl backend)
+find_package(termin_graphics REQUIRED)
+# termin-inspect (extracted inspect/kind core + python bridge)
+find_package(termin_inspect REQUIRED)
+if(TERMIN_BUILD_PYTHON AND NOT TARGET termin_inspect::termin_inspect_python)
+    message(FATAL_ERROR "termin Python build requires termin_inspect::termin_inspect_python. Rebuild/install termin-inspect with TERMIN_BUILD_PYTHON=ON.")
+endif()
+
+# termin-scene (C ECS core + C++ wrappers: Entity, Component, TcSceneRef)
+find_package(termin_scene REQUIRED)
+# termin-collision (colliders + collision world)
+find_package(termin_collision REQUIRED)
+# termin-components-collision (ColliderComponent)
+find_package(termin_components_collision REQUIRED)
+# termin-components-kinematic (ActuatorComponent, RotatorComponent)
+find_package(termin_components_kinematic REQUIRED)
+
+# Core C library
+if(BUILD_TESTS)
+    set(TC_BUILD_TESTS ON CACHE BOOL "" FORCE)
+else()
+    set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+endif()
+add_subdirectory(${TERMIN_ROOT}/core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
+
+# Recast library only (from recastnavigation, avoids configure_file race conditions)
+set(SOVERSION 1)
+set(LIB_VERSION 1.6.0)
+set(RECASTNAVIGATION_ENABLE_ASSERTS OFF)
+set(SKIP_INSTALL_ALL ON)  # Don't use recast's own install rules
+add_subdirectory(${TERMIN_ROOT}/third/recastnavigation/Recast ${CMAKE_CURRENT_BINARY_DIR}/Recast EXCLUDE_FROM_ALL)
+
+# Re-add Recast to build (EXCLUDE_FROM_ALL removed it from default)
+set_target_properties(Recast PROPERTIES EXCLUDE_FROM_ALL FALSE)
+
+# Add INSTALL_INTERFACE to Recast includes for proper export
+target_include_directories(Recast PUBLIC
+    $<INSTALL_INTERFACE:include/recastnavigation>
+)
+
+# ============== Entity shared library ==============
+# Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, KindRegistryCpp, EntityRegistry)
+# are the same instance across all Python extension modules.
+set(ENTITY_LIB_SOURCES
+    # Entity-related sources that remain in termin (not migrated to termin-scene)
+    termin/entity/entity_registry.cpp
+    termin/entity/unknown_component.cpp
+    termin/camera/camera_component.cpp
+    termin/camera/orbit_camera_controller.cpp
+    termin/lighting/light_component.cpp
+    termin/viewport_config.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_inspect_component_adapter.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_inspect_pass_adapter.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_rendering_manager_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_engine_core_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_scene_manager_instance.cpp
+    ${TERMIN_ROOT}/core_c/src/tc_editor_interaction_instance.cpp
+    termin/modules/module_loader.cpp
+    termin/render/tc_value_trent.cpp
+)
+
+if(NOT TC_EXTERNAL_INSPECT_ACTIVE)
+    list(APPEND ENTITY_LIB_SOURCES
+        ${TERMIN_ROOT}/core_c/src/tc_inspect_core_instance.cpp
+        termin/inspect/tc_kind_cpp.cpp
+    )
+else()
+    message(STATUS "entity_lib: using inspect/kind C++ core from external termin_inspect")
+endif()
+add_library(entity_lib SHARED ${ENTITY_LIB_SOURCES})
+target_include_directories(entity_lib PUBLIC
+    $<BUILD_INTERFACE:${TERMIN_ROOT}/core_c/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/core_c>
+    $<INSTALL_INTERFACE:include/cpp>
+    $<INSTALL_INTERFACE:include>
+)
+if(TERMIN_BUILD_PYTHON)
+    find_package(nanobind CONFIG REQUIRED)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic PRIVATE trent nanobind Python::Python)
+    target_link_libraries(entity_lib PUBLIC termin_inspect::termin_inspect_python)
+    target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
+else()
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic PRIVATE trent)
+endif()
+target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
+target_compile_options(entity_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+target_precompile_headers(entity_lib PRIVATE termin/pch.hpp)
+set_target_properties(entity_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+    INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
+)
+
+# ============== Skeleton library ==============
+add_library(skeleton_lib STATIC
+    termin/skeleton/skeleton_instance.cpp
+    termin/render/skeleton_controller.cpp
+)
+target_link_libraries(skeleton_lib PUBLIC entity_lib PRIVATE trent)
+target_compile_options(skeleton_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+target_precompile_headers(skeleton_lib PRIVATE termin/pch.hpp)
+set_target_properties(skeleton_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+)
+
+# ============== Animation library ==============
+add_library(animation_lib STATIC
+    termin/animation/animation_player.cpp
+)
+target_include_directories(animation_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/cpp>
+)
+target_link_libraries(animation_lib PUBLIC skeleton_lib)
+target_compile_options(animation_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+target_precompile_headers(animation_lib PRIVATE termin/pch.hpp)
+set_target_properties(animation_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+# ============== Render library ==============
+# Includes passes with TC_REGISTER_FRAME_PASS for static registration
+# SHARED for Python (consistent RTTI), STATIC for C# (WHOLEARCHIVE needs static lib)
+set(RENDER_LIB_SOURCES
+    # Render extension for TcSceneRef (uses RenderingManager)
+    termin/tc_scene_render_ext.cpp
+    termin/render/drawable.cpp
+    termin/render/mesh_renderer.cpp
+    termin/render/frame_pass.cpp
+    termin/render/fbo_pool.cpp
+    termin/render/render_engine.cpp
+    termin/render/render_pipeline.cpp
+    termin/render/rendering_manager.cpp
+    termin/scene/scene_manager.cpp
+    termin/render/pull_rendering_manager.cpp
+    termin/render/wireframe_renderer.cpp
+    termin/render/color_pass.cpp
+    termin/render/collider_gizmo_pass.cpp
+    termin/render/ground_grid_pass.cpp
+    termin/render/present_pass.cpp
+    termin/render/depth_pass.cpp
+    termin/render/normal_pass.cpp
+    termin/render/shadow_pass.cpp
+    termin/render/id_pass.cpp
+    termin/render/material_pass.cpp
+    termin/render/bloom_pass.cpp
+    termin/render/grayscale_pass.cpp
+    termin/render/tonemap_pass.cpp
+    termin/render/shader_parser.cpp
+    termin/render/shadow_camera.cpp
+    termin/render/glsl_preprocessor.cpp
+    termin/render/shader_skinning.cpp
+    termin/render/graph_data.cpp
+    termin/render/graph_compiler.cpp
+    termin/render/scene_pipeline_template.cpp
+    termin/render/tc_pass_ref.cpp
+    termin/lighting/shadow.cpp
+    termin/texture/tc_texture_handle.cpp
+    termin/editor/frame_graph_debugger_core.cpp
+    termin/camera/camera_viewport_component.cpp
+)
+if(BUILD_CSHARP_BINDINGS)
+    add_library(render_lib STATIC ${RENDER_LIB_SOURCES})
+else()
+    add_library(render_lib SHARED ${RENDER_LIB_SOURCES})
+endif()
+target_include_directories(render_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/cpp>
+)
+target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_components_collision::termin_components_collision)
+target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
+set_target_properties(render_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+    INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
+)
+
+# ============== Engine library ==============
+# Core engine runtime - owns SceneManager and RenderingManager
+add_library(engine_lib SHARED
+    termin/engine/engine_core.cpp
+)
+target_include_directories(engine_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/cpp>
+)
+target_link_libraries(engine_lib PUBLIC render_lib)
+target_compile_options(engine_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+target_precompile_headers(engine_lib PRIVATE termin/pch.hpp)
+set_target_properties(engine_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+    INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
+)
+
+# ============== NavMesh library ==============
+# STATIC for C# (to avoid PCH symbol conflicts), SHARED for Python
+if(BUILD_CSHARP_BINDINGS)
+    add_library(navmesh_lib STATIC
+        termin/navmesh/recast_navmesh_builder_component.cpp
+    )
+else()
+    add_library(navmesh_lib SHARED
+        termin/navmesh/recast_navmesh_builder_component.cpp
+    )
+endif()
+target_include_directories(navmesh_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/cpp>
+)
+target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast)
+target_compile_options(navmesh_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
+set_target_properties(navmesh_lib PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+    INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
+)
+
+# ============== SDL2 (optional) ==============
+option(USE_SYSTEM_SDL2 "Use system SDL2 library (disable to use pysdl2)" ON)
+
+if(USE_SYSTEM_SDL2)
+    if(WIN32)
+        set(SDL2_SEARCH_PATHS
+            "C:/SDL2"
+            "$ENV{SDL2_DIR}"
+            "$ENV{PROGRAMFILES}/SDL2"
+        )
+        find_path(SDL2_INCLUDE_DIRS SDL2/SDL.h
+            PATH_SUFFIXES include
+            PATHS ${SDL2_SEARCH_PATHS}
+        )
+        find_library(SDL2_LIBRARY
+            NAMES SDL2
+            PATH_SUFFIXES lib/x64 lib
+            PATHS ${SDL2_SEARCH_PATHS}
+        )
+        find_library(SDL2MAIN_LIBRARY
+            NAMES SDL2main
+            PATH_SUFFIXES lib/x64 lib
+            PATHS ${SDL2_SEARCH_PATHS}
+        )
+        if(SDL2_INCLUDE_DIRS AND SDL2_LIBRARY)
+            set(SDL2_FOUND TRUE)
+            set(SDL2_LIBRARIES ${SDL2_LIBRARY})
+            if(SDL2MAIN_LIBRARY)
+                list(APPEND SDL2_LIBRARIES ${SDL2MAIN_LIBRARY})
+            endif()
+            get_filename_component(SDL2_LIB_DIR ${SDL2_LIBRARY} DIRECTORY)
+            find_file(SDL2_DLL
+                NAMES SDL2.dll
+                PATHS ${SDL2_LIB_DIR} ${SDL2_LIB_DIR}/../bin ${SDL2_LIB_DIR}/..
+                NO_DEFAULT_PATH
+            )
+            message(STATUS "Found SDL2: ${SDL2_INCLUDE_DIRS}")
+            message(STATUS "SDL2 DLL: ${SDL2_DLL}")
+        else()
+            message(STATUS "SDL2 not found, disabling SDL2 support (use pysdl2 instead)")
+            set(SDL2_FOUND FALSE)
+        endif()
+    else()
+        find_package(SDL2 QUIET)
+        if(NOT SDL2_FOUND)
+            find_package(PkgConfig REQUIRED)
+            pkg_check_modules(SDL2 REQUIRED sdl2)
+        endif()
+    endif()
+else()
+    set(SDL2_FOUND FALSE)
+    message(STATUS "System SDL2 disabled, using pysdl2")
+endif()
+
+# ============== Python bindings (nanobind) ==============
+if(TERMIN_BUILD_PYTHON)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/python_bindings.cmake)
+endif()
+
+# ============== Editor Executable ==============
+option(BUILD_EDITOR_EXE "Build termin_editor executable with embedded Python" OFF)
+option(BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required)" OFF)
+
+if(BUILD_EDITOR_MINIMAL)
+    add_executable(termin_editor
+        app/main_minimal.cpp
+    )
+    target_include_directories(termin_editor PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${Python_INCLUDE_DIRS}
+    )
+    target_link_libraries(termin_editor PRIVATE Python::Python engine_lib)
+    target_compile_options(termin_editor PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+    set_target_properties(termin_editor PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    )
+    if(WIN32)
+        set_target_properties(termin_editor PROPERTIES WIN32_EXECUTABLE FALSE)
+    endif()
+    install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+    set_target_properties(termin_editor PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/python/termin;$ORIGIN"
+        BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
+        BUILD_WITH_INSTALL_RPATH FALSE
+    )
+endif()
+
+# ============== Launcher Test Executable ==============
+option(BUILD_LAUNCHER "Build termin_launcher (UIRenderer test, no Qt)" OFF)
+
+if(BUILD_LAUNCHER)
+    add_executable(termin_launcher
+        app/main_launcher.cpp
+    )
+    target_include_directories(termin_launcher PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${Python_INCLUDE_DIRS}
+    )
+    target_link_libraries(termin_launcher PRIVATE Python::Python)
+    target_compile_options(termin_launcher PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+    set_target_properties(termin_launcher PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    )
+    if(WIN32)
+        set_target_properties(termin_launcher PROPERTIES WIN32_EXECUTABLE FALSE)
+    endif()
+    install(TARGETS termin_launcher RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+    set_target_properties(termin_launcher PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/python/termin;$ORIGIN"
+        BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
+        BUILD_WITH_INSTALL_RPATH FALSE
+    )
+endif()
+
+if(BUILD_EDITOR_EXE)
+    find_package(Qt6 COMPONENTS Widgets QUIET)
+    if(NOT Qt6_FOUND)
+        message(STATUS "Qt6 not found, trying Qt5...")
+        find_package(Qt5 COMPONENTS Widgets REQUIRED)
+        set(QT_LIBS Qt5::Widgets)
+    else()
+        set(QT_LIBS Qt6::Widgets)
+    endif()
+
+    add_executable(termin_editor_qt
+        app/main.cpp
+    )
+    target_include_directories(termin_editor_qt PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${Python_INCLUDE_DIRS}
+    )
+    target_link_libraries(termin_editor_qt PRIVATE
+        ${QT_LIBS}
+        Python::Python
+        entity_lib
+        render_lib
+        ${SDL2_LIBRARIES}
+    )
+    target_compile_options(termin_editor_qt PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+    set_target_properties(termin_editor_qt PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+        INSTALL_RPATH "$ORIGIN"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+    if(WIN32)
+        set_target_properties(termin_editor_qt PROPERTIES WIN32_EXECUTABLE FALSE)
+    endif()
+    install(TARGETS termin_editor_qt RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX})
+endif()
+
+# ============== Tests ==============
+option(BUILD_TESTS "Build C++ tests" OFF)
+
+if(BUILD_TESTS)
+    enable_testing()
+
+    set(DEFAULT_CTEST_CONFIG "Debug")
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/CTestCustom.cmake
+        @ONLY
+    )
+
+    add_executable(termin_tests
+        tests/main.cpp
+        tests/tests_general_pose3.cpp
+        tests/tests_colliders.cpp
+        tests/tests_collision.cpp
+        tests/tests_gjk.cpp
+        tests/tests_quickhull.cpp
+        tests/tests_convex_hull_collider.cpp
+        tests/tests_inspect_registry.cpp
+    )
+    target_include_directories(termin_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    )
+    target_link_libraries(termin_tests PRIVATE entity_lib)
+    target_compile_options(termin_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+    add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
+
+    add_custom_target(run_tests
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
+        DEPENDS termin_tests
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Running C++ tests")
+endif()
+
+# ============== Install shared libraries ==============
+install(TARGETS trent entity_lib termin_core render_lib engine_lib navmesh_lib Recast
+    EXPORT terminTargets
+    RUNTIME DESTINATION ${TERMIN_PYTHON_PREFIX}
+    LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}
+    ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib
+)
+
+if(WIN32 AND SDL2_DLL)
+    install(FILES ${SDL2_DLL} DESTINATION ${TERMIN_PYTHON_PREFIX})
+endif()
+
+install(TARGETS skeleton_lib animation_lib
+    EXPORT terminTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+)
+
+# Install headers
+install(DIRECTORY ${TERMIN_ROOT}/core_c/include/
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/core_c
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/cpp
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    PATTERN "bindings" EXCLUDE
+)
+install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Recast/Include/
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
+    FILES_MATCHING PATTERN "*.h"
+)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/trent
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
+# ============== C# SWIG Bindings ==============
+if(BUILD_CSHARP_BINDINGS)
+    add_library(termin SHARED
+        ${TERMIN_ROOT}/csharp/termin_wrap.cxx
+        termin/render/tc_opengl.cpp
+        termin/tc_scene.cpp
+        termin/tc_component_csharp.cpp
+        termin/tc_inspect_csharp.cpp
+    )
+    target_include_directories(termin PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${TERMIN_ROOT}/core_c/include
+    )
+    add_dependencies(termin render_lib)
+    if(MSVC)
+        target_link_libraries(termin PRIVATE
+            OpenGL::GL
+            termin_core
+            trent
+            entity_lib
+            -WHOLEARCHIVE:$<TARGET_LINKER_FILE:render_lib>
+        )
+    else()
+        target_link_libraries(termin PRIVATE
+            OpenGL::GL
+            termin_core
+            trent
+            entity_lib
+            -Wl,--whole-archive render_lib -Wl,--no-whole-archive
+        )
+    endif()
+    target_compile_definitions(termin PRIVATE SWIG_CSHARP TC_EXPORTS)
+    if(WIN32)
+        set_target_properties(termin PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    endif()
+    target_compile_options(termin PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+    install(TARGETS termin
+        RUNTIME DESTINATION ${TERMIN_ROOT}/csharp/Termin.Native/runtimes/win-x64/native
+        LIBRARY DESTINATION ${TERMIN_ROOT}/csharp/Termin.Native/runtimes/linux-x64/native
+    )
+endif()
+
+# ============== CMake Package Export ==============
+include(CMakePackageConfigHelpers)
+
+install(EXPORT terminTargets
+    FILE terminTargets.cmake
+    NAMESPACE termin::
+    DESTINATION lib/cmake/termin
+)
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/terminConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/termin
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
+    VERSION 1.0.0
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
+    DESTINATION lib/cmake/termin
+)

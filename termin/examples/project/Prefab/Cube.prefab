@@ -1,0 +1,82 @@
+{
+  "version": "2.0",
+  "root": {
+    "uuid": "50c0029e-a3db-45cc-9060-412f85b08597",
+    "name": "[Root]",
+    "priority": 0,
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "visible": true,
+    "active": true,
+    "pickable": true,
+    "selectable": true,
+    "layer": 0,
+    "flags": 0,
+    "pose": {
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "components": [],
+    "children": [
+      {
+        "uuid": "9ea3c2ad-5712-489b-ae29-8de0e07460da",
+        "name": "entity1",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "mesh": {
+                "uuid": "00000000-0000-0000-0003-000000000001"
+              },
+              "base_material": {
+                "uuid": "00000000-0000-0000-0002-000000000001"
+              },
+              "override_material": false,
+              "cast_shadow": true
+            },
+            "type": "MeshRenderer"
+          }
+        ],
+        "children": []
+      }
+    ]
+  },
+  "uuid": "d476c9da-14ec-43da-9d98-2702592db3ab"
+}

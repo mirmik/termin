@@ -1,0 +1,22 @@
+{
+  "uuid": "16cc8c42-4d8b-4cea-8b8a-173ecc39217e",
+  "shader": "TimeModifier",
+  "uniforms": {
+    "u_time_modifier": 1.0,
+    "u_grid_intensity": 0.30000001192092896,
+    "u_grid_scale": 1.0,
+    "u_color": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "u_grid_line_width": 0.029999999329447746,
+    "u_grid_color": [
+      0.0,
+      0.9,
+      0.4,
+      1.0
+    ]
+  }
+}

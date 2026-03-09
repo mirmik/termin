@@ -1,0 +1,61 @@
+# Demo menu layout for widget UI system
+root:
+  type: Panel
+  name: main_panel
+  padding: 15
+  background_color: [0.1, 0.1, 0.15, 0.9]
+  border_radius: 8
+  width: 250px
+  anchor: absolute   
+  position_x: 0.1ndc
+  position_y: 0.1ndc
+  width: 0.3ndc
+  height: 0.3ndc
+  
+  children:
+    - type: VStack
+      spacing: 10
+      alignment: center
+      justify: center
+
+      children:
+        - type: Label
+          text: "Widget UI Demo"
+          font_size: 20
+          color: [1, 1, 1, 1]
+          width: 100%
+          alignment: center
+
+        - type: Separator
+          orientation: horizontal
+          color: [0.5, 0.5, 0.5, 0.5]
+
+        - type: Label
+          name: info_label
+          text: "Click count: 0"
+          font_size: 14
+          color: [0.8, 0.8, 0.8, 1]
+          width: 100%
+          alignment: center
+
+        - type: HStack
+          spacing: 10
+
+          children:
+            - type: Button
+              name: click_button
+              text: "Click me!"
+              font_size: 14
+              padding: 12
+              background_color: [0.2, 0.5, 0.8, 1]
+              hover_color: [0.3, 0.6, 0.9, 1]
+              pressed_color: [0.1, 0.4, 0.7, 1]
+
+            - type: Button
+              name: reset_button
+              text: "Reset"
+              font_size: 14
+              padding: 12
+              background_color: [0.5, 0.2, 0.2, 1]
+              hover_color: [0.6, 0.3, 0.3, 1]
+              pressed_color: [0.4, 0.1, 0.1, 1]

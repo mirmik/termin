@@ -1,0 +1,4 @@
+Pillow
+numpy
+simple-lama-inpainting
+diffusers

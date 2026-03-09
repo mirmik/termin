@@ -1,0 +1,588 @@
+"""
+ViewportInspector — inspector panel for Viewport properties.
+
+Allows editing:
+- Display selection
+- Rect (x, y, width, height in normalized 0..1 coords)
+- Camera selection (from entities with CameraComponent)
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
+
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+)
+from termin.editor.widgets.spinbox import DoubleSpinBox, SpinBox
+
+if TYPE_CHECKING:
+    from termin.visualization.core.camera import CameraComponent
+    from termin.visualization.core.display import Display
+    from termin.visualization.core.scene import Scene
+    from termin.visualization.core.viewport import Viewport
+    from termin.visualization.render.framegraph import RenderPipeline
+
+
+class ViewportInspector(QWidget):
+    """
+    Inspector panel for Viewport properties.
+
+    Shows and allows editing:
+    - Display (dropdown)
+    - Rect: x, y, width, height (spin boxes, 0..1)
+    - Camera (dropdown of entities with CameraComponent)
+
+    Signals:
+        viewport_changed: Emitted when any property changes.
+        display_changed: Emitted when display selection changes.
+        camera_changed: Emitted when camera selection changes.
+        rect_changed: Emitted when rect changes.
+    """
+
+    viewport_changed = pyqtSignal()
+    display_changed = pyqtSignal(object)  # new Display
+    camera_changed = pyqtSignal(object)  # new CameraComponent
+    rect_changed = pyqtSignal(tuple)  # new rect (x, y, w, h)
+    depth_changed = pyqtSignal(int)  # new depth value
+    pipeline_changed = pyqtSignal(object)  # new RenderPipeline
+    enabled_changed = pyqtSignal(bool)  # new enabled state
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+
+        self._viewport: Optional["Viewport"] = None
+        self._current_display: Optional["Display"] = None
+        self._displays: List["Display"] = []
+        self._display_names: dict[int, str] = {}  # tc_display_ptr -> name
+        self._cameras: List[Tuple["CameraComponent", str]] = []  # (camera, name)
+        self._scene: Optional["Scene"] = None
+        self._pipelines: List[Tuple[str, Optional["RenderPipeline"]]] = []  # (name, pipeline or None)
+        self._current_pipeline_name: Optional[str] = None
+        self._get_editor_pipeline: Optional[Callable[[], "RenderPipeline"]] = None
+
+        self._updating = False  # Prevent recursive updates
+
+        self._init_ui()
+
+    def _init_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        # Header
+        header = QLabel("Viewport")
+        header.setStyleSheet("font-weight: bold; font-size: 14px;")
+        layout.addWidget(header)
+
+        # Enabled checkbox
+        self._enabled_checkbox = QCheckBox("Enabled")
+        self._enabled_checkbox.setChecked(True)
+        self._enabled_checkbox.setToolTip("Whether this viewport is rendered")
+        self._enabled_checkbox.stateChanged.connect(self._on_enabled_changed)
+        layout.addWidget(self._enabled_checkbox)
+
+        # Form
+        form = QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(4)
+
+        # Display selection
+        self._display_combo = QComboBox()
+        self._display_combo.currentIndexChanged.connect(self._on_display_changed)
+        form.addRow("Display:", self._display_combo)
+
+        # Camera selection
+        self._camera_combo = QComboBox()
+        self._camera_combo.currentIndexChanged.connect(self._on_camera_changed)
+        form.addRow("Camera:", self._camera_combo)
+
+        # Rect section
+        rect_label = QLabel("Rect (normalized 0..1):")
+        form.addRow(rect_label)
+
+        # X, Y row
+        xy_widget = QWidget()
+        xy_layout = QHBoxLayout(xy_widget)
+        xy_layout.setContentsMargins(0, 0, 0, 0)
+        xy_layout.setSpacing(4)
+
+        xy_layout.addWidget(QLabel("X:"))
+        self._x_spin = self._create_rect_spinbox()
+        xy_layout.addWidget(self._x_spin)
+
+        xy_layout.addWidget(QLabel("Y:"))
+        self._y_spin = self._create_rect_spinbox()
+        xy_layout.addWidget(self._y_spin)
+
+        form.addRow(xy_widget)
+
+        # Width, Height row
+        wh_widget = QWidget()
+        wh_layout = QHBoxLayout(wh_widget)
+        wh_layout.setContentsMargins(0, 0, 0, 0)
+        wh_layout.setSpacing(4)
+
+        wh_layout.addWidget(QLabel("W:"))
+        self._w_spin = self._create_rect_spinbox()
+        self._w_spin.setValue(1.0)
+        wh_layout.addWidget(self._w_spin)
+
+        wh_layout.addWidget(QLabel("H:"))
+        self._h_spin = self._create_rect_spinbox()
+        self._h_spin.setValue(1.0)
+        wh_layout.addWidget(self._h_spin)
+
+        form.addRow(wh_widget)
+
+        # Depth (render priority)
+        self._depth_spin = SpinBox()
+        self._depth_spin.setRange(-1000, 1000)
+        self._depth_spin.setValue(0)
+        self._depth_spin.setToolTip("Render priority: lower values render first")
+        self._depth_spin.valueChanged.connect(self._on_depth_changed)
+        form.addRow("Depth:", self._depth_spin)
+
+        # Pipeline selection
+        self._pipeline_combo = QComboBox()
+        self._pipeline_combo.setToolTip("Render pipeline for this viewport")
+        self._pipeline_combo.currentIndexChanged.connect(self._on_pipeline_changed)
+        form.addRow("Pipeline:", self._pipeline_combo)
+
+        # Layer mask
+        from termin.editor.widgets.layer_mask_widget import LayerMaskFieldWidget
+        self._layer_mask_widget = LayerMaskFieldWidget()
+        self._layer_mask_widget.value_changed.connect(self._on_layer_mask_changed)
+        form.addRow("Layers:", self._layer_mask_widget)
+
+        # Hint warning label (shown when ViewportHint controls the viewport)
+        self._hint_label = QLabel("Controlled by ViewportHint on camera")
+        self._hint_label.setStyleSheet("color: #888; font-style: italic;")
+        self._hint_label.hide()
+        form.addRow(self._hint_label)
+
+        # Scene pipeline label (shown when viewport is managed by scene pipeline)
+        self._scene_pipeline_label = QLabel("Managed by scene pipeline")
+        self._scene_pipeline_label.setStyleSheet("color: #6a9; font-style: italic;")
+        self._scene_pipeline_label.hide()
+        form.addRow(self._scene_pipeline_label)
+
+        layout.addLayout(form)
+
+        # Debug info section
+        debug_header = QLabel("Native State")
+        debug_header.setStyleSheet("font-weight: bold; font-size: 12px; margin-top: 8px;")
+        layout.addWidget(debug_header)
+
+        self._debug_label = QLabel("-")
+        self._debug_label.setStyleSheet("font-family: monospace; font-size: 11px; color: #aaa;")
+        self._debug_label.setWordWrap(True)
+        self._debug_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self._debug_label)
+
+        layout.addStretch()
+
+    def _create_rect_spinbox(self) -> DoubleSpinBox:
+        """Create a spinbox for rect values (0..1)."""
+        spin = DoubleSpinBox()
+        spin.setRange(0.0, 1.0)
+        spin.setSingleStep(0.05)
+        spin.setDecimals(3)
+        spin.valueChanged.connect(self._on_rect_changed)
+        return spin
+
+    def set_displays(
+        self,
+        displays: List["Display"],
+        display_names: Optional[dict[int, str]] = None
+    ) -> None:
+        """
+        Set available displays for selection.
+
+        Args:
+            displays: List of Display objects.
+            display_names: Optional dict mapping tc_display_ptr to name.
+        """
+        self._displays = list(displays)
+        self._display_names = display_names or {}
+        self._update_display_combo()
+
+    def set_scene(self, scene: Optional["Scene"]) -> None:
+        """
+        Set the scene to find cameras from.
+
+        Args:
+            scene: Scene to scan for CameraComponent entities.
+        """
+        self._scene = scene
+        self._update_camera_list()
+
+    def set_viewport(self, viewport: Optional["Viewport"], current_display: Optional["Display"] = None) -> None:
+        """
+        Set the viewport to inspect.
+
+        Args:
+            viewport: Viewport to inspect, or None to clear.
+            current_display: Display that contains this viewport.
+        """
+        self._viewport = viewport
+        self._current_display = current_display
+
+        if viewport is None:
+            self._clear()
+            return
+
+        self._updating = True
+        try:
+            # Update enabled checkbox
+            self._enabled_checkbox.setChecked(viewport.enabled)
+
+            # Update display selection
+            self._update_display_combo()
+            if current_display is not None and current_display in self._displays:
+                idx = self._displays.index(current_display)
+                self._display_combo.setCurrentIndex(idx)
+            else:
+                self._display_combo.setCurrentIndex(-1)
+
+            # Update camera selection
+            self._update_camera_list()
+            camera_idx = -1
+            for i, (cam, _name) in enumerate(self._cameras):
+                if cam is viewport.camera:
+                    camera_idx = i
+                    break
+            self._camera_combo.setCurrentIndex(camera_idx)
+
+            # Update rect
+            x, y, w, h = viewport.rect
+            self._x_spin.setValue(x)
+            self._y_spin.setValue(y)
+            self._w_spin.setValue(w)
+            self._h_spin.setValue(h)
+
+            # Update depth
+            self._depth_spin.setValue(viewport.depth)
+
+            # Update layer mask
+            self._layer_mask_widget.set_value(viewport.layer_mask)
+
+            # Update pipeline list and select current pipeline
+            self.update_pipeline_list()
+            self._select_viewport_pipeline(viewport)
+
+            # Check if camera has ViewportHintComponent
+            self._update_hint_state(viewport)
+
+            # Check if viewport is managed by scene pipeline
+            self._update_scene_pipeline_state(viewport)
+
+            # Debug info
+            self._update_debug_info(viewport)
+        finally:
+            self._updating = False
+
+    def _select_viewport_pipeline(self, viewport: "Viewport") -> None:
+        """Select pipeline in combo based on viewport's current pipeline."""
+        if viewport.pipeline is None:
+            self._pipeline_combo.setCurrentIndex(0)
+            self._current_pipeline_name = None
+            return
+
+        pipeline_name = viewport.pipeline.name
+
+        # Find matching pipeline in list
+        for i, (name, _) in enumerate(self._pipelines):
+            if name == pipeline_name:
+                self._pipeline_combo.setCurrentIndex(i)
+                self._current_pipeline_name = name
+                return
+
+        # Not found - select first (Editor or Default)
+        self._pipeline_combo.setCurrentIndex(0)
+        self._current_pipeline_name = None
+
+    def _update_hint_state(self, viewport: "Viewport") -> None:
+        """Update hint label visibility based on ViewportHintComponent."""
+        if viewport.camera is not None:
+            self._update_hint_state_for_camera(viewport.camera)
+        else:
+            self._hint_label.hide()
+            self._pipeline_combo.setEnabled(True)
+
+    def _update_hint_state_for_camera(self, camera: "CameraComponent") -> None:
+        """Update hint label visibility based on ViewportHintComponent or CameraViewportComponent."""
+        from termin.visualization.core.viewport_hint import ViewportHintComponent
+
+        controlled_by = None
+        camera_name = ""
+        if camera is not None and camera.entity is not None:
+            camera_name = camera.entity.name or "unnamed"
+            hint = camera.entity.get_component(ViewportHintComponent)
+            if hint is not None:
+                controlled_by = "ViewportHint"
+            else:
+                cvp = camera.entity.get_tc_component("CameraViewportComponent")
+                if cvp and cvp.valid:
+                    controlled_by = "CameraViewportComponent"
+
+        if controlled_by:
+            self._hint_label.setText(f"Controlled by {controlled_by} on {camera_name}")
+            self._hint_label.show()
+            self._pipeline_combo.setEnabled(False)
+        else:
+            self._hint_label.hide()
+            self._pipeline_combo.setEnabled(True)
+
+    def _update_scene_pipeline_state(self, viewport: "Viewport") -> None:
+        """Update scene pipeline label visibility."""
+        if viewport.managed_by_scene_pipeline:
+            self._scene_pipeline_label.setText(
+                f"Managed by scene pipeline: {viewport.managed_by_scene_pipeline}"
+            )
+            self._scene_pipeline_label.show()
+            self._pipeline_combo.setEnabled(False)
+        else:
+            self._scene_pipeline_label.hide()
+            # Don't re-enable if ViewportHint is controlling
+            if not self._hint_label.isVisible():
+                self._pipeline_combo.setEnabled(True)
+
+    def _clear(self) -> None:
+        """Clear all fields."""
+        self._updating = True
+        try:
+            self._enabled_checkbox.setChecked(True)
+            self._display_combo.setCurrentIndex(-1)
+            self._camera_combo.setCurrentIndex(-1)
+            self._x_spin.setValue(0.0)
+            self._y_spin.setValue(0.0)
+            self._w_spin.setValue(1.0)
+            self._h_spin.setValue(1.0)
+            self._depth_spin.setValue(0)
+            self._layer_mask_widget.set_value(0xFFFFFFFFFFFFFFFF)
+            self._pipeline_combo.setCurrentIndex(0)
+            self._pipeline_combo.setEnabled(True)
+            self._hint_label.hide()
+            self._scene_pipeline_label.hide()
+            self._current_pipeline_name = None
+            self._debug_label.setText("-")
+        finally:
+            self._updating = False
+
+    def _update_display_combo(self) -> None:
+        """Update display dropdown with current displays."""
+        self._updating = True
+        try:
+            self._display_combo.clear()
+            for i, display in enumerate(self._displays):
+                if display.tc_display_ptr in self._display_names:
+                    name = self._display_names[display.tc_display_ptr]
+                else:
+                    name = f"Display {i}"
+                self._display_combo.addItem(name)
+
+            # Restore selection
+            if self._current_display is not None and self._current_display in self._displays:
+                idx = self._displays.index(self._current_display)
+                self._display_combo.setCurrentIndex(idx)
+        finally:
+            self._updating = False
+
+    def _update_camera_list(self) -> None:
+        """Update camera dropdown from scene."""
+        self._updating = True
+        try:
+            current_camera = None
+            if self._viewport is not None:
+                current_camera = self._viewport.camera
+
+            self._cameras.clear()
+            self._camera_combo.clear()
+
+            if self._scene is not None:
+                from termin.visualization.core.camera import CameraComponent
+
+                for entity in self._scene.entities:
+                    camera = entity.get_component(CameraComponent)
+                    if camera is not None:
+                        name = entity.name or f"Camera ({id(camera)})"
+                        self._cameras.append((camera, name))
+                        self._camera_combo.addItem(name)
+
+            # Restore selection
+            if current_camera is not None:
+                for i, (cam, _name) in enumerate(self._cameras):
+                    if cam is current_camera:
+                        self._camera_combo.setCurrentIndex(i)
+                        break
+        finally:
+            self._updating = False
+
+    def _on_display_changed(self, index: int) -> None:
+        """Handle display selection change."""
+        if self._updating or self._viewport is None:
+            return
+
+        if 0 <= index < len(self._displays):
+            new_display = self._displays[index]
+            self.display_changed.emit(new_display)
+            self.viewport_changed.emit()
+
+    def _on_camera_changed(self, index: int) -> None:
+        """Handle camera selection change."""
+        if self._updating or self._viewport is None:
+            return
+
+        if 0 <= index < len(self._cameras):
+            new_camera, _name = self._cameras[index]
+            self.camera_changed.emit(new_camera)
+            self.viewport_changed.emit()
+            # Update hint state for the new camera
+            # Note: viewport.camera is updated by rendering_controller after this signal
+            # So we need to check the new camera directly
+            self._update_hint_state_for_camera(new_camera)
+
+    def _on_rect_changed(self) -> None:
+        """Handle rect value change."""
+        if self._updating or self._viewport is None:
+            return
+
+        new_rect = (
+            self._x_spin.value(),
+            self._y_spin.value(),
+            self._w_spin.value(),
+            self._h_spin.value(),
+        )
+        self.rect_changed.emit(new_rect)
+        self.viewport_changed.emit()
+
+    def _on_depth_changed(self, value: int) -> None:
+        """Handle depth value change."""
+        if self._updating or self._viewport is None:
+            return
+
+        self.depth_changed.emit(value)
+        self.viewport_changed.emit()
+
+    def _on_enabled_changed(self, state: int) -> None:
+        """Handle enabled checkbox change."""
+        if self._updating or self._viewport is None:
+            return
+
+        enabled = state != 0
+        self.enabled_changed.emit(enabled)
+        self.viewport_changed.emit()
+
+    def _on_layer_mask_changed(self) -> None:
+        """Handle layer mask value change."""
+        if self._updating or self._viewport is None:
+            return
+
+        self._viewport.layer_mask = self._layer_mask_widget.get_value()
+        self.viewport_changed.emit()
+
+    def _on_pipeline_changed(self, index: int) -> None:
+        """Handle pipeline selection change."""
+        if self._updating or self._viewport is None:
+            return
+
+        if 0 <= index < len(self._pipelines):
+            name, pipeline = self._pipelines[index]
+            self._current_pipeline_name = name
+
+            # Handle special "(Editor)" option
+            if name == "(Editor)" and self._get_editor_pipeline is not None:
+                pipeline = self._get_editor_pipeline()
+
+            self.pipeline_changed.emit(pipeline)
+            self.viewport_changed.emit()
+
+    def set_editor_pipeline_getter(self, getter: Optional[Callable[[], "RenderPipeline"]]) -> None:
+        """Set callback to get the editor pipeline."""
+        self._get_editor_pipeline = getter
+
+    def update_pipeline_list(self) -> None:
+        """Update pipeline list from ResourceManager."""
+        from termin.visualization.core.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        pipeline_names = rm.list_pipeline_names()
+
+        self._updating = True
+        try:
+            self._pipelines.clear()
+            self._pipeline_combo.clear()
+
+            # Add "Editor" option if getter is available
+            if self._get_editor_pipeline is not None:
+                self._pipeline_combo.addItem("(Editor)")
+                self._pipelines.append(("(Editor)", None))  # Pipeline created on demand
+
+            # Add registered pipelines (including builtin "Default")
+            for name in pipeline_names:
+                pipeline = rm.get_pipeline(name)
+                if pipeline is not None:
+                    self._pipelines.append((name, pipeline))
+                    self._pipeline_combo.addItem(name)
+
+            # Restore selection
+            if self._current_pipeline_name is not None:
+                for i, (name, _) in enumerate(self._pipelines):
+                    if name == self._current_pipeline_name:
+                        self._pipeline_combo.setCurrentIndex(i)
+                        break
+        finally:
+            self._updating = False
+
+    def set_current_pipeline(self, pipeline: Optional["RenderPipeline"], name: Optional[str] = None) -> None:
+        """Set the current pipeline selection."""
+        self._current_pipeline_name = name
+
+        self._updating = True
+        try:
+            if name is None or pipeline is None:
+                self._pipeline_combo.setCurrentIndex(0)  # Default
+            else:
+                for i, (n, _) in enumerate(self._pipelines):
+                    if n == name:
+                        self._pipeline_combo.setCurrentIndex(i)
+                        break
+        finally:
+            self._updating = False
+
+    def _update_debug_info(self, viewport: "Viewport") -> None:
+        """Update debug info label with native state."""
+        try:
+            from termin._native.render import _viewport_get_input_manager
+
+            vh = viewport._viewport_handle()
+            vp_index, vp_generation = vh
+            vp_im = _viewport_get_input_manager(vp_index, vp_generation)
+
+            lines = [
+                f"handle: idx={vp_index} gen={vp_generation}",
+                f"name:   {viewport.name}",
+                f"im:     0x{vp_im:X}" + (" (NULL)" if vp_im == 0 else ""),
+            ]
+
+            # Show input_mode field
+            input_mode = viewport.input_mode
+            lines.append(f"input_mode: {input_mode!r}")
+
+            self._debug_label.setText("\n".join(lines))
+        except Exception as e:
+            self._debug_label.setText(f"Error: {e}")
+
+    def refresh(self) -> None:
+        """Refresh all data from current viewport."""
+        self._update_camera_list()
+        if self._viewport is not None:
+            self.set_viewport(self._viewport)

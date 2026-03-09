@@ -1,0 +1,1620 @@
+// tc_entity_pool.c - Entity pool implementation
+#include "core/tc_entity_pool.h"
+#include "core/tc_archetype.h"
+#include "tc_hash_map.h"
+#include "core/tc_component.h"
+#include "core/tc_scene.h"
+#include <tcbase/tc_log.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <time.h>
+
+// Reference counting is handled via vtable->retain/release
+
+// Macro for warning on access to dead entity
+#define WARN_DEAD_ENTITY(func_name, id) \
+    tc_log_warn("[tc_entity_pool] %s: entity (idx=%u, gen=%u) is dead", func_name, id.index, id.generation)
+
+// ============================================================================
+// Internal structures
+// ============================================================================
+
+#define INITIAL_CHILDREN_CAPACITY 4
+#define INITIAL_COMPONENTS_CAPACITY 4
+
+typedef struct {
+    double x, y, z;
+} Vec3;
+
+typedef struct {
+    double x, y, z, w;
+} Quat;
+
+typedef struct {
+    Vec3 position;
+    Quat rotation;
+    Vec3 scale;
+} Pose3;
+
+// Dynamic array of entity IDs (for children)
+typedef struct {
+    tc_entity_id* items;
+    size_t count;
+    size_t capacity;
+} EntityIdArray;
+
+// Dynamic array of components
+typedef struct {
+    tc_component** items;
+    size_t count;
+    size_t capacity;
+} ComponentArray;
+
+// ============================================================================
+// Pool structure - mixed SoA/AoS
+// ============================================================================
+
+struct tc_entity_pool {
+    size_t capacity;
+    size_t count;          // alive entities
+    uint64_t next_runtime_id;
+
+    // Free list (stack)
+    uint32_t* free_stack;
+    size_t free_count;
+
+    // Generations (for all slots)
+    uint32_t* generations;
+    bool* alive;
+
+    // Hot data - SoA for iteration
+    bool* visible;
+    bool* enabled;
+    bool* pickable;
+    bool* selectable;
+    bool* serializable;
+    bool* transform_dirty;
+    uint32_t* version_for_walking_to_proximal;
+    uint32_t* version_for_walking_to_distal;
+    uint32_t* version_only_my;
+    int* priorities;
+    uint64_t* layers;
+    uint64_t* entity_flags;
+    uint32_t* pick_ids;
+    uint32_t next_pick_id;
+
+    // Transform data - SoA
+    Vec3* local_positions;
+    Quat* local_rotations;
+    Vec3* local_scales;
+    Vec3* world_positions;
+    Quat* world_rotations;
+    Vec3* world_scales;
+    double* world_matrices;  // 16 doubles per entity
+
+    // Cold data - per entity
+    char** names;
+    char** uuids;
+    uint64_t* runtime_ids;
+
+    // Hierarchy
+    tc_entity_id* parent_ids;  // TC_ENTITY_ID_INVALID = no parent
+    EntityIdArray* children;
+
+    // Components
+    ComponentArray* components;
+
+    // Hash maps for O(1) lookup
+    tc_str_map* by_uuid;      // uuid string -> packed entity_id
+    tc_u32_map* by_pick_id;   // pick_id -> packed entity_id
+
+    // Owner scene (for component registration)
+    tc_scene_handle scene;
+
+    // SoA archetype storage (type registry is global — tc_soa_global_registry())
+    tc_archetype** archetypes;
+    size_t archetype_count;
+    size_t archetype_capacity;
+    tc_u64_map* archetype_by_mask;    // type_mask -> archetype index
+    uint32_t* soa_archetype_ids;      // [capacity] per-entity archetype index (UINT32_MAX = none)
+    uint32_t* soa_archetype_rows;     // [capacity] per-entity row in archetype
+    uint64_t* soa_type_masks;         // [capacity] per-entity type bitmask
+};
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+// Pack entity_id into uint64 for hash map storage
+static uint64_t pack_entity_id(tc_entity_id id) {
+    return ((uint64_t)id.generation << 32) | id.index;
+}
+
+// Unpack entity_id from uint64
+static tc_entity_id unpack_entity_id(uint64_t packed) {
+    return (tc_entity_id){
+        .index = (uint32_t)packed,
+        .generation = (uint32_t)(packed >> 32)
+    };
+}
+
+static Quat quat_identity(void) {
+    return (Quat){0, 0, 0, 1};
+}
+
+static Vec3 vec3_one(void) {
+    return (Vec3){1, 1, 1};
+}
+
+static Vec3 vec3_zero(void) {
+    return (Vec3){0, 0, 0};
+}
+
+static void entity_id_array_init(EntityIdArray* arr) {
+    arr->items = NULL;
+    arr->count = 0;
+    arr->capacity = 0;
+}
+
+static void entity_id_array_free(EntityIdArray* arr) {
+    free(arr->items);
+    arr->items = NULL;
+    arr->count = 0;
+    arr->capacity = 0;
+}
+
+static void entity_id_array_push(EntityIdArray* arr, tc_entity_id id) {
+    if (arr->count >= arr->capacity) {
+        size_t new_cap = arr->capacity == 0 ? INITIAL_CHILDREN_CAPACITY : arr->capacity * 2;
+        arr->items = realloc(arr->items, new_cap * sizeof(tc_entity_id));
+        arr->capacity = new_cap;
+    }
+    arr->items[arr->count++] = id;
+}
+
+static void entity_id_array_remove(EntityIdArray* arr, tc_entity_id id) {
+    for (size_t i = 0; i < arr->count; i++) {
+        if (tc_entity_id_eq(arr->items[i], id)) {
+            arr->items[i] = arr->items[--arr->count];
+            return;
+        }
+    }
+}
+
+static void component_array_init(ComponentArray* arr) {
+    arr->items = NULL;
+    arr->count = 0;
+    arr->capacity = 0;
+}
+
+static void component_array_free(ComponentArray* arr) {
+    free(arr->items);
+    arr->items = NULL;
+    arr->count = 0;
+    arr->capacity = 0;
+}
+
+static void component_array_push(ComponentArray* arr, tc_component* c) {
+    if (arr->count >= arr->capacity) {
+        size_t new_cap = arr->capacity == 0 ? INITIAL_COMPONENTS_CAPACITY : arr->capacity * 2;
+        arr->items = realloc(arr->items, new_cap * sizeof(tc_component*));
+        arr->capacity = new_cap;
+    }
+    arr->items[arr->count++] = c;
+}
+
+static void component_array_remove(ComponentArray* arr, tc_component* c) {
+    for (size_t i = 0; i < arr->count; i++) {
+        if (arr->items[i] == c) {
+            arr->items[i] = arr->items[--arr->count];
+            return;
+        }
+    }
+}
+
+static char* str_dup(const char* s) {
+    if (!s) return NULL;
+    size_t len = strlen(s) + 1;
+    char* copy = malloc(len);
+    memcpy(copy, s, len);
+    return copy;
+}
+
+// ============================================================================
+// Pool lifecycle
+// ============================================================================
+
+tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
+    if (initial_capacity == 0) initial_capacity = 64;
+
+    // Seed random number generator once for UUID generation
+    static bool rand_seeded = false;
+    if (!rand_seeded) {
+        srand((unsigned int)time(NULL) ^ (unsigned int)clock());
+        rand_seeded = true;
+    }
+
+    tc_entity_pool* pool = calloc(1, sizeof(tc_entity_pool));
+    pool->capacity = initial_capacity;
+    pool->count = 0;
+    pool->next_runtime_id = 1;
+
+    // Allocate all arrays
+    pool->free_stack = malloc(initial_capacity * sizeof(uint32_t));
+    pool->free_count = initial_capacity;
+    for (size_t i = 0; i < initial_capacity; i++) {
+        pool->free_stack[i] = (uint32_t)(initial_capacity - 1 - i);
+    }
+
+    pool->generations = calloc(initial_capacity, sizeof(uint32_t));
+    pool->alive = calloc(initial_capacity, sizeof(bool));
+
+    pool->visible = calloc(initial_capacity, sizeof(bool));
+    pool->enabled = calloc(initial_capacity, sizeof(bool));
+    pool->pickable = calloc(initial_capacity, sizeof(bool));
+    pool->selectable = calloc(initial_capacity, sizeof(bool));
+    pool->serializable = calloc(initial_capacity, sizeof(bool));
+    pool->transform_dirty = calloc(initial_capacity, sizeof(bool));
+    pool->version_for_walking_to_proximal = calloc(initial_capacity, sizeof(uint32_t));
+    pool->version_for_walking_to_distal = calloc(initial_capacity, sizeof(uint32_t));
+    pool->version_only_my = calloc(initial_capacity, sizeof(uint32_t));
+    pool->priorities = calloc(initial_capacity, sizeof(int));
+    pool->layers = calloc(initial_capacity, sizeof(uint64_t));
+    pool->entity_flags = calloc(initial_capacity, sizeof(uint64_t));
+    pool->pick_ids = calloc(initial_capacity, sizeof(uint32_t));
+    pool->next_pick_id = 1;
+
+    pool->local_positions = calloc(initial_capacity, sizeof(Vec3));
+    pool->local_rotations = calloc(initial_capacity, sizeof(Quat));
+    pool->local_scales = calloc(initial_capacity, sizeof(Vec3));
+    pool->world_positions = calloc(initial_capacity, sizeof(Vec3));
+    pool->world_rotations = calloc(initial_capacity, sizeof(Quat));
+    pool->world_scales = calloc(initial_capacity, sizeof(Vec3));
+    pool->world_matrices = calloc(initial_capacity * 16, sizeof(double));
+
+    pool->names = calloc(initial_capacity, sizeof(char*));
+    pool->uuids = calloc(initial_capacity, sizeof(char*));
+    pool->runtime_ids = calloc(initial_capacity, sizeof(uint64_t));
+
+    pool->parent_ids = calloc(initial_capacity, sizeof(tc_entity_id));
+    for (size_t i = 0; i < initial_capacity; i++) {
+        pool->parent_ids[i] = TC_ENTITY_ID_INVALID;
+    }
+
+    pool->children = calloc(initial_capacity, sizeof(EntityIdArray));
+    pool->components = calloc(initial_capacity, sizeof(ComponentArray));
+
+    // Create hash maps for O(1) lookup
+    pool->by_uuid = tc_str_map_new(initial_capacity);
+    pool->by_pick_id = tc_u32_map_new(initial_capacity);
+
+    // Scene starts as invalid handle (set by tc_scene when pool is created)
+    pool->scene = TC_SCENE_HANDLE_INVALID;
+
+    // SoA archetype storage
+    pool->archetypes = NULL;
+    pool->archetype_count = 0;
+    pool->archetype_capacity = 0;
+    pool->archetype_by_mask = tc_u64_map_new(16);
+    pool->soa_archetype_ids = malloc(initial_capacity * sizeof(uint32_t));
+    pool->soa_archetype_rows = calloc(initial_capacity, sizeof(uint32_t));
+    pool->soa_type_masks = calloc(initial_capacity, sizeof(uint64_t));
+    memset(pool->soa_archetype_ids, 0xFF, initial_capacity * sizeof(uint32_t)); // UINT32_MAX = none
+
+    return pool;
+}
+
+void tc_entity_pool_set_scene(tc_entity_pool* pool, tc_scene_handle scene) {
+    if (pool) {
+        pool->scene = scene;
+    }
+}
+
+tc_scene_handle tc_entity_pool_get_scene(tc_entity_pool* pool) {
+    return pool ? pool->scene : TC_SCENE_HANDLE_INVALID;
+}
+
+void tc_entity_pool_destroy(tc_entity_pool* pool) {
+    if (!pool) return;
+
+    // Free strings, release Python refs, and free dynamic arrays
+    for (size_t i = 0; i < pool->capacity; i++) {
+        free(pool->names[i]);
+        free(pool->uuids[i]);
+        entity_id_array_free(&pool->children[i]);
+
+        // Destroy all components
+        ComponentArray* comps = &pool->components[i];
+        for (size_t j = 0; j < comps->count; j++) {
+            tc_component* c = comps->items[j];
+            if (!c) continue;
+            tc_component_release(c);
+        }
+        component_array_free(&pool->components[i]);
+    }
+
+    free(pool->free_stack);
+    free(pool->generations);
+    free(pool->alive);
+    free(pool->visible);
+    free(pool->enabled);
+    free(pool->pickable);
+    free(pool->selectable);
+    free(pool->serializable);
+    free(pool->transform_dirty);
+    free(pool->version_for_walking_to_proximal);
+    free(pool->version_for_walking_to_distal);
+    free(pool->version_only_my);
+    free(pool->priorities);
+    free(pool->layers);
+    free(pool->entity_flags);
+    free(pool->pick_ids);
+    free(pool->local_positions);
+    free(pool->local_rotations);
+    free(pool->local_scales);
+    free(pool->world_positions);
+    free(pool->world_rotations);
+    free(pool->world_scales);
+    free(pool->world_matrices);
+    free(pool->names);
+    free(pool->uuids);
+    free(pool->runtime_ids);
+    free(pool->parent_ids);
+    free(pool->children);
+    free(pool->components);
+
+    // Free hash maps
+    tc_str_map_free(pool->by_uuid);
+    tc_u32_map_free(pool->by_pick_id);
+
+    // Free SoA archetype storage
+    for (size_t i = 0; i < pool->archetype_count; i++) {
+        tc_archetype_destroy(pool->archetypes[i], tc_soa_global_registry());
+    }
+    free(pool->archetypes);
+    tc_u64_map_free(pool->archetype_by_mask);
+    free(pool->soa_archetype_ids);
+    free(pool->soa_archetype_rows);
+    free(pool->soa_type_masks);
+
+    free(pool);
+}
+
+// ============================================================================
+// Allocation
+// ============================================================================
+
+static void pool_grow(tc_entity_pool* pool) {
+    size_t old_cap = pool->capacity;
+    size_t new_cap = old_cap * 2;
+
+    tc_log_debug("[tc_entity_pool] Growing pool from %zu to %zu", old_cap, new_cap);
+
+    pool->free_stack = realloc(pool->free_stack, new_cap * sizeof(uint32_t));
+    for (size_t i = old_cap; i < new_cap; i++) {
+        pool->free_stack[pool->free_count++] = (uint32_t)(new_cap - 1 - (i - old_cap));
+    }
+
+    pool->generations = realloc(pool->generations, new_cap * sizeof(uint32_t));
+    pool->alive = realloc(pool->alive, new_cap * sizeof(bool));
+    memset(pool->generations + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
+    memset(pool->alive + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+
+    pool->visible = realloc(pool->visible, new_cap * sizeof(bool));
+    pool->enabled = realloc(pool->enabled, new_cap * sizeof(bool));
+    pool->pickable = realloc(pool->pickable, new_cap * sizeof(bool));
+    pool->selectable = realloc(pool->selectable, new_cap * sizeof(bool));
+    pool->serializable = realloc(pool->serializable, new_cap * sizeof(bool));
+    pool->transform_dirty = realloc(pool->transform_dirty, new_cap * sizeof(bool));
+    memset(pool->visible + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->enabled + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->pickable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->selectable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->serializable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+    memset(pool->transform_dirty + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
+
+    pool->version_for_walking_to_proximal = realloc(pool->version_for_walking_to_proximal, new_cap * sizeof(uint32_t));
+    pool->version_for_walking_to_distal = realloc(pool->version_for_walking_to_distal, new_cap * sizeof(uint32_t));
+    pool->version_only_my = realloc(pool->version_only_my, new_cap * sizeof(uint32_t));
+    memset(pool->version_for_walking_to_proximal + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
+    memset(pool->version_for_walking_to_distal + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
+    memset(pool->version_only_my + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
+    pool->priorities = realloc(pool->priorities, new_cap * sizeof(int));
+    pool->layers = realloc(pool->layers, new_cap * sizeof(uint64_t));
+    pool->entity_flags = realloc(pool->entity_flags, new_cap * sizeof(uint64_t));
+    pool->pick_ids = realloc(pool->pick_ids, new_cap * sizeof(uint32_t));
+    memset(pool->priorities + old_cap, 0, (new_cap - old_cap) * sizeof(int));
+    memset(pool->layers + old_cap, 0, (new_cap - old_cap) * sizeof(uint64_t));
+    memset(pool->entity_flags + old_cap, 0, (new_cap - old_cap) * sizeof(uint64_t));
+    memset(pool->pick_ids + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
+
+    pool->local_positions = realloc(pool->local_positions, new_cap * sizeof(Vec3));
+    pool->local_rotations = realloc(pool->local_rotations, new_cap * sizeof(Quat));
+    pool->local_scales = realloc(pool->local_scales, new_cap * sizeof(Vec3));
+    pool->world_positions = realloc(pool->world_positions, new_cap * sizeof(Vec3));
+    pool->world_rotations = realloc(pool->world_rotations, new_cap * sizeof(Quat));
+    pool->world_scales = realloc(pool->world_scales, new_cap * sizeof(Vec3));
+    pool->world_matrices = realloc(pool->world_matrices, new_cap * 16 * sizeof(double));
+    memset(pool->local_positions + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->local_rotations + old_cap, 0, (new_cap - old_cap) * sizeof(Quat));
+    memset(pool->local_scales + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->world_positions + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->world_rotations + old_cap, 0, (new_cap - old_cap) * sizeof(Quat));
+    memset(pool->world_scales + old_cap, 0, (new_cap - old_cap) * sizeof(Vec3));
+    memset(pool->world_matrices + old_cap * 16, 0, (new_cap - old_cap) * 16 * sizeof(double));
+
+    pool->names = realloc(pool->names, new_cap * sizeof(char*));
+    pool->uuids = realloc(pool->uuids, new_cap * sizeof(char*));
+    pool->runtime_ids = realloc(pool->runtime_ids, new_cap * sizeof(uint64_t));
+    memset(pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
+    memset(pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
+    memset(pool->runtime_ids + old_cap, 0, (new_cap - old_cap) * sizeof(uint64_t));
+
+    pool->parent_ids = realloc(pool->parent_ids, new_cap * sizeof(tc_entity_id));
+    for (size_t i = old_cap; i < new_cap; i++) {
+        pool->parent_ids[i] = TC_ENTITY_ID_INVALID;
+    }
+
+    pool->children = realloc(pool->children, new_cap * sizeof(EntityIdArray));
+    pool->components = realloc(pool->components, new_cap * sizeof(ComponentArray));
+    memset(pool->children + old_cap, 0, (new_cap - old_cap) * sizeof(EntityIdArray));
+    memset(pool->components + old_cap, 0, (new_cap - old_cap) * sizeof(ComponentArray));
+
+    // SoA per-entity arrays
+    pool->soa_archetype_ids = realloc(pool->soa_archetype_ids, new_cap * sizeof(uint32_t));
+    pool->soa_archetype_rows = realloc(pool->soa_archetype_rows, new_cap * sizeof(uint32_t));
+    pool->soa_type_masks = realloc(pool->soa_type_masks, new_cap * sizeof(uint64_t));
+    memset(pool->soa_archetype_ids + old_cap, 0xFF, (new_cap - old_cap) * sizeof(uint32_t));
+    memset(pool->soa_archetype_rows + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
+    memset(pool->soa_type_masks + old_cap, 0, (new_cap - old_cap) * sizeof(uint64_t));
+
+    pool->capacity = new_cap;
+}
+
+tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* name, const char* uuid) {
+    if (pool->free_count == 0) {
+        pool_grow(pool);
+    }
+
+    uint32_t idx = pool->free_stack[--pool->free_count];
+    uint32_t gen = pool->generations[idx];
+
+    pool->alive[idx] = true;
+    pool->visible[idx] = true;
+    pool->enabled[idx] = true;
+    pool->pickable[idx] = true;
+    pool->selectable[idx] = true;
+    pool->serializable[idx] = true;
+    pool->transform_dirty[idx] = true;
+    pool->version_for_walking_to_proximal[idx] = 0;
+    pool->version_for_walking_to_distal[idx] = 0;
+    pool->version_only_my[idx] = 0;
+    pool->priorities[idx] = 0;
+    pool->layers[idx] = 0;
+    pool->entity_flags[idx] = 0;
+    pool->pick_ids[idx] = pool->next_pick_id++;
+
+    // SoA: ensure clean state for reused slot
+    pool->soa_archetype_ids[idx] = UINT32_MAX;
+    pool->soa_archetype_rows[idx] = 0;
+    pool->soa_type_masks[idx] = 0;
+
+    pool->local_positions[idx] = vec3_zero();
+    pool->local_rotations[idx] = quat_identity();
+    pool->local_scales[idx] = vec3_one();
+    pool->world_positions[idx] = vec3_zero();
+    pool->world_rotations[idx] = quat_identity();
+    pool->world_scales[idx] = vec3_one();
+
+    // Clear world matrix to identity
+    double* wm = &pool->world_matrices[idx * 16];
+    memset(wm, 0, 16 * sizeof(double));
+    wm[0] = wm[5] = wm[10] = wm[15] = 1.0;
+
+    free(pool->names[idx]);
+    pool->names[idx] = str_dup(name ? name : "entity");
+
+    // Set UUID - use provided or generate random
+    free(pool->uuids[idx]);
+    if (uuid && uuid[0]) {
+        pool->uuids[idx] = str_dup(uuid);
+    } else {
+        // Generate random UUID4-style identifier
+        char uuid_buf[37];  // 32 hex chars + 4 dashes + null
+        unsigned char bytes[16];
+        for (int i = 0; i < 16; i++) {
+            bytes[i] = (unsigned char)(rand() & 0xFF);
+        }
+        // Set version (4) and variant (RFC 4122)
+        bytes[6] = (bytes[6] & 0x0F) | 0x40;  // Version 4
+        bytes[8] = (bytes[8] & 0x3F) | 0x80;  // Variant 1
+        snprintf(uuid_buf, sizeof(uuid_buf),
+            "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]);
+        pool->uuids[idx] = str_dup(uuid_buf);
+    }
+
+    pool->runtime_ids[idx] = pool->next_runtime_id++;
+    pool->parent_ids[idx] = TC_ENTITY_ID_INVALID;
+
+    entity_id_array_free(&pool->children[idx]);
+    entity_id_array_init(&pool->children[idx]);
+
+    component_array_free(&pool->components[idx]);
+    component_array_init(&pool->components[idx]);
+
+    pool->count++;
+
+    tc_entity_id result = (tc_entity_id){idx, gen};
+
+    // Register in hash maps for O(1) lookup
+    tc_str_map_set(pool->by_uuid, pool->uuids[idx], pack_entity_id(result));
+    tc_u32_map_set(pool->by_pick_id, pool->pick_ids[idx], pack_entity_id(result));
+
+    return result;
+}
+
+tc_entity_id tc_entity_pool_alloc(tc_entity_pool* pool, const char* name) {
+    return tc_entity_pool_alloc_with_uuid(pool, name, NULL);
+}
+
+void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
+    if (!pool || !tc_entity_pool_alive(pool, id)) return;
+
+    uint32_t idx = id.index;
+    tc_scene_handle scene = tc_entity_pool_get_scene(pool);
+
+    // Remove all components properly
+    ComponentArray* comps = &pool->components[idx];
+    while (comps->count > 0) {
+        tc_component* c = comps->items[0];
+        if (!c) {
+            tc_log(TC_LOG_ERROR, "[tc_entity_pool_free] NULL component in entity idx=%u", idx);
+            component_array_remove(comps, c);
+            continue;
+        }
+
+        // Notify component it's being removed from scene
+        tc_component_on_removed(c);
+
+        // Unregister from scene's type lists and scheduler
+        if (tc_scene_handle_valid(scene)) {
+            tc_scene_unregister_component(scene, c);
+        }
+
+        // Notify component it's being removed from entity
+        tc_component_on_removed_from_entity(c);
+
+        // Remove from array and release component
+        component_array_remove(comps, c);
+        tc_component_release(c);
+    }
+    // Free components array itself
+    free(comps->items);
+    comps->items = NULL;
+    comps->capacity = 0;
+
+    // Remove from parent's children
+    tc_entity_id parent_id = pool->parent_ids[idx];
+    if (tc_entity_id_valid(parent_id) && tc_entity_pool_alive(pool, parent_id)) {
+        entity_id_array_remove(&pool->children[parent_id.index], id);
+    }
+
+    // Orphan children (or could recursively delete)
+    for (size_t i = 0; i < pool->children[idx].count; i++) {
+        tc_entity_id child = pool->children[idx].items[i];
+        if (tc_entity_pool_alive(pool, child)) {
+            pool->parent_ids[child.index] = TC_ENTITY_ID_INVALID;
+        }
+    }
+    // Clear children array so reused slot doesn't inherit stale children
+    entity_id_array_free(&pool->children[idx]);
+    entity_id_array_init(&pool->children[idx]);
+
+    // Remove from hash maps before marking as dead
+    if (pool->uuids[idx]) {
+        tc_str_map_remove(pool->by_uuid, pool->uuids[idx]);
+        free(pool->uuids[idx]);
+        pool->uuids[idx] = NULL;
+    }
+    tc_u32_map_remove(pool->by_pick_id, pool->pick_ids[idx]);
+
+    // Free name string
+    free(pool->names[idx]);
+    pool->names[idx] = NULL;
+
+    // Remove from SoA archetype if present
+    if (pool->soa_archetype_ids[idx] != UINT32_MAX) {
+        uint32_t arch_id = pool->soa_archetype_ids[idx];
+        uint32_t row = pool->soa_archetype_rows[idx];
+        tc_archetype* arch = pool->archetypes[arch_id];
+
+        tc_entity_id swapped = tc_archetype_free_row(arch, row, tc_soa_global_registry());
+        if (tc_entity_id_valid(swapped)) {
+            pool->soa_archetype_rows[swapped.index] = row;
+        }
+
+        pool->soa_archetype_ids[idx] = UINT32_MAX;
+        pool->soa_archetype_rows[idx] = 0;
+        pool->soa_type_masks[idx] = 0;
+    }
+
+    pool->alive[idx] = false;
+    pool->generations[idx]++;
+    pool->free_stack[pool->free_count++] = idx;
+    pool->count--;
+}
+
+bool tc_entity_pool_alive(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!pool || id.index >= pool->capacity) return false;
+    return pool->alive[id.index] && pool->generations[id.index] == id.generation;
+}
+
+size_t tc_entity_pool_count(const tc_entity_pool* pool) {
+    return pool ? pool->count : 0;
+}
+
+size_t tc_entity_pool_capacity(const tc_entity_pool* pool) {
+    return pool ? pool->capacity : 0;
+}
+
+tc_entity_id tc_entity_pool_id_at(const tc_entity_pool* pool, uint32_t index) {
+    if (!pool || index >= pool->capacity || !pool->alive[index]) {
+        return TC_ENTITY_ID_INVALID;
+    }
+    return (tc_entity_id){index, pool->generations[index]};
+}
+
+// ============================================================================
+// Data access
+// ============================================================================
+
+const char* tc_entity_pool_name(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("name", id); return NULL; }
+    return pool->names[id.index];
+}
+
+void tc_entity_pool_set_name(tc_entity_pool* pool, tc_entity_id id, const char* name) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_name", id); return; }
+    free(pool->names[id.index]);
+    pool->names[id.index] = str_dup(name);
+}
+
+const char* tc_entity_pool_uuid(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("uuid", id); return NULL; }
+    return pool->uuids[id.index];
+}
+
+void tc_entity_pool_set_uuid(tc_entity_pool* pool, tc_entity_id id, const char* uuid) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_uuid", id); return; }
+    if (!uuid) return;
+
+    uint32_t idx = id.index;
+
+    // Remove old UUID from hash map
+    if (pool->uuids[idx]) {
+        tc_str_map_remove(pool->by_uuid, pool->uuids[idx]);
+        free(pool->uuids[idx]);
+    }
+
+    // Set new UUID
+    pool->uuids[idx] = str_dup(uuid);
+
+    // Register in hash map
+    tc_str_map_set(pool->by_uuid, pool->uuids[idx], pack_entity_id(id));
+}
+
+uint64_t tc_entity_pool_runtime_id(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return 0;
+    return pool->runtime_ids[id.index];
+}
+
+bool tc_entity_pool_visible(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return false;
+    return pool->visible[id.index];
+}
+
+void tc_entity_pool_set_visible(tc_entity_pool* pool, tc_entity_id id, bool v) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    pool->visible[id.index] = v;
+}
+
+bool tc_entity_pool_enabled(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return false;
+    return pool->enabled[id.index];
+}
+
+void tc_entity_pool_set_enabled(tc_entity_pool* pool, tc_entity_id id, bool v) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    pool->enabled[id.index] = v;
+}
+
+bool tc_entity_pool_pickable(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return false;
+    return pool->pickable[id.index];
+}
+
+void tc_entity_pool_set_pickable(tc_entity_pool* pool, tc_entity_id id, bool v) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    pool->pickable[id.index] = v;
+}
+
+bool tc_entity_pool_selectable(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return false;
+    return pool->selectable[id.index];
+}
+
+void tc_entity_pool_set_selectable(tc_entity_pool* pool, tc_entity_id id, bool v) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    pool->selectable[id.index] = v;
+}
+
+bool tc_entity_pool_serializable(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return false;
+    return pool->serializable[id.index];
+}
+
+void tc_entity_pool_set_serializable(tc_entity_pool* pool, tc_entity_id id, bool v) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    pool->serializable[id.index] = v;
+}
+
+int tc_entity_pool_priority(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return 0;
+    return pool->priorities[id.index];
+}
+
+void tc_entity_pool_set_priority(tc_entity_pool* pool, tc_entity_id id, int v) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    pool->priorities[id.index] = v;
+}
+
+uint64_t tc_entity_pool_layer(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return 0;
+    return pool->layers[id.index];
+}
+
+void tc_entity_pool_set_layer(tc_entity_pool* pool, tc_entity_id id, uint64_t v) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    pool->layers[id.index] = v;
+}
+
+uint64_t tc_entity_pool_flags(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return 0;
+    return pool->entity_flags[id.index];
+}
+
+void tc_entity_pool_set_flags(tc_entity_pool* pool, tc_entity_id id, uint64_t v) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+    pool->entity_flags[id.index] = v;
+}
+
+uint32_t tc_entity_pool_pick_id(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return 0;
+    return pool->pick_ids[id.index];
+}
+
+tc_entity_id tc_entity_pool_find_by_pick_id(const tc_entity_pool* pool, uint32_t pick_id) {
+    if (!pool || pick_id == 0) return TC_ENTITY_ID_INVALID;
+
+    uint64_t packed;
+    if (tc_u32_map_get(pool->by_pick_id, pick_id, &packed)) {
+        tc_entity_id id = unpack_entity_id(packed);
+        // Verify entity is still alive with same generation
+        if (tc_entity_pool_alive(pool, id)) {
+            return id;
+        }
+    }
+    return TC_ENTITY_ID_INVALID;
+}
+
+tc_entity_id tc_entity_pool_find_by_uuid(const tc_entity_pool* pool, const char* uuid) {
+    if (!pool || !uuid || !uuid[0]) return TC_ENTITY_ID_INVALID;
+
+    uint64_t packed;
+    if (tc_str_map_get(pool->by_uuid, uuid, &packed)) {
+        tc_entity_id id = unpack_entity_id(packed);
+        // Verify entity is still alive with same generation
+        if (tc_entity_pool_alive(pool, id)) {
+            return id;
+        }
+    }
+    return TC_ENTITY_ID_INVALID;
+}
+
+// ============================================================================
+// Transform
+// ============================================================================
+
+void tc_entity_pool_get_local_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_position", id); return; }
+    Vec3 p = pool->local_positions[id.index];
+    xyz[0] = p.x; xyz[1] = p.y; xyz[2] = p.z;
+}
+
+void tc_entity_pool_set_local_position(tc_entity_pool* pool, tc_entity_id id, const double* xyz) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_local_position", id); return; }
+    pool->local_positions[id.index] = (Vec3){xyz[0], xyz[1], xyz[2]};
+    tc_entity_pool_mark_dirty(pool, id);
+}
+
+void tc_entity_pool_get_local_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_rotation", id); return; }
+    Quat r = pool->local_rotations[id.index];
+    xyzw[0] = r.x; xyzw[1] = r.y; xyzw[2] = r.z; xyzw[3] = r.w;
+}
+
+void tc_entity_pool_set_local_rotation(tc_entity_pool* pool, tc_entity_id id, const double* xyzw) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_local_rotation", id); return; }
+    pool->local_rotations[id.index] = (Quat){xyzw[0], xyzw[1], xyzw[2], xyzw[3]};
+    tc_entity_pool_mark_dirty(pool, id);
+}
+
+void tc_entity_pool_get_local_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_scale", id); return; }
+    Vec3 s = pool->local_scales[id.index];
+    xyz[0] = s.x; xyz[1] = s.y; xyz[2] = s.z;
+}
+
+void tc_entity_pool_set_local_scale(tc_entity_pool* pool, tc_entity_id id, const double* xyz) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_local_scale", id); return; }
+    pool->local_scales[id.index] = (Vec3){xyz[0], xyz[1], xyz[2]};
+    tc_entity_pool_mark_dirty(pool, id);
+}
+
+void tc_entity_pool_get_local_pose(
+    const tc_entity_pool* pool, tc_entity_id id,
+    double* position, double* rotation, double* scale
+) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_pose", id); return; }
+    uint32_t idx = id.index;
+    if (position) {
+        Vec3 p = pool->local_positions[idx];
+        position[0] = p.x; position[1] = p.y; position[2] = p.z;
+    }
+    if (rotation) {
+        Quat q = pool->local_rotations[idx];
+        rotation[0] = q.x; rotation[1] = q.y; rotation[2] = q.z; rotation[3] = q.w;
+    }
+    if (scale) {
+        Vec3 s = pool->local_scales[idx];
+        scale[0] = s.x; scale[1] = s.y; scale[2] = s.z;
+    }
+}
+
+
+void tc_entity_pool_set_local_pose(
+    tc_entity_pool* pool, tc_entity_id id,
+    const double* position, const double* rotation, const double* scale
+) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_local_pose", id); return; }
+    uint32_t idx = id.index;
+    if (position) {
+        pool->local_positions[idx] = (Vec3){position[0], position[1], position[2]};
+    }
+    if (rotation) {
+        pool->local_rotations[idx] = (Quat){rotation[0], rotation[1], rotation[2], rotation[3]};
+    }
+    if (scale) {
+        pool->local_scales[idx] = (Vec3){scale[0], scale[1], scale[2]};
+    }
+    tc_entity_pool_mark_dirty(pool, id);
+}
+
+// Forward declaration for lazy update
+static void update_entity_transform(tc_entity_pool* pool, uint32_t idx);
+
+void tc_entity_pool_get_global_pose(
+    const tc_entity_pool* pool, tc_entity_id id,
+    double* position, double* rotation, double* scale
+) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_pose", id); return; }
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    uint32_t idx = id.index;
+    if (position) {
+        Vec3 p = pool->world_positions[idx];
+        position[0] = p.x; position[1] = p.y; position[2] = p.z;
+    }
+    if (rotation) {
+        Quat q = pool->world_rotations[idx];
+        rotation[0] = q.x; rotation[1] = q.y; rotation[2] = q.z; rotation[3] = q.w;
+    }
+    if (scale) {
+        Vec3 s = pool->world_scales[idx];
+        scale[0] = s.x; scale[1] = s.y; scale[2] = s.z;
+    }
+}
+
+static uint32_t increment_version(uint32_t v) {
+    return (v + 1) % 0x7FFFFFFF;
+}
+
+// Spread changes toward leaves (distal) - increments version_for_walking_to_proximal
+static void spread_changes_to_distal(tc_entity_pool* pool, uint32_t idx) {
+    pool->version_for_walking_to_proximal[idx] = increment_version(pool->version_for_walking_to_proximal[idx]);
+    pool->transform_dirty[idx] = true;
+
+    EntityIdArray* ch = &pool->children[idx];
+    for (size_t i = 0; i < ch->count; i++) {
+        tc_entity_id child = ch->items[i];
+        if (tc_entity_pool_alive(pool, child)) {
+            spread_changes_to_distal(pool, child.index);
+        }
+    }
+}
+
+// Spread changes toward root (proximal) - increments version_for_walking_to_distal
+static void spread_changes_to_proximal(tc_entity_pool* pool, uint32_t idx) {
+    pool->version_for_walking_to_distal[idx] = increment_version(pool->version_for_walking_to_distal[idx]);
+
+    tc_entity_id parent_id = pool->parent_ids[idx];
+    if (tc_entity_id_valid(parent_id) && tc_entity_pool_alive(pool, parent_id)) {
+        spread_changes_to_proximal(pool, parent_id.index);
+    }
+}
+
+void tc_entity_pool_mark_dirty(tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) return;
+
+    uint32_t idx = id.index;
+
+    // Increment own version
+    pool->version_only_my[idx] = increment_version(pool->version_only_my[idx]);
+
+    // Spread to ancestors (they know something below changed)
+    spread_changes_to_proximal(pool, idx);
+
+    // Spread to descendants (they need to recalculate world transform)
+    spread_changes_to_distal(pool, idx);
+}
+
+void tc_entity_pool_get_global_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_position", id); return; }
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    Vec3 p = pool->world_positions[id.index];
+    xyz[0] = p.x; xyz[1] = p.y; xyz[2] = p.z;
+}
+
+void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_rotation", id); return; }
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    Quat q = pool->world_rotations[id.index];
+    xyzw[0] = q.x; xyzw[1] = q.y; xyzw[2] = q.z; xyzw[3] = q.w;
+}
+
+void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_scale", id); return; }
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    Vec3 s = pool->world_scales[id.index];
+    xyz[0] = s.x; xyz[1] = s.y; xyz[2] = s.z;
+}
+
+void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id, double* m16) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_world_matrix", id); return; }
+    // Lazy update if dirty
+    if (pool->transform_dirty[id.index]) {
+        update_entity_transform((tc_entity_pool*)pool, id.index);
+    }
+    memcpy(m16, &pool->world_matrices[id.index * 16], 16 * sizeof(double));
+}
+
+// Simple quaternion multiply
+static Quat quat_mul(Quat a, Quat b) {
+    return (Quat){
+        a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y,
+        a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
+        a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w,
+        a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z
+    };
+}
+
+// Rotate vector by quaternion
+static Vec3 quat_rotate(Quat q, Vec3 v) {
+    Vec3 u = {q.x, q.y, q.z};
+    double s = q.w;
+
+    double dot_uv = u.x*v.x + u.y*v.y + u.z*v.z;
+    double dot_uu = u.x*u.x + u.y*u.y + u.z*u.z;
+
+    Vec3 cross = {
+        u.y*v.z - u.z*v.y,
+        u.z*v.x - u.x*v.z,
+        u.x*v.y - u.y*v.x
+    };
+
+    return (Vec3){
+        2.0*dot_uv*u.x + (s*s - dot_uu)*v.x + 2.0*s*cross.x,
+        2.0*dot_uv*u.y + (s*s - dot_uu)*v.y + 2.0*s*cross.y,
+        2.0*dot_uv*u.z + (s*s - dot_uu)*v.z + 2.0*s*cross.z
+    };
+}
+
+static void compute_world_matrix(double* m, Vec3 pos, Quat rot, Vec3 scale) {
+    // Rotation matrix from quaternion - OUTPUT COLUMN-MAJOR (OpenGL convention)
+    // Column-major layout: m[col * 4 + row]
+    double xx = rot.x * rot.x, yy = rot.y * rot.y, zz = rot.z * rot.z;
+    double xy = rot.x * rot.y, xz = rot.x * rot.z, yz = rot.y * rot.z;
+    double wx = rot.w * rot.x, wy = rot.w * rot.y, wz = rot.w * rot.z;
+
+    // Column 0
+    m[0]  = (1 - 2*(yy + zz)) * scale.x;
+    m[1]  = 2*(xy + wz) * scale.x;
+    m[2]  = 2*(xz - wy) * scale.x;
+    m[3]  = 0;
+
+    // Column 1
+    m[4]  = 2*(xy - wz) * scale.y;
+    m[5]  = (1 - 2*(xx + zz)) * scale.y;
+    m[6]  = 2*(yz + wx) * scale.y;
+    m[7]  = 0;
+
+    // Column 2
+    m[8]  = 2*(xz + wy) * scale.z;
+    m[9]  = 2*(yz - wx) * scale.z;
+    m[10] = (1 - 2*(xx + yy)) * scale.z;
+    m[11] = 0;
+
+    // Column 3 (translation)
+    m[12] = pos.x;
+    m[13] = pos.y;
+    m[14] = pos.z;
+    m[15] = 1;
+}
+
+// Lazy update of a single entity's world transform
+static void update_entity_transform(tc_entity_pool* pool, uint32_t idx) {
+    if (!pool->transform_dirty[idx]) return;
+
+    tc_entity_id parent_id = pool->parent_ids[idx];
+
+    if (!tc_entity_id_valid(parent_id)) {
+        // Root entity - world = local
+        pool->world_positions[idx] = pool->local_positions[idx];
+        pool->world_rotations[idx] = pool->local_rotations[idx];
+        pool->world_scales[idx] = pool->local_scales[idx];
+    } else if (!tc_entity_pool_alive(pool, parent_id)) {
+        // Parent was deleted (generation mismatch) - treat as root
+        tc_log(TC_LOG_WARN, "[update_entity_transform] idx=%u has stale parent (idx=%u gen=%u, current gen=%u) - treating as root",
+            idx, parent_id.index, parent_id.generation, pool->generations[parent_id.index]);
+        pool->parent_ids[idx] = TC_ENTITY_ID_INVALID;  // Fix the stale reference
+        pool->world_positions[idx] = pool->local_positions[idx];
+        pool->world_rotations[idx] = pool->local_rotations[idx];
+        pool->world_scales[idx] = pool->local_scales[idx];
+    } else {
+        // Has valid parent - update parent first if dirty, then combine
+        uint32_t parent_idx = parent_id.index;
+        if (pool->transform_dirty[parent_idx]) {
+            update_entity_transform(pool, parent_idx);
+        }
+
+        Vec3 pw = pool->world_positions[parent_idx];
+        Quat rw = pool->world_rotations[parent_idx];
+        Vec3 sw = pool->world_scales[parent_idx];
+
+        Vec3 lp = pool->local_positions[idx];
+        Quat lr = pool->local_rotations[idx];
+        Vec3 ls = pool->local_scales[idx];
+
+        // Scale local position by parent scale, rotate, add parent position
+        Vec3 scaled_pos = {lp.x * sw.x, lp.y * sw.y, lp.z * sw.z};
+        Vec3 rotated_pos = quat_rotate(rw, scaled_pos);
+
+        pool->world_positions[idx] = (Vec3){
+            pw.x + rotated_pos.x,
+            pw.y + rotated_pos.y,
+            pw.z + rotated_pos.z
+        };
+        pool->world_rotations[idx] = quat_mul(rw, lr);
+        pool->world_scales[idx] = (Vec3){sw.x * ls.x, sw.y * ls.y, sw.z * ls.z};
+    }
+
+    compute_world_matrix(
+        &pool->world_matrices[idx * 16],
+        pool->world_positions[idx],
+        pool->world_rotations[idx],
+        pool->world_scales[idx]
+    );
+
+    pool->transform_dirty[idx] = false;
+}
+
+void tc_entity_pool_update_transforms(tc_entity_pool* pool) {
+    if (!pool) return;
+
+    // Use lazy update for each dirty entity
+    for (uint32_t i = 0; i < pool->capacity; i++) {
+        if (!pool->alive[i] || !pool->transform_dirty[i]) continue;
+        update_entity_transform(pool, i);
+    }
+}
+
+// ============================================================================
+// Hierarchy
+// ============================================================================
+
+tc_entity_id tc_entity_pool_parent(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("parent", id); return TC_ENTITY_ID_INVALID; }
+
+    tc_entity_id parent_id = pool->parent_ids[id.index];
+    if (!tc_entity_id_valid(parent_id)) return TC_ENTITY_ID_INVALID;
+
+    // Verify parent is still alive (generation check)
+    if (!tc_entity_pool_alive(pool, parent_id)) {
+        // Parent was deleted - orphan this entity
+        ((tc_entity_pool*)pool)->parent_ids[id.index] = TC_ENTITY_ID_INVALID;
+        return TC_ENTITY_ID_INVALID;
+    }
+
+    return parent_id;
+}
+
+void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_id parent) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_parent", id); return; }
+
+    uint32_t idx = id.index;
+    tc_entity_id old_parent_id = pool->parent_ids[idx];
+
+    // Remove from old parent's children
+    if (tc_entity_id_valid(old_parent_id) && tc_entity_pool_alive(pool, old_parent_id)) {
+        entity_id_array_remove(&pool->children[old_parent_id.index], id);
+    }
+
+    // Set new parent (store full entity_id including generation)
+    if (tc_entity_id_valid(parent) && tc_entity_pool_alive(pool, parent)) {
+        pool->parent_ids[idx] = parent;
+        entity_id_array_push(&pool->children[parent.index], id);
+    } else {
+        pool->parent_ids[idx] = TC_ENTITY_ID_INVALID;
+    }
+
+    tc_entity_pool_mark_dirty(pool, id);
+}
+
+size_t tc_entity_pool_children_count(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("children_count", id); return 0; }
+    return pool->children[id.index].count;
+}
+
+tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id, size_t index) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("child_at", id); return TC_ENTITY_ID_INVALID; }
+    if (index >= pool->children[id.index].count) return TC_ENTITY_ID_INVALID;
+    return pool->children[id.index].items[index];
+}
+
+// ============================================================================
+// Components
+// ============================================================================
+
+void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
+    if (!tc_entity_pool_alive(pool, id) || !c) { if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id); return; }
+
+    // Set owner entity handle
+    tc_entity_pool_handle pool_h = tc_entity_pool_registry_find(pool);
+    c->owner = tc_entity_handle_make(pool_h, id);
+
+    // Retain component unless factory already did it
+    if (!c->factory_retained) {
+        tc_component_retain(c);
+    }
+    // Clear flag - next add will need retain again
+    c->factory_retained = false;
+
+    component_array_push(&pool->components[id.index], c);
+
+    // Register with scene if pool belongs to one
+    tc_scene_handle scene = tc_entity_pool_get_scene(pool);
+    if (tc_scene_handle_valid(scene)) {
+        tc_scene_register_component(scene, c);
+    }
+
+    // Notify component it was added to entity
+    tc_component_on_added_to_entity(c);
+    tc_component_on_added(c);
+}
+
+void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
+    if (!tc_entity_pool_alive(pool, id) || !c) return;
+
+    // Notify component it's being removed from scene
+    tc_component_on_removed(c);
+
+    // Unregister from scene's type lists
+    if (tc_scene_handle_valid(pool->scene)) {
+        tc_scene_unregister_component(pool->scene, c);
+    }
+
+    // Notify component it's being removed from entity
+    tc_component_on_removed_from_entity(c);
+
+    // Clear owner entity handle
+    c->owner = TC_ENTITY_HANDLE_INVALID;
+
+    // Remove from entity's component array
+    component_array_remove(&pool->components[id.index], c);
+
+    // Release component - may delete if ref_count reaches 0
+    // Works for both Python (Py_DECREF) and C++ (--ref_count, delete if 0)
+    tc_component_release(c);
+}
+
+size_t tc_entity_pool_component_count(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("component_count", id); return 0; }
+    return pool->components[id.index].count;
+}
+
+tc_component* tc_entity_pool_component_at(const tc_entity_pool* pool, tc_entity_id id, size_t index) {
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("component_at", id); return NULL; }
+    if (index >= pool->components[id.index].count) return NULL;
+    return pool->components[id.index].items[index];
+}
+
+// ============================================================================
+// Migration between pools
+// ============================================================================
+
+tc_entity_id tc_entity_pool_migrate(
+    tc_entity_pool* src_pool, tc_entity_id src_id,
+    tc_entity_pool* dst_pool)
+{
+    if (!src_pool || !dst_pool || src_pool == dst_pool) {
+        return TC_ENTITY_ID_INVALID;
+    }
+    if (!tc_entity_pool_alive(src_pool, src_id)) {
+        return TC_ENTITY_ID_INVALID;
+    }
+
+    uint32_t src_idx = src_id.index;
+
+    // Allocate new entity in destination pool
+    tc_entity_id dst_id = tc_entity_pool_alloc(dst_pool, src_pool->names[src_idx]);
+    if (!tc_entity_id_valid(dst_id)) {
+        return TC_ENTITY_ID_INVALID;
+    }
+
+    uint32_t dst_idx = dst_id.index;
+
+    // Copy flags
+    dst_pool->visible[dst_idx] = src_pool->visible[src_idx];
+    dst_pool->enabled[dst_idx] = src_pool->enabled[src_idx];
+    dst_pool->pickable[dst_idx] = src_pool->pickable[src_idx];
+    dst_pool->selectable[dst_idx] = src_pool->selectable[src_idx];
+    dst_pool->serializable[dst_idx] = src_pool->serializable[src_idx];
+    dst_pool->priorities[dst_idx] = src_pool->priorities[src_idx];
+    dst_pool->layers[dst_idx] = src_pool->layers[src_idx];
+    dst_pool->entity_flags[dst_idx] = src_pool->entity_flags[src_idx];
+
+    // Copy transform
+    dst_pool->local_positions[dst_idx] = src_pool->local_positions[src_idx];
+    dst_pool->local_rotations[dst_idx] = src_pool->local_rotations[src_idx];
+    dst_pool->local_scales[dst_idx] = src_pool->local_scales[src_idx];
+    dst_pool->transform_dirty[dst_idx] = true;
+
+    // Move components (transfer ownership, don't copy)
+    // Components keep their wrapper references
+    tc_entity_pool_handle dst_pool_h = tc_entity_pool_registry_find(dst_pool);
+    tc_scene_handle src_scene = tc_entity_pool_get_scene(src_pool);
+    tc_scene_handle dst_scene = tc_entity_pool_get_scene(dst_pool);
+
+    ComponentArray* src_comps = &src_pool->components[src_idx];
+    for (size_t i = 0; i < src_comps->count; i++) {
+        tc_component* c = src_comps->items[i];
+
+        // Unregister from source scene (if any)
+        if (tc_scene_handle_valid(src_scene)) {
+            tc_scene_unregister_component(src_scene, c);
+        }
+
+        // Update component's owner handle to new pool/entity
+        c->owner = tc_entity_handle_make(dst_pool_h, dst_id);
+        // Add to dst without incrementing refcount (we're transferring ownership)
+        component_array_push(&dst_pool->components[dst_idx], c);
+
+        // Register with destination scene (if any)
+        if (tc_scene_handle_valid(dst_scene)) {
+            tc_scene_register_component(dst_scene, c);
+        }
+    }
+    // Clear source without decrementing refcounts (ownership transferred)
+    src_comps->count = 0;
+
+    // Recursively migrate children
+    EntityIdArray* src_children = &src_pool->children[src_idx];
+    for (size_t i = 0; i < src_children->count; i++) {
+        tc_entity_id child_src_id = src_children->items[i];
+        if (tc_entity_pool_alive(src_pool, child_src_id)) {
+            tc_entity_id child_dst_id = tc_entity_pool_migrate(src_pool, child_src_id, dst_pool);
+            if (tc_entity_id_valid(child_dst_id)) {
+                // Set parent in destination pool
+                tc_entity_pool_set_parent(dst_pool, child_dst_id, dst_id);
+            }
+        }
+    }
+
+    // Remove source entity from source hash maps
+    if (src_pool->uuids[src_idx]) {
+        tc_str_map_remove(src_pool->by_uuid, src_pool->uuids[src_idx]);
+    }
+    tc_u32_map_remove(src_pool->by_pick_id, src_pool->pick_ids[src_idx]);
+
+    // Free source entity (bumps generation, invalidates old handles)
+    // Note: components were already moved, so no release will happen
+    src_pool->alive[src_idx] = false;
+    src_pool->generations[src_idx]++;
+    src_pool->free_stack[src_pool->free_count++] = src_idx;
+    src_pool->count--;
+
+    return dst_id;
+}
+
+// ============================================================================
+// Iteration
+// ============================================================================
+
+void tc_entity_pool_foreach(tc_entity_pool* pool, tc_entity_iter_fn callback, void* user_data) {
+    if (!pool || !callback) return;
+
+    for (size_t i = 0; i < pool->capacity; i++) {
+        if (pool->alive[i]) {
+            tc_entity_id id = { (uint32_t)i, pool->generations[i] };
+            if (!callback(pool, id, user_data)) {
+                break;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Input Handler Iteration (for internal_entities dispatch)
+// ============================================================================
+
+// Helper to recursively iterate input handlers in subtree
+static bool foreach_input_handler_recursive(
+    tc_entity_pool* pool,
+    tc_entity_id entity_id,
+    tc_component_iter_fn callback,
+    void* user_data
+) {
+    if (!tc_entity_pool_alive(pool, entity_id)) return true;
+
+    // Check entity is enabled
+    if (!tc_entity_pool_enabled(pool, entity_id)) return true;
+
+    // Iterate components on this entity
+    size_t comp_count = tc_entity_pool_component_count(pool, entity_id);
+    for (size_t i = 0; i < comp_count; i++) {
+        tc_component* c = tc_entity_pool_component_at(pool, entity_id, i);
+        if (!c || !c->enabled) continue;
+
+        // Check if component is input handler (has input_vtable)
+        if (tc_component_is_input_handler(c)) {
+            if (!callback(c, user_data)) {
+                return false;  // Stop iteration
+            }
+        }
+    }
+
+    // Recurse into children
+    size_t child_count = tc_entity_pool_children_count(pool, entity_id);
+    for (size_t i = 0; i < child_count; i++) {
+        tc_entity_id child_id = tc_entity_pool_child_at(pool, entity_id, i);
+        if (!foreach_input_handler_recursive(pool, child_id, callback, user_data)) {
+            return false;  // Stop iteration
+        }
+    }
+
+    return true;
+}
+
+void tc_entity_pool_foreach_input_handler_subtree(
+    tc_entity_pool* pool,
+    tc_entity_id root_id,
+    tc_component_iter_fn callback,
+    void* user_data
+) {
+    if (!pool || !callback) return;
+    if (!tc_entity_id_valid(root_id)) return;
+
+    foreach_input_handler_recursive(pool, root_id, callback, user_data);
+}
+
+// ============================================================================
+// SoA Archetype Component API
+// ============================================================================
+
+tc_soa_type_id tc_entity_pool_register_soa_type(tc_entity_pool* pool, const tc_soa_type_desc* desc) {
+    (void)pool;
+    if (!desc) return TC_SOA_TYPE_INVALID;
+    return tc_soa_register_type(tc_soa_global_registry(), desc);
+}
+
+// Find or create archetype for the given type mask
+static tc_archetype* pool_get_or_create_archetype(tc_entity_pool* pool, uint64_t mask) {
+    // Look up existing
+    uint64_t arch_idx;
+    if (tc_u64_map_get(pool->archetype_by_mask, mask, &arch_idx)) {
+        return pool->archetypes[(size_t)arch_idx];
+    }
+
+    // Build sorted type_ids array from mask
+    tc_soa_type_id type_ids[TC_SOA_MAX_TYPES];
+    size_t type_count = 0;
+    for (int bit = 0; bit < TC_SOA_MAX_TYPES; bit++) {
+        if (mask & (1ULL << bit)) {
+            type_ids[type_count++] = (tc_soa_type_id)bit;
+        }
+    }
+
+    tc_archetype* arch = tc_archetype_create(mask, type_ids, type_count, tc_soa_global_registry());
+    if (!arch) return NULL;
+
+    // Grow archetypes array if needed
+    if (pool->archetype_count >= pool->archetype_capacity) {
+        size_t new_cap = pool->archetype_capacity == 0 ? 8 : pool->archetype_capacity * 2;
+        pool->archetypes = realloc(pool->archetypes, new_cap * sizeof(tc_archetype*));
+        pool->archetype_capacity = new_cap;
+    }
+
+    size_t idx = pool->archetype_count++;
+    pool->archetypes[idx] = arch;
+    tc_u64_map_set(pool->archetype_by_mask, mask, (uint64_t)idx);
+
+    return arch;
+}
+
+// Move entity from one archetype to another, copying shared component data
+static void pool_move_entity_archetype(
+    tc_entity_pool* pool,
+    uint32_t entity_idx,
+    tc_archetype* old_arch,
+    uint32_t old_row,
+    tc_archetype* new_arch
+) {
+    tc_entity_id entity = {entity_idx, pool->generations[entity_idx]};
+
+    // Allocate row in new archetype (init called for all types)
+    uint32_t new_row = tc_archetype_alloc_row(new_arch, entity, tc_soa_global_registry());
+
+    // Copy data for types that exist in both archetypes
+    if (old_arch) {
+        for (size_t i = 0; i < new_arch->type_count; i++) {
+            tc_soa_type_id tid = new_arch->type_ids[i];
+            void* src = tc_archetype_get_array(old_arch, tid);
+            if (!src) continue; // type not in old archetype
+
+            const tc_soa_type_desc* desc = tc_soa_get_type(tc_soa_global_registry(), tid);
+            void* dst = (char*)new_arch->data[i] + new_row * desc->element_size;
+            // Find source row element
+            void* src_elem = NULL;
+            for (size_t j = 0; j < old_arch->type_count; j++) {
+                if (old_arch->type_ids[j] == tid) {
+                    src_elem = (char*)old_arch->data[j] + old_row * desc->element_size;
+                    break;
+                }
+            }
+            if (src_elem) {
+                memcpy(dst, src_elem, desc->element_size);
+            }
+        }
+
+        // Swap-remove from old archetype without destroy — data was already copied
+        tc_entity_id swapped = tc_archetype_detach_row(old_arch, old_row, tc_soa_global_registry());
+        if (tc_entity_id_valid(swapped)) {
+            pool->soa_archetype_rows[swapped.index] = old_row;
+        }
+    }
+
+    // Update entity mapping
+    // Find new archetype index
+    uint64_t new_arch_idx;
+    tc_u64_map_get(pool->archetype_by_mask, new_arch->type_mask, &new_arch_idx);
+    pool->soa_archetype_ids[entity_idx] = (uint32_t)new_arch_idx;
+    pool->soa_archetype_rows[entity_idx] = new_row;
+}
+
+void tc_entity_pool_add_soa(tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type) {
+    if (!pool || !tc_entity_pool_alive(pool, id)) return;
+    if (type >= tc_soa_global_registry()->count) {
+        tc_log_error("[tc_entity_pool] add_soa: invalid type_id %d", type);
+        return;
+    }
+
+    uint32_t idx = id.index;
+    uint64_t old_mask = pool->soa_type_masks[idx];
+    uint64_t new_mask = old_mask | (1ULL << type);
+
+    if (new_mask == old_mask) return; // already has this type
+
+    tc_archetype* old_arch = NULL;
+    uint32_t old_row = 0;
+    if (pool->soa_archetype_ids[idx] != UINT32_MAX) {
+        old_arch = pool->archetypes[pool->soa_archetype_ids[idx]];
+        old_row = pool->soa_archetype_rows[idx];
+    }
+
+    tc_archetype* new_arch = pool_get_or_create_archetype(pool, new_mask);
+    if (!new_arch) {
+        tc_log_error("[tc_entity_pool] add_soa: failed to create archetype for mask 0x%llx",
+                     (unsigned long long)new_mask);
+        return;
+    }
+
+    pool_move_entity_archetype(pool, idx, old_arch, old_row, new_arch);
+    pool->soa_type_masks[idx] = new_mask;
+}
+
+void tc_entity_pool_remove_soa(tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type) {
+    if (!pool || !tc_entity_pool_alive(pool, id)) return;
+    if (type >= tc_soa_global_registry()->count) return;
+
+    uint32_t idx = id.index;
+    uint64_t old_mask = pool->soa_type_masks[idx];
+    uint64_t new_mask = old_mask & ~(1ULL << type);
+
+    if (new_mask == old_mask) return; // doesn't have this type
+
+    tc_archetype* old_arch = pool->archetypes[pool->soa_archetype_ids[idx]];
+    uint32_t old_row = pool->soa_archetype_rows[idx];
+
+    if (new_mask == 0) {
+        // Entity has no more SoA components — just remove from archetype
+        tc_entity_id swapped = tc_archetype_free_row(old_arch, old_row, tc_soa_global_registry());
+        if (tc_entity_id_valid(swapped)) {
+            pool->soa_archetype_rows[swapped.index] = old_row;
+        }
+        pool->soa_archetype_ids[idx] = UINT32_MAX;
+        pool->soa_archetype_rows[idx] = 0;
+        pool->soa_type_masks[idx] = 0;
+        return;
+    }
+
+    tc_archetype* new_arch = pool_get_or_create_archetype(pool, new_mask);
+    if (!new_arch) {
+        tc_log_error("[tc_entity_pool] remove_soa: failed to create archetype for mask 0x%llx",
+                     (unsigned long long)new_mask);
+        return;
+    }
+
+    pool_move_entity_archetype(pool, idx, old_arch, old_row, new_arch);
+    pool->soa_type_masks[idx] = new_mask;
+}
+
+bool tc_entity_pool_has_soa(const tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type) {
+    if (!pool || !tc_entity_pool_alive(pool, id)) return false;
+    if (type >= TC_SOA_MAX_TYPES) return false;
+    return (pool->soa_type_masks[id.index] & (1ULL << type)) != 0;
+}
+
+void* tc_entity_pool_get_soa(const tc_entity_pool* pool, tc_entity_id id, tc_soa_type_id type) {
+    if (!pool || !tc_entity_pool_alive(pool, id)) return NULL;
+    if (type >= tc_soa_global_registry()->count) return NULL;
+
+    uint32_t idx = id.index;
+    if (pool->soa_archetype_ids[idx] == UINT32_MAX) return NULL;
+    if (!(pool->soa_type_masks[idx] & (1ULL << type))) return NULL;
+
+    tc_archetype* arch = pool->archetypes[pool->soa_archetype_ids[idx]];
+    uint32_t row = pool->soa_archetype_rows[idx];
+
+    return tc_archetype_get_element(arch, row, type, tc_soa_global_registry());
+}
+
+uint64_t tc_entity_pool_soa_mask(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!pool || !tc_entity_pool_alive(pool, id)) return 0;
+    return pool->soa_type_masks[id.index];
+}

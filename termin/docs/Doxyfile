@@ -1,0 +1,32 @@
+# Doxyfile for Termin C API documentation
+
+PROJECT_NAME           = "Termin"
+PROJECT_BRIEF          = "3D Simulation Library"
+OUTPUT_LANGUAGE        = Russian
+
+# Input
+INPUT                  = ../core_c/include
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.hpp
+
+# Output - only XML for Breathe
+GENERATE_XML           = YES
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+XML_OUTPUT             = doxygen_xml
+
+# Parsing
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+INLINE_SOURCES         = NO
+
+# Preprocessor
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+PREDEFINED             = TC_LOG_API= \
+                         TC_CORE_API= \
+                         __cplusplus
+
+# Warnings
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO

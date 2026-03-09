@@ -1,0 +1,23 @@
+{
+  "uuid": "e209c796-fd81-4c48-b8ac-040ec7da5616",
+  "resources": {
+    "meshes": {
+      "eyebrow001": "b8857421-fb93-47dc-bf7d-90f9f56d10bd",
+      "eyelashes01": "941e04c9-2fdd-4fc2-a83e-170e8c220ba2",
+      "jammers3": "9931e402-5f59-4862-90bc-ecc86dbb6ba5",
+      "low-poly": "1facd6bb-e785-4882-bf10-59b9d43f0dce",
+      "male_muscle_13290.003": "8d7970b7-908c-4ddb-80cb-9ecd1be1a9c0",
+      "mens_tanks_elv1f": "e50cfb97-90d2-434a-9bda-45de6c22a35c",
+      "spiky": "a5707c49-6511-4b6a-9c7f-36f8abdeb2a5"
+    },
+    "skeletons": {
+      "skeleton": "bb606997-a820-44b8-af00-a5d4fca62a2c"
+    },
+    "animations": {
+      "A": "4f650ec8-c9fa-4feb-97db-d3d6a55d8d8d"
+    }
+  },
+  "convert_to_z_up": true,
+  "normalize_scale": false,
+  "blender_z_up_fix": true
+}

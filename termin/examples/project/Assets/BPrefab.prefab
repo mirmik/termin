@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "root": {
+    "name": "[Root]",
+    "priority": 0,
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "visible": true,
+    "active": true,
+    "pickable": true,
+    "selectable": true,
+    "pose": {
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "components": [],
+    "children": [
+      {
+        "name": "entity1",
+        "priority": 0,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "visible": true,
+        "active": true,
+        "pickable": true,
+        "selectable": true,
+        "pose": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        "components": [
+          {
+            "data": {
+              "enabled": true,
+              "cast_shadow": true,
+              "mesh": "mesh_1",
+              "material": "AMaterial"
+            },
+            "type": "MeshRenderer"
+          }
+        ],
+        "children": []
+      }
+    ]
+  }
+}

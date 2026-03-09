@@ -1,0 +1,81 @@
+"""Animated cube demo: simple rotation driven by a custom component."""
+
+from __future__ import annotations
+
+import numpy as np
+
+from termin.geombase import Pose3
+from termin.mesh.mesh import CubeMesh
+from termin.visualization import (
+    Entity,
+    MeshDrawable,
+    Scene,
+    VisualizationWorld,
+    PerspectiveCameraComponent,
+    OrbitCameraController,
+    Component,
+)
+from termin.visualization.render.components import MeshRenderer, LightComponent
+from termin.visualization.render.materials import ColorMaterial
+
+
+class RotateComponent(Component):
+    """Simple component that rotates its entity around a fixed axis."""
+
+    def __init__(self, axis: np.ndarray = np.array([0.0, 1.0, 0.0]), speed: float = 1.0):
+        super().__init__(enabled=True)
+        axis = np.asarray(axis, dtype=float)
+        norm = np.linalg.norm(axis)
+        self.axis = axis / norm if norm > 0 else np.array([0.0, 1.0, 0.0])
+        self.speed = speed
+        self.angle = 0.0
+
+    def update(self, dt: float):
+        if self.entity is None:
+            return
+        self.angle += self.speed * dt
+        rot_pose = Pose3.rotation(self.axis, self.angle)
+        translation = self.entity.transform.global_pose().lin.copy()
+        self.entity.transform.relocate(Pose3(ang=rot_pose.ang.copy(), lin=translation))
+
+
+def build_scene(world: VisualizationWorld) -> tuple[Scene, PerspectiveCameraComponent]:
+    mesh = MeshDrawable(CubeMesh(size=1.0))
+    material = ColorMaterial(color=(0.3, 0.7, 0.9, 1.0))
+
+    cube = Entity(pose=Pose3.identity(), name="cube")
+    cube.add_component(MeshRenderer(mesh, material))
+    cube.add_component(RotateComponent(axis=np.array([0.2, 1.0, 0.3]), speed=1.5))
+
+    scene = Scene()
+    scene.add(cube)
+    world.add_scene(scene)
+
+    # Light
+    light_entity = Entity(
+        pose=Pose3.from_euler(np.deg2rad(-45), np.deg2rad(-45), 0),
+        name="light",
+    )
+    light_entity.add_component(LightComponent())
+    scene.add(light_entity)
+
+    # Camera
+    camera_entity = Entity(name="camera")
+    camera = PerspectiveCameraComponent()
+    camera_entity.add_component(camera)
+    camera_entity.add_component(OrbitCameraController(radius=5.0, elevation=30.0))
+    scene.add(camera_entity)
+
+    return scene, camera
+
+
+def main():
+    world = VisualizationWorld()
+    scene, camera = build_scene(world)
+    window = world.create_window(title="termin animated cube")
+    window.add_viewport(scene, camera)
+    world.run()
+
+
+if __name__ == "__main__":
+    main()
