@@ -107,6 +107,7 @@ nanobind_add_module(_native NB_SHARED
     termin/editor/transform_gizmo.cpp
     termin/editor/editor_viewport_input_manager.cpp
     termin/editor/editor_interaction_system.cpp
+    termin/bindings/modules/term_modules_integration_bindings.cpp
     ${_NATIVE_SDL_SOURCES}
     termin/scene/scene_manager_bindings.cpp
     termin/engine/engine_core.cpp

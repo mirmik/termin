@@ -132,6 +132,7 @@ find_package(termin_collision REQUIRED)
 find_package(termin_components_collision REQUIRED)
 # termin-components-kinematic (ActuatorComponent, RotatorComponent)
 find_package(termin_components_kinematic REQUIRED)
+find_package(termin_modules REQUIRED)
 
 # Core C library
 if(BUILD_TESTS)
@@ -275,6 +276,7 @@ set(RENDER_LIB_SOURCES
     termin/render/graph_compiler.cpp
     termin/render/scene_pipeline_template.cpp
     termin/render/tc_pass_ref.cpp
+    termin/modules/term_modules_integration.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
     termin/editor/frame_graph_debugger_core.cpp
@@ -289,7 +291,7 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_components_collision::termin_components_collision)
+target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_components_collision::termin_components_collision termin_modules::termin_modules)
 target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
 set_target_properties(render_lib PROPERTIES

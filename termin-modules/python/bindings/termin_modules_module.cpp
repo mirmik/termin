@@ -47,13 +47,15 @@ NB_MODULE(_termin_modules_native, m) {
         .def_ro("id", &ModuleSpec::id)
         .def_ro("kind", &ModuleSpec::kind)
         .def_ro("descriptor_path", &ModuleSpec::descriptor_path)
-        .def_ro("dependencies", &ModuleSpec::dependencies);
+        .def_ro("dependencies", &ModuleSpec::dependencies)
+        .def_ro("components", &ModuleSpec::components);
 
     nb::class_<ModuleRecord>(m, "ModuleRecord")
         .def_prop_ro("id", [](const ModuleRecord& self) { return self.spec.id; })
         .def_prop_ro("kind", [](const ModuleRecord& self) { return self.spec.kind; })
         .def_prop_ro("descriptor_path", [](const ModuleRecord& self) { return self.spec.descriptor_path; })
         .def_prop_ro("dependencies", [](const ModuleRecord& self) { return self.spec.dependencies; })
+        .def_prop_ro("components", [](const ModuleRecord& self) { return self.spec.components; })
         .def_ro("state", &ModuleRecord::state)
         .def_ro("error_message", &ModuleRecord::error_message)
         .def_ro("diagnostics", &ModuleRecord::diagnostics);

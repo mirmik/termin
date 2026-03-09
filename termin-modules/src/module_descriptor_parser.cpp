@@ -112,6 +112,11 @@ std::optional<ModuleSpec> ModuleDescriptorParser::parse(const std::filesystem::p
         error += " in " + path.string();
         return std::nullopt;
     }
+    spec.components = get_optional_string_list(root, "components", error);
+    if (!error.empty()) {
+        error += " in " + path.string();
+        return std::nullopt;
+    }
 
     const auto kind = parse_kind(root, path, error);
     if (!kind.has_value()) {

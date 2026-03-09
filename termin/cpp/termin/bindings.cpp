@@ -15,6 +15,7 @@ extern "C" {
 #include "bindings/render/tc_input_manager_bindings.hpp"
 #include "bindings/render/tc_display_bindings.hpp"
 #include "bindings/input/display_input_router_bindings.hpp"
+#include "bindings/modules/term_modules_integration_bindings.hpp"
 #include "scene/scene_manager_bindings.hpp"
 #include "bindings/engine/engine_core_bindings.hpp"
 #include "profiler_bindings.hpp"
@@ -161,6 +162,7 @@ NB_MODULE(_native, m) {
     auto render_module = m.def_submodule("render", "Render module");
     auto platform_module = m.def_submodule("platform", "Platform module");
     auto scene_module = m.def_submodule("scene", "Scene module");
+    auto modules_module = m.def_submodule("modules", "Modules integration");
     auto profiler_module = m.def_submodule("profiler", "Profiler module");
     auto skeleton_module = m.def_submodule("skeleton", "Skeleton module");
     auto inspect_module = m.def_submodule("inspect", "Inspect module");
@@ -182,6 +184,7 @@ NB_MODULE(_native, m) {
     termin::bind_sdl(platform_module);
 #endif
     termin::bind_scene_manager(scene_module);
+    termin::bind_term_modules_integration(modules_module);
     termin::bind_engine_core(m);  // EngineCore in root module
     termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);
