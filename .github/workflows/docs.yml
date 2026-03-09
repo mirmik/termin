@@ -1,0 +1,83 @@
+name: Docs
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - 'termin/docs/**'
+      - 'termin-collision/docs/**'
+      - 'termin-collision/mkdocs.yml'
+      - 'termin-gui/docs/**'
+      - 'termin-gui/mkdocs.yml'
+      - 'termin-inspect/docs/**'
+      - 'termin-inspect/mkdocs.yml'
+      - 'termin-scene/docs/**'
+      - 'termin-scene/mkdocs.yml'
+      - 'termin-modules/docs/**'
+      - 'termin-modules/mkdocs.yml'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install doc tools
+        run: |
+          pip install mkdocs mkdocs-material sphinx myst-parser breathe sphinx-book-theme
+
+      - name: Build hub page
+        run: |
+          mkdir -p _site
+          cp docs/index.html _site/
+
+      - name: Build termin docs (Sphinx)
+        run: |
+          cd termin/docs
+          # Doxygen for C API (optional, skip if not installed)
+          if command -v doxygen &>/dev/null; then
+            doxygen Doxyfile || true
+          fi
+          sphinx-build -b html . ../../_site/termin
+
+      - name: Build MkDocs projects
+        run: |
+          for project in termin-collision termin-gui termin-inspect termin-scene termin-modules; do
+            echo "=== Building $project docs ==="
+            cd $project
+            mkdocs build -d ../_site/$project
+            cd ..
+          done
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site/
+
+  deploy:
+    needs: build-docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
