@@ -146,31 +146,37 @@ class PlayerRuntime:
         rm.register_builtin_post_effects()
 
     def _load_modules(self) -> None:
-        """Load all C++ and Python modules from the project directory."""
-        from tcbase import log
-        from termin.editor.module_scanner import ModuleScanner
-        from termin.editor.pymodule_scanner import PyModuleScanner
+        """Load all project modules through termin-modules runtime."""
+        from termin_modules import ModuleKind, ModuleState
+        from termin.modules import get_project_modules_runtime
 
-        def on_cpp_loaded(name: str, success: bool, error: str) -> None:
-            if success:
-                log.info(f"[PlayerRuntime] Loaded C++ module: {name}")
+        runtime = get_project_modules_runtime()
+        success = runtime.load_project(self.project_path)
+        if not success and runtime.last_error:
+            log.error(f"[PlayerRuntime] Module load error: {runtime.last_error}")
+
+        cpp_loaded = 0
+        cpp_failed = 0
+        py_loaded = 0
+        py_failed = 0
+
+        for record in runtime.records():
+            if record.kind == ModuleKind.Cpp:
+                if record.state == ModuleState.Loaded:
+                    cpp_loaded += 1
+                    log.info(f"[PlayerRuntime] Loaded C++ module: {record.id}")
+                elif record.state == ModuleState.Failed:
+                    cpp_failed += 1
+                    log.error(f"[PlayerRuntime] Failed to load C++ module {record.id}: {record.error_message}")
             else:
-                log.error(f"[PlayerRuntime] Failed to load C++ module {name}: {error}")
+                if record.state == ModuleState.Loaded:
+                    py_loaded += 1
+                    log.info(f"[PlayerRuntime] Loaded Python module: {record.id}")
+                elif record.state == ModuleState.Failed:
+                    py_failed += 1
+                    log.error(f"[PlayerRuntime] Failed to load Python module {record.id}: {record.error_message}")
 
-        def on_py_loaded(name: str, success: bool, error: str) -> None:
-            if success:
-                log.info(f"[PlayerRuntime] Loaded Python module: {name}")
-            else:
-                log.error(f"[PlayerRuntime] Failed to load Python module {name}: {error}")
-
-        # Load C++ modules
-        cpp_scanner = ModuleScanner(on_module_loaded=on_cpp_loaded)
-        cpp_loaded, cpp_failed = cpp_scanner.scan_and_load(str(self.project_path))
         log.info(f"[PlayerRuntime] C++ modules: {cpp_loaded} loaded, {cpp_failed} failed")
-
-        # Load Python modules
-        py_scanner = PyModuleScanner(on_module_loaded=on_py_loaded)
-        py_loaded, py_failed = py_scanner.scan_and_load(str(self.project_path))
         log.info(f"[PlayerRuntime] Python modules: {py_loaded} loaded, {py_failed} failed")
 
     def _scan_project_assets(self):

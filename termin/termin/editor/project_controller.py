@@ -226,28 +226,40 @@ class EditorProjectController:
         self._on_project_reset()
 
     def _load_project_modules(self, project_root: Path) -> None:
-        """Load all C++ and Python modules from the project directory."""
-        # Load C++ modules
-        from termin.editor.module_scanner import ModuleScanner
+        """Load all project modules through termin-modules runtime."""
+        from termin_modules import ModuleKind, ModuleState
+        from termin.modules import get_project_modules_runtime
 
-        cpp_scanner = ModuleScanner(
-            on_module_loaded=self._on_module_loaded,
-        )
-        cpp_loaded, cpp_failed = cpp_scanner.scan_and_load(str(project_root))
+        runtime = get_project_modules_runtime()
+        success = runtime.load_project(project_root)
+        if not success and runtime.last_error:
+            self._log_message(f"Module load error: {runtime.last_error}")
+
+        cpp_loaded = 0
+        cpp_failed = 0
+        py_loaded = 0
+        py_failed = 0
+
+        for record in runtime.records():
+            if record.kind == ModuleKind.Cpp:
+                if record.state == ModuleState.Loaded:
+                    cpp_loaded += 1
+                    self._on_module_loaded(record.id, True, "")
+                elif record.state == ModuleState.Failed:
+                    cpp_failed += 1
+                    self._on_module_loaded(record.id, False, record.error_message)
+            else:
+                if record.state == ModuleState.Loaded:
+                    py_loaded += 1
+                    self._on_pymodule_loaded(record.id, True, "")
+                elif record.state == ModuleState.Failed:
+                    py_failed += 1
+                    self._on_pymodule_loaded(record.id, False, record.error_message)
 
         if cpp_loaded > 0:
             self._log_message(f"Loaded {cpp_loaded} C++ module(s)")
         if cpp_failed > 0:
             self._log_message(f"Failed to load {cpp_failed} C++ module(s)")
-
-        # Load Python modules
-        from termin.editor.pymodule_scanner import PyModuleScanner
-
-        py_scanner = PyModuleScanner(
-            on_module_loaded=self._on_pymodule_loaded,
-        )
-        py_loaded, py_failed = py_scanner.scan_and_load(str(project_root))
-
         if py_loaded > 0:
             self._log_message(f"Loaded {py_loaded} Python module(s)")
         if py_failed > 0:

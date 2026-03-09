@@ -1,4 +1,5 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/filesystem.h>
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
@@ -37,9 +38,21 @@ NB_MODULE(_termin_modules_native, m) {
 
     nb::class_<ModuleEnvironment>(m, "ModuleEnvironment")
         .def(nb::init<>())
-        .def_rw("sdk_prefix", &ModuleEnvironment::sdk_prefix)
-        .def_rw("cmake_prefix_path", &ModuleEnvironment::cmake_prefix_path)
-        .def_rw("lib_dir", &ModuleEnvironment::lib_dir)
+        .def_prop_rw(
+            "sdk_prefix",
+            [](const ModuleEnvironment& self) { return self.sdk_prefix.string(); },
+            [](ModuleEnvironment& self, const std::string& value) { self.sdk_prefix = value; }
+        )
+        .def_prop_rw(
+            "cmake_prefix_path",
+            [](const ModuleEnvironment& self) { return self.cmake_prefix_path.string(); },
+            [](ModuleEnvironment& self, const std::string& value) { self.cmake_prefix_path = value; }
+        )
+        .def_prop_rw(
+            "lib_dir",
+            [](const ModuleEnvironment& self) { return self.lib_dir.string(); },
+            [](ModuleEnvironment& self, const std::string& value) { self.lib_dir = value; }
+        )
         .def_rw("python_executable", &ModuleEnvironment::python_executable)
         .def_rw("allow_python_package_install", &ModuleEnvironment::allow_python_package_install);
 

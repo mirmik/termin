@@ -1,4 +1,4 @@
-from _termin_modules_native import (
+from ._termin_modules_native import (
     CppModuleBackend,
     ModuleEnvironment,
     ModuleEvent,
