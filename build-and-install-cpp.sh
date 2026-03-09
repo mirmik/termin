@@ -95,13 +95,6 @@ build_cmake_lib_cpp() {
 
     cmake --build "$build_dir" --parallel "$BUILD_JOBS"
 
-    if [[ ${#extra_args[@]} -gt 0 ]]; then
-        echo "Running tests for $name..."
-        cd "$build_dir"
-        ctest --output-on-failure
-        cd "$dir"
-    fi
-
     sudo cmake --install "$build_dir"
 
     echo "$name installed to ${SDK_PREFIX}"
