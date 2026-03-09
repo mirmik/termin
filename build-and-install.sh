@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build and install all termin libraries in dependency order:
-#   termin-nanobind-sdk -> termin-base -> termin-mesh -> termin-graphics -> termin-inspect -> termin-scene -> termin-collision -> termin-components-collision -> termin-components-mesh -> termin-components-kinematic -> termin-gui -> termin
+#   termin-nanobind-sdk -> termin-base -> termin-modules -> termin-mesh -> termin-graphics -> termin-inspect -> termin-scene -> termin-collision -> termin-components-collision -> termin-components-mesh -> termin-components-kinematic -> termin-gui -> termin
 #
 # Usage:
 #   ./make-termin.sh              # Release build
@@ -231,6 +231,7 @@ build_termin_inspect() {
 # Build chain
 build_nanobind_sdk
 build_cmake_lib "termin-base" "$SCRIPT_DIR/termin-base"
+build_cmake_lib "termin-modules" "$SCRIPT_DIR/termin-modules"
 build_cmake_lib "termin-mesh" "$SCRIPT_DIR/termin-mesh"
 build_cmake_lib "termin-graphics" "$SCRIPT_DIR/termin-graphics"
 build_termin_inspect

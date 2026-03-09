@@ -105,7 +105,7 @@ build_with_python "termin-components-mesh"       "$SCRIPT_DIR/termin-components/
 build_with_python "termin-components-kinematic"  "$SCRIPT_DIR/termin-components/termin-components-kinematic"
 
 # ── 3. pip-installable Python packages ───────────────────────────
-for pkg in termin-base termin-mesh termin-graphics; do
+for pkg in termin-base termin-modules termin-mesh termin-graphics; do
     echo ""
     echo "========================================"
     echo "  Installing $pkg (pip)"

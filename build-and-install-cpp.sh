@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build and install C/C++ parts only (no Python bindings / nanobind modules)
 # Dependency order:
-#   termin-base -> termin-mesh -> termin-graphics -> termin-inspect -> termin-scene
+#   termin-base -> termin-modules -> termin-mesh -> termin-graphics -> termin-inspect -> termin-scene
 #   -> termin-collision -> termin-components-collision -> termin-components-mesh
 #   -> termin-components-kinematic -> termin(cpp only)
 
@@ -61,6 +61,11 @@ build_cmake_lib_cpp() {
     fi
 
     mkdir -p "$build_dir"
+
+    local extra_args=()
+    if [[ "$name" == "termin-modules" ]]; then
+        extra_args+=(-DTERMIN_MODULES_BUILD_PYTHON=OFF)
+    fi
 
     cmake -S . -B "$build_dir" \
         -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
@@ -133,6 +138,7 @@ build_termin_cpp_only() {
 
 # Build chain (C/C++ only)
 build_cmake_lib_cpp "termin-base" "$SCRIPT_DIR/termin-base"
+build_cmake_lib_cpp "termin-modules" "$SCRIPT_DIR/termin-modules"
 build_cmake_lib_cpp "termin-mesh" "$SCRIPT_DIR/termin-mesh"
 build_cmake_lib_cpp "termin-graphics" "$SCRIPT_DIR/termin-graphics"
 build_cmake_lib_cpp "termin-inspect" "$SCRIPT_DIR/termin-inspect"

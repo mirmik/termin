@@ -23,3 +23,9 @@
 3. Зарегистрировать `CppModuleBackend` и `PythonModuleBackend`
 4. Вызвать `discover(project_root)`
 5. Вызвать `load_all()` или `load_module(name)`
+
+Сборка в монорепозитории:
+
+- `./build-and-install.sh` собирает и устанавливает `termin-modules` вместе с остальными пакетами
+- `./build-and-install-cpp.sh` собирает C++-only вариант с `TERMIN_MODULES_BUILD_PYTHON=OFF`
+- `./build-and-install-bindings.sh` ставит Python package `termin-modules`

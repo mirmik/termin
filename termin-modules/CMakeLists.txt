@@ -1,21 +1,43 @@
 cmake_minimum_required(VERSION 3.16)
-project(termin_modules LANGUAGES CXX)
+project(termin_modules VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-include(cmake/TerminModule.cmake)
+option(TERMIN_MODULES_BUILD_PYTHON "Build Python/nanobind bindings" ON)
 
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
-find_package(nanobind CONFIG REQUIRED)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
 find_package(termin_base REQUIRED)
 
-add_library(termin_modules STATIC
+if(TERMIN_MODULES_BUILD_PYTHON)
+    if(NOT Python_EXECUTABLE)
+        if(WIN32)
+            set(Python_EXECUTABLE "python")
+        else()
+            set(Python_EXECUTABLE "python3")
+        endif()
+    endif()
+
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    find_package(nanobind CONFIG REQUIRED)
+endif()
+
+set(TERMIN_MODULES_SOURCES
     src/module_cpp_backend.cpp
     src/module_descriptor_parser.cpp
-    src/module_python_backend.cpp
     src/module_runtime.cpp
 )
+
+if(TERMIN_MODULES_BUILD_PYTHON)
+    list(APPEND TERMIN_MODULES_SOURCES
+        src/module_python_backend.cpp
+    )
+endif()
+
+add_library(termin_modules STATIC ${TERMIN_MODULES_SOURCES})
 
 target_compile_features(termin_modules PUBLIC cxx_std_20)
 set_target_properties(termin_modules PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -29,28 +51,80 @@ target_include_directories(termin_modules
 target_link_libraries(termin_modules
     PUBLIC
         tcbase::termin_base
-        Python::Python
         ${CMAKE_DL_LIBS}
 )
 
-nanobind_add_module(_termin_modules_native NB_SHARED
-    python/bindings/termin_modules_module.cpp
+if(TERMIN_MODULES_BUILD_PYTHON)
+    target_link_libraries(termin_modules PUBLIC Python::Python)
+
+    nanobind_add_module(_termin_modules_native NB_SHARED
+        python/bindings/termin_modules_module.cpp
+    )
+
+    target_link_libraries(_termin_modules_native PRIVATE termin_modules)
+
+    set(TERMIN_MODULES_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..")
+    set_target_properties(_termin_modules_native PROPERTIES
+        INSTALL_RPATH "${TERMIN_MODULES_PY_RPATH}"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/python/termin_modules)
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/python/termin_modules/__init__.py
+        ${CMAKE_CURRENT_BINARY_DIR}/python/termin_modules/__init__.py
+        COPYONLY
+    )
+
+    install(TARGETS _termin_modules_native DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/termin_modules)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin_modules/
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/termin_modules
+        FILES_MATCHING PATTERN "*.py"
+    )
+endif()
+
+if(TERMIN_MODULES_BUILD_PYTHON)
+    add_executable(termin_modules_example
+        examples/basic/main.cpp
+    )
+
+    target_link_libraries(termin_modules_example PRIVATE termin_modules)
+    target_compile_definitions(termin_modules_example PRIVATE
+        TERMIN_MODULES_EXAMPLE_PROJECT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/examples/basic/project"
+    )
+endif()
+
+install(TARGETS termin_modules
+    EXPORT termin_modulesTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-target_link_libraries(_termin_modules_native PRIVATE termin_modules)
-
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/python/termin_modules)
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/python/termin_modules/__init__.py
-    ${CMAKE_CURRENT_BINARY_DIR}/python/termin_modules/__init__.py
-    COPYONLY
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-add_executable(termin_modules_example
-    examples/basic/main.cpp
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/termin_modulesConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
 )
 
-target_link_libraries(termin_modules_example PRIVATE termin_modules)
-target_compile_definitions(termin_modules_example PRIVATE
-    TERMIN_MODULES_EXAMPLE_PROJECT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/examples/basic/project"
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/termin_modulesConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/termin_modulesConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_modules
+)
+
+install(EXPORT termin_modulesTargets
+    FILE termin_modulesTargets.cmake
+    NAMESPACE termin_modules::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_modules
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/termin_modulesConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/termin_modulesConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_modules
 )
