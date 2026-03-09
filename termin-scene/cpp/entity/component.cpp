@@ -78,7 +78,12 @@ void CxxComponent::release() {
     }
 }
 
+void CxxComponent::declare_type_name(const char* type_name) {
+    tc_component_set_declared_type_name(&_c, type_name);
+}
+
 void CxxComponent::link_type_entry(const char* type_name) {
+    declare_type_name(type_name);
     tc_type_entry* entry = tc_component_registry_get_entry(type_name);
     if (entry) {
         _c.type_entry = entry;

@@ -7,6 +7,9 @@ from termin.scene._scene_native import (
     ComponentRegistry,
     TcComponent,
     GeneralTransform3,
+    UnknownComponentStats,
+    degrade_components_to_unknown,
+    upgrade_unknown_components,
 )
 from termin.scene.python_component import PythonComponent, InputComponent
 
@@ -18,6 +21,9 @@ __all__ = [
     "Component",
     "ComponentRegistry",
     "TcComponent",
+    "UnknownComponentStats",
+    "degrade_components_to_unknown",
+    "upgrade_unknown_components",
     "PythonComponent",
     "InputComponent",
 ]

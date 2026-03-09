@@ -89,6 +89,7 @@ public:
     }
 
 protected:
+    void declare_type_name(const char* type_name);
     // Link component to type registry entry by name.
     void link_type_entry(const char* type_name);
 

@@ -158,6 +158,10 @@ struct tc_component {
     // For PythonComponent: PyObject* (the PythonComponent object)
     void* body;
 
+    // Declared type name used to lazily attach type_entry on add-to-entity paths.
+    // This is optional; registry-created components already have type_entry.
+    const char* declared_type_name;
+
     // Flags
     bool enabled;
     bool active_in_editor;
@@ -199,6 +203,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->kind = TC_CXX_COMPONENT;
     c->native_language = TC_LANGUAGE_CXX;
     c->body = NULL;
+    c->declared_type_name = NULL;
     c->enabled = true;
     c->active_in_editor = false;
     c->_started = false;
@@ -468,6 +473,8 @@ TC_API size_t tc_component_registry_get_input_handler_types(
 
 // Get type entry for a component type
 TC_API tc_type_entry* tc_component_registry_get_entry(const char* type_name);
+TC_API void tc_component_set_declared_type_name(tc_component* c, const char* type_name);
+TC_API void tc_component_try_link_declared_type(tc_component* c);
 
 // Get instance count for a type
 TC_API size_t tc_component_registry_instance_count(const char* type_name);

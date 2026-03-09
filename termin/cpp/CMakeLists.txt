@@ -162,7 +162,6 @@ target_include_directories(Recast PUBLIC
 set(ENTITY_LIB_SOURCES
     # Entity-related sources that remain in termin (not migrated to termin-scene)
     termin/entity/entity_registry.cpp
-    termin/entity/unknown_component.cpp
     termin/camera/camera_component.cpp
     termin/camera/orbit_camera_controller.cpp
     termin/lighting/light_component.cpp

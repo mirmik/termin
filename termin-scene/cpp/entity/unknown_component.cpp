@@ -1,12 +1,12 @@
-#include "unknown_component.hpp"
+#include <termin/entity/unknown_component.hpp>
+
 #include <termin/entity/component_registry.hpp>
-#include "tc_inspect_cpp.hpp"
+#include <tc_inspect_cpp.hpp>
 
 namespace termin {
 
 UnknownComponent::UnknownComponent() {
     link_type_entry("UnknownComponent");
-    // Disabled by default since it's a placeholder
     set_enabled(false);
 }
 
@@ -15,8 +15,6 @@ UnknownComponent::~UnknownComponent() {
 }
 
 tc_value UnknownComponent::serialize() const {
-    // Return original type and data, not "UnknownComponent"
-    // This preserves the data correctly when scene is saved
     tc_value result = tc_value_dict_new();
 
     if (!original_type.empty()) {
@@ -25,21 +23,17 @@ tc_value UnknownComponent::serialize() const {
         tc_value_dict_set(&result, "type", tc_value_string("UnknownComponent"));
     }
 
-    // Copy original_data
     tc_value data_copy = tc_value_copy(&original_data);
     tc_value_dict_set(&result, "data", data_copy);
-
     return result;
 }
 
 tc_value UnknownComponent::serialize_data() const {
-    // Return a copy of original_data
     return tc_value_copy(&original_data);
 }
 
 void UnknownComponent::deserialize_data(const tc_value* data, tc_scene_handle scene) {
     (void)scene;
-    // Free old data and store new
     tc_value_free(&original_data);
     if (data) {
         original_data = tc_value_copy(data);
@@ -50,10 +44,8 @@ void UnknownComponent::deserialize_data(const tc_value* data, tc_scene_handle sc
 
 REGISTER_COMPONENT(UnknownComponent, CxxComponent);
 
-// Register original_type field (read-only in inspector)
-static struct _UnknownComponentFieldRegistrar {
-    _UnknownComponentFieldRegistrar() {
-        // original_type field
+static struct UnknownComponentFieldRegistrar {
+    UnknownComponentFieldRegistrar() {
         {
             tc::InspectFieldInfo info;
             info.type_name = "UnknownComponent";
@@ -78,14 +70,13 @@ static struct _UnknownComponentFieldRegistrar {
             tc::InspectRegistry::instance().add_field_with_choices("UnknownComponent", std::move(info));
         }
 
-        // original_data field (dict, not shown in inspector but serializable)
         {
             tc::InspectFieldInfo info;
             info.type_name = "UnknownComponent";
             info.path = "original_data";
             info.label = "Original Data";
             info.kind = "dict";
-            info.is_inspectable = false;  // Don't show in inspector
+            info.is_inspectable = false;
             info.is_serializable = true;
 
             info.getter = [](void* obj) -> tc_value {
@@ -102,6 +93,6 @@ static struct _UnknownComponentFieldRegistrar {
             tc::InspectRegistry::instance().add_field_with_choices("UnknownComponent", std::move(info));
         }
     }
-} _unknown_component_registrar;
+} unknown_component_field_registrar;
 
 } // namespace termin

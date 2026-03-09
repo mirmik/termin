@@ -1204,6 +1204,8 @@ tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id
 void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
     if (!tc_entity_pool_alive(pool, id) || !c) { if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id); return; }
 
+    tc_component_try_link_declared_type(c);
+
     // Set owner entity handle
     tc_entity_pool_handle pool_h = tc_entity_pool_registry_find(pool);
     c->owner = tc_entity_handle_make(pool_h, id);

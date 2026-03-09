@@ -13,6 +13,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/component_registry_python.hpp>
+#include <termin/entity/unknown_component_ops.hpp>
 #include <trent/trent.h>
 #include <trent/json.h>
 #include "core/tc_component.h"
@@ -105,6 +106,13 @@ struct ForeachCallbackData {
 // ============================================================================
 
 void bind_tc_scene_core(nb::module_& m) {
+    nb::class_<UnknownComponentStats>(m, "UnknownComponentStats")
+        .def(nb::init<>())
+        .def_rw("degraded", &UnknownComponentStats::degraded)
+        .def_rw("upgraded", &UnknownComponentStats::upgraded)
+        .def_rw("skipped", &UnknownComponentStats::skipped)
+        .def_rw("failed", &UnknownComponentStats::failed);
+
     nb::class_<TcSceneRef>(m, "TcScene")
         .def(nb::init<>(), "Create invalid scene reference")
         .def(nb::init<tc_scene_handle>(), nb::arg("handle"),
@@ -440,6 +448,27 @@ void bind_tc_scene_core(nb::module_& m) {
             }
         }, nb::arg("method_name"), nb::arg("event"), nb::arg("editor_mode") = false,
            "Dispatch input event to all input handlers in scene");
+
+    m.def(
+        "degrade_components_to_unknown",
+        &degrade_components_to_unknown,
+        nb::arg("scene"),
+        nb::arg("type_names"),
+        "Replace component instances of the given types with UnknownComponent placeholders."
+    );
+
+    m.def(
+        "upgrade_unknown_components",
+        [](const TcSceneRef& scene, nb::object type_names) {
+            if (type_names.is_none()) {
+                return upgrade_unknown_components(scene, {});
+            }
+            return upgrade_unknown_components(scene, nb::cast<std::vector<std::string>>(type_names));
+        },
+        nb::arg("scene"),
+        nb::arg("type_names") = nb::none(),
+        "Upgrade UnknownComponent placeholders back to real components when their types are registered."
+    );
 }
 
 } // namespace termin

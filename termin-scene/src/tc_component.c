@@ -254,6 +254,22 @@ tc_type_entry* tc_component_registry_get_entry(const char* type_name) {
     return tc_type_registry_get(g_component_registry, type_name);
 }
 
+void tc_component_set_declared_type_name(tc_component* c, const char* type_name) {
+    if (!c) return;
+    c->declared_type_name = type_name;
+}
+
+void tc_component_try_link_declared_type(tc_component* c) {
+    if (!c || c->type_entry || !c->declared_type_name || !g_component_registry) return;
+
+    tc_type_entry* entry = tc_type_registry_get(g_component_registry, c->declared_type_name);
+    if (!entry || !entry->registered) return;
+
+    c->type_entry = entry;
+    c->type_version = entry->version;
+    tc_type_entry_link_instance(entry, c, COMPONENT_REGISTRY_NODE_OFFSET);
+}
+
 size_t tc_component_registry_instance_count(const char* type_name) {
     if (!type_name || !g_component_registry) return 0;
 
