@@ -6,6 +6,7 @@ on:
     paths:
       - 'docs/**'
       - 'termin/docs/**'
+      - 'termin/mkdocs.yml'
       - 'termin-collision/docs/**'
       - 'termin-collision/mkdocs.yml'
       - 'termin-gui/docs/**'
@@ -41,25 +42,16 @@ jobs:
 
       - name: Install doc tools
         run: |
-          pip install mkdocs mkdocs-material sphinx myst-parser breathe sphinx-book-theme
+          pip install mkdocs mkdocs-material
 
       - name: Build hub page
         run: |
           mkdir -p _site
           cp docs/index.html _site/
 
-      - name: Build termin docs (Sphinx)
-        run: |
-          cd termin/docs
-          # Doxygen for C API (optional, skip if not installed)
-          if command -v doxygen &>/dev/null; then
-            doxygen Doxyfile || true
-          fi
-          sphinx-build -b html . ../../_site/termin
-
       - name: Build MkDocs projects
         run: |
-          for project in termin-collision termin-gui termin-inspect termin-scene termin-modules; do
+          for project in termin termin-collision termin-gui termin-inspect termin-scene termin-modules; do
             echo "=== Building $project docs ==="
             cd $project
             mkdocs build -d ../_site/$project

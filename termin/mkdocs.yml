@@ -1,0 +1,30 @@
+site_name: termin
+site_description: 3D-движок — ECS, физика, рендеринг, анимация, навигация
+repo_url: https://github.com/mirmik/termin-monorepo
+repo_name: mirmik/termin-monorepo
+docs_dir: docs
+theme:
+  name: material
+  language: ru
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+nav:
+  - Главная: index.md
+  - Быстрый старт: getting-started.md
+  - Концепции: concepts.md
+  - API:
+    - Обзор: api/index.md
+    - C API: api/c-api.md
+  - Архитектура:
+    - Расширения сцены: scene_extensions_architecture.md
+    - Миграция tc_scene: termin_scene_migration_checklist.md
+    - MeshCollider: mesh_collider_plan.md
+  - Миграция на tcgui: migration-tcgui.md
