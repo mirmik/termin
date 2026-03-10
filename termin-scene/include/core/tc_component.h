@@ -265,6 +265,9 @@ static inline void tc_component_on_destroy(tc_component* c) {
     if (c && c->vtable && c->vtable->on_destroy) {
         c->vtable->on_destroy(c);
     }
+    if (c) {
+        tc_component_clear_capabilities(c);
+    }
 }
 
 static inline void tc_component_on_added_to_entity(tc_component* c) {
@@ -351,7 +354,15 @@ static inline bool tc_component_is_drawable(const tc_component* c) {
 static inline const tc_drawable_vtable* tc_component_get_drawable_vtable(const tc_component* c) {
     if (!c) return NULL;
     if (c->drawable_vtable) return c->drawable_vtable;
-    return tc_drawable_capability_get(c);
+    const tc_drawable_capability* cap = tc_drawable_capability_get(c);
+    return cap ? cap->vtable : NULL;
+}
+
+static inline void* tc_component_get_drawable_userdata(const tc_component* c) {
+    if (!c) return NULL;
+    if (c->drawable_ptr) return c->drawable_ptr;
+    const tc_drawable_capability* cap = tc_drawable_capability_get(c);
+    return cap ? cap->userdata : NULL;
 }
 
 static inline bool tc_component_has_phase(tc_component* c, const char* phase_mark) {

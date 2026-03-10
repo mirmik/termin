@@ -386,7 +386,7 @@ void tc_component_set_active_in_editor(tc_component* c, bool active) {
 }
 
 bool tc_component_get_is_drawable(const tc_component* c) {
-    return c && (c->drawable_vtable != NULL || tc_drawable_capability_get(c) != NULL);
+    return tc_component_is_drawable(c);
 }
 
 bool tc_component_get_is_input_handler(const tc_component* c) {
