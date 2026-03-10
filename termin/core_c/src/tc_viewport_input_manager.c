@@ -4,6 +4,9 @@
 #include "core/tc_scene.h"
 #include "core/tc_component.h"
 #include "core/tc_entity_pool.h"
+#include "core/tc_input_component.h"
+#include "core/tc_input_entity_pool.h"
+#include "core/tc_input_scene.h"
 #include "tc_input_event.h"
 #include <tcbase/tc_log.h>
 
