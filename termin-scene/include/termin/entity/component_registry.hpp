@@ -6,10 +6,8 @@
 
 #include "component.hpp"
 #include "vtable_utils.hpp"
-#include "input_handler.hpp"
 #include "tc_inspect_cpp.hpp"
 #include "core/tc_drawable_capability.h"
-#include "core/tc_input_capability.h"
 
 #include <termin/export.hpp>
 
@@ -51,15 +49,13 @@ public:
     static bool has_capability(const std::string& name, tc_component_cap_id cap_id);
 
     static tc_component_cap_id drawable_capability_id();
-    static tc_component_cap_id input_capability_id();
-
 private:
     ComponentRegistry() = default;
     ComponentRegistry(const ComponentRegistry&) = delete;
     ComponentRegistry& operator=(const ComponentRegistry&) = delete;
 };
 
-// SFINAE helpers for Drawable/InputHandler detection with incomplete types
+// SFINAE helpers for Drawable detection with incomplete types
 namespace detail {
     template<typename Base, typename Derived, typename = void>
     struct is_base_of_safe : std::false_type {};
@@ -74,13 +70,6 @@ template<typename T>
 void mark_drawable_if_base(const char* name) {
     if constexpr (detail::is_base_of_safe<Drawable, T>::value) {
         ComponentRegistry::set_capability(name, tc_drawable_capability_id(), true);
-    }
-}
-
-template<typename T>
-void mark_input_handler_if_base(const char* name) {
-    if constexpr (detail::is_base_of_safe<InputHandler, T>::value) {
-        ComponentRegistry::set_capability(name, tc_input_capability_id(), true);
     }
 }
 
@@ -130,8 +119,6 @@ struct ComponentRegistrar {
         // Mark as drawable if component inherits from Drawable
         mark_drawable_if_base<T>(name);
 
-        // Mark as input handler if component inherits from InputHandler
-        mark_input_handler_if_base<T>(name);
     }
 };
 

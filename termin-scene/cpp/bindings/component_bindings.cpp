@@ -39,7 +39,6 @@ void bind_cxx_component(nb::module_& m) {
         .def_prop_ro("started", &CxxComponent::started)
         .def_prop_rw("has_update", &CxxComponent::has_update, &CxxComponent::set_has_update)
         .def_prop_rw("has_fixed_update", &CxxComponent::has_fixed_update, &CxxComponent::set_has_fixed_update)
-        .def_prop_ro("is_input_handler", &CxxComponent::is_input_handler)
         .def_prop_ro("entity",
             [](CxxComponent& c) -> nb::object {
                 Entity ent = c.entity();
@@ -107,7 +106,6 @@ void bind_component_registry(nb::module_& m) {
             nb::arg("name"), nb::arg("cap_id"),
             "Check whether a component type has a capability")
         .def_static("drawable_capability_id", &ComponentRegistry::drawable_capability_id)
-        .def_static("input_capability_id", &ComponentRegistry::input_capability_id)
         .def_static("get_types_with_capability", [](tc_component_cap_id cap_id) {
             const char* types[64];
             size_t count = tc_component_registry_get_types_with_capability(cap_id, types, 64);
@@ -141,7 +139,6 @@ void bind_component_registry(nb::module_& m) {
             }
             info["descendants"] = desc_list;
             info["is_drawable"] = tc_component_registry_has_capability(type_name, tc_drawable_capability_id());
-            info["is_input_handler"] = tc_component_registry_has_capability(type_name, tc_input_capability_id());
 
             result.append(info);
         }

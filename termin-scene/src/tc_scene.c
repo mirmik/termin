@@ -3,7 +3,6 @@
 #include "core/tc_drawable_capability.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_scene_extension.h"
-#include "core/tc_input_capability.h"
 #include <tcbase/tc_resource_map.h>
 #include <tcbase/tgfx_intern_string.h>
 #include <tcbase/tc_log.h>
@@ -994,16 +993,6 @@ void tc_scene_foreach_drawable(
         }
         if (!callback(c, user_data)) return;
     }
-}
-
-void tc_scene_foreach_input_handler(
-    tc_scene_handle h,
-    tc_component_iter_fn callback,
-    void* user_data,
-    int filter_flags
-) {
-    if (!handle_alive(h) || !callback) return;
-    tc_scene_foreach_with_capability(h, tc_input_capability_id(), callback, user_data, filter_flags);
 }
 
 // ============================================================================

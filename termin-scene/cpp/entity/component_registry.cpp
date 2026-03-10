@@ -80,8 +80,4 @@ tc_component_cap_id ComponentRegistry::drawable_capability_id() {
     return tc_drawable_capability_id();
 }
 
-tc_component_cap_id ComponentRegistry::input_capability_id() {
-    return tc_input_capability_id();
-}
-
 } // namespace termin

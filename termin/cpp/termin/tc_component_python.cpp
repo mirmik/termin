@@ -3,6 +3,7 @@
 #include "tc_component_python.h"
 #include "core/tc_drawable_capability.h"
 #include "core/tc_input_capability.h"
+#include "tc_component_python_input.h"
 #include <stdlib.h>
 #include <string.h>
 

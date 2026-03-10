@@ -4,7 +4,6 @@
 #include "core/tc_component.h"
 #include "core/tc_component_capability.h"
 #include "core/tc_drawable_capability.h"
-#include "core/tc_input_capability.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
@@ -120,39 +119,6 @@ static int test_scene_capability_iteration(void) {
     return 0;
 }
 
-static int test_live_reindex_for_input_capability(void) {
-    printf("Testing Live Reindex For Input Capability...\n");
-
-    tc_component_cap_id input_cap = tc_input_capability_id();
-    TEST_ASSERT(input_cap != TC_COMPONENT_CAPABILITY_INVALID_ID, "input capability id ok");
-
-    tc_scene_handle scene = tc_scene_new_named("live-reindex-scene");
-    TEST_ASSERT(tc_scene_alive(scene), "scene created");
-
-    tc_entity_pool* pool = tc_scene_entity_pool(scene);
-    tc_entity_id entity = tc_entity_pool_alloc(pool, "entity");
-    TEST_ASSERT(tc_entity_id_valid(entity), "entity created");
-
-    tc_component component;
-    tc_component_init(&component, NULL);
-
-    tc_entity_pool_add_component(pool, entity, &component);
-    TEST_ASSERT(tc_scene_capability_count(scene, input_cap) == 0, "no input capability initially");
-
-    int payload = 55;
-    TEST_ASSERT(tc_component_attach_capability(&component, input_cap, &payload), "attach live capability");
-    TEST_ASSERT(tc_scene_capability_count(scene, input_cap) == 1, "live reindex adds capability");
-
-    tc_component_detach_capability(&component, input_cap);
-    TEST_ASSERT(tc_scene_capability_count(scene, input_cap) == 0, "live reindex removes capability");
-
-    tc_entity_pool_remove_component(pool, entity, &component);
-    tc_scene_free(scene);
-
-    printf("  Live Reindex For Input Capability: PASS\n");
-    return 0;
-}
-
 static int test_live_reindex_for_drawable_capability(void) {
     printf("Testing Live Reindex For Drawable Capability...\n");
 
@@ -198,7 +164,6 @@ int main(void) {
 
     result |= test_capability_register_and_attach();
     result |= test_scene_capability_iteration();
-    result |= test_live_reindex_for_input_capability();
     result |= test_live_reindex_for_drawable_capability();
 
     if (result == 0) {

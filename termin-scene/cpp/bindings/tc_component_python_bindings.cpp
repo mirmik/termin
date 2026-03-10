@@ -10,6 +10,8 @@
 
 extern "C" {
 #include "tc_component_python.h"
+#include "tc_component_python_input.h"
+#include "core/tc_input_component.h"
 }
 
 namespace nb = nanobind;

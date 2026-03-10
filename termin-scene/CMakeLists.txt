@@ -34,7 +34,6 @@ set(TERMIN_SCENE_SOURCES
     src/tc_component.c
     src/tc_component_capability.c
     src/tc_drawable_capability.c
-    src/tc_input_capability.c
     src/tc_entity_pool.c
     src/tc_entity_pool_registry.c
     src/tc_hash_map.c
@@ -52,7 +51,6 @@ set(TERMIN_SCENE_CXX_SOURCES
     cpp/entity/unknown_component.cpp
     cpp/entity/unknown_component_ops.cpp
     cpp/entity/vtable_utils.cpp
-    cpp/entity/input_handler.cpp
     cpp/tc_scene.cpp
 )
 
@@ -66,7 +64,6 @@ set(TERMIN_SCENE_CXX_HEADERS
     include/termin/entity/unknown_component.hpp
     include/termin/entity/unknown_component_ops.hpp
     include/termin/entity/vtable_utils.hpp
-    include/termin/entity/input_handler.hpp
     include/termin/tc_scene.hpp
     include/inspect/tc_inspect_context.h
 )
@@ -77,7 +74,6 @@ set(TERMIN_SCENE_HEADERS
     include/core/tc_component.h
     include/core/tc_component_capability.h
     include/core/tc_drawable_capability.h
-    include/core/tc_input_capability.h
     include/core/tc_dlist.h
     include/core/tc_entity_pool.h
     include/core/tc_entity_pool_registry.h
@@ -129,6 +125,7 @@ endif()
 
 # _scene_native Python module (Entity, Component, TcScene core, registries)
 if(TERMIN_BUILD_PYTHON)
+    find_package(termin_input REQUIRED)
     if(NOT TARGET termin_inspect::termin_inspect_python)
         message(FATAL_ERROR "termin_scene python bindings require termin_inspect::termin_inspect_python target")
     endif()
@@ -143,7 +140,7 @@ if(TERMIN_BUILD_PYTHON)
         cpp/bindings/soa_bindings.cpp
         cpp/bindings/tc_component_python_bindings.cpp
     )
-    target_link_libraries(_scene_native PRIVATE termin_scene termin_inspect::termin_inspect termin_inspect::termin_inspect_python)
+    target_link_libraries(_scene_native PRIVATE termin_scene termin_input::termin_input termin_inspect::termin_inspect termin_inspect::termin_inspect_python)
     target_compile_definitions(_scene_native PRIVATE TERMIN_HAS_NANOBIND)
 
     set(TERMIN_SCENE_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..")
