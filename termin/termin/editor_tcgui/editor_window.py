@@ -913,20 +913,64 @@ class EditorWindowTcgui:
             self._project_browser.set_root(path)
 
     def _load_project(self, path: str) -> None:
-        project_dir = str(Path(path).parent)
+        project_root = Path(path).parent
+        project_dir = str(project_root)
         self._current_project_path = project_dir
         self._project_name = Path(path).stem
         self._log_to_console(f"Project: {project_dir}")
 
         # Initialize project settings
         from termin.project.settings import ProjectSettingsManager
-        ProjectSettingsManager.instance().set_project_path(Path(project_dir))
+        ProjectSettingsManager.instance().set_project_path(project_root)
+
+        from termin.navmesh.settings import NavigationSettingsManager
+        NavigationSettingsManager.instance().set_project_path(project_root)
 
         EditorSettings.instance().set("last_project_file", path)
 
+        self._load_project_modules(project_root)
         self._rescan_file_resources()
         if self._project_browser is not None:
             self._project_browser.set_root(project_dir)
+
+    def _load_project_modules(self, project_root: Path) -> None:
+        from termin.modules import get_project_modules_runtime
+        from termin_modules import ModuleKind, ModuleState
+
+        runtime = get_project_modules_runtime()
+        success = runtime.load_project(project_root)
+        if not success and runtime.last_error:
+            self._log_to_console(f"Module load error: {runtime.last_error}")
+
+        cpp_loaded = 0
+        cpp_failed = 0
+        py_loaded = 0
+        py_failed = 0
+
+        for record in runtime.records():
+            if record.kind == ModuleKind.Cpp:
+                if record.state == ModuleState.Loaded:
+                    cpp_loaded += 1
+                    self._log_to_console(f"Loaded C++ module: {record.id}")
+                elif record.state == ModuleState.Failed:
+                    cpp_failed += 1
+                    self._log_to_console(f"Failed to load C++ module {record.id}: {record.error_message}")
+            else:
+                if record.state == ModuleState.Loaded:
+                    py_loaded += 1
+                    self._log_to_console(f"Loaded Python module: {record.id}")
+                elif record.state == ModuleState.Failed:
+                    py_failed += 1
+                    self._log_to_console(f"Failed to load Python module {record.id}: {record.error_message}")
+
+        if cpp_loaded > 0:
+            self._log_to_console(f"Loaded {cpp_loaded} C++ module(s)")
+        if cpp_failed > 0:
+            self._log_to_console(f"Failed to load {cpp_failed} C++ module(s)")
+        if py_loaded > 0:
+            self._log_to_console(f"Loaded {py_loaded} Python module(s)")
+        if py_failed > 0:
+            self._log_to_console(f"Failed to load {py_failed} Python module(s)")
 
     def _on_project_file_activated(self, path: str) -> None:
         """Called when a file is double-clicked in the project browser."""
