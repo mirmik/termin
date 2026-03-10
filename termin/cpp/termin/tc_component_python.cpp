@@ -2,6 +2,7 @@
 // Provides component functionality for external scripting languages (e.g. Python)
 #include "tc_component_python.h"
 #include "core/tc_drawable_capability.h"
+#include "core/tc_input_component.h"
 #include "core/tc_input_capability.h"
 #include <stdlib.h>
 #include <string.h>
