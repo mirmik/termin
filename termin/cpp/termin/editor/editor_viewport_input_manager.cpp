@@ -5,6 +5,7 @@
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
 #include "core/tc_entity_pool.h"
+#include "core/tc_input_entity_pool.h"
 #include "core/tc_input_scene.h"
 #include <tcbase/tc_log.h>
 
