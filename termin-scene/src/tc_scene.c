@@ -658,13 +658,6 @@ static void scene_capability_detach(uint32_t idx, tc_component* c, uint32_t slot
 static void scene_capability_sync_legacy_bridges(tc_component* c) {
     if (!c) return;
 
-    if (c->input_vtable && tc_input_capability_get(c) == NULL) {
-        uint32_t slot = 0;
-        if (tc_component_capability_slot(tc_input_capability_id(), &slot)) {
-            c->capability_mask |= (UINT64_C(1) << slot);
-            c->capability_ptrs[slot] = (void*)c->input_vtable;
-        }
-    }
 }
 
 void tc_scene_update(tc_scene_handle h, double dt) {

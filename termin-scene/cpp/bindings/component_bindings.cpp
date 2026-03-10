@@ -100,21 +100,23 @@ void bind_component_registry(nb::module_& m) {
             return ComponentRegistryPython::list_python();
         })
         .def("clear", &ComponentRegistry::clear)
-        .def_static("set_drawable", &ComponentRegistry::set_drawable,
-            nb::arg("name"), nb::arg("is_drawable"),
-            "Mark a component type as drawable (can render geometry)")
-        .def_static("set_input_handler", &ComponentRegistry::set_input_handler,
-            nb::arg("name"), nb::arg("is_input_handler"),
-            "Mark a component type as input handler")
-        .def_static("get_input_handler_types", []() {
+        .def_static("set_capability", &ComponentRegistry::set_capability,
+            nb::arg("name"), nb::arg("cap_id"), nb::arg("enabled"),
+            "Enable or disable a capability for a component type")
+        .def_static("has_capability", &ComponentRegistry::has_capability,
+            nb::arg("name"), nb::arg("cap_id"),
+            "Check whether a component type has a capability")
+        .def_static("drawable_capability_id", &ComponentRegistry::drawable_capability_id)
+        .def_static("input_capability_id", &ComponentRegistry::input_capability_id)
+        .def_static("get_types_with_capability", [](tc_component_cap_id cap_id) {
             const char* types[64];
-            size_t count = tc_component_registry_get_input_handler_types(types, 64);
+            size_t count = tc_component_registry_get_types_with_capability(cap_id, types, 64);
             std::vector<std::string> result;
             for (size_t i = 0; i < count; i++) {
                 result.push_back(types[i]);
             }
             return result;
-        }, "Get all input handler type names");
+        }, nb::arg("cap_id"), "Get all component types with the given capability");
 
     // component_registry_get_all_info for debug viewer
     m.def("component_registry_get_all_info", []() {
@@ -138,7 +140,8 @@ void bind_component_registry(nb::module_& m) {
                 desc_list.append(descendants[j]);
             }
             info["descendants"] = desc_list;
-            info["is_drawable"] = tc_component_registry_is_drawable(type_name);
+            info["is_drawable"] = tc_component_registry_has_capability(type_name, tc_drawable_capability_id());
+            info["is_input_handler"] = tc_component_registry_has_capability(type_name, tc_input_capability_id());
 
             result.append(info);
         }

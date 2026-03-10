@@ -8,6 +8,8 @@
 #include "vtable_utils.hpp"
 #include "input_handler.hpp"
 #include "tc_inspect_cpp.hpp"
+#include "core/tc_drawable_capability.h"
+#include "core/tc_input_capability.h"
 
 #include <termin/export.hpp>
 
@@ -42,11 +44,14 @@ public:
     // Clear all (for testing)
     void clear();
 
-    // Mark a component type as drawable
-    static void set_drawable(const std::string& name, bool is_drawable);
+    // Enable or disable a capability for a component type
+    static void set_capability(const std::string& name, tc_component_cap_id cap_id, bool enabled);
 
-    // Mark a component type as input handler
-    static void set_input_handler(const std::string& name, bool is_input_handler);
+    // Check whether a component type has a capability
+    static bool has_capability(const std::string& name, tc_component_cap_id cap_id);
+
+    static tc_component_cap_id drawable_capability_id();
+    static tc_component_cap_id input_capability_id();
 
 private:
     ComponentRegistry() = default;
@@ -68,14 +73,14 @@ namespace detail {
 template<typename T>
 void mark_drawable_if_base(const char* name) {
     if constexpr (detail::is_base_of_safe<Drawable, T>::value) {
-        ComponentRegistry::set_drawable(name, true);
+        ComponentRegistry::set_capability(name, tc_drawable_capability_id(), true);
     }
 }
 
 template<typename T>
 void mark_input_handler_if_base(const char* name) {
     if constexpr (detail::is_base_of_safe<InputHandler, T>::value) {
-        ComponentRegistry::set_input_handler(name, true);
+        ComponentRegistry::set_capability(name, tc_input_capability_id(), true);
     }
 }
 

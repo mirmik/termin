@@ -45,10 +45,9 @@ public:
     static const tc_input_vtable cxx_input_vtable;
 
 protected:
-    // Set input_vtable on the C component (call from subclass constructor)
+    // Attach input capability to the C component (call from subclass constructor)
     void install_input_vtable(tc_component* c) {
         if (c) {
-            c->input_vtable = &cxx_input_vtable;
             tc_input_capability_attach(c, &cxx_input_vtable);
         }
     }
