@@ -85,7 +85,7 @@ public:
 
     // Type identification (for serialization) - uses type_entry from registry
     const char* type_name() const {
-        return tc_component_type_name(&_c);
+        return _c.type_entry ? _c.type_entry->type_name : nullptr;
     }
 
 protected:
