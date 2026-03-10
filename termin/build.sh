@@ -111,6 +111,7 @@ if [[ $ASAN -eq 1 ]]; then
         -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
         -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
         -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
+        -Dtermin_input_DIR="$SDK_DIR/lib/cmake/termin_input" \
         -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
         -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh" \
@@ -133,6 +134,7 @@ else
         -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
         -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
         -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
+        -Dtermin_input_DIR="$SDK_DIR/lib/cmake/termin_input" \
         -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
         -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh" \

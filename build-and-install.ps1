@@ -137,6 +137,7 @@ function Build-CMakeLib {
         $terminGraphicsDir = Join-Path $SdkDir "lib\cmake\termin_graphics"
         $terminInspectDir = Join-Path $SdkDir "lib\cmake\termin_inspect"
         $terminSceneDir = Join-Path $SdkDir "lib\cmake\termin_scene"
+        $terminInputDir = Join-Path $SdkDir "lib\cmake\termin_input"
 
         if ($Clean) {
             Write-Host "Cleaning $buildDir..."
@@ -173,6 +174,9 @@ function Build-CMakeLib {
         }
         if (Test-Path $terminSceneDir) {
             $cmakeArgs += "-Dtermin_scene_DIR=$terminSceneDir"
+        }
+        if (Test-Path $terminInputDir) {
+            $cmakeArgs += "-Dtermin_input_DIR=$terminInputDir"
         }
 
         & cmake @cmakeArgs
