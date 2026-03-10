@@ -1,5 +1,7 @@
 // tc_component.c - Component registry implementation
 #include "core/tc_component.h"
+#include "core/tc_drawable_capability.h"
+#include "core/tc_input_capability.h"
 #include "tc_type_registry.h"
 #include <tcbase/tc_log.h>
 #include <stdlib.h>
@@ -252,7 +254,7 @@ void tc_component_registry_set_input_handler(const char* type_name, bool is_inpu
 
     static tc_component_cap_id input_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
     if (input_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
-        input_cap = tc_component_capability_register("input");
+        input_cap = tc_input_capability_id();
     }
     tc_component_registry_set_capability(type_name, input_cap, is_input_handler);
 }
@@ -384,11 +386,11 @@ void tc_component_set_active_in_editor(tc_component* c, bool active) {
 }
 
 bool tc_component_get_is_drawable(const tc_component* c) {
-    return c && (tc_component_is_drawable(c) || tc_component_has_capability(c, tc_component_capability_register("drawable")));
+    return c && (c->drawable_vtable != NULL || tc_drawable_capability_get(c) != NULL);
 }
 
 bool tc_component_get_is_input_handler(const tc_component* c) {
-    return c && (c->input_vtable != NULL || tc_component_has_capability(c, tc_component_capability_register("input")));
+    return c && (c->input_vtable != NULL || tc_input_capability_get(c) != NULL);
 }
 
 tc_component_kind tc_component_get_kind(const tc_component* c) {

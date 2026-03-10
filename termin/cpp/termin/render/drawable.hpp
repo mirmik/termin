@@ -7,6 +7,7 @@
 
 extern "C" {
 #include "termin_core.h"
+#include "core/tc_drawable_capability.h"
 }
 
 #include "termin/render/render_export.hpp"
@@ -133,6 +134,7 @@ protected:
         if (c) {
             c->drawable_vtable = &cxx_drawable_vtable;
             c->drawable_ptr = this;  // Avoid dynamic_cast in callbacks
+            tc_drawable_capability_attach(c, &cxx_drawable_vtable);
         }
     }
 

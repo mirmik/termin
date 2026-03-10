@@ -33,6 +33,8 @@ set(TERMIN_SCENE_SOURCES
     src/tc_archetype.c
     src/tc_component.c
     src/tc_component_capability.c
+    src/tc_drawable_capability.c
+    src/tc_input_capability.c
     src/tc_entity_pool.c
     src/tc_entity_pool_registry.c
     src/tc_hash_map.c
@@ -74,6 +76,8 @@ set(TERMIN_SCENE_HEADERS
     include/core/tc_archetype.h
     include/core/tc_component.h
     include/core/tc_component_capability.h
+    include/core/tc_drawable_capability.h
+    include/core/tc_input_capability.h
     include/core/tc_dlist.h
     include/core/tc_entity_pool.h
     include/core/tc_entity_pool_registry.h

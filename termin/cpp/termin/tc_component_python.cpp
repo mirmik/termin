@@ -1,6 +1,8 @@
 // tc_component_python.cpp - External component implementation
 // Provides component functionality for external scripting languages (e.g. Python)
 #include "tc_component_python.h"
+#include "core/tc_drawable_capability.h"
+#include "core/tc_input_capability.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -218,6 +220,7 @@ void tc_component_set_python_drawable_callbacks(const tc_python_drawable_callbac
 void tc_component_install_python_drawable_vtable(tc_component* c) {
     if (c) {
         c->drawable_vtable = &g_python_drawable_vtable;
+        tc_drawable_capability_attach(c, &g_python_drawable_vtable);
     }
 }
 
@@ -266,5 +269,6 @@ void tc_component_set_python_input_callbacks(const tc_python_input_callbacks* ca
 void tc_component_install_python_input_vtable(tc_component* c) {
     if (c) {
         c->input_vtable = &g_python_input_vtable;
+        tc_input_capability_attach(c, &g_python_input_vtable);
     }
 }
