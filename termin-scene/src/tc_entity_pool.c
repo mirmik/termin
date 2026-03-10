@@ -1403,7 +1403,7 @@ static bool foreach_input_handler_recursive(
         tc_component* c = tc_entity_pool_component_at(pool, entity_id, i);
         if (!c || !c->enabled) continue;
 
-        // Check if component is input handler (has input_vtable)
+        // Check if component is input handler
         if (tc_component_is_input_handler(c)) {
             if (!callback(c, user_data)) {
                 return false;  // Stop iteration

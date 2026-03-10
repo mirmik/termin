@@ -91,11 +91,11 @@ class PythonComponent:
 
         # Mark as drawable if class has is_drawable = True
         if cls.is_drawable:
-            ComponentRegistry.set_drawable(cls.__name__, True)
+            ComponentRegistry.set_capability(cls.__name__, ComponentRegistry.drawable_capability_id(), True)
 
         # Mark as input handler if class has is_input_handler = True
         if cls.is_input_handler:
-            ComponentRegistry.set_input_handler(cls.__name__, True)
+            ComponentRegistry.set_capability(cls.__name__, ComponentRegistry.input_capability_id(), True)
 
     # =========================================================================
     # Properties (delegate to TcComponent)
@@ -151,7 +151,7 @@ class PythonComponent:
 
     @property
     def is_input_handler(self) -> bool:
-        """Check if this component handles input events (has input_vtable installed)."""
+        """Check if this component handles input events."""
         return self._tc.is_input_handler
 
     @property

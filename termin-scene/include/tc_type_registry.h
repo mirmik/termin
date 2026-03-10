@@ -17,9 +17,7 @@ extern "C" {
 // Type Entry Flags
 // ============================================================================
 
-#define TC_TYPE_FLAG_DRAWABLE       (1 << 0)
-#define TC_TYPE_FLAG_INPUT_HANDLER  (1 << 1)
-#define TC_TYPE_FLAG_ABSTRACT       (1 << 2)
+#define TC_TYPE_FLAG_ABSTRACT       (1 << 0)
 
 // ============================================================================
 // Type Entry - shared structure for component and pass types
@@ -48,7 +46,7 @@ struct tc_type_entry {
     size_t child_count;
     size_t child_capacity;
 
-    // Flags (is_drawable, is_input_handler, etc.)
+    // Flags (abstract, etc.)
     uint32_t flags;
     uint64_t capability_mask;
 

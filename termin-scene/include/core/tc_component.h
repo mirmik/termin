@@ -134,16 +134,6 @@ struct tc_component {
     // Reference counting vtable (separate from main vtable)
     const tc_component_ref_vtable* ref_vtable;
 
-    // Drawable vtable (NULL if component is not drawable)
-    const tc_drawable_vtable* drawable_vtable;
-
-    // Drawable pointer for C++ components (avoids dynamic_cast in callbacks)
-    // Set by install_drawable_vtable(), NULL if not drawable
-    void* drawable_ptr;
-
-    // Input vtable (NULL if component doesn't handle input)
-    const tc_input_vtable* input_vtable;
-
     // Owner entity handle (set when added to entity, invalid when detached)
     tc_entity_handle owner;
 
@@ -206,9 +196,6 @@ struct tc_component {
 static inline void tc_component_init(tc_component* c, const tc_component_vtable* vtable) {
     c->vtable = vtable;
     c->ref_vtable = NULL;
-    c->drawable_vtable = NULL;
-    c->drawable_ptr = NULL;
-    c->input_vtable = NULL;
     c->owner = TC_ENTITY_HANDLE_INVALID;
     c->kind = TC_CXX_COMPONENT;
     c->native_language = TC_LANGUAGE_CXX;
@@ -399,12 +386,11 @@ static inline tc_shader_handle tc_component_override_shader(tc_component* c, con
 // ============================================================================
 
 static inline bool tc_component_is_input_handler(const tc_component* c) {
-    return c && (c->input_vtable != NULL || tc_input_capability_get(c) != NULL);
+    return c && tc_input_capability_get(c) != NULL;
 }
 
 static inline const tc_input_vtable* tc_component_get_input_vtable(const tc_component* c) {
     if (!c) return NULL;
-    if (c->input_vtable) return c->input_vtable;
     return tc_input_capability_get(c);
 }
 
@@ -486,34 +472,6 @@ TC_API const char* tc_component_registry_get_parent(const char* type_name);
 // Get component kind (TC_CXX_COMPONENT or TC_PYTHON_COMPONENT)
 TC_API tc_component_kind tc_component_registry_get_kind(const char* type_name);
 
-// Drawable type management
-// Mark a component type as drawable (can render geometry)
-TC_API void tc_component_registry_set_drawable(const char* type_name, bool is_drawable);
-
-// Check if a component type is drawable
-TC_API bool tc_component_registry_is_drawable(const char* type_name);
-
-// Get all drawable type names
-// Returns count, fills out_names array (caller provides buffer)
-TC_API size_t tc_component_registry_get_drawable_types(
-    const char** out_names,
-    size_t max_count
-);
-
-// Input handler type management
-// Mark a component type as input handler
-TC_API void tc_component_registry_set_input_handler(const char* type_name, bool is_input_handler);
-
-// Check if a component type is an input handler
-TC_API bool tc_component_registry_is_input_handler(const char* type_name);
-
-// Get all input handler type names
-// Returns count, fills out_names array (caller provides buffer)
-TC_API size_t tc_component_registry_get_input_handler_types(
-    const char** out_names,
-    size_t max_count
-);
-
 TC_API void tc_component_registry_set_capability(
     const char* type_name,
     tc_component_cap_id cap_id,
@@ -523,6 +481,12 @@ TC_API void tc_component_registry_set_capability(
 TC_API bool tc_component_registry_has_capability(
     const char* type_name,
     tc_component_cap_id cap_id
+);
+
+TC_API size_t tc_component_registry_get_types_with_capability(
+    tc_component_cap_id cap_id,
+    const char** out_names,
+    size_t max_count
 );
 
 // Get type entry for a component type

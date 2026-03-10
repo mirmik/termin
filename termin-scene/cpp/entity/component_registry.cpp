@@ -68,12 +68,20 @@ std::vector<std::string> ComponentRegistry::list_native() const {
 void ComponentRegistry::clear() {
 }
 
-void ComponentRegistry::set_drawable(const std::string& name, bool is_drawable) {
-    tc_component_registry_set_drawable(name.c_str(), is_drawable);
+void ComponentRegistry::set_capability(const std::string& name, tc_component_cap_id cap_id, bool enabled) {
+    tc_component_registry_set_capability(name.c_str(), cap_id, enabled);
 }
 
-void ComponentRegistry::set_input_handler(const std::string& name, bool is_input_handler) {
-    tc_component_registry_set_input_handler(name.c_str(), is_input_handler);
+bool ComponentRegistry::has_capability(const std::string& name, tc_component_cap_id cap_id) {
+    return tc_component_registry_has_capability(name.c_str(), cap_id);
+}
+
+tc_component_cap_id ComponentRegistry::drawable_capability_id() {
+    return tc_drawable_capability_id();
+}
+
+tc_component_cap_id ComponentRegistry::input_capability_id() {
+    return tc_input_capability_id();
 }
 
 } // namespace termin
