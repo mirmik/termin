@@ -1,7 +1,9 @@
 // tc_scene.c - Scene implementation using pool with generational indices
 #include "core/tc_scene.h"
+#include "core/tc_drawable_capability.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_scene_extension.h"
+#include "core/tc_input_capability.h"
 #include <tcbase/tc_resource_map.h>
 #include <tcbase/tgfx_intern_string.h>
 #include <tcbase/tc_log.h>
@@ -655,30 +657,24 @@ static void scene_capability_detach(uint32_t idx, tc_component* c, uint32_t slot
 
 static void scene_capability_sync_legacy_bridges(tc_component* c) {
     static tc_component_cap_id drawable_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
-    static tc_component_cap_id input_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
-
     if (!c) return;
 
     if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
-        drawable_cap = tc_component_capability_register("drawable");
-    }
-    if (input_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
-        input_cap = tc_component_capability_register("input");
+        drawable_cap = tc_drawable_capability_id();
     }
 
-    if (c->drawable_vtable && drawable_cap != TC_COMPONENT_CAPABILITY_INVALID_ID &&
-        !tc_component_has_capability(c, drawable_cap)) {
+    if (c->drawable_vtable && tc_drawable_capability_get(c) == NULL &&
+        drawable_cap != TC_COMPONENT_CAPABILITY_INVALID_ID) {
         uint32_t slot = 0;
         if (tc_component_capability_slot(drawable_cap, &slot)) {
             c->capability_mask |= (UINT64_C(1) << slot);
-            c->capability_ptrs[slot] = c->drawable_ptr ? c->drawable_ptr : (void*)c->drawable_vtable;
+            c->capability_ptrs[slot] = (void*)c->drawable_vtable;
         }
     }
 
-    if (c->input_vtable && input_cap != TC_COMPONENT_CAPABILITY_INVALID_ID &&
-        !tc_component_has_capability(c, input_cap)) {
+    if (c->input_vtable && tc_input_capability_get(c) == NULL) {
         uint32_t slot = 0;
-        if (tc_component_capability_slot(input_cap, &slot)) {
+        if (tc_component_capability_slot(tc_input_capability_id(), &slot)) {
             c->capability_mask |= (UINT64_C(1) << slot);
             c->capability_ptrs[slot] = (void*)c->input_vtable;
         }
@@ -1000,10 +996,7 @@ void tc_scene_foreach_drawable(
 ) {
     if (!handle_alive(h) || !callback) return;
 
-    static tc_component_cap_id drawable_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
-    if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
-        drawable_cap = tc_component_capability_register("drawable");
-    }
+    tc_component_cap_id drawable_cap = tc_drawable_capability_id();
     if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) return;
 
     bool check_layer = (layer_mask != 0);
@@ -1031,12 +1024,7 @@ void tc_scene_foreach_input_handler(
     int filter_flags
 ) {
     if (!handle_alive(h) || !callback) return;
-
-    static tc_component_cap_id input_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
-    if (input_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
-        input_cap = tc_component_capability_register("input");
-    }
-    tc_scene_foreach_with_capability(h, input_cap, callback, user_data, filter_flags);
+    tc_scene_foreach_with_capability(h, tc_input_capability_id(), callback, user_data, filter_flags);
 }
 
 // ============================================================================

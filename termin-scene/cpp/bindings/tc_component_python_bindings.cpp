@@ -285,7 +285,7 @@ public:
     }
 
     bool is_drawable() const {
-        return _c && _c->drawable_vtable != nullptr;
+        return _c && tc_component_is_drawable(_c);
     }
 
     // Install input vtable
@@ -296,7 +296,7 @@ public:
     }
 
     bool is_input_handler() const {
-        return _c && _c->input_vtable != nullptr;
+        return _c && tc_component_is_input_handler(_c);
     }
 
     // Get owner entity

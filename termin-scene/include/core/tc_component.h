@@ -5,6 +5,8 @@
 #include "tc_types.h"
 #include "tc_type_registry.h"
 #include "core/tc_component_capability.h"
+#include "core/tc_drawable_capability.h"
+#include "core/tc_input_capability.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_dlist.h"
 #include <string.h>
@@ -343,32 +345,42 @@ static inline const char* tc_component_type_name(const tc_component* c) {
 // ============================================================================
 
 static inline bool tc_component_is_drawable(const tc_component* c) {
-    return c && c->drawable_vtable != NULL;
+    return c && (c->drawable_vtable != NULL || tc_drawable_capability_get(c) != NULL);
+}
+
+static inline const tc_drawable_vtable* tc_component_get_drawable_vtable(const tc_component* c) {
+    if (!c) return NULL;
+    if (c->drawable_vtable) return c->drawable_vtable;
+    return tc_drawable_capability_get(c);
 }
 
 static inline bool tc_component_has_phase(tc_component* c, const char* phase_mark) {
-    if (c && c->drawable_vtable && c->drawable_vtable->has_phase) {
-        return c->drawable_vtable->has_phase(c, phase_mark);
+    const tc_drawable_vtable* vt = tc_component_get_drawable_vtable(c);
+    if (c && vt && vt->has_phase) {
+        return vt->has_phase(c, phase_mark);
     }
     return false;
 }
 
 static inline void tc_component_draw_geometry(tc_component* c, void* render_context, int geometry_id) {
-    if (c && c->drawable_vtable && c->drawable_vtable->draw_geometry) {
-        c->drawable_vtable->draw_geometry(c, render_context, geometry_id);
+    const tc_drawable_vtable* vt = tc_component_get_drawable_vtable(c);
+    if (c && vt && vt->draw_geometry) {
+        vt->draw_geometry(c, render_context, geometry_id);
     }
 }
 
 static inline void* tc_component_get_geometry_draws(tc_component* c, const char* phase_mark) {
-    if (c && c->drawable_vtable && c->drawable_vtable->get_geometry_draws) {
-        return c->drawable_vtable->get_geometry_draws(c, phase_mark);
+    const tc_drawable_vtable* vt = tc_component_get_drawable_vtable(c);
+    if (c && vt && vt->get_geometry_draws) {
+        return vt->get_geometry_draws(c, phase_mark);
     }
     return NULL;
 }
 
 static inline tc_shader_handle tc_component_override_shader(tc_component* c, const char* phase_mark, int geometry_id, tc_shader_handle original_shader) {
-    if (c && c->drawable_vtable && c->drawable_vtable->override_shader) {
-        return c->drawable_vtable->override_shader(c, phase_mark, geometry_id, original_shader);
+    const tc_drawable_vtable* vt = tc_component_get_drawable_vtable(c);
+    if (c && vt && vt->override_shader) {
+        return vt->override_shader(c, phase_mark, geometry_id, original_shader);
     }
     return original_shader;
 }
@@ -378,14 +390,13 @@ static inline tc_shader_handle tc_component_override_shader(tc_component* c, con
 // ============================================================================
 
 static inline bool tc_component_is_input_handler(const tc_component* c) {
-    return c && (c->input_vtable != NULL ||
-        tc_component_has_capability(c, tc_component_capability_register("input")));
+    return c && (c->input_vtable != NULL || tc_input_capability_get(c) != NULL);
 }
 
 static inline const tc_input_vtable* tc_component_get_input_vtable(const tc_component* c) {
     if (!c) return NULL;
     if (c->input_vtable) return c->input_vtable;
-    return (const tc_input_vtable*)tc_component_get_capability(c, tc_component_capability_register("input"));
+    return tc_input_capability_get(c);
 }
 
 static inline void tc_component_on_mouse_button(tc_component* c, tc_mouse_button_event* event) {
