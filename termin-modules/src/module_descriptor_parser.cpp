@@ -26,6 +26,63 @@ std::optional<std::string> get_optional_string(const nos::trent& node, const cha
     return node[key].as_string();
 }
 
+std::string current_platform_key() {
+#ifdef _WIN32
+    return "windows";
+#elif defined(__linux__)
+    return "linux";
+#else
+    return "";
+#endif
+}
+
+std::string resolve_template_vars(std::string value, const std::string& module_id) {
+    const std::string name_placeholder = "${name}";
+    size_t pos = value.find(name_placeholder);
+    while (pos != std::string::npos) {
+        value.replace(pos, name_placeholder.size(), module_id);
+        pos = value.find(name_placeholder, pos + module_id.size());
+    }
+
+    return value;
+}
+
+std::optional<std::string> get_platform_string(
+    const nos::trent& node,
+    const char* key,
+    const std::string& module_id,
+    std::string& error
+) {
+    error.clear();
+
+    if (!node.is_dict() || !node.contains(key)) {
+        return std::nullopt;
+    }
+
+    const nos::trent& value_node = node[key];
+    if (value_node.is_string()) {
+        return resolve_template_vars(value_node.as_string(), module_id);
+    }
+
+    if (!value_node.is_dict()) {
+        error = std::string("Field '") + key + "' must be a string or an object";
+        return std::nullopt;
+    }
+
+    const std::string platform = current_platform_key();
+    if (platform.empty()) {
+        error = std::string("Current platform is not supported for field '") + key + "'";
+        return std::nullopt;
+    }
+
+    if (!value_node.contains(platform) || !value_node[platform].is_string()) {
+        error = std::string("Field '") + key + "." + platform + "' must be a string";
+        return std::nullopt;
+    }
+
+    return resolve_template_vars(value_node[platform].as_string(), module_id);
+}
+
 std::vector<std::string> get_optional_string_list(const nos::trent& node, const char* key, std::string& error) {
     std::vector<std::string> result;
     if (!node.is_dict() || !node.contains(key)) {
@@ -133,9 +190,18 @@ std::optional<ModuleSpec> ModuleDescriptorParser::parse(const std::filesystem::p
 
         const nos::trent& build = root["build"];
         auto config = std::make_shared<CppModuleConfig>();
-        config->build_command = get_optional_string(build, "command").value_or("");
+        const auto build_command = get_platform_string(build, "command", spec.id, error);
+        if (!error.empty()) {
+            error += " in " + path.string();
+            return std::nullopt;
+        }
+        config->build_command = build_command.value_or("");
 
-        const auto output = get_optional_string(build, "output");
+        const auto output = get_platform_string(build, "output", spec.id, error);
+        if (!error.empty()) {
+            error += " in " + path.string();
+            return std::nullopt;
+        }
         if (!output.has_value() || output->empty()) {
             error = "Missing required string 'build.output' in " + path.string();
             return std::nullopt;
