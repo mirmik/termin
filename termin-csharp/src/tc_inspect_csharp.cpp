@@ -1,5 +1,5 @@
 // tc_inspect_csharp.cpp - C# inspect integration implementation
-#include "tc_inspect_csharp.h"
+#include <termin_csharp/tc_inspect_csharp.h>
 #include <string>
 #include <vector>
 #include <unordered_map>

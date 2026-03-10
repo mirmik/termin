@@ -22,8 +22,8 @@
 #include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/entity/component.hpp"
 #include "components/collider_component.hpp"
-#include "termin/kinematic/rotator_component.hpp"
-#include "termin/kinematic/actuator_component.hpp"
+#include "components/rotator_component.hpp"
+#include "components/actuator_component.hpp"
 #include "termin/tc_scene.hpp"
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
@@ -481,7 +481,7 @@ void tc_pass_set_enabled(tc_pass* p, bool enabled);
 #include "termin/render/present_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/camera/camera_component.hpp"
-#include "termin/render/graphics_backend.hpp"
+#include <tgfx/graphics_backend.hpp>
 #include "termin/lighting/light.hpp"
 %}
 
