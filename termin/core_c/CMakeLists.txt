@@ -86,6 +86,7 @@ set(TC_HEADERS
 )
 
 find_package(termin_scene REQUIRED)
+find_package(termin_input REQUIRED)
 
 # termin-base (provides tc_log, shared enums)
 find_package(termin_base REQUIRED)
@@ -117,6 +118,7 @@ target_include_directories(termin_core
 
 target_link_libraries(termin_core PUBLIC tgfx::termin_graphics tcbase::termin_base)
 target_link_libraries(termin_core PUBLIC termin_scene::termin_scene)
+target_link_libraries(termin_core PUBLIC termin_input::termin_input)
 target_link_libraries(termin_core PUBLIC termin_inspect::termin_inspect)
 
 # Platform-specific
