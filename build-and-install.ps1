@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 # Build and install all termin libraries in dependency order:
-#   termin-base -> termin-graphics -> termin-inspect -> termin-scene -> termin-render -> termin-collision -> termin-gui -> termin
+#   termin-base -> termin-graphics -> termin-inspect -> termin-scene -> termin-render -> termin-collision -> termin-gui -> termin -> termin-csharp
 #
 # Usage:
 #   .\build-and-install.ps1              # Release build
@@ -12,10 +12,12 @@
 #   .\build-and-install.ps1 --only=collision # Build only termin-collision
 #   .\build-and-install.ps1 --only=gfx   # Build only termin-graphics
 #   .\build-and-install.ps1 --only=app   # Build only termin
+#   .\build-and-install.ps1 --only=csharp # Build only termin-csharp
 #   .\build-and-install.ps1 --from=scene # Start from termin-scene (skip base)
 #   .\build-and-install.ps1 --from=render # Start from termin-render
 #   .\build-and-install.ps1 --from=collision # Start from termin-collision
 #   .\build-and-install.ps1 --from=gfx   # Start from termin-graphics (skip base + scene)
+#   .\build-and-install.ps1 --from=csharp # Start from termin-csharp only
 
 $ErrorActionPreference = "Stop"
 
@@ -40,13 +42,15 @@ function Show-Help {
     Write-Host "  --only=gfx        Build only termin-graphics"
     Write-Host "  --only=gui        Build only termin-gui + termin-nodegraph"
     Write-Host "  --only=app        Build only termin"
+    Write-Host "  --only=csharp     Build only termin-csharp"
     Write-Host "  --from=base       Build from termin-base onwards (all)"
     Write-Host "  --from=scene      Build from termin-scene onwards (skip base)"
     Write-Host "  --from=render     Build from termin-render onwards"
     Write-Host "  --from=collision  Build from termin-collision onwards"
     Write-Host "  --from=gfx        Build from termin-graphics onwards (skip base and scene)"
     Write-Host "  --from=gui        Build from termin-gui onwards (skip base, scene and gfx)"
-    Write-Host "  --from=app        Build only termin (skip base, scene, gfx, gui)"
+    Write-Host "  --from=app        Build termin and termin-csharp"
+    Write-Host "  --from=csharp     Build only termin-csharp"
     Write-Host "  --help, -h        Show this help"
 }
 
@@ -63,6 +67,7 @@ foreach ($arg in $args) {
         "--only=gfx" { $Only = "gfx" }
         "--only=gui" { $Only = "gui" }
         "--only=app" { $Only = "app" }
+        "--only=csharp" { $Only = "csharp" }
         "--from=base" { $From = "base" }
         "--from=scene" { $From = "scene" }
         "--from=render" { $From = "render" }
@@ -70,6 +75,7 @@ foreach ($arg in $args) {
         "--from=gfx" { $From = "gfx" }
         "--from=gui" { $From = "gui" }
         "--from=app" { $From = "app" }
+        "--from=csharp" { $From = "csharp" }
         "--help" { Show-Help; exit 0 }
         "-h" { Show-Help; exit 0 }
         default {
@@ -101,12 +107,13 @@ function Should-Build {
     if ($From) {
         switch ($From) {
             "base" { return $true }
-            "gfx" { return ($Name -eq "gfx" -or $Name -eq "scene" -or $Name -eq "render" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
-            "scene" { return ($Name -eq "scene" -or $Name -eq "render" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
-            "render" { return ($Name -eq "render" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
-            "collision" { return ($Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
-            "gui" { return ($Name -eq "gui" -or $Name -eq "app") }
-            "app" { return ($Name -eq "app") }
+            "gfx" { return ($Name -eq "gfx" -or $Name -eq "scene" -or $Name -eq "render" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app" -or $Name -eq "csharp") }
+            "scene" { return ($Name -eq "scene" -or $Name -eq "render" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app" -or $Name -eq "csharp") }
+            "render" { return ($Name -eq "render" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app" -or $Name -eq "csharp") }
+            "collision" { return ($Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app" -or $Name -eq "csharp") }
+            "gui" { return ($Name -eq "gui" -or $Name -eq "app" -or $Name -eq "csharp") }
+            "app" { return ($Name -eq "app" -or $Name -eq "csharp") }
+            "csharp" { return ($Name -eq "csharp") }
         }
     }
 
@@ -253,6 +260,47 @@ function Build-Termin {
     }
 }
 
+function Build-TerminCSharp {
+    Write-Host ""
+    Write-Host "========================================"
+    Write-Host "  Building termin-csharp ($BuildType)"
+    Write-Host "========================================"
+    Write-Host ""
+
+    if (-not (Get-Command swig -ErrorAction SilentlyContinue)) {
+        throw "swig not found in PATH"
+    }
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+        throw "dotnet not found in PATH"
+    }
+
+    Push-Location (Join-Path $ScriptDir "termin-csharp")
+    try {
+        $buildDir = Join-Path "build" $BuildType
+
+        if ($Clean -and (Test-Path $buildDir)) {
+            Remove-Item -Recurse -Force $buildDir
+        }
+
+        if (-not (Test-Path $buildDir)) {
+            New-Item -ItemType Directory -Path $buildDir | Out-Null
+        }
+
+        Invoke-Checked {
+            cmake -S . -B $buildDir `
+                -DCMAKE_BUILD_TYPE=$BuildType `
+                -DCMAKE_PREFIX_PATH=$SdkDir `
+                -DTERMIN_CSHARP_BUILD_NATIVE=ON `
+                -DTERMIN_CSHARP_BUILD_MANAGED=ON `
+                -DTERMIN_CSHARP_BUILD_TESTS=ON
+        }
+        Invoke-Checked { cmake --build $buildDir --config $BuildType --parallel }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 function Build-TerminInspect {
     Write-Host ""
     Write-Host "========================================"
@@ -346,6 +394,10 @@ if (Should-Build "gui") {
 
 if (Should-Build "app") {
     Build-Termin
+}
+
+if (Should-Build "csharp") {
+    Build-TerminCSharp
 }
 
 Write-Host ""

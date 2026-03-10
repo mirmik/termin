@@ -25,7 +25,6 @@ project(termin VERSION 0.1.0 LANGUAGES C CXX)
 option(BUILD_EDITOR_MINIMAL "Build minimal editor (embedded Python, PyQt6)" ON)
 option(BUILD_EDITOR_EXE "Build Qt C++ editor (requires Qt SDK)" OFF)
 option(BUILD_TESTS "Build C++ tests" OFF)
-option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings" OFF)
 option(BUNDLE_PYTHON "Bundle Python runtime for standalone distribution" OFF)
 
 # Enable CTest at top level so tests from subdirectories are discoverable
