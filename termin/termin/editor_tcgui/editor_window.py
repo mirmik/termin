@@ -805,6 +805,8 @@ class EditorWindowTcgui:
                 self.scene_manager.close_scene(scene_name)
 
             self.scene_manager.load_scene(scene_name, path)
+            from termin.modules import upgrade_scene_unknown_components
+            upgrade_scene_unknown_components(self.scene_manager.get_scene(scene_name))
             self.scene_manager.set_mode(scene_name, SceneMode.STOP)
 
             EditorSettings.instance().set_last_scene_path(path)

@@ -116,6 +116,10 @@ class PlayerRuntime:
         scene_data = data.get("scene") or (data.get("scenes", [None])[0])
         if scene_data:
             self.scene.load_from_data(scene_data, context=None, update_settings=True)
+            from termin.modules import upgrade_scene_unknown_components
+            upgraded = upgrade_scene_unknown_components(self.scene)
+            if upgraded > 0:
+                log.info(f"[PlayerRuntime] Upgraded {upgraded} unknown component(s)")
 
         log.info(f"[PlayerRuntime] Scene loaded: {self.scene_name}")
 
