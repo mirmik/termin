@@ -21,7 +21,7 @@
 #include "termin/camera/camera_component.hpp"
 #include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/entity/component.hpp"
-#include "termin/colliders/collider_component.hpp"
+#include "components/collider_component.hpp"
 #include "termin/kinematic/rotator_component.hpp"
 #include "termin/kinematic/actuator_component.hpp"
 #include "termin/tc_scene.hpp"

@@ -16,7 +16,7 @@
 
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/pose3.hpp>
-#include "../collision/collision_world.hpp"
+#include <termin/collision/collision_world.hpp>
 #include "rigid_body.hpp"
 #include "contact_solver.hpp"
 #include <vector>
