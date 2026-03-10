@@ -53,7 +53,18 @@ NB_MODULE(_termin_modules_native, m) {
             [](const ModuleEnvironment& self) { return self.lib_dir.string(); },
             [](ModuleEnvironment& self, const std::string& value) { self.lib_dir = value; }
         )
+        .def_prop_rw(
+            "project_root",
+            [](const ModuleEnvironment& self) { return self.project_root.string(); },
+            [](ModuleEnvironment& self, const std::string& value) { self.project_root = value; }
+        )
+        .def_prop_rw(
+            "project_venv_path",
+            [](const ModuleEnvironment& self) { return self.project_venv_path.string(); },
+            [](ModuleEnvironment& self, const std::string& value) { self.project_venv_path = value; }
+        )
         .def_rw("python_executable", &ModuleEnvironment::python_executable)
+        .def_rw("use_project_venv", &ModuleEnvironment::use_project_venv)
         .def_rw("allow_python_package_install", &ModuleEnvironment::allow_python_package_install);
 
     nb::class_<ModuleSpec>(m, "ModuleSpec")

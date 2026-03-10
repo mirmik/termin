@@ -3,12 +3,34 @@
 #include <Python.h>
 
 #include <cstdio>
+#include <filesystem>
 #include <sstream>
 #include <string>
 #include <vector>
 
 namespace termin_modules {
 namespace {
+
+std::filesystem::path venv_python_path(const ModuleEnvironment& environment) {
+#ifdef _WIN32
+    return environment.project_venv_path / "Scripts" / "python.exe";
+#else
+    return environment.project_venv_path / "bin" / "python";
+#endif
+}
+
+bool has_added_path(
+    const std::vector<std::filesystem::path>& added_paths,
+    const std::filesystem::path& path
+) {
+    for (const std::filesystem::path& added_path : added_paths) {
+        if (added_path == path) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 bool append_sys_path(const std::filesystem::path& path, std::string& error) {
     PyObject* sys_path = PySys_GetObject("path");
@@ -30,6 +52,23 @@ bool append_sys_path(const std::filesystem::path& path, std::string& error) {
         return false;
     }
 
+    return true;
+}
+
+bool append_sys_path_once(
+    const std::filesystem::path& path,
+    std::vector<std::filesystem::path>& added_paths,
+    std::string& error
+) {
+    if (has_added_path(added_paths, path)) {
+        return true;
+    }
+
+    if (!append_sys_path(path, error)) {
+        return false;
+    }
+
+    added_paths.push_back(path);
     return true;
 }
 
@@ -76,6 +115,69 @@ std::string fetch_python_error_string() {
     Py_XDECREF(value);
     Py_XDECREF(traceback);
     return result;
+}
+
+std::string shell_quote(const std::string& value) {
+    std::string result = "\"";
+    for (char ch : value) {
+        if (ch == '\\' || ch == '"') {
+            result.push_back('\\');
+        }
+        result.push_back(ch);
+    }
+    result.push_back('"');
+    return result;
+}
+
+bool run_command_capture(
+    const std::string& command,
+    std::string& output,
+    std::string& error
+) {
+    output.clear();
+    error.clear();
+
+    FILE* pipe = popen(command.c_str(), "r");
+    if (pipe == nullptr) {
+        error = "Failed to start process";
+        return false;
+    }
+
+    char buffer[512];
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        output += buffer;
+    }
+
+    const int result = pclose(pipe);
+    if (result != 0) {
+        std::ostringstream ss;
+        ss << "Process exited with code " << result;
+        error = ss.str();
+        return false;
+    }
+
+    return true;
+}
+
+std::string summarize_command_output(
+    const std::string& output,
+    const std::string& fallback
+) {
+    std::istringstream stream(output);
+    std::string line;
+    std::string last_non_empty_line;
+
+    while (std::getline(stream, line)) {
+        if (!line.empty()) {
+            last_non_empty_line = line;
+        }
+    }
+
+    if (!last_non_empty_line.empty()) {
+        return last_non_empty_line;
+    }
+
+    return fallback;
 }
 
 std::string requirement_name(const std::string& requirement) {
@@ -133,8 +235,111 @@ bool has_distribution(const std::string& requirement, bool& installed, std::stri
     return false;
 }
 
-bool append_python_site_paths(std::string& error) {
+bool ensure_project_venv(
+    const ModuleEnvironment& environment,
+    std::string& diagnostics,
+    std::string& error
+) {
+    diagnostics.clear();
     error.clear();
+
+    if (!environment.use_project_venv) {
+        return true;
+    }
+
+    if (environment.project_venv_path.empty()) {
+        error = "project_venv_path is not configured";
+        return false;
+    }
+
+    if (environment.python_executable.empty()) {
+        error = "python_executable is not configured";
+        return false;
+    }
+
+    const std::filesystem::path python = venv_python_path(environment);
+    if (std::filesystem::exists(python)) {
+        return true;
+    }
+
+    if (std::filesystem::exists(environment.project_venv_path)) {
+        error = "Project venv is incomplete: " + environment.project_venv_path.string();
+        return false;
+    }
+
+    std::error_code mkdir_error;
+    std::filesystem::create_directories(environment.project_venv_path.parent_path(), mkdir_error);
+    if (mkdir_error) {
+        error = "Failed to create parent directory for project venv: " + mkdir_error.message();
+        return false;
+    }
+
+    const std::string command =
+        shell_quote(environment.python_executable) +
+        " -m venv " +
+        shell_quote(environment.project_venv_path.string()) +
+        " 2>&1";
+
+    if (!run_command_capture(command, diagnostics, error)) {
+        error = "Failed to create project venv: " + summarize_command_output(diagnostics, error);
+        return false;
+    }
+
+    if (!std::filesystem::exists(python)) {
+        error = "Project venv was created, but python executable is missing: " + python.string();
+        return false;
+    }
+
+    return true;
+}
+
+bool append_python_site_paths(
+    const ModuleEnvironment& environment,
+    std::vector<std::filesystem::path>& added_paths,
+    std::string& error
+) {
+    error.clear();
+
+    if (environment.use_project_venv) {
+        const std::filesystem::path python = venv_python_path(environment);
+        if (!std::filesystem::exists(python)) {
+            error = "Project venv python is missing: " + python.string();
+            return false;
+        }
+
+        std::string output;
+        const std::string command =
+            shell_quote(python.string()) +
+            " -c " +
+            shell_quote(
+                "import sysconfig; "
+                "print(sysconfig.get_path('purelib')); "
+                "print(sysconfig.get_path('platlib'))"
+            ) +
+            " 2>&1";
+
+        std::string command_error;
+        if (!run_command_capture(command, output, command_error)) {
+            error = "Failed to query project venv site-packages: " + command_error;
+            return false;
+        }
+
+        std::istringstream stream(output);
+        std::string line;
+        while (std::getline(stream, line)) {
+            if (line.empty()) {
+                continue;
+            }
+
+            std::string append_error;
+            if (!append_sys_path_once(line, added_paths, append_error)) {
+                error = append_error;
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     PyObject* sysconfig_module = PyImport_ImportModule("sysconfig");
     if (sysconfig_module == nullptr) {
@@ -161,7 +366,13 @@ bool append_python_site_paths(std::string& error) {
         const char* raw = PyUnicode_AsUTF8(result);
         if (raw != nullptr && raw[0] != '\0') {
             std::string append_error;
-            append_sys_path(raw, append_error);
+            if (!append_sys_path_once(raw, added_paths, append_error)) {
+                error = append_error;
+                Py_DECREF(result);
+                Py_DECREF(get_path_fn);
+                Py_DECREF(sysconfig_module);
+                return false;
+            }
         }
 
         Py_DECREF(result);
@@ -170,18 +381,6 @@ bool append_python_site_paths(std::string& error) {
     Py_DECREF(get_path_fn);
     Py_DECREF(sysconfig_module);
     return true;
-}
-
-std::string shell_quote(const std::string& value) {
-    std::string result = "\"";
-    for (char ch : value) {
-        if (ch == '\\' || ch == '"') {
-            result.push_back('\\');
-        }
-        result.push_back(ch);
-    }
-    result.push_back('"');
-    return result;
 }
 
 bool install_requirements(
@@ -197,33 +396,29 @@ bool install_requirements(
         return true;
     }
 
-    if (environment.python_executable.empty()) {
+    std::string python_executable = environment.python_executable;
+    if (environment.use_project_venv) {
+        const std::filesystem::path python = venv_python_path(environment);
+        if (!std::filesystem::exists(python)) {
+            error = "Project venv python is missing: " + python.string();
+            return false;
+        }
+        python_executable = python.string();
+    }
+
+    if (python_executable.empty()) {
         error = "Python requirements are missing, but python_executable is not configured";
         return false;
     }
 
-    std::string command = shell_quote(environment.python_executable) + " -m pip install";
+    std::string command = shell_quote(python_executable) + " -m pip install";
     for (const std::string& requirement : requirements) {
         command += " " + shell_quote(requirement);
     }
     command += " 2>&1";
 
-    FILE* pipe = popen(command.c_str(), "r");
-    if (pipe == nullptr) {
-        error = "Failed to start pip install process";
-        return false;
-    }
-
-    char buffer[512];
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-        diagnostics += buffer;
-    }
-
-    const int result = pclose(pipe);
-    if (result != 0) {
-        std::ostringstream ss;
-        ss << "pip install failed with exit code " << result;
-        error = ss.str();
+    if (!run_command_capture(command, diagnostics, error)) {
+        error = "pip install failed: " + summarize_command_output(diagnostics, error);
         return false;
     }
 
@@ -272,12 +467,6 @@ bool ensure_requirements(
         return false;
     }
 
-    std::string append_error;
-    if (!append_python_site_paths(append_error)) {
-        error = "Requirements installed, but failed to refresh sys.path: " + append_error;
-        return false;
-    }
-
     for (const std::string& requirement : missing) {
         bool installed = false;
         std::string requirement_error;
@@ -317,20 +506,31 @@ bool PythonModuleBackend::load(
 
     PyGILState_STATE gil = PyGILState_Ensure();
 
+    auto handle = std::make_shared<PythonModuleHandle>();
+
+    if (!ensure_project_venv(environment, record.diagnostics, error)) {
+        PyGILState_Release(gil);
+        record.error_message = error;
+        return false;
+    }
+
+    if (!append_python_site_paths(environment, handle->added_paths, error)) {
+        PyGILState_Release(gil);
+        record.error_message = error;
+        return false;
+    }
+
     if (!ensure_requirements(*config, environment, record.diagnostics, error)) {
         PyGILState_Release(gil);
         record.error_message = error;
         return false;
     }
 
-    auto handle = std::make_shared<PythonModuleHandle>();
-
-    if (!append_sys_path(config->root, error)) {
+    if (!append_sys_path_once(config->root, handle->added_paths, error)) {
         PyGILState_Release(gil);
         record.error_message = error;
         return false;
     }
-    handle->added_paths.push_back(config->root);
 
     for (const std::string& package : config->packages) {
         PyObject* module = PyImport_ImportModule(package.c_str());
