@@ -219,7 +219,6 @@ void tc_component_set_python_drawable_callbacks(const tc_python_drawable_callbac
 
 void tc_component_install_python_drawable_vtable(tc_component* c) {
     if (c) {
-        c->drawable_vtable = &g_python_drawable_vtable;
         tc_drawable_capability_attach(c, &g_python_drawable_vtable, nullptr);
     }
 }

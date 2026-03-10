@@ -129,11 +129,9 @@ public:
     static const tc_drawable_vtable cxx_drawable_vtable;
 
 protected:
-    // Set drawable_vtable on the C component (call from subclass constructor)
+    // Attach drawable capability to the C component (call from subclass constructor)
     void install_drawable_vtable(tc_component* c) {
         if (c) {
-            c->drawable_vtable = &cxx_drawable_vtable;
-            c->drawable_ptr = this;  // Avoid dynamic_cast in callbacks
             tc_drawable_capability_attach(c, &cxx_drawable_vtable, this);
         }
     }
@@ -149,7 +147,7 @@ private:
 // Draw call for passes - combines entity, component, phase, and geometry.
 struct PhaseDrawCall {
     Entity entity;
-    tc_component* component = nullptr;  // Component with drawable_vtable
+    tc_component* component = nullptr;  // Component with drawable capability
     tc_material_phase* phase = nullptr;
     tc_shader_handle final_shader;      // Shader after override (skinning, etc.)
     int priority = 0;

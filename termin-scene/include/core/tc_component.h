@@ -348,19 +348,17 @@ static inline const char* tc_component_type_name(const tc_component* c) {
 // ============================================================================
 
 static inline bool tc_component_is_drawable(const tc_component* c) {
-    return c && (c->drawable_vtable != NULL || tc_drawable_capability_get(c) != NULL);
+    return c && tc_drawable_capability_get(c) != NULL;
 }
 
 static inline const tc_drawable_vtable* tc_component_get_drawable_vtable(const tc_component* c) {
     if (!c) return NULL;
-    if (c->drawable_vtable) return c->drawable_vtable;
     const tc_drawable_capability* cap = tc_drawable_capability_get(c);
     return cap ? cap->vtable : NULL;
 }
 
 static inline void* tc_component_get_drawable_userdata(const tc_component* c) {
     if (!c) return NULL;
-    if (c->drawable_ptr) return c->drawable_ptr;
     const tc_drawable_capability* cap = tc_drawable_capability_get(c);
     return cap ? cap->userdata : NULL;
 }

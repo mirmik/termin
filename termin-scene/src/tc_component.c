@@ -205,7 +205,7 @@ void tc_component_registry_set_drawable(const char* type_name, bool is_drawable)
 
     static tc_component_cap_id drawable_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
     if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
-        drawable_cap = tc_component_capability_register("drawable");
+        drawable_cap = tc_drawable_capability_id();
     }
     tc_component_registry_set_capability(type_name, drawable_cap, is_drawable);
 }
