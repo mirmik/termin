@@ -37,8 +37,10 @@ endif()
 # For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
 if(BUILD_STANDALONE)
     set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}/lib/python/termin")
+    set(TERMIN_PYTHON_INSTALL_DIR "lib/python/termin")
 else()
     set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}")
+    set(TERMIN_PYTHON_INSTALL_DIR ".")
 endif()
 
 # Default to Release build for single-config generators
@@ -538,13 +540,13 @@ endif()
 # ============== Install shared libraries ==============
 install(TARGETS trent entity_lib termin_core render_lib engine_lib navmesh_lib Recast
     EXPORT terminTargets
-    RUNTIME DESTINATION ${TERMIN_PYTHON_PREFIX}
-    LIBRARY DESTINATION ${TERMIN_PYTHON_PREFIX}
-    ARCHIVE DESTINATION ${TERMIN_PYTHON_PREFIX}/lib
+    RUNTIME DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}
+    LIBRARY DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}
+    ARCHIVE DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/lib
 )
 
 if(WIN32 AND SDL2_DLL)
-    install(FILES ${SDL2_DLL} DESTINATION ${TERMIN_PYTHON_PREFIX})
+    install(FILES ${SDL2_DLL} DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})
 endif()
 
 install(TARGETS skeleton_lib animation_lib
