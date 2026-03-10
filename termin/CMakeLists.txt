@@ -164,6 +164,7 @@ if(BUNDLE_PYTHON)
         tcbase
         tcgui
         tcnodegraph
+        termin_modules
         termin_nodegraph
     )
 

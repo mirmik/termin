@@ -72,7 +72,10 @@ struct ModuleEnvironment {
     std::filesystem::path sdk_prefix;
     std::filesystem::path cmake_prefix_path;
     std::filesystem::path lib_dir;
+    std::filesystem::path project_root;
+    std::filesystem::path project_venv_path;
     std::string python_executable;
+    bool use_project_venv = false;
     bool allow_python_package_install = false;
 };
 

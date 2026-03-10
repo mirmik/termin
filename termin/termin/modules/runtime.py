@@ -60,6 +60,7 @@ class ProjectModulesRuntime:
             log.error("[ProjectModulesRuntime] project root is not set")
             return False
 
+        self._update_environment()
         self._shutdown_runtime()
         self._recreate_runtime()
         self._runtime.discover(self._project_root)
@@ -75,6 +76,7 @@ class ProjectModulesRuntime:
             log.error("[ProjectModulesRuntime] project root is not set")
             return False
 
+        self._update_environment()
         self._shutdown_runtime()
         self._recreate_runtime()
         self._runtime.discover(self._project_root)
@@ -95,6 +97,7 @@ class ProjectModulesRuntime:
         if self._project_root is None:
             self._project_root = descriptor.parent
 
+        self._update_environment()
         self._runtime.discover(self._project_root)
         record = self.find_by_descriptor(descriptor)
         if record is None:
@@ -133,8 +136,23 @@ class ProjectModulesRuntime:
         environment.cmake_prefix_path = str(prefix_root)
         environment.lib_dir = str(prefix_root / "lib")
         environment.allow_python_package_install = True
+        environment.use_project_venv = False
+        self._integration.set_environment(environment)
+        self._runtime.set_environment(environment)
+
+    def _update_environment(self) -> None:
+        environment = self._integration.environment
+        if self._project_root is None:
+            environment.project_root = ""
+            environment.project_venv_path = ""
+            environment.use_project_venv = False
+        else:
+            environment.project_root = str(self._project_root)
+            environment.project_venv_path = str(self._project_root / ".venv")
+            environment.use_project_venv = True
 
         self._integration.set_environment(environment)
+        self._runtime.set_environment(environment)
 
     def _configure_runtime(self) -> None:
         self._runtime.register_cpp_backend(CppModuleBackend())
