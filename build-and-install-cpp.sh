@@ -121,7 +121,6 @@ build_termin_cpp_only() {
         -DBUILD_EDITOR_EXE=OFF \
         -DBUILD_LAUNCHER=OFF \
         -DBUNDLE_PYTHON=OFF \
-        -DBUILD_CSHARP_BINDINGS=OFF \
         -DTERMIN_BUILD_PYTHON=OFF \
         -Dtermin_base_DIR="$SDK_PREFIX/lib/cmake/termin_base" \
         -Dtermin_graphics_DIR="$SDK_PREFIX/lib/cmake/termin_graphics" \

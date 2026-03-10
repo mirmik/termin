@@ -19,25 +19,7 @@ if(BUILD_EDITOR_MINIMAL OR BUILD_EDITOR_EXE)
     set(BUILD_STANDALONE ON)
 endif()
 
-# C# SWIG bindings option (must be declared early to skip nanobind when ON)
-option(BUILD_CSHARP_BINDINGS "Build C# SWIG bindings (termin.dll)" OFF)
 option(TERMIN_BUILD_PYTHON "Build Python/nanobind bindings" ON)
-
-# Current build graph uses different linkage model for Python and C# modes:
-# - Python mode expects shared render/navmesh libs and nanobind modules.
-# - C# mode expects static render/navmesh libs for WHOLEARCHIVE linkage.
-# Keep the constraint explicit instead of silently disabling one side.
-if(TERMIN_BUILD_PYTHON AND BUILD_CSHARP_BINDINGS)
-    message(FATAL_ERROR
-        "TERMIN_BUILD_PYTHON=ON and BUILD_CSHARP_BINDINGS=ON are currently incompatible. "
-        "Use one mode per build directory.")
-endif()
-
-if(BUILD_CSHARP_BINDINGS)
-    message(FATAL_ERROR
-        "C# bindings moved to the separate termin-csharp project. "
-        "Configure /home/mirmik/project/termin-env/termin-csharp instead.")
-endif()
 
 # Install prefix for Python modules
 # For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
@@ -251,7 +233,6 @@ set_target_properties(animation_lib PROPERTIES
 
 # ============== Render library ==============
 # Includes passes with TC_REGISTER_FRAME_PASS for static registration
-# SHARED for Python (consistent RTTI), STATIC for C# (WHOLEARCHIVE needs static lib)
 set(RENDER_LIB_SOURCES
     # Render extension for TcSceneRef (uses RenderingManager)
     termin/tc_scene_render_ext.cpp
@@ -291,11 +272,7 @@ set(RENDER_LIB_SOURCES
     termin/editor/frame_graph_debugger_core.cpp
     termin/camera/camera_viewport_component.cpp
 )
-if(BUILD_CSHARP_BINDINGS)
-    add_library(render_lib STATIC ${RENDER_LIB_SOURCES})
-else()
-    add_library(render_lib SHARED ${RENDER_LIB_SOURCES})
-endif()
+add_library(render_lib SHARED ${RENDER_LIB_SOURCES})
 target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
@@ -334,16 +311,9 @@ set_target_properties(engine_lib PROPERTIES
 )
 
 # ============== NavMesh library ==============
-# STATIC for C# (to avoid PCH symbol conflicts), SHARED for Python
-if(BUILD_CSHARP_BINDINGS)
-    add_library(navmesh_lib STATIC
-        termin/navmesh/recast_navmesh_builder_component.cpp
-    )
-else()
-    add_library(navmesh_lib SHARED
-        termin/navmesh/recast_navmesh_builder_component.cpp
-    )
-endif()
+add_library(navmesh_lib SHARED
+    termin/navmesh/recast_navmesh_builder_component.cpp
+)
 target_include_directories(navmesh_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
@@ -578,48 +548,6 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/trent
     DESTINATION ${CMAKE_INSTALL_PREFIX}/include
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
-
-# ============== C# SWIG Bindings ==============
-if(BUILD_CSHARP_BINDINGS)
-    add_library(termin SHARED
-        ${TERMIN_ROOT}/csharp/termin_wrap.cxx
-        termin/render/tc_opengl.cpp
-        termin/tc_scene.cpp
-        termin/tc_component_csharp.cpp
-        termin/tc_inspect_csharp.cpp
-    )
-    target_include_directories(termin PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${TERMIN_ROOT}/core_c/include
-    )
-    add_dependencies(termin render_lib)
-    if(MSVC)
-        target_link_libraries(termin PRIVATE
-            OpenGL::GL
-            termin_core
-            trent
-            entity_lib
-            -WHOLEARCHIVE:$<TARGET_LINKER_FILE:render_lib>
-        )
-    else()
-        target_link_libraries(termin PRIVATE
-            OpenGL::GL
-            termin_core
-            trent
-            entity_lib
-            -Wl,--whole-archive render_lib -Wl,--no-whole-archive
-        )
-    endif()
-    target_compile_definitions(termin PRIVATE SWIG_CSHARP TC_EXPORTS)
-    if(WIN32)
-        set_target_properties(termin PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
-    endif()
-    target_compile_options(termin PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-    install(TARGETS termin
-        RUNTIME DESTINATION ${TERMIN_ROOT}/csharp/Termin.Native/runtimes/win-x64/native
-        LIBRARY DESTINATION ${TERMIN_ROOT}/csharp/Termin.Native/runtimes/linux-x64/native
-    )
-endif()
 
 # ============== CMake Package Export ==============
 include(CMakePackageConfigHelpers)

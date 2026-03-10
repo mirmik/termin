@@ -2,6 +2,7 @@
 # Build and install the full environment using the dedicated stage scripts:
 #   1. build-and-install-cpp.sh
 #   2. build-and-install-bindings.sh
+#   3. build-and-install-csharp.sh
 
 set -e
 
@@ -31,10 +32,17 @@ echo ""
 
 echo ""
 echo "========================================"
-echo "  Stage 2/2: Python bindings and packages"
+echo "  Stage 2/3: Python bindings and packages"
 echo "========================================"
 echo ""
 "$SCRIPT_DIR/build-and-install-bindings.sh" "$@"
+
+echo ""
+echo "========================================"
+echo "  Stage 3/3: C# bindings"
+echo "========================================"
+echo ""
+bash "$SCRIPT_DIR/build-and-install-csharp.sh" "$@"
 
 echo ""
 echo "========================================"
