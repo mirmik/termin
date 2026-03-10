@@ -2,7 +2,7 @@
 #include "tgfx/handles.hpp"
 #include "termin/camera/camera_component.hpp"
 #include <termin/entity/entity.hpp>
-#include "termin/colliders/collider_component.hpp"
+#include <components/collider_component.hpp>
 #include "termin/colliders/convex_hull_collider.hpp"
 #include <termin/geom/quat.hpp>
 #include <termin/geom/mat44.hpp>

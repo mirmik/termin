@@ -164,8 +164,6 @@ if(BUILD_TESTS)
     nanobind_add_module(_cpp_tests NB_SHARED
         tests/tests_binding.cpp
         tests/tests_general_pose3.cpp
-        tests/tests_colliders.cpp
-        tests/tests_collision.cpp
     )
     target_include_directories(_cpp_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}

@@ -518,11 +518,6 @@ if(BUILD_TESTS)
     add_executable(termin_tests
         tests/main.cpp
         tests/tests_general_pose3.cpp
-        tests/tests_colliders.cpp
-        tests/tests_collision.cpp
-        tests/tests_gjk.cpp
-        tests/tests_quickhull.cpp
-        tests/tests_convex_hull_collider.cpp
         tests/tests_inspect_registry.cpp
     )
     target_include_directories(termin_tests PRIVATE
