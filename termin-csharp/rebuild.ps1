@@ -19,11 +19,10 @@ Write-Host "=== Termin C# Build Script ===" -ForegroundColor Cyan
 Write-Host "Project root: $ProjectRoot"
 
 # Paths
-$CSharpDir = "$ProjectRoot\csharp"
-$CppDir = "$ProjectRoot\cpp"
-$BuildDir = "$ProjectRoot\build_csharp"
+$CSharpDir = "$ProjectRoot\termin-csharp"
+$BuildDir = "$ProjectRoot\build_termin_csharp"
 $GeneratedDir = "$CSharpDir\Termin.Native\Generated"
-$WpfTestBin = "$CSharpDir\Termin.WpfTest\bin\Debug\net9.0-windows"
+$WpfTestBin = "$ProjectRoot\termin\csharp\Termin.WpfTest\bin\Debug\net9.0-windows"
 
 # Clean mode - remove build artifacts
 if ($Clean) {
@@ -135,7 +134,7 @@ if (-not $SkipCpp) {
         Write-Host "Configuring CMake..." -ForegroundColor Gray
         Push-Location $BuildDir
         try {
-            cmake $CppDir -DBUILD_CSHARP_BINDINGS=ON 2>&1 | ForEach-Object {
+            cmake $CSharpDir -DTERMIN_CSHARP_BUILD_NATIVE=ON -DTERMIN_CSHARP_BUILD_MANAGED=OFF 2>&1 | ForEach-Object {
                 if ($_ -match "error") { Write-Host $_ -ForegroundColor Red }
                 elseif ($_ -match "warning") { Write-Host $_ -ForegroundColor Yellow }
                 else { Write-Host $_ -ForegroundColor Gray }
@@ -153,7 +152,7 @@ if (-not $SkipCpp) {
     
     Push-Location $BuildDir
     try {
-        cmake --build . --config Release --target termin 2>&1 | ForEach-Object {
+        cmake --build . --config Release --target termin_csharp_native 2>&1 | ForEach-Object {
             if ($_ -match "error") { Write-Host $_ -ForegroundColor Red }
             elseif ($_ -match "warning") { Write-Host $_ -ForegroundColor Yellow }
             else { Write-Host $_ -ForegroundColor Gray }
@@ -178,9 +177,9 @@ if (-not (Test-Path $WpfTestBin)) {
 }
 
 $DllsToCopy = @(
-    "$BuildDir\bin\termin.dll",
-    "$BuildDir\bin\termin_core.dll",
-    "$BuildDir\bin\entity_lib.dll"
+    "$CSharpDir\Termin.Native\runtimes\win-x64\native\termin.dll",
+    "$CSharpDir\Termin.Native\runtimes\win-x64\native\termin_core.dll",
+    "$CSharpDir\Termin.Native\runtimes\win-x64\native\entity_lib.dll"
 )
 
 foreach ($dll in $DllsToCopy) {
@@ -195,7 +194,7 @@ Write-Host "Copy DLLs: OK" -ForegroundColor Green
 Write-Host ""
 Write-Host "=== Step 4: C# Build ===" -ForegroundColor Yellow
 
-Push-Location "$CSharpDir\Termin.WpfTest"
+Push-Location "$ProjectRoot\termin\csharp\Termin.WpfTest"
 try {
     dotnet build -v q 2>&1 | ForEach-Object {
         if ($_ -match "error") { Write-Host $_ -ForegroundColor Red }
@@ -229,4 +228,4 @@ Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Cyan
 $StopWatch.Stop()
 Write-Host ("Build completed in {0:mm}:{0:ss}.{0:fff}" -f $StopWatch.Elapsed) -ForegroundColor Gray
-Write-Host "To run: cd $CSharpDir\Termin.WpfTest; dotnet run --no-build"
+Write-Host "To run: cd $ProjectRoot\termin\csharp\Termin.WpfTest; dotnet run --no-build"

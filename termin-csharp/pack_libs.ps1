@@ -21,8 +21,12 @@ if ($ProjectRoot -eq "") { $ProjectRoot = "c:\Users\sorok\project\termin" }
 Write-Host "=== Pack Termin Libraries ===" -ForegroundColor Cyan
 
 # Source paths
-$BuildDir = "$ProjectRoot\build_csharp"
 $ManagedDll = "$PSScriptRoot\Termin.Native\bin\Debug\netstandard2.1\Termin.Native.dll"
+if ($IsWindows) {
+    $RuntimeDir = "$PSScriptRoot\Termin.Native\runtimes\win-x64\native"
+} else {
+    $RuntimeDir = "$PSScriptRoot\Termin.Native\runtimes\linux-x64\native"
+}
 
 # Fallback to Release if Debug not found
 if (-not (Test-Path $ManagedDll)) {
@@ -30,9 +34,9 @@ if (-not (Test-Path $ManagedDll)) {
 }
 
 $NativeDlls = @(
-    "$BuildDir\bin\entity_lib.dll",
-    "$BuildDir\bin\termin.dll",
-    "$BuildDir\bin\termin_core.dll"
+    "$RuntimeDir\entity_lib.dll",
+    "$RuntimeDir\termin.dll",
+    "$RuntimeDir\termin_core.dll"
 )
 
 # Verify all files exist

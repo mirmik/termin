@@ -33,6 +33,12 @@ if(TERMIN_BUILD_PYTHON AND BUILD_CSHARP_BINDINGS)
         "Use one mode per build directory.")
 endif()
 
+if(BUILD_CSHARP_BINDINGS)
+    message(FATAL_ERROR
+        "C# bindings moved to the separate termin-csharp project. "
+        "Configure /home/mirmik/project/termin-env/termin-csharp instead.")
+endif()
+
 # Install prefix for Python modules
 # For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
 if(BUILD_STANDALONE)

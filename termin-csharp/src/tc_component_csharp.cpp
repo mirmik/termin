@@ -1,6 +1,6 @@
 // tc_component_csharp.cpp - C# component implementation
 // Analogous to tc_component_python.cpp
-#include "tc_component_csharp.h"
+#include <termin_csharp/tc_component_csharp.h>
 #include <stdlib.h>
 #include <string.h>
 
