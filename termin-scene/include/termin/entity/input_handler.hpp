@@ -5,6 +5,7 @@
 // full definitions must include tc_input_event.h from core_c.
 
 #include "core/tc_component.h"
+#include "core/tc_component_capability.h"
 #include "component.hpp"
 #include <termin/export.hpp>
 
@@ -48,6 +49,7 @@ protected:
     void install_input_vtable(tc_component* c) {
         if (c) {
             c->input_vtable = &cxx_input_vtable;
+            tc_component_attach_capability(c, tc_component_capability_register("input"), (void*)&cxx_input_vtable);
         }
     }
 

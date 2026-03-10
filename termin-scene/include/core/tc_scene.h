@@ -6,6 +6,7 @@
 #include "core/tc_scene_pool.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_component.h"
+#include "core/tc_component_capability.h"
 #include "tc_value.h"
 
 #ifdef __cplusplus
@@ -169,6 +170,23 @@ TC_API void tc_scene_foreach_input_handler(
     void* user_data,
     int filter_flags
 );
+
+// Iterate all components with a registered capability.
+// filter_flags: combination of tc_drawable_filter_flags.
+TC_API void tc_scene_foreach_with_capability(
+    tc_scene_handle h,
+    tc_component_cap_id cap_id,
+    tc_component_iter_fn callback,
+    void* user_data,
+    int filter_flags
+);
+
+// Get number of components currently indexed for a capability in the scene.
+TC_API size_t tc_scene_capability_count(tc_scene_handle h, tc_component_cap_id cap_id);
+
+// Rebuild capability membership links for one component already registered in the scene.
+// Does not affect lifecycle/update/type lists.
+TC_API void tc_scene_reindex_component_capabilities(tc_scene_handle h, tc_component* c);
 
 // ============================================================================
 // Component Type Enumeration

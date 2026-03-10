@@ -85,6 +85,8 @@ typedef struct {
     tc_value* metadata;  // Extensible metadata storage (dict per scene)
     const char** names;
     const char** uuids;
+    tc_component** capability_heads;
+    size_t* capability_counts;
 
     // Layer and flag names (64 each per scene, interned strings)
     const char** layer_names;  // [capacity * 64]
@@ -98,6 +100,13 @@ typedef struct {
 } ScenePool;
 
 static ScenePool* g_pool = NULL;
+
+#define CAPABILITY_HEAD(idx, slot) g_pool->capability_heads[(idx) * TC_COMPONENT_MAX_CAPABILITIES + (slot)]
+#define CAPABILITY_COUNT(idx, slot) g_pool->capability_counts[(idx) * TC_COMPONENT_MAX_CAPABILITIES + (slot)]
+
+static void scene_capability_attach(uint32_t idx, tc_component* c, uint32_t slot);
+static void scene_capability_detach(uint32_t idx, tc_component* c, uint32_t slot);
+static void scene_capability_sync_legacy_bridges(tc_component* c);
 
 // ============================================================================
 // Pool Lifecycle
@@ -131,6 +140,8 @@ void tc_scene_pool_init(void) {
     g_pool->metadata = (tc_value*)calloc(cap, sizeof(tc_value));
     g_pool->names = (const char**)calloc(cap, sizeof(const char*));
     g_pool->uuids = (const char**)calloc(cap, sizeof(const char*));
+    g_pool->capability_heads = (tc_component**)calloc(cap * TC_COMPONENT_MAX_CAPABILITIES, sizeof(tc_component*));
+    g_pool->capability_counts = (size_t*)calloc(cap * TC_COMPONENT_MAX_CAPABILITIES, sizeof(size_t));
     g_pool->layer_names = (const char**)calloc(cap * 64, sizeof(const char*));
     g_pool->flag_names = (const char**)calloc(cap * 64, sizeof(const char*));
     g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
@@ -171,6 +182,8 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->metadata);
     free(g_pool->names);
     free(g_pool->uuids);
+    free(g_pool->capability_heads);
+    free(g_pool->capability_counts);
     free(g_pool->layer_names);
     free(g_pool->flag_names);
     free(g_pool->free_stack);
@@ -205,6 +218,8 @@ static void pool_grow(void) {
     g_pool->metadata = realloc(g_pool->metadata, new_cap * sizeof(tc_value));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(const char*));
     g_pool->uuids = realloc(g_pool->uuids, new_cap * sizeof(const char*));
+    g_pool->capability_heads = realloc(g_pool->capability_heads, new_cap * TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
+    g_pool->capability_counts = realloc(g_pool->capability_counts, new_cap * TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
     g_pool->layer_names = realloc(g_pool->layer_names, new_cap * 64 * sizeof(const char*));
     g_pool->flag_names = realloc(g_pool->flag_names, new_cap * 64 * sizeof(const char*));
     g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
@@ -224,6 +239,10 @@ static void pool_grow(void) {
     memset(g_pool->metadata + old_cap, 0, (new_cap - old_cap) * sizeof(tc_value));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
     memset(g_pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
+    memset(g_pool->capability_heads + old_cap * TC_COMPONENT_MAX_CAPABILITIES, 0,
+           (new_cap - old_cap) * TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
+    memset(g_pool->capability_counts + old_cap * TC_COMPONENT_MAX_CAPABILITIES, 0,
+           (new_cap - old_cap) * TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
     memset(g_pool->layer_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
     memset(g_pool->flag_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
     // Add new slots to free stack
@@ -478,6 +497,7 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
     if (!handle_alive(h) || !c) return;
 
     uint32_t idx = h.index;
+    scene_capability_sync_legacy_bridges(c);
 
     // Add to pending_start if not started
     if (!c->_started && !list_contains(&g_pool->pending_starts[idx], c)) {
@@ -493,6 +513,10 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
     }
     if (c->has_before_render && !list_contains(&g_pool->before_render_lists[idx], c)) {
         list_push(&g_pool->before_render_lists[idx], c);
+    }
+
+    for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
+        scene_capability_attach(idx, c, slot);
     }
 
     // Add to type list (intrusive doubly-linked list)
@@ -519,6 +543,10 @@ void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
     list_remove(&g_pool->update_lists[idx], c);
     list_remove(&g_pool->fixed_update_lists[idx], c);
     list_remove(&g_pool->before_render_lists[idx], c);
+
+    for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
+        scene_capability_detach(idx, c, slot);
+    }
 
     // Remove from type list
     const char* type_name = tc_component_type_name(c);
@@ -570,6 +598,91 @@ static inline bool component_entity_enabled(tc_component* c) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
     if (!pool) return true;
     return tc_entity_pool_enabled(pool, c->owner.id);
+}
+
+static inline bool component_passes_filter(tc_component* c, int filter_flags) {
+    if (!c) return false;
+    if ((filter_flags & TC_DRAWABLE_FILTER_ENABLED) && !c->enabled) return false;
+    if ((filter_flags & TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR) && !c->active_in_editor) return false;
+    if ((filter_flags & TC_DRAWABLE_FILTER_ENTITY_ENABLED) && !component_entity_enabled(c)) return false;
+    if ((filter_flags & TC_DRAWABLE_FILTER_VISIBLE) && tc_entity_handle_valid(c->owner) && !tc_entity_visible(c->owner)) return false;
+    return true;
+}
+
+static void scene_capability_attach(uint32_t idx, tc_component* c, uint32_t slot) {
+    if (!c) return;
+    if ((c->capability_mask & (UINT64_C(1) << slot)) == 0) return;
+    if (CAPABILITY_HEAD(idx, slot) == c || c->capability_prev[slot] || c->capability_next[slot]) return;
+
+    tc_component* head = CAPABILITY_HEAD(idx, slot);
+    c->capability_prev[slot] = NULL;
+    c->capability_next[slot] = head;
+    if (head) {
+        head->capability_prev[slot] = c;
+    }
+    CAPABILITY_HEAD(idx, slot) = c;
+    CAPABILITY_COUNT(idx, slot)++;
+}
+
+static void scene_capability_detach(uint32_t idx, tc_component* c, uint32_t slot) {
+    if (!c) return;
+
+    tc_component* prev = c->capability_prev[slot];
+    tc_component* next = c->capability_next[slot];
+    bool was_head = CAPABILITY_HEAD(idx, slot) == c;
+
+    if (!was_head && !prev && !next) {
+        return;
+    }
+
+    if (prev) {
+        prev->capability_next[slot] = next;
+    } else if (was_head) {
+        CAPABILITY_HEAD(idx, slot) = next;
+    }
+
+    if (next) {
+        next->capability_prev[slot] = prev;
+    }
+
+    c->capability_prev[slot] = NULL;
+    c->capability_next[slot] = NULL;
+
+    if (CAPABILITY_COUNT(idx, slot) > 0) {
+        CAPABILITY_COUNT(idx, slot)--;
+    }
+}
+
+static void scene_capability_sync_legacy_bridges(tc_component* c) {
+    static tc_component_cap_id drawable_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
+    static tc_component_cap_id input_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
+
+    if (!c) return;
+
+    if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
+        drawable_cap = tc_component_capability_register("drawable");
+    }
+    if (input_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
+        input_cap = tc_component_capability_register("input");
+    }
+
+    if (c->drawable_vtable && drawable_cap != TC_COMPONENT_CAPABILITY_INVALID_ID &&
+        !tc_component_has_capability(c, drawable_cap)) {
+        uint32_t slot = 0;
+        if (tc_component_capability_slot(drawable_cap, &slot)) {
+            c->capability_mask |= (UINT64_C(1) << slot);
+            c->capability_ptrs[slot] = c->drawable_ptr ? c->drawable_ptr : (void*)c->drawable_vtable;
+        }
+    }
+
+    if (c->input_vtable && input_cap != TC_COMPONENT_CAPABILITY_INVALID_ID &&
+        !tc_component_has_capability(c, input_cap)) {
+        uint32_t slot = 0;
+        if (tc_component_capability_slot(input_cap, &slot)) {
+            c->capability_mask |= (UINT64_C(1) << slot);
+            c->capability_ptrs[slot] = (void*)c->input_vtable;
+        }
+    }
 }
 
 void tc_scene_update(tc_scene_handle h, double dt) {
@@ -658,6 +771,46 @@ void tc_scene_before_render(tc_scene_handle h) {
 
     // Extension before-render hooks
     tc_scene_ext_on_scene_before_render(h);
+}
+
+void tc_scene_foreach_with_capability(
+    tc_scene_handle h,
+    tc_component_cap_id cap_id,
+    tc_component_iter_fn callback,
+    void* user_data,
+    int filter_flags
+) {
+    if (!handle_alive(h) || !callback) return;
+
+    uint32_t slot = 0;
+    if (!tc_component_capability_slot(cap_id, &slot)) return;
+
+    uint32_t idx = h.index;
+    for (tc_component* c = CAPABILITY_HEAD(idx, slot); c != NULL; c = c->capability_next[slot]) {
+        if (!component_passes_filter(c, filter_flags)) continue;
+        if (!callback(c, user_data)) return;
+    }
+}
+
+size_t tc_scene_capability_count(tc_scene_handle h, tc_component_cap_id cap_id) {
+    if (!handle_alive(h)) return 0;
+    uint32_t slot = 0;
+    if (!tc_component_capability_slot(cap_id, &slot)) return 0;
+    return CAPABILITY_COUNT(h.index, slot);
+}
+
+void tc_scene_reindex_component_capabilities(tc_scene_handle h, tc_component* c) {
+    if (!handle_alive(h) || !c) return;
+
+    uint32_t idx = h.index;
+    scene_capability_sync_legacy_bridges(c);
+
+    for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
+        scene_capability_detach(idx, c, slot);
+    }
+    for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
+        scene_capability_attach(idx, c, slot);
+    }
 }
 
 // ============================================================================
@@ -847,34 +1000,27 @@ void tc_scene_foreach_drawable(
 ) {
     if (!handle_alive(h) || !callback) return;
 
-    const char* drawable_types[64];
-    size_t drawable_count = tc_component_registry_get_drawable_types(drawable_types, 64);
-    if (drawable_count == 0) return;
+    static tc_component_cap_id drawable_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
+    if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
+        drawable_cap = tc_component_capability_register("drawable");
+    }
+    if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) return;
 
-    bool check_enabled = (filter_flags & TC_DRAWABLE_FILTER_ENABLED) != 0;
-    bool check_visible = (filter_flags & TC_DRAWABLE_FILTER_VISIBLE) != 0;
-    bool check_entity_enabled = (filter_flags & TC_DRAWABLE_FILTER_ENTITY_ENABLED) != 0;
     bool check_layer = (layer_mask != 0);
+    uint32_t slot = 0;
+    if (!tc_component_capability_slot(drawable_cap, &slot)) return;
 
-    for (size_t t = 0; t < drawable_count; t++) {
-        tc_component* first = tc_scene_first_component_of_type(h, drawable_types[t]);
-        for (tc_component* c = first; c != NULL; c = c->type_next) {
-            if (check_enabled && !c->enabled) continue;
-
-            if (tc_entity_handle_valid(c->owner) && (check_visible || check_entity_enabled || check_layer)) {
-                tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
-                if (pool) {
-                    if (check_visible && !tc_entity_pool_visible(pool, c->owner.id)) continue;
-                    if (check_entity_enabled && !tc_entity_pool_enabled(pool, c->owner.id)) continue;
-                    if (check_layer) {
-                        uint64_t entity_layer = tc_entity_pool_layer(pool, c->owner.id);
-                        if (!(layer_mask & (1ULL << entity_layer))) continue;
-                    }
-                }
+    uint32_t idx = h.index;
+    for (tc_component* c = CAPABILITY_HEAD(idx, slot); c != NULL; c = c->capability_next[slot]) {
+        if (!component_passes_filter(c, filter_flags)) continue;
+        if (check_layer && tc_entity_handle_valid(c->owner)) {
+            tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
+            if (pool) {
+                uint64_t entity_layer = tc_entity_pool_layer(pool, c->owner.id);
+                if (!(layer_mask & (UINT64_C(1) << entity_layer))) continue;
             }
-
-            if (!callback(c, user_data)) return;
         }
+        if (!callback(c, user_data)) return;
     }
 }
 
@@ -886,28 +1032,11 @@ void tc_scene_foreach_input_handler(
 ) {
     if (!handle_alive(h) || !callback) return;
 
-    const char* input_types[64];
-    size_t input_count = tc_component_registry_get_input_handler_types(input_types, 64);
-    if (input_count == 0) return;
-
-    bool check_enabled = (filter_flags & TC_DRAWABLE_FILTER_ENABLED) != 0;
-    bool check_entity_enabled = (filter_flags & TC_DRAWABLE_FILTER_ENTITY_ENABLED) != 0;
-    bool check_active_in_editor = (filter_flags & TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR) != 0;
-
-    for (size_t t = 0; t < input_count; t++) {
-        for (tc_component* c = tc_scene_first_component_of_type(h, input_types[t]);
-             c != NULL; c = c->type_next) {
-            if (check_enabled && !c->enabled) continue;
-            if (check_active_in_editor && !c->active_in_editor) continue;
-
-            if (tc_entity_handle_valid(c->owner) && check_entity_enabled) {
-                tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
-                if (pool && !tc_entity_pool_enabled(pool, c->owner.id)) continue;
-            }
-
-            if (!callback(c, user_data)) return;
-        }
+    static tc_component_cap_id input_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
+    if (input_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
+        input_cap = tc_component_capability_register("input");
     }
+    tc_scene_foreach_with_capability(h, input_cap, callback, user_data, filter_flags);
 }
 
 // ============================================================================

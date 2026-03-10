@@ -50,6 +50,7 @@ struct tc_type_entry {
 
     // Flags (is_drawable, is_input_handler, etc.)
     uint32_t flags;
+    uint64_t capability_mask;
 
     // Kind (native vs external)
     int kind;
