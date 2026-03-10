@@ -6,7 +6,6 @@
 #include "tc_type_registry.h"
 #include "core/tc_component_capability.h"
 #include "core/tc_drawable_capability.h"
-#include "core/tc_input_capability.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_dlist.h"
 #include <string.h>
@@ -50,29 +49,6 @@ struct tc_drawable_vtable {
     // Returns original_shader if no override needed, or a different shader handle.
     // geometry_id: 0 = default, >0 = specific geometry slot
     tc_shader_handle (*override_shader)(tc_component* self, const char* phase_mark, int geometry_id, tc_shader_handle original_shader);
-};
-
-// ============================================================================
-// Input VTable - for components that handle input events
-// ============================================================================
-
-typedef struct tc_mouse_button_event tc_mouse_button_event;
-typedef struct tc_mouse_move_event tc_mouse_move_event;
-typedef struct tc_scroll_event tc_scroll_event;
-typedef struct tc_key_event tc_key_event;
-
-struct tc_input_vtable {
-    // Mouse button press/release
-    void (*on_mouse_button)(tc_component* self, tc_mouse_button_event* event);
-
-    // Mouse movement
-    void (*on_mouse_move)(tc_component* self, tc_mouse_move_event* event);
-
-    // Scroll wheel
-    void (*on_scroll)(tc_component* self, tc_scroll_event* event);
-
-    // Keyboard input
-    void (*on_key)(tc_component* self, tc_key_event* event);
 };
 
 // ============================================================================
@@ -382,47 +358,6 @@ static inline tc_shader_handle tc_component_override_shader(tc_component* c, con
 }
 
 // ============================================================================
-// Input dispatch (null-safe vtable dispatch)
-// ============================================================================
-
-static inline bool tc_component_is_input_handler(const tc_component* c) {
-    return c && tc_input_capability_get(c) != NULL;
-}
-
-static inline const tc_input_vtable* tc_component_get_input_vtable(const tc_component* c) {
-    if (!c) return NULL;
-    return tc_input_capability_get(c);
-}
-
-static inline void tc_component_on_mouse_button(tc_component* c, tc_mouse_button_event* event) {
-    const tc_input_vtable* vt = tc_component_get_input_vtable(c);
-    if (c && c->enabled && vt && vt->on_mouse_button) {
-        vt->on_mouse_button(c, event);
-    }
-}
-
-static inline void tc_component_on_mouse_move(tc_component* c, tc_mouse_move_event* event) {
-    const tc_input_vtable* vt = tc_component_get_input_vtable(c);
-    if (c && c->enabled && vt && vt->on_mouse_move) {
-        vt->on_mouse_move(c, event);
-    }
-}
-
-static inline void tc_component_on_scroll(tc_component* c, tc_scroll_event* event) {
-    const tc_input_vtable* vt = tc_component_get_input_vtable(c);
-    if (c && c->enabled && vt && vt->on_scroll) {
-        vt->on_scroll(c, event);
-    }
-}
-
-static inline void tc_component_on_key(tc_component* c, tc_key_event* event) {
-    const tc_input_vtable* vt = tc_component_get_input_vtable(c);
-    if (c && c->enabled && vt && vt->on_key) {
-        vt->on_key(c, event);
-    }
-}
-
-// ============================================================================
 // Component Registry
 // ============================================================================
 
@@ -521,7 +456,6 @@ TC_API void tc_component_set_enabled(tc_component* c, bool enabled);
 TC_API bool tc_component_get_active_in_editor(const tc_component* c);
 TC_API void tc_component_set_active_in_editor(tc_component* c, bool active);
 TC_API bool tc_component_get_is_drawable(const tc_component* c);
-TC_API bool tc_component_get_is_input_handler(const tc_component* c);
 TC_API tc_component_kind tc_component_get_kind(const tc_component* c);
 TC_API tc_entity_handle tc_component_get_owner(const tc_component* c);
 

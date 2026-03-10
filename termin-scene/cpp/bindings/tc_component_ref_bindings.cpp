@@ -41,7 +41,6 @@ public:
     void set_active_in_editor(bool v) { if (_c) _c->active_in_editor = v; }
 
     bool is_drawable() const { return tc_component_is_drawable(_c); }
-    bool is_input_handler() const { return tc_component_is_input_handler(_c); }
 
     // Call on_destroy via vtable
     void on_destroy() {
@@ -228,7 +227,6 @@ void bind_tc_component_ref(nb::module_& m) {
         .def_prop_rw("enabled", &TcComponentRef::enabled, &TcComponentRef::set_enabled)
         .def_prop_rw("active_in_editor", &TcComponentRef::active_in_editor, &TcComponentRef::set_active_in_editor)
         .def_prop_ro("is_drawable", &TcComponentRef::is_drawable)
-        .def_prop_ro("is_input_handler", &TcComponentRef::is_input_handler)
         .def_prop_ro("tc_component_ptr", [](TcComponentRef& self) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(self._c);
         })

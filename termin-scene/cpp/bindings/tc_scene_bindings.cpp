@@ -18,6 +18,7 @@
 #include <trent/json.h>
 #include "core/tc_component.h"
 #include "core/tc_scene.h"
+#include "core/tc_input_scene.h"
 
 namespace nb = nanobind;
 

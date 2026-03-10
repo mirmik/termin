@@ -1,5 +1,5 @@
 #include "core/tc_input_capability.h"
-#include "core/tc_component.h"
+#include "core/tc_input_component.h"
 
 tc_component_cap_id tc_input_capability_id(void) {
     static tc_component_cap_id input_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
