@@ -20,6 +20,28 @@ bool is_hidden_dir(const std::filesystem::path& path) {
     return !name.empty() && name[0] == '.';
 }
 
+std::vector<std::string> collect_loaded_dependents(
+    const std::vector<ModuleRecord>& records,
+    const std::string& module_id
+) {
+    std::vector<std::string> dependents;
+
+    for (const ModuleRecord& record : records) {
+        if (record.state != ModuleState::Loaded) {
+            continue;
+        }
+
+        for (const std::string& dependency : record.spec.dependencies) {
+            if (dependency == module_id) {
+                dependents.push_back(record.spec.id);
+                break;
+            }
+        }
+    }
+
+    return dependents;
+}
+
 } // namespace
 
 void ModuleRuntime::set_environment(ModuleEnvironment environment) {
@@ -229,6 +251,20 @@ bool ModuleRuntime::unload_module(const std::string& module_id) {
     if (target->state != ModuleState::Loaded) {
         target->state = ModuleState::Unloaded;
         return true;
+    }
+
+    const std::vector<std::string> dependents = collect_loaded_dependents(_records, module_id);
+    if (!dependents.empty()) {
+        target->error_message = "Loaded dependents prevent unload: ";
+        for (size_t i = 0; i < dependents.size(); ++i) {
+            if (i > 0) {
+                target->error_message += ", ";
+            }
+            target->error_message += dependents[i];
+        }
+        _last_error = target->error_message;
+        emit(ModuleEventKind::Failed, module_id, target->error_message);
+        return false;
     }
 
     IModuleBackend* backend = get_backend(target->spec.kind);

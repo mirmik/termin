@@ -3,7 +3,7 @@
 // Core types (Entity, Component, ComponentRegistry, TcScene, TcComponentRef,
 // TcComponent, SoA) are registered in _scene_native and re-exported here.
 // This module adds domain-specific bindings: EntityRegistry, CameraComponent,
-// OrbitCameraController, InputEvents, ModuleLoader, lighting.
+// OrbitCameraController, InputEvents, lighting.
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -22,7 +22,6 @@
 #include <termin/entity/entity.hpp>
 #include "termin/entity/entity_registry.hpp"
 #include "termin/inspect/tc_kind.hpp"
-#include "termin/modules/module_loader.hpp"
 
 namespace nb = nanobind;
 using namespace termin;
@@ -152,62 +151,6 @@ NB_MODULE(_entity_native, m) {
         [](CxxComponent* c) { return c->enabled(); },
         [](CxxComponent* c, bool v) { c->set_enabled(v); }
     );
-
-    // --- ModuleLoader (hot-reload system for C++ modules) ---
-    nb::class_<ModuleDescriptor>(m, "ModuleDescriptor")
-        .def_ro("name", &ModuleDescriptor::name)
-        .def_ro("path", &ModuleDescriptor::path)
-        .def_ro("build_command", &ModuleDescriptor::build_command)
-        .def_ro("output_pattern", &ModuleDescriptor::output_pattern)
-        .def_ro("components", &ModuleDescriptor::components);
-
-    nb::class_<LoadedModule>(m, "LoadedModule")
-        .def_ro("name", &LoadedModule::name)
-        .def_ro("dll_path", &LoadedModule::dll_path)
-        .def_ro("descriptor", &LoadedModule::descriptor)
-        .def_ro("registered_components", &LoadedModule::registered_components);
-
-    nb::class_<ModuleLoader>(m, "ModuleLoader")
-        .def_static("instance", &ModuleLoader::instance, nb::rv_policy::reference)
-        .def("load_module", &ModuleLoader::load_module, nb::arg("module_path"),
-             "Load a module from .module descriptor file")
-        .def("unload_module", &ModuleLoader::unload_module, nb::arg("name"),
-             "Unload a module by name")
-        .def("reload_module", &ModuleLoader::reload_module, nb::arg("name"),
-             "Reload a module (unload + compile + load)")
-        .def("compile_module", &ModuleLoader::compile_module, nb::arg("name"),
-             "Compile a module, returns path to DLL or empty string on error")
-        .def_prop_ro("last_error", &ModuleLoader::last_error,
-             "Get last error message")
-        .def_prop_ro("compiler_output", &ModuleLoader::compiler_output,
-             "Get compiler output from last compilation")
-        .def("list_modules", &ModuleLoader::list_modules,
-             "Get list of loaded module names")
-        .def("get_module", &ModuleLoader::get_module, nb::arg("name"),
-             nb::rv_policy::reference,
-             "Get module info by name")
-        .def("is_loaded", &ModuleLoader::is_loaded, nb::arg("name"),
-             "Check if a module is loaded")
-        .def("set_event_callback", [](ModuleLoader& loader, nb::object callback) {
-            if (callback.is_none()) {
-                loader.set_event_callback(nullptr);
-            } else {
-                loader.set_event_callback([callback](const std::string& module_name, const std::string& event) {
-                    nb::gil_scoped_acquire gil;
-                    callback(module_name, event);
-                });
-            }
-        }, nb::arg("callback"),
-             "Set callback for module events (loading, loaded, unloading, etc.)")
-        .def_prop_ro("core_c", &ModuleLoader::get_core_c,
-             "Get C API include directory")
-        .def_prop_ro("core_cpp", &ModuleLoader::get_core_cpp,
-             "Get C++ include directory")
-        .def_prop_ro("lib_dir", &ModuleLoader::get_lib_dir,
-             "Get library directory")
-        .def("set_engine_paths", &ModuleLoader::set_engine_paths,
-             nb::arg("core_c"), nb::arg("core_cpp"), nb::arg("lib_dir"),
-             "Set engine paths for module compilation");
 
     // Register atexit handler
     nb::object atexit_mod = nb::module_::import_("atexit");
