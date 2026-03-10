@@ -103,6 +103,7 @@ build_with_python() {
         -Dtermin_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_mesh" \
         -Dtermin_inspect_DIR="$SDK_PREFIX/lib/cmake/termin_inspect" \
         -Dtermin_scene_DIR="$SDK_PREFIX/lib/cmake/termin_scene" \
+        -Dtermin_render_DIR="$SDK_PREFIX/lib/cmake/termin_render" \
         -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \

@@ -7,14 +7,14 @@
 #include "component.hpp"
 #include "vtable_utils.hpp"
 #include "tc_inspect_cpp.hpp"
-#include "core/tc_drawable_capability.h"
 
 #include <termin/export.hpp>
 
 namespace termin {
 
-// Forward declarations for optional checks
 class Drawable;
+
+extern "C" tc_component_cap_id tc_drawable_capability_id(void);
 
 // Global registry for component types.
 class ENTITY_API ComponentRegistry {
@@ -48,14 +48,12 @@ public:
     // Check whether a component type has a capability
     static bool has_capability(const std::string& name, tc_component_cap_id cap_id);
 
-    static tc_component_cap_id drawable_capability_id();
 private:
     ComponentRegistry() = default;
     ComponentRegistry(const ComponentRegistry&) = delete;
     ComponentRegistry& operator=(const ComponentRegistry&) = delete;
 };
 
-// SFINAE helpers for Drawable detection with incomplete types
 namespace detail {
     template<typename Base, typename Derived, typename = void>
     struct is_base_of_safe : std::false_type {};
@@ -116,9 +114,7 @@ struct ComponentRegistrar {
             tc::InspectRegistry::instance().set_type_parent(name, parent);
         }
 
-        // Mark as drawable if component inherits from Drawable
         mark_drawable_if_base<T>(name);
-
     }
 };
 

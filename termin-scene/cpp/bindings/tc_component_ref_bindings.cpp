@@ -14,6 +14,7 @@
 #include "inspect/tc_inspect_python.hpp"
 #include "inspect/tc_kind_python.hpp"
 #include "core/tc_component.h"
+#include "core/tc_drawable_protocol.h"
 
 namespace nb = nanobind;
 

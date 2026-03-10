@@ -120,6 +120,7 @@ find_package(termin_base REQUIRED)
 find_package(termin_graphics REQUIRED)
 # termin-inspect (extracted inspect/kind core + python bridge)
 find_package(termin_inspect REQUIRED)
+find_package(termin_render REQUIRED)
 if(TERMIN_BUILD_PYTHON AND NOT TARGET termin_inspect::termin_inspect_python)
     message(FATAL_ERROR "termin Python build requires termin_inspect::termin_inspect_python. Rebuild/install termin-inspect with TERMIN_BUILD_PYTHON=ON.")
 endif()
@@ -291,7 +292,7 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_components_collision::termin_components_collision termin_modules::termin_modules)
+target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_render::termin_render termin_components_collision::termin_components_collision termin_modules::termin_modules)
 target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
 set_target_properties(render_lib PROPERTIES

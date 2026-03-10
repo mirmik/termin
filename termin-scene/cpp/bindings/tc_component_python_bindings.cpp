@@ -10,7 +10,9 @@
 
 extern "C" {
 #include "tc_component_python.h"
+#include "tc_component_python_drawable.h"
 #include "tc_component_python_input.h"
+#include "core/tc_drawable_protocol.h"
 #include "core/tc_input_component.h"
 }
 

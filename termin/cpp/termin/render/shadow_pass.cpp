@@ -6,6 +6,8 @@
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 #include "tc_profiler.h"
+#include "core/tc_drawable_protocol.h"
+#include "core/tc_scene_drawable.h"
 }
 
 #include <cmath>
@@ -119,9 +121,9 @@ void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_ma
     data.draw_calls = &cached_draw_calls_;
     data.base_shader = shadow_shader ? shadow_shader->handle : tc_shader_handle_invalid();
 
-    int filter_flags = TC_DRAWABLE_FILTER_ENABLED
-                     | TC_DRAWABLE_FILTER_VISIBLE
-                     | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
+    int filter_flags = TC_SCENE_FILTER_ENABLED
+                     | TC_SCENE_FILTER_VISIBLE
+                     | TC_SCENE_FILTER_ENTITY_ENABLED;
     tc_scene_foreach_drawable(scene, collect_shadow_drawable_draw_calls, &data, filter_flags, layer_mask);
 }
 

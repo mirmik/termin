@@ -212,7 +212,7 @@ void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_button_
             return true;
         },
         ev,
-        TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR);
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED | TC_SCENE_FILTER_ACTIVE_IN_EDITOR);
 }
 
 void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_move_event* ev) {
@@ -224,7 +224,7 @@ void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_move_ev
             return true;
         },
         ev,
-        TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR);
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED | TC_SCENE_FILTER_ACTIVE_IN_EDITOR);
 }
 
 void EditorViewportInputManager::_dispatch_to_editor_components(tc_scroll_event* ev) {
@@ -236,7 +236,7 @@ void EditorViewportInputManager::_dispatch_to_editor_components(tc_scroll_event*
             return true;
         },
         ev,
-        TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR);
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED | TC_SCENE_FILTER_ACTIVE_IN_EDITOR);
 }
 
 void EditorViewportInputManager::_dispatch_to_editor_components(tc_key_event* ev) {
@@ -248,7 +248,7 @@ void EditorViewportInputManager::_dispatch_to_editor_components(tc_key_event* ev
             return true;
         },
         ev,
-        TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED | TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR);
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED | TC_SCENE_FILTER_ACTIVE_IN_EDITOR);
 }
 
 // ============================================================================

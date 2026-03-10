@@ -11,6 +11,7 @@
 #include <termin/entity/component_registry_python.hpp>
 #include <termin/entity/entity.hpp>
 #include "core/tc_component.h"
+#include "core/tc_drawable_capability.h"
 #include "core/tc_input_capability.h"
 
 namespace nb = nanobind;
@@ -106,7 +107,9 @@ void bind_component_registry(nb::module_& m) {
         .def_static("has_capability", &ComponentRegistry::has_capability,
             nb::arg("name"), nb::arg("cap_id"),
             "Check whether a component type has a capability")
-        .def_static("drawable_capability_id", &ComponentRegistry::drawable_capability_id)
+        .def_static("drawable_capability_id", []() {
+            return tc_drawable_capability_id();
+        })
         .def_static("input_capability_id", []() {
             return tc_input_capability_id();
         })

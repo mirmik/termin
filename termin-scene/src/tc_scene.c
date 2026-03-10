@@ -1,6 +1,5 @@
 // tc_scene.c - Scene implementation using pool with generational indices
 #include "core/tc_scene.h"
-#include "core/tc_drawable_capability.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_scene_extension.h"
 #include <tcbase/tc_resource_map.h>
@@ -603,10 +602,10 @@ static inline bool component_entity_enabled(tc_component* c) {
 
 static inline bool component_passes_filter(tc_component* c, int filter_flags) {
     if (!c) return false;
-    if ((filter_flags & TC_DRAWABLE_FILTER_ENABLED) && !c->enabled) return false;
-    if ((filter_flags & TC_DRAWABLE_FILTER_ACTIVE_IN_EDITOR) && !c->active_in_editor) return false;
-    if ((filter_flags & TC_DRAWABLE_FILTER_ENTITY_ENABLED) && !component_entity_enabled(c)) return false;
-    if ((filter_flags & TC_DRAWABLE_FILTER_VISIBLE) && tc_entity_handle_valid(c->owner) && !tc_entity_visible(c->owner)) return false;
+    if ((filter_flags & TC_SCENE_FILTER_ENABLED) && !c->enabled) return false;
+    if ((filter_flags & TC_SCENE_FILTER_ACTIVE_IN_EDITOR) && !c->active_in_editor) return false;
+    if ((filter_flags & TC_SCENE_FILTER_ENTITY_ENABLED) && !component_entity_enabled(c)) return false;
+    if ((filter_flags & TC_SCENE_FILTER_VISIBLE) && tc_entity_handle_valid(c->owner) && !tc_entity_visible(c->owner)) return false;
     return true;
 }
 
@@ -962,36 +961,6 @@ void tc_scene_foreach_component_of_type(
              c != NULL; c = c->type_next) {
             if (!callback(c, user_data)) return;
         }
-    }
-}
-
-void tc_scene_foreach_drawable(
-    tc_scene_handle h,
-    tc_component_iter_fn callback,
-    void* user_data,
-    int filter_flags,
-    uint64_t layer_mask
-) {
-    if (!handle_alive(h) || !callback) return;
-
-    tc_component_cap_id drawable_cap = tc_drawable_capability_id();
-    if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) return;
-
-    bool check_layer = (layer_mask != 0);
-    uint32_t slot = 0;
-    if (!tc_component_capability_slot(drawable_cap, &slot)) return;
-
-    uint32_t idx = h.index;
-    for (tc_component* c = CAPABILITY_HEAD(idx, slot); c != NULL; c = c->capability_next[slot]) {
-        if (!component_passes_filter(c, filter_flags)) continue;
-        if (check_layer && tc_entity_handle_valid(c->owner)) {
-            tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
-            if (pool) {
-                uint64_t entity_layer = tc_entity_pool_layer(pool, c->owner.id);
-                if (!(layer_mask & (UINT64_C(1) << entity_layer))) continue;
-            }
-        }
-        if (!callback(c, user_data)) return;
     }
 }
 
