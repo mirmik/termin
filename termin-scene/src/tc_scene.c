@@ -656,17 +656,7 @@ static void scene_capability_detach(uint32_t idx, tc_component* c, uint32_t slot
 }
 
 static void scene_capability_sync_legacy_bridges(tc_component* c) {
-    static tc_component_cap_id drawable_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
     if (!c) return;
-
-    if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
-        drawable_cap = tc_drawable_capability_id();
-    }
-
-    if (c->drawable_vtable && tc_drawable_capability_get(c) == NULL &&
-        drawable_cap != TC_COMPONENT_CAPABILITY_INVALID_ID) {
-        tc_drawable_capability_attach(c, c->drawable_vtable, c->drawable_ptr);
-    }
 
     if (c->input_vtable && tc_input_capability_get(c) == NULL) {
         uint32_t slot = 0;
