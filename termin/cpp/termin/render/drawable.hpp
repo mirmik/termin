@@ -7,7 +7,7 @@
 
 extern "C" {
 #include "termin_core.h"
-#include "core/tc_drawable_capability.h"
+#include "core/tc_drawable_protocol.h"
 }
 
 #include "termin/render/render_export.hpp"

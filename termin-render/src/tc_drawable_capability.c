@@ -3,9 +3,7 @@
 #include <stdlib.h>
 
 static void tc_drawable_capability_destroy(void* cap_ptr) {
-    if (cap_ptr) {
-        free(cap_ptr);
-    }
+    free(cap_ptr);
 }
 
 tc_component_cap_id tc_drawable_capability_id(void) {

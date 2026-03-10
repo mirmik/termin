@@ -23,6 +23,8 @@
 #include <termin/geom/mat44.hpp>
 #include <tcbase/tc_log.hpp>
 #include "core/tc_scene.h"
+#include "core/tc_drawable_protocol.h"
+#include "core/tc_scene_drawable.h"
 #include "core/tc_scene_pool.h"
 #include "tc_inspect_cpp.hpp"
 
@@ -264,9 +266,9 @@ protected:
 
         CollectContext context{this, &cached_draw_calls_, base_shader};
 
-        int filter_flags = TC_DRAWABLE_FILTER_ENABLED
-                         | TC_DRAWABLE_FILTER_VISIBLE
-                         | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
+        int filter_flags = TC_SCENE_FILTER_ENABLED
+                         | TC_SCENE_FILTER_VISIBLE
+                         | TC_SCENE_FILTER_ENTITY_ENABLED;
         tc_scene_foreach_drawable(scene, callback, &context, filter_flags, layer_mask);
     }
 

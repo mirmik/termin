@@ -5,7 +5,6 @@
 #include "tc_types.h"
 #include "tc_type_registry.h"
 #include "core/tc_component_capability.h"
-#include "core/tc_drawable_capability.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_dlist.h"
 #include <string.h>
@@ -25,31 +24,6 @@ typedef enum tc_component_kind {
     TC_PYTHON_COMPONENT = 1,    // Python component
     TC_CSHARP_COMPONENT = 2     // C# component
 } tc_component_kind;
-
-// ============================================================================
-// Drawable VTable - for components that can render geometry
-// ============================================================================
-
-struct tc_drawable_vtable {
-    // Check if this drawable participates in a rendering phase
-    bool (*has_phase)(tc_component* self, const char* phase_mark);
-
-    // Draw geometry (shader already bound by pass)
-    // render_context is opaque (RenderContext* in C++)
-    // geometry_id: 0 = default/all, >0 = specific geometry slot
-    void (*draw_geometry)(tc_component* self, void* render_context, int geometry_id);
-
-    // Get geometry draw calls for a phase
-    // Returns opaque pointer to be interpreted by caller (std::vector<GeometryDrawCall>* in C++)
-    // Caller must NOT free the returned pointer
-    void* (*get_geometry_draws)(tc_component* self, const char* phase_mark);
-
-    // Override shader for a draw call (for skinning injection, etc.)
-    // Pass calls this before applying uniforms to let drawable modify the shader.
-    // Returns original_shader if no override needed, or a different shader handle.
-    // geometry_id: 0 = default, >0 = specific geometry slot
-    tc_shader_handle (*override_shader)(tc_component* self, const char* phase_mark, int geometry_id, tc_shader_handle original_shader);
-};
 
 // ============================================================================
 // Reference counting VTable - separate from main vtable
@@ -307,57 +281,6 @@ static inline const char* tc_component_type_name(const tc_component* c) {
 }
 
 // ============================================================================
-// Drawable dispatch (null-safe vtable dispatch)
-// ============================================================================
-
-static inline bool tc_component_is_drawable(const tc_component* c) {
-    return c && tc_drawable_capability_get(c) != NULL;
-}
-
-static inline const tc_drawable_vtable* tc_component_get_drawable_vtable(const tc_component* c) {
-    if (!c) return NULL;
-    const tc_drawable_capability* cap = tc_drawable_capability_get(c);
-    return cap ? cap->vtable : NULL;
-}
-
-static inline void* tc_component_get_drawable_userdata(const tc_component* c) {
-    if (!c) return NULL;
-    const tc_drawable_capability* cap = tc_drawable_capability_get(c);
-    return cap ? cap->userdata : NULL;
-}
-
-static inline bool tc_component_has_phase(tc_component* c, const char* phase_mark) {
-    const tc_drawable_vtable* vt = tc_component_get_drawable_vtable(c);
-    if (c && vt && vt->has_phase) {
-        return vt->has_phase(c, phase_mark);
-    }
-    return false;
-}
-
-static inline void tc_component_draw_geometry(tc_component* c, void* render_context, int geometry_id) {
-    const tc_drawable_vtable* vt = tc_component_get_drawable_vtable(c);
-    if (c && vt && vt->draw_geometry) {
-        vt->draw_geometry(c, render_context, geometry_id);
-    }
-}
-
-static inline void* tc_component_get_geometry_draws(tc_component* c, const char* phase_mark) {
-    const tc_drawable_vtable* vt = tc_component_get_drawable_vtable(c);
-    if (c && vt && vt->get_geometry_draws) {
-        return vt->get_geometry_draws(c, phase_mark);
-    }
-    return NULL;
-}
-
-static inline tc_shader_handle tc_component_override_shader(tc_component* c, const char* phase_mark, int geometry_id, tc_shader_handle original_shader) {
-    const tc_drawable_vtable* vt = tc_component_get_drawable_vtable(c);
-    if (c && vt && vt->override_shader) {
-        return vt->override_shader(c, phase_mark, geometry_id, original_shader);
-    }
-    return original_shader;
-}
-
-// ============================================================================
 // Component Registry
 // ============================================================================
 
@@ -455,7 +378,6 @@ TC_API bool tc_component_get_enabled(const tc_component* c);
 TC_API void tc_component_set_enabled(tc_component* c, bool enabled);
 TC_API bool tc_component_get_active_in_editor(const tc_component* c);
 TC_API void tc_component_set_active_in_editor(tc_component* c, bool active);
-TC_API bool tc_component_get_is_drawable(const tc_component* c);
 TC_API tc_component_kind tc_component_get_kind(const tc_component* c);
 TC_API tc_entity_handle tc_component_get_owner(const tc_component* c);
 

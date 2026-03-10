@@ -2,7 +2,7 @@
 # Build and install C/C++ parts only (no Python bindings / nanobind modules)
 # Dependency order:
 #   termin-base -> termin-modules -> termin-mesh -> termin-graphics -> termin-inspect -> termin-scene
-#   -> termin-input -> termin-collision -> termin-components-collision -> termin-components-mesh
+#   -> termin-render -> termin-input -> termin-collision -> termin-components-collision -> termin-components-mesh
 #   -> termin-components-kinematic -> termin(cpp only)
 
 set -e
@@ -79,6 +79,7 @@ build_cmake_lib_cpp() {
         -Dtermin_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_mesh" \
         -Dtermin_inspect_DIR="$SDK_PREFIX/lib/cmake/termin_inspect" \
         -Dtermin_scene_DIR="$SDK_PREFIX/lib/cmake/termin_scene" \
+        -Dtermin_render_DIR="$SDK_PREFIX/lib/cmake/termin_render" \
         -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
@@ -126,6 +127,7 @@ build_termin_cpp_only() {
         -Dtermin_graphics_DIR="$SDK_PREFIX/lib/cmake/termin_graphics" \
         -Dtermin_inspect_DIR="$SDK_PREFIX/lib/cmake/termin_inspect" \
         -Dtermin_scene_DIR="$SDK_PREFIX/lib/cmake/termin_scene" \
+        -Dtermin_render_DIR="$SDK_PREFIX/lib/cmake/termin_render" \
         -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
@@ -145,6 +147,7 @@ build_cmake_lib_cpp "termin-mesh" "$SCRIPT_DIR/termin-mesh"
 build_cmake_lib_cpp "termin-graphics" "$SCRIPT_DIR/termin-graphics"
 build_cmake_lib_cpp "termin-inspect" "$SCRIPT_DIR/termin-inspect"
 build_cmake_lib_cpp "termin-scene" "$SCRIPT_DIR/termin-scene"
+build_cmake_lib_cpp "termin-render" "$SCRIPT_DIR/termin-render"
 build_cmake_lib_cpp "termin-input" "$SCRIPT_DIR/termin-input"
 build_cmake_lib_cpp "termin-collision" "$SCRIPT_DIR/termin-collision"
 build_cmake_lib_cpp "termin-components-collision" "$SCRIPT_DIR/termin-components/termin-components-collision"

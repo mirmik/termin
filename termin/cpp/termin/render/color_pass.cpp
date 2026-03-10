@@ -8,6 +8,8 @@ extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 #include "tc_profiler.h"
 #include "core/tc_component.h"
+#include "core/tc_drawable_protocol.h"
+#include "core/tc_scene_drawable.h"
 #include <tgfx/resources/tc_material.h>
 #include "tc_gpu.h"
 #include "core/tc_scene_render_state.h"
@@ -265,9 +267,9 @@ void ColorPass::collect_draw_calls(
     data.phase_mark = phase_mark.c_str();
 
     // Use tc_scene_foreach_drawable with filtering
-    int filter_flags = TC_DRAWABLE_FILTER_ENABLED
-                     | TC_DRAWABLE_FILTER_VISIBLE
-                     | TC_DRAWABLE_FILTER_ENTITY_ENABLED;
+    int filter_flags = TC_SCENE_FILTER_ENABLED
+                     | TC_SCENE_FILTER_VISIBLE
+                     | TC_SCENE_FILTER_ENTITY_ENABLED;
     tc_scene_foreach_drawable(scene, collect_drawable_draw_calls, &data, filter_flags, layer_mask);
 }
 

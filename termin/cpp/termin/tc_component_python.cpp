@@ -1,7 +1,6 @@
 // tc_component_python.cpp - External component implementation
 // Provides component functionality for external scripting languages (e.g. Python)
 #include "tc_component_python.h"
-#include "core/tc_drawable_capability.h"
 #include "core/tc_input_component.h"
 #include "core/tc_input_capability.h"
 #include <stdlib.h>
@@ -9,7 +8,6 @@
 
 // Global Python callbacks (set once at initialization)
 static tc_python_callbacks g_py_callbacks = {0};
-static tc_python_drawable_callbacks g_py_drawable_callbacks = {0};
 static tc_python_input_callbacks g_py_input_callbacks = {0};
 
 // ============================================================================
@@ -178,49 +176,6 @@ void tc_component_free_python(tc_component* c) {
         // Unlink from type registry if linked
         tc_component_unlink_from_registry(c);
         free(c);
-    }
-}
-
-// ============================================================================
-// Python drawable vtable callbacks
-// ============================================================================
-
-static bool py_drawable_has_phase(tc_component* c, const char* phase_mark) {
-    if (g_py_drawable_callbacks.has_phase && c->body) {
-        return g_py_drawable_callbacks.has_phase(c->body, phase_mark);
-    }
-    return false;
-}
-
-static void py_drawable_draw_geometry(tc_component* c, void* render_context, int geometry_id) {
-    if (g_py_drawable_callbacks.draw_geometry && c->body) {
-        g_py_drawable_callbacks.draw_geometry(c->body, render_context, geometry_id);
-    }
-}
-
-static void* py_drawable_get_geometry_draws(tc_component* c, const char* phase_mark) {
-    if (g_py_drawable_callbacks.get_geometry_draws && c->body) {
-        return g_py_drawable_callbacks.get_geometry_draws(c->body, phase_mark);
-    }
-    return NULL;
-}
-
-// Python drawable vtable (shared by all Python drawable components)
-static const tc_drawable_vtable g_python_drawable_vtable = {
-    .has_phase = py_drawable_has_phase,
-    .draw_geometry = py_drawable_draw_geometry,
-    .get_geometry_draws = py_drawable_get_geometry_draws,
-};
-
-void tc_component_set_python_drawable_callbacks(const tc_python_drawable_callbacks* callbacks) {
-    if (callbacks) {
-        g_py_drawable_callbacks = *callbacks;
-    }
-}
-
-void tc_component_install_python_drawable_vtable(tc_component* c) {
-    if (c) {
-        tc_drawable_capability_attach(c, &g_python_drawable_vtable, nullptr);
     }
 }
 

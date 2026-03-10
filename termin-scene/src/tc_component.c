@@ -1,6 +1,5 @@
 // tc_component.c - Component registry implementation
 #include "core/tc_component.h"
-#include "core/tc_drawable_capability.h"
 #include "tc_type_registry.h"
 #include <tcbase/tc_log.h>
 #include <stdlib.h>
@@ -342,10 +341,6 @@ bool tc_component_get_active_in_editor(const tc_component* c) {
 
 void tc_component_set_active_in_editor(tc_component* c, bool active) {
     if (c) c->active_in_editor = active;
-}
-
-bool tc_component_get_is_drawable(const tc_component* c) {
-    return tc_component_is_drawable(c);
 }
 
 tc_component_kind tc_component_get_kind(const tc_component* c) {

@@ -71,7 +71,7 @@ static void dispatch_to_scene(
         scene,
         callback,
         user_data,
-        TC_DRAWABLE_FILTER_ENABLED | TC_DRAWABLE_FILTER_ENTITY_ENABLED
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED
     );
 }
 

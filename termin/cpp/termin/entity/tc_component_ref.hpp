@@ -5,6 +5,7 @@
 #include <cstring>
 #include <trent/trent.h>
 #include "core/tc_component.h"
+#include "core/tc_drawable_protocol.h"
 #include "core/tc_input_component.h"
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_inspect_context.h"

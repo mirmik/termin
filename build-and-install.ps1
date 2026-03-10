@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 # Build and install all termin libraries in dependency order:
-#   termin-base -> termin-graphics -> termin-inspect -> termin-scene -> termin-collision -> termin-gui -> termin
+#   termin-base -> termin-graphics -> termin-inspect -> termin-scene -> termin-render -> termin-collision -> termin-gui -> termin
 #
 # Usage:
 #   .\build-and-install.ps1              # Release build
@@ -8,10 +8,12 @@
 #   .\build-and-install.ps1 --clean      # Clean before build
 #   .\build-and-install.ps1 --only=base  # Build only termin-base
 #   .\build-and-install.ps1 --only=scene # Build only termin-scene
+#   .\build-and-install.ps1 --only=render # Build only termin-render
 #   .\build-and-install.ps1 --only=collision # Build only termin-collision
 #   .\build-and-install.ps1 --only=gfx   # Build only termin-graphics
 #   .\build-and-install.ps1 --only=app   # Build only termin
 #   .\build-and-install.ps1 --from=scene # Start from termin-scene (skip base)
+#   .\build-and-install.ps1 --from=render # Start from termin-render
 #   .\build-and-install.ps1 --from=collision # Start from termin-collision
 #   .\build-and-install.ps1 --from=gfx   # Start from termin-graphics (skip base + scene)
 
@@ -33,12 +35,14 @@ function Show-Help {
     Write-Host "  --clean, -c       Clean build directories first"
     Write-Host "  --only=base       Build only termin-base"
     Write-Host "  --only=scene      Build only termin-scene"
+    Write-Host "  --only=render     Build only termin-render"
     Write-Host "  --only=collision  Build only termin-collision"
     Write-Host "  --only=gfx        Build only termin-graphics"
     Write-Host "  --only=gui        Build only termin-gui + termin-nodegraph"
     Write-Host "  --only=app        Build only termin"
     Write-Host "  --from=base       Build from termin-base onwards (all)"
     Write-Host "  --from=scene      Build from termin-scene onwards (skip base)"
+    Write-Host "  --from=render     Build from termin-render onwards"
     Write-Host "  --from=collision  Build from termin-collision onwards"
     Write-Host "  --from=gfx        Build from termin-graphics onwards (skip base and scene)"
     Write-Host "  --from=gui        Build from termin-gui onwards (skip base, scene and gfx)"
@@ -54,12 +58,14 @@ foreach ($arg in $args) {
         "-c" { $Clean = $true }
         "--only=base" { $Only = "base" }
         "--only=scene" { $Only = "scene" }
+        "--only=render" { $Only = "render" }
         "--only=collision" { $Only = "collision" }
         "--only=gfx" { $Only = "gfx" }
         "--only=gui" { $Only = "gui" }
         "--only=app" { $Only = "app" }
         "--from=base" { $From = "base" }
         "--from=scene" { $From = "scene" }
+        "--from=render" { $From = "render" }
         "--from=collision" { $From = "collision" }
         "--from=gfx" { $From = "gfx" }
         "--from=gui" { $From = "gui" }
@@ -95,8 +101,9 @@ function Should-Build {
     if ($From) {
         switch ($From) {
             "base" { return $true }
-            "gfx" { return ($Name -eq "gfx" -or $Name -eq "scene" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
-            "scene" { return ($Name -eq "scene" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
+            "gfx" { return ($Name -eq "gfx" -or $Name -eq "scene" -or $Name -eq "render" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
+            "scene" { return ($Name -eq "scene" -or $Name -eq "render" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
+            "render" { return ($Name -eq "render" -or $Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
             "collision" { return ($Name -eq "collision" -or $Name -eq "gui" -or $Name -eq "app") }
             "gui" { return ($Name -eq "gui" -or $Name -eq "app") }
             "app" { return ($Name -eq "app") }
@@ -311,6 +318,10 @@ if (Should-Build "gfx") {
 if (Should-Build "scene") {
     Build-TerminInspect
     Build-CMakeLib -Name "termin-scene" -Dir (Join-Path $ScriptDir "termin-scene")
+}
+
+if (Should-Build "render") {
+    Build-CMakeLib -Name "termin-render" -Dir (Join-Path $ScriptDir "termin-render")
 }
 
 if (Should-Build "collision") {

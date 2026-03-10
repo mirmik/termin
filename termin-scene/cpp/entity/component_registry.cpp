@@ -76,8 +76,4 @@ bool ComponentRegistry::has_capability(const std::string& name, tc_component_cap
     return tc_component_registry_has_capability(name.c_str(), cap_id);
 }
 
-tc_component_cap_id ComponentRegistry::drawable_capability_id() {
-    return tc_drawable_capability_id();
-}
-
 } // namespace termin
