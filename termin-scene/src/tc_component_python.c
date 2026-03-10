@@ -262,5 +262,6 @@ void tc_component_set_python_input_callbacks(const tc_python_input_callbacks* ca
 void tc_component_install_python_input_vtable(tc_component* c) {
     if (c) {
         c->input_vtable = &g_python_input_vtable;
+        tc_component_attach_capability(c, tc_component_capability_register("input"), (void*)&g_python_input_vtable);
     }
 }

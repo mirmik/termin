@@ -146,6 +146,7 @@ tc_type_entry* tc_type_registry_register_with_parent(
     entry->child_count = 0;
     entry->child_capacity = 0;
     entry->flags = 0;
+    entry->capability_mask = 0;
     entry->kind = kind;
 
     // Add to map

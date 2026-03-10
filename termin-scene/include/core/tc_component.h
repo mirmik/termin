@@ -4,8 +4,10 @@
 
 #include "tc_types.h"
 #include "tc_type_registry.h"
+#include "core/tc_component_capability.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_dlist.h"
+#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -184,6 +186,12 @@ struct tc_component {
     tc_type_entry* type_entry;
     uint32_t type_version;
 
+    // Generic component capabilities (slot-based fast path)
+    uint64_t capability_mask;
+    void* capability_ptrs[TC_COMPONENT_MAX_CAPABILITIES];
+    tc_component* capability_prev[TC_COMPONENT_MAX_CAPABILITIES];
+    tc_component* capability_next[TC_COMPONENT_MAX_CAPABILITIES];
+
     // Intrusive list for global type registry instance tracking
     // Uses tc_dlist_node for safe multiple-unlink
     tc_dlist_node registry_node;
@@ -215,6 +223,10 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->type_next = NULL;
     c->type_entry = NULL;
     c->type_version = 0;
+    c->capability_mask = 0;
+    memset(c->capability_ptrs, 0, sizeof(c->capability_ptrs));
+    memset(c->capability_prev, 0, sizeof(c->capability_prev));
+    memset(c->capability_next, 0, sizeof(c->capability_next));
     tc_dlist_init_node(&c->registry_node);
 }
 
@@ -366,30 +378,41 @@ static inline tc_shader_handle tc_component_override_shader(tc_component* c, con
 // ============================================================================
 
 static inline bool tc_component_is_input_handler(const tc_component* c) {
-    return c && c->input_vtable != NULL;
+    return c && (c->input_vtable != NULL ||
+        tc_component_has_capability(c, tc_component_capability_register("input")));
+}
+
+static inline const tc_input_vtable* tc_component_get_input_vtable(const tc_component* c) {
+    if (!c) return NULL;
+    if (c->input_vtable) return c->input_vtable;
+    return (const tc_input_vtable*)tc_component_get_capability(c, tc_component_capability_register("input"));
 }
 
 static inline void tc_component_on_mouse_button(tc_component* c, tc_mouse_button_event* event) {
-    if (c && c->enabled && c->input_vtable && c->input_vtable->on_mouse_button) {
-        c->input_vtable->on_mouse_button(c, event);
+    const tc_input_vtable* vt = tc_component_get_input_vtable(c);
+    if (c && c->enabled && vt && vt->on_mouse_button) {
+        vt->on_mouse_button(c, event);
     }
 }
 
 static inline void tc_component_on_mouse_move(tc_component* c, tc_mouse_move_event* event) {
-    if (c && c->enabled && c->input_vtable && c->input_vtable->on_mouse_move) {
-        c->input_vtable->on_mouse_move(c, event);
+    const tc_input_vtable* vt = tc_component_get_input_vtable(c);
+    if (c && c->enabled && vt && vt->on_mouse_move) {
+        vt->on_mouse_move(c, event);
     }
 }
 
 static inline void tc_component_on_scroll(tc_component* c, tc_scroll_event* event) {
-    if (c && c->enabled && c->input_vtable && c->input_vtable->on_scroll) {
-        c->input_vtable->on_scroll(c, event);
+    const tc_input_vtable* vt = tc_component_get_input_vtable(c);
+    if (c && c->enabled && vt && vt->on_scroll) {
+        vt->on_scroll(c, event);
     }
 }
 
 static inline void tc_component_on_key(tc_component* c, tc_key_event* event) {
-    if (c && c->enabled && c->input_vtable && c->input_vtable->on_key) {
-        c->input_vtable->on_key(c, event);
+    const tc_input_vtable* vt = tc_component_get_input_vtable(c);
+    if (c && c->enabled && vt && vt->on_key) {
+        vt->on_key(c, event);
     }
 }
 
@@ -469,6 +492,17 @@ TC_API bool tc_component_registry_is_input_handler(const char* type_name);
 TC_API size_t tc_component_registry_get_input_handler_types(
     const char** out_names,
     size_t max_count
+);
+
+TC_API void tc_component_registry_set_capability(
+    const char* type_name,
+    tc_component_cap_id cap_id,
+    bool enabled
+);
+
+TC_API bool tc_component_registry_has_capability(
+    const char* type_name,
+    tc_component_cap_id cap_id
 );
 
 // Get type entry for a component type

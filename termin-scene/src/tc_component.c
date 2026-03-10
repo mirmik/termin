@@ -15,6 +15,17 @@ static tc_type_registry* g_component_registry = NULL;
 // Offset macro for intrusive list node
 #define COMPONENT_REGISTRY_NODE_OFFSET offsetof(tc_component, registry_node)
 
+void tc_component_registry_set_capability(
+    const char* type_name,
+    tc_component_cap_id cap_id,
+    bool enabled
+);
+
+bool tc_component_registry_has_capability(
+    const char* type_name,
+    tc_component_cap_id cap_id
+);
+
 // ============================================================================
 // Internal Helpers
 // ============================================================================
@@ -189,6 +200,12 @@ void tc_component_registry_set_drawable(const char* type_name, bool is_drawable)
     if (!entry) return;
 
     tc_type_entry_set_flag(entry, TC_TYPE_FLAG_DRAWABLE, is_drawable);
+
+    static tc_component_cap_id drawable_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
+    if (drawable_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
+        drawable_cap = tc_component_capability_register("drawable");
+    }
+    tc_component_registry_set_capability(type_name, drawable_cap, is_drawable);
 }
 
 bool tc_component_registry_is_drawable(const char* type_name) {
@@ -232,6 +249,12 @@ void tc_component_registry_set_input_handler(const char* type_name, bool is_inpu
     if (!entry) return;
 
     tc_type_entry_set_flag(entry, TC_TYPE_FLAG_INPUT_HANDLER, is_input_handler);
+
+    static tc_component_cap_id input_cap = TC_COMPONENT_CAPABILITY_INVALID_ID;
+    if (input_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) {
+        input_cap = tc_component_capability_register("input");
+    }
+    tc_component_registry_set_capability(type_name, input_cap, is_input_handler);
 }
 
 bool tc_component_registry_is_input_handler(const char* type_name) {
@@ -247,6 +270,41 @@ size_t tc_component_registry_get_input_handler_types(const char** out_names, siz
     flagged_types_ctx ctx = { out_names, max_count, 0, TC_TYPE_FLAG_INPUT_HANDLER };
     tc_type_registry_foreach(g_component_registry, collect_flagged_types, &ctx);
     return ctx.count;
+}
+
+void tc_component_registry_set_capability(
+    const char* type_name,
+    tc_component_cap_id cap_id,
+    bool enabled
+) {
+    if (!type_name || !g_component_registry) return;
+
+    tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
+    if (!entry) return;
+
+    uint32_t slot = 0;
+    if (!tc_component_capability_slot(cap_id, &slot)) return;
+
+    if (enabled) {
+        entry->capability_mask |= (UINT64_C(1) << slot);
+    } else {
+        entry->capability_mask &= ~(UINT64_C(1) << slot);
+    }
+}
+
+bool tc_component_registry_has_capability(
+    const char* type_name,
+    tc_component_cap_id cap_id
+) {
+    if (!type_name || !g_component_registry) return false;
+
+    tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
+    if (!entry) return false;
+
+    uint32_t slot = 0;
+    if (!tc_component_capability_slot(cap_id, &slot)) return false;
+
+    return (entry->capability_mask & (UINT64_C(1) << slot)) != 0;
 }
 
 tc_type_entry* tc_component_registry_get_entry(const char* type_name) {
@@ -326,11 +384,11 @@ void tc_component_set_active_in_editor(tc_component* c, bool active) {
 }
 
 bool tc_component_get_is_drawable(const tc_component* c) {
-    return tc_component_is_drawable(c);
+    return c && (tc_component_is_drawable(c) || tc_component_has_capability(c, tc_component_capability_register("drawable")));
 }
 
 bool tc_component_get_is_input_handler(const tc_component* c) {
-    return c && c->input_vtable != NULL;
+    return c && (c->input_vtable != NULL || tc_component_has_capability(c, tc_component_capability_register("input")));
 }
 
 tc_component_kind tc_component_get_kind(const tc_component* c) {
