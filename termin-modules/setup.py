@@ -86,7 +86,7 @@ setup(
     python_requires=">=3.8",
     packages=["termin_modules"],
     package_dir={"termin_modules": "python/termin_modules"},
-    ext_modules=[Extension("_termin_modules_native", sources=[])],
+    ext_modules=[Extension("termin_modules._termin_modules_native", sources=[])],
     cmdclass={"build": CMakeBuild, "build_ext": CMakeBuildExt},
     zip_safe=False,
 )
