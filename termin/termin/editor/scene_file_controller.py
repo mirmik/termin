@@ -294,6 +294,8 @@ class SceneFileController:
                 self._set_editor_scene_name(new_scene_name)
 
             sm.load_scene(new_scene_name, file_path)
+            from termin.modules import upgrade_scene_unknown_components
+            upgrade_scene_unknown_components(sm.get_scene(new_scene_name))
 
             # Extract and store editor data for later application
             if self._store_editor_data is not None:
@@ -361,6 +363,8 @@ class SceneFileController:
                 self._set_editor_scene_name(new_scene_name)
 
             sm.load_scene(new_scene_name, str(last_scene_path))
+            from termin.modules import upgrade_scene_unknown_components
+            upgrade_scene_unknown_components(sm.get_scene(new_scene_name))
 
             # Extract and store editor data
             if self._store_editor_data is not None:

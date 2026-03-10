@@ -132,6 +132,7 @@ class ProjectModulesRuntime:
         environment.sdk_prefix = str(prefix_root)
         environment.cmake_prefix_path = str(prefix_root)
         environment.lib_dir = str(prefix_root / "lib")
+        environment.allow_python_package_install = True
 
         self._integration.set_environment(environment)
 
@@ -184,3 +185,17 @@ def get_project_modules_runtime() -> ProjectModulesRuntime:
     if _instance is None:
         _instance = ProjectModulesRuntime()
     return _instance
+
+
+def upgrade_scene_unknown_components(scene) -> int:
+    if scene is None:
+        return 0
+
+    from termin.scene import upgrade_unknown_components
+
+    stats = upgrade_unknown_components(scene)
+    if stats.failed > 0:
+        log.error(
+            f"[ProjectModulesRuntime] failed to upgrade {stats.failed} unknown components"
+        )
+    return int(stats.upgraded)
