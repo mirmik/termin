@@ -8,26 +8,29 @@ namespace termin {
 // Static callback implementations for drawable vtable
 
 bool Drawable::_cb_has_phase(tc_component* c, const char* phase_mark) {
-    if (!c || !c->drawable_ptr) return false;
+    if (!c) return false;
 
-    Drawable* drawable = static_cast<Drawable*>(c->drawable_ptr);
+    Drawable* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
+    if (!drawable) return false;
     return drawable->has_phase(phase_mark ? phase_mark : "");
 }
 
 void Drawable::_cb_draw_geometry(tc_component* c, void* render_context, int geometry_id) {
-    if (!c || !c->drawable_ptr) return;
+    if (!c) return;
 
     RenderContext* ctx = static_cast<RenderContext*>(render_context);
     if (!ctx) return;
 
-    Drawable* drawable = static_cast<Drawable*>(c->drawable_ptr);
+    Drawable* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
+    if (!drawable) return;
     drawable->draw_geometry(*ctx, geometry_id);
 }
 
 void* Drawable::_cb_get_geometry_draws(tc_component* c, const char* phase_mark) {
-    if (!c || !c->drawable_ptr) return nullptr;
+    if (!c) return nullptr;
 
-    Drawable* drawable = static_cast<Drawable*>(c->drawable_ptr);
+    Drawable* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
+    if (!drawable) return nullptr;
 
     // Get draws and cache them
     std::string pm = phase_mark ? phase_mark : "";
@@ -38,9 +41,10 @@ void* Drawable::_cb_get_geometry_draws(tc_component* c, const char* phase_mark) 
 }
 
 tc_shader_handle Drawable::_cb_override_shader(tc_component* c, const char* phase_mark, int geometry_id, tc_shader_handle original_shader) {
-    if (!c || !c->drawable_ptr) return original_shader;
+    if (!c) return original_shader;
 
-    Drawable* drawable = static_cast<Drawable*>(c->drawable_ptr);
+    Drawable* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
+    if (!drawable) return original_shader;
     TcShader result = drawable->override_shader(
         phase_mark ? phase_mark : "",
         geometry_id,

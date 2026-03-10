@@ -665,11 +665,7 @@ static void scene_capability_sync_legacy_bridges(tc_component* c) {
 
     if (c->drawable_vtable && tc_drawable_capability_get(c) == NULL &&
         drawable_cap != TC_COMPONENT_CAPABILITY_INVALID_ID) {
-        uint32_t slot = 0;
-        if (tc_component_capability_slot(drawable_cap, &slot)) {
-            c->capability_mask |= (UINT64_C(1) << slot);
-            c->capability_ptrs[slot] = (void*)c->drawable_vtable;
-        }
+        tc_drawable_capability_attach(c, c->drawable_vtable, c->drawable_ptr);
     }
 
     if (c->input_vtable && tc_input_capability_get(c) == NULL) {

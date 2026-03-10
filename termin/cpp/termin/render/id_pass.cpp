@@ -93,7 +93,11 @@ void IdPass::execute_with_data(
     float pick_r = 0.0f, pick_g = 0.0f, pick_b = 0.0f;
 
     for (const auto& dc : cached_draw_calls_) {
-        Mat44f model = static_cast<Drawable*>(dc.component->drawable_ptr)->get_model_matrix(dc.entity);
+        auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
+        if (!drawable) {
+            continue;
+        }
+        Mat44f model = drawable->get_model_matrix(dc.entity);
         context.model = model;
 
         const char* name = dc.entity.name();

@@ -308,7 +308,11 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
             tc_shader_handle last_shader = tc_shader_handle_invalid();
 
             for (const auto& dc : cached_draw_calls_) {
-                Mat44f model = static_cast<Drawable*>(dc.component->drawable_ptr)->get_model_matrix(dc.entity);
+                auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
+                if (!drawable) {
+                    continue;
+                }
+                Mat44f model = drawable->get_model_matrix(dc.entity);
                 context.model = model;
 
                 // Use final shader (override already applied during collect)

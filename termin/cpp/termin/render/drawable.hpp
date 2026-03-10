@@ -134,7 +134,7 @@ protected:
         if (c) {
             c->drawable_vtable = &cxx_drawable_vtable;
             c->drawable_ptr = this;  // Avoid dynamic_cast in callbacks
-            tc_drawable_capability_attach(c, &cxx_drawable_vtable);
+            tc_drawable_capability_attach(c, &cxx_drawable_vtable, this);
         }
     }
 

@@ -172,9 +172,10 @@ static int test_live_reindex_for_drawable_capability(void) {
     tc_entity_pool_add_component(pool, entity, &component);
     TEST_ASSERT(tc_scene_capability_count(scene, drawable_cap) == 0, "no drawable capability initially");
 
-    TEST_ASSERT(tc_drawable_capability_attach(&component, &g_test_drawable_vtable), "attach live drawable capability");
+    TEST_ASSERT(tc_drawable_capability_attach(&component, &g_test_drawable_vtable, (void*)0x1234), "attach live drawable capability");
     TEST_ASSERT(tc_scene_capability_count(scene, drawable_cap) == 1, "live reindex adds drawable capability");
     TEST_ASSERT(tc_component_is_drawable(&component), "component is drawable");
+    TEST_ASSERT(tc_component_get_drawable_userdata(&component) == (void*)0x1234, "drawable userdata stored");
     TEST_ASSERT(tc_component_has_phase(&component, "opaque"), "phase dispatch works");
     TEST_ASSERT(tc_component_get_geometry_draws(&component, "opaque") == (void*)0x1, "geometry draw retrieval works");
 
