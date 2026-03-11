@@ -13,7 +13,7 @@
 #include "termin/render/render_context.hpp"
 #include "tgfx/graphics_backend.hpp"
 #include "tgfx/render_state.hpp"
-#include "termin/lighting/light.hpp"
+#include <termin/render/light.hpp>
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/lighting_upload.hpp"
 #include "termin/lighting/lighting_ubo.hpp"

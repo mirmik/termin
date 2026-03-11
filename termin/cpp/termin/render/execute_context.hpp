@@ -6,7 +6,7 @@
 #include <cstdint>
 
 #include "termin/render/frame_pass.hpp"
-#include "termin/lighting/light.hpp"
+#include <termin/render/light.hpp>
 #include <termin/tc_scene.hpp>
 #include "termin/tc_scene_render_ext.hpp"
 

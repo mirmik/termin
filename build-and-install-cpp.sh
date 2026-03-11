@@ -130,6 +130,7 @@ build_termin_cpp_only() {
         -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
+        -Dtermin_components_render_DIR="$SDK_PREFIX/lib/cmake/termin_components_render" \
         -Dtermin_components_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_components_mesh" \
         -Dtermin_components_kinematic_DIR="$SDK_PREFIX/lib/cmake/termin_components_kinematic"
 
@@ -150,6 +151,7 @@ build_cmake_lib_cpp "termin-render" "$SCRIPT_DIR/termin-render"
 build_cmake_lib_cpp "termin-input" "$SCRIPT_DIR/termin-input"
 build_cmake_lib_cpp "termin-collision" "$SCRIPT_DIR/termin-collision"
 build_cmake_lib_cpp "termin-components-collision" "$SCRIPT_DIR/termin-components/termin-components-collision"
+build_cmake_lib_cpp "termin-components-render" "$SCRIPT_DIR/termin-components/termin-components-render"
 build_cmake_lib_cpp "termin-components-mesh" "$SCRIPT_DIR/termin-components/termin-components-mesh"
 build_cmake_lib_cpp "termin-components-kinematic" "$SCRIPT_DIR/termin-components/termin-components-kinematic"
 build_termin_cpp_only

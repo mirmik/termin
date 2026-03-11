@@ -8,7 +8,7 @@
 #include "inspect/tc_inspect.h"
 #include "tgfx/handles.hpp"
 #include "termin/mesh/tc_mesh_handle.hpp"
-#include "termin/texture/tc_texture_handle.hpp"
+#include <tgfx/tgfx_texture_handle.hpp>
 
 namespace nb = nanobind;
 

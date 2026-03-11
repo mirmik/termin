@@ -4,7 +4,7 @@
 #include <cstring>
 #include <vector>
 
-#include "termin/lighting/light.hpp"
+#include <termin/render/light.hpp>
 #include "termin/lighting/shadow.hpp"
 #include "tgfx/handles.hpp"
 #include "tgfx/graphics_backend.hpp"

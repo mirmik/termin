@@ -3,7 +3,7 @@
 #include <termin/entity/component.hpp>
 #include "../../cpp/termin/inspect/tc_kind_cpp_ext.hpp"
 #include "../../cpp/termin/mesh/tc_mesh_handle.hpp"
-#include "../../cpp/termin/material/tc_material_handle.hpp"
+#include <tgfx/tgfx_material_handle.hpp>
 
 #include "inspect/tc_inspect_component_adapter.h"
 

@@ -8,7 +8,7 @@
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/render_pipeline.hpp"
-#include "termin/lighting/light.hpp"
+#include <termin/render/light.hpp>
 #include "termin/lighting/shadow.hpp"
 #include <termin/tc_scene.hpp>
 #include "termin/tc_scene_render_ext.hpp"

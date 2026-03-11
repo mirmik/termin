@@ -8,7 +8,7 @@
 #include "termin/render/frame_pass.hpp"
 #include "tgfx/graphics_backend.hpp"
 #include "tgfx/handles.hpp"
-#include "termin/material/tc_material_handle.hpp"
+#include <tgfx/tgfx_material_handle.hpp>
 
 #include <string>
 #include <unordered_map>
