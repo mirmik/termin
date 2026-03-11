@@ -1,5 +1,5 @@
-#include "frame_graph_debugger_core.hpp"
-#include "termin/render/frame_pass.hpp"
+#include <termin/render/frame_graph_debugger_core.hpp>
+#include <termin/render/frame_pass.hpp>
 
 extern "C" {
 #include <tcbase/tc_log.h>
@@ -9,10 +9,6 @@ extern "C" {
 #include <cmath>
 
 namespace termin {
-
-// ============================================================
-// FrameGraphCapture
-// ============================================================
 
 void FrameGraphCapture::capture(CxxFramePass* caller, FramebufferHandle* src, GraphicsBackend* graphics) {
     if (!should_capture(caller)) {
@@ -42,7 +38,6 @@ void FrameGraphCapture::ensure_capture_fbo(FramebufferHandle* src, GraphicsBacke
         return;
     }
 
-    // Recreate: always non-MSAA (samples=1), copy format from source
     capture_fbo_ = graphics->create_framebuffer(w, h, 1, fmt);
     fbo_w_ = w;
     fbo_h_ = h;
@@ -54,41 +49,14 @@ void FrameGraphCapture::do_blit(FramebufferHandle* src, GraphicsBackend* graphic
     int h = src->get_height();
 
     if (src->is_msaa()) {
-        // MSAA resolve: blit color and depth separately.
-        // Some drivers reject combined color+depth MSAA resolve in a single call.
-        graphics->blit_framebuffer(
-            src, capture_fbo_.get(),
-            0, 0, w, h,
-            0, 0, w, h,
-            true,   // blit_color
-            false   // no depth
-        );
-        graphics->blit_framebuffer(
-            src, capture_fbo_.get(),
-            0, 0, w, h,
-            0, 0, w, h,
-            false,  // no color
-            true    // blit_depth
-        );
+        graphics->blit_framebuffer(src, capture_fbo_.get(), 0, 0, w, h, 0, 0, w, h, true, false);
+        graphics->blit_framebuffer(src, capture_fbo_.get(), 0, 0, w, h, 0, 0, w, h, false, true);
     } else {
-        graphics->blit_framebuffer(
-            src, capture_fbo_.get(),
-            0, 0, w, h,
-            0, 0, w, h,
-            true,  // blit_color
-            true   // blit_depth
-        );
+        graphics->blit_framebuffer(src, capture_fbo_.get(), 0, 0, w, h, 0, 0, w, h, true, true);
     }
 
-    // Restore src as the active draw target.
-    // blit_framebuffer resets to FBO 0 — the caller (render pass)
-    // is still rendering into src, so we must rebind it.
     graphics->bind_framebuffer(src);
 }
-
-// ============================================================
-// FrameGraphPresenter
-// ============================================================
 
 void FrameGraphPresenter::ensure_shader() {
     if (shader_ready_) {
@@ -110,8 +78,8 @@ void FrameGraphPresenter::ensure_shader() {
         #version 330 core
         in vec2 v_uv;
         uniform sampler2D u_tex;
-        uniform int u_channel;  // 0=RGB, 1=R, 2=G, 3=B, 4=A
-        uniform int u_highlight_hdr;  // 1=highlight pixels > 1.0
+        uniform int u_channel;
+        uniform int u_highlight_hdr;
         out vec4 FragColor;
         void main() {
             vec4 c = texture(u_tex, v_uv);
@@ -129,11 +97,10 @@ void FrameGraphPresenter::ensure_shader() {
                 result = c.rgb;
             }
 
-            // HDR highlight: show pixels > 1.0 with magenta overlay
             if (u_highlight_hdr == 1) {
-                float maxVal = max(max(c.r, c.g), c.b);
-                if (maxVal > 1.0) {
-                    float intensity = clamp((maxVal - 1.0) / 2.0, 0.0, 1.0);
+                float max_val = max(max(c.r, c.g), c.b);
+                if (max_val > 1.0) {
+                    float intensity = clamp((max_val - 1.0) / 2.0, 0.0, 1.0);
                     result = mix(result, vec3(1.0, 0.0, 1.0), 0.5 + intensity * 0.5);
                 }
             }
@@ -152,7 +119,8 @@ void FrameGraphPresenter::ensure_shader() {
 void FrameGraphPresenter::render(
     GraphicsBackend* graphics,
     FramebufferHandle* capture_fbo,
-    int dst_w, int dst_h,
+    int dst_w,
+    int dst_h,
     int channel_mode,
     bool highlight_hdr
 ) {
@@ -172,7 +140,6 @@ void FrameGraphPresenter::render(
 
     graphics->set_viewport(0, 0, dst_w, dst_h);
     graphics->clear_color(0.1f, 0.1f, 0.1f, 1.0f);
-
     graphics->set_depth_test(false);
     graphics->set_depth_mask(false);
 
@@ -198,12 +165,10 @@ HDRStats FrameGraphPresenter::compute_hdr_stats(GraphicsBackend* graphics, Frame
     int w = fbo->get_width();
     int h = fbo->get_height();
     int total = w * h;
-
     if (total <= 0) {
         return stats;
     }
 
-    // Read color buffer as floats (RGBA)
     std::vector<float> pixels(total * 4);
     if (!graphics->read_color_buffer_float(fbo, pixels.data())) {
         tc::Log::error("FrameGraphPresenter: read_color_buffer_float failed");
@@ -212,13 +177,19 @@ HDRStats FrameGraphPresenter::compute_hdr_stats(GraphicsBackend* graphics, Frame
 
     stats.total_pixels = total;
 
-    // Initialize with first pixel
-    float r0 = pixels[0], g0 = pixels[1], b0 = pixels[2];
-    stats.min_r = r0; stats.max_r = r0; stats.avg_r = 0;
-    stats.min_g = g0; stats.max_g = g0; stats.avg_g = 0;
-    stats.min_b = b0; stats.max_b = b0; stats.avg_b = 0;
+    float r0 = pixels[0];
+    float g0 = pixels[1];
+    float b0 = pixels[2];
+    stats.min_r = r0;
+    stats.max_r = r0;
+    stats.min_g = g0;
+    stats.max_g = g0;
+    stats.min_b = b0;
+    stats.max_b = b0;
 
-    double sum_r = 0, sum_g = 0, sum_b = 0;
+    double sum_r = 0;
+    double sum_g = 0;
+    double sum_b = 0;
     int hdr_count = 0;
     float max_val = 0;
 
@@ -247,15 +218,17 @@ HDRStats FrameGraphPresenter::compute_hdr_stats(GraphicsBackend* graphics, Frame
     stats.avg_g = static_cast<float>(sum_g / total);
     stats.avg_b = static_cast<float>(sum_b / total);
     stats.hdr_pixel_count = hdr_count;
-    stats.hdr_percent = (total > 0) ? (static_cast<float>(hdr_count) / total * 100.0f) : 0.0f;
+    stats.hdr_percent = total > 0 ? (static_cast<float>(hdr_count) / total * 100.0f) : 0.0f;
     stats.max_value = max_val;
 
     return stats;
 }
 
 std::vector<uint8_t> FrameGraphPresenter::read_depth_normalized(
-    GraphicsBackend* graphics, FramebufferHandle* fbo,
-    int* out_w, int* out_h
+    GraphicsBackend* graphics,
+    FramebufferHandle* fbo,
+    int* out_w,
+    int* out_h
 ) {
     if (out_w) *out_w = 0;
     if (out_h) *out_h = 0;
@@ -266,69 +239,57 @@ std::vector<uint8_t> FrameGraphPresenter::read_depth_normalized(
 
     int w = fbo->get_width();
     int h = fbo->get_height();
-    int total = w * h;
-
-    if (total <= 0) {
+    if (out_w) *out_w = w;
+    if (out_h) *out_h = h;
+    if (w <= 0 || h <= 0) {
         return {};
     }
 
-    std::vector<float> depth(total);
+    std::vector<float> depth(w * h);
     if (!graphics->read_depth_buffer(fbo, depth.data())) {
         tc::Log::error("FrameGraphPresenter: read_depth_buffer failed");
         return {};
     }
 
-    // Find min/max (ignoring NaN/Inf)
-    float d_min = 1.0f, d_max = 0.0f;
-    for (int i = 0; i < total; ++i) {
-        float d = depth[i];
-        if (std::isnan(d) || std::isinf(d)) continue;
-        if (d < d_min) d_min = d;
-        if (d > d_max) d_max = d;
+    float min_d = depth[0];
+    float max_d = depth[0];
+    for (float d : depth) {
+        if (d < min_d) min_d = d;
+        if (d > max_d) max_d = d;
     }
 
-    float range = d_max - d_min;
-    std::vector<uint8_t> result(total);
+    float range = max_d - min_d;
+    if (range < 1e-8f) range = 1.0f;
 
-    for (int i = 0; i < total; ++i) {
-        float d = depth[i];
-        if (std::isnan(d) || std::isinf(d)) {
-            result[i] = 0;
-            continue;
-        }
-        float norm = (range > 0.0f) ? ((d - d_min) / range) : d;
-        // Invert: close=white, far=black
-        norm = 1.0f - norm;
-        int val = static_cast<int>(norm * 255.0f);
-        result[i] = static_cast<uint8_t>(std::clamp(val, 0, 255));
+    std::vector<uint8_t> out(w * h);
+    for (int i = 0; i < w * h; ++i) {
+        float v = (depth[i] - min_d) / range;
+        v = std::clamp(v, 0.0f, 1.0f);
+        out[i] = static_cast<uint8_t>(std::round(v * 255.0f));
     }
 
-    if (out_w) *out_w = w;
-    if (out_h) *out_h = h;
-    return result;
+    return out;
 }
 
 FBOInfo FrameGraphPresenter::get_fbo_info(FramebufferHandle* fbo) {
     FBOInfo info;
     if (!fbo) {
-        info.type_name = "null";
         return info;
     }
 
-    info.type_name = "FramebufferHandle";
+    info.type_name = fbo->resource_type();
     info.width = fbo->get_width();
     info.height = fbo->get_height();
     info.samples = fbo->get_samples();
     info.is_msaa = fbo->is_msaa();
     info.format = fbo->get_format();
     info.fbo_id = fbo->get_fbo_id();
-    info.gl_format = fbo->get_actual_gl_format();
-    info.gl_width = fbo->get_actual_gl_width();
-    info.gl_height = fbo->get_actual_gl_height();
-    info.gl_samples = fbo->get_actual_gl_samples();
-    info.filter = fbo->get_filter();
-    info.gl_filter = fbo->get_actual_gl_filter();
-
+    info.gl_width = info.width;
+    info.gl_height = info.height;
+    info.gl_samples = info.samples;
+    info.gl_format = info.format;
+    info.filter = fbo->is_msaa() ? "n/a" : "linear";
+    info.gl_filter = info.filter;
     return info;
 }
 

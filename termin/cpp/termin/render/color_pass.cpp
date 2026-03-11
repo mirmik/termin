@@ -2,7 +2,7 @@
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 #include "termin/lighting/lighting_upload.hpp"
-#include "termin/editor/frame_graph_debugger_core.hpp"
+#include <termin/render/frame_graph_debugger_core.hpp>
 extern "C" {
 #include <tgfx/resources/tc_shader.h>
 #include <tgfx/resources/tc_shader_registry.h>

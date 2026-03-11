@@ -102,7 +102,6 @@ nanobind_add_module(_native NB_SHARED
     termin/bindings/editor/gizmo_bindings.cpp
     termin/bindings/editor/editor_interaction_bindings.cpp
     termin/bindings/editor/frame_graph_debugger_bindings.cpp
-    termin/editor/frame_graph_debugger_core.cpp
     termin/editor/gizmo_manager.cpp
     termin/editor/transform_gizmo.cpp
     termin/editor/editor_viewport_input_manager.cpp

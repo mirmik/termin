@@ -27,7 +27,7 @@ extern "C" {
 #include "termin/render/execute_context.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/resource_spec.hpp"
-#include "termin/editor/frame_graph_debugger_core.hpp"
+#include <termin/render/frame_graph_debugger_core.hpp>
 
 namespace termin {
 

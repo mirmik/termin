@@ -1,9 +1,9 @@
 #include "graph_compiler.hpp"
 #include <tcbase/tc_log.hpp>
-#include "frame_pass.hpp"
-#include "tc_pass.hpp"
+#include <termin/render/frame_pass.hpp>
+#include <termin/render/tc_pass.hpp>
 #include "render_pipeline.hpp"
-#include "resource_spec.hpp"
+#include <termin/render/resource_spec.hpp>
 #include "material_pass.hpp"
 #include <trent/json.h>
 #include <deque>

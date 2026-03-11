@@ -144,12 +144,10 @@ uint64_t tc_compute_runtime_id(const char* uuid) {
 
 static bool g_initialized = false;
 
-// Forward declarations for cleanup functions
 extern void tc_component_registry_cleanup(void);
 extern void tc_pass_registry_cleanup(void);
 extern void tc_inspect_cleanup(void);
 extern void tc_kind_cleanup(void);
-extern void tc_viewport_pool_shutdown(void);
 extern void tc_scene_ext_registry_init(void);
 extern void tc_scene_ext_registry_shutdown(void);
 
@@ -172,7 +170,6 @@ void tc_shutdown(void) {
     if (!g_initialized) return;
 
     // Cleanup in reverse order of dependency
-    tc_viewport_pool_shutdown();
     tc_scene_registry_shutdown();
     tc_material_shutdown();
     tc_animation_shutdown();

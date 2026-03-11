@@ -1,14 +1,15 @@
 #pragma once
 
-#include <string>
-#include <set>
-#include <vector>
-#include <utility>
-#include <functional>
+#include <algorithm>
 #include <any>
-#include <cstring>
 #include <atomic>
+#include <cstring>
+#include <functional>
+#include <set>
+#include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 extern "C" {
 #include "render/tc_pass.h"
@@ -17,26 +18,20 @@ extern "C" {
 #include "tc_inspect_cpp.hpp"
 
 #include "tgfx/handles.hpp"
-#include "termin/render/resource_spec.hpp"
+#include <termin/render/resource_spec.hpp>
 
 namespace termin {
 
-// Timing information for internal debug symbols
+class ExecuteContext;
+class FrameGraphCapture;
+class GraphicsBackend;
+
 struct InternalSymbolTiming {
     std::string name;
     double cpu_time_ms = 0.0;
-    double gpu_time_ms = 0.0;  // -1.0 if not available yet
+    double gpu_time_ms = 0.0;
 };
 
-// Forward declarations
-class GraphicsBackend;
-class Scene;
-class Camera;
-class Light;
-class FrameGraphCapture;
-struct ExecuteContext;
-
-// Viewport rectangle in pixels
 struct Rect4i {
     int x = 0;
     int y = 0;
@@ -44,11 +39,9 @@ struct Rect4i {
     int height = 0;
 };
 
-// Resource map type: resource name -> framegraph resource
 using ResourceMap = std::unordered_map<std::string, FrameGraphResource*>;
-using FBOMap = ResourceMap;  // Legacy alias
+using FBOMap = ResourceMap;
 
-// Callbacks for frame debugger integration
 struct FrameDebuggerCallbacks {
     void* user_data = nullptr;
 
@@ -76,36 +69,17 @@ struct FrameDebuggerCallbacks {
     bool is_set() const { return blit_from_pass != nullptr; }
 };
 
-// Base class for C++ frame passes in the render graph.
-//
-// Architecture follows CxxComponent pattern:
-// - tc_pass _c is the FIRST member (enables container_of)
-// - Static vtable dispatches to virtual methods
-// - Reference counting for lifetime management
-//
-// Fields like pass_name, enabled, viewport_name are stored ONLY in _c
-// to avoid duplication. Use accessors to get/set them.
 class CxxFramePass {
 public:
-    // FIRST member - enables pointer arithmetic for container_of
     tc_pass _c;
-
-    // Debugger integration
     FrameDebuggerCallbacks debugger_callbacks;
 
 private:
     std::atomic<int> _ref_count{0};
-
-    // Cached strings for tc_pass callbacks (avoid dangling pointers)
-    // These store strings from get_inplace_aliases() and get_internal_symbols()
-    // which return std::string that must outlive the callback
     mutable std::vector<std::string> _cached_aliases;
     mutable std::vector<std::string> _cached_symbols;
-
-    // Static vtable for C++ CxxFramePass objects
     static const tc_pass_vtable _cpp_vtable;
 
-    // Static callbacks for vtable
     static void _cb_execute(tc_pass* p, void* ctx);
     static size_t _cb_get_reads(tc_pass* p, const char** out, size_t max);
     static size_t _cb_get_writes(tc_pass* p, const char** out, size_t max);
@@ -118,25 +92,19 @@ public:
     CxxFramePass();
     virtual ~CxxFramePass();
 
-    // Prevent copying (tc_pass contains pointers)
     CxxFramePass(const CxxFramePass&) = delete;
     CxxFramePass& operator=(const CxxFramePass&) = delete;
 
-    // Get tc_pass pointer
     tc_pass* tc_pass_ptr() { return &_c; }
     const tc_pass* tc_pass_ptr() const { return &_c; }
 
-    // Recover CxxFramePass* from tc_pass* (container_of pattern)
-    // Returns nullptr if p is not a native pass (e.g., Python pass)
     static CxxFramePass* from_tc(tc_pass* p) {
         if (!p || p->kind != TC_NATIVE_PASS) return nullptr;
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #endif
-        return reinterpret_cast<CxxFramePass*>(
-            reinterpret_cast<char*>(p) - offsetof(CxxFramePass, _c)
-        );
+        return reinterpret_cast<CxxFramePass*>(reinterpret_cast<char*>(p) - offsetof(CxxFramePass, _c));
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
@@ -148,23 +116,17 @@ public:
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #endif
-        return reinterpret_cast<const CxxFramePass*>(
-            reinterpret_cast<const char*>(p) - offsetof(CxxFramePass, _c)
-        );
+        return reinterpret_cast<const CxxFramePass*>(reinterpret_cast<const char*>(p) - offsetof(CxxFramePass, _c));
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
     }
 
-    // Link to type registry (call after construction if not created via factory)
     void link_to_type_registry(const char* type_name) {
         if (!type_name) return;
-
-        // Ensure type is registered
         if (!tc_pass_registry_has(type_name)) {
             tc_pass_registry_register(type_name, nullptr, nullptr, TC_NATIVE_PASS);
         }
-
         tc_type_entry* entry = tc_pass_registry_get_entry(type_name);
         if (entry) {
             _c.type_entry = entry;
@@ -172,88 +134,80 @@ public:
         }
     }
 
-    // Set owner and reference counting vtable.
-    // owner: opaque pointer to the object that owns this pass
-    // ref_vt: vtable for reference counting (retain/release/drop)
     void set_owner_ref(void* owner, const tc_pass_ref_vtable* ref_vt) {
         _c.body = owner;
         if (ref_vt) _c.ref_vtable = ref_vt;
     }
 
-    // Legacy alias for Python bindings
     void set_python_ref(void* body, const tc_pass_ref_vtable* ref_vt) {
         set_owner_ref(body, ref_vt);
     }
 
-    // ========================================================================
-    // Accessors for fields stored in _c (no duplication)
-    // ========================================================================
+    std::string pass_name_get() const { return _c.pass_name ? _c.pass_name : ""; }
+    void pass_name_set(const std::string& name) { tc_pass_set_name(&_c, name.c_str()); }
 
-    // pass_name
-    std::string pass_name_get() const {
-        return _c.pass_name ? _c.pass_name : "";
-    }
-    void pass_name_set(const std::string& name) {
-        tc_pass_set_name(&_c, name.c_str());
-    }
-
-    // enabled
     bool enabled_get() const { return _c.enabled; }
     void enabled_set(bool v) { _c.enabled = v; }
 
-    // viewport_name
     std::string viewport_name_get() const {
         return _c.viewport_name ? _c.viewport_name : "";
     }
+
     void viewport_name_set(const std::string& name) {
         if (_c.viewport_name) free(_c.viewport_name);
         _c.viewport_name = name.empty() ? nullptr : strdup(name.c_str());
     }
 
-    // debug_internal_symbol
     std::string debug_internal_symbol_get() const {
         return _c.debug_internal_symbol ? _c.debug_internal_symbol : "";
     }
+
     void debug_internal_symbol_set(const std::string& sym) {
         if (_c.debug_internal_symbol) free(_c.debug_internal_symbol);
         _c.debug_internal_symbol = sym.empty() ? nullptr : strdup(sym.c_str());
     }
 
-    // Compatibility aliases (for existing code)
-    std::string get_pass_name() const { return pass_name_get(); }
-    void set_pass_name(const std::string& n) { pass_name_set(n); }
+    FrameGraphCapture* debug_capture_get() const {
+        return reinterpret_cast<FrameGraphCapture*>(_c.debug_capture);
+    }
+
+    FrameGraphCapture* debug_capture() const {
+        return debug_capture_get();
+    }
+
+    void debug_capture_set(FrameGraphCapture* capture) {
+        _c.debug_capture = reinterpret_cast<void*>(capture);
+    }
+
+    void set_debug_capture(FrameGraphCapture* capture) {
+        debug_capture_set(capture);
+    }
+
+    void clear_debug_capture() {
+        _c.debug_capture = nullptr;
+    }
+
+    const std::string get_pass_name() const { return pass_name_get(); }
+    void set_pass_name(const std::string& name) { pass_name_set(name); }
     bool get_enabled() const { return enabled_get(); }
     void set_enabled(bool v) { enabled_set(v); }
-    std::string get_viewport_name() const { return viewport_name_get(); }
-    void set_viewport_name(const std::string& n) { viewport_name_set(n); }
-    std::string get_debug_internal_symbol() const { return debug_internal_symbol_get(); }
-    void set_debug_internal_symbol(const std::string& s) { debug_internal_symbol_set(s); }
+    const std::string get_viewport_name() const { return viewport_name_get(); }
+    void set_viewport_name(const std::string& name) { viewport_name_set(name); }
+    const std::string get_debug_internal_symbol() const { return debug_internal_symbol_get(); }
+    void set_debug_internal_symbol(const std::string& sym) { debug_internal_symbol_set(sym); }
+    const std::string get_debug_internal_point() const { return debug_internal_symbol_get(); }
+    void set_debug_internal_point(const std::string& sym) { debug_internal_symbol_set(sym); }
 
-    // ========================================================================
-    // Reference counting
-    // ========================================================================
+    virtual void execute(ExecuteContext& ctx) = 0;
 
-    void retain() { ++_ref_count; }
-    void release() {
-        int prev = _ref_count.fetch_sub(1);
-        if (prev <= 1) {
-            delete this;
-        }
-    }
-    int ref_count() const { return _ref_count.load(); }
-
-    // ========================================================================
-    // Virtual methods for subclasses to override
-    // ========================================================================
-
-    virtual void execute(ExecuteContext& ctx) {}
-
-    // Dynamic resource computation - override in subclasses
-    // Returns const char* pointers (use string literals or interned strings)
-    virtual std::set<const char*> compute_reads() const { return {}; }
-    virtual std::set<const char*> compute_writes() const { return {}; }
+    virtual std::set<const char*> compute_reads() const = 0;
+    virtual std::set<const char*> compute_writes() const = 0;
 
     virtual std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const {
+        return {};
+    }
+
+    virtual std::vector<ResourceSpec> get_resource_specs() const {
         return {};
     }
 
@@ -265,16 +219,7 @@ public:
         return {};
     }
 
-    // Resource specs - size, clear values, format
-    virtual std::vector<ResourceSpec> get_resource_specs() const {
-        return {};
-    }
-
     virtual void destroy() {}
-
-    // ========================================================================
-    // Debugger integration
-    // ========================================================================
 
     void set_debugger_callbacks(const FrameDebuggerCallbacks& callbacks) {
         debugger_callbacks = callbacks;
@@ -288,52 +233,38 @@ public:
         return debugger_callbacks.is_set();
     }
 
-    // ========================================================================
-    // Convenience methods
-    // ========================================================================
-
     bool is_inplace() const {
         return !get_inplace_aliases().empty();
-    }
-
-    void set_debug_internal_point(const std::string& symbol) {
-        debug_internal_symbol_set(symbol);
     }
 
     void clear_debug_internal_point() {
         debug_internal_symbol_set("");
     }
 
-    std::string get_debug_internal_point() const {
-        return debug_internal_symbol_get();
-    }
-
-    // Debug capture (FrameGraphCapture* stored in tc_pass)
-    FrameGraphCapture* debug_capture() const {
-        return static_cast<FrameGraphCapture*>(_c.debug_capture);
-    }
-    void set_debug_capture(FrameGraphCapture* c) {
-        _c.debug_capture = c;
-    }
-    void clear_debug_capture() {
-        _c.debug_capture = nullptr;
-    }
-
     std::set<const char*> required_resources() const {
         auto result = compute_reads();
-        auto w = compute_writes();
-        result.insert(w.begin(), w.end());
+        auto writes = compute_writes();
+        result.insert(writes.begin(), writes.end());
         return result;
+    }
+
+    void retain() { _ref_count.fetch_add(1, std::memory_order_relaxed); }
+
+    void release() {
+        int old = _ref_count.fetch_sub(1, std::memory_order_acq_rel);
+        if (old <= 1) {
+            delete this;
+        }
+    }
+
+    int ref_count() const {
+        return _ref_count.load(std::memory_order_relaxed);
     }
 
 private:
     void _init_tc_pass();
     void _cleanup_tc_pass();
 };
-
-// ============================================================================
-// Registration macro for CxxFramePass-based classes
-// ============================================================================
 
 #define TC_REGISTER_FRAME_PASS(PassClass)                                    \
     static tc_pass* _factory_##PassClass(void* /*userdata*/) {               \
@@ -354,7 +285,6 @@ private:
         }                                                                    \
     } _reg_instance_##PassClass
 
-// Registration macro with parent class for InspectRegistry inheritance
 #define TC_REGISTER_FRAME_PASS_DERIVED(PassClass, ParentClass)               \
     static tc_pass* _factory_##PassClass(void* /*userdata*/) {               \
         auto* pass = new PassClass();                                        \
