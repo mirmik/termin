@@ -6,7 +6,7 @@
 #include <termin/geom/mat44.hpp>
 #include "tgfx/types.hpp"
 #include "tgfx/handles.hpp"
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 
 namespace termin {
 

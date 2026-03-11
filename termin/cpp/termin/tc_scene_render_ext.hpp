@@ -5,8 +5,8 @@
 
 #include <string>
 #include <vector>
-#include <tuple>
 
+#include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/entity/entity.hpp>
 #include "core/tc_scene_render_mount.h"
@@ -34,34 +34,6 @@ TcSceneRef create_scene_with_render(const std::string& name = "", const std::str
 
 // Destroy scene and clean up render pipeline cache
 void destroy_scene_with_render(TcSceneRef& scene);
-
-// --- Background color ---
-
-std::tuple<float, float, float, float> scene_get_background_color(const TcSceneRef& scene);
-void scene_set_background_color(const TcSceneRef& scene, float r, float g, float b, float a);
-
-Vec4 scene_background_color(const TcSceneRef& scene);
-void scene_set_background_color(const TcSceneRef& scene, const Vec4& color);
-
-// --- Skybox ---
-
-Vec3 scene_skybox_color(const TcSceneRef& scene);
-void scene_set_skybox_color(const TcSceneRef& scene, const Vec3& color);
-Vec3 scene_skybox_top_color(const TcSceneRef& scene);
-void scene_set_skybox_top_color(const TcSceneRef& scene, const Vec3& color);
-Vec3 scene_skybox_bottom_color(const TcSceneRef& scene);
-void scene_set_skybox_bottom_color(const TcSceneRef& scene, const Vec3& color);
-
-// --- Ambient lighting ---
-
-Vec3 scene_ambient_color(const TcSceneRef& scene);
-void scene_set_ambient_color(const TcSceneRef& scene, const Vec3& color);
-float scene_ambient_intensity(const TcSceneRef& scene);
-void scene_set_ambient_intensity(const TcSceneRef& scene, float intensity);
-
-// --- Lighting ---
-
-tc_scene_lighting* scene_lighting(const TcSceneRef& scene);
 
 // --- Viewport configs ---
 

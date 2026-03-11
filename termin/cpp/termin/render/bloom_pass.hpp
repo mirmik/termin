@@ -5,7 +5,7 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 #include "tc_inspect_cpp.hpp"
 
 #include <vector>

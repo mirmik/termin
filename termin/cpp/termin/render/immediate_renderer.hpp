@@ -3,7 +3,7 @@
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/mat44.hpp>
 #include "tgfx/types.hpp"
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 
 #include <vector>
 #include <memory>

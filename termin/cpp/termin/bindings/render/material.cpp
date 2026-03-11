@@ -4,7 +4,7 @@
 #include "termin/assets/handles.hpp"
 #include "termin/render/shader_parser.hpp"
 #include "tgfx/render_state.hpp"
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 #include "termin/inspect/tc_kind.hpp"
 #include <tcbase/tc_log.hpp>
 extern "C" {

@@ -3,7 +3,7 @@
 #include <string>
 
 #include <termin/geom/mat44.hpp>
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 #include <termin/tc_scene.hpp>
 #include "termin/tc_scene_render_ext.hpp"
 

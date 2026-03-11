@@ -5,7 +5,7 @@
 
 #include "termin/lighting/shadow.hpp"
 #include "termin/texture/tc_texture_handle.hpp"
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 
 namespace termin {

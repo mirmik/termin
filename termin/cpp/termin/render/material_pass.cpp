@@ -3,7 +3,7 @@
 #include "material_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "tgfx/graphics_backend.hpp"
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 
 extern "C" {
