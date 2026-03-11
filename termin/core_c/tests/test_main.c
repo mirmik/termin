@@ -468,6 +468,9 @@ static int test_vertex_layout(void) {
 static int test_scene_extensions_reregister(void) {
     printf("Testing scene extension re-registration...\n");
 
+    tc_scene_render_mount_extension_init();
+    tc_scene_render_state_extension_init();
+
     tc_scene_handle h1 = tc_scene_new();
     TEST_ASSERT(tc_scene_handle_valid(h1), "first scene handle valid");
     TEST_ASSERT(tc_scene_ext_attach(h1, TC_SCENE_EXT_TYPE_RENDER_MOUNT), "first attach render_mount");
@@ -476,6 +479,9 @@ static int test_scene_extensions_reregister(void) {
 
     tc_shutdown();
     tc_init();
+
+    tc_scene_render_mount_extension_init();
+    tc_scene_render_state_extension_init();
 
     tc_scene_handle h2 = tc_scene_new();
     TEST_ASSERT(tc_scene_handle_valid(h2), "second scene handle valid");
