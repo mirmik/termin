@@ -398,7 +398,6 @@ void bind_frame_pass(nb::module_& m) {
 
     // CxxFramePass - base class for C++ frame passes (exposed as "FramePass" for compatibility)
     nb::class_<CxxFramePass>(m, "FramePass")
-        .def(nb::init<>())
         .def_prop_rw("pass_name",
             [](CxxFramePass& p) { return p.get_pass_name(); },
             [](CxxFramePass& p, const std::string& n) { p.set_pass_name(n); })
@@ -466,14 +465,7 @@ void bind_frame_pass(nb::module_& m) {
         }, nb::arg("py_self"))
         .def("__repr__", [](const CxxFramePass& p) {
             return "<CxxFramePass '" + p.get_pass_name() + "'>";
-        })
-        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
-            auto* pass = new CxxFramePass();
-            if (data.contains("pass_name")) {
-                pass->set_pass_name(nb::cast<std::string>(data["pass_name"]));
-            }
-            return init_pass_from_deserialize(pass, "CxxFramePass");
-        }, nb::arg("data"), nb::arg("resource_manager") = nb::none());
+        });
 
     // RenderContext binding
     nb::class_<RenderContext>(m, "RenderContext")

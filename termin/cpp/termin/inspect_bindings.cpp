@@ -9,7 +9,7 @@
 #include <termin/entity/component.hpp>
 #include "material/tc_material_handle.hpp"
 #include "inspect/tc_inspect_init.h"
-#include "render/frame_pass.hpp"
+#include <termin/render/frame_pass.hpp>
 #include "inspect_bindings.hpp"
 
 namespace nb = nanobind;
