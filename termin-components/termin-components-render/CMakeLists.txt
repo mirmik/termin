@@ -18,7 +18,12 @@ termin_add_module(
     NAME termin_components_render
     NAMESPACE termin_components_render::
     SOURCES
+        src/geometry_pass_base.cpp
         src/mesh_renderer.cpp
+        src/material_pass.cpp
+        src/depth_pass.cpp
+        src/normal_pass.cpp
+        src/id_pass.cpp
     PUBLIC_DEPS
         tcbase::termin_base
         tmesh::termin_mesh
@@ -35,4 +40,9 @@ termin_add_module(
         termin_render
     INSTALL_HEADERS
         termin
+)
+
+target_include_directories(termin_components_render PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp/termin
+    ${CMAKE_CURRENT_LIST_DIR}/../../termin/core_c/include
 )
