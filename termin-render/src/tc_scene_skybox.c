@@ -8,7 +8,6 @@
 #include <tgfx/resources/tc_shader.h>
 #include <tgfx/resources/tc_shader_registry.h>
 #include <tgfx/resources/tc_resource.h>
-#include "tc_gpu.h"
 #include <stdlib.h>
 #include <string.h>
 
