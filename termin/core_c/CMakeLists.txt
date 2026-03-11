@@ -31,13 +31,8 @@ set(TC_SOURCES
     src/tc_profiler.c
     src/tc_project_settings.c
     src/tc_render_surface.c
-    src/tc_scene_render_mount.c
-    src/tc_scene_render_state.c
-    src/tc_scene_pipeline_template.c
-    src/tc_scene_skybox.c
     src/tc_skeleton_registry.c
     src/tc_viewport.c
-    src/tc_viewport_config.c
 )
 
 if(NOT TC_USE_EXTERNAL_INSPECT)
@@ -66,12 +61,8 @@ set(TC_HEADERS
     include/tc_project_settings.h
     include/resources/tc_skeleton.h
     include/resources/tc_skeleton_registry.h
-    include/core/tc_scene_render_mount.h
-    include/core/tc_scene_render_state.h
-    include/core/tc_scene_pipeline_template.h
     include/core/tc_scene_registry.h
     include/tc_types.h
-    include/tc_viewport_config.h
     include/termin_core.h
     include/render/tc_display.h
     include/render/tc_input_manager.h
@@ -142,8 +133,12 @@ endif()
 if(TC_BUILD_TESTS)
     enable_testing()
 
+    if(NOT TARGET termin_render::termin_render)
+        find_package(termin_render REQUIRED)
+    endif()
+
     add_executable(termin_core_test tests/test_main.c)
-    target_link_libraries(termin_core_test PRIVATE termin_core)
+    target_link_libraries(termin_core_test PRIVATE termin_core termin_render::termin_render)
     if(UNIX AND NOT APPLE)
         target_link_libraries(termin_core_test PRIVATE m)
     endif()

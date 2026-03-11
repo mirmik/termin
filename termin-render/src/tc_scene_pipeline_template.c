@@ -1,8 +1,8 @@
 // tc_scene_pipeline_template.c - Scene pipeline template registry
 
 #include "core/tc_scene_pipeline_template.h"
-#include "termin_core.h"
 #include <tcbase/tc_log.h>
+#include <tcbase/tgfx_intern_string.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -150,7 +150,7 @@ tc_spt_handle tc_spt_declare(const char* uuid, const char* name) {
     // Initialize template
     memset(&slot->data, 0, sizeof(tc_scene_pipeline_template));
     tc_resource_header_init(&slot->data.header, uuid);
-    slot->data.header.name = name ? tc_intern_string(name) : NULL;
+    slot->data.header.name = name ? tgfx_intern_string(name) : NULL;
     slot->data.graph_data = tc_value_nil();
 
     tc_spt_handle h = { index, slot->generation };
@@ -258,7 +258,7 @@ const char* tc_spt_get_name(tc_spt_handle h) {
 void tc_spt_set_name(tc_spt_handle h, const char* name) {
     tc_spt_slot* slot = tc_spt_get_slot(h);
     if (!slot) return;
-    slot->data.header.name = name ? tc_intern_string(name) : NULL;
+    slot->data.header.name = name ? tgfx_intern_string(name) : NULL;
 }
 
 // ============================================================================

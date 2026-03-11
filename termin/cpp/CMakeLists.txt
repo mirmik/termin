@@ -158,7 +158,6 @@ set(ENTITY_LIB_SOURCES
     termin/camera/camera_component.cpp
     termin/camera/orbit_camera_controller.cpp
     termin/lighting/light_component.cpp
-    termin/viewport_config.cpp
     ${TERMIN_ROOT}/core_c/src/tc_inspect_component_adapter.cpp
     ${TERMIN_ROOT}/core_c/src/tc_inspect_pass_adapter.cpp
     ${TERMIN_ROOT}/core_c/src/tc_rendering_manager_instance.cpp
@@ -271,6 +270,7 @@ set(RENDER_LIB_SOURCES
     termin/texture/tc_texture_handle.cpp
     termin/editor/frame_graph_debugger_core.cpp
     termin/camera/camera_viewport_component.cpp
+    termin/viewport_config.cpp
 )
 add_library(render_lib SHARED ${RENDER_LIB_SOURCES})
 target_include_directories(render_lib PUBLIC

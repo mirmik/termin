@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_MODULES_BUILD_PYTHON "Build Python/nanobind bindings" ON)
+option(TERMIN_MODULES_BUILD_TESTS "Build termin-modules tests" ON)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -128,3 +129,18 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_modulesConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_modules
 )
+
+if(TERMIN_MODULES_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(termin_modules_runtime_test
+        tests/test_module_runtime.cpp
+    )
+
+    target_link_libraries(termin_modules_runtime_test PRIVATE termin_modules)
+    set_target_properties(termin_modules_runtime_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+
+    add_test(NAME termin_modules_runtime_test COMMAND termin_modules_runtime_test)
+endif()
