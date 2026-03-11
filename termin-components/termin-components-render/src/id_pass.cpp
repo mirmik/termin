@@ -1,10 +1,13 @@
-#include "termin/render/id_pass.hpp"
-#include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
+#include <tgfx/tgfx_shader_handle.hpp>
+
+#include <termin/render/id_pass.hpp>
 
 extern "C" {
 #include "tc_picking.h"
 }
+
+#include "camera/camera_component.hpp"
 
 namespace termin {
 
@@ -36,7 +39,6 @@ void main() {
 )";
 
 void IdPass::id_to_rgb(int id, float& r, float& g, float& b) {
-    // Use C API which also populates the cache for rgb_to_id lookup
     tc_picking_id_to_rgb_float(id, &r, &g, &b);
 }
 
@@ -52,7 +54,6 @@ void IdPass::execute_with_data(
 ) {
     (void)reads_fbos;
 
-    // Find output FBO
     auto it = writes_fbos.find(output_res);
     if (it == writes_fbos.end() || it->second == nullptr) {
         return;
@@ -62,20 +63,13 @@ void IdPass::execute_with_data(
         return;
     }
 
-    // Bind and clear
     bind_and_clear(graphics, fb, rect);
     apply_default_render_state(graphics);
 
-    // Get base shader
     TcShader& base_shader = get_shader(graphics);
-
-    // Collect draw calls (computes final_shader during collection)
     collect_draw_calls(scene, layer_mask, base_shader.handle);
-
-    // Sort by shader to minimize state changes
     sort_draw_calls_by_shader();
 
-    // Render
     entity_names.clear();
     std::set<std::string> seen_entities;
 
@@ -86,11 +80,11 @@ void IdPass::execute_with_data(
     context.phase = phase_name();
 
     const std::string& debug_symbol = get_debug_internal_point();
-
-    // Track last shader and pick_id to avoid redundant operations
     tc_shader_handle last_shader = tc_shader_handle_invalid();
     int current_pick_id = -1;
-    float pick_r = 0.0f, pick_g = 0.0f, pick_b = 0.0f;
+    float pick_r = 0.0f;
+    float pick_g = 0.0f;
+    float pick_b = 0.0f;
 
     for (const auto& dc : cached_draw_calls_) {
         auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
@@ -105,32 +99,26 @@ void IdPass::execute_with_data(
             entity_names.push_back(name);
         }
 
-        // Update pick color if pick_id changed
         if (dc.pick_id != current_pick_id) {
             current_pick_id = dc.pick_id;
             id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
         }
 
-        // Use final shader (override already computed during collect)
         tc_shader_handle shader_handle = dc.final_shader;
         bool shader_changed = !tc_shader_handle_eq(shader_handle, last_shader);
 
         TcShader shader_to_use(shader_handle);
-
         if (shader_changed) {
             shader_to_use.use();
-            // Set view/projection only when shader changes
             shader_to_use.set_uniform_mat4("u_view", view.data, false);
             shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
             last_shader = shader_handle;
         }
 
-        // Model matrix and pick color always set per object
         shader_to_use.set_uniform_mat4("u_model", model.data, false);
         shader_to_use.set_uniform_vec3("u_pickColor", pick_r, pick_g, pick_b);
 
         context.current_tc_shader = shader_to_use;
-
         tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
 
         if (!debug_symbol.empty() && name && debug_symbol == name) {
@@ -139,7 +127,49 @@ void IdPass::execute_with_data(
     }
 }
 
-// Register IdPass in tc_pass_registry for C#/standalone C++ usage
+void IdPass::execute(ExecuteContext& ctx) {
+    tc_scene_handle scene = ctx.scene.handle();
+    CameraComponent* camera = ctx.camera;
+    Rect4i rect = ctx.rect;
+
+    if (!camera_name.empty()) {
+        camera = find_camera_by_name(scene, camera_name);
+        if (!camera) {
+            return;
+        }
+    }
+
+    if (!camera) {
+        return;
+    }
+
+    auto it = ctx.writes_fbos.find(output_res);
+    if (it != ctx.writes_fbos.end() && it->second != nullptr) {
+        FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
+        if (fb) {
+            auto fbo_size = fb->get_size();
+            rect = Rect4i(0, 0, fbo_size.width, fbo_size.height);
+            camera->set_aspect(static_cast<double>(fbo_size.width) / std::max(1, fbo_size.height));
+        }
+    }
+
+    Mat44 view_d = camera->get_view_matrix();
+    Mat44 proj_d = camera->get_projection_matrix();
+    Mat44f view = view_d.to_float();
+    Mat44f projection = proj_d.to_float();
+
+    execute_with_data(
+        ctx.graphics,
+        ctx.reads_fbos,
+        ctx.writes_fbos,
+        rect,
+        scene,
+        view,
+        projection,
+        ctx.layer_mask
+    );
+}
+
 TC_REGISTER_FRAME_PASS_DERIVED(IdPass, GeometryPassBase);
 
 } // namespace termin

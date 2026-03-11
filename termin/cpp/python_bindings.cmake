@@ -131,11 +131,7 @@ nanobind_add_module(_native NB_SHARED
     termin/render/color_pass.cpp
     termin/render/collider_gizmo_pass.cpp
     termin/render/present_pass.cpp
-    termin/render/depth_pass.cpp
-    termin/render/normal_pass.cpp
     termin/render/shadow_pass.cpp
-    termin/render/id_pass.cpp
-    termin/render/material_pass.cpp
     termin/render/bloom_pass.cpp
     termin/render/grayscale_pass.cpp
     termin/render/tonemap_pass.cpp

@@ -4,7 +4,7 @@
 #include <termin/render/tc_pass.hpp>
 #include "render_pipeline.hpp"
 #include <termin/render/resource_spec.hpp>
-#include "material_pass.hpp"
+#include <termin/render/material_pass.hpp>
 #include <trent/json.h>
 #include <deque>
 #include <unordered_set>

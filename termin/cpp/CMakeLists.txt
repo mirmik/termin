@@ -246,11 +246,7 @@ set(RENDER_LIB_SOURCES
     termin/render/collider_gizmo_pass.cpp
     termin/render/ground_grid_pass.cpp
     termin/render/present_pass.cpp
-    termin/render/depth_pass.cpp
-    termin/render/normal_pass.cpp
     termin/render/shadow_pass.cpp
-    termin/render/id_pass.cpp
-    termin/render/material_pass.cpp
     termin/render/bloom_pass.cpp
     termin/render/grayscale_pass.cpp
     termin/render/tonemap_pass.cpp

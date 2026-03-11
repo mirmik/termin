@@ -1,18 +1,12 @@
 // material_pass.cpp - Post-processing pass using a Material
 
-#include "material_pass.hpp"
-#include "termin/render/execute_context.hpp"
-#include "tgfx/graphics_backend.hpp"
-#include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
+#include <tgfx/tgfx_shader_handle.hpp>
 
-extern "C" {
-#include "termin_core.h"
-}
+#include <termin/render/material_pass.hpp>
 
 namespace termin {
 
-// Static quad VAO/VBO
 uint32_t MaterialPass::s_quad_vao = 0;
 uint32_t MaterialPass::s_quad_vbo = 0;
 
@@ -34,7 +28,6 @@ void MaterialPass::add_resource(const std::string& resource_name, const std::str
     if (uniform_name.empty()) {
         uname = "u_" + resource_name;
     } else if (uniform_name.rfind("u_", 0) != 0) {
-        // Add u_ prefix if not already present
         uname = "u_" + uniform_name;
     } else {
         uname = uniform_name;
@@ -53,13 +46,13 @@ void MaterialPass::set_before_draw(BeforeDrawCallback callback) {
 std::set<const char*> MaterialPass::compute_reads() const {
     std::set<const char*> reads;
 
-    // Add extra resources
     for (const auto& [res_name, uniform_name] : extra_resources) {
+        (void)uniform_name;
         reads.insert(res_name.c_str());
     }
 
-    // Add texture resources
     for (const auto& [uniform_name, res_name] : texture_resources) {
+        (void)uniform_name;
         if (!res_name.empty()) {
             reads.insert(res_name.c_str());
         }
@@ -77,33 +70,25 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    // Get output FBO
     FramebufferHandle* output_fbo = nullptr;
     auto it = ctx.writes_fbos.find(output_res);
     if (it != ctx.writes_fbos.end()) {
         output_fbo = dynamic_cast<FramebufferHandle*>(it->second);
     }
 
-    // Get output size
-    int w, h;
+    int w = ctx.rect.width;
+    int h = ctx.rect.height;
     if (output_fbo != nullptr) {
         w = output_fbo->get_width();
         h = output_fbo->get_height();
-    } else {
-        w = ctx.rect.width;
-        h = ctx.rect.height;
     }
 
-    // Bind output FBO
     ctx.graphics->bind_framebuffer(output_fbo);
     ctx.graphics->set_viewport(0, 0, w, h);
-
-    // Standard post-effect state
     ctx.graphics->set_depth_test(false);
     ctx.graphics->set_depth_mask(false);
     ctx.graphics->set_blend(false);
 
-    // Get material from handle
     tc_material* mat = material.get();
     if (!mat || mat->phase_count == 0) {
         tc::Log::error("[MaterialPass] '%s': material not set or has no phases",
@@ -113,7 +98,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    // Get first phase
     tc_material_phase* phase = &mat->phases[0];
     tc_shader* shader = tc_shader_get(phase->shader);
     if (!shader) {
@@ -123,7 +107,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    // Compile and use shader
     if (tc_shader_compile_gpu(shader) == 0) {
         tc::Log::error("[MaterialPass] '%s': failed to compile shader", get_pass_name().c_str());
         ctx.graphics->set_depth_test(true);
@@ -135,7 +118,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     int texture_unit = 0;
     std::set<std::string> bound_uniforms;
 
-    // Bind extra resources
     for (const auto& [res_name, uniform_name] : extra_resources) {
         auto res_it = ctx.reads_fbos.find(res_name);
         if (res_it == ctx.reads_fbos.end()) {
@@ -160,15 +142,20 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    // Bind texture resources (uniform_name -> resource_name)
     for (const auto& [uniform_name, res_name] : texture_resources) {
-        if (res_name.empty()) continue;
+        if (res_name.empty()) {
+            continue;
+        }
 
         auto res_it = ctx.reads_fbos.find(res_name);
-        if (res_it == ctx.reads_fbos.end()) continue;
+        if (res_it == ctx.reads_fbos.end()) {
+            continue;
+        }
 
         FramebufferHandle* fbo = dynamic_cast<FramebufferHandle*>(res_it->second);
-        if (!fbo) continue;
+        if (!fbo) {
+            continue;
+        }
 
         GPUTextureHandle* tex = fbo->color_texture();
         if (tex) {
@@ -179,10 +166,8 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    // Set u_resolution
     tc_shader_set_vec2(shader, "u_resolution", static_cast<float>(w), static_cast<float>(h));
 
-    // Bind material textures (skip those already bound from framegraph)
     for (size_t i = 0; i < phase->texture_count; i++) {
         const tc_material_texture* mat_tex = &phase->textures[i];
         if (bound_uniforms.count(mat_tex->name) > 0) {
@@ -198,12 +183,12 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    // Set material uniforms (skip those that match bound texture uniforms)
     for (size_t i = 0; i < phase->uniform_count; i++) {
         const tc_uniform_value* uniform = &phase->uniforms[i];
         if (bound_uniforms.count(uniform->name) > 0) {
             continue;
         }
+
         switch (uniform->type) {
             case TC_UNIFORM_BOOL:
             case TC_UNIFORM_INT:
@@ -229,16 +214,13 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    // Call before_draw callback
     if (before_draw_callback_) {
         TcShader shader_wrapper(phase->shader);
         before_draw_callback_(&shader_wrapper);
     }
 
-    // Draw fullscreen quad
     draw_fullscreen_quad(ctx.graphics);
 
-    // Restore state
     ctx.graphics->set_depth_test(true);
     ctx.graphics->set_depth_mask(true);
 }
@@ -249,7 +231,7 @@ void MaterialPass::draw_fullscreen_quad(GraphicsBackend* graphics) {
 
 void MaterialPass::destroy() {
     before_draw_callback_ = nullptr;
-    material = TcMaterial();  // Release material handle
+    material = TcMaterial();
     texture_resources.clear();
     extra_resources.clear();
 }
