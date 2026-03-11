@@ -14,7 +14,7 @@
 #include "tgfx/graphics_backend.hpp"
 #include "tgfx/render_state.hpp"
 #include "termin/editor/frame_graph_debugger_core.hpp"
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 #include "termin/render/drawable.hpp"
 #include <termin/entity/entity.hpp>
 #include <termin/entity/component.hpp>

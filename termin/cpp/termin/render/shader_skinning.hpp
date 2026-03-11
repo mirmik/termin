@@ -4,7 +4,7 @@
 // C++ implementation of termin/visualization/render/shader_skinning.py
 
 #include <string>
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 
 namespace termin {
 

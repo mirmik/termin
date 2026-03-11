@@ -3,7 +3,7 @@
 #include "tgfx/graphics_backend.hpp"
 #include "shader_skinning.hpp"
 #include <termin/entity/entity.hpp>
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 #include <algorithm>
 #include <unordered_map>

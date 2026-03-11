@@ -27,7 +27,7 @@ extern "C" {
 #include "termin/render/bloom_pass.hpp"
 #include "termin/render/grayscale_pass.hpp"
 #include "termin/render/tonemap_pass.hpp"
-#include "termin/render/tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 #include <termin/entity/entity.hpp>
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/light.hpp"

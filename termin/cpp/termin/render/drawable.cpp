@@ -1,7 +1,7 @@
 // drawable.cpp - Drawable vtable implementation
 
 #include "drawable.hpp"
-#include "tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 
 namespace termin {
 

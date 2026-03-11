@@ -20,7 +20,7 @@
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "tc_inspect_cpp.hpp"
-#include "tc_shader_handle.hpp"
+#include <tgfx/tgfx_shader_handle.hpp>
 
 namespace termin {
 
