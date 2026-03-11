@@ -30,7 +30,7 @@ extern "C" {
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <termin/entity/entity.hpp>
 #include "termin/camera/camera_component.hpp"
-#include "termin/lighting/light.hpp"
+#include <termin/render/light.hpp>
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/shadow_settings.hpp"
 #include <termin/tc_scene.hpp>

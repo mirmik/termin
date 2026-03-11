@@ -13,7 +13,7 @@
 #include "tgfx/graphics_backend.hpp"
 #include "tgfx/render_state.hpp"
 #include "tgfx/handles.hpp"
-#include "termin/lighting/light.hpp"
+#include <termin/render/light.hpp>
 #include "termin/render/shadow_camera.hpp"
 #include <termin/geom/mat44.hpp>
 #include <termin/entity/entity.hpp>

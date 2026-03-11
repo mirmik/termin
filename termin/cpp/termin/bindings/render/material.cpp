@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include <nanobind/stl/optional.h>
-#include "termin/material/tc_material_handle.hpp"
+#include <tgfx/tgfx_material_handle.hpp>
 #include "termin/assets/handles.hpp"
 #include "termin/render/shader_parser.hpp"
 #include "tgfx/render_state.hpp"

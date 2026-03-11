@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "termin/render/mesh_renderer.hpp"
+#include <termin/render/mesh_renderer.hpp>
 #include "termin/entity/cmp_ref.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 

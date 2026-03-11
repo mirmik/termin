@@ -1,13 +1,13 @@
-#include "mesh_renderer.hpp"
+#include <termin/render/mesh_renderer.hpp>
 
 #include <algorithm>
 #include <cstring>
+
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
 
 MeshRenderer::MeshRenderer() {
-    // Link to type registry for proper type identification
     link_type_entry("MeshRenderer");
     install_drawable_vtable(&_c);
 }
@@ -45,7 +45,6 @@ tc_material* MeshRenderer::get_material_ptr() const {
 
 void MeshRenderer::set_material(const TcMaterial& mat) {
     material = mat;
-
     if (_override_material) {
         recreate_overridden_material();
     }
@@ -83,13 +82,10 @@ void MeshRenderer::recreate_overridden_material() {
 
     if (!material.is_valid()) return;
 
-    // Create a copy of the base material
     _overridden_material = TcMaterial::copy(material);
     if (_overridden_material.is_valid()) {
         std::string override_name = std::string(material.name()) + "_override";
         _overridden_material.set_name(override_name.c_str());
-
-        // Apply pending override data if exists
         apply_pending_override_data();
     }
 }
@@ -102,18 +98,14 @@ void MeshRenderer::try_create_override_material() {
         return;
     }
 
-    // Create override material from base
     _overridden_material = TcMaterial::copy(material);
     if (_overridden_material.is_valid()) {
         std::string override_name = std::string(material.name()) + "_override";
         _overridden_material.set_name(override_name.c_str());
-
-        // Apply pending override data if exists
         apply_pending_override_data();
     }
 }
 
-// Helper to get double from tc_value
 static double tc_val_as_double(const tc_value* v) {
     if (!v) return 0.0;
     switch (v->type) {
@@ -130,7 +122,6 @@ void MeshRenderer::apply_pending_override_data() {
     tc_material* mat = _overridden_material.get();
     if (!mat) return;
 
-    // Apply uniforms
     tc_value* phases_uniforms = tc_value_dict_get(&_pending_override_data, "phases_uniforms");
     if (phases_uniforms && phases_uniforms->type == TC_VALUE_LIST) {
         size_t phase_count = std::min(tc_value_list_size(phases_uniforms), mat->phase_count);
@@ -174,7 +165,6 @@ void MeshRenderer::apply_pending_override_data() {
         }
     }
 
-    // Apply textures
     tc_value* phases_textures = tc_value_dict_get(&_pending_override_data, "phases_textures");
     if (phases_textures && phases_textures->type == TC_VALUE_LIST) {
         size_t phase_count = std::min(tc_value_list_size(phases_textures), mat->phase_count);
@@ -207,7 +197,6 @@ void MeshRenderer::apply_pending_override_data() {
         }
     }
 
-    // Clear pending data after applying
     tc_value_free(&_pending_override_data);
     _pending_override_data = tc_value_nil();
 }
@@ -234,7 +223,6 @@ Mat44f MeshRenderer::get_model_matrix(const Entity& entity) const {
 
     if (!mesh_offset_enabled) return model;
 
-    // Euler (degrees) -> Quat
     constexpr double deg2rad = 3.14159265358979323846 / 180.0;
     Quat rx = Quat::from_axis_angle(Vec3(1,0,0), mesh_offset_euler.x * deg2rad);
     Quat ry = Quat::from_axis_angle(Vec3(0,1,0), mesh_offset_euler.y * deg2rad);
@@ -248,6 +236,8 @@ Mat44f MeshRenderer::get_model_matrix(const Entity& entity) const {
 }
 
 void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
+    (void)context;
+    (void)geometry_id;
     tc_mesh* m = mesh.get();
     if (!m) {
         return;
@@ -257,146 +247,51 @@ void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) 
 
 std::vector<tc_material_phase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {
     std::vector<tc_material_phase*> result;
-
     tc_material* mat = get_material_ptr();
     if (!mat) return result;
 
-    for (size_t i = 0; i < mat->phase_count; i++) {
-        if (std::strcmp(mat->phases[i].phase_mark, phase_mark.c_str()) == 0) {
-            result.push_back(&mat->phases[i]);
-        }
+    tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
+    size_t count = tc_material_get_phases_for_mark(mat, phase_mark.c_str(), phases, TC_MATERIAL_MAX_PHASES);
+    result.reserve(count);
+    for (size_t i = 0; i < count; i++) {
+        result.push_back(phases[i]);
     }
-
-    std::sort(result.begin(), result.end(), [](tc_material_phase* a, tc_material_phase* b) {
-        return a->priority < b->priority;
-    });
-
     return result;
 }
 
 std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string* phase_mark) {
-    std::vector<GeometryDrawCall> result;
+    std::vector<GeometryDrawCall> draws;
+    tc_mesh* m = mesh.get();
+    if (!m) return draws;
 
-    // Shadow phase: just need geometry, no material phase required
-    if (phase_mark != nullptr && *phase_mark == "shadow") {
-        if (cast_shadow) {
-            result.emplace_back(nullptr, 0);
-        }
-        return result;
-    }
-
-    // For other phases, need material
     tc_material* mat = get_material_ptr();
-    if (!mat) {
-        return {};
-    }
+    if (!mat) return draws;
 
-    for (size_t i = 0; i < mat->phase_count; i++) {
-        tc_material_phase* phase = &mat->phases[i];
-        if (phase_mark == nullptr || phase_mark->empty() ||
-            std::strcmp(phase->phase_mark, phase_mark->c_str()) == 0) {
-            result.emplace_back(phase, 0);
+    std::vector<tc_material_phase*> phases;
+    if (phase_mark) {
+        phases = get_phases_for_mark(*phase_mark);
+    } else {
+        for (size_t i = 0; i < mat->phase_count; i++) {
+            phases.push_back(&mat->phases[i]);
         }
     }
 
-    std::sort(result.begin(), result.end(), [](const GeometryDrawCall& a, const GeometryDrawCall& b) {
-        return a.phase->priority < b.phase->priority;
-    });
-
-    return result;
+    for (auto* phase : phases) {
+        draws.emplace_back(phase, 0);
+    }
+    return draws;
 }
 
 tc_value MeshRenderer::get_override_data() const {
-    // Return nil if override is not enabled or no overridden material
-    if (!_override_material || !_overridden_material.is_valid()) {
-        return tc_value_nil();
-    }
-
-    tc_material* mat = _overridden_material.get();
-    if (!mat) return tc_value_nil();
-
-    tc_value override_data = tc_value_dict_new();
-    tc_value phases_uniforms = tc_value_list_new();
-    tc_value phases_textures = tc_value_list_new();
-
-    for (size_t i = 0; i < mat->phase_count; i++) {
-        const tc_material_phase* phase = &mat->phases[i];
-
-        // Serialize uniforms
-        tc_value phase_uniforms = tc_value_dict_new();
-
-        for (size_t j = 0; j < phase->uniform_count; j++) {
-            const tc_uniform_value* u = &phase->uniforms[j];
-            switch (u->type) {
-                case TC_UNIFORM_BOOL:
-                case TC_UNIFORM_INT:
-                    tc_value_dict_set(&phase_uniforms, u->name, tc_value_int(u->data.i));
-                    break;
-                case TC_UNIFORM_FLOAT:
-                    tc_value_dict_set(&phase_uniforms, u->name, tc_value_double(static_cast<double>(u->data.f)));
-                    break;
-                case TC_UNIFORM_VEC3: {
-                    tc_value vec = tc_value_list_new();
-                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v3[0])));
-                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v3[1])));
-                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v3[2])));
-                    tc_value_dict_set(&phase_uniforms, u->name, vec);
-                    break;
-                }
-                case TC_UNIFORM_VEC4: {
-                    tc_value vec = tc_value_list_new();
-                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v4[0])));
-                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v4[1])));
-                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v4[2])));
-                    tc_value_list_push(&vec, tc_value_double(static_cast<double>(u->data.v4[3])));
-                    tc_value_dict_set(&phase_uniforms, u->name, vec);
-                    break;
-                }
-                default:
-                    break;
-            }
-        }
-        tc_value_list_push(&phases_uniforms, phase_uniforms);
-
-        // Serialize textures
-        tc_value phase_textures = tc_value_dict_new();
-
-        for (size_t j = 0; j < phase->texture_count; j++) {
-            const tc_material_texture* tex = &phase->textures[j];
-            tc_texture* t = tc_texture_get(tex->texture);
-            if (!t) continue;
-
-            tc_value tex_data = tc_value_dict_new();
-            tc_value_dict_set(&tex_data, "uuid", tc_value_string(t->header.uuid));
-            if (t->header.name) {
-                tc_value_dict_set(&tex_data, "name", tc_value_string(t->header.name));
-            }
-            if (t->source_path && t->source_path[0] != '\0') {
-                tc_value_dict_set(&tex_data, "type", tc_value_string("path"));
-                tc_value_dict_set(&tex_data, "path", tc_value_string(t->source_path));
-            } else {
-                tc_value_dict_set(&tex_data, "type", tc_value_string("named"));
-            }
-            tc_value_dict_set(&phase_textures, tex->name, tex_data);
-        }
-        tc_value_list_push(&phases_textures, phase_textures);
-    }
-
-    tc_value_dict_set(&override_data, "phases_uniforms", phases_uniforms);
-    tc_value_dict_set(&override_data, "phases_textures", phases_textures);
-    return override_data;
+    return tc_value_copy(&_pending_override_data);
 }
 
 void MeshRenderer::set_override_data(const tc_value* val) {
-    // Save data for lazy application (base material may not be loaded yet)
-    if (val && val->type != TC_VALUE_NIL) {
-        tc_value_free(&_pending_override_data);
-        _pending_override_data = tc_value_copy(val);
-    }
+    tc_value_free(&_pending_override_data);
+    _pending_override_data = val ? tc_value_copy(val) : tc_value_nil();
 
-    // If override flag is already set (from deserialization), create the override material now
-    if (_override_material && !_overridden_material.is_valid()) {
-        try_create_override_material();
+    if (_override_material && _overridden_material.is_valid()) {
+        apply_pending_override_data();
     }
 }
 
