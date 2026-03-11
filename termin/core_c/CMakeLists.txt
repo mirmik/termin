@@ -22,11 +22,8 @@ set(TC_SOURCES
     src/tc_input_manager.c
     src/tc_display_input_router.c
     src/tc_viewport_input_manager.c
-    src/tc_frame_graph.c
     src/tc_gpu.c
     src/tc_primitive_mesh.c
-    src/tc_pass.c
-    src/tc_pipeline.c
     src/tc_picking.c
     src/tc_profiler.c
     src/tc_project_settings.c
@@ -51,7 +48,6 @@ set(TC_HEADERS
     include/inspect/tc_inspect_init.h
     include/inspect/tc_inspect_context.h
     include/inspect/tc_inspect_component_adapter.h
-    include/inspect/tc_inspect_pass_adapter.h
     include/resources/tc_animation.h
     include/resources/tc_animation_registry.h
     include/physics/tc_collision.h
@@ -68,16 +64,13 @@ set(TC_HEADERS
     include/render/tc_input_manager.h
     include/render/tc_display_input_router.h
     include/render/tc_viewport_input_manager.h
-    include/render/tc_pass.h
-    include/render/tc_pipeline.h
-    include/render/tc_pipeline_pool.h
     include/render/tc_render_surface.h
     include/render/tc_viewport.h
-    include/render/tc_frame_graph.h
 )
 
 find_package(termin_scene REQUIRED)
 find_package(termin_input REQUIRED)
+find_package(termin_render REQUIRED)
 
 # termin-base (provides tc_log, shared enums)
 find_package(termin_base REQUIRED)
@@ -111,6 +104,7 @@ target_link_libraries(termin_core PUBLIC tgfx::termin_graphics tcbase::termin_ba
 target_link_libraries(termin_core PUBLIC termin_scene::termin_scene)
 target_link_libraries(termin_core PUBLIC termin_input::termin_input)
 target_link_libraries(termin_core PUBLIC termin_inspect::termin_inspect)
+target_link_libraries(termin_core PUBLIC termin_render::termin_render)
 
 # Platform-specific
 if(WIN32)

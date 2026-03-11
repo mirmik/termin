@@ -9,8 +9,8 @@
 #include <tgfx/resources/tc_material.h>
 #include "core/tc_scene.h"
 #include <tcbase/tc_log.hpp>
-#include "render/drawable.hpp"
-#include "render/render_context.hpp"
+#include <termin/render/drawable.hpp>
+#include <termin/render/render_context.hpp>
 #include "tc_component_python_bindings.hpp"
 #include "input/input_events.hpp"
 

@@ -1,20 +1,14 @@
-// tc_frame_graph.c - Frame graph dependency resolution and scheduling
-#include "render/tc_frame_graph.h"
-#include <tcbase/tc_log.h>
+#include <render/tc_frame_graph.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
+#include <tcbase/tc_log.h>
 
-// Cross-platform strdup
 #ifdef _WIN32
 #define tc_strdup _strdup
 #else
 #define tc_strdup strdup
 #endif
-
-// ============================================================================
-// Internal Data Structures
-// ============================================================================
 
 #define MAX_RESOURCES 256
 #define MAX_PASSES 128
@@ -23,8 +17,8 @@
 
 typedef struct {
     char* name;
-    char* canonical;     // Canonical name (for inplace aliasing)
-    int writer_index;    // Index of pass that writes this resource (-1 if none)
+    char* canonical;
+    int writer_index;
 } tc_fg_resource;
 
 typedef struct {
@@ -32,34 +26,21 @@ typedef struct {
     int index;
     int in_degree;
     bool is_inplace;
-
-    // Adjacency list (indices of passes that depend on this one)
     int* dependents;
     size_t dependent_count;
     size_t dependent_capacity;
 } tc_fg_node;
 
 struct tc_frame_graph {
-    // Resources
     tc_fg_resource resources[MAX_RESOURCES];
     size_t resource_count;
-
-    // Pass nodes
     tc_fg_node nodes[MAX_PASSES];
     size_t node_count;
-
-    // Execution schedule (topologically sorted)
     tc_pass** schedule;
     size_t schedule_count;
-
-    // Error state
     tc_frame_graph_error error;
     char error_message[512];
 };
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 static tc_fg_resource* find_resource(tc_frame_graph* fg, const char* name) {
     for (size_t i = 0; i < fg->resource_count; i++) {
@@ -86,9 +67,7 @@ static tc_fg_resource* get_or_create_resource(tc_frame_graph* fg, const char* na
     return res;
 }
 
-// Returns true if added, false if already present
 static bool add_dependent(tc_fg_node* node, int dep_index) {
-    // Check if already present
     for (size_t i = 0; i < node->dependent_count; i++) {
         if (node->dependents[i] == dep_index) return false;
     }
@@ -102,12 +81,7 @@ static bool add_dependent(tc_fg_node* node, int dep_index) {
     return true;
 }
 
-// ============================================================================
-// Frame Graph Building
-// ============================================================================
-
 static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeline) {
-    // First pass: collect all resources and their writers
     int pass_index = 0;
 
     size_t pipeline_pass_count = tc_pipeline_pass_count(pipeline);
@@ -118,8 +92,7 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
         }
 
         if (pass_index >= MAX_PASSES) {
-            snprintf(fg->error_message, sizeof(fg->error_message),
-                     "Too many passes in pipeline");
+            snprintf(fg->error_message, sizeof(fg->error_message), "Too many passes in pipeline");
             fg->error = TC_FG_ERROR_CYCLE;
             return false;
         }
@@ -133,7 +106,6 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
         node->dependent_count = 0;
         node->dependent_capacity = 0;
 
-        // Get writes
         const char* writes[MAX_WRITES_PER_PASS];
         size_t write_count = tc_pass_get_writes(pass, writes, MAX_WRITES_PER_PASS);
 
@@ -142,21 +114,22 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
             if (!res) return false;
 
             if (res->writer_index >= 0) {
-                snprintf(fg->error_message, sizeof(fg->error_message),
-                         "Resource '%s' written by multiple passes: '%s' and '%s'",
-                         writes[i],
-                         fg->nodes[res->writer_index].pass->pass_name,
-                         pass->pass_name);
+                snprintf(
+                    fg->error_message,
+                    sizeof(fg->error_message),
+                    "Resource '%s' written by multiple passes: '%s' and '%s'",
+                    writes[i],
+                    fg->nodes[res->writer_index].pass->pass_name,
+                    pass->pass_name
+                );
                 fg->error = TC_FG_ERROR_MULTI_WRITER;
                 return false;
             }
             res->writer_index = pass_index;
         }
 
-        // Get reads (just create resources, don't link yet)
         const char* reads[MAX_READS_PER_PASS];
         size_t read_count = tc_pass_get_reads(pass, reads, MAX_READS_PER_PASS);
-
         for (size_t i = 0; i < read_count; i++) {
             get_or_create_resource(fg, reads[i]);
         }
@@ -164,17 +137,13 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
         pass_index++;
     }
 
-    // Handle inplace aliases (set canonical names)
-    // Run multiple iterations until no changes - handles transitive closure
-    // E.g., if A->B and B->C are aliases, we need A, B, C all to have same canonical
     bool changed = true;
-    int max_iterations = 100;  // Safety limit
+    int max_iterations = 100;
     while (changed && max_iterations-- > 0) {
         changed = false;
         for (size_t i = 0; i < fg->node_count; i++) {
             tc_fg_node* node = &fg->nodes[i];
-
-            const char* aliases[8];  // pairs: read0, write0, read1, write1, ...
+            const char* aliases[8];
             size_t alias_count = tc_pass_get_inplace_aliases(node->pass, aliases, 4);
 
             for (size_t j = 0; j < alias_count; j++) {
@@ -185,7 +154,6 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
                 tc_fg_resource* write_res = find_resource(fg, write_name);
 
                 if (read_res && write_res) {
-                    // Write resource gets canonical name from read resource
                     if (strcmp(write_res->canonical, read_res->canonical) != 0) {
                         free(write_res->canonical);
                         write_res->canonical = tc_strdup(read_res->canonical);
@@ -196,17 +164,14 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
         }
     }
 
-    // Second pass: build edges (writer -> readers)
     for (size_t i = 0; i < fg->node_count; i++) {
         tc_fg_node* node = &fg->nodes[i];
-
         const char* reads[MAX_READS_PER_PASS];
         size_t read_count = tc_pass_get_reads(node->pass, reads, MAX_READS_PER_PASS);
 
         for (size_t j = 0; j < read_count; j++) {
             tc_fg_resource* res = find_resource(fg, reads[j]);
             if (res && res->writer_index >= 0 && res->writer_index != (int)i) {
-                // Add edge: writer -> this node
                 tc_fg_node* writer_node = &fg->nodes[res->writer_index];
                 if (add_dependent(writer_node, (int)i)) {
                     node->in_degree++;
@@ -215,7 +180,6 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
         }
     }
 
-    // Third pass: inplace passes must wait for all other readers of their input
     for (size_t i = 0; i < fg->node_count; i++) {
         tc_fg_node* node = &fg->nodes[i];
         if (!node->is_inplace) continue;
@@ -226,7 +190,6 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
         for (size_t j = 0; j < alias_count; j++) {
             const char* read_name = aliases[j * 2];
 
-            // Find all other passes that read this resource
             for (size_t k = 0; k < fg->node_count; k++) {
                 if (k == i) continue;
 
@@ -236,7 +199,6 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
 
                 for (size_t r = 0; r < other_read_count; r++) {
                     if (strcmp(other_reads[r], read_name) == 0) {
-                        // Other must execute before inplace pass
                         if (add_dependent(other, (int)i)) {
                             node->in_degree++;
                         }
@@ -251,24 +213,19 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
 }
 
 static bool topological_sort(tc_frame_graph* fg) {
-    // Kahn's algorithm with priority for non-inplace passes
-
     fg->schedule = (tc_pass**)malloc(fg->node_count * sizeof(tc_pass*));
     fg->schedule_count = 0;
 
-    // Copy in_degrees (we'll modify them)
     int* in_degree = (int*)malloc(fg->node_count * sizeof(int));
     for (size_t i = 0; i < fg->node_count; i++) {
         in_degree[i] = fg->nodes[i].in_degree;
     }
 
-    // Two queues: normal passes have priority over inplace passes
     int* queue_normal = (int*)malloc(fg->node_count * sizeof(int));
     int* queue_inplace = (int*)malloc(fg->node_count * sizeof(int));
     size_t qn_head = 0, qn_tail = 0;
     size_t qi_head = 0, qi_tail = 0;
 
-    // Initialize queues with zero in-degree nodes
     for (size_t i = 0; i < fg->node_count; i++) {
         if (in_degree[i] == 0) {
             if (fg->nodes[i].is_inplace) {
@@ -281,8 +238,6 @@ static bool topological_sort(tc_frame_graph* fg) {
 
     while (qn_head < qn_tail || qi_head < qi_tail) {
         int idx;
-
-        // Prefer normal passes
         if (qn_head < qn_tail) {
             idx = queue_normal[qn_head++];
         } else {
@@ -291,7 +246,6 @@ static bool topological_sort(tc_frame_graph* fg) {
 
         fg->schedule[fg->schedule_count++] = fg->nodes[idx].pass;
 
-        // Decrease in-degree of dependents
         tc_fg_node* node = &fg->nodes[idx];
         for (size_t i = 0; i < node->dependent_count; i++) {
             int dep_idx = node->dependents[i];
@@ -311,20 +265,14 @@ static bool topological_sort(tc_frame_graph* fg) {
     free(queue_normal);
     free(queue_inplace);
 
-    // Check for cycle
     if (fg->schedule_count != fg->node_count) {
-        snprintf(fg->error_message, sizeof(fg->error_message),
-                 "Dependency cycle detected in frame graph");
+        snprintf(fg->error_message, sizeof(fg->error_message), "Dependency cycle detected in frame graph");
         fg->error = TC_FG_ERROR_CYCLE;
         return false;
     }
 
     return true;
 }
-
-// ============================================================================
-// Public API
-// ============================================================================
 
 tc_frame_graph* tc_frame_graph_build(tc_pipeline_handle pipeline) {
     if (!tc_pipeline_pool_alive(pipeline)) return NULL;
@@ -336,33 +284,25 @@ tc_frame_graph* tc_frame_graph_build(tc_pipeline_handle pipeline) {
     fg->error_message[0] = '\0';
 
     if (!build_dependency_graph(fg, pipeline)) {
-        return fg;  // Return with error set
+        return fg;
     }
-
     if (!topological_sort(fg)) {
-        return fg;  // Return with error set
+        return fg;
     }
-
     return fg;
 }
 
 void tc_frame_graph_destroy(tc_frame_graph* fg) {
     if (!fg) return;
 
-    // Free resources
     for (size_t i = 0; i < fg->resource_count; i++) {
         free(fg->resources[i].name);
         free(fg->resources[i].canonical);
     }
-
-    // Free node adjacency lists
     for (size_t i = 0; i < fg->node_count; i++) {
         free(fg->nodes[i].dependents);
     }
-
-    // Free schedule
     free(fg->schedule);
-
     free(fg);
 }
 
@@ -375,13 +315,8 @@ const char* tc_frame_graph_get_error_message(tc_frame_graph* fg) {
     return fg->error_message;
 }
 
-size_t tc_frame_graph_get_schedule(
-    tc_frame_graph* fg,
-    tc_pass** out_passes,
-    size_t max_count
-) {
+size_t tc_frame_graph_get_schedule(tc_frame_graph* fg, tc_pass** out_passes, size_t max_count) {
     if (!fg || !out_passes || fg->error != TC_FG_OK) return 0;
-
     size_t count = fg->schedule_count < max_count ? fg->schedule_count : max_count;
     memcpy(out_passes, fg->schedule, count * sizeof(tc_pass*));
     return count;
@@ -398,45 +333,28 @@ tc_pass* tc_frame_graph_schedule_at(tc_frame_graph* fg, size_t index) {
 
 const char* tc_frame_graph_canonical_resource(tc_frame_graph* fg, const char* name) {
     if (!fg || !name) return name;
-
     tc_fg_resource* res = find_resource(fg, name);
     return res ? res->canonical : name;
 }
 
-size_t tc_frame_graph_get_alias_group(
-    tc_frame_graph* fg,
-    const char* canonical_name,
-    const char** out_names,
-    size_t max_count
-) {
+size_t tc_frame_graph_get_alias_group(tc_frame_graph* fg, const char* canonical_name, const char** out_names, size_t max_count) {
     if (!fg || !canonical_name || !out_names) return 0;
 
-    // Use the passed string directly as the canonical value to match
     size_t count = 0;
-
     for (size_t i = 0; i < fg->resource_count && count < max_count; i++) {
         if (strcmp(fg->resources[i].canonical, canonical_name) == 0) {
             out_names[count++] = fg->resources[i].name;
         }
     }
-
     return count;
 }
 
-size_t tc_frame_graph_get_canonical_resources(
-    tc_frame_graph* fg,
-    const char** out_names,
-    size_t max_count
-) {
+size_t tc_frame_graph_get_canonical_resources(tc_frame_graph* fg, const char** out_names, size_t max_count) {
     if (!fg || !out_names) return 0;
 
     size_t count = 0;
-
-    // Collect all unique canonical values (not just where name==canonical)
     for (size_t i = 0; i < fg->resource_count && count < max_count; i++) {
         const char* canonical = fg->resources[i].canonical;
-
-        // Check if this canonical is already in the output
         bool already_added = false;
         for (size_t j = 0; j < count; j++) {
             if (strcmp(out_names[j], canonical) == 0) {
@@ -444,12 +362,10 @@ size_t tc_frame_graph_get_canonical_resources(
                 break;
             }
         }
-
         if (!already_added) {
             out_names[count++] = canonical;
         }
     }
-
     return count;
 }
 
@@ -458,7 +374,6 @@ void tc_frame_graph_dump(tc_frame_graph* fg) {
         tc_log(TC_LOG_INFO, "[tc_frame_graph] NULL");
         return;
     }
-
     if (fg->error != TC_FG_OK) {
         tc_log(TC_LOG_ERROR, "[tc_frame_graph] Error: %s", fg->error_message);
         return;

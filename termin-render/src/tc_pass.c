@@ -1,24 +1,27 @@
-// tc_pass.c - Pass registry and external pass support
-#include "render/tc_pass.h"
-#include "render/tc_pipeline.h"
-#include "tc_pipeline_registry.h"
-#include "tc_type_registry.h"
-#include "termin_core.h"
+#include <render/tc_pass.h>
+#include <render/tc_pipeline.h>
+#include <tc_pipeline_registry.h>
+#include <tc_type_registry.h>
 #include <tcbase/tc_log.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stddef.h>
 
-// Cross-platform strdup
 #ifdef _WIN32
 #define tc_strdup _strdup
 #else
 #define tc_strdup strdup
 #endif
 
-// ============================================================================
-// Pass Property Setters
-// ============================================================================
+static tc_type_registry* g_pass_registry = NULL;
+
+#define PASS_REGISTRY_NODE_OFFSET offsetof(tc_pass, registry_node)
+
+static void ensure_pass_registry_initialized(void) {
+    if (!g_pass_registry) {
+        g_pass_registry = tc_type_registry_new();
+    }
+}
 
 void tc_pass_set_name(tc_pass* p, const char* name) {
     if (!p) return;
@@ -34,21 +37,6 @@ void tc_pass_set_passthrough(tc_pass* p, bool passthrough) {
     if (p) p->passthrough = passthrough;
 }
 
-// ============================================================================
-// Pass Registry - uses tc_type_registry for storage
-// ============================================================================
-
-static tc_type_registry* g_pass_registry = NULL;
-
-// Offset macro for intrusive list node
-#define PASS_REGISTRY_NODE_OFFSET offsetof(tc_pass, registry_node)
-
-static void ensure_pass_registry_initialized(void) {
-    if (!g_pass_registry) {
-        g_pass_registry = tc_type_registry_new();
-    }
-}
-
 void tc_pass_registry_register(
     const char* type_name,
     tc_pass_factory factory,
@@ -56,9 +44,7 @@ void tc_pass_registry_register(
     tc_pass_kind kind
 ) {
     if (!type_name) return;
-
     ensure_pass_registry_initialized();
-
     tc_type_registry_register(
         g_pass_registry,
         type_name,
@@ -87,12 +73,9 @@ tc_pass* tc_pass_registry_create(const char* type_name) {
         return NULL;
     }
 
-    // Create via type entry's factory
     tc_pass* p = (tc_pass*)tc_type_entry_create(entry);
     if (p) {
         p->kind = (tc_pass_kind)entry->kind;
-
-        // Link to type registry for instance tracking
         p->type_entry = entry;
         p->type_version = entry->version;
         tc_type_entry_link_instance(entry, p, PASS_REGISTRY_NODE_OFFSET);
@@ -112,7 +95,6 @@ const char* tc_pass_registry_type_at(size_t index) {
 
 tc_pass_kind tc_pass_registry_get_kind(const char* type_name) {
     if (!g_pass_registry) return TC_NATIVE_PASS;
-
     tc_type_entry* entry = tc_type_registry_get(g_pass_registry, type_name);
     return entry ? (tc_pass_kind)entry->kind : TC_NATIVE_PASS;
 }
@@ -124,23 +106,16 @@ tc_type_entry* tc_pass_registry_get_entry(const char* type_name) {
 
 size_t tc_pass_registry_instance_count(const char* type_name) {
     if (!type_name || !g_pass_registry) return 0;
-
     tc_type_entry* entry = tc_type_registry_get(g_pass_registry, type_name);
     return tc_type_entry_instance_count(entry);
 }
 
 void tc_pass_unlink_from_registry(tc_pass* p) {
     if (!p || !p->type_entry) return;
-
     tc_type_entry_unlink_instance(p->type_entry, p, PASS_REGISTRY_NODE_OFFSET);
-
     p->type_entry = NULL;
     p->type_version = 0;
 }
-
-// ============================================================================
-// Pass Registry Cleanup (called by tc_shutdown)
-// ============================================================================
 
 void tc_pass_registry_cleanup(void) {
     if (g_pass_registry) {
@@ -149,13 +124,8 @@ void tc_pass_registry_cleanup(void) {
     }
 }
 
-// ============================================================================
-// External Pass Support
-// ============================================================================
-
 static tc_external_pass_callbacks g_external_callbacks = {0};
 
-// External pass vtable callbacks
 static void external_execute(tc_pass* p, void* ctx) {
     if (g_external_callbacks.execute && p->body) {
         g_external_callbacks.execute(p->body, ctx);
@@ -230,7 +200,6 @@ tc_pass* tc_pass_new_external(void* body, const char* type_name, const tc_pass_r
     p->ref_vtable = ref_vtable;
     p->kind = TC_EXTERNAL_PASS;
 
-    // Link to type registry for type name and instance tracking
     if (!type_name) {
         tc_log(TC_LOG_ERROR, "[tc_pass_new_external] type_name is NULL!");
         free(p);
@@ -253,14 +222,10 @@ tc_pass* tc_pass_new_external(void* body, const char* type_name, const tc_pass_r
 }
 
 void tc_pass_free_external(tc_pass* p) {
-    if (p) {
-        // Unlink from registry
-        tc_pass_unlink_from_registry(p);
-
-        if (p->pass_name) free(p->pass_name);
-        if (p->viewport_name) free(p->viewport_name);
-        if (p->debug_internal_symbol) free(p->debug_internal_symbol);
-        free(p);
-    }
+    if (!p) return;
+    tc_pass_unlink_from_registry(p);
+    if (p->pass_name) free(p->pass_name);
+    if (p->viewport_name) free(p->viewport_name);
+    if (p->debug_internal_symbol) free(p->debug_internal_symbol);
+    free(p);
 }
-

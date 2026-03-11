@@ -159,7 +159,6 @@ set(ENTITY_LIB_SOURCES
     termin/camera/orbit_camera_controller.cpp
     termin/lighting/light_component.cpp
     ${TERMIN_ROOT}/core_c/src/tc_inspect_component_adapter.cpp
-    ${TERMIN_ROOT}/core_c/src/tc_inspect_pass_adapter.cpp
     ${TERMIN_ROOT}/core_c/src/tc_rendering_manager_instance.cpp
     ${TERMIN_ROOT}/core_c/src/tc_engine_core_instance.cpp
     ${TERMIN_ROOT}/core_c/src/tc_scene_manager_instance.cpp
@@ -185,11 +184,11 @@ target_include_directories(entity_lib PUBLIC
 )
 if(TERMIN_BUILD_PYTHON)
     find_package(nanobind CONFIG REQUIRED)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic PRIVATE trent nanobind Python::Python)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_render::termin_render PRIVATE trent nanobind Python::Python)
     target_link_libraries(entity_lib PUBLIC termin_inspect::termin_inspect_python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
 else()
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic PRIVATE trent)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_render::termin_render PRIVATE trent)
 endif()
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
@@ -235,9 +234,7 @@ set_target_properties(animation_lib PROPERTIES
 set(RENDER_LIB_SOURCES
     # Render extension for TcSceneRef (uses RenderingManager)
     termin/tc_scene_render_ext.cpp
-    termin/render/drawable.cpp
     termin/render/mesh_renderer.cpp
-    termin/render/frame_pass.cpp
     termin/render/fbo_pool.cpp
     termin/render/render_engine.cpp
     termin/render/render_pipeline.cpp
@@ -264,11 +261,9 @@ set(RENDER_LIB_SOURCES
     termin/render/graph_data.cpp
     termin/render/graph_compiler.cpp
     termin/render/scene_pipeline_template.cpp
-    termin/render/tc_pass_ref.cpp
     termin/modules/term_modules_integration.cpp
     termin/lighting/shadow.cpp
     termin/texture/tc_texture_handle.cpp
-    termin/editor/frame_graph_debugger_core.cpp
     termin/camera/camera_viewport_component.cpp
     termin/viewport_config.cpp
 )

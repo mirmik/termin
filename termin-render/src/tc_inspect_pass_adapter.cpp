@@ -1,13 +1,10 @@
-// tc_inspect_pass_adapter.cpp - Render pass adapter for inspect API
-
-#include "inspect/tc_inspect_pass_adapter.h"
-#include "render/tc_pass.h"
-#include "../../cpp/termin/render/frame_pass.hpp"
+#include <inspect/tc_inspect_pass_adapter.h>
+#include <render/tc_pass.h>
+#include <termin/render/frame_pass.hpp>
 
 extern "C" {
 
 void tc_inspect_pass_adapter_init(void) {
-    // Pass adapter currently has no extra registration stage.
 }
 
 tc_value tc_pass_inspect_get(tc_pass* p, const char* path) {
@@ -44,4 +41,4 @@ void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, void* con
     tc_inspect_set(obj, type_name, path, value, context);
 }
 
-} // extern "C"
+}

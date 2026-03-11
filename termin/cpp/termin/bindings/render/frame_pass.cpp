@@ -13,7 +13,7 @@ extern "C" {
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/tc_pass.hpp"
 #include "termin/render/render_context.hpp"
-#include "termin/editor/frame_graph_debugger_core.hpp"
+#include <termin/render/frame_graph_debugger_core.hpp>
 #include "termin/render/execute_context.hpp"
 #include "termin/render/render.hpp"
 #include "termin/render/color_pass.hpp"

@@ -2,7 +2,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include "termin/editor/frame_graph_debugger_core.hpp"
+#include <termin/render/frame_graph_debugger_core.hpp>
 #include "termin/render/frame_pass.hpp"
 
 namespace nb = nanobind;

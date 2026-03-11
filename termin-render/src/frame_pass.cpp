@@ -1,24 +1,6 @@
-// frame_pass.cpp - CxxFramePass implementation with embedded tc_pass
-#include "frame_pass.hpp"
-#include "execute_context.hpp"
-#include <termin/tc_scene.hpp>
-#include "termin/tc_scene_render_ext.hpp"
-#include "termin/camera/camera_component.hpp"
-#include "termin/lighting/light.hpp"
-#include <tcbase/tc_log.hpp>
-#include <algorithm>
-#include <cstdlib>
-#include <cstring>
-
-extern "C" {
-#include "termin_core.h"
-}
+#include <termin/render/frame_pass.hpp>
 
 namespace termin {
-
-// ============================================================================
-// C++ ref_vtable for CxxFramePass
-// ============================================================================
 
 static void cxx_pass_ref_retain(tc_pass* p) {
     auto* self = CxxFramePass::from_tc(p);
@@ -41,15 +23,10 @@ static const tc_pass_ref_vtable g_cxx_pass_ref_vtable = {
     cxx_pass_ref_drop,
 };
 
-// ============================================================================
-// Static vtable callbacks - use from_tc() to recover C++ object
-// ============================================================================
-
 void CxxFramePass::_cb_execute(tc_pass* p, void* ctx) {
     CxxFramePass* self = from_tc(p);
     if (!self || !ctx) return;
 
-    // ctx is ExecuteContext* for C++ passes
     ExecuteContext* cpp_ctx = static_cast<ExecuteContext*>(ctx);
     self->execute(*cpp_ctx);
 }
@@ -90,13 +67,11 @@ size_t CxxFramePass::_cb_get_inplace_aliases(tc_pass* p, const char** out, size_
     self->_cached_aliases.clear();
     self->_cached_aliases.reserve(aliases.size() * 2);
 
-    // Store strings in cache to keep them alive
     for (const auto& [read_name, write_name] : aliases) {
         self->_cached_aliases.push_back(read_name);
         self->_cached_aliases.push_back(write_name);
     }
 
-    // Output pointers to cached strings
     size_t pair_count = std::min(aliases.size(), max);
     for (size_t i = 0; i < pair_count; i++) {
         out[i * 2] = self->_cached_aliases[i * 2].c_str();
@@ -125,7 +100,6 @@ size_t CxxFramePass::_cb_get_internal_symbols(tc_pass* p, const char** out, size
     if (!self || !out) return 0;
 
     self->_cached_symbols = self->get_internal_symbols();
-
     size_t count = std::min(self->_cached_symbols.size(), max);
     for (size_t i = 0; i < count; i++) {
         out[i] = self->_cached_symbols[i].c_str();
@@ -140,10 +114,6 @@ void CxxFramePass::_cb_destroy(tc_pass* p) {
     }
 }
 
-// ============================================================================
-// Static vtable definition
-// ============================================================================
-
 const tc_pass_vtable CxxFramePass::_cpp_vtable = {
     .execute = CxxFramePass::_cb_execute,
     .get_reads = CxxFramePass::_cb_get_reads,
@@ -156,10 +126,6 @@ const tc_pass_vtable CxxFramePass::_cpp_vtable = {
     .deserialize = nullptr,
 };
 
-// ============================================================================
-// Constructors / Destructor
-// ============================================================================
-
 CxxFramePass::CxxFramePass() {
     _init_tc_pass();
 }
@@ -167,10 +133,6 @@ CxxFramePass::CxxFramePass() {
 CxxFramePass::~CxxFramePass() {
     _cleanup_tc_pass();
 }
-
-// ============================================================================
-// tc_pass management
-// ============================================================================
 
 void CxxFramePass::_init_tc_pass() {
     tc_pass_init(&_c, &_cpp_vtable);

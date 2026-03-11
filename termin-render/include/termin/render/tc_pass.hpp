@@ -1,24 +1,19 @@
 #pragma once
 
-#include <string>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 extern "C" {
+#include "core/tc_scene.h"
 #include "render/tc_pass.h"
 #include "tc_value.h"
-#include "core/tc_scene.h"
 }
 
 namespace termin {
 
-// Forward declarations
-class TcPass;
 class CxxFramePass;
-
-// ============================================================================
-// TcPassRef - non-owning reference to tc_pass
-// ============================================================================
+class TcPass;
 
 class TcPassRef {
 public:
@@ -65,26 +60,17 @@ public:
         _c->viewport_name = name.empty() ? nullptr : strdup(name.c_str());
     }
 
-    // Get object pointer for InspectRegistry operations
     void* object_ptr() const;
-
-    // Set field value via InspectRegistry (uses tc_value)
     bool set_field(const std::string& field_name, const tc_value& value);
 
     tc_pass* ptr() const { return _c; }
 };
-
-// ============================================================================
-// TcPass - owning wrapper for external (Python) passes
-// ============================================================================
 
 class TcPass {
 public:
     tc_pass* _c = nullptr;
 
     TcPass() = default;
-
-    // Takes ownership of tc_pass created by tc_pass_new_external
     explicit TcPass(tc_pass* p) : _c(p) {}
 
     ~TcPass() {
@@ -94,14 +80,13 @@ public:
         }
     }
 
-    // Disable copy
     TcPass(const TcPass&) = delete;
     TcPass& operator=(const TcPass&) = delete;
 
-    // Move
     TcPass(TcPass&& other) noexcept : _c(other._c) {
         other._c = nullptr;
     }
+
     TcPass& operator=(TcPass&& other) noexcept {
         if (this != &other) {
             if (_c) tc_pass_free_external(_c);
@@ -111,10 +96,8 @@ public:
         return *this;
     }
 
-    // Convert to non-owning reference
     TcPassRef ref() const { return TcPassRef(_c); }
 
-    // Properties (delegate to ref)
     std::string pass_name() const { return ref().pass_name(); }
     void set_pass_name(const std::string& name) { ref().set_pass_name(name); }
 
