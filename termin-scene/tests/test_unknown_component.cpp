@@ -343,6 +343,66 @@ int test_custom_upgrade_strategy() {
     return 0;
 }
 
+int test_custom_upgrade_from_unregistered_source_type() {
+    std::cout << "Testing custom upgrade from unregistered source type...\n";
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("custom_upgrade_foreign");
+    const std::string json = R"({
+        "entities": [{
+            "uuid": "33333333-3333-3333-3333-333333333333",
+            "name": "entity",
+            "components": [{
+                "type": "ForeignComponent",
+                "data": { "value": 700 }
+            }]
+        }]
+    })";
+
+    termin::UnknownUpgradeStrategy strategy =
+        [](const termin::UnknownComponent& unknown,
+           const termin::Entity&,
+           const termin::TcSceneRef&) -> termin::UnknownUpgradeDecision {
+            if (unknown.original_type != "ForeignComponent") {
+                return termin::UnknownUpgradeDecision::default_upgrade();
+            }
+
+            tc_value* value = tc_value_dict_get(
+                const_cast<tc_value*>(&unknown.original_data), "value");
+            if (value == nullptr || value->type != TC_VALUE_INT) {
+                return termin::UnknownUpgradeDecision::skip();
+            }
+
+            tc_value target_data = tc_value_dict_new();
+            tc_value_dict_set(&target_data, "amount", tc_value_int(value->data.i + 2));
+            auto decision = termin::UnknownUpgradeDecision::custom(
+                "SecondaryComponent", &target_data);
+            tc_value_free(&target_data);
+            return decision;
+        };
+
+    scene.from_json_string(
+        json,
+        termin::ComponentDeserializationMode::UnknownOnly,
+        strategy,
+        true);
+
+    const auto entities = scene.get_all_entities();
+    TEST_ASSERT(entities.size() == 1, "single entity created");
+    termin::Entity entity = entities.front();
+    TEST_ASSERT(entity.valid(), "entity created");
+    TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                "UnknownComponent upgraded away");
+
+    auto* upgraded =
+        dynamic_cast<SecondaryComponent*>(entity.get_component<SecondaryComponent>());
+    TEST_ASSERT(upgraded != nullptr, "target component created from foreign source");
+    TEST_ASSERT(upgraded->amount == 702, "custom payload applied from foreign source");
+
+    scene.destroy();
+    std::cout << "  Custom upgrade from unregistered source: PASS\n";
+    return 0;
+}
+
 } // namespace
 
 int main() {
@@ -356,6 +416,7 @@ int main() {
     result |= test_upgrade_requires_registered_type();
     result |= test_unknown_only_deserialization();
     result |= test_custom_upgrade_strategy();
+    result |= test_custom_upgrade_from_unregistered_source_type();
 
     if (result == 0) {
         std::cout << "\nAll UnknownComponent tests passed.\n";

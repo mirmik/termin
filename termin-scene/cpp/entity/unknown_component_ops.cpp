@@ -391,7 +391,8 @@ UnknownComponentStats upgrade_unknown_components(const TcSceneRef& scene,
                 continue;
             }
 
-            if (!ComponentRegistry::instance().has(unknown_obj->original_type)) {
+            if (!strategy &&
+                !ComponentRegistry::instance().has(unknown_obj->original_type)) {
                 ++stats.skipped;
                 continue;
             }
