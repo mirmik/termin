@@ -2,7 +2,6 @@
 #include <tcbase/tc_log.hpp>
 #include "tc_profiler.h"
 #include "termin/camera/camera_component.hpp"
-#include "termin/lighting/light_component.hpp"
 
 extern "C" {
 #include "render/tc_frame_graph.h"
@@ -15,33 +14,6 @@ extern "C" {
 }
 
 namespace termin {
-
-std::vector<Light> build_lights_from_scene(tc_scene_handle scene) {
-    std::vector<Light> lights;
-    if (!tc_scene_handle_valid(scene)) return lights;
-
-    // Iterate all LightComponent in scene
-    tc_component* c = tc_scene_first_component_of_type(scene, "LightComponent");
-    while (c != nullptr) {
-        // Check if component is enabled
-        if (!c->enabled) {
-            c = c->type_next;
-            continue;
-        }
-
-        // Get LightComponent from tc_component
-        // For C++ components, body points to CxxComponent (LightComponent)
-        if (c->body && c->native_language == TC_LANGUAGE_CXX) {
-            LightComponent* light_comp = static_cast<LightComponent*>(c->body);
-            Light light = light_comp->to_light();
-            lights.push_back(light);
-        }
-
-        c = c->type_next;
-    }
-
-    return lights;
-}
 
 RenderEngine::RenderEngine(GraphicsBackend* graphics)
     : graphics(graphics)
@@ -86,21 +58,6 @@ void RenderEngine::render_to_screen(
         empty_lights,
         0xFFFFFFFFFFFFFFFFULL
     );
-}
-
-void RenderEngine::render_view_to_fbo(
-    RenderPipeline* pipeline,
-    FramebufferHandle* target_fbo,
-    int width,
-    int height,
-    tc_scene_handle scene,
-    CameraComponent* camera,
-    tc_viewport_handle viewport,
-    uint64_t layer_mask
-) {
-    // Build lights from scene and delegate to full version
-    std::vector<Light> lights = build_lights_from_scene(scene);
-    render_view_to_fbo(pipeline, target_fbo, width, height, scene, camera, viewport, lights, layer_mask);
 }
 
 void RenderEngine::present_to_screen(
@@ -427,17 +384,6 @@ void RenderEngine::render_view_to_fbo(
     tc_profiler_end_section(); // Execute Passes
 
     // Frame graph is cached by pipeline, do not destroy
-}
-
-void RenderEngine::render_scene_pipeline_offscreen(
-    RenderPipeline* pipeline,
-    tc_scene_handle scene,
-    const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
-    const std::string& default_viewport
-) {
-    // Build lights from scene and delegate to full version
-    std::vector<Light> lights = build_lights_from_scene(scene);
-    render_scene_pipeline_offscreen(pipeline, scene, viewport_contexts, lights, default_viewport);
 }
 
 void RenderEngine::render_scene_pipeline_offscreen(

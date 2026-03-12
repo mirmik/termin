@@ -1,6 +1,6 @@
 // display_input_router_bindings.cpp - Python bindings for DisplayInputRouter
 #include "display_input_router_bindings.hpp"
-#include "../../input/display_input_router.hpp"
+#include "termin/input/display_input_router.hpp"
 #include "render/tc_display.h"
 #include "render/tc_render_surface.h"
 

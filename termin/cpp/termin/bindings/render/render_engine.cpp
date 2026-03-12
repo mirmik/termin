@@ -45,7 +45,7 @@ void bind_render_engine(nb::module_& m) {
                     throw;
                 }
             }
-            // Use overload that builds lights from scene automatically
+            std::vector<Light> lights;
             self.render_view_to_fbo(
                 &pipeline,
                 target_fbo,
@@ -54,6 +54,7 @@ void bind_render_engine(nb::module_& m) {
                 scene_ref.handle(),
                 camera,
                 vh,
+                lights,
                 layer_mask
             );
         },
@@ -72,11 +73,12 @@ void bind_render_engine(nb::module_& m) {
             const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
             const std::string& default_viewport
         ) {
-            // Use overload that builds lights from scene automatically
+            std::vector<Light> lights;
             self.render_scene_pipeline_offscreen(
                 &pipeline,
                 scene_ref.handle(),
                 viewport_contexts,
+                lights,
                 default_viewport
             );
         },
