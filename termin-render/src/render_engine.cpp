@@ -1,16 +1,15 @@
-#include "render_engine.hpp"
+#include <termin/render/render_engine.hpp>
+
 #include <tcbase/tc_log.hpp>
 #include "tc_profiler.h"
+#include "tc_project_settings.h"
 
 extern "C" {
 #include "render/tc_frame_graph.h"
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
-#include "render/tc_viewport.h"
-#include "render/tc_viewport_pool.h"
 #include "core/tc_scene.h"
 #include "core/tc_component.h"
-#include "tc_project_settings.h"
 }
 
 namespace termin {
@@ -27,7 +26,6 @@ void RenderEngine::render_to_screen(
     tc_scene_handle scene,
     const RenderCamera& camera
 ) {
-    // Validate inputs before passing to render_view_to_fbo
     if (!pipeline) {
         tc::Log::error("[render_to_screen] pipeline is NULL");
         return;
@@ -39,12 +37,13 @@ void RenderEngine::render_to_screen(
     std::vector<Light> empty_lights;
     render_view_to_fbo(
         pipeline,
-        nullptr,  // null = default framebuffer
+        nullptr,
         width,
         height,
         scene,
         camera,
-        TC_VIEWPORT_HANDLE_INVALID,  // no viewport
+        "",
+        TC_ENTITY_HANDLE_INVALID,
         empty_lights,
         0xFFFFFFFFFFFFFFFFULL
     );
@@ -61,11 +60,9 @@ void RenderEngine::present_to_screen(
         return;
     }
 
-    // Get FBO from pipeline's pool
     FramebufferHandle* src_fbo = pipeline->fbo_pool().get(resource_name);
     if (!src_fbo) {
         tc::Log::warn("[present_to_screen] FBO '%s' not found in pipeline. Available FBOs:", resource_name.c_str());
-        // List available FBOs
         auto& pool = pipeline->fbo_pool();
         for (const auto& key : pool.keys()) {
             auto* fbo = pool.get(key);
@@ -74,14 +71,13 @@ void RenderEngine::present_to_screen(
         return;
     }
 
-    // Blit to default framebuffer (screen)
     graphics->blit_framebuffer(
         src_fbo,
-        nullptr,  // dst = default framebuffer
+        nullptr,
         0, 0, src_fbo->get_width(), src_fbo->get_height(),
         0, 0, width, height,
-        true,   // blit color
-        false   // don't blit depth
+        true,
+        false
     );
 }
 
@@ -92,7 +88,8 @@ void RenderEngine::render_view_to_fbo(
     int height,
     tc_scene_handle scene,
     const RenderCamera& camera,
-    tc_viewport_handle viewport,
+    const std::string& viewport_name,
+    tc_entity_handle internal_entities,
     const std::vector<Light>& lights,
     uint64_t layer_mask
 ) {
@@ -109,7 +106,6 @@ void RenderEngine::render_view_to_fbo(
         return;
     }
 
-    // Get cached frame graph (rebuilds only if pipeline is dirty)
     tc_frame_graph* fg = tc_pipeline_get_frame_graph(pipeline->handle());
     if (!fg) {
         tc::Log::error("RenderEngine::render_view_to_fbo: failed to get frame graph");
@@ -122,10 +118,8 @@ void RenderEngine::render_view_to_fbo(
         return;
     }
 
-    // Collect resource specs from pipeline + passes
     auto specs = pipeline->collect_specs();
 
-    // Build spec map - merge specs with same resource name
     std::unordered_map<std::string, ResourceSpec> spec_map;
     for (const auto& spec : specs) {
         auto it = spec_map.find(spec.resource);
@@ -148,7 +142,6 @@ void RenderEngine::render_view_to_fbo(
         }
     }
 
-    // Allocate resources based on canonical names from frame graph
     FBOMap resources;
     resources["OUTPUT"] = target_fbo;
     resources["DISPLAY"] = target_fbo;
@@ -159,7 +152,6 @@ void RenderEngine::render_view_to_fbo(
     for (size_t i = 0; i < canon_count; i++) {
         const char* canon = canonical_names[i];
 
-        // Skip OUTPUT/DISPLAY
         if (strcmp(canon, "OUTPUT") == 0 || strcmp(canon, "DISPLAY") == 0) {
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
@@ -169,7 +161,6 @@ void RenderEngine::render_view_to_fbo(
             continue;
         }
 
-        // Find spec
         const ResourceSpec* spec = nullptr;
         auto it = spec_map.find(canon);
         if (it != spec_map.end()) {
@@ -185,13 +176,11 @@ void RenderEngine::render_view_to_fbo(
             }
         }
 
-        // Determine resource type
         std::string resource_type = "fbo";
         if (spec && !spec->resource_type.empty()) {
             resource_type = spec->resource_type;
         }
 
-        // Handle shadow_map_array resources
         if (resource_type == "shadow_map_array") {
             auto& shadow_array = pipeline->shadow_arrays()[canon];
             if (!shadow_array) {
@@ -210,7 +199,6 @@ void RenderEngine::render_view_to_fbo(
             continue;
         }
 
-        // Skip other non-FBO resources
         if (resource_type != "fbo") {
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
@@ -220,7 +208,6 @@ void RenderEngine::render_view_to_fbo(
             continue;
         }
 
-        // Determine FBO parameters
         int fbo_width = width;
         int fbo_height = height;
         int samples = 1;
@@ -237,11 +224,9 @@ void RenderEngine::render_view_to_fbo(
             filter = spec->filter;
         }
 
-        // Get or create FBO in pipeline's pool
         FBOPool& fbo_pool = pipeline->fbo_pool();
         FramebufferHandle* fbo = fbo_pool.ensure(graphics, canon, fbo_width, fbo_height, samples, format, filter);
 
-        // Set for all aliases and register aliases in pool
         const char* aliases[64];
         size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
         for (size_t j = 0; j < alias_count; j++) {
@@ -250,7 +235,6 @@ void RenderEngine::render_view_to_fbo(
         }
     }
 
-    // Clear resources according to specs
     for (const auto& spec : specs) {
         if (spec.resource_type != "fbo" && !spec.resource_type.empty()) {
             continue;
@@ -265,8 +249,6 @@ void RenderEngine::render_view_to_fbo(
         }
 
         FrameGraphResource* resource = it->second;
-        
-
         FramebufferHandle* fbo = nullptr;
         try {
             fbo = dynamic_cast<FramebufferHandle*>(resource);
@@ -304,7 +286,6 @@ void RenderEngine::render_view_to_fbo(
         }
     }
 
-    // Execute passes in schedule order
     size_t schedule_count = tc_frame_graph_schedule_count(fg);
 
     tc_profiler_begin_section("Execute Passes");
@@ -314,13 +295,11 @@ void RenderEngine::render_view_to_fbo(
             continue;
         }
 
-        // Profile each pass by name
         const char* pass_name = pass->pass_name ? pass->pass_name : "UnnamedPass";
         tc_profiler_begin_section(pass_name);
 
         graphics->reset_state();
 
-        // Build reads/writes FBO maps for this pass
         const char* reads[16];
         const char* writes[8];
         size_t read_count = tc_pass_get_reads(pass, reads, 16);
@@ -338,42 +317,32 @@ void RenderEngine::render_view_to_fbo(
             pass_writes[writes[j]] = (it != resources.end()) ? it->second : nullptr;
         }
 
-        // Build ExecuteContext
-        const char* viewport_name = tc_viewport_handle_valid(viewport)
-            ? tc_viewport_get_name(viewport)
-            : nullptr;
         ExecuteContext ctx;
         ctx.graphics = graphics;
         ctx.reads_fbos = std::move(pass_reads);
         ctx.writes_fbos = std::move(pass_writes);
         ctx.rect = Rect4i{0, 0, width, height};
         ctx.scene = TcSceneRef(scene);
-        ctx.viewport_name = viewport_name ? viewport_name : "";
-        ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
+        ctx.viewport_name = viewport_name;
+        ctx.internal_entities = internal_entities;
         ctx.camera = const_cast<RenderCamera*>(&camera);
         ctx.lights = lights;
         ctx.layer_mask = layer_mask;
 
-        // Execute pass via vtable
         tc_pass_execute(pass, &ctx);
 
-
         tc_profiler_begin_section("Sync Operations");
-
-        // Apply render sync between passes (for debugging)
         tc_render_sync_mode sync_mode = tc_project_settings_get_render_sync_mode();
         if (sync_mode == TC_RENDER_SYNC_FLUSH) {
             graphics->flush();
         } else if (sync_mode == TC_RENDER_SYNC_FINISH) {
             graphics->finish();
         }
-        tc_profiler_end_section(); // Sync Operations
+        tc_profiler_end_section();
 
-        tc_profiler_end_section(); // pass_name
+        tc_profiler_end_section();
     }
-    tc_profiler_end_section(); // Execute Passes
-
-    // Frame graph is cached by pipeline, do not destroy
+    tc_profiler_end_section();
 }
 
 void RenderEngine::render_scene_pipeline_offscreen(
@@ -396,7 +365,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
         return;
     }
 
-    // Select default viewport
     std::string default_vp = default_viewport;
     if (default_vp.empty()) {
         default_vp = viewport_contexts.begin()->first;
@@ -411,7 +379,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
     int default_width = default_ctx.rect.width;
     int default_height = default_ctx.rect.height;
 
-    // Get cached frame graph (rebuilds only if pipeline is dirty)
     tc_profiler_begin_section("Get Frame Graph");
     tc_frame_graph* fg = tc_pipeline_get_frame_graph(pipeline->handle());
     if (!fg) {
@@ -428,12 +395,9 @@ void RenderEngine::render_scene_pipeline_offscreen(
     }
     tc_profiler_end_section();
 
-    // Collect resource specs from pipeline + passes
     tc_profiler_begin_section("Collect Specs");
     auto specs = pipeline->collect_specs();
 
-    // Build spec map - merge specs with same resource name
-    // Pipeline specs come first and have priority for samples/format
     std::unordered_map<std::string, ResourceSpec> spec_map;
     for (const auto& spec : specs) {
         auto it = spec_map.find(spec.resource);
@@ -457,11 +421,8 @@ void RenderEngine::render_scene_pipeline_offscreen(
     }
     tc_profiler_end_section();
 
-    // Allocate resources based on canonical names from frame graph
     tc_profiler_begin_section("Allocate Resources");
     FBOMap resources;
-
-    // Set OUTPUT/DISPLAY to default viewport's output_fbo
     resources["OUTPUT"] = default_ctx.output_fbo;
     resources["DISPLAY"] = default_ctx.output_fbo;
 
@@ -471,7 +432,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
     for (size_t i = 0; i < canon_count; i++) {
         const char* canon = canonical_names[i];
 
-        // Skip OUTPUT/DISPLAY - handled per-pass based on viewport
         if (strcmp(canon, "OUTPUT") == 0 || strcmp(canon, "DISPLAY") == 0) {
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
@@ -481,7 +441,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
             continue;
         }
 
-        // Find spec
         const ResourceSpec* spec = nullptr;
         auto it = spec_map.find(canon);
         if (it != spec_map.end()) {
@@ -497,15 +456,12 @@ void RenderEngine::render_scene_pipeline_offscreen(
             }
         }
 
-        // Determine resource type
         std::string resource_type = "fbo";
         if (spec && !spec->resource_type.empty()) {
             resource_type = spec->resource_type;
         }
 
-        // Handle shadow_map_array resources
         if (resource_type == "shadow_map_array") {
-            // Get or create ShadowMapArrayResource
             auto& shadow_array = pipeline->shadow_arrays()[canon];
             if (!shadow_array) {
                 int resolution = 1024;
@@ -515,7 +471,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
                 shadow_array = std::make_unique<ShadowMapArrayResource>(resolution);
             }
 
-            // Set for all aliases
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
             for (size_t j = 0; j < alias_count; j++) {
@@ -524,7 +479,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
             continue;
         }
 
-        // Skip other non-FBO resources
         if (resource_type != "fbo") {
             const char* aliases[64];
             size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
@@ -534,7 +488,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
             continue;
         }
 
-        // Determine FBO parameters
         int fbo_width = default_width;
         int fbo_height = default_height;
         int samples = 1;
@@ -551,11 +504,9 @@ void RenderEngine::render_scene_pipeline_offscreen(
             filter = spec->filter;
         }
 
-        // Get or create FBO in pipeline's pool
         FBOPool& fbo_pool = pipeline->fbo_pool();
         FramebufferHandle* fbo = fbo_pool.ensure(graphics, canon, fbo_width, fbo_height, samples, format, filter);
 
-        // Set for all aliases and register aliases in pool
         const char* aliases[64];
         size_t alias_count = tc_frame_graph_get_alias_group(fg, canon, aliases, 64);
         for (size_t j = 0; j < alias_count; j++) {
@@ -565,7 +516,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
     }
     tc_profiler_end_section();
 
-    // Clear resources according to specs
     tc_profiler_begin_section("Clear Resources");
     for (const auto& spec : specs) {
         if (spec.resource_type != "fbo" && !spec.resource_type.empty()) {
@@ -581,8 +531,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
         }
 
         FrameGraphResource* resource = it->second;
-                     
-
         FramebufferHandle* fbo = nullptr;
         try {
             fbo = dynamic_cast<FramebufferHandle*>(resource);
@@ -621,7 +569,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
     }
     tc_profiler_end_section();
 
-    // Execute passes in schedule order
     size_t schedule_count = tc_frame_graph_schedule_count(fg);
 
     tc_profiler_begin_section("Execute Passes");
@@ -631,13 +578,11 @@ void RenderEngine::render_scene_pipeline_offscreen(
             continue;
         }
 
-        // Profile each pass by name
         const char* pass_name = pass->pass_name ? pass->pass_name : "UnnamedPass";
         tc_profiler_begin_section(pass_name);
 
         graphics->reset_state();
 
-        // Determine viewport context for this pass
         std::string pass_viewport_name = default_vp;
         if (pass->viewport_name && pass->viewport_name[0] != '\0') {
             pass_viewport_name = pass->viewport_name;
@@ -649,7 +594,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
         }
         const ViewportContext& vp_ctx = vp_it->second;
 
-        // Build reads/writes FBO maps for this pass
         const char* reads[16];
         const char* writes[8];
         size_t read_count = tc_pass_get_reads(pass, reads, 16);
@@ -666,7 +610,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
 
         for (size_t j = 0; j < write_count; j++) {
             const char* write_name = writes[j];
-            // For OUTPUT/DISPLAY, use this viewport's output_fbo
             if (strcmp(write_name, "OUTPUT") == 0 || strcmp(write_name, "DISPLAY") == 0) {
                 pass_writes[write_name] = vp_ctx.output_fbo;
             } else {
@@ -676,7 +619,6 @@ void RenderEngine::render_scene_pipeline_offscreen(
             }
         }
 
-        // Build ExecuteContext
         ExecuteContext ctx;
         ctx.graphics = graphics;
         ctx.reads_fbos = std::move(pass_reads);
@@ -689,10 +631,8 @@ void RenderEngine::render_scene_pipeline_offscreen(
         ctx.lights = lights;
         ctx.layer_mask = vp_ctx.layer_mask;
 
-        // Execute pass via vtable (works for both C++ and Python passes)
         tc_pass_execute(pass, &ctx);
 
-        // Apply render sync between passes (for debugging)
         tc_render_sync_mode sync_mode = tc_project_settings_get_render_sync_mode();
         if (sync_mode == TC_RENDER_SYNC_FLUSH) {
             graphics->flush();
@@ -700,11 +640,9 @@ void RenderEngine::render_scene_pipeline_offscreen(
             graphics->finish();
         }
 
-        tc_profiler_end_section(); // pass_name
+        tc_profiler_end_section();
     }
-    tc_profiler_end_section(); // Execute Passes
-
-    // Frame graph is cached by pipeline, do not destroy
+    tc_profiler_end_section();
 }
 
 } // namespace termin

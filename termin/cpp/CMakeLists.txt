@@ -237,7 +237,6 @@ set_target_properties(animation_lib PROPERTIES
 set(RENDER_LIB_SOURCES
     # Render extension for TcSceneRef (uses RenderingManager)
     termin/tc_scene_render_ext.cpp
-    termin/render/render_engine.cpp
     termin/render/rendering_manager.cpp
     termin/scene/scene_manager.cpp
     termin/render/pull_rendering_manager.cpp

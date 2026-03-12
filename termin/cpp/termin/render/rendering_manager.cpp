@@ -873,13 +873,15 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     // Render to output FBO
     RenderEngine* engine = render_engine();
     RenderCamera render_camera = make_render_camera(*camera, static_cast<double>(pw) / std::max(1, ph));
+    tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
     engine->render_view_to_fbo(
         render_pipeline,
         output_fbo,
         pw, ph,
         scene,
         render_camera,
-        viewport,
+        vp_name ? vp_name : "",
+        internal_entities,
         lights,
         tc_viewport_get_layer_mask(viewport)
     );
