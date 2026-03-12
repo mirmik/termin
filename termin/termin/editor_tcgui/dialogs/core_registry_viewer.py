@@ -25,6 +25,8 @@ def show_core_registry_viewer(ui) -> None:
             tc_material_get_all_info,
             tc_material_count,
             TcMaterial,
+        )
+        from termin.render_framework import (
             tc_pipeline_registry_count,
             tc_pipeline_registry_get_all_info,
             tc_pass_registry_get_all_instance_info,

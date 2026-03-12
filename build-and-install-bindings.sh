@@ -105,6 +105,7 @@ build_with_python() {
         -Dtermin_scene_DIR="$SDK_PREFIX/lib/cmake/termin_scene" \
         -Dtermin_render_DIR="$SDK_PREFIX/lib/cmake/termin_render" \
         -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
+        -Dtermin_display_DIR="$SDK_PREFIX/lib/cmake/termin_display" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
         -Dtermin_components_render_DIR="$SDK_PREFIX/lib/cmake/termin_components_render" \
@@ -120,6 +121,7 @@ build_with_python() {
 build_with_python "termin-inspect"              "$SCRIPT_DIR/termin-inspect"
 build_with_python "termin-scene"                "$SCRIPT_DIR/termin-scene"
 build_with_python "termin-render"               "$SCRIPT_DIR/termin-render"
+build_with_python "termin-display"              "$SCRIPT_DIR/termin-display"
 build_with_python "termin-collision"            "$SCRIPT_DIR/termin-collision"
 build_with_python "termin-components-collision"  "$SCRIPT_DIR/termin-components/termin-components-collision"
 build_with_python "termin-components-render"     "$SCRIPT_DIR/termin-components/termin-components-render"

@@ -4,7 +4,7 @@
 // Port of Python termin/nodegraph/graph_compiler.py
 
 #include "graph_data.hpp"
-#include "render_pipeline.hpp"
+#include "termin/render/render_pipeline.hpp"
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>

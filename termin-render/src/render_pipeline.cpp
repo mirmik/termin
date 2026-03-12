@@ -1,7 +1,7 @@
 // render_pipeline.cpp - C++ RenderPipeline implementation
 #include "termin/render/render_pipeline.hpp"
-#include <tcbase/tc_log.hpp>
-#include <cstring>
+
+#include "termin/lighting/shadow.hpp"
 
 extern "C" {
 #include "render/tc_pass.h"
@@ -12,19 +12,15 @@ namespace termin {
 
 RenderPipeline::RenderPipeline(const std::string& name)
     : handle_(TC_PIPELINE_HANDLE_INVALID),
-      name_(name)
-{
-    // Create pipeline in pool
+      name_(name) {
     handle_ = tc_pipeline_create(name.c_str());
     if (tc_pipeline_pool_alive(handle_)) {
-        // Set cpp_owner for casting back
         tc_pipeline_set_cpp_owner(handle_, this);
     }
 }
 
 RenderPipeline::~RenderPipeline() {
     if (tc_pipeline_pool_alive(handle_)) {
-        // Clear cpp_owner before destroying
         tc_pipeline_set_cpp_owner(handle_, nullptr);
         tc_pipeline_destroy(handle_);
     }
@@ -36,38 +32,31 @@ RenderPipeline::RenderPipeline(RenderPipeline&& other) noexcept
       specs_(std::move(other.specs_)),
       name_(std::move(other.name_)),
       fbo_pool_(std::move(other.fbo_pool_)),
-      shadow_arrays_(std::move(other.shadow_arrays_))
-{
-    // Update cpp_owner to point to this
+      shadow_arrays_(std::move(other.shadow_arrays_)) {
     if (tc_pipeline_pool_alive(handle_)) {
         tc_pipeline_set_cpp_owner(handle_, this);
     }
 
-    // Clear other
     other.handle_ = TC_PIPELINE_HANDLE_INVALID;
 }
 
 RenderPipeline& RenderPipeline::operator=(RenderPipeline&& other) noexcept {
     if (this != &other) {
-        // Destroy current
         if (tc_pipeline_pool_alive(handle_)) {
             tc_pipeline_set_cpp_owner(handle_, nullptr);
             tc_pipeline_destroy(handle_);
         }
 
-        // Move from other
         handle_ = other.handle_;
         specs_ = std::move(other.specs_);
         name_ = std::move(other.name_);
         fbo_pool_ = std::move(other.fbo_pool_);
         shadow_arrays_ = std::move(other.shadow_arrays_);
 
-        // Update cpp_owner
         if (tc_pipeline_pool_alive(handle_)) {
             tc_pipeline_set_cpp_owner(handle_, this);
         }
 
-        // Clear other
         other.handle_ = TC_PIPELINE_HANDLE_INVALID;
     }
     return *this;
@@ -115,7 +104,9 @@ void RenderPipeline::clear_specs() {
 }
 
 const ResourceSpec* RenderPipeline::get_spec_at(size_t index) const {
-    if (index >= specs_.size()) return nullptr;
+    if (index >= specs_.size()) {
+        return nullptr;
+    }
     return &specs_[index];
 }
 
@@ -129,11 +120,8 @@ void RenderPipeline::mark_dirty() {
 
 std::vector<ResourceSpec> RenderPipeline::collect_specs() const {
     std::vector<ResourceSpec> result;
-
-    // Pipeline-level specs
     result.insert(result.end(), specs_.begin(), specs_.end());
 
-    // Pass specs
     size_t count = tc_pipeline_pass_count(handle_);
     for (size_t i = 0; i < count; i++) {
         tc_pass* pass = tc_pipeline_get_pass_at(handle_, i);
@@ -151,7 +139,9 @@ std::vector<ResourceSpec> RenderPipeline::collect_specs() const {
 
 RenderPipeline* RenderPipeline::from_handle(tc_pipeline_handle h) {
     void* owner = tc_pipeline_get_cpp_owner(h);
-    if (!owner) return nullptr;
+    if (!owner) {
+        return nullptr;
+    }
     return static_cast<RenderPipeline*>(owner);
 }
 

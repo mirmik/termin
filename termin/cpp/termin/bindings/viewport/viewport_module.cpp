@@ -6,17 +6,42 @@
 #include <nanobind/stl/tuple.h>
 
 #include "termin/viewport/tc_viewport_handle.hpp"
+#include <tcbase/tc_log.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/entity/component.hpp>
-#include "termin/camera/camera_component.hpp"
-#include "termin/bindings/entity/entity_helpers.hpp"
-#include "termin/render/render_pipeline.hpp"
-#include "termin_core.h"
+#include "core/tc_component.h"
+#include "core/tc_scene.h"
 #include "render/tc_pipeline.h"
 
 namespace nb = nanobind;
 
 namespace termin {
+
+static tc_pipeline_handle object_to_pipeline_handle(nb::object pipeline_obj) {
+    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(pipeline_obj.attr("_pipeline_handle"));
+    tc_pipeline_handle handle;
+    handle.index = std::get<0>(h);
+    handle.generation = std::get<1>(h);
+    return handle;
+}
+
+static nb::object camera_component_from_tc(tc_component* c) {
+    if (!c) {
+        return nb::none();
+    }
+
+    if (c->native_language == TC_LANGUAGE_PYTHON && c->body) {
+        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->body));
+    }
+
+    if (c->kind != TC_CXX_COMPONENT) {
+        return nb::none();
+    }
+
+    nb::module_ render_components = nb::module_::import_("termin.render_components._components_render_native");
+    nb::object camera_class = render_components.attr("CameraComponent");
+    return camera_class.attr("_from_c_component_ptr")(reinterpret_cast<uintptr_t>(c));
+}
 
 void bind_tc_viewport_class(nb::module_& m) {
     nb::class_<TcViewport>(m, "Viewport")
@@ -75,9 +100,7 @@ void bind_tc_viewport_class(nb::module_& m) {
 
             // Pipeline - get handle and set py_wrapper
             if (!pipeline.is_none()) {
-                // Get RenderPipeline C++ object and its handle
-                RenderPipeline* rp = nb::cast<RenderPipeline*>(pipeline);
-                tc_pipeline_handle ph = rp->handle();
+                tc_pipeline_handle ph = object_to_pipeline_handle(pipeline);
                 Py_INCREF(pipeline.ptr());
                 tc_pipeline_set_py_wrapper(ph, pipeline.ptr());
                 tc_viewport_set_pipeline(vh, ph);
@@ -149,23 +172,7 @@ void bind_tc_viewport_class(nb::module_& m) {
         .def_prop_rw("camera",
             [](TcViewport& self) -> nb::object {
                 tc_component* c = self.camera();
-                if (!c) return nb::none();
-
-                // For Python-native components, return body directly
-                if (c->native_language == TC_LANGUAGE_PYTHON && c->body) {
-                    return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(c->body));
-                }
-
-                // For native (C++) components, create Python binding wrapper
-                if (c->kind == TC_CXX_COMPONENT) {
-                    CxxComponent* cxx = CxxComponent::from_tc(c);
-                    if (cxx) {
-                        // Cast to CameraComponent (the only camera type we have)
-                        return nb::cast(static_cast<CameraComponent*>(cxx), nb::rv_policy::reference);
-                    }
-                }
-
-                return nb::none();
+                return camera_component_from_tc(c);
             },
             [](TcViewport& self, nb::object camera_obj) {
                 if (!self.is_valid()) return;
@@ -238,8 +245,7 @@ void bind_tc_viewport_class(nb::module_& m) {
                 if (pipeline_obj.is_none()) {
                     tc_viewport_set_pipeline(self.handle_, TC_PIPELINE_HANDLE_INVALID);
                 } else {
-                    RenderPipeline* rp = nb::cast<RenderPipeline*>(pipeline_obj);
-                    tc_pipeline_handle ph = rp->handle();
+                    tc_pipeline_handle ph = object_to_pipeline_handle(pipeline_obj);
                     Py_INCREF(pipeline_obj.ptr());
                     tc_pipeline_set_py_wrapper(ph, pipeline_obj.ptr());
                     tc_viewport_set_pipeline(self.handle_, ph);
@@ -317,7 +323,7 @@ void bind_tc_viewport_class(nb::module_& m) {
         // Effective layer mask (checks ViewportHintComponent on camera)
         .def_prop_ro("effective_layer_mask", [](TcViewport& self) -> uint64_t {
             tc_component* cam = self.camera();
-            nb::object camera_obj = tc_component_to_python(cam);
+            nb::object camera_obj = camera_component_from_tc(cam);
             if (!camera_obj.is_none()) {
                 try {
                     nb::object entity = camera_obj.attr("entity");
@@ -329,8 +335,8 @@ void bind_tc_viewport_class(nb::module_& m) {
                             return nb::cast<uint64_t>(hint.attr("layer_mask"));
                         }
                     }
-                } catch (...) {
-                    // Fall through to default
+                } catch (const std::exception& e) {
+                    tc::Log::error("Viewport.effective_layer_mask failed: %s", e.what());
                 }
             }
             return self.layer_mask();
@@ -339,7 +345,7 @@ void bind_tc_viewport_class(nb::module_& m) {
         // Screen point to ray
         .def("screen_point_to_ray", [](TcViewport& self, float x, float y) -> nb::object {
             tc_component* cam = self.camera();
-            nb::object camera_obj = tc_component_to_python(cam);
+            nb::object camera_obj = camera_component_from_tc(cam);
             if (camera_obj.is_none()) {
                 return nb::none();
             }
@@ -352,7 +358,8 @@ void bind_tc_viewport_class(nb::module_& m) {
                 self.get_pixel_rect(px, py, pw, ph);
                 auto rect = std::make_tuple(px, py, pw, ph);
                 return camera_obj.attr("screen_point_to_ray")(x, y, nb::arg("viewport_rect") = rect);
-            } catch (...) {
+            } catch (const std::exception& e) {
+                tc::Log::error("Viewport.screen_point_to_ray failed: %s", e.what());
                 return nb::none();
             }
         }, nb::arg("x"), nb::arg("y"))
@@ -365,14 +372,16 @@ void bind_tc_viewport_class(nb::module_& m) {
 
             // Camera entity name
             tc_component* cam = self.camera();
-            nb::object camera_obj = tc_component_to_python(cam);
+            nb::object camera_obj = camera_component_from_tc(cam);
             if (!camera_obj.is_none()) {
                 try {
                     nb::object entity = camera_obj.attr("entity");
                     if (!entity.is_none()) {
                         result["camera_entity"] = entity.attr("name");
                     }
-                } catch (...) {}
+                } catch (const std::exception& e) {
+                    tc::Log::error("Viewport.serialize camera lookup failed: %s", e.what());
+                }
             }
 
             float rx, ry, rw, rh;
@@ -388,7 +397,9 @@ void bind_tc_viewport_class(nb::module_& m) {
                     try {
                         nb::object pl_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(wrapper));
                         result["pipeline"] = pl_obj.attr("name");
-                    } catch (...) {}
+                    } catch (const std::exception& e) {
+                        tc::Log::error("Viewport.serialize pipeline lookup failed: %s", e.what());
+                    }
                 }
             }
 

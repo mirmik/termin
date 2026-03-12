@@ -1,22 +1,19 @@
 #pragma once
 
 #include <vector>
+
 #include <termin/geom/mat44.hpp>
+
 #include "termin/lighting/shadow_settings.hpp"
 #include "tgfx/frame_graph_resource.hpp"
 
 namespace termin {
 
 class FramebufferHandle;
-
-// Forward declaration
 class GPUTextureHandle;
 
-/**
- * Shadow map entry for one light source (or cascade).
- * Mirrors Python ShadowMapArrayEntry dataclass.
- */
 struct ShadowMapArrayEntry {
+public:
     FramebufferHandle* fbo = nullptr;
     Mat44f light_space_matrix;
     int light_index = 0;
@@ -24,6 +21,7 @@ struct ShadowMapArrayEntry {
     float cascade_split_near = 0.0f;
     float cascade_split_far = 0.0f;
 
+public:
     ShadowMapArrayEntry() = default;
 
     ShadowMapArrayEntry(
@@ -33,24 +31,22 @@ struct ShadowMapArrayEntry {
         int cascade_idx = 0,
         float split_near = 0.0f,
         float split_far = 0.0f
-    ) : fbo(fbo_), light_space_matrix(matrix), light_index(light_idx),
-        cascade_index(cascade_idx), cascade_split_near(split_near),
+    ) : fbo(fbo_),
+        light_space_matrix(matrix),
+        light_index(light_idx),
+        cascade_index(cascade_idx),
+        cascade_split_near(split_near),
         cascade_split_far(split_far) {}
 
     GPUTextureHandle* texture() const;
 };
 
-
-// ShadowSettings is defined in shadow_settings.hpp
-
-// Shadow map array resource for framegraph.
-// Contains shadow maps for all lights with shadows.
-// ShadowPass writes this resource, ColorPass reads it.
 class ShadowMapArrayResource : public FrameGraphResource {
 public:
     std::vector<ShadowMapArrayEntry> entries;
     int resolution = 1024;
 
+public:
     ShadowMapArrayResource() = default;
     explicit ShadowMapArrayResource(int res) : resolution(res) {}
 
@@ -94,7 +90,6 @@ public:
         return nullptr;
     }
 
-    // For iteration from Python
     size_t __len__() const { return size(); }
 
     auto begin() { return entries.begin(); }

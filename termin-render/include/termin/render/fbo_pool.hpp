@@ -1,18 +1,18 @@
 // fbo_pool.hpp - FBO pool for managing framebuffer allocation
 #pragma once
 
-#include <string>
-#include <vector>
-#include <unordered_map>
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "tgfx/graphics_backend.hpp"
 #include "termin/render/resource_spec.hpp"
 
 namespace termin {
 
-// FBO Pool entry (move-only because of unique_ptr)
 struct FBOPoolEntry {
+public:
     std::string key;
     FramebufferHandlePtr fbo;
     int width = 0;
@@ -22,6 +22,7 @@ struct FBOPoolEntry {
     TextureFilter filter = TextureFilter::LINEAR;
     bool external = false;
 
+public:
     FBOPoolEntry() = default;
     FBOPoolEntry(FBOPoolEntry&&) = default;
     FBOPoolEntry& operator=(FBOPoolEntry&&) = default;
@@ -29,12 +30,12 @@ struct FBOPoolEntry {
     FBOPoolEntry& operator=(const FBOPoolEntry&) = delete;
 };
 
-// FBO Pool - manages framebuffer allocation and reuse
 class FBOPool {
 public:
     std::vector<FBOPoolEntry> entries;
     std::unordered_map<std::string, std::string> alias_to_canonical;
 
+public:
     FramebufferHandle* ensure(
         GraphicsBackend* graphics,
         const std::string& key,
