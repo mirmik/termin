@@ -29,6 +29,14 @@ class RenderingManager;
 
 // --- Scene creation/destruction with render extensions ---
 
+std::vector<tc_scene_ext_type_id> default_scene_extension_ids();
+
+TcSceneRef create_scene_with_extensions(
+    const std::string& name,
+    const std::string& uuid,
+    const std::vector<tc_scene_ext_type_id>& extensions
+);
+
 // Create scene with builtin render extensions attached (render_mount, render_state, collision_world)
 TcSceneRef create_scene_with_render(const std::string& name = "", const std::string& uuid = "");
 

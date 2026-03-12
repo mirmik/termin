@@ -440,10 +440,24 @@ void bind_tc_scene(nb::module_& m) {
         return SceneRenderMount(scene._h);
     }, nb::arg("scene"), "Get SceneRenderMount extension from scene");
 
-    // Create scene with render extensions
-    m.def("create_scene", &create_scene_with_render,
-        nb::arg("name") = "", nb::arg("uuid") = "",
-        "Create a new scene with render extensions attached");
+    m.attr("SCENE_EXT_TYPE_RENDER_MOUNT") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_MOUNT);
+    m.attr("SCENE_EXT_TYPE_RENDER_STATE") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_STATE);
+    m.attr("SCENE_EXT_TYPE_COLLISION_WORLD") = nb::int_(TC_SCENE_EXT_TYPE_COLLISION_WORLD);
+
+    m.def("default_scene_extensions", &default_scene_extension_ids,
+        "Default scene extensions for render-enabled scenes.");
+
+    m.def("create_scene_with_extensions", &create_scene_with_extensions,
+        nb::arg("name") = "", nb::arg("uuid") = "", nb::arg("extensions"),
+        "Create a new scene with the provided scene extension ids attached");
+
+    m.def("create_scene", [](const std::string& name, const std::string& uuid, nb::object extensions_obj) {
+        if (extensions_obj.is_none()) {
+            return create_scene_with_extensions(name, uuid, default_scene_extension_ids());
+        }
+        return create_scene_with_extensions(name, uuid, nb::cast<std::vector<tc_scene_ext_type_id>>(extensions_obj));
+    }, nb::arg("name") = "", nb::arg("uuid") = "", nb::arg("extensions") = nb::none(),
+        "Create a new scene with explicit extensions, or default render/collision extensions when omitted");
 
     // Destroy scene with render cleanup
     m.def("destroy_scene", [](TcSceneRef& scene) {
@@ -462,7 +476,7 @@ void bind_tc_scene(nb::module_& m) {
 
     // Deserialize scene
     m.def("deserialize_scene", [](nb::handle data, const std::string& name) -> TcSceneRef {
-        TcSceneRef scene = create_scene_with_render(name, "");
+        TcSceneRef scene = create_scene_with_extensions(name, "", default_scene_extension_ids());
         nos::trent t = python_to_trent(data);
 
         if (t.contains("uuid") && t["uuid"].is_string()) {

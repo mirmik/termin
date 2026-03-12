@@ -30,7 +30,7 @@ from termin.editor.editor_commands import (
     DeleteEntityCommand,
     RenameEntityCommand,
 )
-from termin.editor.scene_manager import SceneManager, SceneMode
+from termin.editor.scene_manager import SceneManager, SceneMode, default_scene_extensions
 from termin.editor.resource_loader import ResourceLoader
 from termin.editor.project_file_watcher import ProjectFileWatcher
 from termin.editor.file_processors import (
@@ -100,7 +100,7 @@ class EditorWindowTcgui:
             self.scene_manager.register_scene(self._editor_scene_name, initial_scene.scene_handle())
             self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
         else:
-            self.scene_manager.create_scene(self._editor_scene_name)
+            self.scene_manager.create_scene(self._editor_scene_name, default_scene_extensions())
             self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
 
         # Controllers (set in build())
@@ -721,7 +721,7 @@ class EditorWindowTcgui:
     def _new_scene(self) -> None:
         # TODO: confirm dialog if unsaved changes
         old_scene_name = self._editor_scene_name
-        self.scene_manager.create_scene(self._editor_scene_name)
+        self.scene_manager.create_scene(self._editor_scene_name, default_scene_extensions())
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(self.scene)
@@ -770,7 +770,7 @@ class EditorWindowTcgui:
     def _close_scene(self) -> None:
         if self._editor_scene_name:
             self.scene_manager.close_scene(self._editor_scene_name)
-            self.scene_manager.create_scene(self._editor_scene_name)
+            self.scene_manager.create_scene(self._editor_scene_name, default_scene_extensions())
             self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(self.scene)

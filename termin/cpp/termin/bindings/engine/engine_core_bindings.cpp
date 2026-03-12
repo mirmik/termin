@@ -74,6 +74,9 @@ void bind_engine_core(nb::module_& m) {
            "Set callback for cleanup after main loop ends.")
 
         // Main loop
+        .def("tick_and_render", &EngineCore::tick_and_render, nb::arg("dt"),
+             "Run one frame: tick scenes, prepare render, render, invoke after-render callback.")
+
         .def("run", &EngineCore::run,
              "Run blocking main loop. Returns when should_continue returns False or stop() called.")
 

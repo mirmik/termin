@@ -5,6 +5,7 @@
 
 #include "tc_types.h"
 #include "core/tc_scene_pool.h"
+#include "core/tc_scene_extension.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,9 +13,6 @@ extern "C" {
 
 // Opaque handle to collision world (C++ CollisionWorld*)
 typedef void tc_collision_world;
-
-// Builtin scene extension type id for collision world state.
-#define TC_SCENE_EXT_TYPE_COLLISION_WORLD UINT64_C(0x636f6c6c6973696f)
 
 // Function pointer types for collision world allocation
 typedef tc_collision_world* (*tc_collision_world_alloc_fn)(void);

@@ -91,6 +91,7 @@ typedef struct {
     // Layer and flag names (64 each per scene, interned strings)
     const char** layer_names;  // [capacity * 64]
     const char** flag_names;   // [capacity * 64]
+    void** ext_instances;      // [capacity * TC_SCENE_EXT_TYPE_COUNT]
 
     // Pool management
     uint32_t* free_stack;
@@ -103,6 +104,7 @@ static ScenePool* g_pool = NULL;
 
 #define CAPABILITY_HEAD(idx, slot) g_pool->capability_heads[(idx) * TC_COMPONENT_MAX_CAPABILITIES + (slot)]
 #define CAPABILITY_COUNT(idx, slot) g_pool->capability_counts[(idx) * TC_COMPONENT_MAX_CAPABILITIES + (slot)]
+#define EXT_INSTANCE(idx, slot) g_pool->ext_instances[(idx) * TC_SCENE_EXT_TYPE_COUNT + (slot)]
 
 static void scene_capability_attach(uint32_t idx, tc_component* c, uint32_t slot);
 static void scene_capability_detach(uint32_t idx, tc_component* c, uint32_t slot);
@@ -144,6 +146,7 @@ void tc_scene_pool_init(void) {
     g_pool->capability_counts = (size_t*)calloc(cap * TC_COMPONENT_MAX_CAPABILITIES, sizeof(size_t));
     g_pool->layer_names = (const char**)calloc(cap * 64, sizeof(const char*));
     g_pool->flag_names = (const char**)calloc(cap * 64, sizeof(const char*));
+    g_pool->ext_instances = (void**)calloc(cap * TC_SCENE_EXT_TYPE_COUNT, sizeof(void*));
     g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
     for (size_t i = 0; i < cap; i++) {
         g_pool->free_stack[i] = (uint32_t)(cap - 1 - i);
@@ -186,6 +189,7 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->capability_counts);
     free(g_pool->layer_names);
     free(g_pool->flag_names);
+    free(g_pool->ext_instances);
     free(g_pool->free_stack);
     free(g_pool);
     g_pool = NULL;
@@ -222,6 +226,7 @@ static void pool_grow(void) {
     g_pool->capability_counts = realloc(g_pool->capability_counts, new_cap * TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
     g_pool->layer_names = realloc(g_pool->layer_names, new_cap * 64 * sizeof(const char*));
     g_pool->flag_names = realloc(g_pool->flag_names, new_cap * 64 * sizeof(const char*));
+    g_pool->ext_instances = realloc(g_pool->ext_instances, new_cap * TC_SCENE_EXT_TYPE_COUNT * sizeof(void*));
     g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
 
     // Initialize new slots
@@ -245,6 +250,8 @@ static void pool_grow(void) {
            (new_cap - old_cap) * TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
     memset(g_pool->layer_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
     memset(g_pool->flag_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
+    memset(g_pool->ext_instances + old_cap * TC_SCENE_EXT_TYPE_COUNT, 0,
+           (new_cap - old_cap) * TC_SCENE_EXT_TYPE_COUNT * sizeof(void*));
     // Add new slots to free stack
     for (size_t i = old_cap; i < new_cap; i++) {
         g_pool->free_stack[g_pool->free_count++] = (uint32_t)(new_cap - 1 - (i - old_cap));
@@ -307,6 +314,7 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     g_pool->type_heads[idx] = tc_resource_map_new(NULL);
     g_pool->metadata[idx] = tc_value_dict_new();
     g_pool->names[idx] = name ? tgfx_intern_string(name) : tgfx_intern_string("(unnamed)");
+    memset(g_pool->ext_instances + idx * TC_SCENE_EXT_TYPE_COUNT, 0, TC_SCENE_EXT_TYPE_COUNT * sizeof(void*));
 
     tc_scene_handle h = { idx, gen };
 
@@ -366,6 +374,25 @@ void tc_scene_free(tc_scene_handle h) {
     g_pool->generations[idx]++;
     g_pool->free_stack[g_pool->free_count++] = idx;
     g_pool->count--;
+}
+
+void* tc_scene_ext_slot_get(tc_scene_handle h, tc_scene_ext_type_id type_id) {
+    if (!handle_alive(h)) return NULL;
+    if (type_id >= TC_SCENE_EXT_TYPE_COUNT) return NULL;
+    return EXT_INSTANCE(h.index, (size_t)type_id);
+}
+
+bool tc_scene_ext_slot_set(tc_scene_handle h, tc_scene_ext_type_id type_id, void* instance) {
+    if (!handle_alive(h)) return false;
+    if (type_id >= TC_SCENE_EXT_TYPE_COUNT) return false;
+    EXT_INSTANCE(h.index, (size_t)type_id) = instance;
+    return true;
+}
+
+void tc_scene_ext_slot_clear(tc_scene_handle h, tc_scene_ext_type_id type_id) {
+    if (!handle_alive(h)) return;
+    if (type_id >= TC_SCENE_EXT_TYPE_COUNT) return;
+    EXT_INSTANCE(h.index, (size_t)type_id) = NULL;
 }
 
 // ============================================================================

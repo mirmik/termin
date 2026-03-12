@@ -12,7 +12,7 @@ from termin.editor.undo_stack import UndoStack, UndoCommand
 from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
 from termin.editor.prefab_edit_controller import PrefabEditController
-from termin.editor.scene_manager import SceneManager, SceneMode
+from termin.editor.scene_manager import SceneManager, SceneMode, default_scene_extensions
 from termin.editor.dialog_manager import DialogManager
 from termin.editor.inspector_controller import InspectorController
 from termin.editor.menu_bar_controller import MenuBarController
@@ -95,7 +95,7 @@ class EditorWindow(QMainWindow):
             self.scene_manager.register_scene(self._editor_scene_name, initial_scene.scene_handle())
             self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
         else:
-            self.scene_manager.create_scene(self._editor_scene_name)
+            self.scene_manager.create_scene(self._editor_scene_name, default_scene_extensions())
             self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
 
         # контроллеры создадим чуть позже

@@ -3,6 +3,7 @@
 #define TC_SCENE_EXTENSION_H
 
 #include "core/tc_scene_pool.h"
+#include "core/tc_scene_extension_ids.h"
 #include "tc_value.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -67,6 +68,11 @@ TC_API void tc_scene_ext_registry_shutdown(void);
 // Internal lifecycle hooks (called from tc_scene update/render loop).
 TC_API void tc_scene_ext_on_scene_update(tc_scene_handle scene, double dt);
 TC_API void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
+
+// Internal storage accessors implemented by tc_scene.c.
+TC_API void* tc_scene_ext_slot_get(tc_scene_handle scene, tc_scene_ext_type_id type_id);
+TC_API bool tc_scene_ext_slot_set(tc_scene_handle scene, tc_scene_ext_type_id type_id, void* instance);
+TC_API void tc_scene_ext_slot_clear(tc_scene_handle scene, tc_scene_ext_type_id type_id);
 
 #ifdef __cplusplus
 }

@@ -59,6 +59,10 @@ public:
     void set_on_shutdown_callback(std::function<void()> cb) { _on_shutdown_callback = std::move(cb); }
 
     // --- Main loop ---
+    // Run one frame: scene tick, before_render, RenderingManager render, after_render callback.
+    // Returns true if rendering happened.
+    bool tick_and_render(double dt);
+
     // Run blocking main loop. Calls poll_events, tick_and_render at target_fps.
     // Returns when should_continue returns false or stop() is called.
     void run();

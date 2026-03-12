@@ -9,6 +9,7 @@
 
 extern "C" {
 #include "core/tc_scene.h"
+#include "core/tc_scene_extension.h"
 #include "core/tc_scene_pool.h"
 #include "scene/tc_scene_manager.h"
 }
@@ -32,8 +33,8 @@ public:
 
     // --- Scene lifecycle ---
 
-    // Create a new scene in the pool and register it
-    tc_scene_handle create_scene(const std::string& name);
+    // Create a new scene in the pool, attach requested extensions, and register it
+    tc_scene_handle create_scene(const std::string& name, const std::vector<tc_scene_ext_type_id>& extensions = {});
 
     // Close and destroy a scene
     void close_scene(const std::string& name);
@@ -95,10 +96,6 @@ public:
 
     void invoke_after_render();
     void invoke_before_scene_close(const std::string& name);
-
-    // --- Full tick with rendering ---
-    // Calls tick(), before_render(), RenderingManager::render_all(), and after_render callback
-    bool tick_and_render(double dt);
 
 protected:
     // Registered scenes: name -> tc_scene_handle

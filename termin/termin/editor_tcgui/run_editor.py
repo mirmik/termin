@@ -264,7 +264,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     # First render
     engine.scene_manager.request_render()
-    engine.scene_manager.tick_and_render(0.016)
+    engine.tick_and_render(0.016)
 
     sdl2.SDL_StartTextInput()
 
