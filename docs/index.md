@@ -14,3 +14,7 @@
 | [termin-collision](./termin-collision/) | Коллизии: GJK, коллайдеры, collision world, C/Python API |
 | [termin-gui](./termin-gui/) | Immediate-mode UI фреймворк (tcgui): виджеты, лейауты, диалоги, Canvas/Viewport |
 | [termin-modules](./termin-modules/) | Система модулей: C++/Python плагины, дескрипторы, lifecycle, callbacks |
+
+## Архитектура
+
+- [Граф зависимостей библиотек](./library-dependencies.md)
