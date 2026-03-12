@@ -1,13 +1,13 @@
 #include <tcbase/tc_log.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
 
-#include <termin/render/id_pass.hpp>
+#include "termin/render/id_pass.hpp"
 
 extern "C" {
 #include "tc_picking.h"
 }
 
-#include "camera/camera_component.hpp"
+#include <termin/camera/camera_component.hpp>
 
 namespace termin {
 

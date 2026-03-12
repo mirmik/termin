@@ -1,4 +1,4 @@
 """MeshRenderer - re-export from C++."""
-from termin._native.render import MeshRenderer
+from termin.render_components import MeshRenderer
 
 __all__ = ["MeshRenderer"]

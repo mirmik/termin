@@ -2,6 +2,6 @@
 
 Re-exports C++ DepthPass.
 """
-from termin._native.render import DepthPass
+from termin.render_components import DepthPass
 
 __all__ = ["DepthPass"]

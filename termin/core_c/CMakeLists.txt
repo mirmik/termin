@@ -29,7 +29,6 @@ set(TC_SOURCES
     src/tc_project_settings.c
     src/tc_render_surface.c
     src/tc_skeleton_registry.c
-    src/tc_viewport.c
 )
 
 if(NOT TC_USE_EXTERNAL_INSPECT)
@@ -65,7 +64,6 @@ set(TC_HEADERS
     include/render/tc_display_input_router.h
     include/render/tc_viewport_input_manager.h
     include/render/tc_render_surface.h
-    include/render/tc_viewport.h
 )
 
 find_package(termin_scene REQUIRED)

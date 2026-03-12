@@ -1,19 +1,18 @@
-#include "camera_component.hpp"
-#include <termin/entity/component_registry.hpp>
+#include <algorithm>
+#include <cmath>
 
-#include "tc_inspect_cpp.hpp"
+#include <tc_inspect_cpp.hpp>
 
 extern "C" {
 #include "tc_value.h"
 }
 
-#include <algorithm>
-#include <cmath>
+#include <termin/entity/component_registry.hpp>
+#include <termin/camera/camera_component.hpp>
 
 namespace termin {
 
 CameraComponent::CameraComponent() {
-    // Link to type registry for proper type identification
     link_type_entry("CameraComponent");
 }
 
@@ -73,7 +72,6 @@ Mat44 CameraComponent::get_view_matrix() const {
         return Mat44::identity();
     }
 
-    // Get global pose (ignore scale for view matrix)
     GeneralPose3 gpose = entity().transform().global_pose();
     Pose3 pose(gpose.ang, gpose.lin);
     Pose3 inv_pose = pose.inverse();
@@ -91,26 +89,20 @@ Mat44 CameraComponent::compute_projection_matrix(double aspect_override) const {
         double right = ortho_size * aspect_override;
         double left = -right;
         return Mat44::orthographic(left, right, bottom, top, near_clip, far_clip);
-    } else {
-        double safe_aspect = std::max(1e-6, aspect_override);
+    }
 
-        switch (fov_mode) {
-            case FovMode::FixHorizontal: {
-                // Compute vertical FOV from horizontal FOV and aspect
-                double computed_fov_y = 2.0 * std::atan(std::tan(fov_x * 0.5) / safe_aspect);
-                return Mat44::perspective(computed_fov_y, safe_aspect, near_clip, far_clip);
-            }
-            case FovMode::FixVertical: {
-                // Use vertical FOV directly
-                return Mat44::perspective(fov_y, safe_aspect, near_clip, far_clip);
-            }
-            case FovMode::FixBoth: {
-                // Use both FOVs independently (may cause distortion)
-                return Mat44::perspective_fov_xy(fov_x, fov_y, near_clip, far_clip);
-            }
-            default:
-                return Mat44::perspective(fov_y, safe_aspect, near_clip, far_clip);
+    double safe_aspect = std::max(1e-6, aspect_override);
+    switch (fov_mode) {
+        case FovMode::FixHorizontal: {
+            double computed_fov_y = 2.0 * std::atan(std::tan(fov_x * 0.5) / safe_aspect);
+            return Mat44::perspective(computed_fov_y, safe_aspect, near_clip, far_clip);
         }
+        case FovMode::FixVertical:
+            return Mat44::perspective(fov_y, safe_aspect, near_clip, far_clip);
+        case FovMode::FixBoth:
+            return Mat44::perspective_fov_xy(fov_x, fov_y, near_clip, far_clip);
+        default:
+            return Mat44::perspective(fov_y, safe_aspect, near_clip, far_clip);
     }
 }
 
@@ -122,9 +114,13 @@ Vec3 CameraComponent::get_position() const {
 }
 
 void CameraComponent::add_viewport(const TcViewport& vp) {
-    if (!vp.is_valid()) return;
+    if (!vp.is_valid()) {
+        return;
+    }
     for (auto& v : viewports_) {
-        if (tc_viewport_handle_eq(v.handle_, vp.handle_)) return;
+        if (tc_viewport_handle_eq(v.handle_, vp.handle_)) {
+            return;
+        }
     }
     viewports_.push_back(vp);
 }
@@ -139,7 +135,9 @@ void CameraComponent::remove_viewport(const TcViewport& vp) {
 
 bool CameraComponent::has_viewport(const TcViewport& vp) const {
     for (const auto& v : viewports_) {
-        if (tc_viewport_handle_eq(v.handle_, vp.handle_)) return true;
+        if (tc_viewport_handle_eq(v.handle_, vp.handle_)) {
+            return true;
+        }
     }
     return false;
 }
@@ -157,7 +155,6 @@ void CameraComponent::clear_viewports() {
 }
 
 void CameraComponent::on_destroy() {
-    // Clear camera reference in all viewports that point to this camera
     for (auto& vp : viewports_) {
         if (vp.is_valid() && vp.camera() == &_c) {
             tc_viewport_set_camera(vp.handle_, nullptr);
@@ -167,7 +164,6 @@ void CameraComponent::on_destroy() {
 }
 
 void CameraComponent::on_removed() {
-    // Clear camera reference in all viewports that point to this camera
     for (auto& vp : viewports_) {
         if (vp.is_valid() && vp.camera() == &_c) {
             tc_viewport_set_camera(vp.handle_, nullptr);
@@ -181,29 +177,20 @@ void CameraComponent::on_scene_inactive() {
 }
 
 std::pair<Vec3, Vec3> CameraComponent::screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const {
-    // Use viewport aspect for calculation
     double vp_aspect = static_cast<double>(vp_w) / std::max(1, vp_h);
-
-    // Normalized device coordinates
     double nx = ((x - vp_x) / vp_w) * 2.0 - 1.0;
     double ny = ((y - vp_y) / vp_h) * -2.0 + 1.0;
-
-    // Compute projection matrix with viewport aspect (without copying self)
     Mat44 proj_matrix = compute_projection_matrix(vp_aspect);
     Mat44 pv = proj_matrix * get_view_matrix();
     Mat44 inv_pv = pv.inverse();
-
-    // Transform near and far points
     Vec3 p_near = inv_pv.transform_point(Vec3{nx, ny, -1.0});
     Vec3 p_far = inv_pv.transform_point(Vec3{nx, ny, 1.0});
-
     Vec3 direction = (p_far - p_near).normalized();
     return {p_near, direction};
 }
 
 REGISTER_COMPONENT(CameraComponent, CxxComponent);
 
-// Register fov_mode field with choices
 static struct _FovModeFieldRegistrar {
     _FovModeFieldRegistrar() {
         tc::InspectFieldInfo info;
@@ -211,23 +198,19 @@ static struct _FovModeFieldRegistrar {
         info.path = "fov_mode";
         info.label = "FOV Mode";
         info.kind = "string";
-
         info.choices.push_back({"FixHorizontal", "Fix Horizontal"});
         info.choices.push_back({"FixVertical", "Fix Vertical"});
         info.choices.push_back({"FixBoth", "Fix Both"});
-
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<CameraComponent*>(obj);
             return tc_value_string(c->get_fov_mode_str().c_str());
         };
-
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<CameraComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->set_fov_mode_str(value.data.s);
             }
         };
-
         tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
     }
 } _fov_mode_registrar;

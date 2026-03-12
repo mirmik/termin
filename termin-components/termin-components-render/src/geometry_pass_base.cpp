@@ -5,7 +5,7 @@
 
 #include <termin/render/geometry_pass_base.hpp>
 
-#include "camera/camera_component.hpp"
+#include <termin/camera/camera_component.hpp>
 
 namespace termin {
 

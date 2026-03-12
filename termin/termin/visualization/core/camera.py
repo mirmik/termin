@@ -29,10 +29,12 @@ from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEv
 from tcbase import Action, MouseButton
 
 # Re-export from C++
-from termin.entity._entity_native import (
+from termin.render_components import (
     CameraComponent,
     PerspectiveCameraComponent,
     OrthographicCameraComponent,
+)
+from termin.entity._entity_native import (
     OrbitCameraController,
 )
 
