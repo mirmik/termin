@@ -381,13 +381,43 @@ void bind_tc_scene_core(nb::module_& m) {
         .def("serialize", [](TcSceneRef& self) -> nb::object {
             return trent_to_python(self.serialize());
         })
-        .def("load_from_data", [](TcSceneRef& self, nb::handle data, nb::object context, bool update_settings) -> int {
+        .def("load_from_data", [](TcSceneRef& self,
+                                  nb::handle data,
+                                  nb::object context,
+                                  bool update_settings,
+                                  int mode,
+                                  bool auto_upgrade_unknown) -> int {
             (void)context;
             nos::trent t = python_to_trent(data);
-            return self.load_from_data(t, update_settings);
-        }, nb::arg("data"), nb::arg("context") = nb::none(), nb::arg("update_settings") = true)
+            return self.load_from_data(
+                t,
+                update_settings,
+                static_cast<ComponentDeserializationMode>(mode),
+                UnknownUpgradeStrategy{},
+                auto_upgrade_unknown
+            );
+        },
+             nb::arg("data"),
+             nb::arg("context") = nb::none(),
+             nb::arg("update_settings") = true,
+             nb::arg("mode") = static_cast<int>(ComponentDeserializationMode::Direct),
+             nb::arg("auto_upgrade_unknown") = false)
         .def("to_json_string", &TcSceneRef::to_json_string)
-        .def("from_json_string", &TcSceneRef::from_json_string, nb::arg("json"))
+        .def("from_json_string",
+             [](TcSceneRef& self,
+                const std::string& json,
+                int mode,
+                bool auto_upgrade_unknown) {
+                 self.from_json_string(
+                     json,
+                     static_cast<ComponentDeserializationMode>(mode),
+                     UnknownUpgradeStrategy{},
+                     auto_upgrade_unknown
+                 );
+             },
+             nb::arg("json"),
+             nb::arg("mode") = static_cast<int>(ComponentDeserializationMode::Direct),
+             nb::arg("auto_upgrade_unknown") = false)
 
         // Convenience
         .def_prop_ro("is_destroyed", [](TcSceneRef& self) {
@@ -464,7 +494,7 @@ void bind_tc_scene_core(nb::module_& m) {
         "upgrade_unknown_components",
         [](const TcSceneRef& scene, nb::object type_names) {
             if (type_names.is_none()) {
-                return upgrade_unknown_components(scene, {});
+                return upgrade_unknown_components(scene, std::vector<std::string>{});
             }
             return upgrade_unknown_components(scene, nb::cast<std::vector<std::string>>(type_names));
         },
