@@ -790,6 +790,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
         ctx.name = vp_name;
         ctx.camera = camera;
         ctx.rect = {0, 0, pw, ph};  // Full FBO, offset at blit time
+        ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
         ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
         ctx.output_fbo = output_fbo;
         contexts[vp_name] = std::move(ctx);

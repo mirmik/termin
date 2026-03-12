@@ -392,13 +392,17 @@ void RenderEngine::render_view_to_fbo(
         }
 
         // Build ExecuteContext
+        const char* viewport_name = tc_viewport_handle_valid(viewport)
+            ? tc_viewport_get_name(viewport)
+            : nullptr;
         ExecuteContext ctx;
         ctx.graphics = graphics;
         ctx.reads_fbos = std::move(pass_reads);
         ctx.writes_fbos = std::move(pass_writes);
         ctx.rect = Rect4i{0, 0, width, height};
         ctx.scene = TcSceneRef(scene);
-        ctx.viewport = viewport;
+        ctx.viewport_name = viewport_name ? viewport_name : "";
+        ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
         ctx.camera = camera;
         ctx.lights = lights;
         ctx.layer_mask = layer_mask;
@@ -743,7 +747,8 @@ void RenderEngine::render_scene_pipeline_offscreen(
         ctx.writes_fbos = std::move(pass_writes);
         ctx.rect = vp_ctx.rect;
         ctx.scene = TcSceneRef(scene);
-        ctx.viewport = TC_VIEWPORT_HANDLE_INVALID;  // TODO: add tc_viewport to ViewportContext if needed
+        ctx.viewport_name = vp_ctx.name;
+        ctx.internal_entities = vp_ctx.internal_entities;
         ctx.camera = vp_ctx.camera;
         ctx.lights = lights;
         ctx.layer_mask = vp_ctx.layer_mask;
