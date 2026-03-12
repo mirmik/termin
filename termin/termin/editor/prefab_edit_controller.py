@@ -105,7 +105,7 @@ class PrefabEditController:
             return False
 
         # Set editor scene to inactive
-        from termin.editor.scene_manager import SceneMode
+        from termin.editor.scene_manager import SceneMode, default_scene_extensions
         if self._scene_manager.has_scene("editor"):
             self._scene_manager.set_mode("editor", SceneMode.INACTIVE)
 
@@ -249,7 +249,7 @@ class PrefabEditController:
         self._root_entity = root_entity
 
         # Create new "prefab" scene
-        prefab_scene = self._scene_manager.create_scene("prefab", activate=True)
+        prefab_scene = self._scene_manager.create_scene("prefab", default_scene_extensions())
 
         # Add prefab root entity to scene
         prefab_scene.add(root_entity)

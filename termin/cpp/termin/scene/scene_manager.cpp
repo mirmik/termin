@@ -1,6 +1,5 @@
 // scene_manager.cpp - SceneManager implementation
 #include "scene_manager.hpp"
-#include "termin/render/rendering_manager.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -9,27 +8,10 @@
 extern "C" {
 #include "tc_profiler.h"
 #include "core/tc_scene_extension.h"
-#include "core/tc_scene_render_mount.h"
-#include "core/tc_scene_render_state.h"
-#include <termin_scene/termin_scene.h>
-#include <termin_collision/termin_collision.h>
-#include "physics/tc_collision_world.h"
 #include <tcbase/tc_log.h>
 }
 
 namespace termin {
-
-static void ensure_builtin_scene_extensions_registered() {
-    static bool runtime_inited = false;
-    if (!runtime_inited) {
-        termin_scene_runtime_init();
-        termin_collision_runtime_init();
-        runtime_inited = true;
-    }
-
-    tc_scene_render_mount_extension_init();
-    tc_scene_render_state_extension_init();
-}
 
 SceneManager::SceneManager() {
     tc_scene_manager_set_instance(reinterpret_cast<tc_scene_manager*>(this));
@@ -44,13 +26,11 @@ SceneManager::~SceneManager() {
 
 // --- Scene lifecycle ---
 
-tc_scene_handle SceneManager::create_scene(const std::string& name) {
+tc_scene_handle SceneManager::create_scene(const std::string& name, const std::vector<tc_scene_ext_type_id>& extensions) {
     if (_scenes.find(name) != _scenes.end()) {
         tc_log(TC_LOG_ERROR, "[SceneManager] create_scene: scene '%s' already exists", name.c_str());
         return TC_SCENE_HANDLE_INVALID;
     }
-
-    ensure_builtin_scene_extensions_registered();
 
     tc_scene_handle h = tc_scene_new();
     if (!tc_scene_handle_valid(h)) {
@@ -59,14 +39,13 @@ tc_scene_handle SceneManager::create_scene(const std::string& name) {
     }
 
     tc_scene_set_name(h, name.c_str());
-    if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_MOUNT)) {
-        tc_log(TC_LOG_ERROR, "[SceneManager] failed to attach render_mount extension to scene '%s'", name.c_str());
-    }
-    if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_STATE)) {
-        tc_log(TC_LOG_ERROR, "[SceneManager] failed to attach render_state extension to scene '%s'", name.c_str());
-    }
-    if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_COLLISION_WORLD)) {
-        tc_log(TC_LOG_WARN, "[SceneManager] failed to attach collision_world extension to scene '%s'", name.c_str());
+    for (tc_scene_ext_type_id type_id : extensions) {
+        if (!tc_scene_ext_attach(h, type_id)) {
+            tc_log(TC_LOG_ERROR,
+                   "[SceneManager] failed to attach scene extension %llu to scene '%s'",
+                   (unsigned long long)type_id,
+                   name.c_str());
+        }
     }
     _scenes[name] = h;
     return h;
@@ -242,40 +221,6 @@ std::string SceneManager::read_json_file(const std::string& path) {
     std::stringstream buffer;
     buffer << file.rdbuf();
     return buffer.str();
-}
-
-// --- Full tick with rendering ---
-
-bool SceneManager::tick_and_render(double dt) {
-    bool profile = tc_profiler_enabled();
-
-    if (profile) tc_profiler_begin_frame();
-
-    // Update all scenes
-    bool should_render = tick(dt);
-
-    if (should_render) {
-        // Prepare scenes for rendering
-        if (profile) tc_profiler_begin_section("SceneManager Before Render");
-        before_render();
-        if (profile) tc_profiler_end_section();
-
-        // Render via RenderingManager
-        if (profile) tc_profiler_begin_section("SceneManager Render");
-        RenderingManager::instance().render_all(true);
-        if (profile) tc_profiler_end_section();
-
-        // After-render callback (e.g., editor features)
-        if (_on_after_render) {
-            if (profile) tc_profiler_begin_section("SceneManager After Render");
-            _on_after_render();
-            if (profile) tc_profiler_end_section();
-        }
-    }
-
-    if (profile) tc_profiler_end_frame();
-
-    return should_render;
 }
 
 // --- Callbacks ---

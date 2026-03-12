@@ -6,44 +6,41 @@
 #include "render/scene_pipeline_template.hpp"
 #include "render/tc_value_trent.hpp"
 #include "core/tc_scene_extension.h"
-#include <termin_scene/termin_scene.h>
-#include <termin_collision/termin_collision.h>
-#include "physics/tc_collision_world.h"
+#include "core/tc_scene_extension_ids.h"
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
 
-static void ensure_builtin_scene_extensions_registered() {
-    static bool runtime_inited = false;
-    if (!runtime_inited) {
-        termin_scene_runtime_init();
-        termin_collision_runtime_init();
-        runtime_inited = true;
-    }
-
-    tc_scene_render_mount_extension_init();
-    tc_scene_render_state_extension_init();
+std::vector<tc_scene_ext_type_id> default_scene_extension_ids() {
+    return {
+        TC_SCENE_EXT_TYPE_RENDER_MOUNT,
+        TC_SCENE_EXT_TYPE_RENDER_STATE,
+        TC_SCENE_EXT_TYPE_COLLISION_WORLD,
+    };
 }
 
-TcSceneRef create_scene_with_render(const std::string& name, const std::string& uuid) {
-    ensure_builtin_scene_extensions_registered();
-
+TcSceneRef create_scene_with_extensions(
+    const std::string& name,
+    const std::string& uuid,
+    const std::vector<tc_scene_ext_type_id>& extensions
+) {
     TcSceneRef scene = TcSceneRef::create(name, uuid);
     tc_scene_handle h = scene.handle();
 
     if (tc_scene_handle_valid(h)) {
-        if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_MOUNT)) {
-            tc::Log::error("[create_scene_with_render] failed to attach render_mount extension");
-        }
-        if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_RENDER_STATE)) {
-            tc::Log::error("[create_scene_with_render] failed to attach render_state extension");
-        }
-        if (!tc_scene_ext_attach(h, TC_SCENE_EXT_TYPE_COLLISION_WORLD)) {
-            tc::Log::warn("[create_scene_with_render] failed to attach collision_world extension");
+        for (tc_scene_ext_type_id type_id : extensions) {
+            if (!tc_scene_ext_attach(h, type_id)) {
+                tc::Log::error("[create_scene_with_extensions] failed to attach scene extension %llu",
+                               (unsigned long long)type_id);
+            }
         }
     }
 
     return scene;
+}
+
+TcSceneRef create_scene_with_render(const std::string& name, const std::string& uuid) {
+    return create_scene_with_extensions(name, uuid, default_scene_extension_ids());
 }
 
 void destroy_scene_with_render(TcSceneRef& scene) {

@@ -77,6 +77,7 @@ set(TERMIN_SCENE_HEADERS
     include/core/tc_entity_pool_registry.h
     include/core/tc_scene.h
     include/core/tc_scene_extension.h
+    include/core/tc_scene_extension_ids.h
     include/core/tc_scene_pool.h
     include/tc_hash_map.h
     include/tc_type_registry.h

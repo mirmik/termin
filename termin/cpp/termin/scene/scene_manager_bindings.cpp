@@ -12,6 +12,7 @@ extern "C" {
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_entity_pool.h"
+#include "core/tc_scene_extension_ids.h"
 }
 
 namespace nb = nanobind;
@@ -36,14 +37,30 @@ void bind_scene_manager(nb::module_& m) {
         .value("PLAY", TC_SCENE_MODE_PLAY, "Full simulation")
         .export_values();
 
+    m.attr("SCENE_EXT_TYPE_RENDER_MOUNT") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_MOUNT);
+    m.attr("SCENE_EXT_TYPE_RENDER_STATE") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_STATE);
+    m.attr("SCENE_EXT_TYPE_COLLISION_WORLD") = nb::int_(TC_SCENE_EXT_TYPE_COLLISION_WORLD);
+
+    m.def("default_scene_extensions", []() {
+        return std::vector<tc_scene_ext_type_id>{
+            TC_SCENE_EXT_TYPE_RENDER_MOUNT,
+            TC_SCENE_EXT_TYPE_RENDER_STATE,
+            TC_SCENE_EXT_TYPE_COLLISION_WORLD,
+        };
+    });
+
     // Bind SceneManager class
     nb::class_<SceneManager, PySceneManager>(m, "SceneManager")
         .def(nb::init<>())
 
         // --- Scene lifecycle ---
 
-        .def("create_scene", [](SceneManager& self, const std::string& name) -> nb::object {
-            tc_scene_handle h = self.create_scene(name);
+        .def("create_scene", [](SceneManager& self, const std::string& name, nb::object extensions_obj) -> nb::object {
+            std::vector<tc_scene_ext_type_id> extensions;
+            if (!extensions_obj.is_none()) {
+                extensions = nb::cast<std::vector<tc_scene_ext_type_id>>(extensions_obj);
+            }
+            tc_scene_handle h = self.create_scene(name, extensions);
             if (!tc_scene_handle_valid(h)) {
                 return nb::none();
             }
@@ -51,7 +68,7 @@ void bind_scene_manager(nb::module_& m) {
             nb::module_ entity_module = nb::module_::import_("termin.entity._entity_native");
             nb::object tc_scene_class = entity_module.attr("TcScene");
             return tc_scene_class.attr("from_handle")(h.index, h.generation);
-        }, nb::arg("name"),
+        }, nb::arg("name"), nb::arg("extensions") = nb::none(),
            "Create a new scene and register it. Returns TcScene.")
 
         .def("close_scene", &SceneManager::close_scene, nb::arg("name"),
@@ -238,9 +255,6 @@ void bind_scene_manager(nb::module_& m) {
 
         .def("tick", &SceneManager::tick, nb::arg("dt"),
              "Update all scenes based on their mode. Returns true if render needed.")
-
-        .def("tick_and_render", &SceneManager::tick_and_render, nb::arg("dt"),
-             "Full update cycle: tick, before_render, render_all, after_render callback.")
 
         .def("before_render", &SceneManager::before_render,
              "Call before_render on all active scenes.")

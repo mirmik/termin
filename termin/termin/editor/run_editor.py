@@ -175,7 +175,7 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     # Render first frame
     sdl_backend.poll_events()
     engine.scene_manager.request_render()
-    engine.scene_manager.tick_and_render(0.016)
+    engine.tick_and_render(0.016)
 
     # Setup callbacks for main loop
     def poll_events():
