@@ -113,7 +113,6 @@ nanobind_add_module(_native NB_SHARED
     termin/render/solid_primitive_renderer.cpp
     termin/render/glsl_preprocessor.cpp
     termin/render/skinned_mesh_renderer.cpp
-    termin/render/render_engine.cpp
     termin/render/color_pass.cpp
     termin/render/id_pass.cpp
     termin/render/collider_gizmo_pass.cpp

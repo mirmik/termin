@@ -245,6 +245,8 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
 
     std::vector<Light> lights = collect_lights(scene);
     RenderCamera render_camera = make_render_camera(*camera, static_cast<double>(pw) / std::max(1, ph));
+    const char* vp_name = tc_viewport_get_name(viewport);
+    tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
 
     RenderEngine* engine = render_engine();
     engine->render_view_to_fbo(
@@ -253,7 +255,8 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
         pw, ph,
         scene,
         render_camera,
-        viewport,
+        vp_name ? vp_name : "",
+        internal_entities,
         lights,
         tc_viewport_get_layer_mask(viewport)
     );

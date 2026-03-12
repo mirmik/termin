@@ -21,8 +21,6 @@ set(TC_SOURCES
     src/tc_gpu.c
     src/tc_primitive_mesh.c
     src/tc_picking.c
-    src/tc_profiler.c
-    src/tc_project_settings.c
     src/tc_skeleton_registry.c
 )
 
@@ -47,8 +45,6 @@ set(TC_HEADERS
     include/physics/tc_collision.h
     include/tc_gpu.h
     include/tc_picking.h
-    include/tc_profiler.h
-    include/tc_project_settings.h
     include/resources/tc_skeleton.h
     include/resources/tc_skeleton_registry.h
     include/core/tc_scene_registry.h

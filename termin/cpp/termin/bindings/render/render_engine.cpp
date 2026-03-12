@@ -6,7 +6,6 @@
 #include "termin/camera/render_camera_utils.hpp"
 #include <termin/tc_scene.hpp>
 #include "termin/tc_scene_render_ext.hpp"
-#include "termin/viewport/tc_viewport_handle.hpp"
 
 #include <algorithm>
 #include <nanobind/stl/unordered_map.h>
@@ -31,18 +30,17 @@ void bind_render_engine(nb::module_& m) {
                                    CameraComponent* camera,
                                    nb::object viewport_obj,
                                    uint64_t layer_mask) {
-            // Convert viewport from Python object to handle
-            tc_viewport_handle vh = TC_VIEWPORT_HANDLE_INVALID;
+            std::string viewport_name;
+            tc_entity_handle internal_entities = TC_ENTITY_HANDLE_INVALID;
             if (!viewport_obj.is_none()) {
                 try {
-                    auto attr = viewport_obj.attr("_viewport_handle");
-                    auto result = attr();
-                    // Extract values directly from Python tuple without casting to std::tuple
-                    // This avoids RTTI issues across modules
-                    vh.index = nb::cast<uint32_t>(result[nb::int_(0)]);
-                    vh.generation = nb::cast<uint32_t>(result[nb::int_(1)]);
+                    viewport_name = nb::cast<std::string>(viewport_obj.attr("name"));
+                    nb::object internal_entities_obj = viewport_obj.attr("internal_entities");
+                    if (!internal_entities_obj.is_none()) {
+                        internal_entities = nb::cast<Entity>(internal_entities_obj).handle();
+                    }
                 } catch (const std::exception& e) {
-                    tc::Log::error("[TRACE BINDING] Exception during viewport conversion: %s", e.what());
+                    tc::Log::error("[RenderEngine binding] viewport conversion failed: %s", e.what());
                     throw;
                 }
             }
@@ -57,7 +55,8 @@ void bind_render_engine(nb::module_& m) {
                 height,
                 scene_ref.handle(),
                 render_camera,
-                vh,
+                viewport_name,
+                internal_entities,
                 lights,
                 layer_mask
             );

@@ -1,7 +1,6 @@
-// tc_profiler.c - Hierarchical profiler implementation
 #include "tc_profiler.h"
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -12,7 +11,7 @@ static double get_time_ms(void) {
     }
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
-    return (double)now.QuadPart / (double)freq.QuadPart * 1000.0;
+    return (double) now.QuadPart / (double) freq.QuadPart * 1000.0;
 }
 #else
 #include <time.h>
@@ -23,10 +22,6 @@ static double get_time_ms(void) {
 }
 #endif
 
-// ============================================================================
-// Profiler State
-// ============================================================================
-
 #define PROFILER_HISTORY_SIZE 120
 
 typedef struct {
@@ -34,17 +29,11 @@ typedef struct {
     bool profile_components;
     bool detailed_rendering;
     int frame_count;
-
-    // Current frame being profiled
     tc_frame_profile* current_frame;
     double frame_start_time;
-
-    // Section stack for nesting
     int section_stack[TC_PROFILER_MAX_DEPTH];
     double section_start_times[TC_PROFILER_MAX_DEPTH];
     int stack_depth;
-
-    // Frame history (ring buffer)
     tc_frame_profile history[PROFILER_HISTORY_SIZE];
     int history_start;
     int history_count;
@@ -52,17 +41,9 @@ typedef struct {
 
 static tc_profiler g_profiler = {0};
 
-// ============================================================================
-// Singleton
-// ============================================================================
-
 void* tc_profiler_instance(void) {
     return &g_profiler;
 }
-
-// ============================================================================
-// Enable/Disable
-// ============================================================================
 
 bool tc_profiler_enabled(void) {
     return g_profiler.enabled;
@@ -92,15 +73,10 @@ void tc_profiler_set_detailed_rendering(bool enabled) {
     g_profiler.detailed_rendering = enabled;
 }
 
-// ============================================================================
-// Frame Control
-// ============================================================================
-
 void tc_profiler_begin_frame(void) {
     if (!g_profiler.enabled) return;
-    if (g_profiler.current_frame != NULL) return;  // Idempotent
+    if (g_profiler.current_frame != NULL) return;
 
-    // Get next slot in history ring buffer
     int slot = (g_profiler.history_start + g_profiler.history_count) % PROFILER_HISTORY_SIZE;
     if (g_profiler.history_count == PROFILER_HISTORY_SIZE) {
         g_profiler.history_start = (g_profiler.history_start + 1) % PROFILER_HISTORY_SIZE;
@@ -125,18 +101,11 @@ void tc_profiler_end_frame(void) {
     g_profiler.current_frame = NULL;
 }
 
-// ============================================================================
-// Section Timing
-// ============================================================================
-
-// Find or create section in current frame
 static int find_or_create_section(const char* name, int parent_index) {
     tc_frame_profile* frame = g_profiler.current_frame;
 
-    // Search existing sections with same parent
     int first_child = (parent_index >= 0) ? frame->sections[parent_index].first_child : -1;
 
-    // For root sections, search all sections with parent_index == -1
     if (parent_index < 0) {
         for (int i = 0; i < frame->section_count; i++) {
             if (frame->sections[i].parent_index == -1 &&
@@ -145,7 +114,6 @@ static int find_or_create_section(const char* name, int parent_index) {
             }
         }
     } else {
-        // Search children of parent
         int idx = first_child;
         while (idx >= 0) {
             if (strcmp(frame->sections[idx].name, name) == 0) {
@@ -155,9 +123,8 @@ static int find_or_create_section(const char* name, int parent_index) {
         }
     }
 
-    // Create new section
     if (frame->section_count >= TC_PROFILER_MAX_SECTIONS) {
-        return -1;  // Out of space
+        return -1;
     }
 
     int new_idx = frame->section_count++;
@@ -172,13 +139,11 @@ static int find_or_create_section(const char* name, int parent_index) {
     section->first_child = -1;
     section->next_sibling = -1;
 
-    // Link to parent
     if (parent_index >= 0) {
         tc_section_timing* parent = &frame->sections[parent_index];
         if (parent->first_child < 0) {
             parent->first_child = new_idx;
         } else {
-            // Find last sibling
             int last = parent->first_child;
             while (frame->sections[last].next_sibling >= 0) {
                 last = frame->sections[last].next_sibling;
@@ -220,16 +185,11 @@ void tc_profiler_end_section(void) {
     section->cpu_ms += elapsed;
     section->call_count++;
 
-    // Add elapsed time to parent's children_ms for coverage calculation
     if (section->parent_index >= 0) {
         tc_section_timing* parent = &g_profiler.current_frame->sections[section->parent_index];
         parent->children_ms += elapsed;
     }
 }
-
-// ============================================================================
-// Data Access
-// ============================================================================
 
 tc_frame_profile* tc_profiler_current_frame(void) {
     return g_profiler.current_frame;
@@ -241,8 +201,8 @@ int tc_profiler_history_count(void) {
 
 tc_frame_profile* tc_profiler_history_at(int index) {
     if (index < 0 || index >= g_profiler.history_count) return NULL;
-    int actual_idx = (g_profiler.history_start + index) % PROFILER_HISTORY_SIZE;
-    return &g_profiler.history[actual_idx];
+    int slot = (g_profiler.history_start + index) % PROFILER_HISTORY_SIZE;
+    return &g_profiler.history[slot];
 }
 
 void tc_profiler_clear_history(void) {
