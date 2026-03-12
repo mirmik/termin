@@ -106,6 +106,7 @@ build_with_python() {
         -Dtermin_render_DIR="$SDK_PREFIX/lib/cmake/termin_render" \
         -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
         -Dtermin_display_DIR="$SDK_PREFIX/lib/cmake/termin_display" \
+        -Dtermin_engine_DIR="$SDK_PREFIX/lib/cmake/termin_engine" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
         -Dtermin_components_render_DIR="$SDK_PREFIX/lib/cmake/termin_components_render" \
@@ -126,6 +127,7 @@ build_with_python "termin-collision"            "$SCRIPT_DIR/termin-collision"
 build_with_python "termin-components-collision"  "$SCRIPT_DIR/termin-components/termin-components-collision"
 build_with_python "termin-components-render"     "$SCRIPT_DIR/termin-components/termin-components-render"
 build_with_python "termin-components-mesh"       "$SCRIPT_DIR/termin-components/termin-components-mesh"
+build_with_python "termin-engine"                "$SCRIPT_DIR/termin-engine"
 build_with_python "termin-components-kinematic"  "$SCRIPT_DIR/termin-components/termin-components-kinematic"
 
 # ── 3. pip-installable Python packages ───────────────────────────

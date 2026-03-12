@@ -111,8 +111,10 @@ void bind_render(nb::module_& m) {
     // RenderEngine
     bind_render_engine(m);
 
-    // RenderingManager (scene pipeline methods)
-    bind_rendering_manager(m);
+    nb::module_ engine_native = nb::module_::import_("termin.engine._engine_native");
+    nb::module_ engine_render = nb::borrow<nb::module_>(engine_native.attr("render"));
+    m.attr("RenderingManager") = engine_render.attr("RenderingManager");
+    m.attr("ViewportRenderState") = engine_render.attr("ViewportRenderState");
 }
 
 } // namespace termin

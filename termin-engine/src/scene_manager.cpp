@@ -1,5 +1,5 @@
 // scene_manager.cpp - SceneManager implementation
-#include "scene_manager.hpp"
+#include "termin/scene/scene_manager.hpp"
 
 #include <fstream>
 #include <sstream>

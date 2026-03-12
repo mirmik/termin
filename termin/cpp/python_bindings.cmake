@@ -84,7 +84,6 @@ nanobind_add_module(_native NB_SHARED
     termin/bindings/render/renderers.cpp
     termin/bindings/render/solid_primitive.cpp
     termin/bindings/render/render_engine.cpp
-    termin/bindings/render/rendering_manager_bindings.cpp
     termin/bindings/editor/gizmo_bindings.cpp
     termin/bindings/editor/editor_interaction_bindings.cpp
     termin/bindings/editor/frame_graph_debugger_bindings.cpp
@@ -94,9 +93,6 @@ nanobind_add_module(_native NB_SHARED
     termin/editor/editor_interaction_system.cpp
     termin/bindings/modules/term_modules_integration_bindings.cpp
     ${_NATIVE_SDL_SOURCES}
-    termin/scene/scene_manager_bindings.cpp
-    termin/engine/engine_core.cpp
-    termin/bindings/engine/engine_core_bindings.cpp
     termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp
     termin/profiler_bindings.cpp

@@ -24,6 +24,10 @@ function(termin_add_module)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
     )
+    set_target_properties(${TAM_NAME} PROPERTIES
+        INSTALL_RPATH "$ORIGIN:/opt/termin/lib"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
 
     if(TAM_PUBLIC_DEPS)
         target_link_libraries(${TAM_NAME} PUBLIC ${TAM_PUBLIC_DEPS})

@@ -1,15 +1,16 @@
 // rendering_manager_bindings.cpp - Python bindings for RenderingManager
-#include "common.hpp"
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/function.h>
+#include <nanobind/nanobind.h>
+
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "tgfx/graphics_backend.hpp"
 #include "termin/render/viewport_render_state.hpp"
 #include "termin/render/tc_display_handle.hpp"
 #include "termin/viewport/tc_viewport_handle.hpp"
-#include <nanobind/stl/tuple.h>
-#include <nanobind/stl/vector.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/function.h>
 
 extern "C" {
 #include "core/tc_scene.h"
@@ -18,6 +19,32 @@ extern "C" {
 }
 
 namespace termin {
+
+namespace nb = nanobind;
+
+static RenderPipeline* pipeline_from_python(nb::handle obj) {
+    if (obj.is_none()) {
+        return nullptr;
+    }
+
+    nb::object pipeline_obj = nb::borrow<nb::object>(obj);
+    auto handle_tuple = nb::cast<std::tuple<uint32_t, uint32_t>>(pipeline_obj.attr("_pipeline_handle"));
+    tc_pipeline_handle handle;
+    handle.index = std::get<0>(handle_tuple);
+    handle.generation = std::get<1>(handle_tuple);
+    return RenderPipeline::from_handle(handle);
+}
+
+static nb::object pipeline_to_python(RenderPipeline* pipeline) {
+    if (!pipeline) {
+        return nb::none();
+    }
+
+    nb::module_ render_framework = nb::module_::import_("termin.render_framework");
+    nb::object pipeline_class = render_framework.attr("RenderPipeline");
+    tc_pipeline_handle handle = pipeline->handle();
+    return pipeline_class.attr("from_handle")(handle.index, handle.generation);
+}
 
 // Helper to extract tc_scene_handle from Python Scene object (Scene inherits TcScene)
 static tc_scene_handle get_scene_handle(nb::object scene_py) {
@@ -128,8 +155,7 @@ void bind_rendering_manager(nb::module_& m) {
                 self.set_pipeline_factory([stored](const std::string& name) -> RenderPipeline* {
                     nb::gil_scoped_acquire gil;
                     nb::object result = stored(name);
-                    if (result.is_none()) return nullptr;
-                    return nb::cast<RenderPipeline*>(result);
+                    return pipeline_from_python(result);
                 });
             }
         }, nb::arg("factory").none(),
@@ -294,15 +320,15 @@ void bind_rendering_manager(nb::module_& m) {
 
         .def("get_scene_pipeline", [](RenderingManager& self,
                                        nb::object scene_py,
-                                       const std::string& name) -> RenderPipeline* {
+                                       const std::string& name) -> nb::object {
             tc_scene_handle scene = get_scene_handle(scene_py);
-            return self.get_scene_pipeline(scene, name);
-        }, nb::arg("scene"), nb::arg("name"), nb::rv_policy::reference)
+            return pipeline_to_python(self.get_scene_pipeline(scene, name));
+        }, nb::arg("scene"), nb::arg("name"))
 
         .def("get_scene_pipeline", [](RenderingManager& self,
-                                       const std::string& name) -> RenderPipeline* {
-            return self.get_scene_pipeline(name);
-        }, nb::arg("name"), nb::rv_policy::reference)
+                                       const std::string& name) -> nb::object {
+            return pipeline_to_python(self.get_scene_pipeline(name));
+        }, nb::arg("name"))
 
         .def("clear_scene_pipelines", [](RenderingManager& self, nb::object scene_py) {
             tc_scene_handle scene = get_scene_handle(scene_py);

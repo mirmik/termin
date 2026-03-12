@@ -3,7 +3,7 @@
 # Dependency order:
 #   termin-base -> termin-modules -> termin-mesh -> termin-graphics -> termin-inspect -> termin-scene
 #   -> termin-render -> termin-input -> termin-display -> termin-collision -> termin-components-collision -> termin-components-mesh
-#   -> termin-components-kinematic -> termin(cpp only)
+#   -> termin-engine -> termin-components-kinematic -> termin(cpp only)
 
 set -e
 
@@ -82,6 +82,7 @@ build_cmake_lib_cpp() {
         -Dtermin_render_DIR="$SDK_PREFIX/lib/cmake/termin_render" \
         -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
         -Dtermin_display_DIR="$SDK_PREFIX/lib/cmake/termin_display" \
+        -Dtermin_engine_DIR="$SDK_PREFIX/lib/cmake/termin_engine" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
         -Dtermin_components_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_components_mesh" \
@@ -130,6 +131,7 @@ build_termin_cpp_only() {
         -Dtermin_render_DIR="$SDK_PREFIX/lib/cmake/termin_render" \
         -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
         -Dtermin_display_DIR="$SDK_PREFIX/lib/cmake/termin_display" \
+        -Dtermin_engine_DIR="$SDK_PREFIX/lib/cmake/termin_engine" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
         -Dtermin_components_render_DIR="$SDK_PREFIX/lib/cmake/termin_components_render" \
@@ -156,6 +158,7 @@ build_cmake_lib_cpp "termin-collision" "$SCRIPT_DIR/termin-collision"
 build_cmake_lib_cpp "termin-components-collision" "$SCRIPT_DIR/termin-components/termin-components-collision"
 build_cmake_lib_cpp "termin-components-render" "$SCRIPT_DIR/termin-components/termin-components-render"
 build_cmake_lib_cpp "termin-components-mesh" "$SCRIPT_DIR/termin-components/termin-components-mesh"
+build_cmake_lib_cpp "termin-engine" "$SCRIPT_DIR/termin-engine"
 build_cmake_lib_cpp "termin-components-kinematic" "$SCRIPT_DIR/termin-components/termin-components-kinematic"
 build_termin_cpp_only
 

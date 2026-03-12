@@ -12,8 +12,6 @@ extern "C" {
 #include "sdl_bindings.hpp"
 #endif
 #include "bindings/modules/term_modules_integration_bindings.hpp"
-#include "scene/scene_manager_bindings.hpp"
-#include "bindings/engine/engine_core_bindings.hpp"
 #include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
@@ -137,6 +135,7 @@ NB_MODULE(_native, m) {
     // Must be imported before render (MeshRenderer inherits Component)
     nb::module_ entity_native = nb::module_::import_("termin.entity._entity_native");
     m.attr("entity") = entity_native;
+    nb::module_ engine_native = nb::module_::import_("termin.engine._engine_native");
 
     // Termin-specific: RenderSyncMode (from tc_project_settings.h)
     nb::enum_<tc_render_sync_mode>(m, "RenderSyncMode")
@@ -175,9 +174,7 @@ NB_MODULE(_native, m) {
 #ifdef TERMIN_HAS_SDL2
     termin::bind_sdl(platform_module);
 #endif
-    termin::bind_scene_manager(scene_module);
     termin::bind_term_modules_integration(modules_module);
-    termin::bind_engine_core(m);  // EngineCore in root module
     termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);
     termin::bind_inspect(inspect_module);
@@ -189,6 +186,14 @@ NB_MODULE(_native, m) {
     // TcComponent is registered in _scene_native — re-export it
     nb::module_ scene_native = nb::module_::import_("termin.scene._scene_native");
     component_module.attr("TcComponent") = scene_native.attr("TcComponent");
+    m.attr("EngineCore") = engine_native.attr("EngineCore");
+    nb::module_ engine_scene = nb::borrow<nb::module_>(engine_native.attr("scene"));
+    scene_module.attr("SceneMode") = engine_scene.attr("SceneMode");
+    scene_module.attr("SceneManager") = engine_scene.attr("SceneManager");
+    scene_module.attr("SCENE_EXT_TYPE_RENDER_MOUNT") = engine_scene.attr("SCENE_EXT_TYPE_RENDER_MOUNT");
+    scene_module.attr("SCENE_EXT_TYPE_RENDER_STATE") = engine_scene.attr("SCENE_EXT_TYPE_RENDER_STATE");
+    scene_module.attr("SCENE_EXT_TYPE_COLLISION_WORLD") = engine_scene.attr("SCENE_EXT_TYPE_COLLISION_WORLD");
+    scene_module.attr("default_scene_extensions") = engine_scene.attr("default_scene_extensions");
 
     // Initialize termin-specific drawable and input callbacks
     termin::init_python_component_callbacks();
