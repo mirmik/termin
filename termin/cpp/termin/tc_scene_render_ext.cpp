@@ -3,7 +3,7 @@
 #include <termin/entity/entity.hpp>
 #include "entity/tc_component_ref.hpp"
 #include "render/rendering_manager.hpp"
-#include "render/scene_pipeline_template.hpp"
+#include <termin/render/scene_pipeline_template.hpp>
 #include "render/tc_value_trent.hpp"
 #include "core/tc_scene_extension.h"
 #include "core/tc_scene_extension_ids.h"

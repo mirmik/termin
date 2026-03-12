@@ -1,4 +1,5 @@
-#include "graph_data.hpp"
+#include "termin/render/graph_data.hpp"
+
 #include <tcbase/tc_log.hpp>
 #include <trent/json.h>
 
@@ -22,56 +23,19 @@ const NodeData* GraphData::get_node(const std::string& id) const {
     return nullptr;
 }
 
-// Socket definitions for known pass classes
 static const std::unordered_map<std::string, PassSocketInfo> g_pass_socket_info = {
-    {"ColorPass", {
-        {{"input_res", "fbo"}, {"shadow_res", "shadow"}},  // inputs
-        {{"output_res", "fbo"}}  // outputs
-    }},
-    {"DepthPass", {
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}}
-    }},
-    {"NormalPass", {
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}}
-    }},
-    {"IdPass", {
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}}
-    }},
-    {"ShadowPass", {
-        {},  // no inputs
-        {{"output_res", "shadow"}}
-    }},
-    {"SkyBoxPass", {
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}}
-    }},
-    {"BloomPass", {
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}}
-    }},
-    {"TonemapPass", {
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}}
-    }},
-    {"MaterialPass", {
-        {},  // dynamic inputs
-        {{"output_res", "fbo"}}
-    }},
-    {"ResolvePass", {
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}}
-    }},
-    {"PresentToScreenPass", {
-        {{"input_res", "fbo"}},
-        {}  // no outputs
-    }},
-    {"ColliderGizmoPass", {
-        {{"input_res", "fbo"}},
-        {{"output_res", "fbo"}}
-    }},
+    {"ColorPass", {{{"input_res", "fbo"}, {"shadow_res", "shadow"}}, {{"output_res", "fbo"}}}},
+    {"DepthPass", {{{"input_res", "fbo"}}, {{"output_res", "fbo"}}}},
+    {"NormalPass", {{{"input_res", "fbo"}}, {{"output_res", "fbo"}}}},
+    {"IdPass", {{{"input_res", "fbo"}}, {{"output_res", "fbo"}}}},
+    {"ShadowPass", {{}, {{"output_res", "shadow"}}}},
+    {"SkyBoxPass", {{{"input_res", "fbo"}}, {{"output_res", "fbo"}}}},
+    {"BloomPass", {{{"input_res", "fbo"}}, {{"output_res", "fbo"}}}},
+    {"TonemapPass", {{{"input_res", "fbo"}}, {{"output_res", "fbo"}}}},
+    {"MaterialPass", {{}, {{"output_res", "fbo"}}}},
+    {"ResolvePass", {{{"input_res", "fbo"}}, {{"output_res", "fbo"}}}},
+    {"PresentToScreenPass", {{{"input_res", "fbo"}}, {}}},
+    {"ColliderGizmoPass", {{{"input_res", "fbo"}}, {{"output_res", "fbo"}}}},
 };
 
 PassSocketInfo get_pass_sockets(const std::string& class_name) {
@@ -79,45 +43,34 @@ PassSocketInfo get_pass_sockets(const std::string& class_name) {
     if (it != g_pass_socket_info.end()) {
         return it->second;
     }
-    // Default: single input/output FBO
     return {{{"input_res", "fbo"}}, {{"output_res", "fbo"}}};
 }
 
 GraphData GraphData::from_trent(const nos::trent& t) {
     GraphData graph;
 
-    // Parse nodes
     if (t.contains("nodes") && t["nodes"].is_list()) {
         const auto& nodes_list = t["nodes"].as_list();
         for (size_t i = 0; i < nodes_list.size(); ++i) {
             const auto& node_t = nodes_list[i];
             NodeData node;
 
-            node.id = std::to_string(i);  // Use index as ID
+            node.id = std::to_string(i);
 
-            // "type" is the pass class name (e.g., "ColorPass")
             if (node_t.contains("type") && node_t["type"].is_string()) {
                 node.pass_class = node_t["type"].as_string();
             }
-
-            // "node_type" is the category: "pass", "resource", "output"
             if (node_t.contains("node_type") && node_t["node_type"].is_string()) {
                 node.node_type = node_t["node_type"].as_string();
             } else {
-                node.node_type = "pass";  // Default
+                node.node_type = "pass";
             }
-
-            // Instance name
             if (node_t.contains("name") && node_t["name"].is_string()) {
                 node.name = node_t["name"].as_string();
             }
-
-            // Parameters
             if (node_t.contains("params") && node_t["params"].is_dict()) {
                 node.params = node_t["params"];
             }
-
-            // Position
             if (node_t.contains("x") && node_t["x"].is_numer()) {
                 node.x = static_cast<float>(node_t["x"].as_numer());
             }
@@ -125,8 +78,6 @@ GraphData GraphData::from_trent(const nos::trent& t) {
                 node.y = static_cast<float>(node_t["y"].as_numer());
             }
 
-            // Get sockets from pass class registry
-            // Check for pass-like nodes (pass, effect, or any non-resource/non-output type)
             bool is_pass = (node.node_type != "resource" && node.node_type != "output");
             if (is_pass && !node.pass_class.empty()) {
                 auto sockets = get_pass_sockets(node.pass_class);
@@ -135,33 +86,29 @@ GraphData GraphData::from_trent(const nos::trent& t) {
                 }
                 for (const auto& [name, type] : sockets.outputs) {
                     node.outputs.push_back({name, type, false});
-                    // Add corresponding _target input for output sockets
-                    std::string target_name = name + "_target";
-                    node.inputs.push_back({target_name, type, true});
+                    node.inputs.push_back({name + "_target", type, true});
                 }
 
-                // Add dynamic inputs from serialized data
                 if (node_t.contains("dynamic_inputs") && node_t["dynamic_inputs"].is_list()) {
                     for (const auto& dyn : node_t["dynamic_inputs"].as_list()) {
-                        if (dyn.is_list() && dyn.as_list().size() >= 2) {
-                            std::string dyn_name = dyn[0].as_string();
-                            std::string dyn_type = dyn[1].as_string();
-                            // Check if not already in inputs
-                            bool found = false;
-                            for (const auto& inp : node.inputs) {
-                                if (inp.name == dyn_name) {
-                                    found = true;
-                                    break;
-                                }
+                        if (!dyn.is_list() || dyn.as_list().size() < 2) {
+                            continue;
+                        }
+                        std::string dyn_name = dyn[0].as_string();
+                        std::string dyn_type = dyn[1].as_string();
+                        bool found = false;
+                        for (const auto& inp : node.inputs) {
+                            if (inp.name == dyn_name) {
+                                found = true;
+                                break;
                             }
-                            if (!found) {
-                                node.inputs.push_back({dyn_name, dyn_type, true});
-                            }
+                        }
+                        if (!found) {
+                            node.inputs.push_back({dyn_name, dyn_type, true});
                         }
                     }
                 }
             } else if (node.node_type == "resource") {
-                // Resource nodes have single output named "fbo"
                 node.outputs.push_back({"fbo", "fbo", false});
             }
 
@@ -169,7 +116,6 @@ GraphData GraphData::from_trent(const nos::trent& t) {
         }
     }
 
-    // Parse connections
     if (t.contains("connections") && t["connections"].is_list()) {
         for (const auto& conn_t : t["connections"].as_list()) {
             ConnectionData conn;
@@ -199,11 +145,9 @@ GraphData GraphData::from_trent(const nos::trent& t) {
         }
     }
 
-    // Parse viewport frames
     if (t.contains("viewport_frames") && t["viewport_frames"].is_list()) {
         for (const auto& vf_t : t["viewport_frames"].as_list()) {
             ViewportFrameData vf;
-
             if (vf_t.contains("viewport_name") && vf_t["viewport_name"].is_string()) {
                 vf.viewport_name = vf_t["viewport_name"].as_string();
             }
@@ -219,7 +163,6 @@ GraphData GraphData::from_trent(const nos::trent& t) {
             if (vf_t.contains("height") && vf_t["height"].is_numer()) {
                 vf.height = static_cast<float>(vf_t["height"].as_numer());
             }
-
             graph.viewport_frames.push_back(std::move(vf));
         }
     }

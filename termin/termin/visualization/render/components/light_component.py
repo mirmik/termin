@@ -1,9 +1,5 @@
-"""
-LightComponent - Component that provides a light source.
+"""LightComponent - re-export from render components package."""
 
-Re-exports C++ implementation from termin.lighting.
-"""
-
-from termin.lighting import LightComponent
+from termin.render_components import LightComponent
 
 __all__ = ["LightComponent"]

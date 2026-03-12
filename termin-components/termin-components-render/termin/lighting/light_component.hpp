@@ -1,36 +1,25 @@
 #pragma once
 
-#include <termin/export.hpp>
 #include <termin/entity/component.hpp>
+#include <termin/export.hpp>
 #include <termin/geom/vec3.hpp>
-#include "light.hpp"
+#include <termin/render/light.hpp>
 
 namespace termin {
 
-// LightComponent - component that provides a light source.
-// Uses entity transform for direction/position.
 class ENTITY_API LightComponent : public CxxComponent {
 public:
-    // Light type
     LightType light_type = LightType::Directional;
-
-    // Color (RGB, 0-1)
     Vec3 color = Vec3(1.0, 1.0, 1.0);
-
-    // Intensity multiplier
     double intensity = 1.0;
-
-    // Shadow parameters
     LightShadowParams shadows;
 
 public:
     LightComponent();
 
-    // Type accessors (for serialization as string)
     std::string get_light_type_str() const;
     void set_light_type_str(const std::string& type);
 
-    // Shadow accessors
     bool get_shadows_enabled() const { return shadows.enabled; }
     void set_shadows_enabled(bool v) { shadows.enabled = v; }
 
@@ -49,8 +38,6 @@ public:
     bool get_cascade_blend() const { return shadows.cascade_blend; }
     void set_cascade_blend(bool v) { shadows.cascade_blend = v; }
 
-    // Convert to Light object for rendering
-    // Uses entity transform for direction (Directional) or position (Point/Spot)
     Light to_light() const;
 };
 

@@ -22,6 +22,7 @@ termin_add_module(
     SOURCES
         src/camera_component.cpp
         src/geometry_pass_base.cpp
+        src/light_component.cpp
         src/mesh_renderer.cpp
         src/material_pass.cpp
         src/depth_pass.cpp

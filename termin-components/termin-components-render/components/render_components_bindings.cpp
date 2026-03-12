@@ -10,6 +10,7 @@
 
 #include <termin/bindings/entity_helpers.hpp>
 #include <termin/camera/camera_component.hpp>
+#include <termin/lighting/light_component.hpp>
 #include <termin/render/depth_pass.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/material_pass.hpp>
@@ -145,6 +146,7 @@ NB_MODULE(_components_render_native, m) {
 
     nb::module_::import_("tgfx._tgfx_native");
     nb::module_::import_("termin.entity._entity_native");
+    nb::module_::import_("termin.lighting._lighting_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
     nb::module_::import_("termin.viewport._viewport_native");
 
@@ -372,6 +374,43 @@ NB_MODULE(_components_render_native, m) {
             std::string pm = nb::cast<std::string>(phase_mark);
             return self.get_geometry_draws(&pm);
         }, nb::arg("phase_mark") = nb::none());
+
+    nb::class_<LightComponent, CxxComponent>(m, "LightComponent")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<LightComponent>(self);
+        })
+        .def_prop_rw("light_type",
+            &LightComponent::get_light_type_str,
+            &LightComponent::set_light_type_str)
+        .def_prop_rw("color",
+            [](const LightComponent& c) { return vec3_to_numpy(c.color); },
+            [](LightComponent& c, nb::object v) {
+                c.color = numpy_to_vec3(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(v));
+            })
+        .def_rw("intensity", &LightComponent::intensity)
+        .def_prop_rw("shadows_enabled",
+            &LightComponent::get_shadows_enabled,
+            &LightComponent::set_shadows_enabled)
+        .def_prop_rw("shadows_map_resolution",
+            &LightComponent::get_shadows_map_resolution,
+            &LightComponent::set_shadows_map_resolution)
+        .def_prop_rw("cascade_count",
+            &LightComponent::get_cascade_count,
+            &LightComponent::set_cascade_count)
+        .def_prop_rw("max_distance",
+            &LightComponent::get_max_distance,
+            &LightComponent::set_max_distance)
+        .def_prop_rw("split_lambda",
+            &LightComponent::get_split_lambda,
+            &LightComponent::set_split_lambda)
+        .def_prop_rw("cascade_blend",
+            &LightComponent::get_cascade_blend,
+            &LightComponent::set_cascade_blend)
+        .def_rw("shadows", &LightComponent::shadows)
+        .def("to_light", &LightComponent::to_light)
+        .def("c_component_ptr", [](LightComponent& c) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(c.c_component());
+        });
 
     nb::class_<DepthPass, CxxFramePass>(m, "DepthPass")
         .def("__init__", [](DepthPass* self, const std::string& input_res, const std::string& output_res, const std::string& pass_name) {

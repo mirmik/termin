@@ -43,7 +43,7 @@ public:
     std::string to_json() const;
 
     // Graph data - tc_value interface
-    void set_graph(tc_value graph);  // Takes ownership
+    void set_graph(tc_value graph);
     const tc_value* get_graph() const;
 
     // Target viewports (extracted from graph_data.viewport_frames)

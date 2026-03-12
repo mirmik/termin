@@ -158,7 +158,6 @@ set(ENTITY_LIB_SOURCES
     # Entity-related sources that remain in termin (not migrated to termin-scene)
     termin/entity/entity_registry.cpp
     termin/camera/orbit_camera_controller.cpp
-    termin/lighting/light_component.cpp
     ${TERMIN_ROOT}/core_c/src/tc_inspect_component_adapter.cpp
     ${TERMIN_ROOT}/core_c/src/tc_rendering_manager_instance.cpp
     ${TERMIN_ROOT}/core_c/src/tc_engine_core_instance.cpp
@@ -254,9 +253,6 @@ set(RENDER_LIB_SOURCES
     termin/render/shadow_camera.cpp
     termin/render/glsl_preprocessor.cpp
     termin/render/shader_skinning.cpp
-    termin/render/graph_data.cpp
-    termin/render/graph_compiler.cpp
-    termin/render/scene_pipeline_template.cpp
     termin/modules/term_modules_integration.cpp
     termin/texture/tc_texture_handle.cpp
     termin/camera/camera_viewport_component.cpp
