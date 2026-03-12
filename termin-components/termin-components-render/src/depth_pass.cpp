@@ -1,6 +1,6 @@
 #include <termin/render/depth_pass.hpp>
 
-#include "camera/camera_component.hpp"
+#include <termin/camera/camera_component.hpp>
 
 namespace termin {
 

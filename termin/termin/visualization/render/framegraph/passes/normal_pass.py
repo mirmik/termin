@@ -2,6 +2,6 @@
 
 Re-exports C++ NormalPass.
 """
-from termin._native.render import NormalPass
+from termin.render_components import NormalPass
 
 __all__ = ["NormalPass"]

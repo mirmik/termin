@@ -1,31 +1,23 @@
 // tc_viewport.c - Viewport implementation using pool with generational indices
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
-#include "render/tc_input_manager.h"
 #include "core/tc_component.h"
 #include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
 
-// ============================================================================
-// Viewport Pool - Global singleton
-// ============================================================================
-
 #define MAX_VIEWPORTS 256
 #define INITIAL_POOL_CAPACITY 16
 
 typedef struct {
-    // Generational data
     uint32_t* generations;
     bool* alive;
-
-    // Viewport data arrays (SoA)
     char** names;
     tc_scene_handle* scenes;
     tc_component** cameras;
-    tc_entity_handle* camera_entities;  // Entity handles for camera validation
-    float* rects;           // 4 floats per viewport (x, y, w, h)
-    int* pixel_rects;       // 4 ints per viewport (px, py, pw, ph)
+    tc_entity_handle* camera_entities;
+    float* rects;
+    int* pixel_rects;
     int* depths;
     tc_pipeline_handle* pipelines;
     uint64_t* layer_masks;
@@ -33,18 +25,10 @@ typedef struct {
     char** input_modes;
     bool* block_input_in_editor;
     char** managed_by;
-
-    // Internal entities
     tc_entity_handle* internal_entities;
-
-    // Per-viewport input managers (ownership is external)
     tc_input_manager** input_managers;
-
-    // Display linked list (handles instead of pointers)
     tc_viewport_handle* display_prevs;
     tc_viewport_handle* display_nexts;
-
-    // Pool management
     uint32_t* free_stack;
     size_t free_count;
     size_t capacity;
@@ -53,11 +37,7 @@ typedef struct {
 
 static ViewportPool* g_pool = NULL;
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-static char* tc_strdup(const char* s) {
+static char* tc_strdup_local(const char* s) {
     if (s == NULL) return NULL;
     size_t len = strlen(s) + 1;
     char* copy = (char*)malloc(len);
@@ -67,12 +47,8 @@ static char* tc_strdup(const char* s) {
 
 static void tc_strset(char** dest, const char* src) {
     free(*dest);
-    *dest = tc_strdup(src);
+    *dest = tc_strdup_local(src);
 }
-
-// ============================================================================
-// Pool Lifecycle
-// ============================================================================
 
 void tc_viewport_pool_init(void) {
     if (g_pool) {
@@ -128,7 +104,6 @@ void tc_viewport_pool_shutdown(void) {
         return;
     }
 
-    // Free all alive viewports
     for (size_t i = 0; i < g_pool->capacity; i++) {
         if (g_pool->alive[i]) {
             free(g_pool->names[i]);
@@ -161,10 +136,6 @@ void tc_viewport_pool_shutdown(void) {
     g_pool = NULL;
 }
 
-// ============================================================================
-// Pool Growth
-// ============================================================================
-
 static void pool_grow(void) {
     size_t old_cap = g_pool->capacity;
     size_t new_cap = old_cap * 2;
@@ -195,7 +166,6 @@ static void pool_grow(void) {
     g_pool->display_nexts = realloc(g_pool->display_nexts, new_cap * sizeof(tc_viewport_handle));
     g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
 
-    // Initialize new slots
     memset(g_pool->generations + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
     memset(g_pool->alive + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
@@ -221,17 +191,12 @@ static void pool_grow(void) {
         g_pool->internal_entities[i] = TC_ENTITY_HANDLE_INVALID;
     }
 
-    // Add new slots to free stack
     for (size_t i = old_cap; i < new_cap; i++) {
         g_pool->free_stack[g_pool->free_count++] = (uint32_t)(new_cap - 1 - (i - old_cap));
     }
 
     g_pool->capacity = new_cap;
 }
-
-// ============================================================================
-// Handle validation
-// ============================================================================
 
 static inline bool handle_alive(tc_viewport_handle h) {
     if (!g_pool) return false;
@@ -247,12 +212,7 @@ bool tc_viewport_alive(tc_viewport_handle h) {
     return handle_alive(h);
 }
 
-// ============================================================================
-// Viewport Creation / Destruction
-// ============================================================================
-
 tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
-    // Auto-init if needed
     if (!g_pool) {
         tc_viewport_pool_init();
     }
@@ -268,39 +228,30 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     uint32_t idx = g_pool->free_stack[--g_pool->free_count];
     uint32_t gen = g_pool->generations[idx];
 
-    // Initialize slot
     g_pool->alive[idx] = true;
-    g_pool->names[idx] = tc_strdup(name);
+    g_pool->names[idx] = tc_strdup_local(name);
     g_pool->scenes[idx] = TC_SCENE_HANDLE_INVALID;
     g_pool->cameras[idx] = NULL;
     g_pool->camera_entities[idx] = TC_ENTITY_HANDLE_INVALID;
-
-    // Default rect: full viewport
     g_pool->rects[idx * 4 + 0] = 0.0f;
     g_pool->rects[idx * 4 + 1] = 0.0f;
     g_pool->rects[idx * 4 + 2] = 1.0f;
     g_pool->rects[idx * 4 + 3] = 1.0f;
-
-    // Default pixel rect
     g_pool->pixel_rects[idx * 4 + 0] = 0;
     g_pool->pixel_rects[idx * 4 + 1] = 0;
     g_pool->pixel_rects[idx * 4 + 2] = 1;
     g_pool->pixel_rects[idx * 4 + 3] = 1;
-
     g_pool->depths[idx] = 0;
     g_pool->pipelines[idx] = TC_PIPELINE_HANDLE_INVALID;
     g_pool->layer_masks[idx] = 0xFFFFFFFFFFFFFFFFULL;
     g_pool->enabled[idx] = true;
-    g_pool->input_modes[idx] = tc_strdup("simple");
+    g_pool->input_modes[idx] = tc_strdup_local("simple");
     g_pool->block_input_in_editor[idx] = false;
     g_pool->managed_by[idx] = NULL;
-
     g_pool->input_managers[idx] = NULL;
     g_pool->internal_entities[idx] = TC_ENTITY_HANDLE_INVALID;
-
     g_pool->display_prevs[idx] = TC_VIEWPORT_HANDLE_INVALID;
     g_pool->display_nexts[idx] = TC_VIEWPORT_HANDLE_INVALID;
-
     g_pool->count++;
 
     tc_viewport_handle h = { idx, gen };
@@ -318,54 +269,24 @@ tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene, tc_c
 }
 
 void tc_viewport_pool_free(tc_viewport_handle h) {
-    tc_viewport_free(h);
-}
-
-void tc_viewport_free(tc_viewport_handle h) {
     if (!handle_alive(h)) return;
 
     uint32_t idx = h.index;
-
     free(g_pool->names[idx]);
     free(g_pool->input_modes[idx]);
     free(g_pool->managed_by[idx]);
-
     g_pool->names[idx] = NULL;
     g_pool->input_modes[idx] = NULL;
     g_pool->managed_by[idx] = NULL;
-    g_pool->input_managers[idx] = NULL;
-
-    // Mark as dead
     g_pool->alive[idx] = false;
     g_pool->generations[idx]++;
     g_pool->free_stack[g_pool->free_count++] = idx;
     g_pool->count--;
 }
 
-// ============================================================================
-// Pool Queries
-// ============================================================================
-
-size_t tc_viewport_pool_count(void) {
-    return g_pool ? g_pool->count : 0;
+void tc_viewport_free(tc_viewport_handle h) {
+    tc_viewport_pool_free(h);
 }
-
-void tc_viewport_pool_foreach(tc_viewport_pool_iter_fn callback, void* user_data) {
-    if (!g_pool || !callback) return;
-
-    for (size_t i = 0; i < g_pool->capacity; i++) {
-        if (g_pool->alive[i]) {
-            tc_viewport_handle h = { (uint32_t)i, g_pool->generations[i] };
-            if (!callback(h, user_data)) {
-                break;
-            }
-        }
-    }
-}
-
-// ============================================================================
-// Viewport Properties
-// ============================================================================
 
 void tc_viewport_set_name(tc_viewport_handle h, const char* name) {
     if (!handle_alive(h)) return;
@@ -435,7 +356,7 @@ void tc_viewport_set_layer_mask(tc_viewport_handle h, uint64_t mask) {
 }
 
 uint64_t tc_viewport_get_layer_mask(tc_viewport_handle h) {
-    if (!handle_alive(h)) return 0xFFFFFFFFFFFFFFFFULL;
+    if (!handle_alive(h)) return 0;
     return g_pool->layer_masks[h.index];
 }
 
@@ -468,16 +389,17 @@ void tc_viewport_set_camera(tc_viewport_handle h, tc_component* camera) {
 tc_component* tc_viewport_get_camera(tc_viewport_handle h) {
     if (!handle_alive(h)) return NULL;
 
-    // Check if camera entity is still alive
-    tc_entity_handle cam_entity = g_pool->camera_entities[h.index];
-    if (!tc_entity_handle_valid(cam_entity)) {
-        // Entity is dead, clear the stale pointer
+    tc_component* camera = g_pool->cameras[h.index];
+    if (!camera) return NULL;
+
+    tc_entity_handle owner = g_pool->camera_entities[h.index];
+    if (!tc_entity_handle_valid(owner)) {
         g_pool->cameras[h.index] = NULL;
         g_pool->camera_entities[h.index] = TC_ENTITY_HANDLE_INVALID;
         return NULL;
     }
 
-    return g_pool->cameras[h.index];
+    return camera;
 }
 
 tc_entity_handle tc_viewport_get_camera_entity(tc_viewport_handle h) {
@@ -515,37 +437,29 @@ bool tc_viewport_get_block_input_in_editor(tc_viewport_handle h) {
     return g_pool->block_input_in_editor[h.index];
 }
 
-// ============================================================================
-// Pixel Rect Calculation
-// ============================================================================
+void tc_viewport_set_input_manager(tc_viewport_handle h, tc_input_manager* manager) {
+    if (!handle_alive(h)) return;
+    g_pool->input_managers[h.index] = manager;
+}
+
+tc_input_manager* tc_viewport_get_input_manager(tc_viewport_handle h) {
+    if (!handle_alive(h)) return NULL;
+    return g_pool->input_managers[h.index];
+}
 
 void tc_viewport_update_pixel_rect(tc_viewport_handle h, int display_width, int display_height) {
     if (!handle_alive(h)) return;
 
-    uint32_t idx = h.index;
-    float rx = g_pool->rects[idx * 4 + 0];
-    float ry = g_pool->rects[idx * 4 + 1];
-    float rw = g_pool->rects[idx * 4 + 2];
-    float rh = g_pool->rects[idx * 4 + 3];
+    float x = g_pool->rects[h.index * 4 + 0];
+    float y = g_pool->rects[h.index * 4 + 1];
+    float w = g_pool->rects[h.index * 4 + 2];
+    float height = g_pool->rects[h.index * 4 + 3];
 
-    int px = (int)(rx * display_width);
-    int py = (int)(ry * display_height);
-    int pw = (int)(rw * display_width);
-    int ph = (int)(rh * display_height);
-
-    // Ensure minimum size of 1
-    if (pw < 1) pw = 1;
-    if (ph < 1) ph = 1;
-
-    g_pool->pixel_rects[idx * 4 + 0] = px;
-    g_pool->pixel_rects[idx * 4 + 1] = py;
-    g_pool->pixel_rects[idx * 4 + 2] = pw;
-    g_pool->pixel_rects[idx * 4 + 3] = ph;
+    g_pool->pixel_rects[h.index * 4 + 0] = (int)(x * display_width);
+    g_pool->pixel_rects[h.index * 4 + 1] = (int)(y * display_height);
+    g_pool->pixel_rects[h.index * 4 + 2] = (int)(w * display_width);
+    g_pool->pixel_rects[h.index * 4 + 3] = (int)(height * display_height);
 }
-
-// ============================================================================
-// Internal Entities
-// ============================================================================
 
 void tc_viewport_set_internal_entities(tc_viewport_handle h, tc_entity_handle ent) {
     if (!handle_alive(h)) return;
@@ -561,24 +475,6 @@ bool tc_viewport_has_internal_entities(tc_viewport_handle h) {
     if (!handle_alive(h)) return false;
     return tc_entity_handle_valid(g_pool->internal_entities[h.index]);
 }
-
-// ============================================================================
-// Input Manager
-// ============================================================================
-
-void tc_viewport_set_input_manager(tc_viewport_handle h, tc_input_manager* manager) {
-    if (!handle_alive(h)) return;
-    g_pool->input_managers[h.index] = manager;
-}
-
-tc_input_manager* tc_viewport_get_input_manager(tc_viewport_handle h) {
-    if (!handle_alive(h)) return NULL;
-    return g_pool->input_managers[h.index];
-}
-
-// ============================================================================
-// Display Linked List
-// ============================================================================
 
 tc_viewport_handle tc_viewport_get_display_next(tc_viewport_handle h) {
     if (!handle_alive(h)) return TC_VIEWPORT_HANDLE_INVALID;

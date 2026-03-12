@@ -119,6 +119,7 @@ build_with_python() {
 
 build_with_python "termin-inspect"              "$SCRIPT_DIR/termin-inspect"
 build_with_python "termin-scene"                "$SCRIPT_DIR/termin-scene"
+build_with_python "termin-render"               "$SCRIPT_DIR/termin-render"
 build_with_python "termin-collision"            "$SCRIPT_DIR/termin-collision"
 build_with_python "termin-components-collision"  "$SCRIPT_DIR/termin-components/termin-components-collision"
 build_with_python "termin-components-render"     "$SCRIPT_DIR/termin-components/termin-components-render"

@@ -2,7 +2,7 @@
 
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
-#include "../viewport/tc_viewport_handle.hpp"
+#include <termin/viewport/tc_viewport_handle.hpp>
 
 #include <string>
 #include <cstdint>

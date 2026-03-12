@@ -8,7 +8,7 @@
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/quat.hpp>
 #include <termin/geom/pose3.hpp>
-#include "camera_component.hpp"
+#include <termin/camera/camera_component.hpp>
 
 #include <cmath>
 #include <unordered_map>

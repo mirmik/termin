@@ -40,7 +40,6 @@ target_compile_options(_viewport_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_F
 # Entity native module (Component, Entity, Scene, registries)
 nanobind_add_module(_entity_native NB_SHARED
     termin/bindings/entity/entity_module.cpp
-    termin/bindings/camera/camera_bindings.cpp
     termin/bindings/camera/orbit_camera_bindings.cpp
     termin/bindings/input/input_events_bindings.cpp
     termin/tc_scene_bindings.cpp
@@ -129,6 +128,7 @@ nanobind_add_module(_native NB_SHARED
     termin/render/fbo_pool.cpp
     termin/render/render_engine.cpp
     termin/render/color_pass.cpp
+    termin/render/id_pass.cpp
     termin/render/collider_gizmo_pass.cpp
     termin/render/present_pass.cpp
     termin/render/shadow_pass.cpp
@@ -166,7 +166,7 @@ if(BUILD_TESTS)
     )
     target_link_libraries(_cpp_tests PRIVATE entity_lib)
     target_compile_options(_cpp_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-    install(TARGETS _cpp_tests DESTINATION ${TERMIN_PYTHON_PREFIX}/tests)
+    install(TARGETS _cpp_tests DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/tests)
 endif()
 
 # ============== RPATH settings ==============
@@ -218,12 +218,12 @@ set_target_properties(_native PROPERTIES
 
 # ============== Install targets ==============
 
-install(TARGETS _physics_native DESTINATION ${TERMIN_PYTHON_PREFIX}/physics)
-install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_PREFIX}/voxels)
-install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_PREFIX}/visualization/animation)
-install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_PREFIX}/navmesh)
-install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_PREFIX}/lighting)
-install(TARGETS _skeleton_native DESTINATION ${TERMIN_PYTHON_PREFIX}/skeleton)
-install(TARGETS _viewport_native DESTINATION ${TERMIN_PYTHON_PREFIX}/viewport)
-install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_PREFIX}/entity)
-install(TARGETS _native DESTINATION ${TERMIN_PYTHON_PREFIX})
+install(TARGETS _physics_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/physics)
+install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/voxels)
+install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/visualization/animation)
+install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/navmesh)
+install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/lighting)
+install(TARGETS _skeleton_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/skeleton)
+install(TARGETS _viewport_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/viewport)
+install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/entity)
+install(TARGETS _native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})

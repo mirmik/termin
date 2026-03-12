@@ -27,6 +27,8 @@ from termin.entity._entity_native import (
     EntityRegistry,
     TcComponentRef,
     TcScene,
+)
+from termin.render_components import (
     CameraComponent,
     PerspectiveCameraComponent,
     OrthographicCameraComponent,

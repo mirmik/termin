@@ -156,7 +156,6 @@ target_include_directories(Recast PUBLIC
 set(ENTITY_LIB_SOURCES
     # Entity-related sources that remain in termin (not migrated to termin-scene)
     termin/entity/entity_registry.cpp
-    termin/camera/camera_component.cpp
     termin/camera/orbit_camera_controller.cpp
     termin/lighting/light_component.cpp
     ${TERMIN_ROOT}/core_c/src/tc_inspect_component_adapter.cpp
@@ -179,17 +178,19 @@ add_library(entity_lib SHARED ${ENTITY_LIB_SOURCES})
 target_include_directories(entity_lib PUBLIC
     $<BUILD_INTERFACE:${TERMIN_ROOT}/core_c/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${TERMIN_ROOT}/../termin-components/termin-components-render>
+    $<BUILD_INTERFACE:${TERMIN_ROOT}/../termin-render/include>
     $<INSTALL_INTERFACE:include/core_c>
     $<INSTALL_INTERFACE:include/cpp>
     $<INSTALL_INTERFACE:include>
 )
 if(TERMIN_BUILD_PYTHON)
     find_package(nanobind CONFIG REQUIRED)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_render::termin_render PRIVATE trent nanobind Python::Python)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_components_render::termin_components_render termin_render::termin_render PRIVATE trent nanobind Python::Python)
     target_link_libraries(entity_lib PUBLIC termin_inspect::termin_inspect_python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
 else()
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_render::termin_render PRIVATE trent)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_components_render::termin_components_render termin_render::termin_render PRIVATE trent)
 endif()
 target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
@@ -243,6 +244,7 @@ set(RENDER_LIB_SOURCES
     termin/render/pull_rendering_manager.cpp
     termin/render/wireframe_renderer.cpp
     termin/render/color_pass.cpp
+    termin/render/id_pass.cpp
     termin/render/collider_gizmo_pass.cpp
     termin/render/ground_grid_pass.cpp
     termin/render/present_pass.cpp

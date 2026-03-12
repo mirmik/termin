@@ -1,22 +1,19 @@
 #pragma once
 
-// TcViewport - RAII wrapper for tc_viewport with handle-based access
-
 extern "C" {
-#include "termin_core.h"
+#include "render/tc_viewport.h"
 }
 
 #include <string>
 
 namespace termin {
 
-// TcViewport - Viewport wrapper using generational handle
 class TcViewport {
 public:
     tc_viewport_handle handle_ = TC_VIEWPORT_HANDLE_INVALID;
 
+public:
     TcViewport() = default;
-
     explicit TcViewport(tc_viewport_handle h) : handle_(h) {}
 
     TcViewport(const TcViewport& other) = default;
@@ -26,13 +23,9 @@ public:
 
     ~TcViewport() = default;
 
-    // Get handle
     tc_viewport_handle handle() const { return handle_; }
-
-    // Check if valid
     bool is_valid() const { return tc_viewport_alive(handle_); }
 
-    // Query properties (safe - returns defaults if invalid)
     const char* name() const {
         return is_valid() ? tc_viewport_get_name(handle_) : "";
     }
@@ -61,41 +54,52 @@ public:
         return is_valid() ? tc_viewport_get_pipeline(handle_) : TC_PIPELINE_HANDLE_INVALID;
     }
 
-    // Modify properties
     void set_enabled(bool enabled) {
-        if (is_valid()) tc_viewport_set_enabled(handle_, enabled);
+        if (is_valid()) {
+            tc_viewport_set_enabled(handle_, enabled);
+        }
     }
 
     void set_depth(int depth) {
-        if (is_valid()) tc_viewport_set_depth(handle_, depth);
+        if (is_valid()) {
+            tc_viewport_set_depth(handle_, depth);
+        }
     }
 
     void set_layer_mask(uint64_t mask) {
-        if (is_valid()) tc_viewport_set_layer_mask(handle_, mask);
+        if (is_valid()) {
+            tc_viewport_set_layer_mask(handle_, mask);
+        }
     }
 
     void set_scene(tc_scene_handle scene) {
-        if (is_valid()) tc_viewport_set_scene(handle_, scene);
+        if (is_valid()) {
+            tc_viewport_set_scene(handle_, scene);
+        }
     }
 
     void set_camera(tc_component* camera) {
-        if (is_valid()) tc_viewport_set_camera(handle_, camera);
+        if (is_valid()) {
+            tc_viewport_set_camera(handle_, camera);
+        }
     }
 
     void set_pipeline(tc_pipeline_handle pipeline) {
-        if (is_valid()) tc_viewport_set_pipeline(handle_, pipeline);
+        if (is_valid()) {
+            tc_viewport_set_pipeline(handle_, pipeline);
+        }
     }
 
-    // Input manager
     void set_input_manager(tc_input_manager* manager) {
-        if (is_valid()) tc_viewport_set_input_manager(handle_, manager);
+        if (is_valid()) {
+            tc_viewport_set_input_manager(handle_, manager);
+        }
     }
 
     tc_input_manager* input_manager() const {
         return is_valid() ? tc_viewport_get_input_manager(handle_) : nullptr;
     }
 
-    // Rect access
     void get_rect(float& x, float& y, float& w, float& h) const {
         if (is_valid()) {
             tc_viewport_get_rect(handle_, &x, &y, &w, &h);
@@ -106,7 +110,9 @@ public:
     }
 
     void set_rect(float x, float y, float w, float h) {
-        if (is_valid()) tc_viewport_set_rect(handle_, x, y, w, h);
+        if (is_valid()) {
+            tc_viewport_set_rect(handle_, x, y, w, h);
+        }
     }
 
     void get_pixel_rect(int& px, int& py, int& pw, int& ph) const {
@@ -119,20 +125,24 @@ public:
     }
 
     void set_pixel_rect(int px, int py, int pw, int ph) {
-        if (is_valid()) tc_viewport_set_pixel_rect(handle_, px, py, pw, ph);
+        if (is_valid()) {
+            tc_viewport_set_pixel_rect(handle_, px, py, pw, ph);
+        }
     }
 
     void update_pixel_rect(int display_width, int display_height) {
-        if (is_valid()) tc_viewport_update_pixel_rect(handle_, display_width, display_height);
+        if (is_valid()) {
+            tc_viewport_update_pixel_rect(handle_, display_width, display_height);
+        }
     }
 
-    // Create new viewport (returns handle-based wrapper)
-    static TcViewport create(const std::string& name, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID, tc_component* camera = nullptr) {
+    static TcViewport create(const std::string& name,
+                             tc_scene_handle scene = TC_SCENE_HANDLE_INVALID,
+                             tc_component* camera = nullptr) {
         tc_viewport_handle h = tc_viewport_new(name.c_str(), scene, camera);
         return TcViewport(h);
     }
 
-    // Free the viewport (use when done with it)
     void destroy() {
         if (is_valid()) {
             tc_viewport_free(handle_);
@@ -140,7 +150,6 @@ public:
         }
     }
 
-    // Wrap existing handle
     static TcViewport from_handle(tc_viewport_handle h) {
         return TcViewport(h);
     }

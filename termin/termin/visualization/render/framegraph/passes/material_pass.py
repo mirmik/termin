@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from termin._native.render import MaterialPass
+from termin.render_components import MaterialPass
 from termin.editor.inspect_field import InspectField
 from tcbase import log
 
