@@ -1,0 +1,85 @@
+digraph termin_dependencies {
+	graph [bgcolor=white,
+		nodesep=0.45,
+		overlap=false,
+		pad=0.2,
+		rankdir=LR,
+		ranksep=0.9,
+		splines=true
+	];
+	node [color="#444444",
+		fillcolor="#f7f7f7",
+		fontname="DejaVu Sans",
+		fontsize=11,
+		margin="0.10,0.06",
+		shape=box,
+		style="rounded,filled"
+	];
+	edge [arrowsize=0.7,
+		color="#666666",
+		penwidth=1.1
+	];
+	subgraph cluster_foundation {
+		graph [color="#d9d9d9",
+			label=Foundation,
+			style=rounded
+		];
+		"termin-base";
+		"termin-mesh";
+		"termin-inspect";
+		"termin-scene";
+		"termin-input";
+		"termin-modules";
+		"termin-collision";
+	}
+	subgraph cluster_render {
+		graph [color="#d9d9d9",
+			label="Render Stack",
+			style=rounded
+		];
+		"termin-graphics";
+		"termin-render";
+		"termin-display";
+		"termin-components-render";
+	}
+	subgraph cluster_components {
+		graph [color="#d9d9d9",
+			label="Other Components",
+			style=rounded
+		];
+		"termin-components-collision";
+		"termin-components-mesh";
+		"termin-components-kinematic";
+	}
+	subgraph cluster_runtime {
+		graph [color="#d9d9d9",
+			label=Runtime,
+			style=rounded
+		];
+		"termin-engine";
+		termin;
+	}
+	"termin-base" -> "termin-mesh";
+	"termin-base" -> "termin-inspect";
+	"termin-inspect" -> "termin-scene";
+	"termin-scene" -> "termin-input";
+	"termin-base" -> "termin-modules";
+	"termin-scene" -> "termin-collision";
+	"termin-mesh" -> "termin-graphics";
+	"termin-scene" -> "termin-render";
+	"termin-graphics" -> "termin-render";
+	"termin-input" -> "termin-display";
+	"termin-render" -> "termin-display";
+	"termin-display" -> "termin-components-render";
+	"termin-mesh" -> "termin-components-collision";
+	"termin-collision" -> "termin-components-collision";
+	"termin-mesh" -> "termin-components-mesh";
+	"termin-scene" -> "termin-components-mesh";
+	"termin-scene" -> "termin-components-kinematic";
+	"termin-collision" -> "termin-engine";
+	"termin-components-render" -> "termin-engine";
+	"termin-modules" -> termin;
+	"termin-components-collision" -> termin;
+	"termin-components-kinematic" -> termin;
+	"termin-engine" -> termin;
+}
