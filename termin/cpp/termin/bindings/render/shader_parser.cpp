@@ -6,7 +6,7 @@
 #include <tcbase/tc_log.hpp>
 
 extern "C" {
-#include "tc_gpu.h"
+#include <tgfx/tc_gpu.h>
 }
 
 namespace {

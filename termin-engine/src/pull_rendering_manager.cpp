@@ -6,7 +6,7 @@
 
 extern "C" {
 #include <tcbase/tc_log.h>
-#include "tc_gpu.h"
+#include <tgfx/tc_gpu.h>
 #include "render/tc_viewport_pool.h"
 }
 

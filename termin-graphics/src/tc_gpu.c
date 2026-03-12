@@ -1,7 +1,7 @@
 // tc_gpu.c - GPU operations for termin (material-specific only)
 // Resource GPU ops (texture, shader, mesh) have been moved to termin-graphics
 // (tgfx_resource_gpu.c).
-#include "tc_gpu.h"
+#include <tgfx/tc_gpu.h>
 #include <tcbase/tc_log.h>
 #include <tgfx/resources/tc_shader_registry.h>
 #include <tgfx/resources/tc_texture_registry.h>
