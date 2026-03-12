@@ -526,7 +526,10 @@ Entity Entity::deserialize_base_trent(const nos::trent& data, tc_scene_handle sc
     return ent;
 }
 
-void Entity::deserialize_components_trent(const nos::trent& data, tc_scene_handle scene) {
+void Entity::deserialize_components_trent(
+    const nos::trent& data,
+    tc_scene_handle scene,
+    ComponentDeserializationMode mode) {
     if (!valid()) return;
     if (!data.contains("components") || !data["components"].is_list()) return;
 
@@ -538,6 +541,47 @@ void Entity::deserialize_components_trent(const nos::trent& data, tc_scene_handl
 
         std::string type_name = comp_data["type"].as_string_default("");
         if (type_name.empty()) continue;
+
+        if (mode == ComponentDeserializationMode::UnknownOnly) {
+            tc_component* unk = tc_component_registry_create("UnknownComponent");
+            if (unk == nullptr) {
+                tc::Log::warn(
+                    "[Entity] Failed to create UnknownComponent for %s",
+                    type_name.c_str());
+                continue;
+            }
+
+            add_component_ptr(unk);
+            void* obj_ptr =
+                (unk->kind == TC_CXX_COMPONENT) ? CxxComponent::from_tc(unk)
+                                                : unk->body;
+            if (obj_ptr != nullptr) {
+                tc_scene_inspect_context inspect_ctx =
+                    tc_scene_inspect_context_make(scene);
+
+                tc_value orig_type = tc_value_string(type_name.c_str());
+                tc_inspect_set(
+                    obj_ptr,
+                    "UnknownComponent",
+                    "original_type",
+                    orig_type,
+                    &inspect_ctx);
+                tc_value_free(&orig_type);
+
+                tc_value orig_data = comp_data.contains("data")
+                    ? tc::trent_to_tc_value(comp_data["data"])
+                    : tc_value_dict_new();
+                tc_inspect_set(
+                    obj_ptr,
+                    "UnknownComponent",
+                    "original_data",
+                    orig_data,
+                    &inspect_ctx);
+                tc_value_free(&orig_data);
+            }
+
+            continue;
+        }
 
         // Check if type is registered
         if (!tc_component_registry_has(type_name.c_str())) {

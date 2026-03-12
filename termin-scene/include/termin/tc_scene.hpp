@@ -1,10 +1,12 @@
 // tc_scene.hpp - C++ wrapper for tc_scene_handle (core, no render dependencies)
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <tuple>
 #include <vector>
+#include <cstdint>
 
 #include <trent/trent.h>
 #include <trent/json.h>
@@ -12,12 +14,15 @@
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_entity_pool.h"
+#include <termin/entity/unknown_component_ops.hpp>
 
 namespace termin {
 
 // Forward declarations
 class Entity;
 class CxxComponent;
+class TcSceneRef;
+enum class ComponentDeserializationMode : uint8_t;
 
 // C++ wrapper for tc_scene_handle (non-owning reference)
 // Scene lifetime is managed by tc_scene_pool, not by TcSceneRef instances.
@@ -160,13 +165,31 @@ public:
     nos::trent serialize() const;
 
     // Load data into existing scene
-    int load_from_data(const nos::trent& data, bool update_settings = true);
+    int load_from_data(
+        const nos::trent& data,
+        bool update_settings = true,
+        ComponentDeserializationMode mode = ComponentDeserializationMode::Direct,
+        const UnknownUpgradeStrategy& strategy = {},
+        bool auto_upgrade_unknown = false
+    );
+
+    int load_from_data_unknown_only(
+        const nos::trent& data,
+        bool update_settings = true,
+        const UnknownUpgradeStrategy& strategy = {},
+        bool auto_upgrade_unknown = true
+    );
 
     // Serialize to JSON string
     std::string to_json_string() const;
 
     // Load from JSON string
-    void from_json_string(const std::string& json);
+    void from_json_string(
+        const std::string& json,
+        ComponentDeserializationMode mode = ComponentDeserializationMode::Direct,
+        const UnknownUpgradeStrategy& strategy = {},
+        bool auto_upgrade_unknown = false
+    );
 };
 
 // Serialize a single entity and its subtree to trent (recursive)
