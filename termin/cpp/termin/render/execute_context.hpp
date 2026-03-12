@@ -9,11 +9,7 @@
 #include <termin/render/light.hpp>
 #include <termin/tc_scene.hpp>
 #include "termin/tc_scene_render_ext.hpp"
-
-extern "C" {
-#include "render/tc_viewport.h"
-#include "render/tc_viewport_pool.h"
-}
+#include <core/tc_entity_pool.h>
 
 namespace termin {
 
@@ -27,7 +23,8 @@ class CameraComponent;
  * - graphics: graphics backend
  * - reads_fbos/writes_fbos: FBO maps for input/output
  * - rect: pixel rectangle for rendering
- * - scene, camera, viewport: what to render
+ * - scene, camera: what to render
+ * - viewport_name/internal_entities: auxiliary render-target context
  * - lights: pre-computed lights
  * - layer_mask: which entity layers to render
  */
@@ -38,7 +35,8 @@ struct ExecuteContext {
     Rect4i rect;
     TcSceneRef scene;
     CameraComponent* camera = nullptr;
-    tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
+    std::string viewport_name;
+    tc_entity_handle internal_entities = TC_ENTITY_HANDLE_INVALID;
     std::vector<Light> lights;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
 };

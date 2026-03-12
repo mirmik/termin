@@ -33,6 +33,7 @@ struct ViewportContext {
     std::string name;
     CameraComponent* camera = nullptr;
     Rect4i rect{0, 0, 0, 0};
+    tc_entity_handle internal_entities = TC_ENTITY_HANDLE_INVALID;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
     FramebufferHandle* output_fbo = nullptr;
 };

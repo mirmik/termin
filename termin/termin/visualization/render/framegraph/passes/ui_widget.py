@@ -78,9 +78,9 @@ class UIWidgetPass(RenderFramePass):
             if scene_ui:
                 ui_components.extend(scene_ui)
 
-        # Collect UIComponents from viewport's internal_entities
-        if self.include_internal_entities and ctx.viewport.is_valid():
-            internal_root = ctx.viewport.internal_entities
+        # Collect UIComponents from additional entities attached to the render context
+        if self.include_internal_entities:
+            internal_root = ctx.internal_entities
             if internal_root is not None:
                 internal_ui = self._collect_ui_from_hierarchy(internal_root)
                 ui_components.extend(internal_ui)
