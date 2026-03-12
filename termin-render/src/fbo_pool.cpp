@@ -1,5 +1,6 @@
 // fbo_pool.cpp - FBO pool implementation
-#include "fbo_pool.hpp"
+#include "termin/render/fbo_pool.hpp"
+
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
@@ -13,16 +14,13 @@ FramebufferHandle* FBOPool::ensure(
     const std::string& format,
     TextureFilter filter
 ) {
-    // Find existing entry
     for (auto& entry : entries) {
         if (entry.key == key) {
-            // Check if we need to recreate (samples, format, or filter changed)
             bool needs_recreate = (entry.samples != samples) ||
                                   (entry.format != format) ||
                                   (entry.filter != filter);
 
             if (needs_recreate && entry.fbo && !entry.external) {
-                // Recreate FBO with new samples/format/filter
                 auto new_fbo = graphics->create_framebuffer(width, height, samples, format, filter);
                 if (new_fbo) {
                     entry.fbo = std::move(new_fbo);
@@ -35,7 +33,6 @@ FramebufferHandle* FBOPool::ensure(
                 return entry.fbo.get();
             }
 
-            // Resize if needed (only size changed)
             if (entry.fbo && (entry.width != width || entry.height != height)) {
                 entry.fbo->resize(width, height);
                 entry.width = width;
@@ -45,7 +42,6 @@ FramebufferHandle* FBOPool::ensure(
         }
     }
 
-    // Create new entry
     if (!graphics) {
         tc::Log::error("FBOPool::ensure: graphics is null");
         return nullptr;
@@ -74,13 +70,12 @@ FramebufferHandle* FBOPool::ensure(
 }
 
 FramebufferHandle* FBOPool::get(const std::string& key) {
-    // First, try direct lookup
     for (auto& entry : entries) {
         if (entry.key == key) {
             return entry.fbo.get();
         }
     }
-    // Try alias lookup
+
     auto alias_it = alias_to_canonical.find(key);
     if (alias_it != alias_to_canonical.end()) {
         for (auto& entry : entries) {
@@ -93,16 +88,16 @@ FramebufferHandle* FBOPool::get(const std::string& key) {
 }
 
 void FBOPool::set(const std::string& key, FramebufferHandle* fbo) {
+    (void) fbo;
+
     for (auto& entry : entries) {
         if (entry.key == key) {
-            // Don't destroy external FBO
             entry.fbo.reset();
             entry.external = true;
             return;
         }
     }
 
-    // Create new external entry
     FBOPoolEntry entry;
     entry.key = key;
     entry.fbo.reset();
@@ -111,7 +106,9 @@ void FBOPool::set(const std::string& key, FramebufferHandle* fbo) {
 }
 
 void FBOPool::add_alias(const std::string& alias, const std::string& canonical) {
-    if (alias == canonical) return;  // No point in aliasing to itself
+    if (alias == canonical) {
+        return;
+    }
     alias_to_canonical[alias] = canonical;
 }
 
@@ -126,7 +123,6 @@ std::vector<std::string> FBOPool::keys() const {
     for (const auto& entry : entries) {
         result.push_back(entry.key);
     }
-    // Also include aliases
     for (const auto& pair : alias_to_canonical) {
         result.push_back(pair.first);
     }

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, TYPE_CHECKING
 from collections import deque
 
-from termin._native.render import (
+from termin.render_framework import (
     TcPass,
     TcPassRef,
     tc_pass_registry_register_python,

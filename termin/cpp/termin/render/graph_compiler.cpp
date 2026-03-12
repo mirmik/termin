@@ -2,7 +2,7 @@
 #include <tcbase/tc_log.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/tc_pass.hpp>
-#include "render_pipeline.hpp"
+#include "termin/render/render_pipeline.hpp"
 #include <termin/render/resource_spec.hpp>
 #include <termin/render/material_pass.hpp>
 #include <trent/json.h>

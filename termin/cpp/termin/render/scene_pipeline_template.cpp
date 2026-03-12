@@ -2,7 +2,7 @@
 #include "scene_pipeline_template.hpp"
 #include "tc_value_trent.hpp"
 #include "graph_compiler.hpp"
-#include "render_pipeline.hpp"
+#include "termin/render/render_pipeline.hpp"
 #include <tcbase/tc_log.hpp>
 #include <trent/json.h>
 

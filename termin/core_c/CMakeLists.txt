@@ -18,16 +18,11 @@ option(TC_USE_EXTERNAL_INSPECT "Use external termin_inspect package for inspect/
 set(TC_SOURCES
     src/tc_animation_registry.c
     src/tc_core.c
-    src/tc_display.c
-    src/tc_input_manager.c
-    src/tc_display_input_router.c
-    src/tc_viewport_input_manager.c
     src/tc_gpu.c
     src/tc_primitive_mesh.c
     src/tc_picking.c
     src/tc_profiler.c
     src/tc_project_settings.c
-    src/tc_render_surface.c
     src/tc_skeleton_registry.c
 )
 
@@ -59,16 +54,12 @@ set(TC_HEADERS
     include/core/tc_scene_registry.h
     include/tc_types.h
     include/termin_core.h
-    include/render/tc_display.h
-    include/render/tc_input_manager.h
-    include/render/tc_display_input_router.h
-    include/render/tc_viewport_input_manager.h
-    include/render/tc_render_surface.h
 )
 
 find_package(termin_scene REQUIRED)
 find_package(termin_input REQUIRED)
 find_package(termin_render REQUIRED)
+find_package(termin_display REQUIRED)
 
 # termin-base (provides tc_log, shared enums)
 find_package(termin_base REQUIRED)
@@ -103,6 +94,7 @@ target_link_libraries(termin_core PUBLIC termin_scene::termin_scene)
 target_link_libraries(termin_core PUBLIC termin_input::termin_input)
 target_link_libraries(termin_core PUBLIC termin_inspect::termin_inspect)
 target_link_libraries(termin_core PUBLIC termin_render::termin_render)
+target_link_libraries(termin_core PUBLIC termin_display::termin_display)
 
 # Platform-specific
 if(WIN32)

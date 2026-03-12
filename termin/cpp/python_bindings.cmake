@@ -27,15 +27,7 @@ nanobind_add_module(_skeleton_native NB_SHARED
 target_link_libraries(_skeleton_native PRIVATE trent entity_lib skeleton_lib)
 target_compile_options(_skeleton_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
-# ============== Core entity/viewport modules ==============
-
-# Viewport native module (TcViewport)
-nanobind_add_module(_viewport_native NB_SHARED
-    termin/bindings/viewport/viewport_module.cpp
-)
-target_link_libraries(_viewport_native PRIVATE entity_lib)
-target_compile_definitions(_viewport_native PRIVATE TERMIN_HAS_NANOBIND)
-target_compile_options(_viewport_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+# ============== Core entity modules ==============
 
 # Entity native module (Component, Entity, Scene, registries)
 nanobind_add_module(_entity_native NB_SHARED
@@ -86,10 +78,6 @@ nanobind_add_module(_native NB_SHARED
     termin/bindings/render/wireframe.cpp
     termin/bindings/render/frame_pass.cpp
     termin/bindings/render/tc_pass_bindings.cpp
-    termin/bindings/render/tc_render_surface_bindings.cpp
-    termin/bindings/render/tc_input_manager_bindings.cpp
-    termin/bindings/render/tc_display_bindings.cpp
-    termin/bindings/input/display_input_router_bindings.cpp
     termin/bindings/render/render_pipeline_bindings.cpp
     termin/bindings/render/scene_pipeline_template_bindings.cpp
     termin/bindings/render/material.cpp
@@ -125,7 +113,6 @@ nanobind_add_module(_native NB_SHARED
     termin/render/solid_primitive_renderer.cpp
     termin/render/glsl_preprocessor.cpp
     termin/render/skinned_mesh_renderer.cpp
-    termin/render/fbo_pool.cpp
     termin/render/render_engine.cpp
     termin/render/color_pass.cpp
     termin/render/id_pass.cpp
@@ -195,10 +182,6 @@ set_target_properties(_skeleton_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_viewport_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_entity_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -224,6 +207,5 @@ install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/visua
 install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/navmesh)
 install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/lighting)
 install(TARGETS _skeleton_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/skeleton)
-install(TARGETS _viewport_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/viewport)
 install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/entity)
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})
