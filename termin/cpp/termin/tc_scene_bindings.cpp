@@ -14,7 +14,7 @@
 #include "material/tc_material_handle.hpp"
 #include "scene_bindings.hpp"
 #include "render/rendering_manager.hpp"
-#include "render/scene_pipeline_template.hpp"
+#include <termin/render/scene_pipeline_template.hpp>
 #include <termin/geom/ray3.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/vec4.hpp>

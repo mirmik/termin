@@ -79,7 +79,6 @@ nanobind_add_module(_native NB_SHARED
     termin/bindings/render/frame_pass.cpp
     termin/bindings/render/tc_pass_bindings.cpp
     termin/bindings/render/render_pipeline_bindings.cpp
-    termin/bindings/render/scene_pipeline_template_bindings.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
     termin/bindings/render/renderers.cpp

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from termin.assets.asset import Asset
 from tcbase import log
-from termin._native.render import TcScenePipelineTemplate
+from termin.render_framework import TcScenePipelineTemplate
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.pipeline import RenderPipeline

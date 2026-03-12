@@ -1,16 +1,12 @@
 // scene_pipeline_template.cpp - C++ wrapper implementation
-#include "scene_pipeline_template.hpp"
-#include "tc_value_trent.hpp"
-#include "graph_compiler.hpp"
-#include "termin/render/render_pipeline.hpp"
+#include "termin/render/scene_pipeline_template.hpp"
 #include <tcbase/tc_log.hpp>
 #include <trent/json.h>
+#include "termin/render/graph_compiler.hpp"
+#include "termin/render/render_pipeline.hpp"
+#include "tc_value_trent.hpp"
 
 namespace termin {
-
-// ============================================================================
-// Factory methods
-// ============================================================================
 
 TcScenePipelineTemplate TcScenePipelineTemplate::declare(
     const std::string& uuid,
@@ -30,10 +26,6 @@ TcScenePipelineTemplate TcScenePipelineTemplate::find_by_name(const std::string&
     return TcScenePipelineTemplate(h);
 }
 
-// ============================================================================
-// Validity
-// ============================================================================
-
 bool TcScenePipelineTemplate::is_valid() const {
     return tc_spt_is_valid(handle_);
 }
@@ -41,10 +33,6 @@ bool TcScenePipelineTemplate::is_valid() const {
 bool TcScenePipelineTemplate::is_loaded() const {
     return tc_spt_is_loaded(handle_);
 }
-
-// ============================================================================
-// Accessors
-// ============================================================================
 
 std::string TcScenePipelineTemplate::uuid() const {
     const char* s = tc_spt_get_uuid(handle_);
@@ -59,10 +47,6 @@ std::string TcScenePipelineTemplate::name() const {
 void TcScenePipelineTemplate::set_name(const std::string& name) {
     tc_spt_set_name(handle_, name.c_str());
 }
-
-// ============================================================================
-// Graph data - JSON interface
-// ============================================================================
 
 void TcScenePipelineTemplate::set_from_json(const std::string& json) {
     try {
@@ -89,10 +73,6 @@ std::string TcScenePipelineTemplate::to_json() const {
     }
 }
 
-// ============================================================================
-// Graph data - tc_value interface
-// ============================================================================
-
 void TcScenePipelineTemplate::set_graph(tc_value graph) {
     tc_spt_set_graph(handle_, graph);
 }
@@ -100,10 +80,6 @@ void TcScenePipelineTemplate::set_graph(tc_value graph) {
 const tc_value* TcScenePipelineTemplate::get_graph() const {
     return tc_spt_get_graph(handle_);
 }
-
-// ============================================================================
-// Target viewports
-// ============================================================================
 
 std::vector<std::string> TcScenePipelineTemplate::target_viewports() const {
     std::vector<std::string> result;
@@ -119,10 +95,6 @@ std::vector<std::string> TcScenePipelineTemplate::target_viewports() const {
 
     return result;
 }
-
-// ============================================================================
-// Compile
-// ============================================================================
 
 RenderPipeline* TcScenePipelineTemplate::compile() {
     if (!is_valid()) {
@@ -144,12 +116,10 @@ RenderPipeline* TcScenePipelineTemplate::compile() {
     }
 
     try {
-        // Convert tc_value → trent → GraphData → RenderPipeline
         nos::trent t = tc::tc_value_to_trent(*v);
         RenderPipeline* pipeline = tc::compile_graph(t);
 
         if (pipeline) {
-            // Set pipeline name from template name
             std::string n = name();
             if (!n.empty()) {
                 pipeline->set_name(n);
@@ -162,10 +132,6 @@ RenderPipeline* TcScenePipelineTemplate::compile() {
         return nullptr;
     }
 }
-
-// ============================================================================
-// Lazy loading
-// ============================================================================
 
 bool TcScenePipelineTemplate::ensure_loaded() {
     return tc_spt_ensure_loaded(handle_);

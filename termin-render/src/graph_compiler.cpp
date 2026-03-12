@@ -1,10 +1,9 @@
-#include "graph_compiler.hpp"
+#include "termin/render/graph_compiler.hpp"
 #include <tcbase/tc_log.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/tc_pass.hpp>
 #include "termin/render/render_pipeline.hpp"
 #include <termin/render/resource_spec.hpp>
-#include <termin/render/material_pass.hpp>
 #include <trent/json.h>
 #include <deque>
 #include <unordered_set>
@@ -500,23 +499,6 @@ RenderPipeline* compile_graph(GraphData& graph) {
         if (node->params.is_dict()) {
             for (const auto& [key, value] : node->params.as_dict()) {
                 set_pass_property(pass_ref, key, value);
-            }
-        }
-
-        // Handle dynamic texture resources for MaterialPass
-        if (node->pass_class == "MaterialPass") {
-            termin::MaterialPass* mat_pass = dynamic_cast<termin::MaterialPass*>(
-                static_cast<termin::CxxFramePass*>(pass_ref.object_ptr()));
-            if (mat_pass) {
-                for (const auto& [socket_name, resource_name] : socket_map) {
-                    // Skip standard sockets and _target sockets
-                    if (socket_name == "output_res" || socket_name == "input_res") continue;
-                    if (socket_name.size() > 7 &&
-                        socket_name.substr(socket_name.size() - 7) == "_target") continue;
-
-                    // This is a dynamic texture input - add it as a resource
-                    mat_pass->add_resource(resource_name, socket_name);
-                }
             }
         }
 
