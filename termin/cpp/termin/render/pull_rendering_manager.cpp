@@ -2,6 +2,7 @@
 
 #include "termin/render/pull_rendering_manager.hpp"
 #include "termin/camera/camera_component.hpp"
+#include "termin/camera/render_camera_utils.hpp"
 
 extern "C" {
 #include <tcbase/tc_log.h>
@@ -243,6 +244,7 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
 
     std::vector<Light> lights = collect_lights(scene);
+    RenderCamera render_camera = make_render_camera(*camera, static_cast<double>(pw) / std::max(1, ph));
 
     RenderEngine* engine = render_engine();
     engine->render_view_to_fbo(
@@ -250,7 +252,7 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
         output_fbo,
         pw, ph,
         scene,
-        camera,
+        render_camera,
         viewport,
         lights,
         tc_viewport_get_layer_mask(viewport)

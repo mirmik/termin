@@ -2,6 +2,7 @@
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/scene_pipeline_template.hpp"
 #include "termin/camera/camera_component.hpp"
+#include "termin/camera/render_camera_utils.hpp"
 #include "termin/lighting/light_component.hpp"
 #include <termin/entity/entity.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
@@ -782,13 +783,10 @@ void RenderingManager::render_scene_pipeline_offscreen(
         ViewportRenderState* state = get_or_create_viewport_state(viewport);
         FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
 
-        // Update camera aspect ratio
-        camera->set_aspect(static_cast<double>(pw) / std::max(1, ph));
-
         // Create viewport context
         ViewportContext ctx;
         ctx.name = vp_name;
-        ctx.camera = camera;
+        ctx.camera = make_render_camera(*camera, static_cast<double>(pw) / std::max(1, ph));
         ctx.rect = {0, 0, pw, ph};  // Full FBO, offset at blit time
         ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
         ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
@@ -874,12 +872,13 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
     // Render to output FBO
     RenderEngine* engine = render_engine();
+    RenderCamera render_camera = make_render_camera(*camera, static_cast<double>(pw) / std::max(1, ph));
     engine->render_view_to_fbo(
         render_pipeline,
         output_fbo,
         pw, ph,
         scene,
-        camera,
+        render_camera,
         viewport,
         lights,
         tc_viewport_get_layer_mask(viewport)

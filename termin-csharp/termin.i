@@ -8,6 +8,7 @@
 #include "termin/camera/camera.hpp"
 #include "termin/input/input_events.hpp"
 #include "termin/render/resource_spec.hpp"
+#include "termin/render/render_camera.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
 #include "termin/render/rendering_manager.hpp"
@@ -285,6 +286,16 @@ struct Mat44 {
     Vec3 get_translation() const;
     Vec3 get_scale() const;
     Mat44 with_translation(const Vec3& t) const;
+};
+
+struct RenderCamera {
+    Mat44 view;
+    Mat44 projection;
+    Vec3 position;
+    double near_clip;
+    double far_clip;
+
+    RenderCamera();
 };
 
 // CameraProjection enum
@@ -638,9 +649,6 @@ public:
     bool is_valid() const;
 };
 
-// Forward declaration for CameraComponent (used in RenderEngine)
-class CameraComponent;
-
 // ============================================================================
 // RenderEngine - executes render pipelines
 // ============================================================================
@@ -658,7 +666,7 @@ public:
         int width,
         int height,
         tc_scene_handle scene,
-        CameraComponent* camera
+        const RenderCamera& camera
     );
 
     // Present pipeline's color FBO to screen (blit)

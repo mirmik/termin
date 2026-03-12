@@ -1,12 +1,12 @@
 #include "render_engine.hpp"
 #include <tcbase/tc_log.hpp>
 #include "tc_profiler.h"
-#include "termin/camera/camera_component.hpp"
 
 extern "C" {
 #include "render/tc_frame_graph.h"
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
+#include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
 #include "core/tc_scene.h"
 #include "core/tc_component.h"
@@ -25,7 +25,7 @@ void RenderEngine::render_to_screen(
     int width,
     int height,
     tc_scene_handle scene,
-    CameraComponent* camera
+    const RenderCamera& camera
 ) {
     // Validate inputs before passing to render_view_to_fbo
     if (!pipeline) {
@@ -36,16 +36,6 @@ void RenderEngine::render_to_screen(
         tc::Log::error("[render_to_screen] scene is invalid");
         return;
     }
-    if (!camera) {
-        tc::Log::error("[render_to_screen] camera is NULL");
-        return;
-    }
-    if (!camera->entity().valid()) {
-        tc::Log::error("[render_to_screen] camera->entity is invalid");
-        return;
-    }
-
-    // Simplified render to screen (default framebuffer)
     std::vector<Light> empty_lights;
     render_view_to_fbo(
         pipeline,
@@ -101,7 +91,7 @@ void RenderEngine::render_view_to_fbo(
     int width,
     int height,
     tc_scene_handle scene,
-    CameraComponent* camera,
+    const RenderCamera& camera,
     tc_viewport_handle viewport,
     const std::vector<Light>& lights,
     uint64_t layer_mask
@@ -360,7 +350,7 @@ void RenderEngine::render_view_to_fbo(
         ctx.scene = TcSceneRef(scene);
         ctx.viewport_name = viewport_name ? viewport_name : "";
         ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
-        ctx.camera = camera;
+        ctx.camera = const_cast<RenderCamera*>(&camera);
         ctx.lights = lights;
         ctx.layer_mask = layer_mask;
 
@@ -695,7 +685,7 @@ void RenderEngine::render_scene_pipeline_offscreen(
         ctx.scene = TcSceneRef(scene);
         ctx.viewport_name = vp_ctx.name;
         ctx.internal_entities = vp_ctx.internal_entities;
-        ctx.camera = vp_ctx.camera;
+        ctx.camera = const_cast<RenderCamera*>(&vp_ctx.camera);
         ctx.lights = lights;
         ctx.layer_mask = vp_ctx.layer_mask;
 

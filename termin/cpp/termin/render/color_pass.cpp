@@ -1,4 +1,7 @@
 #include "color_pass.hpp"
+#include "termin/camera/render_camera_utils.hpp"
+
+#include <optional>
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 #include "termin/lighting/lighting_upload.hpp"
@@ -672,17 +675,19 @@ void ColorPass::execute(ExecuteContext& ctx) {
     if (profile) tc_profiler_begin_section(("ColorPass:" + get_pass_name()).c_str());
 
     // Use camera from context, or find by name if camera_name is set
-    CameraComponent* camera = ctx.camera;
+    const RenderCamera* camera = ctx.camera;
     tc_scene_handle scene = ctx.scene.handle();
     if (!tc_scene_handle_valid(scene)) {
         tc::Log::error("[ColorPass] scene is invalid");
         if (profile) tc_profiler_end_section();
         return;
     }
+    std::optional<RenderCamera> named_camera_snapshot;
     if (!camera_name.empty()) {
         CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
         if (named_camera) {
-            camera = named_camera;
+            named_camera_snapshot = make_render_camera(*named_camera);
+            camera = &*named_camera_snapshot;
         } else {
             // Camera not found, skip pass
             if (profile) tc_profiler_end_section();
@@ -709,8 +714,13 @@ void ColorPass::execute(ExecuteContext& ctx) {
             int w = output_fbo->get_width();
             int h = output_fbo->get_height();
             rect = Rect4i{0, 0, w, h};
-            // Update camera aspect ratio
-            camera->set_aspect(static_cast<double>(w) / std::max(1, h));
+            if (!camera_name.empty()) {
+                CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
+                if (named_camera) {
+                    named_camera_snapshot = make_render_camera(*named_camera, static_cast<double>(w) / std::max(1, h));
+                    camera = &*named_camera_snapshot;
+                }
+            }
         }
     }
 
