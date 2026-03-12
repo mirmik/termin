@@ -16,7 +16,7 @@ find_package(termin_input REQUIRED)
 find_package(termin_render REQUIRED)
 
 set(TERMIN_DISPLAY_SOURCES
-    ${CMAKE_CURRENT_LIST_DIR}/../termin-render/src/tc_viewport.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/tc_viewport.c
     ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/src/tc_display.c
     ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/src/tc_input_manager.c
     ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/src/tc_display_input_router.c
@@ -44,11 +44,13 @@ set_target_properties(termin_display PROPERTIES
 
 target_include_directories(termin_display
     PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin-render/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin/cpp>
         $<INSTALL_INTERFACE:include>
     PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin/cpp
@@ -86,6 +88,7 @@ if(TERMIN_BUILD_PYTHON)
     )
     target_link_libraries(_display_native PRIVATE termin_display)
     target_include_directories(_display_native PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin/cpp
@@ -101,6 +104,7 @@ if(TERMIN_BUILD_PYTHON)
     )
     target_link_libraries(_viewport_native PRIVATE termin_display termin_scene::termin_scene)
     target_include_directories(_viewport_native PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin/cpp
@@ -120,8 +124,8 @@ install(TARGETS termin_display
 )
 
 install(FILES
-    ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include/render/tc_viewport.h
-    ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include/render/tc_viewport_pool.h
+    ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_viewport.h
+    ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_viewport_pool.h
     ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include/render/tc_display.h
     ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include/render/tc_input_manager.h
     ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include/render/tc_display_input_router.h
@@ -131,7 +135,7 @@ install(FILES
 )
 
 install(FILES
-    ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include/termin/viewport/tc_viewport_handle.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/termin/viewport/tc_viewport_handle.hpp
     DESTINATION include/termin/viewport
 )
 

@@ -14,12 +14,10 @@ extern "C" {
 
 typedef struct tc_input_manager tc_input_manager;
 
-// Viewport Lifecycle
 TC_API tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene, tc_component* camera);
 TC_API void tc_viewport_free(tc_viewport_handle h);
 TC_API bool tc_viewport_alive(tc_viewport_handle h);
 
-// Viewport Properties
 TC_API void tc_viewport_set_name(tc_viewport_handle h, const char* name);
 TC_API const char* tc_viewport_get_name(tc_viewport_handle h);
 
@@ -57,19 +55,15 @@ TC_API const char* tc_viewport_get_managed_by(tc_viewport_handle h);
 TC_API void tc_viewport_set_block_input_in_editor(tc_viewport_handle h, bool block);
 TC_API bool tc_viewport_get_block_input_in_editor(tc_viewport_handle h);
 
-// Input Manager
 TC_API void tc_viewport_set_input_manager(tc_viewport_handle h, tc_input_manager* manager);
 TC_API tc_input_manager* tc_viewport_get_input_manager(tc_viewport_handle h);
 
-// Pixel Rect Calculation
 TC_API void tc_viewport_update_pixel_rect(tc_viewport_handle h, int display_width, int display_height);
 
-// Internal Entities
 TC_API void tc_viewport_set_internal_entities(tc_viewport_handle h, tc_entity_handle ent);
 TC_API tc_entity_handle tc_viewport_get_internal_entities(tc_viewport_handle h);
 TC_API bool tc_viewport_has_internal_entities(tc_viewport_handle h);
 
-// Display Linked List
 TC_API tc_viewport_handle tc_viewport_get_display_next(tc_viewport_handle h);
 TC_API tc_viewport_handle tc_viewport_get_display_prev(tc_viewport_handle h);
 TC_API void tc_viewport_set_display_next(tc_viewport_handle h, tc_viewport_handle next);

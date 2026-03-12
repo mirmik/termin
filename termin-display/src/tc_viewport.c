@@ -258,30 +258,43 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     return h;
 }
 
-tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene, tc_component* camera) {
-    tc_viewport_handle h = tc_viewport_pool_alloc(name);
-    if (tc_viewport_handle_valid(h)) {
-        g_pool->scenes[h.index] = scene;
-        g_pool->cameras[h.index] = camera;
-        g_pool->camera_entities[h.index] = camera ? camera->owner : TC_ENTITY_HANDLE_INVALID;
-    }
-    return h;
-}
-
 void tc_viewport_pool_free(tc_viewport_handle h) {
     if (!handle_alive(h)) return;
-
     uint32_t idx = h.index;
+
     free(g_pool->names[idx]);
     free(g_pool->input_modes[idx]);
     free(g_pool->managed_by[idx]);
-    g_pool->names[idx] = NULL;
-    g_pool->input_modes[idx] = NULL;
-    g_pool->managed_by[idx] = NULL;
+
     g_pool->alive[idx] = false;
     g_pool->generations[idx]++;
     g_pool->free_stack[g_pool->free_count++] = idx;
     g_pool->count--;
+}
+
+void tc_viewport_pool_foreach(tc_viewport_pool_iter_fn callback, void* user_data) {
+    if (!g_pool || !callback) return;
+    for (uint32_t i = 0; i < g_pool->capacity; i++) {
+        if (g_pool->alive[i]) {
+            tc_viewport_handle h = { i, g_pool->generations[i] };
+            if (!callback(h, user_data)) {
+                break;
+            }
+        }
+    }
+}
+
+size_t tc_viewport_pool_count(void) {
+    return g_pool ? g_pool->count : 0;
+}
+
+tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene, tc_component* camera) {
+    tc_viewport_handle h = tc_viewport_pool_alloc(name);
+    if (tc_viewport_handle_valid(h)) {
+        tc_viewport_set_scene(h, scene);
+        tc_viewport_set_camera(h, camera);
+    }
+    return h;
 }
 
 void tc_viewport_free(tc_viewport_handle h) {
@@ -388,18 +401,7 @@ void tc_viewport_set_camera(tc_viewport_handle h, tc_component* camera) {
 
 tc_component* tc_viewport_get_camera(tc_viewport_handle h) {
     if (!handle_alive(h)) return NULL;
-
-    tc_component* camera = g_pool->cameras[h.index];
-    if (!camera) return NULL;
-
-    tc_entity_handle owner = g_pool->camera_entities[h.index];
-    if (!tc_entity_handle_valid(owner)) {
-        g_pool->cameras[h.index] = NULL;
-        g_pool->camera_entities[h.index] = TC_ENTITY_HANDLE_INVALID;
-        return NULL;
-    }
-
-    return camera;
+    return g_pool->cameras[h.index];
 }
 
 tc_entity_handle tc_viewport_get_camera_entity(tc_viewport_handle h) {
@@ -409,7 +411,7 @@ tc_entity_handle tc_viewport_get_camera_entity(tc_viewport_handle h) {
 
 void tc_viewport_set_input_mode(tc_viewport_handle h, const char* mode) {
     if (!handle_alive(h)) return;
-    tc_strset(&g_pool->input_modes[h.index], mode);
+    tc_strset(&g_pool->input_modes[h.index], mode ? mode : "simple");
 }
 
 const char* tc_viewport_get_input_mode(tc_viewport_handle h) {
@@ -449,7 +451,6 @@ tc_input_manager* tc_viewport_get_input_manager(tc_viewport_handle h) {
 
 void tc_viewport_update_pixel_rect(tc_viewport_handle h, int display_width, int display_height) {
     if (!handle_alive(h)) return;
-
     float x = g_pool->rects[h.index * 4 + 0];
     float y = g_pool->rects[h.index * 4 + 1];
     float w = g_pool->rects[h.index * 4 + 2];
