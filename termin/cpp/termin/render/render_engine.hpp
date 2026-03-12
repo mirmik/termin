@@ -7,6 +7,7 @@
 #include "tgfx/graphics_backend.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
+#include "termin/render/render_camera.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include <termin/render/light.hpp>
 #include "termin/lighting/shadow.hpp"
@@ -15,19 +16,17 @@
 
 extern "C" {
 #include "render/tc_frame_graph.h"
+#include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
 #include "core/tc_scene.h"
 }
 
 namespace termin {
 
-// Forward declarations
-class CameraComponent;
-
 // Viewport context for multi-viewport rendering
 struct ViewportContext {
     std::string name;
-    CameraComponent* camera = nullptr;
+    RenderCamera camera;
     Rect4i rect{0, 0, 0, 0};
     tc_entity_handle internal_entities = TC_ENTITY_HANDLE_INVALID;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
@@ -53,7 +52,7 @@ public:
         int width,
         int height,
         tc_scene_handle scene,
-        CameraComponent* camera,
+        const RenderCamera& camera,
         tc_viewport_handle viewport,
         const std::vector<Light>& lights,
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
@@ -65,7 +64,7 @@ public:
         int width,
         int height,
         tc_scene_handle scene,
-        CameraComponent* camera
+        const RenderCamera& camera
     );
 
     // Present pipeline's color FBO to screen (blit to default framebuffer)

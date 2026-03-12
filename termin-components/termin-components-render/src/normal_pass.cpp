@@ -1,6 +1,9 @@
 #include <termin/render/normal_pass.hpp>
 
 #include <termin/camera/camera_component.hpp>
+#include <termin/camera/render_camera_utils.hpp>
+
+#include <optional>
 
 namespace termin {
 
@@ -56,14 +59,17 @@ void NormalPass::execute_with_data(
 
 void NormalPass::execute(ExecuteContext& ctx) {
     tc_scene_handle scene = ctx.scene.handle();
-    CameraComponent* camera = ctx.camera;
+    const RenderCamera* camera = ctx.camera;
     Rect4i rect = ctx.rect;
+    std::optional<RenderCamera> named_camera_snapshot;
 
     if (!camera_name.empty()) {
-        camera = find_camera_by_name(scene, camera_name);
-        if (!camera) {
+        CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
+        if (!named_camera) {
             return;
         }
+        named_camera_snapshot = make_render_camera(*named_camera);
+        camera = &*named_camera_snapshot;
     }
 
     if (!camera) {
@@ -76,7 +82,13 @@ void NormalPass::execute(ExecuteContext& ctx) {
         if (fb) {
             auto fbo_size = fb->get_size();
             rect = Rect4i(0, 0, fbo_size.width, fbo_size.height);
-            camera->set_aspect(static_cast<double>(fbo_size.width) / std::max(1, fbo_size.height));
+            if (!camera_name.empty()) {
+                CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
+                if (named_camera) {
+                    named_camera_snapshot = make_render_camera(*named_camera, static_cast<double>(fbo_size.width) / std::max(1, fbo_size.height));
+                    camera = &*named_camera_snapshot;
+                }
+            }
         }
     }
 

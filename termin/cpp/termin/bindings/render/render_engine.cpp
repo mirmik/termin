@@ -3,11 +3,12 @@
 #include "termin/render/render_pipeline.hpp"
 #include "tgfx/graphics_backend.hpp"
 #include "termin/render/frame_pass.hpp"
-#include "termin/camera/camera_component.hpp"
+#include "termin/camera/render_camera_utils.hpp"
 #include <termin/tc_scene.hpp>
 #include "termin/tc_scene_render_ext.hpp"
 #include "termin/viewport/tc_viewport_handle.hpp"
 
+#include <algorithm>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/optional.h>
 
@@ -46,13 +47,16 @@ void bind_render_engine(nb::module_& m) {
                 }
             }
             std::vector<Light> lights;
+            RenderCamera render_camera = camera
+                ? make_render_camera(*camera, static_cast<double>(width) / std::max(1, height))
+                : RenderCamera();
             self.render_view_to_fbo(
                 &pipeline,
                 target_fbo,
                 width,
                 height,
                 scene_ref.handle(),
-                camera,
+                render_camera,
                 vh,
                 lights,
                 layer_mask

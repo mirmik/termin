@@ -6,15 +6,13 @@
 #include <cstdint>
 
 #include "termin/render/frame_pass.hpp"
+#include <termin/render/render_camera.hpp>
 #include <termin/render/light.hpp>
 #include <termin/tc_scene.hpp>
 #include "termin/tc_scene_render_ext.hpp"
 #include <core/tc_entity_pool.h>
 
 namespace termin {
-
-// Forward declarations
-class CameraComponent;
 
 /**
  * Context passed to CxxFramePass.execute().
@@ -34,7 +32,7 @@ struct ExecuteContext {
     FBOMap writes_fbos;
     Rect4i rect;
     TcSceneRef scene;
-    CameraComponent* camera = nullptr;
+    RenderCamera* camera = nullptr;
     std::string viewport_name;
     tc_entity_handle internal_entities = TC_ENTITY_HANDLE_INVALID;
     std::vector<Light> lights;
