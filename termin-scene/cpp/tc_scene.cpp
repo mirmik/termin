@@ -2,6 +2,7 @@
 #include <termin/tc_scene.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/entity/component.hpp>
+#include <termin/entity/unknown_component_ops.hpp>
 #include "core/tc_scene_extension.h"
 #include <tcbase/tc_value_trent.hpp>
 #include <tcbase/tc_log.hpp>
@@ -435,7 +436,11 @@ nos::trent TcSceneRef::serialize() const {
     return result;
 }
 
-int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
+int TcSceneRef::load_from_data(const nos::trent& data,
+                               bool update_settings,
+                               ComponentDeserializationMode mode,
+                               const UnknownUpgradeStrategy& strategy,
+                               bool auto_upgrade_unknown) {
     if (update_settings) {
         // Layer names
         if (data.contains("layer_names") && data["layer_names"].is_dict()) {
@@ -509,20 +514,43 @@ int TcSceneRef::load_from_data(const nos::trent& data, bool update_settings) {
 
     // Phase 2: Deserialize components
     for (auto& [ent, ent_data] : entity_data_pairs) {
-        ent.deserialize_components_trent(ent_data, _h);
+        ent.deserialize_components_trent(ent_data, _h, mode);
+    }
+
+    if (auto_upgrade_unknown) {
+        if (strategy) {
+            upgrade_unknown_components(*this, strategy);
+        } else {
+            upgrade_unknown_components(*this);
+        }
     }
 
     return static_cast<int>(entity_data_pairs.size());
+}
+
+int TcSceneRef::load_from_data_unknown_only(
+    const nos::trent& data,
+    bool update_settings,
+    const UnknownUpgradeStrategy& strategy,
+    bool auto_upgrade_unknown) {
+    return load_from_data(data,
+                          update_settings,
+                          ComponentDeserializationMode::UnknownOnly,
+                          strategy,
+                          auto_upgrade_unknown);
 }
 
 std::string TcSceneRef::to_json_string() const {
     return nos::json::dump(serialize(), 2);
 }
 
-void TcSceneRef::from_json_string(const std::string& json) {
+void TcSceneRef::from_json_string(const std::string& json,
+                                  ComponentDeserializationMode mode,
+                                  const UnknownUpgradeStrategy& strategy,
+                                  bool auto_upgrade_unknown) {
     try {
         nos::trent data = nos::json::parse(json);
-        load_from_data(data, true);
+        load_from_data(data, true, mode, strategy, auto_upgrade_unknown);
     } catch (const std::exception& e) {
         tc::Log::error("[TcSceneRef] Failed to parse JSON: %s", e.what());
     }

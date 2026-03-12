@@ -22,6 +22,11 @@ class CxxComponent;
 class TcSceneRef;
 using Component = CxxComponent;
 
+enum class ComponentDeserializationMode : uint8_t {
+    Direct = 0,
+    UnknownOnly = 1,
+};
+
 // Entity - wrapper around tc_entity_handle.
 // All data is stored in tc_entity_pool.
 // Entity uses handle for safe access - pool may be destroyed.
@@ -194,7 +199,11 @@ public:
     static Entity deserialize_base_trent(const nos::trent& data, tc_scene_handle scene);
 
     // Deserialize components from trent data (Phase 2: after all entities exist)
-    void deserialize_components_trent(const nos::trent& data, tc_scene_handle scene);
+    void deserialize_components_trent(
+        const nos::trent& data,
+        tc_scene_handle scene,
+        ComponentDeserializationMode mode = ComponentDeserializationMode::Direct
+    );
 
     // --- Pool/ID/Scene access ---
 

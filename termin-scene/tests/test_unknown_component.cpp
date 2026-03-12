@@ -236,6 +236,113 @@ int test_upgrade_requires_registered_type() {
     return 0;
 }
 
+int test_unknown_only_deserialization() {
+    std::cout << "Testing UnknownOnly component deserialization...\n";
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("unknown_only");
+    const std::string json = R"({
+        "entities": [{
+            "uuid": "11111111-1111-1111-1111-111111111111",
+            "name": "entity",
+            "components": [{
+                "type": "ReloadableComponent",
+                "data": { "value": 987 }
+            }]
+        }]
+    })";
+
+    scene.from_json_string(
+        json,
+        termin::ComponentDeserializationMode::UnknownOnly);
+
+    const auto entities = scene.get_all_entities();
+    TEST_ASSERT(entities.size() == 1, "single entity created");
+    termin::Entity entity = entities.front();
+    TEST_ASSERT(entity.valid(), "entity created");
+    TEST_ASSERT(entity.get_component_by_type_name("ReloadableComponent") == nullptr,
+                "registered component not instantiated in UnknownOnly");
+
+    tc_component* unknown_tc = entity.get_component_by_type_name("UnknownComponent");
+    TEST_ASSERT(unknown_tc != nullptr, "UnknownComponent created");
+
+    auto* unknown =
+        static_cast<termin::UnknownComponent*>(termin::CxxComponent::from_tc(unknown_tc));
+    TEST_ASSERT(unknown != nullptr, "UnknownComponent cast succeeds");
+    TEST_ASSERT(unknown->original_type == "ReloadableComponent",
+                "original type preserved in UnknownOnly");
+    TEST_ASSERT(unknown->original_data.type == TC_VALUE_DICT,
+                "original data stored as dict");
+
+    tc_value* stored_value = tc_value_dict_get(&unknown->original_data, "value");
+    TEST_ASSERT(stored_value != nullptr, "stored value present");
+    TEST_ASSERT(stored_value->type == TC_VALUE_INT, "stored value is int");
+    TEST_ASSERT(stored_value->data.i == 987, "stored value preserved");
+
+    scene.destroy();
+    std::cout << "  UnknownOnly deserialization: PASS\n";
+    return 0;
+}
+
+int test_custom_upgrade_strategy() {
+    std::cout << "Testing UnknownOnly custom upgrade strategy...\n";
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("custom_upgrade");
+    const std::string json = R"({
+        "entities": [{
+            "uuid": "22222222-2222-2222-2222-222222222222",
+            "name": "entity",
+            "components": [{
+                "type": "ReloadableComponent",
+                "data": { "value": 654 }
+            }]
+        }]
+    })";
+
+    termin::UnknownUpgradeStrategy strategy =
+        [](const termin::UnknownComponent& unknown,
+           const termin::Entity&,
+           const termin::TcSceneRef&) -> termin::UnknownUpgradeDecision {
+            if (unknown.original_type != "ReloadableComponent") {
+                return termin::UnknownUpgradeDecision::default_upgrade();
+            }
+
+            tc_value* value = tc_value_dict_get(
+                const_cast<tc_value*>(&unknown.original_data), "value");
+            if (value == nullptr || value->type != TC_VALUE_INT) {
+                return termin::UnknownUpgradeDecision::skip();
+            }
+
+            tc_value target_data = tc_value_dict_new();
+            tc_value_dict_set(&target_data, "amount", tc_value_int(value->data.i + 1));
+            auto decision = termin::UnknownUpgradeDecision::custom(
+                "SecondaryComponent", &target_data);
+            tc_value_free(&target_data);
+            return decision;
+        };
+
+    scene.from_json_string(
+        json,
+        termin::ComponentDeserializationMode::UnknownOnly,
+        strategy,
+        true);
+
+    const auto entities = scene.get_all_entities();
+    TEST_ASSERT(entities.size() == 1, "single entity created");
+    termin::Entity entity = entities.front();
+    TEST_ASSERT(entity.valid(), "entity created");
+    TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                "UnknownComponent upgraded away");
+
+    auto* upgraded =
+        dynamic_cast<SecondaryComponent*>(entity.get_component<SecondaryComponent>());
+    TEST_ASSERT(upgraded != nullptr, "custom target component created");
+    TEST_ASSERT(upgraded->amount == 655, "custom payload applied");
+
+    scene.destroy();
+    std::cout << "  UnknownOnly custom upgrade: PASS\n";
+    return 0;
+}
+
 } // namespace
 
 int main() {
@@ -247,6 +354,8 @@ int main() {
     result |= test_degrade_upgrade_roundtrip();
     result |= test_degrade_filtering();
     result |= test_upgrade_requires_registered_type();
+    result |= test_unknown_only_deserialization();
+    result |= test_custom_upgrade_strategy();
 
     if (result == 0) {
         std::cout << "\nAll UnknownComponent tests passed.\n";
