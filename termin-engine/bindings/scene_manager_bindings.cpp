@@ -6,7 +6,7 @@
 #include <nanobind/trampoline.h>
 #include <memory>
 
-#include "scene_manager.hpp"
+#include "termin/scene/scene_manager.hpp"
 
 extern "C" {
 #include "core/tc_scene.h"

@@ -1,6 +1,6 @@
 #include "camera_viewport_component.hpp"
 #include <termin/camera/camera_component.hpp>
-#include "../render/rendering_manager.hpp"
+#include <termin/render/rendering_manager.hpp>
 #include "tc_inspect_cpp.hpp"
 #include <tcbase/tc_log.hpp>
 

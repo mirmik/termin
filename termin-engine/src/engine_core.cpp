@@ -1,5 +1,5 @@
 // engine_core.cpp - EngineCore implementation
-#include "engine_core.hpp"
+#include "termin/engine/engine_core.hpp"
 
 #include <chrono>
 #include <thread>
