@@ -9,7 +9,7 @@
 
 extern "C" {
 #include <tcbase/tc_log.h>
-#include "tc_gpu.h"
+#include <tgfx/tc_gpu.h>
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_pool.h"

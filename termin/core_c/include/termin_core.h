@@ -47,7 +47,6 @@
 #include <tgfx/resources/tc_material_registry.h>
 #include "core/tc_scene_registry.h"
 #include "render/tc_viewport.h"
-#include "tc_gpu.h"
 
 #ifdef __cplusplus
 extern "C" {

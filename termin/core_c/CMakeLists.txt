@@ -18,7 +18,6 @@ option(TC_USE_EXTERNAL_INSPECT "Use external termin_inspect package for inspect/
 set(TC_SOURCES
     src/tc_animation_registry.c
     src/tc_core.c
-    src/tc_gpu.c
     src/tc_primitive_mesh.c
     src/tc_picking.c
     src/tc_skeleton_registry.c
@@ -43,7 +42,6 @@ set(TC_HEADERS
     include/resources/tc_animation.h
     include/resources/tc_animation_registry.h
     include/physics/tc_collision.h
-    include/tc_gpu.h
     include/tc_picking.h
     include/resources/tc_skeleton.h
     include/resources/tc_skeleton_registry.h

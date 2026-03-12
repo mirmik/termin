@@ -5,6 +5,8 @@
 
 extern "C" {
 #include "termin_core.h"
+#include <tgfx/tc_gpu_context.h>
+#include <tgfx/tgfx_resource_gpu.h>
 }
 
 #include <string>
