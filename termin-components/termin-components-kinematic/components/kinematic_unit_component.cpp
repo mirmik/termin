@@ -4,6 +4,147 @@
 
 namespace termin {
 
+void KinematicUnitComponent::register_type() {
+    auto& component_registry = ComponentRegistry::instance();
+    if (!component_registry.has("KinematicUnitComponent")) {
+        component_registry.register_abstract("KinematicUnitComponent", "Component");
+    }
+
+    auto& inspect = tc::InspectRegistry::instance();
+    inspect.set_type_parent("KinematicUnitComponent", "Component");
+
+    if (!inspect.find_field("KinematicUnitComponent", "axis")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "KinematicUnitComponent";
+        info.path = "axis";
+        info.label = "Axis";
+        info.kind = "vec3";
+        info.min = -100000.0;
+        info.max = 100000.0;
+        info.step = 0.001;
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            tc_vec3 v = {c->axis_x, c->axis_y, c->axis_z};
+            return tc_value_vec3(v);
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            if (value.type == TC_VALUE_VEC3) {
+                c->set_axis(value.data.v3.x, value.data.v3.y, value.data.v3.z);
+            }
+        };
+        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+    }
+
+    if (!inspect.find_field("KinematicUnitComponent", "coordinate")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "KinematicUnitComponent";
+        info.path = "coordinate";
+        info.label = "Coordinate";
+        info.kind = "double";
+        info.min = -100000.0;
+        info.max = 100000.0;
+        info.step = 0.01;
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            return tc_value_double(c->coordinate);
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            double v = 0.0;
+            if (value.type == TC_VALUE_DOUBLE) v = value.data.d;
+            else if (value.type == TC_VALUE_FLOAT) v = value.data.f;
+            else if (value.type == TC_VALUE_INT) v = static_cast<double>(value.data.i);
+            c->set_coordinate(v);
+        };
+        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+    }
+
+    if (!inspect.find_field("KinematicUnitComponent", "base_position")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "KinematicUnitComponent";
+        info.path = "base_position";
+        info.label = "Base Position";
+        info.kind = "vec3";
+        info.min = -100000.0;
+        info.max = 100000.0;
+        info.step = 0.001;
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            return tc_value_vec3(c->base_position);
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            if (value.type == TC_VALUE_VEC3) {
+                c->base_position = value.data.v3;
+                c->apply();
+            }
+        };
+        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+    }
+
+    if (!inspect.find_field("KinematicUnitComponent", "base_rotation")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "KinematicUnitComponent";
+        info.path = "base_rotation";
+        info.label = "Base Rotation";
+        info.kind = "quat";
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            return tc_value_quat(c->base_rotation);
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            if (value.type == TC_VALUE_QUAT) {
+                c->base_rotation = value.data.q;
+                c->apply();
+            }
+        };
+        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+    }
+
+    if (!inspect.find_field("KinematicUnitComponent", "base_scale")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "KinematicUnitComponent";
+        info.path = "base_scale";
+        info.label = "Base Scale";
+        info.kind = "vec3";
+        info.min = -100000.0;
+        info.max = 100000.0;
+        info.step = 0.001;
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            return tc_value_vec3(c->base_scale);
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            if (value.type == TC_VALUE_VEC3) {
+                c->base_scale = value.data.v3;
+                c->apply();
+            }
+        };
+        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+    }
+
+    if (!inspect.find_field("KinematicUnitComponent", "capture_base")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "KinematicUnitComponent";
+        info.path = "capture_base";
+        info.label = "Capture Base";
+        info.kind = "bool";
+        info.getter = [](void*) -> tc_value {
+            return tc_value_bool(false);
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            if (value.type == TC_VALUE_BOOL && value.data.b) {
+                auto* c = static_cast<KinematicUnitComponent*>(obj);
+                c->capture_base();
+            }
+        };
+        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+    }
+}
+
 // Inspect field registrars (inherited by all subclasses via parent chain)
 
 // axis (vec3)

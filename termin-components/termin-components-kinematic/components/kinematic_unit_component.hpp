@@ -41,6 +41,8 @@ public:
 public:
     ~KinematicUnitComponent() override = default;
 
+    static void register_type();
+
     // Lifecycle
     void on_added() override;
 

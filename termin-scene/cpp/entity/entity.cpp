@@ -552,32 +552,16 @@ void Entity::deserialize_components_trent(
             }
 
             add_component_ptr(unk);
-            void* obj_ptr =
-                (unk->kind == TC_CXX_COMPONENT) ? CxxComponent::from_tc(unk)
-                                                : unk->body;
-            if (obj_ptr != nullptr) {
-                tc_scene_inspect_context inspect_ctx =
-                    tc_scene_inspect_context_make(scene);
-
-                tc_value orig_type = tc_value_string(type_name.c_str());
-                tc_inspect_set(
-                    obj_ptr,
-                    "UnknownComponent",
-                    "original_type",
-                    orig_type,
-                    &inspect_ctx);
-                tc_value_free(&orig_type);
-
-                tc_value orig_data = comp_data.contains("data")
+            auto* unknown_obj =
+                (unk->kind == TC_CXX_COMPONENT)
+                    ? dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(unk))
+                    : nullptr;
+            if (unknown_obj != nullptr) {
+                unknown_obj->original_type = type_name;
+                tc_value_free(&unknown_obj->original_data);
+                unknown_obj->original_data = comp_data.contains("data")
                     ? tc::trent_to_tc_value(comp_data["data"])
                     : tc_value_dict_new();
-                tc_inspect_set(
-                    obj_ptr,
-                    "UnknownComponent",
-                    "original_data",
-                    orig_data,
-                    &inspect_ctx);
-                tc_value_free(&orig_data);
             }
 
             continue;
@@ -591,16 +575,16 @@ void Entity::deserialize_components_trent(
             if (unk) {
                 add_component_ptr(unk);
                 // Store original type and data
-                void* obj_ptr = (unk->kind == TC_CXX_COMPONENT) ? CxxComponent::from_tc(unk) : unk->body;
-                if (obj_ptr && comp_data.contains("data")) {
-                    tc_value orig_type = tc_value_string(type_name.c_str());
-                    tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
-                    tc_inspect_set(obj_ptr, "UnknownComponent", "original_type", orig_type, &inspect_ctx);
-                    tc_value_free(&orig_type);
-
-                    tc_value orig_data = tc::trent_to_tc_value(comp_data["data"]);
-                    tc_inspect_set(obj_ptr, "UnknownComponent", "original_data", orig_data, &inspect_ctx);
-                    tc_value_free(&orig_data);
+                auto* unknown_obj =
+                    (unk->kind == TC_CXX_COMPONENT)
+                        ? dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(unk))
+                        : nullptr;
+                if (unknown_obj) {
+                    unknown_obj->original_type = type_name;
+                    tc_value_free(&unknown_obj->original_data);
+                    unknown_obj->original_data = comp_data.contains("data")
+                        ? tc::trent_to_tc_value(comp_data["data"])
+                        : tc_value_dict_new();
                 }
             }
             continue;

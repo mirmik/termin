@@ -17,6 +17,8 @@ public:
     MeshComponent();
     ~MeshComponent() override = default;
 
+    static void register_type();
+
     TcMesh& get_mesh() { return mesh; }
     const TcMesh& get_mesh() const { return mesh; }
 
