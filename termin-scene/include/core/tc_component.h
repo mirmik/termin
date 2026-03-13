@@ -326,6 +326,25 @@ TC_API size_t tc_component_registry_get_type_and_descendants(
 
 // Get parent type name (or NULL if none)
 TC_API const char* tc_component_registry_get_parent(const char* type_name);
+TC_API bool tc_component_registry_is_a(
+    const char* type_name,
+    const char* base_type_name
+);
+
+TC_API void tc_component_registry_add_requirement(
+    const char* type_name,
+    const char* required_type_name
+);
+
+TC_API size_t tc_component_registry_requirement_count(const char* type_name);
+TC_API const char* tc_component_registry_requirement_at(
+    const char* type_name,
+    size_t index
+);
+TC_API bool tc_component_registry_has_requirement(
+    const char* type_name,
+    const char* required_type_name
+);
 
 // Get component kind (TC_CXX_COMPONENT or TC_PYTHON_COMPONENT)
 TC_API tc_component_kind tc_component_registry_get_kind(const char* type_name);

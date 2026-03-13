@@ -45,6 +45,9 @@ struct tc_type_entry {
     tc_type_entry** children;
     size_t child_count;
     size_t child_capacity;
+    const char** requirements;
+    size_t requirement_count;
+    size_t requirement_capacity;
 
     // Flags (abstract, etc.)
     uint32_t flags;

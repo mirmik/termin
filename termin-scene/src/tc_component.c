@@ -2,6 +2,7 @@
 #include "core/tc_component.h"
 #include "tc_type_registry.h"
 #include <tcbase/tc_log.h>
+#include <tcbase/tgfx_intern_string.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
@@ -34,6 +35,22 @@ static void ensure_registry_initialized(void) {
     if (!g_component_registry) {
         g_component_registry = tc_type_registry_new();
     }
+}
+
+static bool type_entry_has_requirement(
+    const tc_type_entry* entry,
+    const char* required_type_name
+) {
+    if (!entry || !required_type_name) return false;
+
+    for (size_t i = 0; i < entry->requirement_count; ++i) {
+        const char* current = entry->requirements[i];
+        if (current && strcmp(current, required_type_name) == 0) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 // ============================================================================
@@ -182,6 +199,80 @@ const char* tc_component_registry_get_parent(const char* type_name) {
     if (!entry || !entry->parent) return NULL;
 
     return entry->parent->type_name;
+}
+
+bool tc_component_registry_is_a(
+    const char* type_name,
+    const char* base_type_name
+) {
+    if (!type_name || !base_type_name || !g_component_registry) return false;
+
+    tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
+    while (entry) {
+        if (entry->type_name && strcmp(entry->type_name, base_type_name) == 0) {
+            return true;
+        }
+        entry = entry->parent;
+    }
+
+    return false;
+}
+
+void tc_component_registry_add_requirement(
+    const char* type_name,
+    const char* required_type_name
+) {
+    if (!type_name || !required_type_name) return;
+
+    ensure_registry_initialized();
+
+    tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
+    if (!entry) return;
+
+    if (type_entry_has_requirement(entry, required_type_name)) {
+        return;
+    }
+
+    if (entry->requirement_count >= entry->requirement_capacity) {
+        size_t new_cap = entry->requirement_capacity == 0 ? 4 : entry->requirement_capacity * 2;
+        const char** new_arr = (const char**)realloc(
+            entry->requirements,
+            new_cap * sizeof(const char*)
+        );
+        if (!new_arr) return;
+        entry->requirements = new_arr;
+        entry->requirement_capacity = new_cap;
+    }
+
+    entry->requirements[entry->requirement_count++] = tgfx_intern_string(required_type_name);
+}
+
+size_t tc_component_registry_requirement_count(const char* type_name) {
+    if (!type_name || !g_component_registry) return 0;
+
+    tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
+    if (!entry) return 0;
+
+    return entry->requirement_count;
+}
+
+const char* tc_component_registry_requirement_at(const char* type_name, size_t index) {
+    if (!type_name || !g_component_registry) return NULL;
+
+    tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
+    if (!entry || index >= entry->requirement_count) return NULL;
+
+    return entry->requirements[index];
+}
+
+bool tc_component_registry_has_requirement(
+    const char* type_name,
+    const char* required_type_name
+) {
+    if (!type_name || !required_type_name || !g_component_registry) return false;
+
+    tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
+    return type_entry_has_requirement(entry, required_type_name);
 }
 
 tc_component_kind tc_component_registry_get_kind(const char* type_name) {

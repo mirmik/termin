@@ -38,10 +38,61 @@ public:
     int amount = 0;
 };
 
+class RequiredBaseComponent : public termin::CxxComponent {
+public:
+    RequiredBaseComponent() {
+        declare_type_name("RequiredBaseComponent");
+    }
+};
+
+class RequiredDerivedComponent : public RequiredBaseComponent {
+public:
+    RequiredDerivedComponent() {
+        declare_type_name("RequiredDerivedComponent");
+    }
+};
+
+class NeedsBaseComponent : public termin::CxxComponent {
+public:
+    NeedsBaseComponent() {
+        declare_type_name("NeedsBaseComponent");
+    }
+};
+
+class CycleAComponent : public termin::CxxComponent {
+public:
+    CycleAComponent() {
+        declare_type_name("CycleAComponent");
+    }
+};
+
+class CycleBComponent : public termin::CxxComponent {
+public:
+    CycleBComponent() {
+        declare_type_name("CycleBComponent");
+    }
+};
+
 static ::termin::ComponentRegistrar<ReloadableComponent>
     reloadable_component_registrar("ReloadableComponent", "CxxComponent");
 static ::termin::ComponentRegistrar<SecondaryComponent>
     secondary_component_registrar("SecondaryComponent", "CxxComponent");
+static ::termin::ComponentRegistrar<RequiredBaseComponent>
+    required_base_component_registrar("RequiredBaseComponent", "CxxComponent");
+static ::termin::ComponentRegistrar<RequiredDerivedComponent>
+    required_derived_component_registrar("RequiredDerivedComponent", "RequiredBaseComponent");
+static ::termin::ComponentRegistrar<NeedsBaseComponent>
+    needs_base_component_registrar("NeedsBaseComponent", "CxxComponent");
+static ::termin::ComponentRegistrar<CycleAComponent>
+    cycle_a_component_registrar("CycleAComponent", "CxxComponent");
+static ::termin::ComponentRegistrar<CycleBComponent>
+    cycle_b_component_registrar("CycleBComponent", "CxxComponent");
+static ::termin::ComponentRequirementRegistrar
+    needs_base_requirement_registrar("NeedsBaseComponent", "RequiredBaseComponent");
+static ::termin::ComponentRequirementRegistrar
+    cycle_a_requirement_registrar("CycleAComponent", "CycleBComponent");
+static ::termin::ComponentRequirementRegistrar
+    cycle_b_requirement_registrar("CycleBComponent", "CycleAComponent");
 
 struct InspectFieldRegistration {
     InspectFieldRegistration() {
@@ -236,6 +287,78 @@ int test_upgrade_requires_registered_type() {
     return 0;
 }
 
+int test_auto_add_required_component() {
+    std::cout << "Testing automatic required component creation...\n";
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("requirements");
+    termin::Entity entity = scene.create_entity("entity");
+
+    auto* needs = create_registered_component<NeedsBaseComponent>("NeedsBaseComponent");
+    TEST_ASSERT(needs != nullptr, "dependent component created");
+    entity.add_component(needs);
+
+    TEST_ASSERT(entity.get_component_by_type_name("NeedsBaseComponent") != nullptr,
+                "dependent component added");
+    TEST_ASSERT(entity.get_component_by_type_name("RequiredBaseComponent") != nullptr,
+                "required component auto-created");
+
+    scene.destroy();
+    std::cout << "  Automatic requirements: PASS\n";
+    return 0;
+}
+
+int test_requirement_satisfied_by_derived_component() {
+    std::cout << "Testing requirement satisfied by derived component...\n";
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("requirements_derived");
+    termin::Entity entity = scene.create_entity("entity");
+
+    auto* derived = create_registered_component<RequiredDerivedComponent>("RequiredDerivedComponent");
+    TEST_ASSERT(derived != nullptr, "derived required component created");
+    entity.add_component(derived);
+
+    auto* needs = create_registered_component<NeedsBaseComponent>("NeedsBaseComponent");
+    TEST_ASSERT(needs != nullptr, "dependent component created");
+    entity.add_component(needs);
+
+    size_t base_like_count = 0;
+    for (size_t i = 0; i < entity.component_count(); ++i) {
+        tc_component* tc = entity.component_at(i);
+        if (!tc) continue;
+        if (termin::ComponentRegistry::instance().is_a(
+                tc_component_type_name(tc), "RequiredBaseComponent")) {
+            base_like_count++;
+        }
+    }
+
+    TEST_ASSERT(base_like_count == 1,
+                "derived component satisfies requirement without duplicate");
+
+    scene.destroy();
+    std::cout << "  Derived requirement satisfaction: PASS\n";
+    return 0;
+}
+
+int test_requirement_cycle_blocks_add() {
+    std::cout << "Testing component dependency cycle detection...\n";
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("requirements_cycle");
+    termin::Entity entity = scene.create_entity("entity");
+
+    auto* cycle_a = create_registered_component<CycleAComponent>("CycleAComponent");
+    TEST_ASSERT(cycle_a != nullptr, "cycle component created");
+    entity.add_component(cycle_a);
+
+    TEST_ASSERT(entity.get_component_by_type_name("CycleAComponent") == nullptr,
+                "cycle root component not added");
+    TEST_ASSERT(entity.get_component_by_type_name("CycleBComponent") == nullptr,
+                "cycle dependency component not added");
+
+    scene.destroy();
+    std::cout << "  Dependency cycle detection: PASS\n";
+    return 0;
+}
+
 int test_unknown_only_deserialization() {
     std::cout << "Testing UnknownOnly component deserialization...\n";
 
@@ -414,6 +537,9 @@ int main() {
     result |= test_degrade_upgrade_roundtrip();
     result |= test_degrade_filtering();
     result |= test_upgrade_requires_registered_type();
+    result |= test_auto_add_required_component();
+    result |= test_requirement_satisfied_by_derived_component();
+    result |= test_requirement_cycle_blocks_add();
     result |= test_unknown_only_deserialization();
     result |= test_custom_upgrade_strategy();
     result |= test_custom_upgrade_from_unregistered_source_type();
