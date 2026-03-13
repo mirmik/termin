@@ -18,6 +18,8 @@ public:
     ActuatorComponent();
     ~ActuatorComponent() override = default;
 
+    static void register_type();
+
     void apply() override;
     void capture_base() override;
 };

@@ -1,6 +1,31 @@
 #include <components/mesh_component.hpp>
+#include <tc_inspect_cpp.hpp>
 
 namespace termin {
+
+void MeshComponent::register_type() {
+    auto& component_registry = ComponentRegistry::instance();
+    if (!component_registry.has("MeshComponent")) {
+        component_registry.register_native(
+            "MeshComponent",
+            &CxxComponentFactoryData<MeshComponent>::create,
+            nullptr,
+            "Component"
+        );
+    }
+
+    auto& inspect = tc::InspectRegistry::instance();
+    inspect.set_type_parent("MeshComponent", "Component");
+    if (!inspect.find_field("MeshComponent", "mesh")) {
+        inspect.add<MeshComponent, TcMesh>(
+            "MeshComponent",
+            &MeshComponent::mesh,
+            "mesh",
+            "Mesh",
+            "tc_mesh"
+        );
+    }
+}
 
 MeshComponent::MeshComponent() {
     link_type_entry("MeshComponent");

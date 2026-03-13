@@ -4,6 +4,23 @@
 
 namespace termin {
 
+void ActuatorComponent::register_type() {
+    KinematicUnitComponent::register_type();
+
+    auto& component_registry = ComponentRegistry::instance();
+    if (!component_registry.has("ActuatorComponent")) {
+        component_registry.register_native(
+            "ActuatorComponent",
+            &CxxComponentFactoryData<ActuatorComponent>::create,
+            nullptr,
+            "KinematicUnitComponent"
+        );
+    }
+
+    tc::InspectRegistry::instance().set_type_parent(
+        "ActuatorComponent", "KinematicUnitComponent");
+}
+
 ActuatorComponent::ActuatorComponent() {
     link_type_entry("ActuatorComponent");
     axis_x = 1.0;  // Default: X axis
