@@ -57,29 +57,51 @@ digraph termin_dependencies {
 			style=rounded
 		];
 		"termin-engine";
-		termin;
 	}
+	subgraph cluster_ui {
+		graph [color="#d9d9d9",
+			label=UI,
+			style=rounded
+		];
+		"termin-gui";
+		"termin-nodegraph";
+	}
+	subgraph cluster_application {
+		graph [color="#d9d9d9",
+			label=Application,
+			style=rounded
+		];
+		termin;
+		"diffusion-editor";
+	}
+	"termin-csharp";
 	"termin-base" -> "termin-mesh";
 	"termin-base" -> "termin-inspect";
+	"termin-base" -> "termin-modules";
+	"termin-mesh" -> "termin-graphics";
+	"termin-mesh" -> "termin-components-collision";
+	"termin-mesh" -> "termin-components-mesh";
 	"termin-inspect" -> "termin-scene";
 	"termin-scene" -> "termin-input";
-	"termin-base" -> "termin-modules";
 	"termin-scene" -> "termin-collision";
-	"termin-mesh" -> "termin-graphics";
 	"termin-scene" -> "termin-render";
-	"termin-graphics" -> "termin-render";
-	"termin-input" -> "termin-display";
-	"termin-render" -> "termin-display";
-	"termin-display" -> "termin-components-render";
-	"termin-mesh" -> "termin-components-collision";
-	"termin-collision" -> "termin-components-collision";
-	"termin-mesh" -> "termin-components-mesh";
 	"termin-scene" -> "termin-components-mesh";
 	"termin-scene" -> "termin-components-kinematic";
+	"termin-input" -> "termin-display";
 	"termin-collision" -> "termin-engine";
+	"termin-collision" -> "termin-components-collision";
+	"termin-graphics" -> "termin-render";
+	"termin-graphics" -> "termin-gui";
+	"termin-render" -> "termin-display";
+	"termin-display" -> "termin-components-render";
 	"termin-components-render" -> "termin-engine";
-	"termin-modules" -> termin;
 	"termin-components-collision" -> termin;
 	"termin-components-kinematic" -> termin;
+	"termin-modules" -> termin;
 	"termin-engine" -> termin;
+	"termin-gui" -> termin;
+	"termin-nodegraph" -> termin;
+	termin -> "termin-csharp";
+	"termin-gui" -> "termin-nodegraph";
+	"termin-gui" -> "diffusion-editor";
 }

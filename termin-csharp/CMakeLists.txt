@@ -67,7 +67,6 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
     target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         OpenGL::GL
         termin::trent
-        termin::termin_core
         termin::entity_lib
         termin::render_lib
         termin_scene::termin_scene
@@ -79,7 +78,6 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
 
     set(_termin_csharp_runtime_targets
         termin::trent
-        termin::termin_core
         termin::entity_lib
         termin::render_lib
         tcbase::termin_base
