@@ -34,13 +34,17 @@ public:
     // Queries
     bool has(const std::string& name) const;
     bool is_native(const std::string& name) const;
+    bool is_a(const std::string& name, const std::string& base_name) const;
 
     // Listing
     std::vector<std::string> list_all() const;
     std::vector<std::string> list_native() const;
+    std::vector<std::string> requirements_of(const std::string& name) const;
 
     // Clear all (for testing)
     void clear();
+
+    void register_requirement(const std::string& name, const std::string& required_name);
 
     // Enable or disable a capability for a component type
     static void set_capability(const std::string& name, tc_component_cap_id cap_id, bool enabled);
@@ -132,8 +136,19 @@ struct AbstractComponentRegistrar {
     }
 };
 
+struct ComponentRequirementRegistrar {
+    ComponentRequirementRegistrar(const char* name, const char* required_name) {
+        ComponentRegistry::instance().register_requirement(name, required_name);
+    }
+};
+
 #define REGISTER_ABSTRACT_COMPONENT(ClassName, Parent) \
     static ::termin::AbstractComponentRegistrar \
         _component_registrar_##ClassName(#ClassName, #Parent)
+
+#define REQUIRE_COMPONENT(ClassName, RequiredClassName) \
+    static ::termin::ComponentRequirementRegistrar \
+        _component_requirement_registrar_##ClassName##_##RequiredClassName( \
+            #ClassName, #RequiredClassName)
 
 } // namespace termin

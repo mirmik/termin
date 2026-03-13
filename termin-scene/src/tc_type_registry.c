@@ -25,6 +25,7 @@ static void type_entry_free(void* ptr) {
 
     // Free children array (entries themselves are in the map)
     free(entry->children);
+    free(entry->requirements);
 
     // type_name is interned, don't free
     // factory is a function pointer, don't free
@@ -145,6 +146,9 @@ tc_type_entry* tc_type_registry_register_with_parent(
     entry->children = NULL;
     entry->child_count = 0;
     entry->child_capacity = 0;
+    entry->requirements = NULL;
+    entry->requirement_count = 0;
+    entry->requirement_capacity = 0;
     entry->flags = 0;
     entry->capability_mask = 0;
     entry->kind = kind;

@@ -51,6 +51,12 @@ typedef struct {
     size_t capacity;
 } ComponentArray;
 
+typedef struct {
+    const char** items;
+    size_t count;
+    size_t capacity;
+} StringArray;
+
 // ============================================================================
 // Pool structure - mixed SoA/AoS
 // ============================================================================
@@ -211,6 +217,34 @@ static void component_array_remove(ComponentArray* arr, tc_component* c) {
             return;
         }
     }
+}
+
+static bool string_array_contains(const StringArray* arr, const char* value) {
+    if (!arr || !value) return false;
+    for (size_t i = 0; i < arr->count; ++i) {
+        if (arr->items[i] && strcmp(arr->items[i], value) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool string_array_push(StringArray* arr, const char* value) {
+    if (!arr || !value) return false;
+    if (arr->count >= arr->capacity) {
+        size_t new_cap = arr->capacity == 0 ? 4 : arr->capacity * 2;
+        const char** new_items = (const char**)realloc(arr->items, new_cap * sizeof(const char*));
+        if (!new_items) return false;
+        arr->items = new_items;
+        arr->capacity = new_cap;
+    }
+    arr->items[arr->count++] = value;
+    return true;
+}
+
+static void string_array_pop(StringArray* arr) {
+    if (!arr || arr->count == 0) return;
+    arr->count--;
 }
 
 static char* str_dup(const char* s) {
@@ -1201,8 +1235,34 @@ tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id
 // Components
 // ============================================================================
 
-void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
-    if (!tc_entity_pool_alive(pool, id) || !c) { if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id); return; }
+static tc_component* tc_entity_pool_find_component_assignable_to(
+    tc_entity_pool* pool,
+    tc_entity_id id,
+    const char* required_type_name
+) {
+    if (!tc_entity_pool_alive(pool, id) || !required_type_name) {
+        return NULL;
+    }
+
+    ComponentArray* components = &pool->components[id.index];
+    for (size_t i = 0; i < components->count; ++i) {
+        tc_component* current = components->items[i];
+        if (!current) continue;
+
+        const char* current_type_name = tc_component_type_name(current);
+        if (tc_component_registry_is_a(current_type_name, required_type_name)) {
+            return current;
+        }
+    }
+
+    return NULL;
+}
+
+static void tc_entity_pool_add_component_raw(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
+    if (!tc_entity_pool_alive(pool, id) || !c) {
+        if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id);
+        return;
+    }
 
     tc_component_try_link_declared_type(c);
 
@@ -1228,6 +1288,104 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
     // Notify component it was added to entity
     tc_component_on_added_to_entity(c);
     tc_component_on_added(c);
+}
+
+static bool tc_entity_pool_add_component_with_requirements(
+    tc_entity_pool* pool,
+    tc_entity_id id,
+    tc_component* c,
+    StringArray* resolving_stack,
+    bool dependency_created
+) {
+    if (!tc_entity_pool_alive(pool, id) || !c) {
+        if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id);
+        return false;
+    }
+
+    tc_component_try_link_declared_type(c);
+
+    const char* type_name = tc_component_type_name(c);
+    if (type_name && string_array_contains(resolving_stack, type_name)) {
+        tc_log(TC_LOG_ERROR,
+               "[tc_entity_pool_add_component] component dependency cycle detected for '%s'",
+               type_name);
+        if (dependency_created) {
+            tc_component_drop(c);
+        }
+        return false;
+    }
+
+    bool pushed = false;
+    if (type_name) {
+        if (!string_array_push(resolving_stack, type_name)) {
+            tc_log(TC_LOG_ERROR,
+                   "[tc_entity_pool_add_component] failed to grow dependency stack for '%s'",
+                   type_name);
+            if (dependency_created) {
+                tc_component_drop(c);
+            }
+            return false;
+        }
+        pushed = true;
+    }
+
+    size_t requirement_count = type_name
+        ? tc_component_registry_requirement_count(type_name)
+        : 0;
+
+    for (size_t i = 0; i < requirement_count; ++i) {
+        const char* required_type_name =
+            tc_component_registry_requirement_at(type_name, i);
+        if (!required_type_name) continue;
+
+        if (tc_entity_pool_find_component_assignable_to(pool, id, required_type_name)) {
+            continue;
+        }
+
+        tc_component* dependency = tc_component_registry_create(required_type_name);
+        if (!dependency) {
+            tc_log(TC_LOG_ERROR,
+                   "[tc_entity_pool_add_component] failed to create required component '%s' for '%s'",
+                   required_type_name,
+                   type_name ? type_name : "<unknown>");
+            if (pushed) string_array_pop(resolving_stack);
+            if (dependency_created) {
+                tc_component_drop(c);
+            }
+            return false;
+        }
+
+        if (!tc_entity_pool_add_component_with_requirements(
+                pool, id, dependency, resolving_stack, true)) {
+            if (pushed) string_array_pop(resolving_stack);
+            if (dependency_created) {
+                tc_component_drop(c);
+            }
+            return false;
+        }
+    }
+
+    if (pushed) {
+        string_array_pop(resolving_stack);
+    }
+
+    tc_entity_pool_add_component_raw(pool, id, c);
+    return true;
+}
+
+void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
+    if (!tc_entity_pool_alive(pool, id) || !c) { if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id); return; }
+
+    StringArray resolving_stack = {0};
+    bool added = tc_entity_pool_add_component_with_requirements(
+        pool, id, c, &resolving_stack, false);
+    free(resolving_stack.items);
+
+    if (!added) {
+        tc_log(TC_LOG_WARN,
+               "[tc_entity_pool_add_component] add component '%s' aborted",
+               tc_component_type_name(c));
+    }
 }
 
 void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
