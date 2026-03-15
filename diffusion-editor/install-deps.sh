@@ -16,19 +16,24 @@ PIP="$VENV/bin/pip"
 TERMIN_ENV="$(cd .. && pwd)"
 
 echo "=== Installing termin-base (tcbase) ==="
-$PIP install "$TERMIN_ENV/termin-base"
+$PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-base"
+
+echo ""
+echo ""
+echo "=== Installing termin-mesh (tmesh) ==="
+$PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-mesh"
 
 echo ""
 echo "=== Installing termin-graphics (tgfx) ==="
-$PIP install "$TERMIN_ENV/termin-graphics"
+$PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-graphics"
 
 echo ""
 echo "=== Installing termin-gui (tcgui) ==="
-$PIP install "$TERMIN_ENV/termin-gui"
+$PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-gui"
 
 echo ""
 echo "=== Installing diffusion-editor requirements ==="
-$PIP install -r requirements.txt
+$PIP install --no-cache-dir --no-build-isolation -r requirements.txt
 
 echo ""
 echo "Done. All dependencies installed into $VENV"
