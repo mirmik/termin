@@ -1,6 +1,6 @@
 import termin.loaders.fbx_loader as fbx_loader
 from termin.mesh.mesh import mesh3_from_assimp, show_mesh
-from termin.animation import TcAnimationClip
+from termin.animation import clip_from_fbx
 
 data = fbx_loader.load_fbx_file("examples/data/FBX/animcube.fbx")
 
@@ -22,7 +22,7 @@ m = mesh3_from_assimp(data.meshes[0])
 print(f"Converted first mesh to Mesh object: vertices={len(m.vertices)}, indices={len(m.triangles)}")
 
 for raw_clip in data.animations:
-    conv = TcAnimationClip.from_assimp_clip(raw_clip)
+    conv = clip_from_fbx(raw_clip)
     print(f"Converted animation clip: {conv}")
     print(f"Channels: {list(conv.channels.values())}")
 
