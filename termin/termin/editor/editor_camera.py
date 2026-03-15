@@ -298,4 +298,3 @@ class EditorCameraManager:
         for child_tf in entity.transform.children:
             if child_tf.entity is not None:
                 self._collect_hierarchy(child_tf.entity, result)
-

@@ -12,18 +12,6 @@ def make_default_scene() -> dict:
         "version": "1.0",
         "scene": {
             "uuid": str(uuid.uuid4()),
-            "background_color": [0.05, 0.05, 0.08, 1.0],
-            "ambient_color": [1.0, 1.0, 1.0],
-            "ambient_intensity": 0.15,
-            "shadow_settings": {
-                "method": 1,
-                "softness": 1.0,
-                "bias": 0.005,
-            },
-            "skybox_type": "gradient",
-            "skybox_color": [0.5, 0.7, 0.9],
-            "skybox_top_color": [0.4, 0.6, 0.9],
-            "skybox_bottom_color": [0.6, 0.5, 0.4],
             "entities": [
                 {
                     "uuid": str(uuid.uuid4()),
@@ -200,8 +188,30 @@ def make_default_scene() -> dict:
             ],
             "layer_names": {},
             "flag_names": {},
-            "viewport_configs": [],
-            "scene_pipelines": [],
+            "extensions": {
+                "render_mount": {
+                    "viewport_configs": [],
+                    "scene_pipelines": [],
+                },
+                "render_state": {
+                    "background_color": [0.05, 0.05, 0.08, 1.0],
+                    "lighting": {
+                        "ambient_color": [1.0, 1.0, 1.0],
+                        "ambient_intensity": 0.15,
+                        "shadow_settings": {
+                            "method": 1,
+                            "softness": 1.0,
+                            "bias": 0.005,
+                        },
+                    },
+                    "skybox": {
+                        "type": 1,
+                        "color": [0.5, 0.7, 0.9],
+                        "top_color": [0.4, 0.6, 0.9],
+                        "bottom_color": [0.6, 0.5, 0.4],
+                    },
+                },
+            },
         },
         "editor": {
             "camera": {

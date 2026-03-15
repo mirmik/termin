@@ -213,6 +213,7 @@ void scene_merge_legacy_render_extensions(const nos::trent& data, nos::trent& me
             merged_extensions["render_state"] = std::move(render_state);
         }
     }
+
 }
 
 } // namespace termin

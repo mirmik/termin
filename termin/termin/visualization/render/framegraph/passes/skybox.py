@@ -135,6 +135,7 @@ class SkyBoxPass(RenderFramePass):
 
         # Skybox должен нарисоваться поверх содержимого color-буфера,
         # но не портить depth-буфер для последующей геометрии.
+        ctx.graphics.set_cull_face(False)
         ctx.graphics.set_depth_mask(False)
         ctx.graphics.set_depth_func("lequal")
 
@@ -167,3 +168,4 @@ class SkyBoxPass(RenderFramePass):
         # Возвращаем стандартные настройки глубины
         ctx.graphics.set_depth_func("less")
         ctx.graphics.set_depth_mask(True)
+        ctx.graphics.set_cull_face(True)
