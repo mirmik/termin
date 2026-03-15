@@ -4,7 +4,8 @@
 #   termin-base -> termin-modules -> termin-mesh -> termin-graphics -> termin-inspect -> termin-scene
 #   -> termin-render -> termin-input -> termin-display -> termin-collision -> termin-physics
 #   -> termin-components-collision -> termin-components-render -> termin-components-mesh
-#   -> termin-engine -> termin-components-kinematic -> termin-components-physics -> termin(cpp only)
+#   -> termin-engine -> termin-components-kinematic -> termin-components-physics
+#   -> termin(cpp only) -> termin-components-skeleton -> termin-components-animation
 
 set -e
 
@@ -86,6 +87,7 @@ build_cmake_lib_cpp() {
         -Dtermin_engine_DIR="$SDK_PREFIX/lib/cmake/termin_engine" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_physics_DIR="$SDK_PREFIX/lib/cmake/termin_physics" \
+        -Dtermin_DIR="$SDK_PREFIX/lib/cmake/termin" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
         -Dtermin_components_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_components_mesh" \
         -Dtermin_components_kinematic_DIR="$SDK_PREFIX/lib/cmake/termin_components_kinematic" \
@@ -166,6 +168,8 @@ build_cmake_lib_cpp "termin-engine" "$SCRIPT_DIR/termin-engine"
 build_cmake_lib_cpp "termin-components-kinematic" "$SCRIPT_DIR/termin-components/termin-components-kinematic"
 build_cmake_lib_cpp "termin-components-physics" "$SCRIPT_DIR/termin-components/termin-components-physics"
 build_termin_cpp_only
+build_cmake_lib_cpp "termin-components-skeleton" "$SCRIPT_DIR/termin-components/termin-components-skeleton"
+build_cmake_lib_cpp "termin-components-animation" "$SCRIPT_DIR/termin-components/termin-components-animation"
 
 echo ""
 echo "========================================"

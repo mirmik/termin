@@ -9,10 +9,7 @@
 
 #include "termin/skeleton/skeleton_instance.hpp"
 #include "termin/skeleton/tc_skeleton_handle.hpp"
-#include "termin/render/skeleton_controller.hpp"
-#include <termin/entity/entity.hpp>
 #include "termin/inspect/tc_kind.hpp"
-#include "termin/bindings/entity/entity_helpers.hpp"
 #include "../../../trent/trent.h"
 #include <tcbase/tc_log.hpp>
 
@@ -423,89 +420,16 @@ void bind_skeleton_instance(nb::module_& m) {
         });
 }
 
-void bind_skeleton_controller(nb::module_& m) {
-    nb::class_<termin::SkeletonController, termin::Component>(m, "SkeletonController")
-        .def("__init__", [](nb::handle self) {
-            termin::cxx_component_init<termin::SkeletonController>(self);
-        })
-        .def("__init__", [](nb::handle self, nb::object skeleton_arg, nb::list bone_entities_list) {
-            termin::cxx_component_init<termin::SkeletonController>(self);
-            auto* cpp = nb::inst_ptr<termin::SkeletonController>(self);
-
-            // Handle skeleton argument: TcSkeleton
-            if (!skeleton_arg.is_none()) {
-                if (nb::isinstance<termin::TcSkeleton>(skeleton_arg)) {
-                    cpp->skeleton = nb::cast<termin::TcSkeleton>(skeleton_arg);
-                }
-            }
-
-            std::vector<termin::Entity> entities;
-            for (auto item : bone_entities_list) {
-                if (!item.is_none()) {
-                    entities.push_back(nb::cast<termin::Entity>(item));
-                }
-            }
-            cpp->set_bone_entities(std::move(entities));
-        },
-            nb::arg("skeleton") = nb::none(),
-            nb::arg("bone_entities") = nb::list())
-        .def_rw("skeleton", &termin::SkeletonController::skeleton)
-        .def_prop_ro("skeleton_data",
-            [](const termin::SkeletonController& self) {
-                return self.skeleton.get();
-            },
-            nb::rv_policy::reference)
-        .def_prop_rw("bone_entities",
-            [](const termin::SkeletonController& self) {
-                nb::list result;
-                for (const auto& e : self.bone_entities) {
-                    if (e.valid()) {
-                        result.append(nb::cast(e));
-                    } else {
-                        result.append(nb::none());
-                    }
-                }
-                return result;
-            },
-            [](termin::SkeletonController& self, nb::list entities) {
-                std::vector<termin::Entity> vec;
-                for (auto item : entities) {
-                    if (!item.is_none()) {
-                        vec.push_back(nb::cast<termin::Entity>(item));
-                    }
-                }
-                self.set_bone_entities(std::move(vec));
-            })
-        .def_prop_ro("skeleton_instance",
-            &termin::SkeletonController::skeleton_instance,
-            nb::rv_policy::reference)
-        .def("set_skeleton", &termin::SkeletonController::set_skeleton)
-        .def("set_bone_entities", [](termin::SkeletonController& self, nb::list entities) {
-            std::vector<termin::Entity> vec;
-            for (auto item : entities) {
-                if (!item.is_none()) {
-                    vec.push_back(nb::cast<termin::Entity>(item));
-                }
-            }
-            self.set_bone_entities(std::move(vec));
-        })
-        .def("invalidate_instance", &termin::SkeletonController::invalidate_instance);
-}
-
 } // anonymous namespace
 
 NB_MODULE(_skeleton_native, m) {
-    m.doc() = "Native C++ skeleton module (TcSkeleton, SkeletonInstance, SkeletonController)";
-
-    // Import _entity_native for Component type (SkeletonController inherits from it)
-    nb::module_::import_("termin.entity._entity_native");
+    m.doc() = "Native C++ skeleton module (TcSkeleton, SkeletonInstance)";
 
     // Bind types
     bind_tc_bone(m);
     bind_tc_skeleton_struct(m);
     bind_tc_skeleton(m);
     bind_skeleton_instance(m);
-    bind_skeleton_controller(m);
 
     // Register tc_skeleton kind handler for InspectRegistry
     register_tc_skeleton_kind();

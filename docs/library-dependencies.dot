@@ -49,6 +49,8 @@ digraph termin_dependencies {
 			style=rounded
 		];
 		"termin-components-collision";
+		"termin-components-skeleton";
+		"termin-components-animation";
 		"termin-components-physics";
 		"termin-components-mesh";
 		"termin-components-kinematic";
@@ -101,6 +103,9 @@ digraph termin_dependencies {
 	"termin-physics" -> "termin-components-physics";
 	"termin-components-collision" -> "termin-components-physics";
 	"termin-components-render" -> "termin-components-physics";
+	termin -> "termin-components-skeleton";
+	termin -> "termin-components-animation";
+	"termin-components-skeleton" -> "termin-components-animation";
 	"termin-components-render" -> "termin-engine";
 	"termin-components-collision" -> termin;
 	"termin-components-kinematic" -> termin;

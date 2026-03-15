@@ -11,13 +11,11 @@ if _os.path.isdir(_sdk_dir) and _sdk_dir not in __path__:
 from termin.skeleton._skeleton_native import (
     TcSkeleton,
     SkeletonInstance,
-    SkeletonController,
 )
 from termin.skeleton.skeleton_asset import SkeletonAsset
 
 __all__ = [
     "TcSkeleton",
     "SkeletonInstance",
-    "SkeletonController",
     "SkeletonAsset",
 ]

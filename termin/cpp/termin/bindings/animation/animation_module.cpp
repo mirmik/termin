@@ -3,11 +3,8 @@
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
 
-#include "termin/animation/animation_player.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
-#include "termin/render/skeleton_controller.hpp"
 #include "termin/inspect/tc_kind.hpp"
-#include "termin/bindings/entity/entity_helpers.hpp"
 #include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
@@ -185,41 +182,6 @@ void bind_tc_animation_clip(nb::module_& m) {
         }, nb::arg("channels_data"));
 }
 
-void bind_animation_player(nb::module_& m) {
-    nb::class_<AnimationPlayer, Component>(m, "AnimationPlayer")
-        .def("__init__", [](nb::handle self) {
-            termin::cxx_component_init<AnimationPlayer>(self);
-        })
-        .def_rw("clips", &AnimationPlayer::clips)
-        .def_rw("_current_clip_name", &AnimationPlayer::_current_clip_name)
-        .def_rw("time", &AnimationPlayer::time)
-        .def_rw("playing", &AnimationPlayer::playing)
-        .def_prop_ro("current", [](AnimationPlayer& self) {
-            return self.current();
-        }, nb::rv_policy::reference)
-        .def_prop_ro("clips_map", [](AnimationPlayer& self) {
-            nb::dict d;
-            for (const auto& [name, idx] : self.clips_map()) {
-                d[nb::str(name.c_str())] = idx;
-            }
-            return d;
-        })
-        .def("set_current", &AnimationPlayer::set_current)
-        .def("play", &AnimationPlayer::play, nb::arg("name"), nb::arg("restart") = true)
-        .def("stop", &AnimationPlayer::stop)
-        .def("update_bones_at_time", &AnimationPlayer::update_bones_at_time)
-        .def_prop_ro("target_skeleton",
-            &AnimationPlayer::target_skeleton,
-            nb::rv_policy::reference)
-        .def_prop_rw("target_skeleton_controller",
-            &AnimationPlayer::target_skeleton_controller,
-            &AnimationPlayer::set_target_skeleton_controller,
-            nb::rv_policy::reference)
-        .def("add_clip", [](AnimationPlayer& self, const TcAnimationClip& clip) {
-            self.clips.push_back(clip);
-        }, nb::arg("clip"));
-}
-
 void register_animation_kind_handlers() {
     // C++ handler for C++ fields
     tc::register_cpp_handle_kind<TcAnimationClip>("tc_animation_clip");
@@ -262,14 +224,7 @@ void register_animation_kind_handlers() {
 NB_MODULE(_animation_native, m) {
     m.doc() = "Native C++ animation module for termin";
 
-    // Import _entity_native for Component type (AnimationPlayer inherits from it)
-    nb::module_::import_("termin.entity._entity_native");
-
-    // Import _skeleton_native for SkeletonInstance/SkeletonController (used by AnimationPlayer)
-    nb::module_::import_("termin.skeleton._skeleton_native");
-
     bind_tc_animation_clip(m);
-    bind_animation_player(m);
 
     // Register kind handlers for serialization
     register_animation_kind_handlers();

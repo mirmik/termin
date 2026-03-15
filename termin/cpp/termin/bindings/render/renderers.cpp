@@ -15,8 +15,8 @@ void bind_renderers(nb::module_& m) {
     nb::module_::import_("termin.entity._entity_native");
     nb::module_::import_("termin.render_components._components_render_native");
 
-    // Import _skeleton_native for SkeletonController type (used by SkinnedMeshRenderer)
-    nb::module_::import_("termin.skeleton._skeleton_native");
+    // Import skeleton component bindings without pulling in termin.visualization package
+    nb::module_::import_("termin.skeleton._components_skeleton_native");
 
     // SkinnedMeshRenderer - inherits from MeshRenderer
     nb::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
