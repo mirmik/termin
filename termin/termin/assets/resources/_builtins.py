@@ -18,8 +18,8 @@ BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.visualization.animation.player", "AnimationPlayer"),
     ("termin.visualization.components.rotator", "RotatorComponent"),
     # Физика
-    ("termin.physics.physics_world_component", "PhysicsWorldComponent"),
-    ("termin.physics.rigid_body_component", "RigidBodyComponent"),
+    ("termin.physics_components.physics_world_component", "PhysicsWorldComponent"),
+    ("termin.physics_components.rigid_body_component", "RigidBodyComponent"),
     # FEM Физика
     ("termin.physics.fem_physics_world_component", "FEMPhysicsWorldComponent"),
     ("termin.physics.fem_rigid_body_component", "FEMRigidBodyComponent"),

@@ -75,10 +75,10 @@ modules, фиксация финального API.
 - Delete: `termin/termin/physics/rigid_body_component.py`
 - Delete: `termin/termin/physics/physics_world_component.py`
 
-- [ ] Финально убедиться что ни один файл не импортирует эти модули (grep по всем проектам)
-- [ ] Удалить `rigid_body_component.py`
-- [ ] Удалить `physics_world_component.py`
-- [ ] Запустить тесты проекта
+- [x] Финально убедиться что ни один файл не импортирует эти модули (grep по всем проектам)
+- [x] Удалить `rigid_body_component.py`
+- [x] Удалить `physics_world_component.py`
+- [x] Запустить тесты проекта
 
 ### Task 5: Удалить animation legacy facade modules
 
