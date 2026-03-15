@@ -15,7 +15,7 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.render.components import MeshRenderer
+from termin.render_components import MeshRenderer
 from tgfx import TcShader
 from tcgui.font import FontTextureAtlas
 from tcgui.widgets import UI, Button

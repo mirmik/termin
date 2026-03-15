@@ -14,7 +14,7 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.render.components import MeshRenderer, LightComponent
+from termin.render_components import LightComponent, MeshRenderer
 from termin.visualization.render.materials import ColorMaterial
 
 # import convex hull

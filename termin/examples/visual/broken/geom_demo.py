@@ -17,7 +17,7 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.render.components import MeshRenderer, LightComponent
+from termin.render_components import LightComponent, MeshRenderer
 from tgfx import TcShader
 
 

@@ -15,7 +15,7 @@ from termin.visualization.core.entity import Entity
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.core.display import Display
 from termin.visualization.core.material import Material
-from termin.visualization.render.components import MeshRenderer
+from termin.render_components import MeshRenderer
 from termin.mesh.mesh import UVSphereMesh
 from termin.mesh import TcMesh
 from termin.geombase import Pose3
