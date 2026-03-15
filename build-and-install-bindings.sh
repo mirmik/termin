@@ -105,23 +105,39 @@ build_with_python() {
     echo "$name Python bindings installed to ${SDK_PREFIX}"
 }
 
-build_with_python "termin-inspect"              "$SCRIPT_DIR/termin-inspect"
-build_with_python "termin-scene"                "$SCRIPT_DIR/termin-scene"
-build_with_python "termin-render"               "$SCRIPT_DIR/termin-render"
-build_with_python "termin-display"              "$SCRIPT_DIR/termin-display"
-build_with_python "termin-collision"            "$SCRIPT_DIR/termin-collision"
-build_with_python "termin-physics"              "$SCRIPT_DIR/termin-physics"
-build_with_python "termin-components-collision"  "$SCRIPT_DIR/termin-components/termin-components-collision"
-build_with_python "termin-components-render"     "$SCRIPT_DIR/termin-components/termin-components-render"
-build_with_python "termin-components-physics"    "$SCRIPT_DIR/termin-components/termin-components-physics"
-build_with_python "termin-components-mesh"       "$SCRIPT_DIR/termin-components/termin-components-mesh"
-build_with_python "termin-engine"                "$SCRIPT_DIR/termin-engine"
-build_with_python "termin-components-kinematic"  "$SCRIPT_DIR/termin-components/termin-components-kinematic"
-build_with_python "termin-skeleton"              "$SCRIPT_DIR/termin-skeleton"
-build_with_python "termin-animation"             "$SCRIPT_DIR/termin-animation"
-build_with_python "termin-components-skeleton"   "$SCRIPT_DIR/termin-components/termin-components-skeleton"
+# Build Python bindings for modules marked has_python=yes in modules.conf
+# (skip entries after @termin-cpp — those are built after termin/build.sh)
+_before_termin=1
+while IFS= read -r line; do
+    line="${line%%#*}"
+    line="$(echo "$line" | xargs)"
+    [[ -z "$line" ]] && continue
+
+    if [[ "$line" == "@termin-cpp" ]]; then
+        _before_termin=0
+        continue
+    fi
+    [[ "$line" == @* ]] && continue
+
+    IFS='|' read -r name dir has_python _rest <<< "$line"
+    name="$(echo "$name" | xargs)"
+    dir="$(echo "$dir" | xargs)"
+    has_python="$(echo "$has_python" | xargs)"
+
+    [[ "$has_python" != "yes" ]] && continue
+    [[ $_before_termin -eq 0 ]] && continue
+
+    build_with_python "$name" "$SCRIPT_DIR/$dir"
+done < "$SCRIPT_DIR/modules.conf"
 
 # ── 3. pip-installable Python packages ───────────────────────────
+echo ""
+echo "========================================"
+echo "  Installing termin-build-tools (pip)"
+echo "========================================"
+echo ""
+pip install --no-build-isolation "$SCRIPT_DIR/termin-build-tools"
+
 for pkg in termin-base termin-modules termin-mesh termin-graphics; do
     echo ""
     echo "========================================"
@@ -176,7 +192,29 @@ cp -a "$SCRIPT_DIR/termin/install/." "$SDK_PREFIX/"
 echo "Installing termin Python package (editable)..."
 CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation -e "$SCRIPT_DIR/termin"
 
-build_with_python "termin-components-animation"  "$SCRIPT_DIR/termin-components/termin-components-animation"
+# Build post-termin Python bindings (modules after @termin-cpp in modules.conf)
+_after_termin=0
+while IFS= read -r line; do
+    line="${line%%#*}"
+    line="$(echo "$line" | xargs)"
+    [[ -z "$line" ]] && continue
+
+    if [[ "$line" == "@termin-cpp" ]]; then
+        _after_termin=1
+        continue
+    fi
+    [[ "$line" == @* ]] && continue
+    [[ $_after_termin -eq 0 ]] && continue
+
+    IFS='|' read -r name dir has_python _rest <<< "$line"
+    name="$(echo "$name" | xargs)"
+    dir="$(echo "$dir" | xargs)"
+    has_python="$(echo "$has_python" | xargs)"
+
+    [[ "$has_python" != "yes" ]] && continue
+
+    build_with_python "$name" "$SCRIPT_DIR/$dir"
+done < "$SCRIPT_DIR/modules.conf"
 
 echo ""
 echo "========================================"
