@@ -44,6 +44,12 @@ install() {
     # Do not wipe existing install to preserve extra bundled libs
     mkdir -p "$INSTALL_PREFIX"
 
+    # Shared runtime libraries no longer live inside the Python package.
+    # Remove stale copies from older installs before overlaying new files.
+    if [[ -d "$INSTALL_PREFIX/lib/python/termin" ]]; then
+        find "$INSTALL_PREFIX/lib/python/termin" -maxdepth 1 \( -name 'lib*.so' -o -name 'lib*.so.*' -o -name 'lib*.dylib' -o -name 'lib*.dll' \) -delete
+    fi
+
     # Copy files (overwrite existing)
     cp -a "$SOURCE_DIR/." "$INSTALL_PREFIX/"
 

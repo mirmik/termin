@@ -1,24 +1,20 @@
-// tc_animation_registry.c - Animation registry with pool + hash table
 #include "resources/tc_animation_registry.h"
-#include <tcbase/tc_pool.h>
-#include <tcbase/tc_resource_map.h>
-#include <tgfx/tc_registry_utils.h>
-#include <tcbase/tc_log.h>
-#include "termin_core.h"
+
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
-// ============================================================================
-// Global state
-// ============================================================================
+#include <tcbase/tc_log.h>
+#include <tcbase/tc_pool.h>
+#include <tcbase/tc_resource_map.h>
+#include <tcbase/tgfx_intern_string.h>
+#include <tgfx/tc_registry_utils.h>
 
 static tc_pool g_animation_pool;
 static tc_resource_map* g_uuid_to_index = NULL;
 static uint64_t g_next_uuid = 1;
 static bool g_initialized = false;
 
-// Free animation internal data
 static void animation_free_data(tc_animation* animation) {
     if (!animation) return;
     if (animation->channels) {
@@ -31,10 +27,6 @@ static void animation_free_data(tc_animation* animation) {
     animation->channel_count = 0;
     animation->duration = 0.0;
 }
-
-// ============================================================================
-// Lifecycle
-// ============================================================================
 
 void tc_animation_init(void) {
     TC_REGISTRY_INIT_GUARD(g_initialized, "tc_animation");
@@ -71,10 +63,6 @@ void tc_animation_shutdown(void) {
     g_next_uuid = 1;
     g_initialized = false;
 }
-
-// ============================================================================
-// Handle-based API
-// ============================================================================
 
 tc_animation_handle tc_animation_create(const char* uuid) {
     if (!g_initialized) {
@@ -206,7 +194,7 @@ tc_animation_handle tc_animation_declare(const char* uuid, const char* name) {
     animation->loop = 1;
 
     if (name && name[0] != '\0') {
-        animation->header.name = tc_intern_string(name);
+        animation->header.name = tgfx_intern_string(name);
     }
 
     if (!tc_resource_map_add(g_uuid_to_index, animation->header.uuid, tc_pack_index(h.index))) {
@@ -260,7 +248,6 @@ bool tc_animation_ensure_loaded(tc_animation_handle h) {
     if (!animation) return false;
 
     if (animation->header.is_loaded) return true;
-
     if (!animation->header.load_callback) {
         tc_log_warn("tc_animation_ensure_loaded: animation '%s' has no load callback", animation->header.uuid);
         return false;
@@ -270,13 +257,8 @@ bool tc_animation_ensure_loaded(tc_animation_handle h) {
     if (success) {
         animation->header.is_loaded = 1;
     }
-
     return success;
 }
-
-// ============================================================================
-// Reference counting
-// ============================================================================
 
 void tc_animation_add_ref(tc_animation* animation) {
     if (animation) {
@@ -298,16 +280,10 @@ bool tc_animation_release(tc_animation* animation) {
     return false;
 }
 
-// ============================================================================
-// Animation data operations
-// ============================================================================
-
 tc_animation_channel* tc_animation_alloc_channels(tc_animation* anim, size_t count) {
     if (!anim) return NULL;
 
-    // Free existing
     animation_free_data(anim);
-
     if (count == 0) return NULL;
 
     anim->channels = (tc_animation_channel*)calloc(count, sizeof(tc_animation_channel));
@@ -317,15 +293,12 @@ tc_animation_channel* tc_animation_alloc_channels(tc_animation* anim, size_t cou
     }
 
     anim->channel_count = count;
-
-    // Initialize all channels
     for (size_t i = 0; i < count; i++) {
         tc_animation_channel_init(&anim->channels[i]);
     }
 
     anim->header.is_loaded = 1;
     anim->header.version++;
-
     return anim->channels;
 }
 
@@ -347,54 +320,42 @@ int tc_animation_find_channel(const tc_animation* anim, const char* target_name)
 
 tc_keyframe_vec3* tc_animation_channel_alloc_translation(tc_animation_channel* ch, size_t count) {
     if (!ch) return NULL;
-
     if (ch->translation_keys) {
         free(ch->translation_keys);
         ch->translation_keys = NULL;
     }
     ch->translation_count = 0;
-
     if (count == 0) return NULL;
-
     ch->translation_keys = (tc_keyframe_vec3*)calloc(count, sizeof(tc_keyframe_vec3));
     if (!ch->translation_keys) return NULL;
-
     ch->translation_count = count;
     return ch->translation_keys;
 }
 
 tc_keyframe_quat* tc_animation_channel_alloc_rotation(tc_animation_channel* ch, size_t count) {
     if (!ch) return NULL;
-
     if (ch->rotation_keys) {
         free(ch->rotation_keys);
         ch->rotation_keys = NULL;
     }
     ch->rotation_count = 0;
-
     if (count == 0) return NULL;
-
     ch->rotation_keys = (tc_keyframe_quat*)calloc(count, sizeof(tc_keyframe_quat));
     if (!ch->rotation_keys) return NULL;
-
     ch->rotation_count = count;
     return ch->rotation_keys;
 }
 
 tc_keyframe_scalar* tc_animation_channel_alloc_scale(tc_animation_channel* ch, size_t count) {
     if (!ch) return NULL;
-
     if (ch->scale_keys) {
         free(ch->scale_keys);
         ch->scale_keys = NULL;
     }
     ch->scale_count = 0;
-
     if (count == 0) return NULL;
-
     ch->scale_keys = (tc_keyframe_scalar*)calloc(count, sizeof(tc_keyframe_scalar));
     if (!ch->scale_keys) return NULL;
-
     ch->scale_count = count;
     return ch->scale_keys;
 }
@@ -408,13 +369,8 @@ void tc_animation_recompute_duration(tc_animation* anim) {
             max_ticks = anim->channels[i].duration;
         }
     }
-
     anim->duration = (anim->tps > 0.0) ? max_ticks / anim->tps : 0.0;
 }
-
-// ============================================================================
-// Iteration
-// ============================================================================
 
 typedef struct {
     tc_animation_iter_fn callback;
@@ -438,11 +394,6 @@ void tc_animation_foreach(tc_animation_iter_fn callback, void* user_data) {
     tc_pool_foreach(&g_animation_pool, animation_iter_adapter, &ctx);
 }
 
-// ============================================================================
-// Sampling functions
-// ============================================================================
-
-// Binary search for keyframe interval
 static size_t find_keyframe_index_vec3(const tc_keyframe_vec3* keys, size_t count, double t) {
     if (count == 0) return 0;
     if (t <= keys[0].time) return 0;
@@ -452,11 +403,8 @@ static size_t find_keyframe_index_vec3(const tc_keyframe_vec3* keys, size_t coun
     size_t hi = count - 1;
     while (lo + 1 < hi) {
         size_t mid = (lo + hi) / 2;
-        if (keys[mid].time <= t) {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
+        if (keys[mid].time <= t) lo = mid;
+        else hi = mid;
     }
     return lo;
 }
@@ -470,11 +418,8 @@ static size_t find_keyframe_index_quat(const tc_keyframe_quat* keys, size_t coun
     size_t hi = count - 1;
     while (lo + 1 < hi) {
         size_t mid = (lo + hi) / 2;
-        if (keys[mid].time <= t) {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
+        if (keys[mid].time <= t) lo = mid;
+        else hi = mid;
     }
     return lo;
 }
@@ -488,18 +433,13 @@ static size_t find_keyframe_index_scalar(const tc_keyframe_scalar* keys, size_t 
     size_t hi = count - 1;
     while (lo + 1 < hi) {
         size_t mid = (lo + hi) / 2;
-        if (keys[mid].time <= t) {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
+        if (keys[mid].time <= t) lo = mid;
+        else hi = mid;
     }
     return lo;
 }
 
-// Quaternion slerp
 static void quat_slerp(const double* a, const double* b, double t, double* out) {
-    // a, b, out are [x, y, z, w]
     double dot = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
 
     double b_adj[4];
@@ -517,12 +457,10 @@ static void quat_slerp(const double* a, const double* b, double t, double* out) 
     }
 
     if (dot > 0.9995) {
-        // Linear interpolation for very close quaternions
         out[0] = a[0] + t * (b_adj[0] - a[0]);
         out[1] = a[1] + t * (b_adj[1] - a[1]);
         out[2] = a[2] + t * (b_adj[2] - a[2]);
         out[3] = a[3] + t * (b_adj[3] - a[3]);
-        // Normalize
         double len = sqrt(out[0]*out[0] + out[1]*out[1] + out[2]*out[2] + out[3]*out[3]);
         if (len > 0.0) {
             out[0] /= len;
@@ -547,27 +485,19 @@ static void quat_slerp(const double* a, const double* b, double t, double* out) 
     out[3] = s0 * a[3] + s1 * b_adj[3];
 }
 
-void tc_animation_channel_sample(
-    const tc_animation_channel* ch,
-    double t_ticks,
-    tc_channel_sample* out
-) {
+void tc_animation_channel_sample(const tc_animation_channel* ch, double t_ticks, tc_channel_sample* out) {
     tc_channel_sample_init(out);
     if (!ch) return;
 
-    // Sample translation
     if (ch->translation_keys && ch->translation_count > 0) {
         out->has_translation = 1;
         size_t idx = find_keyframe_index_vec3(ch->translation_keys, ch->translation_count, t_ticks);
-
         if (idx >= ch->translation_count - 1 || t_ticks <= ch->translation_keys[0].time) {
-            // At or past bounds - use exact value
             const tc_keyframe_vec3* k = &ch->translation_keys[idx];
             out->translation[0] = k->value[0];
             out->translation[1] = k->value[1];
             out->translation[2] = k->value[2];
         } else {
-            // Interpolate
             const tc_keyframe_vec3* k1 = &ch->translation_keys[idx];
             const tc_keyframe_vec3* k2 = &ch->translation_keys[idx + 1];
             double dt = k2->time - k1->time;
@@ -578,11 +508,9 @@ void tc_animation_channel_sample(
         }
     }
 
-    // Sample rotation
     if (ch->rotation_keys && ch->rotation_count > 0) {
         out->has_rotation = 1;
         size_t idx = find_keyframe_index_quat(ch->rotation_keys, ch->rotation_count, t_ticks);
-
         if (idx >= ch->rotation_count - 1 || t_ticks <= ch->rotation_keys[0].time) {
             const tc_keyframe_quat* k = &ch->rotation_keys[idx];
             out->rotation[0] = k->value[0];
@@ -598,11 +526,9 @@ void tc_animation_channel_sample(
         }
     }
 
-    // Sample scale
     if (ch->scale_keys && ch->scale_count > 0) {
         out->has_scale = 1;
         size_t idx = find_keyframe_index_scalar(ch->scale_keys, ch->scale_count, t_ticks);
-
         if (idx >= ch->scale_count - 1 || t_ticks <= ch->scale_keys[0].time) {
             out->scale = ch->scale_keys[idx].value;
         } else {
@@ -615,31 +541,20 @@ void tc_animation_channel_sample(
     }
 }
 
-size_t tc_animation_sample(
-    const tc_animation* anim,
-    double t_seconds,
-    tc_channel_sample* out_samples
-) {
+size_t tc_animation_sample(const tc_animation* anim, double t_seconds, tc_channel_sample* out_samples) {
     if (!anim || !out_samples || anim->channel_count == 0) return 0;
 
-    // Handle looping
     if (anim->loop && anim->duration > 0.0) {
         t_seconds = fmod(t_seconds, anim->duration);
         if (t_seconds < 0.0) t_seconds += anim->duration;
     }
 
     double t_ticks = t_seconds * anim->tps;
-
     for (size_t i = 0; i < anim->channel_count; i++) {
         tc_animation_channel_sample(&anim->channels[i], t_ticks, &out_samples[i]);
     }
-
     return anim->channel_count;
 }
-
-// ============================================================================
-// Info collection
-// ============================================================================
 
 typedef struct {
     tc_animation_info* infos;
