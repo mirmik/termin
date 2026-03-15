@@ -94,7 +94,7 @@ nb::object ComponentRegistryPython::get_class(const std::string& name) {
         if (nb::hasattr(skeleton_native_mod, name.c_str())) {
             return skeleton_native_mod.attr(name.c_str());
         }
-        nb::object animation_native_mod = nb::module_::import_("termin.visualization.animation._animation_native");
+        nb::object animation_native_mod = nb::module_::import_("termin.animation._animation_native");
         if (nb::hasattr(animation_native_mod, name.c_str())) {
             return animation_native_mod.attr(name.c_str());
         }
