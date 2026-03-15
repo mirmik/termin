@@ -127,6 +127,9 @@ find_package(termin_components_collision REQUIRED)
 # termin-components-kinematic (ActuatorComponent, RotatorComponent)
 find_package(termin_components_kinematic REQUIRED)
 find_package(termin_components_render REQUIRED)
+find_package(termin_skeleton REQUIRED)
+find_package(termin_animation REQUIRED)
+find_package(termin_components_skeleton REQUIRED)
 find_package(termin_modules REQUIRED)
 
 # Core C library
@@ -199,34 +202,6 @@ set_target_properties(entity_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
     INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
-)
-
-# ============== Skeleton library ==============
-add_library(skeleton_lib STATIC
-    termin/skeleton/skeleton_instance.cpp
-    termin/render/skeleton_controller.cpp
-)
-target_link_libraries(skeleton_lib PUBLIC entity_lib PRIVATE trent)
-target_compile_options(skeleton_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-target_precompile_headers(skeleton_lib PRIVATE termin/pch.hpp)
-set_target_properties(skeleton_lib PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-)
-
-# ============== Animation library ==============
-add_library(animation_lib STATIC
-    termin/animation/animation_player.cpp
-)
-target_include_directories(animation_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/cpp>
-)
-target_link_libraries(animation_lib PUBLIC skeleton_lib)
-target_compile_options(animation_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-target_precompile_headers(animation_lib PRIVATE termin/pch.hpp)
-set_target_properties(animation_lib PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # ============== Render library ==============
@@ -484,11 +459,6 @@ install(TARGETS trent entity_lib termin_core render_lib navmesh_lib Recast
 if(WIN32 AND SDL2_DLL)
     install(FILES ${SDL2_DLL} DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})
 endif()
-
-install(TARGETS skeleton_lib animation_lib
-    EXPORT terminTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-)
 
 # Install headers
 install(DIRECTORY ${TERMIN_ROOT}/core_c/include/

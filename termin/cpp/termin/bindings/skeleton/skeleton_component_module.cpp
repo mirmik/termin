@@ -2,10 +2,10 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include "termin/render/skeleton_controller.hpp"
-#include "termin/skeleton/tc_skeleton_handle.hpp"
+#include <termin/render/skeleton_controller.hpp>
+#include <termin/skeleton/tc_skeleton_handle.hpp>
 #include <termin/entity/entity.hpp>
-#include "termin/bindings/entity/entity_helpers.hpp"
+#include <termin/bindings/entity_helpers.hpp>
 
 namespace nb = nanobind;
 

@@ -3,17 +3,30 @@ project(termin_components_skeleton VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python binding for SkeletonController" OFF)
 
-find_package(termin REQUIRED)
+find_package(termin_base REQUIRED)
+find_package(termin_scene REQUIRED)
+find_package(termin_inspect REQUIRED)
+find_package(termin_skeleton REQUIRED)
 
-add_library(termin_components_skeleton INTERFACE)
+add_library(termin_components_skeleton SHARED
+    src/skeleton_controller.cpp
+)
 add_library(termin_components_skeleton::termin_components_skeleton ALIAS termin_components_skeleton)
 
-target_link_libraries(termin_components_skeleton INTERFACE
-    termin::entity_lib
-    termin::skeleton_lib
+target_include_directories(termin_components_skeleton PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries(termin_components_skeleton PUBLIC
+    tcbase::termin_base
+    termin_scene::termin_scene
+    termin_inspect::termin_inspect
+    termin_skeleton::termin_skeleton
 )
 
 include(GNUInstallDirs)
@@ -21,6 +34,13 @@ include(CMakePackageConfigHelpers)
 
 install(TARGETS termin_components_skeleton
     EXPORT termin_components_skeletonTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(DIRECTORY include/termin
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 if(TERMIN_BUILD_PYTHON)
@@ -39,12 +59,12 @@ if(TERMIN_BUILD_PYTHON)
         ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp/termin/bindings/skeleton/skeleton_component_module.cpp
     )
     target_include_directories(_components_skeleton_native PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/../../termin-scene/include
     )
     target_link_libraries(_components_skeleton_native PRIVATE
-        termin::trent
-        termin::entity_lib
-        termin::skeleton_lib
+        termin_components_skeleton
+        termin_inspect::termin_inspect_python
     )
     set_target_properties(_components_skeleton_native PROPERTIES
         INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;$ORIGIN/../../../..;$ORIGIN/../../../../..;/opt/termin/lib"

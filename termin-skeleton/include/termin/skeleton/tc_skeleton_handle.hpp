@@ -4,7 +4,7 @@
 // Uses tc_skeleton_handle with generation checking for safety
 
 extern "C" {
-#include "termin_core.h"
+#include "core_c/termin_core.h"
 }
 
 #include <string>

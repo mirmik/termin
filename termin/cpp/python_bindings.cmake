@@ -15,13 +15,6 @@ nanobind_add_module(_lighting_native NB_SHARED termin/lighting_bindings.cpp)
 target_link_libraries(_lighting_native PRIVATE entity_lib)
 target_compile_options(_lighting_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
-# Skeleton native module (TcSkeleton, SkeletonInstance)
-nanobind_add_module(_skeleton_native NB_SHARED
-    termin/bindings/skeleton/skeleton_module.cpp
-)
-target_link_libraries(_skeleton_native PRIVATE trent entity_lib skeleton_lib)
-target_compile_options(_skeleton_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-
 # ============== Core entity modules ==============
 
 # Entity native module (Component, Entity, Scene, registries)
@@ -35,13 +28,6 @@ nanobind_add_module(_entity_native NB_SHARED
 target_link_libraries(_entity_native PRIVATE entity_lib trent render_lib)
 target_compile_definitions(_entity_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_entity_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-
-# Animation native module (TcAnimationClip)
-nanobind_add_module(_animation_native NB_SHARED
-    termin/bindings/animation/animation_module.cpp
-)
-target_link_libraries(_animation_native PRIVATE trent entity_lib skeleton_lib)
-target_compile_options(_animation_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
 # NavMesh native module (RecastNavMeshBuilderComponent)
 nanobind_add_module(_navmesh_native NB_SHARED
@@ -111,7 +97,16 @@ nanobind_add_module(_native NB_SHARED
     termin/render/grayscale_pass.cpp
     termin/render/tonemap_pass.cpp
 )
-target_link_libraries(_native PRIVATE OpenGL::GL trent entity_lib skeleton_lib navmesh_lib render_lib tgfx::termin_graphics)
+target_link_libraries(_native PRIVATE
+    OpenGL::GL
+    trent
+    entity_lib
+    termin_skeleton::termin_skeleton
+    termin_components_skeleton::termin_components_skeleton
+    navmesh_lib
+    render_lib
+    tgfx::termin_graphics
+)
 
 if(SDL2_FOUND)
     target_include_directories(_native PRIVATE ${SDL2_INCLUDE_DIRS})
@@ -162,15 +157,7 @@ set_target_properties(_lighting_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_skeleton_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_entity_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
-set_target_properties(_animation_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
@@ -186,9 +173,7 @@ set_target_properties(_native PROPERTIES
 # ============== Install targets ==============
 
 install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/voxels)
-install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/visualization/animation)
 install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/navmesh)
 install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/lighting)
-install(TARGETS _skeleton_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/skeleton)
 install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/entity)
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})

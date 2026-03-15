@@ -3,18 +3,34 @@ project(termin_components_animation VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python binding for AnimationPlayer" OFF)
 
-find_package(termin REQUIRED)
+find_package(termin_base REQUIRED)
+find_package(termin_scene REQUIRED)
+find_package(termin_inspect REQUIRED)
+find_package(termin_skeleton REQUIRED)
+find_package(termin_animation REQUIRED)
+find_package(termin_components_skeleton REQUIRED)
 
-add_library(termin_components_animation INTERFACE)
+add_library(termin_components_animation SHARED
+    src/animation_player.cpp
+)
 add_library(termin_components_animation::termin_components_animation ALIAS termin_components_animation)
 
-target_link_libraries(termin_components_animation INTERFACE
-    termin::entity_lib
-    termin::skeleton_lib
-    termin::animation_lib
+target_include_directories(termin_components_animation PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries(termin_components_animation PUBLIC
+    tcbase::termin_base
+    termin_scene::termin_scene
+    termin_inspect::termin_inspect
+    termin_skeleton::termin_skeleton
+    termin_animation::termin_animation
+    termin_components_skeleton::termin_components_skeleton
 )
 
 include(GNUInstallDirs)
@@ -22,6 +38,13 @@ include(CMakePackageConfigHelpers)
 
 install(TARGETS termin_components_animation
     EXPORT termin_components_animationTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(DIRECTORY include/termin
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 if(TERMIN_BUILD_PYTHON)
@@ -40,13 +63,13 @@ if(TERMIN_BUILD_PYTHON)
         ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp/termin/bindings/animation/animation_component_module.cpp
     )
     target_include_directories(_components_animation_native PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/../../termin-components/termin-components-skeleton/include
+        ${CMAKE_CURRENT_LIST_DIR}/../../termin-scene/include
     )
     target_link_libraries(_components_animation_native PRIVATE
-        termin::trent
-        termin::entity_lib
-        termin::skeleton_lib
-        termin::animation_lib
+        termin_components_animation
+        termin_inspect::termin_inspect_python
     )
     set_target_properties(_components_animation_native PROPERTIES
         INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;$ORIGIN/../../../..;/opt/termin/lib"
