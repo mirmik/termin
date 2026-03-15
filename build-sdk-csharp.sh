@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build and install C# bindings/runtime from termin-csharp.
-# Assumes the full SDK and termin are already installed to /opt/termin.
+# Assumes the SDK is already built via build-sdk-cpp.sh + build-sdk-bindings.sh.
 
 set -e
 
@@ -70,6 +70,22 @@ cmake -S . -B "$build_dir" \
     -DTERMIN_CSHARP_BUILD_TESTS=ON
 
 cmake --build "$build_dir" --parallel "$BUILD_JOBS"
+
+# Install C# artifacts to SDK
+CSHARP_SDK="$SDK_PREFIX/csharp"
+echo "Installing C# artifacts to $CSHARP_SDK..."
+mkdir -p "$CSHARP_SDK/runtimes/linux-x64/native"
+mkdir -p "$CSHARP_SDK/lib"
+
+# Native bridge and runtime dependencies
+cp -P "$SCRIPT_DIR/termin-csharp/Termin.Native/runtimes/linux-x64/native/"*.so* "$CSHARP_SDK/runtimes/linux-x64/native/" 2>/dev/null || true
+
+# Managed assembly — find the built DLL
+MANAGED_DLL=$(find "$SCRIPT_DIR/termin-csharp/Termin.Native/bin" -name "Termin.Native.dll" -path "*/$BUILD_TYPE/*" 2>/dev/null | head -1)
+if [[ -n "$MANAGED_DLL" ]]; then
+    cp "$MANAGED_DLL" "$CSHARP_SDK/lib/"
+    echo "  Copied $(basename "$MANAGED_DLL") to $CSHARP_SDK/lib/"
+fi
 
 echo ""
 echo "========================================"
