@@ -87,3 +87,28 @@ def test_no_legacy_imports_in_canonical_modules():
     source = inspect.getsource(clip)
     assert "termin.visualization.animation._animation_native" not in source
     assert "termin.animation._animation_native" in source
+
+
+def test_animation_facade_modules_removed():
+    """Legacy facade modules under termin.visualization.animation should not exist."""
+    facade_modules = [
+        "termin.visualization.animation.channel",
+        "termin.visualization.animation.clip",
+        "termin.visualization.animation.clip_io",
+        "termin.visualization.animation.player",
+        "termin.visualization.animation.animation_clip_asset",
+        "termin.visualization.animation.keyframe",
+    ]
+    for mod_name in facade_modules:
+        with pytest.raises(ImportError):
+            importlib.import_module(mod_name)
+
+
+def test_builtins_no_legacy_animation_paths():
+    """_builtins.py should not reference legacy animation paths."""
+    from termin.assets.resources._builtins import BUILTIN_COMPONENTS
+
+    for module_path, _cls in BUILTIN_COMPONENTS:
+        assert not module_path.startswith("termin.visualization.animation"), (
+            f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
+        )

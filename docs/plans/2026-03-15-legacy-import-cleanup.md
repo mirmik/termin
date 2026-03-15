@@ -90,10 +90,10 @@ modules, фиксация финального API.
 - Delete: `termin/termin/visualization/animation/animation_clip_asset.py`
 - Modify: `termin/termin/visualization/animation/__init__.py` (оставить минимальный compatibility entry point или удалить)
 
-- [ ] Финально просканировать все проекты на импорты из `termin.visualization.animation.*`
-- [ ] Удалить facade-файлы
-- [ ] Обновить или удалить `__init__.py` пакета
-- [ ] Запустить тесты проекта
+- [x] Финально просканировать все проекты на импорты из `termin.visualization.animation.*`
+- [x] Удалить facade-файлы
+- [x] Обновить или удалить `__init__.py` пакета
+- [x] Запустить тесты проекта
 
 ### Task 6: Удалить render components legacy facade modules
 
