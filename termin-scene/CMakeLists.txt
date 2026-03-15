@@ -154,10 +154,6 @@ if(TERMIN_BUILD_PYTHON)
     else()
         install(TARGETS _scene_native DESTINATION lib/python/termin/scene)
     endif()
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/scene/
-        DESTINATION lib/python/termin/scene
-        FILES_MATCHING PATTERN "*.py"
-    )
 endif()
 
 

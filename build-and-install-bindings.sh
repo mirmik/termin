@@ -190,6 +190,9 @@ else
     "$SCRIPT_DIR/termin/build.sh" "${build_args[@]}"
 fi
 
+echo "Installing termin to ${SDK_PREFIX}..."
+cp -a "$SCRIPT_DIR/termin/install/." "$SDK_PREFIX/"
+
 echo "Installing termin Python package (editable)..."
 CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation -e "$SCRIPT_DIR/termin"
 
