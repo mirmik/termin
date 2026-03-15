@@ -10,7 +10,6 @@ from termin.physics._physics_native import (
     PhysicsWorld,
     Contact,
 )
-from termin.physics_components import PhysicsWorldComponent, RigidBodyComponent
 
 # FEM physics
 from termin.physics.fem_physics_world_component import FEMPhysicsWorldComponent
@@ -23,8 +22,6 @@ __all__ = [
     "RigidBody",
     "PhysicsWorld",
     "Contact",
-    "RigidBodyComponent",
-    "PhysicsWorldComponent",
     # FEM physics
     "FEMPhysicsWorldComponent",
     "FEMRigidBodyComponent",
