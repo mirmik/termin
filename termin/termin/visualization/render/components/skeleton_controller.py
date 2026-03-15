@@ -1,5 +1,5 @@
-"""SkeletonController - re-exported from the component native module."""
+"""Compatibility facade for SkeletonController."""
 
-from termin.skeleton._components_skeleton_native import SkeletonController
+from termin.skeleton_components import SkeletonController
 
 __all__ = ["SkeletonController"]

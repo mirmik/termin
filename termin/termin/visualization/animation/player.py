@@ -1,5 +1,5 @@
-"""AnimationPlayer - re-exported from the component native module."""
+"""Compatibility facade for AnimationPlayer."""
 
-from termin.visualization.animation._components_animation_native import AnimationPlayer
+from termin.animation_components import AnimationPlayer
 
 __all__ = ["AnimationPlayer"]

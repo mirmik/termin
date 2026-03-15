@@ -1,16 +1,18 @@
-"""Компонент RigidBody для сущностей визуализации (C++ backend)."""
+"""RigidBodyComponent canonical import path."""
 
 from __future__ import annotations
 
-from typing import Optional
-import warnings
-import numpy as np
+from termin import _dll_setup  # noqa: F401
 
 from termin.visualization.core.python_component import PythonComponent
 from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase import GeneralPose3
 from termin.editor.inspect_field import InspectField
+
+from typing import Optional
+import warnings
+import numpy as np
 
 
 class RigidBodyComponent(PythonComponent):
