@@ -658,7 +658,7 @@ void main() {
         Returns:
             List of (mesh, transform_matrix) for each found mesh
         """
-        from termin.visualization.render.components import MeshRenderer
+        from termin.render_components import MeshRenderer
 
         result: List[tuple[TcMesh, np.ndarray]] = []
 

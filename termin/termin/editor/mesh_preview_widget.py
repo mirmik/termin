@@ -94,7 +94,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         from termin.visualization.core.scene import create_scene
         from termin.visualization.core.entity import Entity
         from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
-        from termin.visualization.render.components.light_component import LightComponent
+        from termin.render_components import LightComponent
         from termin.lighting import LightType
         from termin.geombase import Pose3
 
@@ -185,7 +185,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         from termin.visualization.core.entity import Entity
         from termin.voxels.voxel_mesh import create_voxel_mesh
         from termin.visualization.core.material import Material
-        from termin.visualization.render.components import MeshRenderer
+        from termin.render_components import MeshRenderer
         from termin.geombase import Pose3
 
         # Remove old mesh entity if exists

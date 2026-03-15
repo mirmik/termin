@@ -21,8 +21,7 @@ from termin.visualization.platform.backends import (
     set_default_graphics_backend,
     set_default_window_backend,
 )
-from termin.visualization.render.components import MeshRenderer
-from termin.visualization.render.components.light_component import LightComponent
+from termin.render_components import LightComponent, MeshRenderer
 from termin.lighting import LightType, LightShadowParams
 
 from termin.physics_components import RigidBodyComponent, PhysicsWorldComponent
