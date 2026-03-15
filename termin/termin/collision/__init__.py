@@ -27,10 +27,7 @@ Usage:
 # Setup DLL paths before importing native extensions
 from termin import _dll_setup  # noqa: F401
 
-import os as _os
-_sdk_dir = _os.path.join(_os.sep, "opt", "termin", "lib", "python", "termin", "collision")
-if _os.path.isdir(_sdk_dir) and _sdk_dir not in __path__:
-    __path__.append(_sdk_dir)
+_dll_setup.extend_package_path(__path__, "collision")
 
 from ._collision_native import (
     ContactID,

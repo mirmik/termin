@@ -15,6 +15,7 @@ import os
 import sys
 
 _initialized = False
+_sdk_termin_dir = os.path.join(os.sep, "opt", "termin", "lib", "python", "termin")
 
 
 def _setup_dll_paths():
@@ -30,10 +31,9 @@ def _setup_dll_paths():
     sdk_python_dir = os.path.join(os.sep, "opt", "termin", "lib", "python")
     if os.path.isdir(sdk_python_dir) and sdk_python_dir not in sys.path:
         sys.path.insert(0, sdk_python_dir)
-    sdk_termin_dir = os.path.join(sdk_python_dir, "termin")
     import termin as _termin_pkg
-    if os.path.isdir(sdk_termin_dir) and sdk_termin_dir not in _termin_pkg.__path__:
-        _termin_pkg.__path__.append(sdk_termin_dir)
+    if os.path.isdir(_sdk_termin_dir) and _sdk_termin_dir not in _termin_pkg.__path__:
+        _termin_pkg.__path__.append(_sdk_termin_dir)
 
     if sys.platform != "win32":
         return
@@ -52,4 +52,10 @@ def _setup_dll_paths():
 # Run setup on import
 _setup_dll_paths()
 
+
+def extend_package_path(package_path, *relative_parts):
+    """Extend subpackage __path__ with the installed SDK directory for this package."""
+    sdk_package_dir = os.path.join(_sdk_termin_dir, *relative_parts)
+    if os.path.isdir(sdk_package_dir) and sdk_package_dir not in package_path:
+        package_path.append(sdk_package_dir)
 
