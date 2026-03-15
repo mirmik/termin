@@ -51,6 +51,34 @@ def test_canonical_animation_clip_handle_import():
     assert TcAnimationClip is not None
 
 
+def test_no_legacy_imports_in_examples():
+    """Example files should not import from legacy facade paths."""
+    import os
+    import re
+
+    legacy_pattern = re.compile(
+        r"from\s+termin\.visualization\.(animation|render\.components)\s+import"
+        r"|import\s+termin\.visualization\.(animation|render\.components)"
+    )
+
+    examples_dir = os.path.join(os.path.dirname(__file__), "..", "examples")
+    examples_dir = os.path.normpath(examples_dir)
+    violations = []
+
+    for root, _dirs, files in os.walk(examples_dir):
+        for fname in files:
+            if not fname.endswith(".py"):
+                continue
+            fpath = os.path.join(root, fname)
+            with open(fpath) as f:
+                for i, line in enumerate(f, 1):
+                    if legacy_pattern.search(line):
+                        rel = os.path.relpath(fpath, examples_dir)
+                        violations.append(f"{rel}:{i}: {line.strip()}")
+
+    assert not violations, "Legacy imports found in examples:\n" + "\n".join(violations)
+
+
 def test_no_legacy_imports_in_canonical_modules():
     """Canonical modules should not import from termin.visualization.animation._*native."""
     import inspect
