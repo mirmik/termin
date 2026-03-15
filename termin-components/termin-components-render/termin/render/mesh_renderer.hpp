@@ -40,6 +40,7 @@ public:
     INSPECT_FIELD(MeshRenderer, mesh_offset_scale,    "Offset Scale",    "vec3")
 
 private:
+    void ensure_override_material_ready();
     void recreate_overridden_material();
     void apply_pending_override_data();
 
@@ -62,9 +63,7 @@ public:
     bool override_material() const { return _override_material; }
     void set_override_material(bool value);
 
-    TcMaterial get_overridden_material() const {
-        return _override_material ? _overridden_material : TcMaterial();
-    }
+    TcMaterial get_overridden_material() const;
 
     std::set<std::string> get_phase_marks() const override;
     std::set<std::string> phase_marks() const { return get_phase_marks(); }

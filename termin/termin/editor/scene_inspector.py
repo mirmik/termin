@@ -411,7 +411,7 @@ class SceneInspector(QWidget):
             cmd = SkyboxTypeEditCommand(self._scene, old_type, new_type)
             self._push_undo_command(cmd, False)
         else:
-            scene_render_state(self._scene).set_skybox_type(new_type)
+            scene_render_state(self._scene).skybox_type = new_type
 
         self.scene_changed.emit()
 
@@ -589,10 +589,10 @@ class SkyboxTypeEditCommand(UndoCommand):
         self._new_type = new_type
 
     def do(self) -> None:
-        scene_render_state(self._scene).set_skybox_type(self._new_type)
+        scene_render_state(self._scene).skybox_type = self._new_type
 
     def undo(self) -> None:
-        scene_render_state(self._scene).set_skybox_type(self._old_type)
+        scene_render_state(self._scene).skybox_type = self._old_type
 
     def __repr__(self) -> str:
         return f"SkyboxTypeEditCommand({self._old_type} -> {self._new_type})"

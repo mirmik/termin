@@ -30,6 +30,9 @@ void MeshRenderer::set_mesh_by_name(const std::string& name) {
 }
 
 TcMaterial MeshRenderer::get_material() const {
+    if (_override_material) {
+        const_cast<MeshRenderer*>(this)->ensure_override_material_ready();
+    }
     if (_override_material && _overridden_material.is_valid()) {
         return _overridden_material;
     }
@@ -37,6 +40,9 @@ TcMaterial MeshRenderer::get_material() const {
 }
 
 tc_material* MeshRenderer::get_material_ptr() const {
+    if (_override_material) {
+        const_cast<MeshRenderer*>(this)->ensure_override_material_ready();
+    }
     if (_override_material && _overridden_material.is_valid()) {
         return _overridden_material.get();
     }
@@ -77,6 +83,21 @@ void MeshRenderer::set_override_material(bool value) {
     }
 }
 
+TcMaterial MeshRenderer::get_overridden_material() const {
+    if (_override_material) {
+        const_cast<MeshRenderer*>(this)->ensure_override_material_ready();
+        return _overridden_material;
+    }
+    return TcMaterial();
+}
+
+void MeshRenderer::ensure_override_material_ready() {
+    if (!_override_material || _overridden_material.is_valid()) {
+        return;
+    }
+    try_create_override_material();
+}
+
 void MeshRenderer::recreate_overridden_material() {
     _overridden_material = TcMaterial();
 
@@ -113,6 +134,40 @@ static double tc_val_as_double(const tc_value* v) {
         case TC_VALUE_FLOAT: return static_cast<double>(v->data.f);
         case TC_VALUE_DOUBLE: return v->data.d;
         default: return 0.0;
+    }
+}
+
+static tc_value serialize_uniform_value(const tc_uniform_value& uniform) {
+    switch (uniform.type) {
+        case TC_UNIFORM_BOOL:
+            return tc_value_bool(uniform.data.i != 0);
+        case TC_UNIFORM_INT:
+            return tc_value_int(uniform.data.i);
+        case TC_UNIFORM_FLOAT:
+            return tc_value_float(uniform.data.f);
+        case TC_UNIFORM_VEC2: {
+            tc_value v = tc_value_list_new();
+            tc_value_list_push(&v, tc_value_float(uniform.data.v2[0]));
+            tc_value_list_push(&v, tc_value_float(uniform.data.v2[1]));
+            return v;
+        }
+        case TC_UNIFORM_VEC3: {
+            tc_value v = tc_value_list_new();
+            tc_value_list_push(&v, tc_value_float(uniform.data.v3[0]));
+            tc_value_list_push(&v, tc_value_float(uniform.data.v3[1]));
+            tc_value_list_push(&v, tc_value_float(uniform.data.v3[2]));
+            return v;
+        }
+        case TC_UNIFORM_VEC4: {
+            tc_value v = tc_value_list_new();
+            tc_value_list_push(&v, tc_value_float(uniform.data.v4[0]));
+            tc_value_list_push(&v, tc_value_float(uniform.data.v4[1]));
+            tc_value_list_push(&v, tc_value_float(uniform.data.v4[2]));
+            tc_value_list_push(&v, tc_value_float(uniform.data.v4[3]));
+            return v;
+        }
+        default:
+            return tc_value_nil();
     }
 }
 
@@ -283,6 +338,53 @@ std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string
 }
 
 tc_value MeshRenderer::get_override_data() const {
+    if (_override_material && _overridden_material.is_valid()) {
+        tc_material* mat = _overridden_material.get();
+        if (mat) {
+            tc_value result = tc_value_dict_new();
+
+            tc_value phases_uniforms = tc_value_list_new();
+            tc_value phases_textures = tc_value_list_new();
+
+            for (size_t i = 0; i < mat->phase_count; ++i) {
+                const tc_material_phase& phase = mat->phases[i];
+
+                tc_value phase_uniforms = tc_value_dict_new();
+                for (size_t j = 0; j < phase.uniform_count; ++j) {
+                    const tc_uniform_value& uniform = phase.uniforms[j];
+                    tc_value serialized = serialize_uniform_value(uniform);
+                    if (serialized.type != TC_VALUE_NIL) {
+                        tc_value_dict_set(&phase_uniforms, uniform.name, serialized);
+                    }
+                }
+                tc_value_list_push(&phases_uniforms, phase_uniforms);
+
+                tc_value phase_textures = tc_value_dict_new();
+                for (size_t j = 0; j < phase.texture_count; ++j) {
+                    const tc_material_texture& tex_binding = phase.textures[j];
+                    if (tc_texture_handle_is_invalid(tex_binding.texture)) {
+                        continue;
+                    }
+
+                    tc_texture* tex = tc_texture_get(tex_binding.texture);
+                    if (!tex) continue;
+
+                    tc_value tex_value = tc_value_dict_new();
+                    tc_value_dict_set(&tex_value, "uuid", tc_value_string(tex->header.uuid));
+                    if (tex->header.name && tex->header.name[0]) {
+                        tc_value_dict_set(&tex_value, "name", tc_value_string(tex->header.name));
+                    }
+                    tc_value_dict_set(&phase_textures, tex_binding.name, tex_value);
+                }
+                tc_value_list_push(&phases_textures, phase_textures);
+            }
+
+            tc_value_dict_set(&result, "phases_uniforms", phases_uniforms);
+            tc_value_dict_set(&result, "phases_textures", phases_textures);
+            return result;
+        }
+    }
+
     return tc_value_copy(&_pending_override_data);
 }
 
@@ -290,8 +392,13 @@ void MeshRenderer::set_override_data(const tc_value* val) {
     tc_value_free(&_pending_override_data);
     _pending_override_data = val ? tc_value_copy(val) : tc_value_nil();
 
-    if (_override_material && _overridden_material.is_valid()) {
-        apply_pending_override_data();
+    if (_override_material) {
+        if (!_overridden_material.is_valid()) {
+            try_create_override_material();
+        }
+        if (_overridden_material.is_valid()) {
+            apply_pending_override_data();
+        }
     }
 }
 

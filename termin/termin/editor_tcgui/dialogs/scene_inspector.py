@@ -391,7 +391,7 @@ def show_scene_properties_dialog(
             cmd = SkyboxTypeEditCommand(scene, old_type, new_type)
             push_undo_command(cmd, False)
         else:
-            rs.set_skybox_type(new_type)
+            rs.skybox_type = new_type
         _update_skybox_visibility()
         _emit()
 
