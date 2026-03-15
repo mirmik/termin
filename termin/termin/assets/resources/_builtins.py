@@ -6,15 +6,15 @@ from typing import List, Tuple
 # Формат: (имя_модуля, имя_класса)
 BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     # Рендеринг
-    ("termin.visualization.render.components.mesh_renderer", "MeshRenderer"),
-    ("termin.visualization.render.components.skinned_mesh_renderer", "SkinnedMeshRenderer"),
-    ("termin.visualization.render.components.line_renderer", "LineRenderer"),
-    ("termin.visualization.render.components.light_component", "LightComponent"),
+    ("termin.render_components", "MeshRenderer"),
+    ("termin.render_components.skinned_mesh_renderer", "SkinnedMeshRenderer"),
+    ("termin.render_components.line_renderer", "LineRenderer"),
+    ("termin.render_components", "LightComponent"),
     # Камера
     ("termin.visualization.core.camera", "CameraComponent"),
     ("termin.visualization.core.camera", "CameraController"),
     # Скелет и анимация
-    ("termin.visualization.render.components.skeleton_controller", "SkeletonController"),
+    ("termin.skeleton_components", "SkeletonController"),
     ("termin.animation_components", "AnimationPlayer"),
     ("termin.visualization.components.rotator", "RotatorComponent"),
     # Физика

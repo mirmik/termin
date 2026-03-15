@@ -112,3 +112,56 @@ def test_builtins_no_legacy_animation_paths():
         assert not module_path.startswith("termin.visualization.animation"), (
             f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
         )
+
+
+def test_render_components_facade_modules_removed():
+    """Legacy facade modules under termin.visualization.render.components should not exist."""
+    facade_modules = [
+        "termin.visualization.render.components.mesh_renderer",
+        "termin.visualization.render.components.light_component",
+        "termin.visualization.render.components.line_renderer",
+        "termin.visualization.render.components.skinned_mesh_renderer",
+        "termin.visualization.render.components.skybox_renderer",
+        "termin.visualization.render.components.skeleton_controller",
+    ]
+    for mod_name in facade_modules:
+        with pytest.raises(ImportError):
+            importlib.import_module(mod_name)
+
+
+def test_builtins_no_legacy_render_components_paths():
+    """_builtins.py should not reference legacy render components paths."""
+    from termin.assets.resources._builtins import BUILTIN_COMPONENTS
+
+    for module_path, _cls in BUILTIN_COMPONENTS:
+        assert not module_path.startswith("termin.visualization.render.components"), (
+            f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
+        )
+
+
+def test_no_legacy_render_components_imports_in_examples():
+    """Example files should not import from legacy render.components paths."""
+    import os
+    import re
+
+    legacy_pattern = re.compile(
+        r"from\s+termin\.visualization\.render\.components\s+import"
+        r"|import\s+termin\.visualization\.render\.components"
+    )
+
+    examples_dir = os.path.join(os.path.dirname(__file__), "..", "examples")
+    examples_dir = os.path.normpath(examples_dir)
+    violations = []
+
+    for root, _dirs, files in os.walk(examples_dir):
+        for fname in files:
+            if not fname.endswith(".py"):
+                continue
+            fpath = os.path.join(root, fname)
+            with open(fpath) as f:
+                for i, line in enumerate(f, 1):
+                    if legacy_pattern.search(line):
+                        rel = os.path.relpath(fpath, examples_dir)
+                        violations.append(f"{rel}:{i}: {line.strip()}")
+
+    assert not violations, "Legacy render.components imports found in examples:\n" + "\n".join(violations)
