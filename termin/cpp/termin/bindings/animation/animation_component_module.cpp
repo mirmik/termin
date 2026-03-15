@@ -3,10 +3,10 @@
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
 
-#include "termin/animation/animation_player.hpp"
-#include "termin/animation/tc_animation_handle.hpp"
-#include "termin/render/skeleton_controller.hpp"
-#include "termin/bindings/entity/entity_helpers.hpp"
+#include <termin/animation/animation_player.hpp>
+#include <termin/animation/tc_animation_handle.hpp>
+#include <termin/render/skeleton_controller.hpp>
+#include <termin/bindings/entity_helpers.hpp>
 
 namespace nb = nanobind;
 using namespace termin;

@@ -1,4 +1,4 @@
-#include "skeleton_instance.hpp"
+#include <termin/skeleton/skeleton_instance.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/geom/general_transform3.hpp>
 #include <termin/geom/general_pose3.hpp>

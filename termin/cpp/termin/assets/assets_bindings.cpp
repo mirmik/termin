@@ -10,7 +10,7 @@
 #include <termin/entity/entity.hpp>
 #include "termin/inspect/tc_kind.hpp"
 #include "inspect/tc_inspect_python.hpp"
-#include "../skeleton/tc_skeleton_handle.hpp"
+#include <termin/skeleton/tc_skeleton_handle.hpp>
 #include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;

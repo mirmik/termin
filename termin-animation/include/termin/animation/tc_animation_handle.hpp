@@ -4,7 +4,7 @@
 // Uses tc_animation_handle with generation checking for safety
 
 extern "C" {
-#include "termin_core.h"
+#include "core_c/termin_core.h"
 #include "inspect/tc_inspect.h"
 }
 

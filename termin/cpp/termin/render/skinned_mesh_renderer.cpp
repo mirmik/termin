@@ -1,5 +1,5 @@
 #include "skinned_mesh_renderer.hpp"
-#include "skeleton_controller.hpp"
+#include <termin/render/skeleton_controller.hpp>
 #include "tgfx/graphics_backend.hpp"
 #include "shader_skinning.hpp"
 #include <termin/entity/entity.hpp>

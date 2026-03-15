@@ -109,12 +109,15 @@ build_with_python() {
         -Dtermin_engine_DIR="$SDK_PREFIX/lib/cmake/termin_engine" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_physics_DIR="$SDK_PREFIX/lib/cmake/termin_physics" \
+        -Dtermin_skeleton_DIR="$SDK_PREFIX/lib/cmake/termin_skeleton" \
+        -Dtermin_animation_DIR="$SDK_PREFIX/lib/cmake/termin_animation" \
         -Dtermin_DIR="$SDK_PREFIX/lib/cmake/termin" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
         -Dtermin_components_render_DIR="$SDK_PREFIX/lib/cmake/termin_components_render" \
         -Dtermin_components_physics_DIR="$SDK_PREFIX/lib/cmake/termin_components_physics" \
         -Dtermin_components_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_components_mesh" \
         -Dtermin_components_kinematic_DIR="$SDK_PREFIX/lib/cmake/termin_components_kinematic" \
+        -Dtermin_components_skeleton_DIR="$SDK_PREFIX/lib/cmake/termin_components_skeleton" \
         -DPython_EXECUTABLE="$PY_EXEC"
     cmake --build "$build_dir" --parallel "$BUILD_JOBS"
     sudo cmake --install "$build_dir"
@@ -134,6 +137,9 @@ build_with_python "termin-components-physics"    "$SCRIPT_DIR/termin-components/
 build_with_python "termin-components-mesh"       "$SCRIPT_DIR/termin-components/termin-components-mesh"
 build_with_python "termin-engine"                "$SCRIPT_DIR/termin-engine"
 build_with_python "termin-components-kinematic"  "$SCRIPT_DIR/termin-components/termin-components-kinematic"
+build_with_python "termin-skeleton"              "$SCRIPT_DIR/termin-skeleton"
+build_with_python "termin-animation"             "$SCRIPT_DIR/termin-animation"
+build_with_python "termin-components-skeleton"   "$SCRIPT_DIR/termin-components/termin-components-skeleton"
 
 # ── 3. pip-installable Python packages ───────────────────────────
 for pkg in termin-base termin-modules termin-mesh termin-graphics; do
@@ -188,7 +194,6 @@ sudo "$SCRIPT_DIR/termin/install_system.sh"
 echo "Installing termin Python package (editable)..."
 CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation -e "$SCRIPT_DIR/termin"
 
-build_with_python "termin-components-skeleton"   "$SCRIPT_DIR/termin-components/termin-components-skeleton"
 build_with_python "termin-components-animation"  "$SCRIPT_DIR/termin-components/termin-components-animation"
 
 echo ""
