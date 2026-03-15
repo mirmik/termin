@@ -77,24 +77,6 @@ build_cmake_lib_cpp() {
         -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
         -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
         -DTERMIN_BUILD_PYTHON=OFF \
-        -Dtermin_base_DIR="$SDK_PREFIX/lib/cmake/termin_base" \
-        -Dtermin_graphics_DIR="$SDK_PREFIX/lib/cmake/termin_graphics" \
-        -Dtermin_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_mesh" \
-        -Dtermin_inspect_DIR="$SDK_PREFIX/lib/cmake/termin_inspect" \
-        -Dtermin_scene_DIR="$SDK_PREFIX/lib/cmake/termin_scene" \
-        -Dtermin_render_DIR="$SDK_PREFIX/lib/cmake/termin_render" \
-        -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
-        -Dtermin_display_DIR="$SDK_PREFIX/lib/cmake/termin_display" \
-        -Dtermin_engine_DIR="$SDK_PREFIX/lib/cmake/termin_engine" \
-        -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
-        -Dtermin_physics_DIR="$SDK_PREFIX/lib/cmake/termin_physics" \
-        -Dtermin_skeleton_DIR="$SDK_PREFIX/lib/cmake/termin_skeleton" \
-        -Dtermin_animation_DIR="$SDK_PREFIX/lib/cmake/termin_animation" \
-        -Dtermin_DIR="$SDK_PREFIX/lib/cmake/termin" \
-        -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
-        -Dtermin_components_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_components_mesh" \
-        -Dtermin_components_kinematic_DIR="$SDK_PREFIX/lib/cmake/termin_components_kinematic" \
-        -Dtermin_components_skeleton_DIR="$SDK_PREFIX/lib/cmake/termin_components_skeleton" \
         "${extra_args[@]}"
 
     cmake --build "$build_dir" --parallel "$BUILD_JOBS"
@@ -131,24 +113,7 @@ build_termin_cpp_only() {
         -DBUILD_EDITOR_EXE=OFF \
         -DBUILD_LAUNCHER=OFF \
         -DBUNDLE_PYTHON=OFF \
-        -DTERMIN_BUILD_PYTHON=OFF \
-        -Dtermin_base_DIR="$SDK_PREFIX/lib/cmake/termin_base" \
-        -Dtermin_graphics_DIR="$SDK_PREFIX/lib/cmake/termin_graphics" \
-        -Dtermin_inspect_DIR="$SDK_PREFIX/lib/cmake/termin_inspect" \
-        -Dtermin_scene_DIR="$SDK_PREFIX/lib/cmake/termin_scene" \
-        -Dtermin_render_DIR="$SDK_PREFIX/lib/cmake/termin_render" \
-        -Dtermin_input_DIR="$SDK_PREFIX/lib/cmake/termin_input" \
-        -Dtermin_display_DIR="$SDK_PREFIX/lib/cmake/termin_display" \
-        -Dtermin_engine_DIR="$SDK_PREFIX/lib/cmake/termin_engine" \
-        -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
-        -Dtermin_physics_DIR="$SDK_PREFIX/lib/cmake/termin_physics" \
-        -Dtermin_skeleton_DIR="$SDK_PREFIX/lib/cmake/termin_skeleton" \
-        -Dtermin_animation_DIR="$SDK_PREFIX/lib/cmake/termin_animation" \
-        -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
-        -Dtermin_components_render_DIR="$SDK_PREFIX/lib/cmake/termin_components_render" \
-        -Dtermin_components_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_components_mesh" \
-        -Dtermin_components_kinematic_DIR="$SDK_PREFIX/lib/cmake/termin_components_kinematic" \
-        -Dtermin_components_skeleton_DIR="$SDK_PREFIX/lib/cmake/termin_components_skeleton"
+        -DTERMIN_BUILD_PYTHON=OFF
 
     cmake --build "$build_dir" --parallel "$BUILD_JOBS"
     cmake --install "$build_dir"

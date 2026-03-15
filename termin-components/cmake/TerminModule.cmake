@@ -25,7 +25,7 @@ function(termin_add_module)
         $<INSTALL_INTERFACE:include>
     )
     set_target_properties(${TAM_NAME} PROPERTIES
-        INSTALL_RPATH "$ORIGIN:/opt/termin/lib"
+        INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
 

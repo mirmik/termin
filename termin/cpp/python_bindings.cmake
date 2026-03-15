@@ -141,9 +141,9 @@ endif()
 
 # ============== RPATH settings ==============
 
-# Ensure native Python modules can find bundled libs in /opt/termin/lib
+# Ensure native Python modules can find bundled libs in SDK lib dir
 # by walking up from package subdirs.
-set(TERMIN_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;/opt/termin/lib")
+set(TERMIN_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib")
 
 set_target_properties(entity_lib PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
