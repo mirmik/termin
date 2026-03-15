@@ -63,7 +63,7 @@ build_dir="build/${BUILD_TYPE}"
 [[ $CLEAN -eq 1 ]] && rm -rf "$build_dir"
 mkdir -p "$build_dir"
 
-"$PY_EXEC" -c "import nanobind" 2>/dev/null || pip install nanobind
+"$PY_EXEC" -c "import nanobind" 2>/dev/null || { echo "ERROR: nanobind not installed. Run: pip install nanobind"; exit 1; }
 
 cmake -S . -B "$build_dir" \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
@@ -130,33 +130,7 @@ while IFS= read -r line; do
     build_with_python "$name" "$SCRIPT_DIR/$dir"
 done < "$SCRIPT_DIR/modules.conf"
 
-# ── 3. pip-installable Python packages ───────────────────────────
-echo ""
-echo "========================================"
-echo "  Installing termin-build-tools (pip)"
-echo "========================================"
-echo ""
-pip install --no-build-isolation "$SCRIPT_DIR/termin-build-tools"
-
-for pkg in termin-base termin-modules termin-mesh termin-graphics; do
-    echo ""
-    echo "========================================"
-    echo "  Installing $pkg (pip)"
-    echo "========================================"
-    echo ""
-    CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation "$SCRIPT_DIR/$pkg"
-done
-
-for pkg in termin-gui termin-nodegraph; do
-    echo ""
-    echo "========================================"
-    echo "  Installing $pkg (pip)"
-    echo "========================================"
-    echo ""
-    pip install "$SCRIPT_DIR/$pkg"
-done
-
-# ── 4. termin ────────────────────────────────────────────────────
+# ── 3. termin ─────────────────────────────────────────────────────
 echo ""
 echo "========================================"
 echo "  Building termin ($BUILD_TYPE)"
@@ -188,9 +162,6 @@ fi
 
 echo "Installing termin to ${SDK_PREFIX}..."
 cp -a "$SCRIPT_DIR/termin/install/." "$SDK_PREFIX/"
-
-echo "Installing termin Python package (editable)..."
-CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation -e "$SCRIPT_DIR/termin"
 
 # Build post-termin Python bindings (modules after @termin-cpp in modules.conf)
 _after_termin=0
