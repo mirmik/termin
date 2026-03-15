@@ -1,8 +1,11 @@
 #!/bin/bash
-# Build and install the full environment using the dedicated stage scripts:
-#   1. build-and-install-cpp.sh
-#   2. build-and-install-bindings.sh
-#   3. build-and-install-csharp.sh
+# Build the SDK into ./sdk/ using the dedicated stage scripts:
+#   1. build-and-install-cpp.sh    — C/C++ libraries
+#   2. build-and-install-bindings.sh — Python bindings (nanobind)
+#   3. build-and-install-csharp.sh  — C# bindings
+#
+# To install pip packages into your Python environment, run separately:
+#   ./install-pip-packages.sh
 
 set -e
 
@@ -32,7 +35,7 @@ echo ""
 
 echo ""
 echo "========================================"
-echo "  Stage 2/3: Python bindings and packages"
+echo "  Stage 2/3: Python bindings (nanobind)"
 echo "========================================"
 echo ""
 "$SCRIPT_DIR/build-and-install-bindings.sh" "$@"
