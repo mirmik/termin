@@ -116,7 +116,7 @@ modules, фиксация финального API.
 **Files:**
 - Modify: `CANONICAL_NAMING.md`
 
-- [ ] Обновить CANONICAL_NAMING.md: убрать раздел legacy facades, зафиксировать финальную import-модель
-- [ ] Финальное сканирование всех проектов на любые оставшиеся legacy import paths
-- [ ] Запустить полный набор тестов
-- [ ] Удалить `LEGACY_IMPORT_CLEANUP_PLAN.md` из корня репозитория
+- [x] Обновить CANONICAL_NAMING.md: убрать раздел legacy facades, зафиксировать финальную import-модель
+- [x] Финальное сканирование всех проектов на любые оставшиеся legacy import paths
+- [x] Запустить полный набор тестов
+- [x] Удалить `LEGACY_IMPORT_CLEANUP_PLAN.md` из корня репозитория
