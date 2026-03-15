@@ -131,190 +131,61 @@ echo "Installing..."
 rm -rf "$INSTALL_DIR"
 cmake --install "$BUILD_DIR"
 
-# Copy shared libraries from extracted modules
-echo "Copying shared libraries from termin-base, termin-scene, termin-graphics, termin-inspect, termin-collision, termin-components-collision, termin-components-mesh and termin-components-kinematic..."
-TERMIN_BASE_LIBDIR="$SDK_DIR/lib"
-TERMIN_SCENE_LIBDIR="$SDK_DIR/lib"
-TERMIN_GFX_LIBDIR="$SDK_DIR/lib"
-TERMIN_INSPECT_LIBDIR="$SDK_DIR/lib"
-TERMIN_COLLISION_LIBDIR="$SDK_DIR/lib"
-TERMIN_COMPONENTS_COLLISION_LIBDIR="$SDK_DIR/lib"
-TERMIN_COMPONENTS_MESH_LIBDIR="$SDK_DIR/lib"
-TERMIN_COMPONENTS_KINEMATIC_LIBDIR="$SDK_DIR/lib"
-
-if [[ -d "$TERMIN_BASE_LIBDIR" ]]; then
-    cp -P "$TERMIN_BASE_LIBDIR"/libtermin_base.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libtermin_base from $TERMIN_BASE_LIBDIR"
+# Copy shared libraries from SDK
+echo "Copying shared libraries from SDK..."
+if [[ -d "$SDK_DIR/lib" ]]; then
+    rsync -aL \
+        --include='libtermin_*.so*' \
+        --include='libnanobind.so*' \
+        --exclude='*' \
+        "$SDK_DIR/lib/" "$INSTALL_DIR/lib/"
+    echo "  Copied SDK libraries from $SDK_DIR/lib"
 else
-    echo "  WARNING: $TERMIN_BASE_LIBDIR not found — skipping libtermin_base"
+    echo "  WARNING: $SDK_DIR/lib not found — skipping SDK library copy"
 fi
 
-if [[ -d "$TERMIN_SCENE_LIBDIR" ]] && compgen -G "$TERMIN_SCENE_LIBDIR/libtermin_scene.so*" > /dev/null; then
-    cp -P "$TERMIN_SCENE_LIBDIR"/libtermin_scene.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libtermin_scene from $TERMIN_SCENE_LIBDIR"
-else
-    echo "  WARNING: libtermin_scene not found in $TERMIN_SCENE_LIBDIR — skipping libtermin_scene"
-fi
-
-if [[ -d "$TERMIN_GFX_LIBDIR" ]]; then
-    cp -P "$TERMIN_GFX_LIBDIR"/libtermin_graphics.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libtermin_graphics from $TERMIN_GFX_LIBDIR"
-else
-    echo "  WARNING: $TERMIN_GFX_LIBDIR not found — skipping libtermin_graphics"
-fi
-
-if [[ -d "$TERMIN_INSPECT_LIBDIR" ]] && compgen -G "$TERMIN_INSPECT_LIBDIR/libtermin_inspect.so*" > /dev/null; then
-    cp -P "$TERMIN_INSPECT_LIBDIR"/libtermin_inspect.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libtermin_inspect from $TERMIN_INSPECT_LIBDIR"
-else
-    echo "  WARNING: libtermin_inspect not found in $TERMIN_INSPECT_LIBDIR — skipping libtermin_inspect"
-fi
-
-if compgen -G "$TERMIN_INSPECT_LIBDIR/libtermin_inspect_python.so*" > /dev/null; then
-    cp -P "$TERMIN_INSPECT_LIBDIR"/libtermin_inspect_python.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libtermin_inspect_python from $TERMIN_INSPECT_LIBDIR"
-else
-    echo "  WARNING: libtermin_inspect_python not found in $TERMIN_INSPECT_LIBDIR — skipping"
-fi
-
-if compgen -G "$SDK_DIR/lib/libnanobind.so*" > /dev/null; then
-    cp -P "$SDK_DIR/lib"/libnanobind.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libnanobind from $SDK_DIR/lib"
-fi
-
-if [[ -d "$TERMIN_COLLISION_LIBDIR" ]] && compgen -G "$TERMIN_COLLISION_LIBDIR/libtermin_collision.so*" > /dev/null; then
-    cp -P "$TERMIN_COLLISION_LIBDIR"/libtermin_collision.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libtermin_collision from $TERMIN_COLLISION_LIBDIR"
-else
-    echo "  WARNING: libtermin_collision not found in $TERMIN_COLLISION_LIBDIR — skipping libtermin_collision"
-fi
-
-if [[ -d "$TERMIN_COMPONENTS_COLLISION_LIBDIR" ]] && compgen -G "$TERMIN_COMPONENTS_COLLISION_LIBDIR/libtermin_components_collision.so*" > /dev/null; then
-    cp -P "$TERMIN_COMPONENTS_COLLISION_LIBDIR"/libtermin_components_collision.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libtermin_components_collision from $TERMIN_COMPONENTS_COLLISION_LIBDIR"
-else
-    echo "  WARNING: libtermin_components_collision not found in $TERMIN_COMPONENTS_COLLISION_LIBDIR — skipping libtermin_components_collision"
-fi
-
-if [[ -d "$TERMIN_COMPONENTS_MESH_LIBDIR" ]] && compgen -G "$TERMIN_COMPONENTS_MESH_LIBDIR/libtermin_components_mesh.so*" > /dev/null; then
-    cp -P "$TERMIN_COMPONENTS_MESH_LIBDIR"/libtermin_components_mesh.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libtermin_components_mesh from $TERMIN_COMPONENTS_MESH_LIBDIR"
-else
-    echo "  WARNING: libtermin_components_mesh not found in $TERMIN_COMPONENTS_MESH_LIBDIR — skipping libtermin_components_mesh"
-fi
-
-if [[ -d "$TERMIN_COMPONENTS_KINEMATIC_LIBDIR" ]] && compgen -G "$TERMIN_COMPONENTS_KINEMATIC_LIBDIR/libtermin_components_kinematic.so*" > /dev/null; then
-    cp -P "$TERMIN_COMPONENTS_KINEMATIC_LIBDIR"/libtermin_components_kinematic.so* "$INSTALL_DIR/lib/"
-    echo "  Copied libtermin_components_kinematic from $TERMIN_COMPONENTS_KINEMATIC_LIBDIR"
-else
-    echo "  WARNING: libtermin_components_kinematic not found in $TERMIN_COMPONENTS_KINEMATIC_LIBDIR — skipping libtermin_components_kinematic"
-fi
-
-# Copy Python packages from extracted modules
-echo "Copying Python packages from termin-inspect, termin-scene, termin-collision, termin-components-collision, termin-components-mesh and termin-components-kinematic..."
+# Copy Python bindings (.so) and .py sources from subprojects
+echo "Copying Python packages from subprojects..."
 PYTHON_DEST="$INSTALL_DIR/lib/python"
 
-TERMIN_INSPECT_PY="$ENV_DIR/termin-inspect/python"
-TERMIN_INSPECT_BUILD="$ENV_DIR/termin-inspect/build"
-if [[ -d "$TERMIN_INSPECT_PY/termin/inspect" ]]; then
-    mkdir -p "$PYTHON_DEST/termin/inspect"
-    cp -r "$TERMIN_INSPECT_PY/termin/inspect/"*.py "$PYTHON_DEST/termin/inspect/"
-    # Copy _inspect_native shared module
-    INSPECT_SO=$(find_artifact_in_build "$TERMIN_INSPECT_BUILD" "_inspect_native*.so")
-    if [[ -n "$INSPECT_SO" ]]; then
-        cp "$INSPECT_SO" "$PYTHON_DEST/termin/inspect/"
-        echo "  Copied termin.inspect + _inspect_native from $TERMIN_INSPECT_PY"
-    else
-        echo "  Copied termin.inspect (WARNING: _inspect_native.so not found)"
+# Module definitions: project_dir | python_subdir | so_pattern | py_source_dir
+PYTHON_MODULES=(
+    "termin-inspect       | termin/inspect    | _inspect_native*.so               | termin-inspect/python/termin/inspect"
+    "termin-scene         | termin/scene      | _scene_native*.so                 | termin-scene/python/termin/scene"
+    "termin-collision     | termin/colliders  | _colliders_native*.so             | termin-components/termin-components-collision/python/termin/colliders"
+    "termin-collision     | termin/collision  | _collision_native*.so             | "
+    "termin-components-collision | termin/colliders | _components_collision_native*.so | "
+    "termin-components-mesh     | termin/mesh      | _components_mesh_native*.so      | termin-components/termin-components-mesh/python/termin/mesh"
+    "termin-components-kinematic | termin/kinematic | _components_kinematic_native*.so | termin-components/termin-components-kinematic/python/termin/kinematic"
+)
+
+for entry in "${PYTHON_MODULES[@]}"; do
+    IFS='|' read -r project_name py_subdir so_pattern py_source <<< "$entry"
+    project_name=$(echo "$project_name" | xargs)
+    py_subdir=$(echo "$py_subdir" | xargs)
+    so_pattern=$(echo "$so_pattern" | xargs)
+    py_source=$(echo "$py_source" | xargs)
+
+    mkdir -p "$PYTHON_DEST/$py_subdir"
+
+    # Copy .py files from source if specified
+    if [[ -n "$py_source" && -d "$ENV_DIR/$py_source" ]]; then
+        cp -n "$ENV_DIR/$py_source/"*.py "$PYTHON_DEST/$py_subdir/" 2>/dev/null || true
     fi
-else
-    echo "  WARNING: $TERMIN_INSPECT_PY/termin/inspect not found — skipping termin.inspect"
-fi
 
-TERMIN_SCENE_PY="$ENV_DIR/termin-scene/python"
-TERMIN_SCENE_BUILD="$ENV_DIR/termin-scene/build"
-if [[ -d "$TERMIN_SCENE_PY/termin/scene" ]]; then
-    mkdir -p "$PYTHON_DEST/termin/scene"
-    cp -r "$TERMIN_SCENE_PY/termin/scene/"*.py "$PYTHON_DEST/termin/scene/"
-    # Copy _scene_native shared module
-    SCENE_SO=$(find_artifact_in_build "$TERMIN_SCENE_BUILD" "_scene_native*.so")
-    if [[ -n "$SCENE_SO" ]]; then
-        cp "$SCENE_SO" "$PYTHON_DEST/termin/scene/"
-        echo "  Copied termin.scene + _scene_native from $TERMIN_SCENE_PY"
-    else
-        echo "  Copied termin.scene (WARNING: _scene_native.so not found)"
+    # Find and copy .so binding
+    build_dir="$ENV_DIR/$project_name/build"
+    if [[ "$project_name" == termin-components-* ]]; then
+        build_dir="$ENV_DIR/termin-components/$project_name/build"
     fi
-else
-    echo "  WARNING: $TERMIN_SCENE_PY/termin/scene not found — skipping termin.scene"
-fi
-
-TERMIN_COLLISION_BUILD="$ENV_DIR/termin-collision/build"
-TERMIN_COLLISION_PY="$ENV_DIR/termin-collision/python"
-mkdir -p "$PYTHON_DEST/termin/colliders" "$PYTHON_DEST/termin/collision"
-
-# Copy .py files from component sources
-TERMIN_COMPONENTS_COLLISION_PY="$ENV_DIR/termin-components/termin-components-collision/python"
-if [[ -d "$TERMIN_COMPONENTS_COLLISION_PY/termin/colliders" ]]; then
-    cp -n "$TERMIN_COMPONENTS_COLLISION_PY/termin/colliders/"*.py "$PYTHON_DEST/termin/colliders/" 2>/dev/null || true
-fi
-
-COLLIDERS_SO=$(find_artifact_in_build "$TERMIN_COLLISION_BUILD" "_colliders_native*.so")
-COLLISION_SO=$(find_artifact_in_build "$TERMIN_COLLISION_BUILD" "_collision_native*.so")
-if [[ -n "$COLLIDERS_SO" ]]; then
-    cp "$COLLIDERS_SO" "$PYTHON_DEST/termin/colliders/"
-    echo "  Copied _colliders_native from $TERMIN_COLLISION_BUILD"
-else
-    echo "  WARNING: _colliders_native.so not found in $TERMIN_COLLISION_BUILD"
-fi
-if [[ -n "$COLLISION_SO" ]]; then
-    cp "$COLLISION_SO" "$PYTHON_DEST/termin/collision/"
-    echo "  Copied _collision_native from $TERMIN_COLLISION_BUILD"
-else
-    echo "  WARNING: _collision_native.so not found in $TERMIN_COLLISION_BUILD"
-fi
-
-TERMIN_COMPONENTS_COLLISION_BUILD="$ENV_DIR/termin-components/termin-components-collision/build"
-COMPONENTS_COLLISION_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_COLLISION_BUILD" "_components_collision_native*.so")
-if [[ -n "$COMPONENTS_COLLISION_SO" ]]; then
-    cp "$COMPONENTS_COLLISION_SO" "$PYTHON_DEST/termin/colliders/"
-    echo "  Copied _components_collision_native from $TERMIN_COMPONENTS_COLLISION_BUILD"
-else
-    echo "  WARNING: _components_collision_native.so not found in $TERMIN_COMPONENTS_COLLISION_BUILD"
-fi
-
-TERMIN_COMPONENTS_MESH_BUILD="$ENV_DIR/termin-components/termin-components-mesh/build"
-mkdir -p "$PYTHON_DEST/termin/mesh"
-
-# Copy .py files from component sources
-TERMIN_COMPONENTS_MESH_PY="$ENV_DIR/termin-components/termin-components-mesh/python"
-if [[ -d "$TERMIN_COMPONENTS_MESH_PY/termin/mesh" ]]; then
-    cp -n "$TERMIN_COMPONENTS_MESH_PY/termin/mesh/"*.py "$PYTHON_DEST/termin/mesh/" 2>/dev/null || true
-fi
-
-COMPONENTS_MESH_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_MESH_BUILD" "_components_mesh_native*.so")
-if [[ -n "$COMPONENTS_MESH_SO" ]]; then
-    cp "$COMPONENTS_MESH_SO" "$PYTHON_DEST/termin/mesh/"
-    echo "  Copied _components_mesh_native from $TERMIN_COMPONENTS_MESH_BUILD"
-else
-    echo "  WARNING: _components_mesh_native.so not found in $TERMIN_COMPONENTS_MESH_BUILD"
-fi
-
-TERMIN_COMPONENTS_KINEMATIC_BUILD="$ENV_DIR/termin-components/termin-components-kinematic/build"
-mkdir -p "$PYTHON_DEST/termin/kinematic"
-
-# Copy .py files from component sources
-TERMIN_COMPONENTS_KINEMATIC_PY="$ENV_DIR/termin-components/termin-components-kinematic/python"
-if [[ -d "$TERMIN_COMPONENTS_KINEMATIC_PY/termin/kinematic" ]]; then
-    cp -n "$TERMIN_COMPONENTS_KINEMATIC_PY/termin/kinematic/"*.py "$PYTHON_DEST/termin/kinematic/" 2>/dev/null || true
-fi
-
-COMPONENTS_KINEMATIC_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_KINEMATIC_BUILD" "_components_kinematic_native*.so")
-if [[ -n "$COMPONENTS_KINEMATIC_SO" ]]; then
-    cp "$COMPONENTS_KINEMATIC_SO" "$PYTHON_DEST/termin/kinematic/"
-    echo "  Copied _components_kinematic_native from $TERMIN_COMPONENTS_KINEMATIC_BUILD"
-else
-    echo "  WARNING: _components_kinematic_native.so not found in $TERMIN_COMPONENTS_KINEMATIC_BUILD"
-fi
+    SO_FILE=$(find_artifact_in_build "$build_dir" "$so_pattern")
+    if [[ -n "$SO_FILE" ]]; then
+        cp "$SO_FILE" "$PYTHON_DEST/$py_subdir/"
+        echo "  Copied $(basename "$SO_FILE") → $py_subdir/"
+    else
+        echo "  WARNING: $so_pattern not found in $build_dir"
+    fi
+done
 
 echo ""
 echo "=== Build complete ==="

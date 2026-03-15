@@ -18,6 +18,9 @@ find_package(termin_input REQUIRED)
 find_package(termin_collision REQUIRED)
 find_package(termin_components_render REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
+include(TerminRpath)
+
 set(TERMIN_ENGINE_SOURCES
     src/engine_core.cpp
     src/scene_manager.cpp
@@ -42,9 +45,8 @@ set_target_properties(termin_engine PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
-    BUILD_WITH_INSTALL_RPATH TRUE
 )
+termin_set_rpath_lib(termin_engine)
 
 target_include_directories(termin_engine
     PUBLIC
@@ -93,10 +95,7 @@ if(TERMIN_BUILD_PYTHON)
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
     )
-    set_target_properties(_engine_native PROPERTIES
-        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
+    termin_set_rpath_python(_engine_native)
     install(TARGETS _engine_native DESTINATION lib/python/termin/engine)
 endif()
 

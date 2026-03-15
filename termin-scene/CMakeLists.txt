@@ -14,6 +14,9 @@ option(TERMIN_BUILD_PYTHON "Build Python bindings (_scene_native)" OFF)
 find_package(termin_base REQUIRED)
 find_package(termin_inspect REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
+include(TerminRpath)
+
 # Optional: nanobind for Python bindings
 if(TERMIN_BUILD_PYTHON)
     if(NOT Python_EXECUTABLE)
@@ -106,9 +109,8 @@ set_target_properties(termin_scene PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    INSTALL_RPATH "$ORIGIN"
-    BUILD_WITH_INSTALL_RPATH TRUE
 )
+termin_set_rpath_lib(termin_scene)
 
 target_include_directories(termin_scene
     PUBLIC
@@ -143,11 +145,7 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_scene_native PRIVATE termin_scene termin_render::termin_render termin_input::termin_input termin_inspect::termin_inspect termin_inspect::termin_inspect_python)
     target_compile_definitions(_scene_native PRIVATE TERMIN_HAS_NANOBIND)
 
-    set(TERMIN_SCENE_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..")
-    set_target_properties(_scene_native PROPERTIES
-        INSTALL_RPATH "${TERMIN_SCENE_PY_RPATH}"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
+    termin_set_rpath_python(_scene_native)
 
     if(TERMIN_SCENE_PYTHON_PREFIX)
         install(TARGETS _scene_native DESTINATION ${TERMIN_SCENE_PYTHON_PREFIX}/scene)
