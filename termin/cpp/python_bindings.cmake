@@ -5,11 +5,6 @@ find_package(nanobind CONFIG REQUIRED)
 
 # ============== Small utility modules ==============
 
-# Physics native module (RigidBody, PhysicsWorld, Contact)
-nanobind_add_module(_physics_native NB_SHARED termin/physics_bindings.cpp)
-target_link_libraries(_physics_native PRIVATE entity_lib)
-target_compile_options(_physics_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-
 # Voxels native module (VoxelGrid, voxelization, VoxelGridHandle)
 nanobind_add_module(_voxels_native NB_SHARED termin/voxels_bindings.cpp)
 target_compile_options(_voxels_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
@@ -160,10 +155,6 @@ set_target_properties(entity_lib PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_physics_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_voxels_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -195,7 +186,6 @@ set_target_properties(_native PROPERTIES
 
 # ============== Install targets ==============
 
-install(TARGETS _physics_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/physics)
 install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/voxels)
 install(TARGETS _animation_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/visualization/animation)
 install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/navmesh)

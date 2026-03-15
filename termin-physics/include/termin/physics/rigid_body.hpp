@@ -1,16 +1,14 @@
 #pragma once
 
-/**
- * @file rigid_body.hpp
- * @brief Простое твёрдое тело для игровой физики.
- *
- * Модель:
- * - pose: позиция центра масс + ориентация (SE(3))
- * - velocity: линейная + угловая скорости в мировой СК
- * - mass, inertia: масса и главные моменты инерции
- *
- * Угловая динамика учитывает гироскопический момент: τ_gyro = ω × (I·ω)
- */
+// @file rigid_body.hpp
+// @brief Простое твердое тело для игровой физики.
+//
+// Модель:
+// - pose: позиция центра масс + ориентация (SE(3))
+// - velocity: линейная + угловая скорости в мировой СК
+// - mass, inertia: масса и главные моменты инерции
+//
+// Угловая динамика учитывает гироскопический момент: tau_gyro = omega x (I·omega)
 
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/quat.hpp>
@@ -20,46 +18,42 @@
 namespace termin {
 namespace physics {
 
-
 class RigidBody {
 public:
-    // --- Состояние ---
+    // Состояние
     Pose3 pose;
     Vec3 linear_velocity;
     Vec3 angular_velocity;
 
-    // --- Масса и инерция ---
+    // Масса и инерция
     double mass = 1.0;
-    Vec3 inertia{1.0, 1.0, 1.0};  // I_xx, I_yy, I_zz в СК тела
+    Vec3 inertia{1.0, 1.0, 1.0};
 
-    // --- Аккумуляторы сил ---
+    // Аккумуляторы сил
     Vec3 force;
     Vec3 torque;
 
-    // --- Флаги ---
+    // Флаги
     bool is_static = false;
     bool is_kinematic = false;
 
-    // --- Демпфирование ---
+    // Демпфирование
     double linear_damping = 0.01;
     double angular_damping = 0.01;
 
+public:
     RigidBody() = default;
 
-    // ==================== Фабрики ====================
-
-    /**
-     * Создать тело с инерцией параллелепипеда.
-     * @param sx, sy, sz — полные размеры (не half)
-     */
+    // Создать тело с инерцией параллелепипеда.
+    // @param sx, sy, sz - полные размеры (не half)
     static RigidBody create_box(double sx, double sy, double sz, double m,
-                                 const Pose3& p = Pose3(), bool stat = false) {
+                                const Pose3& p = Pose3(), bool stat = false) {
         RigidBody body;
         body.pose = p;
         body.mass = m;
         body.is_static = stat;
 
-        // I = m/12 · (b² + c²)
+        // I = m/12 * (b^2 + c^2)
         body.inertia.x = (m / 12.0) * (sy * sy + sz * sz);
         body.inertia.y = (m / 12.0) * (sx * sx + sz * sz);
         body.inertia.z = (m / 12.0) * (sx * sx + sy * sy);
@@ -67,24 +61,20 @@ public:
         return body;
     }
 
-    /**
-     * Создать тело с инерцией сферы.
-     */
+    // Создать тело с инерцией сферы.
     static RigidBody create_sphere(double radius, double m,
-                                    const Pose3& p = Pose3(), bool stat = false) {
+                                   const Pose3& p = Pose3(), bool stat = false) {
         RigidBody body;
         body.pose = p;
         body.mass = m;
         body.is_static = stat;
 
-        // I = 2/5 · m · r²
+        // I = 2/5 * m * r^2
         double I = 0.4 * m * radius * radius;
         body.inertia = Vec3(I, I, I);
 
         return body;
     }
-
-    // ==================== Свойства ====================
 
     double inv_mass() const {
         return (is_static || is_kinematic || mass < 1e-10) ? 0.0 : 1.0 / mass;
@@ -101,11 +91,7 @@ public:
 
     Vec3 position() const { return pose.lin; }
 
-    // ==================== Мировой тензор инерции ====================
-
-    /**
-     * I_world⁻¹ = R · diag(I⁻¹_body) · R^T
-     */
+    // I_world^-1 = R * diag(I^-1_body) * R^T
     void world_inertia_inv(double* Iinv) const {
         if (is_static || is_kinematic) {
             for (int i = 0; i < 9; ++i) Iinv[i] = 0.0;
@@ -137,14 +123,10 @@ public:
         );
     }
 
-    // ==================== Скорость точки ====================
-
     Vec3 point_velocity(const Vec3& world_point) const {
         Vec3 r = world_point - pose.lin;
         return linear_velocity + angular_velocity.cross(r);
     }
-
-    // ==================== Силы ====================
 
     void add_force(const Vec3& f) {
         if (!is_static && !is_kinematic) force += f;
@@ -159,8 +141,6 @@ public:
         force += f;
         torque += (world_point - pose.lin).cross(f);
     }
-
-    // ==================== Импульсы ====================
 
     void apply_impulse(const Vec3& impulse) {
         if (!is_static && !is_kinematic) {
@@ -180,14 +160,10 @@ public:
         angular_velocity += apply_inv_inertia_world((world_point - pose.lin).cross(impulse));
     }
 
-    // ==================== Интеграция ====================
-
-    /**
-     * Интеграция сил → скорости.
-     *
-     * Линейная: v += (g + F/m) · dt
-     * Угловая:  ω += I_world⁻¹ · (τ - ω × L) · dt
-     */
+    // Интеграция сил -> скорости.
+    //
+    // Линейная: v += (g + F/m) * dt
+    // Угловая: omega += I_world^-1 * (tau - omega x L) * dt
     void integrate_forces(double dt, const Vec3& gravity) {
         if (is_static || is_kinematic) {
             force = Vec3();
@@ -195,35 +171,28 @@ public:
             return;
         }
 
-        // Линейная часть
         linear_velocity += (gravity + force * inv_mass()) * dt;
 
-        // Угловая часть с гироскопическим эффектом
         double R[9];
         pose.rotation_matrix(R);
 
-        // ω_body = R^T · ω_world
         Vec3 omega_body(
             R[0] * angular_velocity.x + R[3] * angular_velocity.y + R[6] * angular_velocity.z,
             R[1] * angular_velocity.x + R[4] * angular_velocity.y + R[7] * angular_velocity.z,
             R[2] * angular_velocity.x + R[5] * angular_velocity.y + R[8] * angular_velocity.z
         );
 
-        // L_body = I · ω_body
         Vec3 L_body(inertia.x * omega_body.x, inertia.y * omega_body.y, inertia.z * omega_body.z);
 
-        // L_world = R · L_body
         Vec3 L_world(
             R[0] * L_body.x + R[1] * L_body.y + R[2] * L_body.z,
             R[3] * L_body.x + R[4] * L_body.y + R[5] * L_body.z,
             R[6] * L_body.x + R[7] * L_body.y + R[8] * L_body.z
         );
 
-        // τ_eff = τ - ω × L (вычитаем гироскопический момент)
         Vec3 tau_eff = torque - angular_velocity.cross(L_world);
         angular_velocity += apply_inv_inertia_world(tau_eff) * dt;
 
-        // Демпфирование
         linear_velocity *= (1.0 - linear_damping * dt);
         angular_velocity *= (1.0 - angular_damping * dt);
 
@@ -231,9 +200,7 @@ public:
         torque = Vec3();
     }
 
-    /**
-     * Интеграция скоростей → позиции.
-     */
+    // Интеграция скоростей -> позиции.
     void integrate_positions(double dt) {
         if (is_static) return;
 
@@ -252,7 +219,6 @@ public:
             pose.ang = (dq * pose.ang).normalized();
         }
     }
-
 };
 
 } // namespace physics
