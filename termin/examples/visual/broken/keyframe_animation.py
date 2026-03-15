@@ -17,11 +17,8 @@ from termin.visualization import (
 )
 from termin.render_components import MeshRenderer
 from tgfx import TcShader
-from termin.visualization.animation import (
-    AnimationChannel,
-    AnimationClip,
-    AnimationPlayer,
-)
+from termin.animation import TcAnimationClip
+from termin.animation_components import AnimationPlayer
 
 
 VERT = """
@@ -101,14 +98,17 @@ def build_scene(world: VisualizationWorld):
         (4.0, 1.0),
     ]
 
-    clip = AnimationClip(
-        "move_rotate_scale",
-        tps=1.0,
-        channels={
-            "clip": AnimationChannel(trs_keys, rot_keys, scale_keys)
-        },
-        loop=True,
-    )
+    clip = TcAnimationClip.create("move_rotate_scale")
+    clip.set_tps(1.0)
+    clip.set_loop(True)
+    clip.set_channels([
+        {
+            "target_name": "animated_cube",
+            "translation_keys": trs_keys,
+            "rotation_keys": rot_keys,
+            "scale_keys": scale_keys,
+        }
+    ])
 
     player = cube.add_component(AnimationPlayer())
     player.add_clip(clip)
