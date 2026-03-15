@@ -74,7 +74,7 @@ set_target_properties(termin_core PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    INSTALL_RPATH "$ORIGIN;$ORIGIN/../..;/opt/termin/lib"
+    INSTALL_RPATH "$ORIGIN;$ORIGIN/../..;${CMAKE_INSTALL_PREFIX}/lib"
 )
 
 target_include_directories(termin_core

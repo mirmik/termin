@@ -42,7 +42,7 @@ set_target_properties(termin_engine PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    INSTALL_RPATH "$ORIGIN:/opt/termin/lib"
+    INSTALL_RPATH "$ORIGIN:${CMAKE_INSTALL_PREFIX}/lib"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
 
@@ -94,7 +94,7 @@ if(TERMIN_BUILD_PYTHON)
         ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
     )
     set_target_properties(_engine_native PROPERTIES
-        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;/opt/termin/lib"
+        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
     install(TARGETS _engine_native DESTINATION lib/python/termin/engine)

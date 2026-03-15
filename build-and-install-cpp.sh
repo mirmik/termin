@@ -11,7 +11,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SDK_PREFIX="/opt/termin"
+SDK_PREFIX="${SDK_PREFIX:-$SCRIPT_DIR/sdk}"
 
 BUILD_TYPE="Release"
 CLEAN=0
@@ -99,7 +99,7 @@ build_cmake_lib_cpp() {
 
     cmake --build "$build_dir" --parallel "$BUILD_JOBS"
 
-    sudo cmake --install "$build_dir"
+    cmake --install "$build_dir"
 
     echo "$name installed to ${SDK_PREFIX}"
 }
@@ -151,7 +151,7 @@ build_termin_cpp_only() {
         -Dtermin_components_skeleton_DIR="$SDK_PREFIX/lib/cmake/termin_components_skeleton"
 
     cmake --build "$build_dir" --parallel "$BUILD_JOBS"
-    sudo cmake --install "$build_dir"
+    cmake --install "$build_dir"
 
     echo "termin (C/C++ only) installed to ${SDK_PREFIX}"
 }

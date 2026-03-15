@@ -91,7 +91,7 @@ if(TERMIN_BUILD_PYTHON)
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
     )
     set_target_properties(_display_native PROPERTIES
-        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;/opt/termin/lib"
+        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
     install(TARGETS _display_native DESTINATION lib/python/termin/display)
@@ -106,7 +106,7 @@ if(TERMIN_BUILD_PYTHON)
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
     )
     set_target_properties(_viewport_native PROPERTIES
-        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;/opt/termin/lib"
+        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
     install(TARGETS _viewport_native DESTINATION lib/python/termin/viewport)

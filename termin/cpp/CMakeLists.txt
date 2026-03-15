@@ -96,7 +96,7 @@ set_target_properties(trent PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin
     LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
-    INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
+    INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
 )
 
 # ============== External dependencies ==============
@@ -202,7 +202,7 @@ set_target_properties(entity_lib PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
-    INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
+    INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
 )
 
 # ============== Render library ==============
@@ -243,7 +243,7 @@ set_target_properties(render_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
-    INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
+    INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
 )
 
 # ============== NavMesh library ==============
@@ -263,7 +263,7 @@ set_target_properties(navmesh_lib PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
-    INSTALL_RPATH "$ORIGIN;/opt/termin/lib"
+    INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
 )
 
 # ============== SDL2 (optional) ==============
