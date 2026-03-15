@@ -1,8 +1,5 @@
-"""SkeletonController - Component that manages skeleton for skinned meshes.
+"""SkeletonController - re-exported from the component native module."""
 
-Re-exports C++ SkeletonController.
-"""
-
-from termin.skeleton._skeleton_native import SkeletonController
+from termin.skeleton._components_skeleton_native import SkeletonController
 
 __all__ = ["SkeletonController"]

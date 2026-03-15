@@ -109,6 +109,7 @@ build_with_python() {
         -Dtermin_engine_DIR="$SDK_PREFIX/lib/cmake/termin_engine" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
         -Dtermin_physics_DIR="$SDK_PREFIX/lib/cmake/termin_physics" \
+        -Dtermin_DIR="$SDK_PREFIX/lib/cmake/termin" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
         -Dtermin_components_render_DIR="$SDK_PREFIX/lib/cmake/termin_components_render" \
         -Dtermin_components_physics_DIR="$SDK_PREFIX/lib/cmake/termin_components_physics" \
@@ -186,6 +187,9 @@ sudo "$SCRIPT_DIR/termin/install_system.sh"
 
 echo "Installing termin Python package (editable)..."
 CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation -e "$SCRIPT_DIR/termin"
+
+build_with_python "termin-components-skeleton"   "$SCRIPT_DIR/termin-components/termin-components-skeleton"
+build_with_python "termin-components-animation"  "$SCRIPT_DIR/termin-components/termin-components-animation"
 
 echo ""
 echo "========================================"

@@ -15,7 +15,7 @@ nanobind_add_module(_lighting_native NB_SHARED termin/lighting_bindings.cpp)
 target_link_libraries(_lighting_native PRIVATE entity_lib)
 target_compile_options(_lighting_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
-# Skeleton native module (Bone, SkeletonData, SkeletonInstance, SkeletonController)
+# Skeleton native module (TcSkeleton, SkeletonInstance)
 nanobind_add_module(_skeleton_native NB_SHARED
     termin/bindings/skeleton/skeleton_module.cpp
 )
@@ -36,10 +36,9 @@ target_link_libraries(_entity_native PRIVATE entity_lib trent render_lib)
 target_compile_definitions(_entity_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_entity_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
-# Animation native module (TcAnimationClip, AnimationPlayer)
+# Animation native module (TcAnimationClip)
 nanobind_add_module(_animation_native NB_SHARED
     termin/bindings/animation/animation_module.cpp
-    termin/animation/animation_player.cpp
 )
 target_link_libraries(_animation_native PRIVATE trent entity_lib skeleton_lib)
 target_compile_options(_animation_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
