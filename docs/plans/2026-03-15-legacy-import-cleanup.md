@@ -53,10 +53,10 @@ modules, фиксация финального API.
 - Modify: `termin/termin/assets/animation_clip_handle.py`
 - Modify: `termin/termin/assets/glb_asset.py`
 
-- [ ] Исследовать как `_animation_native` и `_components_animation_native` регистрируются в namespace (через `_dll_setup.extend_package_path` или иначе)
-- [ ] Определить канонический путь доступа к native-модулям (возможно через `termin.animation._animation_native`)
-- [ ] Обновить все внутренние импорты на канонический путь
-- [ ] Запустить тесты проекта
+- [x] Исследовать как `_animation_native` и `_components_animation_native` регистрируются в namespace (через `_dll_setup.extend_package_path` или иначе)
+- [x] Определить канонический путь доступа к native-модулям (возможно через `termin.animation._animation_native`)
+- [x] Обновить все внутренние импорты на канонический путь
+- [x] Запустить тесты проекта
 
 ### Task 3: Перевести examples на канонические пути
 

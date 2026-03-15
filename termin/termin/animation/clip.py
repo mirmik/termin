@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from termin.visualization.animation._animation_native import TcAnimationClip
+from termin.animation._animation_native import TcAnimationClip
 
 from termin.animation.channel import channel_data_from_fbx, channel_data_from_glb
 
