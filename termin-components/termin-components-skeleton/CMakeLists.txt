@@ -12,6 +12,9 @@ find_package(termin_scene REQUIRED)
 find_package(termin_inspect REQUIRED)
 find_package(termin_skeleton REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
+include(TerminRpath)
+
 add_library(termin_components_skeleton SHARED
     src/skeleton_controller.cpp
 )
@@ -66,10 +69,7 @@ if(TERMIN_BUILD_PYTHON)
         termin_components_skeleton
         termin_inspect::termin_inspect_python
     )
-    set_target_properties(_components_skeleton_native PROPERTIES
-        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;$ORIGIN/../../../..;$ORIGIN/../../../../..;${CMAKE_INSTALL_PREFIX}/lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
+    termin_set_rpath_python(_components_skeleton_native)
 
     set(_py_dest lib/python/termin/skeleton)
     if(TERMIN_COMPONENTS_SKELETON_PYTHON_PREFIX)

@@ -12,6 +12,9 @@ option(TERMIN_BUILD_PYTHON "Build Python-related input bridge code" OFF)
 find_package(termin_base REQUIRED)
 find_package(termin_scene REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
+include(TerminRpath)
+
 set(TERMIN_INPUT_SOURCES
     src/tc_input_capability.c
     src/tc_input_component.c
@@ -44,9 +47,7 @@ target_link_libraries(termin_input
         termin_scene::termin_scene
 )
 
-if(NOT WIN32)
-    set_target_properties(termin_input PROPERTIES INSTALL_RPATH "$ORIGIN")
-endif()
+termin_set_rpath_lib(termin_input)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)

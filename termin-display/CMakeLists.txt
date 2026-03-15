@@ -15,6 +15,9 @@ find_package(termin_scene REQUIRED)
 find_package(termin_input REQUIRED)
 find_package(termin_render REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
+include(TerminRpath)
+
 set(TERMIN_DISPLAY_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_viewport.c
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_display.c
@@ -38,9 +41,8 @@ set_target_properties(termin_display PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    INSTALL_RPATH "$ORIGIN"
-    BUILD_WITH_INSTALL_RPATH TRUE
 )
+termin_set_rpath_lib(termin_display)
 
 target_include_directories(termin_display
     PUBLIC
@@ -90,10 +92,7 @@ if(TERMIN_BUILD_PYTHON)
         ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
     )
-    set_target_properties(_display_native PROPERTIES
-        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
+    termin_set_rpath_python(_display_native)
     install(TARGETS _display_native DESTINATION lib/python/termin/display)
 
     nanobind_add_module(_viewport_native NB_SHARED
@@ -105,10 +104,7 @@ if(TERMIN_BUILD_PYTHON)
         ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
     )
-    set_target_properties(_viewport_native PROPERTIES
-        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
+    termin_set_rpath_python(_viewport_native)
     install(TARGETS _viewport_native DESTINATION lib/python/termin/viewport)
 endif()
 

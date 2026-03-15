@@ -14,6 +14,9 @@ find_package(termin_base REQUIRED)
 find_package(termin_inspect REQUIRED)
 find_package(termin_scene REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
+include(TerminRpath)
+
 if(TERMIN_BUILD_PYTHON)
     if(NOT Python_EXECUTABLE)
         if(WIN32)
@@ -57,9 +60,7 @@ set_target_properties(termin_collision PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
 )
-if(NOT WIN32)
-    set_target_properties(termin_collision PROPERTIES INSTALL_RPATH "$ORIGIN")
-endif()
+termin_set_rpath_lib(termin_collision)
 
 if(TERMIN_BUILD_PYTHON)
     nanobind_add_module(_colliders_native NB_SHARED cpp/bindings/colliders_bindings.cpp)
@@ -68,15 +69,8 @@ if(TERMIN_BUILD_PYTHON)
     nanobind_add_module(_collision_native NB_SHARED cpp/bindings/collision_bindings.cpp)
     target_link_libraries(_collision_native PRIVATE termin_collision termin_scene::termin_scene)
 
-    set(TERMIN_COLLISION_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..")
-    set_target_properties(_colliders_native PROPERTIES
-        INSTALL_RPATH "${TERMIN_COLLISION_PY_RPATH}"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
-    set_target_properties(_collision_native PROPERTIES
-        INSTALL_RPATH "${TERMIN_COLLISION_PY_RPATH}"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
+    termin_set_rpath_python(_colliders_native)
+    termin_set_rpath_python(_collision_native)
 
     if(TERMIN_COLLISION_PYTHON_PREFIX)
         install(TARGETS _colliders_native DESTINATION ${TERMIN_COLLISION_PYTHON_PREFIX}/colliders)

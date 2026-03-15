@@ -13,6 +13,9 @@ include(CMakePackageConfigHelpers)
 
 find_package(termin_base REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
+include(TerminRpath)
+
 if(TERMIN_MODULES_BUILD_PYTHON)
     if(NOT Python_EXECUTABLE)
         if(WIN32)
@@ -64,11 +67,7 @@ if(TERMIN_MODULES_BUILD_PYTHON)
 
     target_link_libraries(_termin_modules_native PRIVATE termin_modules)
 
-    set(TERMIN_MODULES_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..")
-    set_target_properties(_termin_modules_native PROPERTIES
-        INSTALL_RPATH "${TERMIN_MODULES_PY_RPATH}"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
+    termin_set_rpath_python(_termin_modules_native)
 
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/python/termin_modules)
     configure_file(

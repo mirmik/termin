@@ -61,6 +61,9 @@ find_package(termin_base REQUIRED)
 # termin-graphics (provides tgfx types, gpu_ops, opengl backend)
 find_package(termin_graphics REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
+include(TerminRpath)
+
 # Library target
 if(TC_BUILD_SHARED)
     add_library(termin_core SHARED ${TC_SOURCES} ${TC_HEADERS})
@@ -74,8 +77,8 @@ set_target_properties(termin_core PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    INSTALL_RPATH "$ORIGIN;$ORIGIN/../..;${CMAKE_INSTALL_PREFIX}/lib"
 )
+termin_set_rpath_lib(termin_core)
 
 target_include_directories(termin_core
     PUBLIC

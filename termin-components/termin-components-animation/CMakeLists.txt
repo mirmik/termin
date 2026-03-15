@@ -14,6 +14,9 @@ find_package(termin_skeleton REQUIRED)
 find_package(termin_animation REQUIRED)
 find_package(termin_components_skeleton REQUIRED)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
+include(TerminRpath)
+
 add_library(termin_components_animation SHARED
     src/animation_player.cpp
 )
@@ -71,10 +74,7 @@ if(TERMIN_BUILD_PYTHON)
         termin_components_animation
         termin_inspect::termin_inspect_python
     )
-    set_target_properties(_components_animation_native PROPERTIES
-        INSTALL_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;$ORIGIN/../../../..;${CMAKE_INSTALL_PREFIX}/lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
+    termin_set_rpath_python(_components_animation_native)
 
     set(_py_dest lib/python/termin/visualization/animation)
     if(TERMIN_COMPONENTS_ANIMATION_PYTHON_PREFIX)
