@@ -302,7 +302,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         )
         from tgfx import tc_mesh_is_loaded
         from termin.skeleton._skeleton_native import tc_skeleton_is_loaded
-        from termin.visualization.animation.clip import clip_from_glb
+        from termin.animation import clip_from_glb
 
         # Populate mesh assets
         for mesh_name, asset in self._mesh_assets.items():

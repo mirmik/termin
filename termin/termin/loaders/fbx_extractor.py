@@ -174,8 +174,7 @@ def extract_animations(
     Returns:
         List of created animation files
     """
-    from termin.visualization.animation.clip import clip_from_fbx
-    from termin.visualization.animation.clip_io import save_animation_clip
+    from termin.animation import clip_from_fbx, save_animation_clip
 
     fbx_path = Path(fbx_path)
 
