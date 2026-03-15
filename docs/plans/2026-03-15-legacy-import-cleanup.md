@@ -64,10 +64,10 @@ modules, фиксация финального API.
 - Modify: `termin/examples/loader/load_fbx.py`
 - Modify: `termin/examples/visual/broken/keyframe_animation.py`
 
-- [ ] Заменить legacy imports в load_fbx.py
-- [ ] Заменить legacy imports в keyframe_animation.py
-- [ ] Просканировать все examples на оставшиеся legacy imports и исправить
-- [ ] Запустить тесты проекта
+- [x] Заменить legacy imports в load_fbx.py
+- [x] Заменить legacy imports в keyframe_animation.py
+- [x] Просканировать все examples на оставшиеся legacy imports и исправить
+- [x] Запустить тесты проекта
 
 ### Task 4: Удалить physics legacy facade modules
 

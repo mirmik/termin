@@ -17,11 +17,8 @@ from termin.visualization import (
 )
 from termin.render_components import MeshRenderer
 from tgfx import TcShader
-from termin.visualization.animation import (
-    AnimationChannel,
-    AnimationClip,
-    AnimationPlayer,
-)
+from termin.animation import TcAnimationClip
+from termin.animation_components import AnimationPlayer
 
 
 VERT = """
