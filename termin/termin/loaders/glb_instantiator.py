@@ -16,7 +16,7 @@ from termin.skeleton_components import SkeletonController
 from termin.visualization.core.entity import Entity
 from termin.mesh import TcMesh
 from termin.render_components import MeshRenderer
-from termin.visualization.render.components.skinned_mesh_renderer import SkinnedMeshRenderer
+from termin.render_components.skinned_mesh_renderer import SkinnedMeshRenderer
 
 if TYPE_CHECKING:
     from termin.assets.mesh_asset import MeshAsset

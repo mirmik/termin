@@ -1,5 +1,5 @@
 """Canonical SkinnedMeshRenderer import path."""
 
-from termin.visualization.render.components.skinned_mesh_renderer import SkinnedMeshRenderer
+from termin._native.render import SkinnedMeshRenderer
 
 __all__ = ["SkinnedMeshRenderer"]
