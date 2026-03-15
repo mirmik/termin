@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(TERMIN_MODULES_BUILD_PYTHON "Build Python/nanobind bindings" ON)
+option(TERMIN_BUILD_PYTHON "Build Python/nanobind bindings" ON)
 option(TERMIN_MODULES_BUILD_TESTS "Build termin-modules tests" ON)
 
 include(GNUInstallDirs)
@@ -16,32 +16,12 @@ find_package(termin_base REQUIRED)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
-if(TERMIN_MODULES_BUILD_PYTHON)
-    if(NOT Python_EXECUTABLE)
-        if(WIN32)
-            set(Python_EXECUTABLE "python")
-        else()
-            set(Python_EXECUTABLE "python3")
-        endif()
-    endif()
-
-    find_package(Python COMPONENTS Interpreter Development REQUIRED)
-    find_package(nanobind CONFIG REQUIRED)
-endif()
-
-set(TERMIN_MODULES_SOURCES
+# ── Core library (pure C++, no Python dependency) ──
+add_library(termin_modules STATIC
     src/module_cpp_backend.cpp
     src/module_descriptor_parser.cpp
     src/module_runtime.cpp
 )
-
-if(TERMIN_MODULES_BUILD_PYTHON)
-    list(APPEND TERMIN_MODULES_SOURCES
-        src/module_python_backend.cpp
-    )
-endif()
-
-add_library(termin_modules STATIC ${TERMIN_MODULES_SOURCES})
 
 target_compile_features(termin_modules PUBLIC cxx_std_20)
 set_target_properties(termin_modules PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -58,15 +38,35 @@ target_link_libraries(termin_modules
         ${CMAKE_DL_LIBS}
 )
 
-if(TERMIN_MODULES_BUILD_PYTHON)
-    target_link_libraries(termin_modules PUBLIC Python::Python)
+# ── Python backend + nanobind bindings ──
+if(TERMIN_BUILD_PYTHON)
+    if(NOT Python_EXECUTABLE)
+        if(WIN32)
+            set(Python_EXECUTABLE "python")
+        else()
+            set(Python_EXECUTABLE "python3")
+        endif()
+    endif()
 
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    find_package(nanobind CONFIG REQUIRED)
+
+    # Shared library: PythonModuleBackend (uses Python C API)
+    add_library(termin_modules_python SHARED
+        src/module_python_backend.cpp
+    )
+    target_link_libraries(termin_modules_python PUBLIC termin_modules Python::Python)
+    target_include_directories(termin_modules_python PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    )
+    termin_set_rpath_lib(termin_modules_python)
+
+    # Nanobind module
     nanobind_add_module(_termin_modules_native NB_SHARED
         python/bindings/termin_modules_module.cpp
     )
-
-    target_link_libraries(_termin_modules_native PRIVATE termin_modules)
-
+    target_link_libraries(_termin_modules_native PRIVATE termin_modules_python)
     termin_set_rpath_python(_termin_modules_native)
 
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/python/termin_modules)
@@ -76,24 +76,28 @@ if(TERMIN_MODULES_BUILD_PYTHON)
         COPYONLY
     )
 
+    install(TARGETS termin_modules_python
+        EXPORT termin_modulesTargets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
     install(TARGETS _termin_modules_native DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/termin_modules)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin_modules/
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/termin_modules
         FILES_MATCHING PATTERN "*.py"
     )
-endif()
 
-if(TERMIN_MODULES_BUILD_PYTHON)
     add_executable(termin_modules_example
         examples/basic/main.cpp
     )
-
-    target_link_libraries(termin_modules_example PRIVATE termin_modules)
+    target_link_libraries(termin_modules_example PRIVATE termin_modules_python)
     target_compile_definitions(termin_modules_example PRIVATE
         TERMIN_MODULES_EXAMPLE_PROJECT_DIR="${CMAKE_CURRENT_SOURCE_DIR}/examples/basic/project"
     )
 endif()
 
+# ── Install core library ──
 install(TARGETS termin_modules
     EXPORT termin_modulesTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -129,6 +133,7 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_modules
 )
 
+# ── Tests ──
 if(TERMIN_MODULES_BUILD_TESTS)
     enable_testing()
 
