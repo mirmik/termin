@@ -21,7 +21,8 @@ endif()
 
 option(TERMIN_BUILD_PYTHON "Build Python/nanobind bindings" ON)
 
-# Install prefix for Python modules
+# Install prefix for Python modules only.
+# Shared C/C++ runtime libraries are installed into the normal lib/bin dirs.
 # For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
 if(BUILD_STANDALONE)
     set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}/lib/python/termin")
@@ -451,13 +452,13 @@ endif()
 # ============== Install shared libraries ==============
 install(TARGETS trent entity_lib termin_core render_lib navmesh_lib Recast
     EXPORT terminTargets
-    RUNTIME DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}
-    LIBRARY DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}
-    ARCHIVE DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/lib
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 if(WIN32 AND SDL2_DLL)
-    install(FILES ${SDL2_DLL} DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})
+    install(FILES ${SDL2_DLL} DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 # Install headers

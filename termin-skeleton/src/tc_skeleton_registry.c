@@ -1,23 +1,19 @@
-// tc_skeleton_registry.c - Skeleton registry with pool + hash table
 #include "resources/tc_skeleton_registry.h"
-#include <tcbase/tc_pool.h>
-#include <tcbase/tc_resource_map.h>
-#include <tgfx/tc_registry_utils.h>
-#include <tcbase/tc_log.h>
-#include "termin_core.h"
+
 #include <stdlib.h>
 #include <string.h>
 
-// ============================================================================
-// Global state
-// ============================================================================
+#include <tcbase/tc_log.h>
+#include <tcbase/tc_pool.h>
+#include <tcbase/tc_resource_map.h>
+#include <tcbase/tgfx_intern_string.h>
+#include <tgfx/tc_registry_utils.h>
 
 static tc_pool g_skeleton_pool;
 static tc_resource_map* g_uuid_to_index = NULL;
 static uint64_t g_next_uuid = 1;
 static bool g_initialized = false;
 
-// Free skeleton internal data
 static void skeleton_free_data(tc_skeleton* skeleton) {
     if (!skeleton) return;
     if (skeleton->bones) {
@@ -31,10 +27,6 @@ static void skeleton_free_data(tc_skeleton* skeleton) {
     skeleton->bone_count = 0;
     skeleton->root_count = 0;
 }
-
-// ============================================================================
-// Lifecycle
-// ============================================================================
 
 void tc_skeleton_init(void) {
     TC_REGISTRY_INIT_GUARD(g_initialized, "tc_skeleton");
@@ -71,10 +63,6 @@ void tc_skeleton_shutdown(void) {
     g_next_uuid = 1;
     g_initialized = false;
 }
-
-// ============================================================================
-// Handle-based API
-// ============================================================================
 
 tc_skeleton_handle tc_skeleton_create(const char* uuid) {
     if (!g_initialized) {
@@ -202,7 +190,7 @@ tc_skeleton_handle tc_skeleton_declare(const char* uuid, const char* name) {
     skeleton->header.is_loaded = 0;
 
     if (name && name[0] != '\0') {
-        skeleton->header.name = tc_intern_string(name);
+        skeleton->header.name = tgfx_intern_string(name);
     }
 
     if (!tc_resource_map_add(g_uuid_to_index, skeleton->header.uuid, tc_pack_index(h.index))) {
@@ -251,11 +239,7 @@ bool tc_skeleton_is_loaded(tc_skeleton_handle h) {
     return skeleton->header.is_loaded != 0;
 }
 
-void tc_skeleton_set_load_callback(
-    tc_skeleton_handle h,
-    tc_skeleton_load_fn callback,
-    void* user_data
-) {
+void tc_skeleton_set_load_callback(tc_skeleton_handle h, tc_skeleton_load_fn callback, void* user_data) {
     tc_skeleton* skeleton = tc_skeleton_get(h);
     if (!skeleton) return;
     skeleton->header.load_callback = (tc_resource_load_fn)callback;
@@ -267,7 +251,6 @@ bool tc_skeleton_ensure_loaded(tc_skeleton_handle h) {
     if (!skeleton) return false;
 
     if (skeleton->header.is_loaded) return true;
-
     if (!skeleton->header.load_callback) {
         tc_log_warn("tc_skeleton_ensure_loaded: skeleton '%s' has no load callback", skeleton->header.uuid);
         return false;
@@ -277,13 +260,8 @@ bool tc_skeleton_ensure_loaded(tc_skeleton_handle h) {
     if (success) {
         skeleton->header.is_loaded = 1;
     }
-
     return success;
 }
-
-// ============================================================================
-// Reference counting
-// ============================================================================
 
 void tc_skeleton_add_ref(tc_skeleton* skeleton) {
     if (skeleton) {
@@ -305,14 +283,9 @@ bool tc_skeleton_release(tc_skeleton* skeleton) {
     return false;
 }
 
-// ============================================================================
-// Skeleton data operations
-// ============================================================================
-
 tc_bone* tc_skeleton_alloc_bones(tc_skeleton* skeleton, size_t count) {
     if (!skeleton) return NULL;
 
-    // Free existing
     if (skeleton->bones) {
         free(skeleton->bones);
         skeleton->bones = NULL;
@@ -333,8 +306,6 @@ tc_bone* tc_skeleton_alloc_bones(tc_skeleton* skeleton, size_t count) {
     }
 
     skeleton->bone_count = count;
-
-    // Initialize all bones
     for (size_t i = 0; i < count; i++) {
         tc_bone_init(&skeleton->bones[i]);
         skeleton->bones[i].index = (int32_t)i;
@@ -342,7 +313,6 @@ tc_bone* tc_skeleton_alloc_bones(tc_skeleton* skeleton, size_t count) {
 
     skeleton->header.is_loaded = 1;
     skeleton->header.version++;
-
     return skeleton->bones;
 }
 
@@ -370,7 +340,6 @@ int tc_skeleton_find_bone(const tc_skeleton* skeleton, const char* name) {
 void tc_skeleton_rebuild_roots(tc_skeleton* skeleton) {
     if (!skeleton) return;
 
-    // Free existing
     if (skeleton->root_indices) {
         free(skeleton->root_indices);
         skeleton->root_indices = NULL;
@@ -379,14 +348,12 @@ void tc_skeleton_rebuild_roots(tc_skeleton* skeleton) {
 
     if (!skeleton->bones || skeleton->bone_count == 0) return;
 
-    // Count roots
     size_t root_count = 0;
     for (size_t i = 0; i < skeleton->bone_count; i++) {
         if (tc_bone_is_root(&skeleton->bones[i])) {
             root_count++;
         }
     }
-
     if (root_count == 0) return;
 
     skeleton->root_indices = (int32_t*)malloc(root_count * sizeof(int32_t));
@@ -400,10 +367,6 @@ void tc_skeleton_rebuild_roots(tc_skeleton* skeleton) {
     }
     skeleton->root_count = root_count;
 }
-
-// ============================================================================
-// Iteration
-// ============================================================================
 
 typedef struct {
     tc_skeleton_iter_fn callback;
@@ -426,10 +389,6 @@ void tc_skeleton_foreach(tc_skeleton_iter_fn callback, void* user_data) {
     skeleton_iter_ctx ctx = { callback, user_data };
     tc_pool_foreach(&g_skeleton_pool, skeleton_iter_adapter, &ctx);
 }
-
-// ============================================================================
-// Info collection
-// ============================================================================
 
 typedef struct {
     tc_skeleton_info* infos;

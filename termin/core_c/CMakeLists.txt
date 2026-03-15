@@ -16,11 +16,9 @@ option(TC_USE_EXTERNAL_INSPECT "Use external termin_inspect package for inspect/
 # requires C++ CollisionWorld from termin.dll. The C API is implemented
 # in cpp/termin/tc_collision_c_api.cpp instead.
 set(TC_SOURCES
-    src/tc_animation_registry.c
     src/tc_core.c
     src/tc_primitive_mesh.c
     src/tc_picking.c
-    src/tc_skeleton_registry.c
 )
 
 if(NOT TC_USE_EXTERNAL_INSPECT)
@@ -54,6 +52,8 @@ find_package(termin_scene REQUIRED)
 find_package(termin_input REQUIRED)
 find_package(termin_render REQUIRED)
 find_package(termin_display REQUIRED)
+find_package(termin_skeleton REQUIRED)
+find_package(termin_animation REQUIRED)
 
 # termin-base (provides tc_log, shared enums)
 find_package(termin_base REQUIRED)
@@ -74,7 +74,7 @@ set_target_properties(termin_core PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    INSTALL_RPATH "$ORIGIN"
+    INSTALL_RPATH "$ORIGIN;$ORIGIN/../..;/opt/termin/lib"
 )
 
 target_include_directories(termin_core
@@ -89,6 +89,8 @@ target_link_libraries(termin_core PUBLIC termin_input::termin_input)
 target_link_libraries(termin_core PUBLIC termin_inspect::termin_inspect)
 target_link_libraries(termin_core PUBLIC termin_render::termin_render)
 target_link_libraries(termin_core PUBLIC termin_display::termin_display)
+target_link_libraries(termin_core PUBLIC termin_skeleton::termin_skeleton)
+target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 
 # Platform-specific
 if(WIN32)

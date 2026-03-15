@@ -21,6 +21,8 @@ find_dependency(termin_collision REQUIRED)
 find_dependency(termin_components_collision REQUIRED)
 find_dependency(termin_components_kinematic REQUIRED)
 find_dependency(termin_components_render REQUIRED)
+find_dependency(termin_skeleton REQUIRED)
+find_dependency(termin_animation REQUIRED)
 find_dependency(termin_modules REQUIRED)
 
 # Include exported targets
