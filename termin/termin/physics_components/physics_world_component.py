@@ -14,7 +14,7 @@ from termin.physics._physics_native import PhysicsWorld
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from termin.physics_components import RigidBodyComponent
+    from termin.physics_components.rigid_body_component import RigidBodyComponent
 
 
 class PhysicsWorldComponent(PythonComponent):
@@ -162,7 +162,7 @@ class PhysicsWorldComponent(PythonComponent):
         self._initialized = True
 
     def _collect_rigid_bodies(self, scene):
-        from termin.physics_components import RigidBodyComponent
+        from termin.physics_components.rigid_body_component import RigidBodyComponent
 
         self._rigid_body_components.clear()
 
@@ -171,7 +171,7 @@ class PhysicsWorldComponent(PythonComponent):
             self._collect_from_entity(entity, visited_entities)
 
     def _collect_from_entity(self, entity, visited_entities):
-        from termin.physics_components import RigidBodyComponent
+        from termin.physics_components.rigid_body_component import RigidBodyComponent
 
         entity_id = id(entity)
         if entity_id in visited_entities:

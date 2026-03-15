@@ -124,7 +124,7 @@ class RigidBodyComponent(PythonComponent):
         if self._body_index >= 0:
             return
 
-        from termin.physics_components import PhysicsWorldComponent
+        from termin.physics_components.physics_world_component import PhysicsWorldComponent
 
         for entity in scene.entities:
             pw_comp = entity.get_component(PhysicsWorldComponent)
