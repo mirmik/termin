@@ -20,7 +20,7 @@ for arg in "$@"; do
             echo ""
             echo "Options:"
             echo "  --dry-run      Show what would be removed without deleting"
-            echo "  --include-sdk  Also remove /opt/termin"
+            echo "  --include-sdk  Also remove local sdk/ and /opt/termin"
             echo "  --help, -h     Show this help"
             exit 0
             ;;
@@ -94,8 +94,9 @@ for project_root in "${PROJECT_ROOTS[@]}"; do
     fi
 done
 
-if [[ "$INCLUDE_SDK" -eq 1 && -e "/opt/termin" ]]; then
-    TARGETS+=("/opt/termin")
+if [[ "$INCLUDE_SDK" -eq 1 ]]; then
+    [[ -e "$ROOT_DIR/sdk" ]] && TARGETS+=("$ROOT_DIR/sdk")
+    [[ -e "/opt/termin" ]] && TARGETS+=("/opt/termin")
 fi
 
 if [[ "${#TARGETS[@]}" -eq 0 ]]; then

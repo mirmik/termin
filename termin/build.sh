@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$SCRIPT_DIR/build_standalone"
 INSTALL_DIR="$SCRIPT_DIR/install"
-SDK_DIR="/opt/termin"
+SDK_DIR="${SDK_PREFIX:-$(dirname "$SCRIPT_DIR")/sdk}"
 
 BUILD_TYPE="Release"
 CLEAN=0

@@ -11,7 +11,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SDK_PREFIX="/opt/termin"
+SDK_PREFIX="${SDK_PREFIX:-$SCRIPT_DIR/sdk}"
 
 BUILD_TYPE="Release"
 CLEAN=0
@@ -70,7 +70,7 @@ cmake -S . -B "$build_dir" \
     -DCMAKE_INSTALL_PREFIX="$SDK_PREFIX" \
     -DPython_EXECUTABLE="$PY_EXEC"
 cmake --build "$build_dir" --parallel "$BUILD_JOBS"
-sudo cmake --install "$build_dir"
+cmake --install "$build_dir"
 
 echo "termin-nanobind-sdk installed to ${SDK_PREFIX}"
 
@@ -120,7 +120,7 @@ build_with_python() {
         -Dtermin_components_skeleton_DIR="$SDK_PREFIX/lib/cmake/termin_components_skeleton" \
         -DPython_EXECUTABLE="$PY_EXEC"
     cmake --build "$build_dir" --parallel "$BUILD_JOBS"
-    sudo cmake --install "$build_dir"
+    cmake --install "$build_dir"
 
     echo "$name Python bindings installed to ${SDK_PREFIX}"
 }
@@ -180,16 +180,15 @@ if [[ $NO_PARALLEL -eq 1 ]]; then
     CMAKE_PREFIX_PATH="$SDK_PREFIX" \
     CMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
     CMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
+    SDK_PREFIX="$SDK_PREFIX" \
     "$SCRIPT_DIR/termin/build.sh" "${build_args[@]}"
 else
     CMAKE_PREFIX_PATH="$SDK_PREFIX" \
     CMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
     CMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
+    SDK_PREFIX="$SDK_PREFIX" \
     "$SCRIPT_DIR/termin/build.sh" "${build_args[@]}"
 fi
-
-echo "Installing termin to ${SDK_PREFIX}..."
-sudo "$SCRIPT_DIR/termin/install_system.sh"
 
 echo "Installing termin Python package (editable)..."
 CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation -e "$SCRIPT_DIR/termin"

@@ -5,7 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SDK_PREFIX="/opt/termin"
+SDK_PREFIX="${SDK_PREFIX:-$SCRIPT_DIR/sdk}"
 
 BUILD_TYPE="Release"
 CLEAN=0
