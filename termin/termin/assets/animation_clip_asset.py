@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from termin.assets.data_asset import DataAsset
 
 if TYPE_CHECKING:
-    from termin.visualization.animation.clip import TcAnimationClip
+    from termin.animation import TcAnimationClip
 
 
 class AnimationClipAsset(DataAsset["TcAnimationClip"]):
@@ -58,7 +58,7 @@ class AnimationClipAsset(DataAsset["TcAnimationClip"]):
 
     def _parse_content(self, content: str) -> "TcAnimationClip | None":
         """Parse animation content from file."""
-        from termin.visualization.animation.clip_io import parse_animation_content
+        from termin.animation import parse_animation_content
 
         return parse_animation_content(content)
 

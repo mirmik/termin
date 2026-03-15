@@ -149,8 +149,7 @@ def extract_animations(
     Returns:
         List of created animation files
     """
-    from termin.visualization.animation.clip import clip_from_glb
-    from termin.visualization.animation.clip_io import save_animation_clip
+    from termin.animation import clip_from_glb, save_animation_clip
 
     glb_path = Path(glb_path)
 

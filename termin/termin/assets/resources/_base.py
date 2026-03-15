@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from termin.assets.voxel_grid_asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
     from termin.assets.navmesh_asset import NavMeshAsset
-    from termin.visualization.animation.clip import TcAnimationClip
+    from termin.animation import TcAnimationClip
     from termin.assets.animation_clip_asset import AnimationClipAsset
     from termin.skeleton import TcSkeleton
     from termin.assets.skeleton_asset import SkeletonAsset
