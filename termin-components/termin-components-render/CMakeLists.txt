@@ -82,5 +82,12 @@ if(TERMIN_BUILD_PYTHON)
         set(_py_dest lib/python/termin/render_components)
     endif()
     install(TARGETS _components_render_native DESTINATION ${_py_dest})
-    install(FILES python/termin/render_components/__init__.py DESTINATION ${_py_dest})
+    install(FILES
+        python/termin/render_components/__init__.py
+        python/termin/render_components/line_renderer.py
+        python/termin/render_components/skinned_mesh_renderer.py
+        python/termin/render_components/skybox_renderer.py
+        python/termin/render_components/skeleton_controller.py
+        DESTINATION ${_py_dest}
+    )
 endif()

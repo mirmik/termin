@@ -118,7 +118,7 @@ class GizmoPass(RenderFramePass):
             phase="gizmo_mask",
         )
 
-        from termin.visualization.render.components import MeshRenderer
+        from termin.render_components import MeshRenderer
 
         gizmo_entities = self._get_gizmo_entities()
         index = 1

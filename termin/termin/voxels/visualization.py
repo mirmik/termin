@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Optional
 import numpy as np
 
 from termin.mesh import TcMesh
+from termin.render_components import MeshRenderer
 from termin.visualization.core.material import Material
-from termin.visualization.render.components import MeshRenderer
 from tcbase import log
 
 if TYPE_CHECKING:

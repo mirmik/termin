@@ -22,7 +22,7 @@ from termin.visualization.core.camera import (
     OrbitCameraController,
 )
 from termin.visualization.core.mesh import MeshDrawable
-from termin.visualization.render.components import MeshRenderer
+from termin.render_components import MeshRenderer
 from termin.visualization.ui import Canvas, UIElement, UIRectangle
 from termin.visualization.core.material import Material
 from tgfx import TcShader, GraphicsBackend

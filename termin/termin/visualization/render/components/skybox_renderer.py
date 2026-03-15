@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 from termin.geombase import Pose3
 from termin.visualization.render.render_context import RenderContext
-from termin.visualization.render.components.mesh_renderer import MeshRenderer
+from termin.render_components import MeshRenderer
 
 
 class SkyboxRenderer(MeshRenderer):

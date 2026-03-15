@@ -12,7 +12,7 @@ from termin.geombase import GeneralPose3
 from termin.mesh.mesh import Mesh3
 from termin.mesh import TcMesh
 from termin.visualization.core.entity import Entity
-from termin.visualization.render.components.mesh_renderer import MeshRenderer
+from termin.render_components import MeshRenderer
 from termin.visualization.render.materials.default_material import DefaultMaterial
 
 try:

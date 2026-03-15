@@ -579,7 +579,7 @@ void main() {
         Returns:
             Список (mesh, transform_matrix) для каждого найденного меша
         """
-        from termin.visualization.render.components import MeshRenderer
+        from termin.render_components import MeshRenderer
 
         result: List[tuple[TcMesh, np.ndarray]] = []
 
@@ -1433,4 +1433,3 @@ void main() {
         )
 
         log.warning(f"VoxelizerComponent: triangulated mesh from NavMesh ({len(navmesh.polygons)} polygons, {len(vertices)} vertices, {len(triangles)} triangles)")
-

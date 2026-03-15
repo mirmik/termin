@@ -57,7 +57,7 @@ class ResourceLoader:
         Register meshes and materials from scene entities in ResourceManager.
         Assigns names to unnamed resources.
         """
-        from termin.visualization.render.components.mesh_renderer import MeshRenderer
+        from termin.render_components import MeshRenderer
 
         scene = self._get_scene()
         for ent in scene.entities:

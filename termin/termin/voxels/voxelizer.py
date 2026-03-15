@@ -242,7 +242,7 @@ class SceneVoxelizer:
         Returns:
             Общее количество записанных вокселей.
         """
-        from termin.visualization.render.components import MeshRenderer
+        from termin.render_components import MeshRenderer
 
         # Собираем все entity с MeshRenderer
         mesh_entities = []
@@ -327,7 +327,7 @@ def voxelize_scene(
 
 def _compute_scene_bounds(scene: "Scene"):
     """Вычислить bounds сцены по всем мешам."""
-    from termin.visualization.render.components import MeshRenderer
+    from termin.render_components import MeshRenderer
 
     scene_min = None
     scene_max = None
