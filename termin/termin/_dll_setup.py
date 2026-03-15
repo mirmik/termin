@@ -15,25 +15,51 @@ import os
 import sys
 
 _initialized = False
-_sdk_termin_dir = os.path.join(os.sep, "opt", "termin", "lib", "python", "termin")
+_sdk_termin_dir = None
+
+
+def _find_sdk_termin_dir():
+    """Find SDK termin directory by checking known locations."""
+    candidates = []
+
+    # 1. TERMIN_SDK environment variable
+    sdk_env = os.environ.get("TERMIN_SDK")
+    if sdk_env:
+        candidates.append(os.path.join(sdk_env, "lib", "python", "termin"))
+
+    # 2. Relative to this file: ../../lib/python/termin (when running from sdk/lib/python/termin/)
+    this_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.join(this_dir, "..", "..", "..", "lib", "python", "termin"))
+
+    # 3. /opt/termin/lib/python/termin (system install)
+    candidates.append(os.path.join(os.sep, "opt", "termin", "lib", "python", "termin"))
+
+    for c in candidates:
+        c = os.path.normpath(c)
+        if os.path.isdir(c):
+            return c
+    return None
 
 
 def _setup_dll_paths():
     """Configure DLL search paths on Windows."""
-    global _initialized
+    global _initialized, _sdk_termin_dir
     if _initialized:
         return
     _initialized = True
 
+    _sdk_termin_dir = _find_sdk_termin_dir()
+
     # Add SDK Python packages to sys.path and extend termin.__path__
     # so that subpackages from external repos (termin.scene, termin.inspect, etc.)
-    # installed into /opt/termin/lib/python/termin/ are discoverable.
-    sdk_python_dir = os.path.join(os.sep, "opt", "termin", "lib", "python")
-    if os.path.isdir(sdk_python_dir) and sdk_python_dir not in sys.path:
-        sys.path.insert(0, sdk_python_dir)
-    import termin as _termin_pkg
-    if os.path.isdir(_sdk_termin_dir) and _sdk_termin_dir not in _termin_pkg.__path__:
-        _termin_pkg.__path__.append(_sdk_termin_dir)
+    # installed into sdk/lib/python/termin/ are discoverable.
+    if _sdk_termin_dir:
+        sdk_python_dir = os.path.dirname(_sdk_termin_dir)
+        if os.path.isdir(sdk_python_dir) and sdk_python_dir not in sys.path:
+            sys.path.insert(0, sdk_python_dir)
+        import termin as _termin_pkg
+        if _sdk_termin_dir not in _termin_pkg.__path__:
+            _termin_pkg.__path__.append(_sdk_termin_dir)
 
     if sys.platform != "win32":
         return
@@ -55,6 +81,8 @@ _setup_dll_paths()
 
 def extend_package_path(package_path, *relative_parts):
     """Extend subpackage __path__ with the installed SDK directory for this package."""
+    if _sdk_termin_dir is None:
+        return
     sdk_package_dir = os.path.join(_sdk_termin_dir, *relative_parts)
     if os.path.isdir(sdk_package_dir) and sdk_package_dir not in package_path:
         package_path.append(sdk_package_dir)

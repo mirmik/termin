@@ -273,12 +273,10 @@ TERMIN_COLLISION_BUILD="$ENV_DIR/termin-collision/build"
 TERMIN_COLLISION_PY="$ENV_DIR/termin-collision/python"
 mkdir -p "$PYTHON_DEST/termin/colliders" "$PYTHON_DEST/termin/collision"
 
-# Copy .py files from SDK if available
-if [[ -d "$SDK_DIR/lib/python/termin/colliders" ]]; then
-    cp -n "$SDK_DIR/lib/python/termin/colliders/"*.py "$PYTHON_DEST/termin/colliders/" 2>/dev/null || true
-fi
-if [[ -d "$SDK_DIR/lib/python/termin/collision" ]]; then
-    cp -n "$SDK_DIR/lib/python/termin/collision/"*.py "$PYTHON_DEST/termin/collision/" 2>/dev/null || true
+# Copy .py files from component sources
+TERMIN_COMPONENTS_COLLISION_PY="$ENV_DIR/termin-components/termin-components-collision/python"
+if [[ -d "$TERMIN_COMPONENTS_COLLISION_PY/termin/colliders" ]]; then
+    cp -n "$TERMIN_COMPONENTS_COLLISION_PY/termin/colliders/"*.py "$PYTHON_DEST/termin/colliders/" 2>/dev/null || true
 fi
 
 COLLIDERS_SO=$(find_artifact_in_build "$TERMIN_COLLISION_BUILD" "_colliders_native*.so")
@@ -308,9 +306,10 @@ fi
 TERMIN_COMPONENTS_MESH_BUILD="$ENV_DIR/termin-components/termin-components-mesh/build"
 mkdir -p "$PYTHON_DEST/termin/mesh"
 
-# Copy .py files from SDK if available
-if [[ -d "$SDK_DIR/lib/python/termin/mesh" ]]; then
-    cp -n "$SDK_DIR/lib/python/termin/mesh/"*.py "$PYTHON_DEST/termin/mesh/" 2>/dev/null || true
+# Copy .py files from component sources
+TERMIN_COMPONENTS_MESH_PY="$ENV_DIR/termin-components/termin-components-mesh/python"
+if [[ -d "$TERMIN_COMPONENTS_MESH_PY/termin/mesh" ]]; then
+    cp -n "$TERMIN_COMPONENTS_MESH_PY/termin/mesh/"*.py "$PYTHON_DEST/termin/mesh/" 2>/dev/null || true
 fi
 
 COMPONENTS_MESH_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_MESH_BUILD" "_components_mesh_native*.so")
@@ -324,9 +323,10 @@ fi
 TERMIN_COMPONENTS_KINEMATIC_BUILD="$ENV_DIR/termin-components/termin-components-kinematic/build"
 mkdir -p "$PYTHON_DEST/termin/kinematic"
 
-# Copy .py files from SDK if available
-if [[ -d "$SDK_DIR/lib/python/termin/kinematic" ]]; then
-    cp -n "$SDK_DIR/lib/python/termin/kinematic/"*.py "$PYTHON_DEST/termin/kinematic/" 2>/dev/null || true
+# Copy .py files from component sources
+TERMIN_COMPONENTS_KINEMATIC_PY="$ENV_DIR/termin-components/termin-components-kinematic/python"
+if [[ -d "$TERMIN_COMPONENTS_KINEMATIC_PY/termin/kinematic" ]]; then
+    cp -n "$TERMIN_COMPONENTS_KINEMATIC_PY/termin/kinematic/"*.py "$PYTHON_DEST/termin/kinematic/" 2>/dev/null || true
 fi
 
 COMPONENTS_KINEMATIC_SO=$(find_artifact_in_build "$TERMIN_COMPONENTS_KINEMATIC_BUILD" "_components_kinematic_native*.so")

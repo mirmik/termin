@@ -98,7 +98,6 @@ if(TERMIN_BUILD_PYTHON)
         BUILD_WITH_INSTALL_RPATH TRUE
     )
     install(TARGETS _engine_native DESTINATION lib/python/termin/engine)
-    install(FILES python/termin/engine/__init__.py DESTINATION lib/python/termin/engine)
 endif()
 
 install(TARGETS termin_engine
