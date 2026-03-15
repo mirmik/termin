@@ -20,11 +20,6 @@ class PhysicsWorldComponent(PythonComponent):
     Компонент, управляющий физической симуляцией для сцены.
 
     Использует C++ бэкенд для высокой производительности.
-
-    Прикрепите к любой сущности в сцене. Он будет:
-    1. Собирать все RigidBodyComponent в сцене
-    2. Выполнять физическую симуляцию каждый кадр
-    3. Синхронизировать трансформы обратно в сущности
     """
 
     inspect_fields = {
@@ -32,7 +27,7 @@ class PhysicsWorldComponent(PythonComponent):
             path="gravity",
             label="Gravity",
             kind="vec3",
-            is_serializable=False,  # getter/setter работают с C++ объектом
+            is_serializable=False,
         ),
         "iterations": InspectField(
             path="iterations",
@@ -89,7 +84,6 @@ class PhysicsWorldComponent(PythonComponent):
         if gravity is None:
             gravity = np.array([0, 0, -9.81], dtype=np.float64)
 
-        # C++ PhysicsWorld
         self._physics_world = PhysicsWorld()
         self._physics_world.gravity = Vec3(gravity[0], gravity[1], gravity[2])
         self._physics_world.solver_iterations = iterations
@@ -104,8 +98,6 @@ class PhysicsWorldComponent(PythonComponent):
     @property
     def physics_world(self) -> PhysicsWorld:
         return self._physics_world
-
-    # --- Свойства-прокси для инспектора ---
 
     @property
     def gravity(self) -> np.ndarray:
@@ -161,14 +153,13 @@ class PhysicsWorldComponent(PythonComponent):
         scene = self.entity.scene if self.entity else None
         if not scene:
             return
-        # Передаём CollisionWorld из сцены в PhysicsWorld
+
         scene_collision_world = CollisionWorld.from_scene(scene)
         self._physics_world.set_collision_world(scene_collision_world)
         self._collect_rigid_bodies(scene)
         self._initialized = True
 
     def _collect_rigid_bodies(self, scene):
-        """Найти все RigidBodyComponent в сцене и зарегистрировать их без дублей."""
         from termin.physics.rigid_body_component import RigidBodyComponent
 
         self._rigid_body_components.clear()
@@ -178,7 +169,6 @@ class PhysicsWorldComponent(PythonComponent):
             self._collect_from_entity(entity, visited_entities)
 
     def _collect_from_entity(self, entity, visited_entities):
-        """Рекурсивно собрать RigidBodyComponent из дерева сущностей."""
         from termin.physics.rigid_body_component import RigidBodyComponent
 
         entity_id = id(entity)
@@ -189,35 +179,27 @@ class PhysicsWorldComponent(PythonComponent):
         rb_comp = entity.get_component(RigidBodyComponent)
         if rb_comp is not None:
             self._rigid_body_components.append(rb_comp)
-            # Регистрируем тело в C++ мире
             rb_comp._register_with_world(self._physics_world)
 
-        # Проверяем дочерние элементы через трансформ
         for child_transform in entity.transform.children:
             if child_transform.entity is not None:
                 self._collect_from_entity(child_transform.entity, visited_entities)
 
     def add_rigid_body_component(self, rb_comp: "RigidBodyComponent"):
-        """Динамически добавить RigidBodyComponent после инициализации."""
         if rb_comp in self._rigid_body_components:
             return
         self._rigid_body_components.append(rb_comp)
         rb_comp._register_with_world(self._physics_world)
 
     def remove_rigid_body_component(self, rb_comp: "RigidBodyComponent"):
-        """Удалить RigidBodyComponent из симуляции."""
         if rb_comp in self._rigid_body_components:
             self._rigid_body_components.remove(rb_comp)
-            # Note: C++ world не поддерживает удаление тел (пока)
 
     def fixed_update(self, dt: float):
-        """Шаг физики с фиксированным dt и синхронизация трансформов."""
         if not self._initialized or not self.enabled:
             return
 
-        # Шаг физической симуляции (C++)
         self._physics_world.step(dt)
 
-        # Синхронизация трансформов из физики в сущности
         for rb_comp in self._rigid_body_components:
             rb_comp._sync_from_physics()

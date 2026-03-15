@@ -1,20 +1,19 @@
 #pragma once
 
-/**
- * @file contact_solver.hpp
- * @brief Решатель контактных ограничений методом Sequential Impulses.
- *
- * Алгоритм:
- * 1. Для каждого контакта вычисляем эффективную массу
- * 2. Итеративно решаем: j = M_eff · (v_target - v_current)
- * 3. Накапливаем импульсы с ограничением (clamping)
- */
+// @file contact_solver.hpp
+// @brief Решатель контактных ограничений методом Sequential Impulses.
+//
+// Алгоритм:
+// 1. Для каждого контакта вычисляем эффективную массу.
+// 2. Итеративно решаем: j = M_eff * (v_target - v_current).
+// 3. Накапливаем импульсы с ограничением (clamping).
 
 #include <termin/geom/vec3.hpp>
 #include <termin/colliders/collider.hpp>
-#include "rigid_body.hpp"
+#include <termin/physics/rigid_body.hpp>
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace termin {
 namespace physics {
@@ -22,15 +21,14 @@ namespace physics {
 using colliders::Collider;
 
 struct Contact {
-    RigidBody* body_a = nullptr;  // nullptr = статика (земля)
+public:
+    RigidBody* body_a = nullptr;
     RigidBody* body_b = nullptr;
-    Collider* collider_a = nullptr;  // Для скоростей (если body == nullptr)
+    Collider* collider_a = nullptr;
     Collider* collider_b = nullptr;
     Vec3 point;
     Vec3 normal;
     double penetration = 0;
-
-    // Кэш импульсов для warm-starting
     double accumulated_normal = 0;
     double accumulated_tangent1 = 0;
     double accumulated_tangent2 = 0;
@@ -38,14 +36,13 @@ struct Contact {
 
 class ContactSolver {
 public:
-    double restitution = 0.3;  // Коэффициент восстановления
-    double friction = 0.5;     // Коэффициент трения
-    double baumgarte = 0.2;    // Коэффициент позиционной коррекции
-    double slop = 0.005;       // Допустимое проникновение
+    double restitution = 0.3;
+    double friction = 0.5;
+    double baumgarte = 0.2;
+    double slop = 0.005;
     int iterations = 10;
 
 private:
-    // Предвычисленные данные для контакта
     struct CachedContact {
         Contact* contact;
         double eff_mass_n;
@@ -67,11 +64,8 @@ public:
         for (auto& c : contacts) {
             CachedContact cc;
             cc.contact = &c;
-
-            // Эффективная масса по нормали
             cc.eff_mass_n = compute_effective_mass(c, c.normal);
 
-            // Касательные направления
             if (std::abs(c.normal.x) < 0.9) {
                 cc.tangent1 = c.normal.cross(Vec3(1, 0, 0)).normalized();
             } else {
@@ -96,8 +90,6 @@ public:
     }
 
     void solve_positions() {
-        // Baumgarte stabilization уже включён в solve_normal через bias
-        // Дополнительная позиционная коррекция (если нужна):
         for (auto& cc : cache_) {
             Contact& c = *cc.contact;
             if (c.penetration < slop) continue;
@@ -144,7 +136,6 @@ private:
     }
 
     Vec3 relative_velocity(const Contact& c) const {
-        // Скорость тела B в точке контакта
         Vec3 v_b;
         if (c.body_b) {
             v_b = c.body_b->point_velocity(c.point);
@@ -152,7 +143,6 @@ private:
             v_b = c.collider_b->point_velocity(c.point);
         }
 
-        // Скорость тела A в точке контакта
         Vec3 v_a;
         if (c.body_a) {
             v_a = c.body_a->point_velocity(c.point);
@@ -169,19 +159,16 @@ private:
         Vec3 v_rel = relative_velocity(c);
         double vn = v_rel.dot(c.normal);
 
-        // Сохраняем начальную скорость для реституции
         if (!cc.initial_vn_set) {
             cc.initial_vn = vn;
             cc.initial_vn_set = true;
         }
 
-        // Целевая скорость (реституция только при достаточной скорости удара)
         double target_vn = 0;
         if (cc.initial_vn < -1.0) {
             target_vn = -restitution * cc.initial_vn;
         }
 
-        // Bias для Baumgarte stabilization
         double bias = 0;
         if (c.penetration > slop) {
             bias = baumgarte * (c.penetration - slop) / dt;
@@ -189,7 +176,6 @@ private:
 
         double impulse = cc.eff_mass_n * (target_vn - vn + bias);
 
-        // Clamping: накопленный импульс >= 0
         double old = c.accumulated_normal;
         c.accumulated_normal = std::max(0.0, old + impulse);
         impulse = c.accumulated_normal - old;
@@ -200,12 +186,8 @@ private:
     void solve_friction(CachedContact& cc) {
         Contact& c = *cc.contact;
         double max_friction = friction * c.accumulated_normal;
-
-        // Полная относительная скорость в точке контакта (включая вращение)
-        // v_point = v_linear + ω × r
         Vec3 v_rel = relative_velocity(c);
 
-        // Tangent 1
         {
             double vt = v_rel.dot(cc.tangent1);
             double impulse = cc.eff_mass_t1 * (-vt);
@@ -217,7 +199,6 @@ private:
             apply_impulse(c, cc.tangent1 * impulse);
         }
 
-        // Tangent 2
         {
             double vt = v_rel.dot(cc.tangent2);
             double impulse = cc.eff_mass_t2 * (-vt);

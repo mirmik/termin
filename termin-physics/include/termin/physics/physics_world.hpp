@@ -1,90 +1,62 @@
 #pragma once
 
-/**
- * @file physics_world.hpp
- * @brief Простой игровой физический мир.
- *
- * Цикл симуляции (Semi-Implicit Euler):
- * 1. integrate_forces — обновить скорости по силам
- * 2. detect_collisions — найти контакты через CollisionWorld
- * 3. solve_contacts — итеративно разрешить импульсами
- * 4. integrate_positions — обновить позиции по скоростям
- * 5. correct_positions — убрать остаточное проникновение
- *
- * Поддерживает fixed timestep с накоплением времени.
- */
+// @file physics_world.hpp
+// @brief Простой игровой физический мир.
+//
+// Цикл симуляции (Semi-Implicit Euler):
+// 1. integrate_forces - обновить скорости по силам
+// 2. detect_collisions - найти контакты через CollisionWorld
+// 3. solve_contacts - итеративно разрешить импульсами
+// 4. integrate_positions - обновить позиции по скоростям
+// 5. correct_positions - убрать остаточное проникновение
+//
+// Поддерживает fixed timestep с накоплением времени.
 
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/pose3.hpp>
+#include <termin/geom/general_pose3.hpp>
 #include <termin/collision/collision_world.hpp>
-#include "rigid_body.hpp"
-#include "contact_solver.hpp"
-#include <vector>
-#include <unordered_map>
+#include <termin/physics/rigid_body.hpp>
+#include <termin/physics/contact_solver.hpp>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 namespace termin {
 namespace physics {
 
-
-
-
 using collision::CollisionWorld;
 using collision::ContactManifold;
-using colliders::Collider;
 using colliders::BoxCollider;
+using colliders::Collider;
 using colliders::SphereCollider;
 
 class PhysicsWorld {
 public:
-    // --- Параметры симуляции ---
     Vec3 gravity{0, 0, -9.81};
     int solver_iterations = 10;
-
-    // --- Параметры контактов ---
     double restitution = 0.3;
     double friction = 0.5;
-
-    // --- Земля (временно, пока нет PlaneCollider) ---
     bool ground_enabled = false;
     double ground_height = 0.0;
 
 private:
-    // Тела хранятся по значению
     std::vector<RigidBody> bodies_;
-
-    // Коллайдеры, созданные через add_box/add_sphere (владение)
     std::vector<colliders::ColliderPtr> owned_colliders_;
-
-    // Маппинг: collider → индекс тела
     std::unordered_map<Collider*, size_t> collider_to_body_;
-
-    // Маппинг: индекс тела → collider (для синхронизации позы)
     std::unordered_map<size_t, Collider*> body_to_collider_;
-
-    // CollisionWorld: внешний (через set_collision_world) или собственный (для standalone использования)
     std::unique_ptr<CollisionWorld> owned_collision_world_;
     CollisionWorld* collision_world_ = nullptr;
-
     std::vector<Contact> contacts_;
     ContactSolver solver_;
 
 public:
-    // ==================== Collision World ====================
-
-    /**
-     * Установить внешний CollisionWorld.
-     * PhysicsWorld не владеет им.
-     */
     void set_collision_world(CollisionWorld* cw) {
         collision_world_ = cw;
     }
 
     CollisionWorld* collision_world() const { return collision_world_; }
 
-    /**
-     * Получить (или создать) CollisionWorld для standalone использования.
-     */
     CollisionWorld* ensure_collision_world() {
         if (!collision_world_) {
             owned_collision_world_ = std::make_unique<CollisionWorld>();
@@ -93,20 +65,11 @@ public:
         return collision_world_;
     }
 
-    // ==================== Управление телами ====================
-
-    /**
-     * Добавить тело (без коллайдера).
-     */
     size_t add_body(const RigidBody& body) {
         bodies_.push_back(body);
         return bodies_.size() - 1;
     }
 
-    /**
-     * Связать тело с коллайдером.
-     * Коллайдер должен быть уже добавлен в CollisionWorld.
-     */
     void register_collider(size_t body_idx, Collider* collider) {
         if (body_idx >= bodies_.size() || !collider) return;
 
@@ -126,22 +89,14 @@ public:
         contacts_.clear();
     }
 
-    // ==================== Удобные фабрики ====================
-
-    /**
-     * Добавить box: создаёт RigidBody + BoxCollider, регистрирует в CollisionWorld.
-     */
     size_t add_box(double sx, double sy, double sz, double mass,
                    const Pose3& pose, bool is_static = false) {
-        // Создаём тело
         size_t idx = add_body(RigidBody::create_box(sx, sy, sz, mass, pose, is_static));
 
-        // Создаём коллайдер
         Vec3 half_size(sx / 2, sy / 2, sz / 2);
         auto collider = std::make_shared<BoxCollider>(half_size, GeneralPose3(pose.ang, pose.lin));
         owned_colliders_.push_back(collider);
 
-        // Регистрируем (создаём CollisionWorld если нужно для standalone)
         Collider* raw = collider.get();
         ensure_collision_world()->add(raw);
         register_collider(idx, raw);
@@ -149,9 +104,6 @@ public:
         return idx;
     }
 
-    /**
-     * Добавить sphere: создаёт RigidBody + SphereCollider, регистрирует в CollisionWorld.
-     */
     size_t add_sphere(double radius, double mass,
                       const Pose3& pose, bool is_static = false) {
         size_t idx = add_body(RigidBody::create_sphere(radius, mass, pose, is_static));
@@ -166,54 +118,33 @@ public:
         return idx;
     }
 
-    // ==================== Симуляция ====================
-
-    /**
-     * Выполнить один шаг физики с заданным dt.
-     * Накопление времени (fixed timestep) теперь на уровне Scene.
-     */
     void step(double dt) {
-        // 1. Интегрируем силы → скорости
         for (auto& body : bodies_) {
             body.integrate_forces(dt, gravity);
         }
 
-        // 2. Синхронизируем позы коллайдеров
         sync_collider_poses();
-
-        // 3. Детектируем коллизии
         detect_collisions();
 
-        // 4. Решаем контактные ограничения
         solver_.restitution = restitution;
         solver_.friction = friction;
         solver_.iterations = solver_iterations;
         solver_.prepare(contacts_);
         solver_.solve(dt);
 
-        // 5. Интегрируем скорости → позиции
         for (auto& body : bodies_) {
             body.integrate_positions(dt);
         }
 
-        // 6. Позиционная коррекция
         solver_.solve_positions();
-
-        // 7. Синхронизируем скорости в коллайдеры (для других систем)
         sync_collider_velocities();
     }
 
     const std::vector<Contact>& contacts() const { return contacts_; }
-
-    // Для совместимости со старым API
     std::vector<RigidBody>& bodies() { return bodies_; }
     const std::vector<RigidBody>& bodies() const { return bodies_; }
 
 private:
-    /**
-     * Синхронизировать скорости из RigidBody в коллайдеры.
-     * Это позволяет другим системам (FEM, анимация) читать скорости.
-     */
     void sync_collider_velocities() {
         for (auto& [body_idx, collider] : body_to_collider_) {
             if (body_idx >= bodies_.size()) continue;
@@ -223,36 +154,23 @@ private:
         }
     }
 
-    /**
-     * Синхронизировать позы коллайдеров с телами и обновить BVH.
-     *
-     * Для ColliderPrimitive (standalone использование): синхронизируем pose из body.
-     * Для AttachedCollider (сцена): поза автоматически следует за entity.transform.
-     */
     void sync_collider_poses() {
         for (auto& [body_idx, collider] : body_to_collider_) {
             if (body_idx >= bodies_.size()) continue;
 
-            // Для ColliderPrimitive (не AttachedCollider) синхронизируем позу из body
-            // AttachedCollider автоматически следует за entity.transform
             if (auto* prim = dynamic_cast<colliders::ColliderPrimitive*>(collider)) {
-                // Проверяем, не AttachedCollider ли это
                 if (dynamic_cast<colliders::AttachedCollider*>(collider) == nullptr) {
                     const Pose3& pose = bodies_[body_idx].pose;
                     prim->transform = GeneralPose3(pose.ang, pose.lin, prim->transform.scale);
                 }
             }
 
-            // Обновляем BVH
             if (collision_world_) {
                 collision_world_->update_pose(collider);
             }
         }
     }
 
-    /**
-     * Найти RigidBody по коллайдеру.
-     */
     RigidBody* find_body(Collider* collider) {
         auto it = collider_to_body_.find(collider);
         if (it != collider_to_body_.end() && it->second < bodies_.size()) {
@@ -264,7 +182,6 @@ private:
     void detect_collisions() {
         contacts_.clear();
 
-        // Коллизии через CollisionWorld
         if (collision_world_) {
             auto manifolds = collision_world_->detect_contacts();
 
@@ -272,15 +189,12 @@ private:
                 RigidBody* body_a = find_body(m.collider_a);
                 RigidBody* body_b = find_body(m.collider_b);
 
-                // Обрабатываем только если хотя бы одно тело наше
                 if (!body_a && !body_b) continue;
 
-                // Пропускаем статика-статика
                 bool a_static = !body_a || body_a->is_static;
                 bool b_static = !body_b || body_b->is_static;
                 if (a_static && b_static) continue;
 
-                // Конвертируем ContactManifold → Contact
                 for (int i = 0; i < m.point_count; ++i) {
                     const auto& cp = m.points[i];
                     Contact c;
@@ -290,13 +204,12 @@ private:
                     c.collider_b = m.collider_b;
                     c.point = cp.position;
                     c.normal = m.normal;
-                    c.penetration = -cp.penetration;  // ContactManifold: negative = penetrating
+                    c.penetration = -cp.penetration;
                     contacts_.push_back(c);
                 }
             }
         }
 
-        // Коллизии с землёй (временно, пока нет PlaneCollider)
         if (ground_enabled) {
             for (size_t i = 0; i < bodies_.size(); ++i) {
                 RigidBody& body = bodies_[i];
@@ -318,7 +231,7 @@ private:
             for (const auto& corner : corners) {
                 if (corner.z < ground_height) {
                     Contact c;
-                    c.body_a = nullptr;  // Земля
+                    c.body_a = nullptr;
                     c.body_b = &body;
                     c.collider_a = nullptr;
                     c.collider_b = collider;

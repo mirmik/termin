@@ -31,6 +31,7 @@ digraph termin_dependencies {
 		"termin-input";
 		"termin-modules";
 		"termin-collision";
+		"termin-physics";
 	}
 	subgraph cluster_render {
 		graph [color="#d9d9d9",
@@ -48,6 +49,7 @@ digraph termin_dependencies {
 			style=rounded
 		];
 		"termin-components-collision";
+		"termin-components-physics";
 		"termin-components-mesh";
 		"termin-components-kinematic";
 	}
@@ -78,6 +80,7 @@ digraph termin_dependencies {
 	"termin-base" -> "termin-mesh";
 	"termin-base" -> "termin-inspect";
 	"termin-base" -> "termin-modules";
+	"termin-base" -> "termin-physics";
 	"termin-mesh" -> "termin-graphics";
 	"termin-mesh" -> "termin-components-collision";
 	"termin-mesh" -> "termin-components-mesh";
@@ -90,13 +93,19 @@ digraph termin_dependencies {
 	"termin-input" -> "termin-display";
 	"termin-collision" -> "termin-engine";
 	"termin-collision" -> "termin-components-collision";
+	"termin-collision" -> "termin-physics";
 	"termin-graphics" -> "termin-render";
 	"termin-graphics" -> "termin-gui";
 	"termin-render" -> "termin-display";
 	"termin-display" -> "termin-components-render";
+	"termin-physics" -> "termin-components-physics";
+	"termin-components-collision" -> "termin-components-physics";
+	"termin-components-render" -> "termin-components-physics";
 	"termin-components-render" -> "termin-engine";
 	"termin-components-collision" -> termin;
 	"termin-components-kinematic" -> termin;
+	"termin-components-physics" -> termin;
+	"termin-physics" -> termin;
 	"termin-modules" -> termin;
 	"termin-engine" -> termin;
 	"termin-gui" -> termin;

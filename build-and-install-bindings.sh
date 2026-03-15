@@ -108,8 +108,10 @@ build_with_python() {
         -Dtermin_display_DIR="$SDK_PREFIX/lib/cmake/termin_display" \
         -Dtermin_engine_DIR="$SDK_PREFIX/lib/cmake/termin_engine" \
         -Dtermin_collision_DIR="$SDK_PREFIX/lib/cmake/termin_collision" \
+        -Dtermin_physics_DIR="$SDK_PREFIX/lib/cmake/termin_physics" \
         -Dtermin_components_collision_DIR="$SDK_PREFIX/lib/cmake/termin_components_collision" \
         -Dtermin_components_render_DIR="$SDK_PREFIX/lib/cmake/termin_components_render" \
+        -Dtermin_components_physics_DIR="$SDK_PREFIX/lib/cmake/termin_components_physics" \
         -Dtermin_components_mesh_DIR="$SDK_PREFIX/lib/cmake/termin_components_mesh" \
         -Dtermin_components_kinematic_DIR="$SDK_PREFIX/lib/cmake/termin_components_kinematic" \
         -DPython_EXECUTABLE="$PY_EXEC"
@@ -124,8 +126,10 @@ build_with_python "termin-scene"                "$SCRIPT_DIR/termin-scene"
 build_with_python "termin-render"               "$SCRIPT_DIR/termin-render"
 build_with_python "termin-display"              "$SCRIPT_DIR/termin-display"
 build_with_python "termin-collision"            "$SCRIPT_DIR/termin-collision"
+build_with_python "termin-physics"              "$SCRIPT_DIR/termin-physics"
 build_with_python "termin-components-collision"  "$SCRIPT_DIR/termin-components/termin-components-collision"
 build_with_python "termin-components-render"     "$SCRIPT_DIR/termin-components/termin-components-render"
+build_with_python "termin-components-physics"    "$SCRIPT_DIR/termin-components/termin-components-physics"
 build_with_python "termin-components-mesh"       "$SCRIPT_DIR/termin-components/termin-components-mesh"
 build_with_python "termin-engine"                "$SCRIPT_DIR/termin-engine"
 build_with_python "termin-components-kinematic"  "$SCRIPT_DIR/termin-components/termin-components-kinematic"
