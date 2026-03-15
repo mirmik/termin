@@ -9,14 +9,14 @@ import numpy as np
 
 from termin.geombase import Pose3
 from termin.geombase import GeneralPose3
+from termin.animation import TcAnimationClip
+from termin.animation_components import AnimationPlayer
 from termin.skeleton import SkeletonInstance, TcSkeleton
+from termin.skeleton_components import SkeletonController
 from termin.visualization.core.entity import Entity
 from termin.mesh import TcMesh
 from termin.visualization.render.components.mesh_renderer import MeshRenderer
 from termin.visualization.render.components.skinned_mesh_renderer import SkinnedMeshRenderer
-from termin.visualization.render.components.skeleton_controller import SkeletonController
-from termin.visualization.animation.player import AnimationPlayer
-from termin.visualization.animation.clip import TcAnimationClip
 
 if TYPE_CHECKING:
     from termin.assets.mesh_asset import MeshAsset

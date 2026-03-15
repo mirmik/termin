@@ -25,7 +25,7 @@ from termin.visualization.render.components import MeshRenderer
 from termin.visualization.render.components.light_component import LightComponent
 from termin.lighting import LightType, LightShadowParams
 
-from termin.physics import RigidBodyComponent, PhysicsWorldComponent
+from termin.physics_components import RigidBodyComponent, PhysicsWorldComponent
 
 
 def build_physics_scene(world):
