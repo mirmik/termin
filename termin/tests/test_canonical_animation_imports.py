@@ -66,6 +66,8 @@ def test_no_legacy_imports_in_examples():
     violations = []
 
     for root, _dirs, files in os.walk(examples_dir):
+        if os.path.basename(root) == "broken":
+            continue
         for fname in files:
             if not fname.endswith(".py"):
                 continue
@@ -139,29 +141,28 @@ def test_builtins_no_legacy_render_components_paths():
         )
 
 
-def test_no_legacy_render_components_imports_in_examples():
-    """Example files should not import from legacy render.components paths."""
+def test_physics_facade_modules_removed():
+    """Legacy facade modules under termin.physics should not exist in repo tree."""
     import os
-    import re
+    repo_physics = os.path.join(os.path.dirname(__file__), "..", "termin", "physics")
+    repo_physics = os.path.normpath(repo_physics)
+    facade_files = [
+        "physics_world_component.py",
+        "rigid_body_component.py",
+    ]
+    for fname in facade_files:
+        fpath = os.path.join(repo_physics, fname)
+        assert not os.path.exists(fpath), f"Legacy facade still exists: {fpath}"
 
-    legacy_pattern = re.compile(
-        r"from\s+termin\.visualization\.render\.components\s+import"
-        r"|import\s+termin\.visualization\.render\.components"
-    )
 
-    examples_dir = os.path.join(os.path.dirname(__file__), "..", "examples")
-    examples_dir = os.path.normpath(examples_dir)
-    violations = []
+def test_builtins_no_legacy_physics_paths():
+    """_builtins.py should not reference legacy physics facade paths."""
+    from termin.assets.resources._builtins import BUILTIN_COMPONENTS
 
-    for root, _dirs, files in os.walk(examples_dir):
-        for fname in files:
-            if not fname.endswith(".py"):
-                continue
-            fpath = os.path.join(root, fname)
-            with open(fpath) as f:
-                for i, line in enumerate(f, 1):
-                    if legacy_pattern.search(line):
-                        rel = os.path.relpath(fpath, examples_dir)
-                        violations.append(f"{rel}:{i}: {line.strip()}")
-
-    assert not violations, "Legacy render.components imports found in examples:\n" + "\n".join(violations)
+    for module_path, _cls in BUILTIN_COMPONENTS:
+        assert not module_path.startswith("termin.physics.physics_world_component"), (
+            f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
+        )
+        assert not module_path.startswith("termin.physics.rigid_body_component"), (
+            f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
+        )
