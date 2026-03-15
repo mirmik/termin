@@ -15,6 +15,10 @@ PIP="$VENV/bin/pip"
 
 TERMIN_ENV="$(cd .. && pwd)"
 
+echo "=== Installing termin-build-tools ==="
+$PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-build-tools"
+
+echo ""
 echo "=== Installing termin-base (tcbase) ==="
 $PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-base"
 

@@ -47,6 +47,8 @@ fi
 build_cmake_lib_cpp() {
     local name="$1"
     local dir="$2"
+    shift 2
+    local extra_args=("$@")
 
     echo ""
     echo "========================================"
@@ -65,11 +67,6 @@ build_cmake_lib_cpp() {
 
     mkdir -p "$build_dir"
 
-    local extra_args=()
-    if [[ "$name" == "termin-modules" ]]; then
-        extra_args+=(-DTERMIN_MODULES_BUILD_PYTHON=OFF)
-    fi
-
     cmake -S . -B "$build_dir" \
         -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
         -DCMAKE_INSTALL_PREFIX="$SDK_PREFIX" \
@@ -80,7 +77,6 @@ build_cmake_lib_cpp() {
         "${extra_args[@]}"
 
     cmake --build "$build_dir" --parallel "$BUILD_JOBS"
-
     cmake --install "$build_dir"
 
     echo "$name installed to ${SDK_PREFIX}"
@@ -121,29 +117,29 @@ build_termin_cpp_only() {
     echo "termin (C/C++ only) installed to ${SDK_PREFIX}"
 }
 
-# Build chain (C/C++ only)
-build_cmake_lib_cpp "termin-base" "$SCRIPT_DIR/termin-base"
-build_cmake_lib_cpp "termin-modules" "$SCRIPT_DIR/termin-modules"
-build_cmake_lib_cpp "termin-mesh" "$SCRIPT_DIR/termin-mesh"
-build_cmake_lib_cpp "termin-graphics" "$SCRIPT_DIR/termin-graphics"
-build_cmake_lib_cpp "termin-inspect" "$SCRIPT_DIR/termin-inspect"
-build_cmake_lib_cpp "termin-scene" "$SCRIPT_DIR/termin-scene"
-build_cmake_lib_cpp "termin-render" "$SCRIPT_DIR/termin-render"
-build_cmake_lib_cpp "termin-input" "$SCRIPT_DIR/termin-input"
-build_cmake_lib_cpp "termin-display" "$SCRIPT_DIR/termin-display"
-build_cmake_lib_cpp "termin-collision" "$SCRIPT_DIR/termin-collision"
-build_cmake_lib_cpp "termin-physics" "$SCRIPT_DIR/termin-physics"
-build_cmake_lib_cpp "termin-components-collision" "$SCRIPT_DIR/termin-components/termin-components-collision"
-build_cmake_lib_cpp "termin-components-render" "$SCRIPT_DIR/termin-components/termin-components-render"
-build_cmake_lib_cpp "termin-components-mesh" "$SCRIPT_DIR/termin-components/termin-components-mesh"
-build_cmake_lib_cpp "termin-engine" "$SCRIPT_DIR/termin-engine"
-build_cmake_lib_cpp "termin-components-kinematic" "$SCRIPT_DIR/termin-components/termin-components-kinematic"
-build_cmake_lib_cpp "termin-components-physics" "$SCRIPT_DIR/termin-components/termin-components-physics"
-build_cmake_lib_cpp "termin-skeleton" "$SCRIPT_DIR/termin-skeleton"
-build_cmake_lib_cpp "termin-animation" "$SCRIPT_DIR/termin-animation"
-build_cmake_lib_cpp "termin-components-skeleton" "$SCRIPT_DIR/termin-components/termin-components-skeleton"
-build_termin_cpp_only
-build_cmake_lib_cpp "termin-components-animation" "$SCRIPT_DIR/termin-components/termin-components-animation"
+# Build chain from modules.conf
+while IFS= read -r line; do
+    line="${line%%#*}"
+    line="$(echo "$line" | xargs)"
+    [[ -z "$line" ]] && continue
+
+    if [[ "$line" == "@termin-cpp" ]]; then
+        build_termin_cpp_only
+        continue
+    fi
+
+    IFS='|' read -r name dir has_python test_flag extra_cmake <<< "$line"
+    name="$(echo "$name" | xargs)"
+    dir="$(echo "$dir" | xargs)"
+    extra_cmake="$(echo "$extra_cmake" | xargs)"
+
+    extra_args=()
+    if [[ "$extra_cmake" != "-" && -n "$extra_cmake" ]]; then
+        read -ra extra_args <<< "$extra_cmake"
+    fi
+
+    build_cmake_lib_cpp "$name" "$SCRIPT_DIR/$dir" "${extra_args[@]}"
+done < "$SCRIPT_DIR/modules.conf"
 
 echo ""
 echo "========================================"
