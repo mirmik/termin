@@ -1,6 +1,6 @@
 #!/bin/bash
 # Install termin Python packages into the current pip environment.
-# Assumes SDK is already built via build-and-install-cpp.sh + build-and-install-bindings.sh.
+# Assumes SDK is already built via build-sdk-cpp.sh + build-sdk-bindings.sh.
 #
 # Usage:
 #   ./install-pip-packages.sh              # Install all packages

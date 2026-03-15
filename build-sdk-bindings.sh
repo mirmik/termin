@@ -1,12 +1,12 @@
 #!/bin/bash
 # Build and install Python bindings (nanobind SDK + C++ libs with Python + pip packages)
-# Assumes C++ libraries are already built and installed via build-and-install-cpp.sh
+# Assumes C++ libraries are already built and installed via build-sdk-cpp.sh
 #
 # Usage:
-#   ./build-and-install-bindings.sh                # Release build
-#   ./build-and-install-bindings.sh --debug        # Debug build
-#   ./build-and-install-bindings.sh --clean        # Clean before build
-#   ./build-and-install-bindings.sh --no-parallel  # Disable parallel build jobs
+#   ./build-sdk-bindings.sh                # Release build
+#   ./build-sdk-bindings.sh --debug        # Debug build
+#   ./build-sdk-bindings.sh --clean        # Clean before build
+#   ./build-sdk-bindings.sh --no-parallel  # Disable parallel build jobs
 
 set -e
 

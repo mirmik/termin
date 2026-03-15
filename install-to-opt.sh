@@ -29,7 +29,7 @@ esac
 
 if [[ ! -d "$SDK_DIR" ]]; then
     echo "SDK directory not found: $SDK_DIR"
-    echo "Run build-and-install-cpp.sh and/or build-and-install-bindings.sh first."
+    echo "Run build-sdk-cpp.sh and/or build-sdk-bindings.sh first."
     exit 1
 fi
 
