@@ -18,7 +18,7 @@ from termin.visualization import (
     PerspectiveCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.render.components import MeshRenderer
+from termin.render_components import MeshRenderer
 from tgfx import TcShader
 from termin.visualization.render.posteffects.gray import GrayscaleEffect
 from termin.visualization.render.posteffects.blur import GaussianBlurPass

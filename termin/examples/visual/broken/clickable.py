@@ -18,7 +18,7 @@ from termin.visualization import (
     OrbitCameraController,
 )
 from termin.visualization.core.entity import Entity, Component
-from termin.visualization.render.components import MeshRenderer, LightComponent
+from termin.render_components import LightComponent, MeshRenderer
 from tgfx import TcShader
 from termin.colliders import BoxCollider
 from termin.colliders.collider_component import ColliderComponent

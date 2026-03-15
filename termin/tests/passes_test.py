@@ -10,7 +10,7 @@ from termin.visualization.render.framegraph.passes.color import ColorPass
 from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
 from termin.visualization.core.entity import Entity
 from termin.mesh.mesh import CubeMesh
-from termin.visualization.render.components.mesh_renderer import MeshRenderer
+from termin.render_components import MeshRenderer
 from termin.visualization.render.materials.simple import ColorMaterial
 from termin.geombase import Pose3, Vec3
 from termin.visualization.render import (
