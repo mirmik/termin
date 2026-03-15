@@ -1,8 +1,5 @@
-"""SkinnedMeshRenderer - Renderer component for skinned meshes with skeletal animation.
+"""Compatibility facade for SkinnedMeshRenderer."""
 
-Re-exports C++ SkinnedMeshRenderer.
-"""
-
-from termin._native.render import SkinnedMeshRenderer
+from termin.render_components.skinned_mesh_renderer import SkinnedMeshRenderer
 
 __all__ = ["SkinnedMeshRenderer"]
