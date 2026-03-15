@@ -33,11 +33,11 @@ modules, фиксация финального API.
 - Modify: `/home/mirmik/project/chronosquad-termin/Core/controllers/animation_controller.py`
 - Modify: `/home/mirmik/project/chronosquad-termin/Core/controllers/effects/blind_effect.py`
 
-- [ ] Заменить `termin.visualization.animation.player` на `termin.animation_components`
-- [ ] Заменить `termin.visualization.render.components.mesh_renderer` на `termin.render_components`
-- [ ] Просканировать весь chronosquad-termin на оставшиеся legacy imports
-- [ ] Просканировать `/home/mirmik/projects` на legacy imports
-- [ ] Запустить chronosquad-termin и убедиться что импорты работают
+- [x] Заменить `termin.visualization.animation.player` на `termin.animation_components`
+- [x] Заменить `termin.visualization.render.components.mesh_renderer` на `termin.render_components`
+- [x] Просканировать весь chronosquad-termin на оставшиеся legacy imports
+- [x] Просканировать `/home/mirmik/projects` на legacy imports
+- [x] Запустить chronosquad-termin и убедиться что импорты работают
 
 ### Task 2: Перенаправить внутренние импорты из native-модулей
 
