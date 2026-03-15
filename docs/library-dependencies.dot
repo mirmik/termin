@@ -107,7 +107,6 @@ digraph termin_dependencies {
 	"termin-display" -> "termin-components-render";
 	"termin-physics" -> "termin-components-physics";
 	"termin-components-collision" -> "termin-components-physics";
-	"termin-components-render" -> "termin-components-physics";
 	"termin-skeleton" -> "termin-components-skeleton";
 	"termin-animation" -> "termin-components-animation";
 	"termin-components-skeleton" -> "termin-components-animation";

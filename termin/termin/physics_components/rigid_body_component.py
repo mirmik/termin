@@ -120,16 +120,6 @@ class RigidBodyComponent(PythonComponent):
                 max_scale = np.max(global_scale)
                 return np.array([r, r, r]) * max_scale
 
-        from termin.render_components import MeshRenderer
-
-        mesh_renderer = self.entity.get_component(MeshRenderer)
-        if mesh_renderer is not None and mesh_renderer.mesh is not None:
-            mesh = mesh_renderer.mesh
-            if hasattr(mesh, "get_bounds"):
-                bounds = mesh.get_bounds()
-                size = bounds.max_point - bounds.min_point
-                return (size / 2.0) * global_scale
-
         return np.array([0.5, 0.5, 0.5]) * global_scale
 
     def _find_and_register_with_physics_world(self, scene: "Scene"):
