@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from termin.visualization.animation._animation_native import TcAnimationClip
+    from termin.animation._animation_native import TcAnimationClip
 
 
 def save_animation_clip(clip: "TcAnimationClip", path: str | Path) -> None:
@@ -20,7 +20,7 @@ def save_animation_clip(clip: "TcAnimationClip", path: str | Path) -> None:
 
 def load_animation_clip(path: str | Path) -> "TcAnimationClip":
     """Load TcAnimationClip from .tanim file."""
-    from termin.visualization.animation._animation_native import TcAnimationClip
+    from termin.animation._animation_native import TcAnimationClip
 
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -46,7 +46,7 @@ def load_animation_clip(path: str | Path) -> "TcAnimationClip":
 
 def parse_animation_content(content: str) -> "TcAnimationClip":
     """Parse TcAnimationClip from JSON content string."""
-    from termin.visualization.animation._animation_native import TcAnimationClip
+    from termin.animation._animation_native import TcAnimationClip
 
     data = json.loads(content)
 

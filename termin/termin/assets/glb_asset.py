@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from termin.loaders.glb_loader import GLBSceneData
     from termin.visualization.core.mesh_asset import MeshAsset
     from termin.skeleton.skeleton_asset import SkeletonAsset
-    from termin.visualization.animation.animation_clip_asset import AnimationClipAsset
+    from termin.assets.animation_clip_asset import AnimationClipAsset
 
 
 class GLBAsset(DataAsset["GLBSceneData"]):

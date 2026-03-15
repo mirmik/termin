@@ -57,7 +57,7 @@ NB_MODULE(_components_animation_native, m) {
     nb::module_::import_("termin.entity._entity_native");
     nb::module_::import_("termin.skeleton._skeleton_native");
     nb::module_::import_("termin.skeleton._components_skeleton_native");
-    nb::module_::import_("termin.visualization.animation._animation_native");
+    nb::module_::import_("termin.animation._animation_native");
 
     bind_animation_player(m);
 }
