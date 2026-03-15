@@ -96,49 +96,28 @@ find_artifact_in_build() {
 # Configure
 echo "Configuring CMake..."
 
+CMAKE_COMMON_ARGS=(
+    -DBUILD_EDITOR_MINIMAL=ON
+    -DBUILD_LAUNCHER=ON
+    -DBUNDLE_PYTHON=ON
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    -DCMAKE_PREFIX_PATH="$SDK_DIR"
+    -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF
+    -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON
+    -DPython_EXECUTABLE="$(which python3)"
+)
+
 if [[ $ASAN -eq 1 ]]; then
     ASAN_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
     cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
-        -DBUILD_EDITOR_MINIMAL=ON \
-        -DBUILD_LAUNCHER=ON \
-        -DBUNDLE_PYTHON=ON \
-        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-        -DCMAKE_PREFIX_PATH="$SDK_DIR" \
-        -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
-        -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
-        -DPython_EXECUTABLE="$(which python3)" \
-        -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
-        -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
-        -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
-        -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
-        -Dtermin_input_DIR="$SDK_DIR/lib/cmake/termin_input" \
-        -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
-        -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
-        -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh" \
-        -Dtermin_components_kinematic_DIR="$SDK_DIR/lib/cmake/termin_components_kinematic" \
+        "${CMAKE_COMMON_ARGS[@]}" \
         -DCMAKE_C_FLAGS="$ASAN_FLAGS" \
         -DCMAKE_CXX_FLAGS="$ASAN_FLAGS" \
         -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
         -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address"
 else
     cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
-        -DBUILD_EDITOR_MINIMAL=ON \
-        -DBUILD_LAUNCHER=ON \
-        -DBUNDLE_PYTHON=ON \
-        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-        -DCMAKE_PREFIX_PATH="$SDK_DIR" \
-        -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
-        -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
-        -DPython_EXECUTABLE="$(which python3)" \
-        -Dtermin_base_DIR="$SDK_DIR/lib/cmake/termin_base" \
-        -Dtermin_graphics_DIR="$SDK_DIR/lib/cmake/termin_graphics" \
-        -Dtermin_inspect_DIR="$SDK_DIR/lib/cmake/termin_inspect" \
-        -Dtermin_scene_DIR="$SDK_DIR/lib/cmake/termin_scene" \
-        -Dtermin_input_DIR="$SDK_DIR/lib/cmake/termin_input" \
-        -Dtermin_collision_DIR="$SDK_DIR/lib/cmake/termin_collision" \
-        -Dtermin_components_collision_DIR="$SDK_DIR/lib/cmake/termin_components_collision" \
-        -Dtermin_components_mesh_DIR="$SDK_DIR/lib/cmake/termin_components_mesh" \
-        -Dtermin_components_kinematic_DIR="$SDK_DIR/lib/cmake/termin_components_kinematic"
+        "${CMAKE_COMMON_ARGS[@]}"
 fi
 
 # Build
