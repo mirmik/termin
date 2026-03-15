@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Callable
@@ -126,11 +127,10 @@ class ProjectModulesRuntime:
         import termin
 
         termin_path = Path(termin.__file__).resolve().parent
-        install_root = termin_path.parent.parent.parent
-        default_root = Path("/opt/termin")
-        prefix_root = install_root
-        if not (prefix_root / "lib").exists() and default_root.exists():
-            prefix_root = default_root
+        prefix_root = termin_path.parent.parent.parent
+        sdk_env = os.environ.get("TERMIN_SDK")
+        if sdk_env:
+            prefix_root = Path(sdk_env)
 
         environment.sdk_prefix = str(prefix_root)
         environment.cmake_prefix_path = str(prefix_root)

@@ -31,9 +31,6 @@ def _find_sdk_termin_dir():
     this_dir = os.path.dirname(os.path.abspath(__file__))
     candidates.append(os.path.join(this_dir, "..", "..", "..", "lib", "python", "termin"))
 
-    # 3. /opt/termin/lib/python/termin (system install)
-    candidates.append(os.path.join(os.sep, "opt", "termin", "lib", "python", "termin"))
-
     for c in candidates:
         c = os.path.normpath(c)
         if os.path.isdir(c):
