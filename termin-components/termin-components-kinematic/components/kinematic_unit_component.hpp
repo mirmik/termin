@@ -32,6 +32,8 @@ public:
 
     // Current coordinate (interpretation depends on subclass)
     double coordinate = 0.0;
+    double min_coordinate = -100.0;
+    double max_coordinate = 100.0;
 
     // Base pose (GeneralPose3, set by capture_base())
     tc_vec3 base_position = {0, 0, 0};

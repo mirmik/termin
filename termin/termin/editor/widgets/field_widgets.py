@@ -301,6 +301,109 @@ class SliderFieldWidget(FieldWidget):
         self._spinbox.blockSignals(False)
 
 
+class IntervalSliderFieldWidget(FieldWidget):
+    """Widget for interval_slider: [value, min, max] displayed as min spinbox + slider + value spinbox + max spinbox."""
+
+    SLIDER_STEPS = 1000
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._block = False
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self._min_spin = DoubleSpinBox()
+        self._min_spin.setRange(-1e9, 1e9)
+        self._min_spin.setDecimals(3)
+        self._min_spin.setFixedWidth(65)
+
+        self._slider = QSlider(Qt.Orientation.Horizontal)
+        self._slider.setRange(0, self.SLIDER_STEPS)
+
+        self._val_spin = DoubleSpinBox()
+        self._val_spin.setRange(-1e9, 1e9)
+        self._val_spin.setDecimals(3)
+        self._val_spin.setFixedWidth(65)
+
+        self._max_spin = DoubleSpinBox()
+        self._max_spin.setRange(-1e9, 1e9)
+        self._max_spin.setDecimals(3)
+        self._max_spin.setFixedWidth(65)
+
+        layout.addWidget(self._min_spin)
+        layout.addWidget(self._slider, stretch=1)
+        layout.addWidget(self._val_spin)
+        layout.addWidget(self._max_spin)
+
+        self._slider.valueChanged.connect(self._on_slider_changed)
+        self._val_spin.valueChanged.connect(self._on_val_spin_changed)
+        self._min_spin.valueChanged.connect(self._on_range_changed)
+        self._max_spin.valueChanged.connect(self._on_range_changed)
+
+    def _cur_min(self) -> float:
+        return self._min_spin.value()
+
+    def _cur_max(self) -> float:
+        return self._max_spin.value()
+
+    def _val_to_slider(self, val: float) -> int:
+        lo, hi = self._cur_min(), self._cur_max()
+        if hi <= lo:
+            return 0
+        t = (val - lo) / (hi - lo)
+        t = max(0.0, min(1.0, t))
+        return int(t * self.SLIDER_STEPS)
+
+    def _slider_to_val(self, pos: int) -> float:
+        lo, hi = self._cur_min(), self._cur_max()
+        if hi <= lo:
+            return lo
+        return lo + (pos / self.SLIDER_STEPS) * (hi - lo)
+
+    def _on_slider_changed(self) -> None:
+        if self._block:
+            return
+        val = self._slider_to_val(self._slider.value())
+        self._block = True
+        self._val_spin.setValue(val)
+        self._block = False
+        self.value_changed.emit()
+
+    def _on_val_spin_changed(self) -> None:
+        if self._block:
+            return
+        self._block = True
+        self._slider.setValue(self._val_to_slider(self._val_spin.value()))
+        self._block = False
+        self.value_changed.emit()
+
+    def _on_range_changed(self) -> None:
+        if self._block:
+            return
+        self._block = True
+        self._val_spin.setRange(self._cur_min(), self._cur_max())
+        self._slider.setValue(self._val_to_slider(self._val_spin.value()))
+        self._block = False
+        self.value_changed.emit()
+
+    def get_value(self) -> list:
+        return [self._val_spin.value(), self._cur_min(), self._cur_max()]
+
+    def set_value(self, value: Any) -> None:
+        if not isinstance(value, (list, tuple)) or len(value) < 3:
+            return
+        val, lo, hi = float(value[0]), float(value[1]), float(value[2])
+        self._block = True
+        self._min_spin.setValue(lo)
+        self._max_spin.setValue(hi)
+        self._val_spin.setRange(lo, hi)
+        self._val_spin.setValue(val)
+        self._slider.setValue(self._val_to_slider(val))
+        self._block = False
+
+
 class ColorFieldWidget(FieldWidget):
     """Widget for color fields using QPushButton with color dialog."""
 
@@ -738,6 +841,9 @@ class FieldWidgetFactory:
                 min_val=int(field.min) if field.min is not None else 0,
                 max_val=int(field.max) if field.max is not None else 100,
             )
+
+        if kind == "interval_slider":
+            return IntervalSliderFieldWidget()
 
         if kind == "color":
             return ColorFieldWidget()

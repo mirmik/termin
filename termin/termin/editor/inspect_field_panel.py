@@ -232,6 +232,8 @@ class InspectFieldPanel(QWidget):
             new_value = widget.get_value()
             field.set_value(target, new_value)
             self.field_changed.emit(key, old_value, new_value)
+            # Refresh all widgets (a field change may affect other fields)
+            self.refresh()
             # Request viewport redraw after property change
             from termin.editor.rendering_controller import RenderingController
             ctrl = RenderingController.instance()

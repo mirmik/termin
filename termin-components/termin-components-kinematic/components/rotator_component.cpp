@@ -1,6 +1,11 @@
 #include <components/rotator_component.hpp>
 #include <termin/geom/quat.hpp>
+#include "tc_inspect_cpp.hpp"
 #include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace termin {
 
@@ -61,5 +66,49 @@ void RotatorComponent::capture_base() {
     Quat base = current_rot * coord_rot.inverse();
     base_rotation = {base.x, base.y, base.z, base.w};
 }
+
+// axis_scale preset (enum, not serialized)
+static struct _RotatorAxisScaleRegistrar {
+    _RotatorAxisScaleRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "RotatorComponent";
+        info.path = "axis_scale";
+        info.label = "Axis Scale";
+        info.kind = "enum";
+        info.is_serializable = false;
+
+        // π/180 ≈ 0.01745329 — coordinate in degrees
+        // 1.0 — coordinate in radians
+        std::string deg_str = std::to_string(M_PI / 180.0);
+        info.choices = {
+            {deg_str, "deg"},
+            {"1.0",   "rad"},
+        };
+
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            double len = std::sqrt(c->axis_x*c->axis_x + c->axis_y*c->axis_y + c->axis_z*c->axis_z);
+            double deg_scale = M_PI / 180.0;
+            if (std::abs(len - deg_scale) < 1e-6) return tc_value_string(std::to_string(deg_scale).c_str());
+            if (std::abs(len - 1.0) < 1e-6) return tc_value_string("1.0");
+            return tc_value_string(std::to_string(deg_scale).c_str());
+        };
+
+        info.setter = [](void* obj, tc_value value, void*) {
+            if (value.type != TC_VALUE_STRING || !value.data.s) return;
+            double new_scale = std::atof(value.data.s);
+            if (new_scale < 1e-12) return;
+
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            double len = std::sqrt(c->axis_x*c->axis_x + c->axis_y*c->axis_y + c->axis_z*c->axis_z);
+            if (len < 1e-12) return;
+
+            double factor = new_scale / len;
+            c->set_axis(c->axis_x * factor, c->axis_y * factor, c->axis_z * factor);
+        };
+
+        tc::InspectRegistry::instance().add_field_with_choices("RotatorComponent", std::move(info));
+    }
+} _rotator_axis_scale_registrar;
 
 } // namespace termin

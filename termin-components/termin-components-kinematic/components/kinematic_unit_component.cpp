@@ -1,8 +1,12 @@
 #include <components/kinematic_unit_component.hpp>
 #include "tc_inspect_cpp.hpp"
+#include <termin/geom/pose3.hpp>
 #include <cmath>
 
 namespace termin {
+
+static double degrees(double rad) { return rad * (180.0 / M_PI); }
+static double radians(double deg) { return deg * (M_PI / 180.0); }
 
 static bool tc_value_to_vec3(const tc_value& v, tc_vec3& out) {
     if (v.type == TC_VALUE_LIST && v.data.list.count >= 3) {
@@ -66,21 +70,29 @@ void KinematicUnitComponent::register_type() {
         info.type_name = "KinematicUnitComponent";
         info.path = "coordinate";
         info.label = "Coordinate";
-        info.kind = "double";
-        info.min = -100000.0;
-        info.max = 100000.0;
-        info.step = 0.01;
+        info.kind = "interval_slider";
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            return tc_value_double(c->coordinate);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->coordinate));
+            tc_value_list_push(&list, tc_value_double(c->min_coordinate));
+            tc_value_list_push(&list, tc_value_double(c->max_coordinate));
+            return list;
         };
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            double v = 0.0;
-            if (value.type == TC_VALUE_DOUBLE) v = value.data.d;
-            else if (value.type == TC_VALUE_FLOAT) v = value.data.f;
-            else if (value.type == TC_VALUE_INT) v = static_cast<double>(value.data.i);
-            c->set_coordinate(v);
+            if (value.type == TC_VALUE_LIST && value.data.list.count >= 3) {
+                c->min_coordinate = tc::tc_value_to_double(&value.data.list.items[1]);
+                c->max_coordinate = tc::tc_value_to_double(&value.data.list.items[2]);
+                c->set_coordinate(tc::tc_value_to_double(&value.data.list.items[0]));
+            } else {
+                // Backward compat: plain scalar (e.g. from rfmeas scenes)
+                double v = 0.0;
+                if (value.type == TC_VALUE_DOUBLE) v = value.data.d;
+                else if (value.type == TC_VALUE_FLOAT) v = value.data.f;
+                else if (value.type == TC_VALUE_INT) v = static_cast<double>(value.data.i);
+                c->set_coordinate(v);
+            }
         };
         inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
     }
@@ -118,21 +130,27 @@ void KinematicUnitComponent::register_type() {
         info.type_name = "KinematicUnitComponent";
         info.path = "base_rotation";
         info.label = "Base Rotation";
-        info.kind = "quat";
+        info.kind = "vec3";
+        info.min = -360.0;
+        info.max = 360.0;
+        info.step = 0.1;
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
+            Quat q{c->base_rotation.x, c->base_rotation.y, c->base_rotation.z, c->base_rotation.w};
+            Pose3 p{q, Vec3::zero()};
+            Vec3 euler = p.to_euler();
             tc_value list = tc_value_list_new();
-            tc_value_list_push(&list, tc_value_double(c->base_rotation.x));
-            tc_value_list_push(&list, tc_value_double(c->base_rotation.y));
-            tc_value_list_push(&list, tc_value_double(c->base_rotation.z));
-            tc_value_list_push(&list, tc_value_double(c->base_rotation.w));
+            tc_value_list_push(&list, tc_value_double(degrees(euler.x)));
+            tc_value_list_push(&list, tc_value_double(degrees(euler.y)));
+            tc_value_list_push(&list, tc_value_double(degrees(euler.z)));
             return list;
         };
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            tc_quat q;
-            if (tc_value_to_quat(value, q)) {
-                c->base_rotation = q;
+            tc_vec3 v;
+            if (tc_value_to_vec3(value, v)) {
+                Pose3 p = Pose3::from_euler(radians(v.x), radians(v.y), radians(v.z));
+                c->base_rotation = {p.ang.x, p.ang.y, p.ang.z, p.ang.w};
                 c->apply();
             }
         };
@@ -221,30 +239,37 @@ static struct _KinematicAxisRegistrar {
     }
 } _kinematic_axis_registrar;
 
-// coordinate (double)
+// coordinate (interval_slider: [value, min, max])
 static struct _KinematicCoordinateRegistrar {
     _KinematicCoordinateRegistrar() {
         tc::InspectFieldInfo info;
         info.type_name = "KinematicUnitComponent";
         info.path = "coordinate";
         info.label = "Coordinate";
-        info.kind = "double";
-        info.min = -100000.0;
-        info.max = 100000.0;
-        info.step = 0.01;
+        info.kind = "interval_slider";
 
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            return tc_value_double(c->coordinate);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->coordinate));
+            tc_value_list_push(&list, tc_value_double(c->min_coordinate));
+            tc_value_list_push(&list, tc_value_double(c->max_coordinate));
+            return list;
         };
 
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            double v = 0.0;
-            if (value.type == TC_VALUE_DOUBLE) v = value.data.d;
-            else if (value.type == TC_VALUE_FLOAT) v = value.data.f;
-            else if (value.type == TC_VALUE_INT) v = static_cast<double>(value.data.i);
-            c->set_coordinate(v);
+            if (value.type == TC_VALUE_LIST && value.data.list.count >= 3) {
+                c->min_coordinate = tc::tc_value_to_double(&value.data.list.items[1]);
+                c->max_coordinate = tc::tc_value_to_double(&value.data.list.items[2]);
+                c->set_coordinate(tc::tc_value_to_double(&value.data.list.items[0]));
+            } else {
+                double v = 0.0;
+                if (value.type == TC_VALUE_DOUBLE) v = value.data.d;
+                else if (value.type == TC_VALUE_FLOAT) v = value.data.f;
+                else if (value.type == TC_VALUE_INT) v = static_cast<double>(value.data.i);
+                c->set_coordinate(v);
+            }
         };
 
         tc::InspectRegistry::instance().add_field_with_choices("KinematicUnitComponent", std::move(info));
@@ -285,30 +310,36 @@ static struct _KinematicBasePositionRegistrar {
     }
 } _kinematic_base_position_registrar;
 
-// base_rotation (quat)
+// base_rotation (displayed as euler degrees)
 static struct _KinematicBaseRotationRegistrar {
     _KinematicBaseRotationRegistrar() {
         tc::InspectFieldInfo info;
         info.type_name = "KinematicUnitComponent";
         info.path = "base_rotation";
         info.label = "Base Rotation";
-        info.kind = "quat";
+        info.kind = "vec3";
+        info.min = -360.0;
+        info.max = 360.0;
+        info.step = 0.1;
 
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
+            Quat q{c->base_rotation.x, c->base_rotation.y, c->base_rotation.z, c->base_rotation.w};
+            Pose3 p{q, Vec3::zero()};
+            Vec3 euler = p.to_euler();
             tc_value list = tc_value_list_new();
-            tc_value_list_push(&list, tc_value_double(c->base_rotation.x));
-            tc_value_list_push(&list, tc_value_double(c->base_rotation.y));
-            tc_value_list_push(&list, tc_value_double(c->base_rotation.z));
-            tc_value_list_push(&list, tc_value_double(c->base_rotation.w));
+            tc_value_list_push(&list, tc_value_double(degrees(euler.x)));
+            tc_value_list_push(&list, tc_value_double(degrees(euler.y)));
+            tc_value_list_push(&list, tc_value_double(degrees(euler.z)));
             return list;
         };
 
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            tc_quat q;
-            if (tc_value_to_quat(value, q)) {
-                c->base_rotation = q;
+            tc_vec3 v;
+            if (tc_value_to_vec3(value, v)) {
+                Pose3 p = Pose3::from_euler(radians(v.x), radians(v.y), radians(v.z));
+                c->base_rotation = {p.ang.x, p.ang.y, p.ang.z, p.ang.w};
                 c->apply();
             }
         };

@@ -1,5 +1,6 @@
 #include <components/actuator_component.hpp>
 #include <termin/geom/quat.hpp>
+#include "tc_inspect_cpp.hpp"
 #include <tcbase/tc_log.hpp>
 #include <cmath>
 
@@ -47,8 +48,6 @@ void ActuatorComponent::apply() {
     Vec3 new_position = bp + br.rotate(scaled);
 
     // Set position
-    tc::Log::info("ActuatorComponent::apply() base=(%.3f,%.3f,%.3f) coord=%.3f -> pos=(%.3f,%.3f,%.3f)",
-        bp.x, bp.y, bp.z, coordinate, new_position.x, new_position.y, new_position.z);
     double xyz[3] = {new_position.x, new_position.y, new_position.z};
     ent.set_local_position(xyz);
 
@@ -77,5 +76,47 @@ void ActuatorComponent::capture_base() {
 
     base_position = {pos[0] - rotated.x, pos[1] - rotated.y, pos[2] - rotated.z};
 }
+
+// axis_scale preset (enum, not serialized)
+static struct _ActuatorAxisScaleRegistrar {
+    _ActuatorAxisScaleRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "ActuatorComponent";
+        info.path = "axis_scale";
+        info.label = "Axis Scale";
+        info.kind = "enum";
+        info.is_serializable = false;
+        info.choices = {
+            {"1.0",   "m (1.0)"},
+            {"0.01",  "cm (0.01)"},
+            {"0.001", "mm (0.001)"},
+        };
+
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            double len = std::sqrt(c->axis_x*c->axis_x + c->axis_y*c->axis_y + c->axis_z*c->axis_z);
+            // Return closest preset as string
+            if (std::abs(len - 1.0) < 1e-6) return tc_value_string("1.0");
+            if (std::abs(len - 0.01) < 1e-6) return tc_value_string("0.01");
+            if (std::abs(len - 0.001) < 1e-6) return tc_value_string("0.001");
+            return tc_value_string("1.0");
+        };
+
+        info.setter = [](void* obj, tc_value value, void*) {
+            if (value.type != TC_VALUE_STRING || !value.data.s) return;
+            double new_scale = std::atof(value.data.s);
+            if (new_scale < 1e-12) return;
+
+            auto* c = static_cast<KinematicUnitComponent*>(obj);
+            double len = std::sqrt(c->axis_x*c->axis_x + c->axis_y*c->axis_y + c->axis_z*c->axis_z);
+            if (len < 1e-12) return;
+
+            double factor = new_scale / len;
+            c->set_axis(c->axis_x * factor, c->axis_y * factor, c->axis_z * factor);
+        };
+
+        tc::InspectRegistry::instance().add_field_with_choices("ActuatorComponent", std::move(info));
+    }
+} _actuator_axis_scale_registrar;
 
 } // namespace termin
