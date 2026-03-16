@@ -65,7 +65,10 @@ void tc_component_inspect_set(tc_component* c, const char* path, tc_value value,
 }
 
 void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 value, void* context) {
-    tc_value v = tc_value_vec3(value);
+    tc_value v = tc_value_list_new();
+    tc_value_list_push(&v, tc_value_double(value.x));
+    tc_value_list_push(&v, tc_value_double(value.y));
+    tc_value_list_push(&v, tc_value_double(value.z));
     tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
@@ -73,15 +76,28 @@ void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 valu
 tc_vec3 tc_component_get_field_vec3(tc_component* c, const char* path) {
     tc_value v = tc_component_inspect_get(c, path);
     tc_vec3 result = {0.0, 0.0, 0.0};
-    if (v.type == TC_VALUE_VEC3) {
-        result = v.data.v3;
+    if (v.type == TC_VALUE_LIST && v.data.list.count >= 3) {
+        auto get_d = [](tc_value* item) -> double {
+            if (!item) return 0.0;
+            if (item->type == TC_VALUE_DOUBLE) return item->data.d;
+            if (item->type == TC_VALUE_FLOAT) return (double)item->data.f;
+            if (item->type == TC_VALUE_INT) return (double)item->data.i;
+            return 0.0;
+        };
+        result.x = get_d(tc_value_list_get(&v, 0));
+        result.y = get_d(tc_value_list_get(&v, 1));
+        result.z = get_d(tc_value_list_get(&v, 2));
     }
     tc_value_free(&v);
     return result;
 }
 
 void tc_component_set_field_quat(tc_component* c, const char* path, tc_quat value, void* context) {
-    tc_value v = tc_value_quat(value);
+    tc_value v = tc_value_list_new();
+    tc_value_list_push(&v, tc_value_double(value.x));
+    tc_value_list_push(&v, tc_value_double(value.y));
+    tc_value_list_push(&v, tc_value_double(value.z));
+    tc_value_list_push(&v, tc_value_double(value.w));
     tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
@@ -89,8 +105,18 @@ void tc_component_set_field_quat(tc_component* c, const char* path, tc_quat valu
 tc_quat tc_component_get_field_quat(tc_component* c, const char* path) {
     tc_value v = tc_component_inspect_get(c, path);
     tc_quat result = {0, 0, 0, 1};
-    if (v.type == TC_VALUE_QUAT) {
-        result = v.data.q;
+    if (v.type == TC_VALUE_LIST && v.data.list.count >= 4) {
+        auto get_d = [](tc_value* item) -> double {
+            if (!item) return 0.0;
+            if (item->type == TC_VALUE_DOUBLE) return item->data.d;
+            if (item->type == TC_VALUE_FLOAT) return (double)item->data.f;
+            if (item->type == TC_VALUE_INT) return (double)item->data.i;
+            return 0.0;
+        };
+        result.x = get_d(tc_value_list_get(&v, 0));
+        result.y = get_d(tc_value_list_get(&v, 1));
+        result.z = get_d(tc_value_list_get(&v, 2));
+        result.w = get_d(tc_value_list_get(&v, 3));
     }
     tc_value_free(&v);
     return result;

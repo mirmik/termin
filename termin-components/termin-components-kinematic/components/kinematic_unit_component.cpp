@@ -4,6 +4,27 @@
 
 namespace termin {
 
+static bool tc_value_to_vec3(const tc_value& v, tc_vec3& out) {
+    if (v.type == TC_VALUE_LIST && v.data.list.count >= 3) {
+        out.x = tc::tc_value_to_double(&v.data.list.items[0]);
+        out.y = tc::tc_value_to_double(&v.data.list.items[1]);
+        out.z = tc::tc_value_to_double(&v.data.list.items[2]);
+        return true;
+    }
+    return false;
+}
+
+static bool tc_value_to_quat(const tc_value& v, tc_quat& out) {
+    if (v.type == TC_VALUE_LIST && v.data.list.count >= 4) {
+        out.x = tc::tc_value_to_double(&v.data.list.items[0]);
+        out.y = tc::tc_value_to_double(&v.data.list.items[1]);
+        out.z = tc::tc_value_to_double(&v.data.list.items[2]);
+        out.w = tc::tc_value_to_double(&v.data.list.items[3]);
+        return true;
+    }
+    return false;
+}
+
 void KinematicUnitComponent::register_type() {
     auto& component_registry = ComponentRegistry::instance();
     if (!component_registry.has("KinematicUnitComponent")) {
@@ -24,13 +45,17 @@ void KinematicUnitComponent::register_type() {
         info.step = 0.001;
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            tc_vec3 v = {c->axis_x, c->axis_y, c->axis_z};
-            return tc_value_vec3(v);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->axis_x));
+            tc_value_list_push(&list, tc_value_double(c->axis_y));
+            tc_value_list_push(&list, tc_value_double(c->axis_z));
+            return list;
         };
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->set_axis(value.data.v3.x, value.data.v3.y, value.data.v3.z);
+            tc_vec3 v;
+            if (tc_value_to_vec3(value, v)) {
+                c->set_axis(v.x, v.y, v.z);
             }
         };
         inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
@@ -71,12 +96,17 @@ void KinematicUnitComponent::register_type() {
         info.step = 0.001;
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            return tc_value_vec3(c->base_position);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->base_position.x));
+            tc_value_list_push(&list, tc_value_double(c->base_position.y));
+            tc_value_list_push(&list, tc_value_double(c->base_position.z));
+            return list;
         };
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->base_position = value.data.v3;
+            tc_vec3 v;
+            if (tc_value_to_vec3(value, v)) {
+                c->base_position = v;
                 c->apply();
             }
         };
@@ -91,12 +121,18 @@ void KinematicUnitComponent::register_type() {
         info.kind = "quat";
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            return tc_value_quat(c->base_rotation);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->base_rotation.x));
+            tc_value_list_push(&list, tc_value_double(c->base_rotation.y));
+            tc_value_list_push(&list, tc_value_double(c->base_rotation.z));
+            tc_value_list_push(&list, tc_value_double(c->base_rotation.w));
+            return list;
         };
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            if (value.type == TC_VALUE_QUAT) {
-                c->base_rotation = value.data.q;
+            tc_quat q;
+            if (tc_value_to_quat(value, q)) {
+                c->base_rotation = q;
                 c->apply();
             }
         };
@@ -114,12 +150,17 @@ void KinematicUnitComponent::register_type() {
         info.step = 0.001;
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            return tc_value_vec3(c->base_scale);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->base_scale.x));
+            tc_value_list_push(&list, tc_value_double(c->base_scale.y));
+            tc_value_list_push(&list, tc_value_double(c->base_scale.z));
+            return list;
         };
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->base_scale = value.data.v3;
+            tc_vec3 v;
+            if (tc_value_to_vec3(value, v)) {
+                c->base_scale = v;
                 c->apply();
             }
         };
@@ -161,14 +202,18 @@ static struct _KinematicAxisRegistrar {
 
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            tc_vec3 v = {c->axis_x, c->axis_y, c->axis_z};
-            return tc_value_vec3(v);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->axis_x));
+            tc_value_list_push(&list, tc_value_double(c->axis_y));
+            tc_value_list_push(&list, tc_value_double(c->axis_z));
+            return list;
         };
 
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->set_axis(value.data.v3.x, value.data.v3.y, value.data.v3.z);
+            tc_vec3 v;
+            if (tc_value_to_vec3(value, v)) {
+                c->set_axis(v.x, v.y, v.z);
             }
         };
 
@@ -220,13 +265,18 @@ static struct _KinematicBasePositionRegistrar {
 
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            return tc_value_vec3(c->base_position);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->base_position.x));
+            tc_value_list_push(&list, tc_value_double(c->base_position.y));
+            tc_value_list_push(&list, tc_value_double(c->base_position.z));
+            return list;
         };
 
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->base_position = value.data.v3;
+            tc_vec3 v;
+            if (tc_value_to_vec3(value, v)) {
+                c->base_position = v;
                 c->apply();
             }
         };
@@ -246,13 +296,19 @@ static struct _KinematicBaseRotationRegistrar {
 
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            return tc_value_quat(c->base_rotation);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->base_rotation.x));
+            tc_value_list_push(&list, tc_value_double(c->base_rotation.y));
+            tc_value_list_push(&list, tc_value_double(c->base_rotation.z));
+            tc_value_list_push(&list, tc_value_double(c->base_rotation.w));
+            return list;
         };
 
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            if (value.type == TC_VALUE_QUAT) {
-                c->base_rotation = value.data.q;
+            tc_quat q;
+            if (tc_value_to_quat(value, q)) {
+                c->base_rotation = q;
                 c->apply();
             }
         };
@@ -275,13 +331,18 @@ static struct _KinematicBaseScaleRegistrar {
 
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            return tc_value_vec3(c->base_scale);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->base_scale.x));
+            tc_value_list_push(&list, tc_value_double(c->base_scale.y));
+            tc_value_list_push(&list, tc_value_double(c->base_scale.z));
+            return list;
         };
 
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->base_scale = value.data.v3;
+            tc_vec3 v;
+            if (tc_value_to_vec3(value, v)) {
+                c->base_scale = v;
                 c->apply();
             }
         };

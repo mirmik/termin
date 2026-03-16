@@ -142,8 +142,8 @@ if(BUNDLE_PYTHON)
     )
 
     # Create site-packages and install dependencies
-    # List packages to bundle (extend as needed)
-    set(BUNDLE_PACKAGES
+    # External packages: copied from system site-packages
+    set(BUNDLE_PACKAGES_EXTERNAL
         numpy
         PyQt6
         sip
@@ -158,17 +158,10 @@ if(BUNDLE_PYTHON)
         sdl2
         yaml
         watchdog
-        tgfx
-        tmesh
-        tcbase
-        tcgui
-        tcnodegraph
-        termin_modules
-        termin_nodegraph
     )
 
-    # Install each package
-    foreach(pkg ${BUNDLE_PACKAGES})
+    # Install external packages from system site-packages
+    foreach(pkg ${BUNDLE_PACKAGES_EXTERNAL})
         if(EXISTS "${PYTHON_SITEPACKAGES}/${pkg}")
             install(DIRECTORY "${PYTHON_SITEPACKAGES}/${pkg}"
                 DESTINATION ${SITEPACKAGES_INSTALL_DIR}
@@ -183,6 +176,36 @@ if(BUNDLE_PYTHON)
                 DESTINATION ${SITEPACKAGES_INSTALL_DIR}
             )
         endforeach()
+    endforeach()
+
+    # Our packages: copied from repository sources (not system site-packages)
+    set(ENV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
+    set(BUNDLE_PACKAGES_LOCAL
+        "tcbase      | ${ENV_DIR}/termin-base/python/tcbase"
+        "tmesh       | ${ENV_DIR}/termin-mesh/python/tmesh"
+        "tgfx        | ${ENV_DIR}/termin-graphics/python/tgfx"
+        "tcgui        | ${ENV_DIR}/termin-gui/python/tcgui"
+        "tcnodegraph  | ${ENV_DIR}/termin-nodegraph/python/tcnodegraph"
+        "termin_modules | ${ENV_DIR}/termin-modules/python/termin_modules"
+    )
+
+    set(LOCAL_PYTHON_DIR "${CMAKE_INSTALL_PREFIX}/lib/python")
+    foreach(entry ${BUNDLE_PACKAGES_LOCAL})
+        string(REPLACE "|" ";" parts "${entry}")
+        list(GET parts 0 pkg)
+        list(GET parts 1 src_dir)
+        string(STRIP "${pkg}" pkg)
+        string(STRIP "${src_dir}" src_dir)
+        if(EXISTS "${src_dir}")
+            install(DIRECTORY "${src_dir}"
+                DESTINATION ${LOCAL_PYTHON_DIR}
+                PATTERN "__pycache__" EXCLUDE
+                PATTERN "*.pyc" EXCLUDE
+                PATTERN "include" EXCLUDE
+            )
+        else()
+            message(WARNING "Local package source not found: ${src_dir}")
+        endif()
     endforeach()
 
     if(NOT WIN32)

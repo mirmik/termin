@@ -78,17 +78,16 @@ static struct _LightColorFieldRegistrar {
 
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<LightComponent*>(obj);
-            tc_vec3 v = {c->color.x, c->color.y, c->color.z};
-            return tc_value_vec3(v);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(c->color.x));
+            tc_value_list_push(&list, tc_value_double(c->color.y));
+            tc_value_list_push(&list, tc_value_double(c->color.z));
+            return list;
         };
 
         info.setter = [](void* obj, tc_value value, void*) {
             auto* c = static_cast<LightComponent*>(obj);
-            if (value.type == TC_VALUE_VEC3) {
-                c->color = Vec3(value.data.v3.x, value.data.v3.y, value.data.v3.z);
-                return;
-            }
-            if (value.type == TC_VALUE_LIST && tc_value_list_size(&value) == 3) {
+            if (value.type == TC_VALUE_LIST && tc_value_list_size(&value) >= 3) {
                 tc_value* r = tc_value_list_get(&value, 0);
                 tc_value* g = tc_value_list_get(&value, 1);
                 tc_value* b = tc_value_list_get(&value, 2);
