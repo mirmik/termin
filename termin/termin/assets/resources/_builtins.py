@@ -16,7 +16,9 @@ BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     # Скелет и анимация
     ("termin.skeleton_components", "SkeletonController"),
     ("termin.animation_components", "AnimationPlayer"),
-    ("termin.visualization.components.rotator", "RotatorComponent"),
+    # Кинематика
+    ("termin.kinematic.kinematic_components", "ActuatorComponent"),
+    ("termin.kinematic.kinematic_components", "RotatorComponent"),
     # Физика
     ("termin.physics_components.physics_world_component", "PhysicsWorldComponent"),
     ("termin.physics_components.rigid_body_component", "RigidBodyComponent"),
