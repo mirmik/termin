@@ -33,7 +33,7 @@ namespace termin {
 
 class CameraComponent;
 
-class GeometryPassBase : public CxxFramePass {
+class ENTITY_API GeometryPassBase : public CxxFramePass {
 public:
     struct DrawCall {
     public:

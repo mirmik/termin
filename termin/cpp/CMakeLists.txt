@@ -146,15 +146,22 @@ set(SOVERSION 1)
 set(LIB_VERSION 1.6.0)
 set(RECASTNAVIGATION_ENABLE_ASSERTS OFF)
 set(SKIP_INSTALL_ALL ON)  # Don't use recast's own install rules
-add_subdirectory(${TERMIN_ROOT}/third/recastnavigation/Recast ${CMAKE_CURRENT_BINARY_DIR}/Recast EXCLUDE_FROM_ALL)
+set(TERMIN_RECAST_DIR "${TERMIN_ROOT}/third/recastnavigation/Recast")
+set(TERMIN_HAS_RECAST OFF)
+if(EXISTS "${TERMIN_RECAST_DIR}/CMakeLists.txt")
+    add_subdirectory(${TERMIN_RECAST_DIR} ${CMAKE_CURRENT_BINARY_DIR}/Recast EXCLUDE_FROM_ALL)
 
-# Re-add Recast to build (EXCLUDE_FROM_ALL removed it from default)
-set_target_properties(Recast PROPERTIES EXCLUDE_FROM_ALL FALSE)
+    # Re-add Recast to build (EXCLUDE_FROM_ALL removed it from default)
+    set_target_properties(Recast PROPERTIES EXCLUDE_FROM_ALL FALSE)
 
-# Add INSTALL_INTERFACE to Recast includes for proper export
-target_include_directories(Recast PUBLIC
-    $<INSTALL_INTERFACE:include/recastnavigation>
-)
+    # Add INSTALL_INTERFACE to Recast includes for proper export
+    target_include_directories(Recast PUBLIC
+        $<INSTALL_INTERFACE:include/recastnavigation>
+    )
+    set(TERMIN_HAS_RECAST ON)
+else()
+    message(WARNING "Recast submodule not found at ${TERMIN_RECAST_DIR}; navmesh support will be disabled.")
+endif()
 
 # ============== Entity shared library ==============
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, KindRegistryCpp, EntityRegistry)
@@ -194,7 +201,7 @@ if(TERMIN_BUILD_PYTHON)
 else()
     target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_components_render::termin_components_render termin_render::termin_render termin_display::termin_display PRIVATE trent)
 endif()
-target_compile_definitions(entity_lib PRIVATE ENTITY_LIB_EXPORTS TC_EXPORTS)
+target_compile_definitions(entity_lib PRIVATE TERMIN_SCENE_EXPORTS ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(entity_lib PRIVATE termin/pch.hpp)
 set_target_properties(entity_lib PROPERTIES
@@ -225,7 +232,6 @@ set(RENDER_LIB_SOURCES
     termin/render/glsl_preprocessor.cpp
     termin/render/shader_skinning.cpp
     termin/modules/term_modules_integration.cpp
-    termin/texture/tc_texture_handle.cpp
     termin/camera/camera_viewport_component.cpp
     termin/viewport_config.cpp
 )
@@ -235,6 +241,7 @@ target_include_directories(render_lib PUBLIC
     $<INSTALL_INTERFACE:include/cpp>
 )
 target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_render::termin_render termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
+target_compile_definitions(render_lib PRIVATE TERMIN_RENDER_EXPORTS)
 target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
 set_target_properties(render_lib PROPERTIES
@@ -246,25 +253,27 @@ set_target_properties(render_lib PROPERTIES
     INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
 )
 
-# ============== NavMesh library ==============
-add_library(navmesh_lib SHARED
-    termin/navmesh/recast_navmesh_builder_component.cpp
-)
-target_include_directories(navmesh_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/cpp>
-)
-target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast)
-target_compile_options(navmesh_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
-set_target_properties(navmesh_lib PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
-    INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
-)
+if(TERMIN_HAS_RECAST)
+    # ============== NavMesh library ==============
+    add_library(navmesh_lib SHARED
+        termin/navmesh/recast_navmesh_builder_component.cpp
+    )
+    target_include_directories(navmesh_lib PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:include/cpp>
+    )
+    target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast)
+    target_compile_options(navmesh_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+    target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
+    set_target_properties(navmesh_lib PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
+        INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
+    )
+endif()
 
 # ============== SDL2 (optional) ==============
 option(USE_SYSTEM_SDL2 "Use system SDL2 library (disable to use pysdl2)" ON)
@@ -450,7 +459,11 @@ if(BUILD_TESTS)
 endif()
 
 # ============== Install shared libraries ==============
-install(TARGETS trent entity_lib termin_core render_lib navmesh_lib Recast
+set(TERMIN_INSTALL_TARGETS trent entity_lib termin_core render_lib)
+if(TERMIN_HAS_RECAST)
+    list(APPEND TERMIN_INSTALL_TARGETS navmesh_lib Recast)
+endif()
+install(TARGETS ${TERMIN_INSTALL_TARGETS}
     EXPORT terminTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -471,10 +484,12 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "bindings" EXCLUDE
 )
-install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Recast/Include/
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
-    FILES_MATCHING PATTERN "*.h"
-)
+if(TERMIN_HAS_RECAST)
+    install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Recast/Include/
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/trent
     DESTINATION ${CMAKE_INSTALL_PREFIX}/include
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"

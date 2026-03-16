@@ -13,6 +13,7 @@
 // - Displays are independent and symmetrical
 #pragma once
 
+#include "termin/engine/termin_engine_api.hpp"
 #include "termin/render/viewport_render_state.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
@@ -48,7 +49,7 @@ using DisplayRemovedCallback = std::function<void(tc_display*)>;
 //
 // Owned by EngineCore. Global instance() returns the one set by EngineCore.
 // Thread safety: NOT thread-safe. All calls must be from main/render thread.
-class RenderingManager {
+class TERMIN_ENGINE_API RenderingManager {
 public:
     // Global instance access (set by EngineCore)
     static RenderingManager& instance();

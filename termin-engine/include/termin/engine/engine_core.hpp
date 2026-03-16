@@ -4,6 +4,7 @@
 // Editor connects to EngineCore rather than owning managers directly.
 #pragma once
 
+#include "termin/engine/termin_engine_api.hpp"
 #include "termin/scene/scene_manager.hpp"
 #include "termin/render/rendering_manager.hpp"
 
@@ -17,7 +18,7 @@ extern "C" {
 namespace termin {
 
 // EngineCore - owns SceneManager and RenderingManager
-class EngineCore {
+class TERMIN_ENGINE_API EngineCore {
 public:
     SceneManager scene_manager;
     RenderingManager rendering_manager;

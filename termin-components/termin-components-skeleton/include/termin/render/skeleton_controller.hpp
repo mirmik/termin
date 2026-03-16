@@ -17,7 +17,7 @@ namespace termin {
 // Holds TcSkeleton and bone Entity references.
 // Creates SkeletonInstance lazily on first access.
 // SkinnedMeshRenderer uses this to get bone matrices.
-class SkeletonController : public CxxComponent {
+class ENTITY_API SkeletonController : public CxxComponent {
 public:
     // Skeleton (RAII wrapper over tc_skeleton)
     TcSkeleton skeleton;

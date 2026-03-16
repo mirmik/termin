@@ -9,6 +9,8 @@ param(
     [switch]$Debug,
     [switch]$Clean,
     [switch]$InstallOnly,
+    [switch]$Parallel,
+    [switch]$NoParallel,
     [switch]$NoBundlePython,
     [switch]$Help
 )
@@ -22,6 +24,8 @@ if ($Help) {
     Write-Host "  -Debug        Build with debug symbols"
     Write-Host "  -Clean        Clean build directory before building"
     Write-Host "  -InstallOnly  Skip build, only run install"
+    Write-Host "  -Parallel     Enable parallel build"
+    Write-Host "  -NoParallel   Disable parallel build"
     Write-Host "  -NoBundlePython  Skip bundling Python runtime (faster builds)"
     Write-Host "  -Help         Show this help"
     exit 0
@@ -34,10 +38,12 @@ $InstallDir = "$ScriptDir/install_win"
 $BuildType = if ($Debug) { "Debug" } else { "Release" }
 
 $BundlePython = -not $NoBundlePython
+$UseParallel = $Parallel -and -not $NoParallel
 
 Write-Host "=== Termin Build Script (Windows) ===" -ForegroundColor Cyan
 Write-Host "Build type: $BuildType"
 Write-Host "Bundle Python: $BundlePython"
+Write-Host "Parallel build: $UseParallel"
 Write-Host "Build dir:  $BuildDir"
 Write-Host "Install dir: $InstallDir"
 Write-Host ""
@@ -95,7 +101,11 @@ if ($NeedsConfigure) {
 # Build
 if (-not $InstallOnly) {
     Write-Host "Building..."
-    cmake --build $BuildDir --config $BuildType --parallel
+    $buildArgs = @("--build", $BuildDir, "--config", $BuildType)
+    if ($UseParallel) {
+        $buildArgs += "--parallel"
+    }
+    cmake @buildArgs
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Build failed!" -ForegroundColor Red

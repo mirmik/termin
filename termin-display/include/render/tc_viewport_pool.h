@@ -2,6 +2,7 @@
 #define TC_VIEWPORT_POOL_H
 
 #include <tc_types.h>
+#include "render/termin_display_api.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -29,16 +30,16 @@ static inline bool tc_viewport_handle_eq(tc_viewport_handle a, tc_viewport_handl
     return a.index == b.index && a.generation == b.generation;
 }
 
-TC_API void tc_viewport_pool_init(void);
-TC_API void tc_viewport_pool_shutdown(void);
-TC_API tc_viewport_handle tc_viewport_pool_alloc(const char* name);
-TC_API void tc_viewport_pool_free(tc_viewport_handle h);
-TC_API bool tc_viewport_pool_alive(tc_viewport_handle h);
-TC_API size_t tc_viewport_pool_count(void);
+TERMIN_DISPLAY_API void tc_viewport_pool_init(void);
+TERMIN_DISPLAY_API void tc_viewport_pool_shutdown(void);
+TERMIN_DISPLAY_API tc_viewport_handle tc_viewport_pool_alloc(const char* name);
+TERMIN_DISPLAY_API void tc_viewport_pool_free(tc_viewport_handle h);
+TERMIN_DISPLAY_API bool tc_viewport_pool_alive(tc_viewport_handle h);
+TERMIN_DISPLAY_API size_t tc_viewport_pool_count(void);
 
 typedef bool (*tc_viewport_pool_iter_fn)(tc_viewport_handle h, void* user_data);
 
-TC_API void tc_viewport_pool_foreach(tc_viewport_pool_iter_fn callback, void* user_data);
+TERMIN_DISPLAY_API void tc_viewport_pool_foreach(tc_viewport_pool_iter_fn callback, void* user_data);
 
 #ifdef __cplusplus
 }

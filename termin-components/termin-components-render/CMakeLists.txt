@@ -47,6 +47,10 @@ termin_add_module(
         termin
 )
 
+set_target_properties(termin_components_render PROPERTIES
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
+
 target_include_directories(termin_components_render PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/../../termin-render/include
     ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp/termin

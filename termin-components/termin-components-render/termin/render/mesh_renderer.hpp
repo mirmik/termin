@@ -17,7 +17,7 @@
 
 namespace termin {
 
-class MeshRenderer : public Component, public Drawable {
+class ENTITY_API MeshRenderer : public Component, public Drawable {
 public:
     TcMesh mesh;
     TcMaterial material;

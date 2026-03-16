@@ -4,8 +4,8 @@
 
 namespace termin {
 
-extern const char* NORMAL_PASS_VERT;
-extern const char* NORMAL_PASS_FRAG;
+extern ENTITY_API const char* NORMAL_PASS_VERT;
+extern ENTITY_API const char* NORMAL_PASS_FRAG;
 
 class NormalPass : public GeometryPassBase {
 public:

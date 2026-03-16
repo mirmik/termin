@@ -4,6 +4,7 @@
 #define TC_RENDER_SURFACE_H
 
 #include "tc_types.h"
+#include "render/termin_display_api.h"
 #include <tgfx/tc_gpu_context.h>
 #include "render/tc_input_manager.h"
 #include <stdbool.h>
@@ -249,13 +250,13 @@ static inline void tc_render_surface_notify_resize(
 // - body: pointer to external object (e.g., PyObject*)
 // - vtable: vtable for this surface type (one per type, shared by all instances)
 // Python side owns the tc_render_surface and frees it when done.
-TC_API tc_render_surface* tc_render_surface_new_external(
+TERMIN_DISPLAY_API tc_render_surface* tc_render_surface_new_external(
     void* body,
     const tc_render_surface_vtable* vtable
 );
 
 // Free external surface
-TC_API void tc_render_surface_free_external(tc_render_surface* s);
+TERMIN_DISPLAY_API void tc_render_surface_free_external(tc_render_surface* s);
 
 #ifdef __cplusplus
 }
