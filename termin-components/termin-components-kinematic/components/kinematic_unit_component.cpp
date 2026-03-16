@@ -2,11 +2,12 @@
 #include "tc_inspect_cpp.hpp"
 #include <termin/geom/pose3.hpp>
 #include <cmath>
+#include <numbers>
 
 namespace termin {
 
-static double degrees(double rad) { return rad * (180.0 / M_PI); }
-static double radians(double deg) { return deg * (M_PI / 180.0); }
+static double degrees(double rad) { return rad * (180.0 / std::numbers::pi_v<double>); }
+static double radians(double deg) { return deg * (std::numbers::pi_v<double> / 180.0); }
 
 static bool tc_value_to_vec3(const tc_value& v, tc_vec3& out) {
     if (v.type == TC_VALUE_LIST && v.data.list.count >= 3) {

@@ -14,8 +14,6 @@ namespace termin {
 
 class Drawable;
 
-extern "C" tc_component_cap_id tc_drawable_capability_id(void);
-
 // Global registry for component types.
 class ENTITY_API ComponentRegistry {
 public:
@@ -70,9 +68,7 @@ namespace detail {
 
 template<typename T>
 void mark_drawable_if_base(const char* name) {
-    if constexpr (detail::is_base_of_safe<Drawable, T>::value) {
-        ComponentRegistry::set_capability(name, tc_drawable_capability_id(), true);
-    }
+    (void)name;
 }
 
 // Factory data stored in static variables per template instantiation

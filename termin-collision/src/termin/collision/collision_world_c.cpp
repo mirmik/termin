@@ -32,25 +32,25 @@ static CollisionWorldAllocatorRegistrar s_registrar;
 
 extern "C" {
 
-CW_API void* tc_collision_world_create(void) {
+TERMIN_COLLISION_API void* tc_collision_world_create(void) {
     return collision_world_alloc();
 }
 
-CW_API void tc_collision_world_destroy(void* cw) {
+TERMIN_COLLISION_API void tc_collision_world_destroy(void* cw) {
     collision_world_free(static_cast<tc_collision_world*>(cw));
 }
 
-CW_API int tc_collision_world_size(void* cw) {
+TERMIN_COLLISION_API int tc_collision_world_size(void* cw) {
     if (!cw) return 0;
     return static_cast<int>(static_cast<CollisionWorld*>(cw)->size());
 }
 
-CW_API void tc_collision_world_update_all(void* cw) {
+TERMIN_COLLISION_API void tc_collision_world_update_all(void* cw) {
     if (!cw) return;
     static_cast<CollisionWorld*>(cw)->update_all();
 }
 
-CW_API size_t tc_collision_world_detect_contacts(void* cw, tc_contact_manifold** out_manifolds) {
+TERMIN_COLLISION_API size_t tc_collision_world_detect_contacts(void* cw, tc_contact_manifold** out_manifolds) {
     if (out_manifolds) *out_manifolds = nullptr;
     if (!cw) return 0;
 

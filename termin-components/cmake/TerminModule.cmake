@@ -20,6 +20,9 @@ function(termin_add_module)
     set(_config_path "${CMAKE_CURRENT_BINARY_DIR}/${TAM_NAME}Config.cmake")
 
     add_library(${TAM_NAME} SHARED ${TAM_SOURCES})
+    # Component modules reuse ENTITY_API from termin-scene headers.
+    # On Windows, mark those declarations as exports while building the module itself.
+    target_compile_definitions(${TAM_NAME} PRIVATE TERMIN_SCENE_EXPORTS)
     target_include_directories(${TAM_NAME} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>

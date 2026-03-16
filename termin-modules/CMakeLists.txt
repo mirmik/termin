@@ -60,6 +60,9 @@ if(TERMIN_BUILD_PYTHON)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
     )
+    set_target_properties(termin_modules_python PROPERTIES
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
+    )
     termin_set_rpath_lib(termin_modules_python)
 
     # Nanobind module

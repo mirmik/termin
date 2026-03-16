@@ -2,10 +2,7 @@
 #include <termin/geom/quat.hpp>
 #include "tc_inspect_cpp.hpp"
 #include <cmath>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <numbers>
 
 namespace termin {
 
@@ -79,7 +76,7 @@ static struct _RotatorAxisScaleRegistrar {
 
         // π/180 ≈ 0.01745329 — coordinate in degrees
         // 1.0 — coordinate in radians
-        std::string deg_str = std::to_string(M_PI / 180.0);
+        std::string deg_str = std::to_string(std::numbers::pi_v<double> / 180.0);
         info.choices = {
             {deg_str, "deg"},
             {"1.0",   "rad"},
@@ -88,7 +85,7 @@ static struct _RotatorAxisScaleRegistrar {
         info.getter = [](void* obj) -> tc_value {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             double len = std::sqrt(c->axis_x*c->axis_x + c->axis_y*c->axis_y + c->axis_z*c->axis_z);
-            double deg_scale = M_PI / 180.0;
+            double deg_scale = std::numbers::pi_v<double> / 180.0;
             if (std::abs(len - deg_scale) < 1e-6) return tc_value_string(std::to_string(deg_scale).c_str());
             if (std::abs(len - 1.0) < 1e-6) return tc_value_string("1.0");
             return tc_value_string(std::to_string(deg_scale).c_str());

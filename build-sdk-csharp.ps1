@@ -9,6 +9,7 @@ $SdkPrefix = if ($env:SDK_PREFIX) { $env:SDK_PREFIX } else { Join-Path $ScriptDi
 
 $BuildType = "Release"
 $Clean = $false
+$UseParallel = $false
 
 foreach ($arg in $args) {
     switch ($arg) {
@@ -16,8 +17,9 @@ foreach ($arg in $args) {
         "-d"       { $BuildType = "Debug" }
         "--clean"  { $Clean = $true }
         "-c"       { $Clean = $true }
-        "--help"   { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean]"; exit 0 }
-        "-h"       { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean]"; exit 0 }
+        "--no-parallel" { $UseParallel = $false }
+        "--help"   { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel]"; exit 0 }
+        "-h"       { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel]"; exit 0 }
         default    { Write-Error "Unknown option: $arg"; exit 1 }
     }
 }
@@ -47,15 +49,23 @@ try {
         New-Item -ItemType Directory -Path $buildDir | Out-Null
     }
 
-    & cmake -S . -B $buildDir `
-        -DCMAKE_BUILD_TYPE=$BuildType `
-        -DCMAKE_PREFIX_PATH=$SdkPrefix `
-        -DTERMIN_CSHARP_BUILD_NATIVE=ON `
-        -DTERMIN_CSHARP_BUILD_MANAGED=ON `
-        -DTERMIN_CSHARP_BUILD_TESTS=ON
+    $cmakeArgs = @(
+        "-S", ".",
+        "-B", $buildDir,
+        "-DCMAKE_BUILD_TYPE=$BuildType",
+        "-DCMAKE_PREFIX_PATH=$SdkPrefix",
+        "-DTERMIN_CSHARP_BUILD_NATIVE=ON",
+        "-DTERMIN_CSHARP_BUILD_MANAGED=ON",
+        "-DTERMIN_CSHARP_BUILD_TESTS=ON"
+    )
+    & cmake @cmakeArgs
     if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
 
-    & cmake --build $buildDir --config $BuildType --parallel
+    $buildArgs = @("--build", $buildDir, "--config", $BuildType)
+    if ($UseParallel) {
+        $buildArgs += "--parallel"
+    }
+    & cmake @buildArgs
     if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
 }
 finally { Pop-Location }
@@ -64,19 +74,19 @@ finally { Pop-Location }
 $CsharpSdk = Join-Path $SdkPrefix "csharp"
 Write-Host "Installing C# artifacts to $CsharpSdk..."
 
-$runtimeDir = Join-Path $CsharpSdk "runtimes" "win-x64" "native"
+$runtimeDir = Join-Path (Join-Path (Join-Path $CsharpSdk "runtimes") "win-x64") "native"
 $libDir = Join-Path $CsharpSdk "lib"
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 New-Item -ItemType Directory -Path $libDir -Force | Out-Null
 
 # Native bridge and runtime dependencies
-$nativeSource = Join-Path $ScriptDir "termin-csharp" "Termin.Native" "runtimes" "win-x64" "native"
+$nativeSource = Join-Path (Join-Path (Join-Path (Join-Path (Join-Path $ScriptDir "termin-csharp") "Termin.Native") "runtimes") "win-x64") "native"
 if (Test-Path $nativeSource) {
     Copy-Item -Force "$nativeSource\*" $runtimeDir
 }
 
 # Managed assembly
-$dllPath = Get-ChildItem -Path (Join-Path $ScriptDir "termin-csharp" "Termin.Native" "bin") `
+$dllPath = Get-ChildItem -Path (Join-Path (Join-Path (Join-Path $ScriptDir "termin-csharp") "Termin.Native") "bin") `
     -Filter "Termin.Native.dll" -Recurse -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -match $BuildType } |
     Select-Object -First 1

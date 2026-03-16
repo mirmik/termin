@@ -5,6 +5,7 @@
 #define TC_DISPLAY_INPUT_ROUTER_H
 
 #include "tc_types.h"
+#include "render/termin_display_api.h"
 #include "render/tc_input_manager.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport_pool.h"
@@ -37,13 +38,13 @@ struct tc_display_input_router {
 
 // Create display input router
 // Automatically attaches to display's surface as input_manager
-TC_API tc_display_input_router* tc_display_input_router_new(tc_display* display);
+TERMIN_DISPLAY_API tc_display_input_router* tc_display_input_router_new(tc_display* display);
 
 // Free display input router
-TC_API void tc_display_input_router_free(tc_display_input_router* r);
+TERMIN_DISPLAY_API void tc_display_input_router_free(tc_display_input_router* r);
 
 // Get base tc_input_manager pointer
-TC_API tc_input_manager* tc_display_input_router_base(tc_display_input_router* r);
+TERMIN_DISPLAY_API tc_input_manager* tc_display_input_router_base(tc_display_input_router* r);
 
 #ifdef __cplusplus
 }

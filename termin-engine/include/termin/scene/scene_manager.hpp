@@ -2,6 +2,7 @@
 #ifndef TC_SCENE_MANAGER_HPP
 #define TC_SCENE_MANAGER_HPP
 
+#include "termin/engine/termin_engine_api.hpp"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -17,7 +18,7 @@ extern "C" {
 namespace termin {
 
 // SceneManager - manages multiple scenes and their update cycles
-class SceneManager {
+class TERMIN_ENGINE_API SceneManager {
 public:
     SceneManager();
     virtual ~SceneManager();

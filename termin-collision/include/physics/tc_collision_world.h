@@ -6,6 +6,7 @@
 #include "tc_types.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_scene_extension.h"
+#include "termin_collision/termin_collision.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,22 +21,22 @@ typedef void (*tc_collision_world_free_fn)(tc_collision_world* cw);
 
 // Register collision world allocator/deallocator functions
 // Called by entity_lib during initialization
-TC_API void tc_collision_world_set_allocator(
+TERMIN_COLLISION_API void tc_collision_world_set_allocator(
     tc_collision_world_alloc_fn alloc_fn,
     tc_collision_world_free_fn free_fn
 );
 
 // Internal functions used by tc_scene.c (use registered allocators)
-TC_API tc_collision_world* tc_collision_world_new(void);
-TC_API void tc_collision_world_free(tc_collision_world* cw);
+TERMIN_COLLISION_API tc_collision_world* tc_collision_world_new(void);
+TERMIN_COLLISION_API void tc_collision_world_free(tc_collision_world* cw);
 
 // Register builtin collision-world extension type in scene-extension registry.
 // Safe to call multiple times.
-TC_API void tc_collision_world_extension_init(void);
+TERMIN_COLLISION_API void tc_collision_world_extension_init(void);
 
 // Scene-extension access helpers for collision world storage.
-TC_API tc_collision_world* tc_collision_world_get_scene(tc_scene_handle scene);
-TC_API bool tc_collision_world_set_scene(tc_scene_handle scene, tc_collision_world* cw);
+TERMIN_COLLISION_API tc_collision_world* tc_collision_world_get_scene(tc_scene_handle scene);
+TERMIN_COLLISION_API bool tc_collision_world_set_scene(tc_scene_handle scene, tc_collision_world* cw);
 
 #ifdef __cplusplus
 }

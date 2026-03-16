@@ -3,6 +3,7 @@
 #define TC_INPUT_MANAGER_H
 
 #include "tc_types.h"
+#include "render/termin_display_api.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -138,31 +139,31 @@ static inline void tc_input_manager_destroy(tc_input_manager* m) {
 // ============================================================================
 
 // Create input manager with specified vtable and body
-TC_API tc_input_manager* tc_input_manager_new(
+TERMIN_DISPLAY_API tc_input_manager* tc_input_manager_new(
     const tc_input_manager_vtable* vtable,
     void* body
 );
 
 // Free input manager
-TC_API void tc_input_manager_free(tc_input_manager* m);
+TERMIN_DISPLAY_API void tc_input_manager_free(tc_input_manager* m);
 
 // ============================================================================
 // Exported Dispatch Functions (for C#/FFI - inline versions not exported)
 // ============================================================================
 
-TC_API void tc_input_manager_dispatch_mouse_button(
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_button(
     tc_input_manager* m, int button, int action, int mods);
 
-TC_API void tc_input_manager_dispatch_mouse_move(
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_move(
     tc_input_manager* m, double x, double y);
 
-TC_API void tc_input_manager_dispatch_scroll(
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_scroll(
     tc_input_manager* m, double x, double y, int mods);
 
-TC_API void tc_input_manager_dispatch_key(
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_key(
     tc_input_manager* m, int key, int scancode, int action, int mods);
 
-TC_API void tc_input_manager_dispatch_char(
+TERMIN_DISPLAY_API void tc_input_manager_dispatch_char(
     tc_input_manager* m, uint32_t codepoint);
 
 #ifdef __cplusplus

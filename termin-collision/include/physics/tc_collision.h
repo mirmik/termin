@@ -8,6 +8,7 @@
 
 #include "tc_types.h"
 #include "core/tc_scene.h"
+#include "termin_collision/termin_collision.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +24,7 @@ extern "C" {
  *
  * @param scene Scene handle containing the collision world
  */
-TC_API void tc_scene_collision_update(tc_scene_handle scene);
+TERMIN_COLLISION_API void tc_scene_collision_update(tc_scene_handle scene);
 
 /**
  * Check if there are any collisions in the scene.
@@ -31,7 +32,7 @@ TC_API void tc_scene_collision_update(tc_scene_handle scene);
  * @param scene Scene handle
  * @return Non-zero if there are collisions, 0 otherwise
  */
-TC_API int tc_scene_has_collisions(tc_scene_handle scene);
+TERMIN_COLLISION_API int tc_scene_has_collisions(tc_scene_handle scene);
 
 /**
  * Get the number of collision pairs detected.
@@ -39,7 +40,7 @@ TC_API int tc_scene_has_collisions(tc_scene_handle scene);
  * @param scene Scene handle
  * @return Number of collision pairs (ContactManifolds)
  */
-TC_API size_t tc_scene_collision_count(tc_scene_handle scene);
+TERMIN_COLLISION_API size_t tc_scene_collision_count(tc_scene_handle scene);
 
 // ============================================================================
 // Contact Manifold Access
@@ -72,7 +73,7 @@ typedef struct tc_contact_manifold {
  * @param out_count Output: number of manifolds
  * @return Pointer to array of manifolds (internal storage, do not free)
  */
-TC_API tc_contact_manifold* tc_scene_detect_collisions(tc_scene_handle scene, size_t* out_count);
+TERMIN_COLLISION_API tc_contact_manifold* tc_scene_detect_collisions(tc_scene_handle scene, size_t* out_count);
 
 /**
  * Get collision manifold at index.
@@ -81,7 +82,7 @@ TC_API tc_contact_manifold* tc_scene_detect_collisions(tc_scene_handle scene, si
  * @param index Manifold index (0 to count-1)
  * @return Pointer to manifold or NULL if invalid index
  */
-TC_API tc_contact_manifold* tc_scene_get_collision(tc_scene_handle scene, size_t index);
+TERMIN_COLLISION_API tc_contact_manifold* tc_scene_get_collision(tc_scene_handle scene, size_t index);
 
 #ifdef __cplusplus
 }

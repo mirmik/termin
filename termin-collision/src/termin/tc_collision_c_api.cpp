@@ -78,21 +78,9 @@ static size_t detect_and_cache_contacts(void* cw) {
     return s_cached_manifold_count;
 }
 
-// ============================================================================
-// C API Implementation (tc_collision.h)
-// Note: Using explicit __declspec(dllexport) because TC_API is defined for
-// termin_core.dll, but these functions are in termin.dll
-// ============================================================================
-
-#ifdef _WIN32
-#define COLLISION_API __declspec(dllexport)
-#else
-#define COLLISION_API __attribute__((visibility("default")))
-#endif
-
 extern "C" {
 
-COLLISION_API void tc_scene_collision_update(tc_scene_handle scene) {
+TERMIN_COLLISION_API void tc_scene_collision_update(tc_scene_handle scene) {
     void* cw = tc_collision_world_get_scene(scene);
     if (!cw) return;
 
@@ -100,7 +88,7 @@ COLLISION_API void tc_scene_collision_update(tc_scene_handle scene) {
     world->update_all();
 }
 
-COLLISION_API int tc_scene_has_collisions(tc_scene_handle scene) {
+TERMIN_COLLISION_API int tc_scene_has_collisions(tc_scene_handle scene) {
     void* cw = tc_collision_world_get_scene(scene);
     if (!cw) return 0;
 
@@ -108,12 +96,12 @@ COLLISION_API int tc_scene_has_collisions(tc_scene_handle scene) {
     return count > 0 ? 1 : 0;
 }
 
-COLLISION_API size_t tc_scene_collision_count(tc_scene_handle scene) {
+TERMIN_COLLISION_API size_t tc_scene_collision_count(tc_scene_handle scene) {
     (void)scene;  // The count is from the last detect call
     return s_cached_manifold_count;
 }
 
-COLLISION_API tc_contact_manifold* tc_scene_detect_collisions(tc_scene_handle scene, size_t* out_count) {
+TERMIN_COLLISION_API tc_contact_manifold* tc_scene_detect_collisions(tc_scene_handle scene, size_t* out_count) {
     if (out_count) *out_count = 0;
 
     void* cw = tc_collision_world_get_scene(scene);
@@ -125,7 +113,7 @@ COLLISION_API tc_contact_manifold* tc_scene_detect_collisions(tc_scene_handle sc
     return s_cached_manifolds.empty() ? nullptr : s_cached_manifolds.data();
 }
 
-COLLISION_API tc_contact_manifold* tc_scene_get_collision(tc_scene_handle scene, size_t index) {
+TERMIN_COLLISION_API tc_contact_manifold* tc_scene_get_collision(tc_scene_handle scene, size_t index) {
     (void)scene;
     if (index >= s_cached_manifold_count) return nullptr;
     return &s_cached_manifolds[index];

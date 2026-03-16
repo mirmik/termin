@@ -29,12 +29,14 @@ target_link_libraries(_entity_native PRIVATE entity_lib trent render_lib)
 target_compile_definitions(_entity_native PRIVATE TERMIN_HAS_NANOBIND)
 target_compile_options(_entity_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 
-# NavMesh native module (RecastNavMeshBuilderComponent)
-nanobind_add_module(_navmesh_native NB_SHARED
-    termin/bindings/navmesh/navmesh_module.cpp
-)
-target_link_libraries(_navmesh_native PRIVATE trent entity_lib navmesh_lib render_lib)
-target_compile_options(_navmesh_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+if(TERMIN_HAS_RECAST)
+    # NavMesh native module (RecastNavMeshBuilderComponent)
+    nanobind_add_module(_navmesh_native NB_SHARED
+        termin/bindings/navmesh/navmesh_module.cpp
+    )
+    target_link_libraries(_navmesh_native PRIVATE trent entity_lib navmesh_lib render_lib)
+    target_compile_options(_navmesh_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+endif()
 
 # ============== Main unified module ==============
 
@@ -101,12 +103,15 @@ target_link_libraries(_native PRIVATE
     OpenGL::GL
     trent
     entity_lib
+    termin_inspect::termin_inspect_python
     termin_skeleton::termin_skeleton
     termin_components_skeleton::termin_components_skeleton
-    navmesh_lib
     render_lib
     tgfx::termin_graphics
 )
+if(TERMIN_HAS_RECAST)
+    target_link_libraries(_native PRIVATE navmesh_lib)
+endif()
 
 if(SDL2_FOUND)
     target_include_directories(_native PRIVATE ${SDL2_INCLUDE_DIRS})
@@ -161,10 +166,12 @@ set_target_properties(_entity_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_navmesh_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
+if(TERMIN_HAS_RECAST)
+    set_target_properties(_navmesh_native PROPERTIES
+        INSTALL_RPATH "${TERMIN_PY_RPATH}"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+endif()
 set_target_properties(_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -173,7 +180,9 @@ set_target_properties(_native PROPERTIES
 # ============== Install targets ==============
 
 install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/voxels)
-install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/navmesh)
+if(TERMIN_HAS_RECAST)
+    install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/navmesh)
+endif()
 install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/lighting)
 install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/entity)
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})

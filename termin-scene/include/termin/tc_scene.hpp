@@ -14,6 +14,7 @@
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_entity_pool.h"
+#include <termin/export.hpp>
 #include <termin/entity/unknown_component_ops.hpp>
 
 namespace termin {
@@ -31,7 +32,7 @@ enum class ComponentDeserializationMode : uint8_t;
 // scene properties, and serialization. Render-specific methods
 // (background_color, skybox, ambient, pipeline, viewport_configs)
 // are in tc_scene_render_ext.hpp (in termin, not termin-scene).
-class TcSceneRef {
+class TERMIN_SCENE_API TcSceneRef {
 public:
     tc_scene_handle _h = TC_SCENE_HANDLE_INVALID;
 
@@ -193,6 +194,6 @@ public:
 };
 
 // Serialize a single entity and its subtree to trent (recursive)
-nos::trent serialize_entity_recursive(const Entity& e);
+TERMIN_SCENE_API nos::trent serialize_entity_recursive(const Entity& e);
 
 } // namespace termin

@@ -4,8 +4,8 @@
 
 namespace termin {
 
-extern const char* DEPTH_PASS_VERT;
-extern const char* DEPTH_PASS_FRAG;
+extern ENTITY_API const char* DEPTH_PASS_VERT;
+extern ENTITY_API const char* DEPTH_PASS_FRAG;
 
 class DepthPass : public GeometryPassBase {
 private:

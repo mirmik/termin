@@ -19,6 +19,7 @@ add_library(termin_components_skeleton SHARED
     src/skeleton_controller.cpp
 )
 add_library(termin_components_skeleton::termin_components_skeleton ALIAS termin_components_skeleton)
+target_compile_definitions(termin_components_skeleton PRIVATE TERMIN_SCENE_EXPORTS)
 
 target_include_directories(termin_components_skeleton PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

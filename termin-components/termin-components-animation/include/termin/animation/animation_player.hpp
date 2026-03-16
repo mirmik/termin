@@ -18,7 +18,7 @@ class SkeletonController;
 //
 // Stores clips, current clip, time. Updates skeleton bones each frame.
 // Can be controlled externally (playing=false) via update_bones_at_time().
-class AnimationPlayer : public CxxComponent {
+class ENTITY_API AnimationPlayer : public CxxComponent {
 public:
     // Clip handles for serialization
     std::vector<animation::TcAnimationClip> clips;
