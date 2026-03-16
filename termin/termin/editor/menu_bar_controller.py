@@ -63,6 +63,8 @@ class MenuBarController:
         on_toggle_fullscreen: Callable,
         on_show_agent_types: Callable,
         on_show_spacemouse_settings: Callable,
+        on_import_rfmeas: Callable,
+        on_export_rfmeas: Callable,
         # State getters
         can_undo: Callable[[], bool],
         can_redo: Callable[[], bool],
@@ -120,6 +122,8 @@ class MenuBarController:
             on_toggle_fullscreen=on_toggle_fullscreen,
             on_show_agent_types=on_show_agent_types,
             on_show_spacemouse_settings=on_show_spacemouse_settings,
+            on_import_rfmeas=on_import_rfmeas,
+            on_export_rfmeas=on_export_rfmeas,
         )
 
     def _setup_menu_bar(
@@ -160,6 +164,8 @@ class MenuBarController:
         on_toggle_fullscreen: Callable,
         on_show_agent_types: Callable,
         on_show_spacemouse_settings: Callable,
+        on_import_rfmeas: Callable,
+        on_export_rfmeas: Callable,
     ) -> None:
         """Create menu bar structure and connect actions."""
         file_menu = menu_bar.addMenu("File")
@@ -315,6 +321,15 @@ class MenuBarController:
 
         scene_manager_action = debug_menu.addAction("Scene Manager...")
         scene_manager_action.triggered.connect(on_show_scene_manager_viewer)
+
+        # Utils menu
+        utils_menu = menu_bar.addMenu("Utils")
+
+        import_rfmeas_action = utils_menu.addAction("Import rfmeas model...")
+        import_rfmeas_action.triggered.connect(on_import_rfmeas)
+
+        export_rfmeas_action = utils_menu.addAction("Export rfmeas model...")
+        export_rfmeas_action.triggered.connect(on_export_rfmeas)
 
         self.update_undo_redo_actions()
 

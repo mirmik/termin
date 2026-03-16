@@ -488,6 +488,8 @@ class EditorWindow(QMainWindow):
             on_toggle_fullscreen=self._mode_controller.toggle_fullscreen,
             on_show_agent_types=self._show_agent_types_dialog,
             on_show_spacemouse_settings=self._show_spacemouse_settings_dialog,
+            on_import_rfmeas=self._import_rfmeas,
+            on_export_rfmeas=self._export_rfmeas,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._mode_controller.is_fullscreen,
@@ -1638,9 +1640,31 @@ class EditorWindow(QMainWindow):
         """Load scene from file."""
         self._scene_file_controller.load_scene()
 
-    def _load_scene_from_file(self, file_path: str) -> None:
+    def _load_scene_from_file(self, file_path: str) -> bool:
         """Load scene from specified file."""
-        self._scene_file_controller.load_scene_from_file(file_path)
+        return self._scene_file_controller.load_scene_from_file(file_path)
+
+    def _import_rfmeas(self) -> None:
+        from termin.editor.rfmeas_bridge import import_rfmeas_model
+        import_rfmeas_model(
+            parent=self,
+            scene_manager=self.scene_manager,
+            scene_name=self._editor_scene_name or "rfmeas",
+            load_scene_from_file_fn=self._load_scene_from_file,
+        )
+
+    def _export_rfmeas(self) -> None:
+        from termin.editor.rfmeas_bridge import export_rfmeas_model
+        if not self._editor_scene_name:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Export", "No scene loaded.")
+            return
+        export_rfmeas_model(
+            parent=self,
+            scene_manager=self.scene_manager,
+            scene_name=self._editor_scene_name,
+            collect_editor_data_fn=self._collect_editor_state,
+        )
 
     def _close_scene(self) -> None:
         """Close current scene (enter no-scene mode)."""
