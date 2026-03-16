@@ -1,5 +1,6 @@
 #include <components/actuator_component.hpp>
 #include <termin/geom/quat.hpp>
+#include <tcbase/tc_log.hpp>
 #include <cmath>
 
 namespace termin {
@@ -28,7 +29,10 @@ ActuatorComponent::ActuatorComponent() {
 
 void ActuatorComponent::apply() {
     Entity ent = entity();
-    if (!ent.valid()) return;
+    if (!ent.valid()) {
+        tc::Log::warn("ActuatorComponent::apply() - entity not valid");
+        return;
+    }
 
     // local = base * Translation(axis * coordinate)
     Vec3 raw_axis{axis_x, axis_y, axis_z};
@@ -43,6 +47,8 @@ void ActuatorComponent::apply() {
     Vec3 new_position = bp + br.rotate(scaled);
 
     // Set position
+    tc::Log::info("ActuatorComponent::apply() base=(%.3f,%.3f,%.3f) coord=%.3f -> pos=(%.3f,%.3f,%.3f)",
+        bp.x, bp.y, bp.z, coordinate, new_position.x, new_position.y, new_position.z);
     double xyz[3] = {new_position.x, new_position.y, new_position.z};
     ent.set_local_position(xyz);
 
