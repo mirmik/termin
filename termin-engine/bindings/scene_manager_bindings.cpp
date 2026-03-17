@@ -92,8 +92,8 @@ void bind_scene_manager(nb::module_& m) {
             // Serialize source
             nb::object data = src_scene.attr("serialize")();
 
-            // Create destination scene
-            nb::object dst_scene = tc_scene_class.attr("create")(dst_name);
+            // Create destination scene with default extensions
+            nb::object dst_scene = entity_module.attr("create_scene")(dst_name);
             dst_scene.attr("load_from_data")(data, nb::none(), true);
 
             // Register in SceneManager
@@ -133,10 +133,9 @@ void bind_scene_manager(nb::module_& m) {
                 }
             }
 
-            // Create scene
+            // Create scene with default extensions
             nb::module_ entity_module = nb::module_::import_("termin.entity._entity_native");
-            nb::object tc_scene_class = entity_module.attr("TcScene");
-            nb::object scene = tc_scene_class.attr("create")(name);
+            nb::object scene = entity_module.attr("create_scene")(name);
 
             // Load data if present
             if (!scene_data.is_none()) {

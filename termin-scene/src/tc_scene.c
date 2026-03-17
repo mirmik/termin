@@ -369,6 +369,12 @@ void tc_scene_free(tc_scene_handle h) {
     }
     g_pool->pools[idx] = NULL;
 
+    // Clear capability linked lists (prevent dangling pointers on slot reuse)
+    memset(g_pool->capability_heads + idx * TC_COMPONENT_MAX_CAPABILITIES, 0,
+           TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
+    memset(g_pool->capability_counts + idx * TC_COMPONENT_MAX_CAPABILITIES, 0,
+           TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
+
     // Mark as dead
     g_pool->alive[idx] = false;
     g_pool->generations[idx]++;
