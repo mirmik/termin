@@ -35,6 +35,8 @@ typedef void (*tc_py_on_removed_fn)(void* py_self);
 typedef void (*tc_py_on_scene_inactive_fn)(void* py_self);
 typedef void (*tc_py_on_scene_active_fn)(void* py_self);
 typedef void (*tc_py_on_editor_start_fn)(void* py_self);
+typedef void (*tc_py_on_render_attach_fn)(void* py_self);
+typedef void (*tc_py_on_render_detach_fn)(void* py_self);
 
 // Reference counting callbacks for Python objects
 typedef void (*tc_py_incref_fn)(void* py_obj);
@@ -55,6 +57,8 @@ typedef struct {
     tc_py_on_scene_inactive_fn on_scene_inactive;
     tc_py_on_scene_active_fn on_scene_active;
     tc_py_on_editor_start_fn on_editor_start;
+    tc_py_on_render_attach_fn on_render_attach;
+    tc_py_on_render_detach_fn on_render_detach;
     // Reference counting
     tc_py_incref_fn incref;
     tc_py_decref_fn decref;

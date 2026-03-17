@@ -224,10 +224,7 @@ class EditorModeController:
 
     def _start_game_mode(self) -> None:
         """Входит в игровой режим."""
-        from tcbase import log
-        log.info("[GameMode] _start_game_mode BEGIN")
         if self.is_game_mode:
-            log.info("[GameMode] already in game mode, skip")
             return
         if self._window._editor_scene_name is None:
             return
@@ -254,7 +251,6 @@ class EditorModeController:
         if self._window._editor_attachment is not None:
             self._window._editor_attachment.save_state()
 
-        log.info("[GameMode] copy_scene...")
         # Создаём копию сцены для game mode (копируется и editor_viewport_camera_name)
         self._game_scene_name = f"{self._window._editor_scene_name}(game)"
         game_scene = self._window.scene_manager.copy_scene(
@@ -262,33 +258,25 @@ class EditorModeController:
             self._game_scene_name,
         )
 
-        log.info("[GameMode] detach editor scene...")
         # Detach editor scene from RenderingManager BEFORE attaching game scene
         # (иначе editor scene's CameraViewportComponent обнулит камеру при detach)
         if self._window._rendering_controller is not None:
             self._window._rendering_controller.detach_scene(editor_scene)
 
-        log.info("[GameMode] attach game scene...")
         # Detach from editor_scene, attach to game_scene with same camera state
         if self._window._editor_attachment is not None:
             self._window._editor_attachment.attach(game_scene, transfer_camera_state=True)
         self._window._sync_attachment_refs()
 
-        log.info("[GameMode] set_mode PLAY...")
         # Устанавливаем режимы (таймер запустится автоматически)
         self._window.scene_manager.set_mode(self._window._editor_scene_name, SceneMode.INACTIVE)
         self._window.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
 
-        log.info("[GameMode] _on_game_mode_changed...")
         self._on_game_mode_changed(True, game_scene, self._saved_tree_expanded_uuids)
-        log.info("[GameMode] _start_game_mode END")
 
     def _stop_game_mode(self) -> None:
         """Выходит из игрового режима."""
-        from tcbase import log
-        log.info("[GameMode] _stop_game_mode BEGIN")
         if not self.is_game_mode:
-            log.info("[GameMode] not in game mode, skip")
             return
 
         # Detach from game_scene (don't save state - we discard game changes)

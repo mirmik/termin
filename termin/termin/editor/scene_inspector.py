@@ -559,7 +559,7 @@ class SceneInspector(QWidget):
         if asset is None:
             return
 
-        self._scene.add_scene_pipeline(asset.template)
+        scene_render_mount(self._scene).add_pipeline_template(asset.template)
         self._refresh_pipelines_list()
         self.scene_changed.emit()
 
