@@ -64,12 +64,28 @@ def _setup_dll_paths():
     # Directory containing termin package (where DLLs are located)
     dll_dir = os.path.dirname(os.path.abspath(__file__))
 
+    # SDK bin directory (where SDL2.dll, termin_base.dll etc. are installed)
+    sdk_bin_dir = None
+    if _sdk_termin_dir:
+        sdk_bin_dir = os.path.normpath(os.path.join(_sdk_termin_dir, "..", "..", "..", "bin"))
+    if not sdk_bin_dir or not os.path.isdir(sdk_bin_dir):
+        sdk_bin_dir = os.path.normpath(os.path.join(dll_dir, "..", "..", "..", "bin"))
+
     # Python 3.8+ requires explicit DLL directory registration
     if hasattr(os, "add_dll_directory"):
         os.add_dll_directory(dll_dir)
+        if os.path.isdir(sdk_bin_dir):
+            os.add_dll_directory(sdk_bin_dir)
 
     # Also prepend to PATH for compatibility
-    os.environ["PATH"] = dll_dir + os.pathsep + os.environ.get("PATH", "")
+    path_dirs = [dll_dir]
+    if os.path.isdir(sdk_bin_dir):
+        path_dirs.append(sdk_bin_dir)
+    os.environ["PATH"] = os.pathsep.join(path_dirs) + os.pathsep + os.environ.get("PATH", "")
+
+    # Set PYSDL2_DLL_PATH so pysdl2 can find SDL2.dll
+    if os.path.isdir(sdk_bin_dir) and not os.environ.get("PYSDL2_DLL_PATH"):
+        os.environ["PYSDL2_DLL_PATH"] = sdk_bin_dir
 
 
 # Run setup on import
