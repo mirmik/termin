@@ -37,8 +37,6 @@ extern "C" {
 
 namespace termin {
 
-class CameraComponent;
-
 // Factory callback types
 using DisplayFactory = std::function<tc_display*(const std::string& name)>;
 using PipelineFactory = std::function<RenderPipeline*(const std::string& name)>;
@@ -171,7 +169,7 @@ public:
     tc_viewport_handle mount_scene(
         tc_scene_handle scene,
         tc_display* display,
-        CameraComponent* camera,
+        tc_component* camera,
         float region_x, float region_y, float region_w, float region_h,
         RenderPipeline* pipeline,
         const std::string& name
