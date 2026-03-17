@@ -63,7 +63,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
     target_include_directories(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
-    target_compile_definitions(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE TCBASE_EXPORTS)
+    target_compile_definitions(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE TCBASE_EXPORTS TC_EXPORTS)
 
     target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         OpenGL::GL

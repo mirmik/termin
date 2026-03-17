@@ -33,7 +33,7 @@ set(TERMIN_ENGINE_SOURCES
 
 if(TERMIN_ENGINE_BUILD_SHARED)
     add_library(termin_engine SHARED ${TERMIN_ENGINE_SOURCES})
-    target_compile_definitions(termin_engine PRIVATE TERMIN_ENGINE_EXPORTS)
+    target_compile_definitions(termin_engine PRIVATE TERMIN_ENGINE_EXPORTS TC_EXPORTS)
 else()
     add_library(termin_engine STATIC ${TERMIN_ENGINE_SOURCES})
 endif()
