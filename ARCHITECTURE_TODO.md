@@ -10,6 +10,5 @@
 
 ## Dependency graph
 
-- [ ] Автоматизировать генерацию графа зависимостей для документации вместо ручного `docs/library-dependencies.dot`.
-  Граф должен покрывать и C/C++ зависимости, и Python-зависимости.
-  Сейчас диаграмма поддерживается вручную и может расходиться с реальными зависимостями из `CMakeLists.txt` и Python-пакетов/модулей.
+- [x] Автоматизировать генерацию графа зависимостей для документации вместо ручного `docs/library-dependencies.dot`.
+  Реализовано: `scripts/gen-dependency-graph.py` — парсит `target_link_libraries`/`find_package` из CMake, `install_requires` из setup.py, import-сканирование для Python-only пакетов. Транзитивная редукция, группировка в кластеры.

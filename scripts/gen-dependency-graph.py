@@ -341,6 +341,19 @@ def main():
     # Node groups (rendered as subgraph clusters with border)
     GROUPS = {
         "UI": ["termin-gui", "termin-nodegraph"],
+        "Application": ["termin", "diffusion-editor"],
+        "Render Stack": ["termin-graphics", "termin-render", "termin-display", "termin-components-render"],
+        "Runtime": ["termin-engine"],
+        "Foundation": [
+            "termin-base", "termin-mesh", "termin-inspect", "termin-modules",
+            "termin-scene", "termin-skeleton", "termin-collision", "termin-input",
+            "termin-animation", "termin-physics",
+        ],
+        "Other Components": [
+            "termin-components-skeleton", "termin-components-animation",
+            "termin-components-collision", "termin-components-physics",
+            "termin-components-kinematic", "termin-components-mesh",
+        ],
     }
 
     # Build reverse map: node → group name
