@@ -104,6 +104,11 @@ endif()
 
 add_library(termin_scene::termin_scene ALIAS termin_scene)
 
+if(MSVC)
+    target_compile_options(termin_scene PRIVATE /wd4251 /wd4275)
+    target_compile_definitions(termin_scene PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
 set_target_properties(termin_scene PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
