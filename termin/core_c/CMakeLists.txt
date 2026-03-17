@@ -107,7 +107,8 @@ endif()
 
 # Compiler warnings
 if(MSVC)
-    target_compile_options(termin_core PRIVATE /W3)
+    target_compile_options(termin_core PRIVATE /W3 /wd4251 /wd4275)
+    target_compile_definitions(termin_core PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(termin_core PRIVATE -Wall -Wextra -Wno-stringop-truncation)
 endif()
