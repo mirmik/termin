@@ -20,6 +20,8 @@
 #include <termin/geom/vec4.hpp>
 #include "render/tc_value_trent.hpp"
 #include "core/tc_scene_render_state.h"
+#include "core/tc_scene_extension.h"
+#include "core/tc_scene_extension_ids.h"
 #include "core/tc_component.h"
 
 namespace nb = nanobind;
@@ -443,6 +445,18 @@ void bind_tc_scene(nb::module_& m) {
     m.attr("SCENE_EXT_TYPE_RENDER_MOUNT") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_MOUNT);
     m.attr("SCENE_EXT_TYPE_RENDER_STATE") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_STATE);
     m.attr("SCENE_EXT_TYPE_COLLISION_WORLD") = nb::int_(TC_SCENE_EXT_TYPE_COLLISION_WORLD);
+
+    // Get list of attached extension debug names for a scene
+    m.def("scene_ext_attached_names", [](const TcSceneRef& scene) -> std::vector<std::string> {
+        std::vector<std::string> result;
+        tc_scene_ext_type_id ids[TC_SCENE_EXT_TYPE_COUNT];
+        size_t count = tc_scene_ext_get_attached_types(scene._h, ids, TC_SCENE_EXT_TYPE_COUNT);
+        for (size_t i = 0; i < count; i++) {
+            const char* name = tc_scene_ext_type_debug_name(ids[i]);
+            result.push_back(name ? name : "unknown");
+        }
+        return result;
+    }, nb::arg("scene"), "Get debug names of all attached scene extensions");
 
     m.def("default_scene_extensions", &default_scene_extension_ids,
         "Default scene extensions for render-enabled scenes.");

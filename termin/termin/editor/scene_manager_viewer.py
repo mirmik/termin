@@ -439,6 +439,13 @@ class SceneManagerViewer(QWidget):
         if editor is not None and editor._editor_attachment is not None:
             is_editing = editor._editor_attachment.scene is scene
 
+        # Get attached extensions
+        from termin.visualization.core.scene import scene_ext_attached_names
+        try:
+            ext_names = scene_ext_attached_names(scene)
+        except Exception:
+            ext_names = []
+
         lines = [
             f"Name: {scene_name}",
             f"Handle: {handle[0]}:{handle[1]} (index:generation)",
@@ -446,8 +453,15 @@ class SceneManagerViewer(QWidget):
             f"Path: {path or '(unsaved)'}",
             f"Editing: {'YES' if is_editing else 'no'}",
             f"",
-            f"=== Entities ===",
+            f"=== Extensions ({len(ext_names)}) ===",
         ]
+        if ext_names:
+            for ext in ext_names:
+                lines.append(f"  {ext}")
+        else:
+            lines.append("  (none)")
+        lines.append("")
+        lines.append("=== Entities ===")
 
         # List entities
         entity_count = 0

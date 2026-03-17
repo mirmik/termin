@@ -12,6 +12,7 @@ from termin.geombase._geom_native import Vec3
 from termin.collision import CollisionWorld
 from termin.physics._physics_native import PhysicsWorld
 from termin.editor.inspect_field import InspectField
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.physics_components.rigid_body_component import RigidBodyComponent
@@ -157,6 +158,9 @@ class PhysicsWorldComponent(PythonComponent):
             return
 
         scene_collision_world = CollisionWorld.from_scene(scene)
+        if scene_collision_world is None:
+            log.error("PhysicsWorldComponent: no CollisionWorld on scene")
+            return
         self._physics_world.set_collision_world(scene_collision_world)
         self._collect_rigid_bodies(scene)
         self._initialized = True
