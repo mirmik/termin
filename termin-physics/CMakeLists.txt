@@ -34,7 +34,7 @@ set(TERMIN_PHYSICS_SOURCES
 add_library(termin_physics SHARED ${TERMIN_PHYSICS_SOURCES})
 add_library(termin_physics::termin_physics ALIAS termin_physics)
 
-target_compile_definitions(termin_physics PRIVATE TERMIN_PHYSICS_EXPORTS)
+target_compile_definitions(termin_physics PRIVATE TERMIN_PHYSICS_EXPORTS TC_EXPORTS)
 
 target_include_directories(termin_physics PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

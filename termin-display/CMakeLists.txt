@@ -29,7 +29,7 @@ set(TERMIN_DISPLAY_SOURCES
 
 if(TERMIN_DISPLAY_BUILD_SHARED)
     add_library(termin_display SHARED ${TERMIN_DISPLAY_SOURCES})
-    target_compile_definitions(termin_display PRIVATE TERMIN_DISPLAY_EXPORTS)
+    target_compile_definitions(termin_display PRIVATE TERMIN_DISPLAY_EXPORTS TC_EXPORTS)
 else()
     add_library(termin_display STATIC ${TERMIN_DISPLAY_SOURCES})
 endif()
