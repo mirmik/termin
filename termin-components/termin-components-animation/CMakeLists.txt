@@ -21,7 +21,7 @@ add_library(termin_components_animation SHARED
     src/animation_player.cpp
 )
 add_library(termin_components_animation::termin_components_animation ALIAS termin_components_animation)
-target_compile_definitions(termin_components_animation PRIVATE TERMIN_SCENE_EXPORTS)
+target_compile_definitions(termin_components_animation PRIVATE TERMIN_SCENE_EXPORTS TC_EXPORTS)
 set_target_properties(termin_components_animation PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 target_include_directories(termin_components_animation PUBLIC

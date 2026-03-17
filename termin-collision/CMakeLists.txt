@@ -41,7 +41,7 @@ set(TERMIN_COLLISION_SOURCES
 add_library(termin_collision SHARED ${TERMIN_COLLISION_SOURCES})
 add_library(termin_collision::termin_collision ALIAS termin_collision)
 
-target_compile_definitions(termin_collision PRIVATE TERMIN_COLLISION_EXPORTS)
+target_compile_definitions(termin_collision PRIVATE TERMIN_COLLISION_EXPORTS TC_EXPORTS)
 
 target_include_directories(termin_collision PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
