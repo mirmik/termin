@@ -3,10 +3,54 @@
 #include <tc_inspect_cpp.hpp>
 #include <termin/entity/component_registry.hpp>
 
+extern "C" {
+#include "core/tc_light_capability.h"
+}
+
 namespace termin {
+
+// Light capability vtable callback
+static bool light_cap_get_data(tc_component* self, tc_light_data* out) {
+    if (!self || !out) return false;
+    CxxComponent* cxx = CxxComponent::from_tc(self);
+    if (!cxx) return false;
+    LightComponent* lc = static_cast<LightComponent*>(cxx);
+    Light l = lc->to_light();
+
+    out->type = static_cast<tc_light_type>(l.type);
+    out->color[0] = l.color.x;
+    out->color[1] = l.color.y;
+    out->color[2] = l.color.z;
+    out->intensity = l.intensity;
+    out->direction[0] = l.direction.x;
+    out->direction[1] = l.direction.y;
+    out->direction[2] = l.direction.z;
+    out->position[0] = l.position.x;
+    out->position[1] = l.position.y;
+    out->position[2] = l.position.z;
+    out->has_range = l.range.has_value();
+    out->range = l.range.value_or(0.0);
+    out->inner_angle = l.inner_angle;
+    out->outer_angle = l.outer_angle;
+    out->shadows.enabled = l.shadows.enabled;
+    out->shadows.bias = l.shadows.bias;
+    out->shadows.normal_bias = l.shadows.normal_bias;
+    out->shadows.map_resolution = l.shadows.map_resolution;
+    out->shadows.cascade_count = l.shadows.cascade_count;
+    out->shadows.max_distance = l.shadows.max_distance;
+    out->shadows.split_lambda = l.shadows.split_lambda;
+    out->shadows.cascade_blend = l.shadows.cascade_blend;
+    out->shadows.blend_distance = l.shadows.blend_distance;
+    return true;
+}
+
+static const tc_light_vtable g_light_vtable = {
+    .get_light_data = light_cap_get_data,
+};
 
 LightComponent::LightComponent() {
     link_type_entry("LightComponent");
+    tc_light_capability_attach(&_c, &g_light_vtable, this);
 }
 
 std::string LightComponent::get_light_type_str() const {
