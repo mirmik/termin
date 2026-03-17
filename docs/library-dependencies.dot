@@ -110,11 +110,11 @@ digraph termin_dependencies {
 	"termin-skeleton" -> "termin-components-skeleton";
 	"termin-animation" -> "termin-components-animation";
 	"termin-components-skeleton" -> "termin-components-animation";
-	"termin-components-render" -> "termin-engine";
 	"termin-components-skeleton" -> termin;
 	"termin-components-animation" -> termin;
 	"termin-components-collision" -> termin;
 	"termin-components-kinematic" -> termin;
+	"termin-components-render" -> termin;
 	"termin-components-physics" -> termin;
 	"termin-physics" -> termin;
 	"termin-modules" -> termin;
