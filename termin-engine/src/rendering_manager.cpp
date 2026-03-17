@@ -1,14 +1,14 @@
 // rendering_manager.cpp - Global rendering manager implementation
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/scene_pipeline_template.hpp"
-#include "termin/camera/camera_component.hpp"
-#include "termin/camera/render_camera_utils.hpp"
+#include "termin/render/render_camera.hpp"
 #include <termin/entity/entity.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
 
 extern "C" {
 #include <tcbase/tc_log.h>
 #include "core/tc_light_capability.h"
+#include "core/tc_camera_capability.h"
 #include <tgfx/tc_gpu.h>
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
@@ -25,8 +25,31 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <cstring>
 
 namespace termin {
+
+// Convert tc_camera_data to RenderCamera
+static RenderCamera render_camera_from_cap(const tc_camera_data& cd) {
+    RenderCamera rc;
+    std::memcpy(rc.view.data, cd.view, sizeof(cd.view));
+    std::memcpy(rc.projection.data, cd.projection, sizeof(cd.projection));
+    rc.position = Vec3(cd.position[0], cd.position[1], cd.position[2]);
+    rc.near_clip = cd.near_clip;
+    rc.far_clip = cd.far_clip;
+    return rc;
+}
+
+// Get RenderCamera from tc_component* via camera capability.
+// Returns false if component has no camera capability.
+static bool get_render_camera(tc_component* cam_comp, double aspect, RenderCamera* out) {
+    const tc_camera_capability* cap = tc_camera_capability_get(cam_comp);
+    if (!cap || !cap->vtable || !cap->vtable->get_camera_data) return false;
+    tc_camera_data cd;
+    if (!cap->vtable->get_camera_data(cam_comp, aspect, &cd)) return false;
+    *out = render_camera_from_cap(cd);
+    return true;
+}
 
 // Helper to make a unique key from viewport handle
 static inline uint64_t viewport_key(tc_viewport_handle h) {
@@ -311,7 +334,7 @@ tc_display* RenderingManager::get_or_create_display(const std::string& name) {
 tc_viewport_handle RenderingManager::mount_scene(
     tc_scene_handle scene,
     tc_display* display,
-    CameraComponent* camera,
+    tc_component* camera,
     float region_x, float region_y, float region_w, float region_h,
     RenderPipeline* pipeline,
     const std::string& name
@@ -324,7 +347,7 @@ tc_viewport_handle RenderingManager::mount_scene(
     tc_viewport_handle viewport = tc_viewport_new(
         name.c_str(),
         scene,
-        camera->tc_component_ptr()
+        camera
     );
 
     if (!tc_viewport_handle_valid(viewport)) {
@@ -342,9 +365,6 @@ tc_viewport_handle RenderingManager::mount_scene(
 
     // Add to display
     tc_display_add_viewport(display, viewport);
-
-    // Register viewport with camera
-    camera->add_viewport(TcViewport(viewport));
 
     return viewport;
 }
@@ -365,16 +385,6 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
 
     // Remove them
     for (tc_viewport_handle viewport : to_remove) {
-        // Remove from camera
-        tc_component* camera_comp = tc_viewport_get_camera(viewport);
-        if (camera_comp) {
-            CxxComponent* cxx = CxxComponent::from_tc(camera_comp);
-            CameraComponent* camera = cxx ? static_cast<CameraComponent*>(cxx) : nullptr;
-            if (camera) {
-                camera->remove_viewport(TcViewport(viewport));
-            }
-        }
-
         // Remove viewport state
         remove_viewport_state(viewport);
 
@@ -387,27 +397,20 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
 }
 
 // Helper struct for camera search callback
+// Find first component with camera capability in scene
 struct CameraSearchData {
-    tc_entity_pool* pool;
-    CameraComponent* camera;
+    tc_component* camera;
     const char* found_name;
 };
 
-static bool find_first_camera_cb(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+static bool find_first_camera_cb(tc_component* c, void* user_data) {
     CameraSearchData* data = static_cast<CameraSearchData*>(user_data);
-
-    // Get entity handle
-    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(pool);
-    tc_entity_handle eh = tc_entity_handle_make(pool_handle, id);
-    Entity entity(eh);
-
-    CameraComponent* cam = entity.get_component<CameraComponent>();
-    if (cam) {
-        data->camera = cam;
-        data->found_name = tc_entity_pool_name(pool, id);
-        return false; // Stop iteration
+    data->camera = c;
+    if (tc_entity_handle_valid(c->owner)) {
+        tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
+        if (pool) data->found_name = tc_entity_pool_name(pool, c->owner.id);
     }
-    return true; // Continue
+    return false; // Stop iteration — found first camera
 }
 
 std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_handle scene) {
@@ -437,13 +440,13 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         }
 
         // Find camera by UUID
-        CameraComponent* camera = nullptr;
+        tc_component* camera = nullptr;
         if (config->camera_uuid && config->camera_uuid[0] != '\0' && pool) {
             tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, config->camera_uuid);
             if (tc_entity_id_valid(eid)) {
                 tc_entity_handle eh = tc_entity_handle_make(pool_handle, eid);
                 Entity entity(eh);
-                camera = entity.get_component<CameraComponent>();
+                camera = entity.get_component_by_type_name("CameraComponent");
             }
             if (!camera) {
                 tc_log(TC_LOG_WARN, "[RenderingManager] Camera entity not found for uuid=%s",
@@ -451,10 +454,11 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
             }
         }
 
-        // Fallback: find first camera in scene using iterator
-        if (!camera && pool) {
-            CameraSearchData search_data{pool, nullptr, nullptr};
-            tc_entity_pool_foreach(pool, find_first_camera_cb, &search_data);
+        // Fallback: find first camera in scene via capability
+        if (!camera) {
+            tc_component_cap_id cam_cap = tc_camera_capability_id();
+            CameraSearchData search_data{nullptr, nullptr};
+            tc_scene_foreach_with_capability(scene, cam_cap, find_first_camera_cb, &search_data, TC_SCENE_FILTER_NONE);
             if (search_data.camera) {
                 camera = search_data.camera;
                 tc_log(TC_LOG_WARN, "[RenderingManager] Using fallback camera from entity '%s'",
@@ -759,13 +763,6 @@ void RenderingManager::render_scene_pipeline_offscreen(
             continue;
         }
 
-        CxxComponent* cxx = CxxComponent::from_tc(camera_comp);
-        CameraComponent* camera = cxx ? static_cast<CameraComponent*>(cxx) : nullptr;
-        if (!camera) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' camera is not CxxComponent", vp_name.c_str());
-            continue;
-        }
-
         if (first_viewport_name.empty()) {
             first_viewport_name = vp_name;
         }
@@ -779,6 +776,13 @@ void RenderingManager::render_scene_pipeline_offscreen(
             continue;
         }
 
+        double aspect = static_cast<double>(pw) / std::max(1, ph);
+        RenderCamera render_cam;
+        if (!get_render_camera(camera_comp, aspect, &render_cam)) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' camera has no camera capability", vp_name.c_str());
+            continue;
+        }
+
         // Ensure output FBO
         ViewportRenderState* state = get_or_create_viewport_state(viewport);
         FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
@@ -786,7 +790,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
         // Create viewport context
         ViewportContext ctx;
         ctx.name = vp_name;
-        ctx.camera = make_render_camera(*camera, static_cast<double>(pw) / std::max(1, ph));
+        ctx.camera = render_cam;
         ctx.rect = {0, 0, pw, ph};  // Full FBO, offset at blit time
         ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
         ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
@@ -849,19 +853,18 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         return;
     }
 
-    // Get CameraComponent from tc_component using container_of pattern
-    CxxComponent* cxx = CxxComponent::from_tc(camera_comp);
-    CameraComponent* camera = cxx ? static_cast<CameraComponent*>(cxx) : nullptr;
-    if (!camera) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): CxxComponent::from_tc failed",
-               vp_name ? vp_name : "(null)");
-        return;
-    }
-
     // Get pixel rect
     int px, py, pw, ph;
     tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
     if (pw <= 0 || ph <= 0) return;
+
+    double aspect = static_cast<double>(pw) / std::max(1, ph);
+    RenderCamera render_camera;
+    if (!get_render_camera(camera_comp, aspect, &render_camera)) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): no camera capability",
+               vp_name ? vp_name : "(null)");
+        return;
+    }
 
     // Ensure output FBO
     ViewportRenderState* state = get_or_create_viewport_state(viewport);
@@ -872,7 +875,6 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
     // Render to output FBO
     RenderEngine* engine = render_engine();
-    RenderCamera render_camera = make_render_camera(*camera, static_cast<double>(pw) / std::max(1, ph));
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
     engine->render_view_to_fbo(
         render_pipeline,

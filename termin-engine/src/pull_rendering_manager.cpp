@@ -1,11 +1,12 @@
 // pull_rendering_manager.cpp - Pull-based rendering manager for WPF/Qt style rendering
 
 #include "termin/render/pull_rendering_manager.hpp"
-#include "termin/camera/camera_component.hpp"
-#include "termin/camera/render_camera_utils.hpp"
+#include "termin/render/render_camera.hpp"
+#include <cstring>
 
 extern "C" {
 #include <tcbase/tc_log.h>
+#include "core/tc_camera_capability.h"
 #include <tgfx/tc_gpu.h>
 #include "render/tc_viewport_pool.h"
 }
@@ -232,19 +233,28 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     RenderPipeline* render_pipeline = RenderPipeline::from_handle(pipeline);
     if (!render_pipeline) return;
 
-    CxxComponent* cxx = CxxComponent::from_tc(camera_comp);
-    CameraComponent* camera = cxx ? static_cast<CameraComponent*>(cxx) : nullptr;
-    if (!camera) return;
-
     int px, py, pw, ph;
     tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
     if (pw <= 0 || ph <= 0) return;
+
+    double aspect = static_cast<double>(pw) / std::max(1, ph);
+    RenderCamera render_camera;
+    {
+        const tc_camera_capability* cap = tc_camera_capability_get(camera_comp);
+        if (!cap || !cap->vtable || !cap->vtable->get_camera_data) return;
+        tc_camera_data cd;
+        if (!cap->vtable->get_camera_data(camera_comp, aspect, &cd)) return;
+        std::memcpy(render_camera.view.data, cd.view, sizeof(cd.view));
+        std::memcpy(render_camera.projection.data, cd.projection, sizeof(cd.projection));
+        render_camera.position = Vec3(cd.position[0], cd.position[1], cd.position[2]);
+        render_camera.near_clip = cd.near_clip;
+        render_camera.far_clip = cd.far_clip;
+    }
 
     ViewportRenderState* state = get_or_create_viewport_state(viewport);
     FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
 
     std::vector<Light> lights = collect_lights(scene);
-    RenderCamera render_camera = make_render_camera(*camera, static_cast<double>(pw) / std::max(1, ph));
     const char* vp_name = tc_viewport_get_name(viewport);
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
 

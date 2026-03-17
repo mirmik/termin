@@ -161,7 +161,7 @@ void CameraViewportComponent::setup_viewport() {
     }
 
     tc_viewport_handle vh = rm.mount_scene(
-        scene, display, camera,
+        scene, display, camera->tc_component_ptr(),
         rect_x, rect_y, rect_w, rect_h,
         pipeline, vp_name);
 

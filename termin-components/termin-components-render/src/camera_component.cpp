@@ -1,10 +1,12 @@
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include <tc_inspect_cpp.hpp>
 
 extern "C" {
 #include "tc_value.h"
+#include "core/tc_camera_capability.h"
 }
 
 #include <termin/entity/component_registry.hpp>
@@ -12,8 +14,36 @@ extern "C" {
 
 namespace termin {
 
+// Camera capability vtable callback
+static bool camera_cap_get_data(tc_component* self, double aspect_override, tc_camera_data* out) {
+    if (!self || !out) return false;
+    CxxComponent* cxx = CxxComponent::from_tc(self);
+    if (!cxx) return false;
+    CameraComponent* cam = static_cast<CameraComponent*>(cxx);
+
+    Mat44 view = cam->get_view_matrix();
+    Mat44 proj = (aspect_override > 0)
+        ? cam->compute_projection_matrix(aspect_override)
+        : cam->get_projection_matrix();
+    Vec3 pos = cam->get_position();
+
+    std::memcpy(out->view, view.data, sizeof(out->view));
+    std::memcpy(out->projection, proj.data, sizeof(out->projection));
+    out->position[0] = pos.x;
+    out->position[1] = pos.y;
+    out->position[2] = pos.z;
+    out->near_clip = cam->near_clip;
+    out->far_clip = cam->far_clip;
+    return true;
+}
+
+static const tc_camera_vtable g_camera_vtable = {
+    .get_camera_data = camera_cap_get_data,
+};
+
 CameraComponent::CameraComponent() {
     link_type_entry("CameraComponent");
+    tc_camera_capability_attach(&_c, &g_camera_vtable, this);
 }
 
 std::string CameraComponent::get_projection_type_str() const {

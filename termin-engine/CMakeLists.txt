@@ -16,7 +16,6 @@ find_package(termin_render REQUIRED)
 find_package(termin_display REQUIRED)
 find_package(termin_input REQUIRED)
 find_package(termin_collision REQUIRED)
-find_package(termin_components_render REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -68,7 +67,6 @@ target_link_libraries(termin_engine
         termin_display::termin_display
         termin_input::termin_input
         termin_collision::termin_collision
-        termin_components_render::termin_components_render
 )
 
 if(UNIX AND NOT APPLE)
