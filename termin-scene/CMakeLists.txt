@@ -157,6 +157,12 @@ if(TERMIN_BUILD_PYTHON)
     else()
         install(TARGETS _scene_native DESTINATION lib/python/termin/scene)
     endif()
+
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/scene/
+        DESTINATION lib/python/termin/scene
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+    )
 endif()
 
 
@@ -221,4 +227,9 @@ if(TERMIN_SCENE_BUILD_TESTS)
         termin_scene_unknown_component_test termin_scene_component_capability_test
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )
+
+    if(MSVC)
+        target_compile_options(termin_scene_data_structures_test PRIVATE /wd4996)
+        target_compile_options(termin_scene_unknown_component_test PRIVATE /wd4251 /wd4275)
+    endif()
 endif()

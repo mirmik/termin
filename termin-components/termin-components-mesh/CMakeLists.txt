@@ -47,4 +47,9 @@ if(TERMIN_BUILD_PYTHON)
         set(_py_dest lib/python/termin/mesh)
     endif()
     install(TARGETS _components_mesh_native DESTINATION ${_py_dest})
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/mesh/
+        DESTINATION lib/python/termin/mesh
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+    )
 endif()
