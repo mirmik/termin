@@ -20,6 +20,69 @@ digraph termin_dependencies {
 		penwidth=1.1
 	];
 
+	subgraph cluster_application {
+		label="Application";
+		style=dashed;
+		color="#999999";
+		fontname="DejaVu Sans";
+		fontsize=12;
+		"diffusion-editor";
+		"termin";
+	}
+
+	subgraph cluster_foundation {
+		label="Foundation";
+		style=dashed;
+		color="#999999";
+		fontname="DejaVu Sans";
+		fontsize=12;
+		"termin-animation";
+		"termin-base";
+		"termin-collision";
+		"termin-input";
+		"termin-inspect";
+		"termin-mesh";
+		"termin-modules";
+		"termin-physics";
+		"termin-scene";
+		"termin-skeleton";
+	}
+
+	subgraph cluster_other_components {
+		label="Other Components";
+		style=dashed;
+		color="#999999";
+		fontname="DejaVu Sans";
+		fontsize=12;
+		"termin-components-animation";
+		"termin-components-collision";
+		"termin-components-kinematic";
+		"termin-components-mesh";
+		"termin-components-physics";
+		"termin-components-skeleton";
+	}
+
+	subgraph cluster_render_stack {
+		label="Render Stack";
+		style=dashed;
+		color="#999999";
+		fontname="DejaVu Sans";
+		fontsize=12;
+		"termin-components-render";
+		"termin-display";
+		"termin-graphics";
+		"termin-render";
+	}
+
+	subgraph cluster_runtime {
+		label="Runtime";
+		style=dashed;
+		color="#999999";
+		fontname="DejaVu Sans";
+		fontsize=12;
+		"termin-engine";
+	}
+
 	subgraph cluster_ui {
 		label="UI";
 		style=dashed;
@@ -30,30 +93,7 @@ digraph termin_dependencies {
 		"termin-nodegraph";
 	}
 
-	"diffusion-editor";
-	"termin";
-	"termin-animation";
-	"termin-base";
-	"termin-collision";
-	"termin-components-animation";
-	"termin-components-collision";
-	"termin-components-kinematic";
-	"termin-components-mesh";
-	"termin-components-physics";
-	"termin-components-render";
-	"termin-components-skeleton";
 	"termin-csharp";
-	"termin-display";
-	"termin-engine";
-	"termin-graphics";
-	"termin-input";
-	"termin-inspect";
-	"termin-mesh";
-	"termin-modules";
-	"termin-physics";
-	"termin-render";
-	"termin-scene";
-	"termin-skeleton";
 
 	"termin" -> "termin-csharp";
 	"termin-animation" -> "termin-components-animation";
