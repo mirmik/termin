@@ -33,7 +33,7 @@ add_library(termin_input SHARED
 )
 add_library(termin_input::termin_input ALIAS termin_input)
 
-target_compile_definitions(termin_input PRIVATE TERMIN_INPUT_EXPORTS)
+target_compile_definitions(termin_input PRIVATE TERMIN_INPUT_EXPORTS TC_EXPORTS)
 
 target_include_directories(termin_input
     PUBLIC
