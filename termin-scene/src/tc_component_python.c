@@ -83,6 +83,18 @@ static void py_vtable_on_editor_start(tc_component* c) {
     }
 }
 
+static void py_vtable_on_render_attach(tc_component* c) {
+    if (g_py_callbacks.on_render_attach && c->body) {
+        g_py_callbacks.on_render_attach(c->body);
+    }
+}
+
+static void py_vtable_on_render_detach(tc_component* c) {
+    if (g_py_callbacks.on_render_detach && c->body) {
+        g_py_callbacks.on_render_detach(c->body);
+    }
+}
+
 // ============================================================================
 // Python ref_vtable for Python components (TC_PYTHON_COMPONENT)
 // ============================================================================
@@ -122,6 +134,8 @@ static const tc_component_vtable g_python_vtable = {
     .on_scene_inactive = py_vtable_on_scene_inactive,
     .on_scene_active = py_vtable_on_scene_active,
     .on_editor_start = py_vtable_on_editor_start,
+    .on_render_attach = py_vtable_on_render_attach,
+    .on_render_detach = py_vtable_on_render_detach,
     .setup_editor_defaults = NULL,
     .serialize = NULL,
     .deserialize = NULL,

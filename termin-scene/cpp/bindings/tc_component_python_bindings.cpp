@@ -180,6 +180,34 @@ static void py_cb_on_editor_start(void* py_self) {
     PyGILState_Release(gstate);
 }
 
+static void py_cb_on_render_attach(void* py_self) {
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    try {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_render_attach")) {
+            self.attr("on_render_attach")();
+        }
+    } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_render_attach");
+        PyErr_Print();
+    }
+    PyGILState_Release(gstate);
+}
+
+static void py_cb_on_render_detach(void* py_self) {
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    try {
+        nb::handle self((PyObject*)py_self);
+        if (nb::hasattr(self, "on_render_detach")) {
+            self.attr("on_render_detach")();
+        }
+    } catch (const std::exception& e) {
+        tc::Log::error(e, "PythonComponent::on_render_detach");
+        PyErr_Print();
+    }
+    PyGILState_Release(gstate);
+}
+
 // ============================================================================
 // Reference counting callbacks
 // ============================================================================
@@ -221,6 +249,8 @@ static void ensure_core_callbacks_initialized() {
         .on_scene_inactive = py_cb_on_scene_inactive,
         .on_scene_active = py_cb_on_scene_active,
         .on_editor_start = py_cb_on_editor_start,
+        .on_render_attach = py_cb_on_render_attach,
+        .on_render_detach = py_cb_on_render_detach,
         .incref = py_cb_incref,
         .decref = py_cb_decref,
     };
