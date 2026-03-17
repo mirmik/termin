@@ -86,6 +86,11 @@ bool tc_scene_ext_is_registered(tc_scene_ext_type_id type_id) {
     return find_type(type_id) != NULL;
 }
 
+const char* tc_scene_ext_type_debug_name(tc_scene_ext_type_id type_id) {
+    tc_scene_ext_type_entry* entry = find_type(type_id);
+    return entry ? entry->debug_name : NULL;
+}
+
 bool tc_scene_ext_attach(tc_scene_handle scene, tc_scene_ext_type_id type_id) {
     if (!tc_scene_alive(scene)) return false;
 

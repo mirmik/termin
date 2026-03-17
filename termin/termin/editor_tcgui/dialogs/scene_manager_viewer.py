@@ -225,6 +225,13 @@ def show_scene_manager_viewer(
             if attachment is not None and attachment.scene is scene:
                 is_editing = True
 
+        # Get attached extensions
+        from termin.visualization.core.scene import scene_ext_attached_names
+        try:
+            ext_names = scene_ext_attached_names(scene)
+        except Exception:
+            ext_names = []
+
         lines = [
             f"Name: {name}",
             f"Handle: {handle[0]}:{handle[1]} (index:generation)",
@@ -232,8 +239,15 @@ def show_scene_manager_viewer(
             f"Path: {path or '(unsaved)'}",
             f"Editing: {'YES' if is_editing else 'no'}",
             "",
-            "=== Entities ===",
+            f"=== Extensions ({len(ext_names)}) ===",
         ]
+        if ext_names:
+            for ext in ext_names:
+                lines.append(f"  {ext}")
+        else:
+            lines.append("  (none)")
+        lines.append("")
+        lines.append("=== Entities ===")
 
         entity_count = 0
         root_entities = []

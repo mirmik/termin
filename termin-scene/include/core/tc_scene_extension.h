@@ -61,6 +61,9 @@ TC_API tc_value tc_scene_ext_serialize_scene(tc_scene_handle scene);
 // Attaches registered extensions found in input before deserialize callback.
 TC_API void tc_scene_ext_deserialize_scene(tc_scene_handle scene, const tc_value* extensions_dict);
 
+// Get debug name for registered extension type (or NULL if not registered).
+TC_API const char* tc_scene_ext_type_debug_name(tc_scene_ext_type_id type_id);
+
 // Internal lifecycle helpers (called from tc_init/tc_shutdown).
 TC_API void tc_scene_ext_registry_init(void);
 TC_API void tc_scene_ext_registry_shutdown(void);
