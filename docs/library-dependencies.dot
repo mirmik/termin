@@ -19,109 +19,78 @@ digraph termin_dependencies {
 		color="#666666",
 		penwidth=1.1
 	];
-	subgraph cluster_foundation {
-		graph [color="#d9d9d9",
-			label=Foundation,
-			style=rounded
-		];
-		"termin-base";
-		"termin-mesh";
-		"termin-inspect";
-		"termin-scene";
-		"termin-input";
-		"termin-modules";
-		"termin-collision";
-		"termin-physics";
-		"termin-skeleton";
-		"termin-animation";
-	}
-	subgraph cluster_render {
-		graph [color="#d9d9d9",
-			label="Render Stack",
-			style=rounded
-		];
-		"termin-graphics";
-		"termin-render";
-		"termin-display";
-		"termin-components-render";
-	}
-	subgraph cluster_components {
-		graph [color="#d9d9d9",
-			label="Other Components",
-			style=rounded
-		];
-		"termin-components-collision";
-		"termin-components-skeleton";
-		"termin-components-animation";
-		"termin-components-physics";
-		"termin-components-mesh";
-		"termin-components-kinematic";
-	}
-	subgraph cluster_runtime {
-		graph [color="#d9d9d9",
-			label=Runtime,
-			style=rounded
-		];
-		"termin-engine";
-	}
+
 	subgraph cluster_ui {
-		graph [color="#d9d9d9",
-			label=UI,
-			style=rounded
-		];
+		label="UI";
+		style=dashed;
+		color="#999999";
+		fontname="DejaVu Sans";
+		fontsize=12;
 		"termin-gui";
 		"termin-nodegraph";
 	}
-	subgraph cluster_application {
-		graph [color="#d9d9d9",
-			label=Application,
-			style=rounded
-		];
-		termin;
-		"diffusion-editor";
-	}
+
+	"diffusion-editor";
+	"termin";
+	"termin-animation";
+	"termin-base";
+	"termin-collision";
+	"termin-components-animation";
+	"termin-components-collision";
+	"termin-components-kinematic";
+	"termin-components-mesh";
+	"termin-components-physics";
+	"termin-components-render";
+	"termin-components-skeleton";
 	"termin-csharp";
-	"termin-base" -> "termin-mesh";
+	"termin-display";
+	"termin-engine";
+	"termin-graphics";
+	"termin-input";
+	"termin-inspect";
+	"termin-mesh";
+	"termin-modules";
+	"termin-physics";
+	"termin-render";
+	"termin-scene";
+	"termin-skeleton";
+
+	"termin" -> "termin-csharp";
+	"termin-animation" -> "termin-components-animation";
 	"termin-base" -> "termin-inspect";
+	"termin-base" -> "termin-mesh";
 	"termin-base" -> "termin-modules";
-	"termin-base" -> "termin-physics";
-	"termin-mesh" -> "termin-graphics";
+	"termin-collision" -> "termin-components-collision";
+	"termin-collision" -> "termin-engine";
+	"termin-collision" -> "termin-physics";
+	"termin-components-animation" -> "termin";
+	"termin-components-collision" -> "termin-components-physics";
+	"termin-components-kinematic" -> "termin";
+	"termin-components-physics" -> "termin";
+	"termin-components-render" -> "termin";
+	"termin-components-skeleton" -> "termin-components-animation";
+	"termin-display" -> "termin-components-render";
+	"termin-display" -> "termin-engine";
+	"termin-engine" -> "termin";
+	"termin-graphics" -> "termin-gui";
+	"termin-graphics" -> "termin-render";
+	"termin-gui" -> "diffusion-editor";
+	"termin-gui" -> "termin-nodegraph";
+	"termin-input" -> "termin-display";
+	"termin-inspect" -> "termin-scene";
 	"termin-mesh" -> "termin-components-collision";
 	"termin-mesh" -> "termin-components-mesh";
-	"termin-inspect" -> "termin-scene";
-	"termin-scene" -> "termin-input";
-	"termin-scene" -> "termin-collision";
-	"termin-scene" -> "termin-render";
-	"termin-scene" -> "termin-components-mesh";
-	"termin-scene" -> "termin-components-kinematic";
-	"termin-input" -> "termin-display";
-	"termin-collision" -> "termin-engine";
-	"termin-collision" -> "termin-components-collision";
-	"termin-collision" -> "termin-physics";
-	"termin-scene" -> "termin-skeleton";
-	"termin-inspect" -> "termin-animation";
-	"termin-skeleton" -> "termin-animation";
-	"termin-graphics" -> "termin-render";
-	"termin-graphics" -> "termin-gui";
-	"termin-render" -> "termin-display";
-	"termin-display" -> "termin-components-render";
+	"termin-mesh" -> "termin-graphics";
+	"termin-modules" -> "termin";
+	"termin-nodegraph" -> "termin";
 	"termin-physics" -> "termin-components-physics";
-	"termin-components-collision" -> "termin-components-physics";
+	"termin-render" -> "termin-display";
+	"termin-scene" -> "termin-collision";
+	"termin-scene" -> "termin-components-kinematic";
+	"termin-scene" -> "termin-components-mesh";
+	"termin-scene" -> "termin-input";
+	"termin-scene" -> "termin-render";
+	"termin-scene" -> "termin-skeleton";
+	"termin-skeleton" -> "termin-animation";
 	"termin-skeleton" -> "termin-components-skeleton";
-	"termin-animation" -> "termin-components-animation";
-	"termin-components-skeleton" -> "termin-components-animation";
-	"termin-components-skeleton" -> termin;
-	"termin-components-animation" -> termin;
-	"termin-components-collision" -> termin;
-	"termin-components-kinematic" -> termin;
-	"termin-components-render" -> termin;
-	"termin-components-physics" -> termin;
-	"termin-physics" -> termin;
-	"termin-modules" -> termin;
-	"termin-engine" -> termin;
-	"termin-gui" -> termin;
-	"termin-nodegraph" -> termin;
-	termin -> "termin-csharp";
-	"termin-gui" -> "termin-nodegraph";
-	"termin-gui" -> "diffusion-editor";
 }
