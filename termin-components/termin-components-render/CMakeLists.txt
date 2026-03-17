@@ -47,6 +47,10 @@ termin_add_module(
         termin
 )
 
+if(MSVC)
+    target_compile_options(termin_components_render PRIVATE /wd4251 /wd4275)
+endif()
+
 set_target_properties(termin_components_render PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS ON
 )

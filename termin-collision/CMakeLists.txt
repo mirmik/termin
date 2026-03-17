@@ -43,6 +43,10 @@ add_library(termin_collision::termin_collision ALIAS termin_collision)
 
 target_compile_definitions(termin_collision PRIVATE TERMIN_COLLISION_EXPORTS TC_EXPORTS)
 
+if(MSVC)
+    target_compile_options(termin_collision PRIVATE /wd4251 /wd4275)
+endif()
+
 target_include_directories(termin_collision PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/termin/colliders>
