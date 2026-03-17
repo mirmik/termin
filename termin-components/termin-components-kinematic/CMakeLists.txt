@@ -24,6 +24,10 @@ termin_add_module(
     INSTALL_HEADERS components
 )
 
+if(MSVC)
+    target_compile_options(termin_components_kinematic PRIVATE /wd4251 /wd4275)
+endif()
+
 if(TERMIN_BUILD_PYTHON)
     if(NOT Python_EXECUTABLE)
         if(WIN32)

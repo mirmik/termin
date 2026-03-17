@@ -21,6 +21,10 @@ add_library(termin_components_skeleton SHARED
 add_library(termin_components_skeleton::termin_components_skeleton ALIAS termin_components_skeleton)
 target_compile_definitions(termin_components_skeleton PRIVATE TERMIN_SCENE_EXPORTS TC_EXPORTS)
 
+if(MSVC)
+    target_compile_options(termin_components_skeleton PRIVATE /wd4251 /wd4275)
+endif()
+
 target_include_directories(termin_components_skeleton PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>

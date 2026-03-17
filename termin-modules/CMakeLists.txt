@@ -26,6 +26,10 @@ add_library(termin_modules STATIC
 target_compile_features(termin_modules PUBLIC cxx_std_20)
 set_target_properties(termin_modules PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+if(MSVC)
+    target_compile_options(termin_modules PRIVATE /wd4251 /wd4275)
+endif()
+
 target_include_directories(termin_modules
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

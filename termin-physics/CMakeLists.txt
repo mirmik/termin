@@ -36,6 +36,10 @@ add_library(termin_physics::termin_physics ALIAS termin_physics)
 
 target_compile_definitions(termin_physics PRIVATE TERMIN_PHYSICS_EXPORTS TC_EXPORTS)
 
+if(MSVC)
+    target_compile_options(termin_physics PRIVATE /wd4251 /wd4275)
+endif()
+
 target_include_directories(termin_physics PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>

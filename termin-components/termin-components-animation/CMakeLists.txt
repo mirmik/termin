@@ -22,6 +22,11 @@ add_library(termin_components_animation SHARED
 )
 add_library(termin_components_animation::termin_components_animation ALIAS termin_components_animation)
 target_compile_definitions(termin_components_animation PRIVATE TERMIN_SCENE_EXPORTS TC_EXPORTS)
+
+if(MSVC)
+    target_compile_options(termin_components_animation PRIVATE /wd4251 /wd4275)
+endif()
+
 set_target_properties(termin_components_animation PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 target_include_directories(termin_components_animation PUBLIC
