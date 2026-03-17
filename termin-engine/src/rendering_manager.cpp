@@ -3,12 +3,12 @@
 #include "termin/render/scene_pipeline_template.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/camera/render_camera_utils.hpp"
-#include "termin/lighting/light_component.hpp"
 #include <termin/entity/entity.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
 
 extern "C" {
 #include <tcbase/tc_log.h>
+#include "core/tc_light_capability.h"
 #include <tgfx/tc_gpu.h>
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
@@ -1160,41 +1160,47 @@ void RenderingManager::shutdown() {
 // Helpers
 // ============================================================================
 
-// Helper struct for light collection callback
-struct LightCollectData {
-    tc_entity_pool* pool;
-    std::vector<Light>* lights;
-};
+// Light collection via capability system
+static bool collect_lights_cap_cb(tc_component* c, void* user_data) {
+    std::vector<Light>* lights = static_cast<std::vector<Light>*>(user_data);
+    const tc_light_capability* cap = tc_light_capability_get(c);
+    if (!cap || !cap->vtable || !cap->vtable->get_light_data) return true;
 
-static bool collect_lights_cb(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
-    LightCollectData* data = static_cast<LightCollectData*>(user_data);
+    tc_light_data ld;
+    if (!cap->vtable->get_light_data(c, &ld)) return true;
 
-    // Get entity handle
-    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(pool);
-    tc_entity_handle eh = tc_entity_handle_make(pool_handle, id);
-    Entity entity(eh);
-
-    LightComponent* light = entity.get_component<LightComponent>();
-    if (light) {
-        data->lights->push_back(light->to_light());
-    }
-    return true; // Continue iteration
+    Light light;
+    light.type = static_cast<LightType>(ld.type);
+    light.color = Vec3(ld.color[0], ld.color[1], ld.color[2]);
+    light.intensity = ld.intensity;
+    light.direction = Vec3(ld.direction[0], ld.direction[1], ld.direction[2]);
+    light.position = Vec3(ld.position[0], ld.position[1], ld.position[2]);
+    if (ld.has_range) light.range = ld.range;
+    light.inner_angle = ld.inner_angle;
+    light.outer_angle = ld.outer_angle;
+    light.shadows.enabled = ld.shadows.enabled;
+    light.shadows.bias = ld.shadows.bias;
+    light.shadows.normal_bias = ld.shadows.normal_bias;
+    light.shadows.map_resolution = ld.shadows.map_resolution;
+    light.shadows.cascade_count = ld.shadows.cascade_count;
+    light.shadows.max_distance = ld.shadows.max_distance;
+    light.shadows.split_lambda = ld.shadows.split_lambda;
+    light.shadows.cascade_blend = ld.shadows.cascade_blend;
+    light.shadows.blend_distance = ld.shadows.blend_distance;
+    lights->push_back(std::move(light));
+    return true;
 }
 
 std::vector<Light> RenderingManager::collect_lights(tc_scene_handle scene) {
     std::vector<Light> lights;
+    if (!tc_scene_handle_valid(scene)) return lights;
 
-    if (!tc_scene_handle_valid(scene)) {
-        return lights;
-    }
+    tc_component_cap_id light_cap = tc_light_capability_id();
+    if (light_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) return lights;
 
-    tc_entity_pool* pool = tc_scene_entity_pool(scene);
-    if (!pool) {
-        return lights;
-    }
-
-    LightCollectData data{pool, &lights};
-    tc_entity_pool_foreach(pool, collect_lights_cb, &data);
+    tc_scene_foreach_with_capability(
+        scene, light_cap, collect_lights_cap_cb, &lights,
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
 
     return lights;
 }
