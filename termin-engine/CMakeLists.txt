@@ -99,6 +99,11 @@ if(TERMIN_BUILD_PYTHON)
     )
     termin_set_rpath_python(_engine_native)
     install(TARGETS _engine_native DESTINATION lib/python/termin/engine)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/engine/
+        DESTINATION lib/python/termin/engine
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+    )
 endif()
 
 install(TARGETS termin_engine

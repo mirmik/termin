@@ -48,4 +48,9 @@ if(TERMIN_BUILD_PYTHON)
         set(_py_dest lib/python/termin/colliders)
     endif()
     install(TARGETS _components_collision_native DESTINATION ${_py_dest})
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/colliders/
+        DESTINATION lib/python/termin/colliders
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+    )
 endif()

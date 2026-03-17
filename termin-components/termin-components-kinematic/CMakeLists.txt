@@ -49,4 +49,9 @@ if(TERMIN_BUILD_PYTHON)
         set(_py_dest lib/python/termin/kinematic)
     endif()
     install(TARGETS _components_kinematic_native DESTINATION ${_py_dest})
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/kinematic/
+        DESTINATION lib/python/termin/kinematic
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+    )
 endif()
