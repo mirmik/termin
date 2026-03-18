@@ -192,6 +192,11 @@ class UI:
 
         if self._root:
             w, h = self._root.compute_size(viewport_w, viewport_h)
+            # If root has no preferred size, fill the viewport
+            if w <= 0:
+                w = viewport_w
+            if h <= 0:
+                h = viewport_h
 
             anchor = self._root.anchor
             x, y = 0.0, 0.0
