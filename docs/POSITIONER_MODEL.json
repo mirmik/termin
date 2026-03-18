@@ -1,0 +1,516 @@
+{"axis_mapping":{"Az":"E","SL":"V"},"entities":[{
+  "uuid": "3ab429d0-ba8f-43b8-9969-8e950a3d626d",
+  "name": "T",
+  "priority": 0,
+  "visible": true,
+  "enabled": true,
+  "pickable": true,
+  "selectable": true,
+  "layer": 0,
+  "flags": 0,
+  "pose": {
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "rotation": [
+      0,
+      0,
+      0,
+      1
+    ]
+  },
+  "scale": [
+    1,
+    1,
+    1
+  ],
+  "components": [
+    {
+      "type": "MeshRenderer",
+      "data": {
+        "mesh": {
+          "uuid": "mesh-0000000000000001",
+          "name": "__primitive_unit_cube"
+        },
+        "material": {
+          "uuid": "mat-0000000000000001",
+          "name": "DefaultMaterial",
+          "type": "uuid"
+        },
+        "cast_shadow": true,
+        "_override_material": false,
+        "mesh_offset_enabled": true,
+        "mesh_offset_position": [
+          0,
+          0,
+          0
+        ],
+        "mesh_offset_euler": [
+          0,
+          0,
+          0
+        ],
+        "mesh_offset_scale": [
+          0.30000001192092896,
+          0.30000001192092896,
+          0.30000001192092896
+        ]
+      }
+    }
+  ],
+  "children": [
+    {
+      "uuid": "ce5433f1-9c19-45f7-852a-7e2a18ab4e00",
+      "name": "C",
+      "priority": 0,
+      "visible": true,
+      "enabled": true,
+      "pickable": true,
+      "selectable": true,
+      "layer": 0,
+      "flags": 0,
+      "pose": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "data": {
+            "mesh": {
+              "uuid": "mesh-0000000000000001",
+              "name": "__primitive_unit_cube"
+            },
+            "material": {
+              "uuid": "mat-0000000000000001",
+              "name": "DefaultMaterial",
+              "type": "uuid"
+            },
+            "cast_shadow": true,
+            "_override_material": false,
+            "mesh_offset_enabled": true,
+            "mesh_offset_position": [
+              0,
+              0,
+              0.20000000298023224
+            ],
+            "mesh_offset_euler": [
+              0,
+              0,
+              0
+            ],
+            "mesh_offset_scale": [
+              0.20000000298023224,
+              0.20000000298023224,
+              0.5
+            ]
+          }
+        }
+      ],
+      "children": [
+        {
+          "uuid": "03df0eed-fcf9-45d7-9f2f-31c91911e4eb",
+          "name": "E",
+          "priority": 0,
+          "visible": true,
+          "enabled": true,
+          "pickable": true,
+          "selectable": true,
+          "layer": 0,
+          "flags": 0,
+          "pose": {
+            "position": [
+              0,
+              0,
+              0.34999999403953552
+            ],
+            "rotation": [
+              0,
+              0,
+              -0.70710430861191964,
+              0.70710925375252942
+            ]
+          },
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "type": "RotatorComponent",
+              "data": {
+                "axis": [
+                  0,
+                  0,
+                  0.01745329238474369
+                ],
+                "coordinate": -89.999600000000001,
+                "base_position": [
+                  0,
+                  0,
+                  0.34999999403953552
+                ],
+                "base_rotation": [
+                  1,
+                  0,
+                  0,
+                  0
+                ],
+                "base_scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "capture_base": false
+              }
+            },
+            {
+              "type": "MeshRenderer",
+              "data": {
+                "mesh": {
+                  "uuid": "mesh-0000000000000001",
+                  "name": "__primitive_unit_cube"
+                },
+                "material": {
+                  "uuid": "mat-0000000000000001",
+                  "name": "DefaultMaterial",
+                  "type": "uuid"
+                },
+                "cast_shadow": true,
+                "_override_material": false,
+                "mesh_offset_enabled": true,
+                "mesh_offset_position": [
+                  0.20000000298023224,
+                  0,
+                  0
+                ],
+                "mesh_offset_euler": [
+                  0,
+                  0,
+                  0
+                ],
+                "mesh_offset_scale": [
+                  0.69999998807907104,
+                  0.30000001192092896,
+                  0.20000000298023224
+                ]
+              }
+            },
+            {
+              "type": "ColliderComponent",
+              "data": {
+                "box_size": [
+                  0.69999998807907104,
+                  0.30000001192092896,
+                  0.20000000298023224
+                ],
+                "collider_offset_enabled": true,
+                "collider_offset_position": [
+                  0.20000000298023224,
+                  0,
+                  0
+                ],
+                "collider_offset_euler": [
+                  0,
+                  0,
+                  0
+                ],
+                "collider_type": "Box"
+              }
+            }
+          ],
+          "children": [
+            {
+              "uuid": "44196cb2-1383-4754-b15e-f67fe5e4c24a",
+              "name": "V",
+              "priority": 0,
+              "visible": true,
+              "enabled": true,
+              "pickable": true,
+              "selectable": true,
+              "layer": 0,
+              "flags": 0,
+              "pose": {
+                "position": [
+                  0.40731979089569298,
+                  0,
+                  0.50999999046325684
+                ],
+                "rotation": [
+                  0,
+                  0,
+                  0,
+                  1
+                ]
+              },
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "components": [
+                {
+                  "type": "ActuatorComponent",
+                  "data": {
+                    "axis": [
+                      -0.0099999997764825821,
+                      0,
+                      0
+                    ],
+                    "coordinate": -40.73198,
+                    "base_position": [
+                      0,
+                      0,
+                      0.50999999046325684
+                    ],
+                    "base_rotation": [
+                      1,
+                      0,
+                      0,
+                      0
+                    ],
+                    "base_scale": [
+                      1,
+                      1,
+                      1
+                    ],
+                    "capture_base": false
+                  }
+                },
+                {
+                  "type": "MeshRenderer",
+                  "data": {
+                    "mesh": {
+                      "uuid": "mesh-0000000000000001",
+                      "name": "__primitive_unit_cube"
+                    },
+                    "material": {
+                      "uuid": "mat-0000000000000001",
+                      "name": "DefaultMaterial",
+                      "type": "uuid"
+                    },
+                    "cast_shadow": true,
+                    "_override_material": false,
+                    "mesh_offset_enabled": true,
+                    "mesh_offset_position": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "mesh_offset_euler": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "mesh_offset_scale": [
+                      0.30000001192092896,
+                      0.30000001192092896,
+                      0.80000001192092896
+                    ]
+                  }
+                },
+                {
+                  "type": "ColliderComponent",
+                  "data": {
+                    "box_size": [
+                      0.30000001192092896,
+                      0.30000001192092896,
+                      0.80000001192092896
+                    ],
+                    "collider_offset_enabled": false,
+                    "collider_offset_position": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "collider_offset_euler": [
+                      0,
+                      0,
+                      0
+                    ],
+                    "collider_type": "Box"
+                  }
+                }
+              ],
+              "children": [
+                {
+                  "uuid": "39073d6c-5b4c-4bab-83dc-609896d9cb7a",
+                  "name": "C2",
+                  "priority": 0,
+                  "visible": true,
+                  "enabled": true,
+                  "pickable": true,
+                  "selectable": true,
+                  "layer": 0,
+                  "flags": 0,
+                  "pose": {
+                    "position": [
+                      -0.10000000149011612,
+                      0,
+                      0.20000000298023224
+                    ],
+                    "rotation": [
+                      0,
+                      0,
+                      0,
+                      1
+                    ]
+                  },
+                  "scale": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "components": [
+                    {
+                      "type": "MeshRenderer",
+                      "data": {
+                        "mesh": {
+                          "uuid": "mesh-0000000000000001",
+                          "name": "__primitive_unit_cube"
+                        },
+                        "material": {
+                          "uuid": "mat-0000000000000001",
+                          "name": "DefaultMaterial",
+                          "type": "uuid"
+                        },
+                        "cast_shadow": true,
+                        "_override_material": false,
+                        "mesh_offset_enabled": true,
+                        "mesh_offset_position": [
+                          0,
+                          0,
+                          0
+                        ],
+                        "mesh_offset_euler": [
+                          0,
+                          90,
+                          0
+                        ],
+                        "mesh_offset_scale": [
+                          0.20000000298023224,
+                          0.20000000298023224,
+                          0.40000000596046448
+                        ]
+                      }
+                    }
+                  ],
+                  "children": [
+                    {
+                      "uuid": "cbeeb388-8c2a-415b-9f0e-3fa285e41f18",
+                      "name": "Element_7756d23e",
+                      "priority": 0,
+                      "visible": true,
+                      "enabled": true,
+                      "pickable": true,
+                      "selectable": true,
+                      "layer": 0,
+                      "flags": 0,
+                      "pose": {
+                        "position": [
+                          0,
+                          0,
+                          0
+                        ],
+                        "rotation": [
+                          0,
+                          0,
+                          0,
+                          1
+                        ]
+                      },
+                      "scale": [
+                        1,
+                        1,
+                        1
+                      ],
+                      "components": [
+                        {
+                          "type": "RotatorComponent",
+                          "data": {
+                            "axis": [
+                              0,
+                              0,
+                              0.01745329238474369
+                            ],
+                            "coordinate": 0,
+                            "base_position": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "base_rotation": [
+                              1,
+                              0,
+                              0,
+                              0
+                            ],
+                            "base_scale": [
+                              1,
+                              1,
+                              1
+                            ],
+                            "capture_base": false
+                          }
+                        },
+                        {
+                          "type": "MeshRenderer",
+                          "data": {
+                            "mesh": {
+                              "uuid": "mesh-0000000000000001",
+                              "name": "__primitive_unit_cube"
+                            },
+                            "material": {
+                              "uuid": "mat-0000000000000001",
+                              "name": "DefaultMaterial",
+                              "type": "uuid"
+                            },
+                            "cast_shadow": true,
+                            "_override_material": false,
+                            "mesh_offset_enabled": true,
+                            "mesh_offset_position": [
+                              -0.30000001192092896,
+                              0,
+                              0
+                            ],
+                            "mesh_offset_euler": [
+                              0,
+                              0,
+                              0
+                            ],
+                            "mesh_offset_scale": [
+                              0.20000000298023224,
+                              0.40000000596046448,
+                              0.20000000298023224
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}]}
