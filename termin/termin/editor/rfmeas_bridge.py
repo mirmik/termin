@@ -8,13 +8,12 @@ The editor uses:
   {"version": "1.0", "scene": {"entities": [...]}, "editor": {...}}
 
 Entity/component structure is identical in both formats.
+axis_mapping is stored via RfmeasAxisBinding components on individual entities.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
@@ -25,19 +24,68 @@ if TYPE_CHECKING:
     from termin.editor.scene_manager import SceneManager
 
 
-# Module-level state: remembered axis_mapping and source path
-_rfmeas_axis_mapping: dict[str, str] | None = None
+_BINDING_TYPE = "RfmeasAxisBinding"
+
+# Remembered source path for re-export default
 _rfmeas_source_path: str | None = None
+
+
+def _invert_axis_mapping(axis_mapping: dict[str, str]) -> dict[str, str]:
+    """Invert axis_mapping from {axis_name: entity_name} to {entity_name: axis_name}."""
+    return {entity_name: axis_name for axis_name, entity_name in axis_mapping.items()}
+
+
+def _inject_bindings(entities: list[dict], entity_to_axis: dict[str, str]) -> None:
+    """Recursively inject RfmeasAxisBinding components into entity JSON."""
+    for ent in entities:
+        name = ent.get("name", "")
+        if name in entity_to_axis:
+            binding = {
+                "type": _BINDING_TYPE,
+                "data": {"axis_name": entity_to_axis[name]},
+            }
+            ent.setdefault("components", []).append(binding)
+        children = ent.get("children")
+        if children:
+            _inject_bindings(children, entity_to_axis)
+
+
+def _collect_bindings(entities: list[dict]) -> dict[str, str]:
+    """Recursively collect axis_mapping and remove RfmeasAxisBinding components from JSON."""
+    axis_mapping: dict[str, str] = {}
+    for ent in entities:
+        name = ent.get("name", "")
+        components = ent.get("components", [])
+        remaining = []
+        for comp in components:
+            if comp.get("type") == _BINDING_TYPE:
+                axis_name = comp.get("data", {}).get("axis_name", "")
+                if axis_name and name:
+                    axis_mapping[axis_name] = name
+            else:
+                remaining.append(comp)
+        ent["components"] = remaining
+        children = ent.get("children")
+        if children:
+            axis_mapping.update(_collect_bindings(children))
+    return axis_mapping
 
 
 def import_rfmeas_model(
     parent: QWidget,
     scene_manager: SceneManager,
     scene_name: str,
-    load_scene_from_file_fn,
 ) -> bool:
-    """Show file dialog and import rfmeas model into editor scene."""
-    global _rfmeas_axis_mapping, _rfmeas_source_path
+    """Show file dialog and import rfmeas model into current scene."""
+    global _rfmeas_source_path
+
+    # Ensure RfmeasAxisBinding is registered before loading data
+    import termin.editor.rfmeas_axis_binding  # noqa: F401
+
+    scene = scene_manager.get_scene(scene_name)
+    if scene is None:
+        QMessageBox.critical(parent, "Import Error", "No active scene.")
+        return False
 
     file_path, _ = QFileDialog.getOpenFileName(
         parent,
@@ -63,42 +111,31 @@ def import_rfmeas_model(
     axis_mapping = rfmeas_data.get("axis_mapping", {})
     entities = rfmeas_data["entities"]
 
-    # Wrap into termin scene format
-    termin_data = {
-        "version": "1.0",
-        "scene": {
-            "entities": entities,
-        },
-    }
+    # Inject RfmeasAxisBinding components based on axis_mapping
+    entity_to_axis = _invert_axis_mapping(axis_mapping)
+    _inject_bindings(entities, entity_to_axis)
 
-    # Write to temp file, load via standard path
-    fd, tmp_path = tempfile.mkstemp(suffix=".scene")
-    try:
-        os.close(fd)
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(termin_data, f)
+    # Load entities into current scene
+    scene_data = {"entities": entities}
+    scene.load_from_data(scene_data, context=None, update_settings=False)
 
-        ok = load_scene_from_file_fn(tmp_path)
-    finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-    if ok:
-        _rfmeas_axis_mapping = axis_mapping
-        _rfmeas_source_path = file_path
-        log.info(f"Imported rfmeas model: {file_path} (axes: {list(axis_mapping.keys())})")
-
-    return ok
+    _rfmeas_source_path = file_path
+    log.info(f"Imported rfmeas model: {file_path} (axes: {list(axis_mapping.keys())})")
+    return True
 
 
 def export_rfmeas_model(
     parent: QWidget,
     scene_manager: SceneManager,
     scene_name: str,
-    collect_editor_data_fn=None,
 ) -> bool:
-    """Save current scene as rfmeas model JSON."""
-    global _rfmeas_axis_mapping, _rfmeas_source_path
+    """Export current scene as rfmeas model JSON."""
+    global _rfmeas_source_path
+
+    scene = scene_manager.get_scene(scene_name)
+    if scene is None:
+        QMessageBox.critical(parent, "Export Error", "No active scene.")
+        return False
 
     default_path = _rfmeas_source_path or ""
     file_path, _ = QFileDialog.getSaveFileName(
@@ -114,30 +151,12 @@ def export_rfmeas_model(
     if not file_path.endswith(".json"):
         file_path += ".json"
 
-    # Save scene to temp file via SceneManager, then extract entities
-    fd, tmp_path = tempfile.mkstemp(suffix=".scene")
-    try:
-        os.close(fd)
-
-        editor_data = None
-        if collect_editor_data_fn is not None:
-            editor_data = collect_editor_data_fn()
-
-        ok = scene_manager.save_scene(scene_name, tmp_path, editor_data)
-        if not ok:
-            QMessageBox.critical(parent, "Export Error", "SceneManager.save_scene failed.")
-            return False
-
-        with open(tmp_path, "r", encoding="utf-8") as f:
-            termin_data = json.load(f)
-    finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-    scene_data = termin_data.get("scene", {})
+    # Serialize scene in memory
+    scene_data = scene.serialize()
     entities = scene_data.get("entities", [])
 
-    axis_mapping = _rfmeas_axis_mapping if _rfmeas_axis_mapping is not None else {}
+    # Collect axis_mapping from RfmeasAxisBinding components and strip them
+    axis_mapping = _collect_bindings(entities)
 
     rfmeas_data = {
         "axis_mapping": axis_mapping,

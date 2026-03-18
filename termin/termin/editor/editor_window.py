@@ -1650,7 +1650,6 @@ class EditorWindow(QMainWindow):
             parent=self,
             scene_manager=self.scene_manager,
             scene_name=self._editor_scene_name or "rfmeas",
-            load_scene_from_file_fn=self._load_scene_from_file,
         )
 
     def _export_rfmeas(self) -> None:
@@ -1663,7 +1662,6 @@ class EditorWindow(QMainWindow):
             parent=self,
             scene_manager=self.scene_manager,
             scene_name=self._editor_scene_name,
-            collect_editor_data_fn=self._collect_editor_state,
         )
 
     def _close_scene(self) -> None:

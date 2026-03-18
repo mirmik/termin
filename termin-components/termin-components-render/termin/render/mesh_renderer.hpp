@@ -37,7 +37,7 @@ public:
     INSPECT_FIELD(MeshRenderer, mesh_offset_enabled,  "Mesh Offset",     "bool")
     INSPECT_FIELD(MeshRenderer, mesh_offset_position, "Offset Position", "vec3")
     INSPECT_FIELD(MeshRenderer, mesh_offset_euler,    "Offset Rotation", "vec3")
-    INSPECT_FIELD(MeshRenderer, mesh_offset_scale,    "Offset Scale",    "vec3")
+    INSPECT_FIELD(MeshRenderer, mesh_offset_scale,    "Offset Scale", "vec3")
 
 private:
     void ensure_override_material_ready();
