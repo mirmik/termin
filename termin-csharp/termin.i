@@ -518,14 +518,11 @@ public:
 }
 
 // Ignore problematic members
-%ignore termin::RenderPipeline::pipeline_;
-%ignore termin::RenderPipeline::specs_;
-%ignore termin::RenderPipeline::fbo_pool_;
-%ignore termin::RenderPipeline::shadow_arrays_;
+%ignore termin::RenderPipeline::handle_;
 %ignore termin::RenderPipeline::fbo_pool;
 %ignore termin::RenderPipeline::shadow_arrays;
+%ignore termin::RenderPipeline::cache;
 %ignore termin::RenderPipeline::collect_specs;
-%ignore termin::RenderPipeline::operator=;
 
 %ignore termin::RenderEngine::render_scene_pipeline_offscreen;
 
@@ -615,11 +612,12 @@ struct ResourceSpec {
 
 class RenderPipeline {
 public:
-    RenderPipeline(const std::string& name = "default");
-    ~RenderPipeline();
+    RenderPipeline();
+    explicit RenderPipeline(tc_pipeline_handle h);
+    explicit RenderPipeline(const std::string& name);
 
     // Name
-    const std::string& name() const;
+    std::string name() const;
     void set_name(const std::string& name);
 
     // Pass management
@@ -662,7 +660,7 @@ public:
 
     // Render to screen (default FBO)
     void render_to_screen(
-        RenderPipeline* pipeline,
+        RenderPipeline& pipeline,
         int width,
         int height,
         tc_scene_handle scene,
@@ -671,7 +669,7 @@ public:
 
     // Present pipeline's color FBO to screen (blit)
     void present_to_screen(
-        RenderPipeline* pipeline,
+        RenderPipeline& pipeline,
         int width,
         int height,
         const std::string& resource_name = "color"

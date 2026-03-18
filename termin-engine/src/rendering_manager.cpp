@@ -138,14 +138,14 @@ void RenderingManager::set_pipeline_factory(PipelineFactory factory) {
     pipeline_factory_ = std::move(factory);
 }
 
-RenderPipeline* RenderingManager::create_pipeline(const std::string& name) {
+tc_pipeline_handle RenderingManager::create_pipeline(const std::string& name) {
     if (name == "(Default)" || name == "Default" || name.empty()) {
         return make_default_pipeline();
     }
     if (pipeline_factory_) {
         return pipeline_factory_(name);
     }
-    return nullptr;
+    return TC_PIPELINE_HANDLE_INVALID;
 }
 
 // Helper: create pass by type name, set pass_name and string fields via inspect
@@ -168,9 +168,8 @@ static tc_pass* create_and_configure_pass(
     return pass;
 }
 
-RenderPipeline* RenderingManager::make_default_pipeline() {
-    auto* pipeline = new RenderPipeline("Default");
-    tc_pipeline_handle ph = pipeline->handle();
+tc_pipeline_handle RenderingManager::make_default_pipeline() {
+    tc_pipeline_handle ph = tc_pipeline_create("Default");
 
     // 1. ShadowPass
     if (tc_pass* p = create_and_configure_pass("ShadowPass", "Shadow", {
@@ -230,7 +229,7 @@ RenderPipeline* RenderingManager::make_default_pipeline() {
         tc_pipeline_add_pass(ph, p);
     }
 
-    return pipeline;
+    return ph;
 }
 
 void RenderingManager::set_display_removed_callback(DisplayRemovedCallback callback) {
@@ -336,7 +335,7 @@ tc_viewport_handle RenderingManager::mount_scene(
     tc_display* display,
     tc_component* camera,
     float region_x, float region_y, float region_w, float region_h,
-    RenderPipeline* pipeline,
+    tc_pipeline_handle pipeline,
     const std::string& name
 ) {
     if (!tc_scene_handle_valid(scene) || !display || !camera) {
@@ -359,8 +358,8 @@ tc_viewport_handle RenderingManager::mount_scene(
     tc_viewport_set_rect(viewport, region_x, region_y, region_w, region_h);
 
     // Set pipeline if provided
-    if (pipeline) {
-        tc_viewport_set_pipeline(viewport, pipeline->handle());
+    if (tc_pipeline_handle_valid(pipeline)) {
+        tc_viewport_set_pipeline(viewport, pipeline);
     }
 
     // Add to display
@@ -473,20 +472,22 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         }
 
         // Get pipeline
-        RenderPipeline* pipeline = nullptr;
+        tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
 
         // Try by UUID first
+        // Try by UUID first (via factory — ResourceManager lives in Python)
         if (config->pipeline_uuid && config->pipeline_uuid[0] != '\0') {
-            // TODO: lookup pipeline by UUID from ResourceManager
-            // For now, skip UUID lookup
+            if (pipeline_factory_) {
+                pipeline = pipeline_factory_(config->pipeline_uuid);
+            }
         }
 
         // Try by name via factory
-        if (!pipeline && config->pipeline_name && config->pipeline_name[0] != '\0') {
+        if (!tc_pipeline_handle_valid(pipeline) && config->pipeline_name && config->pipeline_name[0] != '\0') {
             if (pipeline_factory_) {
                 pipeline = pipeline_factory_(config->pipeline_name);
-                if (!pipeline) {
-                    tc_log(TC_LOG_WARN, "[RenderingManager] Pipeline factory returned null for name=%s",
+                if (!tc_pipeline_handle_valid(pipeline)) {
+                    tc_log(TC_LOG_WARN, "[RenderingManager] Pipeline factory returned invalid for name=%s",
                            config->pipeline_name);
                 }
             } else {
@@ -698,8 +699,8 @@ void RenderingManager::render_all_offscreen() {
 
         std::vector<std::string> pipeline_names = get_pipeline_names(scene);
         for (const std::string& pipeline_name : pipeline_names) {
-            RenderPipeline* pipeline = get_scene_pipeline(scene, pipeline_name);
-            if (pipeline) {
+            tc_pipeline_handle pipeline = get_scene_pipeline(scene, pipeline_name);
+            if (tc_pipeline_handle_valid(pipeline)) {
                 render_scene_pipeline_offscreen(scene, pipeline_name, pipeline);
             }
         }
@@ -726,9 +727,9 @@ void RenderingManager::render_all_offscreen() {
 void RenderingManager::render_scene_pipeline_offscreen(
     tc_scene_handle scene,
     const std::string& pipeline_name,
-    RenderPipeline* pipeline
+    tc_pipeline_handle pipeline
 ) {
-    if (!tc_scene_handle_valid(scene) || !pipeline || !graphics_) {
+    if (!tc_scene_handle_valid(scene) || !tc_pipeline_handle_valid(pipeline) || !graphics_) {
         return;
     }
 
@@ -807,8 +808,9 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
     // Execute pipeline for all contexts
     RenderEngine* engine = render_engine();
+    RenderPipeline pipeline_wrapper(pipeline);
     engine->render_scene_pipeline_offscreen(
-        pipeline,
+        pipeline_wrapper,
         scene,
         contexts,
         lights,
@@ -845,13 +847,8 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         return;
     }
 
-    // Get RenderPipeline from pipeline handle
-    RenderPipeline* render_pipeline = RenderPipeline::from_handle(pipeline);
-    if (!render_pipeline) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): RenderPipeline::from_handle returned null",
-               vp_name ? vp_name : "(null)");
-        return;
-    }
+    // Wrap pipeline handle
+    RenderPipeline render_pipeline(pipeline);
 
     // Get pixel rect
     int px, py, pw, ph;
@@ -998,17 +995,19 @@ void RenderingManager::attach_scene(tc_scene_handle scene) {
             continue;
         }
 
-        RenderPipeline* pipeline = templ.compile();
-        if (!pipeline) {
+        RenderPipeline* compiled = templ.compile();
+        if (!compiled) {
             tc_log(TC_LOG_WARN, "[RenderingManager] Failed to compile template: '%s'", templ.name().c_str());
             continue;
         }
 
         std::string name = templ.name();
-        pipeline->set_name(name);
+        tc_pipeline_handle ph = compiled->handle();
+        tc_pipeline_set_name(ph, name.c_str());
+        delete compiled; // RenderPipeline no longer owns — handle stays in pool
 
-        // Store ownership in scene_pipelines_
-        scene_pipelines_[key][name] = std::unique_ptr<RenderPipeline>(pipeline);
+        // Store handle
+        scene_pipelines_[key][name] = ph;
 
         // Store targets
         pipeline_targets_[name] = templ.target_viewports();
@@ -1024,25 +1023,24 @@ void RenderingManager::detach_scene(tc_scene_handle scene) {
     clear_scene_pipelines(scene);
 }
 
-RenderPipeline* RenderingManager::get_scene_pipeline(tc_scene_handle scene, const std::string& name) const {
-    if (!tc_scene_handle_valid(scene)) return nullptr;
+tc_pipeline_handle RenderingManager::get_scene_pipeline(tc_scene_handle scene, const std::string& name) const {
+    if (!tc_scene_handle_valid(scene)) return TC_PIPELINE_HANDLE_INVALID;
     uint64_t key = scene_key(scene);
     auto scene_it = scene_pipelines_.find(key);
-    if (scene_it == scene_pipelines_.end()) return nullptr;
+    if (scene_it == scene_pipelines_.end()) return TC_PIPELINE_HANDLE_INVALID;
     auto pipe_it = scene_it->second.find(name);
-    return (pipe_it != scene_it->second.end()) ? pipe_it->second.get() : nullptr;
+    return (pipe_it != scene_it->second.end()) ? pipe_it->second : TC_PIPELINE_HANDLE_INVALID;
 }
 
-RenderPipeline* RenderingManager::get_scene_pipeline(const std::string& name) const {
-    // Search all scenes
+tc_pipeline_handle RenderingManager::get_scene_pipeline(const std::string& name) const {
     for (const auto& [key, pipelines] : scene_pipelines_) {
         auto it = pipelines.find(name);
         if (it != pipelines.end()) {
-            return it->second.get();
+            return it->second;
         }
     }
     tc_log(TC_LOG_WARN, "[RenderingManager] get_scene_pipeline NOT FOUND: '%s'", name.c_str());
-    return nullptr;
+    return TC_PIPELINE_HANDLE_INVALID;
 }
 
 void RenderingManager::set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets) {
@@ -1087,7 +1085,10 @@ void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
         pipeline_targets_.erase(name);
     }
 
-    // Erase the scene entry (unique_ptrs will delete pipelines)
+    // Destroy pipelines in pool, then erase
+    for (const auto& [name, ph] : scene_it->second) {
+        tc_pipeline_destroy(ph);
+    }
     scene_pipelines_.erase(key);
 }
 
@@ -1103,7 +1104,12 @@ void RenderingManager::clear_all_scene_pipelines() {
         }
     }
 
-    // Clear all (unique_ptrs will delete pipelines)
+    // Destroy all pipelines, then clear
+    for (auto& [key, pipelines] : scene_pipelines_) {
+        for (auto& [name, ph] : pipelines) {
+            tc_pipeline_destroy(ph);
+        }
+    }
     scene_pipelines_.clear();
     pipeline_targets_.clear();
 }

@@ -777,20 +777,14 @@ class EditorWindow(QMainWindow):
         return None
 
     def _set_displays_data(self, data: list | None) -> None:
-        """Restore displays/viewports after scene load.
+        """Refresh viewport list after scene load.
 
-        Attaches scene viewports from scene.viewport_configs.
-        Always refreshes viewport list at the end.
+        Viewport creation happens in EditorSceneAttachment.attach() via
+        RenderingManager.attach_scene_full(), which reads viewport_configs.
         """
         if self._rendering_controller is None:
             return
 
-        # Attach scene viewports from viewport_configs
-        from termin.visualization.core.scene import scene_render_mount
-        if self.scene is not None and scene_render_mount(self.scene).viewport_configs:
-            self._rendering_controller.attach_scene(self.scene)
-
-        # Always refresh viewport list to show editor display
         self._rendering_controller._viewport_list.refresh()
 
     def _get_expanded_entities(self) -> list[str] | None:

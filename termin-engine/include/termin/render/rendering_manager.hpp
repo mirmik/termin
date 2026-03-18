@@ -39,7 +39,7 @@ namespace termin {
 
 // Factory callback types
 using DisplayFactory = std::function<tc_display*(const std::string& name)>;
-using PipelineFactory = std::function<RenderPipeline*(const std::string& name)>;
+using PipelineFactory = std::function<tc_pipeline_handle(const std::string& name)>;
 using MakeCurrentCallback = std::function<void()>;
 using DisplayRemovedCallback = std::function<void(tc_display*)>;
 
@@ -87,10 +87,10 @@ public:
     void set_pipeline_factory(PipelineFactory factory);
 
     // Create pipeline by name (uses C++ factory for "(Default)"/"Default", Python factory for rest)
-    RenderPipeline* create_pipeline(const std::string& name);
+    tc_pipeline_handle create_pipeline(const std::string& name);
 
     // Create default render pipeline (Shadow, Skybox, Color, Transparent, PostFX, UIWidgets, Present)
-    static RenderPipeline* make_default_pipeline();
+    static tc_pipeline_handle make_default_pipeline();
 
     // Set callback called when a display is removed (for cleanup in editor)
     void set_display_removed_callback(DisplayRemovedCallback callback);
@@ -171,7 +171,7 @@ public:
         tc_display* display,
         tc_component* camera,
         float region_x, float region_y, float region_w, float region_h,
-        RenderPipeline* pipeline,
+        tc_pipeline_handle pipeline,
         const std::string& name
     );
 
@@ -202,10 +202,10 @@ public:
     void detach_scene(tc_scene_handle scene);
 
     // Get scene pipeline by name (searches in specific scene)
-    RenderPipeline* get_scene_pipeline(tc_scene_handle scene, const std::string& name) const;
+    tc_pipeline_handle get_scene_pipeline(tc_scene_handle scene, const std::string& name) const;
 
     // Get scene pipeline by name (searches all scenes)
-    RenderPipeline* get_scene_pipeline(const std::string& name) const;
+    tc_pipeline_handle get_scene_pipeline(const std::string& name) const;
 
     // Pipeline targets (viewport names for each pipeline)
     void set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets);
@@ -243,7 +243,7 @@ private:
     void render_scene_pipeline_offscreen(
         tc_scene_handle scene,
         const std::string& pipeline_name,
-        RenderPipeline* pipeline
+        tc_pipeline_handle pipeline
     );
 
     // Collect lights from scene (simplified - returns empty for now)
@@ -293,7 +293,7 @@ private:
     // Scene pipelines: scene_handle -> (pipeline_name -> owning pointer)
     // RenderingManager owns compiled pipelines
     // Key is (scene.index << 32 | scene.generation)
-    std::unordered_map<uint64_t, std::unordered_map<std::string, std::unique_ptr<RenderPipeline>>> scene_pipelines_;
+    std::unordered_map<uint64_t, std::unordered_map<std::string, tc_pipeline_handle>> scene_pipelines_;
 
     // Pipeline targets: pipeline_name -> list of viewport names
     std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;

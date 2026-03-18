@@ -116,8 +116,8 @@ TcScenePipelineTemplate scene_pipeline_template_at(const TcSceneRef& scene, size
 
 // --- Compiled pipelines ---
 
-RenderPipeline* scene_get_pipeline(const TcSceneRef& scene, const std::string& name) {
-    return RenderingManager::instance().get_scene_pipeline(scene._h, name);
+RenderPipeline scene_get_pipeline(const TcSceneRef& scene, const std::string& name) {
+    return RenderPipeline(RenderingManager::instance().get_scene_pipeline(scene._h, name));
 }
 
 std::vector<std::string> scene_get_pipeline_names(const TcSceneRef& scene) {

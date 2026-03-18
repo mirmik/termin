@@ -20,6 +20,7 @@
 #include <termin/geom/vec4.hpp>
 #include "render/tc_value_trent.hpp"
 #include "core/tc_scene_render_state.h"
+#include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_extension.h"
 #include "core/tc_scene_extension_ids.h"
 #include "core/tc_component.h"
@@ -393,6 +394,9 @@ void bind_tc_scene(nb::module_& m) {
         .def("add_pipeline_template", [](SceneRenderMount& self, const TcScenePipelineTemplate& templ) {
             TcSceneRef scene(self._h);
             scene_add_pipeline_template(scene, templ);
+        }, nb::arg("template"))
+        .def("remove_pipeline_template", [](SceneRenderMount& self, const TcScenePipelineTemplate& templ) {
+            tc_scene_remove_pipeline_template(self._h, templ.handle());
         }, nb::arg("template"))
         .def("clear_pipeline_templates", [](SceneRenderMount& self) {
             TcSceneRef scene(self._h);
