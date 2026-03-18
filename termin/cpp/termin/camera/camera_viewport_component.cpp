@@ -155,7 +155,7 @@ void CameraViewportComponent::setup_viewport() {
     }
 
     // Resolve pipeline via factory
-    RenderPipeline* pipeline = nullptr;
+    tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
     if (!pipeline_name.empty()) {
         pipeline = rm.create_pipeline(pipeline_name);
     }

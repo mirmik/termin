@@ -41,12 +41,6 @@ def deserialize_viewport_config(data: dict) -> ViewportConfig:
     pipeline_uuid = data.get("pipeline_uuid", "")
     pipeline_name = data.get("pipeline_name", "")
 
-    # Backwards compatibility: convert old pipeline_name (asset name) to uuid
-    # But preserve special names like "(Editor)"
-    if not pipeline_uuid and pipeline_name and not pipeline_name.startswith("("):
-        pipeline_uuid = _get_pipeline_uuid_by_name(pipeline_name) or ""
-        pipeline_name = ""  # Clear old-style name after conversion
-
     # Parse layer_mask (may be hex string or int)
     layer_mask_raw = data.get("layer_mask", 0xFFFFFFFFFFFFFFFF)
     if isinstance(layer_mask_raw, str):
@@ -72,14 +66,3 @@ def deserialize_viewport_config(data: dict) -> ViewportConfig:
     )
 
 
-def _get_pipeline_uuid_by_name(name: str) -> str | None:
-    """Helper for backwards compatibility: get pipeline UUID by name."""
-    try:
-        from termin.assets.resources import ResourceManager
-        rm = ResourceManager.instance()
-        asset = rm.get_pipeline_asset(name)
-        if asset is not None:
-            return asset.uuid
-    except Exception:
-        pass
-    return None

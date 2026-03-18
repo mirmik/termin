@@ -49,7 +49,7 @@ void bind_render_engine(nb::module_& m) {
                 ? make_render_camera(*camera, static_cast<double>(width) / std::max(1, height))
                 : RenderCamera();
             self.render_view_to_fbo(
-                &pipeline,
+                pipeline,
                 target_fbo,
                 width,
                 height,
@@ -78,7 +78,7 @@ void bind_render_engine(nb::module_& m) {
         ) {
             std::vector<Light> lights;
             self.render_scene_pipeline_offscreen(
-                &pipeline,
+                pipeline,
                 scene_ref.handle(),
                 viewport_contexts,
                 lights,

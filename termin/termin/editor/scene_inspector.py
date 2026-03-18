@@ -573,9 +573,9 @@ class SceneInspector(QWidget):
             return
 
         item = selected[0]
-        handle = item.data(Qt.ItemDataRole.UserRole)
-        if handle is not None:
-            self._scene.remove_scene_pipeline(handle)
+        template = item.data(Qt.ItemDataRole.UserRole)
+        if template is not None:
+            scene_render_mount(self._scene).remove_pipeline_template(template)
             self._refresh_pipelines_list()
             self.scene_changed.emit()
 

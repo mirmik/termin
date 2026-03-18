@@ -230,8 +230,8 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
         return;
     }
 
-    RenderPipeline* render_pipeline = RenderPipeline::from_handle(pipeline);
-    if (!render_pipeline) return;
+    if (!tc_pipeline_pool_alive(pipeline)) return;
+    RenderPipeline render_pipeline(pipeline);
 
     int px, py, pw, ph;
     tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);

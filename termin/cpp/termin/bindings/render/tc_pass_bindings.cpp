@@ -965,11 +965,10 @@ void bind_tc_pass(nb::module_& m) {
         nb::dict result;
 
         tc_pipeline_handle handle = { std::get<0>(h), std::get<1>(h) };
-        // Get RenderPipeline from pipeline handle
-        RenderPipeline* rp = RenderPipeline::from_handle(handle);
-        if (!rp) return result;
+        if (!tc_pipeline_pool_alive(handle)) return result;
+        RenderPipeline rp(handle);
 
-        auto specs = rp->collect_specs();
+        auto specs = rp.collect_specs();
 
         for (const auto& spec : specs) {
             nb::dict spec_dict;

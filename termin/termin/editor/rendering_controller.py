@@ -188,13 +188,14 @@ class RenderingController:
         """
         Factory callback for RenderingManager.
 
-        Creates a pipeline by name (e.g., "(Editor)", "(Default)", "Default", etc.).
+        Creates a pipeline by name, UUID, or special name
+        (e.g., "(Editor)", "(Default)", "Default").
 
         Args:
-            name: Pipeline name.
+            name: Pipeline name or UUID.
 
         Returns:
-            Created RenderPipeline or None if unknown name.
+            Created RenderPipeline or None if unknown.
         """
         if name == "(Editor)":
             if self._make_editor_pipeline is not None:
@@ -203,6 +204,12 @@ class RenderingController:
 
         from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
+
+        # Try as UUID first (contains dashes)
+        if "-" in name:
+            pipeline = rm.get_pipeline_by_uuid(name)
+            if pipeline is not None:
+                return pipeline
 
         # Resolve "(Default)" to "Default"
         lookup_name = "Default" if (not name or name == "(Default)") else name
@@ -422,8 +429,6 @@ class RenderingController:
                 continue
 
             for viewport in display.viewports:
-                if viewport.scene is not scene:
-                    continue
 
                 # Get camera UUID
                 camera_uuid = ""
@@ -435,10 +440,9 @@ class RenderingController:
                 pipeline_name = None
                 if viewport.pipeline is not None:
                     pipeline_uuid = self._get_pipeline_uuid(viewport.pipeline)
-                    # If no UUID found, check for special pipeline names
-                    if pipeline_uuid is None:
-                        if viewport.pipeline.name == "editor":
-                            pipeline_name = "(Editor)"
+                    # Always save name — C++ UUID lookup is not implemented
+                    if viewport.pipeline.name:
+                        pipeline_name = viewport.pipeline.name
 
                 rect = viewport.rect
                 config = ViewportConfig(
@@ -471,9 +475,10 @@ class RenderingController:
         # Get displays that will lose all viewports (track by tc_display_ptr)
         displays_to_check = set()
         for display in self._manager.displays:
-            for viewport in display.viewports:
-                if viewport.scene is scene:
-                    displays_to_check.add(display.tc_display_ptr)
+            if display.tc_display_ptr == self._editor_display_ptr:
+                continue
+            if display.viewports:
+                displays_to_check.add(display.tc_display_ptr)
 
         # Remove viewports for this scene (destroys pipelines, clears FBOs)
         self.remove_viewports_for_scene(scene)
@@ -614,8 +619,11 @@ class RenderingController:
         self._offscreen_context.make_current()
 
         for display in self._manager.displays:
+            # Skip editor display — its viewport is managed by EditorSceneAttachment
+            if display.tc_display_ptr == self._editor_display_ptr:
+                continue
             display_id = display.tc_display_ptr
-            viewports_to_remove = [vp for vp in display.viewports if vp.scene is scene]
+            viewports_to_remove = list(display.viewports)
             if not viewports_to_remove:
                 continue
 

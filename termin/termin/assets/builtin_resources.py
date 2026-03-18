@@ -246,6 +246,7 @@ def register_default_pipeline(rm: "ResourceManager") -> None:
     from termin.visualization.core.viewport import make_default_pipeline
 
     pipeline = make_default_pipeline()
+    pipeline.name = "Default"
     rm.register_pipeline("Default", pipeline, uuid=BUILTIN_UUIDS.get("DefaultPipeline"))
 
 

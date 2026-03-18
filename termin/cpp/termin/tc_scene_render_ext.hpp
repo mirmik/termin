@@ -61,7 +61,7 @@ TcScenePipelineTemplate scene_pipeline_template_at(const TcSceneRef& scene, size
 
 // --- Compiled pipelines ---
 
-RenderPipeline* scene_get_pipeline(const TcSceneRef& scene, const std::string& name);
+RenderPipeline scene_get_pipeline(const TcSceneRef& scene, const std::string& name);
 std::vector<std::string> scene_get_pipeline_names(const TcSceneRef& scene);
 const std::vector<std::string>& scene_get_pipeline_targets(const std::string& name);
 

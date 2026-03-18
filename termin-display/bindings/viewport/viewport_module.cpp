@@ -98,11 +98,9 @@ void bind_tc_viewport_class(nb::module_& m) {
                 tc_viewport_set_managed_by(vh, managed_by_scene_pipeline.c_str());
             }
 
-            // Pipeline - get handle and set py_wrapper
+            // Pipeline
             if (!pipeline.is_none()) {
                 tc_pipeline_handle ph = object_to_pipeline_handle(pipeline);
-                Py_INCREF(pipeline.ptr());
-                tc_pipeline_set_py_wrapper(ph, pipeline.ptr());
                 tc_viewport_set_pipeline(vh, ph);
             }
 
@@ -217,37 +215,21 @@ void bind_tc_viewport_class(nb::module_& m) {
             [](TcViewport& self) { return self.depth(); },
             [](TcViewport& self, int d) { self.set_depth(d); })
 
-        // Pipeline
+        // Pipeline — creates wrapper from handle, no py_wrapper
         .def_prop_rw("pipeline",
             [](TcViewport& self) -> nb::object {
                 tc_pipeline_handle ph = self.pipeline();
-                if (tc_pipeline_handle_valid(ph)) {
-                    void* wrapper = tc_pipeline_get_py_wrapper(ph);
-                    if (wrapper) {
-                        return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(wrapper));
-                    }
-                }
-                return nb::none();
+                if (!tc_pipeline_handle_valid(ph)) return nb::none();
+                nb::module_ render_module = nb::module_::import_("termin._native.render");
+                nb::object cls = render_module.attr("RenderPipeline");
+                return cls.attr("from_handle")(ph.index, ph.generation);
             },
             [](TcViewport& self, nb::object pipeline_obj) {
                 if (!self.is_valid()) return;
-
-                // Decref old pipeline's py_wrapper if present
-                tc_pipeline_handle old_ph = tc_viewport_get_pipeline(self.handle_);
-                if (tc_pipeline_handle_valid(old_ph)) {
-                    void* old_wrapper = tc_pipeline_get_py_wrapper(old_ph);
-                    if (old_wrapper) {
-                        Py_DECREF(reinterpret_cast<PyObject*>(old_wrapper));
-                        tc_pipeline_set_py_wrapper(old_ph, nullptr);
-                    }
-                }
-
                 if (pipeline_obj.is_none()) {
                     tc_viewport_set_pipeline(self.handle_, TC_PIPELINE_HANDLE_INVALID);
                 } else {
                     tc_pipeline_handle ph = object_to_pipeline_handle(pipeline_obj);
-                    Py_INCREF(pipeline_obj.ptr());
-                    tc_pipeline_set_py_wrapper(ph, pipeline_obj.ptr());
                     tc_viewport_set_pipeline(self.handle_, ph);
                 }
             }, nb::arg("value").none())
@@ -392,14 +374,9 @@ void bind_tc_viewport_class(nb::module_& m) {
             // Pipeline name
             tc_pipeline_handle ph = self.pipeline();
             if (tc_pipeline_handle_valid(ph)) {
-                void* wrapper = tc_pipeline_get_py_wrapper(ph);
-                if (wrapper) {
-                    try {
-                        nb::object pl_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(wrapper));
-                        result["pipeline"] = pl_obj.attr("name");
-                    } catch (const std::exception& e) {
-                        tc::Log::error("Viewport.serialize pipeline lookup failed: %s", e.what());
-                    }
+                const char* pname = tc_pipeline_get_name(ph);
+                if (pname && pname[0]) {
+                    result["pipeline"] = nb::str(pname);
                 }
             }
 

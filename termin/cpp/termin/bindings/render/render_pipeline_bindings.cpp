@@ -23,6 +23,13 @@ void bind_render_pipeline(nb::module_& m) {
     nb::class_<RenderPipeline>(m, "RenderPipeline")
         .def(nb::init<const std::string&>(), nb::arg("name") = "default")
 
+        .def_static("from_handle", [](uint32_t index, uint32_t generation) {
+            tc_pipeline_handle h;
+            h.index = index;
+            h.generation = generation;
+            return RenderPipeline(h);
+        }, nb::arg("index"), nb::arg("generation"))
+
         // Constructor with passes and specs (accepts Python FramePass objects via _tc_pass attr)
         .def("__init__", [](RenderPipeline* self,
                            const std::string& name,

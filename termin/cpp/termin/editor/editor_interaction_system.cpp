@@ -327,10 +327,8 @@ FramebufferHandle* EditorInteractionSystem::_get_viewport_fbo(
     tc_pipeline_handle pipeline_h = tc_viewport_get_pipeline(vp);
     if (!tc_pipeline_pool_alive(pipeline_h)) return nullptr;
 
-    RenderPipeline* pipeline = RenderPipeline::from_handle(pipeline_h);
-    if (!pipeline) return nullptr;
-
-    return pipeline->get_fbo(name);
+    RenderPipeline pipeline(pipeline_h);
+    return pipeline.get_fbo(name);
 }
 
 // ============================================================================

@@ -22,28 +22,26 @@ namespace termin {
 
 namespace nb = nanobind;
 
-static RenderPipeline* pipeline_from_python(nb::handle obj) {
+static tc_pipeline_handle pipeline_handle_from_python(nb::handle obj) {
     if (obj.is_none()) {
-        return nullptr;
+        return TC_PIPELINE_HANDLE_INVALID;
     }
-
     nb::object pipeline_obj = nb::borrow<nb::object>(obj);
     auto handle_tuple = nb::cast<std::tuple<uint32_t, uint32_t>>(pipeline_obj.attr("_pipeline_handle"));
     tc_pipeline_handle handle;
     handle.index = std::get<0>(handle_tuple);
     handle.generation = std::get<1>(handle_tuple);
-    return RenderPipeline::from_handle(handle);
+    return handle;
 }
 
-static nb::object pipeline_to_python(RenderPipeline* pipeline) {
-    if (!pipeline) {
+static nb::object pipeline_to_python(tc_pipeline_handle h) {
+    if (!tc_pipeline_handle_valid(h)) {
         return nb::none();
     }
 
     nb::module_ render_framework = nb::module_::import_("termin.render_framework");
     nb::object pipeline_class = render_framework.attr("RenderPipeline");
-    tc_pipeline_handle handle = pipeline->handle();
-    return pipeline_class.attr("from_handle")(handle.index, handle.generation);
+    return pipeline_class.attr("from_handle")(h.index, h.generation);
 }
 
 // Helper to extract tc_scene_handle from Python Scene object (Scene inherits TcScene)
@@ -152,10 +150,10 @@ void bind_rendering_manager(nb::module_& m) {
                 self.set_pipeline_factory(nullptr);
             } else {
                 nb::callable stored = factory;
-                self.set_pipeline_factory([stored](const std::string& name) -> RenderPipeline* {
+                self.set_pipeline_factory([stored](const std::string& name) -> tc_pipeline_handle {
                     nb::gil_scoped_acquire gil;
                     nb::object result = stored(name);
-                    return pipeline_from_python(result);
+                    return pipeline_handle_from_python(result);
                 });
             }
         }, nb::arg("factory").none(),
