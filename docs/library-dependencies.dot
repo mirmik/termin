@@ -89,6 +89,7 @@ digraph termin_dependencies {
 		color="#999999";
 		fontname="DejaVu Sans";
 		fontsize=12;
+		"tcplot";
 		"termin-gui";
 		"termin-nodegraph";
 	}
@@ -115,6 +116,7 @@ digraph termin_dependencies {
 	"termin-graphics" -> "termin-gui";
 	"termin-graphics" -> "termin-render";
 	"termin-gui" -> "diffusion-editor";
+	"termin-gui" -> "tcplot";
 	"termin-gui" -> "termin-nodegraph";
 	"termin-input" -> "termin-display";
 	"termin-inspect" -> "termin-scene";

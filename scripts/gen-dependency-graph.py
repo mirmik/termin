@@ -51,6 +51,7 @@ PYTHON_PKG_TO_DIR = {
     "tcgui": "termin-gui",
     "tcnodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
+    "tcplot": "tcplot",
     "termin": "termin",
 }
 
@@ -71,6 +72,7 @@ PYTHON_IMPORT_TO_DIR = {
     "tcnodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
     "diffusion_editor": "diffusion-editor",
+    "tcplot": "tcplot",
     # termin.* submodules → actual library
     "termin.geombase": "termin-base",
     "termin.collision": "termin-collision",
@@ -249,16 +251,12 @@ def main():
                 edges.add((dep, dir_name))
                 all_nodes.add(dep)
 
-    # Python deps from setup.py
-    python_dirs = [
-        ("termin-base", "termin-base"),
-        ("termin-graphics", "termin-graphics"),
-        ("termin-mesh", "termin-mesh"),
-        ("termin-gui", "termin-gui"),
-        ("termin-modules", "termin-modules"),
-        ("termin-nodegraph", "termin-nodegraph"),
-        ("termin", "termin"),
-    ]
+    # Python deps from setup.py — auto-discover all directories with setup.py
+    python_dirs = []
+    for name in os.listdir(ROOT):
+        path = os.path.join(ROOT, name)
+        if os.path.isdir(path) and os.path.exists(os.path.join(path, "setup.py")):
+            python_dirs.append((name, name))
 
     for dir_name, subdir in python_dirs:
         setup_path = os.path.join(ROOT, subdir, "setup.py")
@@ -340,7 +338,7 @@ def main():
 
     # Node groups (rendered as subgraph clusters with border)
     GROUPS = {
-        "UI": ["termin-gui", "termin-nodegraph"],
+        "UI": ["termin-gui", "termin-nodegraph", "tcplot"],
         "Application": ["termin", "diffusion-editor"],
         "Render Stack": ["termin-graphics", "termin-render", "termin-display", "termin-components-render"],
         "Runtime": ["termin-engine"],
