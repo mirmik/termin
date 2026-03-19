@@ -103,8 +103,12 @@ class RenderTargetInspector(QWidget):
                 self.setEnabled(False)
                 return
 
-            self.setEnabled(True)
-            self._title.setText(f"Render Target: {render_target.name or '<unnamed>'}")
+            is_locked = getattr(render_target, 'locked', False)
+            self.setEnabled(not is_locked)
+            label = render_target.name or '<unnamed>'
+            if is_locked:
+                label += " (locked)"
+            self._title.setText(f"Render Target: {label}")
 
             self._enabled_check.setChecked(bool(render_target.enabled))
 
@@ -168,11 +172,17 @@ class RenderTargetInspector(QWidget):
             self._pipeline_combo.setCurrentIndex(0)
             return
         current = self._render_target.pipeline.name or ""
+        # Match by name in combo
         for i in range(self._pipeline_combo.count()):
             if self._pipeline_combo.itemText(i) == current:
                 self._pipeline_combo.setCurrentIndex(i)
                 return
-        self._pipeline_combo.setCurrentIndex(0)
+        # "default"/"Default" → "(Default)" combo item
+        if current.lower() == "default":
+            self._pipeline_combo.setCurrentIndex(1)
+            return
+        # Pipeline exists but not in combo — still show it's set, not (none)
+        self._pipeline_combo.setCurrentIndex(1)
 
     def _on_enabled_toggled(self, checked: bool) -> None:
         if self._updating or self._render_target is None:
@@ -200,6 +210,21 @@ class RenderTargetInspector(QWidget):
             self._render_target.pipeline = None
             self.pipeline_changed.emit("")
             return
+
+        if text == "(Default)":
+            from termin._native.render import RenderingManager
+            pipeline = RenderingManager.instance().create_pipeline("Default")
+            if pipeline is not None:
+                self._render_target.pipeline = pipeline
+        else:
+            # Pipeline by name via pipeline_name_getter
+            idx = index - 2
+            if 0 <= idx < len(self._pipeline_names):
+                from termin._native.render import RenderingManager
+                pipeline = RenderingManager.instance().create_pipeline(self._pipeline_names[idx])
+                if pipeline is not None:
+                    self._render_target.pipeline = pipeline
+
         self.pipeline_changed.emit(text)
 
     def _on_size_changed(self) -> None:

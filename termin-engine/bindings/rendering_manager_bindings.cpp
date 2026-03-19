@@ -41,9 +41,8 @@ static nb::object pipeline_to_python(tc_pipeline_handle h) {
         return nb::none();
     }
 
-    nb::module_ render_framework = nb::module_::import_("termin.render_framework");
-    nb::object pipeline_class = render_framework.attr("RenderPipeline");
-    return pipeline_class.attr("from_handle")(h.index, h.generation);
+    nb::module_ rf = nb::module_::import_("termin.render_framework._render_framework_native");
+    return rf.attr("RenderPipeline").attr("from_handle")(h.index, h.generation);
 }
 
 // Helper to extract tc_scene_handle from Python Scene object (Scene inherits TcScene)
@@ -391,6 +390,11 @@ void bind_rendering_manager(nb::module_& m) {
         // ================================================================
         // Shutdown
         // ================================================================
+
+        .def("create_pipeline", [](RenderingManager& self, const std::string& name) -> nb::object {
+            tc_pipeline_handle h = self.create_pipeline(name);
+            return pipeline_to_python(h);
+        }, nb::arg("name"))
 
         .def("shutdown", &RenderingManager::shutdown,
              "Cleanup all resources")

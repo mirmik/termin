@@ -192,13 +192,9 @@ void bind_scene_manager(nb::module_& m) {
 
         // --- Scene registration (for external scenes) ---
 
-        .def("register_scene", [](SceneManager& self, const std::string& name, std::tuple<uint32_t, uint32_t> handle_tuple) {
-            tc_scene_handle h;
-            h.index = std::get<0>(handle_tuple);
-            h.generation = std::get<1>(handle_tuple);
+        .def("register_scene", [](SceneManager& self, const std::string& name, tc_scene_handle h) {
             self.register_scene(name, h);
-        }, nb::arg("name"), nb::arg("handle"),
-           "Register an external scene by name. handle is (index, generation) tuple.")
+        }, nb::arg("name"), nb::arg("handle"))
 
         .def("unregister_scene", &SceneManager::unregister_scene, nb::arg("name"),
              "Unregister a scene by name (does not destroy it).")

@@ -86,8 +86,12 @@ void bind_render(nb::module_& m) {
     // FramePass, FrameGraph, RenderContext
     bind_frame_pass(m);
 
-    // RenderPipeline (C++ class)
-    bind_render_pipeline(m);
+    // RenderPipeline — re-export from _render_framework_native
+    {
+        nb::module_ rf = nb::module_::import_("termin.render_framework._render_framework_native");
+        m.attr("RenderPipeline") = rf.attr("RenderPipeline");
+        m.attr("compile_graph_from_json") = rf.attr("compile_graph_from_json");
+    }
 
 
     // MaterialPhase, Material

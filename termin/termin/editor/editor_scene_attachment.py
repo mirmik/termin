@@ -153,6 +153,7 @@ class EditorSceneAttachment:
         rt.camera = self._camera_manager.camera
         if self._pipeline is not None:
             rt.pipeline = self._pipeline
+        rt.locked = True
 
         # Create editor viewport and assign render target
         self._viewport = self._display.create_viewport(
@@ -222,8 +223,12 @@ class EditorSceneAttachment:
                 self._pipeline.destroy()
                 self._pipeline = None
 
+            # Free editor render target
+            rt = self._viewport.render_target
             self._display.remove_viewport(self._viewport)
             self._viewport = None
+            if rt is not None:
+                rt.free()
 
         # Remove EditorEntities from scene
         if self._camera_manager is not None:
@@ -234,6 +239,7 @@ class EditorSceneAttachment:
 
         if self._rendering_controller is not None:
             self._rendering_controller._viewport_list.refresh()
+            self._rendering_controller._refresh_render_targets()
 
     # --- State management ---
 
