@@ -95,6 +95,30 @@ class ProjectModulesRuntime:
     def reload_module(self, module_id: str) -> bool:
         return self._runtime.reload_module(module_id)
 
+    def needs_rebuild(self, module_id: str) -> bool:
+        return self._runtime.needs_rebuild(module_id)
+
+    def stale_modules(self) -> list[str]:
+        """Return list of module IDs that need rebuild."""
+        result = []
+        for record in self.records():
+            if self._runtime.needs_rebuild(record.id):
+                result.append(record.id)
+        return result
+
+    def rebuild_stale_modules(self) -> bool:
+        """Rebuild all modules that need it. Returns True if all succeeded."""
+        stale = self.stale_modules()
+        if not stale:
+            return True
+        success = True
+        for module_id in stale:
+            log.info(f"[ProjectModulesRuntime] Rebuilding stale module: {module_id}")
+            if not self._runtime.reload_module(module_id):
+                log.error(f"[ProjectModulesRuntime] Failed to rebuild: {module_id}: {self._runtime.last_error}")
+                success = False
+        return success
+
     def build_module(self, module_id: str) -> bool:
         return self._runtime.build_module(module_id)
 

@@ -381,6 +381,16 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
     return true;
 }
 
+bool ModuleRuntime::needs_rebuild(const std::string& module_id) {
+    const ModuleRecord* target = find(module_id);
+    if (target == nullptr) return false;
+
+    IModuleBackend* backend = get_backend(target->spec.kind);
+    if (backend == nullptr) return false;
+
+    return backend->needs_rebuild(*target, _environment);
+}
+
 bool ModuleRuntime::build_module(const std::string& module_id) {
     ModuleRecord* target = find_mutable_record(_records, module_id);
     if (target == nullptr) {

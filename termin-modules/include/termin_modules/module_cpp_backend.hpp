@@ -30,6 +30,11 @@ public:
         const ModuleEnvironment& environment
     ) override;
 
+    bool needs_rebuild(
+        const ModuleRecord& record,
+        const ModuleEnvironment& environment
+    ) override;
+
     void set_output_callback(BuildOutputCallback callback) override;
 
 private:

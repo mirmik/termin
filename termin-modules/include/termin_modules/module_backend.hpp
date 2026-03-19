@@ -42,6 +42,15 @@ public:
         return true;
     }
 
+    virtual bool needs_rebuild(
+        const ModuleRecord& record,
+        const ModuleEnvironment& environment
+    ) {
+        (void)record;
+        (void)environment;
+        return false;
+    }
+
     virtual void set_output_callback(BuildOutputCallback callback) {
         (void)callback;
     }

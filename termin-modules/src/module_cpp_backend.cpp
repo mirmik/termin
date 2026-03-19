@@ -68,6 +68,52 @@ void* resolve_symbol(void* handle, const char* name) {
 
 } // namespace
 
+bool CppModuleBackend::needs_rebuild(
+    const ModuleRecord& record,
+    const ModuleEnvironment& environment
+) {
+    (void)environment;
+
+    const auto config = std::dynamic_pointer_cast<CppModuleConfig>(record.spec.config);
+    if (!config) return false;
+    if (config->artifact_path.empty()) return true;
+    if (!std::filesystem::exists(config->artifact_path)) return true;
+
+    auto artifact_time = std::filesystem::last_write_time(config->artifact_path);
+
+    // Scan module directory for source files newer than artifact
+    std::filesystem::path module_dir = record.spec.descriptor_path.parent_path();
+    if (!std::filesystem::exists(module_dir)) return true;
+
+    try {
+        for (auto it = std::filesystem::recursive_directory_iterator(module_dir);
+             it != std::filesystem::recursive_directory_iterator(); ++it) {
+            const auto& entry = *it;
+
+            // Skip build directories
+            if (entry.is_directory()) {
+                std::string dirname = entry.path().filename().string();
+                if (dirname == "build" || dirname == "__pycache__" ||
+                    (!dirname.empty() && dirname[0] == '.')) {
+                    it.disable_recursion_pending();
+                    continue;
+                }
+                continue;
+            }
+
+            if (!entry.is_regular_file()) continue;
+
+            if (entry.last_write_time() > artifact_time) {
+                return true;
+            }
+        }
+    } catch (...) {
+        return true;
+    }
+
+    return false;
+}
+
 void CppModuleBackend::set_output_callback(BuildOutputCallback callback) {
     _output_callback = std::move(callback);
 }

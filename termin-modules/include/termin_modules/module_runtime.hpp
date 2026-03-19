@@ -30,6 +30,7 @@ public:
     bool load_module(const std::string& module_id);
     bool unload_module(const std::string& module_id);
     bool reload_module(const std::string& module_id);
+    bool needs_rebuild(const std::string& module_id);
     bool build_module(const std::string& module_id);
     bool clean_module(const std::string& module_id);
     bool rebuild_module(const std::string& module_id);
