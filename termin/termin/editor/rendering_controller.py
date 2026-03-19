@@ -159,6 +159,9 @@ class RenderingController:
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
         self._inspector.pipeline_inspector.pipeline_changed.connect(self._on_pipeline_inspector_changed)
 
+        # Set scene getter for render target inspector
+        self._inspector.render_target_inspector.set_scene_getter(self._get_all_scenes)
+
         # Set editor pipeline getter for ViewportInspector
         if self._make_editor_pipeline is not None:
             self._inspector.viewport_inspector.set_editor_pipeline_getter(self._make_editor_pipeline)
@@ -355,21 +358,17 @@ class RenderingController:
 
     def _find_viewport_config(self, scene: "Scene", viewport: "Viewport", display: "Display" = None):
         """Find ViewportConfig that matches a viewport."""
-        from termin.visualization.core.viewport_config import ViewportConfig
-
         if display is None:
             display = self._manager.get_display_for_viewport(viewport)
-        if display is None or viewport.camera is None:
+        if display is None:
             return None
 
-        display_name = display.name
-        camera_uuid = ""
-        if viewport.camera.entity is not None:
-            camera_uuid = viewport.camera.entity.uuid
+        vp_name = viewport.name or ""
+        display_name = display.name or ""
 
         from termin.visualization.core.scene import scene_render_mount
         for config in scene_render_mount(scene).viewport_configs:
-            if config.display_name == display_name and config.camera_uuid == camera_uuid:
+            if config.display_name == display_name and config.name == vp_name:
                 return config
 
         return None
@@ -462,8 +461,9 @@ class RenderingController:
 
         rm.clear_render_target_configs()
 
-        for rt in self._manager.render_targets:
-            if rt.scene is not scene:
+        from termin.render_framework._render_framework_native import render_target_pool_list
+        for rt in render_target_pool_list():
+            if rt.locked:
                 continue
 
             camera_uuid = ""
@@ -507,6 +507,17 @@ class RenderingController:
 
         # Remove viewports for this scene (destroys pipelines, clears FBOs)
         self.remove_viewports_for_scene(scene)
+
+        # Free unlocked render targets for this scene
+        from termin.render_framework._render_framework_native import render_target_pool_list
+        scene_h = scene.scene_handle()
+        for rt in render_target_pool_list():
+            if rt.locked:
+                continue
+            rt_scene = rt.scene
+            if rt_scene is not None and rt_scene.scene_handle().index == scene_h.index:
+                rt.free()
+        self._refresh_render_targets()
 
         # Detach scene pipelines
         self._manager.detach_scene(scene)
@@ -885,6 +896,15 @@ class RenderingController:
         """Handle entity selection from viewport's internal_entities."""
         if entity is not None and self._on_entity_selected is not None:
             self._on_entity_selected(entity)
+
+    def _get_all_scenes(self) -> list:
+        """Return list of available scenes."""
+        result = []
+        if self._get_scene is not None:
+            scene = self._get_scene()
+            if scene is not None:
+                result.append(scene)
+        return result
 
     def _on_render_target_selected_from_list(self, render_target) -> None:
         """Handle render target selection from list."""

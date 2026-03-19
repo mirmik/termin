@@ -273,8 +273,9 @@ class RenderingControllerTcgui:
 
         scene_render_mount(scene).clear_render_target_configs()
 
-        for rt in self._manager.render_targets:
-            if rt.scene is not scene:
+        from termin.render_framework._render_framework_native import render_target_pool_list
+        for rt in render_target_pool_list():
+            if rt.locked:
                 continue
 
             camera_uuid = ""

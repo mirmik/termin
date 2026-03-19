@@ -42,10 +42,12 @@ class RenderTargetInspector(QWidget):
         super().__init__(parent)
         self._render_target = None
         self._scene: Scene | None = None
+        self._scenes: list = []
         self._cameras: list[CameraComponent] = []
         self._updating = False
         self._pipeline_names: list[str] = []
         self._pipeline_name_getter: Callable[[], list[str]] | None = None
+        self._scene_getter: Callable[[], list] | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -59,6 +61,10 @@ class RenderTargetInspector(QWidget):
         self._enabled_check = QCheckBox()
         self._enabled_check.toggled.connect(self._on_enabled_toggled)
         form.addRow("Enabled:", self._enabled_check)
+
+        self._scene_combo = QComboBox()
+        self._scene_combo.currentIndexChanged.connect(self._on_scene_changed)
+        form.addRow("Scene:", self._scene_combo)
 
         self._camera_combo = QComboBox()
         self._camera_combo.currentIndexChanged.connect(self._on_camera_changed)
@@ -88,6 +94,9 @@ class RenderTargetInspector(QWidget):
     def set_pipeline_name_getter(self, getter: Callable[[], list[str]]) -> None:
         self._pipeline_name_getter = getter
 
+    def set_scene_getter(self, getter: Callable[[], list]) -> None:
+        self._scene_getter = getter
+
     def set_scene(self, scene: "Scene | None") -> None:
         self._scene = scene
 
@@ -112,6 +121,8 @@ class RenderTargetInspector(QWidget):
 
             self._enabled_check.setChecked(bool(render_target.enabled))
 
+            self._refresh_scene_combo()
+            self._select_current_scene()
             self._refresh_camera_combo()
             self._select_current_camera()
             self._refresh_pipeline_combo()
@@ -121,6 +132,50 @@ class RenderTargetInspector(QWidget):
             self._height_spin.setValue(render_target.height)
         finally:
             self._updating = False
+
+    def _refresh_scene_combo(self) -> None:
+        self._scene_combo.blockSignals(True)
+        self._scene_combo.clear()
+        self._scenes.clear()
+        self._scene_combo.addItem("(none)")
+        if self._scene_getter is not None:
+            try:
+                for scene in self._scene_getter():
+                    name = scene.name or scene.uuid or "Scene"
+                    self._scenes.append(scene)
+                    self._scene_combo.addItem(name)
+            except Exception as e:
+                log.error(f"[RenderTargetInspector] scene scan failed: {e}")
+        self._scene_combo.blockSignals(False)
+
+    def _select_current_scene(self) -> None:
+        if self._render_target is None or self._render_target.scene is None:
+            self._scene_combo.setCurrentIndex(0)
+            return
+        rt_scene = self._render_target.scene
+        for i, scene in enumerate(self._scenes):
+            try:
+                if scene.scene_handle().index == rt_scene.scene_handle().index:
+                    self._scene_combo.setCurrentIndex(i + 1)
+                    return
+            except Exception:
+                pass
+        self._scene_combo.setCurrentIndex(0)
+
+    def _on_scene_changed(self, index: int) -> None:
+        if self._updating or self._render_target is None:
+            return
+        if index <= 0:
+            self._render_target.scene = None
+            # Refresh camera combo — no scene means no cameras
+            self._scene = None
+            self._refresh_camera_combo()
+            return
+        idx = index - 1
+        if 0 <= idx < len(self._scenes):
+            self._render_target.scene = self._scenes[idx]
+            self._scene = self._scenes[idx]
+            self._refresh_camera_combo()
 
     def _refresh_camera_combo(self) -> None:
         self._camera_combo.blockSignals(True)
