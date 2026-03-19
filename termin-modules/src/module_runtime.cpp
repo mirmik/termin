@@ -60,6 +60,13 @@ void ModuleRuntime::set_event_callback(ModuleEventCallback callback) {
     _event_callback = std::move(callback);
 }
 
+void ModuleRuntime::set_build_output_callback(BuildOutputCallback callback) {
+    _build_output_callback = callback;
+    for (auto& [kind, backend] : _backends) {
+        backend->set_output_callback(callback);
+    }
+}
+
 void ModuleRuntime::set_descriptor_parser(std::shared_ptr<ModuleDescriptorParser> parser) {
     _parser = std::move(parser);
 }
@@ -69,6 +76,9 @@ void ModuleRuntime::register_backend(std::shared_ptr<IModuleBackend> backend) {
         return;
     }
 
+    if (_build_output_callback) {
+        backend->set_output_callback(_build_output_callback);
+    }
     _backends[backend->kind()] = std::move(backend);
 }
 
@@ -163,7 +173,7 @@ bool ModuleRuntime::load_module(const std::string& module_id) {
     }
 
     if (should_skip(target->spec)) {
-        target->state = ModuleState::Unloaded;
+        target->state = ModuleState::Ignored;
         target->error_message.clear();
         return true;
     }
@@ -371,6 +381,36 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
     return true;
 }
 
+bool ModuleRuntime::build_module(const std::string& module_id) {
+    ModuleRecord* target = find_mutable_record(_records, module_id);
+    if (target == nullptr) {
+        _last_error = "Module not found: " + module_id;
+        return false;
+    }
+
+    IModuleBackend* backend = get_backend(target->spec.kind);
+    if (backend == nullptr) {
+        _last_error = "Backend is not registered";
+        return false;
+    }
+
+    if (!backend->build(*target, _environment)) {
+        target->state = ModuleState::Failed;
+        if (target->error_message.empty()) {
+            target->error_message = "Build failed";
+        }
+        _last_error = target->error_message;
+        return false;
+    }
+
+    if (target->state == ModuleState::Failed) {
+        target->state = ModuleState::Unloaded;
+        target->error_message.clear();
+    }
+
+    return true;
+}
+
 bool ModuleRuntime::clean_module(const std::string& module_id) {
     ModuleRecord* target = find_mutable_record(_records, module_id);
     if (target == nullptr) {
@@ -401,26 +441,13 @@ bool ModuleRuntime::clean_module(const std::string& module_id) {
 }
 
 bool ModuleRuntime::rebuild_module(const std::string& module_id) {
-    emit(ModuleEventKind::Reloading, module_id);
-
-    const ModuleRecord* current = find(module_id);
-    if (current == nullptr) {
+    ModuleRecord* target = find_mutable_record(_records, module_id);
+    if (target == nullptr) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
 
-    std::shared_ptr<IModuleReloadState> reload_state;
-    if (current->spec.kind == ModuleKind::Cpp) {
-        if (_cpp_callbacks.capture_reload_state) {
-            reload_state = _cpp_callbacks.capture_reload_state(*current);
-        }
-    } else {
-        if (_python_callbacks.capture_reload_state) {
-            reload_state = _python_callbacks.capture_reload_state(*current);
-        }
-    }
-
-    const bool was_loaded = current->state == ModuleState::Loaded;
+    const bool was_loaded = target->state == ModuleState::Loaded;
     if (was_loaded && !unload_module(module_id)) {
         return false;
     }
@@ -428,40 +455,8 @@ bool ModuleRuntime::rebuild_module(const std::string& module_id) {
     // Clean build artifacts (ignore failure if no clean_command configured)
     clean_module(module_id);
 
-    if (!load_module(module_id)) {
-        return false;
-    }
-
-    const ModuleRecord* reloaded = find(module_id);
-    if (reloaded == nullptr) {
-        return false;
-    }
-
-    if (reloaded->spec.kind == ModuleKind::Cpp) {
-        if (_cpp_callbacks.restore_reload_state) {
-            std::string error;
-            if (!_cpp_callbacks.restore_reload_state(*reloaded, reload_state, error)) {
-                _last_error = error.empty() ? "Failed to restore C++ reload state" : error;
-                return false;
-            }
-        }
-        if (_cpp_callbacks.after_reload) {
-            _cpp_callbacks.after_reload(*reloaded);
-        }
-    } else {
-        if (_python_callbacks.restore_reload_state) {
-            std::string error;
-            if (!_python_callbacks.restore_reload_state(*reloaded, reload_state, error)) {
-                _last_error = error.empty() ? "Failed to restore Python reload state" : error;
-                return false;
-            }
-        }
-        if (_python_callbacks.after_reload) {
-            _python_callbacks.after_reload(*reloaded);
-        }
-    }
-
-    return true;
+    // Build only, do not load
+    return build_module(module_id);
 }
 
 const ModuleRecord* ModuleRuntime::find(const std::string& module_id) const {

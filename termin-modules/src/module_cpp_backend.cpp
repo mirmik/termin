@@ -68,7 +68,11 @@ void* resolve_symbol(void* handle, const char* name) {
 
 } // namespace
 
-bool CppModuleBackend::load(
+void CppModuleBackend::set_output_callback(BuildOutputCallback callback) {
+    _output_callback = std::move(callback);
+}
+
+bool CppModuleBackend::build(
     ModuleRecord& record,
     const ModuleEnvironment& environment
 ) {
@@ -81,21 +85,40 @@ bool CppModuleBackend::load(
     record.diagnostics.clear();
     record.error_message.clear();
 
-    if (!config->build_command.empty()) {
-        std::string output;
-        std::string error;
-        if (!run_build_command(
-                config->build_command,
-                record.spec.descriptor_path.parent_path(),
-                environment,
-                output,
-                error
-            )) {
-            record.diagnostics = output;
-            record.error_message = error;
-            return false;
-        }
+    if (config->build_command.empty()) {
+        return true;
+    }
+
+    std::string output;
+    std::string error;
+    if (!run_build_command(
+            record.spec.id,
+            config->build_command,
+            record.spec.descriptor_path.parent_path(),
+            environment,
+            output,
+            error
+        )) {
         record.diagnostics = output;
+        record.error_message = error;
+        return false;
+    }
+    record.diagnostics = output;
+    return true;
+}
+
+bool CppModuleBackend::load(
+    ModuleRecord& record,
+    const ModuleEnvironment& environment
+) {
+    if (!build(record, environment)) {
+        return false;
+    }
+
+    const auto config = std::dynamic_pointer_cast<CppModuleConfig>(record.spec.config);
+    if (!config) {
+        record.error_message = "Invalid C++ module config";
+        return false;
     }
 
     if (!std::filesystem::exists(config->artifact_path)) {
@@ -164,6 +187,7 @@ bool CppModuleBackend::clean(
     std::string output;
     std::string error;
     if (!run_build_command(
+            record.spec.id,
             config->clean_command,
             record.spec.descriptor_path.parent_path(),
             environment,
@@ -179,6 +203,7 @@ bool CppModuleBackend::clean(
 }
 
 bool CppModuleBackend::run_build_command(
+    const std::string& module_id,
     const std::string& command,
     const std::filesystem::path& working_dir,
     const ModuleEnvironment& environment,
@@ -224,6 +249,16 @@ bool CppModuleBackend::run_build_command(
     char buffer[512];
     while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
         output += buffer;
+        if (_output_callback) {
+            // Strip trailing newline for callback
+            std::string line(buffer);
+            while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) {
+                line.pop_back();
+            }
+            if (!line.empty()) {
+                _output_callback(module_id, line);
+            }
+        }
     }
 
     const int result = pclose(pipe);

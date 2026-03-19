@@ -1,8 +1,12 @@
 #pragma once
 
+#include <functional>
+
 #include "termin_modules/module_types.hpp"
 
 namespace termin_modules {
+
+using BuildOutputCallback = std::function<void(const std::string& module_id, const std::string& line)>;
 
 class IModuleBackend {
 public:
@@ -20,6 +24,15 @@ public:
         const ModuleEnvironment& environment
     ) = 0;
 
+    virtual bool build(
+        ModuleRecord& record,
+        const ModuleEnvironment& environment
+    ) {
+        (void)record;
+        (void)environment;
+        return true;
+    }
+
     virtual bool clean(
         ModuleRecord& record,
         const ModuleEnvironment& environment
@@ -27,6 +40,10 @@ public:
         (void)record;
         (void)environment;
         return true;
+    }
+
+    virtual void set_output_callback(BuildOutputCallback callback) {
+        (void)callback;
     }
 };
 

@@ -25,6 +25,7 @@ class ProjectModulesRuntime:
         self._integration = TermModulesIntegration()
         self._runtime = ModuleRuntime()
         self._listeners: list[Callable[[ModuleEvent], None]] = []
+        self._build_output_listeners: list[Callable[[str, str], None]] = []
         self._configure_environment()
         self._configure_runtime()
 
@@ -52,6 +53,14 @@ class ProjectModulesRuntime:
     def remove_listener(self, listener: Callable[[ModuleEvent], None]) -> None:
         if listener in self._listeners:
             self._listeners.remove(listener)
+
+    def add_build_output_listener(self, listener: Callable[[str, str], None]) -> None:
+        if listener not in self._build_output_listeners:
+            self._build_output_listeners.append(listener)
+
+    def remove_build_output_listener(self, listener: Callable[[str, str], None]) -> None:
+        if listener in self._build_output_listeners:
+            self._build_output_listeners.remove(listener)
 
     def load_project(self, project_root: str | Path | None = None) -> bool:
         if project_root is not None:
@@ -85,6 +94,9 @@ class ProjectModulesRuntime:
 
     def reload_module(self, module_id: str) -> bool:
         return self._runtime.reload_module(module_id)
+
+    def build_module(self, module_id: str) -> bool:
+        return self._runtime.build_module(module_id)
 
     def clean_module(self, module_id: str) -> bool:
         return self._runtime.clean_module(module_id)
@@ -165,9 +177,19 @@ class ProjectModulesRuntime:
         self._runtime.register_python_backend(PythonModuleBackend())
         self._integration.configure_runtime(self._runtime)
         self._runtime.set_event_callback(self._dispatch_event)
+        self._runtime.set_build_output_callback(self._on_build_output)
+
+    def _on_build_output(self, module_id: str, line: str) -> None:
+        log.info(f"[{module_id}] {line}")
+        for listener in list(self._build_output_listeners):
+            try:
+                listener(module_id, line)
+            except Exception as e:
+                log.error(f"[ProjectModulesRuntime] build output listener failed: {e}")
 
     def _recreate_runtime(self) -> None:
         self._runtime = ModuleRuntime()
+        self._runtime.set_environment(self._integration.environment)
         self._configure_runtime()
 
     def _shutdown_runtime(self) -> None:

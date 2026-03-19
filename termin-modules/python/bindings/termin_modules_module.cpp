@@ -20,7 +20,8 @@ NB_MODULE(_termin_modules_native, m) {
         .value("Discovered", ModuleState::Discovered)
         .value("Loaded", ModuleState::Loaded)
         .value("Failed", ModuleState::Failed)
-        .value("Unloaded", ModuleState::Unloaded);
+        .value("Unloaded", ModuleState::Unloaded)
+        .value("Ignored", ModuleState::Ignored);
 
     nb::enum_<ModuleEventKind>(m, "ModuleEventKind")
         .value("Discovered", ModuleEventKind::Discovered)
@@ -107,6 +108,7 @@ NB_MODULE(_termin_modules_native, m) {
         .def("load_module", &ModuleRuntime::load_module, nb::arg("module_id"))
         .def("unload_module", &ModuleRuntime::unload_module, nb::arg("module_id"))
         .def("reload_module", &ModuleRuntime::reload_module, nb::arg("module_id"))
+        .def("build_module", &ModuleRuntime::build_module, nb::arg("module_id"))
         .def("clean_module", &ModuleRuntime::clean_module, nb::arg("module_id"))
         .def("rebuild_module", &ModuleRuntime::rebuild_module, nb::arg("module_id"))
         .def("list", [](const ModuleRuntime& self) {
@@ -124,6 +126,12 @@ NB_MODULE(_termin_modules_native, m) {
             self.set_event_callback([callback](const ModuleEvent& event) {
                 nb::gil_scoped_acquire gil;
                 callback(event);
+            });
+        }, nb::arg("callback"))
+        .def("set_build_output_callback", [](ModuleRuntime& self, nb::callable callback) {
+            self.set_build_output_callback([callback](const std::string& module_id, const std::string& line) {
+                nb::gil_scoped_acquire gil;
+                callback(module_id, line);
             });
         }, nb::arg("callback"));
 }

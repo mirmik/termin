@@ -15,6 +15,8 @@ from termin_modules import ModuleState
 if TYPE_CHECKING:
     from termin_modules import ModuleEvent
 
+_TAG = "[ModulesPanel]"
+
 
 class ModulesPanel(QtWidgets.QDockWidget):
     """Dock widget for managing project modules."""
@@ -31,6 +33,7 @@ class ModulesPanel(QtWidgets.QDockWidget):
 
         self._modules_runtime = get_project_modules_runtime()
         self._modules_runtime.add_listener(self._on_runtime_event)
+        self._modules_runtime.add_build_output_listener(self._on_build_output)
 
         self._build_ui()
 
@@ -63,6 +66,12 @@ class ModulesPanel(QtWidgets.QDockWidget):
         self._reload_btn.clicked.connect(self._on_reload_clicked)
         toolbar.addWidget(self._reload_btn)
 
+        self._build_btn = QtWidgets.QPushButton("Build")
+        self._build_btn.setToolTip("Build selected module without loading")
+        self._build_btn.setEnabled(False)
+        self._build_btn.clicked.connect(self._on_build_clicked)
+        toolbar.addWidget(self._build_btn)
+
         self._clean_btn = QtWidgets.QPushButton("Clean")
         self._clean_btn.setToolTip("Clean build artifacts of selected module")
         self._clean_btn.setEnabled(False)
@@ -70,7 +79,7 @@ class ModulesPanel(QtWidgets.QDockWidget):
         toolbar.addWidget(self._clean_btn)
 
         self._rebuild_btn = QtWidgets.QPushButton("Rebuild")
-        self._rebuild_btn.setToolTip("Clean, rebuild and reload selected module")
+        self._rebuild_btn.setToolTip("Clean and rebuild selected module without loading")
         self._rebuild_btn.setEnabled(False)
         self._rebuild_btn.clicked.connect(self._on_rebuild_clicked)
         toolbar.addWidget(self._rebuild_btn)
@@ -82,8 +91,6 @@ class ModulesPanel(QtWidgets.QDockWidget):
         toolbar.addWidget(self._unload_btn)
 
         layout.addLayout(toolbar)
-
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
 
         self._module_list = QtWidgets.QTreeWidget()
         self._module_list.setHeaderLabels(["Module", "Status", "Kind / Components"])
@@ -97,22 +104,7 @@ class ModulesPanel(QtWidgets.QDockWidget):
         )
         self._module_list.itemSelectionChanged.connect(self._on_selection_changed)
         self._module_list.itemDoubleClicked.connect(self._on_item_double_clicked)
-        splitter.addWidget(self._module_list)
-
-        output_group = QtWidgets.QGroupBox("Diagnostics")
-        output_layout = QtWidgets.QVBoxLayout(output_group)
-        output_layout.setContentsMargins(4, 4, 4, 4)
-
-        self._output_text = QtWidgets.QPlainTextEdit()
-        self._output_text.setReadOnly(True)
-        self._output_text.setFont(QtGui.QFont("Consolas", 9))
-        self._output_text.setMaximumBlockCount(1000)
-        output_layout.addWidget(self._output_text)
-
-        splitter.addWidget(output_group)
-        splitter.setSizes([220, 120])
-
-        layout.addWidget(splitter)
+        layout.addWidget(self._module_list)
 
         self._status_label = QtWidgets.QLabel("No modules")
         self._status_label.setStyleSheet("color: gray;")
@@ -121,10 +113,15 @@ class ModulesPanel(QtWidgets.QDockWidget):
         self.setWidget(widget)
 
     def _on_runtime_event(self, event: "ModuleEvent") -> None:
-        self._append_output(f"{event.kind.name.lower()}: {event.module_id}")
+        log.info(f"{_TAG} {event.kind.name.lower()}: {event.module_id}")
         if event.message:
-            self._append_output(event.message)
+            log.info(f"{_TAG} {event.message}")
         QtCore.QTimer.singleShot(100, self._update_display)
+
+    def _on_build_output(self, module_id: str, line: str) -> None:
+        app = QtWidgets.QApplication.instance()
+        if app:
+            app.processEvents()
 
     def _update_display(self) -> None:
         selected_name = None
@@ -150,6 +147,8 @@ class ModulesPanel(QtWidgets.QDockWidget):
             elif record.state == ModuleState.Failed:
                 failed_count += 1
                 item.setForeground(1, QtGui.QBrush(QtGui.QColor("red")))
+            elif record.state == ModuleState.Ignored:
+                item.setForeground(1, QtGui.QBrush(QtGui.QColor("gray")))
             else:
                 item.setForeground(1, QtGui.QBrush(QtGui.QColor("orange")))
 
@@ -160,8 +159,6 @@ class ModulesPanel(QtWidgets.QDockWidget):
             item.setToolTip(0, str(record.descriptor_path))
             if record.error_message:
                 item.setToolTip(1, record.error_message)
-            elif record.diagnostics:
-                item.setToolTip(1, record.diagnostics)
 
             self._module_list.addTopLevelItem(item)
 
@@ -180,16 +177,19 @@ class ModulesPanel(QtWidgets.QDockWidget):
 
     def _on_auto_reload_toggled(self, checked: bool) -> None:
         if checked:
-            self._append_output("Auto-reload is not implemented for the new modules runtime yet")
+            log.warn(f"{_TAG} Auto-reload is not implemented yet")
 
     def _on_rescan_clicked(self) -> None:
         project_root = self._modules_runtime.project_root
         if project_root is None:
-            self._append_output("No project root is configured for modules runtime")
+            log.error(f"{_TAG} No project root is configured for modules runtime")
             return
 
+        log.info(f"{_TAG} Rescanning project: {project_root}")
         if not self._modules_runtime.load_project(project_root):
-            self._append_output(f"Error: {self._modules_runtime.last_error}")
+            log.error(f"{_TAG} Rescan failed: {self._modules_runtime.last_error}")
+        else:
+            log.info(f"{_TAG} Rescan complete")
         self._update_display()
 
     def _on_reload_clicked(self) -> None:
@@ -200,14 +200,30 @@ class ModulesPanel(QtWidgets.QDockWidget):
         module_name = selected_items[0].text(0)
         self._reload_module(module_name)
 
+    def _on_build_clicked(self) -> None:
+        selected_items = self._module_list.selectedItems()
+        if not selected_items:
+            return
+
+        module_name = selected_items[0].text(0)
+        log.info(f"{_TAG} Building module '{module_name}'...")
+        if not self._modules_runtime.build_module(module_name):
+            log.error(f"{_TAG} Build failed: {self._modules_runtime.last_error}")
+        else:
+            log.info(f"{_TAG} Build complete: '{module_name}'")
+        self._update_display()
+
     def _on_clean_clicked(self) -> None:
         selected_items = self._module_list.selectedItems()
         if not selected_items:
             return
 
         module_name = selected_items[0].text(0)
+        log.info(f"{_TAG} Cleaning module '{module_name}'...")
         if not self._modules_runtime.clean_module(module_name):
-            self._append_output(f"Error: {self._modules_runtime.last_error}")
+            log.error(f"{_TAG} Clean failed: {self._modules_runtime.last_error}")
+        else:
+            log.info(f"{_TAG} Clean complete: '{module_name}'")
         self._update_display()
 
     def _on_rebuild_clicked(self) -> None:
@@ -216,15 +232,16 @@ class ModulesPanel(QtWidgets.QDockWidget):
             return
 
         module_name = selected_items[0].text(0)
+        log.info(f"{_TAG} Rebuilding module '{module_name}'...")
         try:
             success = self._modules_runtime.rebuild_module(module_name)
             if not success:
-                self._append_output(f"Error: {self._modules_runtime.last_error}")
+                log.error(f"{_TAG} Rebuild failed: {self._modules_runtime.last_error}")
+            else:
+                log.info(f"{_TAG} Rebuild complete: '{module_name}'")
             self._update_display()
-            self.module_reloaded.emit(module_name, success)
         except Exception as e:
-            log.error(f"[ModulesPanel] Failed to rebuild module: {e}")
-            self._append_output(f"Error: {e}")
+            log.error(f"{_TAG} Rebuild exception for '{module_name}': {e}")
 
     def _on_unload_clicked(self) -> None:
         selected_items = self._module_list.selectedItems()
@@ -232,24 +249,30 @@ class ModulesPanel(QtWidgets.QDockWidget):
             return
 
         module_name = selected_items[0].text(0)
+        log.info(f"{_TAG} Unloading module '{module_name}'...")
         if not self._modules_runtime.unload_module(module_name):
-            self._append_output(f"Error: {self._modules_runtime.last_error}")
+            log.error(f"{_TAG} Unload failed: {self._modules_runtime.last_error}")
+        else:
+            log.info(f"{_TAG} Unloaded: '{module_name}'")
         self._update_display()
 
     def _reload_module(self, module_name: str) -> None:
+        log.info(f"{_TAG} Reloading module '{module_name}'...")
         try:
             success = self._modules_runtime.reload_module(module_name)
             if not success:
-                self._append_output(f"Error: {self._modules_runtime.last_error}")
+                log.error(f"{_TAG} Reload failed: {self._modules_runtime.last_error}")
+            else:
+                log.info(f"{_TAG} Reload complete: '{module_name}'")
             self._update_display()
             self.module_reloaded.emit(module_name, success)
         except Exception as e:
-            log.error(f"[ModulesPanel] Failed to reload module: {e}")
-            self._append_output(f"Error: {e}")
+            log.error(f"{_TAG} Reload exception for '{module_name}': {e}")
 
     def _on_selection_changed(self) -> None:
         has_selection = len(self._module_list.selectedItems()) > 0
         self._reload_btn.setEnabled(has_selection)
+        self._build_btn.setEnabled(has_selection)
         self._clean_btn.setEnabled(has_selection)
         self._rebuild_btn.setEnabled(has_selection)
         self._unload_btn.setEnabled(has_selection)
@@ -259,10 +282,6 @@ class ModulesPanel(QtWidgets.QDockWidget):
     ) -> None:
         module_name = item.text(0)
         self._reload_module(module_name)
-
-    def _append_output(self, text: str) -> None:
-        if text:
-            self._output_text.appendPlainText(text)
 
     def showEvent(self, event: QtGui.QShowEvent) -> None:
         super().showEvent(event)
@@ -277,3 +296,4 @@ class ModulesPanel(QtWidgets.QDockWidget):
         super().closeEvent(event)
         self._update_timer.stop()
         self._modules_runtime.remove_listener(self._on_runtime_event)
+        self._modules_runtime.remove_build_output_listener(self._on_build_output)
