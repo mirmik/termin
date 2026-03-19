@@ -108,6 +108,7 @@ NB_MODULE(_termin_modules_native, m) {
         .def("load_module", &ModuleRuntime::load_module, nb::arg("module_id"))
         .def("unload_module", &ModuleRuntime::unload_module, nb::arg("module_id"))
         .def("reload_module", &ModuleRuntime::reload_module, nb::arg("module_id"))
+        .def("needs_rebuild", &ModuleRuntime::needs_rebuild, nb::arg("module_id"))
         .def("build_module", &ModuleRuntime::build_module, nb::arg("module_id"))
         .def("clean_module", &ModuleRuntime::clean_module, nb::arg("module_id"))
         .def("rebuild_module", &ModuleRuntime::rebuild_module, nb::arg("module_id"))

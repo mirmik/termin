@@ -27,6 +27,7 @@ extern "C" {
 
 #include <algorithm>
 #include <cstring>
+#include <unordered_set>
 
 namespace termin {
 
@@ -741,12 +742,30 @@ void RenderingManager::render_all_offscreen() {
         }
     }
 
-    // 3. Render all render targets from pool
-    struct RenderTargetIterCtx { RenderingManager* mgr; };
-    RenderTargetIterCtx rt_ctx = { this };
+    // 3. Render standalone render targets (skip those already rendered via viewports)
+    std::unordered_set<uint64_t> viewport_rt_keys;
+    for (tc_display* display : displays_) {
+        tc_viewport_handle vp = tc_display_get_first_viewport(display);
+        while (tc_viewport_handle_valid(vp)) {
+            tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+            if (tc_render_target_handle_valid(rt)) {
+                viewport_rt_keys.insert(render_target_key(rt));
+            }
+            vp = tc_viewport_get_display_next(vp);
+        }
+    }
+
+    struct RenderTargetIterCtx {
+        RenderingManager* mgr;
+        std::unordered_set<uint64_t>* skip;
+    };
+    RenderTargetIterCtx rt_ctx = { this, &viewport_rt_keys };
     tc_render_target_pool_foreach([](tc_render_target_handle rt, void* ud) -> bool {
         auto* ctx = static_cast<RenderTargetIterCtx*>(ud);
-        ctx->mgr->render_render_target_offscreen(rt);
+        uint64_t key = RenderingManager::render_target_key(rt);
+        if (ctx->skip->count(key) == 0) {
+            ctx->mgr->render_render_target_offscreen(rt);
+        }
         return true;
     }, &rt_ctx);
 }
