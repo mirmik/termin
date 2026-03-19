@@ -18,11 +18,7 @@ namespace nb = nanobind;
 namespace termin {
 
 static tc_pipeline_handle object_to_pipeline_handle(nb::object pipeline_obj) {
-    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(pipeline_obj.attr("_pipeline_handle"));
-    tc_pipeline_handle handle;
-    handle.index = std::get<0>(h);
-    handle.generation = std::get<1>(h);
-    return handle;
+    return nb::cast<tc_pipeline_handle>(pipeline_obj.attr("_pipeline_handle"));
 }
 
 static nb::object camera_component_from_tc(tc_component* c) {

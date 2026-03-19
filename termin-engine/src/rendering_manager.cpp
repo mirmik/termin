@@ -516,6 +516,27 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene) {
         unmount_scene(scene, display);
     }
 
+    // Free render targets belonging to this scene (not locked)
+    struct FreeCtx { tc_scene_handle scene; RenderingManager* mgr; std::vector<tc_render_target_handle> to_free; };
+    FreeCtx free_ctx = { scene, this, {} };
+    tc_render_target_pool_foreach([](tc_render_target_handle rt, void* ud) -> bool {
+        auto* ctx = static_cast<FreeCtx*>(ud);
+        tc_scene_handle rt_scene = tc_render_target_get_scene(rt);
+        if (tc_scene_handle_eq(rt_scene, ctx->scene) && !tc_render_target_get_locked(rt)) {
+            ctx->to_free.push_back(rt);
+        }
+        return true;
+    }, &free_ctx);
+    for (tc_render_target_handle rt : free_ctx.to_free) {
+        uint64_t rt_key = render_target_key(rt);
+        auto rt_it = render_target_states_.find(rt_key);
+        if (rt_it != render_target_states_.end()) {
+            rt_it->second->clear_all();
+            render_target_states_.erase(rt_it);
+        }
+        tc_render_target_free(rt);
+    }
+
     // Remove from attached scenes
     auto it = std::find_if(attached_scenes_.begin(), attached_scenes_.end(),
         [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
@@ -932,13 +953,25 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     tc_component* camera_comp = tc_render_target_get_camera(rt);
     tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
 
-    if (!tc_scene_handle_valid(scene)) return;
-    if (!camera_comp) return;
-    if (!tc_pipeline_handle_valid(pipeline)) return;
+    if (!tc_scene_handle_valid(scene)) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': no scene", rt_name ? rt_name : "?");
+        return;
+    }
+    if (!camera_comp) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': no camera", rt_name ? rt_name : "?");
+        return;
+    }
+    if (!tc_pipeline_handle_valid(pipeline)) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': no pipeline", rt_name ? rt_name : "?");
+        return;
+    }
 
     int w = tc_render_target_get_width(rt);
     int h = tc_render_target_get_height(rt);
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': invalid size %dx%d", rt_name ? rt_name : "?", w, h);
+        return;
+    }
 
     double aspect = static_cast<double>(w) / std::max(1, h);
     RenderCamera render_camera;
