@@ -1,6 +1,7 @@
 // tc_viewport.c - Viewport implementation using pool with generational indices
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
+#include "render/tc_render_target.h"
 #include "core/tc_component.h"
 #include <tcbase/tc_log.h>
 #include <stdlib.h>
@@ -13,14 +14,11 @@ typedef struct {
     uint32_t* generations;
     bool* alive;
     char** names;
-    tc_scene_handle* scenes;
-    tc_component** cameras;
-    tc_entity_handle* camera_entities;
+    tc_render_target_handle* render_targets;
+    bool* override_resolution;
     float* rects;
     int* pixel_rects;
     int* depths;
-    tc_pipeline_handle* pipelines;
-    uint64_t* layer_masks;
     bool* enabled;
     char** input_modes;
     bool* block_input_in_editor;
@@ -67,14 +65,11 @@ void tc_viewport_pool_init(void) {
     g_pool->generations = (uint32_t*)calloc(cap, sizeof(uint32_t));
     g_pool->alive = (bool*)calloc(cap, sizeof(bool));
     g_pool->names = (char**)calloc(cap, sizeof(char*));
-    g_pool->scenes = (tc_scene_handle*)calloc(cap, sizeof(tc_scene_handle));
-    g_pool->cameras = (tc_component**)calloc(cap, sizeof(tc_component*));
-    g_pool->camera_entities = (tc_entity_handle*)calloc(cap, sizeof(tc_entity_handle));
+    g_pool->render_targets = (tc_render_target_handle*)calloc(cap, sizeof(tc_render_target_handle));
+    g_pool->override_resolution = (bool*)calloc(cap, sizeof(bool));
     g_pool->rects = (float*)calloc(cap * 4, sizeof(float));
     g_pool->pixel_rects = (int*)calloc(cap * 4, sizeof(int));
     g_pool->depths = (int*)calloc(cap, sizeof(int));
-    g_pool->pipelines = (tc_pipeline_handle*)calloc(cap, sizeof(tc_pipeline_handle));
-    g_pool->layer_masks = (uint64_t*)calloc(cap, sizeof(uint64_t));
     g_pool->enabled = (bool*)calloc(cap, sizeof(bool));
     g_pool->input_modes = (char**)calloc(cap, sizeof(char*));
     g_pool->block_input_in_editor = (bool*)calloc(cap, sizeof(bool));
@@ -87,8 +82,7 @@ void tc_viewport_pool_init(void) {
     g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
     for (size_t i = 0; i < cap; i++) {
         g_pool->free_stack[i] = (uint32_t)(cap - 1 - i);
-        g_pool->scenes[i] = TC_SCENE_HANDLE_INVALID;
-        g_pool->camera_entities[i] = TC_ENTITY_HANDLE_INVALID;
+        g_pool->render_targets[i] = TC_RENDER_TARGET_HANDLE_INVALID;
         g_pool->display_prevs[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->display_nexts[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->internal_entities[i] = TC_ENTITY_HANDLE_INVALID;
@@ -115,14 +109,11 @@ void tc_viewport_pool_shutdown(void) {
     free(g_pool->generations);
     free(g_pool->alive);
     free(g_pool->names);
-    free(g_pool->scenes);
-    free(g_pool->cameras);
-    free(g_pool->camera_entities);
+    free(g_pool->render_targets);
+    free(g_pool->override_resolution);
     free(g_pool->rects);
     free(g_pool->pixel_rects);
     free(g_pool->depths);
-    free(g_pool->pipelines);
-    free(g_pool->layer_masks);
     free(g_pool->enabled);
     free(g_pool->input_modes);
     free(g_pool->block_input_in_editor);
@@ -148,14 +139,11 @@ static void pool_grow(void) {
     g_pool->generations = realloc(g_pool->generations, new_cap * sizeof(uint32_t));
     g_pool->alive = realloc(g_pool->alive, new_cap * sizeof(bool));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(char*));
-    g_pool->scenes = realloc(g_pool->scenes, new_cap * sizeof(tc_scene_handle));
-    g_pool->cameras = realloc(g_pool->cameras, new_cap * sizeof(tc_component*));
-    g_pool->camera_entities = realloc(g_pool->camera_entities, new_cap * sizeof(tc_entity_handle));
+    g_pool->render_targets = realloc(g_pool->render_targets, new_cap * sizeof(tc_render_target_handle));
+    g_pool->override_resolution = realloc(g_pool->override_resolution, new_cap * sizeof(bool));
     g_pool->rects = realloc(g_pool->rects, new_cap * 4 * sizeof(float));
     g_pool->pixel_rects = realloc(g_pool->pixel_rects, new_cap * 4 * sizeof(int));
     g_pool->depths = realloc(g_pool->depths, new_cap * sizeof(int));
-    g_pool->pipelines = realloc(g_pool->pipelines, new_cap * sizeof(tc_pipeline_handle));
-    g_pool->layer_masks = realloc(g_pool->layer_masks, new_cap * sizeof(uint64_t));
     g_pool->enabled = realloc(g_pool->enabled, new_cap * sizeof(bool));
     g_pool->input_modes = realloc(g_pool->input_modes, new_cap * sizeof(char*));
     g_pool->block_input_in_editor = realloc(g_pool->block_input_in_editor, new_cap * sizeof(bool));
@@ -169,14 +157,10 @@ static void pool_grow(void) {
     memset(g_pool->generations + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
     memset(g_pool->alive + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
-    memset(g_pool->cameras + old_cap, 0, (new_cap - old_cap) * sizeof(tc_component*));
+    memset(g_pool->override_resolution + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(g_pool->rects + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(float));
     memset(g_pool->pixel_rects + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(int));
     memset(g_pool->depths + old_cap, 0, (new_cap - old_cap) * sizeof(int));
-    for (size_t i = old_cap; i < new_cap; i++) {
-        g_pool->pipelines[i] = TC_PIPELINE_HANDLE_INVALID;
-    }
-    memset(g_pool->layer_masks + old_cap, 0, (new_cap - old_cap) * sizeof(uint64_t));
     memset(g_pool->enabled + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(g_pool->input_modes + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
     memset(g_pool->block_input_in_editor + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
@@ -184,8 +168,7 @@ static void pool_grow(void) {
     memset(g_pool->input_managers + old_cap, 0, (new_cap - old_cap) * sizeof(tc_input_manager*));
 
     for (size_t i = old_cap; i < new_cap; i++) {
-        g_pool->scenes[i] = TC_SCENE_HANDLE_INVALID;
-        g_pool->camera_entities[i] = TC_ENTITY_HANDLE_INVALID;
+        g_pool->render_targets[i] = TC_RENDER_TARGET_HANDLE_INVALID;
         g_pool->display_prevs[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->display_nexts[i] = TC_VIEWPORT_HANDLE_INVALID;
         g_pool->internal_entities[i] = TC_ENTITY_HANDLE_INVALID;
@@ -230,9 +213,8 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
 
     g_pool->alive[idx] = true;
     g_pool->names[idx] = tc_strdup_local(name);
-    g_pool->scenes[idx] = TC_SCENE_HANDLE_INVALID;
-    g_pool->cameras[idx] = NULL;
-    g_pool->camera_entities[idx] = TC_ENTITY_HANDLE_INVALID;
+    g_pool->render_targets[idx] = TC_RENDER_TARGET_HANDLE_INVALID;
+    g_pool->override_resolution[idx] = true;
     g_pool->rects[idx * 4 + 0] = 0.0f;
     g_pool->rects[idx * 4 + 1] = 0.0f;
     g_pool->rects[idx * 4 + 2] = 1.0f;
@@ -242,8 +224,6 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     g_pool->pixel_rects[idx * 4 + 2] = 1;
     g_pool->pixel_rects[idx * 4 + 3] = 1;
     g_pool->depths[idx] = 0;
-    g_pool->pipelines[idx] = TC_PIPELINE_HANDLE_INVALID;
-    g_pool->layer_masks[idx] = 0xFFFFFFFFFFFFFFFFULL;
     g_pool->enabled[idx] = true;
     g_pool->input_modes[idx] = tc_strdup_local("simple");
     g_pool->block_input_in_editor[idx] = false;
@@ -289,10 +269,18 @@ size_t tc_viewport_pool_count(void) {
 }
 
 tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene, tc_component* camera) {
+    tc_render_target_handle rt = tc_render_target_new(name);
+    if (!tc_render_target_handle_valid(rt)) {
+        return TC_VIEWPORT_HANDLE_INVALID;
+    }
+    tc_render_target_set_scene(rt, scene);
+    tc_render_target_set_camera(rt, camera);
+
     tc_viewport_handle h = tc_viewport_pool_alloc(name);
     if (tc_viewport_handle_valid(h)) {
-        tc_viewport_set_scene(h, scene);
-        tc_viewport_set_camera(h, camera);
+        g_pool->render_targets[h.index] = rt;
+    } else {
+        tc_render_target_free(rt);
     }
     return h;
 }
@@ -355,22 +343,22 @@ int tc_viewport_get_depth(tc_viewport_handle h) {
 
 void tc_viewport_set_pipeline(tc_viewport_handle h, tc_pipeline_handle pipeline) {
     if (!handle_alive(h)) return;
-    g_pool->pipelines[h.index] = pipeline;
+    tc_render_target_set_pipeline(g_pool->render_targets[h.index], pipeline);
 }
 
 tc_pipeline_handle tc_viewport_get_pipeline(tc_viewport_handle h) {
     if (!handle_alive(h)) return TC_PIPELINE_HANDLE_INVALID;
-    return g_pool->pipelines[h.index];
+    return tc_render_target_get_pipeline(g_pool->render_targets[h.index]);
 }
 
 void tc_viewport_set_layer_mask(tc_viewport_handle h, uint64_t mask) {
     if (!handle_alive(h)) return;
-    g_pool->layer_masks[h.index] = mask;
+    tc_render_target_set_layer_mask(g_pool->render_targets[h.index], mask);
 }
 
 uint64_t tc_viewport_get_layer_mask(tc_viewport_handle h) {
     if (!handle_alive(h)) return 0;
-    return g_pool->layer_masks[h.index];
+    return tc_render_target_get_layer_mask(g_pool->render_targets[h.index]);
 }
 
 void tc_viewport_set_enabled(tc_viewport_handle h, bool enabled) {
@@ -385,28 +373,47 @@ bool tc_viewport_get_enabled(tc_viewport_handle h) {
 
 void tc_viewport_set_scene(tc_viewport_handle h, tc_scene_handle scene) {
     if (!handle_alive(h)) return;
-    g_pool->scenes[h.index] = scene;
+    tc_render_target_set_scene(g_pool->render_targets[h.index], scene);
 }
 
 tc_scene_handle tc_viewport_get_scene(tc_viewport_handle h) {
     if (!handle_alive(h)) return TC_SCENE_HANDLE_INVALID;
-    return g_pool->scenes[h.index];
+    return tc_render_target_get_scene(g_pool->render_targets[h.index]);
 }
 
 void tc_viewport_set_camera(tc_viewport_handle h, tc_component* camera) {
     if (!handle_alive(h)) return;
-    g_pool->cameras[h.index] = camera;
-    g_pool->camera_entities[h.index] = camera ? camera->owner : TC_ENTITY_HANDLE_INVALID;
+    tc_render_target_set_camera(g_pool->render_targets[h.index], camera);
 }
 
 tc_component* tc_viewport_get_camera(tc_viewport_handle h) {
     if (!handle_alive(h)) return NULL;
-    return g_pool->cameras[h.index];
+    return tc_render_target_get_camera(g_pool->render_targets[h.index]);
 }
 
 tc_entity_handle tc_viewport_get_camera_entity(tc_viewport_handle h) {
     if (!handle_alive(h)) return TC_ENTITY_HANDLE_INVALID;
-    return g_pool->camera_entities[h.index];
+    return tc_render_target_get_camera_entity(g_pool->render_targets[h.index]);
+}
+
+void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle rt) {
+    if (!handle_alive(h)) return;
+    g_pool->render_targets[h.index] = rt;
+}
+
+tc_render_target_handle tc_viewport_get_render_target(tc_viewport_handle h) {
+    if (!handle_alive(h)) return TC_RENDER_TARGET_HANDLE_INVALID;
+    return g_pool->render_targets[h.index];
+}
+
+void tc_viewport_set_override_resolution(tc_viewport_handle h, bool override_resolution) {
+    if (!handle_alive(h)) return;
+    g_pool->override_resolution[h.index] = override_resolution;
+}
+
+bool tc_viewport_get_override_resolution(tc_viewport_handle h) {
+    if (!handle_alive(h)) return false;
+    return g_pool->override_resolution[h.index];
 }
 
 void tc_viewport_set_input_mode(tc_viewport_handle h, const char* mode) {
