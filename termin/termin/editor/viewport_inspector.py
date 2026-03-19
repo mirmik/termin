@@ -150,6 +150,18 @@ class ViewportInspector(QWidget):
         self._depth_spin.valueChanged.connect(self._on_depth_changed)
         form.addRow("Depth:", self._depth_spin)
 
+        # Input mode
+        self._input_mode_combo = QComboBox()
+        self._input_mode_combo.addItem("none")
+        self._input_mode_combo.addItem("simple")
+        self._input_mode_combo.addItem("editor")
+        self._input_mode_combo.currentTextChanged.connect(self._on_input_mode_changed)
+        form.addRow("Input Mode:", self._input_mode_combo)
+
+        # Block input in editor
+        self._block_input_check = QCheckBox()
+        self._block_input_check.toggled.connect(self._on_block_input_changed)
+        form.addRow("Block in Editor:", self._block_input_check)
 
         # Hint warning label (shown when ViewportHint controls the viewport)
         self._hint_label = QLabel("Controlled by ViewportHint on camera")
@@ -249,6 +261,18 @@ class ViewportInspector(QWidget):
             # Update depth
             self._depth_spin.setValue(viewport.depth)
 
+            # Update input mode
+            self._input_mode_combo.blockSignals(True)
+            mode = viewport.input_mode or "none"
+            idx = self._input_mode_combo.findText(mode)
+            self._input_mode_combo.setCurrentIndex(idx if idx >= 0 else 0)
+            self._input_mode_combo.blockSignals(False)
+
+            # Update block input in editor
+            self._block_input_check.blockSignals(True)
+            self._block_input_check.setChecked(viewport.block_input_in_editor)
+            self._block_input_check.blockSignals(False)
+
             # Debug info
             self._update_debug_info(viewport)
         finally:
@@ -332,6 +356,8 @@ class ViewportInspector(QWidget):
             self._w_spin.setValue(1.0)
             self._h_spin.setValue(1.0)
             self._depth_spin.setValue(0)
+            self._input_mode_combo.setCurrentIndex(0)
+            self._block_input_check.setChecked(False)
             self._hint_label.hide()
             self._scene_pipeline_label.hide()
             self._debug_label.setText("-")
@@ -475,6 +501,18 @@ class ViewportInspector(QWidget):
         if 0 <= idx < len(rt_list):
             self._viewport.render_target = rt_list[idx]
             self.viewport_changed.emit()
+
+    def _on_input_mode_changed(self, text: str) -> None:
+        if self._updating or self._viewport is None:
+            return
+        self._viewport.input_mode = text
+        self.viewport_changed.emit()
+
+    def _on_block_input_changed(self, checked: bool) -> None:
+        if self._updating or self._viewport is None:
+            return
+        self._viewport.block_input_in_editor = checked
+        self.viewport_changed.emit()
 
     def _on_enabled_changed(self, state: int) -> None:
         """Handle enabled checkbox change."""

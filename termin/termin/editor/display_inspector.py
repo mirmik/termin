@@ -103,28 +103,9 @@ class DisplayInspector(QWidget):
         self._editor_only_checkbox.stateChanged.connect(self._on_editor_only_changed)
         form.addRow("Editor Only:", self._editor_only_checkbox)
 
-        # Input mode combo
-        self._input_mode_combo = QComboBox()
-        self._input_mode_combo.setToolTip(
-            "Input handling mode for this display:\n"
-            "- None: No input handling\n"
-            "- Simple (Game): Routes input to scene with raycast\n"
-            "- Basic (C): Routes input to scene (C impl, no raycast)\n"
-            "- Editor: Full editor input (picking, gizmo, etc.)"
-        )
-        for mode_id, mode_label in self.INPUT_MODES:
-            self._input_mode_combo.addItem(mode_label, mode_id)
-        self._input_mode_combo.currentIndexChanged.connect(self._on_input_mode_changed)
-        form.addRow("Input:", self._input_mode_combo)
-
-        # Block input in editor checkbox
-        self._block_input_in_editor_checkbox = QCheckBox()
-        self._block_input_in_editor_checkbox.setToolTip(
-            "Block input for this display when running in editor mode.\n"
-            "Prevents accidental camera movement while editing."
-        )
-        self._block_input_in_editor_checkbox.stateChanged.connect(self._on_block_input_in_editor_changed)
-        form.addRow("Block in Editor:", self._block_input_in_editor_checkbox)
+        # Router status (read-only)
+        self._router_label = QLabel("-")
+        form.addRow("Input Router:", self._router_label)
 
         layout.addLayout(form)
 
@@ -176,6 +157,15 @@ class DisplayInspector(QWidget):
         self._editor_only_checkbox.setChecked(display.editor_only)
         self._editor_only_checkbox.blockSignals(False)
 
+        # Router status
+        try:
+            from termin._native.render import _render_surface_get_input_manager, _display_get_surface_ptr
+            surface_ptr = _display_get_surface_ptr(display.tc_display_ptr)
+            surface_im = _render_surface_get_input_manager(surface_ptr) if surface_ptr else 0
+            self._router_label.setText("Active" if surface_im else "None")
+        except Exception:
+            self._router_label.setText("?")
+
         # Debug info
         self._update_debug_info(display)
 
@@ -188,13 +178,7 @@ class DisplayInspector(QWidget):
         self._editor_only_checkbox.blockSignals(True)
         self._editor_only_checkbox.setChecked(False)
         self._editor_only_checkbox.blockSignals(False)
-        self._block_input_in_editor_checkbox.blockSignals(True)
-        self._block_input_in_editor_checkbox.setChecked(False)
-        self._block_input_in_editor_checkbox.blockSignals(False)
-        self._updating = True
-        self._input_mode_combo.setCurrentIndex(0)
-        self._current_input_mode = "none"
-        self._updating = False
+        self._router_label.setText("-")
         self._debug_label.setText("-")
 
     def _on_name_changed(self) -> None:
@@ -210,42 +194,6 @@ class DisplayInspector(QWidget):
         if self._display is not None:
             self._display.editor_only = bool(state)
             self.display_changed.emit()
-
-    def _on_input_mode_changed(self, index: int) -> None:
-        """Handle input mode combo changed."""
-        if self._updating or self._display is None:
-            return
-
-        mode_id = self._input_mode_combo.itemData(index)
-        if mode_id and mode_id != self._current_input_mode:
-            self._current_input_mode = mode_id
-            self.input_mode_changed.emit(mode_id)
-            self.display_changed.emit()
-
-    def _on_block_input_in_editor_changed(self, state: int) -> None:
-        """Handle block input in editor checkbox changed."""
-        if self._updating or self._display is None:
-            return
-        self.block_input_in_editor_changed.emit(bool(state))
-        self.display_changed.emit()
-
-    def set_input_mode(self, mode: str) -> None:
-        """Set the current input mode selection."""
-        self._current_input_mode = mode
-        self._updating = True
-        try:
-            for i in range(self._input_mode_combo.count()):
-                if self._input_mode_combo.itemData(i) == mode:
-                    self._input_mode_combo.setCurrentIndex(i)
-                    break
-        finally:
-            self._updating = False
-
-    def set_block_input_in_editor(self, blocked: bool) -> None:
-        """Set the block input in editor checkbox state."""
-        self._updating = True
-        self._block_input_in_editor_checkbox.setChecked(blocked)
-        self._updating = False
 
     def _update_debug_info(self, display: "Display") -> None:
         """Update debug info label with native state."""

@@ -17,6 +17,7 @@ extern "C" {
 #include "core/tc_entity_pool_registry.h"
 #include "tc_viewport_config.h"
 #include "render/tc_viewport_pool.h"
+#include "render/tc_viewport_input_manager.h"
 #include "render/tc_rendering_manager.h"
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
