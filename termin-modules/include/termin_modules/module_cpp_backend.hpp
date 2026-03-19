@@ -18,6 +18,11 @@ public:
         const ModuleEnvironment& environment
     ) override;
 
+    bool clean(
+        ModuleRecord& record,
+        const ModuleEnvironment& environment
+    ) override;
+
 private:
     bool run_build_command(
         const std::string& command,

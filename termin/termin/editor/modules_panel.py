@@ -63,6 +63,18 @@ class ModulesPanel(QtWidgets.QDockWidget):
         self._reload_btn.clicked.connect(self._on_reload_clicked)
         toolbar.addWidget(self._reload_btn)
 
+        self._clean_btn = QtWidgets.QPushButton("Clean")
+        self._clean_btn.setToolTip("Clean build artifacts of selected module")
+        self._clean_btn.setEnabled(False)
+        self._clean_btn.clicked.connect(self._on_clean_clicked)
+        toolbar.addWidget(self._clean_btn)
+
+        self._rebuild_btn = QtWidgets.QPushButton("Rebuild")
+        self._rebuild_btn.setToolTip("Clean, rebuild and reload selected module")
+        self._rebuild_btn.setEnabled(False)
+        self._rebuild_btn.clicked.connect(self._on_rebuild_clicked)
+        toolbar.addWidget(self._rebuild_btn)
+
         self._unload_btn = QtWidgets.QPushButton("Unload")
         self._unload_btn.setToolTip("Unload selected module")
         self._unload_btn.setEnabled(False)
@@ -188,6 +200,32 @@ class ModulesPanel(QtWidgets.QDockWidget):
         module_name = selected_items[0].text(0)
         self._reload_module(module_name)
 
+    def _on_clean_clicked(self) -> None:
+        selected_items = self._module_list.selectedItems()
+        if not selected_items:
+            return
+
+        module_name = selected_items[0].text(0)
+        if not self._modules_runtime.clean_module(module_name):
+            self._append_output(f"Error: {self._modules_runtime.last_error}")
+        self._update_display()
+
+    def _on_rebuild_clicked(self) -> None:
+        selected_items = self._module_list.selectedItems()
+        if not selected_items:
+            return
+
+        module_name = selected_items[0].text(0)
+        try:
+            success = self._modules_runtime.rebuild_module(module_name)
+            if not success:
+                self._append_output(f"Error: {self._modules_runtime.last_error}")
+            self._update_display()
+            self.module_reloaded.emit(module_name, success)
+        except Exception as e:
+            log.error(f"[ModulesPanel] Failed to rebuild module: {e}")
+            self._append_output(f"Error: {e}")
+
     def _on_unload_clicked(self) -> None:
         selected_items = self._module_list.selectedItems()
         if not selected_items:
@@ -212,6 +250,8 @@ class ModulesPanel(QtWidgets.QDockWidget):
     def _on_selection_changed(self) -> None:
         has_selection = len(self._module_list.selectedItems()) > 0
         self._reload_btn.setEnabled(has_selection)
+        self._clean_btn.setEnabled(has_selection)
+        self._rebuild_btn.setEnabled(has_selection)
         self._unload_btn.setEnabled(has_selection)
 
     def _on_item_double_clicked(

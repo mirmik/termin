@@ -76,6 +76,20 @@ class ModulesPanel(VStack):
         self._reload_btn.on_click = self._on_reload_clicked
         toolbar.add_child(self._reload_btn)
 
+        self._clean_btn = Button()
+        self._clean_btn.text = "Clean"
+        self._clean_btn.font_size = 11
+        self._clean_btn.padding = 4
+        self._clean_btn.on_click = self._on_clean_clicked
+        toolbar.add_child(self._clean_btn)
+
+        self._rebuild_btn = Button()
+        self._rebuild_btn.text = "Rebuild"
+        self._rebuild_btn.font_size = 11
+        self._rebuild_btn.padding = 4
+        self._rebuild_btn.on_click = self._on_rebuild_clicked
+        toolbar.add_child(self._rebuild_btn)
+
         self._unload_btn = Button()
         self._unload_btn.text = "Unload"
         self._unload_btn.font_size = 11
@@ -156,6 +170,25 @@ class ModulesPanel(VStack):
     def _on_reload_clicked(self) -> None:
         if self._selected_module:
             self._reload_module(self._selected_module)
+
+    def _on_clean_clicked(self) -> None:
+        if self._selected_module:
+            if not self._modules_runtime.clean_module(self._selected_module):
+                self._append_output(f"Error: {self._modules_runtime.last_error}")
+            self.update_display()
+
+    def _on_rebuild_clicked(self) -> None:
+        if self._selected_module:
+            try:
+                success = self._modules_runtime.rebuild_module(self._selected_module)
+                if not success:
+                    self._append_output(f"Error: {self._modules_runtime.last_error}")
+                self.update_display()
+                if self.on_module_reloaded:
+                    self.on_module_reloaded(self._selected_module, success)
+            except Exception as e:
+                log.error(f"[ModulesPanel] Failed to rebuild module: {e}")
+                self._append_output(f"Error: {e}")
 
     def _on_unload_clicked(self) -> None:
         if self._selected_module:

@@ -29,6 +29,8 @@ public:
     bool load_module(const std::string& module_id);
     bool unload_module(const std::string& module_id);
     bool reload_module(const std::string& module_id);
+    bool clean_module(const std::string& module_id);
+    bool rebuild_module(const std::string& module_id);
 
     const ModuleRecord* find(const std::string& module_id) const;
     std::vector<const ModuleRecord*> list() const;

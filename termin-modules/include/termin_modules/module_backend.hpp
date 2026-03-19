@@ -19,6 +19,15 @@ public:
         ModuleRecord& record,
         const ModuleEnvironment& environment
     ) = 0;
+
+    virtual bool clean(
+        ModuleRecord& record,
+        const ModuleEnvironment& environment
+    ) {
+        (void)record;
+        (void)environment;
+        return true;
+    }
 };
 
 } // namespace termin_modules

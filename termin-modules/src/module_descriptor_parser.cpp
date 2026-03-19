@@ -197,6 +197,13 @@ std::optional<ModuleSpec> ModuleDescriptorParser::parse(const std::filesystem::p
         }
         config->build_command = build_command.value_or("");
 
+        const auto clean_command = get_platform_string(build, "clean_command", spec.id, error);
+        if (!error.empty()) {
+            error += " in " + path.string();
+            return std::nullopt;
+        }
+        config->clean_command = clean_command.value_or("");
+
         const auto output = get_platform_string(build, "output", spec.id, error);
         if (!error.empty()) {
             error += " in " + path.string();
