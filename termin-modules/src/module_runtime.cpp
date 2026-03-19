@@ -257,6 +257,7 @@ bool ModuleRuntime::unload_module(const std::string& module_id) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
+    refresh_spec(*target);
 
     if (target->state != ModuleState::Loaded) {
         target->state = ModuleState::Unloaded;
@@ -321,6 +322,9 @@ bool ModuleRuntime::unload_module(const std::string& module_id) {
 }
 
 bool ModuleRuntime::reload_module(const std::string& module_id) {
+    ModuleRecord* mutable_target = find_mutable_record(_records, module_id);
+    if (mutable_target) refresh_spec(*mutable_target);
+
     emit(ModuleEventKind::Reloading, module_id);
 
     const ModuleRecord* current = find(module_id);
@@ -382,13 +386,14 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
 }
 
 bool ModuleRuntime::needs_rebuild(const std::string& module_id) {
-    const ModuleRecord* target = find(module_id);
-    if (target == nullptr) return false;
+    ModuleRecord* mutable_target = find_mutable_record(_records, module_id);
+    if (mutable_target == nullptr) return false;
+    refresh_spec(*mutable_target);
 
-    IModuleBackend* backend = get_backend(target->spec.kind);
+    IModuleBackend* backend = get_backend(mutable_target->spec.kind);
     if (backend == nullptr) return false;
 
-    return backend->needs_rebuild(*target, _environment);
+    return backend->needs_rebuild(*mutable_target, _environment);
 }
 
 bool ModuleRuntime::build_module(const std::string& module_id) {
@@ -397,6 +402,7 @@ bool ModuleRuntime::build_module(const std::string& module_id) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
+    refresh_spec(*target);
 
     IModuleBackend* backend = get_backend(target->spec.kind);
     if (backend == nullptr) {
@@ -427,6 +433,7 @@ bool ModuleRuntime::clean_module(const std::string& module_id) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
+    refresh_spec(*target);
 
     if (target->state == ModuleState::Loaded) {
         _last_error = "Cannot clean loaded module, unload first: " + module_id;
@@ -456,6 +463,7 @@ bool ModuleRuntime::rebuild_module(const std::string& module_id) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
+    refresh_spec(*target);
 
     const bool was_loaded = target->state == ModuleState::Loaded;
     if (was_loaded && !unload_module(module_id)) {
@@ -553,6 +561,24 @@ void ModuleRuntime::emit(ModuleEventKind kind, const std::string& module_id, con
     if (_event_callback) {
         _event_callback(ModuleEvent{kind, module_id, message});
     }
+}
+
+void ModuleRuntime::refresh_spec(ModuleRecord& record) {
+    if (!_parser) return;
+    if (record.spec.descriptor_path.empty()) return;
+    if (!std::filesystem::exists(record.spec.descriptor_path)) return;
+
+    std::string error;
+    auto new_spec = _parser->parse(record.spec.descriptor_path, error);
+    if (!new_spec.has_value()) {
+        emit(ModuleEventKind::Failed, record.spec.id, "Failed to re-parse descriptor: " + error);
+        return;
+    }
+
+    // Preserve id and descriptor_path, update everything else
+    new_spec->id = record.spec.id;
+    new_spec->descriptor_path = record.spec.descriptor_path;
+    record.spec = std::move(*new_spec);
 }
 
 bool ModuleRuntime::should_skip(const ModuleSpec& spec) const {

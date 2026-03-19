@@ -50,6 +50,7 @@ private:
         std::vector<ModuleRecord*>& ordered,
         std::string& error
     );
+    void refresh_spec(ModuleRecord& record);
     IModuleBackend* get_backend(ModuleKind kind) const;
     void emit(ModuleEventKind kind, const std::string& module_id, const std::string& message = std::string());
     bool should_skip(const ModuleSpec& spec) const;
