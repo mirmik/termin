@@ -138,17 +138,8 @@ public:
     void remove_viewport_state(tc_viewport_handle viewport);
 
     // ========================================================================
-    // Render Target Management
+    // Render Target State
     // ========================================================================
-
-    // Register standalone render target (not attached to any viewport)
-    void register_render_target(tc_render_target_handle rt);
-
-    // Unregister standalone render target
-    void unregister_render_target(tc_render_target_handle rt);
-
-    // Get all registered standalone render targets
-    const std::vector<tc_render_target_handle>& render_targets() const { return registered_render_targets_; }
 
     // Get render state for a render target (returns nullptr if not found)
     ViewportRenderState* get_render_target_state(tc_render_target_handle rt);
@@ -260,8 +251,11 @@ private:
     // Render single viewport to its output FBO
     void render_viewport_offscreen(tc_viewport_handle viewport);
 
+public:
     // Render single standalone render target to its output FBO
     void render_render_target_offscreen(tc_render_target_handle rt);
+
+private:
 
     // Sync override_resolution viewports: update render target width/height from pixel_rect
     void sync_viewport_resolutions();
@@ -324,9 +318,6 @@ private:
 
     // Pipeline targets: pipeline_name -> list of viewport names
     std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;
-
-    // Registered standalone render targets (not attached to viewports)
-    std::vector<tc_render_target_handle> registered_render_targets_;
 
     // Render target states (key = render_target handle as uint64)
     std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> render_target_states_;

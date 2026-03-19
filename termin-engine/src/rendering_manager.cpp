@@ -342,13 +342,8 @@ tc_viewport_handle RenderingManager::mount_scene(
         return TC_VIEWPORT_HANDLE_INVALID;
     }
 
-    // Create viewport
-    tc_viewport_handle viewport = tc_viewport_new(
-        name.c_str(),
-        scene,
-        camera
-    );
-
+    // Create viewport (render target must be assigned by caller)
+    tc_viewport_handle viewport = tc_viewport_pool_alloc(name.c_str());
     if (!tc_viewport_handle_valid(viewport)) {
         tc_log(TC_LOG_ERROR, "[RenderingManager] Failed to create viewport '%s'", name.c_str());
         return TC_VIEWPORT_HANDLE_INVALID;
@@ -356,11 +351,6 @@ tc_viewport_handle RenderingManager::mount_scene(
 
     // Set rect
     tc_viewport_set_rect(viewport, region_x, region_y, region_w, region_h);
-
-    // Set pipeline if provided
-    if (tc_pipeline_handle_valid(pipeline)) {
-        tc_viewport_set_pipeline(viewport, pipeline);
-    }
 
     // Add to display
     tc_display_add_viewport(display, viewport);
@@ -421,105 +411,89 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
     }
 
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
-    size_t config_count = mount ? mount->viewport_config_count : 0;
     tc_entity_pool* pool = tc_scene_entity_pool(scene);
     tc_entity_pool_handle pool_handle = pool ? tc_entity_pool_registry_find(pool) : TC_ENTITY_POOL_HANDLE_INVALID;
 
-    for (size_t i = 0; i < config_count; i++) {
-        tc_viewport_config* config = mount ? &mount->viewport_configs[i] : nullptr;
-        if (!config) continue;
+    // 1. Create render targets from render_target_configs
+    std::unordered_map<std::string, tc_render_target_handle> rt_by_name;
+    size_t rt_count = mount ? mount->render_target_config_count : 0;
+    for (size_t i = 0; i < rt_count; i++) {
+        tc_render_target_config* rtc = &mount->render_target_configs[i];
+        std::string rt_name = rtc->name ? rtc->name : "";
+        if (rt_name.empty()) continue;
 
-        // Get or create display
-        std::string display_name = config->display_name ? config->display_name : "Main";
-        tc_display* display = get_or_create_display(display_name);
-        if (!display) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Cannot create display '%s' for scene viewport",
-                   display_name.c_str());
-            continue;
-        }
+        tc_render_target_handle rt = tc_render_target_new(rt_name.c_str());
+        tc_render_target_set_scene(rt, scene);
+        tc_render_target_set_width(rt, rtc->width);
+        tc_render_target_set_height(rt, rtc->height);
+        tc_render_target_set_layer_mask(rt, rtc->layer_mask);
+        tc_render_target_set_enabled(rt, rtc->enabled);
 
         // Find camera by UUID
-        tc_component* camera = nullptr;
-        if (config->camera_uuid && config->camera_uuid[0] != '\0' && pool) {
-            tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, config->camera_uuid);
+        if (rtc->camera_uuid && rtc->camera_uuid[0] != '\0' && pool) {
+            tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, rtc->camera_uuid);
             if (tc_entity_id_valid(eid)) {
                 tc_entity_handle eh = tc_entity_handle_make(pool_handle, eid);
                 Entity entity(eh);
-                camera = entity.get_component_by_type_name("CameraComponent");
+                tc_component* camera = entity.get_component_by_type_name("CameraComponent");
+                if (camera) {
+                    tc_render_target_set_camera(rt, camera);
+                }
             }
-            if (!camera) {
-                tc_log(TC_LOG_WARN, "[RenderingManager] Camera entity not found for uuid=%s",
-                       config->camera_uuid);
-            }
-        }
-
-        // Fallback: find first camera in scene via capability
-        if (!camera) {
-            tc_component_cap_id cam_cap = tc_camera_capability_id();
-            CameraSearchData search_data{nullptr, nullptr};
-            tc_scene_foreach_with_capability(scene, cam_cap, find_first_camera_cb, &search_data, TC_SCENE_FILTER_NONE);
-            if (search_data.camera) {
-                camera = search_data.camera;
-                tc_log(TC_LOG_WARN, "[RenderingManager] Using fallback camera from entity '%s'",
-                       search_data.found_name ? search_data.found_name : "?");
-            }
-        }
-
-        if (!camera) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] No camera found for viewport on display '%s'",
-                   display_name.c_str());
-            continue;
         }
 
         // Get pipeline
         tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
-
-        // Try by UUID first
-        // Try by UUID first (via factory — ResourceManager lives in Python)
-        if (config->pipeline_uuid && config->pipeline_uuid[0] != '\0') {
-            if (pipeline_factory_) {
-                pipeline = pipeline_factory_(config->pipeline_uuid);
-            }
+        if (rtc->pipeline_uuid && rtc->pipeline_uuid[0] != '\0' && pipeline_factory_) {
+            pipeline = pipeline_factory_(rtc->pipeline_uuid);
+        }
+        if (!tc_pipeline_handle_valid(pipeline) && rtc->pipeline_name && rtc->pipeline_name[0] != '\0' && pipeline_factory_) {
+            pipeline = pipeline_factory_(rtc->pipeline_name);
+        }
+        if (tc_pipeline_handle_valid(pipeline)) {
+            tc_render_target_set_pipeline(rt, pipeline);
         }
 
-        // Try by name via factory
-        if (!tc_pipeline_handle_valid(pipeline) && config->pipeline_name && config->pipeline_name[0] != '\0') {
-            if (pipeline_factory_) {
-                pipeline = pipeline_factory_(config->pipeline_name);
-                if (!tc_pipeline_handle_valid(pipeline)) {
-                    tc_log(TC_LOG_WARN, "[RenderingManager] Pipeline factory returned invalid for name=%s",
-                           config->pipeline_name);
-                }
-            } else {
-                tc_log(TC_LOG_WARN, "[RenderingManager] No pipeline factory set for name=%s",
-                       config->pipeline_name);
-            }
-        }
+        rt_by_name[rt_name] = rt;
+    }
 
-        // Create viewport
-        std::string vp_name = config->name ? config->name : "";
-        tc_viewport_handle viewport = mount_scene(
-            scene,
-            display,
-            camera,
-            config->region[0], config->region[1], config->region[2], config->region[3],
-            pipeline,
-            vp_name
-        );
+    // 2. Create viewports from viewport_configs, link to render targets by name
+    size_t vp_count = mount ? mount->viewport_config_count : 0;
+    for (size_t i = 0; i < vp_count; i++) {
+        tc_viewport_config* config = &mount->viewport_configs[i];
 
-        if (!tc_viewport_handle_valid(viewport)) {
+        std::string display_name = config->display_name ? config->display_name : "Main";
+        tc_display* display = get_or_create_display(display_name);
+        if (!display) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Cannot create display '%s'", display_name.c_str());
             continue;
         }
 
-        // Apply additional properties
+        std::string vp_name = config->name ? config->name : "";
+        tc_viewport_handle viewport = tc_viewport_pool_alloc(vp_name.c_str());
+        if (!tc_viewport_handle_valid(viewport)) continue;
+
+        tc_viewport_set_rect(viewport, config->region[0], config->region[1], config->region[2], config->region[3]);
         tc_viewport_set_depth(viewport, config->depth);
         tc_viewport_set_enabled(viewport, config->enabled);
-        tc_viewport_set_layer_mask(viewport, config->layer_mask);
         if (config->input_mode) {
             tc_viewport_set_input_mode(viewport, config->input_mode);
         }
         tc_viewport_set_block_input_in_editor(viewport, config->block_input_in_editor);
 
+        // Link to render target by name
+        std::string rt_name = config->render_target_name ? config->render_target_name : "";
+        if (!rt_name.empty()) {
+            auto it = rt_by_name.find(rt_name);
+            if (it != rt_by_name.end()) {
+                tc_viewport_set_render_target(viewport, it->second);
+            } else {
+                tc_log(TC_LOG_WARN, "[RenderingManager] Render target '%s' not found for viewport '%s'",
+                       rt_name.c_str(), vp_name.c_str());
+            }
+        }
+
+        tc_display_add_viewport(display, viewport);
         viewports.push_back(viewport);
     }
 
@@ -659,38 +633,8 @@ void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
 }
 
 // ============================================================================
-// Render Target Management
+// Render Target State
 // ============================================================================
-
-void RenderingManager::register_render_target(tc_render_target_handle rt) {
-    if (!tc_render_target_handle_valid(rt)) return;
-    for (const auto& existing : registered_render_targets_) {
-        if (tc_render_target_handle_eq(existing, rt)) return;
-    }
-    registered_render_targets_.push_back(rt);
-}
-
-void RenderingManager::unregister_render_target(tc_render_target_handle rt) {
-    if (!tc_render_target_handle_valid(rt)) return;
-    auto it = std::find_if(registered_render_targets_.begin(), registered_render_targets_.end(),
-        [&](tc_render_target_handle h) { return tc_render_target_handle_eq(h, rt); });
-    if (it != registered_render_targets_.end()) {
-        registered_render_targets_.erase(it);
-    }
-    // Remove state
-    uint64_t key = render_target_key(rt);
-    auto state_it = render_target_states_.find(key);
-    if (state_it != render_target_states_.end()) {
-        if (make_current_callback_) {
-            make_current_callback_();
-        }
-        if (offscreen_gpu_context_) {
-            tc_gpu_set_context(offscreen_gpu_context_);
-        }
-        state_it->second->clear_all();
-        render_target_states_.erase(state_it);
-    }
-}
 
 ViewportRenderState* RenderingManager::get_render_target_state(tc_render_target_handle rt) {
     uint64_t key = render_target_key(rt);
@@ -775,10 +719,14 @@ void RenderingManager::render_all_offscreen() {
         }
     }
 
-    // 3. Render standalone render targets (not attached to viewports)
-    for (tc_render_target_handle rt : registered_render_targets_) {
-        render_render_target_offscreen(rt);
-    }
+    // 3. Render all render targets from pool
+    struct RenderTargetIterCtx { RenderingManager* mgr; };
+    RenderTargetIterCtx rt_ctx = { this };
+    tc_render_target_pool_foreach([](tc_render_target_handle rt, void* ud) -> bool {
+        auto* ctx = static_cast<RenderTargetIterCtx*>(ud);
+        ctx->mgr->render_render_target_offscreen(rt);
+        return true;
+    }, &rt_ctx);
 }
 
 void RenderingManager::render_scene_pipeline_offscreen(

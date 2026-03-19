@@ -116,6 +116,13 @@ void bind_tc_scene_core(nb::module_& m) {
         .def_rw("skipped", &UnknownComponentStats::skipped)
         .def_rw("failed", &UnknownComponentStats::failed);
 
+    nb::class_<tc_scene_handle>(m, "SceneHandle")
+        .def(nb::init<>())
+        .def_rw("index", &tc_scene_handle::index)
+        .def_rw("generation", &tc_scene_handle::generation)
+        .def_prop_ro("valid", [](const tc_scene_handle& h) { return tc_scene_handle_valid(h); })
+        .def_prop_ro("alive", [](const tc_scene_handle& h) { return tc_scene_alive(h); });
+
     nb::class_<TcSceneRef>(m, "TcScene")
         .def(nb::init<>(), "Create invalid scene reference")
         .def(nb::init<tc_scene_handle>(), nb::arg("handle"),
@@ -182,9 +189,9 @@ void bind_tc_scene_core(nb::module_& m) {
         }, "Get scene's entity pool as uintptr_t")
 
         // Scene handle access
-        .def("scene_handle", [](TcSceneRef& self) {
-            return std::make_tuple(self._h.index, self._h.generation);
-        }, "Get scene handle as (index, generation) tuple")
+        .def("scene_handle", [](TcSceneRef& self) -> tc_scene_handle {
+            return self._h;
+        }, "Get scene handle")
 
         // Entity creation in pool
         .def("create_entity", &TcSceneRef::create_entity, nb::arg("name") = "",

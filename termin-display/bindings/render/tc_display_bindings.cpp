@@ -10,6 +10,7 @@
 
 extern "C" {
 #include "render/tc_render_surface.h"
+#include "render/tc_render_target.h"
 #include "core/tc_scene.h"
 #include "core/tc_component.h"
 }
@@ -171,9 +172,7 @@ void bind_tc_display(nb::module_& m) {
             // Get scene handle
             tc_scene_handle scene_h = TC_SCENE_HANDLE_INVALID;
             if (!scene_obj.is_none()) {
-                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_obj.attr("scene_handle")());
-                scene_h.index = std::get<0>(h);
-                scene_h.generation = std::get<1>(h);
+                scene_h = nb::cast<tc_scene_handle>(scene_obj.attr("scene_handle")());
             }
 
             // Get camera component pointer
@@ -184,7 +183,7 @@ void bind_tc_display(nb::module_& m) {
                 );
             }
 
-            // Create viewport
+            // Create viewport (render target assigned separately)
             TcViewport vp = TcViewport::create(name, scene_h, camera_ptr);
             vp.set_rect(std::get<0>(rect), std::get<1>(rect),
                        std::get<2>(rect), std::get<3>(rect));

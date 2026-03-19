@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QWindow
 from PyQt6.QtWidgets import QTabWidget, QVBoxLayout, QWidget
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
@@ -146,15 +147,16 @@ class RenderingController:
         self._viewport_list.viewport_add_requested.connect(self._on_add_viewport_requested)
         self._viewport_list.display_remove_requested.connect(self._on_remove_display_requested)
         self._viewport_list.viewport_remove_requested.connect(self._on_remove_viewport_requested)
+        self._viewport_list.render_target_selected.connect(self._on_render_target_selected_from_list)
+        self._viewport_list.render_target_add_requested.connect(self._on_add_render_target_requested)
+        self._viewport_list.render_target_remove_requested.connect(self._on_remove_render_target_requested)
 
         # Connect inspector signals
         self._inspector.display_inspector.name_changed.connect(self._on_display_name_changed)
         self._inspector.display_inspector.input_mode_changed.connect(self._on_display_input_mode_changed)
         self._inspector.display_inspector.block_input_in_editor_changed.connect(self._on_display_block_input_in_editor_changed)
         self._inspector.viewport_inspector.display_changed.connect(self._on_viewport_display_changed)
-        self._inspector.viewport_inspector.camera_changed.connect(self._on_viewport_camera_changed)
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
-        self._inspector.viewport_inspector.pipeline_changed.connect(self._on_viewport_pipeline_changed)
         self._inspector.pipeline_inspector.pipeline_changed.connect(self._on_pipeline_inspector_changed)
 
         # Set editor pipeline getter for ViewportInspector
@@ -346,6 +348,7 @@ class RenderingController:
 
         # Refresh UI
         self._viewport_list.refresh()
+        self._refresh_render_targets()
         self._request_update()
 
         return viewports
@@ -462,6 +465,44 @@ class RenderingController:
                     enabled=viewport.enabled,
                 )
                 rm.add_viewport_config(config)
+
+    def sync_render_target_configs_to_scene(self, scene: "Scene") -> None:
+        """
+        Sync registered render targets to scene.render_target_configs.
+
+        Call this before saving.
+        """
+        from termin.visualization.core.render_target_config import RenderTargetConfig
+        from termin.visualization.core.scene import scene_render_mount
+        rm = scene_render_mount(scene)
+
+        rm.clear_render_target_configs()
+
+        for rt in self._manager.render_targets:
+            if rt.scene is not scene:
+                continue
+
+            camera_uuid = ""
+            if rt.camera is not None and rt.camera.entity is not None:
+                camera_uuid = rt.camera.entity.uuid
+
+            pipeline_uuid = None
+            pipeline_name = None
+            if rt.pipeline is not None:
+                pipeline_uuid = self._get_pipeline_uuid(rt.pipeline)
+                if rt.pipeline.name:
+                    pipeline_name = rt.pipeline.name
+
+            config = RenderTargetConfig()
+            config.name = rt.name or ""
+            config.camera_uuid = camera_uuid
+            config.width = rt.width
+            config.height = rt.height
+            config.pipeline_uuid = pipeline_uuid or ""
+            config.pipeline_name = pipeline_name or ""
+            config.layer_mask = rt.layer_mask
+            config.enabled = rt.enabled
+            rm.add_render_target_config(config)
 
     def detach_scene(self, scene: "Scene") -> None:
         """
@@ -735,45 +776,6 @@ class RenderingController:
         _container, surface, _qwindow = self._display_tabs[self._editor_display_ptr]
         return surface
 
-    def create_editor_viewport(
-        self,
-        scene: "Scene",
-        camera: "CameraComponent",
-        pipeline: Optional["RenderPipeline"] = None,
-    ) -> Optional["Viewport"]:
-        """
-        Create a viewport in the editor display for a scene.
-
-        Called when switching to a new scene to create its editor viewport.
-        Uses editor pipeline getter if no pipeline specified.
-
-        Args:
-            scene: Scene to display.
-            camera: Camera component for the viewport.
-            pipeline: Optional pipeline. If None, uses editor pipeline.
-
-        Returns:
-            Created Viewport or None if editor display doesn't exist.
-        """
-        display = self.editor_display
-        if display is None:
-            return None
-
-        # Get pipeline from maker if not specified
-        if pipeline is None and self._make_editor_pipeline is not None:
-            pipeline = self._make_editor_pipeline()
-
-        viewport = display.create_viewport(
-            scene=scene,
-            camera=camera,
-            rect=(0.0, 0.0, 1.0, 1.0),
-        )
-        viewport.name = "(Editor)"
-        viewport.pipeline = pipeline
-
-        self._viewport_list.refresh()
-        return viewport
-
     def remove_editor_viewports(self) -> None:
         """
         Remove all viewports from the editor display.
@@ -899,6 +901,30 @@ class RenderingController:
         """Handle entity selection from viewport's internal_entities."""
         if entity is not None and self._on_entity_selected is not None:
             self._on_entity_selected(entity)
+
+    def _on_render_target_selected_from_list(self, render_target) -> None:
+        """Handle render target selection from list."""
+        if render_target is not None:
+            scene = self._get_scene() if self._get_scene is not None else None
+            self._inspector.show_render_target_inspector(render_target, scene)
+
+    def _on_add_render_target_requested(self) -> None:
+        """Handle request to add new render target."""
+        from termin.render_framework._render_framework_native import render_target_new
+        render_target_new("RenderTarget")
+        self._refresh_render_targets()
+        log.info("[RenderingController] Created render target")
+
+    def _on_remove_render_target_requested(self, render_target) -> None:
+        """Handle request to remove a render target."""
+        render_target.free()
+        self._refresh_render_targets()
+        log.info("[RenderingController] Removed render target")
+
+    def _refresh_render_targets(self) -> None:
+        """Refresh render target list from pool."""
+        from termin.render_framework._render_framework_native import render_target_pool_list
+        self._viewport_list.set_render_targets(render_target_pool_list())
 
     # --- Add/Remove requests ---
 

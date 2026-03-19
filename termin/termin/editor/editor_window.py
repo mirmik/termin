@@ -771,6 +771,7 @@ class EditorWindow(QMainWindow):
         # Always sync current state to scene.viewport_configs
         if self.scene is not None:
             self._rendering_controller.sync_viewport_configs_to_scene(self.scene)
+            self._rendering_controller.sync_render_target_configs_to_scene(self.scene)
 
         # New format: viewport_configs is serialized with scene, return None
         # (This triggers new format on next load)

@@ -269,19 +269,13 @@ size_t tc_viewport_pool_count(void) {
 }
 
 tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene, tc_component* camera) {
-    tc_render_target_handle rt = tc_render_target_new(name);
-    if (!tc_render_target_handle_valid(rt)) {
+    tc_viewport_handle h = tc_viewport_pool_alloc(name);
+    if (!tc_viewport_handle_valid(h)) {
         return TC_VIEWPORT_HANDLE_INVALID;
     }
-    tc_render_target_set_scene(rt, scene);
-    tc_render_target_set_camera(rt, camera);
-
-    tc_viewport_handle h = tc_viewport_pool_alloc(name);
-    if (tc_viewport_handle_valid(h)) {
-        g_pool->render_targets[h.index] = rt;
-    } else {
-        tc_render_target_free(rt);
-    }
+    // Прокси-установка через render_target (если назначен)
+    tc_viewport_set_scene(h, scene);
+    tc_viewport_set_camera(h, camera);
     return h;
 }
 

@@ -161,13 +161,10 @@ static FBOMap dict_to_fbo_map(nb::dict src) {
 }
 
 static tc_scene_handle object_to_scene_handle(nb::object scene_py) {
-    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
     if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
-        auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_py.attr("scene_handle")());
-        scene.index = std::get<0>(h);
-        scene.generation = std::get<1>(h);
+        return nb::cast<tc_scene_handle>(scene_py.attr("scene_handle")());
     }
-    return scene;
+    return TC_SCENE_HANDLE_INVALID;
 }
 
 static Mat44f ndarray_to_mat44f(const nb::ndarray<nb::numpy, float, nb::shape<4, 4>>& src) {

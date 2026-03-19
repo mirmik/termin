@@ -97,10 +97,7 @@ void bind_scene_manager(nb::module_& m) {
             dst_scene.attr("load_from_data")(data, nb::none(), true);
 
             // Register in SceneManager
-            auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(dst_scene.attr("scene_handle")());
-            tc_scene_handle dst_h;
-            dst_h.index = std::get<0>(h);
-            dst_h.generation = std::get<1>(h);
+            tc_scene_handle dst_h = nb::cast<tc_scene_handle>(dst_scene.attr("scene_handle")());
             self.register_scene(dst_name, dst_h);
 
             return dst_scene;
@@ -143,10 +140,7 @@ void bind_scene_manager(nb::module_& m) {
             }
 
             // Register in SceneManager
-            auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene.attr("scene_handle")());
-            tc_scene_handle handle;
-            handle.index = std::get<0>(h);
-            handle.generation = std::get<1>(h);
+            tc_scene_handle handle = nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
             self.register_scene(name, handle);
             self.set_scene_path(name, path);
 

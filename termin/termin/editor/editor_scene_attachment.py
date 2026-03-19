@@ -145,15 +145,23 @@ class EditorSceneAttachment:
         # Remove any existing viewports from this display
         self._remove_display_viewports()
 
-        # Create editor viewport
+        # Create render target for editor viewport
+        from termin.render_framework._render_framework_native import render_target_new
         self._pipeline = self._make_editor_pipeline()
+        rt = render_target_new("(Editor)")
+        rt.scene = scene
+        rt.camera = self._camera_manager.camera
+        if self._pipeline is not None:
+            rt.pipeline = self._pipeline
+
+        # Create editor viewport and assign render target
         self._viewport = self._display.create_viewport(
             scene=scene,
             camera=self._camera_manager.camera,
             rect=(0.0, 0.0, 1.0, 1.0),
         )
         self._viewport.name = "(Editor)"
-        self._viewport.pipeline = self._pipeline
+        self._viewport.render_target = rt
         self._viewport.internal_entities = self._camera_manager.editor_entities
         self._camera_manager.camera.add_viewport(self._viewport)
 
@@ -169,6 +177,7 @@ class EditorSceneAttachment:
         if self._rendering_controller is not None:
             self._rendering_controller.attach_scene(scene)
             self._rendering_controller._viewport_list.refresh()
+            self._rendering_controller._refresh_render_targets()
 
     def detach(self, save_state: bool = True) -> None:
         """
