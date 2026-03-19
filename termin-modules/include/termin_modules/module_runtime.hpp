@@ -20,6 +20,7 @@ public:
     void set_cpp_callbacks(CppModuleCallbacks callbacks);
     void set_python_callbacks(PythonModuleCallbacks callbacks);
     void set_event_callback(ModuleEventCallback callback);
+    void set_build_output_callback(BuildOutputCallback callback);
     void set_descriptor_parser(std::shared_ptr<ModuleDescriptorParser> parser);
     void register_backend(std::shared_ptr<IModuleBackend> backend);
 
@@ -29,6 +30,7 @@ public:
     bool load_module(const std::string& module_id);
     bool unload_module(const std::string& module_id);
     bool reload_module(const std::string& module_id);
+    bool build_module(const std::string& module_id);
     bool clean_module(const std::string& module_id);
     bool rebuild_module(const std::string& module_id);
 
@@ -58,6 +60,7 @@ private:
     std::unordered_map<ModuleKind, std::shared_ptr<IModuleBackend>> _backends;
     std::vector<ModuleRecord> _records;
     ModuleEventCallback _event_callback;
+    BuildOutputCallback _build_output_callback;
     std::string _last_error;
 };
 

@@ -17,6 +17,7 @@ enum class ModuleState {
     Loaded,
     Failed,
     Unloaded,
+    Ignored,
 };
 
 struct IModuleConfig {
