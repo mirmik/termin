@@ -277,6 +277,41 @@ class RenderingControllerTcgui:
                 )
                 scene_render_mount(scene).add_viewport_config(config)
 
+    def sync_render_target_configs_to_scene(self, scene: "Scene") -> None:
+        """Sync registered render targets to scene_render_mount(scene).render_target_configs.
+
+        Call before saving.
+        """
+        from termin.visualization.core.render_target_config import RenderTargetConfig
+
+        scene_render_mount(scene).clear_render_target_configs()
+
+        for rt in self._manager.render_targets:
+            if rt.scene is not scene:
+                continue
+
+            camera_uuid = ""
+            if rt.camera is not None and rt.camera.entity is not None:
+                camera_uuid = rt.camera.entity.uuid
+
+            pipeline_uuid = None
+            pipeline_name = None
+            if rt.pipeline is not None:
+                pipeline_uuid = self._get_pipeline_uuid(rt.pipeline)
+                if pipeline_uuid is None:
+                    pipeline_name = rt.pipeline.name or ""
+
+            config = RenderTargetConfig()
+            config.name = rt.name or ""
+            config.camera_uuid = camera_uuid
+            config.width = rt.width
+            config.height = rt.height
+            config.pipeline_uuid = pipeline_uuid or ""
+            config.pipeline_name = pipeline_name or ""
+            config.layer_mask = rt.layer_mask
+            config.enabled = rt.enabled
+            scene_render_mount(scene).add_render_target_config(config)
+
     # ------------------------------------------------------------------
     # Input
     # ------------------------------------------------------------------
@@ -338,10 +373,11 @@ class RenderingControllerTcgui:
     # ------------------------------------------------------------------
 
     def get_displays_data(self) -> list | None:
-        """Sync viewport configs and return None (new format stores in scene)."""
+        """Sync viewport and render target configs and return None (new format stores in scene)."""
         scene = self._get_scene() if self._get_scene is not None else None
         if scene is not None:
             self.sync_viewport_configs_to_scene(scene)
+            self.sync_render_target_configs_to_scene(scene)
         return None
 
     def set_displays_data(self, data: list | None) -> None:
