@@ -236,6 +236,7 @@ set(RENDER_LIB_SOURCES
     termin/modules/term_modules_integration.cpp
     termin/camera/camera_viewport_component.cpp
     termin/viewport_config.cpp
+    termin/render_target_config.cpp
 )
 add_library(render_lib SHARED ${RENDER_LIB_SOURCES})
 target_include_directories(render_lib PUBLIC

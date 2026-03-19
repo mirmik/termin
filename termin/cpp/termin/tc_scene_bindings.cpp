@@ -175,6 +175,18 @@ void bind_tc_scene(nb::module_& m) {
         .def("set_region", &ViewportConfig::set_region,
              nb::arg("x"), nb::arg("y"), nb::arg("w"), nb::arg("h"));
 
+    // --- RenderTargetConfig ---
+    nb::class_<RenderTargetConfig>(m, "RenderTargetConfig")
+        .def(nb::init<>())
+        .def_rw("name", &RenderTargetConfig::name)
+        .def_rw("camera_uuid", &RenderTargetConfig::camera_uuid)
+        .def_rw("width", &RenderTargetConfig::width)
+        .def_rw("height", &RenderTargetConfig::height)
+        .def_rw("pipeline_uuid", &RenderTargetConfig::pipeline_uuid)
+        .def_rw("pipeline_name", &RenderTargetConfig::pipeline_name)
+        .def_rw("layer_mask", &RenderTargetConfig::layer_mask)
+        .def_rw("enabled", &RenderTargetConfig::enabled);
+
     // --- SceneRenderState ---
     nb::class_<SceneRenderState>(m, "SceneRenderState")
         // Background color
@@ -388,6 +400,33 @@ void bind_tc_scene(nb::module_& m) {
         .def_prop_ro("viewport_configs", [](const SceneRenderMount& self) {
             TcSceneRef scene(self._h);
             return scene_viewport_configs(scene);
+        })
+
+        // Render target configurations
+        .def("add_render_target_config", [](SceneRenderMount& self, const RenderTargetConfig& config) {
+            TcSceneRef scene(self._h);
+            scene_add_render_target_config(scene, config);
+        }, nb::arg("config"))
+        .def("remove_render_target_config", [](SceneRenderMount& self, size_t index) {
+            TcSceneRef scene(self._h);
+            scene_remove_render_target_config(scene, index);
+        }, nb::arg("index"))
+        .def("clear_render_target_configs", [](SceneRenderMount& self) {
+            TcSceneRef scene(self._h);
+            scene_clear_render_target_configs(scene);
+        })
+        .def("render_target_config_count", [](const SceneRenderMount& self) {
+            TcSceneRef scene(self._h);
+            return scene_render_target_config_count(scene);
+        })
+        .def("render_target_config_at", [](const SceneRenderMount& self, size_t index) -> nb::object {
+            TcSceneRef scene(self._h);
+            if (index >= scene_render_target_config_count(scene)) return nb::none();
+            return nb::cast(scene_render_target_config_at(scene, index));
+        }, nb::arg("index"))
+        .def_prop_ro("render_target_configs", [](const SceneRenderMount& self) {
+            TcSceneRef scene(self._h);
+            return scene_render_target_configs(scene);
         })
 
         // Pipeline templates
