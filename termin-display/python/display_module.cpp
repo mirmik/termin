@@ -11,6 +11,7 @@ void bind_display_input_router(nb::module_& m);
 
 NB_MODULE(_display_native, m) {
     m.doc() = "Display native module";
+    nb::module_::import_("termin.scene._scene_native");
 
     termin::bind_tc_render_surface(m);
     termin::bind_tc_input_manager(m);

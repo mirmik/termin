@@ -540,10 +540,7 @@ void bind_entity_class(nb::module_& m) {
                         uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
                         pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
                     }
-                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene.attr("scene_handle")());
-                    tc_scene_handle sh;
-                    sh.index = std::get<0>(h);
-                    sh.generation = std::get<1>(h);
+                    tc_scene_handle sh = nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
                     c_scene = TcSceneRef(sh);
                 }
                 if (!pool) pool = get_standalone_pool();
@@ -736,10 +733,7 @@ void bind_entity_class(nb::module_& m) {
 
                 TcSceneRef scene_ref;
                 if (!scene.is_none() && nb::hasattr(scene, "scene_handle")) {
-                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene.attr("scene_handle")());
-                    tc_scene_handle sh;
-                    sh.index = std::get<0>(h);
-                    sh.generation = std::get<1>(h);
+                    tc_scene_handle sh = nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
                     scene_ref = TcSceneRef(sh);
                 }
 

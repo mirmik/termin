@@ -99,10 +99,10 @@ class ViewportInspector(QWidget):
         self._display_combo.currentIndexChanged.connect(self._on_display_changed)
         form.addRow("Display:", self._display_combo)
 
-        # Camera selection
-        self._camera_combo = QComboBox()
-        self._camera_combo.currentIndexChanged.connect(self._on_camera_changed)
-        form.addRow("Camera:", self._camera_combo)
+        # Render target selection
+        self._render_target_combo = QComboBox()
+        self._render_target_combo.currentIndexChanged.connect(self._on_render_target_changed)
+        form.addRow("Render Target:", self._render_target_combo)
 
         # Rect section
         rect_label = QLabel("Rect (normalized 0..1):")
@@ -150,17 +150,6 @@ class ViewportInspector(QWidget):
         self._depth_spin.valueChanged.connect(self._on_depth_changed)
         form.addRow("Depth:", self._depth_spin)
 
-        # Pipeline selection
-        self._pipeline_combo = QComboBox()
-        self._pipeline_combo.setToolTip("Render pipeline for this viewport")
-        self._pipeline_combo.currentIndexChanged.connect(self._on_pipeline_changed)
-        form.addRow("Pipeline:", self._pipeline_combo)
-
-        # Layer mask
-        from termin.editor.widgets.layer_mask_widget import LayerMaskFieldWidget
-        self._layer_mask_widget = LayerMaskFieldWidget()
-        self._layer_mask_widget.value_changed.connect(self._on_layer_mask_changed)
-        form.addRow("Layers:", self._layer_mask_widget)
 
         # Hint warning label (shown when ViewportHint controls the viewport)
         self._hint_label = QLabel("Controlled by ViewportHint on camera")
@@ -215,14 +204,8 @@ class ViewportInspector(QWidget):
         self._update_display_combo()
 
     def set_scene(self, scene: Optional["Scene"]) -> None:
-        """
-        Set the scene to find cameras from.
-
-        Args:
-            scene: Scene to scan for CameraComponent entities.
-        """
+        """Set the scene (kept for API compat, camera/pipeline now on render_target)."""
         self._scene = scene
-        self._update_camera_list()
 
     def set_viewport(self, viewport: Optional["Viewport"], current_display: Optional["Display"] = None) -> None:
         """
@@ -252,14 +235,9 @@ class ViewportInspector(QWidget):
             else:
                 self._display_combo.setCurrentIndex(-1)
 
-            # Update camera selection
-            self._update_camera_list()
-            camera_idx = -1
-            for i, (cam, _name) in enumerate(self._cameras):
-                if cam is viewport.camera:
-                    camera_idx = i
-                    break
-            self._camera_combo.setCurrentIndex(camera_idx)
+            # Update render target combo
+            self._update_render_target_combo()
+            self._select_current_render_target()
 
             # Update rect
             x, y, w, h = viewport.rect
@@ -270,19 +248,6 @@ class ViewportInspector(QWidget):
 
             # Update depth
             self._depth_spin.setValue(viewport.depth)
-
-            # Update layer mask
-            self._layer_mask_widget.set_value(viewport.layer_mask)
-
-            # Update pipeline list and select current pipeline
-            self.update_pipeline_list()
-            self._select_viewport_pipeline(viewport)
-
-            # Check if camera has ViewportHintComponent
-            self._update_hint_state(viewport)
-
-            # Check if viewport is managed by scene pipeline
-            self._update_scene_pipeline_state(viewport)
 
             # Debug info
             self._update_debug_info(viewport)
@@ -361,18 +326,14 @@ class ViewportInspector(QWidget):
         try:
             self._enabled_checkbox.setChecked(True)
             self._display_combo.setCurrentIndex(-1)
-            self._camera_combo.setCurrentIndex(-1)
+            self._render_target_combo.setCurrentIndex(0)
             self._x_spin.setValue(0.0)
             self._y_spin.setValue(0.0)
             self._w_spin.setValue(1.0)
             self._h_spin.setValue(1.0)
             self._depth_spin.setValue(0)
-            self._layer_mask_widget.set_value(0xFFFFFFFFFFFFFFFF)
-            self._pipeline_combo.setCurrentIndex(0)
-            self._pipeline_combo.setEnabled(True)
             self._hint_label.hide()
             self._scene_pipeline_label.hide()
-            self._current_pipeline_name = None
             self._debug_label.setText("-")
         finally:
             self._updating = False
@@ -471,6 +432,49 @@ class ViewportInspector(QWidget):
 
         self.depth_changed.emit(value)
         self.viewport_changed.emit()
+
+    def _update_render_target_combo(self) -> None:
+        """Populate render target combo from pool."""
+        self._render_target_combo.blockSignals(True)
+        self._render_target_combo.clear()
+        self._render_target_combo.addItem("(none)")
+        try:
+            from termin.render_framework._render_framework_native import render_target_pool_list
+            self._render_target_list = render_target_pool_list()
+            for rt in self._render_target_list:
+                self._render_target_combo.addItem(rt.name or "(unnamed)")
+        except Exception:
+            self._render_target_list = []
+        self._render_target_combo.blockSignals(False)
+
+    def _select_current_render_target(self) -> None:
+        """Select current viewport's render target in combo."""
+        if self._viewport is None:
+            self._render_target_combo.setCurrentIndex(0)
+            return
+        rt = self._viewport.render_target
+        if rt is None:
+            self._render_target_combo.setCurrentIndex(0)
+            return
+        for i, pool_rt in enumerate(getattr(self, '_render_target_list', [])):
+            if pool_rt.index == rt.index and pool_rt.generation == rt.generation:
+                self._render_target_combo.setCurrentIndex(i + 1)
+                return
+        self._render_target_combo.setCurrentIndex(0)
+
+    def _on_render_target_changed(self, index: int) -> None:
+        """Handle render target combo change."""
+        if self._updating or self._viewport is None:
+            return
+        if index <= 0:
+            self._viewport.render_target = None
+            self.viewport_changed.emit()
+            return
+        rt_list = getattr(self, '_render_target_list', [])
+        idx = index - 1
+        if 0 <= idx < len(rt_list):
+            self._viewport.render_target = rt_list[idx]
+            self.viewport_changed.emit()
 
     def _on_enabled_changed(self, state: int) -> None:
         """Handle enabled checkbox change."""

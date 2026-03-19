@@ -139,37 +139,16 @@ void bind_tc_scene(nb::module_& m) {
     // --- ViewportConfig ---
     nb::class_<ViewportConfig>(m, "ViewportConfig")
         .def(nb::init<>())
-        .def(nb::init<const std::string&, const std::string&, const std::string&,
-                      float, float, float, float,
-                      const std::string&, const std::string&,
-                      int, const std::string&, bool, uint64_t, bool>(),
-             nb::arg("name") = "",
-             nb::arg("display_name") = "Main",
-             nb::arg("camera_uuid") = "",
-             nb::arg("region_x") = 0.0f,
-             nb::arg("region_y") = 0.0f,
-             nb::arg("region_w") = 1.0f,
-             nb::arg("region_h") = 1.0f,
-             nb::arg("pipeline_uuid") = "",
-             nb::arg("pipeline_name") = "",
-             nb::arg("depth") = 0,
-             nb::arg("input_mode") = "simple",
-             nb::arg("block_input_in_editor") = false,
-             nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL,
-             nb::arg("enabled") = true)
         .def_rw("name", &ViewportConfig::name)
         .def_rw("display_name", &ViewportConfig::display_name)
-        .def_rw("camera_uuid", &ViewportConfig::camera_uuid)
+        .def_rw("render_target_name", &ViewportConfig::render_target_name)
         .def_rw("region_x", &ViewportConfig::region_x)
         .def_rw("region_y", &ViewportConfig::region_y)
         .def_rw("region_w", &ViewportConfig::region_w)
         .def_rw("region_h", &ViewportConfig::region_h)
-        .def_rw("pipeline_uuid", &ViewportConfig::pipeline_uuid)
-        .def_rw("pipeline_name", &ViewportConfig::pipeline_name)
         .def_rw("depth", &ViewportConfig::depth)
         .def_rw("input_mode", &ViewportConfig::input_mode)
         .def_rw("block_input_in_editor", &ViewportConfig::block_input_in_editor)
-        .def_rw("layer_mask", &ViewportConfig::layer_mask)
         .def_rw("enabled", &ViewportConfig::enabled)
         .def_prop_ro("region", &ViewportConfig::region)
         .def("set_region", &ViewportConfig::set_region,

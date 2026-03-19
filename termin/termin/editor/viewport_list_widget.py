@@ -55,33 +55,57 @@ class EntityItem(QStandardItem):
         self.setEditable(False)
 
 
+class RenderTargetItem(QStandardItem):
+    """Tree item representing a RenderTarget."""
+
+    def __init__(self, render_target, name: str):
+        super().__init__(name)
+        self.render_target = render_target
+        self.setEditable(False)
+
+
+class RenderTargetGroupItem(QStandardItem):
+    """Tree group header for Render Targets section."""
+
+    def __init__(self):
+        super().__init__("Render Targets")
+        self.setEditable(False)
+
+
 class ViewportListWidget(QWidget):
     """
-    Widget displaying Displays and their Viewports in a tree structure.
+    Widget displaying Displays, Viewports, and Render Targets in a tree structure.
 
     Signals:
         display_selected: Emitted when a display is selected, passes Display or None.
         viewport_selected: Emitted when a viewport is selected, passes Viewport or None.
+        render_target_selected: Emitted when a render target is selected.
         display_add_requested: Emitted when user wants to add a new display.
         viewport_add_requested: Emitted when user wants to add a viewport to a display.
         display_remove_requested: Emitted when user wants to remove a display.
         viewport_remove_requested: Emitted when user wants to remove a viewport.
+        render_target_add_requested: Emitted when user wants to add a render target.
+        render_target_remove_requested: Emitted when user wants to remove a render target.
     """
 
     display_selected = pyqtSignal(object)  # Display or None
     viewport_selected = pyqtSignal(object)  # Viewport or None
     entity_selected = pyqtSignal(object)  # Entity or None (from internal_entities)
+    render_target_selected = pyqtSignal(object)  # render_target or None
     display_add_requested = pyqtSignal()
     viewport_add_requested = pyqtSignal(object)  # Display
     display_remove_requested = pyqtSignal(object)  # Display
     viewport_remove_requested = pyqtSignal(object)  # Viewport
     viewport_renamed = pyqtSignal(object, str)  # Viewport, new_name
+    render_target_add_requested = pyqtSignal()
+    render_target_remove_requested = pyqtSignal(object)  # render_target
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
 
         self._displays: List["Display"] = []
         self._display_names: dict[int, str] = {}  # tc_display_ptr -> name
+        self._render_targets: list = []
 
         self._init_ui()
 
@@ -105,6 +129,11 @@ class ViewportListWidget(QWidget):
         self._add_viewport_btn.clicked.connect(self._on_add_viewport_clicked)
         self._add_viewport_btn.setEnabled(False)
         toolbar.addWidget(self._add_viewport_btn)
+
+        self._add_rt_btn = QPushButton("+ RT")
+        self._add_rt_btn.setToolTip("Add render target")
+        self._add_rt_btn.clicked.connect(self._on_add_rt_clicked)
+        toolbar.addWidget(self._add_rt_btn)
 
         toolbar.addStretch()
         layout.addLayout(toolbar)
@@ -160,6 +189,11 @@ class ViewportListWidget(QWidget):
             self._display_names.pop(display.tc_display_ptr, None)
             self._rebuild_tree()
 
+    def set_render_targets(self, render_targets: list) -> None:
+        """Set the list of render targets to show."""
+        self._render_targets = list(render_targets or [])
+        self._rebuild_tree()
+
     def refresh(self) -> None:
         """Refresh the tree to reflect current state."""
         self._rebuild_tree()
@@ -198,6 +232,14 @@ class ViewportListWidget(QWidget):
                 display_item.appendRow(viewport_item)
 
             self._model.appendRow(display_item)
+
+        if self._render_targets:
+            rt_group = RenderTargetGroupItem()
+            for rt in self._render_targets:
+                rt_name = rt.name if rt.name else "RenderTarget"
+                rt_item = RenderTargetItem(rt, rt_name)
+                rt_group.appendRow(rt_item)
+            self._model.appendRow(rt_group)
 
         self._tree.expandAll()
 
@@ -241,18 +283,18 @@ class ViewportListWidget(QWidget):
 
         if isinstance(item, EntityItem):
             self._add_viewport_btn.setEnabled(False)
-            # Check if entity is still valid before emitting
             entity = item.entity
             if entity is not None and entity.valid():
                 self.entity_selected.emit(entity)
             else:
                 self.entity_selected.emit(None)
-            # Don't emit other signals - entity takes priority
+        elif isinstance(item, RenderTargetItem):
+            self._add_viewport_btn.setEnabled(False)
+            self.render_target_selected.emit(item.render_target)
         elif isinstance(item, ViewportItem):
             self._add_viewport_btn.setEnabled(True)
             self.viewport_selected.emit(item.viewport)
             self.entity_selected.emit(None)
-            # Don't emit display_selected here - it would override viewport inspector
         elif isinstance(item, DisplayItem):
             self._add_viewport_btn.setEnabled(True)
             self.display_selected.emit(item.display)
@@ -263,6 +305,10 @@ class ViewportListWidget(QWidget):
             self.display_selected.emit(None)
             self.viewport_selected.emit(None)
             self.entity_selected.emit(None)
+            self.render_target_selected.emit(None)
+
+    def _on_add_rt_clicked(self) -> None:
+        self.render_target_add_requested.emit()
 
     def _on_add_display_clicked(self) -> None:
         """Handle add display button click."""
@@ -347,8 +393,37 @@ class ViewportListWidget(QWidget):
                 lambda: self.viewport_remove_requested.emit(item.viewport)
             )
 
+        elif isinstance(item, RenderTargetItem):
+            menu.addSeparator()
+            rename_rt_action = menu.addAction("Rename...")
+            rename_rt_action.triggered.connect(
+                lambda: self._rename_render_target(item.render_target)
+            )
+            remove_rt_action = menu.addAction("Remove Render Target")
+            remove_rt_action.triggered.connect(
+                lambda: self.render_target_remove_requested.emit(item.render_target)
+            )
+
+        elif isinstance(item, RenderTargetGroupItem):
+            menu.addSeparator()
+            add_rt_action = menu.addAction("Add Render Target")
+            add_rt_action.triggered.connect(self.render_target_add_requested.emit)
+
         global_pos = self._tree.viewport().mapToGlobal(pos)
         menu.exec(global_pos)
+
+    def _rename_render_target(self, render_target) -> None:
+        """Show rename dialog for render target."""
+        current_name = render_target.name or ""
+        new_name, ok = QInputDialog.getText(
+            self,
+            "Rename Render Target",
+            "Render target name:",
+            text=current_name,
+        )
+        if ok and new_name != current_name:
+            render_target.name = new_name
+            self._rebuild_tree()
 
     def _rename_viewport(self, viewport: "Viewport") -> None:
         """Show rename dialog for viewport."""

@@ -16,21 +16,17 @@ using namespace termin::collision;
 using namespace termin::colliders;
 
 static tc_scene_handle extract_scene_handle(nb::handle scene_obj) {
-    tc_scene_handle h = TC_SCENE_HANDLE_INVALID;
-    if (scene_obj.is_none()) return h;
-
-    if (nb::hasattr(scene_obj, "scene_handle")) {
-        auto t = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_obj.attr("scene_handle")());
-        h.index = std::get<0>(t);
-        h.generation = std::get<1>(t);
+    if (!scene_obj.is_none() && nb::hasattr(scene_obj, "scene_handle")) {
+        return nb::cast<tc_scene_handle>(scene_obj.attr("scene_handle")());
     }
-    return h;
+    return TC_SCENE_HANDLE_INVALID;
 }
 
 NB_MODULE(_collision_native, m) {
     m.doc() = "Native C++ collision detection module for termin";
 
     // Import dependencies
+    nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.geombase._geom_native");
     nb::module_::import_("termin.colliders._colliders_native");
     nb::module_::import_("termin.entity._entity_native");

@@ -66,10 +66,7 @@ void bind_tc_viewport_class(nb::module_& m) {
             // Get tc_scene_handle from Scene (Scene inherits from TcScene)
             tc_scene_handle tc_s = TC_SCENE_HANDLE_INVALID;
             if (!scene.is_none()) {
-                // scene_handle() is available directly (inherited from TcScene)
-                auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene.attr("scene_handle")());
-                tc_s.index = std::get<0>(h);
-                tc_s.generation = std::get<1>(h);
+                tc_s = nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
             }
 
             // Get tc_component* from CameraComponent
@@ -157,11 +154,7 @@ void bind_tc_viewport_class(nb::module_& m) {
                 if (scene_obj.is_none()) {
                     tc_viewport_set_scene(self.handle_, TC_SCENE_HANDLE_INVALID);
                 } else {
-                    // scene_handle() is available directly (Scene inherits from TcScene)
-                    auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_obj.attr("scene_handle")());
-                    tc_scene_handle handle;
-                    handle.index = std::get<0>(h);
-                    handle.generation = std::get<1>(h);
+                    tc_scene_handle handle = nb::cast<tc_scene_handle>(scene_obj.attr("scene_handle")());
                     tc_viewport_set_scene(self.handle_, handle);
                 }
             })
@@ -214,6 +207,29 @@ void bind_tc_viewport_class(nb::module_& m) {
         .def_prop_rw("depth",
             [](TcViewport& self) { return self.depth(); },
             [](TcViewport& self, int d) { self.set_depth(d); })
+
+        // Render target handle
+        .def_prop_rw("render_target",
+            [](TcViewport& self) -> nb::object {
+                tc_render_target_handle rt = tc_viewport_get_render_target(self.handle_);
+                if (!tc_render_target_handle_valid(rt)) return nb::none();
+                nb::module_ rf = nb::module_::import_("termin.render_framework._render_framework_native");
+                nb::object obj = rf.attr("RenderTargetHandle")();
+                obj.attr("index") = rt.index;
+                obj.attr("generation") = rt.generation;
+                return obj;
+            },
+            [](TcViewport& self, nb::object rt_obj) {
+                if (!self.is_valid()) return;
+                if (rt_obj.is_none()) {
+                    tc_viewport_set_render_target(self.handle_, TC_RENDER_TARGET_HANDLE_INVALID);
+                } else {
+                    tc_render_target_handle rt;
+                    rt.index = nb::cast<uint32_t>(rt_obj.attr("index"));
+                    rt.generation = nb::cast<uint32_t>(rt_obj.attr("generation"));
+                    tc_viewport_set_render_target(self.handle_, rt);
+                }
+            })
 
         // Pipeline — creates wrapper from handle, no py_wrapper
         .def_prop_rw("pipeline",
@@ -426,5 +442,6 @@ void bind_tc_viewport_class(nb::module_& m) {
 
 NB_MODULE(_viewport_native, m) {
     m.doc() = "Viewport native module (TcViewport)";
+    nb::module_::import_("termin.scene._scene_native");
     termin::bind_tc_viewport_class(m);
 }

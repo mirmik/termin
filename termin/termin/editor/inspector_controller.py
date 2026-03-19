@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from termin.editor.texture_inspector import TextureInspector
     from termin.editor.mesh_inspector import MeshInspector
     from termin.editor.glb_inspector import GLBInspector
+    from termin.editor.render_target_inspector import RenderTargetInspector
 
 
 class InspectorController:
@@ -50,6 +51,7 @@ class InspectorController:
     TEXTURE_INSPECTOR_INDEX = 5
     MESH_INSPECTOR_INDEX = 6
     GLB_INSPECTOR_INDEX = 7
+    RENDER_TARGET_INSPECTOR_INDEX = 8
 
     def __init__(
         self,
@@ -137,6 +139,12 @@ class InspectorController:
         self._glb_inspector = GLBInspector()
         self._stack.addWidget(self._glb_inspector)
 
+        # Create RenderTargetInspector
+        from termin.editor.render_target_inspector import RenderTargetInspector
+
+        self._render_target_inspector = RenderTargetInspector()
+        self._stack.addWidget(self._render_target_inspector)
+
         # Add to container
         self._init_in_container(container)
 
@@ -188,6 +196,10 @@ class InspectorController:
     def glb_inspector(self) -> "GLBInspector":
         """Access to GLBInspector widget."""
         return self._glb_inspector
+
+    @property
+    def render_target_inspector(self) -> "RenderTargetInspector":
+        return self._render_target_inspector
 
     @property
     def stack(self) -> QStackedWidget:
@@ -254,6 +266,15 @@ class InspectorController:
         if scene is not None:
             self._viewport_inspector.set_scene(scene)
         self._viewport_inspector.set_viewport(viewport, current_display)
+
+    def show_render_target_inspector(
+        self,
+        render_target=None,
+        scene: "Scene | None" = None,
+    ) -> None:
+        """Show RenderTargetInspector and set target."""
+        self._stack.setCurrentIndex(self.RENDER_TARGET_INSPECTOR_INDEX)
+        self._render_target_inspector.set_render_target(render_target, scene)
 
     def show_pipeline_inspector_for_file(self, file_path: str) -> None:
         """Show PipelineInspector and load pipeline from file."""

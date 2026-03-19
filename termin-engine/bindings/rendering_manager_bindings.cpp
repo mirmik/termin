@@ -16,6 +16,8 @@ extern "C" {
 #include "core/tc_scene.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
+#include "render/tc_render_target.h"
+#include "render/tc_render_target_pool.h"
 }
 
 namespace termin {
@@ -46,13 +48,10 @@ static nb::object pipeline_to_python(tc_pipeline_handle h) {
 
 // Helper to extract tc_scene_handle from Python Scene object (Scene inherits TcScene)
 static tc_scene_handle get_scene_handle(nb::object scene_py) {
-    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
     if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
-        auto h = nb::cast<std::tuple<uint32_t, uint32_t>>(scene_py.attr("scene_handle")());
-        scene.index = std::get<0>(h);
-        scene.generation = std::get<1>(h);
+        return nb::cast<tc_scene_handle>(scene_py.attr("scene_handle")());
     }
-    return scene;
+    return TC_SCENE_HANDLE_INVALID;
 }
 
 // Helper to extract tc_display* from Python Display object

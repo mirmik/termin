@@ -12,6 +12,7 @@ void bind_rendering_manager(nb::module_& m);
 NB_MODULE(_engine_native, m) {
     m.doc() = "Engine/runtime native module for termin";
 
+    nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.display._display_native");
     nb::module_::import_("termin.viewport._viewport_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
