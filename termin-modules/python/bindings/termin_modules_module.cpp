@@ -82,7 +82,11 @@ NB_MODULE(_termin_modules_native, m) {
         .def_prop_ro("components", [](const ModuleRecord& self) { return self.spec.components; })
         .def_ro("state", &ModuleRecord::state)
         .def_ro("error_message", &ModuleRecord::error_message)
-        .def_ro("diagnostics", &ModuleRecord::diagnostics);
+        .def_ro("diagnostics", &ModuleRecord::diagnostics)
+        .def_prop_ro("clean_command", [](const ModuleRecord& self) -> std::string {
+            auto config = std::dynamic_pointer_cast<CppModuleConfig>(self.spec.config);
+            return config ? config->clean_command : "";
+        });
 
     nb::class_<CppModuleBackend>(m, "CppModuleBackend")
         .def(nb::init<>());
@@ -103,6 +107,8 @@ NB_MODULE(_termin_modules_native, m) {
         .def("load_module", &ModuleRuntime::load_module, nb::arg("module_id"))
         .def("unload_module", &ModuleRuntime::unload_module, nb::arg("module_id"))
         .def("reload_module", &ModuleRuntime::reload_module, nb::arg("module_id"))
+        .def("clean_module", &ModuleRuntime::clean_module, nb::arg("module_id"))
+        .def("rebuild_module", &ModuleRuntime::rebuild_module, nb::arg("module_id"))
         .def("list", [](const ModuleRuntime& self) {
             nb::list result;
             for (const ModuleRecord* record : self.list()) {

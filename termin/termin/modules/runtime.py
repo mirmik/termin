@@ -86,6 +86,12 @@ class ProjectModulesRuntime:
     def reload_module(self, module_id: str) -> bool:
         return self._runtime.reload_module(module_id)
 
+    def clean_module(self, module_id: str) -> bool:
+        return self._runtime.clean_module(module_id)
+
+    def rebuild_module(self, module_id: str) -> bool:
+        return self._runtime.rebuild_module(module_id)
+
     def unload_module(self, module_id: str) -> bool:
         return self._runtime.unload_module(module_id)
 

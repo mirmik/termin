@@ -25,6 +25,7 @@ struct IModuleConfig {
 
 struct CppModuleConfig : IModuleConfig {
     std::string build_command;
+    std::string clean_command;
     std::filesystem::path artifact_path;
     bool ignored = false;
 };
