@@ -294,9 +294,7 @@ void bind_rendering_manager(nb::module_& m) {
         .def("attach_scene", [](RenderingManager& self, nb::object scene_py)
                 -> std::vector<TcViewport> {
             tc_scene_handle scene = get_scene_handle(scene_py);
-            tc_log(TC_LOG_INFO, "[RenderingManager] attach_scene: scene index=%u gen=%u", scene.index, scene.generation);
             std::vector<tc_viewport_handle> viewports = self.attach_scene_full(scene);
-            tc_log(TC_LOG_INFO, "[RenderingManager] attach_scene: created %zu viewports", viewports.size());
             std::vector<TcViewport> result;
             result.reserve(viewports.size());
             for (tc_viewport_handle h : viewports) {

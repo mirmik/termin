@@ -153,8 +153,6 @@ class RenderingController:
 
         # Connect inspector signals
         self._inspector.display_inspector.name_changed.connect(self._on_display_name_changed)
-        self._inspector.display_inspector.input_mode_changed.connect(self._on_display_input_mode_changed)
-        self._inspector.display_inspector.block_input_in_editor_changed.connect(self._on_display_block_input_in_editor_changed)
         self._inspector.viewport_inspector.display_changed.connect(self._on_viewport_display_changed)
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
         self._inspector.pipeline_inspector.pipeline_changed.connect(self._on_pipeline_inspector_changed)
@@ -316,6 +314,10 @@ class RenderingController:
         # Use RenderingManager to create viewports
         viewports = self._manager.attach_scene(scene)
 
+        # Create viewport input managers
+        for viewport in viewports:
+            self._ensure_viewport_input_manager(viewport)
+
         # Set up input managers for each display based on viewport configs
         # Group viewports by display
         display_viewports: dict[int, list[tuple["Viewport", ViewportConfig]]] = {}
@@ -372,6 +374,16 @@ class RenderingController:
                 return config
 
         return None
+
+    def _ensure_viewport_input_manager(self, viewport: "Viewport") -> None:
+        """Create appropriate input manager for viewport based on input_mode."""
+        mode = viewport.input_mode or "simple"
+        if mode == "none":
+            return
+        if mode in ("simple", "basic"):
+            from termin.display._display_native import _viewport_input_manager_new
+            idx, gen = viewport._viewport_handle()
+            _viewport_input_manager_new(idx, gen)
 
     def _setup_display_input(self, display: "Display", input_mode: str) -> None:
         """
@@ -855,17 +867,6 @@ class RenderingController:
         if display is not None:
             name = self._manager.get_display_name(display)
             self._inspector.show_display_inspector(display, name)
-
-            # Get input mode from first viewport (if any)
-            input_mode = "none"
-            block_in_editor = False
-            if display.viewports:
-                first_vp = display.viewports[0]
-                input_mode = first_vp.input_mode
-                block_in_editor = first_vp.block_input_in_editor
-
-            self._inspector.display_inspector.set_input_mode(input_mode)
-            self._inspector.display_inspector.set_block_input_in_editor(block_in_editor)
 
             if self._on_display_selected is not None:
                 self._on_display_selected(display)
