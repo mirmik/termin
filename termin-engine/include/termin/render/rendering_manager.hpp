@@ -26,6 +26,8 @@ extern "C" {
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
+#include "render/tc_render_target.h"
+#include "render/tc_render_target_pool.h"
 #include "render/tc_render_surface.h"
 }
 
@@ -136,6 +138,25 @@ public:
     void remove_viewport_state(tc_viewport_handle viewport);
 
     // ========================================================================
+    // Render Target Management
+    // ========================================================================
+
+    // Register standalone render target (not attached to any viewport)
+    void register_render_target(tc_render_target_handle rt);
+
+    // Unregister standalone render target
+    void unregister_render_target(tc_render_target_handle rt);
+
+    // Get all registered standalone render targets
+    const std::vector<tc_render_target_handle>& render_targets() const { return registered_render_targets_; }
+
+    // Get render state for a render target (returns nullptr if not found)
+    ViewportRenderState* get_render_target_state(tc_render_target_handle rt);
+
+    // Get or create render state for a render target
+    ViewportRenderState* get_or_create_render_target_state(tc_render_target_handle rt);
+
+    // ========================================================================
     // Rendering - Single Display (Simple Path)
     // ========================================================================
 
@@ -239,6 +260,12 @@ private:
     // Render single viewport to its output FBO
     void render_viewport_offscreen(tc_viewport_handle viewport);
 
+    // Render single standalone render target to its output FBO
+    void render_render_target_offscreen(tc_render_target_handle rt);
+
+    // Sync override_resolution viewports: update render target width/height from pixel_rect
+    void sync_viewport_resolutions();
+
     // Render scene pipeline to viewport output FBOs
     void render_scene_pipeline_offscreen(
         tc_scene_handle scene,
@@ -298,8 +325,19 @@ private:
     // Pipeline targets: pipeline_name -> list of viewport names
     std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;
 
+    // Registered standalone render targets (not attached to viewports)
+    std::vector<tc_render_target_handle> registered_render_targets_;
+
+    // Render target states (key = render_target handle as uint64)
+    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> render_target_states_;
+
     // Helper to make key from scene handle
     static uint64_t scene_key(tc_scene_handle h) {
+        return (static_cast<uint64_t>(h.index) << 32) | h.generation;
+    }
+
+    // Helper to make key from render target handle
+    static uint64_t render_target_key(tc_render_target_handle h) {
         return (static_cast<uint64_t>(h.index) << 32) | h.generation;
     }
 };

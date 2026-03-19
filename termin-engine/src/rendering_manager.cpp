@@ -659,6 +659,55 @@ void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
 }
 
 // ============================================================================
+// Render Target Management
+// ============================================================================
+
+void RenderingManager::register_render_target(tc_render_target_handle rt) {
+    if (!tc_render_target_handle_valid(rt)) return;
+    for (const auto& existing : registered_render_targets_) {
+        if (tc_render_target_handle_eq(existing, rt)) return;
+    }
+    registered_render_targets_.push_back(rt);
+}
+
+void RenderingManager::unregister_render_target(tc_render_target_handle rt) {
+    if (!tc_render_target_handle_valid(rt)) return;
+    auto it = std::find_if(registered_render_targets_.begin(), registered_render_targets_.end(),
+        [&](tc_render_target_handle h) { return tc_render_target_handle_eq(h, rt); });
+    if (it != registered_render_targets_.end()) {
+        registered_render_targets_.erase(it);
+    }
+    // Remove state
+    uint64_t key = render_target_key(rt);
+    auto state_it = render_target_states_.find(key);
+    if (state_it != render_target_states_.end()) {
+        if (make_current_callback_) {
+            make_current_callback_();
+        }
+        if (offscreen_gpu_context_) {
+            tc_gpu_set_context(offscreen_gpu_context_);
+        }
+        state_it->second->clear_all();
+        render_target_states_.erase(state_it);
+    }
+}
+
+ViewportRenderState* RenderingManager::get_render_target_state(tc_render_target_handle rt) {
+    uint64_t key = render_target_key(rt);
+    auto it = render_target_states_.find(key);
+    return it != render_target_states_.end() ? it->second.get() : nullptr;
+}
+
+ViewportRenderState* RenderingManager::get_or_create_render_target_state(tc_render_target_handle rt) {
+    uint64_t key = render_target_key(rt);
+    auto it = render_target_states_.find(key);
+    if (it != render_target_states_.end()) return it->second.get();
+    auto& state = render_target_states_[key];
+    state = std::make_unique<ViewportRenderState>();
+    return state.get();
+}
+
+// ============================================================================
 // Rendering - Offscreen-First Model
 // ============================================================================
 
@@ -693,6 +742,9 @@ void RenderingManager::render_all_offscreen() {
         return;
     }
 
+    // 0. Sync viewport override_resolution → render target width/height
+    sync_viewport_resolutions();
+
     // 1. Execute scene pipelines (can span multiple displays)
     for (tc_scene_handle scene : attached_scenes_) {
         if (!tc_scene_handle_valid(scene)) continue;
@@ -721,6 +773,11 @@ void RenderingManager::render_all_offscreen() {
             }
             vp = tc_viewport_get_display_next(vp);
         }
+    }
+
+    // 3. Render standalone render targets (not attached to viewports)
+    for (tc_render_target_handle rt : registered_render_targets_) {
+        render_render_target_offscreen(rt);
     }
 }
 
@@ -784,8 +841,14 @@ void RenderingManager::render_scene_pipeline_offscreen(
             continue;
         }
 
-        // Ensure output FBO
-        ViewportRenderState* state = get_or_create_viewport_state(viewport);
+        // Ensure output FBO (stored on render target state)
+        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+        ViewportRenderState* state = nullptr;
+        if (tc_render_target_handle_valid(rt)) {
+            state = get_or_create_render_target_state(rt);
+        } else {
+            state = get_or_create_viewport_state(viewport);
+        }
         FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
 
         // Create viewport context
@@ -863,8 +926,14 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         return;
     }
 
-    // Ensure output FBO
-    ViewportRenderState* state = get_or_create_viewport_state(viewport);
+    // Ensure output FBO (stored on render target state)
+    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+    ViewportRenderState* state = nullptr;
+    if (tc_render_target_handle_valid(rt)) {
+        state = get_or_create_render_target_state(rt);
+    } else {
+        state = get_or_create_viewport_state(viewport);
+    }
     FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
 
     // Collect lights
@@ -883,6 +952,75 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         internal_entities,
         lights,
         tc_viewport_get_layer_mask(viewport)
+    );
+}
+
+void RenderingManager::sync_viewport_resolutions() {
+    for (tc_display* display : displays_) {
+        if (!tc_display_get_enabled(display)) continue;
+
+        tc_viewport_handle vp = tc_display_get_first_viewport(display);
+        while (tc_viewport_handle_valid(vp)) {
+            if (tc_viewport_get_override_resolution(vp)) {
+                tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+                if (tc_render_target_handle_valid(rt)) {
+                    int px, py, pw, ph;
+                    tc_viewport_get_pixel_rect(vp, &px, &py, &pw, &ph);
+                    if (pw > 0 && ph > 0) {
+                        tc_render_target_set_width(rt, pw);
+                        tc_render_target_set_height(rt, ph);
+                    }
+                }
+            }
+            vp = tc_viewport_get_display_next(vp);
+        }
+    }
+}
+
+void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt) {
+    if (!tc_render_target_handle_valid(rt) || !graphics_) return;
+    if (!tc_render_target_get_enabled(rt)) return;
+
+    const char* rt_name = tc_render_target_get_name(rt);
+
+    tc_scene_handle scene = tc_render_target_get_scene(rt);
+    tc_component* camera_comp = tc_render_target_get_camera(rt);
+    tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
+
+    if (!tc_scene_handle_valid(scene)) return;
+    if (!camera_comp) return;
+    if (!tc_pipeline_handle_valid(pipeline)) return;
+
+    int w = tc_render_target_get_width(rt);
+    int h = tc_render_target_get_height(rt);
+    if (w <= 0 || h <= 0) return;
+
+    double aspect = static_cast<double>(w) / std::max(1, h);
+    RenderCamera render_camera;
+    if (!get_render_camera(camera_comp, aspect, &render_camera)) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_render_target_offscreen('%s'): no camera capability",
+               rt_name ? rt_name : "(null)");
+        return;
+    }
+
+    RenderPipeline render_pipeline(pipeline);
+
+    ViewportRenderState* state = get_or_create_render_target_state(rt);
+    FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, w, h);
+
+    std::vector<Light> lights = collect_lights(scene);
+
+    RenderEngine* engine = render_engine();
+    engine->render_view_to_fbo(
+        render_pipeline,
+        output_fbo,
+        w, h,
+        scene,
+        render_camera,
+        rt_name ? rt_name : "",
+        TC_ENTITY_HANDLE_INVALID,
+        lights,
+        tc_render_target_get_layer_mask(rt)
     );
 }
 
@@ -945,7 +1083,16 @@ void RenderingManager::present_display(tc_display* display) {
 
     // Blit viewports
     for (tc_viewport_handle viewport : viewports) {
-        ViewportRenderState* state = get_viewport_state(viewport);
+        // Get render state from viewport's render target
+        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+        ViewportRenderState* state = nullptr;
+        if (tc_render_target_handle_valid(rt)) {
+            state = get_render_target_state(rt);
+        }
+        // Fallback to viewport state (for legacy/transition)
+        if (!state) {
+            state = get_viewport_state(viewport);
+        }
         if (!state || !state->has_output_fbo()) {
             continue;
         }
