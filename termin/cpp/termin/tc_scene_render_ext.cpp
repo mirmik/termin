@@ -91,6 +91,47 @@ std::vector<ViewportConfig> scene_viewport_configs(const TcSceneRef& scene) {
     return result;
 }
 
+// --- Render target configs ---
+
+void scene_add_render_target_config(const TcSceneRef& scene, const RenderTargetConfig& config) {
+    tc_render_target_config c = config.to_c();
+    tc_scene_add_render_target_config(scene._h, &c);
+}
+
+void scene_remove_render_target_config(const TcSceneRef& scene, size_t index) {
+    tc_scene_remove_render_target_config(scene._h, index);
+}
+
+void scene_clear_render_target_configs(const TcSceneRef& scene) {
+    tc_scene_clear_render_target_configs(scene._h);
+}
+
+size_t scene_render_target_config_count(const TcSceneRef& scene) {
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(scene._h);
+    return mount ? mount->render_target_config_count : 0;
+}
+
+RenderTargetConfig scene_render_target_config_at(const TcSceneRef& scene, size_t index) {
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(scene._h);
+    if (!mount || index >= mount->render_target_config_count) {
+        return RenderTargetConfig();
+    }
+    tc_render_target_config* c = &mount->render_target_configs[index];
+    return RenderTargetConfig::from_c(c);
+}
+
+std::vector<RenderTargetConfig> scene_render_target_configs(const TcSceneRef& scene) {
+    std::vector<RenderTargetConfig> result;
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(scene._h);
+    size_t count = mount ? mount->render_target_config_count : 0;
+    result.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        tc_render_target_config* c = &mount->render_target_configs[i];
+        result.push_back(RenderTargetConfig::from_c(c));
+    }
+    return result;
+}
+
 // --- Pipeline templates ---
 
 void scene_add_pipeline_template(const TcSceneRef& scene, const TcScenePipelineTemplate& templ) {

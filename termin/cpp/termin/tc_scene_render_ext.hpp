@@ -15,6 +15,7 @@
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/vec4.hpp>
 #include "termin/viewport_config.hpp"
+#include "termin/render_target_config.hpp"
 
 namespace termin {
 
@@ -51,6 +52,15 @@ void scene_clear_viewport_configs(const TcSceneRef& scene);
 size_t scene_viewport_config_count(const TcSceneRef& scene);
 ViewportConfig scene_viewport_config_at(const TcSceneRef& scene, size_t index);
 std::vector<ViewportConfig> scene_viewport_configs(const TcSceneRef& scene);
+
+// --- Render target configs ---
+
+void scene_add_render_target_config(const TcSceneRef& scene, const RenderTargetConfig& config);
+void scene_remove_render_target_config(const TcSceneRef& scene, size_t index);
+void scene_clear_render_target_configs(const TcSceneRef& scene);
+size_t scene_render_target_config_count(const TcSceneRef& scene);
+RenderTargetConfig scene_render_target_config_at(const TcSceneRef& scene, size_t index);
+std::vector<RenderTargetConfig> scene_render_target_configs(const TcSceneRef& scene);
 
 // --- Pipeline templates ---
 
