@@ -246,35 +246,22 @@ class RenderingControllerTcgui:
                 if viewport.scene is not scene:
                     continue
 
-                camera_uuid = ""
-                if viewport.camera is not None and viewport.camera.entity is not None:
-                    camera_uuid = viewport.camera.entity.uuid
-
-                pipeline_uuid = None
-                pipeline_name = None
-                if viewport.pipeline is not None:
-                    pipeline_uuid = self._get_pipeline_uuid(viewport.pipeline)
-                    if pipeline_uuid is None:
-                        if viewport.pipeline.name == "editor":
-                            pipeline_name = "(Editor)"
+                rt = viewport.render_target
+                rt_name = rt.name if rt is not None else ""
 
                 rect = viewport.rect
-                config = ViewportConfig(
-                    name=viewport.name or "",
-                    display_name=display.name,
-                    camera_uuid=camera_uuid,
-                    region_x=rect[0],
-                    region_y=rect[1],
-                    region_w=rect[2],
-                    region_h=rect[3],
-                    depth=viewport.depth,
-                    input_mode=viewport.input_mode,
-                    block_input_in_editor=viewport.block_input_in_editor,
-                    pipeline_uuid=pipeline_uuid or "",
-                    pipeline_name=pipeline_name or "",
-                    layer_mask=viewport.layer_mask,
-                    enabled=viewport.enabled,
-                )
+                config = ViewportConfig()
+                config.name = viewport.name or ""
+                config.display_name = display.name
+                config.render_target_name = rt_name
+                config.region_x = rect[0]
+                config.region_y = rect[1]
+                config.region_w = rect[2]
+                config.region_h = rect[3]
+                config.depth = viewport.depth
+                config.input_mode = viewport.input_mode
+                config.block_input_in_editor = viewport.block_input_in_editor
+                config.enabled = viewport.enabled
                 scene_render_mount(scene).add_viewport_config(config)
 
     def sync_render_target_configs_to_scene(self, scene: "Scene") -> None:

@@ -229,7 +229,8 @@ void bind_tc_viewport_class(nb::module_& m) {
                     rt.generation = nb::cast<uint32_t>(rt_obj.attr("generation"));
                     tc_viewport_set_render_target(self.handle_, rt);
                 }
-            })
+            },
+            nb::arg().none())
 
         // Pipeline — creates wrapper from handle, no py_wrapper
         .def_prop_rw("pipeline",

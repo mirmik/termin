@@ -838,13 +838,16 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         return;
     }
 
+    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+    if (!tc_render_target_handle_valid(rt)) {
+        return;
+    }
+
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_viewport_get_camera(viewport);
     tc_pipeline_handle pipeline = tc_viewport_get_pipeline(viewport);
 
     if (!tc_scene_handle_valid(scene)) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): invalid scene",
-               vp_name ? vp_name : "(null)");
         return;
     }
     if (!camera_comp) {
@@ -875,13 +878,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     }
 
     // Ensure output FBO (stored on render target state)
-    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
-    ViewportRenderState* state = nullptr;
-    if (tc_render_target_handle_valid(rt)) {
-        state = get_or_create_render_target_state(rt);
-    } else {
-        state = get_or_create_viewport_state(viewport);
-    }
+    ViewportRenderState* state = get_or_create_render_target_state(rt);
     FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
 
     // Collect lights
