@@ -172,8 +172,23 @@ bool CppModuleBackend::load(
         return false;
     }
 
+    // Copy artifact to a unique path to avoid dlopen cache
+    static int load_counter = 0;
+    std::filesystem::path load_path = config->artifact_path;
+    load_path += ".loaded." + std::to_string(++load_counter);
+    try {
+        std::filesystem::copy_file(
+            config->artifact_path, load_path,
+            std::filesystem::copy_options::overwrite_existing
+        );
+    } catch (const std::exception& e) {
+        record.error_message = "Failed to copy artifact for loading: ";
+        record.error_message += e.what();
+        return false;
+    }
+
     std::string error;
-    void* native_handle = load_shared_library(config->artifact_path, error);
+    void* native_handle = load_shared_library(load_path, error);
     if (native_handle == nullptr) {
         record.error_message = "Failed to load shared library: " + error;
         return false;
@@ -186,7 +201,7 @@ bool CppModuleBackend::load(
 
     auto handle = std::make_shared<CppModuleHandle>();
     handle->artifact_path = config->artifact_path;
-    handle->loaded_path = config->artifact_path;
+    handle->loaded_path = load_path;
     handle->native_handle = native_handle;
     record.handle = handle;
     return true;

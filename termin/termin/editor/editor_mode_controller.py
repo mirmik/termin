@@ -229,6 +229,10 @@ class EditorModeController:
         if self._window._editor_scene_name is None:
             return
 
+        # Rebuild stale modules before entering game mode
+        from termin.modules import get_project_modules_runtime
+        get_project_modules_runtime().rebuild_stale_modules()
+
         editor_scene = self._window.scene_manager.get_scene(self._window._editor_scene_name)
         if editor_scene is None:
             return
