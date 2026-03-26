@@ -19,6 +19,11 @@ echo "=== Installing termin-build-tools ==="
 $PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-build-tools"
 
 echo ""
+echo "=== Installing nanobind + termin-nanobind ==="
+$PIP install --no-cache-dir nanobind
+$PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-nanobind-sdk"
+
+echo ""
 echo "=== Installing termin-base (tcbase) ==="
 $PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-base"
 
