@@ -10,10 +10,7 @@
 
 extern "C" {
 #include "tc_component_python.h"
-#include "tc_component_python_drawable.h"
-#include "tc_component_python_input.h"
-#include "core/tc_drawable_protocol.h"
-#include "core/tc_input_component.h"
+// drawable vtable moved to termin-render bindings
 }
 
 namespace nb = nanobind;
@@ -311,27 +308,8 @@ public:
     tc_component* c_ptr() { return _c; }
     uintptr_t c_ptr_int() const { return reinterpret_cast<uintptr_t>(_c); }
 
-    // Install drawable vtable
-    void install_drawable_vtable() {
-        if (_c) {
-            tc_component_install_python_drawable_vtable(_c);
-        }
-    }
-
-    bool is_drawable() const {
-        return _c && tc_component_is_drawable(_c);
-    }
-
-    // Install input vtable
-    void install_input_vtable() {
-        if (_c) {
-            tc_component_install_python_input_vtable(_c);
-        }
-    }
-
-    bool is_input_handler() const {
-        return _c && tc_component_is_input_handler(_c);
-    }
+    // install_drawable_vtable / is_drawable moved to termin-render bindings
+    // install_input_vtable / is_input_handler moved to termin-input bindings
 
     // Get owner entity
     Entity entity() const {
@@ -359,10 +337,8 @@ void bind_tc_component_python(nb::module_& m) {
         .def_prop_rw("has_update", &TcComponent::get_has_update, &TcComponent::set_has_update)
         .def_prop_rw("has_fixed_update", &TcComponent::get_has_fixed_update, &TcComponent::set_has_fixed_update)
         .def("c_ptr_int", &TcComponent::c_ptr_int)
-        .def("install_drawable_vtable", &TcComponent::install_drawable_vtable)
-        .def_prop_ro("is_drawable", &TcComponent::is_drawable)
-        .def("install_input_vtable", &TcComponent::install_input_vtable)
-        .def_prop_ro("is_input_handler", &TcComponent::is_input_handler)
+        // install_drawable_vtable / is_drawable moved to termin-render bindings
+        // install_input_vtable / is_input_handler moved to termin-input bindings
         .def_prop_ro("entity", &TcComponent::entity);
 }
 

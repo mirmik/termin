@@ -10,7 +10,7 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 class BuildExt(TerminCMakeBuildExt):
     module_names = ["_termin_modules_native"]
-    bundle_libs = False
+    upstream_packages = {"tcbase": "libtermin_base", "termin_nanobind": "libnanobind"}
     source_dir = _DIR
 
 
@@ -24,6 +24,7 @@ setup(
     python_requires=">=3.8",
     packages=["termin_modules"],
     package_dir={"termin_modules": "python/termin_modules"},
+    install_requires=["tcbase", "termin-nanobind"],
     ext_modules=[Extension("termin_modules._termin_modules_native", sources=[])],
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,

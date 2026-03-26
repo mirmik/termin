@@ -11,8 +11,7 @@
 #include <termin/entity/component_registry_python.hpp>
 #include <termin/entity/entity.hpp>
 #include "core/tc_component.h"
-#include "core/tc_drawable_capability.h"
-#include "core/tc_input_capability.h"
+// drawable/input capabilities moved to termin-render/termin-input bindings
 
 namespace nb = nanobind;
 
@@ -107,12 +106,8 @@ void bind_component_registry(nb::module_& m) {
         .def_static("has_capability", &ComponentRegistry::has_capability,
             nb::arg("name"), nb::arg("cap_id"),
             "Check whether a component type has a capability")
-        .def_static("drawable_capability_id", []() {
-            return tc_drawable_capability_id();
-        })
-        .def_static("input_capability_id", []() {
-            return tc_input_capability_id();
-        })
+        // drawable_capability_id moved to termin-render bindings
+        // input_capability_id moved to termin-input bindings
         .def_static("get_types_with_capability", [](tc_component_cap_id cap_id) {
             const char* types[64];
             size_t count = tc_component_registry_get_types_with_capability(cap_id, types, 64);
@@ -145,8 +140,8 @@ void bind_component_registry(nb::module_& m) {
                 desc_list.append(descendants[j]);
             }
             info["descendants"] = desc_list;
-            info["is_drawable"] = tc_component_registry_has_capability(type_name, tc_drawable_capability_id());
-            info["is_input_handler"] = tc_component_registry_has_capability(type_name, tc_input_capability_id());
+            // is_drawable requires termin-render; omitted here
+            // is_input_handler requires termin-input; omitted here
 
             result.append(info);
         }

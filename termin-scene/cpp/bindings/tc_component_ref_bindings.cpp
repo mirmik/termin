@@ -14,7 +14,6 @@
 #include "inspect/tc_inspect_python.hpp"
 #include "inspect/tc_kind_python.hpp"
 #include "core/tc_component.h"
-#include "core/tc_drawable_protocol.h"
 
 namespace nb = nanobind;
 
@@ -41,7 +40,7 @@ public:
     bool active_in_editor() const { return _c ? _c->active_in_editor : false; }
     void set_active_in_editor(bool v) { if (_c) _c->active_in_editor = v; }
 
-    bool is_drawable() const { return tc_component_is_drawable(_c); }
+    // is_drawable moved to termin-render bindings
 
     // Call on_destroy via vtable
     void on_destroy() {
@@ -227,7 +226,7 @@ void bind_tc_component_ref(nb::module_& m) {
         .def_prop_ro("type_name", &TcComponentRef::type_name)
         .def_prop_rw("enabled", &TcComponentRef::enabled, &TcComponentRef::set_enabled)
         .def_prop_rw("active_in_editor", &TcComponentRef::active_in_editor, &TcComponentRef::set_active_in_editor)
-        .def_prop_ro("is_drawable", &TcComponentRef::is_drawable)
+        // is_drawable moved to termin-render bindings
         .def_prop_ro("tc_component_ptr", [](TcComponentRef& self) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(self._c);
         })

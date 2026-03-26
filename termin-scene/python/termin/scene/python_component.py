@@ -90,11 +90,11 @@ class PythonComponent:
         ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
 
         # Mark as drawable if class has is_drawable = True
-        if cls.is_drawable:
+        if cls.is_drawable and hasattr(ComponentRegistry, 'drawable_capability_id'):
             ComponentRegistry.set_capability(cls.__name__, ComponentRegistry.drawable_capability_id(), True)
 
         # Mark as input handler if class has is_input_handler = True
-        if cls.is_input_handler:
+        if cls.is_input_handler and hasattr(ComponentRegistry, 'input_capability_id'):
             ComponentRegistry.set_capability(cls.__name__, ComponentRegistry.input_capability_id(), True)
 
     # =========================================================================

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Install termin Python packages into the current pip environment.
-# Assumes SDK is already built via build-sdk-cpp.sh + build-sdk-bindings.sh.
+# Each package builds from source via CMake and bundles its own libraries.
 #
 # Usage:
 #   ./install-pip-packages.sh              # Install all packages
@@ -9,7 +9,6 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SDK_PREFIX="${SDK_PREFIX:-$SCRIPT_DIR/sdk}"
 EDITABLE=0
 
 for arg in "$@"; do
@@ -37,14 +36,22 @@ install_pkg() {
     echo "  Installing $pkg"
     echo "========================================"
     echo ""
-    CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation "$SCRIPT_DIR/$pkg"
+    pip install --no-build-isolation "$SCRIPT_DIR/$pkg"
 }
 
-# Build tools (needed by termin-base, termin-mesh, termin-graphics, termin-modules)
+# Build tools (needed by all C++ packages)
 install_pkg "termin-build-tools"
 
-# C++ packages with native bindings
-for pkg in termin-base termin-modules termin-mesh termin-graphics; do
+# Nanobind shared runtime (needed by all packages with Python bindings)
+install_pkg "termin-nanobind-sdk"
+
+# C++ packages with native bindings (order matters — dependencies first)
+for pkg in termin-base termin-mesh termin-graphics termin-modules; do
+    install_pkg "$pkg"
+done
+
+# Subpackages of termin namespace (order: inspect → scene → collision)
+for pkg in termin-inspect termin-scene termin-collision; do
     install_pkg "$pkg"
 done
 
@@ -60,9 +67,9 @@ echo "  Installing termin"
 echo "========================================"
 echo ""
 if [[ $EDITABLE -eq 1 ]]; then
-    CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation -e "$SCRIPT_DIR/termin"
+    pip install --no-build-isolation -e "$SCRIPT_DIR/termin"
 else
-    CMAKE_PREFIX_PATH="$SDK_PREFIX" pip install --no-build-isolation "$SCRIPT_DIR/termin"
+    pip install --no-build-isolation "$SCRIPT_DIR/termin"
 fi
 
 echo ""
