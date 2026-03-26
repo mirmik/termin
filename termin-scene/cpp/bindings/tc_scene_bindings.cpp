@@ -17,10 +17,7 @@
 #include <trent/trent.h>
 #include <trent/json.h>
 #include "core/tc_component.h"
-#include "core/tc_drawable_capability.h"
-#include "core/tc_scene_drawable.h"
 #include "core/tc_scene.h"
-#include "core/tc_input_scene.h"
 
 namespace nb = nanobind;
 
@@ -451,43 +448,9 @@ void bind_tc_scene_core(nb::module_& m) {
                 if (c) tc_component_on_removed(c);
             }
             self.remove_entity(entity);
-        }, nb::arg("entity"))
+        }, nb::arg("entity"));
 
-        // Input dispatch (generic: iterates input handlers and calls method by name)
-        .def("dispatch_input", [](TcSceneRef& self, const std::string& method_name, nb::object event, bool editor_mode) {
-            if (!self.is_alive()) return;
-
-            int filter_flags = TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED;
-            if (editor_mode) {
-                filter_flags |= TC_SCENE_FILTER_ACTIVE_IN_EDITOR;
-            }
-
-            std::vector<nb::object> handlers;
-            tc_scene_foreach_input_handler(
-                self._h,
-                [](tc_component* c, void* user_data) -> bool {
-                    auto* vec = static_cast<std::vector<nb::object>*>(user_data);
-                    nb::object py_comp = tc_component_to_python(c);
-                    if (!py_comp.is_none()) {
-                        vec->push_back(py_comp);
-                    }
-                    return true;
-                },
-                &handlers,
-                filter_flags
-            );
-
-            for (auto& handler : handlers) {
-                try {
-                    if (nb::hasattr(handler, method_name.c_str())) {
-                        handler.attr(method_name.c_str())(event);
-                    }
-                } catch (const std::exception& e) {
-                    tc::Log::error("Error in input handler %s: %s", method_name.c_str(), e.what());
-                }
-            }
-        }, nb::arg("method_name"), nb::arg("event"), nb::arg("editor_mode") = false,
-           "Dispatch input event to all input handlers in scene");
+        // dispatch_input moved to termin-input bindings
 
     m.def(
         "degrade_components_to_unknown",

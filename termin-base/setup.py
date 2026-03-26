@@ -10,6 +10,7 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 class BuildExt(TerminCMakeBuildExt):
     module_names = ["_tcbase_native", "_geom_native"]
+    upstream_packages = {"termin_nanobind": "libnanobind"}
     source_dir = _DIR
 
 
@@ -34,6 +35,7 @@ setup(
             "lib/cmake/termin_base/*.cmake",
         ],
     },
+    install_requires=["termin-nanobind"],
     ext_modules=[
         Extension("tcbase._tcbase_native", sources=[]),
         Extension("tcbase._geom_native", sources=[]),
