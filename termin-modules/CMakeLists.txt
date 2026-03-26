@@ -93,6 +93,7 @@ if(TERMIN_BUILD_PYTHON)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin_modules/
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/termin_modules
         FILES_MATCHING PATTERN "*.py"
+        PATTERN "lib" EXCLUDE
     )
 
     add_executable(termin_modules_example

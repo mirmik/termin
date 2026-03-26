@@ -88,11 +88,13 @@ if(TERMIN_BUILD_PYTHON)
         DESTINATION lib/python/termin/colliders
         PATTERN "__pycache__" EXCLUDE
         PATTERN "*.pyc" EXCLUDE
+        PATTERN "lib" EXCLUDE
     )
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/collision/
         DESTINATION lib/python/termin/collision
         PATTERN "__pycache__" EXCLUDE
         PATTERN "*.pyc" EXCLUDE
+        PATTERN "lib" EXCLUDE
     )
 endif()
 

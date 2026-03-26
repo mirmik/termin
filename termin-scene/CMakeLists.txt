@@ -160,6 +160,7 @@ if(TERMIN_BUILD_PYTHON)
         DESTINATION lib/python/termin/scene
         PATTERN "__pycache__" EXCLUDE
         PATTERN "*.pyc" EXCLUDE
+        PATTERN "lib" EXCLUDE
     )
 endif()
 
