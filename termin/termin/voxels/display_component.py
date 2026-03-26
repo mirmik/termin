@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, List, Optional, Set, Tuple
 
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.render import DrawableComponent
 from termin.visualization.core.material import Material
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
 from termin.visualization.render.drawable import GeometryDrawCall
@@ -92,7 +92,7 @@ CUBE_SCALE = 0.85  # Размер кубика относительно ячей
 MAX_VOXELS = 100_000
 
 
-class VoxelDisplayComponent(PythonComponent):
+class VoxelDisplayComponent(DrawableComponent):
     """
     Компонент для отображения воксельной сетки из ResourceManager.
 
@@ -101,8 +101,6 @@ class VoxelDisplayComponent(PythonComponent):
     Использует VoxelGridHandle для поддержки hot-reload.
     Отсечка и заливка цветом выполняются в шейдере.
     """
-
-    is_drawable = True
 
     inspect_fields = {
         "voxel_grid": InspectField(

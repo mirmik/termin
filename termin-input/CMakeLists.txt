@@ -49,6 +49,33 @@ target_link_libraries(termin_input
 
 termin_set_rpath_lib(termin_input)
 
+if(TERMIN_BUILD_PYTHON)
+    if(NOT Python_EXECUTABLE)
+        if(WIN32)
+            set(Python_EXECUTABLE "python")
+        else()
+            set(Python_EXECUTABLE "python3")
+        endif()
+    endif()
+    find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
+    find_package(nanobind CONFIG REQUIRED)
+
+    nanobind_add_module(_input_native NB_SHARED
+        cpp/bindings/input_module.cpp
+    )
+    target_link_libraries(_input_native PRIVATE termin_input)
+
+    termin_set_rpath_python(_input_native)
+
+    install(TARGETS _input_native DESTINATION lib/python/termin/input)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/input/
+        DESTINATION lib/python/termin/input
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+        PATTERN "lib" EXCLUDE
+    )
+endif()
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 

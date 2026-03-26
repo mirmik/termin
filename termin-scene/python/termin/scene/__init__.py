@@ -11,7 +11,7 @@ from termin.scene._scene_native import (
     degrade_components_to_unknown,
     upgrade_unknown_components,
 )
-from termin.scene.python_component import PythonComponent, InputComponent
+from termin.scene.python_component import PythonComponent
 
 __all__ = [
     "Entity",
@@ -25,5 +25,4 @@ __all__ = [
     "degrade_components_to_unknown",
     "upgrade_unknown_components",
     "PythonComponent",
-    "InputComponent",
 ]

@@ -35,9 +35,6 @@ class PythonComponent:
         "enabled": InspectField(path="enabled", label="Enabled", kind="bool"),
     }
 
-    # Override to True in drawable subclasses (that have phase_marks)
-    is_drawable: bool = False
-
     # Override to True in input handler subclasses
     is_input_handler: bool = False
 
@@ -53,10 +50,6 @@ class PythonComponent:
         cls = type(self)
         self._tc.has_update = cls.update is not PythonComponent.update
         self._tc.has_fixed_update = cls.fixed_update is not PythonComponent.fixed_update
-
-        # Install drawable vtable if this is a drawable component
-        if cls.is_drawable:
-            self._tc.install_drawable_vtable()
 
     def __init_subclass__(cls, **kwargs):
         """Called when a class inherits from PythonComponent."""
@@ -89,9 +82,7 @@ class PythonComponent:
         # Register factory in C++ ComponentRegistry
         ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
 
-        # Mark as drawable if class has is_drawable = True
-        if cls.is_drawable and hasattr(ComponentRegistry, 'drawable_capability_id'):
-            ComponentRegistry.set_capability(cls.__name__, ComponentRegistry.drawable_capability_id(), True)
+        # drawable capability registration moved to termin.render.DrawableComponent
 
         # Mark as input handler if class has is_input_handler = True
         if cls.is_input_handler and hasattr(ComponentRegistry, 'input_capability_id'):
@@ -272,27 +263,4 @@ class PythonComponent:
         }
 
 
-class InputComponent(PythonComponent):
-    """Component capable of handling input events."""
-
-    is_input_handler: bool = True
-
-    def __init__(self, enabled: bool = True, active_in_editor: bool = False):
-        super().__init__(enabled=enabled)
-        self.active_in_editor = active_in_editor
-        self._tc.install_input_vtable()
-
-    def on_mouse_button(self, event):
-        pass
-
-    def on_mouse_move(self, event):
-        pass
-
-    def on_scroll(self, event):
-        pass
-
-    def on_key(self, event):
-        pass
-
-
-__all__ = ["PythonComponent", "InputComponent"]
+__all__ = ["PythonComponent"]

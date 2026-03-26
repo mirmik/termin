@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Optional, List, Set
 
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.render import DrawableComponent
 from termin.visualization.core.material import Material
 from termin.mesh import TcMesh
 from termin.mesh.mesh import Mesh3
@@ -43,15 +43,13 @@ def _build_navmesh_action(component: "NavMeshBuilderComponent") -> None:
     component.build()
 
 
-class NavMeshBuilderComponent(PythonComponent):
+class NavMeshBuilderComponent(DrawableComponent):
     """
     Component for building NavMesh from entity mesh.
 
     Combines voxelization and NavMesh building in one step.
     Voxels are not saved to file - they are intermediate data.
     """
-
-    is_drawable = True
 
     inspect_fields = {
         "navmesh_name": InspectField(
