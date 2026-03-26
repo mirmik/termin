@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional, List, Set
 
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.render import DrawableComponent
 from termin.visualization.core.material import Material
 from termin.mesh import TcMesh
 from termin.mesh.mesh import Mesh3
@@ -53,7 +53,7 @@ def _build_navmesh_action(component: "VoxelizerComponent") -> None:
     component.build_navmesh()
 
 
-class VoxelizerComponent(PythonComponent):
+class VoxelizerComponent(DrawableComponent):
     """
     Компонент для вокселизации меша entity.
 
@@ -61,8 +61,6 @@ class VoxelizerComponent(PythonComponent):
     В инспекторе показывает кнопку "Voxelize" и настройки.
     По нажатию кнопки вокселизирует меш, регистрирует в ResourceManager и сохраняет в файл.
     """
-
-    is_drawable = True
 
     inspect_fields = {
         "grid_name": InspectField(

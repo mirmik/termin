@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, List, Optional, Set, Tuple
 
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.render import DrawableComponent
 from termin.visualization.core.material import Material
 from termin.mesh import TcMesh
 from termin.visualization.core.navmesh_handle import NavMeshHandle
@@ -34,7 +34,7 @@ def _get_navmesh_choices() -> list[tuple[str, str]]:
     return [(name, name) for name in names]
 
 
-class NavMeshDisplayComponent(PythonComponent):
+class NavMeshDisplayComponent(DrawableComponent):
     """
     Компонент для отображения NavMesh из ResourceManager.
 
@@ -42,8 +42,6 @@ class NavMeshDisplayComponent(PythonComponent):
     Выбирает сетку через комбобокс из зарегистрированных в ResourceManager.
     Использует NavMeshHandle для поддержки hot-reload.
     """
-
-    is_drawable = True
 
     inspect_fields = {
         "navmesh": InspectField(

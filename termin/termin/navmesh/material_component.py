@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, List, Optional, Set
 
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.render import DrawableComponent
 from termin.mesh import TcMesh
 from termin.assets.navmesh_handle import NavMeshHandle
 from termin._native.render import TcMaterial
@@ -24,15 +24,13 @@ if TYPE_CHECKING:
     from termin._native.render import TcMaterialPhase
 
 
-class NavMeshMaterialComponent(PythonComponent):
+class NavMeshMaterialComponent(DrawableComponent):
     """
     Component for rendering NavMesh with a material.
 
     Implements Drawable protocol - renders NavMesh geometry using selected material.
     Supports hot-reload via NavMeshHandle.
     """
-
-    is_drawable = True
 
     inspect_fields = {
         "navmesh": InspectField(
