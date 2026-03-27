@@ -32,11 +32,19 @@ function Install-Pkg {
     if ($LASTEXITCODE -ne 0) { throw "pip install $Pkg failed" }
 }
 
-# Build tools
+# Build tools (needed by all C++ packages)
 Install-Pkg "termin-build-tools"
 
-# C++ packages with native bindings
-foreach ($pkg in @("termin-base", "termin-modules", "termin-mesh", "termin-graphics")) {
+# Nanobind shared runtime (needed by all packages with Python bindings)
+Install-Pkg "termin-nanobind-sdk"
+
+# C++ packages with native bindings (order matters — dependencies first)
+foreach ($pkg in @("termin-base", "termin-mesh", "termin-graphics", "termin-modules")) {
+    Install-Pkg $pkg
+}
+
+# Subpackages of termin namespace (order: inspect -> scene -> collision)
+foreach ($pkg in @("termin-inspect", "termin-scene", "termin-collision")) {
     Install-Pkg $pkg
 }
 
