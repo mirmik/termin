@@ -71,17 +71,31 @@ def _setup_dll_paths():
     if not sdk_bin_dir or not os.path.isdir(sdk_bin_dir):
         sdk_bin_dir = os.path.normpath(os.path.join(dll_dir, "..", "..", "..", "bin"))
 
+    # Collect all directories that may contain DLLs
+    dll_dirs = [dll_dir]
+
+    # Add subdirectories of termin/ (namespace sub-packages like termin/scene/, termin/inspect/)
+    for entry in os.scandir(dll_dir):
+        if entry.is_dir() and not entry.name.startswith(("_", ".")):
+            dll_dirs.append(entry.path)
+
+    # Add upstream flat packages (tcbase, tmesh, tgfx, etc.)
+    site_packages = os.path.dirname(dll_dir)
+    for pkg in ("tcbase", "tmesh", "tgfx", "termin_modules", "termin_nanobind"):
+        pkg_dir = os.path.join(site_packages, pkg)
+        if os.path.isdir(pkg_dir):
+            dll_dirs.append(pkg_dir)
+
+    if sdk_bin_dir and os.path.isdir(sdk_bin_dir):
+        dll_dirs.append(sdk_bin_dir)
+
     # Python 3.8+ requires explicit DLL directory registration
     if hasattr(os, "add_dll_directory"):
-        os.add_dll_directory(dll_dir)
-        if os.path.isdir(sdk_bin_dir):
-            os.add_dll_directory(sdk_bin_dir)
+        for d in dll_dirs:
+            os.add_dll_directory(d)
 
     # Also prepend to PATH for compatibility
-    path_dirs = [dll_dir]
-    if os.path.isdir(sdk_bin_dir):
-        path_dirs.append(sdk_bin_dir)
-    os.environ["PATH"] = os.pathsep.join(path_dirs) + os.pathsep + os.environ.get("PATH", "")
+    os.environ["PATH"] = os.pathsep.join(dll_dirs) + os.pathsep + os.environ.get("PATH", "")
 
     # Set PYSDL2_DLL_PATH so pysdl2 can find SDL2.dll
     if os.path.isdir(sdk_bin_dir) and not os.environ.get("PYSDL2_DLL_PATH"):
