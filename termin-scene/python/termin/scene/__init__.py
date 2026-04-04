@@ -1,4 +1,8 @@
 # termin.scene - core scene types
+from termin import _dll_setup  # noqa: F401
+
+_dll_setup.extend_package_path(__path__, "scene")
+
 from termin.scene._scene_native import (
     Entity,
     TcScene,
