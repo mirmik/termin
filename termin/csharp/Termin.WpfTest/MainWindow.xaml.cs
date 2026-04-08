@@ -16,6 +16,7 @@ static class NativeLoader
 {
     private static IntPtr _terminHandle = IntPtr.Zero;
     private static IntPtr _terminCoreHandle = IntPtr.Zero;
+    private static IntPtr _terminMeshHandle = IntPtr.Zero;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr LoadLibrary(string lpFileName);
@@ -85,6 +86,14 @@ static class NativeLoader
     public static void Initialize()
     {
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+        var meshPath = Path.Combine(baseDir, "termin_mesh.dll");
+        _terminMeshHandle = LoadLibrary(meshPath);
+        if (_terminMeshHandle == IntPtr.Zero)
+        {
+            int error = Marshal.GetLastWin32Error();
+            throw new Exception($"Failed to load termin_mesh.dll from {meshPath}. Error: {error}");
+        }
 
         // Load termin_core.dll first (dependency)
         var corePath = Path.Combine(baseDir, "termin_core.dll");
@@ -174,6 +183,10 @@ static class NativeLoader
         if (libraryName == "termin_core")
         {
             return _terminCoreHandle;
+        }
+        if (libraryName == "termin_mesh")
+        {
+            return _terminMeshHandle;
         }
         if (libraryName == "termin")
         {

@@ -1,8 +1,7 @@
 #ifndef TC_PRIMITIVE_MESH_H
 #define TC_PRIMITIVE_MESH_H
 
-#include "tc_types.h"
-#include <tgfx/resources/tc_mesh.h>
+#include "tgfx/resources/tc_mesh.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,19 +14,19 @@ extern "C" {
 // For shared primitives, use the unit_* functions below.
 
 // Generate a cube mesh (caller owns the returned mesh)
-TC_API tc_mesh* tc_primitive_cube_new(float size_x, float size_y, float size_z);
+TGFX_API tc_mesh* tc_primitive_cube_new(float size_x, float size_y, float size_z);
 
 // Generate a UV sphere mesh (caller owns the returned mesh)
-TC_API tc_mesh* tc_primitive_sphere_new(float radius, int meridians, int parallels);
+TGFX_API tc_mesh* tc_primitive_sphere_new(float radius, int meridians, int parallels);
 
 // Generate a cylinder mesh with caps (caller owns the returned mesh)
-TC_API tc_mesh* tc_primitive_cylinder_new(float radius, float height, int segments);
+TGFX_API tc_mesh* tc_primitive_cylinder_new(float radius, float height, int segments);
 
 // Generate a cone mesh (caller owns the returned mesh)
-TC_API tc_mesh* tc_primitive_cone_new(float radius, float height, int segments);
+TGFX_API tc_mesh* tc_primitive_cone_new(float radius, float height, int segments);
 
 // Generate a plane mesh in XY plane (caller owns the returned mesh)
-TC_API tc_mesh* tc_primitive_plane_new(float width, float height, int segments_w, int segments_h);
+TGFX_API tc_mesh* tc_primitive_plane_new(float width, float height, int segments_w, int segments_h);
 
 // ============================================================================
 // Lazy Singleton Primitives (registered in mesh registry)
@@ -37,19 +36,19 @@ TC_API tc_mesh* tc_primitive_plane_new(float width, float height, int segments_w
 // Do NOT destroy these handles - they are shared.
 
 // Get shared unit cube (1x1x1, centered at origin)
-TC_API tc_mesh_handle tc_primitive_unit_cube(void);
+TGFX_API tc_mesh_handle tc_primitive_unit_cube(void);
 
 // Get shared unit sphere (radius=1, 16x16 segments)
-TC_API tc_mesh_handle tc_primitive_unit_sphere(void);
+TGFX_API tc_mesh_handle tc_primitive_unit_sphere(void);
 
 // Get shared unit cylinder (radius=1, height=1, 16 segments)
-TC_API tc_mesh_handle tc_primitive_unit_cylinder(void);
+TGFX_API tc_mesh_handle tc_primitive_unit_cylinder(void);
 
 // Get shared unit cone (radius=1, height=1, 16 segments)
-TC_API tc_mesh_handle tc_primitive_unit_cone(void);
+TGFX_API tc_mesh_handle tc_primitive_unit_cone(void);
 
 // Get shared unit plane (1x1 in XY plane)
-TC_API tc_mesh_handle tc_primitive_unit_plane(void);
+TGFX_API tc_mesh_handle tc_primitive_unit_plane(void);
 
 // ============================================================================
 // Deprecated API (for backward compatibility)
