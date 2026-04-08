@@ -17,7 +17,6 @@ option(TC_USE_EXTERNAL_INSPECT "Use external termin_inspect package for inspect/
 # in cpp/termin/tc_collision_c_api.cpp instead.
 set(TC_SOURCES
     src/tc_core.c
-    src/tc_primitive_mesh.c
     src/tc_picking.c
 )
 

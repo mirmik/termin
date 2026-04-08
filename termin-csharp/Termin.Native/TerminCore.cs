@@ -9,6 +9,7 @@ namespace Termin.Native;
 public static class TerminCore
 {
     const string DLL = "termin_core";
+    const string MESH_DLL = "termin_mesh";
 
     // ========================================================================
     // Library Initialization
@@ -854,35 +855,35 @@ public static class TerminCore
     // Primitive Mesh Generation (tc_primitive_mesh)
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_cube")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_cube")]
     public static extern IntPtr PrimitiveCube(float sizeX, float sizeY, float sizeZ);
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_sphere")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_sphere")]
     public static extern IntPtr PrimitiveSphere(float radius, int meridians, int parallels);
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_cylinder")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_cylinder")]
     public static extern IntPtr PrimitiveCylinder(float radius, float height, int segments);
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_cone")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_cone")]
     public static extern IntPtr PrimitiveCone(float radius, float height, int segments);
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_plane")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_plane")]
     public static extern IntPtr PrimitivePlane(float width, float height, int segmentsW, int segmentsH);
 
     // Lazy singleton primitives - return handles to shared meshes in registry
-    [DllImport(DLL, EntryPoint = "tc_primitive_unit_cube")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_unit_cube")]
     public static extern TcMeshHandle PrimitiveUnitCube();
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_unit_sphere")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_unit_sphere")]
     public static extern TcMeshHandle PrimitiveUnitSphere();
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_unit_cylinder")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_unit_cylinder")]
     public static extern TcMeshHandle PrimitiveUnitCylinder();
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_unit_cone")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_unit_cone")]
     public static extern TcMeshHandle PrimitiveUnitCone();
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_unit_plane")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_unit_plane")]
     public static extern TcMeshHandle PrimitiveUnitPlane();
 
     [DllImport(DLL, EntryPoint = "tc_primitive_cleanup")]

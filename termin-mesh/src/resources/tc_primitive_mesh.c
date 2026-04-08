@@ -1,9 +1,7 @@
-#include "resources/tc_primitive_mesh.h"
+#include "tgfx/resources/tc_primitive_mesh.h"
 #include <tgfx/resources/tc_mesh_registry.h>
-#include <tgfx/tc_gpu.h>
-#include <stdlib.h>
-#include <string.h>
 #include <math.h>
+#include <stdlib.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -42,50 +40,48 @@ static void set_vertex(tc_mesh* mesh, size_t idx,
                        float u, float v) {
     size_t stride = mesh->layout.stride;
     float* ptr = (float*)((char*)mesh->vertices + idx * stride);
-    ptr[0] = px; ptr[1] = py; ptr[2] = pz;  // position
-    ptr[3] = nx; ptr[4] = ny; ptr[5] = nz;  // normal
-    ptr[6] = u;  ptr[7] = v;                 // uv
+    ptr[0] = px;
+    ptr[1] = py;
+    ptr[2] = pz;
+    ptr[3] = nx;
+    ptr[4] = ny;
+    ptr[5] = nz;
+    ptr[6] = u;
+    ptr[7] = v;
+}
+
+static void free_temp_mesh(tc_mesh* mesh) {
+    if (!mesh) return;
+    free(mesh->vertices);
+    free(mesh->indices);
+    free(mesh);
 }
 
 // Helper to create mesh in registry
-static tc_mesh_handle create_primitive_in_registry(
-    const char* name,
-    tc_mesh* temp_mesh
-) {
+static tc_mesh_handle create_primitive_in_registry(const char* name, tc_mesh* temp_mesh) {
     if (!temp_mesh) return tc_mesh_handle_invalid();
 
-    // Check if already exists
     tc_mesh_handle h = tc_mesh_find_by_name(name);
     if (tc_mesh_is_valid(h)) {
-        // Already exists - free temp and return existing
-        free(temp_mesh->vertices);
-        free(temp_mesh->indices);
-        free(temp_mesh);
-        // Add ref for the caller (singleton pattern - mesh stays alive)
+        free_temp_mesh(temp_mesh);
+
         tc_mesh* existing = tc_mesh_get(h);
         if (existing) tc_mesh_add_ref(existing);
         return h;
     }
 
-    // Create in registry
     h = tc_mesh_create(NULL);
     if (!tc_mesh_is_valid(h)) {
-        free(temp_mesh->vertices);
-        free(temp_mesh->indices);
-        free(temp_mesh);
+        free_temp_mesh(temp_mesh);
         return tc_mesh_handle_invalid();
     }
 
-    // Get mesh from registry and copy data
     tc_mesh* mesh = tc_mesh_get(h);
     if (!mesh) {
-        free(temp_mesh->vertices);
-        free(temp_mesh->indices);
-        free(temp_mesh);
+        free_temp_mesh(temp_mesh);
         return tc_mesh_handle_invalid();
     }
 
-    // Copy data
     tc_mesh_set_data(
         mesh,
         temp_mesh->vertices,
@@ -97,16 +93,9 @@ static tc_mesh_handle create_primitive_in_registry(
     );
     mesh->draw_mode = temp_mesh->draw_mode;
 
-    // Upload to GPU
     tc_mesh_upload_gpu(mesh);
-
-    // Add ref to keep singleton alive (ref_count starts at 0 after tc_mesh_create)
     tc_mesh_add_ref(mesh);
-
-    // Free temp mesh
-    free(temp_mesh->vertices);
-    free(temp_mesh->indices);
-    free(temp_mesh);
+    free_temp_mesh(temp_mesh);
 
     return h;
 }
@@ -116,8 +105,6 @@ static tc_mesh_handle create_primitive_in_registry(
 // ============================================================================
 
 tc_mesh* tc_primitive_cube_new(float size_x, float size_y, float size_z) {
-    // 6 faces * 4 vertices = 24 vertices (for proper normals)
-    // 6 faces * 2 triangles * 3 = 36 indices
     tc_mesh* mesh = alloc_mesh(24, 36);
     if (!mesh) return NULL;
 
@@ -128,22 +115,15 @@ tc_mesh* tc_primitive_cube_new(float size_x, float size_y, float size_z) {
     size_t vi = 0;
     size_t ii = 0;
 
-    // Face data: normal, then 4 corners (CCW from outside)
     struct {
         float nx, ny, nz;
         float v[4][3];
     } faces[6] = {
-        // +X face
         {1, 0, 0, {{hx, -hy, -hz}, {hx, hy, -hz}, {hx, hy, hz}, {hx, -hy, hz}}},
-        // -X face
         {-1, 0, 0, {{-hx, hy, -hz}, {-hx, -hy, -hz}, {-hx, -hy, hz}, {-hx, hy, hz}}},
-        // +Y face
         {0, 1, 0, {{-hx, hy, -hz}, {-hx, hy, hz}, {hx, hy, hz}, {hx, hy, -hz}}},
-        // -Y face
         {0, -1, 0, {{-hx, -hy, hz}, {-hx, -hy, -hz}, {hx, -hy, -hz}, {hx, -hy, hz}}},
-        // +Z face
         {0, 0, 1, {{-hx, -hy, hz}, {hx, -hy, hz}, {hx, hy, hz}, {-hx, hy, hz}}},
-        // -Z face
         {0, 0, -1, {{hx, -hy, -hz}, {-hx, -hy, -hz}, {-hx, hy, -hz}, {hx, hy, -hz}}},
     };
 
@@ -157,7 +137,6 @@ tc_mesh* tc_primitive_cube_new(float size_x, float size_y, float size_z) {
                        faces[f].nx, faces[f].ny, faces[f].nz,
                        uvs[c][0], uvs[c][1]);
         }
-        // Two triangles per face
         mesh->indices[ii++] = base + 0;
         mesh->indices[ii++] = base + 1;
         mesh->indices[ii++] = base + 2;
@@ -253,7 +232,6 @@ tc_mesh* tc_primitive_cylinder_new(float radius, float height, int segments) {
     size_t vi = 0;
     size_t ii = 0;
 
-    // Side vertices
     for (int ring = 0; ring < 2; ring++) {
         float y = (ring == 0) ? -half_h : half_h;
         float v_coord = (ring == 0) ? 0.0f : 1.0f;
@@ -269,7 +247,6 @@ tc_mesh* tc_primitive_cylinder_new(float radius, float height, int segments) {
         }
     }
 
-    // Side indices
     for (int s = 0; s < segments; s++) {
         int next_s = (s + 1) % segments;
         uint32_t b0 = s;
@@ -285,7 +262,6 @@ tc_mesh* tc_primitive_cylinder_new(float radius, float height, int segments) {
         mesh->indices[ii++] = b1;
     }
 
-    // Bottom cap
     uint32_t bottom_base = (uint32_t)vi;
     for (int s = 0; s < segments; s++) {
         float angle = (float)s * 2.0f * (float)M_PI / (float)segments;
@@ -303,7 +279,6 @@ tc_mesh* tc_primitive_cylinder_new(float radius, float height, int segments) {
         mesh->indices[ii++] = bottom_base + s;
     }
 
-    // Top cap
     uint32_t top_base = (uint32_t)vi;
     for (int s = 0; s < segments; s++) {
         float angle = (float)s * 2.0f * (float)M_PI / (float)segments;
@@ -341,11 +316,9 @@ tc_mesh* tc_primitive_cone_new(float radius, float height, int segments) {
     size_t vi = 0;
     size_t ii = 0;
 
-    // Apex vertex
     uint32_t apex_idx = (uint32_t)vi;
     set_vertex(mesh, vi++, 0, half_h, 0, 0, 1, 0, 0.5f, 1.0f);
 
-    // Base ring for sides
     uint32_t base_start = (uint32_t)vi;
     float slope = radius / height;
     float ny = 1.0f / sqrtf(1.0f + slope * slope);
@@ -360,7 +333,6 @@ tc_mesh* tc_primitive_cone_new(float radius, float height, int segments) {
                    (float)s / (float)segments, 0.0f);
     }
 
-    // Side triangles
     for (int s = 0; s < segments; s++) {
         int next_s = (s + 1) % segments;
         mesh->indices[ii++] = apex_idx;
@@ -368,7 +340,6 @@ tc_mesh* tc_primitive_cone_new(float radius, float height, int segments) {
         mesh->indices[ii++] = base_start + s;
     }
 
-    // Base cap
     uint32_t cap_start = (uint32_t)vi;
     for (int s = 0; s < segments; s++) {
         float angle = (float)s * 2.0f * (float)M_PI / (float)segments;
@@ -455,7 +426,6 @@ tc_mesh_handle tc_primitive_unit_cube(void) {
 
 tc_mesh_handle tc_primitive_unit_sphere(void) {
     if (!tc_mesh_is_valid(g_unit_sphere)) {
-        // radius 0.5 so sphere is inscribed in unit cube (diameter = 1.0)
         tc_mesh* temp = tc_primitive_sphere_new(0.5f, 16, 16);
         g_unit_sphere = create_primitive_in_registry("__primitive_unit_sphere", temp);
     }
@@ -464,7 +434,6 @@ tc_mesh_handle tc_primitive_unit_sphere(void) {
 
 tc_mesh_handle tc_primitive_unit_cylinder(void) {
     if (!tc_mesh_is_valid(g_unit_cylinder)) {
-        // radius 0.5 so cylinder is inscribed in unit cube (diameter = 1.0, height = 1.0)
         tc_mesh* temp = tc_primitive_cylinder_new(0.5f, 1.0f, 16);
         g_unit_cylinder = create_primitive_in_registry("__primitive_unit_cylinder", temp);
     }
@@ -473,7 +442,6 @@ tc_mesh_handle tc_primitive_unit_cylinder(void) {
 
 tc_mesh_handle tc_primitive_unit_cone(void) {
     if (!tc_mesh_is_valid(g_unit_cone)) {
-        // radius 0.5 so cone is inscribed in unit cube (diameter = 1.0, height = 1.0)
         tc_mesh* temp = tc_primitive_cone_new(0.5f, 1.0f, 16);
         g_unit_cone = create_primitive_in_registry("__primitive_unit_cone", temp);
     }
