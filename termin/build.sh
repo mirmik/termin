@@ -149,16 +149,36 @@ echo "Copying Python packages from subprojects..."
 PYTHON_DEST="$INSTALL_DIR/lib/python"
 
 # Module definitions: project_dir | python_subdir | so_pattern | py_source_dir
+#
+# Mirrors which subproject contributes what to sdk/lib/python/termin/<subdir>/.
+# Each entry either brings an .so binding, a .py source tree, or both.
+# When multiple subprojects target the same python_subdir (e.g. termin.colliders
+# from both termin-collision and termin-components-collision), they are listed
+# as separate entries — subsequent entries only add files without overwriting
+# existing ones (cp -n).
 PYTHON_MODULES=(
     "termin-inspect       | termin/inspect    | _inspect_native*.so               | termin-inspect/python/termin/inspect"
     "termin-scene         | termin/scene      | _scene_native*.so                 | termin-scene/python/termin/scene"
     "termin-input         | termin/input      | _input_native*.so                 | termin-input/python/termin/input"
     "termin-render        | termin/render     | _render_native*.so                | termin-render/python/termin/render"
+    "termin-render        | termin/render_framework | _render_framework_native*.so | termin-render/python/termin/render_framework"
+    "termin-display       | termin/display    | _display_native*.so               | termin-display/python/termin/display"
+    "termin-display       | termin/viewport   | _viewport_native*.so              | termin-display/python/termin/viewport"
+    "termin-lighting      | termin/lighting   | _lighting_native*.so              | termin-lighting/python/termin/lighting"
+    "termin-entity        | termin/entity     |                                   | termin-entity/python/termin/entity"
+    "termin-navmesh       | termin/navmesh    |                                   | termin-navmesh/python/termin/navmesh"
+    "termin-physics       | termin/physics    | _physics_native*.so               | termin-physics/python/termin/physics"
+    "termin-engine        | termin/engine     | _engine_native*.so                | termin-engine/python/termin/engine"
+    "termin-skeleton      | termin/skeleton   | _skeleton_native*.so              | termin-skeleton/python/termin/skeleton"
+    "termin-animation     | termin/animation  | _animation_native*.so             | termin-animation/python/termin/animation"
     "termin-collision     | termin/colliders  | _colliders_native*.so             | termin-collision/python/termin/colliders"
     "termin-collision     | termin/collision  | _collision_native*.so             | "
     "termin-components-collision | termin/colliders | _components_collision_native*.so | "
-    "termin-components-mesh     | termin/mesh      | _components_mesh_native*.so      | termin-components/termin-components-mesh/python/termin/mesh"
+    "termin-components-render    | termin/render_components | _components_render_native*.so | termin-components/termin-components-render/python/termin/render_components"
+    "termin-components-mesh      | termin/mesh      | _components_mesh_native*.so      | termin-components/termin-components-mesh/python/termin/mesh"
     "termin-components-kinematic | termin/kinematic | _components_kinematic_native*.so | termin-components/termin-components-kinematic/python/termin/kinematic"
+    "termin-components-skeleton  | termin/skeleton  | _components_skeleton_native*.so  | "
+    "termin-components-animation | termin/animation | _components_animation_native*.so | "
 )
 
 for entry in "${PYTHON_MODULES[@]}"; do

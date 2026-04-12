@@ -33,4 +33,7 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_lighting_native PRIVATE termin::entity_lib)
     termin_set_rpath_python(_lighting_native)
     install(TARGETS _lighting_native DESTINATION lib/python/termin/lighting)
+    install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/python/termin/lighting/
+            DESTINATION lib/python/termin/lighting
+            FILES_MATCHING PATTERN "*.py")
 endif()
