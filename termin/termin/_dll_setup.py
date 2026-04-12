@@ -19,7 +19,14 @@ _sdk_termin_dir = None
 
 
 def _find_sdk_termin_dir():
-    """Find SDK termin directory by checking known locations."""
+    """Find SDK termin directory by checking known locations.
+
+    Discovery order mirrors termin_nanobind.runtime.find_sdk():
+      1. $TERMIN_SDK environment variable
+      2. Relative to this file (when running from an already-extracted SDK install)
+      3. /opt/termin (Linux/macOS system-wide install via install-to-opt.sh)
+      4. %LOCALAPPDATA%/termin-sdk (Windows system-wide install)
+    """
     candidates = []
 
     # 1. TERMIN_SDK environment variable
@@ -27,9 +34,16 @@ def _find_sdk_termin_dir():
     if sdk_env:
         candidates.append(os.path.join(sdk_env, "lib", "python", "termin"))
 
-    # 2. Relative to this file: ../../lib/python/termin (when running from sdk/lib/python/termin/)
+    # 2. Relative to this file (when running from sdk/lib/python/termin/)
     this_dir = os.path.dirname(os.path.abspath(__file__))
     candidates.append(os.path.join(this_dir, "..", "..", "..", "lib", "python", "termin"))
+
+    # 3/4. System-wide install fallback
+    if sys.platform == "win32":
+        local = os.environ.get("LOCALAPPDATA", os.path.expanduser("~/AppData/Local"))
+        candidates.append(os.path.join(local, "termin-sdk", "lib", "python", "termin"))
+    else:
+        candidates.append("/opt/termin/lib/python/termin")
 
     for c in candidates:
         c = os.path.normpath(c)

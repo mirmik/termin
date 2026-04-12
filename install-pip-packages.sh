@@ -1,6 +1,10 @@
 #!/bin/bash
 # Install termin Python packages into the current pip environment.
-# Each package builds from source via CMake and bundles its own libraries.
+#
+# Pip packages are THIN: they ship only nanobind binding .so files plus
+# Python wrappers. The shared C++ libraries live in $TERMIN_SDK (default:
+# ./sdk). build-sdk-cpp.sh + build-sdk-bindings.sh must be run first to
+# produce the SDK.
 #
 # Usage:
 #   ./install-pip-packages.sh              # Install all packages
@@ -10,6 +14,33 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EDITABLE=0
+
+# Locate termin SDK so thin pip packages can copy their pre-built bindings.
+# Used both at install time (TerminCMakeBuildExt copies _X_native.so from
+# $TERMIN_SDK/lib/python/termin/) and at runtime (preload_sdk_libs).
+#
+# Discovery order mirrors termin_nanobind.runtime.find_sdk():
+#   1. $TERMIN_SDK environment variable (if set and valid)
+#   2. $SCRIPT_DIR/sdk (in-tree build via build-sdk-bindings.sh)
+#   3. /opt/termin (system-wide install via install-to-opt.sh)
+_sdk_valid() { [[ -d "$1/lib/python/termin" ]]; }
+
+if [[ -n "$TERMIN_SDK" ]]; then
+    if ! _sdk_valid "$TERMIN_SDK"; then
+        echo "ERROR: TERMIN_SDK=$TERMIN_SDK is set but does not contain lib/python/termin" >&2
+        exit 1
+    fi
+elif _sdk_valid "$SCRIPT_DIR/sdk"; then
+    export TERMIN_SDK="$SCRIPT_DIR/sdk"
+elif _sdk_valid "/opt/termin"; then
+    export TERMIN_SDK="/opt/termin"
+else
+    echo "ERROR: termin SDK not found." >&2
+    echo "  Tried: \$TERMIN_SDK (unset), $SCRIPT_DIR/sdk, /opt/termin" >&2
+    echo "  Run build-sdk-cpp.sh and build-sdk-bindings.sh first, or set TERMIN_SDK." >&2
+    exit 1
+fi
+echo "Using TERMIN_SDK=$TERMIN_SDK"
 
 for arg in "$@"; do
     case "$arg" in
