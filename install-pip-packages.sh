@@ -52,10 +52,14 @@ done
 
 # Subpackages of termin namespace
 # Order: inspect → scene → input → collision → render → display → lighting
+#      → entity → navmesh
 # (input depends on scene; render depends on graphics+scene+inspect;
 #  display depends on scene+input+render;
-#  lighting depends on termin::entity_lib from main termin, built after main termin)
-for pkg in termin-inspect termin-scene termin-input termin-collision termin-render termin-display termin-lighting; do
+#  lighting depends on termin::entity_lib from main termin, built after main termin;
+#  entity and navmesh are thin facades over main termin's internal bindings —
+#  their .so files are built by termin/build.sh into sdk/lib/python/ and
+#  the pip packages copy them at install time)
+for pkg in termin-inspect termin-scene termin-input termin-collision termin-render termin-display termin-lighting termin-entity termin-navmesh; do
     install_pkg "$pkg"
 done
 

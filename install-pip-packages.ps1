@@ -47,7 +47,7 @@ foreach ($pkg in @("termin-base", "termin-mesh", "termin-graphics", "termin-modu
 # Order: inspect -> scene -> input -> collision -> render -> display
 # (input depends on scene; render depends on graphics + scene + inspect;
 #  display depends on scene + input + render)
-foreach ($pkg in @("termin-inspect", "termin-scene", "termin-input", "termin-collision", "termin-render", "termin-display", "termin-lighting")) {
+foreach ($pkg in @("termin-inspect", "termin-scene", "termin-input", "termin-collision", "termin-render", "termin-display", "termin-lighting", "termin-entity", "termin-navmesh")) {
     Install-Pkg $pkg
 }
 

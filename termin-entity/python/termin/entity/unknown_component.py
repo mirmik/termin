@@ -1,8 +1,7 @@
-"""
-UnknownComponent utilities.
+"""UnknownComponent utilities.
 
-UnknownComponent is now implemented in C++ in termin-scene.
-This module provides the upgrade function for converting UnknownComponents to real
+UnknownComponent is now implemented in C++ in termin-scene. This module
+provides the upgrade function for converting UnknownComponents to real
 components when their modules are loaded.
 """
 
@@ -10,8 +9,7 @@ from __future__ import annotations
 
 
 def upgrade_unknown_components(scene) -> int:
-    """
-    Try to upgrade UnknownComponents to real components.
+    """Try to upgrade UnknownComponents to real components.
 
     Called after a module is loaded to convert placeholders to real components.
 
