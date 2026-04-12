@@ -225,9 +225,10 @@ NB_MODULE(_components_render_native, m) {
             int vp_w = std::get<2>(rect);
             int vp_h = std::get<3>(rect);
             auto [origin, direction] = c.screen_point_to_ray(x, y, vp_x, vp_y, vp_w, vp_h);
-            nb::module_ geombase = nb::module_::import_("termin.geombase");
-            nb::object Ray3 = geombase.attr("Ray3");
-            nb::object Vec3 = geombase.attr("Vec3");
+            nb::module_ geom = nb::module_::import_("tcbase._geom_native");
+            nb::module_ colliders = nb::module_::import_("termin.colliders._colliders_native");
+            nb::object Vec3 = geom.attr("Vec3");
+            nb::object Ray3 = colliders.attr("Ray3");
             nb::object py_origin = Vec3(origin.x, origin.y, origin.z);
             nb::object py_direction = Vec3(direction.x, direction.y, direction.z);
             return Ray3(py_origin, py_direction);

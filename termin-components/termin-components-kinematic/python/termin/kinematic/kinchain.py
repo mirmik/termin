@@ -1,6 +1,6 @@
 
 from .kinematic import *
-from termin.geombase import Pose3
+from tcbase._geom_native import Pose3
 from .transform import Transform3
 import numpy
 import math
