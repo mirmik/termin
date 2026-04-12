@@ -87,84 +87,89 @@ echo "Using TERMIN_SDK=$TERMIN_SDK"
 if [[ -n "$TARGET_DIR" ]]; then
     mkdir -p "$TARGET_DIR"
     TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
-    echo "Install mode: --target $TARGET_DIR (no-deps)"
+    echo "Install mode: --target $TARGET_DIR (single pip invocation, no-deps)"
 else
-    echo "Install mode: current pip environment"
+    echo "Install mode: current pip environment (sequential pip install)"
 fi
 
-install_pkg() {
-    local pkg="$1"
-    echo ""
-    echo "========================================"
-    echo "  Installing $pkg"
-    echo "========================================"
-    echo ""
-    if [[ -n "$TARGET_DIR" ]]; then
-        # --target mode: install into an arbitrary directory. Skip dependency
-        # resolution because the full transitive set of termin packages is
-        # installed by the enclosing loop in topological order, and we do not
-        # want to pull PyPI deps (nanobind, numpy, ...) into the SDK — those
-        # are already provided by BUNDLE_PACKAGES_EXTERNAL in termin/CMakeLists.txt.
-        pip install --no-build-isolation --no-deps --upgrade \
-            --target "$TARGET_DIR" "$SCRIPT_DIR/$pkg"
-    else
-        pip install --no-build-isolation "$SCRIPT_DIR/$pkg"
-    fi
-}
-
-# Build tools (needed by all C++ packages)
-install_pkg "termin-build-tools"
-
-# Nanobind shared runtime (needed by all packages with Python bindings)
-install_pkg "termin-nanobind-sdk"
-
-# C++ packages with native bindings (order matters — dependencies first)
-for pkg in termin-base termin-mesh termin-graphics termin-modules; do
-    install_pkg "$pkg"
-done
-
-# Subpackages of termin namespace — all ship only nanobind bindings (.so)
-# plus Python wrappers; shared C++ libraries live in the termin SDK.
-#
-# Order must respect build-time and import-time dependencies:
-#   inspect → scene → input → collision → render → display → lighting
-#     → entity → navmesh → physics → engine → skeleton → animation
-#     → components-render → components-mesh → components-kinematic
+# List of termin packages to install, in topological dependency order.
+# Each entry is a path relative to SCRIPT_DIR.
 #
 # Note: several "components-*" C++ targets install into the same Python
 # namespace as their parent subproject (e.g. termin.colliders owns both
 # _colliders_native and _components_collision_native). Those are merged
 # into the parent pip package rather than shipped separately to avoid
 # filesystem overlap at install time.
-for pkg in \
-        termin-inspect termin-scene termin-input termin-collision \
-        termin-render termin-display termin-lighting \
-        termin-entity termin-navmesh termin-physics termin-engine \
-        termin-skeleton termin-animation \
-        termin-components/termin-components-render \
-        termin-components/termin-components-mesh \
-        termin-components/termin-components-kinematic; do
-    install_pkg "$pkg"
-done
+PACKAGES=(
+    termin-build-tools
+    termin-nanobind-sdk
+    termin-base
+    termin-mesh
+    termin-graphics
+    termin-modules
+    termin-inspect
+    termin-scene
+    termin-input
+    termin-collision
+    termin-render
+    termin-display
+    termin-lighting
+    termin-entity
+    termin-navmesh
+    termin-physics
+    termin-engine
+    termin-skeleton
+    termin-animation
+    termin-components/termin-components-render
+    termin-components/termin-components-mesh
+    termin-components/termin-components-kinematic
+    termin-gui
+    termin-nodegraph
+    termin
+)
 
-# Pure Python packages
-for pkg in termin-gui termin-nodegraph; do
-    install_pkg "$pkg"
-done
-
-# Main termin package
-echo ""
-echo "========================================"
-echo "  Installing termin"
-echo "========================================"
-echo ""
 if [[ -n "$TARGET_DIR" ]]; then
-    pip install --no-build-isolation --no-deps --upgrade \
-        --target "$TARGET_DIR" "$SCRIPT_DIR/termin"
-elif [[ $EDITABLE -eq 1 ]]; then
-    pip install --no-build-isolation -e "$SCRIPT_DIR/termin"
+    # --target mode: install ALL packages in a single pip invocation.
+    # This is required because pip --target treats each package-dir
+    # overlap (multiple packages contributing to termin/*) as a conflict
+    # and either errors out (no --upgrade) or wipes previously-installed
+    # subdirs (with --upgrade). When given the whole set at once, pip
+    # merges contributions correctly into the same namespace.
+    #
+    # We pass --no-deps because the dependency closure is the same set
+    # we're already enumerating, and --no-deps avoids pulling PyPI
+    # packages (numpy, nanobind, …) into the SDK — those are provided
+    # separately by BUNDLE_PACKAGES_EXTERNAL in termin/CMakeLists.txt.
+    PIP_ARGS=(--no-build-isolation --no-deps --upgrade --target "$TARGET_DIR")
+    for pkg in "${PACKAGES[@]}"; do
+        PIP_ARGS+=("$SCRIPT_DIR/$pkg")
+    done
+    echo ""
+    echo "========================================"
+    echo "  Installing ${#PACKAGES[@]} packages into $TARGET_DIR"
+    echo "========================================"
+    echo ""
+    pip install "${PIP_ARGS[@]}"
 else
-    pip install --no-build-isolation "$SCRIPT_DIR/termin"
+    # Host-env mode: sequential installs so errors are attributed to a
+    # specific package and intermediate state is inspectable.
+    for pkg in "${PACKAGES[@]}"; do
+        if [[ "$pkg" == "termin" && $EDITABLE -eq 1 ]]; then
+            echo ""
+            echo "========================================"
+            echo "  Installing $pkg (editable)"
+            echo "========================================"
+            echo ""
+            pip install --no-build-isolation -e "$SCRIPT_DIR/$pkg"
+        else
+            echo ""
+            echo "========================================"
+            echo "  Installing $pkg"
+            echo "========================================"
+            echo ""
+            pip install --no-build-isolation "$SCRIPT_DIR/$pkg"
+        fi
+    done
 fi
 
 echo ""
