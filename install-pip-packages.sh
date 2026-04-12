@@ -1,19 +1,61 @@
 #!/bin/bash
-# Install termin Python packages into the current pip environment.
+# Install termin Python packages.
 #
 # Pip packages are THIN: they ship only nanobind binding .so files plus
 # Python wrappers. The shared C++ libraries live in $TERMIN_SDK (default:
 # ./sdk). build-sdk-cpp.sh + build-sdk-bindings.sh must be run first to
 # produce the SDK.
 #
+# By default, packages are installed into the current pip environment.
+# With --target DIR, packages are installed directly into DIR (via
+# `pip install --target`), skipping dependency resolution. This mode is
+# used by build-sdk.sh to populate the bundled Python site-packages in
+# sdk/lib/python3.10/site-packages/ without going through a second Python
+# interpreter.
+#
 # Usage:
-#   ./install-pip-packages.sh              # Install all packages
-#   ./install-pip-packages.sh --editable   # Install termin in editable mode
+#   ./install-pip-packages.sh                             # Install into current pip env
+#   ./install-pip-packages.sh --editable                  # Install termin in editable mode
+#   ./install-pip-packages.sh --target DIR                # Install into DIR (no deps)
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EDITABLE=0
+TARGET_DIR=""
+
+# Parse options first so --target takes effect before SDK discovery / logging.
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --editable|-e) EDITABLE=1; shift ;;
+        --target)
+            TARGET_DIR="$2"
+            shift 2
+            ;;
+        --target=*)
+            TARGET_DIR="${1#--target=}"
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --editable, -e   Install termin in editable mode (host env only)"
+            echo "  --target DIR     Install into DIR (typically bundled Python's site-packages)"
+            echo "  --help, -h       Show this help"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -n "$TARGET_DIR" && $EDITABLE -eq 1 ]]; then
+    echo "ERROR: --editable is incompatible with --target" >&2
+    exit 1
+fi
 
 # Locate termin SDK so thin pip packages can copy their pre-built bindings.
 # Used both at install time (TerminCMakeBuildExt copies _X_native.so from
@@ -42,23 +84,13 @@ else
 fi
 echo "Using TERMIN_SDK=$TERMIN_SDK"
 
-for arg in "$@"; do
-    case "$arg" in
-        --editable|-e) EDITABLE=1 ;;
-        --help|-h)
-            echo "Usage: $0 [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  --editable, -e  Install termin in editable mode"
-            echo "  --help, -h      Show this help"
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $arg"
-            exit 1
-            ;;
-    esac
-done
+if [[ -n "$TARGET_DIR" ]]; then
+    mkdir -p "$TARGET_DIR"
+    TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
+    echo "Install mode: --target $TARGET_DIR (no-deps)"
+else
+    echo "Install mode: current pip environment"
+fi
 
 install_pkg() {
     local pkg="$1"
@@ -67,7 +99,17 @@ install_pkg() {
     echo "  Installing $pkg"
     echo "========================================"
     echo ""
-    pip install --no-build-isolation "$SCRIPT_DIR/$pkg"
+    if [[ -n "$TARGET_DIR" ]]; then
+        # --target mode: install into an arbitrary directory. Skip dependency
+        # resolution because the full transitive set of termin packages is
+        # installed by the enclosing loop in topological order, and we do not
+        # want to pull PyPI deps (nanobind, numpy, ...) into the SDK — those
+        # are already provided by BUNDLE_PACKAGES_EXTERNAL in termin/CMakeLists.txt.
+        pip install --no-build-isolation --no-deps --upgrade \
+            --target "$TARGET_DIR" "$SCRIPT_DIR/$pkg"
+    else
+        pip install --no-build-isolation "$SCRIPT_DIR/$pkg"
+    fi
 }
 
 # Build tools (needed by all C++ packages)
@@ -116,7 +158,10 @@ echo "========================================"
 echo "  Installing termin"
 echo "========================================"
 echo ""
-if [[ $EDITABLE -eq 1 ]]; then
+if [[ -n "$TARGET_DIR" ]]; then
+    pip install --no-build-isolation --no-deps --upgrade \
+        --target "$TARGET_DIR" "$SCRIPT_DIR/termin"
+elif [[ $EDITABLE -eq 1 ]]; then
     pip install --no-build-isolation -e "$SCRIPT_DIR/termin"
 else
     pip install --no-build-isolation "$SCRIPT_DIR/termin"
