@@ -51,10 +51,11 @@ for pkg in termin-base termin-mesh termin-graphics termin-modules; do
 done
 
 # Subpackages of termin namespace
-# Order: inspect → scene → input → collision → render → display
+# Order: inspect → scene → input → collision → render → display → lighting
 # (input depends on scene; render depends on graphics+scene+inspect;
-#  display depends on scene+input+render)
-for pkg in termin-inspect termin-scene termin-input termin-collision termin-render termin-display; do
+#  display depends on scene+input+render;
+#  lighting depends on termin::entity_lib from main termin, built after main termin)
+for pkg in termin-inspect termin-scene termin-input termin-collision termin-render termin-display termin-lighting; do
     install_pkg "$pkg"
 done
 

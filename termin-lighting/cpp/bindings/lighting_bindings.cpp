@@ -4,9 +4,9 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/operators.h>
 
-#include "termin/lighting/lighting.hpp"
+#include <termin/lighting/lighting.hpp>
 #include <termin/geom/vec3.hpp>
-#include "termin/bindings/entity/entity_helpers.hpp"
+#include <termin/bindings/entity_helpers.hpp>
 
 namespace nb = nanobind;
 using namespace termin;

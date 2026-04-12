@@ -10,10 +10,8 @@ nanobind_add_module(_voxels_native NB_SHARED termin/voxels_bindings.cpp)
 target_compile_options(_voxels_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_link_libraries(_voxels_native PRIVATE entity_lib trent)
 
-# Lighting native module (Light, AttenuationCoefficients, LightComponent)
-nanobind_add_module(_lighting_native NB_SHARED termin/lighting_bindings.cpp)
-target_link_libraries(_lighting_native PRIVATE entity_lib)
-target_compile_options(_lighting_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+# _lighting_native has been extracted into the standalone termin-lighting subproject.
+# See termin-env/termin-lighting/ — it is built by build-sdk-bindings.sh after main termin.
 
 # ============== Core entity modules ==============
 
@@ -157,10 +155,6 @@ set_target_properties(_voxels_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_lighting_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_entity_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -182,6 +176,5 @@ install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/voxels)
 if(TERMIN_HAS_RECAST)
     install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/navmesh)
 endif()
-install(TARGETS _lighting_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/lighting)
 install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/entity)
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})
