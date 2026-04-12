@@ -1,6 +1,6 @@
 from .transform import Transform3
 from .kinematic import KinematicTransform3OneScrew, Rotator3, Actuator3
-from termin.geombase import Pose3, Screw3
+from tcbase._geom_native import Pose3, Screw3
 import numpy
 
 def from_trent(dct: dict) -> Transform3:

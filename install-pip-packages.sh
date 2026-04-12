@@ -50,16 +50,27 @@ for pkg in termin-base termin-mesh termin-graphics termin-modules; do
     install_pkg "$pkg"
 done
 
-# Subpackages of termin namespace
-# Order: inspect → scene → input → collision → render → display → lighting
-#      → entity → navmesh
-# (input depends on scene; render depends on graphics+scene+inspect;
-#  display depends on scene+input+render;
-#  lighting depends on termin::entity_lib from main termin, built after main termin;
-#  entity and navmesh are thin facades over main termin's internal bindings —
-#  their .so files are built by termin/build.sh into sdk/lib/python/ and
-#  the pip packages copy them at install time)
-for pkg in termin-inspect termin-scene termin-input termin-collision termin-render termin-display termin-lighting termin-entity termin-navmesh; do
+# Subpackages of termin namespace — all ship only nanobind bindings (.so)
+# plus Python wrappers; shared C++ libraries live in the termin SDK.
+#
+# Order must respect build-time and import-time dependencies:
+#   inspect → scene → input → collision → render → display → lighting
+#     → entity → navmesh → physics → engine → skeleton → animation
+#     → components-render → components-mesh → components-kinematic
+#
+# Note: several "components-*" C++ targets install into the same Python
+# namespace as their parent subproject (e.g. termin.colliders owns both
+# _colliders_native and _components_collision_native). Those are merged
+# into the parent pip package rather than shipped separately to avoid
+# filesystem overlap at install time.
+for pkg in \
+        termin-inspect termin-scene termin-input termin-collision \
+        termin-render termin-display termin-lighting \
+        termin-entity termin-navmesh termin-physics termin-engine \
+        termin-skeleton termin-animation \
+        termin-components/termin-components-render \
+        termin-components/termin-components-mesh \
+        termin-components/termin-components-kinematic; do
     install_pkg "$pkg"
 done
 

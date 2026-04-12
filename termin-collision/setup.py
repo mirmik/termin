@@ -8,7 +8,7 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    module_names = ["_colliders_native", "_collision_native"]
+    module_names = ["_colliders_native", "_collision_native", "_components_collision_native"]
     source_dir = _DIR
 
 
@@ -28,6 +28,7 @@ setup(
     install_requires=["termin-nanobind"],
     ext_modules=[
         Extension("termin.colliders._colliders_native", sources=[]),
+        Extension("termin.colliders._components_collision_native", sources=[]),
         Extension("termin.collision._collision_native", sources=[]),
     ],
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
