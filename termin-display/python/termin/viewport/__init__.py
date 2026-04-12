@@ -1,8 +1,8 @@
 """Viewport module - TcViewport with reference counting."""
 
-from termin import _dll_setup  # noqa: F401
+from termin_nanobind.runtime import preload_sdk_libs
 
-_dll_setup.extend_package_path(__path__, "viewport")
+preload_sdk_libs("termin_display")
 
 from termin.viewport._viewport_native import Viewport
 

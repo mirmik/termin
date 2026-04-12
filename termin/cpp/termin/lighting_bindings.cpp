@@ -30,7 +30,7 @@ NB_MODULE(_lighting_native, m) {
     m.doc() = "Native C++ lighting module for termin";
 
     // Import geom module to register Vec3 type
-    nb::module_::import_("termin.geombase._geom_native");
+    nb::module_::import_("tcbase._geom_native");
 
     // ShadowSettings - scene-wide shadow rendering settings
     nb::class_<ShadowSettings>(m, "ShadowSettings")

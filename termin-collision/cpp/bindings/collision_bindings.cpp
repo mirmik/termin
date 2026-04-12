@@ -27,9 +27,8 @@ NB_MODULE(_collision_native, m) {
 
     // Import dependencies
     nb::module_::import_("termin.scene._scene_native");
-    nb::module_::import_("termin.geombase._geom_native");
+    nb::module_::import_("tcbase._geom_native");
     nb::module_::import_("termin.colliders._colliders_native");
-    nb::module_::import_("termin.entity._entity_native");
 
     // ==================== ContactID ====================
 
@@ -157,7 +156,7 @@ NB_MODULE(_collision_native, m) {
 
     // Check if AABB is already exposed in geombase, if not expose it here
     try {
-        nb::module_::import_("termin.geombase._geom_native").attr("AABB");
+        nb::module_::import_("tcbase._geom_native").attr("AABB");
     } catch (...) {
         nb::class_<AABB>(m, "AABB")
             .def(nb::init<>())

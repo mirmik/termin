@@ -8,27 +8,29 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    module_names = ["_colliders_native", "_collision_native"]
+    module_names = ["_display_native", "_viewport_native"]
     source_dir = _DIR
 
 
 setup(
-    name="termin-collision",
+    name="termin-display",
     version="0.1.0",
     license="MIT",
-    description="Collision and collider Python bindings (thin; requires termin SDK at runtime)",
+    description="Display and viewport Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.8",
-    packages=["termin.colliders", "termin.collision"],
+    packages=["termin.display", "termin.viewport"],
     package_dir={
-        "termin.colliders": "python/termin/colliders",
-        "termin.collision": "python/termin/collision",
+        "termin.display": "python/termin/display",
+        "termin.viewport": "python/termin/viewport",
     },
-    install_requires=["termin-nanobind"],
+    install_requires=[
+        "termin-nanobind",
+    ],
     ext_modules=[
-        Extension("termin.colliders._colliders_native", sources=[]),
-        Extension("termin.collision._collision_native", sources=[]),
+        Extension("termin.display._display_native", sources=[]),
+        Extension("termin.viewport._viewport_native", sources=[]),
     ],
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,

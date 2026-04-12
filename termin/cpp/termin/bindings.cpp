@@ -123,7 +123,7 @@ NB_MODULE(_native, m) {
     m.attr("mesh") = tgfx;
 
     // Import _geom_native for Vec3, Mat44 types (used by Material::color, etc.)
-    nb::module_ geom_native = nb::module_::import_("termin.geombase._geom_native");
+    nb::module_ geom_native = nb::module_::import_("tcbase._geom_native");
     m.attr("geom") = geom_native;
 
     // Import _viewport_native for TcViewport type (used by CameraComponent)

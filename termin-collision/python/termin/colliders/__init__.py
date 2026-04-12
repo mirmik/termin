@@ -8,10 +8,9 @@
 - ColliderHit, RayHit - результаты запросов
 """
 
-# Setup DLL paths before importing native extensions
-from termin import _dll_setup  # noqa: F401
+from termin_nanobind.runtime import preload_sdk_libs
 
-_dll_setup.extend_package_path(__path__, "colliders")
+preload_sdk_libs("termin_collision")
 
 from ._colliders_native import (
     Collider,

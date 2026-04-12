@@ -50,8 +50,11 @@ for pkg in termin-base termin-mesh termin-graphics termin-modules; do
     install_pkg "$pkg"
 done
 
-# Subpackages of termin namespace (order: inspect → scene → collision)
-for pkg in termin-inspect termin-scene termin-collision; do
+# Subpackages of termin namespace
+# Order: inspect → scene → input → collision → render → display
+# (input depends on scene; render depends on graphics+scene+inspect;
+#  display depends on scene+input+render)
+for pkg in termin-inspect termin-scene termin-input termin-collision termin-render termin-display; do
     install_pkg "$pkg"
 done
 
