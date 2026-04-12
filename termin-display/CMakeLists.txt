@@ -107,6 +107,13 @@ if(TERMIN_BUILD_PYTHON)
     )
     termin_set_rpath_python(_viewport_native)
     install(TARGETS _viewport_native DESTINATION lib/python/termin/viewport)
+
+    install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/python/termin/display/
+            DESTINATION lib/python/termin/display
+            FILES_MATCHING PATTERN "*.py")
+    install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/python/termin/viewport/
+            DESTINATION lib/python/termin/viewport
+            FILES_MATCHING PATTERN "*.py")
 endif()
 
 install(TARGETS termin_display

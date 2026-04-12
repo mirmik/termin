@@ -14,7 +14,7 @@ using namespace termin::physics;
 NB_MODULE(_physics_native, m) {
     m.doc() = "Native C++ physics module for termin";
 
-    nb::module_::import_("termin.geombase._geom_native");
+    nb::module_::import_("tcbase._geom_native");
 
     nb::class_<RigidBody>(m, "RigidBody")
         .def(nb::init<>())

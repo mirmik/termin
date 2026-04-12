@@ -43,8 +43,11 @@ foreach ($pkg in @("termin-base", "termin-mesh", "termin-graphics", "termin-modu
     Install-Pkg $pkg
 }
 
-# Subpackages of termin namespace (order: inspect -> scene -> collision)
-foreach ($pkg in @("termin-inspect", "termin-scene", "termin-collision")) {
+# Subpackages of termin namespace
+# Order: inspect -> scene -> input -> collision -> render -> display
+# (input depends on scene; render depends on graphics + scene + inspect;
+#  display depends on scene + input + render)
+foreach ($pkg in @("termin-inspect", "termin-scene", "termin-input", "termin-collision", "termin-render", "termin-display")) {
     Install-Pkg $pkg
 }
 
