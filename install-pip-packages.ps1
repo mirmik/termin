@@ -1,12 +1,41 @@
 #!/usr/bin/env pwsh
 # Install termin Python packages into the current pip environment.
-# Assumes SDK is already built via build-sdk-cpp.ps1 + build-sdk-bindings.ps1.
+#
+# Pip packages are THIN: they ship only nanobind binding .pyd files plus
+# Python wrappers. The shared C++ libraries live in $env:TERMIN_SDK
+# (default: .\sdk). build-sdk-cpp.ps1 + build-sdk-bindings.ps1 must be run
+# first to produce the SDK.
 
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SdkPrefix = if ($env:SDK_PREFIX) { $env:SDK_PREFIX } else { Join-Path $ScriptDir "sdk" }
 $Editable = $false
+
+# Locate termin SDK so thin pip packages can copy their pre-built bindings.
+# Discovery order mirrors termin_nanobind.runtime.find_sdk():
+#   1. $env:TERMIN_SDK (if set and valid)
+#   2. $ScriptDir\sdk (in-tree build via build-sdk-bindings.ps1)
+#   3. $env:LOCALAPPDATA\termin-sdk (system-wide install)
+function Test-TerminSdk { param($Path) Test-Path (Join-Path $Path "lib\python\termin") }
+
+if ($env:TERMIN_SDK) {
+    if (-not (Test-TerminSdk $env:TERMIN_SDK)) {
+        Write-Error "TERMIN_SDK=$($env:TERMIN_SDK) is set but does not contain lib\python\termin"
+        exit 1
+    }
+} elseif (Test-TerminSdk (Join-Path $ScriptDir "sdk")) {
+    $env:TERMIN_SDK = Join-Path $ScriptDir "sdk"
+} else {
+    $localSdk = Join-Path $env:LOCALAPPDATA "termin-sdk"
+    if (Test-TerminSdk $localSdk) {
+        $env:TERMIN_SDK = $localSdk
+    } else {
+        Write-Error "termin SDK not found. Tried: `$env:TERMIN_SDK (unset), $ScriptDir\sdk, $localSdk. Run build-sdk-cpp.ps1 and build-sdk-bindings.ps1 first, or set TERMIN_SDK."
+        exit 1
+    }
+}
+Write-Host "Using TERMIN_SDK=$($env:TERMIN_SDK)"
 
 foreach ($arg in $args) {
     switch ($arg) {
