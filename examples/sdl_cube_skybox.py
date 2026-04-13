@@ -73,10 +73,13 @@ void main() {
 
 
 def make_skybox_pipeline():
+    # Skybox writes 'sky' (inplace over 'empty'), ColorPass reads 'sky' and
+    # writes 'color' (inplace over 'sky'). Framegraph respects inplace
+    # aliasing so all three names resolve to the same physical buffer.
     passes = [
-        SkyBoxPass(input_res="empty", output_res="color", pass_name="Skybox"),
+        SkyBoxPass(input_res="empty", output_res="sky", pass_name="Skybox"),
         ColorPass(
-            input_res="color", output_res="color",
+            input_res="sky", output_res="color",
             shadow_res="", pass_name="Color", phase_mark="opaque",
         ),
         PresentToScreenPass(input_res="color", pass_name="Present"),
