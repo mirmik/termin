@@ -32,38 +32,22 @@ void main() {
 )";
 
 // Legacy path — classic uniforms, paired with TcShader::set_uniform_* dispatch.
+// TEMP DEBUG: hard-coded magenta output to isolate write vs read failure.
 static const char* TONEMAP_FRAG_LEGACY = R"(
 #version 330 core
 in vec2 v_uv;
 
 uniform sampler2D u_input;
 uniform float u_exposure;
-uniform int u_method;  // 0 = ACES, 1 = Reinhard, 2 = None
+uniform int u_method;
 
 out vec4 FragColor;
 
-vec3 aces_tonemap(vec3 x) {
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
-vec3 reinhard_tonemap(vec3 x) {
-    return x / (x + vec3(1.0));
-}
-
 void main() {
-    vec3 color = texture(u_input, v_uv).rgb;
-    color *= u_exposure;
-    if (u_method == 0) {
-        color = aces_tonemap(color);
-    } else if (u_method == 1) {
-        color = reinhard_tonemap(color);
-    }
-    FragColor = vec4(color, 1.0);
+    // DEBUG: ignore inputs, write solid magenta so we can tell if the pass
+    // writes to its target FBO at all.
+    vec3 _unused_sample = texture(u_input, v_uv).rgb * u_exposure * float(u_method);
+    FragColor = vec4(1.0, 0.0, 1.0, 1.0) + vec4(_unused_sample, 0.0) * 0.0;
 }
 )";
 
@@ -162,7 +146,13 @@ void TonemapPass::execute(ExecuteContext& ctx) {
 // ----------------------------------------------------------------------------
 
 void TonemapPass::execute_legacy(ExecuteContext& ctx) {
-    if (!ctx.graphics) return;
+    tc::Log::info("[TonemapPass/legacy] ENTER input_res='%s' output_res='%s' method=%d exposure=%.2f",
+                  input_res.c_str(), output_res.c_str(), method, exposure);
+
+    if (!ctx.graphics) {
+        tc::Log::error("[TonemapPass/legacy] ctx.graphics is NULL");
+        return;
+    }
 
     FramebufferHandle* input_fbo = nullptr;
     if (ctx.reads_fbos.count(input_res)) {
@@ -175,6 +165,9 @@ void TonemapPass::execute_legacy(ExecuteContext& ctx) {
         FrameGraphResource* res = ctx.writes_fbos[output_res];
         output_fbo = dynamic_cast<FramebufferHandle*>(res);
     }
+
+    tc::Log::info("[TonemapPass/legacy] input_fbo=%p output_fbo=%p",
+                  (void*)input_fbo, (void*)output_fbo);
 
     if (!input_fbo) {
         tc::Log::error("[TonemapPass] Missing input FBO '%s'", input_res.c_str());
@@ -189,7 +182,11 @@ void TonemapPass::execute_legacy(ExecuteContext& ctx) {
 
     int w = output_fbo ? output_fbo->get_width() : ctx.rect.width;
     int h = output_fbo ? output_fbo->get_height() : ctx.rect.height;
-    if (w <= 0 || h <= 0) return;
+    tc::Log::info("[TonemapPass/legacy] viewport %dx%d", w, h);
+    if (w <= 0 || h <= 0) {
+        tc::Log::error("[TonemapPass/legacy] bad viewport %dx%d — skipping", w, h);
+        return;
+    }
 
     ensure_shader();
 
@@ -209,6 +206,7 @@ void TonemapPass::execute_legacy(ExecuteContext& ctx) {
     shader_.set_uniform_int("u_method", method);
 
     ctx.graphics->draw_ui_textured_quad();
+    tc::Log::info("[TonemapPass/legacy] draw complete");
 
     ctx.graphics->set_depth_test(true);
     ctx.graphics->set_depth_mask(true);
