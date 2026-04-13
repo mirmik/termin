@@ -57,8 +57,8 @@ set_target_properties(termin_components_render PROPERTIES
 
 target_include_directories(termin_components_render PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/../../termin-render/include
-    ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp/termin
-    ${CMAKE_CURRENT_LIST_DIR}/../../termin/core_c/include
+    ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/cpp/termin
+    ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/core_c/include
 )
 
 if(TERMIN_BUILD_PYTHON)
@@ -79,9 +79,9 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_components_render_native PRIVATE termin_components_render)
     target_include_directories(_components_render_native PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/../../termin-render/include
-        ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp
-        ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp/termin
-        ${CMAKE_CURRENT_LIST_DIR}/../../termin/core_c/include
+        ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/cpp/termin
+        ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/core_c/include
     )
 
     if(TERMIN_COMPONENTS_RENDER_PYTHON_PREFIX)

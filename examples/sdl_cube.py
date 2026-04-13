@@ -1,6 +1,7 @@
 """SDL2 window with a rotating cube.
 
 Uses Display + RenderEngine directly with SDL backend.
+Imports only from subpackages — does NOT require termin-app.
 """
 
 from __future__ import annotations
@@ -8,19 +9,18 @@ from __future__ import annotations
 import sys
 import numpy as np
 
-from termin.visualization.core.scene import Scene
-from termin.visualization.core.entity import Entity
-from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
-from termin.visualization.core.display import Display
-from termin.visualization.core.material import Material
-from termin.render_components import MeshRenderer
-from termin.mesh.mesh import CubeMesh
-from termin.mesh import TcMesh
+from termin.entity import Entity, TcScene
+from termin.entity._entity_native import OrbitCameraController
+from termin.render_components import PerspectiveCameraComponent, MeshRenderer
+from termin.display.display import Display
+from termin.display.sdl_backend import SDLWindowBackend
 from termin.geombase import Pose3
 from tgfx import TcShader
-from termin._native.render import RenderEngine
+from termin._native.render import RenderEngine, ColorPass, PresentToScreenPass, TcMaterial
 from termin.graphics import OpenGLGraphicsBackend
-from termin.visualization.platform.backends.sdl import SDLWindowBackend
+from termin.render_framework import RenderPipeline
+from tmesh import TcMesh
+from tmesh._tmesh_native import CubeMesh
 
 
 VERT = """
@@ -57,25 +57,19 @@ void main() {
 
 
 def make_preview_pipeline():
-    from termin.visualization.render.framegraph import (
-        ColorPass, PresentToScreenPass, RenderPipeline,
-    )
-    from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
-
     passes = [
-        SkyBoxPass(input_res="empty", output_res="skybox", pass_name="Skybox"),
         ColorPass(
-            input_res="skybox", output_res="color",
-            shadow_res=None, pass_name="Color", phase_mark="opaque",
+            input_res="empty", output_res="color",
+            shadow_res="", pass_name="Color", phase_mark="opaque",
         ),
         PresentToScreenPass(input_res="color", pass_name="Present"),
     ]
     return RenderPipeline(name="sdl_cube", _init_passes=passes)
 
 
-def build_scene() -> tuple[Scene, PerspectiveCameraComponent]:
+def build_scene() -> tuple[TcScene, PerspectiveCameraComponent]:
     shader = TcShader.from_sources(VERT, FRAG, "", "SDLCubeShader")
-    material = Material(
+    material = TcMaterial(
         name="SDLCubeMaterial",
         shader=shader,
         color=np.array([0.3, 0.6, 0.8, 1.0], dtype=np.float32),
@@ -87,7 +81,7 @@ def build_scene() -> tuple[Scene, PerspectiveCameraComponent]:
     cube = Entity(pose=Pose3.identity(), name="cube")
     cube.add_component(MeshRenderer(tc_mesh, material))
 
-    scene = Scene.create(name="sdl_cube")
+    scene = TcScene.create(name="sdl_cube")
     scene.add(cube)
 
     cam_entity = Entity(
