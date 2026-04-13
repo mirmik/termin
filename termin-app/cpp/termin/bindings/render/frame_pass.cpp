@@ -17,6 +17,7 @@ extern "C" {
 #include "termin/render/present_pass.hpp"
 #include "termin/render/bloom_pass.hpp"
 #include "termin/render/grayscale_pass.hpp"
+#include "termin/render/skybox_pass.hpp"
 #include "termin/render/tonemap_pass.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/shadow.hpp"
@@ -611,6 +612,39 @@ void bind_frame_pass(nb::module_& m) {
             nb::make_tuple("output_res", "fbo")
         );
         m.attr("GrayscalePass").attr("node_inplace_pairs") = nb::make_tuple();
+    }
+
+    nb::class_<SkyBoxPass, CxxFramePass>(m, "SkyBoxPass")
+        .def("__init__", [](SkyBoxPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) SkyBoxPass(input_res, output_res, pass_name);
+            init_pass_from_python(self, "SkyBoxPass");
+        },
+             nb::arg("input_res") = "empty",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Skybox")
+        .def_rw("input_res", &SkyBoxPass::input_res)
+        .def_rw("output_res", &SkyBoxPass::output_res)
+        .def("compute_reads", &SkyBoxPass::compute_reads)
+        .def("compute_writes", &SkyBoxPass::compute_writes)
+        .def("get_inplace_aliases", &SkyBoxPass::get_inplace_aliases)
+        .def_prop_ro("reads", &SkyBoxPass::compute_reads)
+        .def_prop_ro("writes", &SkyBoxPass::compute_writes)
+        .def("destroy", &SkyBoxPass::destroy);
+
+    {
+        m.attr("SkyBoxPass").attr("category") = "Render";
+        m.attr("SkyBoxPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo")
+        );
+        m.attr("SkyBoxPass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
+        );
+        m.attr("SkyBoxPass").attr("node_inplace_pairs") = nb::make_tuple(
+            nb::make_tuple("input_res", "output_res")
+        );
     }
 
     nb::class_<TonemapPass, CxxFramePass>(m, "TonemapPass")

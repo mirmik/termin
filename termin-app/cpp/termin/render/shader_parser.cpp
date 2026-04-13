@@ -164,6 +164,10 @@ std::pair<uint32_t, uint32_t> std140_size_align(const std::string& property_type
     if (property_type == "Vec4" || property_type == "Color") {
         return {16u, 16u};
     }
+    // 4x4 matrix — four column vec4s, base alignment 16.
+    if (property_type == "Mat4") {
+        return {64u, 16u};
+    }
     // Texture / anything else: not in UBO.
     return {0u, 0u};
 }
@@ -209,6 +213,7 @@ std::string synthesize_material_ubo_glsl(const MaterialUboLayout& layout) {
         if (prop_type == "Vec3")  return "vec3";
         if (prop_type == "Vec4")  return "vec4";
         if (prop_type == "Color") return "vec4";
+        if (prop_type == "Mat4")  return "mat4";
         return nullptr;
     };
 
@@ -328,6 +333,16 @@ bool pack_one(const std::string& property_type,
         else if (property_type == "Vec3") count = 3;
         // Vec4 / Color → 4.
         write_float_array(dst, *arr, count);
+        return true;
+    }
+    if (property_type == "Mat4") {
+        // 16 floats in column-major order, matching Mat44f storage and the
+        // GLSL `mat4` default. std140 aligns each column to 16 bytes, which
+        // for a tightly-packed mat4 means sequential 16-byte columns — so
+        // the raw memcpy-style layout works.
+        auto* arr = std::get_if<std::vector<double>>(&value);
+        if (!arr) return false;
+        write_float_array(dst, *arr, 16);
         return true;
     }
     // Texture or unknown — not in UBO.

@@ -504,3 +504,59 @@ TEST_CASE("std140_pack: Texture properties in values list are ignored")
 
     CHECK_EQ(read_float_at(buf, 0), 0.5f);
 }
+
+TEST_CASE("std140: Mat4 size/align")
+{
+    CHECK_EQ(std140_size_align("Mat4").first, 64u);
+    CHECK_EQ(std140_size_align("Mat4").second, 16u);
+}
+
+TEST_CASE("std140_pack: Mat4 writes 16 floats in column-major order")
+{
+    std::vector<MaterialProperty> schema = { mk("u_view", "Mat4") };
+    std::vector<double> cm_data = {
+        // column 0
+        1.0, 2.0, 3.0, 4.0,
+        // column 1
+        5.0, 6.0, 7.0, 8.0,
+        // column 2
+        9.0, 10.0, 11.0, 12.0,
+        // column 3
+        13.0, 14.0, 15.0, 16.0,
+    };
+    std::vector<MaterialProperty> values = {
+        mk_vec("u_view", "Mat4", cm_data),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    CHECK_EQ(layout.block_size, 64u);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+
+    for (size_t i = 0; i < 16; ++i) {
+        CHECK_EQ(read_float_at(buf, static_cast<uint32_t>(i * 4)),
+                 static_cast<float>(cm_data[i]));
+    }
+}
+
+TEST_CASE("std140_pack: Mat4 followed by Vec4 aligns vec4 right after mat4")
+{
+    std::vector<MaterialProperty> schema = {
+        mk("u_view",  "Mat4"),
+        mk("u_color", "Vec4"),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    CHECK_EQ(layout.entries[0].offset, 0u);
+    CHECK_EQ(layout.entries[0].size, 64u);
+    CHECK_EQ(layout.entries[1].offset, 64u);
+    CHECK_EQ(layout.entries[1].size, 16u);
+    CHECK_EQ(layout.block_size, 80u);
+}
+
+TEST_CASE("synthesize: Mat4 emits mat4 type")
+{
+    std::vector<MaterialProperty> props = { mk("u_view", "Mat4") };
+    MaterialUboLayout layout = compute_std140_layout(props);
+    std::string glsl = synthesize_material_ubo_glsl(layout);
+    CHECK(glsl.find("mat4 u_view;") != std::string::npos);
+}
