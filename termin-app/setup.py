@@ -34,45 +34,27 @@ if __name__ == "__main__":
             include=["termin", "termin.*"],
             exclude=[
                 "tests", "tests.*", "examples", "examples.*",
-                # Shipped by termin-base
-                "termin.geombase", "termin.geombase.*",
-                # Shipped by termin-collision
-                "termin.collision", "termin.collision.*",
-                "termin.colliders", "termin.colliders.*",
-                # Shipped by termin-render
-                "termin.render_framework", "termin.render_framework.*",
-                "termin.render", "termin.render.*",
-                # Shipped by termin-display
-                "termin.display", "termin.display.*",
-                "termin.viewport", "termin.viewport.*",
-                # Shipped by termin-scene
-                "termin.scene", "termin.scene.*",
-                # Shipped by termin-entity
-                "termin.entity", "termin.entity.*",
-                # Shipped by termin-input
-                "termin.input", "termin.input.*",
-                # Shipped by termin-inspect
-                "termin.inspect", "termin.inspect.*",
-                # Shipped by termin-mesh (as tmesh)
-                "termin.mesh", "termin.mesh.*",
-                # Shipped by termin-engine
-                "termin.engine", "termin.engine.*",
-                # Shipped by termin-skeleton
-                "termin.skeleton", "termin.skeleton.*",
-                # Shipped by termin-animation
-                "termin.animation", "termin.animation.*",
-                # Shipped by termin-physics
-                "termin.physics", "termin.physics.*",
-                # Shipped by termin-navmesh
-                "termin.navmesh", "termin.navmesh.*",
-                # Shipped by termin-lighting
-                "termin.lighting", "termin.lighting.*",
-                # Shipped by termin-components-render
-                "termin.render_components", "termin.render_components.*",
-                # Shipped by termin-components-mesh
-                "termin.mesh_components", "termin.mesh_components.*",
-                # Shipped by termin-components-kinematic
-                "termin.kinematic", "termin.kinematic.*",
+                # Exclude subpackages shipped by separate pip packages.
+                # Only list namespaces that are actually installed by those packages.
+                "termin.collision", "termin.collision.*",       # termin-collision
+                "termin.colliders", "termin.colliders.*",       # termin-collision
+                "termin.render_framework", "termin.render_framework.*",  # termin-render
+                "termin.render", "termin.render.*",             # termin-render
+                "termin.display", "termin.display.*",           # termin-display
+                "termin.viewport", "termin.viewport.*",         # termin-display
+                "termin.scene", "termin.scene.*",               # termin-scene
+                "termin.entity", "termin.entity.*",             # termin-entity
+                "termin.input", "termin.input.*",               # termin-input
+                "termin.inspect", "termin.inspect.*",           # termin-inspect
+                "termin.mesh", "termin.mesh.*",                 # termin-components-mesh
+                "termin.engine", "termin.engine.*",             # termin-engine
+                "termin.skeleton", "termin.skeleton.*",         # termin-skeleton
+                "termin.animation", "termin.animation.*",       # termin-animation
+                "termin.physics", "termin.physics.*",           # termin-physics
+                "termin.navmesh", "termin.navmesh.*",           # termin-navmesh
+                "termin.lighting", "termin.lighting.*",         # termin-lighting
+                "termin.render_components", "termin.render_components.*",  # termin-components-render
+                "termin.kinematic", "termin.kinematic.*",       # termin-components-kinematic
             ],
         ),
         python_requires='>3.10.0',
