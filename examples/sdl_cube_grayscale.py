@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """SDL2 window with a rotating cube rendered through a grayscale post-process.
 
 Pipeline:

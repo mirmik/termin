@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """SDL2 window with a rotating cube.
 
 Uses Display + RenderEngine directly with SDL backend.
