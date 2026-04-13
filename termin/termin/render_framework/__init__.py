@@ -1,7 +1,3 @@
-from termin import _dll_setup  # noqa: F401
-
-_dll_setup.extend_package_path(__path__, "render_framework")
-
 from termin.render_framework._render_framework_native import (
     ExecuteContext,
     FrameGraphCapture,

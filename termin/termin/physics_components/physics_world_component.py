@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from termin import _dll_setup  # noqa: F401
-
 from typing import TYPE_CHECKING, List
 import numpy as np
 
