@@ -4,11 +4,6 @@ Voxel system for navmesh generation.
 Provides chunked voxel grid with visualization and serialization support.
 """
 
-# Setup DLL paths before importing native extensions
-from termin import _dll_setup  # noqa: F401
-
-_dll_setup.extend_package_path(__path__, "voxels")
-
 from termin.voxels._voxels_native import (
     VoxelChunk,
     VoxelGrid,

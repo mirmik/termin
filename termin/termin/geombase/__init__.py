@@ -10,11 +10,6 @@
 Использует скомпилированный C++ модуль для Pose3, GeneralPose3 и связанных типов.
 """
 
-# Setup DLL paths before importing native extensions
-from termin import _dll_setup  # noqa: F401
-
-_dll_setup.extend_package_path(__path__, "geombase")
-
 # Import C++ native implementations
 from ._geom_native import (
     Vec3,

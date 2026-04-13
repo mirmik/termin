@@ -26,9 +26,54 @@ if __name__ == "__main__":
         # find_namespace_packages picks up directories without __init__.py too
         # (e.g. transitional namespace dirs, or leftover subdirs that contain
         # only .py submodules). find_packages would drop them silently.
+        # find_namespace_packages picks up directories without __init__.py too.
+        # Exclude subpackages that are already shipped as separate pip packages
+        # (termin-display, termin-render, termin-scene, etc.) to avoid
+        # overwriting their __init__.py files.
         packages=find_namespace_packages(
             include=["termin", "termin.*"],
-            exclude=["tests", "tests.*", "examples", "examples.*"],
+            exclude=[
+                "tests", "tests.*", "examples", "examples.*",
+                # Shipped by termin-base
+                "termin.geombase", "termin.geombase.*",
+                # Shipped by termin-collision
+                "termin.collision", "termin.collision.*",
+                "termin.colliders", "termin.colliders.*",
+                # Shipped by termin-render
+                "termin.render_framework", "termin.render_framework.*",
+                "termin.render", "termin.render.*",
+                # Shipped by termin-display
+                "termin.display", "termin.display.*",
+                "termin.viewport", "termin.viewport.*",
+                # Shipped by termin-scene
+                "termin.scene", "termin.scene.*",
+                # Shipped by termin-entity
+                "termin.entity", "termin.entity.*",
+                # Shipped by termin-input
+                "termin.input", "termin.input.*",
+                # Shipped by termin-inspect
+                "termin.inspect", "termin.inspect.*",
+                # Shipped by termin-mesh (as tmesh)
+                "termin.mesh", "termin.mesh.*",
+                # Shipped by termin-engine
+                "termin.engine", "termin.engine.*",
+                # Shipped by termin-skeleton
+                "termin.skeleton", "termin.skeleton.*",
+                # Shipped by termin-animation
+                "termin.animation", "termin.animation.*",
+                # Shipped by termin-physics
+                "termin.physics", "termin.physics.*",
+                # Shipped by termin-navmesh
+                "termin.navmesh", "termin.navmesh.*",
+                # Shipped by termin-lighting
+                "termin.lighting", "termin.lighting.*",
+                # Shipped by termin-components-render
+                "termin.render_components", "termin.render_components.*",
+                # Shipped by termin-components-mesh
+                "termin.mesh_components", "termin.mesh_components.*",
+                # Shipped by termin-components-kinematic
+                "termin.kinematic", "termin.kinematic.*",
+            ],
         ),
         python_requires='>3.10.0',
         version="0.0.0",
