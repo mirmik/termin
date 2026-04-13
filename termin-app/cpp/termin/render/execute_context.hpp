@@ -12,13 +12,24 @@
 #include "termin/tc_scene_render_ext.hpp"
 #include <core/tc_entity_pool.h>
 
+// Forward declaration — tgfx2 is the new backend-neutral graphics API.
+// Passes that have been migrated to Phase 2 use ctx2 instead of graphics.
+// Legacy passes continue to use graphics; both pointers are valid
+// simultaneously during the dual-path migration window.
+namespace tgfx2 {
+class RenderContext2;
+}
+
 namespace termin {
 
 /**
  * Context passed to CxxFramePass.execute().
  *
  * Contains all data needed by passes to render:
- * - graphics: graphics backend
+ * - graphics: legacy tgfx graphics backend (state-machine API).
+ * - ctx2: tgfx2 mid-level render context (pipeline+command-buffer API).
+ *   Non-null during the Phase 2 dual-path window. Passes that have been
+ *   migrated should prefer ctx2; unmigrated passes keep using graphics.
  * - reads_fbos/writes_fbos: FBO maps for input/output
  * - rect: pixel rectangle for rendering
  * - scene, camera: what to render
@@ -28,6 +39,7 @@ namespace termin {
  */
 struct ExecuteContext {
     GraphicsBackend* graphics = nullptr;
+    tgfx2::RenderContext2* ctx2 = nullptr;
     FBOMap reads_fbos;
     FBOMap writes_fbos;
     Rect4i rect;
