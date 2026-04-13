@@ -58,9 +58,12 @@ if ($env:TERMIN_SDK) {
 Write-Host "Using TERMIN_SDK=$($env:TERMIN_SDK)"
 
 # List of termin packages in topological dependency order.
+# Main termin is installed BEFORE subpackages so that its uninstall step
+# does not remove __init__.py files that subpackages later provide.
 $Packages = @(
     "termin-build-tools",
     "termin-nanobind-sdk",
+    "termin-app",
     "termin-base",
     "termin-mesh",
     "termin-graphics",
@@ -82,8 +85,7 @@ $Packages = @(
     "termin-components/termin-components-mesh",
     "termin-components/termin-components-kinematic",
     "termin-gui",
-    "termin-nodegraph",
-    "termin"
+    "termin-nodegraph"
 )
 
 $env:CMAKE_PREFIX_PATH = $SdkPrefix
@@ -123,7 +125,7 @@ if ($TargetDir) {
         Write-Host "========================================"
         Write-Host ""
 
-        if ($pkg -eq "termin" -and $Editable) {
+        if ($pkg -eq "termin-app" -and $Editable) {
             & python -m pip install --no-build-isolation -e (Join-Path $ScriptDir $pkg)
         } else {
             & python -m pip install --no-build-isolation (Join-Path $ScriptDir $pkg)
