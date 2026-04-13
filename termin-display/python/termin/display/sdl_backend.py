@@ -8,7 +8,7 @@ from termin.display._platform_native import (
     SDLWindowBackend as _SDLWindowBackend,
     SDLWindowRenderSurface,
 )
-from termin.graphics import OpenGLGraphicsBackend
+from tgfx import OpenGLGraphicsBackend
 
 from tgfx.window import BackendWindow, WindowBackend
 
