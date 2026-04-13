@@ -104,12 +104,12 @@ termin_set_rpath_lib(termin_display)
 target_include_directories(termin_display
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin-render/include>
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
 )
 
@@ -155,7 +155,7 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_display_native PRIVATE termin_display)
     target_include_directories(_display_native PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
     )
     termin_set_rpath_python(_display_native)
@@ -167,7 +167,7 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_viewport_native PRIVATE termin_display termin_scene::termin_scene)
     target_include_directories(_viewport_native PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
     )
     termin_set_rpath_python(_viewport_native)
@@ -181,7 +181,7 @@ if(TERMIN_BUILD_PYTHON)
         target_link_libraries(_platform_native PRIVATE termin_display ${SDL2_LIBRARIES})
         target_include_directories(_platform_native PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}/include
-            ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
+            ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
             ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
             ${CMAKE_CURRENT_LIST_DIR}/bindings/platform
             ${SDL2_INCLUDE_DIRS}

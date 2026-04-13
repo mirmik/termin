@@ -25,9 +25,9 @@ set(TERMIN_ENGINE_SOURCES
     src/scene_manager.cpp
     src/rendering_manager.cpp
     src/pull_rendering_manager.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/src/tc_scene_manager_instance.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/src/tc_rendering_manager_instance.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/src/tc_engine_core_instance.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/src/tc_scene_manager_instance.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/src/tc_rendering_manager_instance.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/src/tc_engine_core_instance.cpp
 )
 
 if(TERMIN_ENGINE_BUILD_SHARED)
@@ -51,11 +51,11 @@ termin_set_rpath_lib(termin_engine)
 target_include_directories(termin_engine
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include>
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
 )
 
 target_link_libraries(termin_engine
@@ -93,7 +93,7 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_engine_native PRIVATE termin_engine)
     target_include_directories(_engine_native PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
     )
     termin_set_rpath_python(_engine_native)
     install(TARGETS _engine_native DESTINATION lib/python/termin/engine)

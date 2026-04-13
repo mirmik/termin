@@ -30,7 +30,7 @@ $ProjectRoots = @(
     (Join-Path $Root "termin-graphics"),
     (Join-Path $Root "termin-gui"),
     (Join-Path $Root "termin-nodegraph"),
-    (Join-Path $Root "termin")
+    (Join-Path $Root "termin-app")
 )
 
 $targets = New-Object System.Collections.Generic.List[string]
@@ -49,11 +49,11 @@ $explicitDirs = @(
     "termin-gui\dist",
     "termin-nodegraph\build",
     "termin-nodegraph\dist",
-    "termin\build_win",
-    "termin\build_standalone",
-    "termin\install",
-    "termin\install_win",
-    "termin\cpp\build"
+    "termin-app\build_win",
+    "termin-app\build_standalone",
+    "termin-app\install",
+    "termin-app\install_win",
+    "termin-app\cpp\build"
 )
 
 foreach ($rel in $explicitDirs) {

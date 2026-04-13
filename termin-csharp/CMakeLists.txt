@@ -50,7 +50,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             ${CMAKE_CURRENT_SOURCE_DIR}/termin.i
             ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_component_csharp.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_inspect_csharp.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/../termin/cpp/termin/render/tc_opengl.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../termin-app/cpp/termin/render/tc_opengl.cpp
     )
 
     set_target_properties(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PROPERTIES
