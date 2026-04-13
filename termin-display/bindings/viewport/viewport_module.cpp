@@ -238,12 +238,24 @@ void bind_tc_viewport_class(nb::module_& m) {
                 return cls.attr("from_handle")(ph.index, ph.generation);
             },
             [](TcViewport& self, nb::object pipeline_obj) {
-                if (!self.is_valid()) return;
+                if (!self.is_valid()) {
+                    tc::Log::error("viewport.pipeline setter: viewport is not valid");
+                    return;
+                }
                 if (pipeline_obj.is_none()) {
                     tc_viewport_set_pipeline(self.handle_, TC_PIPELINE_HANDLE_INVALID);
                 } else {
-                    tc_pipeline_handle ph = object_to_pipeline_handle(pipeline_obj);
-                    tc_viewport_set_pipeline(self.handle_, ph);
+                    try {
+                        tc_pipeline_handle ph = object_to_pipeline_handle(pipeline_obj);
+                        tc::Log::info("viewport.pipeline setter: handle=(%u,%u)", ph.index, ph.generation);
+                        tc_viewport_set_pipeline(self.handle_, ph);
+                        // verify
+                        tc_pipeline_handle check = tc_viewport_get_pipeline(self.handle_);
+                        tc::Log::info("viewport.pipeline verify: handle=(%u,%u) valid=%d",
+                            check.index, check.generation, tc_pipeline_handle_valid(check));
+                    } catch (const std::exception& e) {
+                        tc::Log::error("viewport.pipeline setter: %s", e.what());
+                    }
                 }
             }, nb::arg("value").none())
 
