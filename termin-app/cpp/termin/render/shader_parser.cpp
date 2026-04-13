@@ -3,6 +3,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <regex>
 
 namespace termin {
@@ -253,6 +254,112 @@ std::string inject_after_version(const std::string& source, const std::string& b
     }
     // No #version — prepend.
     return block + source;
+}
+
+// ========== std140 value packer ==========
+
+namespace {
+
+// Scalar readers: convert the property's variant payload to a single float
+// (std140 bool stores as 4-byte int-style 0/1, but since we read back as
+// vec4 in shaders for bools it's safe to write as float 0.0/1.0 — the bit
+// pattern matches for 0 and 1 in IEEE 754).
+
+inline void write_float(uint8_t* dst, float v) {
+    std::memcpy(dst, &v, sizeof(float));
+}
+
+inline void write_int(uint8_t* dst, int32_t v) {
+    std::memcpy(dst, &v, sizeof(int32_t));
+}
+
+// Write up to `count` floats from a vector<double> source. Missing elements
+// default to 0.0. Used for Vec2/Vec3/Vec4/Color.
+inline void write_float_array(uint8_t* dst,
+                               const std::vector<double>& src,
+                               size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        float v = i < src.size() ? static_cast<float>(src[i]) : 0.0f;
+        write_float(dst + i * sizeof(float), v);
+    }
+}
+
+// Resolve a property-type string + variant payload into raw std140 bytes at
+// the given destination. Returns true if a value was actually written.
+bool pack_one(const std::string& property_type,
+              const MaterialProperty::DefaultValue& value,
+              uint8_t* dst) {
+    if (property_type == "Float") {
+        if (auto* d = std::get_if<double>(&value)) {
+            write_float(dst, static_cast<float>(*d));
+            return true;
+        }
+        if (auto* i = std::get_if<int>(&value)) {
+            write_float(dst, static_cast<float>(*i));
+            return true;
+        }
+        return false;
+    }
+    if (property_type == "Int") {
+        if (auto* i = std::get_if<int>(&value)) {
+            write_int(dst, *i);
+            return true;
+        }
+        if (auto* d = std::get_if<double>(&value)) {
+            write_int(dst, static_cast<int32_t>(*d));
+            return true;
+        }
+        return false;
+    }
+    if (property_type == "Bool") {
+        if (auto* b = std::get_if<bool>(&value)) {
+            write_int(dst, *b ? 1 : 0);
+            return true;
+        }
+        return false;
+    }
+    if (property_type == "Vec2" || property_type == "Vec3" ||
+        property_type == "Vec4" || property_type == "Color") {
+        auto* arr = std::get_if<std::vector<double>>(&value);
+        if (!arr) return false;
+
+        size_t count = 4;
+        if (property_type == "Vec2") count = 2;
+        else if (property_type == "Vec3") count = 3;
+        // Vec4 / Color → 4.
+        write_float_array(dst, *arr, count);
+        return true;
+    }
+    // Texture or unknown — not in UBO.
+    return false;
+}
+
+} // namespace
+
+void std140_pack(const MaterialUboLayout& layout,
+                 const std::vector<MaterialProperty>& values,
+                 uint8_t* out_buffer) {
+    if (!out_buffer || layout.empty()) return;
+
+    // For each UBO entry, find a matching value by name. Linear scan is
+    // fine — material UBOs have at most a handful of fields.
+    for (const auto& entry : layout.entries) {
+        const MaterialProperty* match = nullptr;
+        for (const auto& v : values) {
+            if (v.name == entry.name) {
+                match = &v;
+                break;
+            }
+        }
+        if (!match) continue;  // leave the slot as-is (caller may have zeroed it).
+
+        // Type must agree with what the layout expects. Mismatches are
+        // skipped to avoid writing garbage into the wrong slot.
+        if (match->property_type != entry.property_type) continue;
+
+        pack_one(entry.property_type, match->default_value,
+                 out_buffer + entry.offset);
+    }
 }
 
 
