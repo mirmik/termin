@@ -59,15 +59,6 @@ void init_pass_from_python(T* self, const char* type_name) {
     Py_INCREF(wrapper.ptr());
 }
 
-template<typename T>
-nb::object init_pass_from_deserialize(T* pass, const char* type_name) {
-    pass->link_to_type_registry(type_name);
-    nb::object wrapper = nb::cast(pass, nb::rv_policy::take_ownership);
-    pass->set_python_ref(wrapper.ptr(), &g_py_cxx_pass_ref_vtable);
-    Py_INCREF(wrapper.ptr());
-    return wrapper;
-}
-
 struct PyDebuggerHolder {
 public:
     nb::object window;
@@ -256,14 +247,7 @@ void bind_frame_pass(nb::module_& m) {
         .def("destroy", &ColorPass::destroy)
         .def("__repr__", [](const ColorPass& p) {
             return "<ColorPass '" + p.get_pass_name() + "' phase='" + p.phase_mark + "'>";
-        })
-        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
-            (void)resource_manager;
-            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "unnamed";
-            auto* p = new ColorPass();
-            p->set_pass_name(pass_name);
-            return init_pass_from_deserialize(p, "ColorPass");
-        }, nb::arg("data"), nb::arg("resource_manager") = nb::none());
+        });
 
     color_pass.attr("category") = "Render";
     color_pass.attr("has_dynamic_inputs") = true;
@@ -356,26 +340,6 @@ void bind_frame_pass(nb::module_& m) {
         nb::arg("lights"),
         nb::arg("camera_view"),
         nb::arg("camera_projection"))
-        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
-            (void)resource_manager;
-            std::string pass_name = "Shadow";
-            std::string output_res = "shadow_maps";
-            float caster_offset = 50.0f;
-            if (data.contains("pass_name")) {
-                pass_name = nb::cast<std::string>(data["pass_name"]);
-            }
-            if (data.contains("data")) {
-                nb::dict d = nb::cast<nb::dict>(data["data"]);
-                if (d.contains("output_res")) {
-                    output_res = nb::cast<std::string>(d["output_res"]);
-                }
-                if (d.contains("caster_offset")) {
-                    caster_offset = nb::cast<float>(d["caster_offset"]);
-                }
-            }
-            auto* p = new ShadowPass(output_res, pass_name, caster_offset);
-            return init_pass_from_deserialize(p, "ShadowPass");
-        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &ShadowPass::compute_reads)
         .def_prop_ro("writes", &ShadowPass::compute_writes)
         .def("destroy", &ShadowPass::destroy)
@@ -403,23 +367,6 @@ void bind_frame_pass(nb::module_& m) {
         .def("execute_with_data", [](IdPass& self, GraphicsBackend* graphics, nb::dict reads_fbos_py, nb::dict writes_fbos_py, nb::tuple rect_py, nb::object scene_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py, uint64_t layer_mask) {
             self.execute_with_data(graphics, dict_to_fbo_map(reads_fbos_py), dict_to_fbo_map(writes_fbos_py), tuple_to_rect(rect_py), object_to_scene_handle(scene_py), ndarray_to_mat44f(view_py), ndarray_to_mat44f(projection_py), layer_mask);
         }, nb::arg("graphics"), nb::arg("reads_fbos"), nb::arg("writes_fbos"), nb::arg("rect"), nb::arg("scene"), nb::arg("view"), nb::arg("projection"), nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
-        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
-            (void)resource_manager;
-            std::string pass_name = "IdPass";
-            std::string camera_name;
-            std::string input_res = "empty";
-            std::string output_res = "id";
-            if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
-            if (data.contains("data")) {
-                nb::dict d = nb::cast<nb::dict>(data["data"]);
-                if (d.contains("camera_name")) camera_name = nb::cast<std::string>(d["camera_name"]);
-                if (d.contains("input_res")) input_res = nb::cast<std::string>(d["input_res"]);
-                if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
-            }
-            auto* p = new IdPass(input_res, output_res, pass_name);
-            p->camera_name = camera_name;
-            return init_pass_from_deserialize(p, "IdPass");
-        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &IdPass::compute_reads)
         .def_prop_ro("writes", &IdPass::compute_writes)
         .def("destroy", &IdPass::destroy);
@@ -457,13 +404,6 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_inplace_aliases", &ColliderGizmoPass::get_inplace_aliases)
         .def_prop_ro("reads", &ColliderGizmoPass::compute_reads)
         .def_prop_ro("writes", &ColliderGizmoPass::compute_writes)
-        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
-            (void)resource_manager;
-            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "ColliderGizmo";
-            auto* p = new ColliderGizmoPass();
-            p->set_pass_name(pass_name);
-            return init_pass_from_deserialize(p, "ColliderGizmoPass");
-        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def("destroy", &ColliderGizmoPass::destroy)
         .def("__repr__", [](const ColliderGizmoPass& p) {
             return "<ColliderGizmoPass '" + p.get_pass_name() + "'>";
@@ -503,24 +443,6 @@ void bind_frame_pass(nb::module_& m) {
         .def("get_inplace_aliases", &PresentToScreenPass::get_inplace_aliases)
         .def_prop_ro("reads", &PresentToScreenPass::compute_reads)
         .def_prop_ro("writes", &PresentToScreenPass::compute_writes)
-        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
-            (void)resource_manager;
-            std::string pass_name = data.contains("pass_name") ? nb::cast<std::string>(data["pass_name"]) : "PresentToScreen";
-            std::string input_res = "color";
-            std::string output_res = "OUTPUT";
-            if (data.contains("data")) {
-                nb::dict d = nb::cast<nb::dict>(data["data"]);
-                if (d.contains("input_res")) {
-                    input_res = nb::cast<std::string>(d["input_res"]);
-                }
-                if (d.contains("output_res")) {
-                    output_res = nb::cast<std::string>(d["output_res"]);
-                }
-            }
-            auto* p = new PresentToScreenPass(input_res, output_res);
-            p->set_pass_name(pass_name);
-            return init_pass_from_deserialize(p, "PresentToScreenPass");
-        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def("destroy", &PresentToScreenPass::destroy);
 
     {

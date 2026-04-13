@@ -284,9 +284,12 @@ void bind_render_pipeline(nb::module_& m) {
 
         // Deserialize from dict (static method)
         .def_static("deserialize", [](nb::dict data, nb::object resource_manager) -> RenderPipeline* {
-            // Import FramePass for deserialization
+            // Pass deserialization lives as a module-level function now —
+            // it works for any pass class (C++ or Python) without relying
+            // on the FramePass classmethod, which only covered Python-side
+            // subclasses of the Python FramePass base.
             nb::module_ core_module = nb::module_::import_("termin.visualization.render.framegraph.core");
-            nb::object FramePass = core_module.attr("FramePass");
+            nb::object deserialize_pass = core_module.attr("deserialize_pass");
 
             std::string name = "default";
             if (data.contains("name")) {
@@ -301,7 +304,7 @@ void bind_render_pipeline(nb::module_& m) {
                 for (size_t i = 0; i < nb::len(passes); i++) {
                     try {
                         nb::dict pass_data = nb::cast<nb::dict>(passes[i]);
-                        nb::object frame_pass = FramePass.attr("deserialize")(pass_data, resource_manager);
+                        nb::object frame_pass = deserialize_pass(pass_data, resource_manager);
                         if (!frame_pass.is_none() && nb::hasattr(frame_pass, "_tc_pass")) {
                             nb::object tc_pass_obj = frame_pass.attr("_tc_pass");
                             if (!tc_pass_obj.is_none() && nb::isinstance<TcPassRef>(tc_pass_obj)) {

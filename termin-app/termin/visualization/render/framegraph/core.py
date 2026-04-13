@@ -256,61 +256,67 @@ class FramePass:
             result["viewport_name"] = self.viewport_name
         return result
 
-    @classmethod
-    def deserialize(cls, data: dict, resource_manager=None) -> "FramePass":
-        """
-        Десериализует FramePass из словаря.
 
-        Использует ResourceManager для поиска зарегистрированного
-        класса по имени типа.
+def deserialize_pass(data: dict, resource_manager=None):
+    """
+    Десериализует любой пасс (Python или C++) из словаря.
 
-        Args:
-            data: Словарь с сериализованными данными
-            resource_manager: ResourceManager для поиска класса
+    Эта функция — module-level, а не classmethod на FramePass, потому что
+    на самом деле она работает с ЛЮБЫМ классом пасса, зарегистрированным
+    в ResourceManager, в том числе с C++-пассами (nb::class_ подклассами
+    CxxFramePass), которые не наследуются от Python FramePass.
 
-        Returns:
-            Экземпляр FramePass
+    Поток:
+        1. Найти pass_cls по имени типа через ResourceManager.
+        2. Если у класса есть собственный `_deserialize_instance` (например
+           у PostProcessPass — он нужен для восстановления списка child
+           effects до вызова конструктора), использовать его.
+        3. Иначе default-сконструировать через `pass_cls()` и проставить
+           pass_name напрямую. Все штатные биндинги C++ и Python пассы
+           допускают конструирование без обязательных аргументов.
+        4. Восстановить мета-поля (enabled/passthrough/viewport_name).
+        5. Передать content-поля в inspect-систему через
+           `instance._tc_pass.deserialize_data(...)`.
 
-        Raises:
-            ValueError: если тип не найден или данные некорректны
-        """
-        pass_type = data.get("type")
-        if pass_type is None:
-            raise ValueError("Missing 'type' in FramePass data")
+    Args:
+        data: словарь с сериализованными данными
+        resource_manager: ResourceManager для поиска класса
 
-        # Получаем класс из ResourceManager
-        if resource_manager is None:
-            from termin.visualization.core.resources import ResourceManager
-            resource_manager = ResourceManager.instance()
+    Returns:
+        Экземпляр пасса
 
-        pass_cls = resource_manager.get_frame_pass(pass_type)
-        if pass_cls is None:
-            raise ValueError(f"Unknown FramePass type: {pass_type}")
+    Raises:
+        ValueError: если тип не найден или данные некорректны
+    """
+    pass_type = data.get("type")
+    if pass_type is None:
+        raise ValueError("Missing 'type' in pass data")
 
-        # Создаём экземпляр и десериализуем данные
-        instance = pass_cls._deserialize_instance(data, resource_manager)
+    if resource_manager is None:
+        from termin.visualization.core.resources import ResourceManager
+        resource_manager = ResourceManager.instance()
 
-        # Восстанавливаем базовые поля
-        instance.enabled = data.get("enabled", True)
-        instance.passthrough = data.get("passthrough", False)
-        instance.viewport_name = data.get("viewport_name", "")
+    pass_cls = resource_manager.get_frame_pass(pass_type)
+    if pass_cls is None:
+        raise ValueError(f"Unknown pass type: {pass_type}")
 
-        # Десериализуем данные через TcPassRef (unified for C++ and Python passes)
-        instance._tc_pass.deserialize_data(data.get("data", {}))
+    # Кастомный конструктор имеет приоритет — нужен, когда у пасса есть
+    # обязательные аргументы без дефолтов (как у PostProcessPass с
+    # списком effects).
+    custom_ctor = getattr(pass_cls, "_deserialize_instance", None)
+    if custom_ctor is not None:
+        instance = custom_ctor(data, resource_manager)
+    else:
+        instance = pass_cls()
+        instance.pass_name = data.get("pass_name", "unnamed")
 
-        return instance
+    instance.enabled = data.get("enabled", True)
+    instance.passthrough = data.get("passthrough", False)
+    instance.viewport_name = data.get("viewport_name", "")
 
-    @classmethod
-    def _deserialize_instance(cls, data: dict, resource_manager=None) -> "FramePass":
-        """
-        Создаёт экземпляр из сериализованных данных.
+    instance._tc_pass.deserialize_data(data.get("data", {}))
 
-        Подклассы должны переопределить этот метод для правильной
-        инициализации с их специфическими параметрами.
-
-        Базовая реализация создаёт экземпляр с pass_name.
-        """
-        return cls(pass_name=data.get("pass_name", "unnamed"))
+    return instance
 
 
 class FrameGraphError(Exception):
