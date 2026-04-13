@@ -445,12 +445,13 @@ if(BUILD_TESTS)
         tests/main.cpp
         tests/tests_general_pose3.cpp
         tests/tests_inspect_registry.cpp
+        tests/tests_shader_parser_std140.cpp
     )
     target_include_directories(termin_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
-    target_link_libraries(termin_tests PRIVATE entity_lib)
+    target_link_libraries(termin_tests PRIVATE entity_lib render_lib)
     target_compile_options(termin_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
 

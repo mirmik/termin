@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 #include <unordered_map>
 #include <optional>
@@ -68,6 +70,36 @@ struct ShaderStage {
 
 
 /**
+ * One field inside the generated std140 material UBO block.
+ * name matches the original @property; property_type is the same string
+ * used in MaterialProperty ("Float", "Vec3", ...); offset and size are
+ * computed per std140 rules and describe the layout inside the block.
+ */
+struct MaterialUboEntry {
+    std::string name;
+    std::string property_type;
+    uint32_t offset = 0;
+    uint32_t size = 0;
+};
+
+
+/**
+ * std140 layout description for the per-phase material UBO.
+ *
+ * Populated at parse time when the shader program has the `material_ubo`
+ * feature. `entries` holds only the scalar/vector properties (not textures),
+ * in declaration order, with std140 offsets. `block_size` is the total UBO
+ * size rounded up to 16 bytes as required by std140.
+ */
+struct MaterialUboLayout {
+    std::vector<MaterialUboEntry> entries;
+    uint32_t block_size = 0;
+
+    bool empty() const { return entries.empty(); }
+};
+
+
+/**
  * Render state settings for a specific phase mark.
  */
 struct PhaseRenderSettings {
@@ -100,6 +132,12 @@ struct ShaderPhase {
 
     // Uniform properties for material inspector
     std::vector<MaterialProperty> uniforms;
+
+    // std140 layout for the auto-generated material UBO. Empty unless the
+    // program has the `material_ubo` feature; in that case the parser
+    // populates this from the phase's scalar/vector @property entries and
+    // rewrites the stage sources to reference the block.
+    MaterialUboLayout material_ubo_layout;
 
     ShaderPhase() = default;
     ShaderPhase(std::string mark) : phase_mark(std::move(mark)) {
@@ -191,5 +229,46 @@ bool parse_bool(const std::string& value);
  * Parse @property directive.
  */
 MaterialProperty parse_property_directive(const std::string& line);
+
+// ========== std140 Material UBO generator ==========
+
+/**
+ * Compute std140 (size, alignment) in bytes for a single material property
+ * type name. Textures return {0, 0}. Unknown types return {0, 0}.
+ *
+ * std140 rules:
+ *   Float / Int / Bool  : size=4,  align=4
+ *   Vec2                : size=8,  align=8
+ *   Vec3                : size=12, align=16
+ *   Vec4 / Color        : size=16, align=16
+ */
+std::pair<uint32_t, uint32_t> std140_size_align(const std::string& property_type);
+
+/**
+ * Compute a MaterialUboLayout for the given ordered list of properties.
+ * Texture properties are skipped (they become samplers, not UBO members).
+ */
+MaterialUboLayout compute_std140_layout(const std::vector<MaterialProperty>& properties);
+
+/**
+ * Produce the GLSL text for a `layout(std140) uniform MaterialParams { ... };`
+ * block matching the given layout. The returned string includes a trailing
+ * newline. Empty layout yields an empty string.
+ */
+std::string synthesize_material_ubo_glsl(const MaterialUboLayout& layout);
+
+/**
+ * Remove top-level `uniform <type> <name>;` declarations whose names are in
+ * `names`. Works line-oriented; lines that do not look like a simple uniform
+ * declaration are preserved as-is.
+ */
+std::string strip_uniform_decls(const std::string& source,
+                                const std::vector<std::string>& names);
+
+/**
+ * Insert a GLSL text block into a shader source immediately after its
+ * `#version ...` line (or at the top if there is none).
+ */
+std::string inject_after_version(const std::string& source, const std::string& block);
 
 } // namespace termin
