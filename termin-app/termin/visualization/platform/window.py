@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.scene import Scene
     from tgfx import GraphicsBackend
-    from termin._native.platform import SDLWindowBackend, SDLWindowRenderSurface
+    from termin.display._platform_native import SDLWindowBackend, SDLWindowRenderSurface
 
 
 class Window:
@@ -55,7 +55,7 @@ class Window:
             backend: C++ SDLWindowBackend.
             share: Окно для sharing OpenGL контекста.
         """
-        from termin._native.platform import SDLWindowRenderSurface
+        from termin.display._platform_native import SDLWindowRenderSurface
 
         self._graphics = graphics
         self._backend = backend

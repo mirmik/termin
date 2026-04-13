@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from tcbase import log
 from termin.mesh.mesh import Mesh3
-from tgfx import TcMesh
+from tmesh import TcMesh
 from termin.assets.data_asset import DataAsset
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ class MeshAsset(DataAsset[TcMesh]):
 
     def _declare_tc_mesh(self) -> None:
         """Declare TcMesh in registry with load callback for lazy loading."""
-        from tgfx import (
+        from tmesh import (
             tc_mesh_declare,
             tc_mesh_set_load_callback,
             tc_mesh_is_loaded,
@@ -149,7 +149,7 @@ class MeshAsset(DataAsset[TcMesh]):
 
     def _populate_or_create_tc_mesh(self, mesh3: Mesh3) -> TcMesh | None:
         """Populate existing declared TcMesh or create new one."""
-        from tgfx import tc_mesh_is_loaded
+        from tmesh import tc_mesh_is_loaded
 
         # If we have a declared (but not loaded) TcMesh, populate it
         if self._data is not None and self._data.is_valid and not tc_mesh_is_loaded(self._data):
