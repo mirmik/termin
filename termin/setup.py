@@ -22,7 +22,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 if __name__ == "__main__":
     setup(
-        name="termin",
+        name="termin-app",
         # find_namespace_packages picks up directories without __init__.py too
         # (e.g. transitional namespace dirs, or leftover subdirs that contain
         # only .py submodules). find_packages would drop them silently.

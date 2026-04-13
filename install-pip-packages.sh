@@ -100,9 +100,12 @@ fi
 # _colliders_native and _components_collision_native). Those are merged
 # into the parent pip package rather than shipped separately to avoid
 # filesystem overlap at install time.
+# Main termin is installed BEFORE subpackages so that its uninstall step
+# does not remove __init__.py files that subpackages later provide.
 PACKAGES=(
     termin-build-tools
     termin-nanobind-sdk
+    termin-app
     termin-base
     termin-mesh
     termin-graphics
@@ -125,7 +128,6 @@ PACKAGES=(
     termin-components/termin-components-kinematic
     termin-gui
     termin-nodegraph
-    termin
 )
 
 if [[ -n "$TARGET_DIR" ]]; then
@@ -154,7 +156,7 @@ else
     # Host-env mode: sequential installs so errors are attributed to a
     # specific package and intermediate state is inspectable.
     for pkg in "${PACKAGES[@]}"; do
-        if [[ "$pkg" == "termin" && $EDITABLE -eq 1 ]]; then
+        if [[ "$pkg" == "termin-app" && $EDITABLE -eq 1 ]]; then
             echo ""
             echo "========================================"
             echo "  Installing $pkg (editable)"
