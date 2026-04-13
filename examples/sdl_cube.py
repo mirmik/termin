@@ -19,8 +19,7 @@ from tgfx import TcShader
 from termin._native.render import RenderEngine, ColorPass, PresentToScreenPass, TcMaterial
 from termin.graphics import OpenGLGraphicsBackend
 from termin.render_framework import RenderPipeline
-from tmesh import TcMesh
-from tmesh._tmesh_native import CubeMesh
+from tmesh import TcMesh, CubeMesh
 
 
 VERT = """
