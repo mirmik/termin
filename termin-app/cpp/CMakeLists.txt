@@ -231,6 +231,7 @@ set(RENDER_LIB_SOURCES
     termin/render/tonemap_pass.cpp
     termin/render/shader_parser.cpp
     termin/render/material_ubo_apply.cpp
+    termin/render/skybox_pass.cpp
     termin/render/shadow_camera.cpp
     termin/render/glsl_preprocessor.cpp
     termin/render/shader_skinning.cpp
