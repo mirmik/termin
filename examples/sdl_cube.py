@@ -118,7 +118,6 @@ def main():
     display.connect_input()
 
     pipeline = rt.pipeline
-    print(f"[DEBUG] rt.pipeline={pipeline}")
 
     while not handle.should_close():
         sdl_backend.poll_events()
@@ -143,7 +142,7 @@ def main():
         engine.render_view_to_fbo(
             pipeline, display_fbo, width, height,
             scene, camera, viewport,
-            viewport.effective_layer_mask,
+            viewport.layer_mask,
         )
 
         display.present()
