@@ -6,15 +6,17 @@
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
 
+namespace tgfx2 { class IRenderDevice; }
+
 namespace termin {
 
 // GrayscalePass - converts image to grayscale with adjustable strength.
 //
-// Dual-path during Phase 2 of the tgfx2 migration:
-//   - If ExecuteContext::ctx2 is non-null, the pass issues its draw through
-//     tgfx2::RenderContext2 (render target setup, state, built-in FSQ).
-//     Texture binding and uniform setting still go through raw GL because
-//     tgfx2's RenderContext2 does not yet expose a ResourceSet interface.
+// Dual-path during the tgfx2 migration:
+//   - If ExecuteContext::ctx2 is non-null, the pass draws through
+//     tgfx2::RenderContext2 end-to-end: built-in FSQ, std140 UBO for
+//     parameters bound via bind_uniform_buffer, input texture bound via
+//     bind_sampled_texture. No raw GL calls.
 //   - Otherwise the legacy tgfx path is used (GraphicsBackend + TcShader).
 class GrayscalePass : public CxxFramePass {
 public:
@@ -26,9 +28,13 @@ private:
     // Legacy tgfx shader (used on the legacy path).
     TcShader shader_;
 
-    // tgfx2 fragment shader (used on the ctx2 path). Created once on first
-    // execute via the device supplied through ExecuteContext::ctx2.
+    // tgfx2 resources (used on the ctx2 path). Created lazily on first
+    // execute. Destroyed in destroy() via device2_ if that pointer was
+    // captured — otherwise leaked until device shutdown.
+    tgfx2::IRenderDevice* device2_ = nullptr;
     tgfx2::ShaderHandle fs2_;
+    tgfx2::BufferHandle params_ubo_;
+    float uploaded_strength_ = -1.0f;
 
 public:
     INSPECT_FIELD(GrayscalePass, input_res, "Input", "string")

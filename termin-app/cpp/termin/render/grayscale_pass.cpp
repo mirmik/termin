@@ -1,23 +1,21 @@
 // grayscale_pass.cpp - Simple grayscale post-processing pass
 //
-// Dual-path implementation (Phase 2 tgfx2 migration):
-//   * execute_legacy() uses tgfx GraphicsBackend + TcShader (the original code)
-//   * execute_tgfx2() uses tgfx2::RenderContext2 for render-target setup,
-//     state management, and the built-in fullscreen quad. Texture/uniform
-//     binding is still done via direct GL because RenderContext2 does not
-//     yet expose a ResourceSet API (placeholder comment in
-//     tgfx2/src/render_context.cpp confirms this is the expected interim).
+// Dual-path implementation during the tgfx2 migration:
+//   * execute_legacy() uses tgfx GraphicsBackend + TcShader.
+//   * execute_tgfx2() goes through tgfx2::RenderContext2 end-to-end: built-in
+//     FSQ, std140 UBO for parameters via bind_uniform_buffer, input texture
+//     via bind_sampled_texture. No raw GL.
 #include "grayscale_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx/graphics_backend.hpp"
 
 #include "tgfx2/render_context.hpp"
-#include "tgfx2/opengl/opengl_render_device.hpp"
+#include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
 
-#include <glad/glad.h>
+#include <span>
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
@@ -36,7 +34,8 @@ void main() {
 }
 )";
 
-static const char* GRAYSCALE_FRAG = R"(
+// Legacy path — classic uniforms, paired with TcShader::set_uniform_* dispatch.
+static const char* GRAYSCALE_FRAG_LEGACY = R"(
 #version 330 core
 in vec2 vUV;
 
@@ -47,13 +46,31 @@ out vec4 FragColor;
 
 void main() {
     vec3 color = texture(u_input, vUV).rgb;
-
-    // Luminance weights (Rec. 709)
     float gray = dot(color, vec3(0.2126, 0.7152, 0.0722));
-
-    // Mix between original and grayscale
     vec3 result = mix(color, vec3(gray), u_strength);
+    FragColor = vec4(result, 1.0);
+}
+)";
 
+// tgfx2 path — parameters live in a std140 UBO bound at slot 0. The sampler
+// is still a plain GL 3.3 `uniform sampler2D` which defaults to texture unit 0
+// at link time, so binding the input texture at resource slot 0 lines up.
+static const char* GRAYSCALE_FRAG_UBO = R"(
+#version 330 core
+in vec2 vUV;
+
+layout(std140) uniform GrayscaleParams {
+    float u_strength;
+};
+
+uniform sampler2D u_input;
+
+out vec4 FragColor;
+
+void main() {
+    vec3 color = texture(u_input, vUV).rgb;
+    float gray = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    vec3 result = mix(color, vec3(gray), u_strength);
     FragColor = vec4(result, 1.0);
 }
 )";
@@ -81,7 +98,7 @@ std::set<const char*> GrayscalePass::compute_writes() const {
 
 void GrayscalePass::ensure_shader() {
     if (!shader_.is_valid()) {
-        shader_ = TcShader::from_sources(GRAYSCALE_VERT, GRAYSCALE_FRAG, "", "GrayscalePass");
+        shader_ = TcShader::from_sources(GRAYSCALE_VERT, GRAYSCALE_FRAG_LEGACY, "", "GrayscalePass");
     }
 }
 
@@ -150,22 +167,28 @@ void GrayscalePass::execute_legacy(ExecuteContext& ctx) {
 }
 
 // ----------------------------------------------------------------------------
-// tgfx2 path (Phase 2)
+// tgfx2 path
 // ----------------------------------------------------------------------------
 
+// std140-padded parameter block matching the shader's GrayscaleParams.
+// A single float rounds up to vec4 alignment, so the UBO is 16 bytes.
+struct GrayscaleParamsStd140 {
+    float strength;
+    float _pad[3];
+};
+static_assert(sizeof(GrayscaleParamsStd140) == 16,
+              "GrayscaleParamsStd140 must be 16 bytes for std140 compliance");
+
 void GrayscalePass::execute_tgfx2(ExecuteContext& ctx) {
-    // Resources — both legacy FBOs (for reading the input texture's GL id
-    // and for size metadata) and tgfx2 texture wrappers for the output
-    // target — are owned and prepared by RenderEngine. The pass just
-    // consumes them.
-    auto* input_fbo = ctx.reads_fbos.count(input_res)
-        ? dynamic_cast<FramebufferHandle*>(ctx.reads_fbos[input_res])
-        : nullptr;
+    // Output target comes from the tex2_writes map (populated by RenderEngine
+    // once per frame). Input texture likewise lives in tex2_reads — no raw
+    // FBO access is needed anymore for the draw itself, but we still read
+    // the output FBO for its width/height.
     auto* output_fbo = ctx.writes_fbos.count(output_res)
         ? dynamic_cast<FramebufferHandle*>(ctx.writes_fbos[output_res])
         : nullptr;
-    if (!input_fbo || !output_fbo) {
-        tc::Log::error("[GrayscalePass/tgfx2] Missing input or output FBO");
+    if (!output_fbo) {
+        tc::Log::error("[GrayscalePass/tgfx2] Missing output FBO '%s'", output_res.c_str());
         return;
     }
 
@@ -177,34 +200,48 @@ void GrayscalePass::execute_tgfx2(ExecuteContext& ctx) {
     }
     tgfx2::TextureHandle output_tex2 = out_it->second;
 
-    GPUTextureHandle* input_tex = input_fbo->color_texture();
-    if (!input_tex || !input_tex->is_valid()) {
-        tc::Log::error("[GrayscalePass/tgfx2] Input FBO has no color texture");
+    auto in_it = ctx.tex2_reads.find(input_res);
+    if (in_it == ctx.tex2_reads.end() || !in_it->second) {
+        tc::Log::error("[GrayscalePass/tgfx2] Missing tgfx2 input texture handle for '%s'",
+                       input_res.c_str());
         return;
     }
+    tgfx2::TextureHandle input_tex2 = in_it->second;
 
     const int w = output_fbo->get_width();
     const int h = output_fbo->get_height();
     if (w <= 0 || h <= 0) return;
 
-    // Lazily compile the fragment shader once via tgfx2. We only need the
-    // device reference for this one-time compile; once fs2_ is valid, we
-    // never touch the device directly again.
+    // Lazily create the tgfx2 fragment shader and the params UBO. The device
+    // pointer is captured on first use so destroy() can release both without
+    // an ExecuteContext.
     if (!fs2_) {
-        auto* dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx.ctx2->device());
-        if (!dev) {
-            tc::Log::error("[GrayscalePass/tgfx2] device is not an OpenGLRenderDevice");
-            return;
-        }
+        device2_ = &ctx.ctx2->device();
+
         tgfx2::ShaderDesc fs_desc;
         fs_desc.stage = tgfx2::ShaderStage::Fragment;
-        fs_desc.source = GRAYSCALE_FRAG;
-        fs2_ = dev->create_shader(fs_desc);
+        fs_desc.source = GRAYSCALE_FRAG_UBO;
+        fs2_ = device2_->create_shader(fs_desc);
+
+        tgfx2::BufferDesc ubo_desc;
+        ubo_desc.size = sizeof(GrayscaleParamsStd140);
+        ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
+        params_ubo_ = device2_->create_buffer(ubo_desc);
     }
 
-    // Begin render pass targeting the output color texture. Passing nullptr
-    // for clear_color means LoadOp::Load — we do not want to wipe the
-    // buffer before filling it with the grayscale result.
+    // Upload parameters only when they change — avoids a GPU round-trip on
+    // every frame when strength is static.
+    if (uploaded_strength_ != strength) {
+        GrayscaleParamsStd140 params{};
+        params.strength = strength;
+        device2_->upload_buffer(
+            params_ubo_,
+            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&params),
+                                     sizeof(params)));
+        uploaded_strength_ = strength;
+    }
+
+    // Begin pass with LoadOp::Load — we fill the output, not clear it.
     ctx.ctx2->begin_pass(output_tex2);
     ctx.ctx2->set_viewport(0, 0, w, h);
 
@@ -213,11 +250,6 @@ void GrayscalePass::execute_tgfx2(ExecuteContext& ctx) {
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx2::CullMode::None);
 
-    // Bind the built-in FSQ vertex shader explicitly together with our
-    // grayscale fragment shader so flush_pipeline() below produces a
-    // valid program with both stages present — draw_fullscreen_quad()'s
-    // internal VS substitution would happen too late for the pre-draw
-    // uniform setup we need.
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs2_);
     ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
 
@@ -229,26 +261,10 @@ void GrayscalePass::execute_tgfx2(ExecuteContext& ctx) {
     };
     ctx.ctx2->set_vertex_layout(fsq_layout);
 
-    // Force-flush the pipeline so the underlying GL program becomes active.
-    // Phase 2 escape hatch — RenderContext2::bind_texture() is a placeholder
-    // and there is no ResourceSet API yet, so texture/uniform binding still
-    // uses raw GL against the GL_CURRENT_PROGRAM.
-    ctx.ctx2->flush_pipeline();
-
-    GLint current_program = 0;
-    glGetIntegerv(GL_CURRENT_PROGRAM, &current_program);
-    if (current_program > 0) {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(input_tex->get_id()));
-
-        GLint loc_input = glGetUniformLocation(current_program, "u_input");
-        if (loc_input >= 0) glUniform1i(loc_input, 0);
-
-        GLint loc_strength = glGetUniformLocation(current_program, "u_strength");
-        if (loc_strength >= 0) glUniform1f(loc_strength, strength);
-    } else {
-        tc::Log::error("[GrayscalePass/tgfx2] no GL program bound after flush_pipeline");
-    }
+    // GrayscaleParams UBO at binding 0; input texture at sampler slot 0
+    // (matches the default unit for the shader's sole `sampler2D u_input`).
+    ctx.ctx2->bind_uniform_buffer(0, params_ubo_);
+    ctx.ctx2->bind_sampled_texture(0, input_tex2);
 
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
@@ -256,10 +272,18 @@ void GrayscalePass::execute_tgfx2(ExecuteContext& ctx) {
 
 void GrayscalePass::destroy() {
     shader_ = TcShader();
-    // fs2_ is not destroyed here — we do not have the device reference.
-    // It leaks one tgfx2 shader object per pass instance until the device
-    // is torn down. Acceptable for Phase 2; revisit when the pass lifecycle
-    // gains a proper on_device_destroyed hook.
+    if (device2_) {
+        if (fs2_) {
+            device2_->destroy(fs2_);
+            fs2_ = {};
+        }
+        if (params_ubo_) {
+            device2_->destroy(params_ubo_);
+            params_ubo_ = {};
+        }
+        device2_ = nullptr;
+    }
+    uploaded_strength_ = -1.0f;
 }
 
 TC_REGISTER_FRAME_PASS(GrayscalePass);
