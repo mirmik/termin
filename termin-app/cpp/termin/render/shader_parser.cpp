@@ -144,6 +144,118 @@ bool parse_bool(const std::string& value) {
 }
 
 
+// ========== std140 Material UBO generator ==========
+
+std::pair<uint32_t, uint32_t> std140_size_align(const std::string& property_type) {
+    // Scalars.
+    if (property_type == "Float" || property_type == "Int" || property_type == "Bool") {
+        return {4u, 4u};
+    }
+    // Two-component vector.
+    if (property_type == "Vec2") {
+        return {8u, 8u};
+    }
+    // Three-component vector: data size 12, but base alignment is 16.
+    if (property_type == "Vec3") {
+        return {12u, 16u};
+    }
+    // Four-component vectors.
+    if (property_type == "Vec4" || property_type == "Color") {
+        return {16u, 16u};
+    }
+    // Texture / anything else: not in UBO.
+    return {0u, 0u};
+}
+
+static uint32_t round_up(uint32_t value, uint32_t align) {
+    if (align == 0) return value;
+    return (value + align - 1u) & ~(align - 1u);
+}
+
+MaterialUboLayout compute_std140_layout(const std::vector<MaterialProperty>& properties) {
+    MaterialUboLayout layout;
+    uint32_t cursor = 0;
+
+    for (const auto& prop : properties) {
+        auto [size, align] = std140_size_align(prop.property_type);
+        if (size == 0) continue;  // Texture / unknown — skip.
+
+        cursor = round_up(cursor, align);
+
+        MaterialUboEntry entry;
+        entry.name = prop.name;
+        entry.property_type = prop.property_type;
+        entry.offset = cursor;
+        entry.size = size;
+        layout.entries.push_back(std::move(entry));
+
+        cursor += size;
+    }
+
+    // Whole block rounds up to 16-byte boundary per std140.
+    layout.block_size = round_up(cursor, 16u);
+    return layout;
+}
+
+std::string synthesize_material_ubo_glsl(const MaterialUboLayout& layout) {
+    if (layout.empty()) return "";
+
+    auto glsl_type = [](const std::string& prop_type) -> const char* {
+        if (prop_type == "Float") return "float";
+        if (prop_type == "Int")   return "int";
+        if (prop_type == "Bool")  return "bool";
+        if (prop_type == "Vec2")  return "vec2";
+        if (prop_type == "Vec3")  return "vec3";
+        if (prop_type == "Vec4")  return "vec4";
+        if (prop_type == "Color") return "vec4";
+        return nullptr;
+    };
+
+    std::ostringstream out;
+    out << "layout(std140) uniform MaterialParams {\n";
+    for (const auto& e : layout.entries) {
+        const char* t = glsl_type(e.property_type);
+        if (!t) continue;
+        out << "    " << t << " " << e.name << ";\n";
+    }
+    out << "};\n";
+    return out.str();
+}
+
+std::string strip_uniform_decls(const std::string& source,
+                                const std::vector<std::string>& names) {
+    if (names.empty()) return source;
+
+    // Match simple top-level declarations: `uniform <type> <name>;` where
+    // name is one of the provided. Use a per-name regex to avoid conflating
+    // similarly-prefixed identifiers (u_strength / u_strength2).
+    std::string result = source;
+    for (const auto& name : names) {
+        // Escape nothing — property names are simple identifiers.
+        std::string pattern =
+            std::string("^[ \\t]*uniform[ \\t]+[A-Za-z_][A-Za-z0-9_]*[ \\t]+") +
+            name + "[ \\t]*;[ \\t]*\\n?";
+        std::regex re(pattern, std::regex::multiline);
+        result = std::regex_replace(result, re, "");
+    }
+    return result;
+}
+
+std::string inject_after_version(const std::string& source, const std::string& block) {
+    if (block.empty()) return source;
+
+    // Find the first `#version ...\n` line and insert block right after it.
+    std::regex version_re(R"(^[ \t]*#version[^\n]*\n)", std::regex::multiline);
+    std::smatch m;
+    if (std::regex_search(source, m, version_re)) {
+        size_t insert_at = m.position(0) + m.length(0);
+        return source.substr(0, insert_at) + block + source.substr(insert_at);
+    }
+    // No #version — prepend.
+    return block + source;
+}
+
+
 MaterialProperty parse_property_directive(const std::string& line) {
     // Remove @property prefix
     std::string content = line.substr(9);  // len("@property") = 9
@@ -559,6 +671,35 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
     }
 
     ShaderMultyPhaseProgramm result(program_name, std::move(phases), "", std::move(features));
+
+    // Stage 2 of tgfx2 migration: if the program opted into material_ubo,
+    // synthesize a std140 MaterialParams block per phase and rewrite stage
+    // sources to reference it. Properties that feed the UBO are removed from
+    // the raw GLSL (their values now come from the block); textures stay as
+    // plain sampler uniforms.
+    if (result.has_feature("material_ubo")) {
+        for (auto& phase : result.phases) {
+            MaterialUboLayout layout = compute_std140_layout(phase.uniforms);
+            if (layout.empty()) continue;
+
+            std::string block_glsl = synthesize_material_ubo_glsl(layout);
+
+            std::vector<std::string> ubo_names;
+            ubo_names.reserve(layout.entries.size());
+            for (const auto& e : layout.entries) {
+                ubo_names.push_back(e.name);
+            }
+
+            for (auto& kv : phase.stages) {
+                std::string& src = kv.second.source;
+                src = strip_uniform_decls(src, ubo_names);
+                src = inject_after_version(src, block_glsl);
+            }
+
+            phase.material_ubo_layout = std::move(layout);
+        }
+    }
+
     return result;
 }
 
