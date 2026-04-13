@@ -17,7 +17,7 @@ from termin.display.sdl_backend import SDLWindowBackend
 from termin.geombase import Pose3
 from tgfx import TcShader
 from termin._native.render import RenderEngine, ColorPass, PresentToScreenPass, TcMaterial
-from termin.graphics import OpenGLGraphicsBackend
+from tgfx import OpenGLGraphicsBackend
 from termin.render_framework import RenderPipeline
 from tmesh import TcMesh, CubeMesh
 
