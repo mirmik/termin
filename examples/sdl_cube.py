@@ -110,6 +110,12 @@ def main():
 
     display.connect_input()
 
+    print(f"[DEBUG] should_close={handle.should_close()}")
+    print(f"[DEBUG] display size={display.get_size()}")
+    print(f"[DEBUG] surface={display.surface}")
+    print(f"[DEBUG] pipeline={viewport.pipeline}")
+
+    frame = 0
     while not handle.should_close():
         sdl_backend.poll_events()
 
@@ -118,10 +124,14 @@ def main():
 
         width, height = display.get_size()
         if width <= 0 or height <= 0:
+            if frame == 0:
+                print(f"[DEBUG] skip: size={width}x{height}")
             continue
 
         surface = display.surface
         if surface is None:
+            if frame == 0:
+                print("[DEBUG] skip: surface is None")
             continue
         display_fbo = surface.get_framebuffer()
 
@@ -129,7 +139,12 @@ def main():
 
         pipeline = viewport.pipeline
         if pipeline is None:
+            if frame == 0:
+                print("[DEBUG] skip: pipeline is None")
             continue
+
+        if frame == 0:
+            print(f"[DEBUG] rendering frame 0: {width}x{height}, fbo={display_fbo}")
 
         engine.render_view_to_fbo(
             pipeline, display_fbo, width, height,
@@ -138,6 +153,7 @@ def main():
         )
 
         display.present()
+        frame += 1
 
     sdl_backend.terminate()
 

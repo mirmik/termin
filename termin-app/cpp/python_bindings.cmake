@@ -38,14 +38,7 @@ endif()
 
 # ============== Main unified module ==============
 
-# SDL2 sources (optional)
-set(_NATIVE_SDL_SOURCES "")
-if(SDL2_FOUND)
-    set(_NATIVE_SDL_SOURCES
-        termin/sdl_bindings.cpp
-        termin/platform/sdl_render_surface.cpp
-    )
-endif()
+# SDL platform bindings moved to termin-display/_platform_native
 
 nanobind_add_module(_native NB_SHARED
     termin/bindings.cpp
@@ -71,7 +64,6 @@ nanobind_add_module(_native NB_SHARED
     termin/editor/editor_viewport_input_manager.cpp
     termin/editor/editor_interaction_system.cpp
     termin/bindings/modules/term_modules_integration_bindings.cpp
-    ${_NATIVE_SDL_SOURCES}
     termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp
     termin/profiler_bindings.cpp
@@ -110,11 +102,6 @@ if(TERMIN_HAS_RECAST)
     target_link_libraries(_native PRIVATE navmesh_lib)
 endif()
 
-if(SDL2_FOUND)
-    target_include_directories(_native PRIVATE ${SDL2_INCLUDE_DIRS})
-    target_link_libraries(_native PRIVATE ${SDL2_LIBRARIES})
-    target_compile_definitions(_native PRIVATE TERMIN_HAS_SDL2)
-endif()
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
