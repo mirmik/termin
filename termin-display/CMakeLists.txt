@@ -18,6 +18,57 @@ find_package(termin_render REQUIRED)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
+# ── SDL2 (optional) ──
+option(USE_SYSTEM_SDL2 "Use system SDL2 library" ON)
+set(TERMIN_DISPLAY_HAS_SDL OFF)
+
+if(USE_SYSTEM_SDL2)
+    if(WIN32)
+        set(SDL2_SEARCH_PATHS
+            "C:/SDL2"
+            "$ENV{SDL2_DIR}"
+            "$ENV{PROGRAMFILES}/SDL2"
+        )
+        find_path(SDL2_INCLUDE_DIRS SDL2/SDL.h
+            PATH_SUFFIXES include
+            PATHS ${SDL2_SEARCH_PATHS}
+        )
+        find_library(SDL2_LIBRARY
+            NAMES SDL2
+            PATH_SUFFIXES lib
+            PATHS ${SDL2_SEARCH_PATHS}
+        )
+        if(SDL2_INCLUDE_DIRS AND SDL2_LIBRARY)
+            set(SDL2_FOUND TRUE)
+            set(SDL2_LIBRARIES ${SDL2_LIBRARY})
+            get_filename_component(SDL2_LIB_DIR ${SDL2_LIBRARY} DIRECTORY)
+            find_file(SDL2_DLL
+                NAMES SDL2.dll
+                PATHS ${SDL2_LIB_DIR} ${SDL2_LIB_DIR}/../bin ${SDL2_LIB_DIR}/..
+            )
+        else()
+            set(SDL2_FOUND FALSE)
+        endif()
+    else()
+        find_package(SDL2 QUIET)
+        if(NOT SDL2_FOUND)
+            find_package(PkgConfig QUIET)
+            if(PkgConfig_FOUND)
+                pkg_check_modules(SDL2 QUIET sdl2)
+            endif()
+        endif()
+    endif()
+else()
+    set(SDL2_FOUND FALSE)
+endif()
+
+if(SDL2_FOUND)
+    set(TERMIN_DISPLAY_HAS_SDL ON)
+    message(STATUS "termin-display: SDL2 found, building SDL support")
+else()
+    message(STATUS "termin-display: SDL2 not found, SDL support disabled")
+endif()
+
 set(TERMIN_DISPLAY_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_viewport.c
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_display.c
@@ -26,6 +77,12 @@ set(TERMIN_DISPLAY_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_viewport_input_manager.c
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_render_surface.c
 )
+
+if(TERMIN_DISPLAY_HAS_SDL)
+    list(APPEND TERMIN_DISPLAY_SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_render_surface.cpp
+    )
+endif()
 
 if(TERMIN_DISPLAY_BUILD_SHARED)
     add_library(termin_display SHARED ${TERMIN_DISPLAY_SOURCES})
@@ -56,6 +113,10 @@ target_include_directories(termin_display
         ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
 )
 
+if(TERMIN_DISPLAY_HAS_SDL)
+    target_include_directories(termin_display PRIVATE ${SDL2_INCLUDE_DIRS})
+endif()
+
 target_link_libraries(termin_display
     PUBLIC
         tcbase::termin_base
@@ -64,6 +125,10 @@ target_link_libraries(termin_display
         termin_input::termin_input
         termin_render::termin_render
 )
+
+if(TERMIN_DISPLAY_HAS_SDL)
+    target_link_libraries(termin_display PRIVATE ${SDL2_LIBRARIES})
+endif()
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(termin_display PRIVATE m)
@@ -108,6 +173,23 @@ if(TERMIN_BUILD_PYTHON)
     termin_set_rpath_python(_viewport_native)
     install(TARGETS _viewport_native DESTINATION lib/python/termin/viewport)
 
+    if(TERMIN_DISPLAY_HAS_SDL)
+        nanobind_add_module(_platform_native NB_SHARED
+            bindings/platform/platform_module.cpp
+            bindings/platform/sdl_bindings.cpp
+        )
+        target_link_libraries(_platform_native PRIVATE termin_display ${SDL2_LIBRARIES})
+        target_include_directories(_platform_native PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/include
+            ${CMAKE_CURRENT_LIST_DIR}/../termin/core_c/include
+            ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
+            ${CMAKE_CURRENT_LIST_DIR}/bindings/platform
+            ${SDL2_INCLUDE_DIRS}
+        )
+        termin_set_rpath_python(_platform_native)
+        install(TARGETS _platform_native DESTINATION lib/python/termin/display)
+    endif()
+
     install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/python/termin/display/
             DESTINATION lib/python/termin/display
             FILES_MATCHING PATTERN "*.py")
@@ -149,6 +231,17 @@ install(FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/display_input_router.hpp
     DESTINATION include/termin/input
 )
+
+if(TERMIN_DISPLAY_HAS_SDL)
+    install(FILES
+        ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_window.hpp
+        ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_render_surface.hpp
+        DESTINATION include/termin/platform
+    )
+    if(WIN32 AND SDL2_DLL)
+        install(FILES ${SDL2_DLL} DESTINATION bin)
+    endif()
+endif()
 
 install(EXPORT termin_displayTargets
     FILE termin_displayTargets.cmake
