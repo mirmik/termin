@@ -166,18 +166,15 @@ class ProjectModulesRuntime:
         environment = ModuleEnvironment()
         environment.python_executable = sys.executable
 
-        import termin
-
-        # termin is a namespace package → __file__ is None; use __path__[0].
-        # The first entry points at site-packages/termin; walk up three levels
-        # to reach the install prefix (same semantics as the previous
-        # Path(termin.__file__).resolve().parent.parent.parent.parent chain
-        # in the legacy layout where termin/__init__.py existed).
-        termin_path = Path(termin.__path__[0]).resolve()
-        prefix_root = termin_path.parent.parent.parent
-        sdk_env = os.environ.get("TERMIN_SDK")
-        if sdk_env:
-            prefix_root = Path(sdk_env)
+        # Use the canonical SDK discovery helper shared with all subpackages.
+        # find_sdk() checks $TERMIN_SDK → /opt/termin → %LOCALAPPDATA%/termin-sdk,
+        # returning the install prefix directly — no fragile `__file__` walk-up.
+        from termin_nanobind.runtime import find_sdk
+        prefix_root = find_sdk()
+        if prefix_root is None:
+            raise RuntimeError(
+                "termin SDK not found. Set TERMIN_SDK or install to /opt/termin."
+            )
 
         environment.sdk_prefix = str(prefix_root)
         environment.cmake_prefix_path = str(prefix_root)
