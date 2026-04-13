@@ -251,7 +251,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
             for glb_mesh in self._data.meshes:
                 if glb_mesh.name == mesh_name:
                     from termin.loaders.glb_instantiator import _populate_tc_mesh_from_glb
-                    from tgfx import TcMesh
+                    from tmesh import TcMesh
 
                     tc_mesh = TcMesh.from_uuid(tc_mesh_data.uuid)
                     if tc_mesh.is_valid:
@@ -300,7 +300,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
             _glb_skin_to_tc_skeleton,
             _populate_tc_skeleton_from_glb,
         )
-        from tgfx import tc_mesh_is_loaded
+        from tmesh import tc_mesh_is_loaded
         from termin.skeleton._skeleton_native import tc_skeleton_is_loaded
         from termin.animation import clip_from_glb
 

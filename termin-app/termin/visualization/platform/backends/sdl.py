@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Tuple
 
-from termin._native.platform import (
+from termin.display._platform_native import (
     SDLWindowBackend as _SDLWindowBackend,
     SDLWindowRenderSurface,
 )
