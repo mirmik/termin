@@ -1,11 +1,13 @@
-"""Canonical animation component API."""
+"""Canonical animation component API.
 
-from termin import _dll_setup  # noqa: F401
+The `_components_animation_native` binding is built by
+termin-components/termin-components-animation and shipped inside the
+termin-animation pip package (both contribute to the `termin.animation`
+namespace). Since this wrapper lives in the separate
+`termin.animation_components` namespace purely for API grouping, it
+re-exports AnimationPlayer from where the binding actually lives.
+"""
 
-# Make native modules accessible via termin.animation_components path
-# (the .so files live under visualization/animation/ in the SDK)
-_dll_setup.extend_package_path(__path__, "visualization", "animation")
-
-from termin.animation_components._components_animation_native import AnimationPlayer
+from termin.animation._components_animation_native import AnimationPlayer
 
 __all__ = ["AnimationPlayer"]
