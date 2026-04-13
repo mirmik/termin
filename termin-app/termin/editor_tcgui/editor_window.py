@@ -1450,7 +1450,8 @@ class EditorWindowTcgui:
             return
         import termin
 
-        stdlib_src = Path(termin.__file__).parent / "resources" / "stdlib"
+        # termin is a namespace package → __file__ is None; use __path__[0]
+        stdlib_src = Path(termin.__path__[0]) / "resources" / "stdlib"
         if not stdlib_src.exists():
             MessageBox.error(
                 self._ui,

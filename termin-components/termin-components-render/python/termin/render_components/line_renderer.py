@@ -10,7 +10,7 @@ from typing import Iterable, List, Optional, Set, TYPE_CHECKING
 import numpy as np
 
 from termin.mesh import TcMesh
-from tgfx import TcVertexLayout, TcAttribType, TcDrawMode
+from tmesh import TcVertexLayout, TcAttribType, TcDrawMode
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.render.render_context import RenderContext
 from termin._native.render import TcMaterial, TcRenderState

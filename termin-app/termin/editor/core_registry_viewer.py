@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-from tgfx import tc_mesh_get_all_info, tc_mesh_count
+from tmesh import tc_mesh_get_all_info, tc_mesh_count
 from tgfx import tc_texture_get_all_info, tc_texture_count
 from termin._native.scene import (
     tc_scene_registry_get_all_info,

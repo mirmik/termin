@@ -39,7 +39,11 @@ def _sync_stdlib(project_root: Path) -> None:
     import shutil
     import termin
 
-    stdlib_src = Path(termin.__file__).parent / "resources" / "stdlib"
+    # termin is a namespace package (no top-level __init__.py), so
+    # termin.__file__ is None. Use __path__[0] — the first directory
+    # contributing to the namespace, which is where termin-app ships
+    # resources/stdlib/ via package_data.
+    stdlib_src = Path(termin.__path__[0]) / "resources" / "stdlib"
     stdlib_dst = project_root / "stdlib"
 
     if not stdlib_src.exists():
