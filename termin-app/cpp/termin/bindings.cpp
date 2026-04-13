@@ -8,9 +8,6 @@ extern "C" {
 }
 
 #include "render_bindings.hpp"
-#ifdef TERMIN_HAS_SDL2
-#include "sdl_bindings.hpp"
-#endif
 #include "bindings/modules/term_modules_integration_bindings.hpp"
 #include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
@@ -155,7 +152,7 @@ NB_MODULE(_native, m) {
     register_tc_mesh_kind();
 
     auto render_module = m.def_submodule("render", "Render module");
-    auto platform_module = m.def_submodule("platform", "Platform module");
+    // SDL platform bindings moved to termin-display/_platform_native
     auto scene_module = m.def_submodule("scene", "Scene module");
     auto modules_module = m.def_submodule("modules", "Modules integration");
     auto profiler_module = m.def_submodule("profiler", "Profiler module");
@@ -171,9 +168,6 @@ NB_MODULE(_native, m) {
     termin::bind_gizmo(editor_module);
     termin::bind_editor_interaction(editor_module);
     termin::bind_frame_graph_debugger(editor_module);
-#ifdef TERMIN_HAS_SDL2
-    termin::bind_sdl(platform_module);
-#endif
     termin::bind_term_modules_integration(modules_module);
     termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);
