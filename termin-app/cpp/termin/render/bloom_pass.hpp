@@ -6,10 +6,13 @@
 
 #include "termin/render/frame_pass.hpp"
 #include <tgfx/tgfx_shader_handle.hpp>
+#include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
 
 #include <vector>
 #include <memory>
+
+namespace tgfx2 { class IRenderDevice; }
 
 namespace termin {
 
@@ -24,19 +27,32 @@ public:
     int mip_levels = 5;
 
 private:
-    // Internal mip chain FBOs
+    // Legacy-path resources
     std::vector<FramebufferHandlePtr> mip_fbos_;
-
-    // Lazy-loaded shaders
     TcShader bright_shader_;
     TcShader downsample_shader_;
     TcShader upsample_shader_;
     TcShader composite_shader_;
 
-    // Last known size for FBO recreation
+    // tgfx2-path resources — persistent across frames, rebuilt on resize.
+    tgfx2::IRenderDevice* device2_ = nullptr;
+    std::vector<tgfx2::TextureHandle> mip_textures_;
+    tgfx2::ShaderHandle bright_fs2_;
+    tgfx2::ShaderHandle downsample_fs2_;
+    tgfx2::ShaderHandle upsample_fs2_;
+    tgfx2::ShaderHandle composite_fs2_;
+    tgfx2::BufferHandle bright_ubo_;
+    tgfx2::BufferHandle downsample_ubo_;
+    tgfx2::BufferHandle upsample_ubo_;
+    tgfx2::BufferHandle composite_ubo_;
+
+    // Last known size/count for mip chain recreation
     int last_width_ = 0;
     int last_height_ = 0;
     int last_mip_levels_ = 0;
+    int last_tgfx2_width_ = 0;
+    int last_tgfx2_height_ = 0;
+    int last_tgfx2_mip_levels_ = 0;
 
 public:
     INSPECT_FIELD(BloomPass, input_res, "Input", "string")
@@ -68,6 +84,12 @@ public:
 private:
     void ensure_shaders();
     void ensure_mip_fbos(GraphicsBackend* graphics, int width, int height);
+
+    void execute_legacy(ExecuteContext& ctx);
+    void execute_tgfx2(ExecuteContext& ctx);
+    void ensure_tgfx2_shaders();
+    void ensure_tgfx2_mip_textures(int width, int height);
+    void destroy_tgfx2_mip_textures();
 };
 
 } // namespace termin
