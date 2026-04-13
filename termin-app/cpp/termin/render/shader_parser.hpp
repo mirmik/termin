@@ -271,4 +271,20 @@ std::string strip_uniform_decls(const std::string& source,
  */
 std::string inject_after_version(const std::string& source, const std::string& block);
 
+/**
+ * Pack material property values into a std140-laid out byte buffer.
+ *
+ * For each entry in `layout.entries`, looks up a property with matching name
+ * in `values` and writes its value at `entry.offset`. Missing properties or
+ * type mismatches are silently skipped (the caller is responsible for
+ * zero-filling `out_buffer` beforehand if it wants deterministic defaults).
+ *
+ * The buffer pointed to by `out_buffer` must be at least `layout.block_size`
+ * bytes long. Values are written as 32-bit floats (even booleans, per
+ * std140). `Texture` properties are ignored — they are not in the UBO.
+ */
+void std140_pack(const MaterialUboLayout& layout,
+                 const std::vector<MaterialProperty>& values,
+                 uint8_t* out_buffer);
+
 } // namespace termin

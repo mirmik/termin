@@ -1,7 +1,10 @@
 #include "guard/guard.h"
 #include "termin/render/shader_parser.hpp"
 
+#include <cstdint>
+#include <cstring>
 #include <string>
+#include <vector>
 
 using termin::MaterialProperty;
 using termin::MaterialUboLayout;
@@ -9,12 +12,43 @@ using termin::ShaderMultyPhaseProgramm;
 using termin::compute_std140_layout;
 using termin::inject_after_version;
 using termin::parse_shader_text;
+using termin::std140_pack;
 using termin::std140_size_align;
 using termin::strip_uniform_decls;
 using termin::synthesize_material_ubo_glsl;
 
 static MaterialProperty mk(const char* name, const char* type) {
     return MaterialProperty(name, type, std::monostate{});
+}
+
+static MaterialProperty mk_float(const char* name, double v) {
+    return MaterialProperty(name, "Float", v);
+}
+
+static MaterialProperty mk_int(const char* name, int v) {
+    return MaterialProperty(name, "Int", v);
+}
+
+static MaterialProperty mk_bool(const char* name, bool v) {
+    return MaterialProperty(name, "Bool", v);
+}
+
+static MaterialProperty mk_vec(const char* name, const char* type,
+                                std::vector<double> values) {
+    return MaterialProperty(name, type, std::move(values));
+}
+
+// Read a float from a packed buffer at a byte offset.
+static float read_float_at(const std::vector<uint8_t>& buf, uint32_t offset) {
+    float v = 0.0f;
+    std::memcpy(&v, buf.data() + offset, sizeof(float));
+    return v;
+}
+
+static int32_t read_int_at(const std::vector<uint8_t>& buf, uint32_t offset) {
+    int32_t v = 0;
+    std::memcpy(&v, buf.data() + offset, sizeof(int32_t));
+    return v;
 }
 
 TEST_CASE("std140: scalar and vector sizes/alignments")
@@ -265,4 +299,208 @@ TEST_CASE("parse_shader_text: no material_ubo feature leaves sources untouched")
     // Legacy path: the raw uniform decl must still be present.
     CHECK(frag.find("uniform float u_strength;") != std::string::npos);
     CHECK(frag.find("MaterialParams") == std::string::npos);
+}
+
+// ============================================================================
+// std140_pack: value serialization into packed byte buffer
+// ============================================================================
+
+TEST_CASE("std140_pack: single float writes 4 bytes at offset 0")
+{
+    std::vector<MaterialProperty> schema = { mk("u_strength", "Float") };
+    std::vector<MaterialProperty> values = { mk_float("u_strength", 0.75) };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+
+    CHECK_EQ(buf.size(), 16u);
+    CHECK_EQ(read_float_at(buf, 0), 0.75f);
+    // Remaining bytes untouched (zero).
+    for (uint32_t i = 4; i < buf.size(); ++i) {
+        CHECK_EQ(buf[i], 0u);
+    }
+}
+
+TEST_CASE("std140_pack: vec3 + float packs into same 16-byte slot")
+{
+    std::vector<MaterialProperty> schema = {
+        mk("u_color",    "Vec3"),
+        mk("u_strength", "Float"),
+    };
+    std::vector<MaterialProperty> values = {
+        mk_vec("u_color", "Vec3", {0.2, 0.4, 0.6}),
+        mk_float("u_strength", 0.9),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    CHECK_EQ(layout.block_size, 16u);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+
+    CHECK_EQ(read_float_at(buf, 0),  0.2f);
+    CHECK_EQ(read_float_at(buf, 4),  0.4f);
+    CHECK_EQ(read_float_at(buf, 8),  0.6f);
+    CHECK_EQ(read_float_at(buf, 12), 0.9f);  // float in the trailing slot
+}
+
+TEST_CASE("std140_pack: float + vec3 jumps vec3 to offset 16")
+{
+    std::vector<MaterialProperty> schema = {
+        mk("u_strength", "Float"),
+        mk("u_color",    "Vec3"),
+    };
+    std::vector<MaterialProperty> values = {
+        mk_float("u_strength", 1.5),
+        mk_vec("u_color", "Vec3", {0.1, 0.2, 0.3}),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    CHECK_EQ(layout.block_size, 32u);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+
+    CHECK_EQ(read_float_at(buf, 0),  1.5f);
+    // Bytes [4..16) are padding — must remain zero.
+    for (uint32_t i = 4; i < 16; ++i) CHECK_EQ(buf[i], 0u);
+    CHECK_EQ(read_float_at(buf, 16), 0.1f);
+    CHECK_EQ(read_float_at(buf, 20), 0.2f);
+    CHECK_EQ(read_float_at(buf, 24), 0.3f);
+    CHECK_EQ(read_float_at(buf, 28), 0.0f);  // padding slot
+}
+
+TEST_CASE("std140_pack: Color packs 4 floats at aligned offset")
+{
+    std::vector<MaterialProperty> schema = {
+        mk("u_strength", "Float"),
+        mk("u_tint",     "Color"),
+    };
+    std::vector<MaterialProperty> values = {
+        mk_float("u_strength", 2.0),
+        mk_vec("u_tint", "Color", {0.9, 0.8, 0.7, 0.6}),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    CHECK_EQ(layout.block_size, 32u);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+
+    CHECK_EQ(read_float_at(buf, 0),  2.0f);
+    // [4..16) padding.
+    CHECK_EQ(read_float_at(buf, 16), 0.9f);
+    CHECK_EQ(read_float_at(buf, 20), 0.8f);
+    CHECK_EQ(read_float_at(buf, 24), 0.7f);
+    CHECK_EQ(read_float_at(buf, 28), 0.6f);
+}
+
+TEST_CASE("std140_pack: Int and Bool")
+{
+    std::vector<MaterialProperty> schema = {
+        mk("u_count",  "Int"),
+        mk("u_enable", "Bool"),
+    };
+    std::vector<MaterialProperty> values = {
+        mk_int("u_count", 42),
+        mk_bool("u_enable", true),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    CHECK_EQ(layout.block_size, 16u);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+
+    CHECK_EQ(read_int_at(buf, 0), 42);
+    CHECK_EQ(read_int_at(buf, 4), 1);  // Bool(true) → int 1
+}
+
+TEST_CASE("std140_pack: realistic PBR material")
+{
+    std::vector<MaterialProperty> schema = {
+        mk("u_albedo",    "Color"),
+        mk("u_metallic",  "Float"),
+        mk("u_roughness", "Float"),
+        mk("u_ao",        "Float"),
+        mk("u_emissive",  "Vec3"),
+        mk("u_opacity",   "Float"),
+    };
+    std::vector<MaterialProperty> values = {
+        mk_vec("u_albedo", "Color", {0.1, 0.2, 0.3, 1.0}),
+        mk_float("u_metallic",  0.5),
+        mk_float("u_roughness", 0.25),
+        mk_float("u_ao",        1.0),
+        mk_vec("u_emissive", "Vec3", {10.0, 20.0, 30.0}),
+        mk_float("u_opacity",   0.8),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    CHECK_EQ(layout.block_size, 48u);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+
+    CHECK_EQ(read_float_at(buf, 0),  0.1f);
+    CHECK_EQ(read_float_at(buf, 4),  0.2f);
+    CHECK_EQ(read_float_at(buf, 8),  0.3f);
+    CHECK_EQ(read_float_at(buf, 12), 1.0f);
+    CHECK_EQ(read_float_at(buf, 16), 0.5f);   // u_metallic
+    CHECK_EQ(read_float_at(buf, 20), 0.25f);  // u_roughness
+    CHECK_EQ(read_float_at(buf, 24), 1.0f);   // u_ao
+    // Offset 28 is padding to align u_emissive vec3 at 32.
+    CHECK_EQ(read_float_at(buf, 28), 0.0f);
+    CHECK_EQ(read_float_at(buf, 32), 10.0f);  // u_emissive
+    CHECK_EQ(read_float_at(buf, 36), 20.0f);
+    CHECK_EQ(read_float_at(buf, 40), 30.0f);
+    CHECK_EQ(read_float_at(buf, 44), 0.8f);   // u_opacity trailing slot
+}
+
+TEST_CASE("std140_pack: missing value leaves the slot alone")
+{
+    std::vector<MaterialProperty> schema = {
+        mk("u_a", "Float"),
+        mk("u_b", "Float"),
+    };
+    // Only provide u_b — u_a should remain whatever was in the buffer.
+    std::vector<MaterialProperty> values = { mk_float("u_b", 7.0) };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    // Pre-fill u_a slot with a sentinel value — packer must not touch it.
+    float sentinel = -12.5f;
+    std::memcpy(buf.data() + 0, &sentinel, sizeof(float));
+
+    std140_pack(layout, values, buf.data());
+
+    CHECK_EQ(read_float_at(buf, 0), sentinel);  // untouched
+    CHECK_EQ(read_float_at(buf, 4), 7.0f);
+}
+
+TEST_CASE("std140_pack: type mismatch is skipped")
+{
+    std::vector<MaterialProperty> schema = { mk("u_strength", "Float") };
+    // Wrong type provided — should not be written.
+    std::vector<MaterialProperty> values = { mk_vec("u_strength", "Vec3", {1, 2, 3}) };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+
+    // Buffer remains zero — mismatched type is ignored.
+    for (uint32_t i = 0; i < buf.size(); ++i) CHECK_EQ(buf[i], 0u);
+}
+
+TEST_CASE("std140_pack: Texture properties in values list are ignored")
+{
+    std::vector<MaterialProperty> schema = {
+        mk("u_strength", "Float"),
+    };
+    std::vector<MaterialProperty> values = {
+        // Texture is in values but not in layout — schema is the floor.
+        mk("u_albedo", "Texture"),
+        mk_float("u_strength", 0.5),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+
+    CHECK_EQ(read_float_at(buf, 0), 0.5f);
 }
