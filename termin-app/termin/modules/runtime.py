@@ -168,8 +168,11 @@ class ProjectModulesRuntime:
 
         import termin
 
-        termin_path = Path(termin.__file__).resolve().parent
-        prefix_root = termin_path.parent.parent.parent
+        # termin is a namespace package → __file__ is None; use __path__[0].
+        # termin_path points into site-packages, and prefix_root walks up to
+        # the install prefix (site-packages/termin → .../lib/python3.x/site-packages → .../lib/python3.x → .../lib → .../).
+        termin_path = Path(termin.__path__[0]).resolve()
+        prefix_root = termin_path.parent.parent.parent.parent
         sdk_env = os.environ.get("TERMIN_SDK")
         if sdk_env:
             prefix_root = Path(sdk_env)

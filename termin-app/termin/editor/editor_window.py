@@ -1442,9 +1442,10 @@ class EditorWindow(QMainWindow):
         import shutil
         from pathlib import Path
 
-        # Get stdlib source directory
+        # Get stdlib source directory. termin is a namespace package so
+        # termin.__file__ is None — use __path__[0] instead.
         import termin
-        stdlib_src = Path(termin.__file__).parent / "resources" / "stdlib"
+        stdlib_src = Path(termin.__path__[0]) / "resources" / "stdlib"
 
         if not stdlib_src.exists():
             QMessageBox.warning(

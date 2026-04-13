@@ -18,7 +18,7 @@ from tcbase import log
 def show_core_registry_viewer(ui) -> None:
     """Show Core Registry viewer dialog."""
     try:
-        from tgfx import tc_mesh_get_all_info, tc_mesh_count
+        from tmesh import tc_mesh_get_all_info, tc_mesh_count
         from tgfx import tc_texture_get_all_info, tc_texture_count
         from tgfx import TcShader, shader_get_all_info, shader_count
         from termin._native.render import (
