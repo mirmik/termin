@@ -219,7 +219,7 @@ set_target_properties(entity_lib PROPERTIES
 set(RENDER_LIB_SOURCES
     # Render extension for TcSceneRef (uses RenderingManager)
     termin/tc_scene_render_ext.cpp
-    termin/render/wireframe_renderer.cpp
+    termin/render/immediate_renderer.cpp
     termin/render/color_pass.cpp
     termin/render/id_pass.cpp
     termin/render/collider_gizmo_pass.cpp

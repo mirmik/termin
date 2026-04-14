@@ -55,7 +55,6 @@ nanobind_add_module(_native NB_SHARED
     termin/bindings/render/shadow.cpp
     termin/bindings/render/resource_spec.cpp
     termin/bindings/render/immediate.cpp
-    termin/bindings/render/wireframe.cpp
     termin/bindings/render/frame_pass.cpp
     termin/bindings/render/tc_pass_bindings.cpp
     termin/bindings/render/material.cpp
@@ -82,7 +81,6 @@ nanobind_add_module(_native NB_SHARED
 
     # Renderer sources unique to _native (NOT in RENDER_LIB_SOURCES).
     # Keep this list tight — every file here compiled twice = duplicate symbols.
-    termin/render/immediate_renderer.cpp
     termin/render/solid_primitive_renderer.cpp
     termin/render/skinned_mesh_renderer.cpp
 )

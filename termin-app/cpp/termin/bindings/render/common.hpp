@@ -16,7 +16,6 @@ void bind_camera(nb::module_& m);
 void bind_shadow(nb::module_& m);
 void bind_resource_spec(nb::module_& m);
 void bind_immediate(nb::module_& m);
-void bind_wireframe(nb::module_& m);
 void bind_frame_pass(nb::module_& m);
 void bind_material(nb::module_& m);
 void bind_tc_material(nb::module_& m);
