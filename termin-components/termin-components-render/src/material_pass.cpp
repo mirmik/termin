@@ -96,19 +96,16 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    FramebufferHandle* output_fbo = nullptr;
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it != ctx.writes_fbos.end()) {
-        output_fbo = dynamic_cast<FramebufferHandle*>(it->second);
-    }
-    if (!output_fbo) {
-        tc::Log::error("[MaterialPass] '%s': output FBO '%s' not found",
+    auto color_it = ctx.tex2_writes.find(output_res);
+    if (color_it == ctx.tex2_writes.end() || !color_it->second) {
+        tc::Log::error("[MaterialPass] '%s': tgfx2 color texture for '%s' not available",
                        get_pass_name().c_str(), output_res.c_str());
         return;
     }
+    tgfx2::TextureHandle color_tex2 = color_it->second;
 
-    int w = output_fbo->get_width();
-    int h = output_fbo->get_height();
+    int w = ctx.rect.width;
+    int h = ctx.rect.height;
     if (w <= 0 || h <= 0) return;
 
     tc_material* mat = material.get();
@@ -134,15 +131,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    // Wrap output FBO as a tgfx2 texture for the duration of the pass.
-    tgfx2::TextureHandle color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, output_fbo);
-    if (!color_tex2) {
-        tc::Log::error("[MaterialPass] '%s': failed to wrap output color attachment",
-                       get_pass_name().c_str());
-        return;
-    }
-    ctx2->defer_destroy(color_tex2);
-
     ctx2->begin_pass(color_tex2, /*depth=*/{},
                      /*clear_color=*/nullptr,
                      /*clear_depth=*/1.0f,
@@ -165,41 +153,29 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     uint32_t tex_slot = 1;
     std::set<std::string> bound_uniforms;
 
-    // extra_resources: read from reads_fbos, wrap color attachment.
+    // extra_resources: pull tgfx2 color textures directly from ctx.tex2_reads.
     for (const auto& [res_name, uniform_name] : extra_resources) {
-        auto res_it = ctx.reads_fbos.find(res_name);
-        if (res_it == ctx.reads_fbos.end()) {
-            tc::Log::warn("[MaterialPass] '%s': resource '%s' not found in reads_fbos",
+        auto res_it = ctx.tex2_reads.find(res_name);
+        if (res_it == ctx.tex2_reads.end() || !res_it->second) {
+            tc::Log::warn("[MaterialPass] '%s': tgfx2 texture for '%s' not available",
                 get_pass_name().c_str(), res_name.c_str());
             continue;
         }
-        FramebufferHandle* fbo = dynamic_cast<FramebufferHandle*>(res_it->second);
-        if (!fbo) continue;
 
-        tgfx2::TextureHandle tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fbo);
-        if (!tex2) continue;
-        ctx2->defer_destroy(tex2);
-
-        ctx2->bind_sampled_texture(tex_slot, tex2);
+        ctx2->bind_sampled_texture(tex_slot, res_it->second);
         ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(tex_slot));
         bound_uniforms.insert(uniform_name);
         tex_slot++;
     }
 
-    // texture_resources: same wrap path, keyed by uniform name.
+    // texture_resources: same tgfx2 texture lookup, keyed by uniform name.
     for (const auto& [uniform_name, res_name] : texture_resources) {
         if (res_name.empty()) continue;
 
-        auto res_it = ctx.reads_fbos.find(res_name);
-        if (res_it == ctx.reads_fbos.end()) continue;
-        FramebufferHandle* fbo = dynamic_cast<FramebufferHandle*>(res_it->second);
-        if (!fbo) continue;
+        auto res_it = ctx.tex2_reads.find(res_name);
+        if (res_it == ctx.tex2_reads.end() || !res_it->second) continue;
 
-        tgfx2::TextureHandle tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fbo);
-        if (!tex2) continue;
-        ctx2->defer_destroy(tex2);
-
-        ctx2->bind_sampled_texture(tex_slot, tex2);
+        ctx2->bind_sampled_texture(tex_slot, res_it->second);
         ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(tex_slot));
         bound_uniforms.insert(uniform_name);
         tex_slot++;
