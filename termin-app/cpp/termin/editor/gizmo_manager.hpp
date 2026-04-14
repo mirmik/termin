@@ -8,11 +8,12 @@
 #include <vector>
 #include <optional>
 
+namespace tgfx2 { class RenderContext2; }
+
 namespace termin {
 
 class ImmediateRenderer;
 class SolidPrimitiveRenderer;
-class GraphicsBackend;
 
 // ============================================================
 // GizmoHit
@@ -63,10 +64,10 @@ public:
     void remove_gizmo(Gizmo* gizmo);
     void clear();
 
-    // Rendering
+    // Rendering (tgfx2 ctx2 path — caller must have an open pass).
     void render(
         ImmediateRenderer* renderer,
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44f& view_matrix,
         const Mat44f& proj_matrix
     );

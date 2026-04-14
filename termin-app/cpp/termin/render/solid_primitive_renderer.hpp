@@ -5,16 +5,21 @@
 
 #include <termin/geom/mat44.hpp>
 #include "tgfx/types.hpp"
-#include "tgfx/handles.hpp"
 #include <tgfx/tgfx_shader_handle.hpp>
+#include "tgfx2/handles.hpp"
+
+namespace tgfx2 {
+class RenderContext2;
+class IRenderDevice;
+}
 
 namespace termin {
 
-class GraphicsBackend;
-
 // Solid primitive renderer using pre-built GPU meshes.
-// All geometry is created once at initialization.
-// Drawing is done by setting model matrices and colors per-primitive.
+// Rendered through tgfx2::RenderContext2 end-to-end.
+// All geometry is created once at initialization via tgfx2 buffers,
+// drawing sets model matrices and colors per-primitive via ctx2's
+// transitional plain-uniform setters.
 class SolidPrimitiveRenderer {
 public:
     // Mesh parameters
@@ -24,19 +29,27 @@ public:
     static constexpr int CYLINDER_SEGMENTS = 16;
     static constexpr int CONE_SEGMENTS = 16;
 
-    // GPU mesh handles for each primitive type
-    GPUMeshHandlePtr _torus_mesh;
-    GPUMeshHandlePtr _cylinder_mesh;
-    GPUMeshHandlePtr _cone_mesh;
-    GPUMeshHandlePtr _quad_mesh;
+    // tgfx2 buffer resources per primitive.
+    struct MeshRes {
+        tgfx2::BufferHandle vbo;
+        tgfx2::BufferHandle ibo;
+        uint32_t index_count = 0;
+    };
+    MeshRes _torus;
+    MeshRes _cylinder;
+    MeshRes _cone;
+    MeshRes _quad;
 
     bool _initialized = false;
-    TcShader _shader;
-    GraphicsBackend* _graphics = nullptr;
+    TcShader _shader;                  // Source of GLSL; compiled to
+                                       // tgfx2 ShaderHandle pair via
+                                       // tc_shader_ensure_tgfx2.
+    tgfx2::IRenderDevice* _device = nullptr;
+    tgfx2::RenderContext2* _ctx2 = nullptr;
 
 public:
     SolidPrimitiveRenderer() = default;
-    ~SolidPrimitiveRenderer() = default;
+    ~SolidPrimitiveRenderer();
 
     // Non-copyable
     SolidPrimitiveRenderer(const SolidPrimitiveRenderer&) = delete;
@@ -46,9 +59,12 @@ public:
     SolidPrimitiveRenderer(SolidPrimitiveRenderer&& other) noexcept;
     SolidPrimitiveRenderer& operator=(SolidPrimitiveRenderer&& other) noexcept;
 
-    // Begin solid primitive rendering. Sets up shader and state.
+    // Begin solid primitive rendering. Sets up shader and state via
+    // ctx2. A render pass must already be open on ctx2 before this is
+    // called — begin() does NOT call ctx2->begin_pass (the caller
+    // already owns the pass boundary).
     void begin(
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj,
         bool depth_test = true,
@@ -87,7 +103,7 @@ public:
     );
 
 private:
-    void _ensure_initialized(GraphicsBackend* graphics);
+    void _ensure_initialized(tgfx2::IRenderDevice* device);
 };
 
 } // namespace termin

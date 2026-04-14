@@ -165,10 +165,11 @@ Color4 TransformGizmo::_get_plane_color(const std::string& plane, TransformEleme
 
 void TransformGizmo::draw_solid(
     SolidPrimitiveRenderer* renderer,
-    GraphicsBackend* graphics,
+    tgfx2::RenderContext2* ctx2,
     const Mat44f& view,
     const Mat44f& proj
 ) {
+    (void)ctx2;
     if (!visible || !_target.valid()) return;
 
     Vec3f origin = _get_position();
@@ -216,10 +217,11 @@ void TransformGizmo::draw_solid(
 
 void TransformGizmo::draw_transparent_solid(
     SolidPrimitiveRenderer* renderer,
-    GraphicsBackend* graphics,
+    tgfx2::RenderContext2* ctx2,
     const Mat44f& view,
     const Mat44f& proj
 ) {
+    (void)ctx2;
     if (!visible || !_target.valid()) return;
 
     Vec3f origin = _get_position();

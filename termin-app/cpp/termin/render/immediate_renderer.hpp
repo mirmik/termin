@@ -9,9 +9,9 @@
 #include <memory>
 #include <functional>
 
-namespace termin {
+namespace tgfx2 { class RenderContext2; }
 
-class GraphicsBackend;
+namespace termin {
 
 /**
  * Immediate mode renderer for debug visualization, gizmos, etc.
@@ -184,11 +184,12 @@ public:
     // ============================================================
 
     /**
-     * Render all accumulated primitives (no depth test buffer).
+     * Render all accumulated primitives through tgfx2::RenderContext2.
+     * The caller must already have an open render pass on ctx2.
      * Clears buffers after rendering.
      */
     void flush(
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44& view_matrix,
         const Mat44& proj_matrix,
         bool depth_test = true,
@@ -196,11 +197,10 @@ public:
     );
 
     /**
-     * Render only depth-tested primitives.
-     * Clears depth buffers after rendering.
+     * Render only depth-tested primitives. Clears depth buffers.
      */
     void flush_depth(
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44& view_matrix,
         const Mat44& proj_matrix,
         bool blend = true
@@ -230,10 +230,10 @@ private:
     void _add_vertex(std::vector<float>& buffer, const Vec3& pos, const Color4& color);
     std::pair<Vec3, Vec3> _build_basis(const Vec3& axis);
 
-    void _ensure_shader(GraphicsBackend* graphics);
+    void _ensure_shader();
 
     void _flush_buffers(
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         std::vector<float>& lines,
         std::vector<float>& tris,
         const Mat44& view_matrix,
@@ -242,6 +242,8 @@ private:
         bool blend
     );
 
+    // Shader kept as GLSL source; compiled to a tgfx2 ShaderHandle pair
+    // via tc_shader_ensure_tgfx2 on first flush.
     TcShader _shader;
 };
 

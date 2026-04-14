@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include "termin/render/immediate_renderer.hpp"
-#include "tgfx/graphics_backend.hpp"
+#include <tgfx2/render_context.hpp>
 
 namespace termin {
 
@@ -89,9 +89,9 @@ void bind_immediate(nb::module_& m) {
              nb::arg("origin"), nb::arg("direction"), nb::arg("length"), nb::arg("color"),
              nb::arg("shaft_radius") = 0.03, nb::arg("head_radius") = 0.06,
              nb::arg("head_length_ratio") = 0.25, nb::arg("segments") = 16, nb::arg("depth_test") = false)
-        // Rendering - numpy overload (converts row-major numpy to column-major Mat44)
+        // Rendering via tgfx2 ctx2 (Stage 8.1 migration)
         .def("flush", [](ImmediateRenderer& self,
-                         GraphicsBackend* graphics,
+                         tgfx2::RenderContext2* ctx2,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj,
                          bool depth_test,
@@ -103,24 +103,22 @@ void bind_immediate(nb::module_& m) {
                     proj_mat.data[col * 4 + row] = proj(row, col);
                 }
             }
-
-            self.flush(graphics, view_mat, proj_mat, depth_test, blend);
+            self.flush(ctx2, view_mat, proj_mat, depth_test, blend);
         },
-             nb::arg("graphics"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
+             nb::arg("ctx2"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
              nb::arg("depth_test") = true, nb::arg("blend") = true)
-        // Mat44 overload (already column-major)
         .def("flush", [](ImmediateRenderer& self,
-                         GraphicsBackend* graphics,
+                         tgfx2::RenderContext2* ctx2,
                          const Mat44& view,
                          const Mat44& proj,
                          bool depth_test,
                          bool blend) {
-            self.flush(graphics, view, proj, depth_test, blend);
+            self.flush(ctx2, view, proj, depth_test, blend);
         },
-             nb::arg("graphics"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
+             nb::arg("ctx2"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
              nb::arg("depth_test") = true, nb::arg("blend") = true)
         .def("flush_depth", [](ImmediateRenderer& self,
-                         GraphicsBackend* graphics,
+                         tgfx2::RenderContext2* ctx2,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj,
                          bool blend) {
@@ -131,20 +129,18 @@ void bind_immediate(nb::module_& m) {
                     proj_mat.data[col * 4 + row] = proj(row, col);
                 }
             }
-
-            self.flush_depth(graphics, view_mat, proj_mat, blend);
+            self.flush_depth(ctx2, view_mat, proj_mat, blend);
         },
-             nb::arg("graphics"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
+             nb::arg("ctx2"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
              nb::arg("blend") = true)
-        // Mat44 overload
         .def("flush_depth", [](ImmediateRenderer& self,
-                         GraphicsBackend* graphics,
+                         tgfx2::RenderContext2* ctx2,
                          const Mat44& view,
                          const Mat44& proj,
                          bool blend) {
-            self.flush_depth(graphics, view, proj, blend);
+            self.flush_depth(ctx2, view, proj, blend);
         },
-             nb::arg("graphics"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
+             nb::arg("ctx2"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
              nb::arg("blend") = true)
         // Properties
         .def_prop_ro("line_count", &ImmediateRenderer::line_count)

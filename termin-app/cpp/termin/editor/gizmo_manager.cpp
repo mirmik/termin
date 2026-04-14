@@ -1,7 +1,9 @@
 #include "gizmo_manager.hpp"
 #include "termin/render/immediate_renderer.hpp"
 #include "termin/render/solid_primitive_renderer.hpp"
-#include "tgfx/graphics_backend.hpp"
+
+#include <tgfx2/render_context.hpp>
+#include <tgfx2/enums.hpp>
 
 extern "C" {
 #include "tc_profiler.h"
@@ -57,17 +59,16 @@ SolidPrimitiveRenderer* GizmoManager::_ensure_solid_renderer() {
 
 void GizmoManager::render(
     ImmediateRenderer* renderer,
-    GraphicsBackend* graphics,
+    tgfx2::RenderContext2* ctx2,
     const Mat44f& view_matrix,
     const Mat44f& proj_matrix
 ) {
+    if (!ctx2) return;
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("GizmoManager::render");
 
-    // Separate gizmos by renderer type
     std::vector<Gizmo*> solid_gizmos;
     std::vector<Gizmo*> immediate_gizmos;
-
     for (Gizmo* gizmo : _gizmos) {
         if (gizmo->visible) {
             if (gizmo->uses_solid_renderer()) {
@@ -78,46 +79,39 @@ void GizmoManager::render(
         }
     }
 
-    // Pass 1: Opaque geometry
-
-    // Solid renderer gizmos
+    // Pass 1: Opaque.
     if (!solid_gizmos.empty()) {
         SolidPrimitiveRenderer* solid = _ensure_solid_renderer();
-        solid->begin(graphics, view_matrix, proj_matrix, true, false);
+        solid->begin(ctx2, view_matrix, proj_matrix, /*depth_test=*/true, /*blend=*/false);
         for (Gizmo* gizmo : solid_gizmos) {
-            gizmo->draw_solid(solid, graphics, view_matrix, proj_matrix);
+            gizmo->draw_solid(solid, ctx2, view_matrix, proj_matrix);
         }
         solid->end();
     }
 
-    // Immediate renderer gizmos
     if (!immediate_gizmos.empty()) {
         renderer->begin();
         for (Gizmo* gizmo : immediate_gizmos) {
             gizmo->draw(renderer);
         }
-        // Convert Mat44f to Mat44 for flush
         Mat44 view_d, proj_d;
         for (int i = 0; i < 16; ++i) {
             view_d.data[i] = view_matrix.data[i];
             proj_d.data[i] = proj_matrix.data[i];
         }
-        renderer->flush(graphics, view_d, proj_d, true, false);
+        renderer->flush(ctx2, view_d, proj_d, /*depth_test=*/true, /*blend=*/false);
     }
 
-    // Pass 2: Transparent geometry
-
-    // Solid renderer transparent
+    // Pass 2: Transparent.
     if (!solid_gizmos.empty()) {
         SolidPrimitiveRenderer* solid = _ensure_solid_renderer();
-        solid->begin(graphics, view_matrix, proj_matrix, true, true);
+        solid->begin(ctx2, view_matrix, proj_matrix, /*depth_test=*/true, /*blend=*/true);
         for (Gizmo* gizmo : solid_gizmos) {
-            gizmo->draw_transparent_solid(solid, graphics, view_matrix, proj_matrix);
+            gizmo->draw_transparent_solid(solid, ctx2, view_matrix, proj_matrix);
         }
         solid->end();
     }
 
-    // Immediate renderer transparent
     if (!immediate_gizmos.empty()) {
         renderer->begin();
         for (Gizmo* gizmo : immediate_gizmos) {
@@ -128,12 +122,10 @@ void GizmoManager::render(
             view_d.data[i] = view_matrix.data[i];
             proj_d.data[i] = proj_matrix.data[i];
         }
-        renderer->flush(graphics, view_d, proj_d, true, true);
+        renderer->flush(ctx2, view_d, proj_d, /*depth_test=*/true, /*blend=*/true);
     }
 
-    // Restore default state
-    graphics->set_blend(false);
-
+    ctx2->set_blend(false);
     if (profile) tc_profiler_end_section();
 }
 

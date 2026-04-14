@@ -1,6 +1,11 @@
 #include "solid_primitive_renderer.hpp"
-#include "tgfx/graphics_backend.hpp"
 #include <tcbase/tc_log.hpp>
+
+#include <tgfx2/render_context.hpp>
+#include <tgfx2/i_render_device.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
+#include <tgfx2/enums.hpp>
+#include <tgfx2/vertex_layout.hpp>
 
 extern "C" {
 #include <tgfx/resources/tc_mesh.h>
@@ -9,6 +14,7 @@ extern "C" {
 #include <vector>
 #include <cmath>
 #include <cstring>
+#include <span>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -213,40 +219,38 @@ IndexedMesh build_unit_quad() {
     return mesh;
 }
 
-// Create tc_mesh from IndexedMesh (position only layout)
-tc_mesh create_tc_mesh(const IndexedMesh& indexed_mesh) {
-    tc_mesh mesh;
-    std::memset(&mesh, 0, sizeof(mesh));
+// Upload an IndexedMesh (pos-only layout: 3 floats per vertex) as a
+// tgfx2 vertex + index buffer pair. The returned MeshRes owns both
+// handles; the caller is responsible for destroying them through the
+// same tgfx2 device.
+SolidPrimitiveRenderer::MeshRes upload_mesh_tgfx2(
+    tgfx2::IRenderDevice& device,
+    const IndexedMesh& indexed_mesh
+) {
+    SolidPrimitiveRenderer::MeshRes res;
 
-    // Setup position-only layout
-    mesh.layout = tc_vertex_layout_pos();
-    mesh.vertex_count = indexed_mesh.vertices.size() / 3;
-    mesh.index_count = indexed_mesh.indices.size();
-    mesh.draw_mode = TC_DRAW_TRIANGLES;
+    tgfx2::BufferDesc vb_desc;
+    vb_desc.size = indexed_mesh.vertices.size() * sizeof(float);
+    vb_desc.usage = tgfx2::BufferUsage::Vertex | tgfx2::BufferUsage::CopyDst;
+    res.vbo = device.create_buffer(vb_desc);
+    device.upload_buffer(
+        res.vbo,
+        std::span<const uint8_t>(
+            reinterpret_cast<const uint8_t*>(indexed_mesh.vertices.data()),
+            vb_desc.size));
 
-    // Copy vertex data
-    size_t vertex_bytes = indexed_mesh.vertices.size() * sizeof(float);
-    mesh.vertices = malloc(vertex_bytes);
-    std::memcpy(mesh.vertices, indexed_mesh.vertices.data(), vertex_bytes);
+    tgfx2::BufferDesc ib_desc;
+    ib_desc.size = indexed_mesh.indices.size() * sizeof(uint32_t);
+    ib_desc.usage = tgfx2::BufferUsage::Index | tgfx2::BufferUsage::CopyDst;
+    res.ibo = device.create_buffer(ib_desc);
+    device.upload_buffer(
+        res.ibo,
+        std::span<const uint8_t>(
+            reinterpret_cast<const uint8_t*>(indexed_mesh.indices.data()),
+            ib_desc.size));
 
-    // Copy index data
-    size_t index_bytes = indexed_mesh.indices.size() * sizeof(uint32_t);
-    mesh.indices = static_cast<uint32_t*>(malloc(index_bytes));
-    std::memcpy(mesh.indices, indexed_mesh.indices.data(), index_bytes);
-
-    return mesh;
-}
-
-// Free tc_mesh data (but not the struct itself)
-void free_tc_mesh_data(tc_mesh* mesh) {
-    if (mesh->vertices) {
-        free(mesh->vertices);
-        mesh->vertices = nullptr;
-    }
-    if (mesh->indices) {
-        free(mesh->indices);
-        mesh->indices = nullptr;
-    }
+    res.index_count = static_cast<uint32_t>(indexed_mesh.indices.size());
+    return res;
 }
 
 Mat44f rotation_matrix_align_z_to(const Vec3f& target) {
@@ -304,118 +308,150 @@ Mat44f compose_trs(const Vec3f& translate, const Mat44f& rotate, const Vec3f& sc
 
 } // anonymous namespace
 
+SolidPrimitiveRenderer::~SolidPrimitiveRenderer() {
+    if (_device) {
+        auto destroy_mesh = [this](MeshRes& m) {
+            if (m.vbo) _device->destroy(m.vbo);
+            if (m.ibo) _device->destroy(m.ibo);
+            m = {};
+        };
+        destroy_mesh(_torus);
+        destroy_mesh(_cylinder);
+        destroy_mesh(_cone);
+        destroy_mesh(_quad);
+    }
+}
+
 SolidPrimitiveRenderer::SolidPrimitiveRenderer(SolidPrimitiveRenderer&& other) noexcept {
     *this = std::move(other);
 }
 
 SolidPrimitiveRenderer& SolidPrimitiveRenderer::operator=(SolidPrimitiveRenderer&& other) noexcept {
     if (this != &other) {
-        _torus_mesh = std::move(other._torus_mesh);
-        _cylinder_mesh = std::move(other._cylinder_mesh);
-        _cone_mesh = std::move(other._cone_mesh);
-        _quad_mesh = std::move(other._quad_mesh);
+        _torus = other._torus;       other._torus = {};
+        _cylinder = other._cylinder; other._cylinder = {};
+        _cone = other._cone;         other._cone = {};
+        _quad = other._quad;         other._quad = {};
         _initialized = other._initialized;
         _shader = std::move(other._shader);
-        _graphics = other._graphics;
+        _device = other._device;
+        _ctx2 = other._ctx2;
 
         other._initialized = false;
-        other._graphics = nullptr;
+        other._device = nullptr;
+        other._ctx2 = nullptr;
     }
     return *this;
 }
 
-void SolidPrimitiveRenderer::_ensure_initialized(GraphicsBackend* graphics) {
-    if (_initialized) return;
+void SolidPrimitiveRenderer::_ensure_initialized(tgfx2::IRenderDevice* device) {
+    if (_initialized && _device == device) return;
 
-    // Shader
-    _shader = TcShader::from_sources(SOLID_VERT, SOLID_FRAG, "", "SolidPrimitiveRenderer");
-    _shader.ensure_ready();
+    // New device — release previous resources (if any).
+    if (_device && _device != device) {
+        if (_torus.vbo) _device->destroy(_torus.vbo);
+        if (_torus.ibo) _device->destroy(_torus.ibo);
+        if (_cylinder.vbo) _device->destroy(_cylinder.vbo);
+        if (_cylinder.ibo) _device->destroy(_cylinder.ibo);
+        if (_cone.vbo) _device->destroy(_cone.vbo);
+        if (_cone.ibo) _device->destroy(_cone.ibo);
+        if (_quad.vbo) _device->destroy(_quad.vbo);
+        if (_quad.ibo) _device->destroy(_quad.ibo);
+        _torus = _cylinder = _cone = _quad = {};
+    }
+    _device = device;
 
-    // Create meshes using tc_mesh and GPUMeshHandle
-    {
-        auto indexed = build_unit_torus(TORUS_MAJOR_SEGMENTS, TORUS_MINOR_SEGMENTS, TORUS_MINOR_RATIO);
-        tc_mesh mesh = create_tc_mesh(indexed);
-        _torus_mesh = graphics->create_mesh(mesh.vertices, mesh.vertex_count, mesh.indices, mesh.index_count, &mesh.layout,
-            mesh.draw_mode == TC_DRAW_LINES ? DrawMode::Lines : DrawMode::Triangles);
-        free_tc_mesh_data(&mesh);
+    // Shader source — will be compiled to tgfx2 via tc_shader_ensure_tgfx2
+    // inside begin().
+    if (!_shader.is_valid()) {
+        _shader = TcShader::from_sources(SOLID_VERT, SOLID_FRAG, "", "SolidPrimitiveRenderer");
     }
-    {
-        auto indexed = build_unit_cylinder(CYLINDER_SEGMENTS);
-        tc_mesh mesh = create_tc_mesh(indexed);
-        _cylinder_mesh = graphics->create_mesh(mesh.vertices, mesh.vertex_count, mesh.indices, mesh.index_count, &mesh.layout,
-            mesh.draw_mode == TC_DRAW_LINES ? DrawMode::Lines : DrawMode::Triangles);
-        free_tc_mesh_data(&mesh);
-    }
-    {
-        auto indexed = build_unit_cone(CONE_SEGMENTS);
-        tc_mesh mesh = create_tc_mesh(indexed);
-        _cone_mesh = graphics->create_mesh(mesh.vertices, mesh.vertex_count, mesh.indices, mesh.index_count, &mesh.layout,
-            mesh.draw_mode == TC_DRAW_LINES ? DrawMode::Lines : DrawMode::Triangles);
-        free_tc_mesh_data(&mesh);
-    }
-    {
-        auto indexed = build_unit_quad();
-        tc_mesh mesh = create_tc_mesh(indexed);
-        _quad_mesh = graphics->create_mesh(mesh.vertices, mesh.vertex_count, mesh.indices, mesh.index_count, &mesh.layout,
-            mesh.draw_mode == TC_DRAW_LINES ? DrawMode::Lines : DrawMode::Triangles);
-        free_tc_mesh_data(&mesh);
-    }
+
+    // Upload unit primitives as tgfx2 buffers (pos-only, vec3 at loc 0).
+    _torus    = upload_mesh_tgfx2(*device,
+        build_unit_torus(TORUS_MAJOR_SEGMENTS, TORUS_MINOR_SEGMENTS, TORUS_MINOR_RATIO));
+    _cylinder = upload_mesh_tgfx2(*device, build_unit_cylinder(CYLINDER_SEGMENTS));
+    _cone     = upload_mesh_tgfx2(*device, build_unit_cone(CONE_SEGMENTS));
+    _quad     = upload_mesh_tgfx2(*device, build_unit_quad());
 
     _initialized = true;
 }
 
 void SolidPrimitiveRenderer::begin(
-    GraphicsBackend* graphics,
+    tgfx2::RenderContext2* ctx2,
     const Mat44f& view,
     const Mat44f& proj,
     bool depth_test,
     bool blend
 ) {
-    _graphics = graphics;
-    _ensure_initialized(graphics);
-
-    // Setup state via GraphicsBackend
-    graphics->set_depth_test(depth_test);
-    if (blend) {
-        graphics->set_blend(true);
-        graphics->set_blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
-    } else {
-        graphics->set_blend(false);
+    if (!ctx2) {
+        tc::Log::error("[SolidPrimitiveRenderer] ctx2 is null");
+        return;
     }
-    graphics->set_cull_face(true);
+    _ctx2 = ctx2;
+    _ensure_initialized(&ctx2->device());
 
-    // Bind shader and set view/proj
-    _shader.use();
-    _shader.set_uniform_mat4("u_view", view.data, false);
-    _shader.set_uniform_mat4("u_projection", proj.data, false);
+    // ctx2 state. Caller owns the render pass boundary; we just set
+    // pipeline state and shader binding.
+    ctx2->set_depth_test(depth_test);
+    ctx2->set_depth_write(depth_test);
+    if (blend) {
+        ctx2->set_blend(true);
+        ctx2->set_blend_func(tgfx2::BlendFactor::SrcAlpha,
+                             tgfx2::BlendFactor::OneMinusSrcAlpha);
+    } else {
+        ctx2->set_blend(false);
+    }
+    ctx2->set_cull(tgfx2::CullMode::Back);
+
+    // Compile our shader into tgfx2 handles and bind.
+    tc_shader* raw = tc_shader_get(_shader.handle);
+    if (!raw) return;
+    tgfx2::ShaderHandle vs2, fs2;
+    if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
+    ctx2->bind_shader(vs2, fs2);
+
+    // Vertex layout: single vec3 position at location 0, tightly packed.
+    tgfx2::VertexBufferLayout layout;
+    layout.stride = 3 * sizeof(float);
+    layout.attributes.push_back({0, tgfx2::VertexFormat::Float3, 0});
+    ctx2->set_vertex_layout(layout);
+    ctx2->set_topology(tgfx2::PrimitiveTopology::TriangleList);
+
+    ctx2->set_uniform_mat4("u_view",       view.data, /*transpose=*/false);
+    ctx2->set_uniform_mat4("u_projection", proj.data, /*transpose=*/false);
 }
 
 void SolidPrimitiveRenderer::end() {
-    // Nothing needed
+    // Nothing needed — caller closes its ctx2 pass.
 }
 
 void SolidPrimitiveRenderer::draw_torus(const Mat44f& model, const Color4& color) {
-    _shader.set_uniform_mat4("u_model", model.data, false);
-    _shader.set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
-    _torus_mesh->draw();
+    if (!_ctx2) return;
+    _ctx2->set_uniform_mat4("u_model", model.data, /*transpose=*/false);
+    _ctx2->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
+    _ctx2->draw(_torus.vbo, _torus.ibo, _torus.index_count);
 }
 
 void SolidPrimitiveRenderer::draw_cylinder(const Mat44f& model, const Color4& color) {
-    _shader.set_uniform_mat4("u_model", model.data, false);
-    _shader.set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
-    _cylinder_mesh->draw();
+    if (!_ctx2) return;
+    _ctx2->set_uniform_mat4("u_model", model.data, /*transpose=*/false);
+    _ctx2->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
+    _ctx2->draw(_cylinder.vbo, _cylinder.ibo, _cylinder.index_count);
 }
 
 void SolidPrimitiveRenderer::draw_cone(const Mat44f& model, const Color4& color) {
-    _shader.set_uniform_mat4("u_model", model.data, false);
-    _shader.set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
-    _cone_mesh->draw();
+    if (!_ctx2) return;
+    _ctx2->set_uniform_mat4("u_model", model.data, /*transpose=*/false);
+    _ctx2->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
+    _ctx2->draw(_cone.vbo, _cone.ibo, _cone.index_count);
 }
 
 void SolidPrimitiveRenderer::draw_quad(const Mat44f& model, const Color4& color) {
-    _shader.set_uniform_mat4("u_model", model.data, false);
-    _shader.set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
-    _quad_mesh->draw();
+    if (!_ctx2) return;
+    _ctx2->set_uniform_mat4("u_model", model.data, /*transpose=*/false);
+    _ctx2->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
+    _ctx2->draw(_quad.vbo, _quad.ibo, _quad.index_count);
 }
 
 void SolidPrimitiveRenderer::draw_arrow(

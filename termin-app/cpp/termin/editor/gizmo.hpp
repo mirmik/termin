@@ -6,11 +6,12 @@
 
 #include <vector>
 
+namespace tgfx2 { class RenderContext2; }
+
 namespace termin {
 
 class ImmediateRenderer;
 class SolidPrimitiveRenderer;
-class GraphicsBackend;
 
 // ============================================================
 // Gizmo Base Class
@@ -28,7 +29,7 @@ public:
     // Draw opaque geometry using SolidPrimitiveRenderer (more efficient)
     virtual void draw_solid(
         SolidPrimitiveRenderer* renderer,
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj
     ) {}
@@ -38,7 +39,7 @@ public:
 
     virtual void draw_transparent_solid(
         SolidPrimitiveRenderer* renderer,
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj
     ) {}
