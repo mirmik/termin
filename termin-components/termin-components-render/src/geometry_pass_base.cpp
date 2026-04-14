@@ -82,26 +82,6 @@ TcShader& GeometryPassBase::get_shader(GraphicsBackend* graphics) {
     return _shader;
 }
 
-void GeometryPassBase::bind_and_clear(
-    GraphicsBackend* graphics,
-    FramebufferHandle* fb,
-    const Rect4i& rect
-) const {
-    auto cc = clear_color();
-    graphics->bind_framebuffer(fb);
-    graphics->set_viewport(0, 0, rect.width, rect.height);
-    graphics->clear_color_depth(cc[0], cc[1], cc[2], cc[3]);
-}
-
-void GeometryPassBase::apply_default_render_state(GraphicsBackend* graphics) const {
-    RenderState state;
-    state.depth_test = true;
-    state.depth_write = true;
-    state.blend = false;
-    state.cull = true;
-    graphics->apply_render_state(state);
-}
-
 void GeometryPassBase::maybe_blit_to_debugger(
     GraphicsBackend* graphics,
     FramebufferHandle* fb,
