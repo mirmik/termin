@@ -3,6 +3,12 @@
 #include <tcbase/tc_log.hpp>
 #include "termin/camera/camera_component.hpp"
 
+#include "termin/render/tgfx2_bridge.hpp"
+#include "tgfx2/render_context.hpp"
+#include "tgfx2/descriptors.hpp"
+#include "tgfx2/enums.hpp"
+#include "tgfx2/opengl/opengl_render_device.hpp"
+
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 #include "tc_profiler.h"
@@ -12,9 +18,59 @@ extern "C" {
 
 #include <cmath>
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <set>
+#include <span>
 
 namespace termin {
+
+namespace {
+
+// std140 layout for the shadow pass uniform block. Three mat4 slots:
+// model, view, projection. Mat4 is already 16-byte aligned so no
+// trailing padding is needed.
+struct ShadowTransformsStd140 {
+    float u_model[16];
+    float u_view[16];
+    float u_projection[16];
+};
+static_assert(sizeof(ShadowTransformsStd140) == 192,
+              "ShadowTransformsStd140 must be 3 * mat4");
+
+// Vertex shader: same math as the legacy shader but uniforms come
+// from a std140 block at binding slot 0.
+constexpr const char* SHADOW_VS_UBO = R"(
+#version 330 core
+#extension GL_ARB_shading_language_420pack : require
+
+layout(location = 0) in vec3 a_position;
+
+layout(std140) uniform Transforms {
+    mat4 u_model;
+    mat4 u_view;
+    mat4 u_projection;
+};
+
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+}
+)";
+
+constexpr const char* SHADOW_FS_UBO = R"(
+#version 330 core
+void main() {
+    // Depth-only pass: fragment shader output is irrelevant because
+    // the FBO has no color attachment.
+}
+)";
+
+bool tgfx2_shadow_enabled() {
+    const char* env = std::getenv("TERMIN_TGFX2_SHADOW");
+    return env && env[0] && env[0] != '0';
+}
+
+} // anonymous namespace
 
 
 
@@ -31,6 +87,42 @@ ShadowPass::ShadowPass(
 
 void ShadowPass::destroy() {
     fbo_pool_.clear();
+    release_tgfx2_resources();
+}
+
+void ShadowPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
+    if (device2_ == &device && shadow_vs2_ && shadow_fs2_ && transforms_ubo_) {
+        return;
+    }
+    if (device2_ && device2_ != &device) {
+        // Device changed under us — tear down old handles. This should
+        // never happen in production, but makes pass hot-reload safe.
+        release_tgfx2_resources();
+    }
+    device2_ = &device;
+
+    tgfx2::ShaderDesc vs_desc;
+    vs_desc.stage = tgfx2::ShaderStage::Vertex;
+    vs_desc.source = SHADOW_VS_UBO;
+    shadow_vs2_ = device.create_shader(vs_desc);
+
+    tgfx2::ShaderDesc fs_desc;
+    fs_desc.stage = tgfx2::ShaderStage::Fragment;
+    fs_desc.source = SHADOW_FS_UBO;
+    shadow_fs2_ = device.create_shader(fs_desc);
+
+    tgfx2::BufferDesc ubo_desc;
+    ubo_desc.size = sizeof(ShadowTransformsStd140);
+    ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
+    transforms_ubo_ = device.create_buffer(ubo_desc);
+}
+
+void ShadowPass::release_tgfx2_resources() {
+    if (!device2_) return;
+    if (shadow_vs2_) { device2_->destroy(shadow_vs2_); shadow_vs2_ = {}; }
+    if (shadow_fs2_) { device2_->destroy(shadow_fs2_); shadow_fs2_ = {}; }
+    if (transforms_ubo_) { device2_->destroy(transforms_ubo_); transforms_ubo_ = {}; }
+    device2_ = nullptr;
 }
 
 
@@ -353,6 +445,225 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass(
 }
 
 
+// ----------------------------------------------------------------------------
+// tgfx2 path — Stage 5.B.
+// ----------------------------------------------------------------------------
+//
+// Draws shadow casters through RenderContext2. The shadow FBO itself is
+// still allocated via the legacy FBOPool; its depth texture is wrapped as
+// a non-owning tgfx2 handle per frame, the pass opens a depth-only render
+// pass on it, and each drawable is drawn via ctx.ctx2->draw(vbo, ibo, ...)
+// with per-draw UBO updates. Drawables that can't expose a tc_mesh* (i.e.
+// SkinnedMeshRenderer and friends) fall back to the legacy draw_geometry
+// call inside the same FBO — the OpenGL backend of ctx2 has already bound
+// the same GL FBO via its fbo_cache_ so legacy glDraw calls land in the
+// right place.
+std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
+    ExecuteContext& ctx,
+    tc_scene_handle scene,
+    const std::vector<Light>& lights,
+    const Mat44f& camera_view,
+    const Mat44f& camera_projection,
+    uint64_t layer_mask
+) {
+    std::vector<ShadowMapResult> results;
+
+    if (!ctx.ctx2 || !ctx.graphics) {
+        tc::Log::error("ShadowPass/tgfx2: ctx2 or graphics is null");
+        return results;
+    }
+    if (!shadow_shader) {
+        tc::Log::error("ShadowPass/tgfx2: shadow_shader not set");
+        return results;
+    }
+
+    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx.ctx2->device());
+    if (!gl_dev) {
+        tc::Log::error("ShadowPass/tgfx2: device is not OpenGLRenderDevice");
+        return results;
+    }
+
+    ensure_tgfx2_resources(ctx.ctx2->device());
+
+    // Find directional lights that cast shadows.
+    std::vector<std::pair<int, const Light*>> shadow_lights;
+    for (size_t i = 0; i < lights.size(); ++i) {
+        const Light& light = lights[i];
+        if (light.type == LightType::Directional && light.shadows.enabled) {
+            shadow_lights.push_back({static_cast<int>(i), &light});
+        }
+    }
+    if (shadow_lights.empty()) {
+        return results;
+    }
+
+    collect_shadow_casters(scene, layer_mask);
+    sort_draw_calls_by_shader();
+
+    entity_names.clear();
+    std::set<std::string> seen;
+    for (const auto& dc : cached_draw_calls_) {
+        const char* name = dc.entity.name();
+        if (name && seen.find(name) == seen.end()) {
+            seen.insert(name);
+            entity_names.push_back(name);
+        }
+    }
+
+    // Extract camera near plane (same logic as legacy path).
+    float camera_near = 0.1f;
+    float proj_23 = camera_projection(2, 3);
+    float proj_21 = camera_projection(2, 1);
+    if (std::abs(proj_21 - 1.0f) > 0.001f && std::abs(proj_23) > 0.001f) {
+        camera_near = -proj_23 / (proj_21 + 1.0f);
+        if (camera_near < 0.01f) camera_near = 0.1f;
+    }
+
+    int fbo_index = 0;
+
+    for (auto [light_index, light] : shadow_lights) {
+        int resolution = light->shadows.map_resolution;
+        int cascade_count = std::max(1, std::min(4, light->shadows.cascade_count));
+        float max_distance = light->shadows.max_distance;
+        float split_lambda = light->shadows.split_lambda;
+
+        std::vector<float> splits = compute_cascade_splits(
+            camera_near, max_distance, cascade_count, split_lambda);
+
+        Vec3 light_dir = light->direction.normalized();
+
+        for (int c = 0; c < cascade_count; ++c) {
+            float cascade_near = splits[c];
+            float cascade_far = splits[c + 1];
+
+            FramebufferHandle* fbo = get_or_create_fbo(ctx.graphics, resolution, fbo_index);
+            fbo_index++;
+            if (!fbo) {
+                tc::Log::error("ShadowPass/tgfx2: FBO is null for cascade %d", c);
+                continue;
+            }
+
+            ShadowCameraParams params = fit_shadow_frustum_for_cascade(
+                camera_view, camera_projection, light_dir,
+                cascade_near, cascade_far, resolution, caster_offset
+            );
+            Mat44f view_matrix = build_shadow_view_matrix(params);
+            Mat44f proj_matrix = build_shadow_projection_matrix(params);
+            Mat44f light_space_matrix = compute_light_space_matrix(params);
+
+            // Wrap the shadow FBO's depth texture as a tgfx2 handle so
+            // we can open a depth-only pass on it. Destroyed at the end
+            // of this cascade.
+            tgfx2::TextureHandle depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fbo);
+            if (!depth_tex2) {
+                tc::Log::error("ShadowPass/tgfx2: failed to wrap depth texture");
+                continue;
+            }
+
+            ctx.ctx2->begin_pass(
+                tgfx2::TextureHandle{},  // depth-only
+                depth_tex2,
+                nullptr,                 // no color clear
+                1.0f,                    // clear depth to 1.0
+                true                     // clear_depth_enabled
+            );
+            ctx.ctx2->set_viewport(0, 0, resolution, resolution);
+            ctx.ctx2->set_depth_test(true);
+            ctx.ctx2->set_depth_write(true);
+            ctx.ctx2->set_blend(false);
+            ctx.ctx2->set_cull(tgfx2::CullMode::Back);
+            ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
+            ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
+            ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
+
+            if (cached_draw_calls_.empty()) {
+                ctx.ctx2->end_pass();
+                gl_dev->destroy(depth_tex2);
+                results.emplace_back(fbo, light_space_matrix, light_index,
+                                     c, cascade_near, cascade_far);
+                continue;
+            }
+
+            ShadowTransformsStd140 transforms{};
+            std::memcpy(transforms.u_view, view_matrix.data, sizeof(float) * 16);
+            std::memcpy(transforms.u_projection, proj_matrix.data, sizeof(float) * 16);
+
+            // RenderContext setup for the legacy fallback path (used
+            // when a drawable can't expose a tc_mesh*).
+            RenderContext legacy_ctx;
+            legacy_ctx.graphics = ctx.graphics;
+            legacy_ctx.phase = "shadow";
+            legacy_ctx.view = view_matrix;
+            legacy_ctx.projection = proj_matrix;
+            bool legacy_shader_in_use = false;
+
+            for (const auto& dc : cached_draw_calls_) {
+                auto* drawable = static_cast<Drawable*>(
+                    tc_component_get_drawable_userdata(dc.component));
+                if (!drawable) continue;
+
+                Mat44f model = drawable->get_model_matrix(dc.entity);
+
+                tc_mesh* mesh = drawable->get_mesh_for_phase("shadow", dc.geometry_id);
+                bool override_is_base = tc_shader_handle_eq(
+                    dc.final_shader,
+                    shadow_shader ? shadow_shader->handle : tc_shader_handle_invalid());
+
+                if (mesh && override_is_base) {
+                    // Fast path: mesh-backed drawable, no shader override.
+                    std::memcpy(transforms.u_model, model.data, sizeof(float) * 16);
+                    ctx.ctx2->device().upload_buffer(
+                        transforms_ubo_,
+                        std::span<const uint8_t>(
+                            reinterpret_cast<const uint8_t*>(&transforms),
+                            sizeof(transforms)));
+                    ctx.ctx2->bind_uniform_buffer(0, transforms_ubo_);
+
+                    Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+                    if (bind.index_count == 0) continue;
+
+                    ctx.ctx2->set_vertex_layout(bind.layout);
+                    ctx.ctx2->set_topology(bind.topology);
+                    ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
+                                   bind.index_count, bind.index_type);
+
+                    gl_dev->destroy(bind.vertex_buffer);
+                    gl_dev->destroy(bind.index_buffer);
+                } else {
+                    // Fallback: shader override (skinning) or non-mesh
+                    // drawable. Use legacy state-machine draw. The GL
+                    // FBO is already bound by ctx2->begin_pass above;
+                    // glDraw calls land on it correctly.
+                    ctx.ctx2->flush_pipeline();  // ensure cmd list is in a
+                                                 // clean state before we
+                                                 // poke raw GL
+
+                    tc_shader_handle shader_handle = dc.final_shader;
+                    TcShader shader_to_use(shader_handle);
+                    shader_to_use.use();
+                    shader_to_use.set_uniform_mat4("u_view", view_matrix.data, false);
+                    shader_to_use.set_uniform_mat4("u_projection", proj_matrix.data, false);
+                    shader_to_use.set_uniform_mat4("u_model", model.data, false);
+                    legacy_ctx.current_tc_shader = shader_to_use;
+                    legacy_shader_in_use = true;
+
+                    tc_component_draw_geometry(dc.component, &legacy_ctx, dc.geometry_id);
+                }
+            }
+
+            (void)legacy_shader_in_use;
+
+            ctx.ctx2->end_pass();
+            gl_dev->destroy(depth_tex2);
+
+            results.emplace_back(fbo, light_space_matrix, light_index,
+                                 c, cascade_near, cascade_far);
+        }
+    }
+
+    return results;
+}
+
 void ShadowPass::execute(ExecuteContext& ctx) {
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("ShadowPass");
@@ -427,15 +738,29 @@ void main() {
     Mat44f camera_view = view_d.to_float();
     Mat44f camera_projection = proj_d.to_float();
 
-    // Execute shadow pass
-    std::vector<ShadowMapResult> results = execute_shadow_pass(
-        ctx.graphics,
-        ctx.scene.handle(),
-        ctx.lights,
-        camera_view,
-        camera_projection,
-        ctx.layer_mask
-    );
+    // Execute shadow pass. When TERMIN_TGFX2_SHADOW is set and a
+    // tgfx2 RenderContext2 is available on the ExecuteContext, route
+    // draws through the tgfx2 path; otherwise use the legacy path.
+    std::vector<ShadowMapResult> results;
+    if (ctx.ctx2 && tgfx2_shadow_enabled()) {
+        results = execute_shadow_pass_tgfx2(
+            ctx,
+            ctx.scene.handle(),
+            ctx.lights,
+            camera_view,
+            camera_projection,
+            ctx.layer_mask
+        );
+    } else {
+        results = execute_shadow_pass(
+            ctx.graphics,
+            ctx.scene.handle(),
+            ctx.lights,
+            camera_view,
+            camera_projection,
+            ctx.layer_mask
+        );
+    }
 
     // Add results to shadow array
     for (const auto& result : results) {

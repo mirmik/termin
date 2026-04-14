@@ -68,6 +68,11 @@ public:
     std::set<std::string> get_phase_marks() const override;
     std::set<std::string> phase_marks() const { return get_phase_marks(); }
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
+    tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override {
+        (void)phase_mark;
+        (void)geometry_id;
+        return mesh.get();
+    }
     Mat44f get_model_matrix(const Entity& entity) const override;
     std::vector<tc_material_phase*> get_phases_for_mark(const std::string& phase_mark);
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;

@@ -13,6 +13,8 @@
 #include "tgfx/graphics_backend.hpp"
 #include "tgfx/render_state.hpp"
 #include "tgfx/handles.hpp"
+#include "tgfx2/handles.hpp"
+#include "tgfx2/i_render_device.hpp"
 #include <termin/render/light.hpp>
 #include "termin/render/shadow_camera.hpp"
 #include <termin/geom/mat44.hpp>
@@ -116,6 +118,20 @@ public:
         uint64_t layer_mask = 0
     );
 
+    // tgfx2 variant — draws scene shadow casters via RenderContext2,
+    // wrapping the shadow FBO depth attachment and each mesh's VBO/EBO
+    // as tgfx2 handles. Falls back to legacy tc_component_draw_geometry
+    // for drawables whose get_mesh_for_phase("shadow", ...) returns
+    // nullptr. Gated by TERMIN_TGFX2_SHADOW env var.
+    std::vector<ShadowMapResult> execute_shadow_pass_tgfx2(
+        ExecuteContext& ctx,
+        tc_scene_handle scene,
+        const std::vector<Light>& lights,
+        const Mat44f& camera_view,
+        const Mat44f& camera_projection,
+        uint64_t layer_mask = 0
+    );
+
     std::vector<ResourceSpec> get_resource_specs() const override;
 
     std::vector<std::string> get_internal_symbols() const override {
@@ -126,6 +142,15 @@ public:
     TcShader* shadow_shader = nullptr;
 
 private:
+    // Lazy tgfx2 shader + UBO resources owned by the pass.
+    tgfx2::IRenderDevice* device2_ = nullptr;
+    tgfx2::ShaderHandle shadow_vs2_;
+    tgfx2::ShaderHandle shadow_fs2_;
+    tgfx2::BufferHandle transforms_ubo_;
+
+    void ensure_tgfx2_resources(tgfx2::IRenderDevice& device);
+    void release_tgfx2_resources();
+
     // FBO pool: index -> FBO
     std::unordered_map<int, FramebufferHandlePtr> fbo_pool_;
 
