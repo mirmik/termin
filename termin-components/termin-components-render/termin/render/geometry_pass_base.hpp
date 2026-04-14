@@ -9,7 +9,6 @@
 
 #include <tc_inspect_cpp.hpp>
 #include <tgfx/graphics_backend.hpp>
-#include <tgfx/render_state.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
 
 #include <termin/entity/component.hpp>
@@ -19,7 +18,6 @@
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_graph_debugger_core.hpp>
 #include <termin/render/frame_pass.hpp>
-#include <termin/render/render_context.hpp>
 #include <termin/render/resource_spec.hpp>
 
 extern "C" {
