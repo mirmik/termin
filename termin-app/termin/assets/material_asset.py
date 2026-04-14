@@ -408,6 +408,25 @@ def _parse_material_content(
             if feature == "lighting_ubo":
                 shader.set_feature(1)  # TC_SHADER_FEATURE_LIGHTING_UBO = 1
 
+        # Stage 5.H: push the std140 material UBO layout computed by the
+        # parser into the freshly-created tc_shader so that ColorPass (and
+        # future material-backed passes) can find it via
+        # tc_shader->material_ubo_entries. The layout is present whenever
+        # the .shader program has `@features material_ubo` and any
+        # @property entries — see shader_parser.cpp:synthesize_material_ubo_glsl.
+        layout = shader_phase.material_ubo_layout
+        if layout is not None and layout.block_size > 0:
+            log.error(
+                f"[Stage 5.H bridge] material_asset pushing layout to {shader_name} "
+                f"phase={phase_mark} block_size={layout.block_size} "
+                f"entries={len(layout.entries)}"
+            )
+            entries = [
+                (e.name, e.property_type, e.offset, e.size)
+                for e in layout.entries
+            ]
+            shader.set_material_ubo_layout(entries, layout.block_size)
+
         # Set available marks
         if shader_phase.available_marks:
             phase.set_available_marks(shader_phase.available_marks)

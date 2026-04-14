@@ -11,6 +11,10 @@
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
+
+namespace tgfx2 {
+class IRenderDevice;
+}
 #include "tgfx/graphics_backend.hpp"
 #include "tgfx/render_state.hpp"
 #include <termin/render/light.hpp>
@@ -128,7 +132,14 @@ public:
         float ambient_intensity,
         const std::vector<ShadowMapArrayEntry>& shadow_maps,
         const ShadowSettings& shadow_settings,
-        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
+        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL,
+        // Optional tgfx2 device access. When non-null AND the
+        // TERMIN_TGFX2_MATERIAL_UBO env var is set, materials whose
+        // shaders have a std140 material UBO layout are bound via
+        // apply_material_phase_ubo_gl at slot MATERIAL_UBO_BINDING
+        // instead of going through per-uniform glUniform*. Legacy
+        // fallback otherwise. Pilot path for Stage 5.H.
+        tgfx2::IRenderDevice* tgfx2_device = nullptr
     );
 
     // Override from CxxFramePass
