@@ -11,6 +11,7 @@
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/opengl/opengl_render_device.hpp"
+#include "tgfx2/tc_shader_bridge.hpp"
 #include <termin/render/frame_graph_debugger_core.hpp>
 extern "C" {
 #include <tgfx/resources/tc_shader.h>
@@ -407,35 +408,8 @@ void ColorPass::execute_with_data(
         return;
     }
 
-    // Stage 5.K step 1: wrap the color FBO as tgfx2 color+depth texture
-    // handles and open a ctx2 render pass around the legacy draw loop.
-    // Legacy glDraw* calls inside the pass still render into the same
-    // underlying GL FBO (via the `graphics->bind_framebuffer(fb)` call
-    // just below), so visual output is unchanged. ctx2 takes over the
-    // pass lifetime — eventually it will own the FBO cache and the
-    // draw-loop dispatch too.
-    tgfx2::OpenGLRenderDevice* gl_dev = nullptr;
-    tgfx2::TextureHandle color_tex2{};
-    tgfx2::TextureHandle depth_tex2{};
-    bool ctx2_pass_open = false;
-    if (tgfx2_color_enabled && ctx2) {
-        gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx2->device());
-    }
-    if (gl_dev) {
-        color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fb);
-        depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fb);
-        if (color_tex2) {
-            // Load existing contents; ColorPass is a final-composite
-            // draw that blends on top of whatever skybox/clear the
-            // framegraph allocator prepared.
-            ctx2->begin_pass(color_tex2, depth_tex2, /*clear_color=*/nullptr,
-                             /*clear_depth=*/1.0f,
-                             /*clear_depth_enabled=*/clear_depth);
-            ctx2_pass_open = true;
-            ctx2->defer_destroy(color_tex2);
-            if (depth_tex2) ctx2->defer_destroy(depth_tex2);
-        }
-    }
+    (void)tgfx2_color_enabled;  // consumed by execute() dispatcher
+    (void)ctx2;
 
     // Bind framebuffer and set viewport
     graphics->bind_framebuffer(fb);
@@ -757,14 +731,318 @@ void ColorPass::execute_with_data(
 
     // Reset render state
     graphics->apply_render_state(RenderState());
+}
 
-    // Stage 5.K step 1: close the ctx2 pass wrapper, if any. Must come
-    // after the legacy state reset so ctx2::end_pass sees the final GL
-    // state (bound FBO, depth/blend disabled) the same way a ctx2 pass
-    // would see it coming out of a ctx2-native draw loop.
-    if (ctx2_pass_open && ctx2) {
-        ctx2->end_pass();
+// ----------------------------------------------------------------------------
+// Stage 5.K: full tgfx2 ColorPass draw loop.
+// ----------------------------------------------------------------------------
+//
+// Uses ctx2 end-to-end for pass boundary, shader binding, resource set
+// (material UBO + textures), mesh draws, and state. Legacy plain-uniform
+// declarations in existing .shader files (u_view, u_projection, u_model,
+// shadow sampler ints and matrices) are routed through RenderContext2's
+// transitional set_uniform_* helpers — clearly marked as migration debt
+// until all shaders move to UBO/push-constant based per-frame data.
+//
+// Intentionally skipped for now:
+//   - non-MeshRenderer drawables (get_mesh_for_phase returns null)
+//   - shader variants where tc_shader_ensure_tgfx2 fails
+//   - extra_textures (reads_fbos wrapped as sampler input)
+//   - maybe_blit_to_debugger for the selected debug symbol
+//   - GPU timing queries
+// These each get a log line when they are skipped.
+
+void ColorPass::execute_with_data_tgfx2(
+    ExecuteContext& ctx,
+    const Rect4i& rect,
+    tc_scene_handle scene,
+    const Mat44f& view,
+    const Mat44f& projection,
+    const Vec3& camera_position,
+    const std::vector<Light>& lights,
+    const Vec3& ambient_color,
+    float ambient_intensity,
+    const std::vector<ShadowMapArrayEntry>& shadow_maps,
+    const ShadowSettings& shadow_settings,
+    uint64_t layer_mask)
+{
+    auto* graphics = ctx.graphics;
+    auto* ctx2 = ctx.ctx2;
+    if (!ctx2 || !graphics) {
+        tc::Log::error("[ColorPass/tgfx2] ctx2 or graphics is null");
+        return;
     }
+
+    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx2->device());
+    if (!gl_dev) {
+        tc::Log::error("[ColorPass/tgfx2] tgfx2 device is not OpenGLRenderDevice");
+        return;
+    }
+    auto& device = ctx2->device();
+
+    // Resolve output FBO.
+    auto it = ctx.writes_fbos.find(output_res);
+    if (it == ctx.writes_fbos.end() || it->second == nullptr) {
+        tc::Log::warn("[ColorPass/tgfx2] FBO '%s' not found in writes_fbos", output_res.c_str());
+        return;
+    }
+    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
+    if (!fb) return;
+
+    // NOTE: ColorPass output FBOs use a GL_RENDERBUFFER for their depth
+    // attachment (see opengl_framebuffer.hpp) and fb->depth_texture()
+    // returns null for those. We can't construct a clean ctx2 render
+    // pass around a renderbuffer-backed depth, so we drive the FBO
+    // binding through legacy graphics->bind_framebuffer and let ctx2
+    // draws land in whatever FBO is currently bound. ctx2 pipeline
+    // cache entries are still produced with a depth_format tag so
+    // they match the underlying D24 renderbuffer. Once FBOPool moves
+    // to tgfx2-native texture-backed depth (Phase 3) this can be
+    // replaced with a proper begin_pass.
+    graphics->bind_framebuffer(fb);
+    graphics->set_viewport(0, 0, rect.width, rect.height);
+    if (clear_depth) {
+        graphics->clear_depth();
+    }
+
+    // Collect + sort draw calls. Reuses the legacy helpers —
+    // gathering logic is backend-agnostic.
+    collect_draw_calls(scene, phase_mark, layer_mask);
+
+    if (sort_mode != "none" && !cached_draw_calls_.empty()) {
+        compute_sort_keys(camera_position);
+        sort_draw_calls();
+    } else if (!cached_draw_calls_.empty()) {
+        std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
+            [](const PhaseDrawCall& a, const PhaseDrawCall& b) {
+                return a.priority < b.priority;
+            });
+    }
+
+    // Decide whether any shader in this batch needs the lighting UBO.
+    bool any_shader_needs_ubo = false;
+    for (const auto& dc : cached_draw_calls_) {
+        tc_shader* shader = tc_shader_get(dc.final_shader);
+        if (shader && tc_shader_has_feature(shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
+            any_shader_needs_ubo = true;
+            break;
+        }
+    }
+
+    // Upload lighting UBO via the legacy LightingUBO helper (its GL
+    // buffer is reused — we just wrap it as a tgfx2 handle for the
+    // draw loop below).
+    tgfx2::BufferHandle lighting_ubo_tgfx2{};
+    if (any_shader_needs_ubo) {
+        lighting_ubo_.create(graphics);
+        lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
+                                         camera_position, shadow_settings);
+        lighting_ubo_.upload();
+        if (lighting_ubo_.buffer) {
+            tgfx2::BufferDesc ldesc;
+            ldesc.size = sizeof(LightingUBOData);
+            ldesc.usage = tgfx2::BufferUsage::Uniform;
+            lighting_ubo_tgfx2 = gl_dev->register_external_buffer(
+                static_cast<GLuint>(lighting_ubo_.buffer->get_id()), ldesc);
+            ctx2->defer_destroy(lighting_ubo_tgfx2);
+        }
+    }
+
+    // Wrap each shadow map FBO's depth attachment once. Shared across
+    // draws within this pass.
+    std::vector<tgfx2::TextureHandle> shadow_tex2s;
+    shadow_tex2s.reserve(shadow_maps.size());
+    for (const auto& smap : shadow_maps) {
+        if (!smap.fbo) {
+            shadow_tex2s.push_back({});
+            continue;
+        }
+        tgfx2::TextureHandle t = wrap_fbo_depth_as_tgfx2(*gl_dev, smap.fbo);
+        if (t) ctx2->defer_destroy(t);
+        shadow_tex2s.push_back(t);
+    }
+
+    entity_names.clear();
+    entity_names.reserve(cached_draw_calls_.size());
+    const std::string& debug_symbol = get_debug_internal_point();
+    if (debug_symbol.empty()) {
+        selected_symbol_timing = {};
+    }
+
+    // Base offset for shadow sampler slots — matches legacy
+    // SHADOW_MAP_TEXTURE_UNIT_START so .shader files that still
+    // declare `uniform sampler2D u_shadow_map_N` at binding N keep
+    // reading from the right slot.
+    constexpr uint32_t SHADOW_SLOT_BASE = 8;
+    constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 0;
+
+    tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
+
+    for (const auto& dc : cached_draw_calls_) {
+        const char* ename = dc.entity.name();
+        entity_names.push_back(ename ? ename : "");
+
+        auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
+        if (!drawable) continue;
+
+        // Mesh access: non-MeshRenderer drawables get skipped until
+        // Stage 5.K expands to cover custom drawables.
+        tc_mesh* mesh = drawable->get_mesh_for_phase(phase_mark, dc.geometry_id);
+        if (!mesh) {
+            tc::Log::warn("[ColorPass/tgfx2] skipping non-mesh drawable '%s'",
+                          ename ? ename : "(unnamed)");
+            continue;
+        }
+
+        Mat44f model = drawable->get_model_matrix(dc.entity);
+
+        // Wrap the mesh's per-context VBO/EBO as tgfx2 buffers for
+        // the duration of this draw. Destroyed right after draw —
+        // wrap_mesh is cheap and avoids growing the HandlePool.
+        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+        if (bind.index_count == 0) continue;
+
+        // Compile the shader through the tc_shader_ensure_tgfx2 bridge.
+        // This is a separate GL program from the legacy one — ctx2
+        // binds it via bind_shader, legacy TcShader still has its own
+        // program id which is now unused for this pass.
+        tc_shader* raw_shader = tc_shader_get(dc.final_shader);
+        if (!raw_shader) {
+            gl_dev->destroy(bind.vertex_buffer);
+            gl_dev->destroy(bind.index_buffer);
+            continue;
+        }
+        tgfx2::ShaderHandle vs2, fs2;
+        if (!tc_shader_ensure_tgfx2(raw_shader, &device, &vs2, &fs2)) {
+            tc::Log::error("[ColorPass/tgfx2] tc_shader_ensure_tgfx2 failed for shader '%s'",
+                           raw_shader->name ? raw_shader->name : raw_shader->uuid);
+            gl_dev->destroy(bind.vertex_buffer);
+            gl_dev->destroy(bind.index_buffer);
+            continue;
+        }
+
+        // Render state from the material phase.
+        RenderState state = convert_render_state(dc.phase->state);
+        if (wireframe) state.polygon_mode = PolygonMode::Line;
+
+        ctx2->set_depth_test(state.depth_test);
+        ctx2->set_depth_write(state.depth_write);
+        ctx2->set_blend(state.blend);
+        ctx2->set_cull(state.cull ? tgfx2::CullMode::Back : tgfx2::CullMode::None);
+        ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
+                               ? tgfx2::PolygonMode::Line
+                               : tgfx2::PolygonMode::Fill);
+
+        // Pipeline cache key — needs to match the FBO formats. This is
+        // approximate because the wrapped textures retain their GL
+        // internal format; the cache key just needs to be stable.
+        ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
+        ctx2->set_depth_format(tgfx2::PixelFormat::D24_UNorm_S8_UInt);
+
+        ctx2->bind_shader(vs2, fs2);
+        ctx2->set_vertex_layout(bind.layout);
+        ctx2->set_topology(bind.topology);
+
+        // --- UBO bindings ---
+        // Lighting UBO at slot 0.
+        if (lighting_ubo_tgfx2 &&
+            tc_shader_has_feature(raw_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
+            ctx2->bind_uniform_buffer(LIGHTING_UBO_BINDING, lighting_ubo_tgfx2);
+        }
+
+        // Material UBO + material textures through the dispatcher.
+        // The C++ variant (not the _gl raw path) is used here because
+        // we are inside a ctx2 pass.
+        apply_material_phase_ubo(dc.phase, raw_shader,
+                                 MATERIAL_UBO_BINDING,
+                                 MATERIAL_TEX_SLOT_BASE,
+                                 device, *ctx2);
+
+        // Tell the shader which texture unit each material sampler
+        // reads from. Existing shaders declare `uniform sampler2D
+        // u_albedo_texture` etc. without an explicit `layout(binding)`
+        // qualifier, so GL defaults them to unit 0. We need to route
+        // each named sampler to the slot apply_material_phase_ubo
+        // bound it at (MATERIAL_TEX_SLOT_BASE + i in declaration
+        // order). Without this, every sampler in the shader reads
+        // unit 0 and extra material textures show up as black/wrong.
+        for (size_t i = 0; i < dc.phase->texture_count; i++) {
+            const tc_material_texture& mt = dc.phase->textures[i];
+            ctx2->set_uniform_int(mt.name,
+                                  static_cast<int>(MATERIAL_TEX_SLOT_BASE + i));
+        }
+
+        // Shadow maps as sampled textures at SHADOW_SLOT_BASE..
+        for (size_t i = 0; i < shadow_tex2s.size() && i < MAX_SHADOW_MAPS; i++) {
+            if (!shadow_tex2s[i]) continue;
+            ctx2->bind_sampled_texture(SHADOW_SLOT_BASE + static_cast<uint32_t>(i),
+                                       shadow_tex2s[i]);
+        }
+
+        // --- Plain-uniform setters through the transitional escape hatch ---
+        // These run after flush_pipeline() inside each setter, so the
+        // tgfx2-compiled program is active before glUniform* is called.
+
+        // Per-draw matrices.
+        ctx2->set_uniform_mat4("u_model",      model.data,      /*transpose=*/false);
+        ctx2->set_uniform_mat4("u_view",       view.data,       /*transpose=*/false);
+        ctx2->set_uniform_mat4("u_projection", projection.data, /*transpose=*/false);
+
+        // Shader changes → link UBO block bindings and shadow sampler
+        // uniforms once per shader in this batch.
+        bool shader_changed =
+            !tc_shader_handle_eq(dc.final_shader, last_shader_handle);
+        if (shader_changed) {
+            ctx2->set_block_binding("MaterialParams", MATERIAL_UBO_BINDING);
+            if (tc_shader_has_feature(raw_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
+                ctx2->set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
+            }
+
+            // Shadow sampler uniforms and cascade metadata. Legacy path
+            // uses upload_shadow_maps_to_shader / init_shadow_map_samplers
+            // which hit the LEGACY program — we need to set on the
+            // currently-bound ctx2 program instead.
+            int sm_count = static_cast<int>(
+                std::min(shadow_maps.size(), static_cast<size_t>(MAX_SHADOW_MAPS)));
+            ctx2->set_uniform_int("u_shadow_map_count", sm_count);
+
+            for (int i = 0; i < sm_count; ++i) {
+                const ShadowMapArrayEntry& e = shadow_maps[i];
+                ctx2->set_uniform_int(detail::shadow_map_names[i],
+                                      SHADOW_SLOT_BASE + i);
+                ctx2->set_uniform_mat4(detail::light_space_matrix_names[i],
+                                       e.light_space_matrix.data, false);
+                ctx2->set_uniform_int(detail::shadow_light_index_names[i],
+                                      e.light_index);
+                ctx2->set_uniform_int(detail::shadow_cascade_index_names[i],
+                                      e.cascade_index);
+                ctx2->set_uniform_float(detail::shadow_split_near_names[i],
+                                        e.cascade_split_near);
+                ctx2->set_uniform_float(detail::shadow_split_far_names[i],
+                                        e.cascade_split_far);
+            }
+            // Remaining shadow samplers must still be set to their unit
+            // (AMD requires no two sampler types share a unit).
+            for (int i = sm_count; i < MAX_SHADOW_MAPS; ++i) {
+                ctx2->set_uniform_int(detail::shadow_map_names[i],
+                                      SHADOW_SLOT_BASE + i);
+            }
+
+            last_shader_handle = dc.final_shader;
+        }
+
+        // Issue the draw. This flushes the pending ctx2 state into a
+        // pipeline binding + glDrawElements on the currently-bound GL
+        // FBO (set via the legacy graphics->bind_framebuffer above).
+        ctx2->draw(bind.vertex_buffer, bind.index_buffer,
+                   bind.index_count, bind.index_type);
+
+        gl_dev->destroy(bind.vertex_buffer);
+        gl_dev->destroy(bind.index_buffer);
+    }
+
+    // No ctx2->end_pass — we never opened one. Legacy bind_framebuffer
+    // owns the FBO for the duration of this pass.
 }
 
 void ColorPass::execute(ExecuteContext& ctx) {
@@ -868,24 +1146,50 @@ void ColorPass::execute(ExecuteContext& ctx) {
         tgfx2_dev = &ctx.ctx2->device();
     }
 
-    execute_with_data(
-        ctx.graphics,
-        ctx.reads_fbos,
-        ctx.writes_fbos,
-        rect,
-        scene,
-        view,
-        projection,
-        camera_position,
-        ctx.lights,
-        ambient_color,
-        ambient_intensity,
-        shadow_maps,
-        shadow_settings,
-        ctx.layer_mask,
-        tgfx2_dev,
-        ctx.ctx2
-    );
+    // Stage 5.K dispatcher: TERMIN_TGFX2_COLOR=1 routes the draw loop
+    // through the full tgfx2 path. Legacy path is preserved as the
+    // fallback until the ctx2 version is validated on production
+    // scenes; after that, legacy execute_with_data will be deleted.
+    const bool tgfx2_color_enabled = [] {
+        const char* env = std::getenv("TERMIN_TGFX2_COLOR");
+        return env && env[0] && env[0] != '0';
+    }();
+
+    if (tgfx2_color_enabled && ctx.ctx2) {
+        execute_with_data_tgfx2(
+            ctx,
+            rect,
+            scene,
+            view,
+            projection,
+            camera_position,
+            ctx.lights,
+            ambient_color,
+            ambient_intensity,
+            shadow_maps,
+            shadow_settings,
+            ctx.layer_mask
+        );
+    } else {
+        execute_with_data(
+            ctx.graphics,
+            ctx.reads_fbos,
+            ctx.writes_fbos,
+            rect,
+            scene,
+            view,
+            projection,
+            camera_position,
+            ctx.lights,
+            ambient_color,
+            ambient_intensity,
+            shadow_maps,
+            shadow_settings,
+            ctx.layer_mask,
+            tgfx2_dev,
+            ctx.ctx2
+        );
+    }
 
     if (profile) tc_profiler_end_section();
 }
