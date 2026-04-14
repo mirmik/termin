@@ -86,37 +86,49 @@ class GizmoPass(RenderFramePass):
     def execute(self, ctx: "ExecuteContext") -> None:
         px, py, pw, ph = ctx.rect
 
+        if ctx.ctx2 is None:
+            from tcbase import log
+            log.error(f"[GizmoPass] '{self.pass_name}': ctx.ctx2 is None — GizmoPass is tgfx2-only")
+            return
+
+        from tgfx._tgfx_native import (
+            tc_shader_ensure_tgfx2,
+            wrap_fbo_color_as_tgfx2,
+            draw_tc_mesh,
+            CULL_NONE,
+            PIXEL_RGBA8,
+        )
+
+        ctx2 = ctx.ctx2
         fb = ctx.writes_fbos.get(self.output_res)
-        ctx.graphics.bind_framebuffer(fb)
-        ctx.graphics.set_viewport(0, 0, pw, ph)
+        if fb is None:
+            return
 
-        # очищаем depth чтобы гизмо был кликабелен поверх сцены
-        ctx.graphics.clear_depth()
-
-        # глубину тестируем, но не пишем
-        ctx.graphics.set_depth_test(True)
-        ctx.graphics.set_depth_mask(False)
-
-        # главное отличие: пишем только в альфу
-        ctx.graphics.set_color_mask(False, False, False, True)
+        target_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb)
+        if not target_tex2:
+            return
 
         view = ctx.camera.get_view_matrix()
         proj = ctx.camera.get_projection_matrix()
 
         shader = self._ensure_shader()
-        shader.use()
-        shader.set_uniform_mat4("u_view", view.data, False)
-        shader.set_uniform_mat4("u_projection", proj.data, False)
+        pair = tc_shader_ensure_tgfx2(ctx2, shader)
+        if not pair.vs or not pair.fs:
+            return
 
-        from termin.visualization.render.render_context import RenderContext
-        ctx_render = RenderContext(
-            view=view,
-            projection=proj,
-            camera=ctx.camera,
-            scene=ctx.scene,
-            graphics=ctx.graphics,
-            phase="gizmo_mask",
-        )
+        ctx2.begin_pass(target_tex2, clear_depth_enabled=True, clear_depth=1.0)
+        ctx2.set_viewport(0, 0, pw, ph)
+        ctx2.set_depth_test(True)
+        ctx2.set_depth_write(False)
+        ctx2.set_blend(False)
+        ctx2.set_cull(CULL_NONE)
+        ctx2.set_color_format(PIXEL_RGBA8)
+        # Пишем только в альфу (id gizmo'а)
+        ctx2.set_color_mask(False, False, False, True)
+        ctx2.bind_shader(pair.vs, pair.fs)
+
+        ctx2.set_uniform_mat4("u_view", list(view.data), False)
+        ctx2.set_uniform_mat4("u_projection", list(proj.data), False)
 
         from termin.render_components import MeshRenderer
 
@@ -133,16 +145,17 @@ class GizmoPass(RenderFramePass):
 
             # alpha < 1.0 для гизмо, alpha=1.0 зарезервирована для обычных объектов
             alpha = index * 1.0 / (maxindex + 1)
-            shader.set_uniform_vec4("u_color", 0.0, 0.0, 0.0, alpha)
+            ctx2.set_uniform_vec4("u_color", 0.0, 0.0, 0.0, alpha)
             model = ent.model_matrix()
-            shader.set_uniform_mat4("u_model", model.data, False)
+            ctx2.set_uniform_mat4("u_model", list(model.data), False)
+
             tc_mesh = mr.mesh
             if tc_mesh is not None and tc_mesh.is_valid:
-                gpu = mr.mesh_gpu
-                gpu.draw(ctx_render, tc_mesh.mesh, tc_mesh.version)
+                draw_tc_mesh(ctx2, tc_mesh)
             index += 1
 
-        # возвращаем нормальное состояние
-        ctx.graphics.set_color_mask(True, True, True, True)
-        ctx.graphics.set_depth_mask(True)
-        ctx.graphics.set_cull_face(True)
+        ctx2.end_pass()
+        # Восстанавливаем нормальную color mask для последующих пассов.
+        # begin_pass следующего пасса всё равно перезапишет state, но
+        # внутри ctx2 pipeline cache значение пойдёт в новую запись.
+        ctx2.set_color_mask(True, True, True, True)
