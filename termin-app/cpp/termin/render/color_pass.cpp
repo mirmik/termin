@@ -379,10 +379,10 @@ void ColorPass::execute_with_data(
     const ShadowSettings& shadow_settings,
     uint64_t layer_mask)
 {
-    auto* graphics = ctx.graphics;
+    auto* graphics = ctx.graphics;  // Still needed for LightingUBO + debugger capture.
     auto* ctx2 = ctx.ctx2;
-    if (!ctx2 || !graphics) {
-        tc::Log::error("[ColorPass/tgfx2] ctx2 or graphics is null");
+    if (!ctx2) {
+        tc::Log::error("[ColorPass/tgfx2] ctx2 is null");
         return;
     }
 
@@ -393,27 +393,19 @@ void ColorPass::execute_with_data(
     }
     auto& device = ctx2->device();
 
-    // Resolve output FBO.
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it == ctx.writes_fbos.end() || it->second == nullptr) {
-        tc::Log::warn("[ColorPass/tgfx2] FBO '%s' not found in writes_fbos", output_res.c_str());
+    // Resolve output textures from ctx.tex2_* — persistent FBOPool
+    // wrappers, no per-frame wrap/destroy churn.
+    auto color_it = ctx.tex2_writes.find(output_res);
+    if (color_it == ctx.tex2_writes.end() || !color_it->second) {
+        tc::Log::warn("[ColorPass/tgfx2] tgfx2 color texture for '%s' not available",
+                      output_res.c_str());
         return;
     }
-    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
-    if (!fb) return;
+    tgfx2::TextureHandle color_tex2 = color_it->second;
 
-    // Phase 3: OpenGL FBOs now use a depth *texture* (was a renderbuffer
-    // before). That lets us wrap both color and depth as tgfx2 handles
-    // and open a real ctx2 render pass — no more legacy
-    // graphics->bind_framebuffer workaround.
-    tgfx2::TextureHandle color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fb);
-    tgfx2::TextureHandle depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fb);
-    if (!color_tex2) {
-        tc::Log::error("[ColorPass/tgfx2] failed to wrap color attachment");
-        return;
-    }
-    ctx2->defer_destroy(color_tex2);
-    if (depth_tex2) ctx2->defer_destroy(depth_tex2);
+    auto depth_it = ctx.tex2_depth_writes.find(output_res);
+    tgfx2::TextureHandle depth_tex2 =
+        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx2::TextureHandle{};
 
     ctx2->begin_pass(color_tex2, depth_tex2,
                      /*clear_color=*/nullptr,
