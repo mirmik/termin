@@ -627,13 +627,18 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._sdl_window.make_current()
 
             dst_w, dst_h = self._sdl_window.framebuffer_size()
-            self._graphics.bind_framebuffer(None)
-            self._graphics.set_viewport(0, 0, dst_w, dst_h)
+            src_w = capture_fbo.get_width()
+            src_h = capture_fbo.get_height()
 
-            self._core.presenter.render(
-                self._graphics, capture_fbo,
-                dst_w, dst_h,
-                self._channel_mode, self._highlight_hdr
+            # Qt-editor framegraph debugger is deprecated (Phase 17 cleanup).
+            # Fall back to a plain glBlitFramebuffer into the debug SDL
+            # window's default framebuffer — channel_mode / highlight_hdr
+            # are not supported on this path.
+            self._graphics.blit_framebuffer(
+                capture_fbo, None,
+                0, 0, src_w, src_h,
+                0, 0, dst_w, dst_h,
+                True, False
             )
 
             self._sdl_window.swap_buffers()

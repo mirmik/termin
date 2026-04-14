@@ -92,59 +92,24 @@ def _get_blit_shader() -> TcShader:
 
 
 def blit_fbo_to_fbo(
-    ctx_or_gfx,
+    ctx2,
     src_fb,
     dst_fb,
     size: tuple[int, int],
 ):
     """
     Copy src_fb's color attachment into dst_fb via a fullscreen quad
-    shader. First argument can be either:
-      - the ctx2 Tgfx2RenderContext (preferred, post Stage 7);
-      - or the legacy GraphicsBackend (only supported for backwards
-        compat with a handful of callers that haven't migrated yet).
+    shader. Requires a Tgfx2RenderContext as the first argument.
 
     When src_fb is not a FramebufferHandle we silently no-op; that
     matches the legacy implementation's ShadowMapArrayResource fallback.
     """
     from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
 
-    if isinstance(ctx_or_gfx, NOPGraphicsBackend):
+    if isinstance(ctx2, NOPGraphicsBackend):
         return
 
-    # Detect which variant of the first argument we received.
-    from tgfx._tgfx_native import Tgfx2RenderContext  # type: ignore
-    if isinstance(ctx_or_gfx, Tgfx2RenderContext):
-        _blit_fbo_to_fbo_tgfx2(ctx_or_gfx, src_fb, dst_fb, size)
-        return
-
-    # Legacy path: compile shader via tgfx2 under the hood (Stage 6)
-    # and hit glUniform / draw_ui_textured_quad on the currently-bound
-    # program.
-    gfx = ctx_or_gfx
-    w, h = size
-
-    gfx.bind_framebuffer(dst_fb)
-    gfx.set_viewport(0, 0, w, h)
-    gfx.set_depth_test(False)
-    gfx.set_depth_mask(False)
-
-    shader = _get_blit_shader()
-    shader.ensure_ready()
-    shader.use()
-    shader.set_uniform_int("u_tex", 0)
-
-    tex = _get_texture_from_resource(src_fb)
-    if tex is None:
-        gfx.set_depth_test(True)
-        gfx.set_depth_mask(True)
-        return
-
-    tex.bind(0)
-    gfx.draw_ui_textured_quad()
-
-    gfx.set_depth_test(True)
-    gfx.set_depth_mask(True)
+    _blit_fbo_to_fbo_tgfx2(ctx2, src_fb, dst_fb, size)
 
 
 def _blit_fbo_to_fbo_tgfx2(ctx2, src_fb, dst_fb, size):

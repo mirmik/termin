@@ -111,6 +111,10 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("graphics").none(),
            "Set graphics backend for rendering")
 
+        .def_prop_ro("render_engine", &RenderingManager::render_engine,
+                     nb::rv_policy::reference,
+                     "Access the engine's RenderEngine (tgfx2_ctx lives on it)")
+
         .def("set_make_current_callback", [](RenderingManager& self, nb::callable callback) {
             if (callback.is_none()) {
                 self.set_make_current_callback(nullptr);

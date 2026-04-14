@@ -594,8 +594,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             height: Source FBO height.
             depth_callback: Optional callback to receive depth buffer as numpy array.
         """
-        from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
-
         # Save current context
         saved_context = video.SDL_GL_GetCurrentContext()
         saved_window = video.SDL_GL_GetCurrentWindow()
@@ -606,27 +604,17 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
             # Get destination size
             dst_w, dst_h = self.framebuffer_size()
+            src_w = fbo.get_width()
+            src_h = fbo.get_height()
 
-            # Bind window framebuffer (0)
-            graphics.bind_framebuffer(None)
-            graphics.set_viewport(0, 0, dst_w, dst_h)
-
-            graphics.set_depth_test(False)
-            graphics.set_depth_mask(False)
-
-            # Get color texture from source FBO
-            tex = fbo.color_texture()
-            if tex is not None:
-                # Render fullscreen quad with texture
-                shader = PresentToScreenPass._get_shader()
-                shader.ensure_ready()  # debugger has its own context
-                shader.use()
-                shader.set_uniform_int("u_tex", 0)
-                tex.bind(0)
-                graphics.draw_ui_textured_quad()
-
-            graphics.set_depth_test(True)
-            graphics.set_depth_mask(True)
+            # Plain glBlitFramebuffer from source fbo to window default
+            # framebuffer — no shader needed for a debug passthrough.
+            graphics.blit_framebuffer(
+                fbo, None,
+                0, 0, src_w, src_h,
+                0, 0, dst_w, dst_h,
+                True, False
+            )
 
             # Read depth buffer if callback provided
             if depth_callback is not None:
@@ -695,10 +683,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             depth_callback: Optional callback to receive depth buffer
         """
         from tcbase import log
-        from termin.visualization.render.framegraph.passes.present import (
-            PresentToScreenPass,
-            _get_texture_from_resource,
-        )
 
         # Handle MSAA: resolve to non-MSAA FBO first
         texture_fb = fb
@@ -728,12 +712,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             if depth is not None:
                 depth_callback(depth)
 
-        # Get texture from (possibly resolved) FBO
-        tex = _get_texture_from_resource(texture_fb)
-        if tex is None:
-            log.warn("[blit_from_pass] tex is None, aborting")
-            return
-
         # Save current context
         saved_context = video.SDL_GL_GetCurrentContext()
         saved_window = video.SDL_GL_GetCurrentWindow()
@@ -743,24 +721,17 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
         # Get debugger window size
         dst_w, dst_h = self.framebuffer_size()
+        src_w = texture_fb.get_width()
+        src_h = texture_fb.get_height()
 
-        # Bind framebuffer 0 (window)
-        graphics.bind_framebuffer(None)
-        graphics.set_viewport(0, 0, dst_w, dst_h)
-
-        graphics.set_depth_test(False)
-        graphics.set_depth_mask(False)
-
-        # Render fullscreen quad with texture
-        shader = PresentToScreenPass._get_shader()
-        shader.ensure_ready()  # embedded window context
-        shader.use()
-        shader.set_uniform_int("u_tex", 0)
-        tex.bind(0)
-        graphics.draw_ui_textured_quad()
-
-        graphics.set_depth_test(True)
-        graphics.set_depth_mask(True)
+        # Plain glBlitFramebuffer from source fbo to window default
+        # framebuffer — no shader needed for a debug passthrough.
+        graphics.blit_framebuffer(
+            texture_fb, None,
+            0, 0, src_w, src_h,
+            0, 0, dst_w, dst_h,
+            True, False
+        )
 
         # Swap buffers
         self.swap_buffers()

@@ -453,19 +453,3 @@ class PostProcessPass(RenderFramePass):
                     break
                 current_tex2 = next_tex2
 
-    def _blit_to_debug(
-        self,
-        gfx: "GraphicsBackend",
-        src_fb: "FramebufferHandle",
-        dst_fb: "FramebufferHandle",
-        size: tuple[int, int],
-    ) -> None:
-        """
-        Копирует промежуточный результат постобработки в debug FBO.
-
-        Используется для внутренних точек — после копирования возвращаемся
-        к исходному FBO, чтобы продолжить цепочку без побочных эффектов.
-        """
-        blit_fbo_to_fbo(gfx, src_fb, dst_fb, size)
-        gfx.bind_framebuffer(src_fb)
-        gfx.set_viewport(0, 0, size[0], size[1])

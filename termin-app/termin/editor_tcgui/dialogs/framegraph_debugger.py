@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from OpenGL.GL import glDisable, glEnable, GL_SCISSOR_TEST
-
 from tcbase import log
 
 from tcgui.widgets.widget import Widget
@@ -31,6 +29,7 @@ class CapturePreviewWidget(Widget):
         super().__init__()
         self._core = None
         self._graphics: GraphicsBackend | None = None
+        self._fbo_surface = None  # FBOSurface backing the tcgui editor
         self.channel_mode: int = 0
         self.highlight_hdr: bool = False
         self.has_content: bool = False
@@ -40,20 +39,42 @@ class CapturePreviewWidget(Widget):
                            (0.08, 0.08, 0.08, 1.0))
         if not self.has_content or self._core is None:
             return
+        if self._fbo_surface is None:
+            return
         capture_fbo = self._core.capture_fbo
         if capture_fbo is None:
             return
 
-        glDisable(GL_SCISSOR_TEST)
+        from termin.visualization.render.manager import RenderingManager
+        render_engine = RenderingManager.instance().render_engine
+        if render_engine is None:
+            return
+        render_engine.ensure_tgfx2()
+        ctx2 = render_engine.tgfx2_ctx
+        if ctx2 is None:
+            return
+
+        vp_w = renderer._viewport_w
         vp_h = renderer._viewport_h
         dst_x = int(self.x)
         dst_y = int(vp_h - self.y - self.height)
         dst_w, dst_h = int(self.width), int(self.height)
-        self._graphics.set_viewport(dst_x, dst_y, dst_w, dst_h)
-        self._core.presenter.render(self._graphics, capture_fbo,
-                                     dst_w, dst_h,
-                                     self.channel_mode, self.highlight_hdr)
-        self._graphics.set_viewport(0, 0, renderer._viewport_w, renderer._viewport_h)
+
+        # Wrap the tcgui FBOSurface as a legacy FramebufferHandle so the
+        # C++ presenter can wrap it as a tgfx2 texture and open a render
+        # pass on it. The surface's FBO id is the current GL target.
+        target_fbo = self._graphics.create_external_framebuffer(
+            self._fbo_surface.get_framebuffer_id(), vp_w, vp_h
+        )
+
+        # The C++ presenter handles scissor via ctx2->clear_scissor
+        # inside the pass; here we restore tcgui's clip afterwards
+        # because clear_scissor leaks GL scissor rect state.
+        self._core.presenter.render(
+            ctx2, capture_fbo, target_fbo,
+            dst_x, dst_y, dst_w, dst_h,
+            self.channel_mode, self.highlight_hdr,
+        )
         if renderer._clip_stack:
             renderer._graphics.enable_scissor(*renderer._clip_stack[-1])
 
@@ -69,6 +90,7 @@ class _FramegraphDebuggerHandle:
         self._core = None
         self._graphics: GraphicsBackend | None = None
         self._rendering_controller = None
+        self._fbo_surface = None
 
         self._current_viewport = None
         self._viewports_list: list[tuple[object, str]] = []
@@ -573,7 +595,7 @@ class _FramegraphDebuggerHandle:
         self.visible = False
 
 
-def show_framegraph_debugger(ui, graphics, rendering_controller) -> _FramegraphDebuggerHandle:
+def show_framegraph_debugger(ui, graphics, rendering_controller, fbo_surface) -> _FramegraphDebuggerHandle:
     """Create and show the Framegraph Debugger dialog. Returns handle for updates."""
 
     from termin._native.editor import FrameGraphDebuggerCore
@@ -581,6 +603,7 @@ def show_framegraph_debugger(ui, graphics, rendering_controller) -> _FramegraphD
     handle = _FramegraphDebuggerHandle()
     handle._graphics = graphics
     handle._rendering_controller = rendering_controller
+    handle._fbo_surface = fbo_surface
     handle._core = FrameGraphDebuggerCore()
 
     # ---- Build UI ----
@@ -785,6 +808,7 @@ def show_framegraph_debugger(ui, graphics, rendering_controller) -> _FramegraphD
     preview.stretch = True
     preview._core = handle._core
     preview._graphics = graphics
+    preview._fbo_surface = fbo_surface
     handle._preview = preview
     viewer_area.add_child(preview)
 

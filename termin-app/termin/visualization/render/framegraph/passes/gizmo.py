@@ -80,7 +80,7 @@ class GizmoPass(RenderFramePass):
     def _ensure_shader(self) -> TcShader:
         if self._shader is None:
             self._shader = TcShader.from_sources(GIZMO_MASK_VERT, GIZMO_MASK_FRAG, "", "GizmoMask")
-        self._shader.ensure_ready()
+        # tgfx2 path compiles lazily via tc_shader_ensure_tgfx2 in execute().
         return self._shader
 
     def execute(self, ctx: "ExecuteContext") -> None:
