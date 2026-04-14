@@ -80,12 +80,6 @@ protected:
     virtual const char* phase_name() const = 0;
     virtual std::optional<std::string> fbo_format() const;
 
-    virtual void setup_extra_uniforms(
-        const DrawCall& dc,
-        TcShader& shader,
-        RenderContext& context
-    );
-
     virtual bool entity_filter(const Entity& ent) const;
     virtual int get_pick_id(const Entity& ent) const;
 
@@ -109,15 +103,6 @@ protected:
         tc_shader_handle base_shader
     ) const;
     void sort_draw_calls_by_shader() const;
-    void execute_geometry_pass(
-        GraphicsBackend* graphics,
-        const FBOMap& writes_fbos,
-        const Rect4i& rect,
-        tc_scene_handle scene,
-        const Mat44f& view,
-        const Mat44f& projection,
-        uint64_t layer_mask
-    );
     std::vector<ResourceSpec> make_resource_specs() const;
 };
 

@@ -56,16 +56,6 @@ std::optional<std::string> GeometryPassBase::fbo_format() const {
     return std::nullopt;
 }
 
-void GeometryPassBase::setup_extra_uniforms(
-    const DrawCall& dc,
-    TcShader& shader,
-    RenderContext& context
-) {
-    (void)dc;
-    (void)shader;
-    (void)context;
-}
-
 bool GeometryPassBase::entity_filter(const Entity& ent) const {
     (void)ent;
     return true;
@@ -194,83 +184,6 @@ void GeometryPassBase::sort_draw_calls_by_shader() const {
         [](const DrawCall& a, const DrawCall& b) {
             return a.final_shader.index < b.final_shader.index;
         });
-}
-
-void GeometryPassBase::execute_geometry_pass(
-    GraphicsBackend* graphics,
-    const FBOMap& writes_fbos,
-    const Rect4i& rect,
-    tc_scene_handle scene,
-    const Mat44f& view,
-    const Mat44f& projection,
-    uint64_t layer_mask
-) {
-    auto it = writes_fbos.find(output_res);
-    if (it == writes_fbos.end() || it->second == nullptr) {
-        tc::Log::error("[GeometryPassBase] '%s': output FBO '%s' not found!",
-            get_pass_name().c_str(), output_res.c_str());
-        return;
-    }
-    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
-    if (!fb) {
-        tc::Log::error("[GeometryPassBase] '%s': output '%s' is not FramebufferHandle!",
-            get_pass_name().c_str(), output_res.c_str());
-        return;
-    }
-
-    bind_and_clear(graphics, fb, rect);
-    apply_default_render_state(graphics);
-
-    TcShader& base_shader = get_shader(graphics);
-    collect_draw_calls(scene, layer_mask, base_shader.handle);
-    sort_draw_calls_by_shader();
-
-    entity_names.clear();
-    std::set<std::string> seen_entities;
-
-    RenderContext context;
-    context.view = view;
-    context.projection = projection;
-    context.graphics = graphics;
-    context.phase = phase_name();
-
-    const std::string& debug_symbol = get_debug_internal_point();
-    tc_shader_handle last_shader = tc_shader_handle_invalid();
-
-    for (const auto& dc : cached_draw_calls_) {
-        auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
-        if (!drawable) {
-            continue;
-        }
-        Mat44f model = drawable->get_model_matrix(dc.entity);
-        context.model = model;
-
-        const char* name = dc.entity.name();
-        if (name && seen_entities.insert(name).second) {
-            entity_names.push_back(name);
-        }
-
-        tc_shader_handle shader_handle = dc.final_shader;
-        bool shader_changed = !tc_shader_handle_eq(shader_handle, last_shader);
-
-        TcShader shader_to_use(shader_handle);
-        if (shader_changed) {
-            shader_to_use.use();
-            shader_to_use.set_uniform_mat4("u_view", view.data, false);
-            shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
-            last_shader = shader_handle;
-        }
-
-        shader_to_use.set_uniform_mat4("u_model", model.data, false);
-        context.current_tc_shader = shader_to_use;
-
-        setup_extra_uniforms(dc, shader_to_use, context);
-        tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
-
-        if (!debug_symbol.empty() && name && debug_symbol == name) {
-            maybe_blit_to_debugger(graphics, fb, name, rect.width, rect.height);
-        }
-    }
 }
 
 std::vector<ResourceSpec> GeometryPassBase::make_resource_specs() const {

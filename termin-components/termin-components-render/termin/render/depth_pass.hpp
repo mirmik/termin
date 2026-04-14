@@ -62,17 +62,6 @@ protected:
     std::array<float, 4> clear_color() const override { return {1.0f, 1.0f, 1.0f, 1.0f}; }
     const char* phase_name() const override { return "depth"; }
     std::optional<std::string> fbo_format() const override { return "r16f"; }
-
-    void setup_extra_uniforms(
-        const DrawCall& dc,
-        TcShader& shader,
-        RenderContext& context
-    ) override {
-        (void)dc;
-        (void)context;
-        shader.set_uniform_float("u_near", _near_plane);
-        shader.set_uniform_float("u_far", _far_plane);
-    }
 };
 
 } // namespace termin
