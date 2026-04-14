@@ -5,6 +5,9 @@
 
 #include <termin/render/material_pass.hpp>
 
+#include <tgfx2/render_context.hpp>
+#include <tgfx2/i_render_device.hpp>
+
 namespace termin {
 
 uint32_t MaterialPass::s_quad_vao = 0;
@@ -212,6 +215,27 @@ void MaterialPass::execute(ExecuteContext& ctx) {
             default:
                 break;
         }
+    }
+
+    // Stage 5.H: if the shader has a std140 material UBO layout, pack
+    // the phase's @property values into the per-phase UBO and bind it
+    // at slot TC_MATERIAL_UBO_BINDING_SLOT. Legacy per-uniform set_*
+    // calls above are still run for non-UBO uniforms like u_resolution;
+    // @property uniforms that moved into the block are stripped from
+    // the GLSL so those set_* calls no-op.
+    if (ctx.ctx2 && shader->material_ubo_block_size > 0) {
+        void* tgfx2_device = &ctx.ctx2->device();
+        if (tc_material_phase_apply_ubo_gl(
+                phase, shader, TC_MATERIAL_UBO_BINDING_SLOT, tgfx2_device)) {
+            TcShader shader_wrapper(phase->shader);
+            shader_wrapper.set_block_binding("MaterialParams", TC_MATERIAL_UBO_BINDING_SLOT);
+        }
+    } else if (shader->material_ubo_block_size > 0) {
+        tc::Log::error("[MaterialPass] '%s': shader has material UBO layout "
+                       "(block_size=%u) but ctx.ctx2 is null — @property uniforms "
+                       "will render as zero",
+                       get_pass_name().c_str(),
+                       shader->material_ubo_block_size);
     }
 
     if (before_draw_callback_) {
