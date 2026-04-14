@@ -66,7 +66,7 @@ int GeometryPassBase::get_pick_id(const Entity& ent) const {
     return 0;
 }
 
-TcShader& GeometryPassBase::get_shader(GraphicsBackend* graphics) {
+TcShader& GeometryPassBase::get_shader() {
     if (!_shader.is_valid()) {
         _shader = TcShader::from_sources(
             vertex_shader_source(),
@@ -78,7 +78,6 @@ TcShader& GeometryPassBase::get_shader(GraphicsBackend* graphics) {
         // _shader here is only used for its handle (as base shader key
         // for per-draw override matching).
     }
-    (void)graphics;
     return _shader;
 }
 
