@@ -74,7 +74,9 @@ TcShader& GeometryPassBase::get_shader(GraphicsBackend* graphics) {
             "",
             get_pass_name()
         );
-        _shader.ensure_ready();
+        // tgfx2 path compiles lazily via tc_shader_ensure_tgfx2; the
+        // _shader here is only used for its handle (as base shader key
+        // for per-draw override matching).
     }
     (void)graphics;
     return _shader;

@@ -546,7 +546,8 @@ void main() {
         if (tc_shader_is_valid(h)) {
             static TcShader cached_shader;
             cached_shader = TcShader(h);
-            cached_shader.ensure_ready();
+            // tgfx2 path compiles lazily via tc_shader_ensure_tgfx2 in
+            // the inner draw loop — no legacy GL compile needed here.
             shadow_shader = &cached_shader;
         }
     }

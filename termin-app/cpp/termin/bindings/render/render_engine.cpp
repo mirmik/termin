@@ -2,6 +2,7 @@
 #include "termin/render/render_engine.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "tgfx/graphics_backend.hpp"
+#include "tgfx2/render_context.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/camera/render_camera_utils.hpp"
 #include <termin/tc_scene.hpp>
@@ -21,6 +22,9 @@ void bind_render_engine(nb::module_& m) {
         .def(nb::init<>())
         .def(nb::init<GraphicsBackend*>(), nb::arg("graphics"))
         .def_rw("graphics", &RenderEngine::graphics)
+        .def("ensure_tgfx2", &RenderEngine::ensure_tgfx2)
+        .def_prop_ro("tgfx2_ctx", &RenderEngine::tgfx2_ctx,
+                     nb::rv_policy::reference_internal)
         .def("render_view_to_fbo", [](RenderEngine& self,
                                    RenderPipeline& pipeline,
                                    FramebufferHandle* target_fbo,
