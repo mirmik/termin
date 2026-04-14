@@ -41,6 +41,13 @@ endif()
 # SDL platform bindings moved to termin-display/_platform_native
 
 nanobind_add_module(_native NB_SHARED
+    # Python bindings entry point + per-subsystem registration files.
+    # The actual C++ pass / renderer implementations live in render_lib —
+    # linking PUBLIC against render_lib below pulls their symbols in
+    # without compiling them a second time here. Listing them in both
+    # lists used to cause duplicate symbols (one copy in render_lib, one
+    # in _native.so) and led to silent "my latest changes aren't visible"
+    # bugs because the linker picked the local copy from _native.
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
     termin/bindings/render/shader_parser.cpp
@@ -72,21 +79,12 @@ nanobind_add_module(_native NB_SHARED
     termin/kind_bindings.cpp
     termin/assets/assets_bindings.cpp
     termin/assets/handles.cpp
-    termin/render/shader_parser.cpp
-    termin/render/shadow_camera.cpp
+
+    # Renderer sources unique to _native (NOT in RENDER_LIB_SOURCES).
+    # Keep this list tight — every file here compiled twice = duplicate symbols.
     termin/render/immediate_renderer.cpp
-    termin/render/wireframe_renderer.cpp
     termin/render/solid_primitive_renderer.cpp
-    termin/render/glsl_preprocessor.cpp
     termin/render/skinned_mesh_renderer.cpp
-    termin/render/color_pass.cpp
-    termin/render/id_pass.cpp
-    termin/render/collider_gizmo_pass.cpp
-    termin/render/present_pass.cpp
-    termin/render/shadow_pass.cpp
-    termin/render/bloom_pass.cpp
-    termin/render/grayscale_pass.cpp
-    termin/render/tonemap_pass.cpp
 )
 target_link_libraries(_native PRIVATE
     OpenGL::GL
