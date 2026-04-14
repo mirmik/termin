@@ -151,16 +151,15 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
         tc::Log::error("[GroundGridPass] ctx.ctx2 is null — GroundGridPass is tgfx2-only");
         return;
     }
-    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx2->device());
-    if (!gl_dev) return;
-
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it == ctx.writes_fbos.end() || it->second == nullptr) {
-        return;
-    }
-    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
-    if (!fb) return;
     if (!ctx.camera) return;
+
+    auto color_it = ctx.tex2_writes.find(output_res);
+    if (color_it == ctx.tex2_writes.end() || !color_it->second) return;
+    tgfx2::TextureHandle color_tex2 = color_it->second;
+
+    auto depth_it = ctx.tex2_depth_writes.find(output_res);
+    tgfx2::TextureHandle depth_tex2 =
+        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx2::TextureHandle{};
 
     Mat44 view64  = ctx.camera->get_view_matrix();
     Mat44 proj64  = ctx.camera->get_projection_matrix();
@@ -171,15 +170,6 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
 
     float near_clip = static_cast<float>(ctx.camera->near_clip);
     float far_clip  = static_cast<float>(ctx.camera->far_clip);
-
-    // Wrap output FBO as tgfx2 textures. We use both color and depth:
-    // the fragment shader writes gl_FragDepth to punch the grid into the
-    // scene depth buffer so regular geometry still occludes it.
-    tgfx2::TextureHandle color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fb);
-    tgfx2::TextureHandle depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fb);
-    if (!color_tex2) return;
-    ctx2->defer_destroy(color_tex2);
-    if (depth_tex2) ctx2->defer_destroy(depth_tex2);
 
     // Compile the grid shader via the bridge (tgfx2 ShaderHandle pair).
     _ensure_shader();
@@ -192,7 +182,7 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
                      /*clear_color=*/nullptr,
                      /*clear_depth=*/1.0f,
                      /*clear_depth_enabled=*/false);
-    ctx2->set_viewport(0, 0, fb->get_width(), fb->get_height());
+    ctx2->set_viewport(0, 0, ctx.rect.width, ctx.rect.height);
 
     // Depth test ON + write, blend ON (alpha fade), no culling.
     ctx2->set_depth_test(true);

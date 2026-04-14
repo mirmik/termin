@@ -166,19 +166,18 @@ void ColliderGizmoPass::execute(ExecuteContext& ctx) {
 
     tc_scene_handle scene = ctx.scene.handle();
 
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it == ctx.writes_fbos.end() || it->second == nullptr) {
+    auto color_it = ctx.tex2_writes.find(output_res);
+    if (color_it == ctx.tex2_writes.end() || !color_it->second) {
         return;
     }
-    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
-    if (!fb) {
-        return;
-    }
+    tgfx2::TextureHandle color_tex2 = color_it->second;
 
-    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx.ctx2->device());
-    if (!gl_dev) {
-        tc::Log::error("ColliderGizmoPass/tgfx2: device is not OpenGLRenderDevice");
-        return;
+    tgfx2::TextureHandle depth_tex2;
+    if (depth_test) {
+        auto depth_it = ctx.tex2_depth_writes.find(output_res);
+        if (depth_it != ctx.tex2_depth_writes.end()) {
+            depth_tex2 = depth_it->second;
+        }
     }
 
     Mat44 view = ctx.camera->get_view_matrix();
@@ -190,19 +189,8 @@ void ColliderGizmoPass::execute(ExecuteContext& ctx) {
     // Walk scene and emit primitives into _renderer.
     tc_scene_foreach_component_of_type(scene, "ColliderComponent", draw_collider_callback, this);
 
-    // Wrap legacy FBO attachments as tgfx2 textures. Depth is optional
-    // and only used when depth_test is enabled.
-    tgfx2::TextureHandle color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fb);
-    if (!color_tex2) {
-        return;
-    }
-    tgfx2::TextureHandle depth_tex2;
-    if (depth_test) {
-        depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fb);
-    }
-
     ctx.ctx2->begin_pass(color_tex2, depth_tex2, nullptr, 1.0f, false);
-    ctx.ctx2->set_viewport(0, 0, fb->get_width(), fb->get_height());
+    ctx.ctx2->set_viewport(0, 0, ctx.rect.width, ctx.rect.height);
     ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
     if (depth_test) {
         ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
@@ -219,9 +207,7 @@ void ColliderGizmoPass::execute(ExecuteContext& ctx) {
     }
 
     ctx.ctx2->end_pass();
-
-    gl_dev->destroy(color_tex2);
-    if (depth_tex2) gl_dev->destroy(depth_tex2);
+    // color_tex2/depth_tex2 are persistent FBOPool wrappers — do not destroy.
 }
 
 // ============================================================================
