@@ -146,6 +146,28 @@ public:
         tgfx2::RenderContext2* ctx2 = nullptr
     );
 
+    // Stage 5.K full tgfx2 path. When TERMIN_TGFX2_COLOR=1 and ctx.ctx2
+    // is available, execute() routes through this instead of the legacy
+    // execute_with_data. Uses ctx2->bind_shader via tc_shader_ensure_tgfx2
+    // bridge, material UBO dispatcher (C++ variant), wrap_mesh_as_tgfx2,
+    // and transitional set_uniform_*/set_block_binding for legacy plain
+    // uniforms (u_view/u_projection/u_model/shadow samplers). Skips
+    // non-MeshRenderer drawables for now.
+    void execute_with_data_tgfx2(
+        ExecuteContext& ctx,
+        const Rect4i& rect,
+        tc_scene_handle scene,
+        const Mat44f& view,
+        const Mat44f& projection,
+        const Vec3& camera_position,
+        const std::vector<Light>& lights,
+        const Vec3& ambient_color,
+        float ambient_intensity,
+        const std::vector<ShadowMapArrayEntry>& shadow_maps,
+        const ShadowSettings& shadow_settings,
+        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
+    );
+
     // Override from CxxFramePass
     void execute(ExecuteContext& ctx) override;
 
