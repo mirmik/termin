@@ -61,6 +61,15 @@ public:
     void upload_bone_matrices(TcShader& shader);
 
     /**
+     * tgfx2 path: push u_bone_matrices and u_bone_count onto the
+     * currently-bound ctx2 program right before ctx2->draw().
+     */
+    void upload_per_draw_uniforms_tgfx2(
+        tgfx2::RenderContext2& ctx2,
+        int geometry_id
+    ) override;
+
+    /**
      * Draw skinned geometry with bone matrices.
      * Overrides MeshRenderer::draw_geometry.
      */
