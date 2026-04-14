@@ -20,24 +20,31 @@ namespace termin {
 
 namespace {
 
-// std140 layout for DepthPass parameters.
-//   u_model      mat4   offset 0
-//   u_view       mat4   offset 64
-//   u_projection mat4   offset 128
-//   u_near       float  offset 192
-//   u_far        float  offset 196
-//   padding 8B to round block to 16B boundary
-// Total: 208 bytes.
-struct DepthParamsStd140 {
-    float u_model[16];
+// PerFrame UBO (binding 0): view + projection + near/far plane. Uploaded
+// ONCE per execute, bound as a regular uniform buffer. std140:
+//   u_view       mat4   offset 0    (64 B)
+//   u_projection mat4   offset 64   (64 B)
+//   u_near       float  offset 128  (4 B)
+//   u_far        float  offset 132  (4 B)
+//   pad                 offset 136  (8 B to 16-byte boundary)
+// Total 144 bytes. Rounded up to 144 here; the GPU reads 16-byte
+// aligned chunks so we pad the tail.
+struct DepthPerFrameStd140 {
     float u_view[16];
     float u_projection[16];
     float u_near;
     float u_far;
     float _pad[2];
 };
-static_assert(sizeof(DepthParamsStd140) == 208,
-              "DepthParamsStd140 must be 208 bytes for std140 compliance");
+static_assert(sizeof(DepthPerFrameStd140) == 144,
+              "DepthPerFrameStd140 must be 144 bytes");
+
+// PushConstants (binding 14): per-object model matrix.
+struct DepthPushStd140 {
+    float u_model[16];
+};
+static_assert(sizeof(DepthPushStd140) == 64,
+              "DepthPushStd140 must be exactly one mat4");
 
 constexpr const char* DEPTH_PASS_VERT_UBO = R"(
 #version 330 core
@@ -47,12 +54,15 @@ layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in vec2 a_texcoord;
 
-layout(std140) uniform DepthParams {
-    mat4  u_model;
+layout(std140, binding = 0) uniform PerFrame {
     mat4  u_view;
     mat4  u_projection;
     float u_near;
     float u_far;
+};
+
+layout(std140, binding = 14) uniform PushConstants {
+    mat4 u_model;
 };
 
 out float v_linear_depth;
@@ -148,7 +158,7 @@ void DepthPass::execute_with_data(
 }
 
 void DepthPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
-    if (device2_ == &device && depth_vs2_ && depth_fs2_ && params_ubo_) {
+    if (device2_ == &device && depth_vs2_ && depth_fs2_ && per_frame_ubo_) {
         return;
     }
     if (device2_ && device2_ != &device) {
@@ -167,16 +177,16 @@ void DepthPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
     depth_fs2_ = device.create_shader(fs_desc);
 
     tgfx2::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(DepthParamsStd140);
+    ubo_desc.size = sizeof(DepthPerFrameStd140);
     ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
-    params_ubo_ = device.create_buffer(ubo_desc);
+    per_frame_ubo_ = device.create_buffer(ubo_desc);
 }
 
 void DepthPass::release_tgfx2_resources() {
     if (!device2_) return;
     if (depth_vs2_) { device2_->destroy(depth_vs2_); depth_vs2_ = {}; }
     if (depth_fs2_) { device2_->destroy(depth_fs2_); depth_fs2_ = {}; }
-    if (params_ubo_) { device2_->destroy(params_ubo_); params_ubo_ = {}; }
+    if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
 
@@ -249,11 +259,19 @@ void DepthPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
     ctx.ctx2->bind_shader(depth_vs2_, depth_fs2_);
 
-    DepthParamsStd140 params{};
-    std::memcpy(params.u_view, view.data, sizeof(float) * 16);
-    std::memcpy(params.u_projection, projection.data, sizeof(float) * 16);
-    params.u_near = near_plane;
-    params.u_far = far_plane;
+    // PerFrame UBO — uploaded ONCE per execute. view + projection +
+    // near/far plane. Bound at slot 0.
+    DepthPerFrameStd140 per_frame{};
+    std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
+    std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
+    per_frame.u_near = near_plane;
+    per_frame.u_far = far_plane;
+    ctx.ctx2->device().upload_buffer(
+        per_frame_ubo_,
+        std::span<const uint8_t>(
+            reinterpret_cast<const uint8_t*>(&per_frame),
+            sizeof(per_frame)));
+    ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo_);
 
     RenderContext legacy_ctx;
     legacy_ctx.view = view;
@@ -278,13 +296,10 @@ void DepthPass::execute_with_data_tgfx2(
         bool override_is_base = tc_shader_handle_eq(dc.final_shader, base_shader.handle);
 
         if (mesh && override_is_base) {
-            std::memcpy(params.u_model, model.data, sizeof(float) * 16);
-            ctx.ctx2->device().upload_buffer(
-                params_ubo_,
-                std::span<const uint8_t>(
-                    reinterpret_cast<const uint8_t*>(&params),
-                    sizeof(params)));
-            ctx.ctx2->bind_uniform_buffer(0, params_ubo_);
+            // Fast path: push constants for model matrix.
+            DepthPushStd140 push{};
+            std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+            ctx.ctx2->set_push_constants(&push, sizeof(push));
 
             Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
             if (bind.index_count == 0) continue;

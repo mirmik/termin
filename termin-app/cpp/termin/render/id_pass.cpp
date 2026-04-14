@@ -25,20 +25,25 @@ namespace termin {
 
 namespace {
 
-// std140 layout for the IdPass parameter block.
-//   u_model       mat4    offset  0
-//   u_view        mat4    offset 64
-//   u_projection  mat4    offset 128
-//   u_pickColor   vec3    offset 192  (std140 pads vec3 to 16 bytes)
-// Total: 208 bytes, naturally 16-byte aligned.
-struct IdParamsStd140 {
-    float u_model[16];
+// PerFrame UBO (binding 0): view + projection. 128 bytes std140.
+struct IdPerFrameStd140 {
     float u_view[16];
     float u_projection[16];
+};
+static_assert(sizeof(IdPerFrameStd140) == 128,
+              "IdPerFrameStd140 must be 2 * mat4");
+
+// PushConstants (binding 14): per-object model matrix + pick color.
+// 64 + 16 = 80 bytes. vec4 used for pickColor because std140 pads
+// vec3 to 16-byte alignment anyway.
+struct IdPushStd140 {
+    float u_model[16];
     float u_pickColor[4];  // vec3 + pad
 };
-static_assert(sizeof(IdParamsStd140) == 208,
-              "IdParamsStd140 must be 208 bytes for std140 compliance");
+static_assert(sizeof(IdPushStd140) == 80,
+              "IdPushStd140 must be mat4 + vec4");
+static_assert(sizeof(IdPushStd140) <= 128,
+              "IdPushStd140 must fit within Vulkan min push constant size");
 
 constexpr const char* ID_PASS_VERT_UBO = R"(
 #version 330 core
@@ -48,11 +53,14 @@ layout(location=0) in vec3 a_position;
 layout(location=1) in vec3 a_normal;
 layout(location=2) in vec2 a_texcoord;
 
-layout(std140) uniform IdParams {
-    mat4 u_model;
+layout(std140, binding = 0) uniform PerFrame {
     mat4 u_view;
     mat4 u_projection;
-    vec3 u_pickColor;
+};
+
+layout(std140, binding = 14) uniform PushConstants {
+    mat4 u_model;
+    vec4 u_pickColor;  // w ignored
 };
 
 void main() {
@@ -64,17 +72,15 @@ constexpr const char* ID_PASS_FRAG_UBO = R"(
 #version 330 core
 #extension GL_ARB_shading_language_420pack : require
 
-layout(std140) uniform IdParams {
+layout(std140, binding = 14) uniform PushConstants {
     mat4 u_model;
-    mat4 u_view;
-    mat4 u_projection;
-    vec3 u_pickColor;
+    vec4 u_pickColor;
 };
 
 out vec4 fragColor;
 
 void main() {
-    fragColor = vec4(u_pickColor, 1.0);
+    fragColor = vec4(u_pickColor.rgb, 1.0);
 }
 )";
 
@@ -117,7 +123,7 @@ void IdPass::id_to_rgb(int id, float& r, float& g, float& b) {
 }
 
 void IdPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
-    if (device2_ == &device && id_vs2_ && id_fs2_ && params_ubo_) {
+    if (device2_ == &device && id_vs2_ && id_fs2_ && per_frame_ubo_) {
         return;
     }
     if (device2_ && device2_ != &device) {
@@ -136,16 +142,16 @@ void IdPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
     id_fs2_ = device.create_shader(fs_desc);
 
     tgfx2::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(IdParamsStd140);
+    ubo_desc.size = sizeof(IdPerFrameStd140);
     ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
-    params_ubo_ = device.create_buffer(ubo_desc);
+    per_frame_ubo_ = device.create_buffer(ubo_desc);
 }
 
 void IdPass::release_tgfx2_resources() {
     if (!device2_) return;
     if (id_vs2_) { device2_->destroy(id_vs2_); id_vs2_ = {}; }
     if (id_fs2_) { device2_->destroy(id_fs2_); id_fs2_ = {}; }
-    if (params_ubo_) { device2_->destroy(params_ubo_); params_ubo_ = {}; }
+    if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
 
@@ -221,11 +227,16 @@ void IdPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
     ctx.ctx2->bind_shader(id_vs2_, id_fs2_);
 
-    // Staging UBO contents. view/projection written once, model and
-    // pickColor overwritten per draw.
-    IdParamsStd140 params{};
-    std::memcpy(params.u_view, view.data, sizeof(float) * 16);
-    std::memcpy(params.u_projection, projection.data, sizeof(float) * 16);
+    // PerFrame UBO: view + projection, uploaded once.
+    IdPerFrameStd140 per_frame{};
+    std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
+    std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
+    ctx.ctx2->device().upload_buffer(
+        per_frame_ubo_,
+        std::span<const uint8_t>(
+            reinterpret_cast<const uint8_t*>(&per_frame),
+            sizeof(per_frame)));
+    ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo_);
 
     // Legacy RenderContext used by the fallback branch.
     RenderContext legacy_ctx;
@@ -260,18 +271,14 @@ void IdPass::execute_with_data_tgfx2(
         bool override_is_base = tc_shader_handle_eq(dc.final_shader, base_shader.handle);
 
         if (mesh && override_is_base) {
-            // Fast path: tgfx2 draw.
-            std::memcpy(params.u_model, model.data, sizeof(float) * 16);
-            params.u_pickColor[0] = pick_r;
-            params.u_pickColor[1] = pick_g;
-            params.u_pickColor[2] = pick_b;
-            params.u_pickColor[3] = 0.0f;  // std140 vec3 pad
-            ctx.ctx2->device().upload_buffer(
-                params_ubo_,
-                std::span<const uint8_t>(
-                    reinterpret_cast<const uint8_t*>(&params),
-                    sizeof(params)));
-            ctx.ctx2->bind_uniform_buffer(0, params_ubo_);
+            // Fast path: push constants for model + pick color (80 B).
+            IdPushStd140 push{};
+            std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+            push.u_pickColor[0] = pick_r;
+            push.u_pickColor[1] = pick_g;
+            push.u_pickColor[2] = pick_b;
+            push.u_pickColor[3] = 1.0f;
+            ctx.ctx2->set_push_constants(&push, sizeof(push));
 
             Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
             if (bind.index_count == 0) continue;
