@@ -92,23 +92,30 @@ class FogEffect(PostEffect):
             self._shader = TcShader.from_sources(FOG_VERT, FOG_FRAG, "", "FogEffect")
         return self._shader
 
-    def draw(self, gfx,color_tex, extra_textures, size, target_fbo=None):
-        depth_tex = extra_textures.get("depth")
+    def draw(self, ctx2, color_tex2, target_tex2, extra_tex2, size):
+        from tgfx._tgfx_native import tc_shader_ensure_tgfx2
+
+        depth_tex2 = extra_tex2.get("depth")
 
         shader = self._get_shader()
-        shader.ensure_ready()
-        shader.use()
+        pair = tc_shader_ensure_tgfx2(ctx2, shader)
+        if not pair.vs or not pair.fs:
+            return
 
-        color_tex.bind(0)
-        shader.set_uniform_int("u_color", 0)
+        def setup(ctx2):
+            ctx2.bind_shader(pair.vs, pair.fs)
+            ctx2.bind_sampled_texture(0, color_tex2)
+            ctx2.set_uniform_int("u_color", 0)
 
-        if depth_tex is not None:
-            depth_tex.bind(1)
-            shader.set_uniform_int("u_depth", 1)
+            if depth_tex2 is not None:
+                ctx2.bind_sampled_texture(1, depth_tex2)
+                ctx2.set_uniform_int("u_depth", 1)
 
-        fc = self._fog_color
-        shader.set_uniform_vec3("u_fog_color", float(fc[0]), float(fc[1]), float(fc[2]))
-        shader.set_uniform_float("u_fog_start", self._fog_start if depth_tex else 1.0)
-        shader.set_uniform_float("u_fog_end", self._fog_end if depth_tex else 1.0)
+            fc = self._fog_color
+            ctx2.set_uniform_vec3("u_fog_color", float(fc[0]), float(fc[1]), float(fc[2]))
+            ctx2.set_uniform_float("u_fog_start", self._fog_start if depth_tex2 else 1.0)
+            ctx2.set_uniform_float("u_fog_end", self._fog_end if depth_tex2 else 1.0)
 
-        gfx.draw_ui_textured_quad()
+            ctx2.draw_fullscreen_quad()
+
+        PostEffect._simple_draw(ctx2, target_tex2, size, setup)

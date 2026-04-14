@@ -24,7 +24,8 @@ class PostEffect:
 
     По умолчанию:
     - не требует дополнительных ресурсов (кроме основного color);
-    - получает текущую color-текстуру и словарь extra_textures.
+    - получает tgfx2 handles для входных/extra текстур;
+    - рисует через RenderContext2 внутри открытого pass'а.
     """
 
     name: str = "unnamed_post_effect"
@@ -153,25 +154,52 @@ class PostEffect:
 
     def draw(
         self,
-        gfx: "GraphicsBackend",
-        color_tex: "GPUTextureHandle",
-        extra_textures: dict[str, "GPUTextureHandle"],
+        ctx2,
+        color_tex2,
+        target_tex2,
+        extra_tex2: dict,
         size: tuple[int, int],
-        target_fbo: "FramebufferHandle | None" = None,
     ):
         """
-        color_tex      – текущая цветовая текстура (что пришло с предыдущего шага).
-        extra_textures – карта имя_ресурса -> GPUTextureHandle (id, depth, normals...).
-        size           – (width, height) целевого буфера.
-        target_fbo     – целевой FBO (уже привязан, но передаётся для эффектов
-                         с внутренними проходами, которым нужно восстановить его).
+        ctx2        — tgfx2 Tgfx2RenderContext (ни в каком pass'е не находится
+                      на момент вызова — эффект сам открывает/закрывает).
+        color_tex2  — Tgfx2TextureHandle входного color (предыдущий шаг).
+        target_tex2 — Tgfx2TextureHandle куда надо нарисовать конечный
+                      результат. Эффект должен закончить рендером именно
+                      сюда.
+        extra_tex2  — карта имя_ресурса -> Tgfx2TextureHandle (id, depth, ...).
+        size        — (width, height) целевого буфера.
 
-        Эффект внутри сам:
-        - биндит нужные текстуры по юнитам;
-        - включает свой шейдер;
-        - рисует фуллскрин-квад.
+        Эффект внутри:
+        - открывает один или несколько ctx2.begin_pass/end_pass;
+        - последний pass — в target_tex2;
+        - компилирует шейдер через tc_shader_ensure_tgfx2;
+        - биндит текстуры/униформы, draw_fullscreen_quad().
+
+        Простые одноступенчатые эффекты могут использовать
+        PostEffect._simple_draw(ctx2, target_tex2, size, setup_fn).
         """
         raise NotImplementedError
+
+    @staticmethod
+    def _simple_draw(ctx2, target_tex2, size, setup_fn):
+        """
+        Helper для одноступенчатых эффектов: открывает pass на target_tex2,
+        выставляет стандартный state (depth off, blend off, cull none),
+        вызывает setup_fn(ctx2) где эффект биндит свой шейдер, текстуры,
+        униформы и вызывает draw_fullscreen_quad, затем закрывает pass.
+        """
+        from tgfx._tgfx_native import CULL_NONE, PIXEL_RGBA8
+        w, h = size
+        ctx2.begin_pass(target_tex2)
+        ctx2.set_viewport(0, 0, w, h)
+        ctx2.set_depth_test(False)
+        ctx2.set_depth_write(False)
+        ctx2.set_blend(False)
+        ctx2.set_cull(CULL_NONE)
+        ctx2.set_color_format(PIXEL_RGBA8)
+        setup_fn(ctx2)
+        ctx2.end_pass()
 
     def clear_callbacks(self) -> None:
         """Clear any callbacks that reference external objects. Override in subclasses."""
@@ -343,36 +371,20 @@ class PostProcessPass(RenderFramePass):
         if isinstance(ctx.graphics, NOPGraphicsBackend):
             return
 
+        if ctx.ctx2 is None:
+            from tcbase import log
+            log.error(f"[PostProcessPass] '{self.pass_name}': ctx.ctx2 is None — PostProcessPass is tgfx2-only")
+            return
+
+        from tgfx._tgfx_native import wrap_fbo_color_as_tgfx2
+
         px, py, pw, ph = ctx.rect
         size = (pw, ph)
+        ctx2 = ctx.ctx2
 
         fb_in = ctx.reads_fbos.get(self.input_res)
         if fb_in is None:
             return
-
-        # Внутренняя точка дебага
-        debug_symbol = self.get_debug_internal_point()
-        debugger_window = self.get_debugger_window()
-
-        # Извлекаем текстуру с учетом типа ресурса
-        color_tex = _get_texture_from_resource(fb_in)
-        if color_tex is None:
-            return
-
-        # --- extra textures ---
-        required_resources: set[str] = set()
-        for eff in self.effects:
-            required_resources |= set(eff.required_resources())
-
-        extra_textures: dict[str, "GPUTextureHandle"] = {}
-        for res_name in required_resources:
-            fb = ctx.reads_fbos.get(res_name)
-            if fb is None:
-                continue
-            # Извлекаем текстуру с учетом типа ресурса
-            tex = _get_texture_from_resource(fb)
-            if tex is not None:
-                extra_textures[res_name] = tex
 
         fb_out_final = ctx.writes_fbos.get(self.output_res)
         if fb_out_final is None:
@@ -380,46 +392,66 @@ class PostProcessPass(RenderFramePass):
 
         # --- нет эффектов -> блит и выходим ---
         if not self.effects:
-            blit_fbo_to_fbo(ctx.graphics, fb_in, fb_out_final, size)
+            blit_fbo_to_fbo(ctx2, fb_in, fb_out_final, size)
             return
 
-        current_tex = color_tex
+        # Внутренняя точка дебага
+        debug_symbol = self.get_debug_internal_point()
 
-        # <<< ВАЖНО: постпроцесс — чисто экранная штука, отключаем глубину >>>
-        ctx.graphics.set_depth_test(False)
-        ctx.graphics.set_depth_mask(False)
+        # Обернём входной FBO как tgfx2 текстуру
+        color_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb_in)
+        if not color_tex2:
+            from tcbase import log
+            log.error(f"[PostProcessPass] '{self.pass_name}': failed to wrap input '{self.input_res}'")
+            return
 
-        # Debugger: блит входной текстуры если выбран символ "input"
+        # Extra textures: обернуть каждый нужный FBO как tgfx2 tex
+        required_resources: set[str] = set()
+        for eff in self.effects:
+            required_resources |= set(eff.required_resources())
+
+        extra_tex2: dict = {}
+        for res_name in required_resources:
+            fb = ctx.reads_fbos.get(res_name)
+            if fb is None:
+                continue
+            tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb)
+            if tex2:
+                extra_tex2[res_name] = tex2
+
+        current_tex2 = color_tex2
+
         if debug_symbol == "input":
             self._blit_to_debugger(ctx.graphics, fb_in)
 
-        try:
-            for i, effect in enumerate(self.effects):
-                is_last = (i == len(self.effects) - 1)
+        # Эффект сам открывает/закрывает свои ctx2 passes. PostProcessPass
+        # лишь решает куда направить выход: в temp FBO (промежуточные
+        # шаги) или в финальный output (последний эффект).
+        for i, effect in enumerate(self.effects):
+            is_last = (i == len(self.effects) - 1)
 
-                if is_last:
-                    fb_target = fb_out_final
-                else:
-                    fb_target = self._get_temp_fbo(ctx.graphics, i % 2, size)
+            if is_last:
+                fb_target = fb_out_final
+            else:
+                fb_target = self._get_temp_fbo(ctx.graphics, i % 2, size)
 
-                ctx.graphics.bind_framebuffer(fb_target)
-                ctx.graphics.set_viewport(0, 0, pw, ph)
+            target_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb_target)
+            if not target_tex2:
+                from tcbase import log
+                log.error(f"[PostProcessPass] '{self.pass_name}': failed to wrap target for effect '{effect.name}'")
+                break
 
-                effect.draw(ctx.graphics, current_tex, extra_textures, size, fb_target)
-                ctx.graphics.check_gl_error(f"PostFX: {effect.name}")
+            effect.draw(ctx2, current_tex2, target_tex2, extra_tex2, size)
 
-                # Debugger: блит после применения эффекта если выбран его символ
-                if debug_symbol == self._effect_symbol(i, effect):
-                    self._blit_to_debugger(ctx.graphics, fb_target)
+            if debug_symbol == self._effect_symbol(i, effect):
+                self._blit_to_debugger(ctx.graphics, fb_target)
 
-                # Извлекаем текстуру с учетом типа ресурса
-                current_tex = _get_texture_from_resource(fb_target)
-                if current_tex is None:
+            # Выход этого эффекта становится входом следующего
+            if not is_last:
+                next_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb_target)
+                if not next_tex2:
                     break
-        finally:
-            # восстанавливаем "нормальное" состояние для последующих пассов
-            ctx.graphics.set_depth_test(True)
-            ctx.graphics.set_depth_mask(True)
+                current_tex2 = next_tex2
 
     def _blit_to_debug(
         self,

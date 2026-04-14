@@ -92,47 +92,102 @@ def _get_blit_shader() -> TcShader:
 
 
 def blit_fbo_to_fbo(
-    gfx: "GraphicsBackend",
+    ctx_or_gfx,
     src_fb,
     dst_fb,
     size: tuple[int, int],
 ):
+    """
+    Copy src_fb's color attachment into dst_fb via a fullscreen quad
+    shader. First argument can be either:
+      - the ctx2 Tgfx2RenderContext (preferred, post Stage 7);
+      - or the legacy GraphicsBackend (only supported for backwards
+        compat with a handful of callers that haven't migrated yet).
+
+    When src_fb is not a FramebufferHandle we silently no-op; that
+    matches the legacy implementation's ShadowMapArrayResource fallback.
+    """
     from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
 
-    # Для NOP бэкенда пропускаем реальные OpenGL операции
-    if isinstance(gfx, NOPGraphicsBackend):
+    if isinstance(ctx_or_gfx, NOPGraphicsBackend):
         return
 
+    # Detect which variant of the first argument we received.
+    from tgfx._tgfx_native import Tgfx2RenderContext  # type: ignore
+    if isinstance(ctx_or_gfx, Tgfx2RenderContext):
+        _blit_fbo_to_fbo_tgfx2(ctx_or_gfx, src_fb, dst_fb, size)
+        return
+
+    # Legacy path: compile shader via tgfx2 under the hood (Stage 6)
+    # and hit glUniform / draw_ui_textured_quad on the currently-bound
+    # program.
+    gfx = ctx_or_gfx
     w, h = size
 
-    # целевой FBO
     gfx.bind_framebuffer(dst_fb)
     gfx.set_viewport(0, 0, w, h)
-
-    # глубина нам не нужна
     gfx.set_depth_test(False)
     gfx.set_depth_mask(False)
 
-    # берём фуллскрин-квад-программу
     shader = _get_blit_shader()
     shader.ensure_ready()
     shader.use()
     shader.set_uniform_int("u_tex", 0)
 
-    # Извлекаем текстуру с учетом типа ресурса
     tex = _get_texture_from_resource(src_fb)
     if tex is None:
-        # Если не удалось получить текстуру, ничего не делаем
         gfx.set_depth_test(True)
         gfx.set_depth_mask(True)
         return
 
     tex.bind(0)
-
     gfx.draw_ui_textured_quad()
 
     gfx.set_depth_test(True)
     gfx.set_depth_mask(True)
+
+
+def _blit_fbo_to_fbo_tgfx2(ctx2, src_fb, dst_fb, size):
+    """ctx2 variant of blit_fbo_to_fbo — fullscreen blit through
+    RenderContext2. src_fb and dst_fb are legacy FramebufferHandles;
+    they get wrapped as external tgfx2 textures for the duration of
+    this draw."""
+    from tgfx._tgfx_native import (
+        tc_shader_ensure_tgfx2,
+        wrap_fbo_color_as_tgfx2,
+        CULL_NONE,
+        PIXEL_RGBA8,
+    )
+    from termin.graphics import FramebufferHandle
+
+    if not isinstance(src_fb, FramebufferHandle):
+        return
+    if not isinstance(dst_fb, FramebufferHandle):
+        return
+
+    w, h = size
+    src_tex2 = wrap_fbo_color_as_tgfx2(ctx2, src_fb)
+    dst_tex2 = wrap_fbo_color_as_tgfx2(ctx2, dst_fb)
+    if not src_tex2 or not dst_tex2:
+        return
+
+    shader = _get_blit_shader()
+    pair = tc_shader_ensure_tgfx2(ctx2, shader)
+    if not pair.vs or not pair.fs:
+        return
+
+    ctx2.begin_pass(dst_tex2)
+    ctx2.set_viewport(0, 0, w, h)
+    ctx2.set_depth_test(False)
+    ctx2.set_depth_write(False)
+    ctx2.set_blend(False)
+    ctx2.set_cull(CULL_NONE)
+    ctx2.set_color_format(PIXEL_RGBA8)
+    ctx2.bind_shader(pair.vs, pair.fs)
+    ctx2.bind_sampled_texture(0, src_tex2)
+    ctx2.set_uniform_int("u_tex", 0)
+    ctx2.draw_fullscreen_quad()
+    ctx2.end_pass()
 
 
 class BlitPass(RenderFramePass):
