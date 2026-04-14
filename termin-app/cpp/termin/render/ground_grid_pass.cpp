@@ -1,7 +1,14 @@
 #include "ground_grid_pass.hpp"
 #include "tgfx/handles.hpp"
 #include "termin/camera/camera_component.hpp"
+#include "termin/render/tgfx2_bridge.hpp"
 #include <tcbase/tc_log.hpp>
+
+#include <tgfx2/render_context.hpp>
+#include <tgfx2/i_render_device.hpp>
+#include <tgfx2/opengl/opengl_render_device.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
+#include <tgfx2/enums.hpp>
 
 namespace termin {
 
@@ -139,18 +146,20 @@ void GroundGridPass::_ensure_shader() {
 }
 
 void GroundGridPass::execute(ExecuteContext& ctx) {
-    if (!ctx.graphics) return;
+    auto* ctx2 = ctx.ctx2;
+    if (!ctx2) {
+        tc::Log::error("[GroundGridPass] ctx.ctx2 is null — GroundGridPass is tgfx2-only");
+        return;
+    }
+    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx2->device());
+    if (!gl_dev) return;
 
-    // Get output FBO
     auto it = ctx.writes_fbos.find(output_res);
     if (it == ctx.writes_fbos.end() || it->second == nullptr) {
         return;
     }
-
     FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
     if (!fb) return;
-
-    // Need camera for matrices
     if (!ctx.camera) return;
 
     Mat44 view64  = ctx.camera->get_view_matrix();
@@ -163,35 +172,53 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     float near_clip = static_cast<float>(ctx.camera->near_clip);
     float far_clip  = static_cast<float>(ctx.camera->far_clip);
 
-    // Bind FBO and set viewport
-    ctx.graphics->bind_framebuffer(fb);
-    ctx.graphics->set_viewport(0, 0, fb->get_width(), fb->get_height());
+    // Wrap output FBO as tgfx2 textures. We use both color and depth:
+    // the fragment shader writes gl_FragDepth to punch the grid into the
+    // scene depth buffer so regular geometry still occludes it.
+    tgfx2::TextureHandle color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fb);
+    tgfx2::TextureHandle depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fb);
+    if (!color_tex2) return;
+    ctx2->defer_destroy(color_tex2);
+    if (depth_tex2) ctx2->defer_destroy(depth_tex2);
 
-    // Setup state: depth test ON (for depth write), blending ON (alpha fade), cull OFF
-    ctx.graphics->set_depth_test(true);
-    ctx.graphics->set_depth_mask(true);
-    ctx.graphics->set_blend(true);
-    ctx.graphics->set_blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
-    ctx.graphics->set_cull_face(false);
-
-    // Compile and use shader
+    // Compile the grid shader via the bridge (tgfx2 ShaderHandle pair).
     _ensure_shader();
-    _shader.ensure_ready();
-    _shader.use();
+    tc_shader* raw = tc_shader_get(_shader.handle);
+    if (!raw) return;
+    tgfx2::ShaderHandle vs2, fs2;
+    if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
 
-    // Set uniforms
-    _shader.set_uniform_mat4("u_inv_vp",     inv_vp.data);
-    _shader.set_uniform_mat4("u_view",        view.data);
-    _shader.set_uniform_mat4("u_projection",  proj.data);
-    _shader.set_uniform_float("u_near",       near_clip);
-    _shader.set_uniform_float("u_far",        far_clip);
+    ctx2->begin_pass(color_tex2, depth_tex2,
+                     /*clear_color=*/nullptr,
+                     /*clear_depth=*/1.0f,
+                     /*clear_depth_enabled=*/false);
+    ctx2->set_viewport(0, 0, fb->get_width(), fb->get_height());
 
-    // Draw fullscreen quad
-    ctx.graphics->draw_ui_textured_quad();
+    // Depth test ON + write, blend ON (alpha fade), no culling.
+    ctx2->set_depth_test(true);
+    ctx2->set_depth_write(true);
+    ctx2->set_blend(true);
+    ctx2->set_blend_func(tgfx2::BlendFactor::SrcAlpha,
+                         tgfx2::BlendFactor::OneMinusSrcAlpha);
+    ctx2->set_cull(tgfx2::CullMode::None);
+    ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
+    ctx2->set_depth_format(tgfx2::PixelFormat::D24_UNorm_S8_UInt);
 
-    // Restore state
-    ctx.graphics->set_blend(false);
-    ctx.graphics->set_cull_face(true);
+    // Bind our grid VS/FS (NOT the built-in FSQ VS) and draw the
+    // built-in fullscreen quad. The grid VS declares `a_pos` at
+    // location 0 — compatible with ctx2's FSQ VBO layout (aPos/aUV);
+    // aUV at location 1 is simply ignored by the VS.
+    ctx2->bind_shader(vs2, fs2);
+
+    // Grid uniforms via the transitional plain-uniform helpers.
+    ctx2->set_uniform_mat4("u_inv_vp",    inv_vp.data, /*transpose=*/false);
+    ctx2->set_uniform_mat4("u_view",      view.data,   /*transpose=*/false);
+    ctx2->set_uniform_mat4("u_projection", proj.data,  /*transpose=*/false);
+    ctx2->set_uniform_float("u_near", near_clip);
+    ctx2->set_uniform_float("u_far",  far_clip);
+
+    ctx2->draw_fullscreen_quad();
+    ctx2->end_pass();
 }
 
 // Register GroundGridPass in tc_pass_registry

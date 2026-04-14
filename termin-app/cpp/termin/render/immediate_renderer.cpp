@@ -1,6 +1,10 @@
 #include "immediate_renderer.hpp"
-#include "tgfx/graphics_backend.hpp"
-#include "tgfx/render_state.hpp"
+
+#include <tgfx2/render_context.hpp>
+#include <tgfx2/i_render_device.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
+#include <tgfx2/enums.hpp>
+#include <tgfx2/vertex_layout.hpp>
 
 extern "C" {
 #include "tc_profiler.h"
@@ -502,15 +506,13 @@ void ImmediateRenderer::arrow_solid(
 // Rendering
 // ============================================================
 
-void ImmediateRenderer::_ensure_shader(GraphicsBackend* graphics) {
+void ImmediateRenderer::_ensure_shader() {
     if (_shader.is_valid()) return;
-
     _shader = TcShader::from_sources(IMMEDIATE_VERT, IMMEDIATE_FRAG, "", "ImmediateRenderer");
-    _shader.ensure_ready();
 }
 
 void ImmediateRenderer::_flush_buffers(
-    GraphicsBackend* graphics,
+    tgfx2::RenderContext2* ctx2,
     std::vector<float>& lines,
     std::vector<float>& tris,
     const Mat44& view_matrix,
@@ -518,58 +520,61 @@ void ImmediateRenderer::_flush_buffers(
     bool depth_test,
     bool blend
 ) {
+    if (!ctx2) return;
     if (lines.empty() && tris.empty()) return;
 
     bool detailed = tc_profiler_detailed_rendering();
 
-    _ensure_shader(graphics);
+    _ensure_shader();
     if (!_shader.is_valid()) return;
 
-    // Setup render state
+    // Compile to tgfx2 ShaderHandle pair via bridge (cached per shader).
+    tc_shader* raw = tc_shader_get(_shader.handle);
+    if (!raw) return;
+    tgfx2::ShaderHandle vs2, fs2;
+    if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
+
     if (detailed) tc_profiler_begin_section("Setup");
-    RenderState state;
-    state.depth_test = depth_test;
-    state.depth_write = depth_test;
-    state.blend = blend;
-    state.blend_src = BlendFactor::SrcAlpha;
-    state.blend_dst = BlendFactor::OneMinusSrcAlpha;
-    state.cull = false;
-    graphics->apply_render_state(state);
+    ctx2->set_depth_test(depth_test);
+    ctx2->set_depth_write(depth_test);
+    ctx2->set_blend(blend);
+    if (blend) {
+        ctx2->set_blend_func(tgfx2::BlendFactor::SrcAlpha,
+                             tgfx2::BlendFactor::OneMinusSrcAlpha);
+    }
+    ctx2->set_cull(tgfx2::CullMode::None);
+    ctx2->bind_shader(vs2, fs2);
 
-    // Use shader and set uniforms
-    _shader.use();
-
-    // Convert Mat44 (double) to float for OpenGL
+    // 7 floats per vertex: x,y,z, r,g,b,a — matches draw_immediate_*
+    // vertex layout set inside ctx2's own helper. Pass uniforms now.
     float view_f[16], proj_f[16];
     for (int i = 0; i < 16; ++i) {
         view_f[i] = static_cast<float>(view_matrix.data[i]);
         proj_f[i] = static_cast<float>(proj_matrix.data[i]);
     }
-    _shader.set_uniform_mat4("u_view", view_f, false);
-    _shader.set_uniform_mat4("u_projection", proj_f, false);
+    ctx2->set_uniform_mat4("u_view", view_f, /*transpose=*/false);
+    ctx2->set_uniform_mat4("u_projection", proj_f, /*transpose=*/false);
     if (detailed) tc_profiler_end_section();
 
-    // Draw lines
     if (!lines.empty()) {
         if (detailed) tc_profiler_begin_section("Lines");
-        int vertex_count = static_cast<int>(lines.size() / 7);
-        graphics->draw_immediate_lines(lines.data(), vertex_count);
+        uint32_t vertex_count = static_cast<uint32_t>(lines.size() / 7);
+        ctx2->draw_immediate_lines(lines.data(), vertex_count);
         lines.clear();
         if (detailed) tc_profiler_end_section();
     }
 
-    // Draw triangles
     if (!tris.empty()) {
         if (detailed) tc_profiler_begin_section("Triangles");
-        int vertex_count = static_cast<int>(tris.size() / 7);
-        graphics->draw_immediate_triangles(tris.data(), vertex_count);
+        uint32_t vertex_count = static_cast<uint32_t>(tris.size() / 7);
+        ctx2->draw_immediate_triangles(tris.data(), vertex_count);
         tris.clear();
         if (detailed) tc_profiler_end_section();
     }
 }
 
 void ImmediateRenderer::flush(
-    GraphicsBackend* graphics,
+    tgfx2::RenderContext2* ctx2,
     const Mat44& view_matrix,
     const Mat44& proj_matrix,
     bool depth_test,
@@ -579,12 +584,12 @@ void ImmediateRenderer::flush(
 
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("Immediate:Flush");
-    _flush_buffers(graphics, line_vertices, tri_vertices, view_matrix, proj_matrix, depth_test, blend);
+    _flush_buffers(ctx2, line_vertices, tri_vertices, view_matrix, proj_matrix, depth_test, blend);
     if (profile) tc_profiler_end_section();
 }
 
 void ImmediateRenderer::flush_depth(
-    GraphicsBackend* graphics,
+    tgfx2::RenderContext2* ctx2,
     const Mat44& view_matrix,
     const Mat44& proj_matrix,
     bool blend
@@ -593,7 +598,7 @@ void ImmediateRenderer::flush_depth(
 
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("Immediate:FlushDepth");
-    _flush_buffers(graphics, line_vertices_depth, tri_vertices_depth, view_matrix, proj_matrix, true, blend);
+    _flush_buffers(ctx2, line_vertices_depth, tri_vertices_depth, view_matrix, proj_matrix, true, blend);
     if (profile) tc_profiler_end_section();
 }
 

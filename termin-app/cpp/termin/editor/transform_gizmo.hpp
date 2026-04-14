@@ -11,9 +11,10 @@
 #include <optional>
 #include <string>
 
+namespace tgfx2 { class RenderContext2; }
+
 namespace termin {
 class SolidPrimitiveRenderer;
-class GraphicsBackend;
 
 // ============================================================
 // TransformElement
@@ -102,14 +103,14 @@ public:
 
     void draw_solid(
         SolidPrimitiveRenderer* renderer,
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj
     ) override;
 
     void draw_transparent_solid(
         SolidPrimitiveRenderer* renderer,
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj
     ) override;

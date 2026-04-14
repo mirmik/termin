@@ -72,6 +72,17 @@ class UnifiedGizmoPass(RenderFramePass):
         profiler = Profiler.instance()
 
         with profiler.section("UnifiedGizmoPass"):
+            if ctx.ctx2 is None:
+                from tcbase import log
+                log.error(f"[UnifiedGizmoPass] ctx.ctx2 is None — UnifiedGizmoPass is tgfx2-only")
+                return
+
+            from tgfx._tgfx_native import (
+                wrap_fbo_color_as_tgfx2,
+                CULL_NONE,
+                PIXEL_RGBA8,
+            )
+
             manager = self._get_gizmo_manager()
             renderer = ImmediateRenderer.instance()
 
@@ -83,43 +94,51 @@ class UnifiedGizmoPass(RenderFramePass):
                 log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is None, skipping")
                 return
 
-            # Check type - must be FramebufferHandle
             from termin.graphics import FramebufferHandle
             if not isinstance(fb, FramebufferHandle):
                 from tcbase import log
                 log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle, skipping")
                 return
 
-            with profiler.section("Setup"):
-                ctx.graphics.bind_framebuffer(fb)
-                ctx.graphics.set_viewport(0, 0, pw, ph)
+            ctx2 = ctx.ctx2
+            target_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb)
+            if not target_tex2:
+                return
 
-                # Clear depth so gizmo renders on top of scene
-                ctx.graphics.clear_depth()
+            with profiler.section("Setup"):
+                # Open one ctx2 pass and clear depth — gizmos render on
+                # top of scene. GizmoManager/ImmediateRenderer render
+                # into this pass via their ctx2 entry points.
+                ctx2.begin_pass(
+                    target_tex2,
+                    clear_depth_enabled=True,
+                    clear_depth=1.0,
+                )
+                ctx2.set_viewport(0, 0, pw, ph)
+                ctx2.set_color_format(PIXEL_RGBA8)
 
                 view = ctx.camera.get_view_matrix()
                 proj = ctx.camera.get_projection_matrix()
 
-            # Render all gizmos
-            if manager is not None and renderer is not None:
-                with profiler.section("GizmoRender"):
-                    manager.render(renderer, ctx.graphics, view, proj)
+            try:
+                if manager is not None and renderer is not None:
+                    with profiler.section("GizmoRender"):
+                        manager.render(renderer, ctx2, view, proj)
 
-            # Flush debug primitives added by components via ImmediateRenderer.instance()
-            if renderer is not None:
-                # First flush depth-tested primitives (with depth test enabled)
-                renderer.flush_depth(
-                    graphics=ctx.graphics,
-                    view_matrix=view,
-                    proj_matrix=proj,
-                    blend=True,
-                )
-                # Then flush non-depth-tested primitives (overlay)
-                renderer.flush(
-                    graphics=ctx.graphics,
-                    view_matrix=view,
-                    proj_matrix=proj,
-                    depth_test=False,
-                    blend=True,
-                )
-                renderer.begin()  # Clear for next frame
+                if renderer is not None:
+                    renderer.flush_depth(
+                        ctx2=ctx2,
+                        view_matrix=view,
+                        proj_matrix=proj,
+                        blend=True,
+                    )
+                    renderer.flush(
+                        ctx2=ctx2,
+                        view_matrix=view,
+                        proj_matrix=proj,
+                        depth_test=False,
+                        blend=True,
+                    )
+                    renderer.begin()
+            finally:
+                ctx2.end_pass()

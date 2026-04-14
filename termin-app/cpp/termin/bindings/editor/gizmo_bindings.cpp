@@ -11,8 +11,8 @@
 #include "termin/editor/transform_gizmo.hpp"
 #include <termin/entity/entity.hpp>
 #include "termin/render/immediate_renderer.hpp"
-#include "tgfx/graphics_backend.hpp"
 #include "termin/render/solid_primitive_renderer.hpp"
+#include <tgfx2/render_context.hpp>
 
 namespace nb = nanobind;
 
@@ -68,11 +68,11 @@ public:
 
     void draw_solid(
         SolidPrimitiveRenderer* renderer,
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj
     ) override {
-        NB_OVERRIDE(draw_solid, renderer, graphics, view, proj);
+        NB_OVERRIDE(draw_solid, renderer, ctx2, view, proj);
     }
 
     void draw_transparent(ImmediateRenderer* renderer) override {
@@ -81,11 +81,11 @@ public:
 
     void draw_transparent_solid(
         SolidPrimitiveRenderer* renderer,
-        GraphicsBackend* graphics,
+        tgfx2::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj
     ) override {
-        NB_OVERRIDE(draw_transparent_solid, renderer, graphics, view, proj);
+        NB_OVERRIDE(draw_transparent_solid, renderer, ctx2, view, proj);
     }
 
     std::vector<GizmoCollider> get_colliders() override {
@@ -160,15 +160,15 @@ void bind_gizmo(nb::module_& m) {
         // render with float64 matrices (from camera)
         .def("render", [](GizmoManager& self,
                           ImmediateRenderer* renderer,
-                          GraphicsBackend* graphics,
+                          tgfx2::RenderContext2* ctx2,
                           nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
                           nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj) {
-            self.render(renderer, graphics, ndarray_to_mat44f(view), ndarray_to_mat44f(proj));
-        }, nb::arg("renderer"), nb::arg("graphics"), nb::arg("view"), nb::arg("proj"))
+            self.render(renderer, ctx2, ndarray_to_mat44f(view), ndarray_to_mat44f(proj));
+        }, nb::arg("renderer"), nb::arg("ctx2"), nb::arg("view"), nb::arg("proj"))
         // render with Mat44 (double)
         .def("render", [](GizmoManager& self,
                           ImmediateRenderer* renderer,
-                          GraphicsBackend* graphics,
+                          tgfx2::RenderContext2* ctx2,
                           const Mat44& view,
                           const Mat44& proj) {
             Mat44f view_f, proj_f;
@@ -176,8 +176,8 @@ void bind_gizmo(nb::module_& m) {
                 view_f.data[i] = static_cast<float>(view.data[i]);
                 proj_f.data[i] = static_cast<float>(proj.data[i]);
             }
-            self.render(renderer, graphics, view_f, proj_f);
-        }, nb::arg("renderer"), nb::arg("graphics"), nb::arg("view"), nb::arg("proj"))
+            self.render(renderer, ctx2, view_f, proj_f);
+        }, nb::arg("renderer"), nb::arg("ctx2"), nb::arg("view"), nb::arg("proj"))
         // raycast
         .def("raycast", [](GizmoManager& self,
                            nb::ndarray<nb::numpy, float, nb::shape<3>> ray_origin,
