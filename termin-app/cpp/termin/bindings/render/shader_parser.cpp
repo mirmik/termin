@@ -181,6 +181,29 @@ void bind_shader_parser(nb::module_& m) {
     // Alias for typo compatibility
     m.attr("ShasderStage") = m.attr("ShaderStage");
 
+    // --- Material UBO layout (std140 block metadata from shader parser) ---
+    nb::class_<MaterialUboEntry>(m, "MaterialUboEntry")
+        .def(nb::init<>())
+        .def_rw("name",          &MaterialUboEntry::name)
+        .def_rw("property_type", &MaterialUboEntry::property_type)
+        .def_rw("offset",        &MaterialUboEntry::offset)
+        .def_rw("size",          &MaterialUboEntry::size)
+        .def("__repr__", [](const MaterialUboEntry& e) {
+            return "<MaterialUboEntry " + e.name + ":" + e.property_type +
+                   " @" + std::to_string(e.offset) +
+                   " +" + std::to_string(e.size) + ">";
+        });
+
+    nb::class_<MaterialUboLayout>(m, "MaterialUboLayout")
+        .def(nb::init<>())
+        .def_rw("entries",    &MaterialUboLayout::entries)
+        .def_rw("block_size", &MaterialUboLayout::block_size)
+        .def("empty",         &MaterialUboLayout::empty)
+        .def("__repr__", [](const MaterialUboLayout& l) {
+            return "<MaterialUboLayout " + std::to_string(l.entries.size()) +
+                   " entries, " + std::to_string(l.block_size) + " bytes>";
+        });
+
     // --- ShaderPhase ---
     nb::class_<ShaderPhase>(m, "ShaderPhase")
         .def(nb::init<>())
@@ -224,6 +247,11 @@ void bind_shader_parser(nb::module_& m) {
         .def_rw("gl_cull", &ShaderPhase::gl_cull)
         .def_rw("stages", &ShaderPhase::stages)
         .def_rw("uniforms", &ShaderPhase::uniforms)
+        // std140 material UBO layout computed by the parser. Populated
+        // when the phase has @property declarations (and the parser
+        // synthesized a MaterialParams block for the phase). Empty
+        // layout on raw shaders or system shaders without properties.
+        .def_rw("material_ubo_layout", &ShaderPhase::material_ubo_layout)
         // Backward compatibility: identity transform
         .def_static("from_tree", [](const ShaderPhase& phase) {
             return phase;

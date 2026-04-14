@@ -171,6 +171,8 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
         if self._data is None or not self._uuid:
             return
 
+        from termin._native import log
+
         # Update tc_shader for each phase so existing TcShaders see new sources
         for phase in self._data.phases:
             phase_mark = phase.phase_mark
@@ -179,7 +181,17 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
             # Find existing tc_shader (don't create - it's created by MaterialPhase)
             tc = TcShader.from_uuid(phase_uuid)
             if not tc.is_valid:
+                log.error(
+                    f"[Stage 5.H bridge] _update_tc_shaders: tc_shader not found "
+                    f"for phase_uuid={phase_uuid} (shader={self._name}, phase={phase_mark}) — "
+                    f"layout push will be skipped"
+                )
                 continue
+
+            log.error(
+                f"[Stage 5.H bridge] _update_tc_shaders: pushing to {self._name} phase={phase_mark} "
+                f"layout.block_size={phase.material_ubo_layout.block_size if phase.material_ubo_layout else 0}"
+            )
 
             # Get sources from phase
             vs = phase.stages.get("vertex")
@@ -192,6 +204,23 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
 
             # Update sources in tc_shader (bumps version if changed)
             tc.set_sources(vertex_src, fragment_src, geometry_src, self._name, str(self._source_path) if self._source_path else "")
+
+            # Push the std140 material UBO layout computed by the parser
+            # (if any) so runtime pass code can query tc_shader->material_ubo_*
+            # without re-parsing the shader text. Travels with set_sources
+            # because hot-reload is driven from here.
+            layout = phase.material_ubo_layout
+            if layout is not None and layout.block_size > 0:
+                entries = [
+                    (e.name, e.property_type, e.offset, e.size)
+                    for e in layout.entries
+                ]
+                tc.set_material_ubo_layout(entries, layout.block_size)
+            else:
+                # Explicit clear so stale layouts from a previous version
+                # of the same UUID don't linger after a hot-reload that
+                # removes @property declarations.
+                tc.set_material_ubo_layout([], 0)
 
     def _on_loaded(self) -> None:
         """After loading/reloading, update tc_shader registry for hot-reload."""

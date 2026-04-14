@@ -1,10 +1,14 @@
 #include "color_pass.hpp"
 #include "termin/camera/render_camera_utils.hpp"
+#include "termin/render/material_ubo_apply.hpp"
 
 #include <optional>
+#include <cstdlib>
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 #include "termin/lighting/lighting_upload.hpp"
+#include "tgfx2/render_context.hpp"
+#include "tgfx2/i_render_device.hpp"
 #include <termin/render/frame_graph_debugger_core.hpp>
 extern "C" {
 #include <tgfx/resources/tc_shader.h>
@@ -353,8 +357,16 @@ void ColorPass::execute_with_data(
     float ambient_intensity,
     const std::vector<ShadowMapArrayEntry>& shadow_maps,
     const ShadowSettings& shadow_settings,
-    uint64_t layer_mask
+    uint64_t layer_mask,
+    tgfx2::IRenderDevice* tgfx2_device
 ) {
+    // Pilot: TERMIN_TGFX2_MATERIAL_UBO=1 enables the material UBO path.
+    // Gated here so a single env var flip toggles the whole ColorPass
+    // draw loop onto the new path without touching per-draw code.
+    const bool tgfx2_material_ubo_enabled = [] {
+        const char* env = std::getenv("TERMIN_TGFX2_MATERIAL_UBO");
+        return env && env[0] && env[0] != '0';
+    }();
     // Get output framebuffer
     auto it = writes_fbos.find(output_res);
     if (it == writes_fbos.end() || it->second == nullptr) {
@@ -561,6 +573,37 @@ void ColorPass::execute_with_data(
                 );
                 last_material_phase = dc.phase;
             }
+
+            // Stage 5.H pilot: if the shader has a std140 material UBO
+            // layout (synthesized by the parser when @features material_ubo
+            // is set), pack the phase uniforms into the phase-owned UBO
+            // and bind it at slot MATERIAL_UBO_BINDING. Legacy
+            // tc_material_phase_apply_with_mvp above already set u_model /
+            // u_view / u_projection via glUniform*; the @property uniforms
+            // that moved into the block had their plain `uniform` decls
+            // stripped from the GLSL so the legacy apply silently no-ops
+            // them (glGetUniformLocation returns -1).
+            if (tgfx2_material_ubo_enabled && shader_changed) {
+                // One-line diagnostic per shader change so we can trace
+                // which materials are seen by the pilot path and what
+                // state their shaders are in.
+                tc::Log::error("[Stage 5.H pilot] ColorPass shader=%s "
+                               "block_size=%u tgfx2_device=%p env_on=%d",
+                               shader_to_use.name(),
+                               raw_shader->material_ubo_block_size,
+                               (void*)tgfx2_device,
+                               (int)tgfx2_material_ubo_enabled);
+            }
+            if (tgfx2_material_ubo_enabled && tgfx2_device &&
+                raw_shader->material_ubo_block_size > 0) {
+                if (apply_material_phase_ubo_gl(
+                        dc.phase, raw_shader, MATERIAL_UBO_BINDING, *tgfx2_device)) {
+                    // Link the compiled program's MaterialParams block
+                    // to our binding slot. set_block_binding is cheap
+                    // to call repeatedly (GL caches it on the program).
+                    shader_to_use.set_block_binding("MaterialParams", MATERIAL_UBO_BINDING);
+                }
+            }
         }
         if (graphics->check_gl_error("after tc_material_phase_apply_with_mvp")) {
             tc::Log::error("  shader: %s, phase->uniform_count=%zu, phase->texture_count=%zu",
@@ -766,6 +809,11 @@ void ColorPass::execute(ExecuteContext& ctx) {
         }
     }
 
+    tgfx2::IRenderDevice* tgfx2_dev = nullptr;
+    if (ctx.ctx2) {
+        tgfx2_dev = &ctx.ctx2->device();
+    }
+
     execute_with_data(
         ctx.graphics,
         ctx.reads_fbos,
@@ -780,7 +828,8 @@ void ColorPass::execute(ExecuteContext& ctx) {
         ambient_intensity,
         shadow_maps,
         shadow_settings,
-        ctx.layer_mask
+        ctx.layer_mask,
+        tgfx2_dev
     );
 
     if (profile) tc_profiler_end_section();

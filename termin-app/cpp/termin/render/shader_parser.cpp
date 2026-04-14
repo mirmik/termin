@@ -351,6 +351,24 @@ bool pack_one(const std::string& property_type,
 
 } // namespace
 
+namespace {
+
+// Two property_type strings are "compatible" for std140 packing if they
+// pack to the same std140 slot layout. This is needed because the
+// runtime value side (tc_uniform_value → MaterialProperty) doesn't know
+// whether the original declaration was `Color` or `Vec4` — both round-
+// trip through a vec4 of floats. Similarly, Float/Int can be written
+// through the same 4-byte slot, and Bool packs identically to Int
+// (std140 rule: Bool is stored as 32-bit uint).
+bool property_types_compatible(const std::string& a, const std::string& b) {
+    if (a == b) return true;
+    // Color and Vec4 are the same std140 payload.
+    if ((a == "Color" && b == "Vec4") || (a == "Vec4" && b == "Color")) return true;
+    return false;
+}
+
+} // namespace
+
 void std140_pack(const MaterialUboLayout& layout,
                  const std::vector<MaterialProperty>& values,
                  uint8_t* out_buffer) {
@@ -370,8 +388,11 @@ void std140_pack(const MaterialUboLayout& layout,
 
         // Type must agree with what the layout expects. Mismatches are
         // skipped to avoid writing garbage into the wrong slot.
-        if (match->property_type != entry.property_type) continue;
+        if (!property_types_compatible(match->property_type, entry.property_type)) continue;
 
+        // Always dispatch on the layout's declared type — pack_one reads
+        // the layout type to know how many floats to write, and Color
+        // packs as a 4-float Vec4.
         pack_one(entry.property_type, match->default_value,
                  out_buffer + entry.offset);
     }
@@ -794,11 +815,10 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
 
     ShaderMultyPhaseProgramm result(program_name, std::move(phases), "", std::move(features));
 
-    // Stage 2 of tgfx2 migration: if the program opted into material_ubo,
-    // synthesize a std140 MaterialParams block per phase and rewrite stage
-    // sources to reference it. Properties that feed the UBO are removed from
-    // the raw GLSL (their values now come from the block); textures stay as
-    // plain sampler uniforms.
+    // Synthesize a std140 MaterialParams block per phase when the program
+    // opted into material_ubo. Will be made unconditional at the end of
+    // Stage 5.H once the dispatcher + per-phase UBO lifecycle are in
+    // place and one pilot shader is validated end-to-end.
     if (result.has_feature("material_ubo")) {
         for (auto& phase : result.phases) {
             MaterialUboLayout layout = compute_std140_layout(phase.uniforms);
