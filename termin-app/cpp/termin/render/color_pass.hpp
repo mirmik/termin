@@ -14,6 +14,7 @@
 
 namespace tgfx2 {
 class IRenderDevice;
+class RenderContext2;
 }
 #include "tgfx/graphics_backend.hpp"
 #include "tgfx/render_state.hpp"
@@ -133,13 +134,16 @@ public:
         const std::vector<ShadowMapArrayEntry>& shadow_maps,
         const ShadowSettings& shadow_settings,
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL,
-        // Optional tgfx2 device access. When non-null AND the
-        // TERMIN_TGFX2_MATERIAL_UBO env var is set, materials whose
-        // shaders have a std140 material UBO layout are bound via
-        // apply_material_phase_ubo_gl at slot MATERIAL_UBO_BINDING
-        // instead of going through per-uniform glUniform*. Legacy
-        // fallback otherwise. Pilot path for Stage 5.H.
-        tgfx2::IRenderDevice* tgfx2_device = nullptr
+        // Optional tgfx2 device access. Non-null whenever the pipeline
+        // is running with a RenderContext2 available. Used by the
+        // material UBO dispatcher and (when TERMIN_TGFX2_COLOR is set)
+        // by the ctx2 pass wrapper.
+        tgfx2::IRenderDevice* tgfx2_device = nullptr,
+        // Optional tgfx2 render context. When TERMIN_TGFX2_COLOR is
+        // set and this is non-null, ColorPass opens a ctx2 render pass
+        // around the legacy draw loop (FBO, viewport, clear) — the
+        // first step of Stage 5.K full ColorPass migration.
+        tgfx2::RenderContext2* ctx2 = nullptr
     );
 
     // Override from CxxFramePass
