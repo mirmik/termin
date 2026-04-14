@@ -510,17 +510,46 @@ void ColorPass::execute_with_data(
         const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
 
-        auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
-        if (!drawable) continue;
+        // Only cast the drawable userdata to Drawable* when the component
+        // actually installed the C++ drawable vtable. Python drawables use
+        // the same capability slot with a PyObject* userdata and a
+        // different C vtable — casting that to Drawable* and calling
+        // virtual methods on it is undefined behaviour and was the cause
+        // of the Stage 6 post-switch segfault in chronosquad.
+        Drawable* drawable = nullptr;
+        if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
+            drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
+        }
 
-        Mat44f model = drawable->get_model_matrix(dc.entity);
+        Mat44f model;
+        if (drawable) {
+            model = drawable->get_model_matrix(dc.entity);
+        } else {
+            // For Python (or otherwise non-C++) drawables we can't call
+            // into Drawable virtuals. Derive the model matrix from the
+            // entity's transform — same as Drawable::get_model_matrix's
+            // default implementation — and route the draw through the
+            // legacy C vtable via tc_component_draw_geometry below.
+            Entity e(dc.component->owner);
+            double m[16];
+            e.transform().world_matrix(m);
+            for (int i = 0; i < 16; ++i) {
+                model.data[i] = static_cast<float>(m[i]);
+            }
+        }
 
         // Non-mesh drawable fallback: flush the pending tgfx2 state,
         // bind the legacy program via TcShader::use(), and hand off to
         // the component's draw_geometry(). The tgfx2 program will be
         // re-bound automatically on the next mesh-backed draw via
         // bind_shader + set_vertex_layout.
-        tc_mesh* mesh = drawable->get_mesh_for_phase(phase_mark, dc.geometry_id);
+        //
+        // Non-C++ drawables (drawable == nullptr) ALWAYS take this path —
+        // we can't ask them for a tc_mesh so we treat them as non-mesh
+        // and hand the draw back to the C vtable.
+        tc_mesh* mesh = drawable
+            ? drawable->get_mesh_for_phase(phase_mark, dc.geometry_id)
+            : nullptr;
         if (!mesh) {
             ctx2->flush_pipeline();
 

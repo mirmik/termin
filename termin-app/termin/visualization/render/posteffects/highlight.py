@@ -107,37 +107,44 @@ class HighlightEffect(PostEffect):
             self._shader = TcShader.from_sources(HIGHLIGHT_VERT, HIGHLIGHT_FRAG, "", "HighlightEffect")
         return self._shader
 
-    def draw(self, gfx, color_tex, extra_textures, size, target_fbo=None):
-        w, h = size
-        tex_id = extra_textures.get("id")
+    def draw(self, ctx2, color_tex2, target_tex2, extra_tex2, size):
+        from tgfx._tgfx_native import tc_shader_ensure_tgfx2
 
+        w, h = size
+        tex_id2 = extra_tex2.get("id")
         selected_id = self._get_id() if self._get_id else 0
 
         shader = self._get_shader()
-        shader.ensure_ready()
-        shader.use()
+        pair = tc_shader_ensure_tgfx2(ctx2, shader)
+        if not pair.vs or not pair.fs:
+            return
 
-        color_tex.bind(0)
-        shader.set_uniform_int("u_color", 0)
+        enabled = (tex_id2 is not None) and (selected_id > 0)
 
-        enabled = (tex_id is not None) and (selected_id > 0)
-        shader.set_uniform_float("u_enabled", 1.0 if enabled else 0.0)
+        def setup(ctx2):
+            ctx2.bind_shader(pair.vs, pair.fs)
+            ctx2.bind_sampled_texture(0, color_tex2)
+            ctx2.set_uniform_int("u_color", 0)
+            ctx2.set_uniform_float("u_enabled", 1.0 if enabled else 0.0)
 
-        if enabled:
-            tex_id.bind(1)
-            shader.set_uniform_int("u_id", 1)
+            if enabled:
+                ctx2.bind_sampled_texture(1, tex_id2)
+                ctx2.set_uniform_int("u_id", 1)
+                sel_color = id_to_rgb(selected_id)
+                ctx2.set_uniform_vec3("u_selected_color",
+                                      float(sel_color[0]), float(sel_color[1]), float(sel_color[2]))
 
-            sel_color = id_to_rgb(selected_id)
-            shader.set_uniform_vec3("u_selected_color", float(sel_color[0]), float(sel_color[1]), float(sel_color[2]))
+            texel_x = 1.0 / max(1, w)
+            texel_y = 1.0 / max(1, h)
+            ctx2.set_uniform_vec2("u_texel_size", texel_x, texel_y)
 
-        texel_x = 1.0 / max(1, w)
-        texel_y = 1.0 / max(1, h)
-        shader.set_uniform_vec2("u_texel_size", texel_x, texel_y)
+            oc = self._color
+            ctx2.set_uniform_vec3("u_outline_color",
+                                  float(oc[0]), float(oc[1]), float(oc[2]))
 
-        oc = self._color
-        shader.set_uniform_vec3("u_outline_color", float(oc[0]), float(oc[1]), float(oc[2]))
+            ctx2.draw_fullscreen_quad()
 
-        gfx.draw_ui_textured_quad()
+        PostEffect._simple_draw(ctx2, target_tex2, size, setup)
 
     def clear_callbacks(self) -> None:
         """Clear callback to allow garbage collection."""

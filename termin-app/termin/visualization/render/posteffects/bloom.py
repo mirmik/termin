@@ -314,100 +314,122 @@ class BloomEffect(PostEffect):
             fbo = self._mip_fbos.pop()
             fbo.delete()
 
-    def draw(self, gfx,color_tex, extra_textures, size, target_fbo=None):
-        """Execute bloom effect with progressive downsample/upsample."""
+    def draw(self, ctx2, color_tex2, target_tex2, extra_tex2, size):
+        """Execute bloom effect with progressive downsample/upsample via ctx2.
+
+        NOTE: the intermediate mip-chain FBOs are still allocated through
+        the legacy GraphicsBackend (self._mip_fbos). Their color
+        textures are wrapped as tgfx2 handles per frame and fed into
+        the ctx2 draw loop. A full Stage 8 would move mip FBOs into
+        pure tgfx2 render targets, but that's out of scope for the
+        first-cut Python migration.
+        """
+        from tgfx._tgfx_native import (
+            tc_shader_ensure_tgfx2,
+            wrap_fbo_color_as_tgfx2,
+            CULL_NONE,
+            PIXEL_RGBA16F,
+        )
+
         w, h = size
         format_str = "rgba16f"
         mip_levels = int(self.mip_levels)
 
+        # Intermediate FBOs still via legacy path; we only need them
+        # for their underlying GL textures. GraphicsBackend singleton
+        # is pulled from tgfx so we don't need to thread ctx.graphics
+        # through effect.draw.
+        from tgfx._tgfx_native import OpenGLGraphicsBackend
+        gfx = OpenGLGraphicsBackend.get_instance()
         self._ensure_mip_fbos(gfx, size, format_str)
 
-        gfx.set_depth_test(False)
-        gfx.set_blend(False)
+        # Wrap every mip FBO as a tgfx2 texture for this frame. Handles
+        # are non-owning external wraps; they're cheap and tgfx2
+        # tracks them in its HandlePool.
+        mip_tex2 = [wrap_fbo_color_as_tgfx2(ctx2, fbo) for fbo in self._mip_fbos]
+
+        def _begin(dst_tex2, dst_w, dst_h):
+            ctx2.begin_pass(dst_tex2)
+            ctx2.set_viewport(0, 0, dst_w, dst_h)
+            ctx2.set_depth_test(False)
+            ctx2.set_depth_write(False)
+            ctx2.set_blend(False)
+            ctx2.set_cull(CULL_NONE)
+            ctx2.set_color_format(PIXEL_RGBA16F)
 
         # === 1. Bright Pass -> mip[0] ===
-        mip0 = self._mip_fbos[0]
-        gfx.bind_framebuffer(mip0)
-        gfx.set_viewport(0, 0, w, h)
-
         bright = _get_bright_shader()
-        bright.ensure_ready()
-        bright.use()
+        bright_pair = tc_shader_ensure_tgfx2(ctx2, bright)
+        if not bright_pair.vs or not bright_pair.fs:
+            return
 
-        color_tex.bind(0)
-        bright.set_uniform_int("u_texture", 0)
-        bright.set_uniform_float("u_threshold", self.threshold)
-        bright.set_uniform_float("u_soft_threshold", self.soft_threshold)
-
-        gfx.draw_ui_textured_quad()
+        _begin(mip_tex2[0], w, h)
+        ctx2.bind_shader(bright_pair.vs, bright_pair.fs)
+        ctx2.bind_sampled_texture(0, color_tex2)
+        ctx2.set_uniform_int("u_texture", 0)
+        ctx2.set_uniform_float("u_threshold", self.threshold)
+        ctx2.set_uniform_float("u_soft_threshold", self.soft_threshold)
+        ctx2.draw_fullscreen_quad()
+        ctx2.end_pass()
 
         # === 2. Progressive Downsample ===
         down = _get_downsample_shader()
-        down.ensure_ready()
-        down.use()
+        down_pair = tc_shader_ensure_tgfx2(ctx2, down)
+        if not down_pair.vs or not down_pair.fs:
+            return
 
         for i in range(1, mip_levels):
-            src_fbo = self._mip_fbos[i - 1]
-            dst_fbo = self._mip_fbos[i]
-
             src_w = max(1, w >> (i - 1))
             src_h = max(1, h >> (i - 1))
             dst_w = max(1, w >> i)
             dst_h = max(1, h >> i)
 
-            gfx.bind_framebuffer(dst_fbo)
-            gfx.set_viewport(0, 0, dst_w, dst_h)
-
-            src_fbo.color_texture().bind(0)
-            down.set_uniform_int("u_texture", 0)
-            down.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
-
-            gfx.draw_ui_textured_quad()
+            _begin(mip_tex2[i], dst_w, dst_h)
+            ctx2.bind_shader(down_pair.vs, down_pair.fs)
+            ctx2.bind_sampled_texture(0, mip_tex2[i - 1])
+            ctx2.set_uniform_int("u_texture", 0)
+            ctx2.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
+            ctx2.draw_fullscreen_quad()
+            ctx2.end_pass()
 
         # === 3. Progressive Upsample (accumulate bloom) ===
         up = _get_upsample_shader()
-        up.ensure_ready()
-        up.use()
+        up_pair = tc_shader_ensure_tgfx2(ctx2, up)
+        if not up_pair.vs or not up_pair.fs:
+            return
 
         for i in range(mip_levels - 2, -1, -1):
-            src_fbo = self._mip_fbos[i + 1]
-            dst_fbo = self._mip_fbos[i]
-
             src_w = max(1, w >> (i + 1))
             src_h = max(1, h >> (i + 1))
             dst_w = max(1, w >> i)
             dst_h = max(1, h >> i)
 
-            gfx.bind_framebuffer(dst_fbo)
-            gfx.set_viewport(0, 0, dst_w, dst_h)
+            _begin(mip_tex2[i], dst_w, dst_h)
+            ctx2.bind_shader(up_pair.vs, up_pair.fs)
+            ctx2.bind_sampled_texture(0, mip_tex2[i + 1])
+            ctx2.bind_sampled_texture(1, mip_tex2[i])
+            ctx2.set_uniform_int("u_texture", 0)
+            ctx2.set_uniform_int("u_higher_mip", 1)
+            ctx2.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
+            ctx2.set_uniform_float("u_blend_factor", 1.0)
+            ctx2.draw_fullscreen_quad()
+            ctx2.end_pass()
 
-            src_fbo.color_texture().bind(0)
-            dst_fbo.color_texture().bind(1)
-
-            up.set_uniform_int("u_texture", 0)
-            up.set_uniform_int("u_higher_mip", 1)
-            up.set_uniform_vec2("u_texel_size", 1.0 / max(1, src_w), 1.0 / max(1, src_h))
-            up.set_uniform_float("u_blend_factor", 1.0)
-
-            gfx.draw_ui_textured_quad()
-
-        # === 4. Composite Pass ===
-        if target_fbo is not None:
-            gfx.bind_framebuffer(target_fbo)
-            gfx.set_viewport(0, 0, w, h)
-
+        # === 4. Composite: original + bloom -> target_tex2 ===
         comp = _get_composite_shader()
-        comp.ensure_ready()
-        comp.use()
+        comp_pair = tc_shader_ensure_tgfx2(ctx2, comp)
+        if not comp_pair.vs or not comp_pair.fs:
+            return
 
-        color_tex.bind(0)
-        self._mip_fbos[0].color_texture().bind(1)
-
-        comp.set_uniform_int("u_original", 0)
-        comp.set_uniform_int("u_bloom", 1)
-        comp.set_uniform_float("u_intensity", self.intensity)
-
-        gfx.draw_ui_textured_quad()
+        _begin(target_tex2, w, h)
+        ctx2.bind_shader(comp_pair.vs, comp_pair.fs)
+        ctx2.bind_sampled_texture(0, color_tex2)
+        ctx2.bind_sampled_texture(1, mip_tex2[0])
+        ctx2.set_uniform_int("u_original", 0)
+        ctx2.set_uniform_int("u_bloom", 1)
+        ctx2.set_uniform_float("u_intensity", self.intensity)
+        ctx2.draw_fullscreen_quad()
+        ctx2.end_pass()
 
     def clear_callbacks(self) -> None:
         """Clean up resources."""

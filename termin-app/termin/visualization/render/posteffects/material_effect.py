@@ -149,127 +149,97 @@ class MaterialPostEffect(PostEffect):
         """Get material."""
         return self._material if self._material.is_valid else None
 
-    def draw(
-        self,
-        gfx: "GraphicsBackend",
-        color_tex: "GPUTextureHandle",
-        extra_textures: dict[str, "GPUTextureHandle"],
-        size: tuple[int, int],
-        target_fbo=None,
-    ):
+    def draw(self, ctx2, color_tex2, target_tex2, extra_tex2, size):
         """Draw the post effect using the material's shader."""
-        import numpy as np
+        from tgfx._tgfx_native import tc_shader_ensure_tgfx2
 
         material = self._get_material()
-        if material is None:
-            # Fallback: just pass through color
-            self._draw_passthrough(gfx, color_tex)
-            return
-
-        # Get first phase (post effects typically have one phase)
-        if not material.phases:
-            self._draw_passthrough(gfx, color_tex)
+        if material is None or not material.phases:
+            self._draw_passthrough(ctx2, color_tex2, target_tex2, size)
             return
 
         phase = material.phases[0]
         shader = phase.shader
-
         if not shader.is_valid:
-            self._draw_passthrough(gfx, color_tex)
+            self._draw_passthrough(ctx2, color_tex2, target_tex2, size)
             return
 
-        shader.ensure_ready()
-        shader.use()
-        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after shader.use")
+        pair = tc_shader_ensure_tgfx2(ctx2, shader)
+        if not pair.vs or not pair.fs:
+            self._draw_passthrough(ctx2, color_tex2, target_tex2, size)
+            return
 
-        # Bind main color texture (use u_input_tex to avoid conflict with material's u_color)
-        color_tex.bind(0)
-        shader.set_uniform_int("u_input_tex", 0)
-        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after bind u_input_tex")
+        def setup(ctx2):
+            ctx2.bind_shader(pair.vs, pair.fs)
 
-        # Bind extra resources as texture uniforms
-        texture_unit = 1
-        for resource_name, uniform_name in self._extra_resources.items():
-            tex = extra_textures.get(resource_name)
-            if tex is not None:
-                tex.bind(texture_unit)
-                shader.set_uniform_int(uniform_name, texture_unit)
-                texture_unit += 1
-        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after extra resources")
+            ctx2.bind_sampled_texture(0, color_tex2)
+            ctx2.set_uniform_int("u_input_tex", 0)
 
-        # Bind depth if required and available (legacy support)
-        if self._required_depth and "depth" not in self._extra_resources:
-            depth_tex = extra_textures.get("depth")
-            if depth_tex is not None:
-                depth_tex.bind(texture_unit)
-                shader.set_uniform_int("u_depth", texture_unit)
-                texture_unit += 1
+            texture_unit = 1
+            for resource_name, uniform_name in self._extra_resources.items():
+                tex2 = extra_tex2.get(resource_name)
+                if tex2 is not None:
+                    ctx2.bind_sampled_texture(texture_unit, tex2)
+                    ctx2.set_uniform_int(uniform_name, texture_unit)
+                    texture_unit += 1
 
-        # Set resolution uniform
-        w, h = size
-        shader.set_uniform_vec2("u_resolution", float(w), float(h))
-        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after resolution")
+            if self._required_depth and "depth" not in self._extra_resources:
+                depth_tex2 = extra_tex2.get("depth")
+                if depth_tex2 is not None:
+                    ctx2.bind_sampled_texture(texture_unit, depth_tex2)
+                    ctx2.set_uniform_int("u_depth", texture_unit)
 
-        # Bind material textures (starting from next available unit)
-        for tex_name, tex_handle in phase.textures.items():
-            if tex_handle is not None:
-                tex_handle.upload_gpu()
-                tex_handle.bind_gpu(texture_unit)
-                shader.set_uniform_int(tex_name, texture_unit)
-                texture_unit += 1
-        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after material textures")
+            w, h = size
+            ctx2.set_uniform_vec2("u_resolution", float(w), float(h))
 
-        # Set material uniforms
-        for uniform_name, uniform_value in phase.uniforms.items():
-            self._set_uniform(shader, uniform_name, uniform_value)
-            gfx.check_gl_error(f"MaterialPostEffect({self.name}): after uniform '{uniform_name}'")
+            for uniform_name, uniform_value in phase.uniforms.items():
+                self._set_uniform(ctx2, uniform_name, uniform_value)
 
-        # Call before_draw callback for custom uniforms
-        if self._before_draw is not None:
-            self._before_draw(shader)
-        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after before_draw callback")
+            if self._before_draw is not None:
+                self._before_draw(shader)
 
-        # Draw fullscreen quad
-        gfx.draw_ui_textured_quad()
-        gfx.check_gl_error(f"MaterialPostEffect({self.name}): after draw_quad")
+            ctx2.draw_fullscreen_quad()
 
-    def _set_uniform(self, shader, name: str, value) -> None:
-        """Set uniform based on value type."""
+        PostEffect._simple_draw(ctx2, target_tex2, size, setup)
+
+    def _set_uniform(self, ctx2, name: str, value) -> None:
+        """Set uniform on the tgfx2 context based on value type."""
         import numpy as np
         from termin.geombase import Vec3, Vec4
 
         if isinstance(value, (int, bool)):
-            shader.set_uniform_int(name, int(value))
+            ctx2.set_uniform_int(name, int(value))
         elif isinstance(value, float):
-            shader.set_uniform_float(name, value)
+            ctx2.set_uniform_float(name, value)
         elif isinstance(value, Vec3):
-            shader.set_uniform_vec3(name, float(value.x), float(value.y), float(value.z))
+            ctx2.set_uniform_vec3(name, float(value.x), float(value.y), float(value.z))
         elif isinstance(value, Vec4):
-            shader.set_uniform_vec4(name, float(value.x), float(value.y), float(value.z), float(value.w))
+            ctx2.set_uniform_vec4(name, float(value.x), float(value.y), float(value.z), float(value.w))
         elif isinstance(value, np.ndarray):
             if value.size == 2:
-                shader.set_uniform_vec2(name, float(value[0]), float(value[1]))
+                ctx2.set_uniform_vec2(name, float(value[0]), float(value[1]))
             elif value.size == 3:
-                shader.set_uniform_vec3(name, float(value[0]), float(value[1]), float(value[2]))
+                ctx2.set_uniform_vec3(name, float(value[0]), float(value[1]), float(value[2]))
             elif value.size == 4:
-                shader.set_uniform_vec4(name, float(value[0]), float(value[1]), float(value[2]), float(value[3]))
-            elif value.size == 16:
-                shader.set_uniform_mat4(name, value.astype(np.float32).flatten().tolist(), False)
+                ctx2.set_uniform_vec4(name, float(value[0]), float(value[1]), float(value[2]), float(value[3]))
         elif isinstance(value, (list, tuple)):
             arr = np.array(value, dtype=np.float32)
-            self._set_uniform(shader, name, arr)
+            self._set_uniform(ctx2, name, arr)
 
-    def _draw_passthrough(
-        self,
-        gfx: "GraphicsBackend",
-        color_tex: "GPUTextureHandle",
-    ) -> None:
-        """Fallback: pass through color unchanged."""
+    def _draw_passthrough(self, ctx2, color_tex2, target_tex2, size) -> None:
+        """Fallback: pass through color unchanged via a minimal blit shader."""
+        from tgfx._tgfx_native import tc_shader_ensure_tgfx2
         from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
 
         shader = PresentToScreenPass._get_shader()
-        shader.ensure_ready()
-        shader.use()
-        shader.set_uniform_int("u_tex", 0)
-        color_tex.bind(0)
-        gfx.draw_ui_textured_quad()
+        pair = tc_shader_ensure_tgfx2(ctx2, shader)
+        if not pair.vs or not pair.fs:
+            return
+
+        def setup(ctx2):
+            ctx2.bind_shader(pair.vs, pair.fs)
+            ctx2.bind_sampled_texture(0, color_tex2)
+            ctx2.set_uniform_int("u_tex", 0)
+            ctx2.draw_fullscreen_quad()
+
+        PostEffect._simple_draw(ctx2, target_tex2, size, setup)
