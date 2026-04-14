@@ -2,12 +2,14 @@
 
 #include <cstdint>
 #include <cstring>
+#include <span>
 #include <vector>
 
 #include <termin/render/light.hpp>
 #include "termin/lighting/shadow.hpp"
-#include "tgfx/handles.hpp"
-#include "tgfx/graphics_backend.hpp"
+#include "tgfx2/handles.hpp"
+#include "tgfx2/descriptors.hpp"
+#include "tgfx2/i_render_device.hpp"
 #include <termin/geom/vec3.hpp>
 
 namespace termin {
@@ -74,18 +76,44 @@ static_assert(sizeof(LightingUBOData) == 688, "LightingUBOData must be 688 bytes
 class LightingUBO {
 public:
     LightingUBOData data;
-    UniformBufferHandlePtr buffer;
+    tgfx2::BufferHandle buffer;
 
     LightingUBO() {
         std::memset(&data, 0, sizeof(data));
     }
 
-    // Create the GPU buffer
-    void create(GraphicsBackend* graphics) {
-        if (!buffer) {
-            buffer = graphics->create_uniform_buffer(sizeof(LightingUBOData));
-        }
+    // Create the GPU buffer through the tgfx2 device. Idempotent —
+    // calling twice on the same device is a no-op. If the device
+    // pointer changes between frames the buffer is recreated; this
+    // happens when the RenderEngine's tgfx2 stack is rebuilt
+    // (resolution change, context reset, ...).
+    void create(tgfx2::IRenderDevice& device) {
+        if (buffer && device_ == &device) return;
+        destroy();
+        tgfx2::BufferDesc desc;
+        desc.size = sizeof(LightingUBOData);
+        desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
+        buffer = device.create_buffer(desc);
+        device_ = &device;
     }
+
+    void destroy() {
+        if (buffer && device_) {
+            device_->destroy(buffer);
+        }
+        buffer = {};
+        device_ = nullptr;
+    }
+
+    ~LightingUBO() { destroy(); }
+
+    LightingUBO(const LightingUBO&) = delete;
+    LightingUBO& operator=(const LightingUBO&) = delete;
+
+private:
+    tgfx2::IRenderDevice* device_ = nullptr;
+
+public:
 
     // Update UBO from lights vector
     void update_from_lights(
@@ -157,32 +185,14 @@ public:
         data._pad0 = 0.0f;
     }
 
-    // Upload data to GPU only (no bind)
+    // Upload data to GPU (buffer must be create()'d first).
     void upload() {
-        if (buffer) {
-            buffer->update(&data, sizeof(data));
-        }
-    }
-
-    // Upload data to GPU and bind
-    void upload_and_bind() {
-        if (buffer) {
-            buffer->update(&data, sizeof(data));
-            buffer->bind(LIGHTING_UBO_BINDING);
-        }
-    }
-
-    // Just bind (data already uploaded)
-    void bind() {
-        if (buffer) {
-            buffer->bind(LIGHTING_UBO_BINDING);
-        }
-    }
-
-    void unbind() {
-        if (buffer) {
-            buffer->unbind();
-        }
+        if (!buffer || !device_) return;
+        device_->upload_buffer(
+            buffer,
+            std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(&data),
+                sizeof(data)));
     }
 };
 

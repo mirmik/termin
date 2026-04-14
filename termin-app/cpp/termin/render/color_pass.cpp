@@ -357,7 +357,6 @@ void ColorPass::execute_with_data(
     const ShadowSettings& shadow_settings,
     uint64_t layer_mask)
 {
-    auto* graphics = ctx.graphics;  // Still needed for LightingUBO + debugger capture.
     auto* ctx2 = ctx.ctx2;
     if (!ctx2) {
         tc::Log::error("[ColorPass/tgfx2] ctx2 is null");
@@ -415,23 +414,16 @@ void ColorPass::execute_with_data(
         }
     }
 
-    // Upload lighting UBO via the legacy LightingUBO helper (its GL
-    // buffer is reused — we just wrap it as a tgfx2 handle for the
-    // draw loop below).
+    // Allocate lighting UBO directly on the tgfx2 device and upload
+    // this frame's data. The buffer is persistent — only the contents
+    // change per frame.
     tgfx2::BufferHandle lighting_ubo_tgfx2{};
     if (any_shader_needs_ubo) {
-        lighting_ubo_.create(graphics);
+        lighting_ubo_.create(device);
         lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
                                          camera_position, shadow_settings);
         lighting_ubo_.upload();
-        if (lighting_ubo_.buffer) {
-            tgfx2::BufferDesc ldesc;
-            ldesc.size = sizeof(LightingUBOData);
-            ldesc.usage = tgfx2::BufferUsage::Uniform;
-            lighting_ubo_tgfx2 = gl_dev->register_external_buffer(
-                static_cast<GLuint>(lighting_ubo_.buffer->get_id()), ldesc);
-            ctx2->defer_destroy(lighting_ubo_tgfx2);
-        }
+        lighting_ubo_tgfx2 = lighting_ubo_.buffer;
     }
 
     // Wrap each shadow map FBO's depth attachment once. Shared across
