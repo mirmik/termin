@@ -19,7 +19,7 @@ private:
     tgfx2::IRenderDevice* device2_ = nullptr;
     tgfx2::ShaderHandle depth_vs2_;
     tgfx2::ShaderHandle depth_fs2_;
-    tgfx2::BufferHandle params_ubo_;
+    tgfx2::BufferHandle per_frame_ubo_;
 
     void ensure_tgfx2_resources(tgfx2::IRenderDevice& device);
     void release_tgfx2_resources();

@@ -20,15 +20,20 @@ namespace termin {
 
 namespace {
 
-// std140 layout for NormalPass parameters: {model, view, projection}.
-// 3 * mat4 = 192 bytes, naturally 16-byte aligned, no padding needed.
-struct NormalParamsStd140 {
-    float u_model[16];
+// PerFrame UBO (binding 0): view + projection. 128 bytes std140.
+struct NormalPerFrameStd140 {
     float u_view[16];
     float u_projection[16];
 };
-static_assert(sizeof(NormalParamsStd140) == 192,
-              "NormalParamsStd140 must be 192 bytes");
+static_assert(sizeof(NormalPerFrameStd140) == 128,
+              "NormalPerFrameStd140 must be 2 * mat4");
+
+// PushConstants (binding 14): per-object model matrix.
+struct NormalPushStd140 {
+    float u_model[16];
+};
+static_assert(sizeof(NormalPushStd140) == 64,
+              "NormalPushStd140 must be exactly one mat4");
 
 constexpr const char* NORMAL_PASS_VERT_UBO = R"(
 #version 330 core
@@ -38,10 +43,13 @@ layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in vec2 a_texcoord;
 
-layout(std140) uniform NormalParams {
-    mat4 u_model;
+layout(std140, binding = 0) uniform PerFrame {
     mat4 u_view;
     mat4 u_projection;
+};
+
+layout(std140, binding = 14) uniform PushConstants {
+    mat4 u_model;
 };
 
 out vec3 v_world_normal;
@@ -125,7 +133,7 @@ void NormalPass::execute_with_data(
 }
 
 void NormalPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
-    if (device2_ == &device && normal_vs2_ && normal_fs2_ && params_ubo_) {
+    if (device2_ == &device && normal_vs2_ && normal_fs2_ && per_frame_ubo_) {
         return;
     }
     if (device2_ && device2_ != &device) {
@@ -144,16 +152,16 @@ void NormalPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
     normal_fs2_ = device.create_shader(fs_desc);
 
     tgfx2::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(NormalParamsStd140);
+    ubo_desc.size = sizeof(NormalPerFrameStd140);
     ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
-    params_ubo_ = device.create_buffer(ubo_desc);
+    per_frame_ubo_ = device.create_buffer(ubo_desc);
 }
 
 void NormalPass::release_tgfx2_resources() {
     if (!device2_) return;
     if (normal_vs2_) { device2_->destroy(normal_vs2_); normal_vs2_ = {}; }
     if (normal_fs2_) { device2_->destroy(normal_fs2_); normal_fs2_ = {}; }
-    if (params_ubo_) { device2_->destroy(params_ubo_); params_ubo_ = {}; }
+    if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
 
@@ -217,9 +225,15 @@ void NormalPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
     ctx.ctx2->bind_shader(normal_vs2_, normal_fs2_);
 
-    NormalParamsStd140 params{};
-    std::memcpy(params.u_view, view.data, sizeof(float) * 16);
-    std::memcpy(params.u_projection, projection.data, sizeof(float) * 16);
+    NormalPerFrameStd140 per_frame{};
+    std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
+    std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
+    ctx.ctx2->device().upload_buffer(
+        per_frame_ubo_,
+        std::span<const uint8_t>(
+            reinterpret_cast<const uint8_t*>(&per_frame),
+            sizeof(per_frame)));
+    ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo_);
 
     RenderContext legacy_ctx;
     legacy_ctx.view = view;
@@ -244,13 +258,9 @@ void NormalPass::execute_with_data_tgfx2(
         bool override_is_base = tc_shader_handle_eq(dc.final_shader, base_shader.handle);
 
         if (mesh && override_is_base) {
-            std::memcpy(params.u_model, model.data, sizeof(float) * 16);
-            ctx.ctx2->device().upload_buffer(
-                params_ubo_,
-                std::span<const uint8_t>(
-                    reinterpret_cast<const uint8_t*>(&params),
-                    sizeof(params)));
-            ctx.ctx2->bind_uniform_buffer(0, params_ubo_);
+            NormalPushStd140 push{};
+            std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+            ctx.ctx2->set_push_constants(&push, sizeof(push));
 
             Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
             if (bind.index_count == 0) continue;
