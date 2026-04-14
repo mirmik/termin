@@ -92,9 +92,6 @@ void bind_render(nb::module_& m) {
     // ImmediateRenderer
     bind_immediate(m);
 
-    // WireframeRenderer
-    bind_wireframe(m);
-
     // FramePass, FrameGraph, RenderContext
     bind_frame_pass(m);
 
