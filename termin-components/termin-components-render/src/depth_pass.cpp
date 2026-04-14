@@ -184,22 +184,25 @@ void DepthPass::execute_with_data_tgfx2(
     float far_plane,
     uint64_t layer_mask
 ) {
-    if (!ctx.ctx2 || !ctx.graphics) {
-        tc::Log::error("DepthPass/tgfx2: ctx2 or graphics is null");
+    if (!ctx.ctx2) {
+        tc::Log::error("DepthPass/tgfx2: ctx2 is null");
         return;
     }
 
     _near_plane = near_plane;
     _far_plane = far_plane;
 
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it == ctx.writes_fbos.end() || it->second == nullptr) {
+    auto color_it = ctx.tex2_writes.find(output_res);
+    if (color_it == ctx.tex2_writes.end() || !color_it->second) {
+        tc::Log::error("DepthPass/tgfx2: missing tgfx2 color texture for '%s'",
+                       output_res.c_str());
         return;
     }
-    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
-    if (!fb) {
-        return;
-    }
+    tgfx2::TextureHandle color_tex2 = color_it->second;
+
+    auto depth_it = ctx.tex2_depth_writes.find(output_res);
+    tgfx2::TextureHandle depth_tex2 =
+        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx2::TextureHandle{};
 
     auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx.ctx2->device());
     if (!gl_dev) {
@@ -215,13 +218,6 @@ void DepthPass::execute_with_data_tgfx2(
 
     entity_names.clear();
     std::set<std::string> seen_entities;
-
-    tgfx2::TextureHandle color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fb);
-    tgfx2::TextureHandle depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fb);
-    if (!color_tex2) {
-        tc::Log::error("DepthPass/tgfx2: failed to wrap color texture");
-        return;
-    }
 
     auto cc = clear_color();
     float clear_rgba[4] = {cc[0], cc[1], cc[2], cc[3]};
@@ -325,8 +321,13 @@ void DepthPass::execute_with_data_tgfx2(
         gl_dev->destroy(bind.index_buffer);
 
         if (!debug_symbol.empty() && name && debug_symbol == name) {
+            auto fb_it = ctx.writes_fbos.find(output_res);
+            FramebufferHandle* fb = (fb_it != ctx.writes_fbos.end())
+                ? dynamic_cast<FramebufferHandle*>(fb_it->second) : nullptr;
             ctx.ctx2->end_pass();
-            maybe_blit_to_debugger(ctx.graphics, fb, name, rect.width, rect.height);
+            if (fb && ctx.graphics) {
+                maybe_blit_to_debugger(ctx.graphics, fb, name, rect.width, rect.height);
+            }
             ctx.ctx2->begin_pass(color_tex2, depth_tex2, nullptr, 1.0f, false);
             ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
             ctx.ctx2->set_depth_test(true);
@@ -338,8 +339,7 @@ void DepthPass::execute_with_data_tgfx2(
     }
 
     ctx.ctx2->end_pass();
-    gl_dev->destroy(color_tex2);
-    if (depth_tex2) gl_dev->destroy(depth_tex2);
+    // color_tex2/depth_tex2 are persistent FBOPool wrappers — do not destroy.
 }
 
 void DepthPass::execute(ExecuteContext& ctx) {

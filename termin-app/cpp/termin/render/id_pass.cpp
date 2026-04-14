@@ -170,19 +170,22 @@ void IdPass::execute_with_data_tgfx2(
     const Mat44f& projection,
     uint64_t layer_mask
 ) {
-    if (!ctx.ctx2 || !ctx.graphics) {
-        tc::Log::error("IdPass/tgfx2: ctx2 or graphics is null");
+    if (!ctx.ctx2) {
+        tc::Log::error("IdPass/tgfx2: ctx2 is null");
         return;
     }
 
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it == ctx.writes_fbos.end() || it->second == nullptr) {
+    auto color_it = ctx.tex2_writes.find(output_res);
+    if (color_it == ctx.tex2_writes.end() || !color_it->second) {
+        tc::Log::error("IdPass/tgfx2: missing tgfx2 color texture for '%s'",
+                       output_res.c_str());
         return;
     }
-    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
-    if (!fb) {
-        return;
-    }
+    tgfx2::TextureHandle color_tex2 = color_it->second;
+
+    auto depth_it = ctx.tex2_depth_writes.find(output_res);
+    tgfx2::TextureHandle depth_tex2 =
+        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx2::TextureHandle{};
 
     auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx.ctx2->device());
     if (!gl_dev) {
@@ -192,25 +195,13 @@ void IdPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(ctx.ctx2->device());
 
-    // Resolve base shader via the legacy path first. collect_draw_calls
-    // needs a tc_shader_handle to key overrides against; the TcShader
-    // object itself stays in _shader for the legacy fallback branch of
-    // the inner loop.
+    // Resolve base shader for collect_draw_calls' override keying.
     TcShader& base_shader = get_shader();
     collect_draw_calls(scene, layer_mask, base_shader.handle);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
     std::set<std::string> seen_entities;
-
-    // Wrap legacy FBO attachments. Both color and depth must be
-    // wrapped so begin_pass can open a proper render pass on them.
-    tgfx2::TextureHandle color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fb);
-    tgfx2::TextureHandle depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fb);
-    if (!color_tex2) {
-        tc::Log::error("IdPass/tgfx2: failed to wrap color texture");
-        return;
-    }
 
     auto cc = clear_color();
     float clear_rgba[4] = {cc[0], cc[1], cc[2], cc[3]};
@@ -321,12 +312,15 @@ void IdPass::execute_with_data_tgfx2(
         gl_dev->destroy(bind.index_buffer);
 
         if (!debug_symbol.empty() && name && debug_symbol == name) {
-            // maybe_blit_to_debugger touches raw GL on the FBO; close
-            // the pass first so tgfx2 doesn't see mutation of state it
-            // thinks it owns, then reopen. This is rare (only fires
-            // when the debugger has pinned a specific entity).
+            // Debugger capture path still needs a legacy FramebufferHandle*
+            // for graphics->blit_framebuffer. Resolve lazily only when hit.
+            auto fb_it = ctx.writes_fbos.find(output_res);
+            FramebufferHandle* fb = (fb_it != ctx.writes_fbos.end())
+                ? dynamic_cast<FramebufferHandle*>(fb_it->second) : nullptr;
             ctx.ctx2->end_pass();
-            maybe_blit_to_debugger(ctx.graphics, fb, name, rect.width, rect.height);
+            if (fb && ctx.graphics) {
+                maybe_blit_to_debugger(ctx.graphics, fb, name, rect.width, rect.height);
+            }
             ctx.ctx2->begin_pass(color_tex2, depth_tex2, nullptr, 1.0f, false);
             ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
             ctx.ctx2->set_depth_test(true);
@@ -338,8 +332,7 @@ void IdPass::execute_with_data_tgfx2(
     }
 
     ctx.ctx2->end_pass();
-    gl_dev->destroy(color_tex2);
-    if (depth_tex2) gl_dev->destroy(depth_tex2);
+    // color_tex2/depth_tex2 are persistent FBOPool wrappers — do not destroy.
 }
 
 void IdPass::execute(ExecuteContext& ctx) {
