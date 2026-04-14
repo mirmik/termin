@@ -27,29 +27,39 @@ namespace termin {
 
 namespace {
 
-// std140 layout for the shadow pass uniform block. Three mat4 slots:
-// model, view, projection. Mat4 is already 16-byte aligned so no
-// trailing padding is needed.
-struct ShadowTransformsStd140 {
-    float u_model[16];
+// PerFrame UBO (binding 0): view + projection. Uploaded ONCE per
+// cascade, bound as a regular uniform buffer. 128 bytes, std140
+// mat4-aligned.
+struct ShadowPerFrameStd140 {
     float u_view[16];
     float u_projection[16];
 };
-static_assert(sizeof(ShadowTransformsStd140) == 192,
-              "ShadowTransformsStd140 must be 3 * mat4");
+static_assert(sizeof(ShadowPerFrameStd140) == 128,
+              "ShadowPerFrameStd140 must be 2 * mat4");
 
-// Vertex shader: same math as the legacy shader but uniforms come
-// from a std140 block at binding slot 0.
+// PushConstants (binding 14, slot TGFX2_PUSH_CONSTANTS_BINDING): the
+// per-object model matrix. Written per-draw via
+// RenderContext2::set_push_constants. 64 bytes, well under the
+// TGFX2_PUSH_CONSTANTS_MAX_BYTES (128 byte) Vulkan-compat cap.
+struct ShadowPushStd140 {
+    float u_model[16];
+};
+static_assert(sizeof(ShadowPushStd140) == 64,
+              "ShadowPushStd140 must be exactly one mat4");
+
 constexpr const char* SHADOW_VS_UBO = R"(
 #version 330 core
 #extension GL_ARB_shading_language_420pack : require
 
 layout(location = 0) in vec3 a_position;
 
-layout(std140) uniform Transforms {
-    mat4 u_model;
+layout(std140, binding = 0) uniform PerFrame {
     mat4 u_view;
     mat4 u_projection;
+};
+
+layout(std140, binding = 14) uniform PushConstants {
+    mat4 u_model;
 };
 
 void main() {
@@ -91,7 +101,7 @@ void ShadowPass::destroy() {
 }
 
 void ShadowPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
-    if (device2_ == &device && shadow_vs2_ && shadow_fs2_ && transforms_ubo_) {
+    if (device2_ == &device && shadow_vs2_ && shadow_fs2_ && per_frame_ubo_) {
         return;
     }
     if (device2_ && device2_ != &device) {
@@ -112,16 +122,16 @@ void ShadowPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
     shadow_fs2_ = device.create_shader(fs_desc);
 
     tgfx2::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(ShadowTransformsStd140);
+    ubo_desc.size = sizeof(ShadowPerFrameStd140);
     ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
-    transforms_ubo_ = device.create_buffer(ubo_desc);
+    per_frame_ubo_ = device.create_buffer(ubo_desc);
 }
 
 void ShadowPass::release_tgfx2_resources() {
     if (!device2_) return;
     if (shadow_vs2_) { device2_->destroy(shadow_vs2_); shadow_vs2_ = {}; }
     if (shadow_fs2_) { device2_->destroy(shadow_fs2_); shadow_fs2_ = {}; }
-    if (transforms_ubo_) { device2_->destroy(transforms_ubo_); transforms_ubo_ = {}; }
+    if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
 
@@ -576,6 +586,19 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
             ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
 
+            // PerFrame UBO (view + projection) — upload ONCE per
+            // cascade, bound at slot 0. Never re-uploaded inside the
+            // draw loop.
+            ShadowPerFrameStd140 per_frame{};
+            std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
+            std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
+            ctx.ctx2->device().upload_buffer(
+                per_frame_ubo_,
+                std::span<const uint8_t>(
+                    reinterpret_cast<const uint8_t*>(&per_frame),
+                    sizeof(per_frame)));
+            ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo_);
+
             if (cached_draw_calls_.empty()) {
                 ctx.ctx2->end_pass();
                 gl_dev->destroy(depth_tex2);
@@ -583,10 +606,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                                      c, cascade_near, cascade_far);
                 continue;
             }
-
-            ShadowTransformsStd140 transforms{};
-            std::memcpy(transforms.u_view, view_matrix.data, sizeof(float) * 16);
-            std::memcpy(transforms.u_projection, proj_matrix.data, sizeof(float) * 16);
 
             // RenderContext setup for the legacy fallback path (used
             // when a drawable can't expose a tc_mesh*).
@@ -611,13 +630,11 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                 if (mesh && override_is_base) {
                     // Fast path: mesh-backed drawable, no shader override.
-                    std::memcpy(transforms.u_model, model.data, sizeof(float) * 16);
-                    ctx.ctx2->device().upload_buffer(
-                        transforms_ubo_,
-                        std::span<const uint8_t>(
-                            reinterpret_cast<const uint8_t*>(&transforms),
-                            sizeof(transforms)));
-                    ctx.ctx2->bind_uniform_buffer(0, transforms_ubo_);
+                    // Per-object data goes through push constants — 64 B
+                    // per draw via the ring buffer, no ResourceSet churn.
+                    ShadowPushStd140 push{};
+                    std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+                    ctx.ctx2->set_push_constants(&push, sizeof(push));
 
                     Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
                     if (bind.index_count == 0) continue;
