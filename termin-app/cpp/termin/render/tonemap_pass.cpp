@@ -15,7 +15,6 @@
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
 
-#include <cstdio>
 #include <span>
 #include <tcbase/tc_log.hpp>
 
@@ -71,12 +70,12 @@ void main() {
 // tgfx2 path — parameters live in a std140 UBO bound at slot 0. `u_input`
 // uses an explicit `layout(binding = 0)` (via GL_ARB_shading_language_420pack)
 // so the sampler unit is pinned rather than relying on GL's default
-// uninitialized sampler = unit 0. In multi-stage tgfx2 pipelines (e.g. when
-// BloomPass's composite runs before Tonemap in the editor's default
-// pipeline) the default path can end up reading from a previously-bound
-// texture unit; the explicit binding keeps Tonemap self-contained.
-// Varying name `vUV` matches the built-in FSQ vertex shader from
-// RenderContext2.
+// uninitialized-sampler = unit 0 behaviour. That default can read from a
+// previously-bound texture unit when multiple tgfx2 pipelines run in
+// sequence (e.g. BloomPass's composite feeding into Tonemap in the editor
+// pipeline). Varying name `vUV` matches the built-in FSQ vertex shader
+// from RenderContext2 — mismatch silently drops the connection and
+// produces a solid-color result.
 static const char* TONEMAP_FRAG_UBO = R"(
 #version 330 core
 #extension GL_ARB_shading_language_420pack : require
@@ -157,13 +156,6 @@ void TonemapPass::ensure_shader() {
 }
 
 void TonemapPass::execute(ExecuteContext& ctx) {
-    static int call_count = 0;
-    if (call_count < 5) {
-        fprintf(stderr, "[TONEMAP] execute() called #%d ctx2=%p\n",
-                call_count, (void*)ctx.ctx2);
-        fflush(stderr);
-        call_count++;
-    }
     if (ctx.ctx2) {
         execute_tgfx2(ctx);
     } else {
@@ -176,13 +168,7 @@ void TonemapPass::execute(ExecuteContext& ctx) {
 // ----------------------------------------------------------------------------
 
 void TonemapPass::execute_legacy(ExecuteContext& ctx) {
-    tc::Log::info("[TonemapPass/legacy] ENTER input_res='%s' output_res='%s' method=%d exposure=%.2f",
-                  input_res.c_str(), output_res.c_str(), method, exposure);
-
-    if (!ctx.graphics) {
-        tc::Log::error("[TonemapPass/legacy] ctx.graphics is NULL");
-        return;
-    }
+    if (!ctx.graphics) return;
 
     FramebufferHandle* input_fbo = nullptr;
     if (ctx.reads_fbos.count(input_res)) {
@@ -195,9 +181,6 @@ void TonemapPass::execute_legacy(ExecuteContext& ctx) {
         FrameGraphResource* res = ctx.writes_fbos[output_res];
         output_fbo = dynamic_cast<FramebufferHandle*>(res);
     }
-
-    tc::Log::info("[TonemapPass/legacy] input_fbo=%p output_fbo=%p",
-                  (void*)input_fbo, (void*)output_fbo);
 
     if (!input_fbo) {
         tc::Log::error("[TonemapPass] Missing input FBO '%s'", input_res.c_str());
@@ -212,11 +195,7 @@ void TonemapPass::execute_legacy(ExecuteContext& ctx) {
 
     int w = output_fbo ? output_fbo->get_width() : ctx.rect.width;
     int h = output_fbo ? output_fbo->get_height() : ctx.rect.height;
-    tc::Log::info("[TonemapPass/legacy] viewport %dx%d", w, h);
-    if (w <= 0 || h <= 0) {
-        tc::Log::error("[TonemapPass/legacy] bad viewport %dx%d — skipping", w, h);
-        return;
-    }
+    if (w <= 0 || h <= 0) return;
 
     ensure_shader();
 
@@ -236,7 +215,6 @@ void TonemapPass::execute_legacy(ExecuteContext& ctx) {
     shader_.set_uniform_int("u_method", method);
 
     ctx.graphics->draw_ui_textured_quad();
-    tc::Log::info("[TonemapPass/legacy] draw complete");
 
     ctx.graphics->set_depth_test(true);
     ctx.graphics->set_depth_mask(true);
@@ -247,14 +225,6 @@ void TonemapPass::execute_legacy(ExecuteContext& ctx) {
 // ----------------------------------------------------------------------------
 
 void TonemapPass::execute_tgfx2(ExecuteContext& ctx) {
-    static int enter_count = 0;
-    if (enter_count < 3) {
-        fprintf(stderr, "[TONEMAP/tgfx2] ENTER #%d input='%s' output='%s' method=%d\n",
-                enter_count, input_res.c_str(), output_res.c_str(), method);
-        fflush(stderr);
-        enter_count++;
-    }
-
     auto* output_fbo = ctx.writes_fbos.count(output_res)
         ? dynamic_cast<FramebufferHandle*>(ctx.writes_fbos[output_res])
         : nullptr;
