@@ -146,7 +146,7 @@ private:
     tgfx2::IRenderDevice* device2_ = nullptr;
     tgfx2::ShaderHandle shadow_vs2_;
     tgfx2::ShaderHandle shadow_fs2_;
-    tgfx2::BufferHandle transforms_ubo_;
+    tgfx2::BufferHandle per_frame_ubo_;
 
     void ensure_tgfx2_resources(tgfx2::IRenderDevice& device);
     void release_tgfx2_resources();
