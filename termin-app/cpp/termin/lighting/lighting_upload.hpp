@@ -1,12 +1,16 @@
 #pragma once
 
+// Shadow-map uniform-name tables + constants shared by C++ passes
+// (ColorPass uses them on the ctx2 path via ctx2->set_uniform_int).
+// Legacy TcShader helpers (upload_shadow_maps_to_shader,
+// init_shadow_map_samplers, bind_shadow_textures) were removed in
+// Stage 8.1 — nothing calls them any more, and the ctx2 path binds
+// shadow textures directly via bind_sampled_texture.
+
 #include <vector>
 #include <string>
 
 #include "termin/lighting/shadow.hpp"
-#include <tgfx/tgfx_texture_handle.hpp>
-#include <tgfx/tgfx_shader_handle.hpp>
-#include <tcbase/tc_log.hpp>
 
 namespace termin {
 
@@ -52,71 +56,6 @@ namespace detail {
         "u_shadow_split_far[8]", "u_shadow_split_far[9]", "u_shadow_split_far[10]", "u_shadow_split_far[11]",
         "u_shadow_split_far[12]", "u_shadow_split_far[13]", "u_shadow_split_far[14]", "u_shadow_split_far[15]"
     };
-}
-
-// TcShader version (no allocations)
-inline void upload_shadow_maps_to_shader(TcShader& shader, const std::vector<ShadowMapArrayEntry>& shadow_maps) {
-    int count = static_cast<int>(std::min(shadow_maps.size(), static_cast<size_t>(MAX_SHADOW_MAPS)));
-    shader.set_uniform_int("u_shadow_map_count", count);
-
-    for (int i = 0; i < count; ++i) {
-        const ShadowMapArrayEntry& entry = shadow_maps[i];
-
-        shader.set_uniform_int(detail::shadow_map_names[i], SHADOW_MAP_TEXTURE_UNIT_START + i);
-        shader.set_uniform_mat4(detail::light_space_matrix_names[i], entry.light_space_matrix.data, false);
-        shader.set_uniform_int(detail::shadow_light_index_names[i], entry.light_index);
-        shader.set_uniform_int(detail::shadow_cascade_index_names[i], entry.cascade_index);
-        shader.set_uniform_float(detail::shadow_split_near_names[i], entry.cascade_split_near);
-        shader.set_uniform_float(detail::shadow_split_far_names[i], entry.cascade_split_far);
-    }
-
-    // CRITICAL: Set remaining samplers to their dedicated units (for AMD drivers)
-    // sampler2DShadow uniforms default to unit 0, which conflicts with material textures (sampler2D)
-    // AMD strictly enforces that different sampler types cannot share the same texture unit
-    for (int i = count; i < MAX_SHADOW_MAPS; ++i) {
-        shader.set_uniform_int(detail::shadow_map_names[i], SHADOW_MAP_TEXTURE_UNIT_START + i);
-    }
-}
-
-/**
- * Initialize shadow map sampler uniforms to their dedicated texture units.
- * MUST be called when switching shaders, even if no shadow maps are used.
- *
- * On AMD drivers, sampler2DShadow uniforms default to texture unit 0.
- * This conflicts with material textures (sampler2D) which also use unit 0,
- * causing "Different sampler types for same sample texture unit" errors.
- */
-inline void init_shadow_map_samplers(TcShader& shader) {
-    shader.set_uniform_int("u_shadow_map_count", 0);
-    for (int i = 0; i < MAX_SHADOW_MAPS; ++i) {
-        shader.set_uniform_int(detail::shadow_map_names[i], SHADOW_MAP_TEXTURE_UNIT_START + i);
-    }
-}
-
-/**
- * Bind shadow map textures to their texture units.
- * Call this ONCE per frame, before rendering any draw calls.
- *
- * Binds actual shadow textures from entries, and fills remaining slots
- * with dummy shadow texture (required by AMD drivers).
- */
-inline void bind_shadow_textures(const std::vector<ShadowMapArrayEntry>& shadow_maps) {
-    int bound_count = 0;
-
-    // Bind actual shadow textures
-    for (size_t i = 0; i < shadow_maps.size() && i < static_cast<size_t>(MAX_SHADOW_MAPS); ++i) {
-        GPUTextureHandle* tex = shadow_maps[i].texture();
-        if (tex) {
-            tex->bind(SHADOW_MAP_TEXTURE_UNIT_START + static_cast<int>(i));
-            ++bound_count;
-        }
-    }
-
-    // Bind dummy texture to remaining slots (AMD compatibility)
-    TcTexture dummy = TcTexture::dummy_shadow_1x1();
-    for (int i = bound_count; i < MAX_SHADOW_MAPS; ++i) {
-        dummy.bind_gpu(SHADOW_MAP_TEXTURE_UNIT_START + i);
-    }
 }
 
 } // namespace termin

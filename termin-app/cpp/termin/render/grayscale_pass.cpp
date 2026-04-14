@@ -1,14 +1,11 @@
-// grayscale_pass.cpp - Simple grayscale post-processing pass
+// grayscale_pass.cpp - Simple grayscale post-processing pass.
 //
-// Dual-path implementation during the tgfx2 migration:
-//   * execute_legacy() uses tgfx GraphicsBackend + TcShader.
-//   * execute_tgfx2() goes through tgfx2::RenderContext2 end-to-end: built-in
-//     FSQ, std140 UBO for parameters via bind_uniform_buffer, input texture
-//     via bind_sampled_texture. No raw GL.
+// Draws through tgfx2::RenderContext2 end-to-end: built-in FSQ,
+// std140 UBO for parameters via bind_uniform_buffer, input texture
+// via bind_sampled_texture. Legacy tgfx1 dual-path removed in Stage 8.1.
 #include "grayscale_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
-#include "tgfx/graphics_backend.hpp"
 
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -19,38 +16,6 @@
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
-
-// Varying name `vUV` matches both the legacy GRAYSCALE_VERT below and the
-// built-in FSQ vertex shader used by RenderContext2 — so the same fragment
-// shader source can be paired with either VS on the two migration paths.
-static const char* GRAYSCALE_VERT = R"(
-#version 330 core
-layout(location=0) in vec2 aPos;
-layout(location=1) in vec2 aUV;
-out vec2 vUV;
-void main() {
-    vUV = aUV;
-    gl_Position = vec4(aPos, 0.0, 1.0);
-}
-)";
-
-// Legacy path — classic uniforms, paired with TcShader::set_uniform_* dispatch.
-static const char* GRAYSCALE_FRAG_LEGACY = R"(
-#version 330 core
-in vec2 vUV;
-
-uniform sampler2D u_input;
-uniform float u_strength;
-
-out vec4 FragColor;
-
-void main() {
-    vec3 color = texture(u_input, vUV).rgb;
-    float gray = dot(color, vec3(0.2126, 0.7152, 0.0722));
-    vec3 result = mix(color, vec3(gray), u_strength);
-    FragColor = vec4(result, 1.0);
-}
-)";
 
 // tgfx2 path — parameters live in a std140 UBO bound at slot 0. The sampler
 // is still a plain GL 3.3 `uniform sampler2D` which defaults to texture unit 0
@@ -96,80 +61,6 @@ std::set<const char*> GrayscalePass::compute_writes() const {
     return {output_res.c_str()};
 }
 
-void GrayscalePass::ensure_shader() {
-    if (!shader_.is_valid()) {
-        shader_ = TcShader::from_sources(GRAYSCALE_VERT, GRAYSCALE_FRAG_LEGACY, "", "GrayscalePass");
-    }
-}
-
-void GrayscalePass::execute(ExecuteContext& ctx) {
-    if (ctx.ctx2) {
-        execute_tgfx2(ctx);
-    } else {
-        execute_legacy(ctx);
-    }
-}
-
-// ----------------------------------------------------------------------------
-// Legacy tgfx path
-// ----------------------------------------------------------------------------
-
-void GrayscalePass::execute_legacy(ExecuteContext& ctx) {
-    if (!ctx.graphics) return;
-
-    auto* input_fbo = ctx.reads_fbos.count(input_res)
-        ? dynamic_cast<FramebufferHandle*>(ctx.reads_fbos[input_res])
-        : nullptr;
-    auto* output_fbo = ctx.writes_fbos.count(output_res)
-        ? dynamic_cast<FramebufferHandle*>(ctx.writes_fbos[output_res])
-        : nullptr;
-
-    if (!input_fbo) {
-        tc::Log::error("[GrayscalePass] Missing input FBO '%s'", input_res.c_str());
-        return;
-    }
-
-    GPUTextureHandle* input_tex = input_fbo->color_texture();
-    if (!input_tex) {
-        tc::Log::error("[GrayscalePass] Input FBO has no color texture");
-        return;
-    }
-
-    int w = output_fbo ? output_fbo->get_width() : ctx.rect.width;
-    int h = output_fbo ? output_fbo->get_height() : ctx.rect.height;
-
-    if (w <= 0 || h <= 0) return;
-
-    ensure_shader();
-
-    // Setup state
-    ctx.graphics->set_depth_test(false);
-    ctx.graphics->set_depth_mask(false);
-    ctx.graphics->set_blend(false);
-
-    // Bind output
-    ctx.graphics->bind_framebuffer(output_fbo);
-    ctx.graphics->set_viewport(0, 0, w, h);
-
-    // Draw
-    shader_.ensure_ready();
-    shader_.use();
-
-    input_tex->bind(0);
-    shader_.set_uniform_int("u_input", 0);
-    shader_.set_uniform_float("u_strength", strength);
-
-    ctx.graphics->draw_ui_textured_quad();
-
-    // Restore state
-    ctx.graphics->set_depth_test(true);
-    ctx.graphics->set_depth_mask(true);
-}
-
-// ----------------------------------------------------------------------------
-// tgfx2 path
-// ----------------------------------------------------------------------------
-
 // std140-padded parameter block matching the shader's GrayscaleParams.
 // A single float rounds up to vec4 alignment, so the UBO is 16 bytes.
 struct GrayscaleParamsStd140 {
@@ -179,7 +70,11 @@ struct GrayscaleParamsStd140 {
 static_assert(sizeof(GrayscaleParamsStd140) == 16,
               "GrayscaleParamsStd140 must be 16 bytes for std140 compliance");
 
-void GrayscalePass::execute_tgfx2(ExecuteContext& ctx) {
+void GrayscalePass::execute(ExecuteContext& ctx) {
+    if (!ctx.ctx2) {
+        tc::Log::error("[GrayscalePass] ctx.ctx2 is null — GrayscalePass is tgfx2-only");
+        return;
+    }
     // Output target comes from the tex2_writes map (populated by RenderEngine
     // once per frame). Input texture likewise lives in tex2_reads — no raw
     // FBO access is needed anymore for the draw itself, but we still read
@@ -271,7 +166,6 @@ void GrayscalePass::execute_tgfx2(ExecuteContext& ctx) {
 }
 
 void GrayscalePass::destroy() {
-    shader_ = TcShader();
     if (device2_) {
         if (fs2_) {
             device2_->destroy(fs2_);

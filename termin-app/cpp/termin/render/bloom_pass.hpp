@@ -5,7 +5,6 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
-#include <tgfx/tgfx_shader_handle.hpp>
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
 
@@ -16,7 +15,10 @@ namespace tgfx2 { class IRenderDevice; }
 
 namespace termin {
 
-// BloomPass - HDR bloom with mip-chain downsampling/upsampling
+// BloomPass - HDR bloom with mip-chain downsampling/upsampling.
+// Draws through tgfx2::RenderContext2 end-to-end (four sub-passes:
+// bright, downsample chain, upsample chain, composite). Legacy tgfx1
+// dual-path removed in Stage 8.1.
 class BloomPass : public CxxFramePass {
 public:
     std::string input_res = "color";
@@ -27,14 +29,7 @@ public:
     int mip_levels = 5;
 
 private:
-    // Legacy-path resources
-    std::vector<FramebufferHandlePtr> mip_fbos_;
-    TcShader bright_shader_;
-    TcShader downsample_shader_;
-    TcShader upsample_shader_;
-    TcShader composite_shader_;
-
-    // tgfx2-path resources — persistent across frames, rebuilt on resize.
+    // tgfx2 resources — persistent across frames, rebuilt on resize.
     tgfx2::IRenderDevice* device2_ = nullptr;
     std::vector<tgfx2::TextureHandle> mip_textures_;
     tgfx2::ShaderHandle bright_fs2_;
@@ -46,10 +41,6 @@ private:
     tgfx2::BufferHandle upsample_ubo_;
     tgfx2::BufferHandle composite_ubo_;
 
-    // Last known size/count for mip chain recreation
-    int last_width_ = 0;
-    int last_height_ = 0;
-    int last_mip_levels_ = 0;
     int last_tgfx2_width_ = 0;
     int last_tgfx2_height_ = 0;
     int last_tgfx2_mip_levels_ = 0;
@@ -82,11 +73,6 @@ public:
     void destroy() override;
 
 private:
-    void ensure_shaders();
-    void ensure_mip_fbos(GraphicsBackend* graphics, int width, int height);
-
-    void execute_legacy(ExecuteContext& ctx);
-    void execute_tgfx2(ExecuteContext& ctx);
     void ensure_tgfx2_shaders();
     void ensure_tgfx2_mip_textures(int width, int height);
     void destroy_tgfx2_mip_textures();
