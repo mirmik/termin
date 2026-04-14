@@ -2,7 +2,6 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
-#include <tgfx/tgfx_shader_handle.hpp>
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
 
@@ -19,12 +18,10 @@ enum class TonemapMethod : int {
 
 // TonemapPass - converts HDR to displayable LDR range.
 //
-// Dual-path during the tgfx2 migration:
-//   - If ExecuteContext::ctx2 is non-null, the pass draws through
-//     tgfx2::RenderContext2 end-to-end: built-in FSQ, std140 UBO for
-//     parameters via bind_uniform_buffer, input texture via
-//     bind_sampled_texture. No raw GL calls.
-//   - Otherwise the legacy tgfx path is used (GraphicsBackend + TcShader).
+// Draws through tgfx2::RenderContext2 end-to-end: built-in FSQ, std140
+// UBO for parameters via bind_uniform_buffer, input texture via
+// bind_sampled_texture. No raw GL calls. Legacy tgfx1 dual-path
+// removed in Stage 8.1.
 class TonemapPass : public CxxFramePass {
 public:
     std::string input_res = "color";
@@ -33,11 +30,8 @@ public:
     int method = 0;  // TonemapMethod::ACES
 
 private:
-    // Legacy tgfx shader (used on the legacy path).
-    TcShader shader_;
-
-    // tgfx2 resources (used on the ctx2 path). Created lazily on first
-    // execute. Destroyed in destroy() via device2_ if captured.
+    // tgfx2 resources. Created lazily on first execute. Destroyed in
+    // destroy() via device2_ if captured.
     tgfx2::IRenderDevice* device2_ = nullptr;
     tgfx2::ShaderHandle fs2_;
     tgfx2::BufferHandle params_ubo_;
@@ -66,11 +60,6 @@ public:
 
     void execute(ExecuteContext& ctx) override;
     void destroy() override;
-
-private:
-    void ensure_shader();
-    void execute_legacy(ExecuteContext& ctx);
-    void execute_tgfx2(ExecuteContext& ctx);
 };
 
 } // namespace termin
