@@ -126,6 +126,15 @@ MaterialProperty::DefaultValue get_default_for_type(const std::string& type) {
     if (type == "Vec3") return std::vector<double>{0.0, 0.0, 0.0};
     if (type == "Vec4") return std::vector<double>{0.0, 0.0, 0.0, 0.0};
     if (type == "Color") return std::vector<double>{1.0, 1.0, 1.0, 1.0};
+    if (type == "Mat4") {
+        // 4x4 identity, column-major like Mat44f storage.
+        return std::vector<double>{
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        };
+    }
     if (type == "Texture") return std::monostate{};
     throw std::runtime_error("Unknown property type: " + type);
 }
@@ -450,7 +459,7 @@ MaterialProperty parse_property_directive(const std::string& line) {
         property_type = "Texture";
     }
     static const std::vector<std::string> valid_types = {
-        "Float", "Int", "Bool", "Vec2", "Vec3", "Vec4", "Color", "Texture"
+        "Float", "Int", "Bool", "Vec2", "Vec3", "Vec4", "Color", "Mat4", "Texture"
     };
     bool type_valid = std::find(valid_types.begin(), valid_types.end(), property_type) != valid_types.end();
     if (!type_valid) {
