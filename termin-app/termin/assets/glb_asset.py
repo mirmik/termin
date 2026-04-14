@@ -81,7 +81,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
         Also declares meshes in tc_mesh registry with lazy load callback.
         """
         from termin.assets.resources import ResourceManager
-        from tgfx import (
+        from tmesh import (
             tc_mesh_declare,
             tc_mesh_set_load_callback,
             tc_mesh_is_loaded,

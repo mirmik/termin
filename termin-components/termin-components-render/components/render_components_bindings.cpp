@@ -420,9 +420,6 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("output_res", &DepthPass::output_res)
         .def_rw("camera_name", &DepthPass::camera_name)
         .def("get_internal_symbols", &DepthPass::get_internal_symbols)
-        .def("execute_with_data", [](DepthPass& self, GraphicsBackend* graphics, nb::dict reads_fbos_py, nb::dict writes_fbos_py, nb::tuple rect_py, nb::object scene_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py, float near_plane, float far_plane, uint64_t layer_mask) {
-            self.execute_with_data(graphics, dict_to_fbo_map(reads_fbos_py), dict_to_fbo_map(writes_fbos_py), tuple_to_rect(rect_py), object_to_scene_handle(scene_py), ndarray_to_mat44f(view_py), ndarray_to_mat44f(projection_py), near_plane, far_plane, layer_mask);
-        }, nb::arg("graphics"), nb::arg("reads_fbos"), nb::arg("writes_fbos"), nb::arg("rect"), nb::arg("scene"), nb::arg("view"), nb::arg("projection"), nb::arg("near_plane"), nb::arg("far_plane"), nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "Depth";
@@ -466,9 +463,6 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("camera_name", &NormalPass::camera_name)
         .def("get_resource_specs", &NormalPass::get_resource_specs)
         .def("get_internal_symbols", &NormalPass::get_internal_symbols)
-        .def("execute_with_data", [](NormalPass& self, GraphicsBackend* graphics, nb::dict reads_fbos_py, nb::dict writes_fbos_py, nb::tuple rect_py, nb::object scene_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py, uint64_t layer_mask) {
-            self.execute_with_data(graphics, dict_to_fbo_map(reads_fbos_py), dict_to_fbo_map(writes_fbos_py), tuple_to_rect(rect_py), object_to_scene_handle(scene_py), ndarray_to_mat44f(view_py), ndarray_to_mat44f(projection_py), layer_mask);
-        }, nb::arg("graphics"), nb::arg("reads_fbos"), nb::arg("writes_fbos"), nb::arg("rect"), nb::arg("scene"), nb::arg("view"), nb::arg("projection"), nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "Normal";
