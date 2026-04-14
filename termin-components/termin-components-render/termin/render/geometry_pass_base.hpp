@@ -84,12 +84,6 @@ protected:
     virtual int get_pick_id(const Entity& ent) const;
 
     TcShader& get_shader(GraphicsBackend* graphics);
-    void bind_and_clear(
-        GraphicsBackend* graphics,
-        FramebufferHandle* fb,
-        const Rect4i& rect
-    ) const;
-    void apply_default_render_state(GraphicsBackend* graphics) const;
     void maybe_blit_to_debugger(
         GraphicsBackend* graphics,
         FramebufferHandle* fb,
