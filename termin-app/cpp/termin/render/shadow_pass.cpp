@@ -406,68 +406,80 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 continue;
             }
 
-            // RenderContext setup for the legacy fallback path (used
-            // when a drawable can't expose a tc_mesh*).
-            RenderContext legacy_ctx;
-            legacy_ctx.graphics = ctx.graphics;
-            legacy_ctx.phase = "shadow";
-            legacy_ctx.view = view_matrix;
-            legacy_ctx.projection = proj_matrix;
-            bool legacy_shader_in_use = false;
+            tc_shader_handle last_shader = tc_shader_handle_invalid();
 
             for (const auto& dc : cached_draw_calls_) {
-                auto* drawable = static_cast<Drawable*>(
-                    tc_component_get_drawable_userdata(dc.component));
+                Drawable* drawable = nullptr;
+                if (tc_component_get_drawable_vtable(dc.component)
+                    == &Drawable::cxx_drawable_vtable()) {
+                    drawable = static_cast<Drawable*>(
+                        tc_component_get_drawable_userdata(dc.component));
+                }
                 if (!drawable) continue;
+
+                tc_mesh* mesh = drawable->get_mesh_for_phase("shadow", dc.geometry_id);
+                if (!mesh) continue;  // non-mesh drawables don't cast shadows
 
                 Mat44f model = drawable->get_model_matrix(dc.entity);
 
-                tc_mesh* mesh = drawable->get_mesh_for_phase("shadow", dc.geometry_id);
                 bool override_is_base = tc_shader_handle_eq(
                     dc.final_shader,
                     shadow_shader ? shadow_shader->handle : tc_shader_handle_invalid());
 
-                if (mesh && override_is_base) {
-                    // Fast path: mesh-backed drawable, no shader override.
-                    // Per-object data goes through push constants — 64 B
-                    // per draw via the ring buffer, no ResourceSet churn.
+                Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+                if (bind.index_count == 0) continue;
+
+                if (override_is_base) {
+                    // Fast path: push constants for u_model.
                     ShadowPushStd140 push{};
                     std::memcpy(push.u_model, model.data, sizeof(float) * 16);
                     ctx.ctx2->set_push_constants(&push, sizeof(push));
-
-                    Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
-                    if (bind.index_count == 0) continue;
 
                     ctx.ctx2->set_vertex_layout(bind.layout);
                     ctx.ctx2->set_topology(bind.topology);
                     ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                                    bind.index_count, bind.index_type);
-
-                    gl_dev->destroy(bind.vertex_buffer);
-                    gl_dev->destroy(bind.index_buffer);
                 } else {
-                    // Fallback: shader override (skinning) or non-mesh
-                    // drawable. Use legacy state-machine draw. The GL
-                    // FBO is already bound by ctx2->begin_pass above;
-                    // glDraw calls land on it correctly.
-                    ctx.ctx2->flush_pipeline();  // ensure cmd list is in a
-                                                 // clean state before we
-                                                 // poke raw GL
+                    // Skinning variant (override shader): compile via
+                    // bridge, bind, upload bone matrices + legacy
+                    // u_model/u_view/u_projection via ctx2's
+                    // transitional plain-uniform helpers, draw.
+                    tc_shader* raw = tc_shader_get(dc.final_shader);
+                    if (!raw) {
+                        gl_dev->destroy(bind.vertex_buffer);
+                        gl_dev->destroy(bind.index_buffer);
+                        continue;
+                    }
+                    tgfx2::ShaderHandle vs2, fs2;
+                    if (!tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &vs2, &fs2)) {
+                        gl_dev->destroy(bind.vertex_buffer);
+                        gl_dev->destroy(bind.index_buffer);
+                        continue;
+                    }
+                    ctx.ctx2->bind_shader(vs2, fs2);
+                    ctx.ctx2->set_vertex_layout(bind.layout);
+                    ctx.ctx2->set_topology(bind.topology);
 
-                    tc_shader_handle shader_handle = dc.final_shader;
-                    TcShader shader_to_use(shader_handle);
-                    shader_to_use.use();
-                    shader_to_use.set_uniform_mat4("u_view", view_matrix.data, false);
-                    shader_to_use.set_uniform_mat4("u_projection", proj_matrix.data, false);
-                    shader_to_use.set_uniform_mat4("u_model", model.data, false);
-                    legacy_ctx.current_tc_shader = shader_to_use;
-                    legacy_shader_in_use = true;
+                    ctx.ctx2->set_uniform_mat4("u_model",      model.data,        false);
+                    ctx.ctx2->set_uniform_mat4("u_view",       view_matrix.data,  false);
+                    ctx.ctx2->set_uniform_mat4("u_projection", proj_matrix.data,  false);
 
-                    tc_component_draw_geometry(dc.component, &legacy_ctx, dc.geometry_id);
+                    // Per-draw uniforms (bone matrices for SkinnedMeshRenderer).
+                    drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
+
+                    ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
+                                   bind.index_count, bind.index_type);
+
+                    // Next mesh-backed draw must re-bind the base shadow
+                    // shader; skinning variant left its own program bound.
+                    last_shader = dc.final_shader;
+                    ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
                 }
-            }
 
-            (void)legacy_shader_in_use;
+                gl_dev->destroy(bind.vertex_buffer);
+                gl_dev->destroy(bind.index_buffer);
+            }
+            (void)last_shader;
 
             ctx.ctx2->end_pass();
             gl_dev->destroy(depth_tex2);

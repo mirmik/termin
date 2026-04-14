@@ -494,18 +494,6 @@ void ColorPass::execute_with_data(
 
     tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
 
-    // RenderContext for the legacy non-mesh drawable fallback (below).
-    // Only populated when the fallback path is taken; draw_geometry
-    // implementations for non-MeshRenderer drawables (NavMesh debug,
-    // immediate-mode gizmos, etc.) call tc_mesh_draw_gpu against
-    // whatever GL program is currently bound, so we ensure that's the
-    // legacy TcShader program before invoking them.
-    RenderContext legacy_ctx;
-    legacy_ctx.graphics = graphics;
-    legacy_ctx.phase = phase_mark.c_str();
-    legacy_ctx.view = view;
-    legacy_ctx.projection = projection;
-
     for (const auto& dc : cached_draw_calls_) {
         const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
@@ -514,63 +502,24 @@ void ColorPass::execute_with_data(
         // actually installed the C++ drawable vtable. Python drawables use
         // the same capability slot with a PyObject* userdata and a
         // different C vtable — casting that to Drawable* and calling
-        // virtual methods on it is undefined behaviour and was the cause
-        // of the Stage 6 post-switch segfault in chronosquad.
+        // virtual methods on it is undefined behaviour.
         Drawable* drawable = nullptr;
         if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
             drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
         }
+        if (!drawable) continue;
 
-        Mat44f model;
-        if (drawable) {
-            model = drawable->get_model_matrix(dc.entity);
-        } else {
-            // For Python (or otherwise non-C++) drawables we can't call
-            // into Drawable virtuals. Derive the model matrix from the
-            // entity's transform — same as Drawable::get_model_matrix's
-            // default implementation — and route the draw through the
-            // legacy C vtable via tc_component_draw_geometry below.
-            Entity e(dc.component->owner);
-            double m[16];
-            e.transform().world_matrix(m);
-            for (int i = 0; i < 16; ++i) {
-                model.data[i] = static_cast<float>(m[i]);
-            }
-        }
-
-        // Non-mesh drawable fallback: flush the pending tgfx2 state,
-        // bind the legacy program via TcShader::use(), and hand off to
-        // the component's draw_geometry(). The tgfx2 program will be
-        // re-bound automatically on the next mesh-backed draw via
-        // bind_shader + set_vertex_layout.
-        //
-        // Non-C++ drawables (drawable == nullptr) ALWAYS take this path —
-        // we can't ask them for a tc_mesh so we treat them as non-mesh
-        // and hand the draw back to the C vtable.
-        tc_mesh* mesh = drawable
-            ? drawable->get_mesh_for_phase(phase_mark, dc.geometry_id)
-            : nullptr;
+        tc_mesh* mesh = drawable->get_mesh_for_phase(phase_mark, dc.geometry_id);
         if (!mesh) {
-            ctx2->flush_pipeline();
-
-            TcShader legacy_shader(dc.final_shader);
-            legacy_shader.use();
-            legacy_shader.set_uniform_mat4("u_view",       view.data,       false);
-            legacy_shader.set_uniform_mat4("u_projection", projection.data, false);
-            legacy_shader.set_uniform_mat4("u_model",      model.data,      false);
-            legacy_ctx.model = model;
-            legacy_ctx.current_tc_shader = legacy_shader;
-
-            tc_component_draw_geometry(dc.component, &legacy_ctx, dc.geometry_id);
-
-            // Force the next mesh draw to re-bind its tgfx2 shader —
-            // the legacy program is currently active and pipeline
-            // state inside ctx2 still thinks its cached program is
-            // bound. Invalidate it via last_shader_handle reset so
-            // the "shader changed" branch runs next iteration.
-            last_shader_handle = tc_shader_handle_invalid();
+            // Non-mesh drawables (immediate gizmos, NavMesh debug,
+            // solid primitive helpers) belong in their own dedicated
+            // passes (UnifiedGizmoPass, ColliderGizmoPass, ...), not
+            // in ColorPass. Stage 8.1 removed the legacy fallback
+            // that ran them through shader.use() + draw_geometry.
             continue;
         }
+
+        Mat44f model = drawable->get_model_matrix(dc.entity);
 
         // Wrap the mesh's per-context VBO/EBO as tgfx2 buffers for
         // the duration of this draw. Destroyed right after draw —
