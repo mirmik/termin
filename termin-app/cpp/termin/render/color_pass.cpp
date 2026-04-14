@@ -1,6 +1,7 @@
 #include "color_pass.hpp"
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/material_ubo_apply.hpp"
+#include "termin/render/tgfx2_bridge.hpp"
 
 #include <optional>
 #include <cstdlib>
@@ -9,6 +10,7 @@
 #include "termin/lighting/lighting_upload.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
+#include "tgfx2/opengl/opengl_render_device.hpp"
 #include <termin/render/frame_graph_debugger_core.hpp>
 extern "C" {
 #include <tgfx/resources/tc_shader.h>
@@ -358,7 +360,8 @@ void ColorPass::execute_with_data(
     const std::vector<ShadowMapArrayEntry>& shadow_maps,
     const ShadowSettings& shadow_settings,
     uint64_t layer_mask,
-    tgfx2::IRenderDevice* tgfx2_device
+    tgfx2::IRenderDevice* tgfx2_device,
+    tgfx2::RenderContext2* ctx2
 ) {
     // Stage 5.H: material UBO dispatch is unconditional. The shader
     // parser always synthesizes a std140 MaterialParams block when a
@@ -367,6 +370,19 @@ void ColorPass::execute_with_data(
     // raw GLSL). Every shader with material_ubo_block_size > 0 MUST
     // go through apply_material_phase_ubo_gl or it will render with
     // zero material uniforms.
+
+    // Stage 5.K (first step): opt-in ctx2 pass boundary. When
+    // TERMIN_TGFX2_COLOR=1 is set AND a tgfx2 device is reachable, the
+    // color FBO is wrapped as tgfx2 color+depth textures and wrapped in
+    // ctx2->begin_pass / end_pass. Legacy glDraw* calls inside the pass
+    // keep working — the GL FBO is the same object either way, the
+    // tgfx2 layer just manages the pass lifetime and pipeline cache.
+    // Next iterations migrate individual state setup (viewport, clear,
+    // render state) and eventually the draw loop itself onto ctx2.
+    const bool tgfx2_color_enabled = [] {
+        const char* env = std::getenv("TERMIN_TGFX2_COLOR");
+        return env && env[0] && env[0] != '0';
+    }();
     // Get output framebuffer
     auto it = writes_fbos.find(output_res);
     if (it == writes_fbos.end() || it->second == nullptr) {
@@ -389,6 +405,36 @@ void ColorPass::execute_with_data(
     if (!fb) {
         tc::Log::warn("[ColorPass] FBO '%s' is not a FramebufferHandle (cast returned nullptr)", output_res.c_str());
         return;
+    }
+
+    // Stage 5.K step 1: wrap the color FBO as tgfx2 color+depth texture
+    // handles and open a ctx2 render pass around the legacy draw loop.
+    // Legacy glDraw* calls inside the pass still render into the same
+    // underlying GL FBO (via the `graphics->bind_framebuffer(fb)` call
+    // just below), so visual output is unchanged. ctx2 takes over the
+    // pass lifetime — eventually it will own the FBO cache and the
+    // draw-loop dispatch too.
+    tgfx2::OpenGLRenderDevice* gl_dev = nullptr;
+    tgfx2::TextureHandle color_tex2{};
+    tgfx2::TextureHandle depth_tex2{};
+    bool ctx2_pass_open = false;
+    if (tgfx2_color_enabled && ctx2) {
+        gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx2->device());
+    }
+    if (gl_dev) {
+        color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fb);
+        depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fb);
+        if (color_tex2) {
+            // Load existing contents; ColorPass is a final-composite
+            // draw that blends on top of whatever skybox/clear the
+            // framegraph allocator prepared.
+            ctx2->begin_pass(color_tex2, depth_tex2, /*clear_color=*/nullptr,
+                             /*clear_depth=*/1.0f,
+                             /*clear_depth_enabled=*/clear_depth);
+            ctx2_pass_open = true;
+            ctx2->defer_destroy(color_tex2);
+            if (depth_tex2) ctx2->defer_destroy(depth_tex2);
+        }
     }
 
     // Bind framebuffer and set viewport
@@ -711,6 +757,14 @@ void ColorPass::execute_with_data(
 
     // Reset render state
     graphics->apply_render_state(RenderState());
+
+    // Stage 5.K step 1: close the ctx2 pass wrapper, if any. Must come
+    // after the legacy state reset so ctx2::end_pass sees the final GL
+    // state (bound FBO, depth/blend disabled) the same way a ctx2 pass
+    // would see it coming out of a ctx2-native draw loop.
+    if (ctx2_pass_open && ctx2) {
+        ctx2->end_pass();
+    }
 }
 
 void ColorPass::execute(ExecuteContext& ctx) {
@@ -829,7 +883,8 @@ void ColorPass::execute(ExecuteContext& ctx) {
         shadow_maps,
         shadow_settings,
         ctx.layer_mask,
-        tgfx2_dev
+        tgfx2_dev,
+        ctx.ctx2
     );
 
     if (profile) tc_profiler_end_section();
