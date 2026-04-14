@@ -104,8 +104,9 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     }
     tgfx2::TextureHandle color_tex2 = color_it->second;
 
-    int w = ctx.rect.width;
-    int h = ctx.rect.height;
+    auto out_desc = device.texture_desc(color_tex2);
+    int w = static_cast<int>(out_desc.width);
+    int h = static_cast<int>(out_desc.height);
     if (w <= 0 || h <= 0) return;
 
     tc_material* mat = material.get();

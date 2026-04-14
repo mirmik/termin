@@ -189,8 +189,12 @@ void ColliderGizmoPass::execute(ExecuteContext& ctx) {
     // Walk scene and emit primitives into _renderer.
     tc_scene_foreach_component_of_type(scene, "ColliderComponent", draw_collider_callback, this);
 
+    auto out_desc = ctx.ctx2->device().texture_desc(color_tex2);
+    const int w = static_cast<int>(out_desc.width);
+    const int h = static_cast<int>(out_desc.height);
+
     ctx.ctx2->begin_pass(color_tex2, depth_tex2, nullptr, 1.0f, false);
-    ctx.ctx2->set_viewport(0, 0, ctx.rect.width, ctx.rect.height);
+    ctx.ctx2->set_viewport(0, 0, w, h);
     ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
     if (depth_test) {
         ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
