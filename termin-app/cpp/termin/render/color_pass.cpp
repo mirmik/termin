@@ -360,13 +360,13 @@ void ColorPass::execute_with_data(
     uint64_t layer_mask,
     tgfx2::IRenderDevice* tgfx2_device
 ) {
-    // Pilot: TERMIN_TGFX2_MATERIAL_UBO=1 enables the material UBO path.
-    // Gated here so a single env var flip toggles the whole ColorPass
-    // draw loop onto the new path without touching per-draw code.
-    const bool tgfx2_material_ubo_enabled = [] {
-        const char* env = std::getenv("TERMIN_TGFX2_MATERIAL_UBO");
-        return env && env[0] && env[0] != '0';
-    }();
+    // Stage 5.H: material UBO dispatch is unconditional. The shader
+    // parser always synthesizes a std140 MaterialParams block when a
+    // phase has @property entries, and the legacy per-uniform dispatch
+    // no longer reaches those uniforms (they were stripped from the
+    // raw GLSL). Every shader with material_ubo_block_size > 0 MUST
+    // go through apply_material_phase_ubo_gl or it will render with
+    // zero material uniforms.
     // Get output framebuffer
     auto it = writes_fbos.find(output_res);
     if (it == writes_fbos.end() || it->second == nullptr) {
@@ -574,28 +574,17 @@ void ColorPass::execute_with_data(
                 last_material_phase = dc.phase;
             }
 
-            // Stage 5.H pilot: if the shader has a std140 material UBO
-            // layout (synthesized by the parser when @features material_ubo
-            // is set), pack the phase uniforms into the phase-owned UBO
-            // and bind it at slot MATERIAL_UBO_BINDING. Legacy
-            // tc_material_phase_apply_with_mvp above already set u_model /
-            // u_view / u_projection via glUniform*; the @property uniforms
-            // that moved into the block had their plain `uniform` decls
-            // stripped from the GLSL so the legacy apply silently no-ops
-            // them (glGetUniformLocation returns -1).
-            if (tgfx2_material_ubo_enabled && shader_changed) {
-                // One-line diagnostic per shader change so we can trace
-                // which materials are seen by the pilot path and what
-                // state their shaders are in.
-                tc::Log::error("[Stage 5.H pilot] ColorPass shader=%s "
-                               "block_size=%u tgfx2_device=%p env_on=%d",
-                               shader_to_use.name(),
-                               raw_shader->material_ubo_block_size,
-                               (void*)tgfx2_device,
-                               (int)tgfx2_material_ubo_enabled);
-            }
-            if (tgfx2_material_ubo_enabled && tgfx2_device &&
-                raw_shader->material_ubo_block_size > 0) {
+            // Stage 5.H: if the shader has a std140 material UBO layout,
+            // pack the phase uniforms into the phase-owned UBO and bind
+            // it at slot MATERIAL_UBO_BINDING. This must run for every
+            // material shader with @property — the legacy
+            // tc_material_phase_apply_with_mvp above still sets u_model /
+            // u_view / u_projection via glUniform* (those are per-object
+            // matrices, not @property), and it still binds textures; the
+            // @property uniforms that moved into the block have their
+            // plain `uniform` decls stripped from the GLSL so the legacy
+            // apply silently no-ops them (glGetUniformLocation returns -1).
+            if (tgfx2_device && raw_shader->material_ubo_block_size > 0) {
                 if (apply_material_phase_ubo_gl(
                         dc.phase, raw_shader, MATERIAL_UBO_BINDING, *tgfx2_device)) {
                     // Link the compiled program's MaterialParams block
@@ -603,6 +592,17 @@ void ColorPass::execute_with_data(
                     // to call repeatedly (GL caches it on the program).
                     shader_to_use.set_block_binding("MaterialParams", MATERIAL_UBO_BINDING);
                 }
+            } else if (raw_shader->material_ubo_block_size > 0) {
+                // Non-fatal but unsafe: shader has a material UBO layout
+                // but we have no tgfx2 device. The block is in the GLSL
+                // and zero-initialized at draw time — materials will
+                // render with zero @property values. Logged to help catch
+                // pipelines that forget to plumb ctx.ctx2 into ColorPass.
+                tc::Log::error("[Stage 5.H] ColorPass: shader '%s' has material UBO layout "
+                               "(block_size=%u) but tgfx2_device is null — @property uniforms "
+                               "will render as zero",
+                               shader_to_use.name(),
+                               raw_shader->material_ubo_block_size);
             }
         }
         if (graphics->check_gl_error("after tc_material_phase_apply_with_mvp")) {

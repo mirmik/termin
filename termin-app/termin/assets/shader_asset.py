@@ -167,31 +167,29 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
         return ShaderMultyPhaseProgramm.from_tree(tree)
 
     def _update_tc_shaders(self) -> None:
-        """Update tc_shader registry for hot-reload."""
+        """Update tc_shader registry for hot-reload.
+
+        Runs at initial shader asset load AND on hot-reload from disk.
+        On first load the tc_shaders for the phases don't exist yet
+        (they are created later by MaterialPhase), so the loop skips.
+        On hot-reload they do exist and sources + material UBO layout
+        get pushed to them.
+        """
         if self._data is None or not self._uuid:
             return
-
-        from termin._native import log
 
         # Update tc_shader for each phase so existing TcShaders see new sources
         for phase in self._data.phases:
             phase_mark = phase.phase_mark
             phase_uuid = make_phase_uuid(self._uuid, phase_mark)
 
-            # Find existing tc_shader (don't create - it's created by MaterialPhase)
+            # Find existing tc_shader (don't create - it's created by MaterialPhase).
+            # On first asset load the tc_shader doesn't exist yet — that's
+            # expected, the layout gets pushed by material_asset._parse_material_content
+            # at material creation time instead.
             tc = TcShader.from_uuid(phase_uuid)
             if not tc.is_valid:
-                log.error(
-                    f"[Stage 5.H bridge] _update_tc_shaders: tc_shader not found "
-                    f"for phase_uuid={phase_uuid} (shader={self._name}, phase={phase_mark}) — "
-                    f"layout push will be skipped"
-                )
                 continue
-
-            log.error(
-                f"[Stage 5.H bridge] _update_tc_shaders: pushing to {self._name} phase={phase_mark} "
-                f"layout.block_size={phase.material_ubo_layout.block_size if phase.material_ubo_layout else 0}"
-            )
 
             # Get sources from phase
             vs = phase.stages.get("vertex")
