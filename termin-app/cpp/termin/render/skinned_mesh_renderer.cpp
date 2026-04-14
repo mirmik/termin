@@ -4,6 +4,7 @@
 #include "shader_skinning.hpp"
 #include <termin/entity/entity.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
+#include <tgfx2/render_context.hpp>
 #include <tcbase/tc_log.hpp>
 #include <algorithm>
 #include <unordered_map>
@@ -80,6 +81,23 @@ void SkinnedMeshRenderer::upload_bone_matrices(TcShader& shader) {
 
     shader.set_uniform_mat4_array("u_bone_matrices", _bone_matrices_flat.data(), _bone_count, false);
     shader.set_uniform_int("u_bone_count", _bone_count);
+}
+
+void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
+    tgfx2::RenderContext2& ctx2,
+    int geometry_id
+) {
+    (void)geometry_id;
+    if (!_skeleton_controller.valid()) return;
+
+    update_bone_matrices();
+    if (_bone_count <= 0 || _bone_matrices_flat.empty()) return;
+
+    ctx2.set_uniform_mat4_array("u_bone_matrices",
+                                _bone_matrices_flat.data(),
+                                _bone_count,
+                                /*transpose=*/false);
+    ctx2.set_uniform_int("u_bone_count", _bone_count);
 }
 
 TcShader SkinnedMeshRenderer::override_shader(

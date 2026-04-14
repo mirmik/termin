@@ -494,6 +494,18 @@ void ColorPass::execute_with_data(
 
     tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
 
+    // RenderContext for the legacy non-mesh drawable fallback (below).
+    // Only populated when the fallback path is taken; draw_geometry
+    // implementations for non-MeshRenderer drawables (NavMesh debug,
+    // immediate-mode gizmos, etc.) call tc_mesh_draw_gpu against
+    // whatever GL program is currently bound, so we ensure that's the
+    // legacy TcShader program before invoking them.
+    RenderContext legacy_ctx;
+    legacy_ctx.graphics = graphics;
+    legacy_ctx.phase = phase_mark.c_str();
+    legacy_ctx.view = view;
+    legacy_ctx.projection = projection;
+
     for (const auto& dc : cached_draw_calls_) {
         const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
@@ -501,16 +513,35 @@ void ColorPass::execute_with_data(
         auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
         if (!drawable) continue;
 
-        // Mesh access: non-MeshRenderer drawables get skipped until
-        // Stage 5.K expands to cover custom drawables.
+        Mat44f model = drawable->get_model_matrix(dc.entity);
+
+        // Non-mesh drawable fallback: flush the pending tgfx2 state,
+        // bind the legacy program via TcShader::use(), and hand off to
+        // the component's draw_geometry(). The tgfx2 program will be
+        // re-bound automatically on the next mesh-backed draw via
+        // bind_shader + set_vertex_layout.
         tc_mesh* mesh = drawable->get_mesh_for_phase(phase_mark, dc.geometry_id);
         if (!mesh) {
-            tc::Log::warn("[ColorPass/tgfx2] skipping non-mesh drawable '%s'",
-                          ename ? ename : "(unnamed)");
+            ctx2->flush_pipeline();
+
+            TcShader legacy_shader(dc.final_shader);
+            legacy_shader.use();
+            legacy_shader.set_uniform_mat4("u_view",       view.data,       false);
+            legacy_shader.set_uniform_mat4("u_projection", projection.data, false);
+            legacy_shader.set_uniform_mat4("u_model",      model.data,      false);
+            legacy_ctx.model = model;
+            legacy_ctx.current_tc_shader = legacy_shader;
+
+            tc_component_draw_geometry(dc.component, &legacy_ctx, dc.geometry_id);
+
+            // Force the next mesh draw to re-bind its tgfx2 shader —
+            // the legacy program is currently active and pipeline
+            // state inside ctx2 still thinks its cached program is
+            // bound. Invalidate it via last_shader_handle reset so
+            // the "shader changed" branch runs next iteration.
+            last_shader_handle = tc_shader_handle_invalid();
             continue;
         }
-
-        Mat44f model = drawable->get_model_matrix(dc.entity);
 
         // Wrap the mesh's per-context VBO/EBO as tgfx2 buffers for
         // the duration of this draw. Destroyed right after draw —
@@ -646,6 +677,11 @@ void ColorPass::execute_with_data(
 
             last_shader_handle = dc.final_shader;
         }
+
+        // Per-draw uniforms that can't live in push-constants or the
+        // material UBO yet — skinning bone matrices are the main case.
+        // Default implementation is a no-op for non-skinned drawables.
+        drawable->upload_per_draw_uniforms_tgfx2(*ctx2, dc.geometry_id);
 
         // Issue the draw. This flushes the pending ctx2 state into a
         // pipeline binding + glDrawElements inside the ctx2 render pass.
