@@ -22,34 +22,41 @@
 namespace termin {
 
 // ============================================================================
-// Shaders
+// Shader source
 // ============================================================================
 //
-// All three shaders declare an identical `SkyboxParams` std140 uniform block
-// so the same UBO binding (slot 0) feeds every variant. Colors live in vec4
-// slots (xyz = color, w = unused / 1.0) to sidestep the std140 vec3 quirk.
+// Full @program .shader text. The parser processes it at load time and
+// synthesizes a std140 MaterialParams block from the @property entries,
+// strips the corresponding `uniform` decls from the stage sources, and
+// injects the block declaration after #version. The layout, block size,
+// and rewritten stage sources all come out of parse_shader_text()
+// below — zero hand-coded duplication.
+//
+// A single fragment stage branches on u_skybox_type to cover both solid
+// and gradient variants, so the program compiles to one pipeline.
 
-static const char* SKYBOX_UBO_BLOCK = R"(
-layout(std140) uniform SkyboxParams {
-    mat4 u_view;
-    mat4 u_projection;
-    vec4 u_skybox_color;
-    vec4 u_skybox_top_color;
-    vec4 u_skybox_bottom_color;
-};
-)";
+static const char* SKYBOX_SHADER_TEXT = R"(
+@program Skybox
 
-static const char* SKYBOX_VS = R"(
+@phase opaque
+@priority 0
+@glDepthTest true
+@glDepthMask false
+@glCull false
+
+@property Mat4  u_view
+@property Mat4  u_projection
+@property Int   u_skybox_type
+@property Color u_skybox_color        = Color(0.5, 0.5, 0.5, 1.0)
+@property Color u_skybox_top_color    = Color(0.3, 0.5, 1.0, 1.0)
+@property Color u_skybox_bottom_color = Color(0.1, 0.1, 0.3, 1.0)
+
+@stage vertex
 #version 330 core
 layout(location = 0) in vec3 a_position;
 
-layout(std140) uniform SkyboxParams {
-    mat4 u_view;
-    mat4 u_projection;
-    vec4 u_skybox_color;
-    vec4 u_skybox_top_color;
-    vec4 u_skybox_bottom_color;
-};
+uniform mat4 u_view;
+uniform mat4 u_projection;
 
 out vec3 v_dir;
 
@@ -58,46 +65,34 @@ void main() {
     v_dir = a_position;
     gl_Position = u_projection * view_no_translation * vec4(a_position, 1.0);
 }
-)";
+@endstage
 
-static const char* SKYBOX_FS_GRADIENT = R"(
+@stage fragment
 #version 330 core
 
 in vec3 v_dir;
 out vec4 FragColor;
 
-layout(std140) uniform SkyboxParams {
-    mat4 u_view;
-    mat4 u_projection;
-    vec4 u_skybox_color;
-    vec4 u_skybox_top_color;
-    vec4 u_skybox_bottom_color;
-};
+uniform int  u_skybox_type;
+uniform vec4 u_skybox_color;
+uniform vec4 u_skybox_top_color;
+uniform vec4 u_skybox_bottom_color;
 
 void main() {
-    float t = normalize(v_dir).z * 0.5 + 0.5;
-    vec3 c = mix(u_skybox_bottom_color.rgb, u_skybox_top_color.rgb, t);
-    FragColor = vec4(c, 1.0);
+    // 0 = gradient, 1 = solid — matches the TC_SKYBOX_* enum values in
+    // core/tc_scene_skybox.h (TC_SKYBOX_GRADIENT=0, TC_SKYBOX_SOLID=1;
+    // TC_SKYBOX_NONE is filtered out by the C++ caller before dispatch).
+    if (u_skybox_type == 1) {
+        FragColor = vec4(u_skybox_color.rgb, 1.0);
+    } else {
+        float t = normalize(v_dir).z * 0.5 + 0.5;
+        vec3 c = mix(u_skybox_bottom_color.rgb, u_skybox_top_color.rgb, t);
+        FragColor = vec4(c, 1.0);
+    }
 }
-)";
+@endstage
 
-static const char* SKYBOX_FS_SOLID = R"(
-#version 330 core
-
-in vec3 v_dir;
-out vec4 FragColor;
-
-layout(std140) uniform SkyboxParams {
-    mat4 u_view;
-    mat4 u_projection;
-    vec4 u_skybox_color;
-    vec4 u_skybox_top_color;
-    vec4 u_skybox_bottom_color;
-};
-
-void main() {
-    FragColor = vec4(u_skybox_color.rgb, 1.0);
-}
+@endphase
 )";
 
 // ============================================================================
@@ -167,20 +162,38 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
 
+    // Parse the @program .shader text once. Parser auto-generates the
+    // std140 MaterialParams block from the @property entries, rewrites
+    // the stage sources to include the block declaration, and returns a
+    // layout we can use directly for std140_pack / block_size sizing.
+    ShaderMultyPhaseProgramm parsed = parse_shader_text(SKYBOX_SHADER_TEXT);
+    if (parsed.phases.empty()) {
+        tc::Log::error("[SkyBoxPass] failed to parse shader text");
+        return;
+    }
+    const ShaderPhase& phase = parsed.phases.front();
+    skybox_layout_ = phase.material_ubo_layout;
+    if (skybox_layout_.block_size == 0) {
+        tc::Log::error("[SkyBoxPass] parser produced empty material UBO layout");
+        return;
+    }
+
+    const auto vs_it = phase.stages.find("vertex");
+    const auto fs_it = phase.stages.find("fragment");
+    if (vs_it == phase.stages.end() || fs_it == phase.stages.end()) {
+        tc::Log::error("[SkyBoxPass] parser produced phase without vertex/fragment stage");
+        return;
+    }
+
     tgfx2::ShaderDesc vs_desc;
     vs_desc.stage = tgfx2::ShaderStage::Vertex;
-    vs_desc.source = SKYBOX_VS;
+    vs_desc.source = vs_it->second.source;
     vs_ = device2_->create_shader(vs_desc);
 
-    tgfx2::ShaderDesc fs_grad_desc;
-    fs_grad_desc.stage = tgfx2::ShaderStage::Fragment;
-    fs_grad_desc.source = SKYBOX_FS_GRADIENT;
-    fs_gradient_ = device2_->create_shader(fs_grad_desc);
-
-    tgfx2::ShaderDesc fs_solid_desc;
-    fs_solid_desc.stage = tgfx2::ShaderStage::Fragment;
-    fs_solid_desc.source = SKYBOX_FS_SOLID;
-    fs_solid_ = device2_->create_shader(fs_solid_desc);
+    tgfx2::ShaderDesc fs_desc;
+    fs_desc.stage = tgfx2::ShaderStage::Fragment;
+    fs_desc.source = fs_it->second.source;
+    fs_ = device2_->create_shader(fs_desc);
 
     tgfx2::BufferDesc vbo_desc;
     vbo_desc.size = sizeof(CUBE_VERTICES);
@@ -202,37 +215,11 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
             reinterpret_cast<const uint8_t*>(CUBE_INDICES),
             sizeof(CUBE_INDICES)));
 
-    // UBO sized to hold all five fields. Block layout is constructed by
-    // hand below; 2 * mat4 + 3 * vec4 = 128 + 48 = 176, rounded to 176.
+    // UBO sized from parser-computed block_size — no hand-coded duplicate.
     tgfx2::BufferDesc ubo_desc;
-    ubo_desc.size = 2u * 64u + 3u * 16u;
+    ubo_desc.size = skybox_layout_.block_size;
     ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
     params_ubo_ = device2_->create_buffer(ubo_desc);
-}
-
-// ============================================================================
-// Hand-written layout for SkyboxParams block
-// ============================================================================
-
-static MaterialUboLayout make_skybox_layout() {
-    MaterialUboLayout layout;
-
-    auto add = [&](const char* name, const char* type, uint32_t offset, uint32_t size) {
-        MaterialUboEntry e;
-        e.name = name;
-        e.property_type = type;
-        e.offset = offset;
-        e.size = size;
-        layout.entries.push_back(e);
-    };
-
-    add("u_view",                "Mat4", 0,   64);
-    add("u_projection",          "Mat4", 64,  64);
-    add("u_skybox_color",        "Vec4", 128, 16);
-    add("u_skybox_top_color",    "Vec4", 144, 16);
-    add("u_skybox_bottom_color", "Vec4", 160, 16);
-    layout.block_size = 176;
-    return layout;
 }
 
 // ============================================================================
@@ -269,11 +256,15 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     if (w <= 0 || h <= 0) return;
 
     ensure_resources(ctx);
-    if (!params_ubo_) return;
+    if (!params_ubo_ || skybox_layout_.block_size == 0) return;
 
-    // Collect material values: camera matrices + skybox colors. Both color
-    // arrays are filled even though only one variant uses each — the other
-    // gets zeros, which is harmless.
+    // Collect material values: variant selector + camera matrices + colors.
+    // u_skybox_type matches the TC_SKYBOX_* enum (0=gradient, 1=solid); the
+    // fragment shader branches on it so we bind one pipeline regardless of
+    // variant. u_skybox_type = Int here, not Bool, so the shader comparison
+    // uses GLSL int semantics.
+    int variant_int = (skybox_type == TC_SKYBOX_SOLID) ? 1 : 0;
+
     float solid_rgb[3] = {0, 0, 0};
     float top_rgb[3]   = {0, 0, 0};
     float bot_rgb[3]   = {0, 0, 0};
@@ -290,17 +281,16 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     std::vector<MaterialProperty> values;
     values.emplace_back("u_view",       "Mat4", std::move(view_data));
     values.emplace_back("u_projection", "Mat4", std::move(proj_data));
+    values.emplace_back("u_skybox_type", "Int", variant_int);
     values.emplace_back(
-        "u_skybox_color", "Vec4",
+        "u_skybox_color", "Color",
         std::vector<double>{solid_rgb[0], solid_rgb[1], solid_rgb[2], 1.0});
     values.emplace_back(
-        "u_skybox_top_color", "Vec4",
+        "u_skybox_top_color", "Color",
         std::vector<double>{top_rgb[0], top_rgb[1], top_rgb[2], 1.0});
     values.emplace_back(
-        "u_skybox_bottom_color", "Vec4",
+        "u_skybox_bottom_color", "Color",
         std::vector<double>{bot_rgb[0], bot_rgb[1], bot_rgb[2], 1.0});
-
-    static const MaterialUboLayout layout = make_skybox_layout();
 
     // Begin pass with LoadOp::Load — inplace alias means input_res already
     // holds whatever the framegraph allocator cleared it to.
@@ -313,9 +303,7 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx2::CullMode::None);
 
-    tgfx2::ShaderHandle fs =
-        (skybox_type == TC_SKYBOX_SOLID) ? fs_solid_ : fs_gradient_;
-    ctx.ctx2->bind_shader(vs_, fs);
+    ctx.ctx2->bind_shader(vs_, fs_);
     ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
 
     tgfx2::VertexBufferLayout cube_layout;
@@ -325,7 +313,7 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     };
     ctx.ctx2->set_vertex_layout(cube_layout);
 
-    bind_material_ubo(layout, values, {}, params_ubo_, 0, *device2_, *ctx.ctx2);
+    bind_material_ubo(skybox_layout_, values, {}, params_ubo_, 0, *device2_, *ctx.ctx2);
 
     ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx2::IndexType::Uint32);
     ctx.ctx2->end_pass();
@@ -333,14 +321,14 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
 
 void SkyBoxPass::destroy() {
     if (device2_) {
-        if (vs_)          { device2_->destroy(vs_);          vs_ = {}; }
-        if (fs_gradient_) { device2_->destroy(fs_gradient_); fs_gradient_ = {}; }
-        if (fs_solid_)    { device2_->destroy(fs_solid_);    fs_solid_ = {}; }
-        if (cube_vbo_)    { device2_->destroy(cube_vbo_);    cube_vbo_ = {}; }
-        if (cube_ibo_)    { device2_->destroy(cube_ibo_);    cube_ibo_ = {}; }
-        if (params_ubo_)  { device2_->destroy(params_ubo_);  params_ubo_ = {}; }
+        if (vs_)         { device2_->destroy(vs_);         vs_ = {}; }
+        if (fs_)         { device2_->destroy(fs_);         fs_ = {}; }
+        if (cube_vbo_)   { device2_->destroy(cube_vbo_);   cube_vbo_ = {}; }
+        if (cube_ibo_)   { device2_->destroy(cube_ibo_);   cube_ibo_ = {}; }
+        if (params_ubo_) { device2_->destroy(params_ubo_); params_ubo_ = {}; }
         device2_ = nullptr;
     }
+    skybox_layout_ = MaterialUboLayout{};
 }
 
 TC_REGISTER_FRAME_PASS(SkyBoxPass);

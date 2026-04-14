@@ -1,13 +1,16 @@
 // skybox_pass.hpp - tgfx2-native skybox rendering.
 //
-// Stage 4 of the tgfx2 migration. The skybox is the first full-stack
-// material-style pass going through RenderContext2 + bind_material_ubo:
-// a hand-written MaterialUboLayout carries per-frame camera matrices plus
-// skybox colors, packed via std140_pack and bound via the ResourceSet API
-// added in Stage 1.
+// Stage 5.I: driven entirely by the tgfx2 material UBO path. The shader
+// text is a @program .shader string parsed at ensure_resources time, the
+// parser auto-generates the std140 MaterialParams layout from @property
+// entries, and values (camera matrices + colors + variant selector) are
+// packed each frame and bound via bind_material_ubo. No hand-coded layout,
+// no gradient/solid shader split — a single fragment shader branches on
+// the u_skybox_type @property.
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
+#include "termin/render/shader_parser.hpp"
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
 
@@ -27,11 +30,14 @@ private:
     // becomes reachable through ExecuteContext::ctx2. Destroyed in destroy().
     tgfx2::IRenderDevice* device2_ = nullptr;
     tgfx2::ShaderHandle vs_;
-    tgfx2::ShaderHandle fs_gradient_;
-    tgfx2::ShaderHandle fs_solid_;
+    tgfx2::ShaderHandle fs_;
     tgfx2::BufferHandle cube_vbo_;
     tgfx2::BufferHandle cube_ibo_;
     tgfx2::BufferHandle params_ubo_;
+
+    // Parsed from SKYBOX_SHADER_TEXT at ensure_resources time — layout
+    // drives std140_pack and the UBO block_size. No hand-coded duplicate.
+    MaterialUboLayout skybox_layout_;
 
 public:
     INSPECT_FIELD(SkyBoxPass, input_res, "Input", "string")
