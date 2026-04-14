@@ -74,15 +74,6 @@ void SkinnedMeshRenderer::update_bone_matrices() {
     }
 }
 
-void SkinnedMeshRenderer::upload_bone_matrices(TcShader& shader) {
-    if (_bone_count == 0 || _bone_matrices_flat.empty()) {
-        return;
-    }
-
-    shader.set_uniform_mat4_array("u_bone_matrices", _bone_matrices_flat.data(), _bone_count, false);
-    shader.set_uniform_int("u_bone_count", _bone_count);
-}
-
 void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
     tgfx2::RenderContext2& ctx2,
     int geometry_id
@@ -135,28 +126,6 @@ TcShader SkinnedMeshRenderer::override_shader(
     }
 
     return original_shader;
-}
-
-void SkinnedMeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
-    if (!mesh.is_valid()) {
-        return;
-    }
-
-    // Upload bone matrices if we have a skeleton
-    if (_skeleton_controller.valid() && context.current_tc_shader.is_valid()) {
-        update_bone_matrices();
-        if (_bone_count > 0) {
-            // Use TcShader for uniform upload
-            TcShader shader = context.current_tc_shader;
-            upload_bone_matrices(shader);
-        }
-    }
-
-    // Draw the mesh via tc_mesh GPU API
-    tc_mesh* m = mesh.get();
-    if (m) {
-        tc_mesh_draw_gpu(m);
-    }
 }
 
 std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string* phase_mark) {
