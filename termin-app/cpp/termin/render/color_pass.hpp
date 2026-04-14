@@ -192,7 +192,7 @@ private:
     /**
      * Bind extra textures to texture units before rendering.
      */
-    void bind_extra_textures(const FBOMap& reads_fbos);
+    void bind_extra_textures(const Tex2Map& tex2_reads, tgfx2::RenderContext2* ctx2);
 
     /**
      * Find camera component by entity name in scene.

@@ -130,48 +130,26 @@ void ColorPass::add_extra_texture(const std::string& uniform_name, const std::st
     extra_textures[name] = resource_name;
 }
 
-void ColorPass::bind_extra_textures(const FBOMap& reads_fbos) {
+void ColorPass::bind_extra_textures(
+    const Tex2Map& tex2_reads,
+    tgfx2::RenderContext2* ctx2
+) {
     // Clear previous frame's uniforms
     extra_texture_uniforms.clear();
+    if (!ctx2) return;
 
     int i = 0;
     for (const auto& [uniform_name, resource_name] : extra_textures) {
-        auto it = reads_fbos.find(resource_name);
-        if (it == reads_fbos.end() || it->second == nullptr) {
-            tc::Log::warn("[ColorPass:%s] FBO not found for resource: %s",
+        auto it = tex2_reads.find(resource_name);
+        if (it == tex2_reads.end() || !it->second) {
+            tc::Log::warn("[ColorPass:%s] tgfx2 texture not found for resource: %s",
                          get_pass_name().c_str(), resource_name.c_str());
             continue;
         }
 
-        // Get FBO and its color texture
-        FrameGraphResource* resource = it->second;
-
-        FramebufferHandle* fbo = nullptr;
-        try {
-            fbo = dynamic_cast<FramebufferHandle*>(resource);
-        } catch (const std::exception& e) {
-            tc::Log::error("[ColorPass:%s] dynamic_cast failed: %s", get_pass_name().c_str(), e.what());
-            continue;
-        }
-
-        if (!fbo) {
-            tc::Log::warn("[ColorPass:%s] Resource %s is not a FramebufferHandle (cast returned nullptr)",
-                         get_pass_name().c_str(), resource_name.c_str());
-            continue;
-        }
-
-        GPUTextureHandle* tex = fbo->color_texture();
-        if (!tex) {
-            tc::Log::warn("[ColorPass:%s] No color_texture on FBO %s",
-                         get_pass_name().c_str(), resource_name.c_str());
-            continue;
-        }
-
-        // Bind to texture unit
         int unit = EXTRA_TEXTURE_UNIT_START + i;
-        tex->bind(unit);
-
-        // Register uniform->unit mapping for shader
+        ctx2->bind_sampled_texture(unit, it->second);
+        ctx2->set_uniform_int(uniform_name.c_str(), unit);
         extra_texture_uniforms[uniform_name] = unit;
         ++i;
     }
@@ -575,6 +553,12 @@ void ColorPass::execute_with_data(
                                  MATERIAL_TEX_SLOT_BASE,
                                  device, *ctx2);
 
+        // Extra textures (nodegraph inputs) — bind into the currently
+        // active pipeline after material textures are in place.
+        if (!extra_textures.empty()) {
+            bind_extra_textures(ctx.tex2_reads, ctx2);
+        }
+
         // Tell the shader which texture unit each material sampler
         // reads from. Existing shaders declare `uniform sampler2D
         // u_albedo_texture` etc. without an explicit `layout(binding)`
@@ -695,25 +679,27 @@ void ColorPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    // Bind extra textures (if any)
-    if (!extra_textures.empty()) {
-        bind_extra_textures(ctx.reads_fbos);
-    }
+    // extra_textures are resolved inside execute_with_data after a ctx2
+    // shader is bound (bind_extra_textures needs an active pipeline to
+    // call bind_sampled_texture + set_uniform_int).
 
-    // Get output FBO and update rect to match its size
+    // Get output size from the tgfx2 color texture and update rect.
     Rect4i rect = ctx.rect;
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it != ctx.writes_fbos.end() && it->second != nullptr) {
-        FramebufferHandle* output_fbo = dynamic_cast<FramebufferHandle*>(it->second);
-        if (output_fbo) {
-            int w = output_fbo->get_width();
-            int h = output_fbo->get_height();
-            rect = Rect4i{0, 0, w, h};
-            if (!camera_name.empty()) {
-                CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-                if (named_camera) {
-                    named_camera_snapshot = make_render_camera(*named_camera, static_cast<double>(w) / std::max(1, h));
-                    camera = &*named_camera_snapshot;
+    if (ctx.ctx2) {
+        auto it = ctx.tex2_writes.find(output_res);
+        if (it != ctx.tex2_writes.end() && it->second) {
+            auto desc = ctx.ctx2->device().texture_desc(it->second);
+            int w = static_cast<int>(desc.width);
+            int h = static_cast<int>(desc.height);
+            if (w > 0 && h > 0) {
+                rect = Rect4i{0, 0, w, h};
+                if (!camera_name.empty()) {
+                    CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
+                    if (named_camera) {
+                        named_camera_snapshot = make_render_camera(
+                            *named_camera, static_cast<double>(w) / std::max(1, h));
+                        camera = &*named_camera_snapshot;
+                    }
                 }
             }
         }
