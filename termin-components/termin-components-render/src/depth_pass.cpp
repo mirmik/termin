@@ -209,7 +209,7 @@ void DepthPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(ctx.ctx2->device());
 
-    TcShader& base_shader = get_shader(ctx.graphics);
+    TcShader& base_shader = get_shader();
     collect_draw_calls(scene, layer_mask, base_shader.handle);
     sort_draw_calls_by_shader();
 

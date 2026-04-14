@@ -83,7 +83,7 @@ protected:
     virtual bool entity_filter(const Entity& ent) const;
     virtual int get_pick_id(const Entity& ent) const;
 
-    TcShader& get_shader(GraphicsBackend* graphics);
+    TcShader& get_shader();
     void maybe_blit_to_debugger(
         GraphicsBackend* graphics,
         FramebufferHandle* fb,

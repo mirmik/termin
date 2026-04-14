@@ -196,7 +196,7 @@ void IdPass::execute_with_data_tgfx2(
     // needs a tc_shader_handle to key overrides against; the TcShader
     // object itself stays in _shader for the legacy fallback branch of
     // the inner loop.
-    TcShader& base_shader = get_shader(ctx.graphics);
+    TcShader& base_shader = get_shader();
     collect_draw_calls(scene, layer_mask, base_shader.handle);
     sort_draw_calls_by_shader();
 
