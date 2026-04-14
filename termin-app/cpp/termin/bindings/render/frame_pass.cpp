@@ -307,39 +307,6 @@ void bind_frame_pass(nb::module_& m) {
             [](ShadowPass& self) -> TcShader* { return self.shadow_shader; },
             [](ShadowPass& self, TcShader* s) { self.shadow_shader = s; })
         .def("get_internal_symbols", &ShadowPass::get_internal_symbols)
-        .def("execute_shadow_pass", [](
-            ShadowPass& self,
-            GraphicsBackend* graphics,
-            nb::object scene_py,
-            nb::list lights_py,
-            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_view_py,
-            nb::ndarray<nb::numpy, float, nb::shape<4, 4>> camera_projection_py
-        ) {
-            tc_scene_handle scene = object_to_scene_handle(scene_py);
-
-            std::vector<Light> lights;
-            for (auto item : lights_py) {
-                lights.push_back(nb::cast<Light>(item));
-            }
-
-            Mat44f camera_view = ndarray_to_mat44f(camera_view_py);
-            Mat44f camera_projection = ndarray_to_mat44f(camera_projection_py);
-
-            std::vector<ShadowMapResult> results = self.execute_shadow_pass(
-                graphics, scene, lights, camera_view, camera_projection
-            );
-
-            nb::list result_list;
-            for (const auto& r : results) {
-                result_list.append(nb::cast(r));
-            }
-            return result_list;
-        },
-        nb::arg("graphics"),
-        nb::arg("scene"),
-        nb::arg("lights"),
-        nb::arg("camera_view"),
-        nb::arg("camera_projection"))
         .def_prop_ro("reads", &ShadowPass::compute_reads)
         .def_prop_ro("writes", &ShadowPass::compute_writes)
         .def("destroy", &ShadowPass::destroy)
@@ -364,9 +331,6 @@ void bind_frame_pass(nb::module_& m) {
         .def_rw("output_res", &IdPass::output_res)
         .def_rw("camera_name", &IdPass::camera_name)
         .def("get_internal_symbols", &IdPass::get_internal_symbols)
-        .def("execute_with_data", [](IdPass& self, GraphicsBackend* graphics, nb::dict reads_fbos_py, nb::dict writes_fbos_py, nb::tuple rect_py, nb::object scene_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py, uint64_t layer_mask) {
-            self.execute_with_data(graphics, dict_to_fbo_map(reads_fbos_py), dict_to_fbo_map(writes_fbos_py), tuple_to_rect(rect_py), object_to_scene_handle(scene_py), ndarray_to_mat44f(view_py), ndarray_to_mat44f(projection_py), layer_mask);
-        }, nb::arg("graphics"), nb::arg("reads_fbos"), nb::arg("writes_fbos"), nb::arg("rect"), nb::arg("scene"), nb::arg("view"), nb::arg("projection"), nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def_prop_ro("reads", &IdPass::compute_reads)
         .def_prop_ro("writes", &IdPass::compute_writes)
         .def("destroy", &IdPass::destroy);

@@ -84,11 +84,6 @@ void main() {
 }
 )";
 
-bool tgfx2_id_enabled() {
-    const char* env = std::getenv("TERMIN_TGFX2_ID");
-    return env && env[0] && env[0] != '0';
-}
-
 } // anonymous namespace
 
 const char* ID_PASS_VERT = R"(
@@ -331,91 +326,6 @@ void IdPass::execute_with_data_tgfx2(
     if (depth_tex2) gl_dev->destroy(depth_tex2);
 }
 
-void IdPass::execute_with_data(
-    GraphicsBackend* graphics,
-    const FBOMap& reads_fbos,
-    const FBOMap& writes_fbos,
-    const Rect4i& rect,
-    tc_scene_handle scene,
-    const Mat44f& view,
-    const Mat44f& projection,
-    uint64_t layer_mask
-) {
-    (void)reads_fbos;
-
-    auto it = writes_fbos.find(output_res);
-    if (it == writes_fbos.end() || it->second == nullptr) {
-        return;
-    }
-    FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
-    if (!fb) {
-        return;
-    }
-
-    bind_and_clear(graphics, fb, rect);
-    apply_default_render_state(graphics);
-
-    TcShader& base_shader = get_shader(graphics);
-    collect_draw_calls(scene, layer_mask, base_shader.handle);
-    sort_draw_calls_by_shader();
-
-    entity_names.clear();
-    std::set<std::string> seen_entities;
-
-    RenderContext context;
-    context.view = view;
-    context.projection = projection;
-    context.graphics = graphics;
-    context.phase = phase_name();
-
-    const std::string& debug_symbol = get_debug_internal_point();
-    tc_shader_handle last_shader = tc_shader_handle_invalid();
-    int current_pick_id = -1;
-    float pick_r = 0.0f;
-    float pick_g = 0.0f;
-    float pick_b = 0.0f;
-
-    for (const auto& dc : cached_draw_calls_) {
-        auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
-        if (!drawable) {
-            continue;
-        }
-        Mat44f model = drawable->get_model_matrix(dc.entity);
-        context.model = model;
-
-        const char* name = dc.entity.name();
-        if (name && seen_entities.insert(name).second) {
-            entity_names.push_back(name);
-        }
-
-        if (dc.pick_id != current_pick_id) {
-            current_pick_id = dc.pick_id;
-            id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
-        }
-
-        tc_shader_handle shader_handle = dc.final_shader;
-        bool shader_changed = !tc_shader_handle_eq(shader_handle, last_shader);
-
-        TcShader shader_to_use(shader_handle);
-        if (shader_changed) {
-            shader_to_use.use();
-            shader_to_use.set_uniform_mat4("u_view", view.data, false);
-            shader_to_use.set_uniform_mat4("u_projection", projection.data, false);
-            last_shader = shader_handle;
-        }
-
-        shader_to_use.set_uniform_mat4("u_model", model.data, false);
-        shader_to_use.set_uniform_vec3("u_pickColor", pick_r, pick_g, pick_b);
-
-        context.current_tc_shader = shader_to_use;
-        tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
-
-        if (!debug_symbol.empty() && name && debug_symbol == name) {
-            maybe_blit_to_debugger(graphics, fb, name, rect.width, rect.height);
-        }
-    }
-}
-
 void IdPass::execute(ExecuteContext& ctx) {
     tc_scene_handle scene = ctx.scene.handle();
     const RenderCamera* camera = ctx.camera;
@@ -456,27 +366,19 @@ void IdPass::execute(ExecuteContext& ctx) {
     Mat44f view = view_d.to_float();
     Mat44f projection = proj_d.to_float();
 
-    if (ctx.ctx2 && tgfx2_id_enabled()) {
-        execute_with_data_tgfx2(
-            ctx,
-            rect,
-            scene,
-            view,
-            projection,
-            ctx.layer_mask
-        );
-    } else {
-        execute_with_data(
-            ctx.graphics,
-            ctx.reads_fbos,
-            ctx.writes_fbos,
-            rect,
-            scene,
-            view,
-            projection,
-            ctx.layer_mask
-        );
+    if (!ctx.ctx2) {
+        tc::Log::error("[IdPass] ctx.ctx2 is null — IdPass is tgfx2-only");
+        return;
     }
+
+    execute_with_data_tgfx2(
+        ctx,
+        rect,
+        scene,
+        view,
+        projection,
+        ctx.layer_mask
+    );
 }
 
 TC_REGISTER_FRAME_PASS_DERIVED(IdPass, GeometryPassBase);

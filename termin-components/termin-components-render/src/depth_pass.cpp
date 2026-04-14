@@ -91,11 +91,6 @@ void main() {
 }
 )";
 
-bool tgfx2_depth_enabled() {
-    const char* env = std::getenv("TERMIN_TGFX2_DEPTH");
-    return env && env[0] && env[0] != '0';
-}
-
 } // anonymous namespace
 
 const char* DEPTH_PASS_VERT = R"(
@@ -138,24 +133,6 @@ void main()
     FragColor = vec4(d, d, d, 1.0);
 }
 )";
-
-void DepthPass::execute_with_data(
-    GraphicsBackend* graphics,
-    const FBOMap& reads_fbos,
-    const FBOMap& writes_fbos,
-    const Rect4i& rect,
-    tc_scene_handle scene,
-    const Mat44f& view,
-    const Mat44f& projection,
-    float near_plane,
-    float far_plane,
-    uint64_t layer_mask
-) {
-    (void)reads_fbos;
-    _near_plane = near_plane;
-    _far_plane = far_plane;
-    execute_geometry_pass(graphics, writes_fbos, rect, scene, view, projection, layer_mask);
-}
 
 void DepthPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
     if (device2_ == &device && depth_vs2_ && depth_fs2_ && per_frame_ubo_) {
@@ -389,31 +366,21 @@ void DepthPass::execute(ExecuteContext& ctx) {
     float near_plane = static_cast<float>(camera->near_clip);
     float far_plane = static_cast<float>(camera->far_clip);
 
-    if (ctx.ctx2 && tgfx2_depth_enabled()) {
-        execute_with_data_tgfx2(
-            ctx,
-            rect,
-            scene,
-            view,
-            projection,
-            near_plane,
-            far_plane,
-            ctx.layer_mask
-        );
-    } else {
-        execute_with_data(
-            ctx.graphics,
-            ctx.reads_fbos,
-            ctx.writes_fbos,
-            rect,
-            scene,
-            view,
-            projection,
-            near_plane,
-            far_plane,
-            ctx.layer_mask
-        );
+    if (!ctx.ctx2) {
+        tc::Log::error("[DepthPass] ctx.ctx2 is null — DepthPass is tgfx2-only");
+        return;
     }
+
+    execute_with_data_tgfx2(
+        ctx,
+        rect,
+        scene,
+        view,
+        projection,
+        near_plane,
+        far_plane,
+        ctx.layer_mask
+    );
 }
 
 TC_REGISTER_FRAME_PASS_DERIVED(DepthPass, GeometryPassBase);

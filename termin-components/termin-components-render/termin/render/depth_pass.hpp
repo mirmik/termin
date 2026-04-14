@@ -38,20 +38,7 @@ public:
         release_tgfx2_resources();
     }
 
-    void execute_with_data(
-        GraphicsBackend* graphics,
-        const FBOMap& reads_fbos,
-        const FBOMap& writes_fbos,
-        const Rect4i& rect,
-        tc_scene_handle scene,
-        const Mat44f& view,
-        const Mat44f& projection,
-        float near_plane,
-        float far_plane,
-        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
-    );
-
-    // tgfx2 variant — gated by TERMIN_TGFX2_DEPTH env var.
+    // tgfx2-native DepthPass entry — requires ctx.ctx2 to be non-null.
     void execute_with_data_tgfx2(
         ExecuteContext& ctx,
         const Rect4i& rect,

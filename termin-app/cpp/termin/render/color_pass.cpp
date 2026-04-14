@@ -346,395 +346,8 @@ void ColorPass::sort_draw_calls() {
     std::swap(cached_draw_calls_, sorted_draw_calls_);
 }
 
-void ColorPass::execute_with_data(
-    GraphicsBackend* graphics,
-    const FBOMap& reads_fbos,
-    const FBOMap& writes_fbos,
-    const Rect4i& rect,
-    tc_scene_handle scene,
-    const Mat44f& view,
-    const Mat44f& projection,
-    const Vec3& camera_position,
-    const std::vector<Light>& lights,
-    const Vec3& ambient_color,
-    float ambient_intensity,
-    const std::vector<ShadowMapArrayEntry>& shadow_maps,
-    const ShadowSettings& shadow_settings,
-    uint64_t layer_mask,
-    tgfx2::IRenderDevice* tgfx2_device,
-    tgfx2::RenderContext2* ctx2
-) {
-    // Stage 5.H: material UBO dispatch is unconditional. The shader
-    // parser always synthesizes a std140 MaterialParams block when a
-    // phase has @property entries, and the legacy per-uniform dispatch
-    // no longer reaches those uniforms (they were stripped from the
-    // raw GLSL). Every shader with material_ubo_block_size > 0 MUST
-    // go through apply_material_phase_ubo_gl or it will render with
-    // zero material uniforms.
-
-    // Stage 5.K (first step): opt-in ctx2 pass boundary. When
-    // TERMIN_TGFX2_COLOR=1 is set AND a tgfx2 device is reachable, the
-    // color FBO is wrapped as tgfx2 color+depth textures and wrapped in
-    // ctx2->begin_pass / end_pass. Legacy glDraw* calls inside the pass
-    // keep working — the GL FBO is the same object either way, the
-    // tgfx2 layer just manages the pass lifetime and pipeline cache.
-    // Next iterations migrate individual state setup (viewport, clear,
-    // render state) and eventually the draw loop itself onto ctx2.
-    const bool tgfx2_color_enabled = [] {
-        const char* env = std::getenv("TERMIN_TGFX2_COLOR");
-        return env && env[0] && env[0] != '0';
-    }();
-    // Get output framebuffer
-    auto it = writes_fbos.find(output_res);
-    if (it == writes_fbos.end() || it->second == nullptr) {
-        tc::Log::warn("[ColorPass] FBO '%s' not found in writes_fbos (size=%zu)", output_res.c_str(), writes_fbos.size());
-        for (auto& p : writes_fbos) {
-            tc::Log::warn("  - '%s': %p", p.first.c_str(), p.second);
-        }
-        return;
-    }
-    FrameGraphResource* resource = it->second;
-
-    FramebufferHandle* fb = nullptr;
-    try {
-        fb = dynamic_cast<FramebufferHandle*>(resource);
-    } catch (const std::exception& e) {
-        tc::Log::error("[ColorPass] dynamic_cast failed: %s", e.what());
-        return;
-    }
-
-    if (!fb) {
-        tc::Log::warn("[ColorPass] FBO '%s' is not a FramebufferHandle (cast returned nullptr)", output_res.c_str());
-        return;
-    }
-
-    (void)tgfx2_color_enabled;  // consumed by execute() dispatcher
-    (void)ctx2;
-
-    // Bind framebuffer and set viewport
-    graphics->bind_framebuffer(fb);
-    graphics->check_gl_error("ColorPass: after bind_framebuffer");
-    graphics->set_viewport(0, 0, rect.width, rect.height);
-
-    // Clear depth if requested
-    if (clear_depth) {
-        graphics->clear_depth();
-    }
-    graphics->check_gl_error("ColorPass: after setup");
-
-    // Create render context
-    RenderContext context;
-    context.view = view;
-    context.projection = projection;
-    context.graphics = graphics;
-    context.phase = phase_mark;
-
-    // Detailed profiling mode
-    bool detailed = tc_profiler_detailed_rendering();
-
-    // Collect draw calls into cached vector
-    if (detailed) tc_profiler_begin_section("Collect");
-    collect_draw_calls(scene, phase_mark, layer_mask);
-    if (detailed) tc_profiler_end_section();
-
-    // Compute sort keys and sort (single pass with combined priority+distance key)
-    if (detailed) tc_profiler_begin_section("Sort");
-    if (sort_mode != "none" && !cached_draw_calls_.empty()) {
-        compute_sort_keys(camera_position);
-        sort_draw_calls();
-    } else if (!cached_draw_calls_.empty()) {
-        // Sort by priority only
-        std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
-            [](const PhaseDrawCall& a, const PhaseDrawCall& b) {
-                return a.priority < b.priority;
-            });
-    }
-    if (detailed) tc_profiler_end_section();
-
-    // Clear entity names cache but keep capacity
-    entity_names.clear();
-    entity_names.reserve(cached_draw_calls_.size());
-
-    // Get debug symbol
-    const std::string& debug_symbol = get_debug_internal_point();
-
-    // Clear timing if no debug symbol selected
-    if (debug_symbol.empty()) {
-        selected_symbol_timing = {};
-    }
-
-    // Check if any shader needs UBO (has lighting_ubo feature)
-    bool any_shader_needs_ubo = false;
-    for (const auto& dc : cached_draw_calls_) {
-        if (dc.phase && !tc_shader_handle_is_invalid(dc.phase->shader)) {
-            tc_shader* shader = tc_shader_get(dc.phase->shader);
-            if (shader && tc_shader_has_feature(shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
-                any_shader_needs_ubo = true;
-                break;
-            }
-        }
-    }
-
-    // Setup lighting UBO if any shader needs it (or if manually enabled)
-    bool ubo_active = use_ubo || any_shader_needs_ubo;
-
-    if (detailed) tc_profiler_begin_section("UBO");
-    if (ubo_active) {
-        lighting_ubo_.create(graphics);
-        graphics->check_gl_error("ColorPass: after UBO create");
-        lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
-                                          camera_position, shadow_settings);
-        lighting_ubo_.upload();
-        graphics->check_gl_error("ColorPass: after UBO upload");
-    }
-    if (detailed) tc_profiler_end_section();
-
-    // Bind shadow textures to texture units (once per frame)
-    // Skip entirely when no shadow resource — no shader expects sampler2DShadow
-    if (detailed) tc_profiler_begin_section("ShadowBind");
-    if (!shadow_res.empty()) {
-        bind_shadow_textures(shadow_maps);
-        graphics->check_gl_error("ColorPass: after bind_shadow_textures");
-    }
-    if (detailed) tc_profiler_end_section();
-
-    // Render each draw call
-    if (detailed) {
-        tc_profiler_begin_section("DrawCalls");
-    }
-
-    // Clear any accumulated GL errors before rendering
-    graphics->clear_gl_errors();
-
-    // Track last shader/material to avoid redundant state changes
-    tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
-    tc_material_phase* last_material_phase = nullptr;
-    RenderState last_render_state;
-
-    size_t draw_idx = 0;
-    for (const auto& dc : cached_draw_calls_)
-    {
-        ++draw_idx;
-        if (detailed) {
-            tc_profiler_begin_section("Prep.ModelMatrix");
-        }
-
-        // Cache entity name
-        const char* ename = dc.entity.name();
-        entity_names.push_back(ename ? ename : "");
-
-        // Get model matrix
-        auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
-        if (!drawable) {
-            continue;
-        }
-        Mat44f model = drawable->get_model_matrix(dc.entity);
-        context.model = model;
-
-        if (detailed) {
-            tc_profiler_end_section();
-            tc_profiler_begin_section("Prep.RenderState");
-        }
-
-        // Apply render state (override polygon mode if wireframe enabled)
-        RenderState state = convert_render_state(dc.phase->state);
-        if (wireframe) {
-            state.polygon_mode = PolygonMode::Line;
-        }
-        // Only apply if state changed
-        if (state != last_render_state) {
-            graphics->apply_render_state(state);
-            last_render_state = state;
-        }
-
-        if (detailed) {
-            tc_profiler_end_section();
-            tc_profiler_begin_section("Prep.Shader");
-        }
-
-        // Use final shader (override already applied during collect)
-        tc_shader_handle shader_handle = dc.final_shader;
-        TcShader shader_to_use(shader_handle);
-
-        if (detailed) {
-            tc_profiler_end_section();
-            tc_profiler_begin_section("Prep.ApplyMaterial");
-        }
-
-        // Check if shader changed
-        bool shader_changed = !tc_shader_handle_eq(shader_handle, last_shader_handle);
-
-        // Compile and use shader (only if changed)
-        if (shader_changed) {
-            shader_to_use.use();
-            if (graphics->check_gl_error("after shader.use()")) {
-                tc::Log::error("  shader: %s, program=%u", shader_to_use.name(), shader_to_use.gpu_program());
-            }
-        }
-
-        // Apply material uniforms
-        tc_shader* raw_shader = tc_shader_get(shader_handle);
-        if (raw_shader) {
-            // Clear any pending GL errors before apply
-            graphics->clear_gl_errors();
-
-            // If same material phase, only update MVP matrices (textures/uniforms already set)
-            if (dc.phase == last_material_phase && !shader_changed) {
-                // Just update model matrix (view/projection unchanged within frame)
-                tc_shader_set_mat4(raw_shader, "u_model", model.data, false);
-            } else {
-                // Full material apply (textures, uniforms, MVP)
-                tc_material_phase_apply_with_mvp(
-                    dc.phase,
-                    raw_shader,
-                    model.data,
-                    view.data,
-                    projection.data
-                );
-                last_material_phase = dc.phase;
-            }
-
-            // Stage 5.H: if the shader has a std140 material UBO layout,
-            // pack the phase uniforms into the phase-owned UBO and bind
-            // it at slot MATERIAL_UBO_BINDING. This must run for every
-            // material shader with @property — the legacy
-            // tc_material_phase_apply_with_mvp above still sets u_model /
-            // u_view / u_projection via glUniform* (those are per-object
-            // matrices, not @property), and it still binds textures; the
-            // @property uniforms that moved into the block have their
-            // plain `uniform` decls stripped from the GLSL so the legacy
-            // apply silently no-ops them (glGetUniformLocation returns -1).
-            if (tgfx2_device && raw_shader->material_ubo_block_size > 0) {
-                if (apply_material_phase_ubo_gl(
-                        dc.phase, raw_shader, MATERIAL_UBO_BINDING, *tgfx2_device)) {
-                    // Link the compiled program's MaterialParams block
-                    // to our binding slot. set_block_binding is cheap
-                    // to call repeatedly (GL caches it on the program).
-                    shader_to_use.set_block_binding("MaterialParams", MATERIAL_UBO_BINDING);
-                }
-            } else if (raw_shader->material_ubo_block_size > 0) {
-                // Non-fatal but unsafe: shader has a material UBO layout
-                // but we have no tgfx2 device. The block is in the GLSL
-                // and zero-initialized at draw time — materials will
-                // render with zero @property values. Logged to help catch
-                // pipelines that forget to plumb ctx.ctx2 into ColorPass.
-                tc::Log::error("[Stage 5.H] ColorPass: shader '%s' has material UBO layout "
-                               "(block_size=%u) but tgfx2_device is null — @property uniforms "
-                               "will render as zero",
-                               shader_to_use.name(),
-                               raw_shader->material_ubo_block_size);
-            }
-        }
-        if (graphics->check_gl_error("after tc_material_phase_apply_with_mvp")) {
-            tc::Log::error("  shader: %s, phase->uniform_count=%zu, phase->texture_count=%zu",
-                          shader_to_use.name(),
-                          dc.phase->uniform_count,
-                          dc.phase->texture_count);
-        }
-
-        if (detailed) {
-            tc_profiler_end_section();
-            tc_profiler_begin_section("Prep.Uniforms");
-        }
-
-        // Extra texture uniforms
-        if (!extra_texture_uniforms.empty()) {
-            for (const auto& [uniform_name, unit] : extra_texture_uniforms) {
-                shader_to_use.set_uniform_int(uniform_name.c_str(), unit);
-            }
-        }
-
-        // Lighting UBO binding
-        // Note: AMD requires glBindBufferBase AFTER glUniformBlockBinding
-        // Also AMD requires UBO to be unbound when shader doesn't use it
-        if (ubo_active) {
-            if (shader_to_use.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO)) {
-                shader_to_use.set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
-                lighting_ubo_.bind();
-            } else {
-                // Unbind UBO for shaders that don't use it (AMD compatibility)
-                lighting_ubo_.unbind();
-            }
-        }
-        graphics->check_gl_error("after UBO operations");
-
-        // Initialize/upload shadow maps uniforms when shader changes
-        // CRITICAL: Must always initialize shadow samplers to prevent AMD sampler type conflicts
-        // (sampler2DShadow defaults to unit 0, conflicting with material sampler2D textures)
-        if (shader_handle.index != last_shader_handle.index ||
-            shader_handle.generation != last_shader_handle.generation) {
-            if (!shadow_maps.empty()) {
-                upload_shadow_maps_to_shader(shader_to_use, shadow_maps);
-            } else {
-                init_shadow_map_samplers(shader_to_use);
-            }
-            last_shader_handle = shader_handle;
-        }
-        graphics->check_gl_error("after shadow_maps upload");
-
-        context.current_tc_shader = shader_to_use;
-
-        if (detailed) {
-            tc_profiler_end_section();
-            tc_profiler_begin_section("DrawGeometry");
-        }
-
-        // Check if we should measure timing for this entity
-        bool measure_timing = !debug_symbol.empty() && ename && debug_symbol == ename;
-
-        // Start timing if this is the selected debug symbol
-        std::chrono::high_resolution_clock::time_point cpu_start;
-        if (measure_timing) {
-            // Read GPU result from PREVIOUS frame before starting new query
-            // (GPU query results are not available until the next frame)
-            double prev_gpu_ms = graphics->get_gpu_query_ms("ColorPass_DebugSymbol");
-            if (prev_gpu_ms >= 0) {
-                selected_symbol_timing.gpu_time_ms = prev_gpu_ms;
-            }
-
-            cpu_start = std::chrono::high_resolution_clock::now();
-            graphics->begin_gpu_query("ColorPass_DebugSymbol");
-        }
-
-        // Draw geometry via vtable
-        tc_component_draw_geometry(dc.component, &context, dc.geometry_id);
-        if (graphics->check_gl_error("after draw_geometry")) {
-            tc::Log::error("  entity: %s, shader: %s", ename ? ename : "(null)", shader_to_use.name());
-        }
-
-        // End timing and store results
-        if (measure_timing) {
-            graphics->end_gpu_query();
-            auto cpu_end = std::chrono::high_resolution_clock::now();
-            double cpu_ms = std::chrono::duration<double, std::milli>(cpu_end - cpu_start).count();
-
-            selected_symbol_timing.name = ename;
-            selected_symbol_timing.cpu_time_ms = cpu_ms;
-            // GPU time is read at the start of the NEXT frame (see above)
-
-            maybe_blit_to_debugger(graphics, fb, ename, rect.width, rect.height);
-        }
-
-        if (detailed) {
-            tc_profiler_end_section(); // DrawGeometry
-        }
-    }
-
-    if (detailed) {
-        tc_profiler_end_section();
-    }
-
-    // Unbind lighting UBO
-    if (ubo_active) {
-        lighting_ubo_.unbind();
-    }
-
-    // Reset render state
-    graphics->apply_render_state(RenderState());
-}
-
 // ----------------------------------------------------------------------------
-// Stage 5.K: full tgfx2 ColorPass draw loop.
+// ColorPass draw loop — tgfx2 native.
 // ----------------------------------------------------------------------------
 //
 // Uses ctx2 end-to-end for pass boundary, shader binding, resource set
@@ -752,7 +365,7 @@ void ColorPass::execute_with_data(
 //   - GPU timing queries
 // These each get a log line when they are skipped.
 
-void ColorPass::execute_with_data_tgfx2(
+void ColorPass::execute_with_data(
     ExecuteContext& ctx,
     const Rect4i& rect,
     tc_scene_handle scene,
@@ -789,21 +402,24 @@ void ColorPass::execute_with_data_tgfx2(
     FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
     if (!fb) return;
 
-    // NOTE: ColorPass output FBOs use a GL_RENDERBUFFER for their depth
-    // attachment (see opengl_framebuffer.hpp) and fb->depth_texture()
-    // returns null for those. We can't construct a clean ctx2 render
-    // pass around a renderbuffer-backed depth, so we drive the FBO
-    // binding through legacy graphics->bind_framebuffer and let ctx2
-    // draws land in whatever FBO is currently bound. ctx2 pipeline
-    // cache entries are still produced with a depth_format tag so
-    // they match the underlying D24 renderbuffer. Once FBOPool moves
-    // to tgfx2-native texture-backed depth (Phase 3) this can be
-    // replaced with a proper begin_pass.
-    graphics->bind_framebuffer(fb);
-    graphics->set_viewport(0, 0, rect.width, rect.height);
-    if (clear_depth) {
-        graphics->clear_depth();
+    // Phase 3: OpenGL FBOs now use a depth *texture* (was a renderbuffer
+    // before). That lets us wrap both color and depth as tgfx2 handles
+    // and open a real ctx2 render pass — no more legacy
+    // graphics->bind_framebuffer workaround.
+    tgfx2::TextureHandle color_tex2 = wrap_fbo_color_as_tgfx2(*gl_dev, fb);
+    tgfx2::TextureHandle depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fb);
+    if (!color_tex2) {
+        tc::Log::error("[ColorPass/tgfx2] failed to wrap color attachment");
+        return;
     }
+    ctx2->defer_destroy(color_tex2);
+    if (depth_tex2) ctx2->defer_destroy(depth_tex2);
+
+    ctx2->begin_pass(color_tex2, depth_tex2,
+                     /*clear_color=*/nullptr,
+                     /*clear_depth=*/1.0f,
+                     /*clear_depth_enabled=*/clear_depth);
+    ctx2->set_viewport(0, 0, rect.width, rect.height);
 
     // Collect + sort draw calls. Reuses the legacy helpers —
     // gathering logic is backend-agnostic.
@@ -1032,8 +648,7 @@ void ColorPass::execute_with_data_tgfx2(
         }
 
         // Issue the draw. This flushes the pending ctx2 state into a
-        // pipeline binding + glDrawElements on the currently-bound GL
-        // FBO (set via the legacy graphics->bind_framebuffer above).
+        // pipeline binding + glDrawElements inside the ctx2 render pass.
         ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                    bind.index_count, bind.index_type);
 
@@ -1041,8 +656,7 @@ void ColorPass::execute_with_data_tgfx2(
         gl_dev->destroy(bind.index_buffer);
     }
 
-    // No ctx2->end_pass — we never opened one. Legacy bind_framebuffer
-    // owns the FBO for the duration of this pass.
+    ctx2->end_pass();
 }
 
 void ColorPass::execute(ExecuteContext& ctx) {
@@ -1141,55 +755,25 @@ void ColorPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    tgfx2::IRenderDevice* tgfx2_dev = nullptr;
-    if (ctx.ctx2) {
-        tgfx2_dev = &ctx.ctx2->device();
+    if (!ctx.ctx2) {
+        tc::Log::error("[ColorPass] ctx.ctx2 is null — ColorPass is tgfx2-only");
+        return;
     }
 
-    // Stage 5.K dispatcher: TERMIN_TGFX2_COLOR=1 routes the draw loop
-    // through the full tgfx2 path. Legacy path is preserved as the
-    // fallback until the ctx2 version is validated on production
-    // scenes; after that, legacy execute_with_data will be deleted.
-    const bool tgfx2_color_enabled = [] {
-        const char* env = std::getenv("TERMIN_TGFX2_COLOR");
-        return env && env[0] && env[0] != '0';
-    }();
-
-    if (tgfx2_color_enabled && ctx.ctx2) {
-        execute_with_data_tgfx2(
-            ctx,
-            rect,
-            scene,
-            view,
-            projection,
-            camera_position,
-            ctx.lights,
-            ambient_color,
-            ambient_intensity,
-            shadow_maps,
-            shadow_settings,
-            ctx.layer_mask
-        );
-    } else {
-        execute_with_data(
-            ctx.graphics,
-            ctx.reads_fbos,
-            ctx.writes_fbos,
-            rect,
-            scene,
-            view,
-            projection,
-            camera_position,
-            ctx.lights,
-            ambient_color,
-            ambient_intensity,
-            shadow_maps,
-            shadow_settings,
-            ctx.layer_mask,
-            tgfx2_dev,
-            ctx.ctx2
-        );
-    }
+    execute_with_data(
+        ctx,
+        rect,
+        scene,
+        view,
+        projection,
+        camera_position,
+        ctx.lights,
+        ambient_color,
+        ambient_intensity,
+        shadow_maps,
+        shadow_settings,
+        ctx.layer_mask
+    );
 
     if (profile) tc_profiler_end_section();
 }

@@ -119,41 +119,20 @@ public:
      * @param ambient_intensity Ambient light intensity
      * @param layer_mask Layer mask for filtering entities
      */
+    // Draw the opaque/transparent geometry through a tgfx2 render
+    // context. Requires ctx.ctx2 to be non-null — ColorPass is a
+    // tgfx2-only pass now. Uses ctx2->bind_shader via the
+    // tc_shader_ensure_tgfx2 bridge, apply_material_phase_ubo
+    // dispatcher for material UBO + textures, wrap_mesh_as_tgfx2 for
+    // per-draw vertex/index buffers, and transitional
+    // set_uniform_*/set_block_binding helpers for legacy plain
+    // uniforms in existing .shader files (u_view, u_projection,
+    // u_model, shadow samplers).
+    //
+    // Non-MeshRenderer drawables (SolidPrimitive, Immediate, ...) are
+    // currently skipped with a warning — until they expose a tc_mesh
+    // via get_mesh_for_phase() they can't go through ctx2.draw.
     void execute_with_data(
-        GraphicsBackend* graphics,
-        const FBOMap& reads_fbos,
-        const FBOMap& writes_fbos,
-        const Rect4i& rect,
-        tc_scene_handle scene,
-        const Mat44f& view,
-        const Mat44f& projection,
-        const Vec3& camera_position,
-        const std::vector<Light>& lights,
-        const Vec3& ambient_color,
-        float ambient_intensity,
-        const std::vector<ShadowMapArrayEntry>& shadow_maps,
-        const ShadowSettings& shadow_settings,
-        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL,
-        // Optional tgfx2 device access. Non-null whenever the pipeline
-        // is running with a RenderContext2 available. Used by the
-        // material UBO dispatcher and (when TERMIN_TGFX2_COLOR is set)
-        // by the ctx2 pass wrapper.
-        tgfx2::IRenderDevice* tgfx2_device = nullptr,
-        // Optional tgfx2 render context. When TERMIN_TGFX2_COLOR is
-        // set and this is non-null, ColorPass opens a ctx2 render pass
-        // around the legacy draw loop (FBO, viewport, clear) — the
-        // first step of Stage 5.K full ColorPass migration.
-        tgfx2::RenderContext2* ctx2 = nullptr
-    );
-
-    // Stage 5.K full tgfx2 path. When TERMIN_TGFX2_COLOR=1 and ctx.ctx2
-    // is available, execute() routes through this instead of the legacy
-    // execute_with_data. Uses ctx2->bind_shader via tc_shader_ensure_tgfx2
-    // bridge, material UBO dispatcher (C++ variant), wrap_mesh_as_tgfx2,
-    // and transitional set_uniform_*/set_block_binding for legacy plain
-    // uniforms (u_view/u_projection/u_model/shadow samplers). Skips
-    // non-MeshRenderer drawables for now.
-    void execute_with_data_tgfx2(
         ExecuteContext& ctx,
         const Rect4i& rect,
         tc_scene_handle scene,

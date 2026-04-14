@@ -75,11 +75,6 @@ void main() {
 }
 )";
 
-bool tgfx2_normal_enabled() {
-    const char* env = std::getenv("TERMIN_TGFX2_NORMAL");
-    return env && env[0] && env[0] != '0';
-}
-
 } // anonymous namespace
 
 const char* NORMAL_PASS_VERT = R"(
@@ -117,20 +112,6 @@ void main()
     FragColor = vec4(encoded, 1.0);
 }
 )";
-
-void NormalPass::execute_with_data(
-    GraphicsBackend* graphics,
-    const FBOMap& reads_fbos,
-    const FBOMap& writes_fbos,
-    const Rect4i& rect,
-    tc_scene_handle scene,
-    const Mat44f& view,
-    const Mat44f& projection,
-    uint64_t layer_mask
-) {
-    (void)reads_fbos;
-    execute_geometry_pass(graphics, writes_fbos, rect, scene, view, projection, layer_mask);
-}
 
 void NormalPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
     if (device2_ == &device && normal_vs2_ && normal_fs2_ && per_frame_ubo_) {
@@ -345,27 +326,19 @@ void NormalPass::execute(ExecuteContext& ctx) {
     Mat44f view = view_d.to_float();
     Mat44f projection = proj_d.to_float();
 
-    if (ctx.ctx2 && tgfx2_normal_enabled()) {
-        execute_with_data_tgfx2(
-            ctx,
-            rect,
-            scene,
-            view,
-            projection,
-            ctx.layer_mask
-        );
-    } else {
-        execute_with_data(
-            ctx.graphics,
-            ctx.reads_fbos,
-            ctx.writes_fbos,
-            rect,
-            scene,
-            view,
-            projection,
-            ctx.layer_mask
-        );
+    if (!ctx.ctx2) {
+        tc::Log::error("[NormalPass] ctx.ctx2 is null — NormalPass is tgfx2-only");
+        return;
     }
+
+    execute_with_data_tgfx2(
+        ctx,
+        rect,
+        scene,
+        view,
+        projection,
+        ctx.layer_mask
+    );
 }
 
 TC_REGISTER_FRAME_PASS_DERIVED(NormalPass, GeometryPassBase);

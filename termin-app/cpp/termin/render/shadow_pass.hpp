@@ -109,20 +109,7 @@ public:
     void execute(ExecuteContext& ctx) override;
 
     // Execute shadow pass, rendering shadow maps for all lights
-    std::vector<ShadowMapResult> execute_shadow_pass(
-        GraphicsBackend* graphics,
-        tc_scene_handle scene,
-        const std::vector<Light>& lights,
-        const Mat44f& camera_view,
-        const Mat44f& camera_projection,
-        uint64_t layer_mask = 0
-    );
-
-    // tgfx2 variant — draws scene shadow casters via RenderContext2,
-    // wrapping the shadow FBO depth attachment and each mesh's VBO/EBO
-    // as tgfx2 handles. Falls back to legacy tc_component_draw_geometry
-    // for drawables whose get_mesh_for_phase("shadow", ...) returns
-    // nullptr. Gated by TERMIN_TGFX2_SHADOW env var.
+    // through a tgfx2 RenderContext2. Requires ctx.ctx2 to be non-null.
     std::vector<ShadowMapResult> execute_shadow_pass_tgfx2(
         ExecuteContext& ctx,
         tc_scene_handle scene,
