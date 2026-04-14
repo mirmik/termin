@@ -361,17 +361,21 @@ void DepthPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it != ctx.writes_fbos.end() && it->second != nullptr) {
-        FramebufferHandle* fb = dynamic_cast<FramebufferHandle*>(it->second);
-        if (fb) {
-            auto fbo_size = fb->get_size();
-            rect = Rect4i(0, 0, fbo_size.width, fbo_size.height);
-            if (!camera_name.empty()) {
-                CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-                if (named_camera) {
-                    named_camera_snapshot = make_render_camera(*named_camera, static_cast<double>(fbo_size.width) / std::max(1, fbo_size.height));
-                    camera = &*named_camera_snapshot;
+    if (ctx.ctx2) {
+        auto it = ctx.tex2_writes.find(output_res);
+        if (it != ctx.tex2_writes.end() && it->second) {
+            auto desc = ctx.ctx2->device().texture_desc(it->second);
+            int w = static_cast<int>(desc.width);
+            int h = static_cast<int>(desc.height);
+            if (w > 0 && h > 0) {
+                rect = Rect4i(0, 0, w, h);
+                if (!camera_name.empty()) {
+                    CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
+                    if (named_camera) {
+                        named_camera_snapshot = make_render_camera(
+                            *named_camera, static_cast<double>(w) / std::max(1, h));
+                        camera = &*named_camera_snapshot;
+                    }
                 }
             }
         }
