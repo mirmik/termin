@@ -147,12 +147,27 @@ extern "C" void material_phase_release_ubo_cb(tc_material_phase* phase) {
     // registry — we just do the GPU destroy here.
 }
 
-std::atomic<bool> g_release_cb_installed{false};
+// C ABI wrapper so legacy GL passes that live outside termin-app (e.g.
+// MaterialPass in termin-components-render) can call the dispatcher via
+// tc_material_phase_apply_ubo_gl without linking termin-app.
+extern "C" bool material_phase_apply_ubo_gl_cb(
+    tc_material_phase* phase,
+    const tc_shader* shader,
+    uint32_t binding_slot,
+    void* tgfx2_device
+) {
+    if (!tgfx2_device) return false;
+    auto* device = static_cast<tgfx2::IRenderDevice*>(tgfx2_device);
+    return termin::apply_material_phase_ubo_gl(phase, shader, binding_slot, *device);
+}
+
+std::atomic<bool> g_callbacks_installed{false};
 
 void ensure_release_cb_installed() {
     bool expected = false;
-    if (g_release_cb_installed.compare_exchange_strong(expected, true)) {
+    if (g_callbacks_installed.compare_exchange_strong(expected, true)) {
         tc_material_phase_set_release_ubo_callback(material_phase_release_ubo_cb);
+        tc_material_phase_set_apply_ubo_gl_callback(material_phase_apply_ubo_gl_cb);
     }
 }
 
