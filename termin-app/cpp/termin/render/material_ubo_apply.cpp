@@ -1,6 +1,7 @@
 // material_ubo_apply.cpp - Implementation of bind_material_ubo.
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/render/shader_parser.hpp"
+#include "termin/render/tgfx2_bridge.hpp"
 
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/render_context.hpp"
@@ -266,22 +267,37 @@ bool apply_material_phase_ubo(
     // Build the layout view on the tc_shader C-side entries.
     MaterialUboLayout layout = layout_from_tc_shader(shader);
 
-    // Textures: bind each phase texture at successive slots. The shader
-    // must declare samplers with matching `layout(binding = N)` qualifiers
-    // or rely on tc_shader set_block_binding for block-based textures.
-    // For per-texture samplers we bind by index order starting at
-    // `tex_slot_start` — the shader author is responsible for keeping the
-    // declaration order in the .shader file in sync with the sampler
-    // binding slots in the fragment stage.
+    // Wrap each phase texture as a tgfx2::TextureHandle for the duration
+    // of the frame. Sampler slots start at tex_slot_start and increment
+    // in declaration order — shader authors must keep their fragment
+    // sampler bindings in the same order as the .shader @property
+    // Texture entries.
+    //
+    // The wrappers are single-use: registered here, bound into the
+    // resource set by bind_material_ubo, and deferred-destroyed at
+    // ctx.end_frame() so their HandlePool slots don't leak.
+    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&device);
     std::vector<MaterialTextureBinding> textures;
-    textures.reserve(phase->texture_count);
-    for (size_t i = 0; i < phase->texture_count; i++) {
-        (void)phase->textures[i];
-        // tc_texture_handle → tgfx2::TextureHandle conversion needs the
-        // texture registry bridge (tc_texture_get_gl_id → register_external
-        // _texture via an existing helper). Not implemented at this stage;
-        // the first pilot shader will be texture-free to keep Stage 5.H
-        // focused. Textures land in Stage 5.H.1.
+    if (gl_dev) {
+        textures.reserve(phase->texture_count);
+        uint32_t slot = tex_slot_start;
+        for (size_t i = 0; i < phase->texture_count; i++) {
+            const tc_material_texture& mat_tex = phase->textures[i];
+            if (tc_texture_handle_is_invalid(mat_tex.texture)) {
+                slot++;
+                continue;
+            }
+            tgfx2::TextureHandle tex2 =
+                wrap_tc_texture_as_tgfx2(*gl_dev, mat_tex.texture);
+            if (tex2) {
+                MaterialTextureBinding b;
+                b.slot = slot;
+                b.texture = tex2;
+                textures.push_back(b);
+                ctx.defer_destroy(tex2);
+            }
+            slot++;
+        }
     }
 
     bind_material_ubo(layout, values, textures, ubo, ubo_slot, device, ctx);
