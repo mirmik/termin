@@ -105,15 +105,6 @@ void TonemapPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    // Inline (ctx2 path — formerly TonemapPass::execute_tgfx2).
-    auto* output_fbo = ctx.writes_fbos.count(output_res)
-        ? dynamic_cast<FramebufferHandle*>(ctx.writes_fbos[output_res])
-        : nullptr;
-    if (!output_fbo) {
-        tc::Log::error("[TonemapPass/tgfx2] Missing output FBO '%s'", output_res.c_str());
-        return;
-    }
-
     auto out_it = ctx.tex2_writes.find(output_res);
     if (out_it == ctx.tex2_writes.end() || !out_it->second) {
         tc::Log::error("[TonemapPass/tgfx2] Missing tgfx2 output texture handle for '%s'",
@@ -130,8 +121,9 @@ void TonemapPass::execute(ExecuteContext& ctx) {
     }
     tgfx2::TextureHandle input_tex2 = in_it->second;
 
-    const int w = output_fbo->get_width();
-    const int h = output_fbo->get_height();
+    auto out_desc = ctx.ctx2->device().texture_desc(output_tex2);
+    const int w = static_cast<int>(out_desc.width);
+    const int h = static_cast<int>(out_desc.height);
     if (w <= 0 || h <= 0) return;
 
     if (!fs2_) {

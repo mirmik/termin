@@ -317,17 +317,6 @@ void BloomPass::execute(ExecuteContext& ctx) {
         tc::Log::error("[BloomPass] ctx.ctx2 is null — BloomPass is tgfx2-only");
         return;
     }
-    auto* input_fbo = ctx.reads_fbos.count(input_res)
-        ? dynamic_cast<FramebufferHandle*>(ctx.reads_fbos[input_res])
-        : nullptr;
-    auto* output_fbo = ctx.writes_fbos.count(output_res)
-        ? dynamic_cast<FramebufferHandle*>(ctx.writes_fbos[output_res])
-        : nullptr;
-    if (!input_fbo || !output_fbo) {
-        tc::Log::error("[BloomPass/tgfx2] Missing input or output FBO");
-        return;
-    }
-
     auto in_it = ctx.tex2_reads.find(input_res);
     if (in_it == ctx.tex2_reads.end() || !in_it->second) {
         tc::Log::error("[BloomPass/tgfx2] Missing tgfx2 input texture handle '%s'",
@@ -344,8 +333,9 @@ void BloomPass::execute(ExecuteContext& ctx) {
     }
     tgfx2::TextureHandle output_tex2 = out_it->second;
 
-    const int w = output_fbo->get_width();
-    const int h = output_fbo->get_height();
+    auto out_desc = ctx.ctx2->device().texture_desc(output_tex2);
+    const int w = static_cast<int>(out_desc.width);
+    const int h = static_cast<int>(out_desc.height);
     if (w <= 0 || h <= 0) return;
 
     const int count = std::max(1, std::min(mip_levels, 8));

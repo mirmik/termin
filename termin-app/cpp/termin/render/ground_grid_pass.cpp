@@ -178,11 +178,15 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     tgfx2::ShaderHandle vs2, fs2;
     if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
 
+    auto out_desc = ctx2->device().texture_desc(color_tex2);
+    const int w = static_cast<int>(out_desc.width);
+    const int h = static_cast<int>(out_desc.height);
+
     ctx2->begin_pass(color_tex2, depth_tex2,
                      /*clear_color=*/nullptr,
                      /*clear_depth=*/1.0f,
                      /*clear_depth_enabled=*/false);
-    ctx2->set_viewport(0, 0, ctx.rect.width, ctx.rect.height);
+    ctx2->set_viewport(0, 0, w, h);
 
     // Depth test ON + write, blend ON (alpha fade), no culling.
     ctx2->set_depth_test(true);

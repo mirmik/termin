@@ -247,12 +247,9 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     }
     tgfx2::TextureHandle output_tex2 = out_it->second;
 
-    auto* output_fbo = ctx.writes_fbos.count(output_res)
-        ? dynamic_cast<FramebufferHandle*>(ctx.writes_fbos[output_res])
-        : nullptr;
-    if (!output_fbo) return;
-    const int w = output_fbo->get_width();
-    const int h = output_fbo->get_height();
+    auto out_desc = ctx.ctx2->device().texture_desc(output_tex2);
+    const int w = static_cast<int>(out_desc.width);
+    const int h = static_cast<int>(out_desc.height);
     if (w <= 0 || h <= 0) return;
 
     ensure_resources(ctx);
