@@ -815,31 +815,38 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
 
     ShaderMultyPhaseProgramm result(program_name, std::move(phases), "", std::move(features));
 
-    // Synthesize a std140 MaterialParams block per phase when the program
-    // opted into material_ubo. Will be made unconditional at the end of
-    // Stage 5.H once the dispatcher + per-phase UBO lifecycle are in
-    // place and one pilot shader is validated end-to-end.
-    if (result.has_feature("material_ubo")) {
-        for (auto& phase : result.phases) {
-            MaterialUboLayout layout = compute_std140_layout(phase.uniforms);
-            if (layout.empty()) continue;
+    // Material UBO synthesis is unconditional: any phase that declares
+    // scalar/vector @property entries gets a std140 MaterialParams block
+    // auto-synthesized, injected into the stage sources, and the original
+    // `uniform T name;` decls stripped from the raw GLSL. Texture
+    // properties stay as plain samplers outside the block
+    // (compute_std140_layout skips them).
+    //
+    // Phases without UBO-eligible properties get an empty layout and
+    // their sources are left alone.
+    //
+    // The former `@features material_ubo` opt-in was temporary scaffolding
+    // for the migration; see shadow/depth/normal/id pass pattern for the
+    // same "two code paths converge into one" cleanup.
+    for (auto& phase : result.phases) {
+        MaterialUboLayout layout = compute_std140_layout(phase.uniforms);
+        if (layout.empty()) continue;
 
-            std::string block_glsl = synthesize_material_ubo_glsl(layout);
+        std::string block_glsl = synthesize_material_ubo_glsl(layout);
 
-            std::vector<std::string> ubo_names;
-            ubo_names.reserve(layout.entries.size());
-            for (const auto& e : layout.entries) {
-                ubo_names.push_back(e.name);
-            }
-
-            for (auto& kv : phase.stages) {
-                std::string& src = kv.second.source;
-                src = strip_uniform_decls(src, ubo_names);
-                src = inject_after_version(src, block_glsl);
-            }
-
-            phase.material_ubo_layout = std::move(layout);
+        std::vector<std::string> ubo_names;
+        ubo_names.reserve(layout.entries.size());
+        for (const auto& e : layout.entries) {
+            ubo_names.push_back(e.name);
         }
+
+        for (auto& kv : phase.stages) {
+            std::string& src = kv.second.source;
+            src = strip_uniform_decls(src, ubo_names);
+            src = inject_after_version(src, block_glsl);
+        }
+
+        phase.material_ubo_layout = std::move(layout);
     }
 
     return result;
