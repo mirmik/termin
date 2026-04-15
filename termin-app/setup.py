@@ -58,7 +58,7 @@ if __name__ == "__main__":
             ],
         ),
         python_requires='>3.10.0',
-        version="0.0.0",
+        version=BuildExt.compute_local_version("0.0.0"),
         license="MIT",
         description="Projective geometry library",
         author="mirmik",
