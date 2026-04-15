@@ -721,15 +721,11 @@ void ColorPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    // Get shadow maps from reads_fbos
     std::vector<ShadowMapArrayEntry> shadow_maps;
     if (!shadow_res.empty()) {
-        auto shadow_it = ctx.reads_fbos.find(shadow_res);
-        if (shadow_it != ctx.reads_fbos.end() && shadow_it->second != nullptr) {
-            ShadowMapArrayResource* shadow_array = dynamic_cast<ShadowMapArrayResource*>(shadow_it->second);
-            if (shadow_array) {
-                shadow_maps = shadow_array->entries;
-            }
+        auto shadow_it = ctx.shadow_arrays.find(shadow_res);
+        if (shadow_it != ctx.shadow_arrays.end() && shadow_it->second != nullptr) {
+            shadow_maps = shadow_it->second->entries;
         }
     }
 

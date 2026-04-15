@@ -539,20 +539,12 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("ShadowPass");
 
-    // Get shadow array from writes_fbos
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it == ctx.writes_fbos.end() || it->second == nullptr) {
+    auto it = ctx.shadow_arrays.find(output_res);
+    if (it == ctx.shadow_arrays.end() || it->second == nullptr) {
         if (profile) tc_profiler_end_section();
         return;
     }
-
-    // Dynamic cast to ShadowMapArrayResource
-    ShadowMapArrayResource* shadow_array = dynamic_cast<ShadowMapArrayResource*>(it->second);
-    if (!shadow_array) {
-        tc::Log::error("ShadowPass: writes_fbos[%s] is not a ShadowMapArrayResource", output_res.c_str());
-        if (profile) tc_profiler_end_section();
-        return;
-    }
+    ShadowMapArrayResource* shadow_array = it->second;
 
     // Clear previous frame's entries
     shadow_array->clear();
