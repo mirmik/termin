@@ -336,9 +336,11 @@ class PostProcessPass(RenderFramePass):
             symbols.append(self._effect_symbol(idx, eff))
         return symbols
 
-    def _get_temp_fbo(self, graphics: "GraphicsBackend", index: int, size: tuple[int, int]):
+    def _get_temp_fbo(self, index: int, size: tuple[int, int]):
+        from tgfx import OpenGLGraphicsBackend
+        gfx = OpenGLGraphicsBackend.get_instance()
         while len(self._temp_fbos) <= index:
-            self._temp_fbos.append(graphics.create_framebuffer(size, 1, self.internal_format))
+            self._temp_fbos.append(gfx.create_framebuffer(size, 1, self.internal_format))
         fb = self._temp_fbos[index]
         fb.resize(size)
         return fb
@@ -366,10 +368,6 @@ class PostProcessPass(RenderFramePass):
 
     def execute(self, ctx: "ExecuteContext") -> None:
         from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
-
-        # Для NOP бэкенда пропускаем реальные OpenGL операции
-        if isinstance(ctx.graphics, NOPGraphicsBackend):
-            return
 
         if ctx.ctx2 is None:
             from tcbase import log
@@ -423,7 +421,7 @@ class PostProcessPass(RenderFramePass):
             else:
                 # Temp FBOs остаются на legacy пути до полной миграции
                 # _get_temp_fbo на native device.create_texture.
-                fb_target = self._get_temp_fbo(ctx.graphics, i % 2, size)
+                fb_target = self._get_temp_fbo(i % 2, size)
                 target_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb_target)
                 if not target_tex2:
                     from tcbase import log

@@ -104,7 +104,7 @@ class UIWidgetPass(RenderFramePass):
                 entity_layer = entity.layer
                 if not (ctx.layer_mask & (1 << entity_layer)):
                     continue
-            ui_comp.render(ctx.graphics, pw, ph)
+            ui_comp.render(None, pw, ph)
 
     def _collect_ui_from_hierarchy(self, entity) -> list:
         """Recursively collect UIComponents from entity hierarchy."""

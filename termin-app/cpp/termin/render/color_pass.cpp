@@ -752,36 +752,6 @@ void ColorPass::execute(ExecuteContext& ctx) {
     if (profile) tc_profiler_end_section();
 }
 
-void ColorPass::maybe_blit_to_debugger(
-    GraphicsBackend* graphics,
-    FramebufferHandle* fb,
-    const std::string& entity_name,
-    int width,
-    int height
-) {
-    // New path: FrameGraphCapture (no context switch needed)
-    // debug_internal_symbol already filters which entity to capture,
-    // so we use capture_direct (no caller check needed)
-    auto* cap = debug_capture();
-    if (cap) {
-        cap->capture_direct(fb, graphics);
-        return;
-    }
-
-    // Old path: callback-based (for backward compatibility)
-    if (!debugger_callbacks.is_set()) {
-        return;
-    }
-
-    debugger_callbacks.blit_from_pass(
-        debugger_callbacks.user_data,
-        fb,
-        graphics,
-        width,
-        height
-    );
-}
-
 // Register ColorPass in tc_pass_registry for C#/standalone C++ usage
 TC_REGISTER_FRAME_PASS(ColorPass);
 
