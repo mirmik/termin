@@ -370,26 +370,6 @@ void bind_tc_material(nb::module_& m) {
            nb::arg("shader_uuid") = "",
            nb::rv_policy::reference)
         .def("bump_version", &TcMaterial::bump_version)
-        // Apply with MVP
-        .def("apply", [](TcMaterial& self) { return self.apply(); })
-        .def("apply", [](TcMaterial& self, const Mat44f& model, const Mat44f& view, const Mat44f& projection) {
-            return self.apply_with_mvp(model, view, projection);
-        }, nb::arg("model"), nb::arg("view"), nb::arg("projection"))
-        .def("apply", [](TcMaterial& self, const Mat44& model, const Mat44& view, const Mat44& projection) {
-            return self.apply_with_mvp(model.to_float(), view.to_float(), projection.to_float());
-        }, nb::arg("model"), nb::arg("view"), nb::arg("projection"))
-        // Overload for numpy arrays (for backward compatibility)
-        .def("apply", [](TcMaterial& self,
-            nb::ndarray<float, nb::c_contig, nb::device::cpu> model,
-            nb::ndarray<float, nb::c_contig, nb::device::cpu> view,
-            nb::ndarray<float, nb::c_contig, nb::device::cpu> projection
-        ) {
-            Mat44f m, v, p;
-            memcpy(m.data, model.data(), 16 * sizeof(float));
-            memcpy(v.data, view.data(), 16 * sizeof(float));
-            memcpy(p.data, projection.data(), 16 * sizeof(float));
-            return self.apply_with_mvp(m, v, p);
-        }, nb::arg("model"), nb::arg("view"), nb::arg("projection"))
         // Color
         .def_prop_rw("color",
             [](const TcMaterial& self) -> nb::object {

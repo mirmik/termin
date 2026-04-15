@@ -23,7 +23,6 @@ from termin.visualization.core.camera import (
 )
 from termin.visualization.core.mesh import MeshDrawable
 from termin.render_components import MeshRenderer
-from termin.visualization.ui import Canvas, UIElement, UIRectangle
 from termin.visualization.core.material import Material
 from tgfx import TcShader, GraphicsBackend
 from tgfx.window import WindowBackend
@@ -51,9 +50,6 @@ __all__ = [
     "OrbitCameraController",
     "MeshDrawable",
     "MeshRenderer",
-    "Canvas",
-    "UIElement",
-    "UIRectangle",
     "Material",
     "TcShader",
     "Texture",
