@@ -506,7 +506,7 @@ class UIRenderer:
             self._holder.destroy_texture(wrapped_handle)
 
     def upload_texture(self, data: np.ndarray) -> Tgfx2TextureHandle:
-        """Upload a numpy RGBA array as a GPU texture.
+        """Upload a numpy RGBA array as a new GPU texture.
 
         Parameters
         ----------
@@ -521,6 +521,82 @@ class UIRenderer:
         h, w = data.shape[0], data.shape[1]
         flat = np.ascontiguousarray(data).reshape(-1)
         return self._holder.create_texture_rgba8(w, h, flat)
+
+    def update_texture(
+        self, handle: Tgfx2TextureHandle, data: np.ndarray,
+    ) -> None:
+        """Replace the contents of an existing GPU texture.
+
+        The caller is responsible for ensuring ``data`` matches the
+        texture's original (width, height, RGBA) dimensions — tgfx2's
+        ``IRenderDevice::upload_texture`` is full-texture only; there
+        is no partial region upload. Callers that need region updates
+        should fall back to a full re-upload.
+        """
+        if self._holder is None:
+            raise RuntimeError(
+                "UIRenderer.update_texture called before first begin()"
+            )
+        flat = np.ascontiguousarray(data).reshape(-1)
+        self._holder.upload_texture(handle, flat)
+
+    def destroy_texture(self, handle: Tgfx2TextureHandle) -> None:
+        """Release a GPU texture previously returned by ``upload_texture``."""
+        if self._holder is None or handle is None:
+            return
+        self._holder.destroy_texture(handle)
+
+    def draw_external_gl_texture(
+        self, x: float, y: float, w: float, h: float,
+        gl_tex_id: int, tex_w: int, tex_h: int,
+        *,
+        flip_v: bool = False,
+        tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    ) -> None:
+        """Draw a raw GL RGBA texture id as a subregion of the current
+        UI pass.
+
+        Used by Viewport3D to composite an external 3D engine's
+        shared color texture onto the UI offscreen. The texture id
+        must be valid in the current GL context (typically via a
+        shared GL context / share group).
+
+        ``flip_v=True`` samples the texture with V axis inverted —
+        use this for GL-native render targets where texel (0, 0) is
+        the bottom-left corner.
+        """
+        if w <= 0 or h <= 0 or gl_tex_id == 0 or self._ctx is None:
+            return
+
+        tex2 = wrap_gl_texture_as_tgfx2(
+            self._holder, int(gl_tex_id),
+            int(tex_w), int(tex_h), PIXEL_RGBA8,
+        )
+        try:
+            ctx = self._ctx
+            ctx.bind_shader(self._ui_vs, self._ui_fs)
+            proj = _build_ortho_pixel_to_ndc(
+                float(self._viewport_w), float(self._viewport_h),
+            )
+            ctx.set_uniform_mat4("u_projection", proj.flatten().tolist(), True)
+            ctx.set_uniform_vec4(
+                "u_color",
+                float(tint[0]), float(tint[1]),
+                float(tint[2]), float(tint[3]),
+            )
+            ctx.set_uniform_int("u_texture_mode", 2)
+            ctx.set_uniform_int("u_texture", 0)
+            ctx.bind_sampled_texture(0, tex2)
+
+            if flip_v:
+                verts = self._emit_quad(x, y, x + w, y + h, 0.0, 1.0, 1.0, 0.0)
+            else:
+                verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
+            ctx.draw_immediate_triangles(verts, 6)
+        finally:
+            # Non-owning wrapper: release the HandlePool entry but
+            # leave the underlying GL texture alone.
+            self._holder.destroy_texture(tex2)
 
     def load_image(self, path: str) -> Tgfx2TextureHandle:
         """Load an image file and upload it as a GPU texture."""
