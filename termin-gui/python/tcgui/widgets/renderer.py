@@ -1,67 +1,132 @@
-"""OpenGL renderer for the widget-based UI system."""
+"""tgfx2-backed renderer for the widget-based UI system.
+
+Public API is byte-compatible with the previous tgfx1 version:
+``__init__(graphics, font)``, ``font`` property, ``begin``, ``end``,
+``begin_clip``, ``end_clip``, ``draw_rect``, ``draw_rect_outline``,
+``draw_line``, ``draw_text``, ``draw_text_centered``, ``draw_image``,
+``upload_texture``, ``load_image``, ``measure_text``.
+
+Internally the renderer drives a ``Tgfx2Context`` (created lazily on
+first ``begin()``) and keeps an offscreen tgfx1 FBO as its draw
+target. At ``end()`` it blits the offscreen to the default
+framebuffer via tgfx1 ``blit_framebuffer``. This mirrors the
+production pattern used by ``present.py`` and lets diffusion-editor
+and tcplot consumers remain unchanged.
+
+Text is delegated to ``Text2DRenderer``. Rects / lines / images use a
+small UI shader compiled once per holder through
+``tc_shader_ensure_tgfx2``.
+"""
 
 from __future__ import annotations
 
 import math
+
 import numpy as np
 
 from tgfx import GraphicsBackend, TcShader
 from tgfx.font import FontTextureAtlas, get_default_font
+from tgfx.text2d import Text2DRenderer
+from tgfx._tgfx_native import (
+    Tgfx2Context,
+    Tgfx2TextureHandle,
+    tc_shader_ensure_tgfx2,
+    wrap_fbo_color_as_tgfx2,
+    CULL_NONE,
+)
 
 
-# Built-in UI shaders
-UI_VERTEX_SHADER = """
-#version 330 core
-layout(location=0) in vec2 a_position;
-layout(location=1) in vec2 a_uv;
+# UI shader: solid colour (mode 0) and RGBA-image sampling (mode 2).
+# Font-atlas sampling lives in Text2DRenderer; this shader does not
+# carry mode 1.
+UI_VERTEX_SHADER = """#version 330 core
+layout(location=0) in vec3 a_pos;    // (x_pixel, y_pixel, 0)
+layout(location=1) in vec4 a_uv_pad; // (u, v, _, _)
+
+uniform mat4 u_projection;
 
 out vec2 v_uv;
 
-void main(){
-    v_uv = a_uv;
-    gl_Position = vec4(a_position, 0, 1);
+void main() {
+    gl_Position = u_projection * vec4(a_pos.xy, 0.0, 1.0);
+    v_uv = a_uv_pad.xy;
 }
 """
 
-UI_FRAGMENT_SHADER = """
-#version 330 core
+UI_FRAGMENT_SHADER = """#version 330 core
 uniform sampler2D u_texture;
 uniform vec4 u_color;
-uniform int u_texture_mode;  // 0=solid color, 1=font atlas (R→alpha), 2=RGBA image
+uniform int u_texture_mode;   // 0 = solid colour, 2 = RGBA image (tinted)
 
 in vec2 v_uv;
 out vec4 FragColor;
 
-void main(){
-    if (u_texture_mode == 1) {
-        // Font atlas: R channel as alpha mask, color from uniform
-        float a = texture(u_texture, v_uv).r * u_color.a;
-        FragColor = vec4(u_color.rgb, a);
-    } else if (u_texture_mode == 2) {
-        // RGBA image: full texture color multiplied by tint
+void main() {
+    if (u_texture_mode == 2) {
         FragColor = texture(u_texture, v_uv) * u_color;
     } else {
-        // Solid color
         FragColor = u_color;
     }
 }
 """
 
 
-class UIRenderer:
-    """OpenGL renderer for UI widgets."""
+def _build_ortho_pixel_to_ndc(w: float, h: float) -> np.ndarray:
+    """Ortho projection: pixel coords (y+ down) → NDC (y+ up)."""
+    if w <= 0 or h <= 0:
+        return np.eye(4, dtype=np.float32)
+    return np.array(
+        [
+            [2.0 / w,  0.0,     0.0, -1.0],
+            [0.0,    -2.0 / h,  0.0,  1.0],
+            [0.0,     0.0,     -1.0,  0.0],
+            [0.0,     0.0,      0.0,  1.0],
+        ],
+        dtype=np.float32,
+    )
 
-    def __init__(self, graphics: GraphicsBackend, font: FontTextureAtlas | None = None):
+
+class UIRenderer:
+    """UI widget renderer backed by tgfx2."""
+
+    def __init__(
+        self,
+        graphics: GraphicsBackend,
+        font: FontTextureAtlas | None = None,
+    ):
+        # tgfx1 singleton is kept around because the offscreen FBO is
+        # created through it and the final composite to the default
+        # framebuffer goes through ``blit_framebuffer``. It is NOT
+        # used for any rendering state or draw calls.
         self._graphics = graphics
         self._font = font
-        self._shader: TcShader | None = None
 
-        # Viewport size in pixels
+        # Viewport dimensions in pixels. Updated each begin().
         self._viewport_w: int = 0
         self._viewport_h: int = 0
 
-        # Scissor clip stack for nested begin_clip/end_clip
+        # CPU scissor stack for nested begin_clip/end_clip. Stored in
+        # GL (bottom-left, y+ up) pixel coordinates.
         self._clip_stack: list[tuple[int, int, int, int]] = []
+
+        # --- Lazy tgfx2 resources — created on first begin() ---
+        self._holder: Tgfx2Context | None = None
+        self._ctx = None
+        self._text2d: Text2DRenderer | None = None
+
+        self._ui_tc_shader: TcShader | None = None
+        self._ui_vs = None
+        self._ui_fs = None
+
+        # Offscreen target wired through tgfx1 FramebufferHandle +
+        # wrap_fbo_color_as_tgfx2 each frame.
+        self._offscreen_fbo = None
+        self._window_fbo = None
+        self._offscreen_size: tuple[int, int] = (0, 0)
+
+    # ------------------------------------------------------------------
+    # Font property
+    # ------------------------------------------------------------------
 
     @property
     def font(self) -> FontTextureAtlas | None:
@@ -73,36 +138,109 @@ class UIRenderer:
     def font(self, value: FontTextureAtlas | None):
         self._font = value
 
-    def _ensure_shader(self):
-        if self._shader is None:
-            self._shader = TcShader.from_sources(UI_VERTEX_SHADER, UI_FRAGMENT_SHADER, "", "UIRenderer")
+    # ------------------------------------------------------------------
+    # Lazy tgfx2 init
+    # ------------------------------------------------------------------
 
-    def begin(self, viewport_w: int, viewport_h: int):
+    def _ensure_init(self, w: int, h: int) -> None:
+        """Create Tgfx2Context, compile UI shader, allocate offscreen
+        FBO. Called on the first begin() and whenever the viewport
+        size changes."""
+        if self._holder is None:
+            self._holder = Tgfx2Context()
+            self._ctx = self._holder.context
+            self._text2d = Text2DRenderer(font=self._font)
+
+        if self._ui_tc_shader is None:
+            self._ui_tc_shader = TcShader.from_sources(
+                UI_VERTEX_SHADER, UI_FRAGMENT_SHADER, "", "UIRenderer"
+            )
+            self._ui_tc_shader.ensure_ready()
+            pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
+            if not pair.vs or not pair.fs:
+                raise RuntimeError(
+                    "UIRenderer: tc_shader_ensure_tgfx2 returned null handles"
+                )
+            self._ui_vs = pair.vs
+            self._ui_fs = pair.fs
+
+        if self._offscreen_size != (w, h):
+            self._offscreen_fbo = self._graphics.create_framebuffer(w, h, 1, "")
+            self._window_fbo = self._graphics.create_external_framebuffer(0, w, h)
+            self._offscreen_size = (w, h)
+
+    # ------------------------------------------------------------------
+    # Frame lifecycle
+    # ------------------------------------------------------------------
+
+    def begin(self, viewport_w: int, viewport_h: int) -> None:
         """Begin UI rendering pass."""
-        self._viewport_w = viewport_w
-        self._viewport_h = viewport_h
+        self._viewport_w = int(viewport_w)
+        self._viewport_h = int(viewport_h)
 
-        self._ensure_shader()
+        self._ensure_init(self._viewport_w, self._viewport_h)
 
-        # Setup OpenGL state for 2D UI
-        self._graphics.set_cull_face(False)
-        self._graphics.set_depth_test(False)
-        self._graphics.set_blend(True)
-        self._graphics.set_blend_func("src_alpha", "one_minus_src_alpha")
+        ctx = self._ctx
 
-    def end(self):
-        """End UI rendering pass, restore state."""
-        self._graphics.set_cull_face(True)
-        self._graphics.set_blend(False)
-        self._graphics.set_depth_test(True)
+        ctx.begin_frame()
+        offscreen_tex2 = wrap_fbo_color_as_tgfx2(ctx, self._offscreen_fbo)
+        # Clear to transparent black so areas the UI does not touch
+        # remain transparent after composite. Since Phase 4 assumes
+        # UIRenderer is the only producer of frame content, the
+        # destination FB is about to be fully overwritten by the
+        # final blit anyway — the transparency story matters only
+        # once viewport3D / 3D underlays enter the picture in Phase 5.
+        ctx.begin_pass(
+            color=offscreen_tex2,
+            clear_color_enabled=True,
+            r=0.0, g=0.0, b=0.0, a=0.0,
+        )
+        ctx.set_viewport(0, 0, self._viewport_w, self._viewport_h)
+        ctx.set_cull(CULL_NONE)
+        ctx.set_depth_test(False)
+        ctx.set_blend(True)
 
-    def begin_clip(self, x: float, y: float, w: float, h: float):
+        # Text2D uses the same projection matrix — its begin() sets
+        # its own u_projection on its own shader, so we must call it
+        # here after the ctx is in a pass.
+        self._text2d.begin(self._holder, self._viewport_w, self._viewport_h,
+                           font=self._font)
+
+    def end(self) -> None:
+        """End UI rendering pass, composite offscreen to default FB."""
+        if self._ctx is None:
+            return
+
+        self._text2d.end()
+        self._ctx.end_pass()
+        self._ctx.end_frame()
+
+        # Drop any remaining scissor state so legacy tgfx1 rendering
+        # after this (if any) starts with a clean slate.
+        self._clip_stack.clear()
+
+        # Composite offscreen → default framebuffer.
+        self._graphics.blit_framebuffer(
+            self._offscreen_fbo,
+            self._window_fbo,
+            (0, 0, self._viewport_w, self._viewport_h),
+            (0, 0, self._viewport_w, self._viewport_h),
+            True,
+            False,
+        )
+
+    # ------------------------------------------------------------------
+    # Scissor / clip stack
+    # ------------------------------------------------------------------
+
+    def begin_clip(self, x: float, y: float, w: float, h: float) -> None:
         """Push scissor clip rect. Nested clips are intersected."""
-        # Convert to GL bottom-left origin integers
-        ix, iy, iw, ih = int(x), int(self._viewport_h - (y + h)), int(w), int(h)
+        ix = int(x)
+        iy = int(self._viewport_h - (y + h))  # GL bottom-left origin
+        iw = int(w)
+        ih = int(h)
 
         if self._clip_stack:
-            # Intersect with current top-of-stack
             px, py, pw, ph = self._clip_stack[-1]
             x1 = max(ix, px)
             y1 = max(iy, py)
@@ -113,265 +251,242 @@ class UIRenderer:
             ix, iy = x1, y1
 
         self._clip_stack.append((ix, iy, iw, ih))
-        self._graphics.enable_scissor(ix, iy, iw, ih)
+        self._ctx.set_scissor(ix, iy, iw, ih)
 
-    def end_clip(self):
-        """Pop scissor clip rect. Restores parent clip or disables scissor."""
+    def end_clip(self) -> None:
+        """Pop scissor clip rect. Restore parent clip or disable."""
         if self._clip_stack:
             self._clip_stack.pop()
         if self._clip_stack:
             px, py, pw, ph = self._clip_stack[-1]
-            self._graphics.enable_scissor(px, py, pw, ph)
+            self._ctx.set_scissor(px, py, pw, ph)
         else:
-            self._graphics.disable_scissor()
+            self._ctx.clear_scissor()
 
-    def _px_to_ndc(self, x: float, y: float) -> tuple[float, float]:
-        """Convert pixel coordinates to NDC (-1..1)."""
-        nx = (x / self._viewport_w) * 2.0 - 1.0
-        ny = 1.0 - (y / self._viewport_h) * 2.0  # Y is flipped
-        return (nx, ny)
+    # ------------------------------------------------------------------
+    # Primitive drawing helpers
+    # ------------------------------------------------------------------
 
-    def _size_to_ndc(self, w: float, h: float) -> tuple[float, float]:
-        """Convert pixel size to NDC size."""
-        nw = (w / self._viewport_w) * 2.0
-        nh = (h / self._viewport_h) * 2.0
-        return (nw, nh)
+    def _bind_ui_shader_solid(
+        self, color: tuple[float, float, float, float],
+    ) -> None:
+        ctx = self._ctx
+        ctx.bind_shader(self._ui_vs, self._ui_fs)
+        proj = _build_ortho_pixel_to_ndc(
+            float(self._viewport_w), float(self._viewport_h),
+        )
+        ctx.set_uniform_mat4("u_projection", proj.flatten().tolist(), True)
+        ctx.set_uniform_vec4(
+            "u_color",
+            float(color[0]), float(color[1]),
+            float(color[2]), float(color[3]),
+        )
+        ctx.set_uniform_int("u_texture_mode", 0)
 
-    def draw_rect(self, x: float, y: float, w: float, h: float,
-                  color: tuple[float, float, float, float],
-                  border_radius: float = 0):
-        """Draw a filled rectangle at pixel coordinates."""
-        # Convert to NDC
-        nx, ny = self._px_to_ndc(x, y)
-        nw, nh = self._size_to_ndc(w, h)
+    def _emit_quad(
+        self,
+        px0: float, py0: float, px1: float, py1: float,
+        u0: float, v0: float, u1: float, v1: float,
+    ) -> np.ndarray:
+        """Return 6 CCW (in y+ down pixel coords) vertices for a
+        quad spanning (px0, py0)-(px1, py1) with given UVs. The
+        winding survives the ortho Y-flip and default back-face
+        culling: triangles end up CCW in NDC."""
+        return np.array(
+            [
+                # Triangle 1: TL, BL, BR
+                px0, py0, 0.0, u0, v0, 0.0, 0.0,
+                px0, py1, 0.0, u0, v1, 0.0, 0.0,
+                px1, py1, 0.0, u1, v1, 0.0, 0.0,
+                # Triangle 2: TL, BR, TR
+                px0, py0, 0.0, u0, v0, 0.0, 0.0,
+                px1, py1, 0.0, u1, v1, 0.0, 0.0,
+                px1, py0, 0.0, u1, v0, 0.0, 0.0,
+            ],
+            dtype=np.float32,
+        )
 
-        # Build quad vertices (2 triangles as triangle strip)
-        left = nx
-        right = nx + nw
-        top = ny
-        bottom = ny - nh
+    # ------------------------------------------------------------------
+    # Public draw API
+    # ------------------------------------------------------------------
 
-        vertices = np.array([
-            [left, top],
-            [right, top],
-            [left, bottom],
-            [right, bottom],
-        ], dtype=np.float32)
-
-        # Bind shader and set uniforms
-        self._shader.ensure_ready()
-        self._shader.use()
-        self._graphics.check_gl_error("UIRenderer: after shader.use")
-        self._shader.set_uniform_vec4("u_color", float(color[0]), float(color[1]), float(color[2]), float(color[3]))
-        self._shader.set_uniform_int("u_texture_mode", 0)
-        self._graphics.check_gl_error("UIRenderer: after set uniforms")
-
-        # Draw
-        self._graphics.draw_ui_vertices(vertices)
-        self._graphics.check_gl_error("UIRenderer: after draw_rect")
-
-    def draw_text(self, x: float, y: float, text: str,
-                  color: tuple[float, float, float, float],
-                  font_size: float = 14):
-        """Draw text at pixel coordinates (baseline position)."""
-        font = self.font  # Use property for lazy loading
-        if not font or not text:
+    def draw_rect(
+        self, x: float, y: float, w: float, h: float,
+        color: tuple[float, float, float, float],
+        border_radius: float = 0,
+    ) -> None:
+        """Draw a filled rectangle. ``border_radius`` is currently
+        ignored (the legacy implementation also ignored it)."""
+        if w <= 0 or h <= 0:
             return
+        self._bind_ui_shader_solid(color)
+        verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
+        self._ctx.draw_immediate_triangles(verts, 6)
 
-        # Ensure all glyphs are in the atlas (triggers GPU sync if needed)
-        font.ensure_glyphs(text, self._graphics)
+    def draw_rect_outline(
+        self, x: float, y: float, w: float, h: float,
+        color: tuple[float, float, float, float],
+        thickness: float = 1.0,
+    ) -> None:
+        """Draw an unfilled rectangle outline."""
+        self.draw_rect(x, y, w, thickness, color)                   # top
+        self.draw_rect(x, y + h - thickness, w, thickness, color)   # bottom
+        self.draw_rect(x, y, thickness, h, color)                   # left
+        self.draw_rect(x + w - thickness, y, thickness, h, color)   # right
 
-        self._shader.ensure_ready()
-        self._shader.use()
-        self._shader.set_uniform_vec4("u_color", float(color[0]), float(color[1]), float(color[2]), float(color[3]))
-        self._shader.set_uniform_int("u_texture_mode", 1)
-
-        # Bind font texture
-        texture_handle = font.ensure_texture(self._graphics)
-        texture_handle.bind(0)
-        self._shader.set_uniform_int("u_texture", 0)
-        self._graphics.check_gl_error("UIRenderer: after text setup")
-
-        # Scale factor from font atlas size to desired size
-        scale = font_size / font.size
-
-        # Ascent from font: distance from glyph image top to baseline
-        ascent = font.ascent if hasattr(font, "ascent") else font.size
-
-        cursor_x = x
-        for ch in text:
-            if ch not in font.glyphs:
-                continue
-
-            glyph = font.glyphs[ch]
-            gw, gh = glyph["size"]
-            u0, v0, u1, v1 = glyph["uv"]
-
-            # Glyph dimensions in pixels at current scale
-            char_w = gw * scale
-            char_h = gh * scale
-
-            # Glyph image top is ascent pixels above the baseline
-            glyph_y = y - ascent * scale
-
-            # Convert to NDC
-            nx, ny = self._px_to_ndc(cursor_x, glyph_y)
-            nw, nh = self._size_to_ndc(char_w, char_h)
-
-            left = nx
-            right = nx + nw
-            top = ny
-            bottom = ny - nh
-
-            vertices = np.array([
-                [left, top, u0, v0],
-                [right, top, u1, v0],
-                [left, bottom, u0, v1],
-                [right, bottom, u1, v1],
-            ], dtype=np.float32)
-
-            self._graphics.draw_ui_textured_quad(vertices)
-
-            cursor_x += char_w
-
-    def draw_text_centered(self, cx: float, cy: float, text: str,
-                           color: tuple[float, float, float, float],
-                           font_size: float = 14):
-        """Draw text centered at the given pixel position."""
-        font = self.font  # Use property for lazy loading
-        if not font or not text:
-            return
-
-        # Measure text width
-        scale = font_size / font.size
-        text_width = 0.0
-        for ch in text:
-            if ch in font.glyphs:
-                gw, _ = font.glyphs[ch]["size"]
-                text_width += gw * scale
-
-        # Center position
-        x = cx - text_width / 2
-        y = cy + font_size / 2  # baseline offset
-
-        self.draw_text(x, y, text, color, font_size)
-
-    def draw_line(self, x1: float, y1: float, x2: float, y2: float,
-                  color: tuple[float, float, float, float],
-                  thickness: float = 1.0):
-        """Draw a line between two pixel coordinates."""
+    def draw_line(
+        self, x1: float, y1: float, x2: float, y2: float,
+        color: tuple[float, float, float, float],
+        thickness: float = 1.0,
+    ) -> None:
+        """Draw a thick line between two pixel coordinates."""
         dx = x2 - x1
         dy = y2 - y1
         length = math.sqrt(dx * dx + dy * dy)
         if length < 0.001:
             return
 
-        # Perpendicular normal
         half = thickness / 2.0
+        # Perpendicular unit vector × half-thickness
         nx = -dy / length * half
         ny = dx / length * half
 
-        # 4 corners of the thin quad
-        vertices_px = [
-            (x1 + nx, y1 + ny),
-            (x1 - nx, y1 - ny),
-            (x2 + nx, y2 + ny),
-            (x2 - nx, y2 - ny),
-        ]
+        # Quad corners in pixel coords. Naming mirrors `_emit_quad`
+        # expectations (tl/bl/br/tr) so winding stays consistent.
+        ax, ay = x1 + nx, y1 + ny  # "TL" — start, +normal
+        bx, by = x1 - nx, y1 - ny  # "BL" — start, -normal
+        cx, cy = x2 - nx, y2 - ny  # "BR" — end, -normal
+        dx_, dy_ = x2 + nx, y2 + ny  # "TR" — end, +normal
 
-        # Convert to NDC
-        ndc = np.array(
-            [self._px_to_ndc(px, py) for px, py in vertices_px],
+        self._bind_ui_shader_solid(color)
+        verts = np.array(
+            [
+                ax, ay, 0.0, 0.0, 0.0, 0.0, 0.0,  # "TL"
+                bx, by, 0.0, 0.0, 1.0, 0.0, 0.0,  # "BL"
+                cx, cy, 0.0, 1.0, 1.0, 0.0, 0.0,  # "BR"
+                ax, ay, 0.0, 0.0, 0.0, 0.0, 0.0,  # "TL"
+                cx, cy, 0.0, 1.0, 1.0, 0.0, 0.0,  # "BR"
+                dx_, dy_, 0.0, 1.0, 0.0, 0.0, 0.0,  # "TR"
+            ],
             dtype=np.float32,
         )
+        self._ctx.draw_immediate_triangles(verts, 6)
 
-        self._shader.ensure_ready()
-        self._shader.use()
-        self._shader.set_uniform_vec4(
-            "u_color",
-            float(color[0]), float(color[1]),
-            float(color[2]), float(color[3]),
+    # ------------------------------------------------------------------
+    # Text
+    # ------------------------------------------------------------------
+
+    def draw_text(
+        self, x: float, y: float, text: str,
+        color: tuple[float, float, float, float],
+        font_size: float = 14,
+    ) -> None:
+        """Draw text at the given pixel position. ``y`` is the
+        baseline (legacy convention), not the top of the text box."""
+        font = self.font
+        if not font or not text or self._text2d is None:
+            return
+
+        scale = font_size / font.size
+        ascent = font.ascent if hasattr(font, "ascent") else font.size
+
+        # Translate baseline → top-of-glyph for Text2DRenderer, which
+        # uses top-left anchoring.
+        top_y = y - ascent * scale
+
+        self._text2d.draw(
+            text, x, top_y,
+            color=color, size=float(font_size), anchor="left",
         )
-        self._shader.set_uniform_int("u_texture_mode", 0)
 
-        self._graphics.draw_ui_vertices(ndc)
+    def draw_text_centered(
+        self, cx: float, cy: float, text: str,
+        color: tuple[float, float, float, float],
+        font_size: float = 14,
+    ) -> None:
+        """Draw text centered on (cx, cy)."""
+        font = self.font
+        if not font or not text or self._text2d is None:
+            return
 
-    def draw_rect_outline(self, x: float, y: float, w: float, h: float,
-                          color: tuple[float, float, float, float],
-                          thickness: float = 1.0):
-        """Draw a rectangle outline (unfilled) at pixel coordinates."""
-        self.draw_rect(x, y, w, thickness, color)                   # top
-        self.draw_rect(x, y + h - thickness, w, thickness, color)   # bottom
-        self.draw_rect(x, y, thickness, h, color)                   # left
-        self.draw_rect(x + w - thickness, y, thickness, h, color)   # right
+        # Legacy semantics: convert to a draw_text call at the baseline.
+        scale = font_size / font.size
+        text_width = sum(
+            font.glyphs[ch]["size"][0] * scale
+            for ch in text if ch in font.glyphs
+        )
+        x = cx - text_width / 2
+        y = cy + font_size / 2  # baseline offset (legacy)
+        self.draw_text(x, y, text, color, font_size)
 
-    def draw_image(self, x: float, y: float, w: float, h: float,
-                   texture_handle,
-                   tint: tuple[float, float, float, float] = (1, 1, 1, 1)):
-        """Draw an RGBA textured quad at pixel coordinates."""
-        self._shader.ensure_ready()
-        self._shader.use()
-        self._shader.set_uniform_vec4("u_color", float(tint[0]), float(tint[1]), float(tint[2]), float(tint[3]))
-        self._shader.set_uniform_int("u_texture_mode", 2)
+    def measure_text(
+        self, text: str, font_size: float = 14,
+    ) -> tuple[float, float]:
+        """Measure pixel (width, height) of ``text`` at ``font_size``."""
+        font = self.font
+        if not font or not text:
+            return (0.0, 0.0)
 
-        texture_handle.bind(0)
-        self._shader.set_uniform_int("u_texture", 0)
+        font.ensure_glyphs(text)
 
-        # Convert to NDC
-        nx, ny = self._px_to_ndc(x, y)
-        nw, nh = self._size_to_ndc(w, h)
+        scale = font_size / font.size
+        width = sum(
+            font.glyphs[ch]["size"][0] * scale
+            for ch in text if ch in font.glyphs
+        )
+        return (width, float(font_size))
 
-        left = nx
-        right = nx + nw
-        top = ny
-        bottom = ny - nh
+    # ------------------------------------------------------------------
+    # Images
+    # ------------------------------------------------------------------
 
-        # GL texture row 0 = numpy row 0 = image top, so v=0 at screen top
-        vertices = np.array([
-            [left, top, 0, 0],
-            [right, top, 1, 0],
-            [left, bottom, 0, 1],
-            [right, bottom, 1, 1],
-        ], dtype=np.float32)
+    def draw_image(
+        self, x: float, y: float, w: float, h: float,
+        texture_handle: Tgfx2TextureHandle,
+        tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    ) -> None:
+        """Draw an RGBA texture at pixel coordinates, multiplied by ``tint``."""
+        if w <= 0 or h <= 0 or texture_handle is None:
+            return
 
-        self._graphics.draw_ui_textured_quad(vertices)
+        ctx = self._ctx
+        ctx.bind_shader(self._ui_vs, self._ui_fs)
+        proj = _build_ortho_pixel_to_ndc(
+            float(self._viewport_w), float(self._viewport_h),
+        )
+        ctx.set_uniform_mat4("u_projection", proj.flatten().tolist(), True)
+        ctx.set_uniform_vec4(
+            "u_color",
+            float(tint[0]), float(tint[1]),
+            float(tint[2]), float(tint[3]),
+        )
+        ctx.set_uniform_int("u_texture_mode", 2)
+        ctx.set_uniform_int("u_texture", 0)
+        ctx.bind_sampled_texture(0, texture_handle)
 
-    def upload_texture(self, data: np.ndarray):
-        """Upload a numpy RGBA array as a GPU texture. Returns a texture handle.
+        verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
+        ctx.draw_immediate_triangles(verts, 6)
+
+    def upload_texture(self, data: np.ndarray) -> Tgfx2TextureHandle:
+        """Upload a numpy RGBA array as a GPU texture.
 
         Parameters
         ----------
         data : np.ndarray
             Shape (H, W, 4) uint8 RGBA.
         """
+        if self._holder is None:
+            raise RuntimeError(
+                "UIRenderer.upload_texture called before first begin() — "
+                "the Tgfx2Context is not initialised yet"
+            )
         h, w = data.shape[0], data.shape[1]
-        return self._graphics.create_texture(data, (w, h), channels=4,
-                                             mipmap=False, clamp=True)
+        flat = np.ascontiguousarray(data).reshape(-1)
+        return self._holder.create_texture_rgba8(w, h, flat)
 
-    def load_image(self, path: str):
-        """Load an image file and upload as GPU texture. Returns a texture handle."""
+    def load_image(self, path: str) -> Tgfx2TextureHandle:
+        """Load an image file and upload it as a GPU texture."""
         from PIL import Image
         img = Image.open(path).convert("RGBA")
         data = np.array(img, dtype=np.uint8)
-        w, h = img.size
-        return self._graphics.create_texture(data, (w, h), channels=4, mipmap=False, clamp=True)
-
-    def measure_text(self, text: str, font_size: float = 14) -> tuple[float, float]:
-        """Measure text dimensions in pixels."""
-        font = self.font  # Use property for lazy loading
-        if not font or not text:
-            return (0, 0)
-
-        # Ensure glyphs exist on CPU (no GPU sync needed just for measuring)
-        font.ensure_glyphs(text)
-
-        scale = font_size / font.size
-        width = 0.0
-        height = font_size
-
-        for ch in text:
-            if ch in font.glyphs:
-                gw, _ = font.glyphs[ch]["size"]
-                width += gw * scale
-
-        return (width, height)
+        return self.upload_texture(data)
