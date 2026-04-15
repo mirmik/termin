@@ -19,7 +19,7 @@ from termin.render_components import MeshRenderer
 from tgfx import TcShader
 
 from termin.visualization.ui import Canvas, UIRectangle
-from tcgui.font import FontTextureAtlas
+from tgfx.font import FontTextureAtlas
 from termin.visualization.ui.elements import UISlider, UIText
 
 

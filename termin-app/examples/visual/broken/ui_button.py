@@ -20,7 +20,7 @@ from tgfx import TcShader
 
 from termin.visualization.ui import Canvas, UIRectangle
 from termin.visualization.ui.elements import UIButton   # ← наша новая кнопка
-from tcgui.font import FontTextureAtlas
+from tgfx.font import FontTextureAtlas
 
 
 # ----- 3D SHADER ---------------------------------------------------

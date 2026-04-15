@@ -8,7 +8,7 @@ from typing import Callable
 
 from tcbase import Key, MouseButton, Mods
 from tgfx import GraphicsBackend
-from tcgui.font import FontTextureAtlas
+from tgfx.font import FontTextureAtlas
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
 from tcgui.widgets.renderer import UIRenderer

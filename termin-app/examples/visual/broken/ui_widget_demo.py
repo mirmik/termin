@@ -28,7 +28,7 @@ from tcgui.widgets import (
     px,
     pct,
 )
-from tcgui.font import FontTextureAtlas
+from tgfx.font import FontTextureAtlas
 
 
 # 3D shader

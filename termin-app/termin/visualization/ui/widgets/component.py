@@ -9,7 +9,7 @@ from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEv
 from tcbase import Action
 from tcgui.widgets.ui import UI
 from tcgui.widgets.widget import Widget
-from tcgui.font import FontTextureAtlas
+from tgfx.font import FontTextureAtlas
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:

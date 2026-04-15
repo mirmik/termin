@@ -1,4 +1,3 @@
-# tcgui/font.py
 """Dynamic font texture atlas.
 
 Glyphs are rasterized on demand and added to a pre-allocated atlas.
@@ -22,7 +21,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from tcbase import log
+from tgfx import log
 
 if TYPE_CHECKING:
     from tgfx import GPUTextureHandle
