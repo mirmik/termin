@@ -77,33 +77,20 @@ class UnifiedGizmoPass(RenderFramePass):
                 log.error(f"[UnifiedGizmoPass] ctx.ctx2 is None — UnifiedGizmoPass is tgfx2-only")
                 return
 
-            from tgfx._tgfx_native import (
-                wrap_fbo_color_as_tgfx2,
-                CULL_NONE,
-                PIXEL_RGBA8,
-            )
+            from tgfx._tgfx_native import PIXEL_RGBA8
 
             manager = self._get_gizmo_manager()
             renderer = ImmediateRenderer.instance()
 
             px, py, pw, ph = ctx.rect
 
-            fb = ctx.writes_fbos.get(self.output_res)
-            if fb is None:
+            target_tex2 = ctx.tex2_writes.get(self.output_res)
+            if not target_tex2:
                 from tcbase import log
-                log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is None, skipping")
-                return
-
-            from termin.graphics import FramebufferHandle
-            if not isinstance(fb, FramebufferHandle):
-                from tcbase import log
-                log.warn(f"[UnifiedGizmoPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle, skipping")
+                log.warn(f"[UnifiedGizmoPass] tex2 write '{self.output_res}' missing, skipping")
                 return
 
             ctx2 = ctx.ctx2
-            target_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb)
-            if not target_tex2:
-                return
 
             with profiler.section("Setup"):
                 # Open one ctx2 pass and clear depth — gizmos render on
