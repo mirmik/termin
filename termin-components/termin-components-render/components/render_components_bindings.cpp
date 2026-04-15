@@ -57,23 +57,6 @@ nb::object init_pass_from_deserialize(T* pass, const char* type_name) {
     return wrapper;
 }
 
-static FBOMap dict_to_fbo_map(nb::dict src) {
-    FBOMap result;
-    for (auto item : src) {
-        std::string key = nb::cast<std::string>(nb::str(item.first));
-        nb::object val = nb::borrow<nb::object>(item.second);
-        if (val.is_none()) {
-            continue;
-        }
-        try {
-            result[key] = nb::cast<FramebufferHandle*>(val);
-        } catch (const nb::cast_error&) {
-            tc::Log::error("[render_components] Expected FBO for key '%s'", key.c_str());
-        }
-    }
-    return result;
-}
-
 static Rect4i tuple_to_rect(nb::tuple rect_py) {
     Rect4i rect;
     rect.x = nb::cast<int>(rect_py[0]);
@@ -543,14 +526,12 @@ NB_MODULE(_components_render_native, m) {
         .def("remove_resource", &MaterialPass::remove_resource,
             nb::arg("resource_name"))
         .def("get_internal_symbols", &MaterialPass::get_internal_symbols)
-        .def("execute_with_data", [](MaterialPass& self, GraphicsBackend* graphics, nb::dict reads_fbos_py, nb::dict writes_fbos_py, nb::tuple rect_py) {
+        .def("execute_with_data", [](MaterialPass& self, GraphicsBackend* graphics, nb::tuple rect_py) {
             ExecuteContext ctx;
             ctx.graphics = graphics;
-            ctx.reads_fbos = dict_to_fbo_map(reads_fbos_py);
-            ctx.writes_fbos = dict_to_fbo_map(writes_fbos_py);
             ctx.rect = tuple_to_rect(rect_py);
             self.execute(ctx);
-        }, nb::arg("graphics"), nb::arg("reads_fbos"), nb::arg("writes_fbos"), nb::arg("rect"))
+        }, nb::arg("graphics"), nb::arg("rect"))
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "MaterialPass";

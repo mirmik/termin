@@ -135,23 +135,6 @@ static Rect4i tuple_to_rect(nb::tuple rect_py) {
     return rect;
 }
 
-static FBOMap dict_to_fbo_map(nb::dict src) {
-    FBOMap result;
-    for (auto item : src) {
-        std::string key = nb::cast<std::string>(nb::str(item.first));
-        nb::object val = nb::borrow<nb::object>(item.second);
-        if (val.is_none()) {
-            continue;
-        }
-        try {
-            result[key] = nb::cast<FramebufferHandle*>(val);
-        } catch (const nb::cast_error&) {
-            tc::Log::error("[frame_pass] Expected FBO for key '%s'", key.c_str());
-        }
-    }
-    return result;
-}
-
 static tc_scene_handle object_to_scene_handle(nb::object scene_py) {
     if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
         return nb::cast<tc_scene_handle>(scene_py.attr("scene_handle")());
