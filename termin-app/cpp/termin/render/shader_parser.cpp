@@ -242,16 +242,34 @@ std::string strip_uniform_decls(const std::string& source,
     if (names.empty()) return source;
 
     // Match simple top-level declarations: `uniform <type> <name>;` where
-    // name is one of the provided. Use a per-name regex to avoid conflating
-    // similarly-prefixed identifiers (u_strength / u_strength2).
-    std::string result = source;
+    // name is one of the provided. Use a per-name regex applied per line,
+    // since MSVC STL lacks std::regex::multiline.
+    std::vector<std::regex> res;
+    res.reserve(names.size());
     for (const auto& name : names) {
-        // Escape nothing — property names are simple identifiers.
         std::string pattern =
-            std::string("^[ \\t]*uniform[ \\t]+[A-Za-z_][A-Za-z0-9_]*[ \\t]+") +
-            name + "[ \\t]*;[ \\t]*\\n?";
-        std::regex re(pattern, std::regex::multiline);
-        result = std::regex_replace(result, re, "");
+            std::string("[ \\t]*uniform[ \\t]+[A-Za-z_][A-Za-z0-9_]*[ \\t]+") +
+            name + "[ \\t]*;[ \\t]*";
+        res.emplace_back(pattern);
+    }
+
+    std::string result;
+    result.reserve(source.size());
+    size_t i = 0;
+    while (i < source.size()) {
+        size_t eol = source.find('\n', i);
+        size_t line_end = (eol == std::string::npos) ? source.size() : eol;
+        std::string line = source.substr(i, line_end - i);
+        bool drop = false;
+        for (const auto& re : res) {
+            if (std::regex_match(line, re)) { drop = true; break; }
+        }
+        if (!drop) {
+            result.append(line);
+            if (eol != std::string::npos) result.push_back('\n');
+        }
+        if (eol == std::string::npos) break;
+        i = eol + 1;
     }
     return result;
 }
@@ -259,12 +277,19 @@ std::string strip_uniform_decls(const std::string& source,
 std::string inject_after_version(const std::string& source, const std::string& block) {
     if (block.empty()) return source;
 
-    // Find the first `#version ...\n` line and insert block right after it.
-    std::regex version_re(R"(^[ \t]*#version[^\n]*\n)", std::regex::multiline);
-    std::smatch m;
-    if (std::regex_search(source, m, version_re)) {
-        size_t insert_at = m.position(0) + m.length(0);
-        return source.substr(0, insert_at) + block + source.substr(insert_at);
+    // Find the first `#version ...` line and insert block right after it.
+    std::regex version_re(R"([ \t]*#version[^\n]*)");
+    size_t i = 0;
+    while (i < source.size()) {
+        size_t eol = source.find('\n', i);
+        size_t line_end = (eol == std::string::npos) ? source.size() : eol;
+        std::string line = source.substr(i, line_end - i);
+        if (std::regex_match(line, version_re)) {
+            size_t insert_at = (eol == std::string::npos) ? line_end : eol + 1;
+            return source.substr(0, insert_at) + block + source.substr(insert_at);
+        }
+        if (eol == std::string::npos) break;
+        i = eol + 1;
     }
     // No #version — prepend.
     return block + source;

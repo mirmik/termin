@@ -6,7 +6,7 @@ import math
 import numpy as np
 
 from tgfx import GraphicsBackend, TcShader
-from tcgui.font import FontTextureAtlas, get_default_font
+from tgfx.font import FontTextureAtlas, get_default_font
 
 
 # Built-in UI shaders

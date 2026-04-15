@@ -18,7 +18,7 @@ from termin.visualization import (
 from termin.render_components import MeshRenderer
 from tgfx import TcShader
 from tcgui.widgets import UIComponent, Button
-from tcgui.font import FontTextureAtlas
+from tgfx.font import FontTextureAtlas
 
 
 # 3D shader

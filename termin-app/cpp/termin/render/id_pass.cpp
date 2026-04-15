@@ -87,9 +87,7 @@ void main() {
 }
 )";
 
-} // anonymous namespace
-
-const char* ID_PASS_VERT = R"(
+constexpr const char* ID_PASS_VERT = R"(
 #version 330 core
 
 layout(location=0) in vec3 a_position;
@@ -105,7 +103,7 @@ void main() {
 }
 )";
 
-const char* ID_PASS_FRAG = R"(
+constexpr const char* ID_PASS_FRAG = R"(
 #version 330 core
 
 uniform vec3 u_pickColor;
@@ -115,6 +113,11 @@ void main() {
     fragColor = vec4(u_pickColor, 1.0);
 }
 )";
+
+} // anonymous namespace
+
+const char* IdPass::vertex_shader_source() const { return ID_PASS_VERT; }
+const char* IdPass::fragment_shader_source() const { return ID_PASS_FRAG; }
 
 void IdPass::id_to_rgb(int id, float& r, float& g, float& b) {
     tc_picking_id_to_rgb_float(id, &r, &g, &b);

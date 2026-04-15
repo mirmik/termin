@@ -18,7 +18,7 @@ from termin.render_components import MeshRenderer
 from tgfx import TcShader
 from termin.visualization.ui import Canvas, UIRectangle
 from termin.visualization.ui.elements import UIText
-from tcgui.font import FontTextureAtlas
+from tgfx.font import FontTextureAtlas
 
 
 VERT = """
