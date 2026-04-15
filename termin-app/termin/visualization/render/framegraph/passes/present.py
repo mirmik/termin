@@ -255,36 +255,22 @@ class ResolvePass(RenderFramePass):
         return {self.output_res}
 
     def execute(self, ctx: "ExecuteContext") -> None:
-        from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
         from tcbase import log
-        from termin.graphics import FramebufferHandle
 
-        if isinstance(ctx.graphics, NOPGraphicsBackend):
+        if ctx.ctx2 is None:
+            log.error("[ResolvePass] ctx.ctx2 is None — ResolvePass is tgfx2-only")
             return
 
-        px, py, pw, ph = ctx.rect
-
-        fb_in = ctx.reads_fbos.get(self.input_res)
-        fb_out = ctx.writes_fbos.get(self.output_res)
-        if fb_in is None or fb_out is None:
-            log.warn(f"[ResolvePass] Missing FBO: input={fb_in is not None}, output={fb_out is not None}, input_res='{self.input_res}', output_res='{self.output_res}'")
+        tex_in = ctx.tex2_reads.get(self.input_res)
+        tex_out = ctx.tex2_writes.get(self.output_res)
+        if not tex_in or not tex_out:
+            log.warn(
+                f"[ResolvePass] Missing tex2: input={bool(tex_in)}, output={bool(tex_out)}, "
+                f"input_res='{self.input_res}', output_res='{self.output_res}'"
+            )
             return
 
-        # Check type - skip if not a FramebufferHandle
-        if not isinstance(fb_in, FramebufferHandle):
-            log.warn(f"[ResolvePass] input '{self.input_res}' is {type(fb_in).__name__}, not FramebufferHandle")
-            return
-        if not isinstance(fb_out, FramebufferHandle):
-            log.warn(f"[ResolvePass] output '{self.output_res}' is {type(fb_out).__name__}, not FramebufferHandle")
-            return
-
-        src_size = fb_in.get_size()
-        ctx.graphics.blit_framebuffer(
-            fb_in,
-            fb_out,
-            (0, 0, src_size[0], src_size[1]),
-            (0, 0, pw, ph),
-        )
+        ctx.ctx2.blit(tex_in, tex_out)
 
 
 
