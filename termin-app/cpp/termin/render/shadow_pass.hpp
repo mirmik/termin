@@ -98,7 +98,7 @@ public:
         return {output_res.c_str()};
     }
 
-    // Non-copyable (contains unique_ptr in fbo_pool_)
+    // Non-copyable (owns tgfx2 texture handles in depth_pool_)
     ShadowPass(const ShadowPass&) = delete;
     ShadowPass& operator=(const ShadowPass&) = delete;
     ShadowPass(ShadowPass&&) = default;
