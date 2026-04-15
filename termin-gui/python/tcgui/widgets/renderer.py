@@ -140,6 +140,17 @@ class UIRenderer:
     def font(self, value: FontTextureAtlas | None):
         self._font = value
 
+    @property
+    def holder(self) -> Tgfx2Context | None:
+        """The Tgfx2Context the renderer draws through.
+
+        Publicly exposed for embedded sub-renderers (tcplot Plot3D,
+        custom widgets) that want to issue their own tgfx2 draw calls
+        into the same render pass. Valid only between ``begin()`` and
+        ``end()`` — before ``begin()`` the context does not exist yet.
+        """
+        return self._holder
+
     # ------------------------------------------------------------------
     # Lazy tgfx2 init
     # ------------------------------------------------------------------
