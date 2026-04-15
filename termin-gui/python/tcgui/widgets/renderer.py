@@ -32,6 +32,7 @@ from tgfx._tgfx_native import (
     Tgfx2TextureHandle,
     tc_shader_ensure_tgfx2,
     wrap_fbo_color_as_tgfx2,
+    wrap_fbo_depth_as_tgfx2,
     wrap_gl_texture_as_tgfx2,
     CULL_NONE,
     PIXEL_RGBA8,
@@ -197,16 +198,18 @@ class UIRenderer:
 
         ctx.begin_frame()
         offscreen_tex2 = wrap_fbo_color_as_tgfx2(ctx, self._offscreen_fbo)
+        offscreen_depth2 = wrap_fbo_depth_as_tgfx2(ctx, self._offscreen_fbo)
         # Clear to transparent black so areas the UI does not touch
-        # remain transparent after composite. Since Phase 4 assumes
-        # UIRenderer is the only producer of frame content, the
-        # destination FB is about to be fully overwritten by the
-        # final blit anyway — the transparency story matters only
-        # once viewport3D / 3D underlays enter the picture in Phase 5.
+        # remain transparent after composite. Depth is cleared to 1.0
+        # so 3D embedded renderers (tcplot Plot3D, Viewport3D) get a
+        # fresh depth buffer each frame.
         ctx.begin_pass(
             color=offscreen_tex2,
+            depth=offscreen_depth2,
             clear_color_enabled=True,
             r=0.0, g=0.0, b=0.0, a=0.0,
+            clear_depth=1.0,
+            clear_depth_enabled=True,
         )
         ctx.set_viewport(0, 0, self._viewport_w, self._viewport_h)
         ctx.set_cull(CULL_NONE)
