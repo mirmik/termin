@@ -525,13 +525,10 @@ class UIRenderer:
     def update_texture(
         self, handle: Tgfx2TextureHandle, data: np.ndarray,
     ) -> None:
-        """Replace the contents of an existing GPU texture.
+        """Replace the full contents of an existing GPU texture.
 
-        The caller is responsible for ensuring ``data`` matches the
-        texture's original (width, height, RGBA) dimensions — tgfx2's
-        ``IRenderDevice::upload_texture`` is full-texture only; there
-        is no partial region upload. Callers that need region updates
-        should fall back to a full re-upload.
+        ``data`` must match the texture's original (width, height,
+        RGBA) dimensions.
         """
         if self._holder is None:
             raise RuntimeError(
@@ -539,6 +536,27 @@ class UIRenderer:
             )
         flat = np.ascontiguousarray(data).reshape(-1)
         self._holder.upload_texture(handle, flat)
+
+    def update_texture_region(
+        self, handle: Tgfx2TextureHandle,
+        x: int, y: int, w: int, h: int,
+        data: np.ndarray,
+    ) -> None:
+        """Upload a rectangular region of an existing GPU texture.
+
+        ``data`` is the **region** (shape ``(h, w, channels)``), not
+        the full image — tightly packed RGBA bytes. Origin is top-left
+        in pixel space, same convention as the rest of the UIRenderer.
+        Used by Canvas for incremental overlay updates during painting.
+        """
+        if self._holder is None:
+            raise RuntimeError(
+                "UIRenderer.update_texture_region called before first begin()"
+            )
+        flat = np.ascontiguousarray(data).reshape(-1)
+        self._holder.upload_texture_region(
+            handle, int(x), int(y), int(w), int(h), flat,
+        )
 
     def destroy_texture(self, handle: Tgfx2TextureHandle) -> None:
         """Release a GPU texture previously returned by ``upload_texture``."""

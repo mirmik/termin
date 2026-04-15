@@ -221,11 +221,10 @@ class Canvas(Widget):
     def _sync_textures(self, renderer) -> None:
         """Upload dirty images to GPU via the UIRenderer's public API.
 
-        tgfx2 ``IRenderDevice::upload_texture`` is full-texture only —
-        there is no region upload path yet. ``mark_overlay_dirty`` still
-        tracks a dirty rect so once region upload ships we can route
-        the partial path through it; for now the rect is used to
-        signal "dirty", and the full overlay is re-uploaded.
+        Supports three paths:
+        - New texture — allocate via ``upload_texture``.
+        - Same-size full replacement — ``update_texture``.
+        - Same-size partial (dirty rect) — ``update_texture_region``.
         """
         if self._image_dirty:
             self._image_dirty = False
@@ -249,7 +248,8 @@ class Canvas(Widget):
 
         if self._overlay_dirty:
             self._overlay_dirty = False
-            self._overlay_dirty_rect = None  # region upload unsupported on tgfx2
+            dirty_rect = self._overlay_dirty_rect
+            self._overlay_dirty_rect = None
             if self._overlay_data is None:
                 if self._overlay_texture is not None:
                     renderer.destroy_texture(self._overlay_texture)
@@ -259,8 +259,14 @@ class Canvas(Widget):
                 h, w = self._overlay_data.shape[:2]
                 if (self._overlay_texture is not None
                         and self._overlay_tex_size == (w, h)):
-                    renderer.update_texture(
-                        self._overlay_texture, self._overlay_data)
+                    if dirty_rect is not None:
+                        rx, ry, rw, rh = dirty_rect
+                        region = self._overlay_data[ry:ry + rh, rx:rx + rw]
+                        renderer.update_texture_region(
+                            self._overlay_texture, rx, ry, rw, rh, region)
+                    else:
+                        renderer.update_texture(
+                            self._overlay_texture, self._overlay_data)
                 else:
                     if self._overlay_texture is not None:
                         renderer.destroy_texture(self._overlay_texture)
