@@ -328,8 +328,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 ) {
     std::vector<ShadowMapResult> results;
 
-    if (!ctx.ctx2 || !ctx.graphics) {
-        tc::Log::error("ShadowPass/tgfx2: ctx2 or graphics is null");
+    if (!ctx.ctx2) {
+        tc::Log::error("ShadowPass/tgfx2: ctx2 is null");
         return results;
     }
     if (!shadow_shader) {

@@ -108,6 +108,6 @@ class FrameDebuggerPass(RenderFramePass):
         # blitted pixels and be compatible with the SDL debug blit.
         fmt = "rgba8"
         self._capture.capture_direct_via_ctx2(
-            ctx.ctx2, src_tex, ctx.graphics, pw, ph, fmt
+            ctx.ctx2, src_tex, pw, ph, fmt
         )
         log.debug(f"[FrameDebuggerPass] execute: captured '{src_name}' {pw}x{ph}, has={self._capture.has_capture()}")

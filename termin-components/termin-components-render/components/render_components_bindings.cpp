@@ -526,12 +526,11 @@ NB_MODULE(_components_render_native, m) {
         .def("remove_resource", &MaterialPass::remove_resource,
             nb::arg("resource_name"))
         .def("get_internal_symbols", &MaterialPass::get_internal_symbols)
-        .def("execute_with_data", [](MaterialPass& self, GraphicsBackend* graphics, nb::tuple rect_py) {
+        .def("execute_with_data", [](MaterialPass& self, nb::tuple rect_py) {
             ExecuteContext ctx;
-            ctx.graphics = graphics;
             ctx.rect = tuple_to_rect(rect_py);
             self.execute(ctx);
-        }, nb::arg("graphics"), nb::arg("rect"))
+        }, nb::arg("rect"))
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "MaterialPass";

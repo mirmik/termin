@@ -59,73 +59,6 @@ void init_pass_from_python(T* self, const char* type_name) {
     Py_INCREF(wrapper.ptr());
 }
 
-struct PyDebuggerHolder {
-public:
-    nb::object window;
-    nb::object depth_callback;
-    nb::object error_callback;
-
-public:
-    static void blit_from_pass_cb(void* user_data, FramebufferHandle* fb,
-                                   GraphicsBackend* graphics, int width, int height) {
-        auto* holder = static_cast<PyDebuggerHolder*>(user_data);
-        if (!holder || holder->window.is_none()) {
-            return;
-        }
-
-        nb::gil_scoped_acquire gil;
-        try {
-            holder->window.attr("blit_from_pass")(
-                nb::cast(fb, nb::rv_policy::reference),
-                nb::cast(graphics, nb::rv_policy::reference),
-                width, height,
-                holder->depth_callback
-            );
-        } catch (const std::exception& e) {
-            tc::Log::error("PyDebuggerHolder::blit_from_pass: %s", e.what());
-        }
-    }
-
-    static void on_error_cb(void* user_data, const char* message) {
-        auto* holder = static_cast<PyDebuggerHolder*>(user_data);
-        if (!holder || holder->error_callback.is_none()) {
-            return;
-        }
-
-        nb::gil_scoped_acquire gil;
-        try {
-            holder->error_callback(message);
-        } catch (const std::exception& e) {
-            tc::Log::error("PyDebuggerHolder::on_error: %s", e.what());
-        }
-    }
-};
-
-static std::unordered_map<CxxFramePass*, std::unique_ptr<PyDebuggerHolder>> g_debugger_holders;
-
-static void setup_py_debugger(CxxFramePass* pass, nb::object window,
-                               nb::object depth_callback, nb::object error_callback) {
-    if (window.is_none()) {
-        g_debugger_holders.erase(pass);
-        pass->clear_debugger_callbacks();
-        return;
-    }
-
-    auto& holder = g_debugger_holders[pass];
-    if (!holder) {
-        holder = std::make_unique<PyDebuggerHolder>();
-    }
-    holder->window = window;
-    holder->depth_callback = depth_callback;
-    holder->error_callback = error_callback;
-
-    FrameDebuggerCallbacks callbacks;
-    callbacks.user_data = holder.get();
-    callbacks.blit_from_pass = PyDebuggerHolder::blit_from_pass_cb;
-    callbacks.on_error = error_callback.is_none() ? nullptr : PyDebuggerHolder::on_error_cb;
-    pass->set_debugger_callbacks(callbacks);
-}
-
 static Rect4i tuple_to_rect(nb::tuple rect_py) {
     Rect4i rect;
     rect.x = nb::cast<int>(rect_py[0]);
@@ -283,10 +216,6 @@ void bind_frame_pass(nb::module_& m) {
              nb::arg("caster_offset") = 50.0f)
         .def_rw("output_res", &ShadowPass::output_res)
         .def_rw("caster_offset", &ShadowPass::caster_offset)
-        .def("set_debugger_window", [](ShadowPass& self, nb::object window,
-                                       nb::object depth_callback, nb::object error_callback) {
-            setup_py_debugger(&self, window, depth_callback, error_callback);
-        }, nb::arg("window") = nb::none(), nb::arg("depth_callback") = nb::none(), nb::arg("error_callback") = nb::none())
         .def_prop_rw("shadow_shader",
             [](ShadowPass& self) -> TcShader* { return self.shadow_shader; },
             [](ShadowPass& self, TcShader* s) { self.shadow_shader = s; })

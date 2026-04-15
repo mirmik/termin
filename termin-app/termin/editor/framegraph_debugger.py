@@ -759,7 +759,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._hdr_stats_label.setText("No capture available")
             return
 
-        stats = self._core.presenter.compute_hdr_stats(self._graphics, capture_fbo)
+        stats = self._core.presenter.compute_hdr_stats(capture_fbo)
 
         lines = []
         lines.append(f"<b>R:</b> {stats.min_r:.3f} - {stats.max_r:.3f} (avg: {stats.avg_r:.3f})")
