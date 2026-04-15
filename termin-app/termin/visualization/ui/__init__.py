@@ -1,10 +1,3 @@
-"""Basic UI overlay primitives."""
+"""UI subpackage (widgets only — Canvas/UIRectangle stack removed)."""
 
-from .canvas import Canvas
-from .elements import UIElement, UIRectangle
-
-__all__ = [
-    "Canvas",
-    "UIElement",
-    "UIRectangle"
-]
+__all__: list[str] = []
