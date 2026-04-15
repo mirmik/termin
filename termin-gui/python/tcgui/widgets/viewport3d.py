@@ -44,10 +44,6 @@ class Viewport3D(Widget):
         # Коллбек вызывается при изменении размера (до того как FBO пересоздан)
         self.on_before_resize: Callable[[int, int], None] | None = None
 
-        # Local FBO in main window context wrapping the shared color texture.
-        self._local_blit_fbo: int = 0
-        self._local_blit_tex: int = 0
-
     # ------------------------------------------------------------------
     # Подключение
     # ------------------------------------------------------------------
@@ -108,58 +104,27 @@ class Viewport3D(Widget):
         self._blit_fbo(renderer)
 
     def _blit_fbo(self, renderer: 'UIRenderer') -> None:
-        from OpenGL.GL import (
-            glBindFramebuffer, GL_READ_FRAMEBUFFER, GL_DRAW_FRAMEBUFFER,
-            GL_FRAMEBUFFER,
-            glBlitFramebuffer, GL_COLOR_BUFFER_BIT, GL_LINEAR,
-            glDisable, GL_SCISSOR_TEST,
-            glGenFramebuffers, glFramebufferTexture2D,
-            GL_TEXTURE_2D, GL_COLOR_ATTACHMENT0,
-        )
+        """Composite the 3D engine's offscreen texture into the UI
+        pass via ``UIRenderer.draw_external_gl_texture``.
 
+        The surface's color texture is shared across GL contexts
+        (main + offscreen), so its ``color_texture_id`` is valid
+        in the current context. ``flip_v=True`` because GL-rendered
+        textures have origin bottom-left, while the UI ortho
+        projection expects top-left sampling.
+        """
         tex_id = self._surface.color_texture_id
         fbo_w, fbo_h = self._surface.framebuffer_size()
+        if tex_id == 0 or fbo_w == 0 or fbo_h == 0:
+            return
 
-        # Create/update local FBO wrapping the shared color texture.
-        # The surface's FBO lives in the offscreen context and is not
-        # accessible here (main window context). But the color texture
-        # is shared between contexts, so we wrap it in a local FBO.
-        if self._local_blit_fbo == 0:
-            self._local_blit_fbo = int(glGenFramebuffers(1))
-
-        if self._local_blit_tex != tex_id:
-            glBindFramebuffer(GL_FRAMEBUFFER, self._local_blit_fbo)
-            glFramebufferTexture2D(
-                GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                GL_TEXTURE_2D, tex_id, 0,
-            )
-            glBindFramebuffer(GL_FRAMEBUFFER, 0)
-            self._local_blit_tex = tex_id
-
-        # Координаты виджета в GL (Y=0 снизу, Y-flip от экранных координат)
-        vp_h = renderer._viewport_h
-        dst_x = int(self.x)
-        dst_y = int(vp_h - self.y - self.height)
-        dst_w = int(self.width)
-        dst_h = int(self.height)
-
-        # Blit не использует scissor корректно на некоторых драйверах —
-        # отключаем на время blit, восстанавливаем после
-        glDisable(GL_SCISSOR_TEST)
-
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, self._local_blit_fbo)
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0)
-        glBlitFramebuffer(
-            0, 0, fbo_w, fbo_h,
-            dst_x, dst_y, dst_x + dst_w, dst_y + dst_h,
-            GL_COLOR_BUFFER_BIT, GL_LINEAR,
+        renderer.draw_external_gl_texture(
+            self.x, self.y, self.width, self.height,
+            gl_tex_id=tex_id,
+            tex_w=fbo_w,
+            tex_h=fbo_h,
+            flip_v=True,
         )
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)
-
-        # Восстанавливаем scissor если был активен
-        if renderer._clip_stack:
-            px, py, pw, ph = renderer._clip_stack[-1]
-            renderer._graphics.enable_scissor(px, py, pw, ph)
 
     # ------------------------------------------------------------------
     # Mouse events → input manager

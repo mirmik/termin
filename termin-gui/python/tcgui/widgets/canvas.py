@@ -35,12 +35,14 @@ class Canvas(Widget):
 
         # --- Image data ---
         self._image_data: np.ndarray | None = None
-        self._image_texture = None  # GPUTextureHandle
+        self._image_texture = None  # Tgfx2TextureHandle
+        self._image_tex_size: tuple[int, int] | None = None  # (w, h)
         self._image_dirty: bool = False
 
         # --- Overlay data (optional second layer, e.g. stroke preview) ---
         self._overlay_data: np.ndarray | None = None
         self._overlay_texture = None
+        self._overlay_tex_size: tuple[int, int] | None = None  # (w, h)
         self._overlay_dirty: bool = False
         self._overlay_dirty_rect: tuple[int, int, int, int] | None = None  # (x, y, w, h)
 
@@ -217,56 +219,54 @@ class Canvas(Widget):
     # ------------------------------------------------------------------
 
     def _sync_textures(self, renderer) -> None:
-        graphics = renderer._graphics
+        """Upload dirty images to GPU via the UIRenderer's public API.
 
+        tgfx2 ``IRenderDevice::upload_texture`` is full-texture only —
+        there is no region upload path yet. ``mark_overlay_dirty`` still
+        tracks a dirty rect so once region upload ships we can route
+        the partial path through it; for now the rect is used to
+        signal "dirty", and the full overlay is re-uploaded.
+        """
         if self._image_dirty:
             self._image_dirty = False
             if self._image_data is None:
                 if self._image_texture is not None:
-                    self._image_texture.delete()
+                    renderer.destroy_texture(self._image_texture)
                     self._image_texture = None
+                    self._image_tex_size = None
             else:
                 h, w = self._image_data.shape[:2]
                 if (self._image_texture is not None
-                        and self._image_texture.get_width() == w
-                        and self._image_texture.get_height() == h):
-                    graphics.update_texture(
-                        self._image_texture, self._image_data, w, h, 4)
+                        and self._image_tex_size == (w, h)):
+                    renderer.update_texture(
+                        self._image_texture, self._image_data)
                 else:
                     if self._image_texture is not None:
-                        self._image_texture.delete()
-                    self._image_texture = graphics.create_texture(
-                        self._image_data, w, h, channels=4,
-                        mipmap=False, clamp=True)
+                        renderer.destroy_texture(self._image_texture)
+                    self._image_texture = renderer.upload_texture(
+                        self._image_data)
+                    self._image_tex_size = (w, h)
 
         if self._overlay_dirty:
             self._overlay_dirty = False
-            dirty_rect = self._overlay_dirty_rect
-            self._overlay_dirty_rect = None
+            self._overlay_dirty_rect = None  # region upload unsupported on tgfx2
             if self._overlay_data is None:
                 if self._overlay_texture is not None:
-                    self._overlay_texture.delete()
+                    renderer.destroy_texture(self._overlay_texture)
                     self._overlay_texture = None
+                    self._overlay_tex_size = None
             else:
                 h, w = self._overlay_data.shape[:2]
                 if (self._overlay_texture is not None
-                        and self._overlay_texture.get_width() == w
-                        and self._overlay_texture.get_height() == h):
-                    if (dirty_rect is not None
-                            and hasattr(graphics, 'update_texture_region')):
-                        rx, ry, rw, rh = dirty_rect
-                        graphics.update_texture_region(
-                            self._overlay_texture, self._overlay_data,
-                            rx, ry, rw, rh, 4)
-                    else:
-                        graphics.update_texture(
-                            self._overlay_texture, self._overlay_data, w, h, 4)
+                        and self._overlay_tex_size == (w, h)):
+                    renderer.update_texture(
+                        self._overlay_texture, self._overlay_data)
                 else:
                     if self._overlay_texture is not None:
-                        self._overlay_texture.delete()
-                    self._overlay_texture = graphics.create_texture(
-                        self._overlay_data, w, h, channels=4,
-                        mipmap=False, clamp=True)
+                        renderer.destroy_texture(self._overlay_texture)
+                    self._overlay_texture = renderer.upload_texture(
+                        self._overlay_data)
+                    self._overlay_tex_size = (w, h)
 
     # ------------------------------------------------------------------
     # Rendering
