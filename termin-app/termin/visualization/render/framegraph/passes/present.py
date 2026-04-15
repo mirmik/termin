@@ -200,7 +200,8 @@ class BlitPass(RenderFramePass):
         return set(self.reads) | set(self.writes)
 
     def execute(self, ctx: "ExecuteContext") -> None:
-        px, py, pw, ph = ctx.rect
+        if ctx.ctx2 is None:
+            return
 
         if self._get_source_res is None:
             return
@@ -209,15 +210,12 @@ class BlitPass(RenderFramePass):
         if not src_name:
             return
 
-        fb_in = ctx.reads_fbos.get(src_name)
-        if fb_in is None:
+        tex_in = ctx.tex2_reads.get(src_name)
+        tex_out = ctx.tex2_writes.get(self.output_res)
+        if not tex_in or not tex_out:
             return
 
-        fb_out = ctx.writes_fbos.get(self.output_res)
-        if fb_out is None:
-            return
-
-        blit_fbo_to_fbo(ctx.graphics, fb_in, fb_out, (pw, ph))
+        ctx.ctx2.blit(tex_in, tex_out)
 
 
 class ResolvePass(RenderFramePass):

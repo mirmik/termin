@@ -382,47 +382,35 @@ class PostProcessPass(RenderFramePass):
         size = (pw, ph)
         ctx2 = ctx.ctx2
 
-        fb_in = ctx.reads_fbos.get(self.input_res)
-        if fb_in is None:
+        tex_in = ctx.tex2_reads.get(self.input_res)
+        if not tex_in:
             return
 
-        fb_out_final = ctx.writes_fbos.get(self.output_res)
-        if fb_out_final is None:
+        tex_out_final = ctx.tex2_writes.get(self.output_res)
+        if not tex_out_final:
             return
 
         # --- нет эффектов -> блит и выходим ---
         if not self.effects:
-            blit_fbo_to_fbo(ctx2, fb_in, fb_out_final, size)
+            ctx2.blit(tex_in, tex_out_final)
             return
 
         # Внутренняя точка дебага
         debug_symbol = self.get_debug_internal_point()
 
-        # Обернём входной FBO как tgfx2 текстуру
-        color_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb_in)
-        if not color_tex2:
-            from tcbase import log
-            log.error(f"[PostProcessPass] '{self.pass_name}': failed to wrap input '{self.input_res}'")
-            return
-
-        # Extra textures: обернуть каждый нужный FBO как tgfx2 tex
+        # Extra textures: читаем напрямую из tex2_reads — никаких
+        # per-frame wrap'ов, handles уже персистентные.
         required_resources: set[str] = set()
         for eff in self.effects:
             required_resources |= set(eff.required_resources())
 
         extra_tex2: dict = {}
         for res_name in required_resources:
-            fb = ctx.reads_fbos.get(res_name)
-            if fb is None:
-                continue
-            tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb)
+            tex2 = ctx.tex2_reads.get(res_name)
             if tex2:
                 extra_tex2[res_name] = tex2
 
-        current_tex2 = color_tex2
-
-        if debug_symbol == "input":
-            self._blit_to_debugger(ctx.graphics, fb_in)
+        current_tex2 = tex_in
 
         # Эффект сам открывает/закрывает свои ctx2 passes. PostProcessPass
         # лишь решает куда направить выход: в temp FBO (промежуточные
@@ -431,25 +419,20 @@ class PostProcessPass(RenderFramePass):
             is_last = (i == len(self.effects) - 1)
 
             if is_last:
-                fb_target = fb_out_final
+                target_tex2 = tex_out_final
             else:
+                # Temp FBOs остаются на legacy пути до полной миграции
+                # _get_temp_fbo на native device.create_texture.
                 fb_target = self._get_temp_fbo(ctx.graphics, i % 2, size)
-
-            target_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb_target)
-            if not target_tex2:
-                from tcbase import log
-                log.error(f"[PostProcessPass] '{self.pass_name}': failed to wrap target for effect '{effect.name}'")
-                break
+                target_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb_target)
+                if not target_tex2:
+                    from tcbase import log
+                    log.error(f"[PostProcessPass] '{self.pass_name}': failed to wrap temp target for effect '{effect.name}'")
+                    break
 
             effect.draw(ctx2, current_tex2, target_tex2, extra_tex2, size)
 
-            if debug_symbol == self._effect_symbol(i, effect):
-                self._blit_to_debugger(ctx.graphics, fb_target)
-
             # Выход этого эффекта становится входом следующего
             if not is_last:
-                next_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb_target)
-                if not next_tex2:
-                    break
-                current_tex2 = next_tex2
+                current_tex2 = target_tex2
 
