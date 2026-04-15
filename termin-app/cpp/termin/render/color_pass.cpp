@@ -426,18 +426,12 @@ void ColorPass::execute_with_data(
         lighting_ubo_tgfx2 = lighting_ubo_.buffer;
     }
 
-    // Wrap each shadow map FBO's depth attachment once. Shared across
-    // draws within this pass.
+    // Shadow maps are now native tgfx2 depth textures owned by
+    // ShadowPass; no per-frame wrap needed.
     std::vector<tgfx2::TextureHandle> shadow_tex2s;
     shadow_tex2s.reserve(shadow_maps.size());
     for (const auto& smap : shadow_maps) {
-        if (!smap.fbo) {
-            shadow_tex2s.push_back({});
-            continue;
-        }
-        tgfx2::TextureHandle t = wrap_fbo_depth_as_tgfx2(*gl_dev, smap.fbo);
-        if (t) ctx2->defer_destroy(t);
-        shadow_tex2s.push_back(t);
+        shadow_tex2s.push_back(smap.depth_tex2);
     }
 
     entity_names.clear();

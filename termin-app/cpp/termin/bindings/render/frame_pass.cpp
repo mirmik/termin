@@ -271,7 +271,8 @@ void bind_frame_pass(nb::module_& m) {
 
     nb::class_<ShadowMapResult>(m, "ShadowMapResult")
         .def(nb::init<>())
-        .def_ro("fbo", &ShadowMapResult::fbo)
+        .def_ro("width", &ShadowMapResult::width)
+        .def_ro("height", &ShadowMapResult::height)
         .def_prop_ro("light_space_matrix", [](const ShadowMapResult& self) {
             size_t shape[2] = {4, 4};
             float* data = new float[16];
