@@ -16,6 +16,10 @@ public partial class Plot3DWindow : Window
 
     private void Populate()
     {
+        // MSAA setting is per-view; default (4) is set by the C++
+        // side. Override here to taste — e.g. `Plot.View.set_msaa_samples(2)`.
+        Plot.View.set_msaa_samples(8);
+
         // Helix: 200 points along (cos t, sin t, 0.1 t).
         const int N = 200;
         var x = new double[N];
@@ -28,7 +32,9 @@ public partial class Plot3DWindow : Window
             y[i] = Math.Sin(t);
             z[i] = t * 0.1;
         }
-        Plot.Plot(x, y, z, 0.2f, 0.6f, 1.0f, 1.0f, thickness: 2.0, label: "helix");
+        // Lighter cyan than the default blue so the helix stands out
+        // against the brightened grid under MSAA.
+        Plot.Plot(x, y, z, 0.1f, 0.55f, 1.0f, 1.0f, thickness: 2.0, label: "helix");
 
         // Noisy scatter around the helix.
         var sx = new double[50];
@@ -42,7 +48,9 @@ public partial class Plot3DWindow : Window
             sy[i] = Math.Sin(t) + (rnd.NextDouble() - 0.5) * 0.3;
             sz[i] = t * 0.1      + (rnd.NextDouble() - 0.5) * 0.3;
         }
-        Plot.Scatter(sx, sy, sz, 1.0f, 0.7f, 0.2f, 1.0f, size: 6.0, label: "noise");
+        // Saturated yellow for the scatter markers; thin cross-lines
+        // need the extra brightness to read clearly under MSAA.
+        Plot.Scatter(sx, sy, sz, 1.0f, 0.95f, 0.35f, 1.0f, size: 6.0, label: "noise");
 
         // Gaussian bump on a 30x30 grid, placed below the helix.
         const uint R = 30, C = 30;
