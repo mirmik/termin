@@ -248,7 +248,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     ui = UI()
 
     # Window manager — all windows are equal
-    wm = SDLWindowManager(graphics)
+    wm = SDLWindowManager()
     wm.register_main(window, gl_context, ui)
 
     # Create editor window and build UI

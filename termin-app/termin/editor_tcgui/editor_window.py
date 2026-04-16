@@ -1139,8 +1139,7 @@ class EditorWindowTcgui:
             return
         from termin.editor_tcgui.dialogs.framegraph_debugger import show_framegraph_debugger
         self._framegraph_debugger = show_framegraph_debugger(
-            self._ui, self._graphics, self._rendering_controller,
-            self._fbo_surface)
+            self._ui, self._rendering_controller, self._fbo_surface)
 
     def _show_audio_debugger(self) -> None:
         if self._ui is None:

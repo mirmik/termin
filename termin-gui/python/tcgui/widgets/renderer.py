@@ -176,8 +176,19 @@ class UIRenderer:
     # Frame lifecycle
     # ------------------------------------------------------------------
 
-    def begin(self, viewport_w: int, viewport_h: int) -> None:
-        """Begin UI rendering pass."""
+    def begin(
+        self,
+        viewport_w: int,
+        viewport_h: int,
+        background_color: tuple[float, float, float, float] | None = None,
+    ) -> None:
+        """Begin UI rendering pass.
+
+        ``background_color`` — if given, the default framebuffer (fbo 0)
+        is cleared to this colour after the UI composite, so the host
+        window receives a solid background behind any transparent UI
+        pixels. ``None`` leaves the default framebuffer unchanged.
+        """
         self._viewport_w = int(viewport_w)
         self._viewport_h = int(viewport_h)
 
@@ -186,15 +197,21 @@ class UIRenderer:
         ctx = self._ctx
 
         ctx.begin_frame()
-        # Clear to transparent black so areas the UI does not touch
-        # remain transparent after composite. Depth is cleared to 1.0
-        # so 3D embedded renderers (tcplot Plot3D, Viewport3D) get a
-        # fresh depth buffer each frame.
+        # Offscreen clear colour determines what fills UI-transparent
+        # regions — the final blit copies pixels directly (no blending)
+        # so the host background shows up only if we fill those regions
+        # here. Depth is cleared to 1.0 so 3D embedded renderers
+        # (tcplot Plot3D, Viewport3D) get a fresh depth buffer each
+        # frame.
+        if background_color is not None:
+            bg_r, bg_g, bg_b, bg_a = background_color
+        else:
+            bg_r = bg_g = bg_b = bg_a = 0.0
         ctx.begin_pass(
             color=self._offscreen_color_tex,
             depth=self._offscreen_depth_tex,
             clear_color_enabled=True,
-            r=0.0, g=0.0, b=0.0, a=0.0,
+            r=bg_r, g=bg_g, b=bg_b, a=bg_a,
             clear_depth=1.0,
             clear_depth_enabled=True,
         )
