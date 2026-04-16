@@ -27,9 +27,6 @@ void bind_sdl(nb::module_& m) {
         .def("window_size", &SDLWindow::window_size)
         .def("get_cursor_pos", &SDLWindow::get_cursor_pos)
         .def("get_window_id", &SDLWindow::get_window_id)
-        .def("set_graphics", &SDLWindow::set_graphics, nb::arg("graphics"))
-        .def("get_window_framebuffer", &SDLWindow::get_window_framebuffer,
-            nb::rv_policy::reference)
         // Callbacks - use lambdas to convert C++ callbacks to Python
         .def("set_framebuffer_size_callback", [](SDLWindow& self, nb::object callback) {
             if (callback.is_none()) {
@@ -135,9 +132,6 @@ void bind_sdl(nb::module_& m) {
         .def("should_close", &SDLWindowRenderSurface::should_close)
         .def("set_should_close", &SDLWindowRenderSurface::set_should_close, nb::arg("value"))
         .def("get_cursor_pos", &SDLWindowRenderSurface::get_cursor_pos)
-        .def("set_graphics", &SDLWindowRenderSurface::set_graphics, nb::arg("graphics"))
-        .def("get_window_framebuffer", &SDLWindowRenderSurface::get_window_framebuffer,
-            nb::rv_policy::reference)
         .def("get_native_handle", &SDLWindowRenderSurface::get_native_handle)
         .def("request_update", &SDLWindowRenderSurface::request_update)
         .def("needs_render", &SDLWindowRenderSurface::needs_render)

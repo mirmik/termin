@@ -8,7 +8,6 @@
 #include <string>
 #include <unordered_map>
 
-#include "tgfx/opengl/opengl_backend.hpp"
 #include "render/termin_display_api.h"
 
 namespace termin {
@@ -43,9 +42,6 @@ private:
     int last_width_;
     int last_height_;
 
-    OpenGLGraphicsBackend* graphics_;
-    FramebufferHandlePtr window_fb_handle_;
-
     FramebufferSizeCallback framebuffer_size_callback_;
     CursorPosCallback cursor_pos_callback_;
     ScrollCallback scroll_callback_;
@@ -55,7 +51,7 @@ private:
 public:
     SDLWindow(int width, int height, const std::string& title, SDLWindow* share = nullptr)
         : window_(nullptr), gl_context_(nullptr), should_close_(false),
-          last_width_(width), last_height_(height), graphics_(nullptr) {
+          last_width_(width), last_height_(height) {
 
         // OpenGL attributes
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -97,9 +93,6 @@ public:
     }
 
     void close() {
-        if (window_fb_handle_) {
-            window_fb_handle_.reset();
-        }
         if (gl_context_) {
             SDL_GL_DeleteContext(gl_context_);
             gl_context_ = nullptr;
@@ -147,24 +140,6 @@ public:
 
     uint32_t get_window_id() const {
         return window_ ? SDL_GetWindowID(window_) : 0;
-    }
-
-    // Set graphics backend for framebuffer creation
-    void set_graphics(OpenGLGraphicsBackend* graphics) {
-        graphics_ = graphics;
-    }
-
-    // Get window framebuffer (creates external FBO wrapper)
-    FramebufferHandle* get_window_framebuffer() {
-        auto [width, height] = framebuffer_size();
-
-        if (!window_fb_handle_ && graphics_) {
-            window_fb_handle_ = graphics_->create_external_framebuffer(0, width, height);
-        } else if (window_fb_handle_) {
-            window_fb_handle_->set_external_target(0, width, height);
-        }
-
-        return window_fb_handle_.get();
     }
 
     // Callbacks
