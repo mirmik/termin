@@ -1091,3 +1091,150 @@ namespace termin {
     }
 }
 %}
+
+// ============================================================================
+// tcplot — 2D/3D plotting library
+// ============================================================================
+
+%include "arrays_csharp.i"
+
+%{
+#include "tcplot/styles.hpp"
+#include "tcplot/orbit_camera.hpp"
+#include "tcplot/plot_view2d.hpp"
+#include "tcplot/plot_view3d.hpp"
+%}
+
+// --- double[] array typemaps for the plot_view data entry points ---
+//
+// SWIG's default typemap for `const double*` exposes a raw IntPtr to
+// C# which is unsafe for array data. arrays_csharp.i gives us a
+// `double INPUT[]` / `double OUTPUT[]` family that marshals a C#
+// double[] into a pinned native pointer + length. We apply it
+// selectively to each PlotView* data-entry parameter by name so only
+// the genuinely array-shaped parameters get the typemap; a lone
+// `double*` out-param (see pick()) stays as a pointer for `ref`/out.
+%apply double INPUT[] {
+    const double* x, const double* y, const double* z,
+    const double* X, const double* Y, const double* Z
+}
+
+// pick() out-params: expose as C# `out double`. SWIG's CSHARP_ARRAYS
+// doesn't help here — use the plain double* → out mapping.
+%typemap(cstype, out = "out double") double* OUTPUT "out double"
+%typemap(csin)   double* OUTPUT "out $csinput"
+%typemap(imtype) double* OUTPUT "out double"
+%typemap(ctype)  double* OUTPUT "double*"
+%typemap(in)     double* OUTPUT "$1 = $input;"
+%apply double* OUTPUT {
+    double* out_x, double* out_y, double* out_z,
+    double* out_screen_dist_px
+}
+
+namespace tcplot {
+
+struct Color4 {
+    float r, g, b, a;
+
+    Color4();
+    Color4(float r, float g, float b, float a = 1.0f);
+};
+
+class OrbitCamera {
+public:
+    float distance;
+    float azimuth;
+    float elevation;
+    float fov_y;
+    float near;
+    float far;
+    float min_distance;
+    float max_distance;
+    float min_elevation;
+    float max_elevation;
+
+    OrbitCamera();
+
+    void orbit(float d_azimuth, float d_elevation);
+    void zoom(float factor);
+    void pan(float dx, float dy);
+};
+
+class PlotView3D {
+public:
+    PlotView3D(const std::string& ttf_path);
+    ~PlotView3D();
+
+    void plot(const double* x, const double* y, const double* z,
+              size_t n,
+              float cr, float cg, float cb, float ca,
+              double thickness = 1.5,
+              const char* label = "");
+
+    void scatter(const double* x, const double* y, const double* z,
+                 size_t n,
+                 float cr, float cg, float cb, float ca,
+                 double size = 4.0,
+                 const char* label = "");
+
+    void surface(const double* X, const double* Y, const double* Z,
+                 unsigned int rows, unsigned int cols,
+                 float cr, float cg, float cb, float ca,
+                 bool wireframe = false,
+                 const char* label = "");
+
+    void clear();
+    void toggle_wireframe();
+    void toggle_marker_mode();
+    void set_z_scale(float s);
+    float get_z_scale() const;
+
+    OrbitCamera& camera();
+    void fit_camera();
+
+    bool on_mouse_down(float x, float y, int button);
+    void on_mouse_move(float x, float y);
+    void on_mouse_up(float x, float y, int button);
+    bool on_mouse_wheel(float x, float y, float dy);
+
+    bool pick(float mx, float my,
+              double* out_x, double* out_y, double* out_z,
+              double* out_screen_dist_px);
+
+    void render(int width, int height, unsigned int dst_gl_fbo);
+    void release_gpu();
+};
+
+class PlotView2D {
+public:
+    PlotView2D(const std::string& ttf_path);
+    ~PlotView2D();
+
+    void plot(const double* x, const double* y, size_t n,
+              float cr, float cg, float cb, float ca,
+              double thickness = 1.5,
+              const char* label = "");
+
+    void scatter(const double* x, const double* y, size_t n,
+                 float cr, float cg, float cb, float ca,
+                 double size = 4.0,
+                 const char* label = "");
+
+    void clear();
+    void fit();
+    void set_view(double x_min, double x_max, double y_min, double y_max);
+
+    void set_title(const char* title);
+    void set_x_label(const char* label);
+    void set_y_label(const char* label);
+
+    bool on_mouse_down(float x, float y, int button);
+    void on_mouse_move(float x, float y);
+    void on_mouse_up(float x, float y, int button);
+    bool on_mouse_wheel(float x, float y, float dy);
+
+    void render(int width, int height, unsigned int dst_gl_fbo);
+    void release_gpu();
+};
+
+} // namespace tcplot
