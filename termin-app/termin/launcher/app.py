@@ -170,7 +170,7 @@ class LauncherApp:
 
     def __init__(self, graphics: OpenGLGraphicsBackend, ui_backend: str = "qt"):
         self.graphics = graphics
-        self.ui = UI(graphics)
+        self.ui = UI()
         self.recent = RecentProjects()
         self._ui_backend = ui_backend
         self._bg_image_path = os.path.join(os.path.dirname(__file__), "back.png")

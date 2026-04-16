@@ -173,7 +173,7 @@ class UIComponent(InputComponent):
             from termin.visualization.platform.backends import get_default_graphics_backend
             self._graphics = get_default_graphics_backend()
 
-        self._ui = UI(self._graphics, self._font)
+        self._ui = UI(self._font)
 
     def load(self, path: str) -> Widget:
         """

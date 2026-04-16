@@ -67,7 +67,7 @@ class WindowManager:
     def create_window(self, title: str, width: int, height: int) -> UI | None:
         """Create a new window. Used as ``UI.create_window`` callback."""
         handle, gl_context = self._create_native_window(title, width, height)
-        window_ui = UI(graphics=self._graphics)
+        window_ui = UI()
         entry = WindowEntry(handle, gl_context, window_ui)
         self._make_current(entry)
         entry.gpu_context = self._create_gpu_context(f"window:{title[:20]}")
