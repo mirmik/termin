@@ -32,6 +32,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
     find_package(termin_components_collision REQUIRED)
     find_package(termin_components_kinematic REQUIRED)
     find_package(termin_render REQUIRED)
+    find_package(tcplot REQUIRED)
 
     set(CMAKE_SWIG_OUTDIR "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Generated")
 
@@ -75,6 +76,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         termin_components_collision::termin_components_collision
         termin_components_kinematic::termin_components_kinematic
         termin_render::termin_render
+        tcplot::tcplot
     )
 
     set(_termin_csharp_runtime_targets
@@ -90,7 +92,10 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         termin_components_kinematic::termin_components_kinematic
         termin_render::termin_render
         tgfx::termin_graphics
+        tgfx::termin_graphics2
         termin_modules::termin_modules
+        tmesh::termin_mesh
+        tcplot::tcplot
     )
 
     foreach(_dep IN LISTS _termin_csharp_runtime_targets)
