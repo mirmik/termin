@@ -1,0 +1,12 @@
+<Window x:Class="PlotDemoApp.Plot3DWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:PlotDemoApp"
+        Title="tcplot — 3D demo (left-drag: orbit, middle-drag: pan, wheel: zoom, right-click: pick)"
+        Width="900" Height="700"
+        Background="#202024"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <local:Plot3DControl x:Name="Plot"/>
+    </Grid>
+</Window>

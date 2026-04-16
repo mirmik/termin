@@ -1,31 +1,22 @@
 using System;
 using System.Windows;
 
-namespace SceneApp.Controls;
+namespace PlotDemoApp;
 
-// Launch via: new Plot3DWindow().Show();
-// Populates a scatter + surface + helix demo on first render tick so
-// the Plot3DControl has its PlotView3D constructed before we touch
-// its data API.
 public partial class Plot3DWindow : Window
 {
-    private bool _populated;
-
     public Plot3DWindow()
     {
         InitializeComponent();
-        // Populate after the Plot3DControl has been loaded and its
-        // native view constructed. The easiest hook is the first
-        // ContentRendered event.
-        ContentRendered += (_, _) => PopulateOnce();
+        // Populate once the Plot3DControl's native view is ready. The
+        // control fires NativeInitialized after tc_opengl_init +
+        // PlotView3D construction complete.
+        Plot.NativeInitialized += (_, _) => Populate();
     }
 
-    private void PopulateOnce()
+    private void Populate()
     {
-        if (_populated) return;
-        _populated = true;
-
-        // Helix: N=200 points.
+        // Helix: 200 points along (cos t, sin t, 0.1 t).
         const int N = 200;
         var x = new double[N];
         var y = new double[N];
@@ -39,7 +30,7 @@ public partial class Plot3DWindow : Window
         }
         Plot.Plot(x, y, z, 0.2f, 0.6f, 1.0f, 1.0f, thickness: 2.0, label: "helix");
 
-        // Scatter cloud around the helix.
+        // Noisy scatter around the helix.
         var sx = new double[50];
         var sy = new double[50];
         var sz = new double[50];
@@ -53,8 +44,7 @@ public partial class Plot3DWindow : Window
         }
         Plot.Scatter(sx, sy, sz, 1.0f, 0.7f, 0.2f, 1.0f, size: 6.0, label: "noise");
 
-        // Surface: 30x30 gaussian-ish bump, offset below the helix so
-        // we actually see two things in the same view.
+        // Gaussian bump on a 30x30 grid, placed below the helix.
         const uint R = 30, C = 30;
         var X = new double[R * C];
         var Y = new double[R * C];
@@ -70,12 +60,13 @@ public partial class Plot3DWindow : Window
                 Z[j * C + i] = -2.0 + Math.Exp(-(xv * xv + yv * yv) * 0.5);
             }
         }
+        // Color tuple is ignored by the engine when surface picks the
+        // jet colormap from normalised Z; any value works.
         Plot.Surface(X, Y, Z, R, C,
-                     0f, 0f, 0f, 1f,           // ignored — engine picks jet
+                     0f, 0f, 0f, 1f,
                      wireframe: false,
                      label: "gaussian");
 
-        // Fit camera to the combined extent.
         Plot.View.fit_camera();
     }
 }
