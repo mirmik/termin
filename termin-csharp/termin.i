@@ -1201,6 +1201,9 @@ public:
               double* out_x, double* out_y, double* out_z,
               double* out_screen_dist_px);
 
+    void set_msaa_samples(int samples);
+    int  msaa_samples() const;
+
     void render(int width, int height, unsigned int dst_gl_fbo);
     void release_gpu();
 };
@@ -1232,6 +1235,9 @@ public:
     void on_mouse_move(float x, float y);
     void on_mouse_up(float x, float y, int button);
     bool on_mouse_wheel(float x, float y, float dy);
+
+    void set_msaa_samples(int samples);
+    int  msaa_samples() const;
 
     void render(int width, int height, unsigned int dst_gl_fbo);
     void release_gpu();
