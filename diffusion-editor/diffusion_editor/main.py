@@ -5,7 +5,6 @@ import ctypes
 import sdl2
 from sdl2 import video
 
-from tgfx import OpenGLGraphicsBackend
 from tcbase import Key, MouseButton, Mods
 from tcbase import log
 
@@ -158,12 +157,7 @@ def main():
     window, gl_ctx = create_window("Diffusion Editor", 1280, 800)
     log.info("[main] Window created")
 
-    graphics = OpenGLGraphicsBackend.get_instance()
-    log.debug("[main] Got graphics backend")
-    graphics.ensure_ready()
-    log.debug("[main] Graphics ready")
-
-    editor = EditorWindow(graphics)
+    editor = EditorWindow()
     ui = editor.ui
 
     # Cursor support
@@ -227,12 +221,10 @@ def main():
             # Poll engines
             editor.poll()
 
-            # Render
+            # Render — UIRenderer clears its offscreen (with the
+            # editor's background colour) and blits to fbo 0; no
+            # separate bind/clear of the default framebuffer needed.
             vw, vh = get_drawable_size(window)
-            graphics.bind_framebuffer(None)
-            graphics.set_viewport(0, 0, vw, vh)
-            graphics.clear_color_depth(0.12, 0.12, 0.14, 1.0)
-
             editor.render(vw, vh)
 
             video.SDL_GL_SwapWindow(window)
