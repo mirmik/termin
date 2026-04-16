@@ -28,7 +28,6 @@ from tgfx.window import WindowBackend
 from tcbase import MouseButton, Key, Action
 from termin.visualization.render.texture import Texture
 from termin.visualization.core.world import VisualizationWorld, Visualization
-from termin.visualization.platform.backends.qt import QtWindowBackend, QtGLWindowHandle
 
 __all__ = [
     "Renderer",
@@ -57,6 +56,4 @@ __all__ = [
     "MouseButton",
     "Key",
     "Action",
-    "QtWindowBackend",
-    "QtGLWindowHandle",
 ]

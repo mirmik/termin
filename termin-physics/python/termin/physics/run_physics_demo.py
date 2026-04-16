@@ -17,9 +17,7 @@ from termin.visualization.core.scene import create_scene
 from termin.visualization.core.world import VisualizationWorld
 from termin.visualization.platform.backends import (
     OpenGLGraphicsBackend,
-    QtWindowBackend,
     set_default_graphics_backend,
-    set_default_window_backend,
 )
 from termin.render_components import LightComponent, MeshRenderer
 from termin.lighting import LightType, LightShadowParams
@@ -149,7 +147,6 @@ def run_physics_demo():
     app = QApplication(sys.argv)
 
     set_default_graphics_backend(OpenGLGraphicsBackend.get_instance())
-    set_default_window_backend(QtWindowBackend())
 
     world = VisualizationWorld()
     scene = build_physics_scene(world)

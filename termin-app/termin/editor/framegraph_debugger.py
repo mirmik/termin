@@ -500,7 +500,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             SingleFBO,
             ShadowMapArrayResource,
         )
-        from termin.graphics import FramebufferHandle
 
         if isinstance(resource, ShadowMapArrayResource):
             info_parts.append(f"Тип: ShadowMapArray ({len(resource)} entries)")
@@ -533,27 +532,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 req_filter = fbo.get_filter()
                 gl_filter = fbo.get_actual_gl_filter()
                 info_parts.append(f"<span style='color: #88aaff;'>Filter: {req_filter} → {gl_filter}</span>")
-        elif isinstance(resource, FramebufferHandle):
-            info_parts.append("Тип: FramebufferHandle")
-            w, h = resource.get_size()
-            samples = resource.get_samples()
-            is_msaa = resource.is_msaa()
-            fmt = resource.get_format()
-            info_parts.append(f"Размер: {w}×{h}")
-            info_parts.append(f"Формат: {fmt}")
-            if is_msaa:
-                info_parts.append(f"<span style='color: #ffaa00;'>MSAA: {samples}x</span>")
-            else:
-                info_parts.append("MSAA: нет")
-            info_parts.append(f"FBO ID: {resource.get_fbo_id()}")
-            gl_fmt = resource.get_actual_gl_format()
-            gl_w = resource.get_actual_gl_width()
-            gl_h = resource.get_actual_gl_height()
-            gl_s = resource.get_actual_gl_samples()
-            info_parts.append(f"<span style='color: #88ff88;'>GL: {gl_fmt} {gl_w}×{gl_h} s={gl_s}</span>")
-            req_filter = resource.get_filter()
-            gl_filter = resource.get_actual_gl_filter()
-            info_parts.append(f"<span style='color: #88aaff;'>Filter: {req_filter} → {gl_filter}</span>")
         else:
             info_parts.append(f"Тип: {type(resource).__name__}")
 
