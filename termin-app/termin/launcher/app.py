@@ -11,8 +11,6 @@ import time
 import sdl2
 from sdl2 import video
 
-from termin.graphics import OpenGLGraphicsBackend
-from termin.visualization.platform.backends import set_default_graphics_backend
 from tcgui.widgets.ui import UI
 from tcgui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
 from tcgui.widgets.containers import HStack, VStack, Panel
@@ -168,8 +166,7 @@ class LauncherApp:
     _BTN_NORMAL_PRESSED = (0.18, 0.18, 0.22, 1.0)
     _BTN_DISABLED = (0.18, 0.18, 0.2, 0.6)
 
-    def __init__(self, graphics: OpenGLGraphicsBackend, ui_backend: str = "qt"):
-        self.graphics = graphics
+    def __init__(self, ui_backend: str = "qt"):
         self.ui = UI()
         self.recent = RecentProjects()
         self._ui_backend = ui_backend
@@ -607,11 +604,7 @@ def run():
 
     window, gl_context = _create_sdl_window("Termin Launcher", 1024, 640)
 
-    graphics = OpenGLGraphicsBackend.get_instance()
-    graphics.ensure_ready()
-    set_default_graphics_backend(graphics)
-
-    app = LauncherApp(graphics, ui_backend=ui_backend)
+    app = LauncherApp(ui_backend=ui_backend)
 
     sdl2.SDL_StartTextInput()
 
@@ -656,11 +649,7 @@ def run():
             break
 
         vw, vh = _get_drawable_size(window)
-        graphics.bind_framebuffer(None)
-        graphics.set_viewport(0, 0, vw, vh)
-        graphics.clear_color_depth(0.08, 0.08, 0.10, 1.0)
-
-        app.ui.render(vw, vh)
+        app.ui.render(vw, vh, background_color=(0.08, 0.08, 0.10, 1.0))
 
         video.SDL_GL_SwapWindow(window)
 

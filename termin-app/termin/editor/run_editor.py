@@ -10,10 +10,6 @@ from PyQt6.QtWidgets import QApplication
 from termin.editor.editor_window import EditorWindow
 from termin.visualization.core.scene import create_scene
 from termin.visualization.core.world import World
-from termin.visualization.platform.backends import (
-    OpenGLGraphicsBackend,
-    set_default_graphics_backend,
-)
 from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 
 
@@ -143,10 +139,6 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
         raise RuntimeError(f"Failed to initialize SDL: {sdl2.SDL_GetError()}")
 
-    # Setup graphics backend
-    graphics = OpenGLGraphicsBackend.get_instance()
-    set_default_graphics_backend(graphics)
-
     # Create SDL embedded backend
     sdl_backend = SDLEmbeddedWindowBackend()
 
@@ -161,7 +153,7 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     apply_dark_palette(app)
 
     # Create editor window with scene_manager from EngineCore
-    win = EditorWindow(world, scene, sdl_backend, engine.scene_manager, graphics=graphics)
+    win = EditorWindow(world, scene, sdl_backend, engine.scene_manager)
     win.showMaximized()
 
     # Process events to ensure window is visible
