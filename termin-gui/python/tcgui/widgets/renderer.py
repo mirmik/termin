@@ -20,7 +20,7 @@ import math
 
 import numpy as np
 
-from tgfx import TcShader
+from tgfx import TcShader, GPUTextureHandle
 from tgfx.font import FontTextureAtlas, get_default_font
 from tgfx.text2d import Text2DRenderer
 from tgfx._tgfx_native import (
@@ -29,6 +29,7 @@ from tgfx._tgfx_native import (
     tc_shader_ensure_tgfx2,
     wrap_gl_texture_as_tgfx2,
     CULL_NONE,
+    PIXEL_RGBA8,
 )
 
 
@@ -463,18 +464,34 @@ class UIRenderer:
 
     def draw_image(
         self, x: float, y: float, w: float, h: float,
-        texture_handle: Tgfx2TextureHandle,
+        texture_handle,
         tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     ) -> None:
         """Draw an RGBA texture at pixel coordinates, multiplied by ``tint``.
 
-        ``texture_handle`` must be a ``Tgfx2TextureHandle`` obtained
-        via ``upload_texture`` / ``load_image``.
+        ``texture_handle`` is a ``Tgfx2TextureHandle`` (from
+        ``upload_texture`` / ``load_image``) or a legacy
+        ``GPUTextureHandle`` (e.g. from a diffusion compositor).
+        Legacy handles are wrapped into a non-owning tgfx2 handle
+        for the duration of this draw call.
         """
         if w <= 0 or h <= 0 or texture_handle is None:
             return
 
         ctx = self._ctx
+
+        tex2 = texture_handle
+        wrapped = None
+        if isinstance(texture_handle, GPUTextureHandle):
+            wrapped = wrap_gl_texture_as_tgfx2(
+                self._holder,
+                texture_handle.get_id(),
+                int(texture_handle.get_width()),
+                int(texture_handle.get_height()),
+                PIXEL_RGBA8,
+            )
+            tex2 = wrapped
+
         ctx.bind_shader(self._ui_vs, self._ui_fs)
         proj = _build_ortho_pixel_to_ndc(
             float(self._viewport_w), float(self._viewport_h),
@@ -487,10 +504,13 @@ class UIRenderer:
         )
         ctx.set_uniform_int("u_texture_mode", 2)
         ctx.set_uniform_int("u_texture", 0)
-        ctx.bind_sampled_texture(0, texture_handle)
+        ctx.bind_sampled_texture(0, tex2)
 
         verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
         ctx.draw_immediate_triangles(verts, 6)
+
+        if wrapped is not None:
+            self._holder.destroy_texture(wrapped)
 
     def upload_texture(self, data: np.ndarray) -> Tgfx2TextureHandle:
         """Upload a numpy RGBA array as a new GPU texture.
