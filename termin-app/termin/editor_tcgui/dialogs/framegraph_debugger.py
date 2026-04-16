@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 
 from tcbase import log
 
@@ -18,9 +17,6 @@ from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.units import px
 
-if TYPE_CHECKING:
-    from tgfx import GraphicsBackend
-
 
 class CapturePreviewWidget(Widget):
     """Renders captured FBO texture via C++ presenter (shared GL textures)."""
@@ -28,7 +24,6 @@ class CapturePreviewWidget(Widget):
     def __init__(self) -> None:
         super().__init__()
         self._core = None
-        self._graphics: GraphicsBackend | None = None
         self._fbo_surface = None  # FBOSurface backing the tcgui editor
         self.channel_mode: int = 0
         self.highlight_hdr: bool = False
@@ -79,7 +74,7 @@ class CapturePreviewWidget(Widget):
         )
         ctx2.destroy_texture(target_tex)
         if renderer._clip_stack:
-            renderer._graphics.enable_scissor(*renderer._clip_stack[-1])
+            renderer._ctx.set_scissor(*renderer._clip_stack[-1])
 
 
 class _FramegraphDebuggerHandle:
@@ -91,7 +86,6 @@ class _FramegraphDebuggerHandle:
 
         # State
         self._core = None
-        self._graphics: GraphicsBackend | None = None
         self._rendering_controller = None
         self._fbo_surface = None
 
@@ -607,13 +601,12 @@ class _FramegraphDebuggerHandle:
         self.visible = False
 
 
-def show_framegraph_debugger(ui, graphics, rendering_controller, fbo_surface) -> _FramegraphDebuggerHandle:
+def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _FramegraphDebuggerHandle:
     """Create and show the Framegraph Debugger dialog. Returns handle for updates."""
 
     from termin._native.editor import FrameGraphDebuggerCore
 
     handle = _FramegraphDebuggerHandle()
-    handle._graphics = graphics
     handle._rendering_controller = rendering_controller
     handle._fbo_surface = fbo_surface
     handle._core = FrameGraphDebuggerCore()
@@ -819,7 +812,6 @@ def show_framegraph_debugger(ui, graphics, rendering_controller, fbo_surface) ->
     preview = CapturePreviewWidget()
     preview.stretch = True
     preview._core = handle._core
-    preview._graphics = graphics
     preview._fbo_surface = fbo_surface
     handle._preview = preview
     viewer_area.add_child(preview)

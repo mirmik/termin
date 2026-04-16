@@ -219,8 +219,19 @@ class UI:
 
             self._root.layout(x, y, w, h, viewport_w, viewport_h)
 
-    def render(self, viewport_w: int, viewport_h: int):
-        """Render the UI and all overlays."""
+    def render(
+        self,
+        viewport_w: int,
+        viewport_h: int,
+        background_color: tuple[float, float, float, float] | None = None,
+    ):
+        """Render the UI and all overlays.
+
+        ``background_color`` — if given, the UI's offscreen target is
+        cleared to this colour so transparent areas show it after the
+        final composite. ``None`` leaves those areas transparent
+        (useful when the UI is overlaid on top of other rendering).
+        """
         if not self._root and not self._overlays:
             return
 
@@ -233,7 +244,7 @@ class UI:
         # Check tooltip timer
         self._update_tooltip()
 
-        self._renderer.begin(viewport_w, viewport_h)
+        self._renderer.begin(viewport_w, viewport_h, background_color)
         if self._root:
             self._root.render(self._renderer)
 

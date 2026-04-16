@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from tgfx import (
-    GraphicsBackend,
     tc_gpu_context_new,
     tc_gpu_set_context,
     tc_gpu_context_set_name,
@@ -34,8 +33,7 @@ class WindowManager:
     windowing backend (SDL, GLFW, etc.).
     """
 
-    def __init__(self, graphics: GraphicsBackend, share_group_key: int = 0):
-        self._graphics = graphics
+    def __init__(self, share_group_key: int = 0):
         self._windows: list[WindowEntry] = []
         self._share_group_key = share_group_key
 
@@ -85,16 +83,18 @@ class WindowManager:
         window_ui.create_window = self.create_window
         return window_ui
 
+    # Default window background. UIRenderer clears its offscreen
+    # target to this before drawing widgets, so transparent regions
+    # show it after the final composite into the default framebuffer.
+    WINDOW_BG: tuple[float, float, float, float] = (0.08, 0.08, 0.10, 1.0)
+
     def render_all(self) -> None:
         """Render all windows."""
         for entry in list(self._windows):
             self._make_current(entry)
             tc_gpu_set_context(entry.gpu_context)
             vw, vh = self._get_drawable_size(entry)
-            self._graphics.bind_framebuffer(None)
-            self._graphics.set_viewport(0, 0, vw, vh)
-            self._graphics.clear_color_depth(0.08, 0.08, 0.10, 1.0)
-            entry.ui.render(vw, vh)
+            entry.ui.render(vw, vh, background_color=self.WINDOW_BG)
             entry.ui.process_deferred()
             self._swap(entry)
 
