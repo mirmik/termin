@@ -851,7 +851,18 @@ class EditorCanvas(Canvas):
             if not in_mask_erase_preview:
                 gpu_tex = self._gpu_compositor.get_display_texture()
                 if gpu_tex is not None:
+                    # Base Canvas marks owned Tgfx2 textures by setting
+                    # _image_tex_size alongside _image_texture. If it's
+                    # set, the current handle is a Tgfx2TextureHandle
+                    # uploaded via `renderer.upload_texture` — we must
+                    # release it before swapping in the external GPU
+                    # compositor texture (which we do NOT own, so we
+                    # mark _image_tex_size=None so base Canvas won't
+                    # try to destroy it later).
+                    if self._image_texture is not None and self._image_tex_size is not None:
+                        renderer.destroy_texture(self._image_texture)
                     self._image_texture = gpu_tex
+                    self._image_tex_size = None
                     self._image_dirty = False
                     # Provide image_size info for Canvas.render() viewport math
                     w, h = self._layer_stack.width, self._layer_stack.height
@@ -860,6 +871,13 @@ class EditorCanvas(Canvas):
                             self._image_data = np.empty((h, w, 4), dtype=np.uint8)
                     else:
                         self._image_data = None
+            else:
+                # Switching to CPU preview path: drop the reference to
+                # the external GPU compositor texture so base Canvas's
+                # _sync_textures doesn't try to destroy it. The next
+                # set_image() triggers a fresh renderer.upload_texture.
+                if self._image_texture is not None and self._image_tex_size is None:
+                    self._image_texture = None
         super().render(renderer)
 
     # ------------------------------------------------------------------
