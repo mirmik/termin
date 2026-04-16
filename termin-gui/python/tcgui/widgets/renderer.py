@@ -220,7 +220,7 @@ class UIRenderer:
         # here after the ctx is in a pass. Go through the `font`
         # property so the default system font is lazily resolved if
         # the caller did not supply one.
-        self._text2d.begin(self._holder, self._viewport_w, self._viewport_h,
+        self._text2d.begin(self._ctx, self._viewport_w, self._viewport_h,
                            font=self.font)
 
     def end(self) -> None:
