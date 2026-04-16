@@ -244,7 +244,6 @@ class MeshPreviewWidget(QtWidgets.QWidget):
             return
 
         self._display.make_current()
-        self._graphics.ensure_ready()
 
         width, height = self._display.get_size()
         if width <= 0 or height <= 0:
@@ -253,7 +252,7 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         surface = self._display.surface
         if surface is None:
             return
-        display_fbo = surface.get_framebuffer()
+        display_fbo_id = surface.get_framebuffer_id()
 
         # Get scene, camera, pipeline from viewport
         scene = self._viewport.scene
@@ -266,10 +265,11 @@ class MeshPreviewWidget(QtWidgets.QWidget):
         # Update camera aspect ratio
         camera.set_aspect(width / float(max(1, height)))
 
-        # Render via C++ RenderEngine
-        self._render_engine.render_view_to_fbo(
+        # Render via C++ RenderEngine into the raw GL fbo id — no
+        # legacy FramebufferHandle involved.
+        self._render_engine.render_view_to_fbo_id(
             pipeline,
-            display_fbo,
+            display_fbo_id,
             width,
             height,
             scene,

@@ -76,6 +76,54 @@ void bind_render_engine(nb::module_& m) {
              nb::arg("camera"),
              nb::arg("viewport").none(),
              nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
+        .def("render_view_to_fbo_id", [](RenderEngine& self,
+                                      RenderPipeline& pipeline,
+                                      uint32_t target_fbo_id,
+                                      int width,
+                                      int height,
+                                      TcSceneRef scene_ref,
+                                      CameraComponent* camera,
+                                      nb::object viewport_obj,
+                                      uint64_t layer_mask) {
+            std::string viewport_name;
+            tc_entity_handle internal_entities = TC_ENTITY_HANDLE_INVALID;
+            if (!viewport_obj.is_none()) {
+                try {
+                    viewport_name = nb::cast<std::string>(viewport_obj.attr("name"));
+                    nb::object internal_entities_obj = viewport_obj.attr("internal_entities");
+                    if (!internal_entities_obj.is_none()) {
+                        internal_entities = nb::cast<Entity>(internal_entities_obj).handle();
+                    }
+                } catch (const std::exception& e) {
+                    tc::Log::error("[RenderEngine binding] viewport conversion failed: %s", e.what());
+                    throw;
+                }
+            }
+            std::vector<Light> lights;
+            RenderCamera render_camera = camera
+                ? make_render_camera(*camera, static_cast<double>(width) / std::max(1, height))
+                : RenderCamera();
+            self.render_view_to_fbo_id(
+                pipeline,
+                target_fbo_id,
+                width,
+                height,
+                scene_ref.handle(),
+                render_camera,
+                viewport_name,
+                internal_entities,
+                lights,
+                layer_mask
+            );
+        },
+             nb::arg("pipeline"),
+             nb::arg("target_fbo_id"),
+             nb::arg("width"),
+             nb::arg("height"),
+             nb::arg("scene"),
+             nb::arg("camera"),
+             nb::arg("viewport").none(),
+             nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def("render_scene_pipeline_offscreen", [](
             RenderEngine& self,
             RenderPipeline& pipeline,

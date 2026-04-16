@@ -183,16 +183,16 @@ class WebStreamServer:
         # Make surface current
         self._surface.make_current()
 
-        # Get display FBO
-        display_fbo = self._surface.get_framebuffer()
+        # Get display FBO id (raw GL id, 0 = default framebuffer)
+        display_fbo_id = self._surface.get_framebuffer_id()
 
         # Update camera aspect ratio
         self.camera.set_aspect(self.width / float(max(1, self.height)))
 
-        # Render via C++ RenderEngine
-        self._engine.render_view_to_fbo(
+        # Render via C++ RenderEngine into the raw GL fbo id.
+        self._engine.render_view_to_fbo_id(
             self._pipeline,
-            display_fbo,
+            display_fbo_id,
             self.width,
             self.height,
             self.scene,
