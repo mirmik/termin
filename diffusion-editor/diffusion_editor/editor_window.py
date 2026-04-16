@@ -73,7 +73,7 @@ class ExternalEditContext:
 class EditorWindow:
     """Non-widget orchestrator: assembles UI, wires callbacks, handles logic."""
 
-    def __init__(self, graphics):
+    def __init__(self):
         self._running = True
         self._closed = False
         self._settings = Settings()
@@ -106,7 +106,7 @@ class EditorWindow:
         )
 
         # Build UI
-        self._build_ui(graphics)
+        self._build_ui()
 
         # Wire callbacks
         self._wire_callbacks()
@@ -116,7 +116,7 @@ class EditorWindow:
     # UI Construction
     # ------------------------------------------------------------------
 
-    def _build_ui(self, graphics):
+    def _build_ui(self):
         root = VStack()
         root.preferred_width = pct(100)
         root.preferred_height = pct(100)
@@ -162,7 +162,7 @@ class EditorWindow:
         main_area.add_child(Splitter(target=self._left_container, side="right"))
 
         # Canvas (center, stretches to fill remaining space)
-        self._canvas = EditorCanvas(self._layer_stack, graphics=graphics)
+        self._canvas = EditorCanvas(self._layer_stack)
         self._canvas.stretch = True
         # Give brush reference now
         self._brush_panel._brush = self._canvas.brush
@@ -1331,8 +1331,12 @@ class EditorWindow:
     # Public: rendering
     # ------------------------------------------------------------------
 
+    # Background colour painted by the UIRenderer's offscreen clear
+    # so transparent UI regions show this through the composite.
+    UI_BACKGROUND = (0.12, 0.12, 0.14, 1.0)
+
     def render(self, vw: int, vh: int):
-        self.ui.render(vw, vh)
+        self.ui.render(vw, vh, background_color=self.UI_BACKGROUND)
 
     @property
     def running(self) -> bool:
