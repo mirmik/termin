@@ -14,7 +14,6 @@ from tgfx import (
 from tgfx.window import BackendWindow, WindowBackend
 from .nop_graphics import NOPGraphicsBackend
 from .nop_window import NOPWindowBackend
-from .qt import QtGLWindowHandle, QtWindowBackend
 from termin.visualization.platform.backends.glfw import GLFWWindowBackend
 
 # Use C++ OpenGLGraphicsBackend
@@ -80,8 +79,6 @@ __all__ = [
     "get_default_window_backend",
     "NOPGraphicsBackend",
     "NOPWindowBackend",
-    "QtWindowBackend",
-    "QtGLWindowHandle",
     "GLFWWindowBackend",
     "SDLEmbeddedWindowBackend",
     "OpenGLGraphicsBackend",
