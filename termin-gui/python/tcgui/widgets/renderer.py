@@ -1,21 +1,17 @@
 """tgfx2-backed renderer for the widget-based UI system.
 
-Public API is byte-compatible with the previous tgfx1 version:
-``__init__(graphics, font)``, ``font`` property, ``begin``, ``end``,
+``UIRenderer(font=None)``, ``font`` property, ``begin``, ``end``,
 ``begin_clip``, ``end_clip``, ``draw_rect``, ``draw_rect_outline``,
 ``draw_line``, ``draw_text``, ``draw_text_centered``, ``draw_image``,
 ``upload_texture``, ``load_image``, ``measure_text``.
 
 Internally the renderer drives a ``Tgfx2Context`` (created lazily on
-first ``begin()``) and keeps an offscreen tgfx1 FBO as its draw
-target. At ``end()`` it blits the offscreen to the default
-framebuffer via tgfx1 ``blit_framebuffer``. This mirrors the
-production pattern used by ``present.py`` and lets diffusion-editor
-and tcplot consumers remain unchanged.
-
-Text is delegated to ``Text2DRenderer``. Rects / lines / images use a
-small UI shader compiled once per holder through
-``tc_shader_ensure_tgfx2``.
+first ``begin()``) and keeps an offscreen native tgfx2 color+depth
+texture pair as its draw target. At ``end()`` it blits the offscreen
+color to the default framebuffer via
+``RenderContext2::blit_to_external_fbo``. Text is delegated to
+``Text2DRenderer``. Rects / lines / images use a small UI shader
+compiled once per holder through ``tc_shader_ensure_tgfx2``.
 """
 
 from __future__ import annotations
@@ -24,18 +20,15 @@ import math
 
 import numpy as np
 
-from tgfx import GraphicsBackend, TcShader
+from tgfx import TcShader
 from tgfx.font import FontTextureAtlas, get_default_font
 from tgfx.text2d import Text2DRenderer
 from tgfx._tgfx_native import (
     Tgfx2Context,
     Tgfx2TextureHandle,
     tc_shader_ensure_tgfx2,
-    wrap_fbo_color_as_tgfx2,
-    wrap_fbo_depth_as_tgfx2,
     wrap_gl_texture_as_tgfx2,
     CULL_NONE,
-    PIXEL_RGBA8,
 )
 
 
@@ -92,16 +85,7 @@ def _build_ortho_pixel_to_ndc(w: float, h: float) -> np.ndarray:
 class UIRenderer:
     """UI widget renderer backed by tgfx2."""
 
-    def __init__(
-        self,
-        graphics: GraphicsBackend,
-        font: FontTextureAtlas | None = None,
-    ):
-        # tgfx1 singleton is kept around because the offscreen FBO is
-        # created through it and the final composite to the default
-        # framebuffer goes through ``blit_framebuffer``. It is NOT
-        # used for any rendering state or draw calls.
-        self._graphics = graphics
+    def __init__(self, font: FontTextureAtlas | None = None):
         self._font = font
 
         # Viewport dimensions in pixels. Updated each begin().
@@ -121,10 +105,10 @@ class UIRenderer:
         self._ui_vs = None
         self._ui_fs = None
 
-        # Offscreen target wired through tgfx1 FramebufferHandle +
-        # wrap_fbo_color_as_tgfx2 each frame.
-        self._offscreen_fbo = None
-        self._window_fbo = None
+        # Owned offscreen color + depth textures. Allocated on first
+        # begin() / reallocated when the viewport size changes.
+        self._offscreen_color_tex: Tgfx2TextureHandle | None = None
+        self._offscreen_depth_tex: Tgfx2TextureHandle | None = None
         self._offscreen_size: tuple[int, int] = (0, 0)
 
     # ------------------------------------------------------------------
@@ -178,8 +162,14 @@ class UIRenderer:
             self._ui_fs = pair.fs
 
         if self._offscreen_size != (w, h):
-            self._offscreen_fbo = self._graphics.create_framebuffer(w, h, 1, "")
-            self._window_fbo = self._graphics.create_external_framebuffer(0, w, h)
+            if self._offscreen_color_tex is not None:
+                self._holder.destroy_texture(self._offscreen_color_tex)
+                self._offscreen_color_tex = None
+            if self._offscreen_depth_tex is not None:
+                self._holder.destroy_texture(self._offscreen_depth_tex)
+                self._offscreen_depth_tex = None
+            self._offscreen_color_tex = self._holder.create_color_attachment(w, h)
+            self._offscreen_depth_tex = self._holder.create_depth_attachment(w, h)
             self._offscreen_size = (w, h)
 
     # ------------------------------------------------------------------
@@ -196,15 +186,13 @@ class UIRenderer:
         ctx = self._ctx
 
         ctx.begin_frame()
-        offscreen_tex2 = wrap_fbo_color_as_tgfx2(ctx, self._offscreen_fbo)
-        offscreen_depth2 = wrap_fbo_depth_as_tgfx2(ctx, self._offscreen_fbo)
         # Clear to transparent black so areas the UI does not touch
         # remain transparent after composite. Depth is cleared to 1.0
         # so 3D embedded renderers (tcplot Plot3D, Viewport3D) get a
         # fresh depth buffer each frame.
         ctx.begin_pass(
-            color=offscreen_tex2,
-            depth=offscreen_depth2,
+            color=self._offscreen_color_tex,
+            depth=self._offscreen_depth_tex,
             clear_color_enabled=True,
             r=0.0, g=0.0, b=0.0, a=0.0,
             clear_depth=1.0,
@@ -232,19 +220,28 @@ class UIRenderer:
         self._ctx.end_pass()
         self._ctx.end_frame()
 
-        # Drop any remaining scissor state so legacy tgfx1 rendering
-        # after this (if any) starts with a clean slate.
         self._clip_stack.clear()
 
-        # Composite offscreen → default framebuffer.
-        self._graphics.blit_framebuffer(
-            self._offscreen_fbo,
-            self._window_fbo,
-            (0, 0, self._viewport_w, self._viewport_h),
-            (0, 0, self._viewport_w, self._viewport_h),
-            True,
-            False,
+        # Composite offscreen color → default framebuffer (fbo id = 0).
+        self._ctx.blit_to_external_fbo(
+            0,
+            self._offscreen_color_tex,
+            0, 0, self._viewport_w, self._viewport_h,
+            0, 0, self._viewport_w, self._viewport_h,
         )
+
+    def close(self) -> None:
+        """Release owned offscreen textures. Call before the GL
+        context the holder lives on gets destroyed."""
+        if self._holder is None:
+            return
+        if self._offscreen_color_tex is not None:
+            self._holder.destroy_texture(self._offscreen_color_tex)
+            self._offscreen_color_tex = None
+        if self._offscreen_depth_tex is not None:
+            self._holder.destroy_texture(self._offscreen_depth_tex)
+            self._offscreen_depth_tex = None
+        self._offscreen_size = (0, 0)
 
     # ------------------------------------------------------------------
     # Scissor / clip stack

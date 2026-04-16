@@ -245,7 +245,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         world.add_scene(initial_scene)
 
     # Create tcgui UI
-    ui = UI(graphics=graphics)
+    ui = UI()
 
     # Window manager — all windows are equal
     wm = SDLWindowManager(graphics)

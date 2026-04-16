@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from tcbase import Key, MouseButton, Mods
-from tgfx import GraphicsBackend
 from tgfx.font import FontTextureAtlas
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
@@ -33,9 +32,8 @@ class UI:
     and provides an overlay stack for popups / tooltips / menus.
     """
 
-    def __init__(self, graphics: GraphicsBackend, font: FontTextureAtlas | None = None):
-        self._graphics = graphics
-        self._renderer = UIRenderer(graphics, font)
+    def __init__(self, font: FontTextureAtlas | None = None):
+        self._renderer = UIRenderer(font)
         self._loader = UILoader()
 
         self._root: Widget | None = None

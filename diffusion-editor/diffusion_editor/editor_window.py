@@ -181,7 +181,7 @@ class EditorWindow:
         root.add_child(self._statusbar)
 
         # Create UI
-        self.ui = UI(graphics)
+        self.ui = UI()
         self.ui.root = root
 
     def _canvas_placeholder_brush(self):
