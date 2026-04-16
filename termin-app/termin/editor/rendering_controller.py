@@ -249,7 +249,6 @@ class RenderingController:
             share_context=self._offscreen_context.gl_context,
             make_current_fn=self._offscreen_context.make_current,
         )
-        sdl_backend.set_graphics(self._offscreen_context.graphics)
 
         # Create tab container widget
         tab_container = QWidget()
@@ -718,7 +717,6 @@ class RenderingController:
             share_context=self._offscreen_context.gl_context,
             make_current_fn=self._offscreen_context.make_current,
         )
-        sdl_backend.set_graphics(self._offscreen_context.graphics)
 
         # Create SDL window (will share context with offscreen context)
         surface = sdl_backend.create_embedded_window(

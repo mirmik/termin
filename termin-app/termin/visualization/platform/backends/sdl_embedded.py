@@ -16,11 +16,8 @@ from sdl2 import video
 from tcbase import Action, Key, MouseButton
 from tgfx.window import BackendWindow, WindowBackend
 
-from termin.graphics import OpenGLGraphicsBackend
-
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QWidget
-    from termin.graphics import FramebufferHandle
 
 
 # --- tc_render_surface support ---
@@ -307,7 +304,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         height: int = 600,
         title: str = "SDL Viewport",
         share_context: Optional[Any] = None,
-        graphics: Optional[OpenGLGraphicsBackend] = None,
     ):
         _ensure_sdl()
 
@@ -364,29 +360,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
         video.SDL_GL_MakeCurrent(self._window, self._gl_context)
 
-        # Initialize OpenGL function pointers (GLAD) after context is created
-        if graphics is not None:
-            from tcbase import log
-            log.info(f"About to call ensure_ready() on graphics={graphics}, type={type(graphics)}, id={id(graphics)}")
-            log.info(f"graphics.__class__.__mro__ = {graphics.__class__.__mro__}")
-            log.info(f"hasattr(graphics, 'ensure_ready') = {hasattr(graphics, 'ensure_ready')}")
-            log.info(f"type(graphics.ensure_ready) = {type(graphics.ensure_ready)}")
-
-            # Test if C++ methods are callable
-            if hasattr(graphics, 'test_method'):
-                log.info("Calling test_method()...")
-                graphics.test_method()
-                log.info("test_method() completed")
-
-            try:
-                result = graphics.ensure_ready()
-                log.info(f"ensure_ready() completed successfully, result={result}")
-            except Exception as e:
-                log.error(f"ensure_ready() FAILED with exception: {type(e).__name__}: {e}")
-                import traceback
-                traceback.print_exc()
-                raise
-
         # Log actual color depth we got
         r_size = ctypes.c_int()
         g_size = ctypes.c_int()
@@ -420,15 +393,9 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         self._should_close = False
         self._needs_render = True
 
-        # Cache for window framebuffer handle
-        self._window_fb_handle: Optional[Any] = None
-
         # Last known size for resize detection
         self._last_width = width
         self._last_height = height
-
-        # Graphics backend for framebuffer creation
-        self._graphics = graphics
 
         # Create tc_render_surface for C interop
         self._tc_surface_ptr = _create_tc_render_surface(self)
@@ -505,10 +472,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         """Return raw OpenGL FBO id (for C++ vtable dispatch). SDL window is always 0."""
         return 0
 
-    def get_framebuffer(self) -> Any:
-        """Return FramebufferHandle for window (wraps FBO 0)."""
-        return self.get_window_framebuffer()
-
     def window_size(self) -> Tuple[int, int]:
         if self._window is None:
             return (0, 0)
@@ -574,174 +537,14 @@ class SDLEmbeddedWindowHandle(BackendWindow):
     def needs_render(self) -> bool:
         return self._needs_render
 
-    def blit_from_pass(
-        self,
-        fbo,
-        graphics,
-        width: int,
-        height: int,
-        depth_callback=None,
-    ) -> None:
-        """
-        Blit from a pass's FBO to this debugger window.
-
-        Called by C++ passes (ColorPass, DepthPass, etc.) in "inside pass" debug mode.
-
-        Args:
-            fbo: FramebufferHandle to blit from.
-            graphics: GraphicsBackend for rendering.
-            width: Source FBO width.
-            height: Source FBO height.
-            depth_callback: Optional callback to receive depth buffer as numpy array.
-        """
-        # Save current context
-        saved_context = video.SDL_GL_GetCurrentContext()
-        saved_window = video.SDL_GL_GetCurrentWindow()
-
-        try:
-            # Switch to debugger window context
-            self.make_current()
-
-            # Get destination size
-            dst_w, dst_h = self.framebuffer_size()
-            src_w = fbo.get_width()
-            src_h = fbo.get_height()
-
-            # Plain glBlitFramebuffer from source fbo to window default
-            # framebuffer — no shader needed for a debug passthrough.
-            graphics.blit_framebuffer(
-                fbo, None,
-                0, 0, src_w, src_h,
-                0, 0, dst_w, dst_h,
-                True, False
-            )
-
-            # Read depth buffer if callback provided
-            if depth_callback is not None:
-                depth = graphics.read_depth_buffer(fbo)
-                if depth is not None:
-                    depth_callback(depth)
-
-            # Show result
-            self.swap_buffers()
-
-        except Exception as e:
-            from termin import log
-            log.error(f"blit_from_pass failed: {e}")
-
-        finally:
-            # Restore original context
-            if saved_window and saved_context:
-                video.SDL_GL_MakeCurrent(saved_window, saved_context)
-
     def clear_render_flag(self) -> None:
         self._needs_render = False
-
-    def get_window_framebuffer(self) -> Any:
-        width, height = self.framebuffer_size()
-
-        if self._window_fb_handle is None and self._graphics is not None:
-            self._window_fb_handle = self._graphics.create_external_framebuffer(0, width, height)
-        elif self._window_fb_handle is not None:
-            self._window_fb_handle.set_external_target(0, width, height)
-
-        return self._window_fb_handle
-
-    def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
-        """Set graphics backend for framebuffer creation."""
-        self._graphics = graphics
 
     def get_window_id(self) -> int:
         """Get SDL window ID for event routing."""
         if self._window is None:
             return 0
         return video.SDL_GetWindowID(self._window)
-
-    # Cached resolve FBO for MSAA blit
-    _resolve_fbo: "FramebufferHandle | None" = None
-    _resolve_fbo_size: tuple[int, int] = (0, 0)
-
-    def blit_from_pass(
-        self,
-        fb,
-        graphics,
-        width: int,
-        height: int,
-        depth_callback=None,
-    ) -> None:
-        """
-        Blit framebuffer texture to this window.
-
-        Called from C++ ColorPass during debug mode to show intermediate
-        render state in the debugger window.
-
-        Args:
-            fb: Source FramebufferHandle
-            graphics: GraphicsBackend for GL operations
-            width: Source framebuffer width
-            height: Source framebuffer height
-            depth_callback: Optional callback to receive depth buffer
-        """
-        from tcbase import log
-
-        # Handle MSAA: resolve to non-MSAA FBO first
-        texture_fb = fb
-        if fb.is_msaa():
-            w, h = fb.get_size()
-            # Get or create resolve FBO
-            if (
-                SDLEmbeddedWindowHandle._resolve_fbo is None
-                or SDLEmbeddedWindowHandle._resolve_fbo_size != (w, h)
-            ):
-                SDLEmbeddedWindowHandle._resolve_fbo = graphics.create_framebuffer(w, h, samples=1)
-                SDLEmbeddedWindowHandle._resolve_fbo_size = (w, h)
-
-            # Blit MSAA -> non-MSAA
-            graphics.blit_framebuffer(
-                fb, SDLEmbeddedWindowHandle._resolve_fbo,
-                (0, 0, w, h),
-                (0, 0, w, h),
-                blit_color=True,
-                blit_depth=True,
-            )
-            texture_fb = SDLEmbeddedWindowHandle._resolve_fbo
-
-        # Capture depth buffer before switching context (from resolved FBO if MSAA)
-        if depth_callback is not None:
-            depth = graphics.read_depth_buffer(texture_fb)
-            if depth is not None:
-                depth_callback(depth)
-
-        # Save current context
-        saved_context = video.SDL_GL_GetCurrentContext()
-        saved_window = video.SDL_GL_GetCurrentWindow()
-
-        # Switch to debugger window context
-        self.make_current()
-
-        # Get debugger window size
-        dst_w, dst_h = self.framebuffer_size()
-        src_w = texture_fb.get_width()
-        src_h = texture_fb.get_height()
-
-        # Plain glBlitFramebuffer from source fbo to window default
-        # framebuffer — no shader needed for a debug passthrough.
-        graphics.blit_framebuffer(
-            texture_fb, None,
-            0, 0, src_w, src_h,
-            0, 0, dst_w, dst_h,
-            True, False
-        )
-
-        # Swap buffers
-        self.swap_buffers()
-
-        # Restore original context
-        if saved_window and saved_context:
-            video.SDL_GL_MakeCurrent(saved_window, saved_context)
-            # Restore FBO and viewport
-            graphics.bind_framebuffer(fb)
-            graphics.set_viewport(0, 0, width, height)
 
     def check_resize(self) -> None:
         """Check if window was resized and call callback if needed."""
@@ -848,14 +651,12 @@ class SDLEmbeddedWindowBackend(WindowBackend):
 
     def __init__(
         self,
-        graphics: Optional[OpenGLGraphicsBackend] = None,
         share_context: Optional[Any] = None,
     ):
         """
         Initialize SDL embedded window backend.
 
         Args:
-            graphics: Graphics backend for new windows.
             share_context: External GL context to share with (e.g., from OffscreenContext).
                           If provided, all windows will share this context instead of
                           sharing with the first window.
@@ -864,13 +665,8 @@ class SDLEmbeddedWindowBackend(WindowBackend):
         self._windows: dict[int, SDLEmbeddedWindowHandle] = {}
         self._primary_window: Optional[SDLEmbeddedWindowHandle] = None
         self._focused_window_id: int = 0
-        self._graphics = graphics
         self._external_share_context = share_context
         self._external_make_current: Optional[Callable[[], None]] = None
-
-    def set_graphics(self, graphics: OpenGLGraphicsBackend) -> None:
-        """Set graphics backend for new windows."""
-        self._graphics = graphics
 
     def set_share_context(
         self,
@@ -920,7 +716,6 @@ class SDLEmbeddedWindowBackend(WindowBackend):
         window = SDLEmbeddedWindowHandle(
             width, height, title,
             share_context=share_context,
-            graphics=self._graphics,
         )
         self._windows[window.get_window_id()] = window
 

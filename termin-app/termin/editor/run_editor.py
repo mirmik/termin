@@ -148,7 +148,7 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False):
     set_default_graphics_backend(graphics)
 
     # Create SDL embedded backend
-    sdl_backend = SDLEmbeddedWindowBackend(graphics=graphics)
+    sdl_backend = SDLEmbeddedWindowBackend()
 
     # Create world and scene
     world = World()
