@@ -41,8 +41,8 @@ class CapturePreviewWidget(Widget):
             return
         if self._fbo_surface is None:
             return
-        capture_fbo = self._core.capture_fbo
-        if capture_fbo is None:
+        capture_tex = self._core.capture_tex
+        if not capture_tex:
             return
 
         from termin.visualization.render.manager import RenderingManager
@@ -60,21 +60,24 @@ class CapturePreviewWidget(Widget):
         dst_y = int(vp_h - self.y - self.height)
         dst_w, dst_h = int(self.width), int(self.height)
 
-        # Wrap the tcgui FBOSurface as a legacy FramebufferHandle so the
-        # C++ presenter can wrap it as a tgfx2 texture and open a render
-        # pass on it. The surface's FBO id is the current GL target.
-        target_fbo = self._graphics.create_external_framebuffer(
-            self._fbo_surface.get_framebuffer_id(), vp_w, vp_h
+        # Wrap the tcgui FBOSurface's color texture (raw GL id) as a
+        # non-owning tgfx2 handle so the C++ presenter can open a
+        # render pass on it.
+        from tgfx._tgfx_native import PIXEL_RGBA8
+        target_tex = ctx2.wrap_gl_texture(
+            self._fbo_surface.color_texture_id,
+            vp_w, vp_h, PIXEL_RGBA8,
         )
 
         # The C++ presenter handles scissor via ctx2->clear_scissor
         # inside the pass; here we restore tcgui's clip afterwards
         # because clear_scissor leaks GL scissor rect state.
         self._core.presenter.render(
-            ctx2, capture_fbo, target_fbo,
+            ctx2, capture_tex, target_tex,
             dst_x, dst_y, dst_w, dst_h,
             self.channel_mode, self.highlight_hdr,
         )
+        ctx2.destroy_texture(target_tex)
         if renderer._clip_stack:
             renderer._graphics.enable_scissor(*renderer._clip_stack[-1])
 
@@ -561,17 +564,26 @@ class _FramegraphDebuggerHandle:
         self._preview.highlight_hdr = self._highlight_hdr
 
     def _on_refresh_depth(self) -> None:
-        capture_fbo = self._core.capture_fbo
-        if capture_fbo is None:
+        capture_tex = self._core.capture_tex
+        if not capture_tex:
             self._status_label.text = "No capture for depth"
             return
+        from termin.visualization.render.manager import RenderingManager
+        render_engine = RenderingManager.instance().render_engine
+        if render_engine is None:
+            self._status_label.text = "No render engine"
+            return
+        render_engine.ensure_tgfx2()
+        device = render_engine.tgfx2_device
+        if device is None:
+            self._status_label.text = "No tgfx2 device"
+            return
         try:
-            data_bytes, w, h = self._core.presenter.read_depth_normalized_with_size(
-                self._graphics, capture_fbo
-            )
-            if not data_bytes or w == 0 or h == 0:
+            result = self._core.presenter.read_depth_normalized(device, capture_tex)
+            if result is None:
                 self._status_label.text = "No depth data"
             else:
+                _, w, h = result
                 self._status_label.text = f"Depth: {w}x{h} read OK"
         except Exception as e:
             log.error(f"[FrameDebugger] depth read failed: {e}")
@@ -925,12 +937,22 @@ def show_framegraph_debugger(ui, graphics, rendering_controller, fbo_surface) ->
             handle._preview.highlight_hdr = checked
 
     def on_analyze_hdr():
-        capture_fbo = handle._core.capture_fbo
-        if capture_fbo is None:
+        capture_tex = handle._core.capture_tex
+        if not capture_tex:
             handle._hdr_stats_label.text = "No capture available"
             return
+        from termin.visualization.render.manager import RenderingManager
+        render_engine = RenderingManager.instance().render_engine
+        if render_engine is None:
+            handle._hdr_stats_label.text = "No render engine"
+            return
+        render_engine.ensure_tgfx2()
+        device = render_engine.tgfx2_device
+        if device is None:
+            handle._hdr_stats_label.text = "No tgfx2 device"
+            return
         try:
-            stats = handle._core.presenter.compute_hdr_stats(capture_fbo)
+            stats = handle._core.presenter.compute_hdr_stats(device, capture_tex)
             lines = []
             lines.append(f"R: {stats.min_r:.3f} - {stats.max_r:.3f} (avg: {stats.avg_r:.3f})")
             lines.append(f"G: {stats.min_g:.3f} - {stats.max_g:.3f} (avg: {stats.avg_g:.3f})")
