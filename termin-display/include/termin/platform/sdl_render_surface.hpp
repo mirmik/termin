@@ -59,10 +59,6 @@ public:
     void set_should_close(bool value) { if (window_) window_->set_should_close(value); }
     std::pair<double, double> get_cursor_pos() const { return window_ ? window_->get_cursor_pos() : std::make_pair(0.0, 0.0); }
 
-    // Graphics backend (for framebuffer creation)
-    void set_graphics(OpenGLGraphicsBackend* graphics) { if (window_) window_->set_graphics(graphics); }
-    FramebufferHandle* get_window_framebuffer() { return window_ ? window_->get_window_framebuffer() : nullptr; }
-
     // Render flag for pull-mode rendering
     void request_update() { needs_render_ = true; }
     bool needs_render() const { return needs_render_; }
