@@ -17,7 +17,6 @@ from typing import Any
 import sdl2
 from sdl2 import video
 
-from tgfx import OpenGLGraphicsBackend
 from tcbase import Key, MouseButton, Mods
 
 from tcgui.widgets.ui import UI
@@ -113,8 +112,7 @@ class _WinEntry:
 
 
 class _WindowManager:
-    def __init__(self, graphics):
-        self._graphics = graphics
+    def __init__(self):
         self._windows: list[_WinEntry] = []
 
     def register_main(self, sdl_window, gl_context, ui):
@@ -130,7 +128,7 @@ class _WindowManager:
             prev = self._windows[0]
             video.SDL_GL_MakeCurrent(prev.sdl_window, prev.gl_context)
 
-        window_ui = UI(graphics=self._graphics)
+        window_ui = UI()
         entry = _WinEntry(sdl_win, gl_ctx, window_ui)
         self._windows.append(entry)
 
@@ -165,10 +163,7 @@ class _WindowManager:
         for e in list(self._windows):
             video.SDL_GL_MakeCurrent(e.sdl_window, e.gl_context)
             vw, vh = _get_drawable_size(e.sdl_window)
-            self._graphics.bind_framebuffer(None)
-            self._graphics.set_viewport(0, 0, vw, vh)
-            self._graphics.clear_color_depth(0.12, 0.12, 0.14, 1.0)
-            e.ui.render(vw, vh)
+            e.ui.render(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
             e.ui.process_deferred()
             video.SDL_GL_SwapWindow(e.sdl_window)
 
@@ -251,7 +246,7 @@ def dispatch_events(wm: _WindowManager) -> bool:
 # UI setup
 # ---------------------------------------------------------------------------
 
-def build_main_ui(graphics, wm):
+def build_main_ui(wm):
     root = Panel()
     root.preferred_width = pct(100)
     root.preferred_height = pct(100)
@@ -273,7 +268,7 @@ def build_main_ui(graphics, wm):
     subtitle.text_color = (0.6, 0.6, 0.6, 1.0)
     stack.add_child(subtitle)
 
-    ui = UI(graphics)
+    ui = UI()
 
     # --- Button: open a simple widget in a window ---
     btn_widget = Button()
@@ -433,12 +428,9 @@ def main():
 
     window, gl_ctx = _create_sdl_window("tcgui Multi-Window", 600, 400)
 
-    graphics = OpenGLGraphicsBackend.get_instance()
-    graphics.ensure_ready()
+    wm = _WindowManager()
 
-    wm = _WindowManager(graphics)
-
-    ui = build_main_ui(graphics, wm)
+    ui = build_main_ui(wm)
     wm.register_main(window, gl_ctx, ui)
 
     sdl2.SDL_StartTextInput()

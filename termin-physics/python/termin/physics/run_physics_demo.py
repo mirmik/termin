@@ -15,10 +15,6 @@ from termin.visualization.core.material import Material
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.scene import create_scene
 from termin.visualization.core.world import VisualizationWorld
-from termin.visualization.platform.backends import (
-    OpenGLGraphicsBackend,
-    set_default_graphics_backend,
-)
 from termin.render_components import LightComponent, MeshRenderer
 from termin.lighting import LightType, LightShadowParams
 
@@ -145,8 +141,6 @@ def apply_dark_palette(app: QApplication):
 def run_physics_demo():
     QApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
     app = QApplication(sys.argv)
-
-    set_default_graphics_backend(OpenGLGraphicsBackend.get_instance())
 
     world = VisualizationWorld()
     scene = build_physics_scene(world)
