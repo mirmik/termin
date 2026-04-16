@@ -5,7 +5,6 @@ The module exposes abstractions for window/context management, scene graphs,
 camera models and GPU resources such as meshes, shaders, materials and textures.
 """
 
-from termin.visualization.platform.window import Window, GLWindow
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity, Component, InputComponent
 from termin.visualization.render.render_context import RenderContext
@@ -32,8 +31,6 @@ from termin.visualization.core.world import VisualizationWorld, Visualization
 from termin.visualization.platform.backends.qt import QtWindowBackend, QtGLWindowHandle
 
 __all__ = [
-    "Window",
-    "GLWindow",
     "Renderer",
     "Scene",
     "Entity",

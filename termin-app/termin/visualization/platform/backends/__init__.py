@@ -26,11 +26,8 @@ from termin.visualization.platform.backends.opengl import (
     get_make_current,
 )
 
-# SDL backend using C++ implementation
-from termin.visualization.platform.backends.sdl import (
-    SDLWindowBackend,
-    SDLWindowHandle,
-)
+# SDL backend using C++ implementation (embedded-mode only; the
+# standalone SDL wrapper was removed in 8.6-ui as unused).
 from termin.visualization.platform.backends.sdl_embedded import (
     SDLEmbeddedWindowBackend,
 )
@@ -86,8 +83,6 @@ __all__ = [
     "QtWindowBackend",
     "QtGLWindowHandle",
     "GLFWWindowBackend",
-    "SDLWindowBackend",
-    "SDLWindowHandle",
     "SDLEmbeddedWindowBackend",
     "OpenGLGraphicsBackend",
     # Context management
