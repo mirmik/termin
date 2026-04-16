@@ -21,8 +21,6 @@ void bind_render_engine(nb::module_& m) {
 
     nb::class_<RenderEngine>(m, "RenderEngine")
         .def(nb::init<>())
-        .def(nb::init<GraphicsBackend*>(), nb::arg("graphics"))
-        .def_rw("graphics", &RenderEngine::graphics)
         .def("ensure_tgfx2", &RenderEngine::ensure_tgfx2)
         .def_prop_ro("tgfx2_ctx", &RenderEngine::tgfx2_ctx,
                      nb::rv_policy::reference_internal)

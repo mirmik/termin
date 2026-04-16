@@ -48,10 +48,6 @@ PullRenderingManager::~PullRenderingManager() {
 }
 
 // Configuration
-void PullRenderingManager::set_graphics(GraphicsBackend* graphics) {
-    graphics_ = graphics;
-}
-
 void PullRenderingManager::set_render_engine(RenderEngine* engine) {
     render_engine_ = engine;
     owned_render_engine_.reset();
@@ -59,11 +55,7 @@ void PullRenderingManager::set_render_engine(RenderEngine* engine) {
 
 RenderEngine* PullRenderingManager::render_engine() {
     if (!render_engine_) {
-        if (!graphics_) {
-            tc_log(TC_LOG_ERROR, "[PullRenderingManager] Cannot create RenderEngine: graphics not set");
-            return nullptr;
-        }
-        owned_render_engine_ = std::make_unique<RenderEngine>(graphics_);
+        owned_render_engine_ = std::make_unique<RenderEngine>();
         render_engine_ = owned_render_engine_.get();
     }
     return render_engine_;
@@ -139,7 +131,7 @@ void PullRenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
 
 // Pull-rendering: render and present single display
 void PullRenderingManager::render_display(tc_display* display) {
-    if (!display || !graphics_) return;
+    if (!display) return;
 
     const char* dname = tc_display_get_name(display);
 
@@ -234,7 +226,7 @@ void PullRenderingManager::render_display(tc_display* display) {
 }
 
 void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
-    if (!tc_viewport_handle_valid(viewport) || !graphics_) return;
+    if (!tc_viewport_handle_valid(viewport)) return;
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_viewport_get_camera(viewport);
@@ -305,7 +297,6 @@ void PullRenderingManager::shutdown() {
     displays_.clear();
     owned_render_engine_.reset();
     render_engine_ = nullptr;
-    graphics_ = nullptr;
 }
 
 // Helpers
