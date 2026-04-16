@@ -13,7 +13,6 @@ from tgfx.font import FontTextureAtlas
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
-    from tgfx import GraphicsBackend
     from termin.assets.ui_handle import UIHandle
 
 
@@ -70,7 +69,6 @@ class UIComponent(InputComponent):
         self._ui: UI | None = None
         self._font: FontTextureAtlas | None = None
         self._priority = priority
-        self._graphics: GraphicsBackend | None = None
         self._ui_handle: UIHandle | None = None
         self._ui_layout_name: str = ""
         # Viewport dimensions for input handling before first render
@@ -165,13 +163,9 @@ class UIComponent(InputComponent):
                 self._ui.root = None
 
     def _ensure_ui(self):
-        """Lazily create UI when graphics backend is available."""
+        """Lazily create UI."""
         if self._ui is not None:
             return
-
-        if self._graphics is None:
-            from termin.visualization.platform.backends import get_default_graphics_backend
-            self._graphics = get_default_graphics_backend()
 
         self._ui = UI(self._font)
 
@@ -229,20 +223,12 @@ class UIComponent(InputComponent):
             return []
         return self._ui.find_all(name)
 
-    def render(self, graphics: GraphicsBackend, viewport_w: int, viewport_h: int):
+    def render(self, viewport_w: int, viewport_h: int):
         """
         Render the UI.
 
         Called by UIWidgetPass during the render pipeline.
-
-        Args:
-            graphics: Graphics backend.
-            viewport_w: Viewport width in pixels.
-            viewport_h: Viewport height in pixels.
         """
-        if self._graphics is None:
-            self._graphics = graphics
-
         self._ensure_ui()
 
         if self._ui.root is None:

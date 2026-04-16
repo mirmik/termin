@@ -570,11 +570,6 @@ class RenderingController:
         """Dedicated offscreen GL context for rendering."""
         return self._offscreen_context
 
-    @property
-    def graphics(self) -> "GraphicsBackend":
-        """Graphics backend for rendering."""
-        return self._offscreen_context.graphics
-
     def add_display(self, display: "Display", name: Optional[str] = None) -> None:
         """
         Add a display to management.

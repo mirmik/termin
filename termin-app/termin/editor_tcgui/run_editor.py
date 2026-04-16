@@ -228,11 +228,6 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     video.SDL_GL_SetAttribute(video.SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1)
     window, gl_context = _create_sdl_window("Termin Editor", 1280, 720)
 
-    # Graphics backend is already initialized by OffscreenContext (singleton)
-    from termin.visualization.platform.backends import set_default_graphics_backend
-    graphics = offscreen_context.graphics
-    set_default_graphics_backend(graphics)
-
     # Create world and scene
     from termin.visualization.core.world import World
     from termin.visualization.core.scene import create_scene
