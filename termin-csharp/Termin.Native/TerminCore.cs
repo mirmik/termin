@@ -21,9 +21,10 @@ public static class TerminCore
     /// <summary>
     /// Full initialization: core registries + inspect system + kind handlers.
     /// Call this instead of Init() to enable serialization/deserialization and SetField.
-    /// Exported from entity_lib.dll.
+    /// Exported from termin_inspect.dll (moved from entity_lib during
+    /// the inspect-lib split).
     /// </summary>
-    [DllImport("entity_lib", EntryPoint = "tc_init_full")]
+    [DllImport("termin_inspect", EntryPoint = "tc_init_full")]
     public static extern void InitFull();
 
     [DllImport(DLL, EntryPoint = "tc_shutdown")]
