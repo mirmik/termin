@@ -4,6 +4,10 @@
 #include "termin/render/render_camera.hpp"
 #include <cstring>
 
+#include <tgfx2/opengl/opengl_render_device.hpp>
+#include <tgfx2/i_render_device.hpp>
+#include "tgfx/handles.hpp"
+
 extern "C" {
 #include <tcbase/tc_log.h>
 #include "core/tc_camera_capability.h"
@@ -166,10 +170,22 @@ void PullRenderingManager::render_display(tc_display* display) {
 
     uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
 
-    // Clear display
-    graphics_->bind_framebuffer_id(display_fbo);
-    graphics_->set_viewport(0, 0, width, height);
-    graphics_->clear_color_depth({0.1f, 0.1f, 0.1f, 1.0f});
+    // Bind display FBO + clear through the engine's tgfx2 GL device.
+    RenderEngine* engine = render_engine();
+    if (engine) engine->ensure_tgfx2();
+    auto* gl_dev = engine
+        ? dynamic_cast<tgfx2::OpenGLRenderDevice*>(engine->tgfx2_device())
+        : nullptr;
+    if (!gl_dev) {
+        tc_log(TC_LOG_WARN, "[PullRM] present_display: tgfx2 GL device not available");
+        return;
+    }
+    gl_dev->clear_external_fbo(
+        display_fbo,
+        0.1f, 0.1f, 0.1f, 1.0f,
+        1.0f,
+        0, 0, width, height
+    );
 
     // Collect viewports sorted by depth
     std::vector<tc_viewport_handle> viewports;
@@ -209,12 +225,22 @@ void PullRenderingManager::render_display(tc_display* display) {
         int src_w = state->output_width;
         int src_h = state->output_height;
 
-        graphics_->blit_framebuffer_to_id(
-            *state->output_fbo,
-            display_fbo,
-            {0, 0, src_w, src_h},
-            {px, py, px + pw, py + ph}
+        GPUTextureHandle* color = state->output_fbo->color_texture();
+        if (!color) continue;
+        tgfx2::TextureDesc desc;
+        desc.width = static_cast<uint32_t>(src_w);
+        desc.height = static_cast<uint32_t>(src_h);
+        desc.format = tgfx2::PixelFormat::RGBA8_UNorm;
+        desc.usage = tgfx2::TextureUsage::Sampled;
+        tgfx2::TextureHandle wrapped = gl_dev->register_external_texture(
+            static_cast<GLuint>(color->get_id()), desc
         );
+        gl_dev->blit_to_external_fbo(
+            display_fbo, wrapped,
+            0, 0, src_w, src_h,
+            px, py, pw, ph
+        );
+        gl_dev->destroy(wrapped);
     }
 }
 
