@@ -11,7 +11,6 @@ import sdl2
 from sdl2 import video
 import numpy as np
 
-from tgfx import OpenGLGraphicsBackend
 from tcbase import Key, MouseButton, Mods
 
 from tcgui.widgets.ui import UI
@@ -298,7 +297,7 @@ def build_ui(graphics):
     root.add_child(canvas)
     root.add_child(status_bar)
 
-    ui = UI(graphics)
+    ui = UI()
     ui.root = root
     return ui, canvas
 
@@ -307,8 +306,6 @@ def build_ui(graphics):
 
 def main():
     window, gl_ctx = create_window("tcgui — Canvas Demo", 800, 600)
-    graphics = OpenGLGraphicsBackend.get_instance()
-    graphics.ensure_ready()
 
     ui, canvas = build_ui(graphics)
 
@@ -373,11 +370,8 @@ def main():
             break
 
         vw, vh = get_drawable_size(window)
-        graphics.bind_framebuffer(None)
-        graphics.set_viewport(0, 0, vw, vh)
-        graphics.clear_color_depth(0.12, 0.12, 0.14, 1.0)
 
-        ui.render(vw, vh)
+        ui.render(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
 
         # Fit on first frame (canvas needs layout first)
         if first_frame:

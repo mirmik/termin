@@ -20,7 +20,6 @@ from tcgui.scene import GraphicsScene, RectItem, SceneView
 from tcgui.widgets.ui import UI
 from tcgui.widgets.units import pct
 from tcgui.widgets.vstack import VStack
-from tgfx import OpenGLGraphicsBackend
 
 
 def create_window(title: str, width: int, height: int):
@@ -161,7 +160,7 @@ def build_ui(graphics) -> UI:
 
     root.add_child(view)
 
-    ui = UI(graphics)
+    ui = UI()
     ui.root = root
     return ui
 
@@ -169,8 +168,6 @@ def build_ui(graphics) -> UI:
 def main():
     window, gl_ctx = create_window("tcgui scene items demo", 1200, 800)
     try:
-        graphics = OpenGLGraphicsBackend.get_instance()
-        graphics.ensure_ready()
         ui = build_ui(graphics)
         event = sdl2.SDL_Event()
         running = True
@@ -217,10 +214,7 @@ def main():
             ui.process_deferred()
 
             w, h = get_drawable_size(window)
-            graphics.bind_framebuffer(None)
-            graphics.set_viewport(0, 0, w, h)
-            graphics.clear_color_depth(0.08, 0.08, 0.10, 1.0)
-            ui.render(w, h)
+            ui.render(w, h, background_color=(0.08, 0.08, 0.10, 1.0))
             video.SDL_GL_SwapWindow(window)
     finally:
         video.SDL_GL_DeleteContext(gl_ctx)
