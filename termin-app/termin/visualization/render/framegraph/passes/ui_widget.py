@@ -66,9 +66,12 @@ class UIWidgetPass(RenderFramePass):
     def execute(self, ctx: "ExecuteContext") -> None:
         px, py, pw, ph = ctx.rect
 
-        fb_out = ctx.writes_fbos.get(self.output_res)
-        ctx.graphics.bind_framebuffer(fb_out)
-        ctx.graphics.set_viewport(0, 0, pw, ph)
+        # UIComponent.render delegates to tcgui UIRenderer, which manages
+        # its own offscreen FBO and blits to the window itself. No need
+        # to bind the target FBO here — it was never actually used.
+        target_tex2 = ctx.tex2_writes.get(self.output_res)
+        if not target_tex2:
+            return
 
         ui_components = []
 
@@ -101,8 +104,7 @@ class UIWidgetPass(RenderFramePass):
                 entity_layer = entity.layer
                 if not (ctx.layer_mask & (1 << entity_layer)):
                     continue
-            ui_comp.render(ctx.graphics, pw, ph)
-            ctx.graphics.check_gl_error(f"UIWidgets: {entity.name if entity else 'ui_component'}")
+            ui_comp.render(None, pw, ph)
 
     def _collect_ui_from_hierarchy(self, entity) -> list:
         """Recursively collect UIComponents from entity hierarchy."""

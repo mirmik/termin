@@ -370,27 +370,6 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_shader_get")]
     public static extern IntPtr ShaderGet(TcShaderHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_shader_compile_gpu")]
-    public static extern uint ShaderCompileGpu(IntPtr shader);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_use_gpu")]
-    public static extern void ShaderUseGpu(IntPtr shader);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_int")]
-    public static extern void ShaderSetInt(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, int value);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_float")]
-    public static extern void ShaderSetFloat(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float value);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_vec3")]
-    public static extern void ShaderSetVec3(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float x, float y, float z);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_vec4")]
-    public static extern void ShaderSetVec4(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float x, float y, float z, float w);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_mat4")]
-    public static extern void ShaderSetMat4(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float[] data, [MarshalAs(UnmanagedType.U1)] bool transpose);
-
     // ========================================================================
     // Material Registry
     // ========================================================================

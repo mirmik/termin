@@ -426,18 +426,12 @@ void ColorPass::execute_with_data(
         lighting_ubo_tgfx2 = lighting_ubo_.buffer;
     }
 
-    // Wrap each shadow map FBO's depth attachment once. Shared across
-    // draws within this pass.
+    // Shadow maps are now native tgfx2 depth textures owned by
+    // ShadowPass; no per-frame wrap needed.
     std::vector<tgfx2::TextureHandle> shadow_tex2s;
     shadow_tex2s.reserve(shadow_maps.size());
     for (const auto& smap : shadow_maps) {
-        if (!smap.fbo) {
-            shadow_tex2s.push_back({});
-            continue;
-        }
-        tgfx2::TextureHandle t = wrap_fbo_depth_as_tgfx2(*gl_dev, smap.fbo);
-        if (t) ctx2->defer_destroy(t);
-        shadow_tex2s.push_back(t);
+        shadow_tex2s.push_back(smap.depth_tex2);
     }
 
     entity_names.clear();
@@ -727,15 +721,11 @@ void ColorPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    // Get shadow maps from reads_fbos
     std::vector<ShadowMapArrayEntry> shadow_maps;
     if (!shadow_res.empty()) {
-        auto shadow_it = ctx.reads_fbos.find(shadow_res);
-        if (shadow_it != ctx.reads_fbos.end() && shadow_it->second != nullptr) {
-            ShadowMapArrayResource* shadow_array = dynamic_cast<ShadowMapArrayResource*>(shadow_it->second);
-            if (shadow_array) {
-                shadow_maps = shadow_array->entries;
-            }
+        auto shadow_it = ctx.shadow_arrays.find(shadow_res);
+        if (shadow_it != ctx.shadow_arrays.end() && shadow_it->second != nullptr) {
+            shadow_maps = shadow_it->second->entries;
         }
     }
 
@@ -760,36 +750,6 @@ void ColorPass::execute(ExecuteContext& ctx) {
     );
 
     if (profile) tc_profiler_end_section();
-}
-
-void ColorPass::maybe_blit_to_debugger(
-    GraphicsBackend* graphics,
-    FramebufferHandle* fb,
-    const std::string& entity_name,
-    int width,
-    int height
-) {
-    // New path: FrameGraphCapture (no context switch needed)
-    // debug_internal_symbol already filters which entity to capture,
-    // so we use capture_direct (no caller check needed)
-    auto* cap = debug_capture();
-    if (cap) {
-        cap->capture_direct(fb, graphics);
-        return;
-    }
-
-    // Old path: callback-based (for backward compatibility)
-    if (!debugger_callbacks.is_set()) {
-        return;
-    }
-
-    debugger_callbacks.blit_from_pass(
-        debugger_callbacks.user_data,
-        fb,
-        graphics,
-        width,
-        height
-    );
 }
 
 // Register ColorPass in tc_pass_registry for C#/standalone C++ usage

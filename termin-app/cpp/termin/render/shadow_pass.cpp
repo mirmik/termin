@@ -92,7 +92,13 @@ ShadowPass::ShadowPass(
 
 
 void ShadowPass::destroy() {
-    fbo_pool_.clear();
+    if (depth_pool_device_) {
+        for (auto& [_, slot] : depth_pool_) {
+            if (slot.tex) depth_pool_device_->destroy(slot.tex);
+        }
+    }
+    depth_pool_.clear();
+    depth_pool_device_ = nullptr;
     release_tgfx2_resources();
 }
 
@@ -145,31 +151,75 @@ std::vector<ResourceSpec> ShadowPass::get_resource_specs() const {
 }
 
 
-FramebufferHandle* ShadowPass::get_or_create_fbo(
-    GraphicsBackend* graphics,
+tgfx2::TextureHandle ShadowPass::get_or_create_depth_tex2(
+    tgfx2::IRenderDevice& device,
     int resolution,
     int index
 ) {
-    auto it = fbo_pool_.find(index);
-    if (it != fbo_pool_.end()) {
-        FramebufferHandle* fbo = it->second.get();
-        // Check if resolution matches
-        if (fbo->get_width() != resolution || fbo->get_height() != resolution) {
-            fbo->resize(resolution, resolution);
+    if (depth_pool_device_ && depth_pool_device_ != &device) {
+        // Device changed — throw the whole pool away.
+        for (auto& [_, slot] : depth_pool_) {
+            if (slot.tex) depth_pool_device_->destroy(slot.tex);
         }
-        return fbo;
+        depth_pool_.clear();
+        depth_pool_device_ = nullptr;
+    }
+    depth_pool_device_ = &device;
+
+    auto it = depth_pool_.find(index);
+    if (it != depth_pool_.end() && it->second.resolution == resolution) {
+        return it->second.tex;
     }
 
-    // Create new shadow FBO
-    auto fbo = graphics->create_shadow_framebuffer(resolution, resolution);
-    if (!fbo) {
-        tc::Log::error("ShadowPass: failed to create shadow framebuffer");
-        return nullptr;
+    // Resolution changed or slot missing — recreate.
+    if (it != depth_pool_.end()) {
+        if (it->second.tex) device.destroy(it->second.tex);
+        // Reusing the same gl_id for a new texture of a different
+        // size invalidates any FBO the device cached on the old id.
+        if (auto* gl_dev =
+                dynamic_cast<tgfx2::OpenGLRenderDevice*>(&device)) {
+            gl_dev->invalidate_fbo_cache();
+        }
+        depth_pool_.erase(it);
     }
 
-    FramebufferHandle* ptr = fbo.get();
-    fbo_pool_[index] = std::move(fbo);
-    return ptr;
+    tgfx2::TextureDesc desc;
+    desc.width = static_cast<uint32_t>(resolution);
+    desc.height = static_cast<uint32_t>(resolution);
+    desc.format = tgfx2::PixelFormat::D24_UNorm;
+    desc.sample_count = 1;
+    desc.usage = tgfx2::TextureUsage::Sampled |
+                 tgfx2::TextureUsage::DepthStencilAttachment;
+    tgfx2::TextureHandle tex = device.create_texture(desc);
+    if (!tex) {
+        tc::Log::error("ShadowPass: failed to create depth texture (res=%d)",
+                       resolution);
+        return {};
+    }
+
+    // Configure the GL texture object for hardware shadow sampling:
+    // CLAMP_TO_BORDER with white border (outside-frustum = not in shadow),
+    // and REF_TO_TEXTURE compare mode so sampler2DShadow / textureShadow
+    // in the fragment shader does PCF. These parameters are intrinsic to
+    // the texture rather than the sampler, so setting them here is the
+    // right place. Legacy OpenGLShadowFramebufferHandle::create() does
+    // the equivalent setup.
+    if (auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&device)) {
+        auto* gl_tex = gl_dev->get_texture(tex);
+        if (gl_tex) {
+            glBindTexture(gl_tex->target, gl_tex->gl_id);
+            glTexParameteri(gl_tex->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+            glTexParameteri(gl_tex->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+            float border[] = {1.0f, 1.0f, 1.0f, 1.0f};
+            glTexParameterfv(gl_tex->target, GL_TEXTURE_BORDER_COLOR, border);
+            glTexParameteri(gl_tex->target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+            glTexParameteri(gl_tex->target, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+            glBindTexture(gl_tex->target, 0);
+        }
+    }
+
+    depth_pool_[index] = ShadowDepthSlot{tex, resolution};
+    return tex;
 }
 
 
@@ -278,8 +328,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 ) {
     std::vector<ShadowMapResult> results;
 
-    if (!ctx.ctx2 || !ctx.graphics) {
-        tc::Log::error("ShadowPass/tgfx2: ctx2 or graphics is null");
+    if (!ctx.ctx2) {
+        tc::Log::error("ShadowPass/tgfx2: ctx2 is null");
         return results;
     }
     if (!shadow_shader) {
@@ -346,10 +396,11 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             float cascade_near = splits[c];
             float cascade_far = splits[c + 1];
 
-            FramebufferHandle* fbo = get_or_create_fbo(ctx.graphics, resolution, fbo_index);
+            tgfx2::TextureHandle depth_tex2 =
+                get_or_create_depth_tex2(ctx.ctx2->device(), resolution, fbo_index);
             fbo_index++;
-            if (!fbo) {
-                tc::Log::error("ShadowPass/tgfx2: FBO is null for cascade %d", c);
+            if (!depth_tex2) {
+                tc::Log::error("ShadowPass/tgfx2: depth tex is null for cascade %d", c);
                 continue;
             }
 
@@ -360,15 +411,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             Mat44f view_matrix = build_shadow_view_matrix(params);
             Mat44f proj_matrix = build_shadow_projection_matrix(params);
             Mat44f light_space_matrix = compute_light_space_matrix(params);
-
-            // Wrap the shadow FBO's depth texture as a tgfx2 handle so
-            // we can open a depth-only pass on it. Destroyed at the end
-            // of this cascade.
-            tgfx2::TextureHandle depth_tex2 = wrap_fbo_depth_as_tgfx2(*gl_dev, fbo);
-            if (!depth_tex2) {
-                tc::Log::error("ShadowPass/tgfx2: failed to wrap depth texture");
-                continue;
-            }
 
             ctx.ctx2->begin_pass(
                 tgfx2::TextureHandle{},  // depth-only
@@ -401,8 +443,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
             if (cached_draw_calls_.empty()) {
                 ctx.ctx2->end_pass();
-                gl_dev->destroy(depth_tex2);
-                results.emplace_back(fbo, light_space_matrix, light_index,
+                results.emplace_back(depth_tex2, resolution, resolution,
+                                     light_space_matrix, light_index,
                                      c, cascade_near, cascade_far);
                 continue;
             }
@@ -483,9 +525,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             (void)last_shader;
 
             ctx.ctx2->end_pass();
-            gl_dev->destroy(depth_tex2);
 
-            results.emplace_back(fbo, light_space_matrix, light_index,
+            results.emplace_back(depth_tex2, resolution, resolution,
+                                 light_space_matrix, light_index,
                                  c, cascade_near, cascade_far);
         }
     }
@@ -497,20 +539,12 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("ShadowPass");
 
-    // Get shadow array from writes_fbos
-    auto it = ctx.writes_fbos.find(output_res);
-    if (it == ctx.writes_fbos.end() || it->second == nullptr) {
+    auto it = ctx.shadow_arrays.find(output_res);
+    if (it == ctx.shadow_arrays.end() || it->second == nullptr) {
         if (profile) tc_profiler_end_section();
         return;
     }
-
-    // Dynamic cast to ShadowMapArrayResource
-    ShadowMapArrayResource* shadow_array = dynamic_cast<ShadowMapArrayResource*>(it->second);
-    if (!shadow_array) {
-        tc::Log::error("ShadowPass: writes_fbos[%s] is not a ShadowMapArrayResource", output_res.c_str());
-        if (profile) tc_profiler_end_section();
-        return;
-    }
+    ShadowMapArrayResource* shadow_array = it->second;
 
     // Clear previous frame's entries
     shadow_array->clear();
@@ -586,7 +620,9 @@ void main() {
     // Add results to shadow array
     for (const auto& result : results) {
         shadow_array->add_entry(
-            result.fbo,
+            result.depth_tex2,
+            result.width,
+            result.height,
             result.light_space_matrix,
             result.light_index,
             result.cascade_index,

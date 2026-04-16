@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-modules",
-    version="0.1.0",
+    version=BuildExt.compute_local_version("0.1.0"),
     license="MIT",
     description="Runtime module loader for termin projects",
     author="mirmik",

@@ -282,25 +282,6 @@ void NormalPass::execute_with_data_tgfx2(
 
         gl_dev->destroy(bind.vertex_buffer);
         gl_dev->destroy(bind.index_buffer);
-
-        if (!debug_symbol.empty() && name && debug_symbol == name) {
-            // Debugger capture path still needs a legacy FramebufferHandle*
-            // for graphics->blit_framebuffer. Resolve lazily only when hit.
-            auto fb_it = ctx.writes_fbos.find(output_res);
-            FramebufferHandle* fb = (fb_it != ctx.writes_fbos.end())
-                ? dynamic_cast<FramebufferHandle*>(fb_it->second) : nullptr;
-            ctx.ctx2->end_pass();
-            if (fb && ctx.graphics) {
-                maybe_blit_to_debugger(ctx.graphics, fb, name, rect.width, rect.height);
-            }
-            ctx.ctx2->begin_pass(color_tex2, depth_tex2, nullptr, 1.0f, false);
-            ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
-            ctx.ctx2->set_depth_test(true);
-            ctx.ctx2->set_depth_write(true);
-            ctx.ctx2->set_blend(false);
-            ctx.ctx2->set_cull(tgfx2::CullMode::Back);
-            ctx.ctx2->bind_shader(normal_vs2_, normal_fs2_);
-        }
     }
 
     ctx.ctx2->end_pass();

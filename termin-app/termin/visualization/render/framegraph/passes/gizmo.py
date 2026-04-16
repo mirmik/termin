@@ -93,18 +93,13 @@ class GizmoPass(RenderFramePass):
 
         from tgfx._tgfx_native import (
             tc_shader_ensure_tgfx2,
-            wrap_fbo_color_as_tgfx2,
             draw_tc_mesh,
             CULL_NONE,
             PIXEL_RGBA8,
         )
 
         ctx2 = ctx.ctx2
-        fb = ctx.writes_fbos.get(self.output_res)
-        if fb is None:
-            return
-
-        target_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb)
+        target_tex2 = ctx.tex2_writes.get(self.output_res)
         if not target_tex2:
             return
 

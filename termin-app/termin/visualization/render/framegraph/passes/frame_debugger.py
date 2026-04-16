@@ -94,17 +94,20 @@ class FrameDebuggerPass(RenderFramePass):
         if not src_name:
             return
 
-        src_fb = ctx.reads_fbos.get(src_name)
-        if src_fb is None:
-            log.debug(f"[FrameDebuggerPass] execute: resource '{src_name}' not in reads_fbos. Keys: {list(ctx.reads_fbos.keys())}")
+        if ctx.ctx2 is None:
+            log.debug("[FrameDebuggerPass] execute: ctx.ctx2 is None — debugger is tgfx2-only")
             return
 
-        fbo = self._get_fbo_from_resource(src_fb)
-        if fbo is None:
-            log.debug(f"[FrameDebuggerPass] execute: could not extract FBO from resource '{src_name}' (type: {type(src_fb).__name__})")
+        src_tex = ctx.tex2_reads.get(src_name)
+        if not src_tex:
+            log.debug(f"[FrameDebuggerPass] execute: resource '{src_name}' not in tex2_reads")
             return
 
-        log.debug(f"[FrameDebuggerPass] execute: capturing '{src_name}', fbo size={fbo.get_size()}")
-        # Capture phase: blit into offscreen FBO (same GL context, no switch)
-        self._capture.capture_direct(fbo, ctx.graphics)
-        log.debug(f"[FrameDebuggerPass] execute: has_capture={self._capture.has_capture()}")
+        px, py, pw, ph = ctx.rect
+        # Default to rgba8; the capture FBO just needs to hold the
+        # blitted pixels and be compatible with the SDL debug blit.
+        fmt = "rgba8"
+        self._capture.capture_direct_via_ctx2(
+            ctx.ctx2, src_tex, pw, ph, fmt
+        )
+        log.debug(f"[FrameDebuggerPass] execute: captured '{src_name}' {pw}x{ph}, has={self._capture.has_capture()}")

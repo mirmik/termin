@@ -234,16 +234,6 @@ private:
     // Sort draw calls by sort_keys_
     void sort_draw_calls();
 
-    /**
-     * Call debugger blit if debug point matches entity name.
-     */
-    void maybe_blit_to_debugger(
-        GraphicsBackend* graphics,
-        FramebufferHandle* fb,
-        const std::string& entity_name,
-        int width,
-        int height
-    );
 };
 
 } // namespace termin
