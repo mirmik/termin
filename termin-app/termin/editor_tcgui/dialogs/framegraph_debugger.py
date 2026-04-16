@@ -930,8 +930,7 @@ def show_framegraph_debugger(ui, graphics, rendering_controller, fbo_surface) ->
             handle._hdr_stats_label.text = "No capture available"
             return
         try:
-            stats = handle._core.presenter.compute_hdr_stats(
-                handle._graphics, capture_fbo)
+            stats = handle._core.presenter.compute_hdr_stats(capture_fbo)
             lines = []
             lines.append(f"R: {stats.min_r:.3f} - {stats.max_r:.3f} (avg: {stats.avg_r:.3f})")
             lines.append(f"G: {stats.min_g:.3f} - {stats.max_g:.3f} (avg: {stats.avg_g:.3f})")

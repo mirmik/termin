@@ -10,6 +10,7 @@
 #include "render/tc_display.h"
 #include "render/tc_render_surface.h"
 #include "tc_picking.h"
+#include "tgfx2/opengl/opengl_render_device.hpp"
 #include <tcbase/tc_log.h>
 
 #include <cmath>
@@ -249,23 +250,26 @@ void EditorInteractionSystem::_handle_double_click(
 Entity EditorInteractionSystem::pick_entity_at(
     float x, float y, tc_viewport_handle viewport, tc_display* display)
 {
-    if (!_graphics) return Entity();
     if (!tc_viewport_handle_valid(viewport)) return Entity();
 
-    FramebufferHandle* fbo = _get_viewport_fbo(viewport, "id");
-    if (!fbo) return Entity();
+    tc_pipeline_handle pipeline_h = tc_viewport_get_pipeline(viewport);
+    if (!tc_pipeline_pool_alive(pipeline_h)) return Entity();
+    RenderPipeline pipeline(pipeline_h);
+
+    tgfx2::TextureHandle id_tex = pipeline.get_color_tex2("id");
+    if (!id_tex) return Entity();
+
+    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(pipeline.tex2_device());
+    if (!gl_dev) return Entity();
 
     int fx, fy;
     if (!_window_to_fbo_coords(x, y, viewport, display, fx, fy)) {
         return Entity();
     }
 
-    auto color = _graphics->read_pixel(fbo, fx, fy);
-
-    // Restore window framebuffer
-    if (display && display->surface) {
-        uint32_t window_fbo_id = tc_render_surface_get_framebuffer(display->surface);
-        _graphics->bind_framebuffer_id(window_fbo_id);
+    float color[4] = {0, 0, 0, 0};
+    if (!gl_dev->read_pixel_rgba8(id_tex, fx, fy, color)) {
+        return Entity();
     }
 
     int r = (int)std::round(color[0] * 255.0f);

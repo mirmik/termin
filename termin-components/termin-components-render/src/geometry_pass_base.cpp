@@ -81,33 +81,6 @@ TcShader& GeometryPassBase::get_shader() {
     return _shader;
 }
 
-void GeometryPassBase::maybe_blit_to_debugger(
-    GraphicsBackend* graphics,
-    FramebufferHandle* fb,
-    const std::string& entity_name,
-    int width,
-    int height
-) {
-    (void)entity_name;
-    auto* cap = debug_capture();
-    if (cap) {
-        cap->capture_direct(fb, graphics);
-        return;
-    }
-
-    if (!debugger_callbacks.is_set()) {
-        return;
-    }
-
-    debugger_callbacks.blit_from_pass(
-        debugger_callbacks.user_data,
-        fb,
-        graphics,
-        width,
-        height
-    );
-}
-
 void GeometryPassBase::collect_draw_calls(
     tc_scene_handle scene,
     uint64_t layer_mask,

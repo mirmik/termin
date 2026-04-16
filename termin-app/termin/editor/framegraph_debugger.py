@@ -631,14 +631,18 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             src_h = capture_fbo.get_height()
 
             # Qt-editor framegraph debugger is deprecated (Phase 17 cleanup).
-            # Fall back to a plain glBlitFramebuffer into the debug SDL
-            # window's default framebuffer — channel_mode / highlight_hdr
-            # are not supported on this path.
+            # Wrap the SDL window's default framebuffer (GL id = 0) as an
+            # external FramebufferHandle so the regular blit API accepts
+            # it. Channel_mode / highlight_hdr are not supported on this
+            # fallback path.
+            default_fb = self._graphics.create_external_framebuffer(
+                0, (dst_w, dst_h)
+            )
             self._graphics.blit_framebuffer(
-                capture_fbo, None,
-                0, 0, src_w, src_h,
-                0, 0, dst_w, dst_h,
-                True, False
+                capture_fbo, default_fb,
+                (0, 0, src_w, src_h),
+                (0, 0, dst_w, dst_h),
+                blit_color=True, blit_depth=False
             )
 
             self._sdl_window.swap_buffers()
@@ -755,7 +759,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._hdr_stats_label.setText("No capture available")
             return
 
-        stats = self._core.presenter.compute_hdr_stats(self._graphics, capture_fbo)
+        stats = self._core.presenter.compute_hdr_stats(capture_fbo)
 
         lines = []
         lines.append(f"<b>R:</b> {stats.min_r:.3f} - {stats.max_r:.3f} (avg: {stats.avg_r:.3f})")

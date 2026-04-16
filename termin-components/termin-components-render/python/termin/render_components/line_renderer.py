@@ -314,9 +314,6 @@ class LineRenderer(PythonComponent):
         if mesh is None or not mesh.is_valid:
             return
 
-        if not self._raw_lines and context.current_shader is not None:
-            context.current_shader.set_uniform_float("u_line_width", self._width)
-
         mesh.draw_gpu()
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:

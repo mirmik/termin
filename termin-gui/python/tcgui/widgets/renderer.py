@@ -169,7 +169,6 @@ class UIRenderer:
             self._ui_tc_shader = TcShader.from_sources(
                 UI_VERTEX_SHADER, UI_FRAGMENT_SHADER, "", "UIRenderer"
             )
-            self._ui_tc_shader.ensure_ready()
             pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
             if not pair.vs or not pair.fs:
                 raise RuntimeError(

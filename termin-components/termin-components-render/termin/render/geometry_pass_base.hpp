@@ -82,13 +82,6 @@ protected:
     virtual int get_pick_id(const Entity& ent) const;
 
     TcShader& get_shader();
-    void maybe_blit_to_debugger(
-        GraphicsBackend* graphics,
-        FramebufferHandle* fb,
-        const std::string& entity_name,
-        int width,
-        int height
-    );
     void collect_draw_calls(
         tc_scene_handle scene,
         uint64_t layer_mask,

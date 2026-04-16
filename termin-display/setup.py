@@ -14,7 +14,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-display",
-    version="0.1.0",
+    version=BuildExt.compute_local_version("0.1.0"),
     license="MIT",
     description="Display, viewport, and SDL platform Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",

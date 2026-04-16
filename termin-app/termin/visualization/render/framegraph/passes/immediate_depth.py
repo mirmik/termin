@@ -67,31 +67,32 @@ class ImmediateDepthPass(RenderFramePass):
         if renderer.line_count_depth == 0 and renderer.triangle_count_depth == 0:
             return
 
+        if ctx.ctx2 is None:
+            from tcbase import log
+            log.error("[ImmediateDepthPass] ctx.ctx2 is None — pass is tgfx2-only")
+            return
+
+        target_tex2 = ctx.tex2_writes.get(self.output_res)
+        if not target_tex2:
+            from tcbase import log
+            log.warn(f"[ImmediateDepthPass] tex2 write '{self.output_res}' missing")
+            return
+
         px, py, pw, ph = ctx.rect
+        ctx2 = ctx.ctx2
 
-        fb = ctx.writes_fbos.get(self.output_res)
-        if fb is None:
-            from tcbase import log
-            log.warn(f"[ImmediateDepthPass] output '{self.output_res}' is None")
-            return
-
-        # Check type - must be FramebufferHandle
-        from termin.graphics import FramebufferHandle
-        if not isinstance(fb, FramebufferHandle):
-            from tcbase import log
-            log.warn(f"[ImmediateDepthPass] output '{self.output_res}' is {type(fb).__name__}, not FramebufferHandle")
-            return
-
-        ctx.graphics.bind_framebuffer(fb)
-        ctx.graphics.set_viewport(0, 0, pw, ph)
+        ctx2.begin_pass(target_tex2)
+        ctx2.set_viewport(0, 0, pw, ph)
 
         view = ctx.camera.get_view_matrix()
         proj = ctx.camera.get_projection_matrix()
 
-        # Flush depth-tested geometry with depth test enabled
-        renderer.flush_depth(
-            graphics=ctx.graphics,
-            view_matrix=view,
-            proj_matrix=proj,
-            blend=True,
-        )
+        try:
+            renderer.flush_depth(
+                ctx2=ctx2,
+                view_matrix=view,
+                proj_matrix=proj,
+                blend=True,
+            )
+        finally:
+            ctx2.end_pass()
