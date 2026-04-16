@@ -104,7 +104,8 @@ void bind_render_engine(nb::module_& m) {
         .def_rw("camera", &ViewportContext::camera)
         .def_rw("rect", &ViewportContext::rect)
         .def_rw("layer_mask", &ViewportContext::layer_mask)
-        .def_rw("output_fbo", &ViewportContext::output_fbo);
+        .def_rw("output_color_tex", &ViewportContext::output_color_tex)
+        .def_rw("output_depth_tex", &ViewportContext::output_depth_tex);
 }
 
 } // namespace termin

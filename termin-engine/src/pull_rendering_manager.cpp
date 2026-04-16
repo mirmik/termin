@@ -214,8 +214,8 @@ void PullRenderingManager::render_display(tc_display* display) {
 
         // Blit to display
         ViewportRenderState* state = get_viewport_state(viewport);
-        if (!state || !state->has_output_fbo()) {
-            tc_log(TC_LOG_WARN, "[PullRM] viewport has no output_fbo after render");
+        if (!state || !state->has_output()) {
+            tc_log(TC_LOG_WARN, "[PullRM] viewport has no output texture after render");
             continue;
         }
 
@@ -225,22 +225,11 @@ void PullRenderingManager::render_display(tc_display* display) {
         int src_w = state->output_width;
         int src_h = state->output_height;
 
-        GPUTextureHandle* color = state->output_fbo->color_texture();
-        if (!color) continue;
-        tgfx2::TextureDesc desc;
-        desc.width = static_cast<uint32_t>(src_w);
-        desc.height = static_cast<uint32_t>(src_h);
-        desc.format = tgfx2::PixelFormat::RGBA8_UNorm;
-        desc.usage = tgfx2::TextureUsage::Sampled;
-        tgfx2::TextureHandle wrapped = gl_dev->register_external_texture(
-            static_cast<GLuint>(color->get_id()), desc
-        );
         gl_dev->blit_to_external_fbo(
-            display_fbo, wrapped,
+            display_fbo, state->output_color_tex,
             0, 0, src_w, src_h,
             px, py, pw, ph
         );
-        gl_dev->destroy(wrapped);
     }
 }
 
@@ -278,23 +267,32 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     }
 
     ViewportRenderState* state = get_or_create_viewport_state(viewport);
-    FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
+    RenderEngine* engine = render_engine();
+    if (engine) engine->ensure_tgfx2();
+    tgfx2::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    if (!device) {
+        tc_log(TC_LOG_WARN, "[PullRM] render_viewport_offscreen: tgfx2 device unavailable");
+        return;
+    }
+    state->ensure_output_textures(*device, pw, ph);
 
     std::vector<Light> lights = collect_lights(scene);
     const char* vp_name = tc_viewport_get_name(viewport);
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
+    std::string name = vp_name ? vp_name : "";
 
-    RenderEngine* engine = render_engine();
-    engine->render_view_to_fbo(
-        render_pipeline,
-        output_fbo,
-        pw, ph,
-        scene,
-        render_camera,
-        vp_name ? vp_name : "",
-        internal_entities,
-        lights,
-        tc_viewport_get_layer_mask(viewport)
+    std::unordered_map<std::string, ViewportContext> contexts;
+    ViewportContext ctx;
+    ctx.name = name;
+    ctx.camera = render_camera;
+    ctx.rect = {0, 0, pw, ph};
+    ctx.internal_entities = internal_entities;
+    ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
+    ctx.output_color_tex = state->output_color_tex;
+    ctx.output_depth_tex = state->output_depth_tex;
+    contexts[name] = std::move(ctx);
+    engine->render_scene_pipeline_offscreen(
+        render_pipeline, scene, contexts, lights, name
     );
 }
 

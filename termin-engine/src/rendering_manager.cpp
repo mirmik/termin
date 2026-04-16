@@ -834,7 +834,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
             continue;
         }
 
-        // Ensure output FBO (stored on render target state)
+        // Ensure output textures (native) stored on the render-target state
         tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
         ViewportRenderState* state = nullptr;
         if (tc_render_target_handle_valid(rt)) {
@@ -842,7 +842,16 @@ void RenderingManager::render_scene_pipeline_offscreen(
         } else {
             state = get_or_create_viewport_state(viewport);
         }
-        FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
+
+        RenderEngine* vp_engine = render_engine();
+        if (vp_engine) vp_engine->ensure_tgfx2();
+        tgfx2::IRenderDevice* vp_device = vp_engine ? vp_engine->tgfx2_device() : nullptr;
+        if (!vp_device) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] tgfx2 device unavailable for viewport '%s'",
+                   vp_name.c_str());
+            continue;
+        }
+        state->ensure_output_textures(*vp_device, pw, ph);
 
         // Create viewport context
         ViewportContext ctx;
@@ -851,7 +860,8 @@ void RenderingManager::render_scene_pipeline_offscreen(
         ctx.rect = {0, 0, pw, ph};  // Full FBO, offset at blit time
         ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
         ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
-        ctx.output_fbo = output_fbo;
+        ctx.output_color_tex = state->output_color_tex;
+        ctx.output_depth_tex = state->output_depth_tex;
         contexts[vp_name] = std::move(ctx);
     }
 
@@ -922,26 +932,35 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         return;
     }
 
-    // Ensure output FBO (stored on render target state)
+    // Ensure output textures (native tgfx2)
     ViewportRenderState* state = get_or_create_render_target_state(rt);
-    FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
+    RenderEngine* engine = render_engine();
+    if (engine) engine->ensure_tgfx2();
+    tgfx2::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    if (!device) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): tgfx2 device unavailable",
+               vp_name ? vp_name : "(null)");
+        return;
+    }
+    state->ensure_output_textures(*device, pw, ph);
 
     // Collect lights
     std::vector<Light> lights = collect_lights(scene);
 
-    // Render to output FBO
-    RenderEngine* engine = render_engine();
+    // Build a single-viewport context and run scene pipeline
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
-    engine->render_view_to_fbo(
-        render_pipeline,
-        output_fbo,
-        pw, ph,
-        scene,
-        render_camera,
-        vp_name ? vp_name : "",
-        internal_entities,
-        lights,
-        tc_viewport_get_layer_mask(viewport)
+    std::unordered_map<std::string, ViewportContext> contexts;
+    ViewportContext ctx;
+    ctx.name = vp_name ? vp_name : "";
+    ctx.camera = render_camera;
+    ctx.rect = {0, 0, pw, ph};
+    ctx.internal_entities = internal_entities;
+    ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
+    ctx.output_color_tex = state->output_color_tex;
+    ctx.output_depth_tex = state->output_depth_tex;
+    contexts[ctx.name] = std::move(ctx);
+    engine->render_scene_pipeline_offscreen(
+        render_pipeline, scene, contexts, lights, vp_name ? vp_name : ""
     );
 }
 
@@ -1008,21 +1027,31 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     RenderPipeline render_pipeline(pipeline);
 
     ViewportRenderState* state = get_or_create_render_target_state(rt);
-    FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, w, h);
+    RenderEngine* engine = render_engine();
+    if (engine) engine->ensure_tgfx2();
+    tgfx2::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    if (!device) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable",
+               rt_name ? rt_name : "?");
+        return;
+    }
+    state->ensure_output_textures(*device, w, h);
 
     std::vector<Light> lights = collect_lights(scene);
 
-    RenderEngine* engine = render_engine();
-    engine->render_view_to_fbo(
-        render_pipeline,
-        output_fbo,
-        w, h,
-        scene,
-        render_camera,
-        rt_name ? rt_name : "",
-        TC_ENTITY_HANDLE_INVALID,
-        lights,
-        tc_render_target_get_layer_mask(rt)
+    std::string name = rt_name ? rt_name : "";
+    std::unordered_map<std::string, ViewportContext> contexts;
+    ViewportContext ctx;
+    ctx.name = name;
+    ctx.camera = render_camera;
+    ctx.rect = {0, 0, w, h};
+    ctx.internal_entities = TC_ENTITY_HANDLE_INVALID;
+    ctx.layer_mask = tc_render_target_get_layer_mask(rt);
+    ctx.output_color_tex = state->output_color_tex;
+    ctx.output_depth_tex = state->output_depth_tex;
+    contexts[name] = std::move(ctx);
+    engine->render_scene_pipeline_offscreen(
+        render_pipeline, scene, contexts, lights, name
     );
 }
 
@@ -1112,7 +1141,7 @@ void RenderingManager::present_display(tc_display* display) {
         if (!state) {
             state = get_viewport_state(viewport);
         }
-        if (!state || !state->has_output_fbo()) {
+        if (!state || !state->has_output()) {
             continue;
         }
 
@@ -1120,30 +1149,15 @@ void RenderingManager::present_display(tc_display* display) {
         int px, py, pw, ph;
         tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
 
-        // Get output FBO size
         int src_w = state->output_width;
         int src_h = state->output_height;
 
-        // Blit output_fbo's color attachment → display_fbo via tgfx2.
-        // The legacy FramebufferHandle keeps owning its GL texture;
-        // here we wrap it as a non-owning tgfx2 handle for the blit
-        // and destroy the wrapper immediately afterwards.
-        GPUTextureHandle* color = state->output_fbo->color_texture();
-        if (!color) continue;
-        tgfx2::TextureDesc desc;
-        desc.width = static_cast<uint32_t>(src_w);
-        desc.height = static_cast<uint32_t>(src_h);
-        desc.format = tgfx2::PixelFormat::RGBA8_UNorm;
-        desc.usage = tgfx2::TextureUsage::Sampled;
-        tgfx2::TextureHandle wrapped = gl_dev->register_external_texture(
-            static_cast<GLuint>(color->get_id()), desc
-        );
+        // Blit the viewport's native color texture to display_fbo.
         gl_dev->blit_to_external_fbo(
-            display_fbo, wrapped,
+            display_fbo, state->output_color_tex,
             0, 0, src_w, src_h,
             px, py, pw, ph
         );
-        gl_dev->destroy(wrapped);
     }
 
     // Swap buffers
