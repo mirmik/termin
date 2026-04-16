@@ -286,7 +286,6 @@ class EditorWindow(QMainWindow):
         from termin._native.editor import EditorInteractionSystem, EditorViewportInputManager as CppEditorViewportInputManager
         self._interaction_system = EditorInteractionSystem()
         EditorInteractionSystem.set_instance(self._interaction_system)
-        self._interaction_system.set_graphics(self._graphics)
         self.gizmo_manager = self._interaction_system.gizmo_manager
 
         # Per-display routers and per-viewport editor input managers
@@ -356,7 +355,6 @@ class EditorWindow(QMainWindow):
         self._debug_source_res: str = "color_pp"
         self._debug_paused: bool = False
 
-        RenderingManager.instance().set_graphics(self._graphics)
         self.scene_manager.set_on_after_render(self._after_render)
 
         # Set editor pipeline maker for RenderingController (and ViewportInspector)

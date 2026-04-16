@@ -63,7 +63,6 @@ class RenderingControllerTcgui:
         self._center_tabs = None
 
         # Register offscreen context with RenderingManager
-        self._manager.set_graphics(offscreen_context.graphics)
         self._manager.set_make_current_callback(offscreen_context.make_current)
 
         # Register factories

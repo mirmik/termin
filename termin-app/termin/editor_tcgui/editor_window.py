@@ -168,7 +168,6 @@ class EditorWindowTcgui:
         from termin._native.editor import EditorInteractionSystem
         self._interaction_system = EditorInteractionSystem()
         EditorInteractionSystem.set_instance(self._interaction_system)
-        self._interaction_system.set_graphics(self._graphics)
         self.gizmo_manager = self._interaction_system.gizmo_manager
 
     # ------------------------------------------------------------------

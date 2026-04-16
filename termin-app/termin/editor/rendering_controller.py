@@ -133,7 +133,6 @@ class RenderingController:
         self._offscreen_context: OffscreenContext = OffscreenContext()
 
         # Pass graphics backend and make_current callback to RenderingManager
-        self._manager.set_graphics(self._offscreen_context.graphics)
         self._manager.set_make_current_callback(self._offscreen_context.make_current)
 
         self._connect_signals()

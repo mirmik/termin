@@ -111,10 +111,6 @@ RenderingManager::~RenderingManager() {
 // Configuration
 // ============================================================================
 
-void RenderingManager::set_graphics(GraphicsBackend* graphics) {
-    graphics_ = graphics;
-}
-
 void RenderingManager::set_render_engine(RenderEngine* engine) {
     render_engine_ = engine;
     owned_render_engine_.reset(); // Release owned engine if any
@@ -122,11 +118,7 @@ void RenderingManager::set_render_engine(RenderEngine* engine) {
 
 RenderEngine* RenderingManager::render_engine() {
     if (!render_engine_) {
-        if (!graphics_) {
-            tc_log(TC_LOG_ERROR, "[RenderingManager] Cannot create RenderEngine: graphics not set");
-            return nullptr;
-        }
-        owned_render_engine_ = std::make_unique<RenderEngine>(graphics_);
+        owned_render_engine_ = std::make_unique<RenderEngine>();
         render_engine_ = owned_render_engine_.get();
     }
     return render_engine_;
@@ -690,10 +682,6 @@ void RenderingManager::render_all(bool present) {
 }
 
 void RenderingManager::render_all_offscreen() {
-    if (!graphics_) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_all_offscreen: graphics not set");
-        return;
-    }
 
     // Activate GL context via callback
     if (make_current_callback_) {
@@ -779,7 +767,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
     const std::string& pipeline_name,
     tc_pipeline_handle pipeline
 ) {
-    if (!tc_scene_handle_valid(scene) || !tc_pipeline_handle_valid(pipeline) || !graphics_) {
+    if (!tc_scene_handle_valid(scene) || !tc_pipeline_handle_valid(pipeline)) {
         return;
     }
 
@@ -887,8 +875,8 @@ void RenderingManager::render_scene_pipeline_offscreen(
 void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     const char* vp_name = tc_viewport_get_name(viewport);
 
-    if (!tc_viewport_handle_valid(viewport) || !graphics_) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): invalid viewport or no graphics",
+    if (!tc_viewport_handle_valid(viewport)) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): invalid viewport",
                vp_name ? vp_name : "(null)");
         return;
     }
@@ -987,7 +975,7 @@ void RenderingManager::sync_viewport_resolutions() {
 }
 
 void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt) {
-    if (!tc_render_target_handle_valid(rt) || !graphics_) return;
+    if (!tc_render_target_handle_valid(rt)) return;
     if (!tc_render_target_get_enabled(rt)) return;
 
     const char* rt_name = tc_render_target_get_name(rt);
@@ -1064,7 +1052,7 @@ void RenderingManager::present_all() {
 }
 
 void RenderingManager::present_display(tc_display* display) {
-    if (!display || !graphics_) return;
+    if (!display) return;
 
     tc_render_surface* surface = tc_display_get_surface(display);
     if (!surface) {
@@ -1353,8 +1341,6 @@ void RenderingManager::shutdown() {
     // Release owned render engine
     owned_render_engine_.reset();
     render_engine_ = nullptr;
-
-    graphics_ = nullptr;
 }
 
 // ============================================================================

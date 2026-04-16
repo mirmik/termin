@@ -79,10 +79,6 @@ class PlayerRuntime:
         manager = RenderingManager.instance()
         manager.set_default_pipeline(pipeline)
 
-        # Create graphics backend
-        from termin.graphics import OpenGLGraphicsBackend
-        self.graphics = OpenGLGraphicsBackend.get_instance()
-        manager.set_graphics(self.graphics)
 
         # Create window
         from termin.visualization.platform.backends.glfw import GLFWWindowHandle

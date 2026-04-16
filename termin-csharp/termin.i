@@ -653,10 +653,7 @@ public:
 
 class RenderEngine {
 public:
-    GraphicsBackend* graphics;
-
     RenderEngine();
-    explicit RenderEngine(GraphicsBackend* graphics);
 
     // Render to screen (default FBO)
     void render_to_screen(
@@ -691,9 +688,6 @@ public:
     static void reset_for_testing();
 
     // Configuration
-    void set_graphics(GraphicsBackend* graphics);
-    GraphicsBackend* graphics() const;
-
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();
 
@@ -722,7 +716,6 @@ public:
     static void reset_for_testing();
 
     // Configuration
-    void set_graphics(GraphicsBackend* graphics);
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();
 

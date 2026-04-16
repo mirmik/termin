@@ -26,7 +26,6 @@ public:
 
 private:
     TransformGizmo _transform_gizmo;
-    GraphicsBackend* _graphics = nullptr;
 
     // Click/drag detection
     float _press_x = 0.0f;
@@ -64,10 +63,6 @@ public:
     // Singleton via C API
     static EditorInteractionSystem* instance();
     static void set_instance(EditorInteractionSystem* inst);
-
-    // Configuration
-    void set_graphics(GraphicsBackend* graphics) { _graphics = graphics; }
-    GraphicsBackend* graphics() const { return _graphics; }
 
     // Transform gizmo access
     TransformGizmo* transform_gizmo() { return &_transform_gizmo; }

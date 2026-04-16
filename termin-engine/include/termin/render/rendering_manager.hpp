@@ -71,10 +71,6 @@ public:
     // Configuration
     // ========================================================================
 
-    // Set graphics backend (required before rendering)
-    void set_graphics(GraphicsBackend* graphics);
-    GraphicsBackend* graphics() const { return graphics_; }
-
     // Set render engine (optional, created lazily if not set)
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();
@@ -285,9 +281,6 @@ private:
 
     // Viewport render states (key = viewport handle as uint64)
     std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
-
-    // Graphics backend (not owned)
-    GraphicsBackend* graphics_ = nullptr;
 
     // Render engine (owned if created internally)
     RenderEngine* render_engine_ = nullptr;

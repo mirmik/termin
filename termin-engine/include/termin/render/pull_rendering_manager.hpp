@@ -24,7 +24,6 @@ namespace termin {
 // Viewports are rendered to offscreen FBOs and immediately blitted to display.
 class PullRenderingManager {
 public:
-    GraphicsBackend* graphics_ = nullptr;
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
     std::vector<tc_display*> displays_;
@@ -39,7 +38,6 @@ public:
     ~PullRenderingManager();
 
     // Configuration
-    void set_graphics(GraphicsBackend* graphics);
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();
 
