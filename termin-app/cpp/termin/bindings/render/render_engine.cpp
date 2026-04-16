@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include "termin/render/render_engine.hpp"
+#include <tgfx2/i_render_device.hpp>
 #include "termin/render/render_pipeline.hpp"
 #include "tgfx/graphics_backend.hpp"
 #include "tgfx2/render_context.hpp"
@@ -24,6 +25,8 @@ void bind_render_engine(nb::module_& m) {
         .def_rw("graphics", &RenderEngine::graphics)
         .def("ensure_tgfx2", &RenderEngine::ensure_tgfx2)
         .def_prop_ro("tgfx2_ctx", &RenderEngine::tgfx2_ctx,
+                     nb::rv_policy::reference_internal)
+        .def_prop_ro("tgfx2_device", &RenderEngine::tgfx2_device,
                      nb::rv_policy::reference_internal)
         .def("render_view_to_fbo", [](RenderEngine& self,
                                    RenderPipeline& pipeline,

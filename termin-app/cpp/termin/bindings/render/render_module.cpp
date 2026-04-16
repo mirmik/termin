@@ -49,7 +49,7 @@ void bind_render(nb::module_& m) {
     m.attr("FramePass") = framework.attr("FramePass");
     m.attr("RenderContext") = framework.attr("RenderContext");
     m.attr("HDRStats") = framework.attr("HDRStats");
-    m.attr("FBOInfo") = framework.attr("FBOInfo");
+    m.attr("TextureInfo") = framework.attr("TextureInfo");
     m.attr("FrameGraphCapture") = framework.attr("FrameGraphCapture");
     m.attr("FrameGraphPresenter") = framework.attr("FrameGraphPresenter");
     m.attr("FrameGraphDebuggerCore") = framework.attr("FrameGraphDebuggerCore");

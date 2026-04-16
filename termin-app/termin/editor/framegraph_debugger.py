@@ -611,14 +611,25 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             log.debug("[FramegraphDebugger] _present_capture: no capture")
             return
 
-        capture_fbo = self._core.capture_fbo
-        if capture_fbo is None:
-            log.warn("[FramegraphDebugger] _present_capture: capture_fbo is None")
+        capture_tex = self._core.capture_tex
+        if not capture_tex:
+            log.warn("[FramegraphDebugger] _present_capture: capture_tex is invalid")
             return
 
         log.debug("[FramegraphDebugger] _present_capture: presenting")
 
         from sdl2 import video as sdl_video
+        from termin.visualization.render.manager import RenderingManager
+
+        render_engine = RenderingManager.instance().render_engine
+        if render_engine is None:
+            log.warn("[FramegraphDebugger] _present_capture: no render engine")
+            return
+        render_engine.ensure_tgfx2()
+        ctx2 = render_engine.tgfx2_ctx
+        if ctx2 is None:
+            log.warn("[FramegraphDebugger] _present_capture: no ctx2")
+            return
 
         try:
             saved_context = sdl_video.SDL_GL_GetCurrentContext()
@@ -627,22 +638,17 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._sdl_window.make_current()
 
             dst_w, dst_h = self._sdl_window.framebuffer_size()
-            src_w = capture_fbo.get_width()
-            src_h = capture_fbo.get_height()
+            src_w = self._core.capture.width
+            src_h = self._core.capture.height
 
             # Qt-editor framegraph debugger is deprecated (Phase 17 cleanup).
-            # Wrap the SDL window's default framebuffer (GL id = 0) as an
-            # external FramebufferHandle so the regular blit API accepts
-            # it. Channel_mode / highlight_hdr are not supported on this
-            # fallback path.
-            default_fb = self._graphics.create_external_framebuffer(
-                0, (dst_w, dst_h)
-            )
-            self._graphics.blit_framebuffer(
-                capture_fbo, default_fb,
-                (0, 0, src_w, src_h),
-                (0, 0, dst_w, dst_h),
-                blit_color=True, blit_depth=False
+            # Blit the capture texture into the SDL debug window's
+            # default framebuffer (GL id = 0). Channel_mode /
+            # highlight_hdr are not supported on this fallback path.
+            ctx2.blit_to_external_fbo(
+                0, capture_tex,
+                0, 0, src_w, src_h,
+                0, 0, dst_w, dst_h,
             )
 
             self._sdl_window.swap_buffers()
@@ -688,20 +694,27 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     # ============ Depth buffer ============
 
     def _update_depth_image(self) -> None:
-        """Read depth from capture FBO and display as QImage."""
-        capture_fbo = self._core.capture_fbo
-        if capture_fbo is None:
+        """Read depth from capture texture and display as QImage."""
+        capture_tex = self._core.capture_tex
+        if not capture_tex:
             return
 
-        data_bytes, w, h = self._core.presenter.read_depth_normalized_with_size(
-            self._graphics, capture_fbo
-        )
+        from termin.visualization.render.manager import RenderingManager
+        render_engine = RenderingManager.instance().render_engine
+        if render_engine is None:
+            return
+        render_engine.ensure_tgfx2()
+        device = render_engine.tgfx2_device
+        if device is None:
+            return
 
-        if not data_bytes or w == 0 or h == 0:
+        result = self._core.presenter.read_depth_normalized(device, capture_tex)
+        if result is None:
             if self._depth_label is not None:
                 self._depth_label.setText("No depth data")
                 self._depth_label.setStyleSheet("color: #ff6666;")
             return
+        data_bytes, w, h = result
 
         qimage = QtGui.QImage(
             data_bytes, w, h, w,
@@ -754,12 +767,23 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             self._on_request_update()
 
     def _on_analyze_hdr_clicked(self) -> None:
-        capture_fbo = self._core.capture_fbo
-        if capture_fbo is None:
+        capture_tex = self._core.capture_tex
+        if not capture_tex:
             self._hdr_stats_label.setText("No capture available")
             return
 
-        stats = self._core.presenter.compute_hdr_stats(capture_fbo)
+        from termin.visualization.render.manager import RenderingManager
+        render_engine = RenderingManager.instance().render_engine
+        if render_engine is None:
+            self._hdr_stats_label.setText("No render engine")
+            return
+        render_engine.ensure_tgfx2()
+        device = render_engine.tgfx2_device
+        if device is None:
+            self._hdr_stats_label.setText("No tgfx2 device")
+            return
+
+        stats = self._core.presenter.compute_hdr_stats(device, capture_tex)
 
         lines = []
         lines.append(f"<b>R:</b> {stats.min_r:.3f} - {stats.max_r:.3f} (avg: {stats.avg_r:.3f})")
