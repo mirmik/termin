@@ -428,11 +428,7 @@ class UIRenderer:
             return
 
         # Legacy semantics: convert to a draw_text call at the baseline.
-        scale = font_size / font.size
-        text_width = sum(
-            font.glyphs[ch]["size"][0] * scale
-            for ch in text if ch in font.glyphs
-        )
+        text_width, _ = font.measure_text(text, font_size)
         x = cx - text_width / 2
         y = cy + font_size / 2  # baseline offset (legacy)
         self.draw_text(x, y, text, color, font_size)
@@ -446,13 +442,7 @@ class UIRenderer:
             return (0.0, 0.0)
 
         font.ensure_glyphs(text)
-
-        scale = font_size / font.size
-        width = sum(
-            font.glyphs[ch]["size"][0] * scale
-            for ch in text if ch in font.glyphs
-        )
-        return (width, float(font_size))
+        return font.measure_text(text, font_size)
 
     # ------------------------------------------------------------------
     # Images
@@ -460,38 +450,15 @@ class UIRenderer:
 
     def draw_image(
         self, x: float, y: float, w: float, h: float,
-        texture_handle,
+        texture_handle: Tgfx2TextureHandle,
         tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     ) -> None:
         """Draw an RGBA texture at pixel coordinates, multiplied by ``tint``.
 
-        Accepts either a tgfx2 ``Tgfx2TextureHandle`` (returned from
-        ``upload_texture`` / ``load_image``) or a legacy tgfx1
-        ``GPUTextureHandle`` (created by widgets that still call
-        ``graphics.create_texture`` directly — notably Canvas). tgfx1
-        handles are wrapped as non-owning tgfx2 handles for the
-        duration of this draw call and destroyed afterwards. This
-        shim will go away in Phase 5 when Canvas migrates.
+        ``texture_handle`` must be a ``Tgfx2TextureHandle`` obtained
+        via ``upload_texture`` / ``load_image``.
         """
         if w <= 0 or h <= 0 or texture_handle is None:
-            return
-
-        # Detect legacy tgfx1 GPUTextureHandle by its distinctive
-        # methods and wrap it as a tgfx2 handle. Tgfx2TextureHandle
-        # is a POD id struct with no get_id method.
-        wrapped_handle = None
-        if isinstance(texture_handle, Tgfx2TextureHandle):
-            tex2 = texture_handle
-        elif hasattr(texture_handle, "get_id"):
-            tex2 = wrap_gl_texture_as_tgfx2(
-                self._holder,
-                texture_handle.get_id(),
-                texture_handle.get_width(),
-                texture_handle.get_height(),
-                PIXEL_RGBA8,
-            )
-            wrapped_handle = tex2  # destroy after draw
-        else:
             return
 
         ctx = self._ctx
@@ -507,17 +474,10 @@ class UIRenderer:
         )
         ctx.set_uniform_int("u_texture_mode", 2)
         ctx.set_uniform_int("u_texture", 0)
-        ctx.bind_sampled_texture(0, tex2)
+        ctx.bind_sampled_texture(0, texture_handle)
 
         verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
         ctx.draw_immediate_triangles(verts, 6)
-
-        # Non-owning wrappers of legacy GL textures must be released.
-        # The underlying GL texture is untouched — only the HandlePool
-        # entry is freed. Safe to do immediately because the draw
-        # above already flushed synchronously.
-        if wrapped_handle is not None:
-            self._holder.destroy_texture(wrapped_handle)
 
     def upload_texture(self, data: np.ndarray) -> Tgfx2TextureHandle:
         """Upload a numpy RGBA array as a new GPU texture.
