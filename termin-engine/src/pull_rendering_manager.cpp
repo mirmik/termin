@@ -162,18 +162,16 @@ void PullRenderingManager::render_display(tc_display* display) {
 
     uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
 
-    // Bind display FBO + clear through the engine's tgfx2 GL device.
+    // Bind display FBO + clear through the backend-neutral tgfx2 API.
     RenderEngine* engine = render_engine();
     if (engine) engine->ensure_tgfx2();
-    auto* gl_dev = engine
-        ? dynamic_cast<tgfx::OpenGLRenderDevice*>(engine->tgfx2_device())
-        : nullptr;
-    if (!gl_dev) {
-        tc_log(TC_LOG_WARN, "[PullRM] present_display: tgfx2 GL device not available");
+    tgfx::IRenderDevice* dev = engine ? engine->tgfx2_device() : nullptr;
+    if (!dev) {
+        tc_log(TC_LOG_WARN, "[PullRM] present_display: tgfx2 device not available");
         return;
     }
-    gl_dev->clear_external_fbo(
-        display_fbo,
+    dev->clear_external_target(
+        static_cast<uintptr_t>(display_fbo),
         0.1f, 0.1f, 0.1f, 1.0f,
         1.0f,
         0, 0, width, height
@@ -217,8 +215,8 @@ void PullRenderingManager::render_display(tc_display* display) {
         int src_w = state->output_width;
         int src_h = state->output_height;
 
-        gl_dev->blit_to_external_fbo(
-            display_fbo, state->output_color_tex,
+        dev->blit_to_external_target(
+            static_cast<uintptr_t>(display_fbo), state->output_color_tex,
             0, 0, src_w, src_h,
             px, py, pw, ph
         );

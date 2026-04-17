@@ -1082,23 +1082,22 @@ void RenderingManager::present_display(tc_display* display) {
 
     uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
 
-    // Bind the display FBO, reset viewport, clear background. Done
-    // through the engine's tgfx2 OpenGL device so this method no
-    // longer depends on the legacy GraphicsBackend for any GL work.
+    // Bind the display FBO, reset viewport, clear background through
+    // the backend-neutral tgfx2 device API. For OpenGL this maps to
+    // glBindFramebuffer + glClear; for Vulkan / future backends it will
+    // route to the appropriate swapchain-image operations.
     RenderEngine* engine = render_engine();
     if (engine) {
         engine->ensure_tgfx2();
     }
-    auto* gl_dev = engine
-        ? dynamic_cast<tgfx::OpenGLRenderDevice*>(engine->tgfx2_device())
-        : nullptr;
-    if (!gl_dev) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] present_display: tgfx2 GL device not available");
+    tgfx::IRenderDevice* dev = engine ? engine->tgfx2_device() : nullptr;
+    if (!dev) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] present_display: tgfx2 device not available");
         return;
     }
 
-    gl_dev->clear_external_fbo(
-        display_fbo,
+    dev->clear_external_target(
+        static_cast<uintptr_t>(display_fbo),
         0.1f, 0.1f, 0.1f, 1.0f,
         1.0f,
         0, 0, width, height
@@ -1140,9 +1139,9 @@ void RenderingManager::present_display(tc_display* display) {
         int src_w = state->output_width;
         int src_h = state->output_height;
 
-        // Blit the viewport's native color texture to display_fbo.
-        gl_dev->blit_to_external_fbo(
-            display_fbo, state->output_color_tex,
+        // Blit the viewport's native color texture to display target.
+        dev->blit_to_external_target(
+            static_cast<uintptr_t>(display_fbo), state->output_color_tex,
             0, 0, src_w, src_h,
             px, py, pw, ph
         );
