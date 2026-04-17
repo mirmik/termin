@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.scene import Scene
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-    from tgfx import GraphicsBackend
     from termin.editor.editor_inspector import EntityInspector
     from termin.editor.material_inspector import MaterialInspector
     from termin.editor.display_inspector import DisplayInspector
@@ -65,7 +64,6 @@ class InspectorController:
         on_viewport_changed: Optional[Callable] = None,
         on_pipeline_changed: Optional[Callable] = None,
         window_backend: Optional["SDLEmbeddedWindowBackend"] = None,
-        graphics: Optional["GraphicsBackend"] = None,
     ):
         self._resource_manager = resource_manager
         self._push_undo_command = push_undo_command
@@ -73,7 +71,6 @@ class InspectorController:
         self._on_viewport_changed = on_viewport_changed
         self._on_pipeline_changed = on_pipeline_changed
         self._window_backend = window_backend
-        self._graphics = graphics
 
         # Create stack widget
         self._stack = QStackedWidget()
@@ -129,7 +126,6 @@ class InspectorController:
 
         self._mesh_inspector = MeshInspector(
             window_backend=self._window_backend,
-            graphics=self._graphics,
         )
         self._stack.addWidget(self._mesh_inspector)
 

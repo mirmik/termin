@@ -10,7 +10,6 @@
 #include "termin/lighting/shadow.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
-#include "tgfx/graphics_backend.hpp"
 #include "tgfx/render_state.hpp"
 #include "tgfx/handles.hpp"
 #include "tgfx2/handles.hpp"

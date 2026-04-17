@@ -8,7 +8,6 @@
 #include <vector>
 
 #include <tc_inspect_cpp.hpp>
-#include <tgfx/graphics_backend.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
 
 #include <termin/entity/component.hpp>

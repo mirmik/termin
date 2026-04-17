@@ -207,9 +207,6 @@ void bind_render_pipeline(nb::module_& m) {
         })
 
         // FBO pool access (moved from RenderEngine)
-        .def("get_fbo", [](RenderPipeline& self, const std::string& key) -> FramebufferHandle* {
-            return self.fbo_pool().get(key);
-        }, nb::arg("key"), nb::rv_policy::reference)
         .def("get_fbo_keys", [](RenderPipeline& self) -> std::vector<std::string> {
             return self.fbo_pool().keys();
         })

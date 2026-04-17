@@ -14,43 +14,6 @@ if TYPE_CHECKING:
 __all__ = ["PresentToScreenPass", "BlitPass", "ResolvePass"]
 
 
-def _get_texture_from_resource(resource, shadow_map_index: int = 0):
-    """
-    Извлекает текстуру из ресурса framegraph для отображения.
-
-    Поддерживает:
-    - SingleFBO: возвращает color_texture()
-    - ShadowMapArrayResource: возвращает текстуру из первого entry (или по индексу)
-    - FramebufferHandle (C++): возвращает color_texture()
-
-    Args:
-        resource: объект ресурса (SingleFBO, ShadowMapArrayResource, FramebufferHandle)
-        shadow_map_index: индекс shadow map для ShadowMapArrayResource
-
-    Returns:
-        GPUTextureHandle или None
-    """
-    if resource is None:
-        return None
-
-    from termin.visualization.render.framegraph.resource import (
-        SingleFBO,
-        ShadowMapArrayResource,
-    )
-
-    if isinstance(resource, ShadowMapArrayResource):
-        if len(resource) == 0:
-            return None
-        index = min(shadow_map_index, len(resource) - 1)
-        entry = resource[index]
-        return entry.texture()
-
-    if isinstance(resource, SingleFBO):
-        return resource.color_texture()
-
-    return None
-
-
 FSQ_VERT = """
 #version 330 core
 layout(location = 0) in vec2 a_pos;

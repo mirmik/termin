@@ -292,7 +292,6 @@ public partial class MainWindow : Window
     private EntityPool? _internalEntitiesPool2;
     private TcEntityId _internalRootId;
     private TcEntityId _internalRootId2;
-    private SWIGTYPE_p_termin__GraphicsBackend? _graphics;
     private PullRenderingManager? _renderingManager;
     private OrbitCameraController? _orbitController;
     private OrbitCameraController? _orbitController2;
@@ -364,17 +363,11 @@ public partial class MainWindow : Window
 
         GL.Enable(EnableCap.DepthTest);
 
-        // Get graphics backend (SWIG helper)
-        _graphics = termin.get_opengl_graphics();
-        Console.WriteLine($"[Init] Graphics backend: {_graphics != null}");
-
         // Set up RenderingManager (store reference to prevent GC issues)
         _renderingManager = PullRenderingManager.instance();
-        _renderingManager.set_graphics(_graphics);
-        Console.WriteLine("[Init] RenderingManager graphics set");
 
         // Create render engine (RenderingManager will use it)
-        _renderEngine = new RenderEngine(_graphics);
+        _renderEngine = new RenderEngine();
         _renderingManager.set_render_engine(_renderEngine);
         Console.WriteLine("[Init] RenderingManager render engine set");
 

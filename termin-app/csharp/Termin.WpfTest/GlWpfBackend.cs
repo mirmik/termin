@@ -265,46 +265,6 @@ public class GlWpfBackend
     #region Rendering
 
     /// <summary>
-    /// Блитит содержимое FBO пайплайна в FBO окна WPF.
-    /// 
-    /// Вызывается после render_to_screen() для копирования результата
-    /// из color FBO пайплайна в framebuffer WPF контрола.
-    /// </summary>
-    /// <param name="pipeline">RenderPipeline с FBO pool.</param>
-    /// <param name="resourceName">Имя ресурса FBO (обычно "color").</param>
-    /// <param name="wpfFboId">ID WPF framebuffer (получить до вызова render_to_screen).</param>
-    public void BlitFromPipeline(RenderPipeline pipeline, string resourceName, int wpfFboId)
-    {
-        var fbo = pipeline.get_fbo(resourceName);
-        if (fbo == null)
-        {
-            Console.WriteLine($"[Backend] FBO '{resourceName}' not found in pipeline");
-            return;
-        }
-
-        int srcFboId = (int)fbo.get_fbo_id();
-        int srcWidth = fbo.get_width();
-        int srcHeight = fbo.get_height();
-        int dstWidth = FramebufferWidth;
-        int dstHeight = FramebufferHeight;
-
-        // Биндим source FBO для чтения, destination для записи
-        GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, srcFboId);
-        GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, wpfFboId);
-
-        // Копируем color buffer
-        GL.BlitFramebuffer(
-            0, 0, srcWidth, srcHeight,
-            0, 0, dstWidth, dstHeight,
-            ClearBufferMask.ColorBufferBit,
-            BlitFramebufferFilter.Nearest
-        );
-
-        // Восстанавливаем биндинг
-        GL.BindFramebuffer(FramebufferTarget.Framebuffer, wpfFboId);
-    }
-
-    /// <summary>
     /// Получает текущий FBO ID от WPF контрола.
     /// Вызывать ДО render_to_screen(), т.к. пайплайн меняет биндинг.
     /// </summary>

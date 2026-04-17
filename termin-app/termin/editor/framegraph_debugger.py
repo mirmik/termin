@@ -5,8 +5,6 @@ from typing import Optional, Callable, List, Tuple, TYPE_CHECKING
 from PyQt6 import QtWidgets, QtCore, QtGui
 from PyQt6.QtGui import QWindow
 
-from tgfx import GraphicsBackend
-
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 
@@ -30,14 +28,12 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     def __init__(
         self,
         window_backend: "SDLEmbeddedWindowBackend",
-        graphics: GraphicsBackend,
         rendering_controller,
         on_request_update: Optional[Callable[[], None]] = None,
         parent: Optional[QtWidgets.QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self._window_backend = window_backend
-        self._graphics = graphics
         self._rendering_controller = rendering_controller
         self._on_request_update = on_request_update
         self._resource_name = "debug"
@@ -497,7 +493,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         info_parts = [f"<b>{resource_name}</b>"]
 
         from termin.visualization.render.framegraph.resource import (
-            SingleFBO,
             ShadowMapArrayResource,
         )
 
@@ -509,29 +504,6 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 if fbo is not None:
                     w, h = fbo.get_size()
                     info_parts.append(f"Размер: {w}×{h}")
-        elif isinstance(resource, SingleFBO):
-            info_parts.append("Тип: SingleFBO")
-            fbo = resource._fbo
-            if fbo is not None:
-                w, h = fbo.get_size()
-                samples = fbo.get_samples()
-                is_msaa = fbo.is_msaa()
-                fmt = fbo.get_format()
-                info_parts.append(f"Размер: {w}×{h}")
-                info_parts.append(f"Формат: {fmt}")
-                if is_msaa:
-                    info_parts.append(f"<span style='color: #ffaa00;'>MSAA: {samples}x</span>")
-                else:
-                    info_parts.append("MSAA: нет")
-                info_parts.append(f"FBO ID: {fbo.get_fbo_id()}")
-                gl_fmt = fbo.get_actual_gl_format()
-                gl_w = fbo.get_actual_gl_width()
-                gl_h = fbo.get_actual_gl_height()
-                gl_s = fbo.get_actual_gl_samples()
-                info_parts.append(f"<span style='color: #88ff88;'>GL: {gl_fmt} {gl_w}×{gl_h} s={gl_s}</span>")
-                req_filter = fbo.get_filter()
-                gl_filter = fbo.get_actual_gl_filter()
-                info_parts.append(f"<span style='color: #88aaff;'>Filter: {req_filter} → {gl_filter}</span>")
         else:
             info_parts.append(f"Тип: {type(resource).__name__}")
 

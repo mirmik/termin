@@ -19,11 +19,6 @@ TC_API bool tc_opengl_is_initialized(void);
 // Shutdown OpenGL backend (optional, for cleanup)
 TC_API void tc_opengl_shutdown(void);
 
-// Get the global OpenGL graphics backend.
-// Returns NULL if not initialized.
-// The returned pointer is valid until tc_opengl_shutdown() is called.
-TC_API void* tc_opengl_get_graphics(void);
-
 #ifdef __cplusplus
 }
 #endif

@@ -64,7 +64,7 @@ class EditorWindow(QMainWindow):
     def instance(cls) -> "EditorWindow | None":
         return cls._instance
 
-    def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend, scene_manager: SceneManager, graphics=None):
+    def __init__(self, world, initial_scene, sdl_backend: SDLEmbeddedWindowBackend, scene_manager: SceneManager):
         super().__init__()
         EditorWindow._instance = self
         self.undo_stack = UndoStack()
@@ -74,7 +74,6 @@ class EditorWindow(QMainWindow):
 
         self.world = world
         self._sdl_backend = sdl_backend
-        self._graphics = graphics
 
         # --- ресурс-менеджер редактора ---
         self.resource_manager = ResourceManager.instance()
@@ -250,7 +249,6 @@ class EditorWindow(QMainWindow):
             on_component_changed=self._on_inspector_component_changed,
             on_material_changed=self._on_material_inspector_changed,
             window_backend=self._sdl_backend,
-            graphics=self._graphics,
         )
 
         # Для обратной совместимости
@@ -597,7 +595,6 @@ class EditorWindow(QMainWindow):
         """
         debugger = self._dialog_manager.show_framegraph_debugger(
             window_backend=self._sdl_backend,
-            graphics=self._graphics,
             rendering_controller=self._rendering_controller,
             on_request_update=self._request_viewport_update,
             initial_resource=initial_resource,
@@ -853,12 +850,6 @@ class EditorWindow(QMainWindow):
             return None
         return self._project_controller.get_project_path()
 
-    def _get_graphics(self):
-        """Get GraphicsBackend from world."""
-        if self.world is not None:
-            return self._graphics
-        return None
-
     def _get_window_backend(self):
         """Get WindowBackend from world."""
         if self.world is not None:
@@ -1004,7 +995,6 @@ class EditorWindow(QMainWindow):
             inspector_controller=self._inspector_controller,
             center_tab_widget=self._center_tab_widget,
             get_scene=lambda: self.scene,
-            get_graphics=self._get_graphics,
             get_window_backend=self._get_window_backend,
             get_sdl_backend=lambda: self._sdl_backend,
             on_entity_selected=self.show_entity_inspector,

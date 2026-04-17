@@ -5,7 +5,6 @@
 #include <nanobind/ndarray.h>
 
 #include "handles.hpp"
-#include "tgfx/graphics_backend.hpp"
 #include <tgfx/tgfx_material_handle.hpp>
 #include <termin/entity/entity.hpp>
 #include "termin/inspect/tc_kind.hpp"

@@ -19,7 +19,6 @@ import numpy as np
 if TYPE_CHECKING:
     from termin.visualization.render.immediate import ImmediateRenderer
     from termin.visualization.render.solid_primitives import SolidPrimitiveRenderer
-    from tgfx import GraphicsBackend
 
 
 # ============================================================
@@ -282,22 +281,6 @@ class Gizmo(ABC):
         Called every frame. Add primitives to the renderer.
         Override this for opaque geometry (arrows, rings, spheres).
 
-        NOTE: Prefer implementing draw_solid() for better performance.
-        """
-        pass
-
-    def draw_solid(
-        self,
-        renderer: "SolidPrimitiveRenderer",
-        graphics: "GraphicsBackend",
-        view: np.ndarray,
-        proj: np.ndarray,
-    ) -> None:
-        """
-        Draw opaque gizmo geometry using SolidPrimitiveRenderer.
-
-        More efficient than draw() - uses pre-built GPU meshes.
-        If implemented, this is called instead of draw().
         """
         pass
 
@@ -308,26 +291,6 @@ class Gizmo(ABC):
         Called after opaque pass. Override for transparent geometry (plane quads).
         """
         pass
-
-    def draw_transparent_solid(
-        self,
-        renderer: "SolidPrimitiveRenderer",
-        graphics: "GraphicsBackend",
-        view: np.ndarray,
-        proj: np.ndarray,
-    ) -> None:
-        """
-        Draw transparent gizmo geometry using SolidPrimitiveRenderer.
-
-        More efficient than draw_transparent().
-        If implemented, this is called instead of draw_transparent().
-        """
-        pass
-
-    @property
-    def uses_solid_renderer(self) -> bool:
-        """Return True if this gizmo uses SolidPrimitiveRenderer."""
-        return False
 
     @abstractmethod
     def get_colliders(self) -> list[GizmoCollider]:

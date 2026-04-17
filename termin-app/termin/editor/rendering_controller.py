@@ -24,10 +24,10 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.entity import Entity
-    from tgfx import GraphicsBackend
     from tgfx.window import BackendWindow, WindowBackend
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-    from termin.visualization.render import RenderEngine, ViewportRenderState
+    from termin.visualization.render import RenderEngine
+    from termin._native.render import ViewportRenderState
     from termin.visualization.render.framegraph import RenderPipeline
     from termin.visualization.render.offscreen_context import OffscreenContext
     from termin.editor.viewport_list_widget import ViewportListWidget
@@ -60,7 +60,6 @@ class RenderingController:
         inspector_controller: "InspectorController",
         center_tab_widget: Optional[QTabWidget] = None,
         get_scene: Optional[Callable[[], "Scene"]] = None,
-        get_graphics: Optional[Callable[[], "GraphicsBackend"]] = None,
         get_window_backend: Optional[Callable[[], "WindowBackend"]] = None,
         get_sdl_backend: Optional[Callable[[], "SDLEmbeddedWindowBackend"]] = None,
         on_display_selected: Optional[Callable[["Display"], None]] = None,
@@ -78,7 +77,6 @@ class RenderingController:
             inspector_controller: Controller for inspector panels.
             center_tab_widget: Tab widget for display switching.
             get_scene: Callback to get current scene.
-            get_graphics: Callback to get GraphicsBackend for creating surfaces.
             get_window_backend: Callback to get WindowBackend for creating GL widgets.
             get_sdl_backend: Callback to get SDLEmbeddedWindowBackend for creating SDL windows.
             on_display_selected: Callback when display is selected.
@@ -96,7 +94,6 @@ class RenderingController:
         self._inspector = inspector_controller
         self._center_tabs = center_tab_widget
         self._get_scene = get_scene
-        self._get_graphics = get_graphics
         self._get_window_backend = get_window_backend
         self._get_sdl_backend = get_sdl_backend
         self._on_display_selected = on_display_selected
@@ -927,14 +924,13 @@ class RenderingController:
 
     def _on_add_display_requested(self) -> None:
         """Handle request to add new display."""
-        if self._get_graphics is None or self._get_sdl_backend is None:
+        if self._get_sdl_backend is None:
             return
         if self._center_tabs is None:
             return
 
-        graphics = self._get_graphics()
         sdl_backend = self._get_sdl_backend()
-        if graphics is None or sdl_backend is None:
+        if sdl_backend is None:
             return
 
         # Generate unique name
@@ -1371,9 +1367,6 @@ class RenderingController:
 
     def render_all_displays(self) -> None:
         """Render all displays using offscreen rendering."""
-        if self._get_graphics is None:
-            return
-
         from termin.core.profiler import Profiler
         profiler = Profiler.instance()
 
