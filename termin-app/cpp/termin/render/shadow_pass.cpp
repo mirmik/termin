@@ -102,7 +102,7 @@ void ShadowPass::destroy() {
     release_tgfx2_resources();
 }
 
-void ShadowPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
+void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     if (device2_ == &device && shadow_vs2_ && shadow_fs2_ && per_frame_ubo_) {
         return;
     }
@@ -113,19 +113,19 @@ void ShadowPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
     }
     device2_ = &device;
 
-    tgfx2::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx2::ShaderStage::Vertex;
+    tgfx::ShaderDesc vs_desc;
+    vs_desc.stage = tgfx::ShaderStage::Vertex;
     vs_desc.source = SHADOW_VS_UBO;
     shadow_vs2_ = device.create_shader(vs_desc);
 
-    tgfx2::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx2::ShaderStage::Fragment;
+    tgfx::ShaderDesc fs_desc;
+    fs_desc.stage = tgfx::ShaderStage::Fragment;
     fs_desc.source = SHADOW_FS_UBO;
     shadow_fs2_ = device.create_shader(fs_desc);
 
-    tgfx2::BufferDesc ubo_desc;
+    tgfx::BufferDesc ubo_desc;
     ubo_desc.size = sizeof(ShadowPerFrameStd140);
-    ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
+    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
     per_frame_ubo_ = device.create_buffer(ubo_desc);
 }
 
@@ -151,8 +151,8 @@ std::vector<ResourceSpec> ShadowPass::get_resource_specs() const {
 }
 
 
-tgfx2::TextureHandle ShadowPass::get_or_create_depth_tex2(
-    tgfx2::IRenderDevice& device,
+tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
+    tgfx::IRenderDevice& device,
     int resolution,
     int index
 ) {
@@ -177,20 +177,20 @@ tgfx2::TextureHandle ShadowPass::get_or_create_depth_tex2(
         // Reusing the same gl_id for a new texture of a different
         // size invalidates any FBO the device cached on the old id.
         if (auto* gl_dev =
-                dynamic_cast<tgfx2::OpenGLRenderDevice*>(&device)) {
+                dynamic_cast<tgfx::OpenGLRenderDevice*>(&device)) {
             gl_dev->invalidate_fbo_cache();
         }
         depth_pool_.erase(it);
     }
 
-    tgfx2::TextureDesc desc;
+    tgfx::TextureDesc desc;
     desc.width = static_cast<uint32_t>(resolution);
     desc.height = static_cast<uint32_t>(resolution);
-    desc.format = tgfx2::PixelFormat::D24_UNorm;
+    desc.format = tgfx::PixelFormat::D24_UNorm;
     desc.sample_count = 1;
-    desc.usage = tgfx2::TextureUsage::Sampled |
-                 tgfx2::TextureUsage::DepthStencilAttachment;
-    tgfx2::TextureHandle tex = device.create_texture(desc);
+    desc.usage = tgfx::TextureUsage::Sampled |
+                 tgfx::TextureUsage::DepthStencilAttachment;
+    tgfx::TextureHandle tex = device.create_texture(desc);
     if (!tex) {
         tc::Log::error("ShadowPass: failed to create depth texture (res=%d)",
                        resolution);
@@ -204,7 +204,7 @@ tgfx2::TextureHandle ShadowPass::get_or_create_depth_tex2(
     // the texture rather than the sampler, so setting them here is the
     // right place. Legacy OpenGLShadowFramebufferHandle::create() does
     // the equivalent setup.
-    if (auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&device)) {
+    if (auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device)) {
         auto* gl_tex = gl_dev->get_texture(tex);
         if (gl_tex) {
             glBindTexture(gl_tex->target, gl_tex->gl_id);
@@ -337,7 +337,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         return results;
     }
 
-    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx.ctx2->device());
+    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx.ctx2->device());
     if (!gl_dev) {
         tc::Log::error("ShadowPass/tgfx2: device is not OpenGLRenderDevice");
         return results;
@@ -396,7 +396,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             float cascade_near = splits[c];
             float cascade_far = splits[c + 1];
 
-            tgfx2::TextureHandle depth_tex2 =
+            tgfx::TextureHandle depth_tex2 =
                 get_or_create_depth_tex2(ctx.ctx2->device(), resolution, fbo_index);
             fbo_index++;
             if (!depth_tex2) {
@@ -413,7 +413,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             Mat44f light_space_matrix = compute_light_space_matrix(params);
 
             ctx.ctx2->begin_pass(
-                tgfx2::TextureHandle{},  // depth-only
+                tgfx::TextureHandle{},  // depth-only
                 depth_tex2,
                 nullptr,                 // no color clear
                 1.0f,                    // clear depth to 1.0
@@ -423,9 +423,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ctx.ctx2->set_depth_test(true);
             ctx.ctx2->set_depth_write(true);
             ctx.ctx2->set_blend(false);
-            ctx.ctx2->set_cull(tgfx2::CullMode::Back);
-            ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
-            ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
+            ctx.ctx2->set_cull(tgfx::CullMode::Back);
+            ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
+            ctx.ctx2->set_depth_format(tgfx::PixelFormat::D32F);
             ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
 
             // PerFrame UBO (view + projection) — upload ONCE per
@@ -493,7 +493,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         gl_dev->destroy(bind.index_buffer);
                         continue;
                     }
-                    tgfx2::ShaderHandle vs2, fs2;
+                    tgfx::ShaderHandle vs2, fs2;
                     if (!tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &vs2, &fs2)) {
                         gl_dev->destroy(bind.vertex_buffer);
                         gl_dev->destroy(bind.index_buffer);

@@ -185,19 +185,19 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
         return;
     }
 
-    tgfx2::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx2::ShaderStage::Vertex;
+    tgfx::ShaderDesc vs_desc;
+    vs_desc.stage = tgfx::ShaderStage::Vertex;
     vs_desc.source = vs_it->second.source;
     vs_ = device2_->create_shader(vs_desc);
 
-    tgfx2::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx2::ShaderStage::Fragment;
+    tgfx::ShaderDesc fs_desc;
+    fs_desc.stage = tgfx::ShaderStage::Fragment;
     fs_desc.source = fs_it->second.source;
     fs_ = device2_->create_shader(fs_desc);
 
-    tgfx2::BufferDesc vbo_desc;
+    tgfx::BufferDesc vbo_desc;
     vbo_desc.size = sizeof(CUBE_VERTICES);
-    vbo_desc.usage = tgfx2::BufferUsage::Vertex | tgfx2::BufferUsage::CopyDst;
+    vbo_desc.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
     cube_vbo_ = device2_->create_buffer(vbo_desc);
     device2_->upload_buffer(
         cube_vbo_,
@@ -205,9 +205,9 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
             reinterpret_cast<const uint8_t*>(CUBE_VERTICES),
             sizeof(CUBE_VERTICES)));
 
-    tgfx2::BufferDesc ibo_desc;
+    tgfx::BufferDesc ibo_desc;
     ibo_desc.size = sizeof(CUBE_INDICES);
-    ibo_desc.usage = tgfx2::BufferUsage::Index | tgfx2::BufferUsage::CopyDst;
+    ibo_desc.usage = tgfx::BufferUsage::Index | tgfx::BufferUsage::CopyDst;
     cube_ibo_ = device2_->create_buffer(ibo_desc);
     device2_->upload_buffer(
         cube_ibo_,
@@ -216,9 +216,9 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
             sizeof(CUBE_INDICES)));
 
     // UBO sized from parser-computed block_size — no hand-coded duplicate.
-    tgfx2::BufferDesc ubo_desc;
+    tgfx::BufferDesc ubo_desc;
     ubo_desc.size = skybox_layout_.block_size;
-    ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
+    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
     params_ubo_ = device2_->create_buffer(ubo_desc);
 }
 
@@ -245,7 +245,7 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
                        output_res.c_str());
         return;
     }
-    tgfx2::TextureHandle output_tex2 = out_it->second;
+    tgfx::TextureHandle output_tex2 = out_it->second;
 
     auto out_desc = ctx.ctx2->device().texture_desc(output_tex2);
     const int w = static_cast<int>(out_desc.width);
@@ -296,23 +296,23 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
 
     ctx.ctx2->set_depth_test(true);
     ctx.ctx2->set_depth_write(false);
-    ctx.ctx2->set_depth_func(tgfx2::CompareOp::LessEqual);
+    ctx.ctx2->set_depth_func(tgfx::CompareOp::LessEqual);
     ctx.ctx2->set_blend(false);
-    ctx.ctx2->set_cull(tgfx2::CullMode::None);
+    ctx.ctx2->set_cull(tgfx::CullMode::None);
 
     ctx.ctx2->bind_shader(vs_, fs_);
-    ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
+    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
 
-    tgfx2::VertexBufferLayout cube_layout;
+    tgfx::VertexBufferLayout cube_layout;
     cube_layout.stride = 3 * sizeof(float);
     cube_layout.attributes = {
-        {0, tgfx2::VertexFormat::Float3, 0},  // a_position
+        {0, tgfx::VertexFormat::Float3, 0},  // a_position
     };
     ctx.ctx2->set_vertex_layout(cube_layout);
 
     bind_material_ubo(skybox_layout_, values, {}, params_ubo_, 0, *device2_, *ctx.ctx2);
 
-    ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx2::IndexType::Uint32);
+    ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx::IndexType::Uint32);
     ctx.ctx2->end_pass();
 }
 

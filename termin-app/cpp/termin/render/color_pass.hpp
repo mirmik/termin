@@ -12,7 +12,7 @@
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
 
-namespace tgfx2 {
+namespace tgfx {
 class IRenderDevice;
 class RenderContext2;
 }
@@ -191,7 +191,7 @@ private:
     /**
      * Bind extra textures to texture units before rendering.
      */
-    void bind_extra_textures(const Tex2Map& tex2_reads, tgfx2::RenderContext2* ctx2);
+    void bind_extra_textures(const Tex2Map& tex2_reads, tgfx::RenderContext2* ctx2);
 
     /**
      * Find camera component by entity name in scene.

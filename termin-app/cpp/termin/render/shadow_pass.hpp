@@ -35,7 +35,7 @@ struct ShadowDrawCall {
 
 // Result of shadow map rendering for one light (or cascade)
 struct ShadowMapResult {
-    tgfx2::TextureHandle depth_tex2;
+    tgfx::TextureHandle depth_tex2;
     int width = 0;
     int height = 0;
     Mat44f light_space_matrix;
@@ -48,7 +48,7 @@ struct ShadowMapResult {
 
     ShadowMapResult() = default;
 
-    ShadowMapResult(tgfx2::TextureHandle d, int w, int h,
+    ShadowMapResult(tgfx::TextureHandle d, int w, int h,
                     const Mat44f& m, int light_idx,
                     int cascade_idx, float split_near, float split_far)
         : depth_tex2(d), width(w), height(h),
@@ -131,29 +131,29 @@ public:
 
 private:
     // Lazy tgfx2 shader + UBO resources owned by the pass.
-    tgfx2::IRenderDevice* device2_ = nullptr;
-    tgfx2::ShaderHandle shadow_vs2_;
-    tgfx2::ShaderHandle shadow_fs2_;
-    tgfx2::BufferHandle per_frame_ubo_;
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tgfx::ShaderHandle shadow_vs2_;
+    tgfx::ShaderHandle shadow_fs2_;
+    tgfx::BufferHandle per_frame_ubo_;
 
-    void ensure_tgfx2_resources(tgfx2::IRenderDevice& device);
+    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
 
     // Native shadow-map pool: index -> depth texture.
     // Owned via tgfx2 IRenderDevice. Destroyed in destroy().
     struct ShadowDepthSlot {
-        tgfx2::TextureHandle tex;
+        tgfx::TextureHandle tex;
         int resolution = 0;
     };
     std::unordered_map<int, ShadowDepthSlot> depth_pool_;
-    tgfx2::IRenderDevice* depth_pool_device_ = nullptr;
+    tgfx::IRenderDevice* depth_pool_device_ = nullptr;
 
     // Cached draw calls (reused between frames)
     std::vector<ShadowDrawCall> cached_draw_calls_;
 
     // Get or create native depth texture for shadow map at (index, resolution).
-    tgfx2::TextureHandle get_or_create_depth_tex2(
-        tgfx2::IRenderDevice& device, int resolution, int index);
+    tgfx::TextureHandle get_or_create_depth_tex2(
+        tgfx::IRenderDevice& device, int resolution, int index);
 
     // Collect shadow caster draw calls
     void collect_shadow_casters(tc_scene_handle scene, uint64_t layer_mask);

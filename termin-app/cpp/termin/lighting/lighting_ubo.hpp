@@ -76,7 +76,7 @@ static_assert(sizeof(LightingUBOData) == 688, "LightingUBOData must be 688 bytes
 class LightingUBO {
 public:
     LightingUBOData data;
-    tgfx2::BufferHandle buffer;
+    tgfx::BufferHandle buffer;
 
     LightingUBO() {
         std::memset(&data, 0, sizeof(data));
@@ -87,12 +87,12 @@ public:
     // pointer changes between frames the buffer is recreated; this
     // happens when the RenderEngine's tgfx2 stack is rebuilt
     // (resolution change, context reset, ...).
-    void create(tgfx2::IRenderDevice& device) {
+    void create(tgfx::IRenderDevice& device) {
         if (buffer && device_ == &device) return;
         destroy();
-        tgfx2::BufferDesc desc;
+        tgfx::BufferDesc desc;
         desc.size = sizeof(LightingUBOData);
-        desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
+        desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
         buffer = device.create_buffer(desc);
         device_ = &device;
     }
@@ -111,7 +111,7 @@ public:
     LightingUBO& operator=(const LightingUBO&) = delete;
 
 private:
-    tgfx2::IRenderDevice* device_ = nullptr;
+    tgfx::IRenderDevice* device_ = nullptr;
 
 public:
 

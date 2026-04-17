@@ -13,12 +13,12 @@ class NormalPass : public GeometryPassBase {
 private:
     // Lazy tgfx2 resources used by execute_with_data_tgfx2. Lifetime
     // tied to device2_; released in destroy()/dtor.
-    tgfx2::IRenderDevice* device2_ = nullptr;
-    tgfx2::ShaderHandle normal_vs2_;
-    tgfx2::ShaderHandle normal_fs2_;
-    tgfx2::BufferHandle per_frame_ubo_;
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tgfx::ShaderHandle normal_vs2_;
+    tgfx::ShaderHandle normal_fs2_;
+    tgfx::BufferHandle per_frame_ubo_;
 
-    void ensure_tgfx2_resources(tgfx2::IRenderDevice& device);
+    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
 
 public:

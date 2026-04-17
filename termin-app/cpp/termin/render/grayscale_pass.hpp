@@ -5,13 +5,13 @@
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
 
-namespace tgfx2 { class IRenderDevice; }
+namespace tgfx { class IRenderDevice; }
 
 namespace termin {
 
 // GrayscalePass - converts image to grayscale with adjustable strength.
 //
-// Draws through tgfx2::RenderContext2 end-to-end: built-in FSQ, std140
+// Draws through tgfx::RenderContext2 end-to-end: built-in FSQ, std140
 // UBO for parameters via bind_uniform_buffer, input texture via
 // bind_sampled_texture. Legacy tgfx1 dual-path removed in Stage 8.1.
 class GrayscalePass : public CxxFramePass {
@@ -21,9 +21,9 @@ public:
     float strength = 1.0f;
 
 private:
-    tgfx2::IRenderDevice* device2_ = nullptr;
-    tgfx2::ShaderHandle fs2_;
-    tgfx2::BufferHandle params_ubo_;
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tgfx::ShaderHandle fs2_;
+    tgfx::BufferHandle params_ubo_;
     float uploaded_strength_ = -1.0f;
 
 public:

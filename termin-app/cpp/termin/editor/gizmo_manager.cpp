@@ -59,7 +59,7 @@ SolidPrimitiveRenderer* GizmoManager::_ensure_solid_renderer() {
 
 void GizmoManager::render(
     ImmediateRenderer* renderer,
-    tgfx2::RenderContext2* ctx2,
+    tgfx::RenderContext2* ctx2,
     const Mat44f& view_matrix,
     const Mat44f& proj_matrix
 ) {

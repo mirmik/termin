@@ -155,11 +155,11 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
 
     auto color_it = ctx.tex2_writes.find(output_res);
     if (color_it == ctx.tex2_writes.end() || !color_it->second) return;
-    tgfx2::TextureHandle color_tex2 = color_it->second;
+    tgfx::TextureHandle color_tex2 = color_it->second;
 
     auto depth_it = ctx.tex2_depth_writes.find(output_res);
-    tgfx2::TextureHandle depth_tex2 =
-        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx2::TextureHandle{};
+    tgfx::TextureHandle depth_tex2 =
+        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
     Mat44 view64  = ctx.camera->get_view_matrix();
     Mat44 proj64  = ctx.camera->get_projection_matrix();
@@ -175,7 +175,7 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     _ensure_shader();
     tc_shader* raw = tc_shader_get(_shader.handle);
     if (!raw) return;
-    tgfx2::ShaderHandle vs2, fs2;
+    tgfx::ShaderHandle vs2, fs2;
     if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
 
     auto out_desc = ctx2->device().texture_desc(color_tex2);
@@ -192,11 +192,11 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     ctx2->set_depth_test(true);
     ctx2->set_depth_write(true);
     ctx2->set_blend(true);
-    ctx2->set_blend_func(tgfx2::BlendFactor::SrcAlpha,
-                         tgfx2::BlendFactor::OneMinusSrcAlpha);
-    ctx2->set_cull(tgfx2::CullMode::None);
-    ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
-    ctx2->set_depth_format(tgfx2::PixelFormat::D24_UNorm_S8_UInt);
+    ctx2->set_blend_func(tgfx::BlendFactor::SrcAlpha,
+                         tgfx::BlendFactor::OneMinusSrcAlpha);
+    ctx2->set_cull(tgfx::CullMode::None);
+    ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
+    ctx2->set_depth_format(tgfx::PixelFormat::D24_UNorm_S8_UInt);
 
     // Bind our grid VS/FS (NOT the built-in FSQ VS) and draw the
     // built-in fullscreen quad. The grid VS declares `a_pos` at

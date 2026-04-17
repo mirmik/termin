@@ -1,6 +1,6 @@
 // grayscale_pass.cpp - Simple grayscale post-processing pass.
 //
-// Draws through tgfx2::RenderContext2 end-to-end: built-in FSQ,
+// Draws through tgfx::RenderContext2 end-to-end: built-in FSQ,
 // std140 UBO for parameters via bind_uniform_buffer, input texture
 // via bind_sampled_texture. Legacy tgfx1 dual-path removed in Stage 8.1.
 #include "grayscale_pass.hpp"
@@ -81,7 +81,7 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
                        output_res.c_str());
         return;
     }
-    tgfx2::TextureHandle output_tex2 = out_it->second;
+    tgfx::TextureHandle output_tex2 = out_it->second;
 
     auto in_it = ctx.tex2_reads.find(input_res);
     if (in_it == ctx.tex2_reads.end() || !in_it->second) {
@@ -89,7 +89,7 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
                        input_res.c_str());
         return;
     }
-    tgfx2::TextureHandle input_tex2 = in_it->second;
+    tgfx::TextureHandle input_tex2 = in_it->second;
 
     auto out_desc = ctx.ctx2->device().texture_desc(output_tex2);
     const int w = static_cast<int>(out_desc.width);
@@ -102,14 +102,14 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     if (!fs2_) {
         device2_ = &ctx.ctx2->device();
 
-        tgfx2::ShaderDesc fs_desc;
-        fs_desc.stage = tgfx2::ShaderStage::Fragment;
+        tgfx::ShaderDesc fs_desc;
+        fs_desc.stage = tgfx::ShaderStage::Fragment;
         fs_desc.source = GRAYSCALE_FRAG_UBO;
         fs2_ = device2_->create_shader(fs_desc);
 
-        tgfx2::BufferDesc ubo_desc;
+        tgfx::BufferDesc ubo_desc;
         ubo_desc.size = sizeof(GrayscaleParamsStd140);
-        ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
+        ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
         params_ubo_ = device2_->create_buffer(ubo_desc);
     }
 
@@ -132,16 +132,16 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_depth_test(false);
     ctx.ctx2->set_depth_write(false);
     ctx.ctx2->set_blend(false);
-    ctx.ctx2->set_cull(tgfx2::CullMode::None);
+    ctx.ctx2->set_cull(tgfx::CullMode::None);
 
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs2_);
-    ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
+    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
 
-    tgfx2::VertexBufferLayout fsq_layout;
+    tgfx::VertexBufferLayout fsq_layout;
     fsq_layout.stride = 4 * sizeof(float);
     fsq_layout.attributes = {
-        {0, tgfx2::VertexFormat::Float2, 0},
-        {1, tgfx2::VertexFormat::Float2, 2 * sizeof(float)},
+        {0, tgfx::VertexFormat::Float2, 0},
+        {1, tgfx::VertexFormat::Float2, 2 * sizeof(float)},
     };
     ctx.ctx2->set_vertex_layout(fsq_layout);
 

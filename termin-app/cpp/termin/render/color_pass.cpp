@@ -132,7 +132,7 @@ void ColorPass::add_extra_texture(const std::string& uniform_name, const std::st
 
 void ColorPass::bind_extra_textures(
     const Tex2Map& tex2_reads,
-    tgfx2::RenderContext2* ctx2
+    tgfx::RenderContext2* ctx2
 ) {
     // Clear previous frame's uniforms
     extra_texture_uniforms.clear();
@@ -363,7 +363,7 @@ void ColorPass::execute_with_data(
         return;
     }
 
-    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx2->device());
+    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx2->device());
     if (!gl_dev) {
         tc::Log::error("[ColorPass/tgfx2] tgfx2 device is not OpenGLRenderDevice");
         return;
@@ -378,11 +378,11 @@ void ColorPass::execute_with_data(
                       output_res.c_str());
         return;
     }
-    tgfx2::TextureHandle color_tex2 = color_it->second;
+    tgfx::TextureHandle color_tex2 = color_it->second;
 
     auto depth_it = ctx.tex2_depth_writes.find(output_res);
-    tgfx2::TextureHandle depth_tex2 =
-        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx2::TextureHandle{};
+    tgfx::TextureHandle depth_tex2 =
+        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
     ctx2->begin_pass(color_tex2, depth_tex2,
                      /*clear_color=*/nullptr,
@@ -417,7 +417,7 @@ void ColorPass::execute_with_data(
     // Allocate lighting UBO directly on the tgfx2 device and upload
     // this frame's data. The buffer is persistent — only the contents
     // change per frame.
-    tgfx2::BufferHandle lighting_ubo_tgfx2{};
+    tgfx::BufferHandle lighting_ubo_tgfx2{};
     if (any_shader_needs_ubo) {
         lighting_ubo_.create(device);
         lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
@@ -428,7 +428,7 @@ void ColorPass::execute_with_data(
 
     // Shadow maps are now native tgfx2 depth textures owned by
     // ShadowPass; no per-frame wrap needed.
-    std::vector<tgfx2::TextureHandle> shadow_tex2s;
+    std::vector<tgfx::TextureHandle> shadow_tex2s;
     shadow_tex2s.reserve(shadow_maps.size());
     for (const auto& smap : shadow_maps) {
         shadow_tex2s.push_back(smap.depth_tex2);
@@ -493,7 +493,7 @@ void ColorPass::execute_with_data(
             gl_dev->destroy(bind.index_buffer);
             continue;
         }
-        tgfx2::ShaderHandle vs2, fs2;
+        tgfx::ShaderHandle vs2, fs2;
         if (!tc_shader_ensure_tgfx2(raw_shader, &device, &vs2, &fs2)) {
             tc::Log::error("[ColorPass/tgfx2] tc_shader_ensure_tgfx2 failed for shader '%s'",
                            raw_shader->name ? raw_shader->name : raw_shader->uuid);
@@ -509,16 +509,16 @@ void ColorPass::execute_with_data(
         ctx2->set_depth_test(state.depth_test);
         ctx2->set_depth_write(state.depth_write);
         ctx2->set_blend(state.blend);
-        ctx2->set_cull(state.cull ? tgfx2::CullMode::Back : tgfx2::CullMode::None);
+        ctx2->set_cull(state.cull ? tgfx::CullMode::Back : tgfx::CullMode::None);
         ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
-                               ? tgfx2::PolygonMode::Line
-                               : tgfx2::PolygonMode::Fill);
+                               ? tgfx::PolygonMode::Line
+                               : tgfx::PolygonMode::Fill);
 
         // Pipeline cache key — needs to match the FBO formats. This is
         // approximate because the wrapped textures retain their GL
         // internal format; the cache key just needs to be stable.
-        ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
-        ctx2->set_depth_format(tgfx2::PixelFormat::D24_UNorm_S8_UInt);
+        ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
+        ctx2->set_depth_format(tgfx::PixelFormat::D24_UNorm_S8_UInt);
 
         ctx2->bind_shader(vs2, fs2);
         ctx2->set_vertex_layout(bind.layout);

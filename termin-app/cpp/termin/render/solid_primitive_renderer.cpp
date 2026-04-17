@@ -224,14 +224,14 @@ IndexedMesh build_unit_quad() {
 // handles; the caller is responsible for destroying them through the
 // same tgfx2 device.
 SolidPrimitiveRenderer::MeshRes upload_mesh_tgfx2(
-    tgfx2::IRenderDevice& device,
+    tgfx::IRenderDevice& device,
     const IndexedMesh& indexed_mesh
 ) {
     SolidPrimitiveRenderer::MeshRes res;
 
-    tgfx2::BufferDesc vb_desc;
+    tgfx::BufferDesc vb_desc;
     vb_desc.size = indexed_mesh.vertices.size() * sizeof(float);
-    vb_desc.usage = tgfx2::BufferUsage::Vertex | tgfx2::BufferUsage::CopyDst;
+    vb_desc.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
     res.vbo = device.create_buffer(vb_desc);
     device.upload_buffer(
         res.vbo,
@@ -239,9 +239,9 @@ SolidPrimitiveRenderer::MeshRes upload_mesh_tgfx2(
             reinterpret_cast<const uint8_t*>(indexed_mesh.vertices.data()),
             vb_desc.size));
 
-    tgfx2::BufferDesc ib_desc;
+    tgfx::BufferDesc ib_desc;
     ib_desc.size = indexed_mesh.indices.size() * sizeof(uint32_t);
-    ib_desc.usage = tgfx2::BufferUsage::Index | tgfx2::BufferUsage::CopyDst;
+    ib_desc.usage = tgfx::BufferUsage::Index | tgfx::BufferUsage::CopyDst;
     res.ibo = device.create_buffer(ib_desc);
     device.upload_buffer(
         res.ibo,
@@ -344,7 +344,7 @@ SolidPrimitiveRenderer& SolidPrimitiveRenderer::operator=(SolidPrimitiveRenderer
     return *this;
 }
 
-void SolidPrimitiveRenderer::_ensure_initialized(tgfx2::IRenderDevice* device) {
+void SolidPrimitiveRenderer::_ensure_initialized(tgfx::IRenderDevice* device) {
     if (_initialized && _device == device) return;
 
     // New device — release previous resources (if any).
@@ -378,7 +378,7 @@ void SolidPrimitiveRenderer::_ensure_initialized(tgfx2::IRenderDevice* device) {
 }
 
 void SolidPrimitiveRenderer::begin(
-    tgfx2::RenderContext2* ctx2,
+    tgfx::RenderContext2* ctx2,
     const Mat44f& view,
     const Mat44f& proj,
     bool depth_test,
@@ -397,26 +397,26 @@ void SolidPrimitiveRenderer::begin(
     ctx2->set_depth_write(depth_test);
     if (blend) {
         ctx2->set_blend(true);
-        ctx2->set_blend_func(tgfx2::BlendFactor::SrcAlpha,
-                             tgfx2::BlendFactor::OneMinusSrcAlpha);
+        ctx2->set_blend_func(tgfx::BlendFactor::SrcAlpha,
+                             tgfx::BlendFactor::OneMinusSrcAlpha);
     } else {
         ctx2->set_blend(false);
     }
-    ctx2->set_cull(tgfx2::CullMode::Back);
+    ctx2->set_cull(tgfx::CullMode::Back);
 
     // Compile our shader into tgfx2 handles and bind.
     tc_shader* raw = tc_shader_get(_shader.handle);
     if (!raw) return;
-    tgfx2::ShaderHandle vs2, fs2;
+    tgfx::ShaderHandle vs2, fs2;
     if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
     ctx2->bind_shader(vs2, fs2);
 
     // Vertex layout: single vec3 position at location 0, tightly packed.
-    tgfx2::VertexBufferLayout layout;
+    tgfx::VertexBufferLayout layout;
     layout.stride = 3 * sizeof(float);
-    layout.attributes.push_back({0, tgfx2::VertexFormat::Float3, 0});
+    layout.attributes.push_back({0, tgfx::VertexFormat::Float3, 0});
     ctx2->set_vertex_layout(layout);
-    ctx2->set_topology(tgfx2::PrimitiveTopology::TriangleList);
+    ctx2->set_topology(tgfx::PrimitiveTopology::TriangleList);
 
     ctx2->set_uniform_mat4("u_view",       view.data, /*transpose=*/false);
     ctx2->set_uniform_mat4("u_projection", proj.data, /*transpose=*/false);

@@ -166,7 +166,7 @@ void PullRenderingManager::render_display(tc_display* display) {
     RenderEngine* engine = render_engine();
     if (engine) engine->ensure_tgfx2();
     auto* gl_dev = engine
-        ? dynamic_cast<tgfx2::OpenGLRenderDevice*>(engine->tgfx2_device())
+        ? dynamic_cast<tgfx::OpenGLRenderDevice*>(engine->tgfx2_device())
         : nullptr;
     if (!gl_dev) {
         tc_log(TC_LOG_WARN, "[PullRM] present_display: tgfx2 GL device not available");
@@ -261,7 +261,7 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     ViewportRenderState* state = get_or_create_viewport_state(viewport);
     RenderEngine* engine = render_engine();
     if (engine) engine->ensure_tgfx2();
-    tgfx2::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
     if (!device) {
         tc_log(TC_LOG_WARN, "[PullRM] render_viewport_offscreen: tgfx2 device unavailable");
         return;

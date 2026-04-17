@@ -55,12 +55,12 @@ private:
     static void id_to_rgb(int id, float& r, float& g, float& b);
 
     // Lazy tgfx2 resources (shader + UBO) used by execute_with_data_tgfx2.
-    tgfx2::IRenderDevice* device2_ = nullptr;
-    tgfx2::ShaderHandle id_vs2_;
-    tgfx2::ShaderHandle id_fs2_;
-    tgfx2::BufferHandle per_frame_ubo_;
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tgfx::ShaderHandle id_vs2_;
+    tgfx::ShaderHandle id_fs2_;
+    tgfx::BufferHandle per_frame_ubo_;
 
-    void ensure_tgfx2_resources(tgfx2::IRenderDevice& device);
+    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
 };
 

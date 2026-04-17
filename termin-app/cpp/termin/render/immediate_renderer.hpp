@@ -9,7 +9,7 @@
 #include <memory>
 #include <functional>
 
-namespace tgfx2 { class RenderContext2; }
+namespace tgfx { class RenderContext2; }
 
 namespace termin {
 
@@ -184,12 +184,12 @@ public:
     // ============================================================
 
     /**
-     * Render all accumulated primitives through tgfx2::RenderContext2.
+     * Render all accumulated primitives through tgfx::RenderContext2.
      * The caller must already have an open render pass on ctx2.
      * Clears buffers after rendering.
      */
     void flush(
-        tgfx2::RenderContext2* ctx2,
+        tgfx::RenderContext2* ctx2,
         const Mat44& view_matrix,
         const Mat44& proj_matrix,
         bool depth_test = true,
@@ -200,7 +200,7 @@ public:
      * Render only depth-tested primitives. Clears depth buffers.
      */
     void flush_depth(
-        tgfx2::RenderContext2* ctx2,
+        tgfx::RenderContext2* ctx2,
         const Mat44& view_matrix,
         const Mat44& proj_matrix,
         bool blend = true
@@ -233,7 +233,7 @@ private:
     void _ensure_shader();
 
     void _flush_buffers(
-        tgfx2::RenderContext2* ctx2,
+        tgfx::RenderContext2* ctx2,
         std::vector<float>& lines,
         std::vector<float>& tris,
         const Mat44& view_matrix,

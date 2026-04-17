@@ -15,13 +15,13 @@ namespace termin {
 // - Intermediate FBOs are managed separately by the pipeline's FBOPool.
 class ViewportRenderState {
 public:
-    tgfx2::TextureHandle output_color_tex;
-    tgfx2::TextureHandle output_depth_tex;
+    tgfx::TextureHandle output_color_tex;
+    tgfx::TextureHandle output_depth_tex;
     int output_width = 0;
     int output_height = 0;
 
 private:
-    tgfx2::IRenderDevice* device_ = nullptr;
+    tgfx::IRenderDevice* device_ = nullptr;
 
 public:
     ViewportRenderState() = default;
@@ -68,7 +68,7 @@ public:
 
     // Ensure output color+depth textures exist at the given size.
     // Reallocates on size change via the provided tgfx2 device.
-    void ensure_output_textures(tgfx2::IRenderDevice& device, int width, int height) {
+    void ensure_output_textures(tgfx::IRenderDevice& device, int width, int height) {
         if (output_color_tex && output_width == width && output_height == height &&
             device_ == &device) {
             return;
@@ -77,21 +77,21 @@ public:
 
         device_ = &device;
 
-        tgfx2::TextureDesc color_desc;
+        tgfx::TextureDesc color_desc;
         color_desc.width = static_cast<uint32_t>(width);
         color_desc.height = static_cast<uint32_t>(height);
-        color_desc.format = tgfx2::PixelFormat::RGBA8_UNorm;
-        color_desc.usage = tgfx2::TextureUsage::Sampled |
-                           tgfx2::TextureUsage::ColorAttachment |
-                           tgfx2::TextureUsage::CopyDst;
+        color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        color_desc.usage = tgfx::TextureUsage::Sampled |
+                           tgfx::TextureUsage::ColorAttachment |
+                           tgfx::TextureUsage::CopyDst;
         output_color_tex = device.create_texture(color_desc);
 
-        tgfx2::TextureDesc depth_desc;
+        tgfx::TextureDesc depth_desc;
         depth_desc.width = static_cast<uint32_t>(width);
         depth_desc.height = static_cast<uint32_t>(height);
-        depth_desc.format = tgfx2::PixelFormat::D24_UNorm;
-        depth_desc.usage = tgfx2::TextureUsage::DepthStencilAttachment |
-                           tgfx2::TextureUsage::Sampled;
+        depth_desc.format = tgfx::PixelFormat::D24_UNorm;
+        depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment |
+                           tgfx::TextureUsage::Sampled;
         output_depth_tex = device.create_texture(depth_desc);
 
         output_width = width;

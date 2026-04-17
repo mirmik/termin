@@ -74,7 +74,7 @@ void SkinnedMeshRenderer::update_bone_matrices() {
 }
 
 void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
-    tgfx2::RenderContext2& ctx2,
+    tgfx::RenderContext2& ctx2,
     int geometry_id
 ) {
     (void)geometry_id;

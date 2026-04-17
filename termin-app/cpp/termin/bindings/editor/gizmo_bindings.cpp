@@ -68,7 +68,7 @@ public:
 
     void draw_solid(
         SolidPrimitiveRenderer* renderer,
-        tgfx2::RenderContext2* ctx2,
+        tgfx::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj
     ) override {
@@ -81,7 +81,7 @@ public:
 
     void draw_transparent_solid(
         SolidPrimitiveRenderer* renderer,
-        tgfx2::RenderContext2* ctx2,
+        tgfx::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj
     ) override {
@@ -160,7 +160,7 @@ void bind_gizmo(nb::module_& m) {
         // render with float64 matrices (from camera)
         .def("render", [](GizmoManager& self,
                           ImmediateRenderer* renderer,
-                          tgfx2::RenderContext2* ctx2,
+                          tgfx::RenderContext2* ctx2,
                           nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
                           nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj) {
             self.render(renderer, ctx2, ndarray_to_mat44f(view), ndarray_to_mat44f(proj));
@@ -168,7 +168,7 @@ void bind_gizmo(nb::module_& m) {
         // render with Mat44 (double)
         .def("render", [](GizmoManager& self,
                           ImmediateRenderer* renderer,
-                          tgfx2::RenderContext2* ctx2,
+                          tgfx::RenderContext2* ctx2,
                           const Mat44& view,
                           const Mat44& proj) {
             Mat44f view_f, proj_f;

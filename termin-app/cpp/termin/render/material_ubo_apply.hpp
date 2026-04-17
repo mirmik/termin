@@ -22,7 +22,7 @@ extern "C" {
 #include "tgfx/resources/tc_shader.h"
 }
 
-namespace tgfx2 {
+namespace tgfx {
 class IRenderDevice;
 class RenderContext2;
 }
@@ -43,8 +43,8 @@ struct MaterialUboLayout;
 // A sampled texture that accompanies the material UBO at draw time.
 struct MaterialTextureBinding {
     uint32_t slot = 0;
-    tgfx2::TextureHandle texture;
-    tgfx2::SamplerHandle sampler;  // may be {} for default sampling
+    tgfx::TextureHandle texture;
+    tgfx::SamplerHandle sampler;  // may be {} for default sampling
 };
 
 // Pack, upload, and bind one material UBO + its textures.
@@ -63,10 +63,10 @@ void bind_material_ubo(
     const MaterialUboLayout& layout,
     const std::vector<MaterialProperty>& values,
     const std::vector<MaterialTextureBinding>& textures,
-    tgfx2::BufferHandle ubo,
+    tgfx::BufferHandle ubo,
     uint32_t ubo_slot,
-    tgfx2::IRenderDevice& device,
-    tgfx2::RenderContext2& ctx);
+    tgfx::IRenderDevice& device,
+    tgfx::RenderContext2& ctx);
 
 // Ensure `phase` has a tgfx2 UBO that matches the current shader's
 // material_ubo_block_size. Allocates on first call, reallocates on
@@ -77,10 +77,10 @@ void bind_material_ubo(
 // Returns a BufferHandle wrapping `phase->ubo_id`. If the shader has no
 // material UBO layout (block_size == 0), returns an invalid handle and
 // leaves the phase fields cleared.
-tgfx2::BufferHandle ensure_material_phase_ubo(
+tgfx::BufferHandle ensure_material_phase_ubo(
     tc_material_phase* phase,
     const tc_shader* shader,
-    tgfx2::IRenderDevice& device);
+    tgfx::IRenderDevice& device);
 
 // Dispatch entry point: if `shader` declares a material UBO layout,
 // packs + uploads the phase's uniforms + binds the UBO at `ubo_slot`
@@ -94,8 +94,8 @@ bool apply_material_phase_ubo(
     const tc_shader* shader,
     uint32_t ubo_slot,
     uint32_t tex_slot_start,
-    tgfx2::IRenderDevice& device,
-    tgfx2::RenderContext2& ctx);
+    tgfx::IRenderDevice& device,
+    tgfx::RenderContext2& ctx);
 
 // Raw-GL variant: same as apply_material_phase_ubo but bypasses
 // RenderContext2 entirely and binds the UBO via direct
@@ -116,6 +116,6 @@ bool apply_material_phase_ubo_gl(
     tc_material_phase* phase,
     const tc_shader* shader,
     uint32_t binding_slot,
-    tgfx2::IRenderDevice& device);
+    tgfx::IRenderDevice& device);
 
 } // namespace termin

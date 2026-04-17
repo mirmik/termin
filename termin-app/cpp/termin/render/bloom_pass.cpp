@@ -1,6 +1,6 @@
 // bloom_pass.cpp - HDR bloom post-processing pass implementation.
 //
-// Draws through tgfx2::RenderContext2: four sub-passes (bright,
+// Draws through tgfx::RenderContext2: four sub-passes (bright,
 // downsample chain, upsample chain, composite) with an HDR (RGBA16F)
 // mip chain allocated as tgfx2 textures, std140 UBOs for parameters,
 // bind_sampled_texture for all sampler slots. Legacy tgfx1 dual-path
@@ -223,9 +223,9 @@ std::set<const char*> BloomPass::compute_writes() const {
 void BloomPass::ensure_tgfx2_shaders() {
     if (bright_fs2_) return;
 
-    auto compile = [&](const char* src) -> tgfx2::ShaderHandle {
-        tgfx2::ShaderDesc desc;
-        desc.stage = tgfx2::ShaderStage::Fragment;
+    auto compile = [&](const char* src) -> tgfx::ShaderHandle {
+        tgfx::ShaderDesc desc;
+        desc.stage = tgfx::ShaderStage::Fragment;
         desc.source = src;
         return device2_->create_shader(desc);
     };
@@ -235,10 +235,10 @@ void BloomPass::ensure_tgfx2_shaders() {
     upsample_fs2_   = compile(UPSAMPLE_FRAG_UBO);
     composite_fs2_  = compile(COMPOSITE_FRAG_UBO);
 
-    auto make_ubo = [&](uint64_t size) -> tgfx2::BufferHandle {
-        tgfx2::BufferDesc desc;
+    auto make_ubo = [&](uint64_t size) -> tgfx::BufferHandle {
+        tgfx::BufferDesc desc;
         desc.size = size;
-        desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
+        desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
         return device2_->create_buffer(desc);
     };
 
@@ -276,13 +276,13 @@ void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
         int mip_w = std::max(1, width >> i);
         int mip_h = std::max(1, height >> i);
 
-        tgfx2::TextureDesc desc;
+        tgfx::TextureDesc desc;
         desc.width = mip_w;
         desc.height = mip_h;
         desc.mip_levels = 1;
         desc.sample_count = 1;
-        desc.format = tgfx2::PixelFormat::RGBA16F;
-        desc.usage = tgfx2::TextureUsage::ColorAttachment | tgfx2::TextureUsage::Sampled;
+        desc.format = tgfx::PixelFormat::RGBA16F;
+        desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::Sampled;
         mip_textures_.push_back(device2_->create_texture(desc));
     }
 }
@@ -292,22 +292,22 @@ void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
 // layout. Caller is responsible for begin_pass / set_viewport /
 // bind_uniform_buffer / bind_sampled_texture / draw_fullscreen_quad /
 // end_pass around this.
-static void setup_fsq_state(tgfx2::RenderContext2& ctx,
-                            tgfx2::ShaderHandle fs,
-                            tgfx2::PixelFormat color_fmt) {
+static void setup_fsq_state(tgfx::RenderContext2& ctx,
+                            tgfx::ShaderHandle fs,
+                            tgfx::PixelFormat color_fmt) {
     ctx.set_depth_test(false);
     ctx.set_depth_write(false);
     ctx.set_blend(false);
-    ctx.set_cull(tgfx2::CullMode::None);
+    ctx.set_cull(tgfx::CullMode::None);
 
     ctx.bind_shader(ctx.fsq_vertex_shader(), fs);
     ctx.set_color_format(color_fmt);
 
-    tgfx2::VertexBufferLayout fsq_layout;
+    tgfx::VertexBufferLayout fsq_layout;
     fsq_layout.stride = 4 * sizeof(float);
     fsq_layout.attributes = {
-        {0, tgfx2::VertexFormat::Float2, 0},
-        {1, tgfx2::VertexFormat::Float2, 2 * sizeof(float)},
+        {0, tgfx::VertexFormat::Float2, 0},
+        {1, tgfx::VertexFormat::Float2, 2 * sizeof(float)},
     };
     ctx.set_vertex_layout(fsq_layout);
 }
@@ -323,7 +323,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
                        input_res.c_str());
         return;
     }
-    tgfx2::TextureHandle input_tex2 = in_it->second;
+    tgfx::TextureHandle input_tex2 = in_it->second;
 
     auto out_it = ctx.tex2_writes.find(output_res);
     if (out_it == ctx.tex2_writes.end() || !out_it->second) {
@@ -331,7 +331,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
                        output_res.c_str());
         return;
     }
-    tgfx2::TextureHandle output_tex2 = out_it->second;
+    tgfx::TextureHandle output_tex2 = out_it->second;
 
     auto out_desc = ctx.ctx2->device().texture_desc(output_tex2);
     const int w = static_cast<int>(out_desc.width);
@@ -363,7 +363,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(mip_textures_[0]);
         c2.set_viewport(0, 0, w, h);
-        setup_fsq_state(c2, bright_fs2_, tgfx2::PixelFormat::RGBA16F);
+        setup_fsq_state(c2, bright_fs2_, tgfx::PixelFormat::RGBA16F);
         c2.bind_uniform_buffer(0, bright_ubo_);
         c2.bind_sampled_texture(0, input_tex2);
         c2.draw_fullscreen_quad();
@@ -386,7 +386,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
-        setup_fsq_state(c2, downsample_fs2_, tgfx2::PixelFormat::RGBA16F);
+        setup_fsq_state(c2, downsample_fs2_, tgfx::PixelFormat::RGBA16F);
         c2.bind_uniform_buffer(0, downsample_ubo_);
         c2.bind_sampled_texture(0, mip_textures_[i - 1]);
         c2.draw_fullscreen_quad();
@@ -416,7 +416,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
         // the current texel (no cross-pixel sample).
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
-        setup_fsq_state(c2, upsample_fs2_, tgfx2::PixelFormat::RGBA16F);
+        setup_fsq_state(c2, upsample_fs2_, tgfx::PixelFormat::RGBA16F);
         c2.bind_uniform_buffer(0, upsample_ubo_);
         c2.bind_sampled_texture(0, mip_textures_[i + 1]);
         c2.bind_sampled_texture(1, mip_textures_[i]);
@@ -434,7 +434,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(output_tex2);
         c2.set_viewport(0, 0, w, h);
-        setup_fsq_state(c2, composite_fs2_, tgfx2::PixelFormat::RGBA8_UNorm);
+        setup_fsq_state(c2, composite_fs2_, tgfx::PixelFormat::RGBA8_UNorm);
         c2.bind_uniform_buffer(0, composite_ubo_);
         c2.bind_sampled_texture(0, input_tex2);
         c2.bind_sampled_texture(1, mip_textures_[0]);

@@ -60,7 +60,7 @@ public:
      * currently-bound ctx2 program right before ctx2->draw().
      */
     void upload_per_draw_uniforms_tgfx2(
-        tgfx2::RenderContext2& ctx2,
+        tgfx::RenderContext2& ctx2,
         int geometry_id
     ) override;
 
