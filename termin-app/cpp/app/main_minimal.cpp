@@ -100,6 +100,18 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Using bundled Python: " << python_stdlib << std::endl;
 
+        // Anchor the SDK root to this executable's install tree so
+        // Python-side `preload_sdk_libs()` (termin_nanobind/runtime.py)
+        // loads libs from here instead of falling back to /opt/termin.
+        // Respect an explicit TERMIN_SDK if the user already set one.
+        if (std::getenv("TERMIN_SDK") == nullptr) {
+#ifdef _WIN32
+            _putenv_s("TERMIN_SDK", install_root.string().c_str());
+#else
+            setenv("TERMIN_SDK", install_root.c_str(), 1);
+#endif
+        }
+
         static std::string python_home_str = install_root.string();
         static std::wstring python_home_wstr(python_home_str.begin(), python_home_str.end());
         Py_SetPythonHome(python_home_wstr.c_str());
