@@ -23,7 +23,7 @@ from termin.visualization.core.camera import (
 from termin.visualization.core.mesh import MeshDrawable
 from termin.render_components import MeshRenderer
 from termin.visualization.core.material import Material
-from tgfx import TcShader, GraphicsBackend
+from tgfx import TcShader
 from tgfx.window import WindowBackend
 from tcbase import MouseButton, Key, Action
 from termin.visualization.render.texture import Texture
@@ -51,7 +51,6 @@ __all__ = [
     "Texture",
     "Visualization",
     "VisualizationWorld",
-    "GraphicsBackend",
     "WindowBackend",
     "MouseButton",
     "Key",

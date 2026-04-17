@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 from termin.visualization.render.framegraph.core import FramePass
 
 if TYPE_CHECKING:
-    from tgfx import GraphicsBackend, FramebufferHandle
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
@@ -55,16 +54,3 @@ class RenderFramePass(FramePass):
         """
         pass
 
-    def _blit_to_debugger(
-        self, graphics: "GraphicsBackend", src_fbo: "FramebufferHandle"
-    ) -> None:
-        """
-        Blit current FBO state into debugger's capture FBO.
-
-        Used for "inside pass" mode — capturing intermediate state
-        after rendering a specific entity.
-        """
-        cap = self._tc_pass.get_debug_capture()
-        if cap is None:
-            return
-        cap.capture_direct(src_fbo, graphics)

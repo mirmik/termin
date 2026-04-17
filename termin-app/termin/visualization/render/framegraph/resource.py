@@ -25,9 +25,6 @@ from termin._native.render import (
     ShadowMapArrayResource,
 )
 
-if TYPE_CHECKING:
-    from tgfx import FramebufferHandle, GPUTextureHandle
-
 __all__ = [
     "FrameGraphResource",
     "SingleFBO",

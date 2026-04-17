@@ -10,7 +10,6 @@ from typing import Set, TYPE_CHECKING, Callable
 from termin.visualization.render.framegraph.passes.base import RenderFramePass
 
 if TYPE_CHECKING:
-    from tgfx import FramebufferHandle
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
@@ -58,27 +57,6 @@ class FrameDebuggerPass(RenderFramePass):
 
     def required_resources(self) -> set[str]:
         return set(self.reads)
-
-    def _get_fbo_from_resource(self, resource) -> "FramebufferHandle | None":
-        """Extract FramebufferHandle from a framegraph resource."""
-        from termin.visualization.render.framegraph.resource import (
-            SingleFBO,
-            ShadowMapArrayResource,
-        )
-        from termin.graphics import FramebufferHandle
-
-        if isinstance(resource, ShadowMapArrayResource):
-            if len(resource) == 0:
-                return None
-            return resource[0].fbo
-
-        if isinstance(resource, SingleFBO):
-            return resource._fbo
-
-        if isinstance(resource, FramebufferHandle):
-            return resource
-
-        return None
 
     def execute(self, ctx: "ExecuteContext") -> None:
         from tcbase import log
