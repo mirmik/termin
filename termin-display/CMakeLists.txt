@@ -81,7 +81,17 @@ set(TERMIN_DISPLAY_SOURCES
 if(TERMIN_DISPLAY_HAS_SDL)
     list(APPEND TERMIN_DISPLAY_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_render_surface.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/platform/backend_window.cpp
     )
+endif()
+
+# Optional Vulkan path for BackendWindow. When enabled, BackendWindow
+# reads TERMIN_BACKEND=vulkan and creates a VulkanRenderDevice + swapchain;
+# without this flag it only supports the OpenGL backend (TERMIN_BACKEND=vulkan
+# then throws "Vulkan backend not compiled" at ctor time).
+option(TGFX2_ENABLE_VULKAN "Enable Vulkan path in BackendWindow" OFF)
+if(TGFX2_ENABLE_VULKAN)
+    find_package(Vulkan REQUIRED)
 endif()
 
 if(TERMIN_DISPLAY_BUILD_SHARED)
@@ -121,6 +131,7 @@ target_link_libraries(termin_display
     PUBLIC
         tcbase::termin_base
         tgfx::termin_graphics
+        tgfx::termin_graphics2
         termin_scene::termin_scene
         termin_input::termin_input
         termin_render::termin_render
@@ -128,6 +139,11 @@ target_link_libraries(termin_display
 
 if(TERMIN_DISPLAY_HAS_SDL)
     target_link_libraries(termin_display PRIVATE ${SDL2_LIBRARIES})
+endif()
+
+if(TGFX2_ENABLE_VULKAN)
+    target_compile_definitions(termin_display PRIVATE TGFX2_HAS_VULKAN)
+    target_link_libraries(termin_display PRIVATE Vulkan::Vulkan)
 endif()
 
 if(UNIX AND NOT APPLE)
@@ -236,10 +252,22 @@ if(TERMIN_DISPLAY_HAS_SDL)
     install(FILES
         ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_window.hpp
         ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_render_surface.hpp
+        ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/backend_window.hpp
         DESTINATION include/termin/platform
     )
     if(WIN32 AND SDL2_DLL)
         install(FILES ${SDL2_DLL} DESTINATION bin)
+    endif()
+
+    # Standalone smoke test: the same triangle code running on either
+    # backend. Built when tests are enabled.
+    option(TERMIN_DISPLAY_BUILD_TESTS "Build termin-display smoke tests" OFF)
+    if(TERMIN_DISPLAY_BUILD_TESTS)
+        add_executable(backend_window_triangle tests/test_backend_window_triangle.cpp)
+        target_link_libraries(backend_window_triangle
+            PRIVATE termin_display ${SDL2_LIBRARIES})
+        target_include_directories(backend_window_triangle
+            PRIVATE ${SDL2_INCLUDE_DIRS})
     endif()
 endif()
 
