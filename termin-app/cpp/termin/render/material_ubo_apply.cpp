@@ -27,10 +27,10 @@ void bind_material_ubo(
     const MaterialUboLayout& layout,
     const std::vector<MaterialProperty>& values,
     const std::vector<MaterialTextureBinding>& textures,
-    tgfx2::BufferHandle ubo,
+    tgfx::BufferHandle ubo,
     uint32_t ubo_slot,
-    tgfx2::IRenderDevice& device,
-    tgfx2::RenderContext2& ctx)
+    tgfx::IRenderDevice& device,
+    tgfx::RenderContext2& ctx)
 {
     if (!layout.empty() && ubo) {
         // Zero-initialised staging — unset properties become zero bytes,
@@ -133,15 +133,15 @@ MaterialUboLayout layout_from_tc_shader(const tc_shader* shader) {
 
 // --- Release callback (C ABI, registered with tc_material) ---
 //
-// The phase owns a tgfx2::BufferHandle (stored as uint32_t) plus a back
+// The phase owns a tgfx::BufferHandle (stored as uint32_t) plus a back
 // pointer to the IRenderDevice that minted it. On phase destroy, the C
 // layer calls us to invoke IRenderDevice::destroy on the handle. This
 // mirrors the tgfx2_shader_device back-pointer on tc_gpu_slot from
 // Stage 5.A.
 extern "C" void material_phase_release_ubo_cb(tc_material_phase* phase) {
     if (!phase || phase->ubo_id == 0 || !phase->ubo_device) return;
-    auto* device = static_cast<tgfx2::IRenderDevice*>(phase->ubo_device);
-    tgfx2::BufferHandle handle{};
+    auto* device = static_cast<tgfx::IRenderDevice*>(phase->ubo_device);
+    tgfx::BufferHandle handle{};
     handle.id = phase->ubo_id;
     device->destroy(handle);
     // Field reset happens in tc_material_phase_release_ubo in the C
@@ -158,7 +158,7 @@ extern "C" bool material_phase_apply_ubo_gl_cb(
     void* tgfx2_device
 ) {
     if (!tgfx2_device) return false;
-    auto* device = static_cast<tgfx2::IRenderDevice*>(tgfx2_device);
+    auto* device = static_cast<tgfx::IRenderDevice*>(tgfx2_device);
     return termin::apply_material_phase_ubo_gl(phase, shader, binding_slot, *device);
 }
 
@@ -174,10 +174,10 @@ void ensure_release_cb_installed() {
 
 } // namespace
 
-tgfx2::BufferHandle ensure_material_phase_ubo(
+tgfx::BufferHandle ensure_material_phase_ubo(
     tc_material_phase* phase,
     const tc_shader* shader,
-    tgfx2::IRenderDevice& device)
+    tgfx::IRenderDevice& device)
 {
     if (!phase || !shader) return {};
     uint32_t block_size = shader->material_ubo_block_size;
@@ -210,17 +210,17 @@ tgfx2::BufferHandle ensure_material_phase_ubo(
         // leak — that's the "device changed under us" case which we log
         // and accept in favour of not double-freeing.
         if (phase->ubo_id != 0 && phase->ubo_device == &device) {
-            tgfx2::BufferHandle old{};
+            tgfx::BufferHandle old{};
             old.id = phase->ubo_id;
             device.destroy(old);
         } else if (phase->ubo_id != 0) {
             tc::Log::error("ensure_material_phase_ubo: phase UBO leak — device changed");
         }
 
-        tgfx2::BufferDesc desc;
+        tgfx::BufferDesc desc;
         desc.size = block_size;
-        desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
-        tgfx2::BufferHandle fresh = device.create_buffer(desc);
+        desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
+        tgfx::BufferHandle fresh = device.create_buffer(desc);
 
         phase->ubo_id = fresh.id;
         phase->ubo_size = block_size;
@@ -237,7 +237,7 @@ tgfx2::BufferHandle ensure_material_phase_ubo(
         return fresh;
     }
 
-    tgfx2::BufferHandle h{};
+    tgfx::BufferHandle h{};
     h.id = phase->ubo_id;
     return h;
 }
@@ -247,13 +247,13 @@ bool apply_material_phase_ubo(
     const tc_shader* shader,
     uint32_t ubo_slot,
     uint32_t tex_slot_start,
-    tgfx2::IRenderDevice& device,
-    tgfx2::RenderContext2& ctx)
+    tgfx::IRenderDevice& device,
+    tgfx::RenderContext2& ctx)
 {
     if (!phase || !shader) return false;
     if (shader->material_ubo_block_size == 0) return false;
 
-    tgfx2::BufferHandle ubo = ensure_material_phase_ubo(phase, shader, device);
+    tgfx::BufferHandle ubo = ensure_material_phase_ubo(phase, shader, device);
     if (!ubo) return false;
 
     // Translate phase uniforms (C) into MaterialProperty (C++) for
@@ -267,7 +267,7 @@ bool apply_material_phase_ubo(
     // Build the layout view on the tc_shader C-side entries.
     MaterialUboLayout layout = layout_from_tc_shader(shader);
 
-    // Wrap each phase texture as a tgfx2::TextureHandle for the duration
+    // Wrap each phase texture as a tgfx::TextureHandle for the duration
     // of the frame. Sampler slots start at tex_slot_start and increment
     // in declaration order — shader authors must keep their fragment
     // sampler bindings in the same order as the .shader @property
@@ -276,7 +276,7 @@ bool apply_material_phase_ubo(
     // The wrappers are single-use: registered here, bound into the
     // resource set by bind_material_ubo, and deferred-destroyed at
     // ctx.end_frame() so their HandlePool slots don't leak.
-    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&device);
+    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device);
     std::vector<MaterialTextureBinding> textures;
     if (gl_dev) {
         textures.reserve(phase->texture_count);
@@ -287,7 +287,7 @@ bool apply_material_phase_ubo(
                 slot++;
                 continue;
             }
-            tgfx2::TextureHandle tex2 =
+            tgfx::TextureHandle tex2 =
                 wrap_tc_texture_as_tgfx2(*gl_dev, mat_tex.texture);
             if (tex2) {
                 MaterialTextureBinding b;
@@ -308,17 +308,17 @@ bool apply_material_phase_ubo_gl(
     tc_material_phase* phase,
     const tc_shader* shader,
     uint32_t binding_slot,
-    tgfx2::IRenderDevice& device)
+    tgfx::IRenderDevice& device)
 {
     if (!phase || !shader) return false;
     if (shader->material_ubo_block_size == 0) return false;
 
     // Allocate (or reuse) the phase's tgfx2 buffer. Ownership stays
     // with the phase; we get its gl id and drive GL directly.
-    tgfx2::BufferHandle ubo = ensure_material_phase_ubo(phase, shader, device);
+    tgfx::BufferHandle ubo = ensure_material_phase_ubo(phase, shader, device);
     if (!ubo) return false;
 
-    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&device);
+    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device);
     if (!gl_dev) {
         tc::Log::error("apply_material_phase_ubo_gl: device is not OpenGLRenderDevice");
         return false;

@@ -256,10 +256,10 @@ Entity EditorInteractionSystem::pick_entity_at(
     if (!tc_pipeline_pool_alive(pipeline_h)) return Entity();
     RenderPipeline pipeline(pipeline_h);
 
-    tgfx2::TextureHandle id_tex = pipeline.get_color_tex2("id");
+    tgfx::TextureHandle id_tex = pipeline.get_color_tex2("id");
     if (!id_tex) return Entity();
 
-    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(pipeline.tex2_device());
+    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(pipeline.tex2_device());
     if (!gl_dev) return Entity();
 
     int fx, fy;

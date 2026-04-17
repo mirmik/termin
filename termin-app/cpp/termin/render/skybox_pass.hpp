@@ -16,7 +16,7 @@
 
 #include <string>
 
-namespace tgfx2 { class IRenderDevice; }
+namespace tgfx { class IRenderDevice; }
 
 namespace termin {
 
@@ -28,12 +28,12 @@ public:
 private:
     // tgfx2 resources, all created lazily on first execute when the device
     // becomes reachable through ExecuteContext::ctx2. Destroyed in destroy().
-    tgfx2::IRenderDevice* device2_ = nullptr;
-    tgfx2::ShaderHandle vs_;
-    tgfx2::ShaderHandle fs_;
-    tgfx2::BufferHandle cube_vbo_;
-    tgfx2::BufferHandle cube_ibo_;
-    tgfx2::BufferHandle params_ubo_;
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tgfx::ShaderHandle vs_;
+    tgfx::ShaderHandle fs_;
+    tgfx::BufferHandle cube_vbo_;
+    tgfx::BufferHandle cube_ibo_;
+    tgfx::BufferHandle params_ubo_;
 
     // Parsed from SKYBOX_SHADER_TEXT at ensure_resources time — layout
     // drives std140_pack and the UBO block_size. No hand-coded duplicate.

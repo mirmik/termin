@@ -512,7 +512,7 @@ void ImmediateRenderer::_ensure_shader() {
 }
 
 void ImmediateRenderer::_flush_buffers(
-    tgfx2::RenderContext2* ctx2,
+    tgfx::RenderContext2* ctx2,
     std::vector<float>& lines,
     std::vector<float>& tris,
     const Mat44& view_matrix,
@@ -531,7 +531,7 @@ void ImmediateRenderer::_flush_buffers(
     // Compile to tgfx2 ShaderHandle pair via bridge (cached per shader).
     tc_shader* raw = tc_shader_get(_shader.handle);
     if (!raw) return;
-    tgfx2::ShaderHandle vs2, fs2;
+    tgfx::ShaderHandle vs2, fs2;
     if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
 
     if (detailed) tc_profiler_begin_section("Setup");
@@ -539,10 +539,10 @@ void ImmediateRenderer::_flush_buffers(
     ctx2->set_depth_write(depth_test);
     ctx2->set_blend(blend);
     if (blend) {
-        ctx2->set_blend_func(tgfx2::BlendFactor::SrcAlpha,
-                             tgfx2::BlendFactor::OneMinusSrcAlpha);
+        ctx2->set_blend_func(tgfx::BlendFactor::SrcAlpha,
+                             tgfx::BlendFactor::OneMinusSrcAlpha);
     }
-    ctx2->set_cull(tgfx2::CullMode::None);
+    ctx2->set_cull(tgfx::CullMode::None);
     ctx2->bind_shader(vs2, fs2);
 
     // 7 floats per vertex: x,y,z, r,g,b,a — matches draw_immediate_*
@@ -574,7 +574,7 @@ void ImmediateRenderer::_flush_buffers(
 }
 
 void ImmediateRenderer::flush(
-    tgfx2::RenderContext2* ctx2,
+    tgfx::RenderContext2* ctx2,
     const Mat44& view_matrix,
     const Mat44& proj_matrix,
     bool depth_test,
@@ -589,7 +589,7 @@ void ImmediateRenderer::flush(
 }
 
 void ImmediateRenderer::flush_depth(
-    tgfx2::RenderContext2* ctx2,
+    tgfx::RenderContext2* ctx2,
     const Mat44& view_matrix,
     const Mat44& proj_matrix,
     bool blend

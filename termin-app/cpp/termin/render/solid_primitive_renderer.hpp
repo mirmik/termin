@@ -8,7 +8,7 @@
 #include <tgfx/tgfx_shader_handle.hpp>
 #include "tgfx2/handles.hpp"
 
-namespace tgfx2 {
+namespace tgfx {
 class RenderContext2;
 class IRenderDevice;
 }
@@ -16,7 +16,7 @@ class IRenderDevice;
 namespace termin {
 
 // Solid primitive renderer using pre-built GPU meshes.
-// Rendered through tgfx2::RenderContext2 end-to-end.
+// Rendered through tgfx::RenderContext2 end-to-end.
 // All geometry is created once at initialization via tgfx2 buffers,
 // drawing sets model matrices and colors per-primitive via ctx2's
 // transitional plain-uniform setters.
@@ -31,8 +31,8 @@ public:
 
     // tgfx2 buffer resources per primitive.
     struct MeshRes {
-        tgfx2::BufferHandle vbo;
-        tgfx2::BufferHandle ibo;
+        tgfx::BufferHandle vbo;
+        tgfx::BufferHandle ibo;
         uint32_t index_count = 0;
     };
     MeshRes _torus;
@@ -44,8 +44,8 @@ public:
     TcShader _shader;                  // Source of GLSL; compiled to
                                        // tgfx2 ShaderHandle pair via
                                        // tc_shader_ensure_tgfx2.
-    tgfx2::IRenderDevice* _device = nullptr;
-    tgfx2::RenderContext2* _ctx2 = nullptr;
+    tgfx::IRenderDevice* _device = nullptr;
+    tgfx::RenderContext2* _ctx2 = nullptr;
 
 public:
     SolidPrimitiveRenderer() = default;
@@ -64,7 +64,7 @@ public:
     // called — begin() does NOT call ctx2->begin_pass (the caller
     // already owns the pass boundary).
     void begin(
-        tgfx2::RenderContext2* ctx2,
+        tgfx::RenderContext2* ctx2,
         const Mat44f& view,
         const Mat44f& proj,
         bool depth_test = true,
@@ -103,7 +103,7 @@ public:
     );
 
 private:
-    void _ensure_initialized(tgfx2::IRenderDevice* device);
+    void _ensure_initialized(tgfx::IRenderDevice* device);
 };
 
 } // namespace termin

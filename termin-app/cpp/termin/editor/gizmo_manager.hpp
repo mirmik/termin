@@ -8,7 +8,7 @@
 #include <vector>
 #include <optional>
 
-namespace tgfx2 { class RenderContext2; }
+namespace tgfx { class RenderContext2; }
 
 namespace termin {
 
@@ -67,7 +67,7 @@ public:
     // Rendering (tgfx2 ctx2 path — caller must have an open pass).
     void render(
         ImmediateRenderer* renderer,
-        tgfx2::RenderContext2* ctx2,
+        tgfx::RenderContext2* ctx2,
         const Mat44f& view_matrix,
         const Mat44f& proj_matrix
     );

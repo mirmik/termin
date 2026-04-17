@@ -5,7 +5,7 @@
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
 
-namespace tgfx2 { class IRenderDevice; }
+namespace tgfx { class IRenderDevice; }
 
 namespace termin {
 
@@ -18,7 +18,7 @@ enum class TonemapMethod : int {
 
 // TonemapPass - converts HDR to displayable LDR range.
 //
-// Draws through tgfx2::RenderContext2 end-to-end: built-in FSQ, std140
+// Draws through tgfx::RenderContext2 end-to-end: built-in FSQ, std140
 // UBO for parameters via bind_uniform_buffer, input texture via
 // bind_sampled_texture. No raw GL calls. Legacy tgfx1 dual-path
 // removed in Stage 8.1.
@@ -32,9 +32,9 @@ public:
 private:
     // tgfx2 resources. Created lazily on first execute. Destroyed in
     // destroy() via device2_ if captured.
-    tgfx2::IRenderDevice* device2_ = nullptr;
-    tgfx2::ShaderHandle fs2_;
-    tgfx2::BufferHandle params_ubo_;
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tgfx::ShaderHandle fs2_;
+    tgfx::BufferHandle params_ubo_;
     float uploaded_exposure_ = -1.0f;
     int uploaded_method_ = -1;
 

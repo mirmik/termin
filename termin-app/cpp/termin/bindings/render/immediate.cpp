@@ -91,7 +91,7 @@ void bind_immediate(nb::module_& m) {
              nb::arg("head_length_ratio") = 0.25, nb::arg("segments") = 16, nb::arg("depth_test") = false)
         // Rendering via tgfx2 ctx2 (Stage 8.1 migration)
         .def("flush", [](ImmediateRenderer& self,
-                         tgfx2::RenderContext2* ctx2,
+                         tgfx::RenderContext2* ctx2,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj,
                          bool depth_test,
@@ -108,7 +108,7 @@ void bind_immediate(nb::module_& m) {
              nb::arg("ctx2"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
              nb::arg("depth_test") = true, nb::arg("blend") = true)
         .def("flush", [](ImmediateRenderer& self,
-                         tgfx2::RenderContext2* ctx2,
+                         tgfx::RenderContext2* ctx2,
                          const Mat44& view,
                          const Mat44& proj,
                          bool depth_test,
@@ -118,7 +118,7 @@ void bind_immediate(nb::module_& m) {
              nb::arg("ctx2"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
              nb::arg("depth_test") = true, nb::arg("blend") = true)
         .def("flush_depth", [](ImmediateRenderer& self,
-                         tgfx2::RenderContext2* ctx2,
+                         tgfx::RenderContext2* ctx2,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj,
                          bool blend) {
@@ -134,7 +134,7 @@ void bind_immediate(nb::module_& m) {
              nb::arg("ctx2"), nb::arg("view_matrix"), nb::arg("proj_matrix"),
              nb::arg("blend") = true)
         .def("flush_depth", [](ImmediateRenderer& self,
-                         tgfx2::RenderContext2* ctx2,
+                         tgfx::RenderContext2* ctx2,
                          const Mat44& view,
                          const Mat44& proj,
                          bool blend) {

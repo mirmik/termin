@@ -11,12 +11,12 @@
 #include <vector>
 #include <memory>
 
-namespace tgfx2 { class IRenderDevice; }
+namespace tgfx { class IRenderDevice; }
 
 namespace termin {
 
 // BloomPass - HDR bloom with mip-chain downsampling/upsampling.
-// Draws through tgfx2::RenderContext2 end-to-end (four sub-passes:
+// Draws through tgfx::RenderContext2 end-to-end (four sub-passes:
 // bright, downsample chain, upsample chain, composite). Legacy tgfx1
 // dual-path removed in Stage 8.1.
 class BloomPass : public CxxFramePass {
@@ -30,16 +30,16 @@ public:
 
 private:
     // tgfx2 resources — persistent across frames, rebuilt on resize.
-    tgfx2::IRenderDevice* device2_ = nullptr;
-    std::vector<tgfx2::TextureHandle> mip_textures_;
-    tgfx2::ShaderHandle bright_fs2_;
-    tgfx2::ShaderHandle downsample_fs2_;
-    tgfx2::ShaderHandle upsample_fs2_;
-    tgfx2::ShaderHandle composite_fs2_;
-    tgfx2::BufferHandle bright_ubo_;
-    tgfx2::BufferHandle downsample_ubo_;
-    tgfx2::BufferHandle upsample_ubo_;
-    tgfx2::BufferHandle composite_ubo_;
+    tgfx::IRenderDevice* device2_ = nullptr;
+    std::vector<tgfx::TextureHandle> mip_textures_;
+    tgfx::ShaderHandle bright_fs2_;
+    tgfx::ShaderHandle downsample_fs2_;
+    tgfx::ShaderHandle upsample_fs2_;
+    tgfx::ShaderHandle composite_fs2_;
+    tgfx::BufferHandle bright_ubo_;
+    tgfx::BufferHandle downsample_ubo_;
+    tgfx::BufferHandle upsample_ubo_;
+    tgfx::BufferHandle composite_ubo_;
 
     int last_tgfx2_width_ = 0;
     int last_tgfx2_height_ = 0;

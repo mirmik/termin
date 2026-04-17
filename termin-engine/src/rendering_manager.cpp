@@ -833,7 +833,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
         RenderEngine* vp_engine = render_engine();
         if (vp_engine) vp_engine->ensure_tgfx2();
-        tgfx2::IRenderDevice* vp_device = vp_engine ? vp_engine->tgfx2_device() : nullptr;
+        tgfx::IRenderDevice* vp_device = vp_engine ? vp_engine->tgfx2_device() : nullptr;
         if (!vp_device) {
             tc_log(TC_LOG_WARN, "[RenderingManager] tgfx2 device unavailable for viewport '%s'",
                    vp_name.c_str());
@@ -924,7 +924,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     ViewportRenderState* state = get_or_create_render_target_state(rt);
     RenderEngine* engine = render_engine();
     if (engine) engine->ensure_tgfx2();
-    tgfx2::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
     if (!device) {
         tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): tgfx2 device unavailable",
                vp_name ? vp_name : "(null)");
@@ -1017,7 +1017,7 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     ViewportRenderState* state = get_or_create_render_target_state(rt);
     RenderEngine* engine = render_engine();
     if (engine) engine->ensure_tgfx2();
-    tgfx2::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
     if (!device) {
         tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable",
                rt_name ? rt_name : "?");
@@ -1090,7 +1090,7 @@ void RenderingManager::present_display(tc_display* display) {
         engine->ensure_tgfx2();
     }
     auto* gl_dev = engine
-        ? dynamic_cast<tgfx2::OpenGLRenderDevice*>(engine->tgfx2_device())
+        ? dynamic_cast<tgfx::OpenGLRenderDevice*>(engine->tgfx2_device())
         : nullptr;
     if (!gl_dev) {
         tc_log(TC_LOG_WARN, "[RenderingManager] present_display: tgfx2 GL device not available");

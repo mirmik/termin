@@ -14,7 +14,7 @@ namespace termin {
  * Includes colored axis highlights (X=red, Y=green) and distance fade-out.
  * Writes gl_FragDepth for correct depth integration with scene geometry.
  *
- * Goes through tgfx2::RenderContext2 end-to-end.
+ * Goes through tgfx::RenderContext2 end-to-end.
  */
 class GroundGridPass : public CxxFramePass {
 public:
@@ -35,7 +35,7 @@ public:
 
 private:
     // TcShader kept as the compile source — tc_shader_ensure_tgfx2
-    // bridges it to a tgfx2::ShaderHandle pair on first execute. We do
+    // bridges it to a tgfx::ShaderHandle pair on first execute. We do
     // not call TcShader::use / set_uniform_* directly any more.
     TcShader _shader;
     void _ensure_shader();

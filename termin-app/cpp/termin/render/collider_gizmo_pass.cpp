@@ -170,9 +170,9 @@ void ColliderGizmoPass::execute(ExecuteContext& ctx) {
     if (color_it == ctx.tex2_writes.end() || !color_it->second) {
         return;
     }
-    tgfx2::TextureHandle color_tex2 = color_it->second;
+    tgfx::TextureHandle color_tex2 = color_it->second;
 
-    tgfx2::TextureHandle depth_tex2;
+    tgfx::TextureHandle depth_tex2;
     if (depth_test) {
         auto depth_it = ctx.tex2_depth_writes.find(output_res);
         if (depth_it != ctx.tex2_depth_writes.end()) {
@@ -195,9 +195,9 @@ void ColliderGizmoPass::execute(ExecuteContext& ctx) {
 
     ctx.ctx2->begin_pass(color_tex2, depth_tex2, nullptr, 1.0f, false);
     ctx.ctx2->set_viewport(0, 0, w, h);
-    ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
+    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
     if (depth_test) {
-        ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
+        ctx.ctx2->set_depth_format(tgfx::PixelFormat::D32F);
     }
 
     // Collider gizmo always goes into line_vertices (no-depth) unless

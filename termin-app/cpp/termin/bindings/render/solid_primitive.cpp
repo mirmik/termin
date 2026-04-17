@@ -34,7 +34,7 @@ void bind_solid_primitive(nb::module_& m) {
         .def(nb::init<>())
         // float64 overload (from camera matrices)
         .def("begin", [](SolidPrimitiveRenderer& self,
-                         tgfx2::RenderContext2* ctx2,
+                         tgfx::RenderContext2* ctx2,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj,
                          bool depth_test,
@@ -45,7 +45,7 @@ void bind_solid_primitive(nb::module_& m) {
              nb::arg("depth_test") = true, nb::arg("blend") = false)
         // float32 ndarray overload
         .def("begin", [](SolidPrimitiveRenderer& self,
-                         tgfx2::RenderContext2* ctx2,
+                         tgfx::RenderContext2* ctx2,
                          nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view,
                          nb::ndarray<nb::numpy, float, nb::shape<4, 4>> proj,
                          bool depth_test,
@@ -56,7 +56,7 @@ void bind_solid_primitive(nb::module_& m) {
              nb::arg("depth_test") = true, nb::arg("blend") = false)
         // Mat44 (double) overload - from camera matrices
         .def("begin", [](SolidPrimitiveRenderer& self,
-                         tgfx2::RenderContext2* ctx2,
+                         tgfx::RenderContext2* ctx2,
                          const Mat44& view,
                          const Mat44& proj,
                          bool depth_test,

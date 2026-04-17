@@ -117,7 +117,7 @@ void main()
 }
 )";
 
-void NormalPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
+void NormalPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     if (device2_ == &device && normal_vs2_ && normal_fs2_ && per_frame_ubo_) {
         return;
     }
@@ -126,19 +126,19 @@ void NormalPass::ensure_tgfx2_resources(tgfx2::IRenderDevice& device) {
     }
     device2_ = &device;
 
-    tgfx2::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx2::ShaderStage::Vertex;
+    tgfx::ShaderDesc vs_desc;
+    vs_desc.stage = tgfx::ShaderStage::Vertex;
     vs_desc.source = NORMAL_PASS_VERT_UBO;
     normal_vs2_ = device.create_shader(vs_desc);
 
-    tgfx2::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx2::ShaderStage::Fragment;
+    tgfx::ShaderDesc fs_desc;
+    fs_desc.stage = tgfx::ShaderStage::Fragment;
     fs_desc.source = NORMAL_PASS_FRAG_UBO;
     normal_fs2_ = device.create_shader(fs_desc);
 
-    tgfx2::BufferDesc ubo_desc;
+    tgfx::BufferDesc ubo_desc;
     ubo_desc.size = sizeof(NormalPerFrameStd140);
-    ubo_desc.usage = tgfx2::BufferUsage::Uniform | tgfx2::BufferUsage::CopyDst;
+    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
     per_frame_ubo_ = device.create_buffer(ubo_desc);
 }
 
@@ -172,13 +172,13 @@ void NormalPass::execute_with_data_tgfx2(
                        output_res.c_str());
         return;
     }
-    tgfx2::TextureHandle color_tex2 = color_it->second;
+    tgfx::TextureHandle color_tex2 = color_it->second;
 
     auto depth_it = ctx.tex2_depth_writes.find(output_res);
-    tgfx2::TextureHandle depth_tex2 =
-        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx2::TextureHandle{};
+    tgfx::TextureHandle depth_tex2 =
+        (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&ctx.ctx2->device());
+    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx.ctx2->device());
     if (!gl_dev) {
         tc::Log::error("NormalPass/tgfx2: device is not OpenGLRenderDevice");
         return;
@@ -201,9 +201,9 @@ void NormalPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_test(true);
     ctx.ctx2->set_depth_write(true);
     ctx.ctx2->set_blend(false);
-    ctx.ctx2->set_cull(tgfx2::CullMode::Back);
-    ctx.ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
-    ctx.ctx2->set_depth_format(tgfx2::PixelFormat::D32F);
+    ctx.ctx2->set_cull(tgfx::CullMode::Back);
+    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
+    ctx.ctx2->set_depth_format(tgfx::PixelFormat::D32F);
     ctx.ctx2->bind_shader(normal_vs2_, normal_fs2_);
 
     NormalPerFrameStd140 per_frame{};
@@ -258,7 +258,7 @@ void NormalPass::execute_with_data_tgfx2(
                 gl_dev->destroy(bind.index_buffer);
                 continue;
             }
-            tgfx2::ShaderHandle vs2, fs2;
+            tgfx::ShaderHandle vs2, fs2;
             if (!tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &vs2, &fs2)) {
                 gl_dev->destroy(bind.vertex_buffer);
                 gl_dev->destroy(bind.index_buffer);

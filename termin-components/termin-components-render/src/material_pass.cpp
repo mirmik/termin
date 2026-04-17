@@ -89,7 +89,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     }
     auto* ctx2 = ctx.ctx2;
     auto& device = ctx2->device();
-    auto* gl_dev = dynamic_cast<tgfx2::OpenGLRenderDevice*>(&device);
+    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device);
     if (!gl_dev) {
         tc::Log::error("[MaterialPass] '%s': tgfx2 device is not OpenGLRenderDevice",
                        get_pass_name().c_str());
@@ -102,7 +102,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
                        get_pass_name().c_str(), output_res.c_str());
         return;
     }
-    tgfx2::TextureHandle color_tex2 = color_it->second;
+    tgfx::TextureHandle color_tex2 = color_it->second;
 
     auto out_desc = device.texture_desc(color_tex2);
     int w = static_cast<int>(out_desc.width);
@@ -124,7 +124,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    tgfx2::ShaderHandle vs2, fs2;
+    tgfx::ShaderHandle vs2, fs2;
     if (!tc_shader_ensure_tgfx2(shader, &device, &vs2, &fs2)) {
         tc::Log::error("[MaterialPass] '%s': tc_shader_ensure_tgfx2 failed for shader '%s'",
                        get_pass_name().c_str(),
@@ -140,8 +140,8 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     ctx2->set_depth_test(false);
     ctx2->set_depth_write(false);
     ctx2->set_blend(false);
-    ctx2->set_cull(tgfx2::CullMode::None);
-    ctx2->set_color_format(tgfx2::PixelFormat::RGBA8_UNorm);
+    ctx2->set_cull(tgfx::CullMode::None);
+    ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
 
     ctx2->bind_shader(vs2, fs2);
 
