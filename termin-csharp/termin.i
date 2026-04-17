@@ -1271,6 +1271,10 @@ public:
     void set_shared_view_x(double x_min, double x_max);
     void set_panel_view_y(int panel_idx, double y_min, double y_max);
 
+    void set_panel_height(float h);
+    void set_scroll_offset(float offset);
+    float total_virtual_height() const;
+
     void render(int width, int height, unsigned int dst_gl_fbo);
     void release_gpu();
 
@@ -1278,6 +1282,7 @@ public:
     void on_mouse_move(float x, float y);
     void on_mouse_up(float x, float y, int button);
     bool on_mouse_wheel(float x, float y, float dy);
+    bool on_mouse_wheel_x(float x, float y, float dy);
 };
 
 } // namespace tcplot

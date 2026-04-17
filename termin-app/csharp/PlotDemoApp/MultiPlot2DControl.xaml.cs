@@ -24,6 +24,60 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
     // has no effect.
     public int PanelCount { get; set; } = 3;
 
+    // Optional explicit TTF path. Null → auto-pick via
+    // Plot3DControl.FindSystemFont (segoeui on Windows). Handy when
+    // you want to pin the font regardless of the host OS's defaults.
+    public string? FontPath { get; set; }
+
+    // Fixed panel height for virtualised scrolling. 0 (default) keeps
+    // the classic "divide render height evenly" behaviour. Set once
+    // before data starts flowing; changing later requires re-layout
+    // which happens on the next render() anyway.
+    public static readonly DependencyProperty PanelHeightProperty =
+        DependencyProperty.Register(
+            nameof(PanelHeight), typeof(double), typeof(MultiPlot2DControl),
+            new PropertyMetadata(0.0, OnPanelHeightChanged));
+    public double PanelHeight
+    {
+        get => (double)GetValue(PanelHeightProperty);
+        set => SetValue(PanelHeightProperty, value);
+    }
+    private static void OnPanelHeightChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var self = (MultiPlot2DControl)d;
+        if (self._view != null)
+        {
+            self._view.set_panel_height((float)(double)e.NewValue);
+            self.UpdateMaxScroll();
+        }
+    }
+
+    // Virtual scroll offset in pixels. Bind this to a WPF ScrollBar.Value.
+    public static readonly DependencyProperty ScrollOffsetProperty =
+        DependencyProperty.Register(
+            nameof(ScrollOffset), typeof(double), typeof(MultiPlot2DControl),
+            new PropertyMetadata(0.0, OnScrollOffsetChanged));
+    public double ScrollOffset
+    {
+        get => (double)GetValue(ScrollOffsetProperty);
+        set => SetValue(ScrollOffsetProperty, value);
+    }
+    private static void OnScrollOffsetChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var self = (MultiPlot2DControl)d;
+        self._view?.set_scroll_offset((float)(double)e.NewValue);
+    }
+
+    // Read-only: the max scroll offset, updated whenever the control's
+    // height or panel layout changes. Binds naturally to ScrollBar.Maximum.
+    private static readonly DependencyPropertyKey MaxScrollPropertyKey =
+        DependencyProperty.RegisterReadOnly(
+            nameof(MaxScroll), typeof(double), typeof(MultiPlot2DControl),
+            new PropertyMetadata(0.0));
+    public static readonly DependencyProperty MaxScrollProperty =
+        MaxScrollPropertyKey.DependencyProperty;
+    public double MaxScroll => (double)GetValue(MaxScrollProperty);
+
     // MSAA sample count for the shared offscreen attachment (1 / 2 / 4 / 8).
     // If set after the native view is initialised, the change is
     // propagated immediately; ensure_offscreen_ will reallocate on the
@@ -120,12 +174,29 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
             _openglBooted = true;
         }
 
-        var ttfPath = Plot3DControl.FindSystemFont()
-            ?? throw new InvalidOperationException(
-                "No system TTF font found for MultiPlot2DControl.");
+        string ttfPath;
+        if (!string.IsNullOrEmpty(FontPath) && File.Exists(FontPath))
+        {
+            ttfPath = FontPath;
+        }
+        else
+        {
+            ttfPath = Plot3DControl.FindSystemFont()
+                ?? throw new InvalidOperationException(
+                    "No system TTF font found for MultiPlot2DControl.");
+        }
+        System.Diagnostics.Debug.WriteLine(
+            $"MultiPlot2DControl: loading font {ttfPath}");
 
         _view = new PlotView2DMulti(ttfPath, PanelCount);
         _view.set_msaa_samples(_msaaSamples);
+        if (PanelHeight > 0)
+        {
+            _view.set_panel_height((float)PanelHeight);
+            _view.set_scroll_offset((float)ScrollOffset);
+            UpdateMaxScroll();
+        }
+        SizeChanged += (_, _) => UpdateMaxScroll();
         _initialized = true;
         NativeInitialized?.Invoke(this, EventArgs.Empty);
     }
@@ -192,8 +263,37 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
     private void OnMouseWheelGl(object sender, MouseWheelEventArgs e)
     {
         if (_view == null) return;
-        var p = e.GetPosition(GlControl);
-        _view.on_mouse_wheel((float)p.X, (float)p.Y, e.Delta > 0 ? 1f : -1f);
+        // In virtualised/scrollable mode, plain wheel scrolls the list
+        // and Ctrl+wheel zooms the X axis — matches the ubiquitous
+        // "document vs. content" mousewheel convention. Classic (non-
+        // virtualised) mode still zooms unconditionally.
+        bool scrollable = PanelHeight > 0 && MaxScroll > 0;
+        bool wantZoom = !scrollable
+            || (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+        if (wantZoom)
+        {
+            var p = e.GetPosition(GlControl);
+            float dy = e.Delta > 0 ? 1f : -1f;
+            // Ctrl held → zoom X only (shared-X dashboard convention).
+            // Plain wheel in non-scrollable mode zooms both axes as before.
+            bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+            if (ctrl)
+                _view.on_mouse_wheel_x((float)p.X, (float)p.Y, dy);
+            else
+                _view.on_mouse_wheel((float)p.X, (float)p.Y, dy);
+        }
+        else
+        {
+            // One wheel notch ≈ one third of a panel. Tuned so flicking
+            // the wheel moves the viewport at a readable pace instead
+            // of teleporting by whole panels per tick.
+            double step = Math.Max(PanelHeight * 0.33, 24.0);
+            double delta = -Math.Sign(e.Delta) * step;
+            double next = ScrollOffset + delta;
+            if (next < 0) next = 0;
+            if (next > MaxScroll) next = MaxScroll;
+            ScrollOffset = next;
+        }
         e.Handled = true;
     }
 
@@ -211,4 +311,17 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
     }
 
     ~MultiPlot2DControl() { Dispose(); }
+
+    // Recompute max scroll from the current native total_virtual_height
+    // and the control's actual on-screen height. Called on resize and
+    // whenever PanelHeight changes.
+    private void UpdateMaxScroll()
+    {
+        if (_view == null) return;
+        double total = _view.total_virtual_height();
+        double visible = Math.Max(1.0, ActualHeight);
+        double max = Math.Max(0.0, total - visible);
+        SetValue(MaxScrollPropertyKey, max);
+        if (ScrollOffset > max) ScrollOffset = max;
+    }
 }

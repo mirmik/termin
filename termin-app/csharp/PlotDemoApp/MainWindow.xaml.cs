@@ -23,4 +23,9 @@ public partial class MainWindow : Window
     {
         new MultiPlot2DWindow().Show();
     }
+
+    private void OnOpenScrollMulti2D(object sender, RoutedEventArgs e)
+    {
+        new ScrollableMultiPlot2DWindow().Show();
+    }
 }
