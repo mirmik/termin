@@ -56,8 +56,18 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
 
     set_target_properties(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PROPERTIES
         OUTPUT_NAME "termin"
-        LIBRARY_OUTPUT_DIRECTORY "${TERMIN_CSHARP_RUNTIME_DIR}"
-        RUNTIME_OUTPUT_DIRECTORY "${TERMIN_CSHARP_RUNTIME_DIR}"
+        # Per-config overrides bypass Visual Studio's default
+        # "$(Configuration)" subfolder append. Without these the DLL
+        # lands in runtimes/win-x64/native/Release/termin.dll — and
+        # .NET's RID resolver expects it at runtimes/win-x64/native/,
+        # so the process fails to load termin.dll at startup with
+        # DllNotFoundException. Flatten the output path explicitly.
+        LIBRARY_OUTPUT_DIRECTORY         "${TERMIN_CSHARP_RUNTIME_DIR}"
+        LIBRARY_OUTPUT_DIRECTORY_DEBUG   "${TERMIN_CSHARP_RUNTIME_DIR}"
+        LIBRARY_OUTPUT_DIRECTORY_RELEASE "${TERMIN_CSHARP_RUNTIME_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY         "${TERMIN_CSHARP_RUNTIME_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${TERMIN_CSHARP_RUNTIME_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TERMIN_CSHARP_RUNTIME_DIR}"
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib"
     )
 

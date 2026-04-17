@@ -1095,6 +1095,7 @@ namespace termin {
 #include "tcplot/styles.hpp"
 #include "tcplot/orbit_camera.hpp"
 #include "tcplot/plot_view2d.hpp"
+#include "tcplot/plot_view2d_multi.hpp"
 #include "tcplot/plot_view3d.hpp"
 %}
 
@@ -1234,6 +1235,49 @@ public:
 
     void render(int width, int height, unsigned int dst_gl_fbo);
     void release_gpu();
+};
+
+// ----------------------------------------------------------------------------
+// PlotView2DMulti — stacked panels with shared X + real-time append.
+// ----------------------------------------------------------------------------
+
+%apply double INPUT[] { const double* x, const double* y }
+
+class PlotView2DMulti {
+public:
+    PlotView2DMulti(const std::string& ttf_path, int panel_count);
+    ~PlotView2DMulti();
+
+    int panel_count() const;
+
+    int add_line(int panel_idx,
+                 const double* x, const double* y, size_t n,
+                 float cr, float cg, float cb, float ca,
+                 double thickness = 1.5,
+                 const char* label = "");
+
+    void append_to_line(int panel_idx, int series_idx,
+                        const double* x, const double* y, size_t n);
+
+    void clear();
+
+    void set_panel_title(int panel_idx, const char* title);
+    void set_panel_y_label(int panel_idx, const char* label);
+    void set_x_label(const char* label);
+
+    void set_msaa_samples(int samples);
+
+    void set_autoscroll(bool on, double window_size);
+    void set_shared_view_x(double x_min, double x_max);
+    void set_panel_view_y(int panel_idx, double y_min, double y_max);
+
+    void render(int width, int height, unsigned int dst_gl_fbo);
+    void release_gpu();
+
+    bool on_mouse_down(float x, float y, int button);
+    void on_mouse_move(float x, float y);
+    void on_mouse_up(float x, float y, int button);
+    bool on_mouse_wheel(float x, float y, float dy);
 };
 
 } // namespace tcplot
