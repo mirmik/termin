@@ -12,14 +12,6 @@ namespace Termin.Native;
 public static class SwigHelpers
 {
     /// <summary>
-    /// Wrap an IntPtr as SWIGTYPE_p_void for passing to SWIG methods.
-    /// </summary>
-    public static SWIGTYPE_p_void WrapVoidPtr(IntPtr ptr)
-    {
-        return new SWIGTYPE_p_void(ptr, false);
-    }
-
-    /// <summary>
     /// Wrap an IntPtr as CameraComponent for passing to SWIG methods.
     /// CameraComponent is now a fully defined type in SWIG.
     /// </summary>
