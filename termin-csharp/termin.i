@@ -35,6 +35,21 @@
 // Use std::string
 %include "std_string.i"
 
+// --- Marshal strings as UTF-8 instead of the platform default (ANSI/CP125x) ---
+// Without this, Cyrillic / any non-ASCII text passed from C# to C++ arrives
+// in the host codepage (e.g. Windows-1251 on RU Windows), which our tgfx2
+// FontAtlas then tries to decode as UTF-8 and rejects → "?" in the atlas.
+// LPUTF8Str asks .NET to encode the managed string as UTF-8 bytes on the way
+// out, so C++ sees valid UTF-8 exactly as written in the source.
+%typemap(imtype,
+         inattributes="[global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)]")
+    const char *, char *
+    "string"
+%typemap(imtype,
+         inattributes="[global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)]")
+    std::string, std::string const &, std::string &
+    "string"
+
 // ============================================================================
 // C# Owner Ref Support — prevent GC while C++ holds a reference
 //
@@ -1274,6 +1289,14 @@ public:
     void set_panel_height(float h);
     void set_scroll_offset(float offset);
     float total_virtual_height() const;
+
+    void set_bg_color       (float r, float g, float b, float a);
+    void set_plot_bg_color  (float r, float g, float b, float a);
+    void set_grid_color     (float r, float g, float b, float a);
+    void set_axis_color     (float r, float g, float b, float a);
+    void set_label_color    (float r, float g, float b, float a);
+    void set_font_size      (float label_px, float title_px);
+    void set_panel_margins  (int left, int right, int top, int bottom);
 
     void render(int width, int height, unsigned int dst_gl_fbo);
     void release_gpu();
