@@ -1,0 +1,12 @@
+<Window x:Class="PlotDemoApp.MultiPlot2DWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:PlotDemoApp"
+        Title="tcplot — multi-panel time-series (shared X, real-time append)"
+        Width="1100" Height="700"
+        Background="#181820"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <local:MultiPlot2DControl x:Name="Plot" PanelCount="3" MsaaSamples="4"/>
+    </Grid>
+</Window>

@@ -18,4 +18,9 @@ public partial class MainWindow : Window
     {
         new Plot2DWindow().Show();
     }
+
+    private void OnOpenMulti2D(object sender, RoutedEventArgs e)
+    {
+        new MultiPlot2DWindow().Show();
+    }
 }
