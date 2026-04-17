@@ -252,7 +252,6 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         world=world,
         initial_scene=initial_scene,
         scene_manager=engine.scene_manager,
-        graphics=graphics,
         offscreen_context=offscreen_context,
     )
     win.build(ui)

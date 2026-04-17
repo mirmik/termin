@@ -251,12 +251,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     ctx2->end_pass();
 }
 
-void MaterialPass::draw_fullscreen_quad(GraphicsBackend* graphics) {
-    // Retained for API compatibility; the tgfx2 path uses
-    // ctx2->draw_fullscreen_quad() directly in execute().
-    (void)graphics;
-}
-
 void MaterialPass::destroy() {
     before_draw_callback_ = nullptr;
     material = TcMaterial();

@@ -88,13 +88,11 @@ static Mat44f ndarray_to_mat44f(const nb::ndarray<nb::numpy, float, nb::shape<4,
 void bind_frame_pass(nb::module_& m) {
     nb::class_<ShadowMapArrayEntry>(m, "ShadowMapArrayEntry")
         .def(nb::init<>())
-        .def_rw("fbo", &ShadowMapArrayEntry::fbo)
         .def_rw("light_space_matrix", &ShadowMapArrayEntry::light_space_matrix)
         .def_rw("light_index", &ShadowMapArrayEntry::light_index)
         .def_rw("cascade_index", &ShadowMapArrayEntry::cascade_index)
         .def_rw("cascade_split_near", &ShadowMapArrayEntry::cascade_split_near)
-        .def_rw("cascade_split_far", &ShadowMapArrayEntry::cascade_split_far)
-        .def("texture", &ShadowMapArrayEntry::texture, nb::rv_policy::reference);
+        .def_rw("cascade_split_far", &ShadowMapArrayEntry::cascade_split_far);
 
     nb::class_<ShadowMapArrayResource, FrameGraphResource>(m, "ShadowMapArrayResource")
         .def(nb::init<>())

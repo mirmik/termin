@@ -5,7 +5,6 @@
 #include "termin/editor/selection_manager.hpp"
 #include "termin/editor/gizmo_manager.hpp"
 #include "termin/editor/transform_gizmo.hpp"
-#include "tgfx/graphics_backend.hpp"
 #include <termin/geom/general_pose3.hpp>
 #include "termin/input/input_events.hpp"
 #include "render/tc_display.h"
@@ -88,7 +87,6 @@ private:
 
     bool _window_to_fbo_coords(float x, float y, tc_viewport_handle vp,
                                tc_display* display, int& fx, int& fy);
-    FramebufferHandle* _get_viewport_fbo(tc_viewport_handle vp, const std::string& name);
 
     // Get ray from screen coordinates
     bool _screen_to_ray(float x, float y, tc_viewport_handle vp, tc_display* display,

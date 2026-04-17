@@ -28,7 +28,6 @@ from termin.editor.widgets.spinbox import DoubleSpinBox
 if TYPE_CHECKING:
     from termin.assets.mesh_asset import MeshAsset
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-    from tgfx import GraphicsBackend
 
 
 class MeshInspector(QWidget):
@@ -52,7 +51,6 @@ class MeshInspector(QWidget):
         parent: Optional[QWidget] = None,
         on_spec_changed: Optional[Callable[[str], None]] = None,
         window_backend: Optional["SDLEmbeddedWindowBackend"] = None,
-        graphics: Optional["GraphicsBackend"] = None,
     ):
         super().__init__(parent)
 
@@ -61,11 +59,9 @@ class MeshInspector(QWidget):
         self._file_path: str = ""
         self._on_spec_changed = on_spec_changed
         self._window_backend = window_backend
-        self._graphics = graphics
         self._preview_widget = None
         self._current_mesh3 = None
 
-        # Render timer for preview updates
         self._render_timer: Optional[QTimer] = None
 
         self._init_ui()
@@ -75,28 +71,9 @@ class MeshInspector(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        # Header
         header = QLabel("Mesh")
         header.setStyleSheet("font-weight: bold; font-size: 14px;")
         layout.addWidget(header)
-
-        # Preview widget (if backend available)
-        # TODO: disabled for debugging - causes std::bad_alloc
-        # if self._window_backend is not None and self._graphics is not None:
-        #     from termin.editor.mesh_preview_widget import MeshPreviewWidget
-        #
-        #     self._preview_widget = MeshPreviewWidget(
-        #         window_backend=self._window_backend,
-        #         graphics=self._graphics,
-        #         parent=self,
-        #     )
-        #     self._preview_widget.setMinimumHeight(180)
-        #     layout.addWidget(self._preview_widget)
-        #
-        #     # Start render timer
-        #     self._render_timer = QTimer(self)
-        #     self._render_timer.timeout.connect(self._on_render_timer)
-        #     self._render_timer.start(33)  # ~30 FPS
 
         # Info Form
         form = QFormLayout()

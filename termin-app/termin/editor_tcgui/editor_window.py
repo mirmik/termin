@@ -72,11 +72,9 @@ class EditorWindowTcgui:
         world,
         initial_scene,
         scene_manager: SceneManager,
-        graphics=None,
         offscreen_context=None,
     ) -> None:
         self._world = world
-        self._graphics = graphics
         self._offscreen_context = offscreen_context
         self._should_close = False
         self._ui: UI | None = None
@@ -389,7 +387,6 @@ class EditorWindowTcgui:
             on_display_changed=self._request_viewport_update,
             on_viewport_changed=self._request_viewport_update,
             on_pipeline_changed=self._request_viewport_update,
-            graphics=self._graphics,
         )
         self._inspector_controller.set_scene(self.scene)
 

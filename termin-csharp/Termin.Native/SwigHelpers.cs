@@ -37,14 +37,6 @@ public static class SwigHelpers
     }
 
     /// <summary>
-    /// Wrap a GraphicsBackend IntPtr for passing to SWIG methods.
-    /// </summary>
-    public static SWIGTYPE_p_termin__GraphicsBackend WrapGraphicsBackendPtr(IntPtr ptr)
-    {
-        return new SWIGTYPE_p_termin__GraphicsBackend(ptr, false);
-    }
-
-    /// <summary>
     /// Wrap an IntPtr as SWIGTYPE_p_tc_display for passing to SWIG methods.
     /// </summary>
     public static SWIGTYPE_p_tc_display WrapTcDisplayPtr(IntPtr ptr)

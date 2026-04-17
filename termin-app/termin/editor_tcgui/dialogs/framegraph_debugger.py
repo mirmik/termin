@@ -396,7 +396,6 @@ class _FramegraphDebuggerHandle:
             return
 
         from termin.visualization.render.framegraph.resource import (
-            SingleFBO,
             ShadowMapArrayResource,
         )
 
@@ -410,18 +409,6 @@ class _FramegraphDebuggerHandle:
                 if fbo is not None:
                     w, h = fbo.get_size()
                     parts.append(f"{w}x{h}")
-        elif isinstance(resource, SingleFBO):
-            fbo = resource._fbo
-            if fbo is not None:
-                w, h = fbo.get_size()
-                samples = fbo.get_samples()
-                is_msaa = fbo.is_msaa()
-                fmt = fbo.get_format()
-                parts.append(f"SingleFBO {w}x{h}")
-                parts.append(f"fmt={fmt}")
-                if is_msaa:
-                    parts.append(f"MSAA={samples}x")
-                parts.append(f"id={fbo.get_fbo_id()}")
         else:
             parts.append(type(resource).__name__)
 

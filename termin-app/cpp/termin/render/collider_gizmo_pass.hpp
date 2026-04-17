@@ -3,7 +3,6 @@
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/immediate_renderer.hpp"
-#include "tgfx/graphics_backend.hpp"
 #include <termin/geom/mat44.hpp>
 
 namespace termin {

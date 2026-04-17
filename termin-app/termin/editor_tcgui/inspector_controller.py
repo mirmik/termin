@@ -36,12 +36,10 @@ class InspectorControllerTcgui:
         on_display_changed: Optional[Callable] = None,
         on_viewport_changed: Optional[Callable] = None,
         on_pipeline_changed: Optional[Callable] = None,
-        graphics=None,
     ) -> None:
         self._resource_manager = resource_manager
         self._push_undo_command = push_undo_command
         self._container = container
-        self._graphics = graphics
         self._scene = None
         self._on_material_changed = on_material_changed
         self._on_display_changed = on_display_changed

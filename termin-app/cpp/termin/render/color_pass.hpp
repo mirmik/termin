@@ -16,7 +16,6 @@ namespace tgfx2 {
 class IRenderDevice;
 class RenderContext2;
 }
-#include "tgfx/graphics_backend.hpp"
 #include "tgfx/render_state.hpp"
 #include <termin/render/light.hpp>
 #include "termin/lighting/shadow.hpp"

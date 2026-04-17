@@ -161,21 +161,6 @@ public class GlWpfBackend
         };
     }
 
-    public void BlitFromPipeline(RenderPipeline pipeline, string resourceName, int wpfFboId)
-    {
-        var fbo = pipeline.get_fbo(resourceName);
-        if (fbo == null) return;
-        int srcFboId = (int)fbo.get_fbo_id();
-        int srcWidth = fbo.get_width();
-        int srcHeight = fbo.get_height();
-        int dstWidth = FramebufferWidth;
-        int dstHeight = FramebufferHeight;
-        GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, srcFboId);
-        GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, wpfFboId);
-        GL.BlitFramebuffer(0, 0, srcWidth, srcHeight, 0, 0, dstWidth, dstHeight, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
-        GL.BindFramebuffer(FramebufferTarget.Framebuffer, wpfFboId);
-    }
-
     public int GetCurrentFboId()
     {
         GL.GetInteger(GetPName.FramebufferBinding, out int fboId);

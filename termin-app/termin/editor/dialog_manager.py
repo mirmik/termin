@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from termin.editor.spacemouse_controller import SpaceMouseController
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.resources import ResourceManager
-    from tgfx import GraphicsBackend
 
 
 class DialogManager:
@@ -119,7 +118,6 @@ class DialogManager:
     def show_framegraph_debugger(
         self,
         window_backend,
-        graphics: "GraphicsBackend",
         rendering_controller,
         on_request_update=None,
         initial_resource: str | None = None,
@@ -128,7 +126,6 @@ class DialogManager:
 
         Args:
             window_backend: SDL window backend.
-            graphics: Graphics backend.
             rendering_controller: Rendering controller.
             on_request_update: Callback for requesting render update.
             initial_resource: Initial resource to show (e.g., "shadow_maps").
@@ -141,7 +138,6 @@ class DialogManager:
 
         self._framegraph_debugger = FramegraphDebugDialog(
             window_backend=window_backend,
-            graphics=graphics,
             rendering_controller=rendering_controller,
             on_request_update=on_request_update,
             parent=self._parent,

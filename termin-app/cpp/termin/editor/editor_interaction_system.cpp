@@ -325,16 +325,6 @@ bool EditorInteractionSystem::_window_to_fbo_coords(
     return true;
 }
 
-FramebufferHandle* EditorInteractionSystem::_get_viewport_fbo(
-    tc_viewport_handle vp, const std::string& name)
-{
-    tc_pipeline_handle pipeline_h = tc_viewport_get_pipeline(vp);
-    if (!tc_pipeline_pool_alive(pipeline_h)) return nullptr;
-
-    RenderPipeline pipeline(pipeline_h);
-    return pipeline.get_fbo(name);
-}
-
 // ============================================================================
 // Ray casting
 // ============================================================================

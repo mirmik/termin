@@ -507,29 +507,16 @@ void tc_pass_set_enabled(tc_pass* p, bool enabled);
 #include "termin/render/present_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/camera/camera_component.hpp"
-#include <tgfx/graphics_backend.hpp>
 #include "termin/lighting/light.hpp"
 %}
 
 // Forward declarations
 namespace termin {
-    class GraphicsBackend;
     class Component;
     class CxxComponent;
     class Drawable;
     struct TcMesh;
     struct TcMaterial;
-}
-
-// FramebufferHandle - minimal interface for FBO access
-namespace termin {
-class FramebufferHandle {
-public:
-    virtual ~FramebufferHandle() = default;
-    virtual unsigned int get_fbo_id() const = 0;
-    virtual int get_width() const = 0;
-    virtual int get_height() const = 0;
-};
 }
 
 // Ignore problematic members
@@ -648,9 +635,6 @@ public:
     void clear_specs();
     size_t spec_count() const;
     const ResourceSpec* get_spec_at(size_t index) const;
-
-    // FBO access (for manual blit)
-    FramebufferHandle* get_fbo(const std::string& name);
 
     // Access tc_pipeline pointer (for viewport binding)
     tc_pipeline* ptr();
@@ -1043,16 +1027,6 @@ public:
 bool tc_opengl_init(void);
 bool tc_opengl_is_initialized(void);
 void tc_opengl_shutdown(void);
-void* tc_opengl_get_graphics(void);
-
-// Helper to cast void* to GraphicsBackend*
-%inline %{
-namespace termin {
-    GraphicsBackend* get_opengl_graphics() {
-        return static_cast<GraphicsBackend*>(tc_opengl_get_graphics());
-    }
-}
-%}
 
 // ============================================================================
 // Scene Serialization (via TcSceneRef C++ wrapper)

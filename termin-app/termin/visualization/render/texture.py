@@ -12,7 +12,6 @@ from termin.visualization.render.texture_asset import TextureAsset
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QPixmap
-    from tgfx import GraphicsBackend
 
 
 class Texture:
@@ -82,7 +81,7 @@ class Texture:
             texture_data.delete_gpu()
         self._preview_pixmap = None
 
-    def bind(self, graphics: "GraphicsBackend", unit: int = 0) -> None:
+    def bind(self, unit: int = 0) -> None:
         """Bind texture to specified unit."""
         texture_data = self._handle.get()
         if texture_data is None:

@@ -14,7 +14,6 @@ public partial class SceneViewerControl : UserControl, IDisposable
     private GlWpfBackend? _backend;
     private WpfRenderSurface? _renderSurface;
     private NativeDisplayManager? _displayManager;
-    private SWIGTYPE_p_termin__GraphicsBackend? _graphics;
     private PullRenderingManager? _renderingManager;
     private RenderEngine? _renderEngine;
 
@@ -111,14 +110,10 @@ public partial class SceneViewerControl : UserControl, IDisposable
 
         GL.Enable(EnableCap.DepthTest);
 
-        // Get graphics backend
-        _graphics = termin.get_opengl_graphics();
-
         // Setup rendering manager
         _renderingManager = PullRenderingManager.instance();
-        _renderingManager.set_graphics(_graphics);
 
-        _renderEngine = new RenderEngine(_graphics);
+        _renderEngine = new RenderEngine();
         _renderingManager.set_render_engine(_renderEngine);
 
         // Create render surface and display manager
