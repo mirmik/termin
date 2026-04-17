@@ -208,6 +208,13 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         var w = Math.Max(1, (int)GlControl.ActualWidth);
         var h = Math.Max(1, (int)GlControl.ActualHeight);
 
+        // Apply coalesced pan from the latest MouseMove before rendering.
+        if (_hasPendingPan && _dragging)
+        {
+            _view.on_mouse_move(_pendingPanX, _pendingPanY);
+            _hasPendingPan = false;
+        }
+
         GL.GetInteger(GetPName.DrawFramebufferBinding, out int dstFbo);
         _view.render(w, h, (uint)dstFbo);
     }
@@ -228,6 +235,16 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
     // that the native engine cares about (middle, for pan) is held.
     private bool _dragging;
 
+    // Pan coalesced to render tick. Sending a native on_mouse_move per
+    // WPF MouseMove amplifies input-routing cost through the visual
+    // tree (WPF tunnels/bubbles each event through the whole parent
+    // chain even with MouseCapture). We record the latest position on
+    // each event and apply it exactly once per OnGlRender frame —
+    // this cuts frame_dt roughly in half in a deep WPF window.
+    private float _pendingPanX;
+    private float _pendingPanY;
+    private bool  _hasPendingPan;
+
     private void OnMouseDownGl(object sender, MouseButtonEventArgs e)
     {
         if (_view == null) return;
@@ -245,7 +262,9 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
     {
         if (_view == null || !_dragging) return;
         var p = e.GetPosition(GlControl);
-        _view.on_mouse_move((float)p.X, (float)p.Y);
+        _pendingPanX = (float)p.X;
+        _pendingPanY = (float)p.Y;
+        _hasPendingPan = true;
     }
 
     private void OnMouseUpGl(object sender, MouseButtonEventArgs e)
