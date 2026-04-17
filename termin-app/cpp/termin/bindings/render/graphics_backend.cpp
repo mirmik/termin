@@ -2,7 +2,6 @@
 #include <nanobind/stl/unique_ptr.h>
 #include "termin/render/render.hpp"
 #include "tgfx/types.hpp"
-#include "tgfx/opengl/opengl_mesh.hpp"
 #include "termin/render/shader_parser.hpp"
 #include "termin/render/glsl_preprocessor.hpp"
 #include "termin/lighting/shadow.hpp"
