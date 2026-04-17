@@ -20,7 +20,7 @@ from termin.visualization.render.framegraph.passes.depth import DepthPass
 from termin.visualization.render.framegraph.passes.normal_pass import NormalPass
 from termin.visualization.render.framegraph.passes.gizmo import GizmoPass
 from termin.visualization.render.framegraph.passes.id_pass import IdPass
-from termin.visualization.render.framegraph.passes.present import BlitPass, PresentToScreenPass, ResolvePass, blit_fbo_to_fbo
+from termin.visualization.render.framegraph.passes.present import BlitPass, PresentToScreenPass, ResolvePass
 from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
 from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
 from termin.visualization.render.framegraph.passes.grayscale import GrayscalePass
@@ -52,7 +52,6 @@ __all__ = [
     "PresentToScreenPass",
     "ResolvePass",
     "UIWidgetPass",
-    "blit_fbo_to_fbo",
     "GrayscalePass",
     "MaterialPass",
     "BloomPass",

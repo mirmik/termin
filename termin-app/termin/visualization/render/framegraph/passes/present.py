@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 # Re-export C++ PresentToScreenPass
-__all__ = ["PresentToScreenPass", "BlitPass", "ResolvePass", "blit_fbo_to_fbo"]
+__all__ = ["PresentToScreenPass", "BlitPass", "ResolvePass"]
 
 
 def _get_texture_from_resource(resource, shadow_map_index: int = 0):
@@ -37,7 +37,6 @@ def _get_texture_from_resource(resource, shadow_map_index: int = 0):
         SingleFBO,
         ShadowMapArrayResource,
     )
-    from termin.graphics import FramebufferHandle
 
     if isinstance(resource, ShadowMapArrayResource):
         if len(resource) == 0:
@@ -47,9 +46,6 @@ def _get_texture_from_resource(resource, shadow_map_index: int = 0):
         return entry.texture()
 
     if isinstance(resource, SingleFBO):
-        return resource.color_texture()
-
-    if isinstance(resource, FramebufferHandle):
         return resource.color_texture()
 
     return None
@@ -89,70 +85,6 @@ def _get_blit_shader() -> TcShader:
     if _blit_shader is None:
         _blit_shader = TcShader.from_sources(FSQ_VERT, FSQ_FRAG, "", "BlitShader")
     return _blit_shader
-
-
-def blit_fbo_to_fbo(
-    ctx2,
-    src_fb,
-    dst_fb,
-    size: tuple[int, int],
-):
-    """
-    Copy src_fb's color attachment into dst_fb via a fullscreen quad
-    shader. Requires a Tgfx2RenderContext as the first argument.
-
-    When src_fb is not a FramebufferHandle we silently no-op; that
-    matches the legacy implementation's ShadowMapArrayResource fallback.
-    """
-    from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
-
-    if isinstance(ctx2, NOPGraphicsBackend):
-        return
-
-    _blit_fbo_to_fbo_tgfx2(ctx2, src_fb, dst_fb, size)
-
-
-def _blit_fbo_to_fbo_tgfx2(ctx2, src_fb, dst_fb, size):
-    """ctx2 variant of blit_fbo_to_fbo — fullscreen blit through
-    RenderContext2. src_fb and dst_fb are legacy FramebufferHandles;
-    they get wrapped as external tgfx2 textures for the duration of
-    this draw."""
-    from tgfx._tgfx_native import (
-        tc_shader_ensure_tgfx2,
-        wrap_fbo_color_as_tgfx2,
-        CULL_NONE,
-        PIXEL_RGBA8,
-    )
-    from termin.graphics import FramebufferHandle
-
-    if not isinstance(src_fb, FramebufferHandle):
-        return
-    if not isinstance(dst_fb, FramebufferHandle):
-        return
-
-    w, h = size
-    src_tex2 = wrap_fbo_color_as_tgfx2(ctx2, src_fb)
-    dst_tex2 = wrap_fbo_color_as_tgfx2(ctx2, dst_fb)
-    if not src_tex2 or not dst_tex2:
-        return
-
-    shader = _get_blit_shader()
-    pair = tc_shader_ensure_tgfx2(ctx2, shader)
-    if not pair.vs or not pair.fs:
-        return
-
-    ctx2.begin_pass(dst_tex2)
-    ctx2.set_viewport(0, 0, w, h)
-    ctx2.set_depth_test(False)
-    ctx2.set_depth_write(False)
-    ctx2.set_blend(False)
-    ctx2.set_cull(CULL_NONE)
-    ctx2.set_color_format(PIXEL_RGBA8)
-    ctx2.bind_shader(pair.vs, pair.fs)
-    ctx2.bind_sampled_texture(0, src_tex2)
-    ctx2.set_uniform_int("u_tex", 0)
-    ctx2.draw_fullscreen_quad()
-    ctx2.end_pass()
 
 
 class BlitPass(RenderFramePass):

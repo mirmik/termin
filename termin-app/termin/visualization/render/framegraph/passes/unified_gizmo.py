@@ -16,8 +16,6 @@ from termin.core.profiler import Profiler
 
 if TYPE_CHECKING:
     from termin.editor.gizmo import GizmoManager
-    from tgfx import GraphicsBackend
-    from termin.visualization.render.framebuffer import FramebufferHandle
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 

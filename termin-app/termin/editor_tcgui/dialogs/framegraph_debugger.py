@@ -399,7 +399,6 @@ class _FramegraphDebuggerHandle:
             SingleFBO,
             ShadowMapArrayResource,
         )
-        from termin.graphics import FramebufferHandle
 
         parts = [resource_name]
 
@@ -423,16 +422,6 @@ class _FramegraphDebuggerHandle:
                 if is_msaa:
                     parts.append(f"MSAA={samples}x")
                 parts.append(f"id={fbo.get_fbo_id()}")
-        elif isinstance(resource, FramebufferHandle):
-            w, h = resource.get_size()
-            samples = resource.get_samples()
-            is_msaa = resource.is_msaa()
-            fmt = resource.get_format()
-            parts.append(f"FBH {w}x{h}")
-            parts.append(f"fmt={fmt}")
-            if is_msaa:
-                parts.append(f"MSAA={samples}x")
-            parts.append(f"id={resource.get_fbo_id()}")
         else:
             parts.append(type(resource).__name__)
 

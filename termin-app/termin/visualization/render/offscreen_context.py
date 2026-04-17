@@ -27,11 +27,6 @@ OffscreenContext — dedicated GL context для offscreen рендеринга.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    from tgfx import GraphicsBackend
-
 
 class OffscreenContext:
     """
@@ -56,7 +51,6 @@ class OffscreenContext:
 
         self._window = None
         self._gl_context = None
-        self._graphics: Optional[GraphicsBackend] = None
 
         # SDL must be initialized by caller (e.g., in run_editor.py)
 
@@ -94,19 +88,10 @@ class OffscreenContext:
             self._window = None
             raise RuntimeError(f"Failed to create GL context: {sdl2.SDL_GetError()}")
 
-        # Make current and initialize graphics backend
+        # Make the GL context current — tgfx2 devices created later
+        # (UIRenderer / RenderEngine / GPUCompositor) will load GL
+        # function pointers via glad themselves in their ctors.
         self.make_current()
-
-        from termin.graphics import OpenGLGraphicsBackend
-        self._graphics = OpenGLGraphicsBackend.get_instance()
-
-        # Ensure OpenGL functions are loaded
-        self._graphics.ensure_ready()
-
-    @property
-    def graphics(self) -> "GraphicsBackend":
-        """GraphicsBackend для этого контекста."""
-        return self._graphics
 
     @property
     def gl_context(self):
@@ -162,8 +147,6 @@ class OffscreenContext:
         if self._window is not None:
             video.SDL_DestroyWindow(self._window)
             self._window = None
-
-        self._graphics = None
 
     def __enter__(self) -> "OffscreenContext":
         return self

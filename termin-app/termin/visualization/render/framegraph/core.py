@@ -10,10 +10,6 @@ from termin.render_framework import (
     tc_pass_registry_has,
 )
 
-if TYPE_CHECKING:
-    from tgfx import FramebufferHandle
-
-
 class FramePass:
     """
     Логический проход кадра.

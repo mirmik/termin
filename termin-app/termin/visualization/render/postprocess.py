@@ -5,13 +5,7 @@ from typing import Dict, Set, Tuple, List, TYPE_CHECKING
 
 import numpy as np
 
-from tgfx import (
-    FramebufferHandle,
-    GraphicsBackend,
-    GPUTextureHandle,
-)
-from termin.visualization.render.framegraph import RenderFramePass, blit_fbo_to_fbo
-from termin.visualization.render.framegraph.passes.present import _get_texture_from_resource
+from termin.visualization.render.framegraph import RenderFramePass
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -242,7 +236,10 @@ class PostProcessPass(RenderFramePass):
         self.output_res = output_res
         self._internal_format = internal_format  # FBO format for temp buffers ("rgba16f" for HDR)
 
-        self._temp_fbos: list["FramebufferHandle"] = []
+        # Owned native tgfx2 temp color attachments (one per ping-pong slot).
+        self._temp_texs: list = []
+        self._temp_sizes: list[tuple[int, int]] = []
+        self._temp_ctx2 = None
 
     @property
     def internal_format(self) -> str:
@@ -251,11 +248,12 @@ class PostProcessPass(RenderFramePass):
     @internal_format.setter
     def internal_format(self, value: str) -> None:
         if value != self._internal_format:
-            # Clear temp FBOs so they get recreated with new format
-            for fbo in self._temp_fbos:
-                if fbo is not None:
-                    fbo.delete()
-            self._temp_fbos.clear()
+            if self._temp_ctx2 is not None:
+                for tex in self._temp_texs:
+                    if tex:
+                        self._temp_ctx2.destroy_texture(tex)
+            self._temp_texs.clear()
+            self._temp_sizes.clear()
             self._internal_format = value
 
     def compute_reads(self) -> Set[str]:
@@ -336,25 +334,41 @@ class PostProcessPass(RenderFramePass):
             symbols.append(self._effect_symbol(idx, eff))
         return symbols
 
-    def _get_temp_fbo(self, index: int, size: tuple[int, int]):
-        from tgfx import OpenGLGraphicsBackend
-        gfx = OpenGLGraphicsBackend.get_instance()
-        while len(self._temp_fbos) <= index:
-            self._temp_fbos.append(gfx.create_framebuffer(size, 1, self.internal_format))
-        fb = self._temp_fbos[index]
-        fb.resize(size)
-        return fb
+    def _get_temp_tex(self, ctx2, index: int, size: tuple[int, int]):
+        """Return a native tgfx2 color attachment for the given ping-pong
+        slot. Reallocated on size / format change."""
+        from tgfx._tgfx_native import Tgfx2PixelFormat
+
+        self._temp_ctx2 = ctx2
+        fmt_map = {
+            "rgba8":  Tgfx2PixelFormat.RGBA8_UNorm,
+            "rgba16f": Tgfx2PixelFormat.RGBA16F,
+            "rgba32f": Tgfx2PixelFormat.RGBA32F,
+        }
+        fmt = fmt_map.get(self._internal_format, Tgfx2PixelFormat.RGBA16F)
+        w, h = size
+
+        while len(self._temp_texs) <= index:
+            tex = ctx2.create_color_attachment(w, h, fmt)
+            self._temp_texs.append(tex)
+            self._temp_sizes.append((w, h))
+
+        if self._temp_sizes[index] != (w, h):
+            ctx2.destroy_texture(self._temp_texs[index])
+            self._temp_texs[index] = ctx2.create_color_attachment(w, h, fmt)
+            self._temp_sizes[index] = (w, h)
+
+        return self._temp_texs[index]
 
     def destroy(self) -> None:
-        """
-        Clean up resources.
-
-        Deletes temporary FBOs and clears callbacks on effects.
-        """
-        for fbo in self._temp_fbos:
-            if fbo is not None:
-                fbo.delete()
-        self._temp_fbos.clear()
+        """Clean up resources."""
+        if self._temp_ctx2 is not None:
+            for tex in self._temp_texs:
+                if tex:
+                    self._temp_ctx2.destroy_texture(tex)
+        self._temp_texs.clear()
+        self._temp_sizes.clear()
+        self._temp_ctx2 = None
 
         for effect in self.effects:
             effect.clear_callbacks()
@@ -367,14 +381,10 @@ class PostProcessPass(RenderFramePass):
         self.effects.append(effect)
 
     def execute(self, ctx: "ExecuteContext") -> None:
-        from termin.visualization.platform.backends.nop_graphics import NOPGraphicsBackend
-
         if ctx.ctx2 is None:
             from tcbase import log
             log.error(f"[PostProcessPass] '{self.pass_name}': ctx.ctx2 is None — PostProcessPass is tgfx2-only")
             return
-
-        from tgfx._tgfx_native import wrap_fbo_color_as_tgfx2
 
         px, py, pw, ph = ctx.rect
         size = (pw, ph)
@@ -419,14 +429,7 @@ class PostProcessPass(RenderFramePass):
             if is_last:
                 target_tex2 = tex_out_final
             else:
-                # Temp FBOs остаются на legacy пути до полной миграции
-                # _get_temp_fbo на native device.create_texture.
-                fb_target = self._get_temp_fbo(i % 2, size)
-                target_tex2 = wrap_fbo_color_as_tgfx2(ctx2, fb_target)
-                if not target_tex2:
-                    from tcbase import log
-                    log.error(f"[PostProcessPass] '{self.pass_name}': failed to wrap temp target for effect '{effect.name}'")
-                    break
+                target_tex2 = self._get_temp_tex(ctx2, i % 2, size)
 
             effect.draw(ctx2, current_tex2, target_tex2, extra_tex2, size)
 

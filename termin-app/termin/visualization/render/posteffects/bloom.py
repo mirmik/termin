@@ -292,61 +292,59 @@ class BloomEffect(PostEffect):
         self.intensity = intensity
         self.mip_levels = mip_levels
 
-        # Mip chain FBOs
-        self._mip_fbos = []
+        # Mip chain: owned native tgfx2 color textures (one per level).
+        # Sizes tracked separately so we can reallocate on resize.
+        self._mip_texs = []
+        self._mip_sizes = []
+        self._ctx2_for_destroy = None
 
-    def _ensure_mip_fbos(self, graphics, base_size: tuple[int, int], format_str: str):
-        """Ensure we have FBOs for each mip level."""
+    def _ensure_mip_texs(self, ctx2, base_size: tuple[int, int]):
+        """Ensure we have native color textures for each mip level."""
+        from tgfx._tgfx_native import Tgfx2PixelFormat
+
         w, h = base_size
         mip_levels = int(self.mip_levels)
+        self._ctx2_for_destroy = ctx2
 
         for i in range(mip_levels):
             mip_w = max(1, w >> i)
             mip_h = max(1, h >> i)
 
-            if i >= len(self._mip_fbos):
-                fbo = graphics.create_framebuffer((mip_w, mip_h), 1, format_str)
-                self._mip_fbos.append(fbo)
-            else:
-                self._mip_fbos[i].resize(mip_w, mip_h)
+            if i >= len(self._mip_texs):
+                tex = ctx2.create_color_attachment(
+                    mip_w, mip_h, Tgfx2PixelFormat.RGBA16F,
+                )
+                self._mip_texs.append(tex)
+                self._mip_sizes.append((mip_w, mip_h))
+            elif self._mip_sizes[i] != (mip_w, mip_h):
+                ctx2.destroy_texture(self._mip_texs[i])
+                self._mip_texs[i] = ctx2.create_color_attachment(
+                    mip_w, mip_h, Tgfx2PixelFormat.RGBA16F,
+                )
+                self._mip_sizes[i] = (mip_w, mip_h)
 
-        while len(self._mip_fbos) > mip_levels:
-            fbo = self._mip_fbos.pop()
-            fbo.delete()
+        while len(self._mip_texs) > mip_levels:
+            tex = self._mip_texs.pop()
+            self._mip_sizes.pop()
+            ctx2.destroy_texture(tex)
 
     def draw(self, ctx2, color_tex2, target_tex2, extra_tex2, size):
         """Execute bloom effect with progressive downsample/upsample via ctx2.
 
-        NOTE: the intermediate mip-chain FBOs are still allocated through
-        the legacy GraphicsBackend (self._mip_fbos). Their color
-        textures are wrapped as tgfx2 handles per frame and fed into
-        the ctx2 draw loop. A full Stage 8 would move mip FBOs into
-        pure tgfx2 render targets, but that's out of scope for the
-        first-cut Python migration.
+        Intermediate mip chain lives on native tgfx2 color attachments
+        owned by this effect.
         """
         from tgfx._tgfx_native import (
             tc_shader_ensure_tgfx2,
-            wrap_fbo_color_as_tgfx2,
             CULL_NONE,
             PIXEL_RGBA16F,
         )
 
         w, h = size
-        format_str = "rgba16f"
         mip_levels = int(self.mip_levels)
 
-        # Intermediate FBOs still via legacy path; we only need them
-        # for their underlying GL textures. GraphicsBackend singleton
-        # is pulled from tgfx so we don't need to thread ctx.graphics
-        # through effect.draw.
-        from tgfx._tgfx_native import OpenGLGraphicsBackend
-        gfx = OpenGLGraphicsBackend.get_instance()
-        self._ensure_mip_fbos(gfx, size, format_str)
-
-        # Wrap every mip FBO as a tgfx2 texture for this frame. Handles
-        # are non-owning external wraps; they're cheap and tgfx2
-        # tracks them in its HandlePool.
-        mip_tex2 = [wrap_fbo_color_as_tgfx2(ctx2, fbo) for fbo in self._mip_fbos]
+        self._ensure_mip_texs(ctx2, size)
+        mip_tex2 = self._mip_texs
 
         def _begin(dst_tex2, dst_w, dst_h):
             ctx2.begin_pass(dst_tex2)
