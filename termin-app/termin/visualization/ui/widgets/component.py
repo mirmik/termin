@@ -223,15 +223,32 @@ class UIComponent(InputComponent):
             return []
         return self._ui.find_all(name)
 
-    def render(self, viewport_w: int, viewport_h: int):
+    def render(self, viewport_w: int, viewport_h: int,
+               ctx2=None, target_tex2=None):
         """
         Render the UI.
 
         Called by UIWidgetPass during the render pipeline.
+
+        When ``ctx2`` and ``target_tex2`` are supplied (framegraph path),
+        the UI is composited offscreen and the resulting tgfx2 texture
+        is blitted into ``target_tex2``. This is the backend-neutral
+        path used by the engine's UIWidgetPass — works on both OpenGL
+        and Vulkan.
+
+        When both are ``None`` (raw SDL/GLFW host), falls back to the
+        legacy ``UI.render`` which publishes the composite to FBO 0 via
+        ``blit_to_external_fbo``. GL-only.
         """
         self._ensure_ui()
 
         if self._ui.root is None:
+            return
+
+        if ctx2 is not None and target_tex2 is not None:
+            tex = self._ui.render_compose(viewport_w, viewport_h)
+            if tex is not None:
+                ctx2.blit(tex, target_tex2)
             return
 
         self._ui.render(viewport_w, viewport_h)
