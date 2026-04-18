@@ -1,14 +1,14 @@
 #include "ground_grid_pass.hpp"
-#include "tgfx/handles.hpp"
 #include "termin/camera/camera_component.hpp"
-#include "termin/render/tgfx2_bridge.hpp"
 #include <tcbase/tc_log.hpp>
 
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/i_render_device.hpp>
-#include <tgfx2/opengl/opengl_render_device.hpp>
-#include <tgfx2/tc_shader_bridge.hpp>
+#include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
+
+#include <cstring>
+#include <span>
 
 namespace termin {
 
@@ -16,14 +16,22 @@ namespace termin {
 // Shaders (inline)
 // ---------------------------------------------------------------------------
 
-static const char* GRID_VERT = R"(
-#version 330 core
+// Shared parameter block — declared inline in both stages below.
+// std140 aligns every mat4 to 16 bytes and each float to 4 bytes with
+// the final block rounded up to 16. Layout: u_inv_vp(64) u_view(64)
+// u_projection(64) u_near(4) u_far(4) + 8 bytes tail pad = 208 bytes.
+
+static const char* GRID_VERT = R"(#version 450 core
+layout(std140, binding = 0) uniform GridParams {
+    mat4 u_inv_vp;
+    mat4 u_view;
+    mat4 u_projection;
+    float u_near;
+    float u_far;
+};
 layout(location = 0) in vec2 a_pos;
-
-uniform mat4 u_inv_vp;
-
-out vec3 v_near_point;
-out vec3 v_far_point;
+layout(location = 0) out vec3 v_near_point;
+layout(location = 1) out vec3 v_far_point;
 
 vec3 unproject(vec2 xy, float z) {
     vec4 p = u_inv_vp * vec4(xy, z, 1.0);
@@ -37,17 +45,17 @@ void main() {
 }
 )";
 
-static const char* GRID_FRAG = R"(
-#version 330 core
-in vec3 v_near_point;
-in vec3 v_far_point;
-
-uniform mat4 u_view;
-uniform mat4 u_projection;
-uniform float u_near;
-uniform float u_far;
-
-out vec4 fragColor;
+static const char* GRID_FRAG = R"(#version 450 core
+layout(std140, binding = 0) uniform GridParams {
+    mat4 u_inv_vp;
+    mat4 u_view;
+    mat4 u_projection;
+    float u_near;
+    float u_far;
+};
+layout(location = 0) in vec3 v_near_point;
+layout(location = 1) in vec3 v_far_point;
+layout(location = 0) out vec4 fragColor;
 
 // Procedural grid lines for given world XY coordinates
 vec4 grid(vec3 pos, float scale, vec4 color) {
@@ -117,6 +125,19 @@ void main() {
 // GroundGridPass implementation
 // ---------------------------------------------------------------------------
 
+// std140 layout for GridParams: 3 mat4 + 2 float padded to 16-byte
+// block boundary. Matches the GLSL declaration in GRID_VERT/GRID_FRAG.
+struct GridParamsStd140 {
+    float u_inv_vp[16];
+    float u_view[16];
+    float u_projection[16];
+    float u_near;
+    float u_far;
+    float _pad[2];
+};
+static_assert(sizeof(GridParamsStd140) == 208,
+              "GridParamsStd140 must be 208 bytes for std140 compliance");
+
 GroundGridPass::GroundGridPass(
     const std::string& input_res,
     const std::string& output_res,
@@ -125,6 +146,14 @@ GroundGridPass::GroundGridPass(
     output_res(output_res)
 {
     set_pass_name(pass_name);
+}
+
+GroundGridPass::~GroundGridPass() {
+    if (_device) {
+        if (_vs)         _device->destroy(_vs);
+        if (_fs)         _device->destroy(_fs);
+        if (_params_ubo) _device->destroy(_params_ubo);
+    }
 }
 
 std::set<const char*> GroundGridPass::compute_reads() const {
@@ -139,9 +168,27 @@ std::vector<std::pair<std::string, std::string>> GroundGridPass::get_inplace_ali
     return {{input_res, output_res}};
 }
 
-void GroundGridPass::_ensure_shader() {
-    if (!_shader.is_valid()) {
-        _shader = TcShader::from_sources(GRID_VERT, GRID_FRAG, "", "GroundGridPass");
+void GroundGridPass::_ensure_resources(tgfx::IRenderDevice* device) {
+    if (_vs && _fs && _params_ubo && _device == device) return;
+    _device = device;
+
+    if (!_vs) {
+        tgfx::ShaderDesc vs_desc;
+        vs_desc.stage = tgfx::ShaderStage::Vertex;
+        vs_desc.source = GRID_VERT;
+        _vs = device->create_shader(vs_desc);
+    }
+    if (!_fs) {
+        tgfx::ShaderDesc fs_desc;
+        fs_desc.stage = tgfx::ShaderStage::Fragment;
+        fs_desc.source = GRID_FRAG;
+        _fs = device->create_shader(fs_desc);
+    }
+    if (!_params_ubo) {
+        tgfx::BufferDesc ubo_desc;
+        ubo_desc.size = sizeof(GridParamsStd140);
+        ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
+        _params_ubo = device->create_buffer(ubo_desc);
     }
 }
 
@@ -171,12 +218,22 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     float near_clip = static_cast<float>(ctx.camera->near_clip);
     float far_clip  = static_cast<float>(ctx.camera->far_clip);
 
-    // Compile the grid shader via the bridge (tgfx2 ShaderHandle pair).
-    _ensure_shader();
-    tc_shader* raw = tc_shader_get(_shader.handle);
-    if (!raw) return;
-    tgfx::ShaderHandle vs2, fs2;
-    if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
+    _ensure_resources(&ctx2->device());
+    if (!_vs || !_fs || !_params_ubo) return;
+
+    // Upload the param block BEFORE begin_pass — Vulkan forbids
+    // vkCmdCopyBuffer inside a render pass, and tgfx2's upload_buffer
+    // on the GL path is a trivial glBufferSubData so either order is fine.
+    GridParamsStd140 params{};
+    std::memcpy(params.u_inv_vp,     inv_vp.data, sizeof(params.u_inv_vp));
+    std::memcpy(params.u_view,       view.data,   sizeof(params.u_view));
+    std::memcpy(params.u_projection, proj.data,   sizeof(params.u_projection));
+    params.u_near = near_clip;
+    params.u_far  = far_clip;
+    ctx2->device().upload_buffer(
+        _params_ubo,
+        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&params),
+                                 sizeof(params)));
 
     auto out_desc = ctx2->device().texture_desc(color_tex2);
     const int w = static_cast<int>(out_desc.width);
@@ -202,14 +259,8 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     // built-in fullscreen quad. The grid VS declares `a_pos` at
     // location 0 — compatible with ctx2's FSQ VBO layout (aPos/aUV);
     // aUV at location 1 is simply ignored by the VS.
-    ctx2->bind_shader(vs2, fs2);
-
-    // Grid uniforms via the transitional plain-uniform helpers.
-    ctx2->set_uniform_mat4("u_inv_vp",    inv_vp.data, /*transpose=*/false);
-    ctx2->set_uniform_mat4("u_view",      view.data,   /*transpose=*/false);
-    ctx2->set_uniform_mat4("u_projection", proj.data,  /*transpose=*/false);
-    ctx2->set_uniform_float("u_near", near_clip);
-    ctx2->set_uniform_float("u_far",  far_clip);
+    ctx2->bind_shader(_vs, _fs);
+    ctx2->bind_uniform_buffer(0, _params_ubo);
 
     ctx2->draw_fullscreen_quad();
     ctx2->end_pass();

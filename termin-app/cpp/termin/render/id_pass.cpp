@@ -48,10 +48,11 @@ static_assert(sizeof(IdPushStd140) == 80,
 static_assert(sizeof(IdPushStd140) <= 128,
               "IdPushStd140 must fit within Vulkan min push constant size");
 
-constexpr const char* ID_PASS_VERT_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
-
+// PerFrame UBO at binding 0 (view+proj, uploaded once per pass).
+// Per-draw data (model + pickColor, 80 bytes) rides on push_constants in
+// Vulkan; under GL the same bytes land in the std140 emulation UBO at
+// binding 14 managed by tgfx2's ring buffer.
+constexpr const char* ID_PASS_VERT_UBO = R"(#version 450 core
 layout(location=0) in vec3 a_position;
 layout(location=1) in vec3 a_normal;
 layout(location=2) in vec2 a_texcoord;
@@ -61,35 +62,44 @@ layout(std140, binding = 0) uniform PerFrame {
     mat4 u_projection;
 };
 
-layout(std140, binding = 14) uniform PushConstants {
+struct IdPushData {
     mat4 u_model;
     vec4 u_pickColor;  // w ignored
 };
+#ifdef VULKAN
+layout(push_constant) uniform IdPushBlock { IdPushData pc; };
+#else
+layout(std140, binding = 14) uniform IdPushBlock { IdPushData pc; };
+#endif
 
 void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+    gl_Position = u_projection * u_view * pc.u_model * vec4(a_position, 1.0);
 }
 )";
 
-constexpr const char* ID_PASS_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
-
-layout(std140, binding = 14) uniform PushConstants {
+constexpr const char* ID_PASS_FRAG_UBO = R"(#version 450 core
+struct IdPushData {
     mat4 u_model;
     vec4 u_pickColor;
 };
+#ifdef VULKAN
+layout(push_constant) uniform IdPushBlock { IdPushData pc; };
+#else
+layout(std140, binding = 14) uniform IdPushBlock { IdPushData pc; };
+#endif
 
-out vec4 fragColor;
+layout(location=0) out vec4 fragColor;
 
 void main() {
-    fragColor = vec4(u_pickColor.rgb, 1.0);
+    fragColor = vec4(pc.u_pickColor.rgb, 1.0);
 }
 )";
 
-constexpr const char* ID_PASS_VERT = R"(
-#version 330 core
-
+// ID_PASS_VERT / ID_PASS_FRAG — referenced via vertex_shader_source() /
+// fragment_shader_source() for legacy override keying (GeometryPassBase
+// uses the source pointer as a registry key). Never actually compiled
+// on the tgfx2 path — kept here so the sentinel values stay stable.
+constexpr const char* ID_PASS_VERT = R"(#version 450 core
 layout(location=0) in vec3 a_position;
 layout(location=1) in vec3 a_normal;
 layout(location=2) in vec2 a_texcoord;
@@ -103,11 +113,9 @@ void main() {
 }
 )";
 
-constexpr const char* ID_PASS_FRAG = R"(
-#version 330 core
-
+constexpr const char* ID_PASS_FRAG = R"(#version 450 core
 uniform vec3 u_pickColor;
-out vec4 fragColor;
+layout(location=0) out vec4 fragColor;
 
 void main() {
     fragColor = vec4(u_pickColor, 1.0);

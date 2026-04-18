@@ -2,7 +2,9 @@
 
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
-#include <tgfx/tgfx_shader_handle.hpp>
+#include "tgfx2/handles.hpp"
+
+namespace tgfx { class IRenderDevice; }
 
 namespace termin {
 
@@ -21,12 +23,22 @@ public:
     std::string input_res = "color";
     std::string output_res = "color";
 
+private:
+    // Cached tgfx2 resources. Parameters don't fit the 128-byte
+    // push-constant guarantee (3 mat4 + 2 float = 200 bytes padded to
+    // 208), so everything lives in a std140 UBO at binding 0.
+    tgfx::IRenderDevice* _device = nullptr;
+    tgfx::ShaderHandle _vs;
+    tgfx::ShaderHandle _fs;
+    tgfx::BufferHandle _params_ubo;
+
+public:
     GroundGridPass(
         const std::string& input_res = "color",
         const std::string& output_res = "color",
         const std::string& pass_name = "GroundGrid"
     );
-    virtual ~GroundGridPass() = default;
+    virtual ~GroundGridPass();
 
     void execute(ExecuteContext& ctx) override;
     std::set<const char*> compute_reads() const override;
@@ -34,11 +46,7 @@ public:
     std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
 
 private:
-    // TcShader kept as the compile source — tc_shader_ensure_tgfx2
-    // bridges it to a tgfx::ShaderHandle pair on first execute. We do
-    // not call TcShader::use / set_uniform_* directly any more.
-    TcShader _shader;
-    void _ensure_shader();
+    void _ensure_resources(tgfx::IRenderDevice* device);
 };
 
 } // namespace termin

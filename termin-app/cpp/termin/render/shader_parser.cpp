@@ -226,8 +226,13 @@ std::string synthesize_material_ubo_glsl(const MaterialUboLayout& layout) {
         return nullptr;
     };
 
+    // Binding 0 pins the block to UBO descriptor slot 0 — matches the
+    // shared descriptor set layout on Vulkan (UBO 0-3) and the explicit
+    // bind_uniform_buffer(0, ...) call in every pass that uses this
+    // parser. On GL 4.3+ the same qualifier is accepted via core
+    // GL_ARB_shading_language_420pack.
     std::ostringstream out;
-    out << "layout(std140) uniform MaterialParams {\n";
+    out << "layout(std140, binding = 0) uniform MaterialParams {\n";
     for (const auto& e : layout.entries) {
         const char* t = glsl_type(e.property_type);
         if (!t) continue;

@@ -52,13 +52,13 @@ static const char* SKYBOX_SHADER_TEXT = R"(
 @property Color u_skybox_bottom_color = Color(0.1, 0.1, 0.3, 1.0)
 
 @stage vertex
-#version 330 core
+#version 450 core
 layout(location = 0) in vec3 a_position;
 
 uniform mat4 u_view;
 uniform mat4 u_projection;
 
-out vec3 v_dir;
+layout(location = 0) out vec3 v_dir;
 
 void main() {
     mat4 view_no_translation = mat4(mat3(u_view));
@@ -68,10 +68,10 @@ void main() {
 @endstage
 
 @stage fragment
-#version 330 core
+#version 450 core
 
-in vec3 v_dir;
-out vec4 FragColor;
+layout(location = 0) in vec3 v_dir;
+layout(location = 0) out vec4 FragColor;
 
 uniform int  u_skybox_type;
 uniform vec4 u_skybox_color;
