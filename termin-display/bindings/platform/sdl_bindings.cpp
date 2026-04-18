@@ -164,6 +164,22 @@ void bind_sdl(nb::module_& m) {
              "tgfx::IRenderDevice bound to this window. Outlives the window.")
         .def("context", &BackendWindow::context, nb::rv_policy::reference_internal,
              "tgfx::RenderContext2 bound to this window's device. Lazy-built.")
+        // Opaque pointers for cross-module (nanobind) handshakes. Python
+        // code in tgfx._tgfx_native calls `Tgfx2Context.borrow(dev_ptr,
+        // ctx_ptr)` with these to produce a non-owning holder — we cannot
+        // return the C++ objects directly because IRenderDevice /
+        // RenderContext2 are registered in another .so's nanobind type
+        // table.
+        .def("device_ptr", [](BackendWindow& self) -> uintptr_t {
+                return reinterpret_cast<uintptr_t>(self.device());
+            },
+            "uintptr_t to the bound IRenderDevice. Pass to "
+            "tgfx._tgfx_native.Tgfx2Context.borrow.")
+        .def("context_ptr", [](BackendWindow& self) -> uintptr_t {
+                return reinterpret_cast<uintptr_t>(self.context());
+            },
+            "uintptr_t to the bound RenderContext2 (lazy-built on first "
+            "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
         .def("should_close", &BackendWindow::should_close)
         .def("set_should_close", &BackendWindow::set_should_close, nb::arg("value"))
         .def("poll_events", &BackendWindow::poll_events,

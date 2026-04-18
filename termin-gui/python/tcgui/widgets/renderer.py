@@ -86,7 +86,25 @@ def _build_ortho_pixel_to_ndc(w: float, h: float) -> np.ndarray:
 class UIRenderer:
     """UI widget renderer backed by tgfx2."""
 
-    def __init__(self, font: FontTextureAtlas | None = None):
+    def __init__(self, font: FontTextureAtlas | None = None,
+                 holder: Tgfx2Context | None = None):
+        """UIRenderer backed by tgfx2.
+
+        Parameters
+        ----------
+        font : FontTextureAtlas or None
+            Default font; falls back to the process-default atlas.
+        holder : Tgfx2Context or None
+            Externally-owned tgfx2 context to draw through. When a host
+            (BackendWindow-based editor) wants every renderer in the
+            process to share a single IRenderDevice — mandatory on
+            Vulkan, strongly recommended on GL to avoid GL_SHARE_WITH_
+            CURRENT_CONTEXT gymnastics — it passes a borrowed Tgfx2Context
+            built via ``Tgfx2Context.borrow(device_ptr, context_ptr)``.
+            If None, UIRenderer creates its own owning context on first
+            ``begin()`` (historical behaviour, kept for standalone tcgui
+            demos and tests).
+        """
         self._font = font
 
         # Viewport dimensions in pixels. Updated each begin().
@@ -97,9 +115,13 @@ class UIRenderer:
         # GL (bottom-left, y+ up) pixel coordinates.
         self._clip_stack: list[tuple[int, int, int, int]] = []
 
-        # --- Lazy tgfx2 resources — created on first begin() ---
-        self._holder: Tgfx2Context | None = None
-        self._ctx = None
+        # --- tgfx2 resources ---
+        # `_holder` may come from outside (borrow mode); if so we do not
+        # recreate it on begin(). `_owns_holder` tells end-of-life
+        # cleanup whether to destroy it.
+        self._holder: Tgfx2Context | None = holder
+        self._owns_holder: bool = holder is None
+        self._ctx = holder.context if holder is not None else None
         self._text2d: Text2DRenderer | None = None
 
         self._ui_tc_shader: TcShader | None = None
@@ -142,12 +164,18 @@ class UIRenderer:
     # ------------------------------------------------------------------
 
     def _ensure_init(self, w: int, h: int) -> None:
-        """Create Tgfx2Context, compile UI shader, allocate offscreen
-        FBO. Called on the first begin() and whenever the viewport
-        size changes."""
+        """Create Tgfx2Context (only when not already borrowed), compile
+        UI shader, allocate offscreen FBO. Called on the first begin()
+        and whenever the viewport size changes."""
         if self._holder is None:
             self._holder = Tgfx2Context()
+            self._owns_holder = True
             self._ctx = self._holder.context
+            self._text2d = Text2DRenderer(font=self._font)
+        elif self._text2d is None:
+            # Borrow mode: the holder was injected in __init__. Text2D
+            # is deferred to the first begin() because it needs the
+            # context to compile its shader.
             self._text2d = Text2DRenderer(font=self._font)
 
         if self._ui_tc_shader is None:
