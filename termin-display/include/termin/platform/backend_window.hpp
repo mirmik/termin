@@ -24,7 +24,11 @@
 #include "tgfx2/handles.hpp"
 #include "render/termin_display_api.h"
 
-namespace tgfx { class IRenderDevice; }
+namespace tgfx {
+class IRenderDevice;
+class PipelineCache;
+class RenderContext2;
+}
 
 namespace termin {
 
@@ -43,6 +47,11 @@ public:
     // / pipelines / command lists through this — no backend-specific
     // calls anywhere else.
     tgfx::IRenderDevice* device();
+
+    // A RenderContext2 bound to this window's device. Created lazily on
+    // first call. Share this across frames — it holds a pipeline cache
+    // that gets warmer as the app runs.
+    tgfx::RenderContext2* context();
 
     // Raw SDL handle for hosts that need to forward events or embed
     // the window. Prefer should_close() / poll_events() for the common

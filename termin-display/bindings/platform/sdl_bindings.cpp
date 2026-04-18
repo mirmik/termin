@@ -7,6 +7,11 @@
 
 #include "termin/platform/sdl_window.hpp"
 #include "termin/platform/sdl_render_surface.hpp"
+#include "termin/platform/backend_window.hpp"
+
+#include "tgfx2/handles.hpp"
+#include "tgfx2/i_render_device.hpp"
+#include "tgfx2/render_context.hpp"
 
 namespace nb = nanobind;
 
@@ -137,6 +142,39 @@ void bind_sdl(nb::module_& m) {
         .def("needs_render", &SDLWindowRenderSurface::needs_render)
         .def("clear_render_flag", &SDLWindowRenderSurface::clear_render_flag)
         .def("check_resize", &SDLWindowRenderSurface::check_resize);
+
+    // --- BackendWindow: the backend-neutral SDL wrapper. ---
+    //
+    // Apps write the same Python code under TERMIN_BACKEND=opengl and
+    // TERMIN_BACKEND=vulkan. The ctor reads the env-var and spins up
+    // the right SDL window flags + IRenderDevice internally.
+    //
+    //   from tgfx import _tgfx_native   # ensures Tgfx2* types registered
+    //   from termin.display._platform_native import BackendWindow
+    //   win = BackendWindow("Editor", 1280, 720)
+    //   dev = win.device()
+    //   while not win.should_close():
+    //       win.poll_events()
+    //       # render into my_color_tex via dev
+    //       win.present(my_color_tex)
+    nb::class_<BackendWindow>(m, "BackendWindow")
+        .def(nb::init<const std::string&, int, int>(),
+             nb::arg("title"), nb::arg("width"), nb::arg("height"))
+        .def("device", &BackendWindow::device, nb::rv_policy::reference_internal,
+             "tgfx::IRenderDevice bound to this window. Outlives the window.")
+        .def("context", &BackendWindow::context, nb::rv_policy::reference_internal,
+             "tgfx::RenderContext2 bound to this window's device. Lazy-built.")
+        .def("should_close", &BackendWindow::should_close)
+        .def("set_should_close", &BackendWindow::set_should_close, nb::arg("value"))
+        .def("poll_events", &BackendWindow::poll_events,
+             "Drain SDL events, flip should_close on SDL_QUIT / window-close "
+             "/ ESC. For finer control use the SDL module directly.")
+        .def("framebuffer_size", &BackendWindow::framebuffer_size,
+             "Drawable size (width, height). Updates after host resize; "
+             "the next present() will recreate the Vulkan swapchain.")
+        .def("present", &BackendWindow::present, nb::arg("color_tex"),
+             "Publish color_tex to the window surface. GL: blit + SwapWindow. "
+             "Vulkan: acquire + compose + present.");
 }
 
 } // namespace termin

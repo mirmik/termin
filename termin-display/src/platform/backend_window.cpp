@@ -9,6 +9,13 @@
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/opengl/opengl_render_device.hpp"
+#include "tgfx2/pipeline_cache.hpp"
+#include "tgfx2/render_context.hpp"
+
+extern "C" {
+#include "tgfx/tc_gpu_context.h"
+#include "tgfx/tgfx2_interop.h"
+}
 
 #ifdef TGFX2_HAS_VULKAN
 #include <SDL2/SDL_vulkan.h>
@@ -27,6 +34,9 @@ namespace termin {
 struct BackendWindow::Impl {
     tgfx::BackendType backend = tgfx::BackendType::OpenGL;
     std::unique_ptr<tgfx::IRenderDevice> device;
+    // Lazily-built pipeline cache + RenderContext2 bound to `device`.
+    std::unique_ptr<tgfx::PipelineCache> cache;
+    std::unique_ptr<tgfx::RenderContext2> ctx;
 
     // OpenGL state (only used when backend == OpenGL).
     SDL_GLContext gl_context = nullptr;
@@ -80,6 +90,15 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height)
         // OpenGLRenderDevice ctor loads GLAD and validates the live
         // context — it expects MakeCurrent to already have happened.
         impl_->device = tgfx::create_device(tgfx::BackendType::OpenGL);
+
+        // Wire up legacy tgfx_gpu_ops so TcShader / TcTexture / TcMesh
+        // calls (tc_shader_ensure_tgfx2, tc_mesh_upload_gpu, ...) route
+        // through the tgfx2 device. Vulkan has no such interop yet —
+        // the factory-default vtable stays unset there, legacy paths
+        // aren't expected to run under Vulkan.
+        tc_ensure_default_gpu_context();
+        tgfx2_interop_set_device(impl_->device.get());
+        tgfx2_gpu_ops_register();
     }
 #ifdef TGFX2_HAS_VULKAN
     else if (impl_->backend == tgfx::BackendType::Vulkan) {
@@ -123,7 +142,10 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height)
 }
 
 BackendWindow::~BackendWindow() {
-    // Device must die before its GL context / SDL window.
+    // Teardown in reverse dependency order: ctx → cache → device →
+    // GL context → SDL window.
+    impl_->ctx.reset();
+    impl_->cache.reset();
     impl_->device.reset();
     if (impl_->gl_context) {
         SDL_GL_DeleteContext(impl_->gl_context);
@@ -141,6 +163,14 @@ BackendWindow::~BackendWindow() {
 
 tgfx::IRenderDevice* BackendWindow::device() {
     return impl_->device.get();
+}
+
+tgfx::RenderContext2* BackendWindow::context() {
+    if (!impl_->ctx && impl_->device) {
+        impl_->cache = std::make_unique<tgfx::PipelineCache>(*impl_->device);
+        impl_->ctx = std::make_unique<tgfx::RenderContext2>(*impl_->device, *impl_->cache);
+    }
+    return impl_->ctx.get();
 }
 
 std::pair<int, int> BackendWindow::framebuffer_size() const {
