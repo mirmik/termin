@@ -24,18 +24,22 @@ class EditorCanvas(Canvas):
     """Zoomable image canvas with brush painting, mask painting, and rect tools."""
 
     def __init__(self, layer_stack: LayerStack, *,
-                 gpu_compositing: bool = True):
+                 gpu_compositing: bool = True,
+                 ctx=None):
         super().__init__()
         self.background_color = (0.08, 0.08, 0.10, 1.0)
         self._layer_stack = layer_stack
         self._composite: np.ndarray | None = None
 
-        # GPU compositing runs through the tgfx2 native compositor —
-        # it owns its own Tgfx2Context and needs no legacy graphics
-        # backend.
+        # GPU compositing runs through the tgfx2 native compositor. The
+        # host (EditorWindow) threads the process-global Tgfx2Context
+        # down so the compositor's textures live on the same IRenderDevice
+        # as the UI shader — required under Vulkan (no cross-device
+        # handle resolution) and harmless on OpenGL.
         self._gpu_compositing = gpu_compositing
         self._gpu_compositor: GPUCompositor | None = (
-            GPUCompositor(layer_stack) if self._gpu_compositing else None)
+            GPUCompositor(layer_stack, ctx=ctx)
+            if self._gpu_compositing else None)
         self._composite_stale = True  # CPU readback needed
 
         self.brush = Brush()
@@ -845,41 +849,43 @@ class EditorCanvas(Canvas):
     # ------------------------------------------------------------------
 
     def render(self, renderer):
-        wrapped_gpu_tex = None
+        # Borrow the compositor's display tex directly. Since
+        # EditorWindow threads the process-global tgfx2 context into
+        # both the compositor and the renderer, the handle is valid on
+        # both sides — no GL-id wrap, no raw-GL detour that only worked
+        # on OpenGL. On Vulkan the raw-GL path returned 0 and left the
+        # canvas black; this shared-device path draws a real image on
+        # both backends.
+        borrowed_display_tex = None
         if self._gpu_compositing and self._gpu_compositor:
-            # During mask erase preview, _preview_mask_erase_region modifies
-            # self._composite on CPU and calls set_image(); let base Canvas
-            # handle that upload instead of overriding with GPU texture.
+            # During mask erase preview, _preview_mask_erase_region
+            # modifies self._composite on CPU and calls set_image() —
+            # let base Canvas handle that upload instead of overriding
+            # with the GPU display tex.
             in_mask_erase_preview = self._mask_erase_stroke is not None
 
             if not in_mask_erase_preview:
-                gl_id = self._gpu_compositor.get_display_gl_id()
+                tex = self._gpu_compositor.display_tex
                 w, h = self._gpu_compositor.display_size()
-                if gl_id and w > 0 and h > 0:
-                    # The compositor owns its own tgfx2 device, so its
-                    # TextureHandle is meaningless to the UIRenderer's
-                    # device. Wrap the raw GL id in the renderer's
-                    # holder for this draw, then destroy after.
-                    wrapped_gpu_tex = wrap_gl_texture_as_tgfx2(
-                        renderer._holder, gl_id, w, h, PIXEL_RGBA8,
-                    )
+                if tex is not None and w > 0 and h > 0:
                     if self._image_texture is not None and self._image_tex_size is not None:
                         renderer.destroy_texture(self._image_texture)
-                    self._image_texture = wrapped_gpu_tex
-                    self._image_tex_size = None  # non-owning wrap
+                    self._image_texture = tex
+                    self._image_tex_size = None  # non-owning borrow
                     self._image_dirty = False
                     if self._image_data is None or self._image_data.shape[:2] != (h, w):
                         self._image_data = np.empty((h, w, 4), dtype=np.uint8)
+                    borrowed_display_tex = tex
             else:
                 if self._image_texture is not None and self._image_tex_size is None:
                     self._image_texture = None
         try:
             super().render(renderer)
         finally:
-            if wrapped_gpu_tex is not None:
-                renderer._holder.destroy_texture(wrapped_gpu_tex)
-                if self._image_texture is wrapped_gpu_tex:
-                    self._image_texture = None
+            # Null out the borrowed reference so Canvas.dispose / texture
+            # updates don't try to destroy a texture owned by the compositor.
+            if borrowed_display_tex is not None and self._image_texture is borrowed_display_tex:
+                self._image_texture = None
 
     # ------------------------------------------------------------------
     # Keyboard

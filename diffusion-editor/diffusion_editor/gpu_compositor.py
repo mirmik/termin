@@ -2,57 +2,72 @@
 
 from __future__ import annotations
 
+import struct
+
 import numpy as np
 from tcbase import log
 
 from .layer_stack import LayerStack
 from .layer import Layer
 
-from tgfx import TcShader
 from tgfx._tgfx_native import (
     Tgfx2Context,
     Tgfx2TextureHandle,
     Tgfx2BlendFactor,
-    tc_shader_ensure_tgfx2,
+    Tgfx2ShaderStage,
 )
 
 # ---------------------------------------------------------------------------
 # GLSL sources
 # ---------------------------------------------------------------------------
+#
+# Single source for both backends — `#ifdef VULKAN` is auto-defined by
+# shaderc (=100) when compiling to SPIR-V. Per-draw state lives in a
+# push_constant block on Vulkan and in a UBO at binding 14 on OpenGL
+# (matches the tgfx2 GL push-constant ring UBO). Sampler sits at
+# COMBINED_IMAGE_SAMPLER binding 4, the shared descriptor set's slot
+# for the first fragment sampler.
 
-_VERT_SRC = """
-#version 330 core
+_VERT_SRC = """#version 450 core
 layout(location=0) in vec3 a_position;
 layout(location=1) in vec4 a_uv_pad;
-out vec2 v_uv;
+
+layout(location=0) out vec2 v_uv;
+
 void main() {
     v_uv = a_uv_pad.xy;
     gl_Position = vec4(a_position.xy, 0.0, 1.0);
 }
 """
 
-# Premultiplied alpha compositing fragment shader.
-# Converts straight-alpha texture to premultiplied on the fly.
-_COMPOSITE_FRAG_SRC = """
-#version 330 core
-uniform sampler2D u_texture;
-uniform float u_opacity;
-in vec2 v_uv;
-out vec4 FragColor;
+_COMPOSITE_FRAG_SRC = """#version 450 core
+struct CompositePush {
+    float u_opacity;
+};
+#ifdef VULKAN
+layout(push_constant) uniform CompositePushBlock { CompositePush pc; };
+#else
+layout(std140, binding = 14) uniform CompositePushBlock { CompositePush pc; };
+#endif
+
+layout(binding = 4) uniform sampler2D u_texture;
+
+layout(location=0) in vec2 v_uv;
+layout(location=0) out vec4 FragColor;
+
 void main() {
     vec4 t = texture(u_texture, v_uv);
-    float a = t.a * u_opacity;
+    float a = t.a * pc.u_opacity;
     FragColor = vec4(t.rgb * a, a);
 }
 """
 
-# Un-premultiply shader: converts premultiplied alpha back to straight alpha
-# for display by the Canvas base class.
-_UNPREMUL_FRAG_SRC = """
-#version 330 core
-uniform sampler2D u_texture;
-in vec2 v_uv;
-out vec4 FragColor;
+_UNPREMUL_FRAG_SRC = """#version 450 core
+layout(binding = 4) uniform sampler2D u_texture;
+
+layout(location=0) in vec2 v_uv;
+layout(location=0) out vec4 FragColor;
+
 void main() {
     vec4 pm = texture(u_texture, v_uv);
     if (pm.a > 0.001)
@@ -61,6 +76,14 @@ void main() {
         FragColor = vec4(0.0);
 }
 """
+
+# Python-side layout of the CompositePush block. `float u_opacity` alone
+# fits in 4 bytes, but std140 UBOs round each member up to 16; Vulkan
+# push-constant blocks are under std430 so a single float is fine. We
+# pad to 16 so the OpenGL branch (which uses std140) and the Vulkan
+# branch both accept the same bytes.
+_COMPOSITE_PUSH_FMT = "=f12x"   # u_opacity + 12 bytes padding (16 total)
+_COMPOSITE_PUSH_SIZE = struct.calcsize(_COMPOSITE_PUSH_FMT)
 
 
 def _full_screen_quad_verts() -> np.ndarray:
@@ -89,7 +112,20 @@ class GPUCompositor:
     is handed to the Canvas for display.
     """
 
-    def __init__(self, layer_stack: LayerStack):
+    def __init__(self, layer_stack: LayerStack,
+                 ctx: Tgfx2Context | None = None):
+        """
+        Parameters
+        ----------
+        layer_stack : LayerStack
+            Model to composite.
+        ctx : Tgfx2Context or None
+            Borrowed context from the host (BackendWindow). When given,
+            the compositor renders through the same IRenderDevice as
+            every other renderer — mandatory on Vulkan because cross-
+            device TextureHandles don't resolve. ``None`` keeps the
+            old owning-mode behaviour for legacy hosts.
+        """
         self._stack = layer_stack
 
         # Per-layer GPU textures, keyed by ``id(layer)`` — Tgfx2TextureHandle.
@@ -107,11 +143,12 @@ class GPUCompositor:
         self._temp_texs: list[Tgfx2TextureHandle] = []
         self._temp_texs_in_use: int = 0
 
-        # tgfx2 context + compiled shaders (lazy).
-        self._holder: Tgfx2Context | None = None
+        # tgfx2 context + compiled shaders (lazy). In borrow mode the
+        # holder is set up front so `_ensure_context` skips its owning-
+        # mode branch.
+        self._holder: Tgfx2Context | None = ctx
+        self._owns_holder: bool = ctx is None
         self._ctx = None
-        self._composite_tc: TcShader | None = None
-        self._unpremul_tc: TcShader | None = None
         self._composite_vs = None
         self._composite_fs = None
         self._unpremul_vs = None
@@ -174,8 +211,8 @@ class GPUCompositor:
         ctx.set_viewport(0, 0, w, h)
         ctx.set_blend(False)
         ctx.bind_shader(self._unpremul_vs, self._unpremul_fs)
-        ctx.bind_sampled_texture(0, self._main_tex)
-        ctx.set_uniform_int("u_texture", 0)
+        # Unpremul shader has no uniforms — just the sampler at binding 4.
+        ctx.bind_sampled_texture(4, self._main_tex)
         ctx.draw_immediate_triangles(self._quad_verts, 6)
         ctx.end_pass()
 
@@ -183,18 +220,22 @@ class GPUCompositor:
         self._dirty = False
 
     def get_display_gl_id(self) -> int:
-        """Return the raw GL texture id of the final composited image.
-
-        The compositor owns its own ``Tgfx2Context`` (separate device
-        from the UIRenderer's), so handing out our ``Tgfx2TextureHandle``
-        directly would land in the wrong device's pool on the consumer
-        side. Instead we expose the underlying GL texture id; the
-        consumer wraps it with ``wrap_gl_texture_as_tgfx2`` in its own
-        holder for the draw.
+        """Legacy raw-GL-id path. Returns 0 when the compositor shares
+        a device with the UIRenderer (the ``ctx=`` constructor arg).
+        Prefer ``display_tex`` which works on both OpenGL and Vulkan.
         """
         if self._display_tex is None or self._holder is None:
             return 0
         return int(self._holder.get_gl_id(self._display_tex))
+
+    @property
+    def display_tex(self):
+        """tgfx2 TextureHandle of the composited image. Valid in the
+        renderer's device because the compositor was constructed with
+        a borrowed context. Use this instead of ``get_display_gl_id``
+        whenever the host wires the compositor onto the shared device.
+        """
+        return self._display_tex
 
     def display_size(self) -> tuple[int, int]:
         """(width, height) of the current display texture, or (0, 0)."""
@@ -288,25 +329,23 @@ class GPUCompositor:
     def _ensure_context(self):
         if self._holder is None:
             self._holder = Tgfx2Context()
+            self._owns_holder = True
+        if self._ctx is None:
             self._ctx = self._holder.context
         if self._composite_vs is None:
-            self._composite_tc = TcShader.from_sources(
-                _VERT_SRC, _COMPOSITE_FRAG_SRC, "", "gpu_compositor_composite")
-            pair = tc_shader_ensure_tgfx2(self._ctx, self._composite_tc)
-            if not pair.vs or not pair.fs:
-                raise RuntimeError(
-                    "GPUCompositor: composite shader compile failed")
-            self._composite_vs = pair.vs
-            self._composite_fs = pair.fs
-
-            self._unpremul_tc = TcShader.from_sources(
-                _VERT_SRC, _UNPREMUL_FRAG_SRC, "", "gpu_compositor_unpremul")
-            pair = tc_shader_ensure_tgfx2(self._ctx, self._unpremul_tc)
-            if not pair.vs or not pair.fs:
-                raise RuntimeError(
-                    "GPUCompositor: unpremul shader compile failed")
-            self._unpremul_vs = pair.vs
-            self._unpremul_fs = pair.fs
+            # Compile directly on the tgfx2 device — same path UIRenderer
+            # uses. No TcShader bridge, no legacy tc_gpu_slot: the route
+            # works on both OpenGL and Vulkan.
+            dev = self._holder.device
+            self._composite_vs = dev.create_shader(Tgfx2ShaderStage.Vertex, _VERT_SRC)
+            self._composite_fs = dev.create_shader(Tgfx2ShaderStage.Fragment,
+                                                    _COMPOSITE_FRAG_SRC)
+            self._unpremul_vs = dev.create_shader(Tgfx2ShaderStage.Vertex, _VERT_SRC)
+            self._unpremul_fs = dev.create_shader(Tgfx2ShaderStage.Fragment,
+                                                   _UNPREMUL_FRAG_SRC)
+            if not (self._composite_vs and self._composite_fs
+                    and self._unpremul_vs and self._unpremul_fs):
+                raise RuntimeError("GPUCompositor: shader compile failed")
 
     def _ensure_attachments(self, w: int, h: int):
         if (self._main_tex is not None
@@ -439,9 +478,12 @@ class GPUCompositor:
 
     def _draw_texture_quad(self, texture: Tgfx2TextureHandle, opacity: float):
         ctx = self._ctx
-        ctx.bind_sampled_texture(0, texture)
-        ctx.set_uniform_int("u_texture", 0)
-        ctx.set_uniform_float("u_opacity", float(opacity))
+        # Sampler slot 4 matches `layout(binding = 4)` in the fragment
+        # shader (combined image+sampler — the shared descriptor set's
+        # first fragment texture binding on both backends).
+        ctx.bind_sampled_texture(4, texture)
+        data = struct.pack(_COMPOSITE_PUSH_FMT, float(opacity))
+        ctx.set_push_constants(np.asarray(bytearray(data), dtype=np.uint8))
         ctx.draw_immediate_triangles(self._quad_verts, 6)
 
     # ------------------------------------------------------------------

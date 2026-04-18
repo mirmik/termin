@@ -300,6 +300,16 @@ class UIRenderer:
         ctx.set_cull(CULL_NONE)
         ctx.set_depth_test(False)
         ctx.set_blend(True)
+        # Explicit blend func — don't rely on defaults. Other renderers
+        # on the same shared Tgfx2Context (the diffusion-editor's
+        # GPUCompositor) set their own blend func to One / OneMinusSrcAlpha
+        # for premultiplied-alpha compositing, and that leaks into the
+        # UIRenderer pass if we don't reassert ours. Symptom was white
+        # halos around text and red-tinted image after the compositor
+        # ran. Standard over-alpha for color.
+        from tgfx._tgfx_native import Tgfx2BlendFactor
+        ctx.set_blend_func(Tgfx2BlendFactor.SrcAlpha,
+                           Tgfx2BlendFactor.OneMinusSrcAlpha)
 
         # Text2D uses the same projection matrix — its begin() sets
         # its own u_projection on its own shader, so we must call it
