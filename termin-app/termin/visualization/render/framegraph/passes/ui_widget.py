@@ -103,7 +103,11 @@ class UIWidgetPass(RenderFramePass):
                 entity_layer = entity.layer
                 if not (ctx.layer_mask & (1 << entity_layer)):
                     continue
-            ui_comp.render(pw, ph)
+            # Framegraph path: give the UIComponent the tgfx2 context and
+            # the framegraph-allocated target texture so it can composite
+            # and blit without touching FBO 0. Backend-neutral — works on
+            # both OpenGL and Vulkan.
+            ui_comp.render(pw, ph, ctx2=ctx.ctx2, target_tex2=target_tex2)
 
     def _collect_ui_from_hierarchy(self, entity) -> list:
         """Recursively collect UIComponents from entity hierarchy."""
