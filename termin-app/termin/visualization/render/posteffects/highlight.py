@@ -153,7 +153,10 @@ class HighlightEffect(PostEffect):
             texel_x, texel_y,
             0.0, 0.0,
         )
-        push_buf = np.frombuffer(push_bytes, dtype=np.uint8)
+        # np.frombuffer returns read-only; nanobind's set_push_constants
+        # wants a writable C-contig uint8 ndarray. bytearray copy gives us
+        # that without extra fuss.
+        push_buf = np.asarray(bytearray(push_bytes), dtype=np.uint8)
 
         def setup(ctx2):
             ctx2.bind_shader(self._vs, self._fs)

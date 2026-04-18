@@ -131,7 +131,8 @@ class FogEffect(PostEffect):
         #   u_fog_end             : 16
         # The pack above places start at offset 12 (after 3 floats, position
         # 3 in the `=8f` stream) and end at offset 16 (position 4). Good.
-        push_buf = np.frombuffer(push_bytes, dtype=np.uint8)
+        # bytearray → writable C-contig ndarray (nanobind rejects read-only).
+        push_buf = np.asarray(bytearray(push_bytes), dtype=np.uint8)
 
         def setup(ctx2):
             ctx2.bind_shader(self._vs, self._fs)
