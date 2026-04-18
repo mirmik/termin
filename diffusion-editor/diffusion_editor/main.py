@@ -1,4 +1,10 @@
-"""SDL2 + OpenGL entry point for diffusion-editor (tcgui version)."""
+"""Entry point for diffusion-editor.
+
+Runs on ``termin.display.BackendWindow`` — backend is selected by the
+env-var ``TERMIN_BACKEND`` (``opengl`` / ``vulkan``). A single tgfx2
+IRenderDevice is owned by the BackendWindow; the UI borrows it via
+``Tgfx2Context.borrow`` so every renderer lands on the same device.
+"""
 
 import sys
 import ctypes
@@ -8,48 +14,10 @@ from sdl2 import video
 from tcbase import Key, MouseButton, Mods
 from tcbase import log
 
+from tgfx import Tgfx2Context
+from termin.display._platform_native import BackendWindow
+
 from .editor_window import EditorWindow
-
-
-# --- SDL helpers ---
-
-def create_window(title: str, width: int, height: int):
-    if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
-        raise RuntimeError(f"SDL_Init failed: {sdl2.SDL_GetError()}")
-
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MINOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(
-        video.SDL_GL_CONTEXT_PROFILE_MASK,
-        video.SDL_GL_CONTEXT_PROFILE_CORE,
-    )
-    video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
-    video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
-
-    flags = video.SDL_WINDOW_OPENGL | video.SDL_WINDOW_RESIZABLE | video.SDL_WINDOW_SHOWN | video.SDL_WINDOW_MAXIMIZED
-    window = video.SDL_CreateWindow(
-        title.encode("utf-8"),
-        video.SDL_WINDOWPOS_CENTERED,
-        video.SDL_WINDOWPOS_CENTERED,
-        width, height, flags,
-    )
-    if not window:
-        raise RuntimeError(f"SDL_CreateWindow failed: {sdl2.SDL_GetError()}")
-
-    gl_ctx = video.SDL_GL_CreateContext(window)
-    if not gl_ctx:
-        video.SDL_DestroyWindow(window)
-        raise RuntimeError(f"SDL_GL_CreateContext failed: {sdl2.SDL_GetError()}")
-
-    video.SDL_GL_MakeCurrent(window, gl_ctx)
-    video.SDL_GL_SetSwapInterval(1)
-    return window, gl_ctx
-
-
-def get_drawable_size(window):
-    w, h = ctypes.c_int(), ctypes.c_int()
-    video.SDL_GL_GetDrawableSize(window, ctypes.byref(w), ctypes.byref(h))
-    return w.value, h.value
 
 
 _KEY_MAP = {
@@ -154,10 +122,14 @@ def main():
     faulthandler.enable()
     log.set_level(log.Level.INFO)
 
-    window, gl_ctx = create_window("Diffusion Editor", 1280, 800)
+    # BackendWindow owns the device + SDL window; backend picked from
+    # TERMIN_BACKEND env-var (default: opengl). Vulkan is an opt-in:
+    # `TERMIN_BACKEND=vulkan ./run.sh`.
+    window = BackendWindow("Diffusion Editor", 1280, 800)
+    tgfx2_ctx = Tgfx2Context.borrow(window.device_ptr(), window.context_ptr())
     log.info("[main] Window created")
 
-    editor = EditorWindow()
+    editor = EditorWindow(ctx=tgfx2_ctx)
     ui = editor.ui
 
     # Cursor support
@@ -183,9 +155,11 @@ def main():
         t = ev.type
         if t == sdl2.SDL_QUIT:
             editor._running = False
+            window.set_should_close(True)
         elif t == sdl2.SDL_WINDOWEVENT:
             if ev.window.event == video.SDL_WINDOWEVENT_CLOSE:
                 editor._running = False
+                window.set_should_close(True)
         elif t == sdl2.SDL_MOUSEMOTION:
             ui.mouse_move(float(ev.motion.x), float(ev.motion.y))
         elif t == sdl2.SDL_MOUSEBUTTONDOWN:
@@ -221,18 +195,19 @@ def main():
             # Poll engines
             editor.poll()
 
-            # Render — UIRenderer clears its offscreen (with the
-            # editor's background colour) and blits to fbo 0; no
-            # separate bind/clear of the default framebuffer needed.
-            vw, vh = get_drawable_size(window)
-            editor.render(vw, vh)
-
-            video.SDL_GL_SwapWindow(window)
+            # Render into the UI's offscreen texture, then publish via
+            # BackendWindow.present — on OpenGL this blits to the
+            # default framebuffer and calls SwapWindow; on Vulkan it
+            # acquires a swapchain image, blits, submits, presents.
+            vw, vh = window.framebuffer_size()
+            tex = editor.render_compose(vw, vh)
+            if tex is not None:
+                window.present(tex)
     finally:
         editor.close()
-        video.SDL_GL_DeleteContext(gl_ctx)
-        video.SDL_DestroyWindow(window)
-        sdl2.SDL_Quit()
+        # BackendWindow destructor cleans up SDL window + GL/Vulkan
+        # device in the correct order. Dropping the Python wrapper is
+        # enough; explicit sdl2.SDL_Quit is handled by BackendWindow.
 
 
 if __name__ == "__main__":

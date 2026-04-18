@@ -73,7 +73,15 @@ class ExternalEditContext:
 class EditorWindow:
     """Non-widget orchestrator: assembles UI, wires callbacks, handles logic."""
 
-    def __init__(self):
+    def __init__(self, ctx=None):
+        # Optional borrowed tgfx2 context. When given (typically by
+        # main.py, which owns a BackendWindow and wants every renderer
+        # to share one IRenderDevice), the UI draws through it; when
+        # None, UIRenderer falls back to its own owning Tgfx2Context.
+        # Required to be non-None under TERMIN_BACKEND=vulkan because
+        # cross-widget TextureHandle sharing and swapchain presentation
+        # both assume a single process-global device.
+        self._ctx = ctx
         self._running = True
         self._closed = False
         self._settings = Settings()
@@ -180,8 +188,8 @@ class EditorWindow:
         self._statusbar.text = "Ready"
         root.add_child(self._statusbar)
 
-        # Create UI
-        self.ui = UI()
+        # Create UI on the borrowed tgfx2 context (None = owning mode).
+        self.ui = UI(holder=self._ctx)
         self.ui.root = root
 
     def _canvas_placeholder_brush(self):
@@ -1337,6 +1345,15 @@ class EditorWindow:
 
     def render(self, vw: int, vh: int):
         self.ui.render(vw, vh, background_color=self.UI_BACKGROUND)
+
+    def render_compose(self, vw: int, vh: int):
+        """Render the UI and return the composite TextureHandle.
+
+        Preferred when the host owns a BackendWindow and publishes the
+        result via ``win.present(tex)`` — works on both OpenGL and
+        Vulkan. ``None`` if the UI is empty.
+        """
+        return self.ui.render_compose(vw, vh, background_color=self.UI_BACKGROUND)
 
     @property
     def running(self) -> bool:
