@@ -89,8 +89,18 @@ endif()
 # reads TERMIN_BACKEND=vulkan and creates a VulkanRenderDevice + swapchain;
 # without this flag it only supports the OpenGL backend (TERMIN_BACKEND=vulkan
 # then throws "Vulkan backend not compiled" at ctor time).
-option(TGFX2_ENABLE_VULKAN "Enable Vulkan path in BackendWindow" OFF)
-if(TGFX2_ENABLE_VULKAN)
+#
+# Default: auto-enable if Vulkan is discoverable on the host. This way
+# pip-installed binaries Just Work under TERMIN_BACKEND=vulkan — no
+# explicit build-time flag required, and the OpenGL path is unchanged
+# when Vulkan is absent.
+find_package(Vulkan QUIET)
+if(Vulkan_FOUND)
+    option(TGFX2_ENABLE_VULKAN "Enable Vulkan path in BackendWindow" ON)
+else()
+    option(TGFX2_ENABLE_VULKAN "Enable Vulkan path in BackendWindow" OFF)
+endif()
+if(TGFX2_ENABLE_VULKAN AND NOT Vulkan_FOUND)
     find_package(Vulkan REQUIRED)
 endif()
 
