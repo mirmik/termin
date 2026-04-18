@@ -113,7 +113,8 @@ class GaussianBlurPass(PostEffect):
             float(self.direction[0]), float(self.direction[1]),
             texel_x, texel_y,
         )
-        push_buf = np.frombuffer(push_bytes, dtype=np.uint8)
+        # bytearray → writable C-contig ndarray (nanobind rejects read-only).
+        push_buf = np.asarray(bytearray(push_bytes), dtype=np.uint8)
 
         def setup(ctx2):
             ctx2.bind_shader(self._vs, self._fs)
