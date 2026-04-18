@@ -18,12 +18,20 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.render.framegraph import RenderPipeline
     from termin.visualization.render.offscreen_context import OffscreenContext
+    from tgfx._tgfx_native import Tgfx2Context
 
 
 class _NoOpViewportList:
     """Stub for EditorSceneAttachment compatibility (calls _viewport_list.refresh())."""
 
     def refresh(self) -> None:
+        pass
+
+    def set_render_targets(self, targets) -> None:
+        # Qt editor used this to populate a side panel listing
+        # offscreen render targets. The tcgui editor has no such panel
+        # yet — the list is silently dropped until M14 restores a
+        # parity panel.
         pass
 
 
@@ -41,6 +49,7 @@ class RenderingControllerTcgui:
     def __init__(
         self,
         offscreen_context: "OffscreenContext",
+        ctx: "Tgfx2Context",
         get_scene: Callable[[], "Scene | None"] | None = None,
         make_editor_pipeline: Callable[[], "RenderPipeline"] | None = None,
         on_request_update: Callable[[], None] | None = None,
@@ -50,6 +59,11 @@ class RenderingControllerTcgui:
 
         self._manager = RenderingManager.instance()
         self._offscreen_context = offscreen_context
+        # Process-global tgfx2 context — every FBOSurface this controller
+        # creates allocates its color/depth textures on this device.
+        # Passed in from run_editor_tcgui (currently built around
+        # OffscreenContext, migrating to BackendWindow in M4).
+        self._ctx = ctx
         self._get_scene = get_scene
         self._make_editor_pipeline = make_editor_pipeline
         self._on_request_update = on_request_update
@@ -62,8 +76,16 @@ class RenderingControllerTcgui:
         self._viewport_list = _NoOpViewportList()
         self._center_tabs = None
 
-        # Register offscreen context with RenderingManager
-        self._manager.set_make_current_callback(offscreen_context.make_current)
+        # Register offscreen context with RenderingManager. Under
+        # BackendWindow the GL context is always current on the one
+        # thread that ever renders, and on Vulkan there's nothing to
+        # make current at all — so the callback is a no-op in that
+        # mode. We still wire it up when a legacy offscreen_context
+        # was supplied (standalone tests that pre-date M4).
+        if offscreen_context is not None:
+            self._manager.set_make_current_callback(offscreen_context.make_current)
+        else:
+            self._manager.set_make_current_callback(lambda: None)
 
         # Register factories
         self._manager.set_display_factory(self._create_display_for_name)
@@ -95,6 +117,13 @@ class RenderingControllerTcgui:
     def set_center_tabs(self, tabs) -> None:
         self._center_tabs = tabs
 
+    def _refresh_render_targets(self) -> None:
+        """Refresh render target list from pool. Kept as a no-op method
+        for EditorSceneAttachment parity with the Qt controller — the
+        tcgui editor has not yet restored the render-targets debug
+        panel, so there's nothing to refresh."""
+        pass
+
     # ------------------------------------------------------------------
     # Factories
     # ------------------------------------------------------------------
@@ -121,9 +150,10 @@ class RenderingControllerTcgui:
         from termin.visualization.core.display import Display
         from termin.visualization.platform.backends.fbo_backend import FBOSurface
 
-        self._offscreen_context.make_current()
+        if self._offscreen_context is not None:
+            self._offscreen_context.make_current()
 
-        fbo = FBOSurface(width=800, height=600)
+        fbo = FBOSurface(800, 600, ctx=self._ctx)
         display = Display(surface=fbo, name=name)
         display.auto_remove_when_empty = True
 
@@ -212,7 +242,8 @@ class RenderingControllerTcgui:
 
     def remove_viewports_for_scene(self, scene: "Scene") -> None:
         """Remove all viewports referencing the given scene."""
-        self._offscreen_context.make_current()
+        if self._offscreen_context is not None:
+            self._offscreen_context.make_current()
 
         for display in self._manager.displays:
             viewports_to_remove = [vp for vp in display.viewports if vp.scene is scene]

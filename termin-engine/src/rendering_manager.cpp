@@ -1081,11 +1081,13 @@ void RenderingManager::present_display(tc_display* display) {
     if (width <= 0 || height <= 0) return;
 
     uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
+    // Backend-neutral composite target: when the surface exposes a
+    // tgfx2 TextureHandle we route through blit_to_texture / clear_texture
+    // (works on both OpenGL and Vulkan). Zero = legacy FBO path (GL only).
+    tgfx::TextureHandle display_color_tex{
+        tc_render_surface_get_tgfx_color_tex_id(surface)
+    };
 
-    // Bind the display FBO, reset viewport, clear background through
-    // the backend-neutral tgfx2 device API. For OpenGL this maps to
-    // glBindFramebuffer + glClear; for Vulkan / future backends it will
-    // route to the appropriate swapchain-image operations.
     RenderEngine* engine = render_engine();
     if (engine) {
         engine->ensure_tgfx2();
@@ -1096,12 +1098,20 @@ void RenderingManager::present_display(tc_display* display) {
         return;
     }
 
-    dev->clear_external_target(
-        static_cast<uintptr_t>(display_fbo),
-        0.1f, 0.1f, 0.1f, 1.0f,
-        1.0f,
-        0, 0, width, height
-    );
+    if (display_color_tex) {
+        dev->clear_texture(
+            display_color_tex,
+            0.1f, 0.1f, 0.1f, 1.0f,
+            0, 0, width, height
+        );
+    } else {
+        dev->clear_external_target(
+            static_cast<uintptr_t>(display_fbo),
+            0.1f, 0.1f, 0.1f, 1.0f,
+            1.0f,
+            0, 0, width, height
+        );
+    }
 
     // Collect viewports sorted by depth
     std::vector<tc_viewport_handle> viewports;
@@ -1140,11 +1150,19 @@ void RenderingManager::present_display(tc_display* display) {
         int src_h = state->output_height;
 
         // Blit the viewport's native color texture to display target.
-        dev->blit_to_external_target(
-            static_cast<uintptr_t>(display_fbo), state->output_color_tex,
-            0, 0, src_w, src_h,
-            px, py, pw, ph
-        );
+        if (display_color_tex) {
+            dev->blit_to_texture(
+                display_color_tex, state->output_color_tex,
+                0, 0, src_w, src_h,
+                px, py, pw, ph
+            );
+        } else {
+            dev->blit_to_external_target(
+                static_cast<uintptr_t>(display_fbo), state->output_color_tex,
+                0, 0, src_w, src_h,
+                px, py, pw, ph
+            );
+        }
     }
 
     // Swap buffers

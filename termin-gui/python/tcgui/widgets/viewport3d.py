@@ -95,34 +95,38 @@ class Viewport3D(Widget):
     # ------------------------------------------------------------------
 
     def render(self, renderer: 'UIRenderer') -> None:
-        if self._surface is None or self._surface.color_texture_id == 0:
-            # FBO не готов — заглушка
+        if self._surface is None or self._surface.color_tex is None:
+            # Render target not ready — placeholder rectangle
             renderer.draw_rect(self.x, self.y, self.width, self.height,
                                (0.05, 0.05, 0.05, 1.0))
             return
 
-        self._blit_fbo(renderer)
+        self._composite_texture(renderer)
 
-    def _blit_fbo(self, renderer: 'UIRenderer') -> None:
-        """Composite the 3D engine's offscreen texture into the UI
-        pass via ``UIRenderer.draw_external_gl_texture``.
+    def _composite_texture(self, renderer: 'UIRenderer') -> None:
+        """Composite the 3D engine's offscreen tgfx2 texture into the
+        UI pass via ``UIRenderer.draw_texture``.
 
-        The surface's color texture is shared across GL contexts
-        (main + offscreen), so its ``color_texture_id`` is valid
-        in the current context. ``flip_v=True`` because GL-rendered
-        textures have origin bottom-left, while the UI ortho
-        projection expects top-left sampling.
+        The surface's color texture and the renderer's Tgfx2Context
+        live on the same IRenderDevice by construction (the host binds
+        a process-global context in ``run_editor_tcgui``), so the
+        handle is directly consumable — no GL-id wrap needed. Works on
+        both OpenGL and Vulkan.
+
+        ``flip_v=True`` because tgfx2 color attachments follow the GL
+        origin convention (texel (0, 0) at the bottom-left), while the
+        UI ortho projection samples top-left.
         """
-        tex_id = self._surface.color_texture_id
-        fbo_w, fbo_h = self._surface.framebuffer_size()
-        if tex_id == 0 or fbo_w == 0 or fbo_h == 0:
+        handle = self._surface.color_tex
+        tex_w, tex_h = self._surface.framebuffer_size()
+        if handle is None or tex_w == 0 or tex_h == 0:
             return
 
-        renderer.draw_external_gl_texture(
+        renderer.draw_texture(
             self.x, self.y, self.width, self.height,
-            gl_tex_id=tex_id,
-            tex_w=fbo_w,
-            tex_h=fbo_h,
+            handle=handle,
+            tex_w=tex_w,
+            tex_h=tex_h,
             flip_v=True,
         )
 
