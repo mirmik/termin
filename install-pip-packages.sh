@@ -17,17 +17,29 @@
 #   ./install-pip-packages.sh                             # Install into current pip env
 #   ./install-pip-packages.sh --editable                  # Install termin in editable mode
 #   ./install-pip-packages.sh --target DIR                # Install into DIR (no deps)
+#   ./install-pip-packages.sh --force                     # Force-reinstall, bypass pip cache
+#
+# When the SDK changes in an ABI-breaking way (namespace rename, virtual
+# table layout, enum re-ordering, ...) the nanobind .so files that pip
+# copies out of $TERMIN_SDK change, but pip's wheel cache may still serve
+# an old build. `compute_local_version()` mitigates this by embedding the
+# SDK mtime into the package version, but if a wheel is already cached
+# under that version string — or worse, a package is not in the list
+# below and was installed ad-hoc — pip stays happy with the stale install.
+# --force trades rebuild time for guaranteed-fresh bindings.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EDITABLE=0
 TARGET_DIR=""
+FORCE=0
 
 # Parse options first so --target takes effect before SDK discovery / logging.
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --editable|-e) EDITABLE=1; shift ;;
+        --force|-f) FORCE=1; shift ;;
         --target)
             TARGET_DIR="$2"
             shift 2
@@ -41,6 +53,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --editable, -e   Install termin in editable mode (host env only)"
+            echo "  --force, -f      Force-reinstall all packages, bypass pip cache"
+            echo "                   (needed after SDK ABI-breaking rebuilds)"
             echo "  --target DIR     Install into DIR (typically bundled Python's site-packages)"
             echo "  --help, -h       Show this help"
             exit 0
@@ -128,7 +142,31 @@ PACKAGES=(
     termin-components/termin-components-kinematic
     termin-gui
     termin-nodegraph
+    tcplot
 )
+
+# When --force is set, nuke each package's build cache and egg-info so
+# setuptools re-runs the CMake copy step from $TERMIN_SDK instead of
+# reusing a cached wheel. This is the only reliable way to recover from
+# an ABI-breaking SDK change — compute_local_version() fails when pip
+# has already cached a wheel under the matching +sdkNNN suffix.
+if [[ $FORCE -eq 1 ]]; then
+    echo "--force: clearing per-package build caches before install"
+    for pkg in "${PACKAGES[@]}"; do
+        rm -rf "$SCRIPT_DIR/$pkg/build" "$SCRIPT_DIR/$pkg"/*.egg-info 2>/dev/null || true
+    done
+fi
+
+FORCE_FLAGS=()
+if [[ $FORCE -eq 1 ]]; then
+    # --no-deps is mandatory alongside --force-reinstall: pip otherwise
+    # tries to re-resolve dependencies like `tcbase`, `tmesh`, `tgfx`
+    # that live locally and are not on PyPI — fails with "No matching
+    # distribution found". The PyPI transitive deps (numpy, nanobind,
+    # ...) have already been installed by the initial no-force run, so
+    # skipping their re-resolve is harmless here.
+    FORCE_FLAGS=(--force-reinstall --no-cache-dir --no-deps)
+fi
 
 if [[ -n "$TARGET_DIR" ]]; then
     # --target mode: install ALL packages in a single pip invocation.
@@ -142,7 +180,7 @@ if [[ -n "$TARGET_DIR" ]]; then
     # we're already enumerating, and --no-deps avoids pulling PyPI
     # packages (numpy, nanobind, …) into the SDK — those are provided
     # separately by BUNDLE_PACKAGES_EXTERNAL in termin/CMakeLists.txt.
-    PIP_ARGS=(--no-build-isolation --no-deps --upgrade --target "$TARGET_DIR")
+    PIP_ARGS=(--no-build-isolation --no-deps --upgrade --target "$TARGET_DIR" "${FORCE_FLAGS[@]}")
     for pkg in "${PACKAGES[@]}"; do
         PIP_ARGS+=("$SCRIPT_DIR/$pkg")
     done
@@ -162,14 +200,14 @@ else
             echo "  Installing $pkg (editable)"
             echo "========================================"
             echo ""
-            pip install --no-build-isolation -e "$SCRIPT_DIR/$pkg"
+            pip install --no-build-isolation "${FORCE_FLAGS[@]}" -e "$SCRIPT_DIR/$pkg"
         else
             echo ""
             echo "========================================"
             echo "  Installing $pkg"
             echo "========================================"
             echo ""
-            pip install --no-build-isolation "$SCRIPT_DIR/$pkg"
+            pip install --no-build-isolation "${FORCE_FLAGS[@]}" "$SCRIPT_DIR/$pkg"
         fi
     done
 fi
