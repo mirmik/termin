@@ -26,6 +26,7 @@ from tgfx.text2d import Text2DRenderer
 from tgfx._tgfx_native import (
     Tgfx2Context,
     Tgfx2TextureHandle,
+    Tgfx2ShaderStage,
     tc_shader_ensure_tgfx2,
     wrap_gl_texture_as_tgfx2,
     CULL_NONE,
@@ -36,36 +37,65 @@ from tgfx._tgfx_native import (
 # UI shader: solid colour (mode 0) and RGBA-image sampling (mode 2).
 # Font-atlas sampling lives in Text2DRenderer; this shader does not
 # carry mode 1.
-UI_VERTEX_SHADER = """#version 330 core
+#
+# Single source for both backends. Under Vulkan (`#define VULKAN 1`
+# injected by shaderc) the per-draw state lives in a `layout(push_
+# constant)` block; under OpenGL it is a plain UBO bound at binding
+# 14 (the slot used by tgfx2's push-constant ring buffer — see
+# `TGFX2_PUSH_CONSTANTS_BINDING`). Same `UIPush pc` struct on both
+# sides, so the Python packer does not fork. `#version 450 core`
+# requires GL 4.3+ core (BackendWindow bumps the context to match).
+_UI_SHADER_COMMON_PUSH = """
+struct UIPushData {
+    mat4 u_projection;
+    vec4 u_color;
+    int  u_texture_mode;
+};
+#ifdef VULKAN
+layout(push_constant) uniform UIPushBlock { UIPushData pc; };
+#else
+layout(std140, binding = 14) uniform UIPushBlock { UIPushData pc; };
+#endif
+"""
+
+UI_VERTEX_SHADER = """#version 450 core
+""" + _UI_SHADER_COMMON_PUSH + """
 layout(location=0) in vec3 a_pos;    // (x_pixel, y_pixel, 0)
 layout(location=1) in vec4 a_uv_pad; // (u, v, _, _)
 
-uniform mat4 u_projection;
-
-out vec2 v_uv;
+layout(location=0) out vec2 v_uv;
 
 void main() {
-    gl_Position = u_projection * vec4(a_pos.xy, 0.0, 1.0);
+    gl_Position = pc.u_projection * vec4(a_pos.xy, 0.0, 1.0);
     v_uv = a_uv_pad.xy;
 }
 """
 
-UI_FRAGMENT_SHADER = """#version 330 core
-uniform sampler2D u_texture;
-uniform vec4 u_color;
-uniform int u_texture_mode;   // 0 = solid colour, 2 = RGBA image (tinted)
+UI_FRAGMENT_SHADER = """#version 450 core
+""" + _UI_SHADER_COMMON_PUSH + """
+layout(binding = 4) uniform sampler2D u_texture;
 
-in vec2 v_uv;
-out vec4 FragColor;
+layout(location=0) in vec2 v_uv;
+layout(location=0) out vec4 FragColor;
 
 void main() {
-    if (u_texture_mode == 2) {
-        FragColor = texture(u_texture, v_uv) * u_color;
+    if (pc.u_texture_mode == 2) {
+        FragColor = texture(u_texture, v_uv) * pc.u_color;
     } else {
-        FragColor = u_color;
+        FragColor = pc.u_color;
     }
 }
 """
+
+# Python-side struct layout mirroring UIPushData. mat4 = 64 bytes
+# std140-aligned, vec4 = 16 bytes, int = 4 bytes (padded to 16 in
+# std140 BUT push_constant uses scalar/natural alignment; we align
+# manually). Total 96 bytes — well under the 128-byte push-constant
+# range that VulkanRenderDevice reserves. Encoded little-endian
+# native floats (x86_64 / arm64).
+import struct as _struct
+_UI_PUSH_FMT = "=16f4fI12x"   # projection, color, texture_mode + pad
+_UI_PUSH_SIZE = _struct.calcsize(_UI_PUSH_FMT)
 
 
 def _build_ortho_pixel_to_ndc(w: float, h: float) -> np.ndarray:
@@ -141,6 +171,10 @@ class UIRenderer:
         self._offscreen_depth_tex: Tgfx2TextureHandle | None = None
         self._offscreen_size: tuple[int, int] = (0, 0)
 
+        # 1×1 white fallback texture bound at sampler slot 4 on every
+        # solid-colour draw (see _ensure_init for the rationale).
+        self._placeholder_tex: Tgfx2TextureHandle | None = None
+
     # ------------------------------------------------------------------
     # Font property
     # ------------------------------------------------------------------
@@ -183,17 +217,18 @@ class UIRenderer:
         if self._text2d is None:
             self._text2d = Text2DRenderer(font=self._font)
 
-        if self._ui_tc_shader is None:
-            self._ui_tc_shader = TcShader.from_sources(
-                UI_VERTEX_SHADER, UI_FRAGMENT_SHADER, "", "UIRenderer"
-            )
-            pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
-            if not pair.vs or not pair.fs:
-                raise RuntimeError(
-                    "UIRenderer: tc_shader_ensure_tgfx2 returned null handles"
-                )
-            self._ui_vs = pair.vs
-            self._ui_fs = pair.fs
+        if self._ui_vs is None:
+            # Compile the UI shader directly on the tgfx2 device. The old
+            # TcShader + tc_shader_ensure_tgfx2 path is GL-only (it routes
+            # through the legacy tc_gpu_slot cache); the direct call works
+            # on both OpenGL and Vulkan and is what Vulkan hosts need.
+            dev = self._holder.device
+            self._ui_vs = dev.create_shader(Tgfx2ShaderStage.Vertex,
+                                            UI_VERTEX_SHADER)
+            self._ui_fs = dev.create_shader(Tgfx2ShaderStage.Fragment,
+                                            UI_FRAGMENT_SHADER)
+            if not self._ui_vs or not self._ui_fs:
+                raise RuntimeError("UIRenderer: UI shader compile failed")
 
         if self._offscreen_size != (w, h):
             if self._offscreen_color_tex is not None:
@@ -205,6 +240,18 @@ class UIRenderer:
             self._offscreen_color_tex = self._holder.create_color_attachment(w, h)
             self._offscreen_depth_tex = self._holder.create_depth_attachment(w, h)
             self._offscreen_size = (w, h)
+
+        if self._placeholder_tex is None:
+            # 1×1 white texture bound at binding 4 whenever the UI shader
+            # runs in solid-colour mode (texture_mode=0). Vulkan's
+            # validator rejects draws that leave a shader-declared
+            # `layout(binding=4) uniform sampler2D` slot empty even if
+            # the fragment branch never samples from it. OpenGL doesn't
+            # care, but the same placeholder on both sides keeps the
+            # bind sequence identical and cheap.
+            white = np.array([[[255, 255, 255, 255]]], dtype=np.uint8)
+            self._placeholder_tex = self._holder.create_texture_rgba8(
+                1, 1, white.reshape(-1))
 
     # ------------------------------------------------------------------
     # Frame lifecycle
@@ -350,21 +397,47 @@ class UIRenderer:
     # Primitive drawing helpers
     # ------------------------------------------------------------------
 
-    def _bind_ui_shader_solid(
-        self, color: tuple[float, float, float, float],
+    def _push_ui_state(
+        self,
+        color: tuple[float, float, float, float],
+        texture_mode: int,
     ) -> None:
+        """Pack the per-draw UI state into a push-constant block and
+        bind it. Single byte layout for both backends — under Vulkan
+        vkCmdPushConstants ships it; under OpenGL the tgfx2 ring UBO
+        at binding 14 picks it up. Shader source is the same on both
+        sides (`pc.u_projection`, `pc.u_color`, `pc.u_texture_mode`)."""
         ctx = self._ctx
         ctx.bind_shader(self._ui_vs, self._ui_fs)
+        # Projection is row-major in Python but GLSL expects column-major
+        # mat4. Transpose here once instead of a shader-side transpose
+        # marker (set_uniform_mat4 had a transpose flag; push_constants
+        # is raw bytes).
         proj = _build_ortho_pixel_to_ndc(
             float(self._viewport_w), float(self._viewport_h),
         )
-        ctx.set_uniform_mat4("u_projection", proj.flatten().tolist(), True)
-        ctx.set_uniform_vec4(
-            "u_color",
+        proj_cm = np.ascontiguousarray(proj.T, dtype=np.float32)
+        data = _struct.pack(
+            _UI_PUSH_FMT,
+            *proj_cm.flatten().tolist(),
             float(color[0]), float(color[1]),
             float(color[2]), float(color[3]),
+            int(texture_mode),
         )
-        ctx.set_uniform_int("u_texture_mode", 0)
+        # np.frombuffer would give a read-only view; nanobind needs a
+        # C-contiguous writable-ish ndarray, so copy into a fresh array.
+        ctx.set_push_constants(np.asarray(bytearray(data), dtype=np.uint8))
+
+    def _bind_ui_shader_solid(
+        self, color: tuple[float, float, float, float],
+    ) -> None:
+        # Kept as a thin wrapper so the draw_rect / draw_line call sites
+        # don't have to know about push constants. The placeholder bind
+        # is there so Vulkan's validator sees a valid descriptor set
+        # even when the fragment shader's sample path is unreachable.
+        self._push_ui_state(color, 0)
+        if self._placeholder_tex is not None:
+            self._ctx.bind_sampled_texture(4, self._placeholder_tex)
 
     def _emit_quad(
         self,
@@ -543,19 +616,10 @@ class UIRenderer:
             )
             tex2 = wrapped
 
-        ctx.bind_shader(self._ui_vs, self._ui_fs)
-        proj = _build_ortho_pixel_to_ndc(
-            float(self._viewport_w), float(self._viewport_h),
-        )
-        ctx.set_uniform_mat4("u_projection", proj.flatten().tolist(), True)
-        ctx.set_uniform_vec4(
-            "u_color",
-            float(tint[0]), float(tint[1]),
-            float(tint[2]), float(tint[3]),
-        )
-        ctx.set_uniform_int("u_texture_mode", 2)
-        ctx.set_uniform_int("u_texture", 0)
-        ctx.bind_sampled_texture(0, tex2)
+        self._push_ui_state(tint, 2)
+        # Sampler slot 4 matches `layout(binding=4) uniform sampler2D
+        # u_texture` in the UI fragment shader — same on both backends.
+        ctx.bind_sampled_texture(4, tex2)
 
         verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
         ctx.draw_immediate_triangles(verts, 6)
@@ -647,19 +711,8 @@ class UIRenderer:
             return
 
         ctx = self._ctx
-        ctx.bind_shader(self._ui_vs, self._ui_fs)
-        proj = _build_ortho_pixel_to_ndc(
-            float(self._viewport_w), float(self._viewport_h),
-        )
-        ctx.set_uniform_mat4("u_projection", proj.flatten().tolist(), True)
-        ctx.set_uniform_vec4(
-            "u_color",
-            float(tint[0]), float(tint[1]),
-            float(tint[2]), float(tint[3]),
-        )
-        ctx.set_uniform_int("u_texture_mode", 2)
-        ctx.set_uniform_int("u_texture", 0)
-        ctx.bind_sampled_texture(0, handle)
+        self._push_ui_state(tint, 2)
+        ctx.bind_sampled_texture(4, handle)
 
         if flip_v:
             verts = self._emit_quad(x, y, x + w, y + h, 0.0, 1.0, 1.0, 0.0)
@@ -695,19 +748,8 @@ class UIRenderer:
         )
         try:
             ctx = self._ctx
-            ctx.bind_shader(self._ui_vs, self._ui_fs)
-            proj = _build_ortho_pixel_to_ndc(
-                float(self._viewport_w), float(self._viewport_h),
-            )
-            ctx.set_uniform_mat4("u_projection", proj.flatten().tolist(), True)
-            ctx.set_uniform_vec4(
-                "u_color",
-                float(tint[0]), float(tint[1]),
-                float(tint[2]), float(tint[3]),
-            )
-            ctx.set_uniform_int("u_texture_mode", 2)
-            ctx.set_uniform_int("u_texture", 0)
-            ctx.bind_sampled_texture(0, tex2)
+            self._push_ui_state(tint, 2)
+            ctx.bind_sampled_texture(4, tex2)
 
             if flip_v:
                 verts = self._emit_quad(x, y, x + w, y + h, 0.0, 1.0, 1.0, 0.0)

@@ -59,14 +59,16 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height)
     impl_->backend = tgfx::default_backend_from_env();
 
     if (impl_->backend == tgfx::BackendType::OpenGL) {
-        // GL 4.1 core — the minimum version where `layout(location=N)`
-        // on inter-stage varyings is standard (ARB_separate_shader_objects
-        // graduated in 4.1). Shaders that compile on Vulkan SPIR-V with
-        // explicit locations then compile on OpenGL unchanged. 4.1 is
-        // also macOS's hard ceiling for a core profile, which gives us
-        // maximum portability.
+        // GL 4.3 core — gives us `layout(binding=N)` on UBOs (GL 4.2+,
+        // needed for the push-constants ring UBO trick at binding 14)
+        // plus `layout(location=N)` on varyings (GL 4.1+). The single
+        // shader source that compiles on Vulkan SPIR-V via shaderc
+        // (`#version 450`) then compiles on this GL context too —
+        // `#version 450 core` is a subset of what 4.3 accepts. macOS
+        // is a loss at core-profile 4.3, but the cross-backend story
+        // is unusable on macOS anyway (no Vulkan natively).
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
