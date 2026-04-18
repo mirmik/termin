@@ -8,12 +8,38 @@ from termin.visualization.render.postprocess import PostEffect
 from termin._native.render import TcMaterial
 from termin.editor.inspect_field import InspectField
 from tcbase import log
+from tgfx._tgfx_native import Tgfx2ShaderStage
 
 if TYPE_CHECKING:
     from tgfx import TcShader
 
 # Callback type: (shader) -> None
 BeforeDrawCallback = Callable[["TcShader"], None]
+
+
+# Passthrough FSQ shader for the fallback path — backend-neutral pattern
+# with explicit location qualifiers (Vulkan shaderc requires them) and
+# sampler at binding 4 (matches tgfx2's shared descriptor layout).
+_PASSTHROUGH_VERT = """#version 450 core
+layout(location=0) in vec2 a_pos;
+layout(location=1) in vec2 a_uv;
+layout(location=0) out vec2 v_uv;
+
+void main() {
+    v_uv = a_uv;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+"""
+
+_PASSTHROUGH_FRAG = """#version 450 core
+layout(location=0) in vec2 v_uv;
+layout(binding=4) uniform sampler2D u_tex;
+layout(location=0) out vec4 FragColor;
+
+void main() {
+    FragColor = texture(u_tex, v_uv);
+}
+"""
 
 
 class MaterialPostEffect(PostEffect):
@@ -30,6 +56,13 @@ class MaterialPostEffect(PostEffect):
     - Extra resources specified via add_resource() as their uniform names
 
     Additional textures and uniforms come from the material itself.
+
+    Known limitation: the material path still relies on set_uniform_* and
+    binds samplers at legacy GL slots 0..N. This works on OpenGL. On
+    Vulkan it falls back to the passthrough shader when the material
+    shader can't be compiled (missing layout qualifiers, etc.) — a full
+    rewrite of user-authored .material shaders is a separate migration
+    step.
     """
 
     name = "material"
@@ -51,6 +84,10 @@ class MaterialPostEffect(PostEffect):
             kind="string",
         ),
     }
+
+    # Shared passthrough shader handles (compiled lazily once per device).
+    _passthrough_vs = None
+    _passthrough_fs = None
 
     def __init__(
         self,
@@ -164,7 +201,13 @@ class MaterialPostEffect(PostEffect):
             self._draw_passthrough(ctx2, color_tex2, target_tex2, size)
             return
 
-        pair = tc_shader_ensure_tgfx2(ctx2, shader)
+        try:
+            pair = tc_shader_ensure_tgfx2(ctx2, shader)
+        except RuntimeError as e:
+            log.error(f"MaterialPostEffect: shader compile failed ({e}); falling back to passthrough")
+            self._draw_passthrough(ctx2, color_tex2, target_tex2, size)
+            return
+
         if not pair.vs or not pair.fs:
             self._draw_passthrough(ctx2, color_tex2, target_tex2, size)
             return
@@ -226,20 +269,26 @@ class MaterialPostEffect(PostEffect):
             arr = np.array(value, dtype=np.float32)
             self._set_uniform(ctx2, name, arr)
 
-    def _draw_passthrough(self, ctx2, color_tex2, target_tex2, size) -> None:
-        """Fallback: pass through color unchanged via a minimal blit shader."""
-        from tgfx._tgfx_native import tc_shader_ensure_tgfx2
-        from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
+    @classmethod
+    def _ensure_passthrough_shaders(cls, ctx2):
+        if cls._passthrough_vs is None:
+            cls._passthrough_vs = ctx2.device.create_shader(
+                Tgfx2ShaderStage.Vertex, _PASSTHROUGH_VERT)
+        if cls._passthrough_fs is None:
+            cls._passthrough_fs = ctx2.device.create_shader(
+                Tgfx2ShaderStage.Fragment, _PASSTHROUGH_FRAG)
 
-        shader = PresentToScreenPass._get_shader()
-        pair = tc_shader_ensure_tgfx2(ctx2, shader)
-        if not pair.vs or not pair.fs:
+    def _draw_passthrough(self, ctx2, color_tex2, target_tex2, size) -> None:
+        """Fallback: pass color through unchanged via a backend-neutral
+        FSQ blit shader. Used when the material is missing, invalid, or
+        fails to compile (e.g. legacy `#version 330` shader on Vulkan)."""
+        self._ensure_passthrough_shaders(ctx2)
+        if not self._passthrough_vs or not self._passthrough_fs:
             return
 
         def setup(ctx2):
-            ctx2.bind_shader(pair.vs, pair.fs)
-            ctx2.bind_sampled_texture(0, color_tex2)
-            ctx2.set_uniform_int("u_tex", 0)
+            ctx2.bind_shader(self._passthrough_vs, self._passthrough_fs)
+            ctx2.bind_sampled_texture(4, color_tex2)
             ctx2.draw_fullscreen_quad()
 
         PostEffect._simple_draw(ctx2, target_tex2, size, setup)
