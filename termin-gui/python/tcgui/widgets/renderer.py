@@ -374,9 +374,17 @@ class UIRenderer:
     # ------------------------------------------------------------------
 
     def begin_clip(self, x: float, y: float, w: float, h: float) -> None:
-        """Push scissor clip rect. Nested clips are intersected."""
+        """Push scissor clip rect. Nested clips are intersected.
+
+        Coordinates are top-left origin in pixels — same convention the
+        widget tree uses. tgfx2's ``set_scissor`` is backend-neutral on
+        that contract: Vulkan uses it verbatim, OpenGL internally flips
+        to bottom-left. Keep no manual flip here — it would double-flip
+        on one of the backends and leave text input content outside the
+        clip rect on the other.
+        """
         ix = int(x)
-        iy = int(self._viewport_h - (y + h))  # GL bottom-left origin
+        iy = int(y)
         iw = int(w)
         ih = int(h)
 
