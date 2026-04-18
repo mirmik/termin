@@ -17,29 +17,24 @@
 
 namespace termin {
 
-// tgfx2 path — parameters live in a std140 UBO bound at slot 0. `u_input`
-// uses an explicit `layout(binding = 0)` (via GL_ARB_shading_language_420pack)
-// so the sampler unit is pinned rather than relying on GL's default
-// uninitialized-sampler = unit 0 behaviour. That default can read from a
-// previously-bound texture unit when multiple tgfx2 pipelines run in
-// sequence (e.g. BloomPass's composite feeding into Tonemap in the editor
-// pipeline). Varying name `vUV` matches the built-in FSQ vertex shader
-// from RenderContext2 — mismatch silently drops the connection and
-// produces a solid-color result.
+// Backend-neutral: `#version 450 core` compiles directly on GL 4.3+ and
+// via shaderc for Vulkan. UBO at binding 0, sampler at binding 4 — matches
+// the shared descriptor set layout (UBO 0-3, COMBINED_IMAGE_SAMPLER 4-7).
+// Varying name `vUV` matches the built-in FSQ vertex shader from
+// RenderContext2 — mismatch silently drops the connection and produces
+// a solid-color result.
 static const char* TONEMAP_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+#version 450 core
+layout(location=0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform TonemapParams {
+layout(std140, binding = 0) uniform TonemapParams {
     float u_exposure;
     int u_method;
 };
 
-layout(binding = 0) uniform sampler2D u_input;
+layout(binding = 4) uniform sampler2D u_input;
 
-out vec4 FragColor;
+layout(location=0) out vec4 FragColor;
 
 vec3 aces_tonemap(vec3 x) {
     const float a = 2.51;
@@ -173,7 +168,7 @@ void TonemapPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_vertex_layout(fsq_layout);
 
     ctx.ctx2->bind_uniform_buffer(0, params_ubo_);
-    ctx.ctx2->bind_sampled_texture(0, input_tex2);
+    ctx.ctx2->bind_sampled_texture(4, input_tex2);
 
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();

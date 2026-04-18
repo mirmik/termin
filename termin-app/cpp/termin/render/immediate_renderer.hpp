@@ -3,13 +3,13 @@
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/mat44.hpp>
 #include "tgfx/types.hpp"
-#include <tgfx/tgfx_shader_handle.hpp>
+#include "tgfx2/handles.hpp"
 
 #include <vector>
 #include <memory>
 #include <functional>
 
-namespace tgfx { class RenderContext2; }
+namespace tgfx { class RenderContext2; class IRenderDevice; }
 
 namespace termin {
 
@@ -230,7 +230,7 @@ private:
     void _add_vertex(std::vector<float>& buffer, const Vec3& pos, const Color4& color);
     std::pair<Vec3, Vec3> _build_basis(const Vec3& axis);
 
-    void _ensure_shader();
+    void _ensure_shader(tgfx::IRenderDevice* device);
 
     void _flush_buffers(
         tgfx::RenderContext2* ctx2,
@@ -242,9 +242,12 @@ private:
         bool blend
     );
 
-    // Shader kept as GLSL source; compiled to a tgfx2 ShaderHandle pair
-    // via tc_shader_ensure_tgfx2 on first flush.
-    TcShader _shader;
+    // tgfx2 shader pair — compiled lazily on first flush against the
+    // caller's device. Leaked at process exit (no explicit release):
+    // caller-supplied context outlives this renderer.
+    tgfx::ShaderHandle _vs;
+    tgfx::ShaderHandle _fs;
+    tgfx::IRenderDevice* _device = nullptr;
 };
 
 } // namespace termin

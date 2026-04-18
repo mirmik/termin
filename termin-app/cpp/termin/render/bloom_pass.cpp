@@ -28,20 +28,17 @@ namespace termin {
 // binding works without a post-link glUniform1i.
 // ================================================================
 
-static const char* BRIGHT_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+static const char* BRIGHT_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform BloomBrightParams {
+layout(std140, binding = 0) uniform BloomBrightParams {
     float u_threshold;
     float u_soft_threshold;
 };
 
-layout(binding = 0) uniform sampler2D u_texture;
+layout(binding = 4) uniform sampler2D u_texture;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec3 color = texture(u_texture, vUV).rgb;
@@ -56,19 +53,16 @@ void main() {
 }
 )";
 
-static const char* DOWNSAMPLE_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+static const char* DOWNSAMPLE_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform BloomDownsampleParams {
+layout(std140, binding = 0) uniform BloomDownsampleParams {
     vec2 u_texel_size;
 };
 
-layout(binding = 0) uniform sampler2D u_texture;
+layout(binding = 4) uniform sampler2D u_texture;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec2 ts = u_texel_size;
@@ -93,21 +87,21 @@ void main() {
 }
 )";
 
-static const char* UPSAMPLE_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+// Upsample outputs only the blended delta; `u_higher_mip` read has been
+// removed. Caller enables additive blending (ONE, ONE) so the existing
+// mip[i] content is preserved and summed in the framebuffer — avoids
+// the self-sampling feedback loop that Vulkan forbids inside a render pass.
+static const char* UPSAMPLE_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform BloomUpsampleParams {
+layout(std140, binding = 0) uniform BloomUpsampleParams {
     vec2 u_texel_size;
     float u_blend_factor;
 };
 
-layout(binding = 0) uniform sampler2D u_texture;
-layout(binding = 1) uniform sampler2D u_higher_mip;
+layout(binding = 4) uniform sampler2D u_texture;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec2 ts = u_texel_size;
@@ -124,25 +118,21 @@ void main() {
     upsampled += (b + d + f + h) * 2.0;
     upsampled += (a + c + g + i);
     upsampled /= 16.0;
-    vec3 higher = texture(u_higher_mip, vUV).rgb;
-    FragColor = vec4(higher + upsampled * u_blend_factor, 1.0);
+    FragColor = vec4(upsampled * u_blend_factor, 1.0);
 }
 )";
 
-static const char* COMPOSITE_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+static const char* COMPOSITE_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform BloomCompositeParams {
+layout(std140, binding = 0) uniform BloomCompositeParams {
     float u_intensity;
 };
 
-layout(binding = 0) uniform sampler2D u_original;
-layout(binding = 1) uniform sampler2D u_bloom;
+layout(binding = 4) uniform sampler2D u_original;
+layout(binding = 5) uniform sampler2D u_bloom;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec3 original = texture(u_original, vUV).rgb;
@@ -365,7 +355,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.set_viewport(0, 0, w, h);
         setup_fsq_state(c2, bright_fs2_, tgfx::PixelFormat::RGBA16F);
         c2.bind_uniform_buffer(0, bright_ubo_);
-        c2.bind_sampled_texture(0, input_tex2);
+        c2.bind_sampled_texture(4, input_tex2);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -388,12 +378,12 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.set_viewport(0, 0, dst_w, dst_h);
         setup_fsq_state(c2, downsample_fs2_, tgfx::PixelFormat::RGBA16F);
         c2.bind_uniform_buffer(0, downsample_ubo_);
-        c2.bind_sampled_texture(0, mip_textures_[i - 1]);
+        c2.bind_sampled_texture(4, mip_textures_[i - 1]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
 
-    // === 3. Progressive Upsample (accumulate bloom) ===
+    // === 3. Progressive Upsample (accumulate bloom via additive blend) ===
     for (int i = count - 2; i >= 0; i--) {
         if (i + 1 >= (int)mip_textures_.size()) continue;
 
@@ -410,16 +400,17 @@ void BloomPass::execute(ExecuteContext& ctx) {
             upsample_ubo_,
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&p), sizeof(p)));
 
-        // Note: mip_textures_[i] is bound both as the render target and
-        // as u_higher_mip sampler — same read-write feedback pattern as
-        // the legacy path. OpenGL tolerates it since the shader only reads
-        // the current texel (no cross-pixel sample).
+        // Additive blend (ONE, ONE) preserves existing mip[i] content
+        // and sums the upsampled delta on top — equivalent to the former
+        // in-shader `higher + upsampled*blend` but without the self-
+        // sampling feedback loop that Vulkan forbids inside a pass.
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
         setup_fsq_state(c2, upsample_fs2_, tgfx::PixelFormat::RGBA16F);
+        c2.set_blend(true);
+        c2.set_blend_func(tgfx::BlendFactor::One, tgfx::BlendFactor::One);
         c2.bind_uniform_buffer(0, upsample_ubo_);
-        c2.bind_sampled_texture(0, mip_textures_[i + 1]);
-        c2.bind_sampled_texture(1, mip_textures_[i]);
+        c2.bind_sampled_texture(4, mip_textures_[i + 1]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -436,8 +427,8 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.set_viewport(0, 0, w, h);
         setup_fsq_state(c2, composite_fs2_, tgfx::PixelFormat::RGBA8_UNorm);
         c2.bind_uniform_buffer(0, composite_ubo_);
-        c2.bind_sampled_texture(0, input_tex2);
-        c2.bind_sampled_texture(1, mip_textures_[0]);
+        c2.bind_sampled_texture(4, input_tex2);
+        c2.bind_sampled_texture(5, mip_textures_[0]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }

@@ -17,20 +17,20 @@
 
 namespace termin {
 
-// tgfx2 path — parameters live in a std140 UBO bound at slot 0. The sampler
-// is still a plain GL 3.3 `uniform sampler2D` which defaults to texture unit 0
-// at link time, so binding the input texture at resource slot 0 lines up.
+// Backend-neutral: `#version 450 core` compiles directly on GL 4.3+ and
+// via shaderc for Vulkan. UBO at binding 0, sampler at binding 4 — matches
+// the shared descriptor set layout (UBO 0-3, COMBINED_IMAGE_SAMPLER 4-7).
 static const char* GRAYSCALE_FRAG_UBO = R"(
-#version 330 core
-in vec2 vUV;
+#version 450 core
+layout(location=0) in vec2 vUV;
 
-layout(std140) uniform GrayscaleParams {
+layout(std140, binding = 0) uniform GrayscaleParams {
     float u_strength;
 };
 
-uniform sampler2D u_input;
+layout(binding = 4) uniform sampler2D u_input;
 
-out vec4 FragColor;
+layout(location=0) out vec4 FragColor;
 
 void main() {
     vec3 color = texture(u_input, vUV).rgb;
@@ -145,10 +145,11 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     };
     ctx.ctx2->set_vertex_layout(fsq_layout);
 
-    // GrayscaleParams UBO at binding 0; input texture at sampler slot 0
-    // (matches the default unit for the shader's sole `sampler2D u_input`).
+    // GrayscaleParams UBO at binding 0; input texture at sampler slot 4
+    // (matches shader's `layout(binding=4) uniform sampler2D u_input` and
+    // the shared descriptor layout).
     ctx.ctx2->bind_uniform_buffer(0, params_ubo_);
-    ctx.ctx2->bind_sampled_texture(0, input_tex2);
+    ctx.ctx2->bind_sampled_texture(4, input_tex2);
 
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
