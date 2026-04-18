@@ -282,7 +282,14 @@ std::string strip_uniform_decls(const std::string& source,
 std::string inject_after_version(const std::string& source, const std::string& block) {
     if (block.empty()) return source;
 
-    // Find the first `#version ...` line and insert block right after it.
+    // The synthesised block uses `layout(std140, binding = 0)` which is
+    // a GL 4.2+ / GL_ARB_shading_language_420pack feature and also the
+    // baseline for Vulkan GLSL via shaderc. User-authored `.shader`
+    // stages often start with `#version 330 core` — safe to upgrade in
+    // place since everything we inject is forward-compatible and the
+    // stage body rarely uses anything 330-specific. Find the first
+    // `#version` line, replace it with `#version 450 core`, then insert
+    // the generated block right after.
     std::regex version_re(R"([ \t]*#version[^\n]*)");
     size_t i = 0;
     while (i < source.size()) {
@@ -290,14 +297,17 @@ std::string inject_after_version(const std::string& source, const std::string& b
         size_t line_end = (eol == std::string::npos) ? source.size() : eol;
         std::string line = source.substr(i, line_end - i);
         if (std::regex_match(line, version_re)) {
-            size_t insert_at = (eol == std::string::npos) ? line_end : eol + 1;
-            return source.substr(0, insert_at) + block + source.substr(insert_at);
+            size_t line_start = i;
+            std::string before = source.substr(0, line_start);
+            std::string after = (eol == std::string::npos) ? std::string()
+                                                           : source.substr(eol + 1);
+            return before + "#version 450 core\n" + block + after;
         }
         if (eol == std::string::npos) break;
         i = eol + 1;
     }
-    // No #version — prepend.
-    return block + source;
+    // No #version — prepend both the version line and the block.
+    return std::string("#version 450 core\n") + block + source;
 }
 
 // ========== std140 value packer ==========

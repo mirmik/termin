@@ -9,6 +9,40 @@ if TYPE_CHECKING:
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 
 
+class _FboPoolEntryView:
+    """Shim around the dict returned by RenderPipeline.get_fbo(key).
+
+    Exposes the minimum API the Qt framegraph debugger touches on FBO
+    entries — size + formats + the native GPU handles for preview hooks.
+    Kept thin on purpose: the underlying dict is authoritative and can
+    grow new keys without changing this class.
+    """
+
+    key: str = ""
+    width: int = 0
+    height: int = 0
+    samples: int = 1
+    has_depth: bool = False
+    color_format: int = 0
+    depth_format: int = 0
+    color_native_handle: int = 0
+    depth_native_handle: int = 0
+
+    def __init__(self, raw: dict) -> None:
+        self.key = raw.get("key", "")
+        self.width = int(raw.get("width", 0))
+        self.height = int(raw.get("height", 0))
+        self.samples = int(raw.get("samples", 1))
+        self.has_depth = bool(raw.get("has_depth", False))
+        self.color_format = int(raw.get("color_format", 0))
+        self.depth_format = int(raw.get("depth_format", 0))
+        self.color_native_handle = int(raw.get("color_native_handle", 0))
+        self.depth_native_handle = int(raw.get("depth_native_handle", 0))
+
+    def get_size(self) -> Tuple[int, int]:
+        return (self.width, self.height)
+
+
 class FramegraphDebugDialog(QtWidgets.QDialog):
     """
     Framegraph debugger window with two connection modes:
@@ -467,9 +501,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             return {}
         result = {}
         for key in pipeline.get_fbo_keys():
-            fbo = pipeline.get_fbo(key)
-            if fbo is not None:
-                result[key] = fbo
+            raw = pipeline.get_fbo(key)
+            if raw is not None:
+                result[key] = _FboPoolEntryView(raw)
         return result
 
     def _get_current_pipeline(self):
