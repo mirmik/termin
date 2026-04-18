@@ -121,7 +121,14 @@ class UIRenderer:
         # cleanup whether to destroy it.
         self._holder: Tgfx2Context | None = holder
         self._owns_holder: bool = holder is None
-        self._ctx = holder.context if holder is not None else None
+        # Do NOT pre-fetch `holder.context` here: the returned wrapper
+        # uses nanobind's `reference_internal` which creates a Python-
+        # level cycle (wrapper keeps holder alive, holder object keeps
+        # a pointer to itself through nanobind's type registry). The
+        # cycle collector then tries to break it at shutdown and hits
+        # undefined order, segfaulting when it calls free on an object
+        # whose backing C++ already died. Fetch lazily on first begin().
+        self._ctx = None
         self._text2d: Text2DRenderer | None = None
 
         self._ui_tc_shader: TcShader | None = None
@@ -170,12 +177,10 @@ class UIRenderer:
         if self._holder is None:
             self._holder = Tgfx2Context()
             self._owns_holder = True
+        if self._ctx is None:
+            # Fetched lazily — see __init__ comment on cycle collection.
             self._ctx = self._holder.context
-            self._text2d = Text2DRenderer(font=self._font)
-        elif self._text2d is None:
-            # Borrow mode: the holder was injected in __init__. Text2D
-            # is deferred to the first begin() because it needs the
-            # context to compile its shader.
+        if self._text2d is None:
             self._text2d = Text2DRenderer(font=self._font)
 
         if self._ui_tc_shader is None:

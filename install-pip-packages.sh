@@ -151,9 +151,17 @@ PACKAGES=(
 # an ABI-breaking SDK change — compute_local_version() fails when pip
 # has already cached a wheel under the matching +sdkNNN suffix.
 if [[ $FORCE -eq 1 ]]; then
-    echo "--force: clearing per-package build caches before install"
+    # Clear ONLY pip's build artefacts — build/lib.*, build/bdist.*,
+    # *.egg-info. The `build/` dir also houses CMake build trees
+    # (Release/, etc.) for the C++ libs whose output we copy into the
+    # pip wheel; wiping that wastes 5+ minutes of recompile and we
+    # never needed to in the first place, pip cache lives in
+    # build/lib*/ + build/bdist*/ only.
+    echo "--force: clearing per-package pip build caches before install"
     for pkg in "${PACKAGES[@]}"; do
-        rm -rf "$SCRIPT_DIR/$pkg/build" "$SCRIPT_DIR/$pkg"/*.egg-info 2>/dev/null || true
+        rm -rf "$SCRIPT_DIR/$pkg"/build/lib.* \
+               "$SCRIPT_DIR/$pkg"/build/bdist.* \
+               "$SCRIPT_DIR/$pkg"/*.egg-info 2>/dev/null || true
     done
 fi
 
