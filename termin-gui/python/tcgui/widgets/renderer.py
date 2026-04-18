@@ -258,9 +258,33 @@ class UIRenderer:
                            font=self.font)
 
     def end(self) -> None:
-        """End UI rendering pass, composite offscreen to default FB."""
-        if self._ctx is None:
+        """End UI rendering pass, composite offscreen → default GL FBO.
+
+        Legacy path for GL-only hosts that drive their own window with
+        raw SDL / GLFW and expect the result on FBO 0 before their
+        own SwapWindow call. BackendWindow-hosted editors call
+        ``end_compose()`` instead — it returns the offscreen tex so
+        ``win.present(tex)`` can publish it on both OpenGL and Vulkan.
+        """
+        tex = self.end_compose()
+        if tex is None or self._ctx is None:
             return
+
+        self._ctx.blit_to_external_fbo(
+            0, tex,
+            0, 0, self._viewport_w, self._viewport_h,
+            0, 0, self._viewport_w, self._viewport_h,
+        )
+
+    def end_compose(self):
+        """End the UI pass and return the offscreen composite texture.
+
+        Returns the tgfx2 TextureHandle the caller should publish to
+        the window surface (BackendWindow.present, custom GL blit,
+        etc.). ``None`` if begin() was never called.
+        """
+        if self._ctx is None:
+            return None
 
         self._text2d.end()
         self._ctx.end_pass()
@@ -268,13 +292,7 @@ class UIRenderer:
 
         self._clip_stack.clear()
 
-        # Composite offscreen color → default framebuffer (fbo id = 0).
-        self._ctx.blit_to_external_fbo(
-            0,
-            self._offscreen_color_tex,
-            0, 0, self._viewport_w, self._viewport_h,
-            0, 0, self._viewport_w, self._viewport_h,
-        )
+        return self._offscreen_color_tex
 
     def close(self) -> None:
         """Release owned offscreen textures. Call before the GL
@@ -598,6 +616,51 @@ class UIRenderer:
         if self._holder is None or handle is None:
             return
         self._holder.destroy_texture(handle)
+
+    def draw_texture(
+        self, x: float, y: float, w: float, h: float,
+        handle: Tgfx2TextureHandle, tex_w: int, tex_h: int,
+        *,
+        flip_v: bool = False,
+        tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    ) -> None:
+        """Draw a tgfx2 TextureHandle as a subregion of the current UI pass.
+
+        The handle must belong to *this* renderer's device — i.e. both
+        objects must share the same ``Tgfx2Context``. That invariant
+        holds by construction in a BackendWindow-hosted editor where
+        every renderer borrows one process-global context. Use this
+        path instead of ``draw_external_gl_texture`` for new code: it
+        works on both OpenGL and Vulkan, while the GL-id version is
+        GL-only.
+
+        ``flip_v=True`` samples the texture with V axis inverted —
+        use this for GL-native render targets where texel (0, 0) is
+        the bottom-left corner.
+        """
+        if w <= 0 or h <= 0 or handle is None or self._ctx is None:
+            return
+
+        ctx = self._ctx
+        ctx.bind_shader(self._ui_vs, self._ui_fs)
+        proj = _build_ortho_pixel_to_ndc(
+            float(self._viewport_w), float(self._viewport_h),
+        )
+        ctx.set_uniform_mat4("u_projection", proj.flatten().tolist(), True)
+        ctx.set_uniform_vec4(
+            "u_color",
+            float(tint[0]), float(tint[1]),
+            float(tint[2]), float(tint[3]),
+        )
+        ctx.set_uniform_int("u_texture_mode", 2)
+        ctx.set_uniform_int("u_texture", 0)
+        ctx.bind_sampled_texture(0, handle)
+
+        if flip_v:
+            verts = self._emit_quad(x, y, x + w, y + h, 0.0, 1.0, 1.0, 0.0)
+        else:
+            verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
+        ctx.draw_immediate_triangles(verts, 6)
 
     def draw_external_gl_texture(
         self, x: float, y: float, w: float, h: float,

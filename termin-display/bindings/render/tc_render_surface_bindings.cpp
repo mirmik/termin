@@ -147,6 +147,23 @@ static void pysurface_destroy(tc_render_surface* s) {
     // No-op: Python owns the surface and will free it
 }
 
+static uint32_t pysurface_get_tgfx_color_tex_id(tc_render_surface* s) {
+    // Optional method. Surfaces that still own a raw GL FBO and have
+    // not been migrated to tgfx2 textures simply skip this attribute;
+    // PullRenderingManager falls back to the FBO path.
+    if (!s->body) return 0;
+    nb::gil_scoped_acquire gil;
+    try {
+        nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
+        if (nb::hasattr(py_obj, "get_tgfx_color_tex_id")) {
+            return nb::cast<uint32_t>(py_obj.attr("get_tgfx_color_tex_id")());
+        }
+    } catch (const std::exception& e) {
+        tc::Log::error("pysurface_get_tgfx_color_tex_id failed: %s", e.what());
+    }
+    return 0;
+}
+
 static uintptr_t pysurface_share_group_key(tc_render_surface* s) {
     if (!s->body) return reinterpret_cast<uintptr_t>(s->body);
     nb::gil_scoped_acquire gil;
@@ -176,6 +193,7 @@ static const tc_render_surface_vtable g_python_surface_vtable = {
     .get_cursor_pos = pysurface_get_cursor_pos,
     .destroy = pysurface_destroy,
     .share_group_key = pysurface_share_group_key,
+    .get_tgfx_color_tex_id = pysurface_get_tgfx_color_tex_id,
 };
 
 // ============================================================================
