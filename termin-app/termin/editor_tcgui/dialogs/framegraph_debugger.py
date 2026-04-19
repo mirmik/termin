@@ -390,10 +390,16 @@ class _FramegraphDebuggerHandle:
         fbos = self._get_fbos()
         resource_name = self._debug_source_res
 
+        log.info(f"[FrameDebugger] _update_fbo_info: resource_name={resource_name!r} "
+                 f"fbo_keys={list(fbos.keys())}")
+
         resource = fbos.get(resource_name) if fbos else None
         if resource is None:
             self._fbo_info_label.text = f"Resource '{resource_name}': not found"
             return
+
+        log.info(f"[FrameDebugger] _update_fbo_info: resource type={type(resource).__name__} "
+                 f"value={resource!r}")
 
         from termin.visualization.render.framegraph.resource import (
             ShadowMapArrayResource,
