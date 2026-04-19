@@ -224,6 +224,15 @@ private:
     // Shadow map samplers stay on texture slots SHADOW_SLOT_BASE+N.
     tgfx::BufferHandle shadow_block_ubo_{};
 
+    // Depth-compare sampler used for `sampler2DShadow u_shadow_map[]` in
+    // shaders. Vulkan requires compareEnable=VK_TRUE on the sampler for
+    // PCF shadow lookups — the default linear-clamp sampler we fall
+    // back to otherwise leaves compare disabled and produces no
+    // shadows. GL sets compare mode on the texture and ignores the
+    // sampler, but using the same typed sampler on both paths is
+    // harmless and keeps the binding API symmetrical.
+    tgfx::SamplerHandle shadow_sampler_{};
+
     // Cached draw calls vector (reused between frames to avoid allocations)
     std::vector<PhaseDrawCall> cached_draw_calls_;
 
