@@ -129,8 +129,8 @@ class LauncherApp:
     _BTN_NORMAL_PRESSED = (0.18, 0.18, 0.22, 1.0)
     _BTN_DISABLED = (0.18, 0.18, 0.2, 0.6)
 
-    def __init__(self, ui_backend: str = "qt", ctx=None):
-        self.ui = UI(holder=ctx) if ctx is not None else UI()
+    def __init__(self, graphics, ui_backend: str = "qt"):
+        self.ui = UI(graphics=graphics)
         self.recent = RecentProjects()
         self._ui_backend = ui_backend
         self._bg_image_path = os.path.join(os.path.dirname(__file__), "back.png")
@@ -574,9 +574,9 @@ def run():
     from tgfx import Tgfx2Context
 
     window = BackendWindow("Termin Launcher", 1024, 640)
-    tgfx2_ctx = Tgfx2Context.borrow(window.device_ptr(), window.context_ptr())
+    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
-    app = LauncherApp(ui_backend=ui_backend, ctx=tgfx2_ctx)
+    app = LauncherApp(graphics=graphics, ui_backend=ui_backend)
 
     sdl2.SDL_StartTextInput()
 

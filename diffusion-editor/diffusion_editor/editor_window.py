@@ -188,8 +188,7 @@ class EditorWindow:
         self._statusbar.text = "Ready"
         root.add_child(self._statusbar)
 
-        # Create UI on the borrowed tgfx2 context (None = owning mode).
-        self.ui = UI(holder=self._ctx)
+        self.ui = UI(graphics=self._ctx)
         self.ui.root = root
 
     def _canvas_placeholder_brush(self):

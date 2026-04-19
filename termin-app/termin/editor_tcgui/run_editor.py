@@ -163,9 +163,10 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     # based on TERMIN_BACKEND. No manual SDL_Init / SDL_GL_CreateContext.
     main_window = BackendWindow("Termin Editor", 1280, 720)
 
-    # Process-global tgfx2 context borrowed from the window. Every
-    # renderer (UIRenderer, FBOSurface, RenderEngine) attaches here.
-    tgfx2_ctx = Tgfx2Context.borrow(
+    # Process-global tgfx2 context owned by the window. Every renderer
+    # (UIRenderer, FBOSurface, RenderEngine) wraps the same device+ctx
+    # through it.
+    tgfx2_ctx = Tgfx2Context.from_window(
         main_window.device_ptr(), main_window.context_ptr())
 
     # Create world and scene
@@ -179,7 +180,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         initial_scene = create_scene(name="default")
         world.add_scene(initial_scene)
 
-    ui = UI(holder=tgfx2_ctx)
+    ui = UI(graphics=tgfx2_ctx)
 
     wm = BackendWindowManager()
     wm.register_main(main_window, ui)
