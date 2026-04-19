@@ -15,6 +15,12 @@ public:
     std::string name;
     std::string display_name = "Main";
     std::string render_target_name;
+    // UUID of the entity that owns the camera this viewport renders
+    // through. Stable across save/load — used by the editor to match
+    // a runtime Viewport back to its saved config after scene reload
+    // (viewport.camera.entity.uuid identifies the same camera in any
+    // process). Empty when the viewport has no camera yet.
+    std::string camera_uuid;
     float region_x = 0.0f;
     float region_y = 0.0f;
     float region_w = 1.0f;
