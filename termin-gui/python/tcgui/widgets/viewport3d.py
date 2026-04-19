@@ -110,24 +110,26 @@ class Viewport3D(Widget):
         The surface's color texture and the renderer's Tgfx2Context
         live on the same IRenderDevice by construction (the host binds
         a process-global context in ``run_editor_tcgui``), so the
-        handle is directly consumable — no GL-id wrap needed. Works on
-        both OpenGL and Vulkan.
+        handle is directly consumable — no GL-id wrap needed.
 
-        ``flip_v=True`` because tgfx2 color attachments follow the GL
-        origin convention (texel (0, 0) at the bottom-left), while the
-        UI ortho projection samples top-left.
+        The texel-origin convention of the scene's render target
+        depends on the backend: OpenGL stores (0, 0) at the bottom-left
+        (so we flip V to match the UI's top-left sampling), Vulkan
+        stores it at the top-left natively (no flip needed).
         """
         handle = self._surface.color_tex
         tex_w, tex_h = self._surface.framebuffer_size()
         if handle is None or tex_w == 0 or tex_h == 0:
             return
 
+        flip_v = renderer._graphics.backend == "opengl"
+
         renderer.draw_texture(
             self.x, self.y, self.width, self.height,
             handle=handle,
             tex_w=tex_w,
             tex_h=tex_h,
-            flip_v=True,
+            flip_v=flip_v,
         )
 
     # ------------------------------------------------------------------
