@@ -409,6 +409,24 @@ class _FramegraphDebuggerHandle:
                 if fbo is not None:
                     w, h = fbo.get_size()
                     parts.append(f"{w}x{h}")
+        elif isinstance(resource, dict):
+            # RenderPipeline.get_fbo(key) returns a dict with size, samples,
+            # formats, and native handles. See render_pipeline_bindings.cpp.
+            w = resource.get("width", 0)
+            h = resource.get("height", 0)
+            samples = int(resource.get("samples", 1))
+            has_depth = bool(resource.get("has_depth", False))
+            color_fmt = resource.get("color_format", 0)
+            depth_fmt = resource.get("depth_format", 0)
+            parts.append(f"{w}x{h}")
+            parts.append(f"fmt={color_fmt}")
+            if has_depth:
+                parts.append(f"depth_fmt={depth_fmt}")
+            if samples > 1:
+                parts.append(f"MSAA={samples}x")
+            color_h = resource.get("color_native_handle", 0)
+            if color_h:
+                parts.append(f"id={color_h}")
         else:
             parts.append(type(resource).__name__)
 

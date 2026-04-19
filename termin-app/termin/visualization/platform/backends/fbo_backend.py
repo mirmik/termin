@@ -82,6 +82,10 @@ class FBOSurface:
         self._depth_tex = self._ctx.create_depth_attachment(
             self._width, self._height, Tgfx2PixelFormat.D24_UNorm
         )
+        import sys
+        print(f"[FBOSurface] _allocate: color_tex id={self._color_tex.id} "
+              f"depth_tex id={self._depth_tex.id} size={self._width}x{self._height}",
+              file=sys.stderr, flush=True)
 
     def _release(self) -> None:
         if self._color_tex is not None:
