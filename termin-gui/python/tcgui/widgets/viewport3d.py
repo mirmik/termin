@@ -97,6 +97,9 @@ class Viewport3D(Widget):
     def render(self, renderer: 'UIRenderer') -> None:
         if self._surface is None or self._surface.color_tex is None:
             # Render target not ready — placeholder rectangle
+            print(f"[VP3D] surface={self._surface} "
+                  f"color_tex={self._surface.color_tex if self._surface else 'n/a'} "
+                  f"-> placeholder", flush=True)
             renderer.draw_rect(self.x, self.y, self.width, self.height,
                                (0.05, 0.05, 0.05, 1.0))
             return
@@ -119,6 +122,8 @@ class Viewport3D(Widget):
         """
         handle = self._surface.color_tex
         tex_w, tex_h = self._surface.framebuffer_size()
+        print(f"[VP3D] composite tex={handle} {tex_w}x{tex_h} "
+              f"rect=({self.x},{self.y},{self.width},{self.height})", flush=True)
         if handle is None or tex_w == 0 or tex_h == 0:
             return
 
