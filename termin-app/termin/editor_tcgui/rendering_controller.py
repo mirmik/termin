@@ -280,10 +280,14 @@ class RenderingControllerTcgui:
                 rt_name = rt.name if rt is not None else ""
 
                 rect = viewport.rect
+                camera_uuid = ""
+                if viewport.camera is not None and viewport.camera.entity is not None:
+                    camera_uuid = viewport.camera.entity.uuid
                 config = ViewportConfig()
                 config.name = viewport.name or ""
                 config.display_name = display.name
                 config.render_target_name = rt_name
+                config.camera_uuid = camera_uuid
                 config.region_x = rect[0]
                 config.region_y = rect[1]
                 config.region_w = rect[2]
@@ -424,18 +428,19 @@ class RenderingControllerTcgui:
     def _find_viewport_config(self, scene: "Scene", viewport: "Viewport", display: "Display | None" = None):
         if display is None:
             display = self._manager.get_display_for_viewport(viewport)
-        if display is None:
+        if display is None or viewport.camera is None:
             return None
 
-        # Match by (display_name, viewport.name). ViewportConfig doesn't
-        # carry camera_uuid — the camera is reached indirectly through
-        # render_target_name → RenderTargetConfig.camera_uuid, and the
-        # (display, viewport_name) pair is unique per scene.
+        # Match by (display_name, camera_uuid). camera.entity.uuid is
+        # the stable identifier for a viewport across save/load — unique
+        # within a scene and invariant under renames / reordering.
         display_name = display.name
-        vp_name = viewport.name or ""
+        camera_uuid = ""
+        if viewport.camera.entity is not None:
+            camera_uuid = viewport.camera.entity.uuid
 
         for config in scene_render_mount(scene).viewport_configs:
-            if config.display_name == display_name and config.name == vp_name:
+            if config.display_name == display_name and config.camera_uuid == camera_uuid:
                 return config
 
         return None
