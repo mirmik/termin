@@ -663,11 +663,35 @@ void ColorPass::execute_with_data(
                                   static_cast<int>(MATERIAL_TEX_SLOT_BASE + i));
         }
 
-        // Shadow maps as sampled textures at SHADOW_SLOT_BASE..
+        // Shadow maps as sampled textures at SHADOW_SLOT_BASE.. paired
+        // with the depth-compare sampler (sampler2DShadow needs
+        // compareEnable=true on Vulkan; GL sets compare mode on the
+        // texture itself and ignores the sampler, so the shared
+        // sampler is backend-safe). Created lazily once per device.
+        if (!shadow_sampler_) {
+            tgfx::SamplerDesc sd;
+            sd.min_filter = tgfx::FilterMode::Linear;
+            sd.mag_filter = tgfx::FilterMode::Linear;
+            sd.mip_filter = tgfx::FilterMode::Nearest;
+            // ClampToEdge + clear-depth 1.0 gives the same "outside
+            // frustum = not in shadow" behaviour as GL's ClampToBorder
+            // + white border: sampling beyond the shadow map returns a
+            // texel cleared to the far plane, and LessOrEqual below
+            // passes the compare.
+            sd.address_u = tgfx::AddressMode::ClampToEdge;
+            sd.address_v = tgfx::AddressMode::ClampToEdge;
+            sd.address_w = tgfx::AddressMode::ClampToEdge;
+            sd.compare_enable = true;
+            // Match GL_TEXTURE_COMPARE_FUNC=GL_LEQUAL set by
+            // ShadowPass::create_shadow_depth_texture on the GL path.
+            sd.compare_op = tgfx::CompareOp::LessEqual;
+            shadow_sampler_ = device.create_sampler(sd);
+        }
         for (size_t i = 0; i < shadow_tex2s.size() && i < MAX_SHADOW_MAPS; i++) {
             if (!shadow_tex2s[i]) continue;
             ctx2->bind_sampled_texture(SHADOW_SLOT_BASE + static_cast<uint32_t>(i),
-                                       shadow_tex2s[i]);
+                                       shadow_tex2s[i],
+                                       shadow_sampler_);
         }
 
         // --- Per-draw data ---

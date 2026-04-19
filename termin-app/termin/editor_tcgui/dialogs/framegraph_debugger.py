@@ -7,7 +7,6 @@ import json
 from tcbase import log
 
 from tcgui.widgets.widget import Widget
-from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.vstack import VStack
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
@@ -15,7 +14,7 @@ from tcgui.widgets.button import Button
 from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.units import px
+from tcgui.widgets.units import px, pct
 
 
 class CapturePreviewWidget(Widget):
@@ -34,54 +33,51 @@ class CapturePreviewWidget(Widget):
                            (0.08, 0.08, 0.08, 1.0))
         if not self.has_content or self._core is None:
             return
-        if self._fbo_surface is None:
-            return
         capture_tex = self._core.capture_tex
         if not capture_tex:
             return
 
-        from termin.visualization.render.manager import RenderingManager
-        render_engine = RenderingManager.instance().render_engine
-        if render_engine is None:
-            return
-        render_engine.ensure_tgfx2()
-        ctx2 = render_engine.tgfx2_ctx
-        if ctx2 is None:
-            return
+        # Sample capture_tex as an ordinary textured quad inside the
+        # UI pass. We cannot call FrameGraphPresenter::render here:
+        # it does ctx2->begin_pass(target_tex), which auto-ends the
+        # currently-open tcgui UI pass — the next widget then draws
+        # into undefined state and the renderer asserts. The Qt
+        # debugger got away with the presenter path because it ran in
+        # a separate SDL debug window with its own GL context; tcgui
+        # composites inline into the editor UI.
+        #
+        # Channel-mode / HDR-highlight overlays are not applied in
+        # this simple path. If we want them back, the way forward is
+        # a draw_texture variant that takes a channel-mask uniform.
+        #
+        # flip_v follows the same backend convention as Viewport3D:
+        # OpenGL render targets have texel (0,0) at the bottom-left
+        # so we invert V when sampling into the top-left UI pass;
+        # Vulkan RTs are top-left natively and sample as-is.
+        ctx = renderer._graphics
+        flip_v = ctx.backend == "opengl"
 
-        vp_w = renderer._viewport_w
-        vp_h = renderer._viewport_h
-        dst_x = int(self.x)
-        dst_y = int(vp_h - self.y - self.height)
-        dst_w, dst_h = int(self.width), int(self.height)
-
-        # Wrap the tcgui FBOSurface's color texture (raw GL id) as a
-        # non-owning tgfx2 handle so the C++ presenter can open a
-        # render pass on it.
-        from tgfx._tgfx_native import PIXEL_RGBA8
-        target_tex = ctx2.wrap_gl_texture(
-            self._fbo_surface.color_texture_id,
-            vp_w, vp_h, PIXEL_RGBA8,
+        dev = ctx.device
+        desc = dev.texture_desc(capture_tex)
+        renderer.draw_texture(
+            self.x, self.y, self.width, self.height,
+            handle=capture_tex,
+            tex_w=int(desc.width),
+            tex_h=int(desc.height),
+            flip_v=flip_v,
         )
-
-        # The C++ presenter handles scissor via ctx2->clear_scissor
-        # inside the pass; here we restore tcgui's clip afterwards
-        # because clear_scissor leaks GL scissor rect state.
-        self._core.presenter.render(
-            ctx2, capture_tex, target_tex,
-            dst_x, dst_y, dst_w, dst_h,
-            self.channel_mode, self.highlight_hdr,
-        )
-        ctx2.destroy_texture(target_tex)
-        if renderer._clip_stack:
-            renderer._ctx.set_scissor(*renderer._clip_stack[-1])
 
 
 class _FramegraphDebuggerHandle:
     """Handle returned by show_framegraph_debugger() for external update calls."""
 
     def __init__(self) -> None:
-        self.dialog: Dialog | None = None
+        # Dedicated tcgui window hosting the debugger UI. Created via
+        # parent_ui.create_window(...) so the preview gets its own
+        # offscreen target and OS window, the same way the Qt debugger
+        # ran inside a separate SDL window — avoids stepping on the
+        # editor's composited UI pass.
+        self.window_ui = None
         self.visible: bool = False
 
         # State
@@ -390,16 +386,10 @@ class _FramegraphDebuggerHandle:
         fbos = self._get_fbos()
         resource_name = self._debug_source_res
 
-        log.info(f"[FrameDebugger] _update_fbo_info: resource_name={resource_name!r} "
-                 f"fbo_keys={list(fbos.keys())}")
-
         resource = fbos.get(resource_name) if fbos else None
         if resource is None:
             self._fbo_info_label.text = f"Resource '{resource_name}': not found"
             return
-
-        log.info(f"[FrameDebugger] _update_fbo_info: resource type={type(resource).__name__} "
-                 f"value={resource!r}")
 
         from termin.visualization.render.framegraph.resource import (
             ShadowMapArrayResource,
@@ -602,7 +592,11 @@ class _FramegraphDebuggerHandle:
 
 
 def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _FramegraphDebuggerHandle:
-    """Create and show the Framegraph Debugger dialog. Returns handle for updates."""
+    """Create and show the Framegraph Debugger in a dedicated tcgui window."""
+
+    if ui.create_window is None:
+        log.error("[FrameDebugger] ui.create_window is not available — cannot open")
+        return None
 
     from termin._native.editor import FrameGraphDebuggerCore
 
@@ -613,15 +607,19 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
 
     # ---- Build UI ----
     # Layout matches Qt6 original:
-    #   VStack (main)
+    #   VStack (root)
     #   ├── HStack (top_area)
     #   │   ├── VStack (settings)
     #   │   └── VStack (pipeline schedule)
-    #   └── HStack (viewer_area, stretch)
-    #       ├── CapturePreviewWidget (stretch)
-    #       └── VStack (depth)
+    #   ├── HStack (viewer_area, stretch)
+    #   │   ├── CapturePreviewWidget (stretch)
+    #   │   └── VStack (depth)
+    #   └── HStack (footer: Close button)
 
     content = VStack()
+    content.preferred_width = pct(100)
+    content.preferred_height = pct(100)
+    content.padding = 6
     content.spacing = 6
 
     # ============ Top area: settings (left) + pipeline schedule (right) ============
@@ -991,24 +989,50 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     refresh_depth_btn.on_click = on_refresh_depth
     refresh_stats_btn.on_click = on_refresh_stats
 
-    # ---- Dialog ----
+    # ---- Footer: Close button ----
 
-    dialog = Dialog()
-    dialog.title = "Framegraph Debugger"
-    dialog.content = content
-    dialog.buttons = ["Close"]
-    dialog.cancel_button = "Close"
-    dialog.preferred_width = px(950)
-    dialog.preferred_height = px(700)
+    footer = HStack()
+    footer.spacing = 6
+    footer.preferred_height = px(32)
 
-    def on_dialog_result(btn):
-        handle.close()
+    footer_spacer = Label()
+    footer_spacer.text = ""
+    footer_spacer.stretch = True
+    footer.add_child(footer_spacer)
 
-    dialog.on_result = on_dialog_result
-    handle.dialog = dialog
+    close_btn = Button()
+    close_btn.text = "Close"
+    close_btn.preferred_width = px(90)
+    close_btn.padding = 4
+    footer.add_child(close_btn)
+
+    content.add_child(footer)
+
+    # ---- Create dedicated window ----
+
+    window_ui = ui.create_window("Framegraph Debugger", 950, 700)
+    if window_ui is None:
+        log.error("[FrameDebugger] create_window returned None")
+        return None
+
+    handle.window_ui = window_ui
     handle.visible = True
+    window_ui.root = content
 
-    dialog.show(ui, windowed=True)
+    # The window manager installs its own close_window/on_empty that
+    # destroys the native window. Wrap it to also tear down the
+    # pipeline connection — otherwise FrameDebuggerPass stays wired
+    # after the window disappears and keeps capturing for nothing.
+    native_close = window_ui.close_window
+
+    def _on_close():
+        handle.close()
+        if native_close is not None:
+            native_close()
+
+    window_ui.close_window = _on_close
+    window_ui.on_empty = _on_close
+    close_btn.on_click = _on_close
 
     # Initial population
     handle._update_viewport_list()

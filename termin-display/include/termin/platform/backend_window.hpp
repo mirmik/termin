@@ -38,6 +38,20 @@ public:
     // SDL / device failure. The selected backend is TERMIN_BACKEND
     // (defaults to OpenGL).
     BackendWindow(const std::string& title, int width, int height);
+
+    // Secondary-window constructor. Uses the IRenderDevice owned by
+    // `share_with` — no new device, no new instance, preserves the
+    // "one IRenderDevice per process" invariant. The new window owns:
+    //   - its own SDL window,
+    //   - its own GL context (OpenGL, created with sharing) or its
+    //     own VkSurfaceKHR + VulkanSwapchain (Vulkan).
+    // All resource handles (textures, buffers, pipelines) created on
+    // the primary remain valid here and vice versa.
+    //
+    // Throws std::runtime_error on SDL / surface / swapchain failure.
+    BackendWindow(const std::string& title, int width, int height,
+                  BackendWindow& share_with);
+
     ~BackendWindow();
 
     BackendWindow(const BackendWindow&) = delete;
