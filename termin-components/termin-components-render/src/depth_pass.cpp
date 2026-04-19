@@ -269,7 +269,10 @@ void DepthPass::execute_with_data_tgfx2(
             std::memcpy(push.u_model, model.data, sizeof(float) * 16);
             ctx.ctx2->set_push_constants(&push, sizeof(push));
 
-            ctx.ctx2->set_vertex_layout(bind.layout);
+            // Base depth VS only reads a_position. See the matching filter
+            // in IdPass / ShadowPass for the rationale.
+            ctx.ctx2->set_vertex_layout(
+                filter_vertex_layout_to_locations(bind.layout, {0}));
             ctx.ctx2->set_topology(bind.topology);
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
