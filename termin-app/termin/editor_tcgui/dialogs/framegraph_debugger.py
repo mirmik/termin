@@ -65,6 +65,14 @@ class _FramegraphDebuggerHandle:
         # editor's composited UI pass.
         self.window_ui = None
         self.visible: bool = False
+        # Callback that asks the editor to re-render the main viewport.
+        # Needed after the debugger changes what the pipeline captures:
+        # without a new scene render there's nothing fresh to display in
+        # the preview. tcgui doesn't auto-redraw idle scenes, so the
+        # user sees stale content until something else triggers a draw
+        # (mouse move, etc.). Set by show_framegraph_debugger() from the
+        # editor window.
+        self._on_request_update = None
 
         # State
         self._core = None
@@ -196,6 +204,13 @@ class _FramegraphDebuggerHandle:
     def _reconnect(self) -> None:
         self._disconnect()
         self._connect()
+        # Kick the editor to redraw the main scene — otherwise nothing
+        # new lands in the capture buffer until the user happens to
+        # move the mouse or something else invalidates the viewport,
+        # and the preview shows stale / empty content. Same callback
+        # wiring as the Qt debugger used.
+        if self._on_request_update is not None:
+            self._on_request_update()
 
     # ---- Schedule building ----
 
@@ -577,8 +592,18 @@ class _FramegraphDebuggerHandle:
         self.visible = False
 
 
-def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _FramegraphDebuggerHandle:
-    """Create and show the Framegraph Debugger in a dedicated tcgui window."""
+def show_framegraph_debugger(
+    ui, rendering_controller, fbo_surface,
+    on_request_update=None,
+) -> _FramegraphDebuggerHandle:
+    """Create and show the Framegraph Debugger in a dedicated tcgui window.
+
+    ``on_request_update`` — a zero-arg callable the debugger invokes
+    every time it reroutes capture (pass change, symbol change,
+    resource change, mode swap). Typically the editor's
+    `_request_viewport_update`, which marks the main scene dirty so
+    the next frame actually renders something new for the capture.
+    """
 
     if ui.create_window is None:
         log.error("[FrameDebugger] ui.create_window is not available — cannot open")
@@ -590,6 +615,7 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     handle._rendering_controller = rendering_controller
     handle._fbo_surface = fbo_surface
     handle._core = FrameGraphDebuggerCore()
+    handle._on_request_update = on_request_update
 
     # ---- Build UI ----
     # Layout matches Qt6 original:
