@@ -170,11 +170,6 @@ private:
     // Cached draw calls (reused between frames)
     std::vector<ShadowDrawCall> cached_draw_calls_;
 
-    // Diagnostic counter — limits one-shot shadow-matrix dumps to a few
-    // frames so comparisons between backends aren't spam. See the
-    // `[ShadowDiag]` log site in execute_shadow_pass_tgfx2.
-    int debug_matrix_dump_count_ = 0;
-
     // Get or create native depth texture for shadow map at (index, resolution).
     tgfx::TextureHandle get_or_create_depth_tex2(
         tgfx::IRenderDevice& device, int resolution, int index);
