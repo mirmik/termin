@@ -424,16 +424,18 @@ class RenderingControllerTcgui:
     def _find_viewport_config(self, scene: "Scene", viewport: "Viewport", display: "Display | None" = None):
         if display is None:
             display = self._manager.get_display_for_viewport(viewport)
-        if display is None or viewport.camera is None:
+        if display is None:
             return None
 
+        # Match by (display_name, viewport.name). ViewportConfig doesn't
+        # carry camera_uuid — the camera is reached indirectly through
+        # render_target_name → RenderTargetConfig.camera_uuid, and the
+        # (display, viewport_name) pair is unique per scene.
         display_name = display.name
-        camera_uuid = ""
-        if viewport.camera.entity is not None:
-            camera_uuid = viewport.camera.entity.uuid
+        vp_name = viewport.name or ""
 
         for config in scene_render_mount(scene).viewport_configs:
-            if config.display_name == display_name and config.camera_uuid == camera_uuid:
+            if config.display_name == display_name and config.name == vp_name:
                 return config
 
         return None
