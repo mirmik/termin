@@ -90,27 +90,28 @@ def _hsv_to_rgb(h: float, s: float, v: float) -> tuple[float, float, float]:
 # Render + secondary spawn
 # ---------------------------------------------------------------------------
 
-def render_entry(entry: BackendWindowEntry, ctx: Tgfx2Context, t: float,
-                 label: str) -> None:
+def render_entry(entry: BackendWindowEntry, ctx: Tgfx2Context, t: float) -> None:
     state: WindowState = entry.host_data
     w, h = entry.window.framebuffer_size()
     if w <= 0 or h <= 0:
         return
-    print(f"  [{label}] ensure_size({w}x{h})", flush=True)
     state.ensure_size(w, h)
 
     hue = (t * 0.1 + state.hue_offset) % 1.0
     r, g, b = _hsv_to_rgb(hue, 0.6, 0.9)
 
-    print(f"  [{label}] begin_pass", flush=True)
+    # Frame lifecycle: begin_frame builds a command list, the pass
+    # records into it, end_frame submits. present() then publishes
+    # the resulting texture. Don't nest present() inside the frame —
+    # it does its own submits and the live cmd list would trip over
+    # them.
+    ctx.context.begin_frame()
     ctx.context.begin_pass(state.tex,
                             clear_color_enabled=True,
                             r=r, g=g, b=b, a=1.0)
-    print(f"  [{label}] end_pass", flush=True)
     ctx.context.end_pass()
-    print(f"  [{label}] present", flush=True)
+    ctx.context.end_frame()
     entry.window.present(state.tex)
-    print(f"  [{label}] done", flush=True)
 
 
 _secondary_counter = [0]
@@ -161,27 +162,20 @@ def main() -> None:
     if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
         raise RuntimeError(f"SDL_Init failed: {sdl2.SDL_GetError()}")
 
-    print("creating primary window...", flush=True)
     main_window = BackendWindow("termin.display multi-window (primary)", 800, 600)
-    print(f"primary window created, backend=..., device_ptr=0x{main_window.device_ptr():x}", flush=True)
     ctx = Tgfx2Context.from_window(
         main_window.device_ptr(), main_window.context_ptr())
-    print(f"tgfx2 ctx: backend={ctx.backend}", flush=True)
 
     wm = BackendWindowManager()
-    primary_state = WindowState(ctx, 800, 600, hue_offset=0.0)
-    print("primary state ready", flush=True)
     primary_entry = wm.register_main(
         main_window,
-        host_data=primary_state,
+        host_data=WindowState(ctx, 800, 600, hue_offset=0.0),
         on_destroy=_destroy_state)
 
     # Open one secondary right away; press 'N' to pop more.
-    print("opening secondary window...", flush=True)
     open_secondary(wm, ctx)
-    print("secondary window opened", flush=True)
 
-    print("Multi-window example running.")
+    print(f"termin.display multi-window example ({ctx.backend}).")
     print("  N   — open another secondary window")
     print("  ESC — close focused window (primary → exit)")
 
