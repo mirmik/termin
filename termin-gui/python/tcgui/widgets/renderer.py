@@ -181,6 +181,11 @@ class UIRenderer:
         # whether to close symmetrically.
         self._opened_frame: bool = False
 
+        # Color attachment the current begin()/end_compose() is drawing
+        # into — either _offscreen_color_tex (standalone) or the host's
+        # target_color (in-scene).
+        self._current_target: Tgfx2TextureHandle | None = None
+
     # ------------------------------------------------------------------
     # Font property
     # ------------------------------------------------------------------
@@ -209,10 +214,14 @@ class UIRenderer:
     # Lazy tgfx2 init
     # ------------------------------------------------------------------
 
-    def _ensure_init(self, w: int, h: int) -> None:
-        """Compile the UI shader and allocate the offscreen FBO. Called
-        on the first begin() and whenever the viewport size changes.
-        The Tgfx2Context is already set up by __init__.
+    def _ensure_init(self, w: int, h: int, need_offscreen: bool = True) -> None:
+        """Compile the UI shader and (if needed) allocate the offscreen
+        FBO. Called on the first begin() and whenever the viewport size
+        changes. The Tgfx2Context is already set up by __init__.
+
+        ``need_offscreen`` is False on the framegraph in-scene path: the
+        host hands us its own target_color, so we skip allocating the
+        renderer's own offscreen color/depth pair.
         """
         if self._ctx is None:
             # Fetched lazily — see __init__ comment on cycle collection.
@@ -233,7 +242,7 @@ class UIRenderer:
             if not self._ui_vs or not self._ui_fs:
                 raise RuntimeError("UIRenderer: UI shader compile failed")
 
-        if self._offscreen_size != (w, h):
+        if need_offscreen and self._offscreen_size != (w, h):
             if self._offscreen_color_tex is not None:
                 self._graphics.destroy_texture(self._offscreen_color_tex)
                 self._offscreen_color_tex = None
@@ -265,18 +274,34 @@ class UIRenderer:
         viewport_w: int,
         viewport_h: int,
         background_color: tuple[float, float, float, float] | None = None,
+        target_color=None,
     ) -> None:
         """Begin UI rendering pass.
 
-        ``background_color`` — if given, the default framebuffer (fbo 0)
-        is cleared to this colour after the UI composite, so the host
-        window receives a solid background behind any transparent UI
-        pixels. ``None`` leaves the default framebuffer unchanged.
+        Parameters
+        ----------
+        target_color : Tgfx2TextureHandle or None
+            Externally-provided color attachment to draw into. When set
+            (framegraph in-scene path), the pass opens with LoadOp::Load
+            and the widgets composite on top of whatever the previous
+            pass rendered — no offscreen, no final blit. When ``None``
+            (standalone hosts: the project-picker launcher, tcgui demos,
+            legacy ``render()``), the renderer draws into its own
+            offscreen color+depth pair, which ``end_compose`` then hands
+            back to the host to present.
+        background_color : (r, g, b, a) or None
+            Only meaningful in standalone mode (target_color is None) —
+            the colour the offscreen is cleared to before widgets draw.
+            Ignored when target_color is set (otherwise we'd wipe the
+            host's previous content every frame).
         """
         self._viewport_w = int(viewport_w)
         self._viewport_h = int(viewport_h)
 
-        self._ensure_init(self._viewport_w, self._viewport_h)
+        using_external_target = target_color is not None
+
+        self._ensure_init(self._viewport_w, self._viewport_h,
+                          need_offscreen=not using_external_target)
 
         ctx = self._ctx
 
@@ -288,24 +313,37 @@ class UIRenderer:
         self._opened_frame = not ctx.in_frame
         if self._opened_frame:
             ctx.begin_frame()
-        # Offscreen clear colour determines what fills UI-transparent
-        # regions — the final blit copies pixels directly (no blending)
-        # so the host background shows up only if we fill those regions
-        # here. Depth is cleared to 1.0 so 3D embedded renderers
-        # (tcplot Plot3D, Viewport3D) get a fresh depth buffer each
-        # frame.
-        if background_color is not None:
-            bg_r, bg_g, bg_b, bg_a = background_color
+
+        if using_external_target:
+            # In-scene path: draw straight into the host's target with
+            # LoadOp::Load so the previous pass' content stays visible
+            # under UI-transparent regions. No depth attached — UI
+            # draws with depth_test=False anyway.
+            ctx.begin_pass(
+                color=target_color,
+                clear_color_enabled=False,
+                clear_depth_enabled=False,
+            )
+            self._current_target = target_color
         else:
-            bg_r = bg_g = bg_b = bg_a = 0.0
-        ctx.begin_pass(
-            color=self._offscreen_color_tex,
-            depth=self._offscreen_depth_tex,
-            clear_color_enabled=True,
-            r=bg_r, g=bg_g, b=bg_b, a=bg_a,
-            clear_depth=1.0,
-            clear_depth_enabled=True,
-        )
+            # Standalone path: own offscreen cleared to background_color
+            # (transparent by default). The clear colour leaks through
+            # any UI-transparent pixels once the host presents/blits.
+            # Depth is cleared to 1.0 so 3D embedded renderers (tcplot
+            # Plot3D, Viewport3D) get a fresh depth buffer each frame.
+            if background_color is not None:
+                bg_r, bg_g, bg_b, bg_a = background_color
+            else:
+                bg_r = bg_g = bg_b = bg_a = 0.0
+            ctx.begin_pass(
+                color=self._offscreen_color_tex,
+                depth=self._offscreen_depth_tex,
+                clear_color_enabled=True,
+                r=bg_r, g=bg_g, b=bg_b, a=bg_a,
+                clear_depth=1.0,
+                clear_depth_enabled=True,
+            )
+            self._current_target = self._offscreen_color_tex
         ctx.set_viewport(0, 0, self._viewport_w, self._viewport_h)
         ctx.set_cull(CULL_NONE)
         ctx.set_depth_test(False)
