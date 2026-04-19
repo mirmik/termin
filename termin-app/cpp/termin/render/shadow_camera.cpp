@@ -361,49 +361,34 @@ ShadowCameraParams fit_shadow_frustum_for_cascade(
 ) {
     Vec3 light_dir = safe_normalize(light_direction, Vec3{0, 1, 0});
 
-    // Modify projection matrix to use cascade's near/far planes
-    // We need to extract FOV and aspect from the original projection
-    // and create a new projection for this cascade's depth range
-
-    // For perspective projection, extract parameters
-    // Python projection matrix layout (Y-forward convention):
-    // proj[0,0] = f / aspect (X scale)
-    // proj[1,2] = f (Z to screen Y)
-    // proj[2,1] = depth mapping
-    // proj[3,1] = 1 (w = y)
+    // Extract FOV and aspect from the Vulkan-native Y-forward perspective
+    // matrix (see Mat44f::perspective in termin-base/geom/mat44.hpp):
+    //   m(0, 0) = f / aspect         (X -> clip X)
+    //   m(2, 1) = -f                 (view Z up  -> clip -Y, Y-flipped)
+    //   m(1, 2) = far / (far - near) (view Y fwd -> clip Z, Z in [0, 1])
+    //   m(3, 2) = -far*near/(far-near)
+    //   m(1, 3) = 1                  (w = view.y, Y-forward)
     //
-    // After conversion to C++ Mat44f(col, row):
-    // m(0, 0) = f / aspect
-    // m(2, 1) = f
-    // m(1, 2) = depth mapping
-    // m(1, 3) = 1
-
-    // Extract FOV from projection (assuming perspective)
-    float f = projection_matrix(2, 1);  // Python proj[1,2] -> C++ m(2, 1)
-    if (f < 0.001f) f = 1.0f;  // Fallback
+    // The matrix is the one built by CameraComponent::compute_projection_matrix
+    // on both OpenGL and Vulkan — Z stays in [0, 1], Y is flipped in clip
+    // space, everyone consumes it identically via glClipControl/Vulkan-native.
+    float f = -projection_matrix(2, 1);  // stored as -f, negate to recover
+    if (f < 0.001f) f = 1.0f;  // Fallback for degenerate matrices
 
     float aspect = 1.0f;
     if (std::abs(projection_matrix(0, 0)) > 0.001f) {
         aspect = f / projection_matrix(0, 0);
     }
 
-    // Build cascade projection matrix
-    // Mat44f uses (col, row) indexing, column-major storage
-    // Python numpy uses [row, col] indexing, row-major storage
-    // So Python proj[r,c] becomes C++ m(c, r)
-    float tan_half_fov = 1.0f / f;
+    // Rebuild the cascade's projection in the same Vulkan-native layout so
+    // compute_frustum_corners() (which feeds NDC cube with Z in [0, 1]) can
+    // correctly unproject corners back to world space. Any other convention
+    // here produces a bogus world frustum — and a bogus shadow ortho fit.
     Mat44f cascade_projection = Mat44f::zero();
-
-    // Our Y-forward convention projection (matching Python camera.py)
-    // proj[0,0] = f/aspect  -> m(0, 0)
-    // proj[1,2] = f         -> m(2, 1)
-    // proj[2,1] = depth     -> m(1, 2)
-    // proj[2,3] = offset    -> m(3, 2)
-    // proj[3,1] = 1         -> m(1, 3)
     cascade_projection(0, 0) = f / aspect;
-    cascade_projection(2, 1) = f;
-    cascade_projection(1, 2) = (cascade_far + cascade_near) / (cascade_far - cascade_near);
-    cascade_projection(3, 2) = (-2.0f * cascade_far * cascade_near) / (cascade_far - cascade_near);
+    cascade_projection(2, 1) = -f;
+    cascade_projection(1, 2) = cascade_far / (cascade_far - cascade_near);
+    cascade_projection(3, 2) = -(cascade_far * cascade_near) / (cascade_far - cascade_near);
     cascade_projection(1, 3) = 1.0f;
 
     // Get cascade frustum corners
