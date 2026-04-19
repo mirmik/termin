@@ -49,10 +49,11 @@ struct ShadowPushStd140 {
 static_assert(sizeof(ShadowPushStd140) == 64,
               "ShadowPushStd140 must be exactly one mat4");
 
-constexpr const char* SHADOW_VS_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
-
+// Per-frame view+proj on binding 0 (UBO set from ctx2 per cascade).
+// Per-object model matrix rides push_constants on Vulkan / std140 UBO at
+// slot 14 on GL (tgfx2's emulation ring). Same `ShadowPushData` struct
+// on both sides, so the CPU packer doesn't need to fork.
+constexpr const char* SHADOW_VS_UBO = R"(#version 450 core
 layout(location = 0) in vec3 a_position;
 
 layout(std140, binding = 0) uniform PerFrame {
@@ -60,17 +61,21 @@ layout(std140, binding = 0) uniform PerFrame {
     mat4 u_projection;
 };
 
-layout(std140, binding = 14) uniform PushConstants {
+struct ShadowPushData {
     mat4 u_model;
 };
+#ifdef VULKAN
+layout(push_constant) uniform ShadowPushBlock { ShadowPushData pc; };
+#else
+layout(std140, binding = 14) uniform ShadowPushBlock { ShadowPushData pc; };
+#endif
 
 void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+    gl_Position = u_projection * u_view * pc.u_model * vec4(a_position, 1.0);
 }
 )";
 
-constexpr const char* SHADOW_FS_UBO = R"(
-#version 330 core
+constexpr const char* SHADOW_FS_UBO = R"(#version 450 core
 void main() {
     // Depth-only pass: fragment shader output is irrelevant because
     // the FBO has no color attachment.
