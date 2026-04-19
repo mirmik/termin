@@ -8,7 +8,7 @@
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
-#include "tgfx2/opengl/opengl_render_device.hpp"
+#include "tgfx2/i_render_device.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 
 #include <cstdlib>
@@ -198,13 +198,9 @@ void IdPass::execute_with_data_tgfx2(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx.ctx2->device());
-    if (!gl_dev) {
-        tc::Log::error("IdPass/tgfx2: device is not OpenGLRenderDevice");
-        return;
-    }
+    auto& device = ctx.ctx2->device();
 
-    ensure_tgfx2_resources(ctx.ctx2->device());
+    ensure_tgfx2_resources(device);
 
     // Resolve base shader for collect_draw_calls' override keying.
     TcShader& base_shader = get_shader();
@@ -268,7 +264,7 @@ void IdPass::execute_with_data_tgfx2(
 
         bool override_is_base = tc_shader_handle_eq(dc.final_shader, base_shader.handle);
 
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
         if (bind.index_count == 0) continue;
 
         if (override_is_base) {
@@ -292,14 +288,12 @@ void IdPass::execute_with_data_tgfx2(
             // the base id shader for the next iteration.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+                release_mesh_binding(device, bind);
                 continue;
             }
             tgfx::ShaderHandle vs2, fs2;
-            if (!tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &vs2, &fs2)) {
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+            if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
+                release_mesh_binding(device, bind);
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
@@ -319,8 +313,7 @@ void IdPass::execute_with_data_tgfx2(
             ctx.ctx2->bind_shader(id_vs2_, id_fs2_);
         }
 
-        gl_dev->destroy(bind.vertex_buffer);
-        gl_dev->destroy(bind.index_buffer);
+        release_mesh_binding(device, bind);
     }
 
     ctx.ctx2->end_pass();

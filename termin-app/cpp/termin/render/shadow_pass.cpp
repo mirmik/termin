@@ -7,6 +7,7 @@
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
+#include "tgfx2/i_render_device.hpp"
 #include "tgfx2/opengl/opengl_render_device.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 
@@ -337,13 +338,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         return results;
     }
 
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx.ctx2->device());
-    if (!gl_dev) {
-        tc::Log::error("ShadowPass/tgfx2: device is not OpenGLRenderDevice");
-        return results;
-    }
+    auto& device = ctx.ctx2->device();
 
-    ensure_tgfx2_resources(ctx.ctx2->device());
+    ensure_tgfx2_resources(device);
 
     // Find directional lights that cast shadows.
     std::vector<std::pair<int, const Light*>> shadow_lights;
@@ -469,7 +466,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     dc.final_shader,
                     shadow_shader ? shadow_shader->handle : tc_shader_handle_invalid());
 
-                Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+                Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
                 if (bind.index_count == 0) continue;
 
                 if (override_is_base) {
@@ -489,14 +486,12 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // transitional plain-uniform helpers, draw.
                     tc_shader* raw = tc_shader_get(dc.final_shader);
                     if (!raw) {
-                        gl_dev->destroy(bind.vertex_buffer);
-                        gl_dev->destroy(bind.index_buffer);
+                        release_mesh_binding(device, bind);
                         continue;
                     }
                     tgfx::ShaderHandle vs2, fs2;
-                    if (!tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &vs2, &fs2)) {
-                        gl_dev->destroy(bind.vertex_buffer);
-                        gl_dev->destroy(bind.index_buffer);
+                    if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
+                        release_mesh_binding(device, bind);
                         continue;
                     }
                     ctx.ctx2->bind_shader(vs2, fs2);
@@ -519,8 +514,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
                 }
 
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+                release_mesh_binding(device, bind);
             }
             (void)last_shader;
 

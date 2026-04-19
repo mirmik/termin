@@ -10,7 +10,6 @@
 #include "termin/lighting/lighting_upload.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
-#include "tgfx2/opengl/opengl_render_device.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 #include <termin/render/frame_graph_debugger_core.hpp>
 extern "C" {
@@ -363,11 +362,6 @@ void ColorPass::execute_with_data(
         return;
     }
 
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx2->device());
-    if (!gl_dev) {
-        tc::Log::error("[ColorPass/tgfx2] tgfx2 device is not OpenGLRenderDevice");
-        return;
-    }
     auto& device = ctx2->device();
 
     // Resolve output textures from ctx.tex2_* — persistent FBOPool
@@ -480,7 +474,7 @@ void ColorPass::execute_with_data(
         // Wrap the mesh's per-context VBO/EBO as tgfx2 buffers for
         // the duration of this draw. Destroyed right after draw —
         // wrap_mesh is cheap and avoids growing the HandlePool.
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
         if (bind.index_count == 0) continue;
 
         // Compile the shader through the tc_shader_ensure_tgfx2 bridge.
@@ -489,16 +483,14 @@ void ColorPass::execute_with_data(
         // program id which is now unused for this pass.
         tc_shader* raw_shader = tc_shader_get(dc.final_shader);
         if (!raw_shader) {
-            gl_dev->destroy(bind.vertex_buffer);
-            gl_dev->destroy(bind.index_buffer);
+            release_mesh_binding(device, bind);
             continue;
         }
         tgfx::ShaderHandle vs2, fs2;
         if (!tc_shader_ensure_tgfx2(raw_shader, &device, &vs2, &fs2)) {
             tc::Log::error("[ColorPass/tgfx2] tc_shader_ensure_tgfx2 failed for shader '%s'",
                            raw_shader->name ? raw_shader->name : raw_shader->uuid);
-            gl_dev->destroy(bind.vertex_buffer);
-            gl_dev->destroy(bind.index_buffer);
+            release_mesh_binding(device, bind);
             continue;
         }
 
@@ -628,8 +620,7 @@ void ColorPass::execute_with_data(
         ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                    bind.index_count, bind.index_type);
 
-        gl_dev->destroy(bind.vertex_buffer);
-        gl_dev->destroy(bind.index_buffer);
+        release_mesh_binding(device, bind);
     }
 
     ctx2->end_pass();
