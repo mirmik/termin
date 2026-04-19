@@ -183,12 +183,13 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height,
     impl_->shared_ctx_owner = &share_with;
 
     if (impl_->backend == tgfx::BackendType::OpenGL) {
-        // Ask SDL to create the new GL context in the same share group
-        // as whichever context is current. We make the primary's
-        // context current first to guarantee sharing with it.
-        SDL_GL_MakeCurrent(share_with.window_, share_with.impl_->gl_context);
-        SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
-
+        // Secondary GL windows don't get their own GL context — they
+        // borrow the primary's. One context can be made current against
+        // any of its owner's compatible windows, which is exactly what
+        // we need here: no share-group complexity, no second set of
+        // cached FBOs, no risk of desynchronised GLAD function tables.
+        // present() will MakeCurrent the primary's context against
+        // this window before blitting + SwapWindow.
         Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
         window_ = SDL_CreateWindow(title.c_str(),
                                     SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -197,18 +198,13 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height,
             throw std::runtime_error(std::string("SDL_CreateWindow(secondary) failed: ") +
                                      SDL_GetError());
         }
+        // impl_->gl_context stays null — the dtor skips SDL_GL_DeleteContext.
 
-        impl_->gl_context = SDL_GL_CreateContext(window_);
-        if (!impl_->gl_context) {
-            SDL_DestroyWindow(window_);
-            throw std::runtime_error(std::string("SDL_GL_CreateContext(secondary) failed: ") +
-                                     SDL_GetError());
-        }
-        SDL_GL_MakeCurrent(window_, impl_->gl_context);
-        SDL_GL_SetSwapInterval(1);
-
-        // Restore the primary as current so callers that expect the
-        // main window's context after ctor return don't get surprised.
+        // Re-make the primary context current. Creating a new
+        // SDL_WINDOW_OPENGL window can unbind the current GL context
+        // on some drivers (Mesa/GLX in particular), after which any
+        // GL call dispatched through GLAD hits a null function pointer
+        // and segfaults.
         SDL_GL_MakeCurrent(share_with.window_, share_with.impl_->gl_context);
     }
 #ifdef TGFX2_HAS_VULKAN
@@ -355,9 +351,15 @@ void BackendWindow::present(tgfx::TextureHandle color_tex) {
     if (w <= 0 || h <= 0) return;
 
     if (impl_->backend == tgfx::BackendType::OpenGL) {
-        // Ensure the window's GL context is current — in some hosts
-        // other threads / widgets may have taken it over.
-        SDL_GL_MakeCurrent(window_, impl_->gl_context);
+        // Secondary windows borrow the primary's GL context. Find it:
+        // either we own it (primary) or the shared owner does.
+        SDL_GLContext gl_ctx = impl_->gl_context
+            ? impl_->gl_context
+            : (impl_->shared_ctx_owner
+                ? impl_->shared_ctx_owner->impl_->gl_context
+                : nullptr);
+        if (!gl_ctx) return;
+        SDL_GL_MakeCurrent(window_, gl_ctx);
 
         // Query src size from the tgfx2 device so partial-resolution
         // FBOs composite correctly.
