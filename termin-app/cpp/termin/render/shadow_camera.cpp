@@ -130,14 +130,17 @@ Mat44f build_shadow_projection_matrix(const ShadowCameraParams& params) {
 
     Mat44f proj = Mat44f::zero();
 
-    // Orthographic projection matrix (column-major)
+    // Vulkan-native NDC: Y+ down, Z ∈ [0, 1]. Shadow camera looks along
+    // its own -Z (standard graphics convention in build_shadow_view_matrix).
+    // See termin-base/include/termin/geom/mat44.hpp for the matching scene
+    // projection.
     proj(0, 0) = 2.0f / (right_bound - left);
-    proj(1, 1) = 2.0f / (top - bottom);
-    proj(2, 2) = -2.0f / (far - near);
+    proj(1, 1) = -2.0f / (top - bottom);             // Y flipped
+    proj(2, 2) = -1.0f / (far - near);               // Z ∈ [0, 1]
 
     proj(3, 0) = -(right_bound + left) / (right_bound - left);
-    proj(3, 1) = -(top + bottom) / (top - bottom);
-    proj(3, 2) = -(far + near) / (far - near);
+    proj(3, 1) = (top + bottom) / (top - bottom);    // sign flipped
+    proj(3, 2) = -near / (far - near);
     proj(3, 3) = 1.0f;
 
     return proj;
@@ -155,12 +158,13 @@ std::array<Vec3, 8> compute_frustum_corners(
     const Mat44f& view_matrix,
     const Mat44f& projection_matrix
 ) {
-    // NDC cube corners
+    // NDC cube corners — Z ∈ [0, 1] (near=0, far=1) to match the
+    // Vulkan-native projection convention used everywhere.
     static const float ndc_corners[8][3] = {
-        {-1, -1, -1},  // near bottom left
-        { 1, -1, -1},  // near bottom right
-        { 1,  1, -1},  // near top right
-        {-1,  1, -1},  // near top left
+        {-1, -1,  0},  // near bottom left
+        { 1, -1,  0},  // near bottom right
+        { 1,  1,  0},  // near top right
+        {-1,  1,  0},  // near top left
         {-1, -1,  1},  // far bottom left
         { 1, -1,  1},  // far bottom right
         { 1,  1,  1},  // far top right

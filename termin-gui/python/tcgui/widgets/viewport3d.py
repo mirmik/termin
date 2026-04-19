@@ -112,24 +112,22 @@ class Viewport3D(Widget):
         a process-global context in ``run_editor_tcgui``), so the
         handle is directly consumable — no GL-id wrap needed.
 
-        The texel-origin convention of the scene's render target
-        depends on the backend: OpenGL stores (0, 0) at the bottom-left
-        (so we flip V to match the UI's top-left sampling), Vulkan
-        stores it at the top-left natively (no flip needed).
+        Texel-origin convention is uniform across backends: (0,0) is
+        top-left in render-target memory (Vulkan-native; OpenGL is
+        coerced into the same by glClipControl(GL_UPPER_LEFT)), so
+        sampling here needs no flip.
         """
         handle = self._surface.color_tex
         tex_w, tex_h = self._surface.framebuffer_size()
         if handle is None or tex_w == 0 or tex_h == 0:
             return
 
-        flip_v = renderer._graphics.backend == "opengl"
-
         renderer.draw_texture(
             self.x, self.y, self.width, self.height,
             handle=handle,
             tex_w=tex_w,
             tex_h=tex_h,
-            flip_v=flip_v,
+            flip_v=False,
         )
 
     # ------------------------------------------------------------------
