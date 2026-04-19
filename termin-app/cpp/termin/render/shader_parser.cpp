@@ -6,6 +6,13 @@
 #include <cstring>
 #include <regex>
 
+// Use tgfx2's shared include-resolution hook so the parser's strip /
+// inject passes see the full expanded source — including content
+// pulled in from lighting.glsl / shadows.glsl. Without this, plain
+// `uniform mat4 u_view;` decls hiding inside included .glsl files
+// slip past the engine-uniforms strip and break Vulkan compilation.
+#include "tgfx2/internal/shader_preprocess.hpp"
+
 namespace termin {
 
 namespace {
@@ -995,6 +1002,16 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
         for (auto& kv : phase.stages) {
             std::string& src = kv.second.source;
 
+            // Expand #include directives first so the strip passes
+            // below see the full merged source — including plain
+            // `uniform ...;` decls hiding inside shadows.glsl /
+            // lighting.glsl. Without this the strip only covers the
+            // stage's own text and uniforms from includes leak into
+            // the output, violating Vulkan's "non-opaque uniforms
+            // outside a block" rule.
+            src = tgfx::internal::preprocess_shader_source(
+                src, kv.first.c_str());
+
             // Material UBO: strip @property plain-uniform decls and
             // inject the synthesised std140 block. Only for phases with
             // non-empty layout — phases without @property entries skip
@@ -1008,10 +1025,29 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
             // Engine uniforms: strip plain decls of u_view / u_projection /
             // u_model / u_view_projection / u_camera_position, inject the
             // PerFrame UBO + push_constant block if the stage actually
-            // references any of them. Always applied (independent of
-            // @property material layout) so minimal shaders that only
-            // read view/proj still compile against the Vulkan rules.
-            bool needs_engine_block = stage_uses_engine_uniform(src);
+            // references any of them.
+            //
+            // Skip the engine injection entirely when any of the engine
+            // names collide with a MaterialParams @property entry — this
+            // happens in shaders that hand the view/proj matrices down
+            // through the material system rather than asking the engine
+            // to supply them (e.g. the Skybox program). Injecting would
+            // redeclare `u_view` in PerFrame and collide with the same
+            // name already promoted from MaterialParams into the global
+            // scope ("nameless block contains a member that already has
+            // a name at global scope").
+            bool collision_with_material = false;
+            for (const char* engine_name : ENGINE_PLAIN_UNIFORM_NAMES) {
+                for (const auto& ubo_name : ubo_names) {
+                    if (ubo_name == engine_name) {
+                        collision_with_material = true;
+                        break;
+                    }
+                }
+                if (collision_with_material) break;
+            }
+            bool needs_engine_block =
+                !collision_with_material && stage_uses_engine_uniform(src);
             if (needs_engine_block) {
                 src = strip_engine_uniform_decls(src);
             }

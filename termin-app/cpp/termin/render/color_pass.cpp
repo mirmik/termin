@@ -397,8 +397,12 @@ void ColorPass::execute_with_data(
     if (per_frame_device_ != &device) {
         if (per_frame_ubo_ && per_frame_device_) {
             per_frame_device_->destroy(per_frame_ubo_);
+            per_frame_ubo_ = {};
         }
-        per_frame_ubo_ = {};
+        if (shadow_block_ubo_ && per_frame_device_) {
+            per_frame_device_->destroy(shadow_block_ubo_);
+            shadow_block_ubo_ = {};
+        }
         per_frame_device_ = &device;
     }
     if (!per_frame_ubo_) {
@@ -423,16 +427,73 @@ void ColorPass::execute_with_data(
                 reinterpret_cast<const uint8_t*>(&pf), sizeof(pf)));
     }
 
+    // --- Shadow metadata UBO (binding 3) ------------------------------
+    // Packs the plain shadow uniforms shadows.glsl used to read through
+    // glUniform* (u_shadow_map_count, u_light_space_matrix[N], ...) into
+    // a std140 block so Vulkan's "no non-opaque uniforms outside a
+    // block" rule is satisfied. The same layout also works on GL —
+    // shadows.glsl is rewritten to read from this block on both paths.
+    //
+    // std140 pads each scalar-in-array to 16 bytes and each mat4 to 64.
+    // MAX_SHADOW_MAPS = 16 (from lighting_upload.hpp) — hardcoded here
+    // so the struct layout can be static_asserted at compile time.
+    constexpr size_t SHADOW_UBO_MAX = MAX_SHADOW_MAPS;
+    struct ShadowBlockStd140 {
+        int   u_shadow_map_count;       // 4
+        int   _pad0[3];                 // 12
+        // mat4[16] = 64 * 16 = 1024
+        float u_light_space_matrix[SHADOW_UBO_MAX][16];
+        // int[16] with std140 vec4 alignment (4 bytes + 12 pad per element)
+        int   u_shadow_light_index[SHADOW_UBO_MAX][4];
+        int   u_shadow_cascade_index[SHADOW_UBO_MAX][4];
+        float u_shadow_split_near[SHADOW_UBO_MAX][4];
+        float u_shadow_split_far[SHADOW_UBO_MAX][4];
+    };
+    static_assert(sizeof(ShadowBlockStd140) ==
+                  16 + 1024 + 256 + 256 + 256 + 256,
+                  "ShadowBlockStd140 must match std140 layout (2064 B)");
+
+    if (!shadow_block_ubo_) {
+        tgfx::BufferDesc bd;
+        bd.size = sizeof(ShadowBlockStd140);
+        bd.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
+        shadow_block_ubo_ = device.create_buffer(bd);
+    }
+    {
+        ShadowBlockStd140 sb{};
+        int sm_count = static_cast<int>(
+            std::min(shadow_maps.size(), static_cast<size_t>(SHADOW_UBO_MAX)));
+        sb.u_shadow_map_count = sm_count;
+        for (int i = 0; i < sm_count; ++i) {
+            const ShadowMapArrayEntry& e = shadow_maps[i];
+            std::memcpy(sb.u_light_space_matrix[i],
+                        e.light_space_matrix.data,
+                        sizeof(sb.u_light_space_matrix[i]));
+            sb.u_shadow_light_index[i][0]   = e.light_index;
+            sb.u_shadow_cascade_index[i][0] = e.cascade_index;
+            sb.u_shadow_split_near[i][0]    = e.cascade_split_near;
+            sb.u_shadow_split_far[i][0]     = e.cascade_split_far;
+        }
+        device.upload_buffer(
+            shadow_block_ubo_,
+            std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(&sb), sizeof(sb)));
+    }
+
     ctx2->begin_pass(color_tex2, depth_tex2,
                      /*clear_color=*/nullptr,
                      /*clear_depth=*/1.0f,
                      /*clear_depth_enabled=*/clear_depth);
     ctx2->set_viewport(0, 0, rect.width, rect.height);
 
-    // Bind the per-frame UBO after the pass is open — ResourceSet
-    // bindings are attached to the next pipeline flush anyway.
+    // Bind per-frame / shadow-block UBOs after the pass is open —
+    // ResourceSet bindings are attached to the next pipeline flush
+    // anyway. These stay bound for the whole pass; per-draw bindings
+    // (material UBO, lighting UBO, shadow samplers) are set below.
     constexpr uint32_t PER_FRAME_UBO_BINDING = 2;
+    constexpr uint32_t SHADOW_UBO_BINDING    = 3;
     ctx2->bind_uniform_buffer(PER_FRAME_UBO_BINDING, per_frame_ubo_);
+    ctx2->bind_uniform_buffer(SHADOW_UBO_BINDING,    shadow_block_ubo_);
 
     // Collect + sort draw calls. Reuses the legacy helpers —
     // gathering logic is backend-agnostic.
@@ -610,17 +671,15 @@ void ColorPass::execute_with_data(
 
         // --- Per-draw data ---
         //
-        // Vulkan-compatible path: push u_model through push_constants
-        // (tgfx2 maps this to `layout(push_constant)` in Vulkan and to
-        // the emulation UBO at binding TGFX2_PUSH_CONSTANTS_BINDING=14
-        // on GL). Shaders that declare `ColorPushBlock { mat4 u_model; }`
-        // pick up the value; shaders that don't simply ignore the push.
+        // u_model goes through push_constants — tgfx2 maps this to
+        // `layout(push_constant)` on Vulkan and to the emulation UBO at
+        // binding TGFX2_PUSH_CONSTANTS_BINDING=14 on GL. shader_parser
+        // injects a `ColorPushBlock { mat4 _u_model; }` + `#define
+        // u_model pc._u_model` into any stage that references u_model,
+        // so stage bodies keep writing `u_model * vec4(...)`.
         //
-        // Legacy GL path: set_uniform_mat4 still sets u_model/u_view/
-        // u_projection on the currently-bound program for shaders that
-        // kept their plain `uniform mat4 u_view` declarations. On Vulkan
-        // these calls are no-ops — migrated shaders must read view and
-        // projection from the PerFrame UBO at binding 2.
+        // u_view / u_projection / u_view_projection / u_camera_position
+        // come from the PerFrame UBO (binding 2) bound once per pass.
         struct ColorPushData {
             float u_model[16];
         };
@@ -628,12 +687,7 @@ void ColorPass::execute_with_data(
         std::memcpy(push.u_model, model.data, sizeof(push.u_model));
         ctx2->set_push_constants(&push, sizeof(push));
 
-        ctx2->set_uniform_mat4("u_model",      model.data,      /*transpose=*/false);
-        ctx2->set_uniform_mat4("u_view",       view.data,       /*transpose=*/false);
-        ctx2->set_uniform_mat4("u_projection", projection.data, /*transpose=*/false);
-
-        // Shader changes → link UBO block bindings and shadow sampler
-        // uniforms once per shader in this batch.
+        // Shader changes → link UBO block bindings once per shader.
         bool shader_changed =
             !tc_shader_handle_eq(dc.final_shader, last_shader_handle);
         if (shader_changed) {
@@ -641,36 +695,8 @@ void ColorPass::execute_with_data(
             if (tc_shader_has_feature(raw_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
                 ctx2->set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
             }
-
-            // Shadow sampler uniforms and cascade metadata. Legacy path
-            // uses upload_shadow_maps_to_shader / init_shadow_map_samplers
-            // which hit the LEGACY program — we need to set on the
-            // currently-bound ctx2 program instead.
-            int sm_count = static_cast<int>(
-                std::min(shadow_maps.size(), static_cast<size_t>(MAX_SHADOW_MAPS)));
-            ctx2->set_uniform_int("u_shadow_map_count", sm_count);
-
-            for (int i = 0; i < sm_count; ++i) {
-                const ShadowMapArrayEntry& e = shadow_maps[i];
-                ctx2->set_uniform_int(detail::shadow_map_names[i],
-                                      SHADOW_SLOT_BASE + i);
-                ctx2->set_uniform_mat4(detail::light_space_matrix_names[i],
-                                       e.light_space_matrix.data, false);
-                ctx2->set_uniform_int(detail::shadow_light_index_names[i],
-                                      e.light_index);
-                ctx2->set_uniform_int(detail::shadow_cascade_index_names[i],
-                                      e.cascade_index);
-                ctx2->set_uniform_float(detail::shadow_split_near_names[i],
-                                        e.cascade_split_near);
-                ctx2->set_uniform_float(detail::shadow_split_far_names[i],
-                                        e.cascade_split_far);
-            }
-            // Remaining shadow samplers must still be set to their unit
-            // (AMD requires no two sampler types share a unit).
-            for (int i = sm_count; i < MAX_SHADOW_MAPS; ++i) {
-                ctx2->set_uniform_int(detail::shadow_map_names[i],
-                                      SHADOW_SLOT_BASE + i);
-            }
+            ctx2->set_block_binding("PerFrame",   PER_FRAME_UBO_BINDING);
+            ctx2->set_block_binding("ShadowBlock", SHADOW_UBO_BINDING);
 
             last_shader_handle = dc.final_shader;
         }
