@@ -246,6 +246,17 @@ class UIComponent(InputComponent):
             return
 
         if ctx2 is not None and target_tex2 is not None:
+            # Route the UI's internal renderer through the same device
+            # that owns `ctx2` — the offscreen TextureHandle UIRenderer
+            # will return must live in the same HandlePool that the
+            # subsequent ctx2.blit() reads from, or the blit quietly
+            # skips ("null s" in opengl_command_list.cpp) and the UI
+            # disappears from the scene overlay. Safe no-op when the
+            # renderer already has a holder (e.g. second frame, or
+            # standalone UI demos that supplied their own up front).
+            from tgfx._tgfx_native import Tgfx2Context
+            self._ui.attach_holder(Tgfx2Context.borrow_from_context(ctx2))
+
             tex = self._ui.render_compose(viewport_w, viewport_h)
             if tex is not None:
                 ctx2.blit(tex, target_tex2)

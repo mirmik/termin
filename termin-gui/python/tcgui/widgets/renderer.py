@@ -175,6 +175,22 @@ class UIRenderer:
         # solid-colour draw (see _ensure_init for the rationale).
         self._placeholder_tex: Tgfx2TextureHandle | None = None
 
+    def attach_holder(self, holder: "Tgfx2Context") -> None:
+        """Attach an externally-owned (borrow-mode) Tgfx2Context before
+        the first begin(). Required when the UIRenderer's offscreen
+        TextureHandles have to be blit/sampled through a ctx that lives
+        on the same device — e.g. in-scene UIComponent rendered by the
+        framegraph, where the host device is only known at draw time.
+
+        Silently ignored if the renderer has already created its own
+        owning context (first begin() ran) — swapping the device then
+        would leave offscreen textures allocated on the wrong pool.
+        """
+        if self._holder is not None:
+            return
+        self._holder = holder
+        self._owns_holder = False
+
     # ------------------------------------------------------------------
     # Font property
     # ------------------------------------------------------------------

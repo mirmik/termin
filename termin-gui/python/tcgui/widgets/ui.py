@@ -121,6 +121,16 @@ class UI:
         """Access to the loader for registering custom widget types."""
         return self._loader
 
+    def attach_holder(self, holder) -> None:
+        """Attach a borrow-mode Tgfx2Context to the underlying renderer.
+
+        See UIRenderer.attach_holder for the rationale — lets in-scene
+        UIComponent hand the framegraph's live RenderContext2 to the UI
+        before the first begin(), so the offscreen TextureHandles land
+        on the same device the external ctx.blit() will read from.
+        """
+        self._renderer.attach_holder(holder)
+
     # ------------------------------------------------------------------
     # Global shortcuts
     # ------------------------------------------------------------------
