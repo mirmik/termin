@@ -90,15 +90,20 @@ def _get_event_window_id(event) -> int | None:
     return None
 
 
-def _dispatch_sdl_events(bw: BackendWindow, ui: UI) -> bool:
-    """Pump SDL events, forward to the main UI.
+def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
+    """Pump SDL events, forward to the UI of the window each event is for.
 
     We poll SDL directly (bypassing BackendWindow.poll_events) because
     the editor wants to route input into the widget tree; BackendWindow
     only cares about quit/close for its own should_close flag. Single
     SDL source is drained exactly once per frame.
+
+    When ``wm`` is passed, window-scoped events (mouse, keys, close)
+    are routed to the secondary window's UI. Without ``wm`` only the
+    main window is served (legacy single-window callers).
     """
     event = sdl2.SDL_Event()
+    main_id = bw.window_id()
     while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
         etype = event.type
 
@@ -108,38 +113,53 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI) -> bool:
 
         if etype == sdl2.SDL_WINDOWEVENT:
             if event.window.event == video.SDL_WINDOWEVENT_CLOSE:
-                bw.set_should_close(True)
-                return False
+                wid = event.window.windowID
+                if wm is not None and wm.handle_window_close(wid):
+                    bw.set_should_close(True)
+                    return False
+                if wm is None and wid == main_id:
+                    bw.set_should_close(True)
+                    return False
             continue
 
-        # Forward every UI-input event to the main UI. Secondary
-        # windows are not yet wired up (M5).
+        wid = _get_event_window_id(event)
+        target_ui = ui
+        if wm is not None and wid is not None:
+            matched = wm.get_ui_for_window_id(wid)
+            if matched is not None:
+                target_ui = matched
+
         if etype == sdl2.SDL_MOUSEMOTION:
-            ui.mouse_move(float(event.motion.x), float(event.motion.y))
+            target_ui.mouse_move(float(event.motion.x), float(event.motion.y))
         elif etype == sdl2.SDL_MOUSEBUTTONDOWN:
             btn = _BTN_MAP.get(event.button.button, MouseButton.LEFT)
             mods = _translate_sdl_mods(sdl2.SDL_GetModState())
-            ui.mouse_down(float(event.button.x), float(event.button.y), btn, mods)
+            target_ui.mouse_down(float(event.button.x), float(event.button.y), btn, mods)
         elif etype == sdl2.SDL_MOUSEBUTTONUP:
             btn = _BTN_MAP.get(event.button.button, MouseButton.LEFT)
             mods = _translate_sdl_mods(sdl2.SDL_GetModState())
-            ui.mouse_up(float(event.button.x), float(event.button.y), btn, mods)
+            target_ui.mouse_up(float(event.button.x), float(event.button.y), btn, mods)
         elif etype == sdl2.SDL_MOUSEWHEEL:
             mx = ctypes.c_int()
             my = ctypes.c_int()
             sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
-            ui.mouse_wheel(float(event.wheel.x), float(event.wheel.y),
-                           float(mx.value), float(my.value))
+            target_ui.mouse_wheel(float(event.wheel.x), float(event.wheel.y),
+                                  float(mx.value), float(my.value))
         elif etype == sdl2.SDL_KEYDOWN:
             key = _translate_sdl_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)
-            ui.key_down(key, mods)
+            target_ui.key_down(key, mods)
+            # ESC closes the event's window — not always the main one.
             if key == Key.ESCAPE:
-                bw.set_should_close(True)
-                return False
+                if wid is None or wid == main_id or wm is None:
+                    bw.set_should_close(True)
+                    return False
+                if wm is not None and wm.handle_window_close(wid):
+                    bw.set_should_close(True)
+                    return False
         elif etype == sdl2.SDL_TEXTINPUT:
             text = event.text.text.decode("utf-8", errors="replace")
-            ui.text_input(text)
+            target_ui.text_input(text)
 
     return True
 
@@ -203,7 +223,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     sdl2.SDL_StartTextInput()
 
     def poll_events() -> None:
-        if not _dispatch_sdl_events(main_window, ui):
+        if not _dispatch_sdl_events(main_window, ui, wm):
             win.close()
             return
 
