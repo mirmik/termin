@@ -131,13 +131,32 @@ public:
 
 private:
     // Lazy tgfx2 shader + UBO resources owned by the pass.
+    //
+    // NOTE on `per_frame_ubo_pool_`: Vulkan records commands into a deferred
+    // command buffer — all the frame's vkCmdDrawIndexed calls accumulate
+    // and execute together at submit time, reading whatever the UBO
+    // contains *then*. If every cascade's draws shared a single UBO and we
+    // re-uploaded it between cascades (via execute_immediate, which merely
+    // serialises a staging copy on the GPU, not against the main buffer's
+    // recording), every draw would end up reading the last-written
+    // cascade's matrices. Symptom: shadow map renders all casters with
+    // the final cascade's ortho bounds — geometry ~4× too small, landing
+    // wherever the largest cascade projected the scene origin. OpenGL
+    // hides the bug because glBufferSubData is immediate relative to the
+    // driver's command stream.
+    //
+    // Fix: one UBO per cascade slot, keyed by the same `fbo_index` the
+    // depth pool uses. Each cascade writes its own UBO; draws read
+    // unchanged data when the command buffer finally executes.
     tgfx::IRenderDevice* device2_ = nullptr;
     tgfx::ShaderHandle shadow_vs2_;
     tgfx::ShaderHandle shadow_fs2_;
-    tgfx::BufferHandle per_frame_ubo_;
+    std::unordered_map<int, tgfx::BufferHandle> per_frame_ubo_pool_;
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
+    tgfx::BufferHandle get_or_create_per_frame_ubo(
+        tgfx::IRenderDevice& device, int index);
 
     // Native shadow-map pool: index -> depth texture.
     // Owned via tgfx2 IRenderDevice. Destroyed in destroy().
@@ -150,6 +169,11 @@ private:
 
     // Cached draw calls (reused between frames)
     std::vector<ShadowDrawCall> cached_draw_calls_;
+
+    // Diagnostic counter — limits one-shot shadow-matrix dumps to a few
+    // frames so comparisons between backends aren't spam. See the
+    // `[ShadowDiag]` log site in execute_shadow_pass_tgfx2.
+    int debug_matrix_dump_count_ = 0;
 
     // Get or create native depth texture for shadow map at (index, resolution).
     tgfx::TextureHandle get_or_create_depth_tex2(

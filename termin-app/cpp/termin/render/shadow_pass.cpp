@@ -109,7 +109,7 @@ void ShadowPass::destroy() {
 }
 
 void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
-    if (device2_ == &device && shadow_vs2_ && shadow_fs2_ && per_frame_ubo_) {
+    if (device2_ == &device && shadow_vs2_ && shadow_fs2_) {
         return;
     }
     if (device2_ && device2_ != &device) {
@@ -128,18 +128,31 @@ void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     fs_desc.stage = tgfx::ShaderStage::Fragment;
     fs_desc.source = SHADOW_FS_UBO;
     shadow_fs2_ = device.create_shader(fs_desc);
+}
+
+tgfx::BufferHandle ShadowPass::get_or_create_per_frame_ubo(
+    tgfx::IRenderDevice& device,
+    int index
+) {
+    auto it = per_frame_ubo_pool_.find(index);
+    if (it != per_frame_ubo_pool_.end()) return it->second;
 
     tgfx::BufferDesc ubo_desc;
     ubo_desc.size = sizeof(ShadowPerFrameStd140);
     ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-    per_frame_ubo_ = device.create_buffer(ubo_desc);
+    tgfx::BufferHandle ubo = device.create_buffer(ubo_desc);
+    per_frame_ubo_pool_[index] = ubo;
+    return ubo;
 }
 
 void ShadowPass::release_tgfx2_resources() {
     if (!device2_) return;
     if (shadow_vs2_) { device2_->destroy(shadow_vs2_); shadow_vs2_ = {}; }
     if (shadow_fs2_) { device2_->destroy(shadow_fs2_); shadow_fs2_ = {}; }
-    if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
+    for (auto& [_, ubo] : per_frame_ubo_pool_) {
+        if (ubo) device2_->destroy(ubo);
+    }
+    per_frame_ubo_pool_.clear();
     device2_ = nullptr;
 }
 
@@ -192,7 +205,12 @@ tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
     tgfx::TextureDesc desc;
     desc.width = static_cast<uint32_t>(resolution);
     desc.height = static_cast<uint32_t>(resolution);
-    desc.format = tgfx::PixelFormat::D24_UNorm;
+    // D32F is universally supported as a depth attachment across GL/Vulkan
+    // drivers. D24_UNorm maps to VK_FORMAT_X8_D24_UNORM_PACK32 on Vulkan,
+    // which is an *optional* format — unsupported on AMD and some Intel
+    // parts, and produces a silently broken VkImage on affected hardware
+    // (no validation error, just garbage depth values in the shadow map).
+    desc.format = tgfx::PixelFormat::D32F;
     desc.sample_count = 1;
     desc.usage = tgfx::TextureUsage::Sampled |
                  tgfx::TextureUsage::DepthStencilAttachment |
@@ -416,6 +434,32 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             Mat44f proj_matrix = build_shadow_projection_matrix(params);
             Mat44f light_space_matrix = compute_light_space_matrix(params);
 
+            // Diagnostic dump — triggers once per cascade on the first three
+            // frames so both backends emit comparable logs. Remove when the
+            // Vulkan/GL shadow parity issue is resolved.
+            if (debug_matrix_dump_count_ < 6) {
+                const float* p = proj_matrix.data;
+                const float* v = view_matrix.data;
+                tc::Log::warn(
+                    "[ShadowDiag] cascade=%d split=[%.3f..%.3f] ortho L=%.2f R=%.2f B=%.2f T=%.2f N=%.2f F=%.2f",
+                    c, cascade_near, cascade_far,
+                    params.ortho_bounds.has_value() ? (*params.ortho_bounds)[0] : -999.f,
+                    params.ortho_bounds.has_value() ? (*params.ortho_bounds)[1] : -999.f,
+                    params.ortho_bounds.has_value() ? (*params.ortho_bounds)[2] : -999.f,
+                    params.ortho_bounds.has_value() ? (*params.ortho_bounds)[3] : -999.f,
+                    params.near, params.far);
+                tc::Log::warn(
+                    "[ShadowDiag] proj col0=%.3f,%.3f,%.3f,%.3f  col1=%.3f,%.3f,%.3f,%.3f",
+                    p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
+                tc::Log::warn(
+                    "[ShadowDiag] proj col2=%.3f,%.3f,%.3f,%.3f  col3=%.3f,%.3f,%.3f,%.3f",
+                    p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
+                tc::Log::warn(
+                    "[ShadowDiag] view col0=%.3f,%.3f,%.3f,%.3f  col3=%.3f,%.3f,%.3f,%.3f",
+                    v[0], v[1], v[2], v[3], v[12], v[13], v[14], v[15]);
+                ++debug_matrix_dump_count_;
+            }
+
             ctx.ctx2->begin_pass(
                 tgfx::TextureHandle{},  // depth-only
                 depth_tex2,
@@ -430,18 +474,25 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ctx.ctx2->set_cull(tgfx::CullMode::Back);
             ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
 
-            // PerFrame UBO (view + projection) — upload ONCE per
-            // cascade, bound at slot 0. Never re-uploaded inside the
-            // draw loop.
+            // PerFrame UBO (view + projection). Each cascade gets its
+            // own UBO slot (per_frame_ubo_pool_, keyed by fbo_index) so
+            // Vulkan's deferred command buffer sees the right data at
+            // draw-execute time. A single shared UBO would be overwritten
+            // between cascades during recording and all cascades' draws
+            // would end up reading the final cascade's matrices — see
+            // the extended note in shadow_pass.hpp. The depth pool uses
+            // the same `fbo_index` keying so slot lifetimes match.
+            tgfx::BufferHandle per_frame_ubo =
+                get_or_create_per_frame_ubo(ctx.ctx2->device(), fbo_index - 1);
             ShadowPerFrameStd140 per_frame{};
             std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
             std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
             ctx.ctx2->device().upload_buffer(
-                per_frame_ubo_,
+                per_frame_ubo,
                 std::span<const uint8_t>(
                     reinterpret_cast<const uint8_t*>(&per_frame),
                     sizeof(per_frame)));
-            ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo_);
+            ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo);
 
             if (cached_draw_calls_.empty()) {
                 ctx.ctx2->end_pass();
@@ -478,6 +529,16 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // Fast path: push constants for u_model.
                     ShadowPushStd140 push{};
                     std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+                    if (debug_matrix_dump_count_ < 12) {
+                        const float* m = model.data;
+                        const char* name = dc.entity.name() ? dc.entity.name() : "?";
+                        tc::Log::warn(
+                            "[ShadowDiag] draw c=%d '%s' stride=%u idx=%u vs=%u u_model.trans=(%.3f,%.3f,%.3f) col0=(%.2f,%.2f,%.2f)",
+                            c, name, unsigned(bind.layout.stride),
+                            unsigned(bind.index_count), unsigned(bind.layout.attributes.size()),
+                            m[12], m[13], m[14], m[0], m[1], m[2]);
+                        ++debug_matrix_dump_count_;
+                    }
                     ctx.ctx2->set_push_constants(&push, sizeof(push));
 
                     ctx.ctx2->set_vertex_layout(bind.layout);
