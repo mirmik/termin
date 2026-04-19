@@ -74,37 +74,59 @@ Backend-адаптеры:
 всегда передают один и тот же `(x, y, w, h)` на оба backend-а. Никаких
 if-branch по backend-у в пользовательском коде.
 
+## 3a. Scissor isolation between render passes
+
+Vulkan хранит scissor/viewport как часть command buffer — `begin_pass`
+поднимает чистый набор, закрытие pass очищает. В OpenGL это **глобальное
+состояние**, переживающее pass'ы и кадры. Если один pass (например
+`Canvas.begin_clip` в UI compose) оставил scissor включённым на
+виджет-прямоугольнике, следующий pass (например GPU compositor) откроет
+FBO и сделает `glClear` + draw, обрезанные тем же старым rect'ом.
+
+Поэтому `OpenGLCommandList::begin_render_pass` перед `glClear`
+вызывает `glDisable(GL_SCISSOR_TEST)` — гарантирует, что каждый pass
+стартует с чистым scissor'ом. Вызов `set_scissor` внутри pass-а
+включает scissor заново, если нужно.
+
+Бага-признак: «на OpenGL canvas обрезан сверху/снизу, на Vulkan всё
+ок» — почти наверняка scissor leaked с предыдущего pass-а.
+
 ## 4. Texture memory / sampling
 
-Любая render target текстура:
+Контракт API: **`v = 0` — визуальный верх содержимого на обоих
+backends**. Никакого `flip_v` снаружи бэкенда. Пользовательские
+шейдеры и Python API (`UIRenderer.draw_texture`, `Viewport3D`,
+`framegraph_debugger`, tcplot и т.д.) пишут Vulkan-style sampling и
+получают одинаковую картинку.
 
-- Vulkan memory: row 0 = визуальный верх содержимого (native).
-- OpenGL memory: row 0 = визуальный **низ** содержимого (bottom-up
-  legacy, неизменно даже с `glClipControl`).
+Вулкан: memory row 0 — это натурально «визуальный верх» (как для
+rendered, так и для uploaded текстур), и `texture(sam, vec2(u, 0))`
+сэмплирует именно его. Никаких трюков в бэкенде не нужно.
 
-Это единственная точка, где backends реально расходятся: `glClipControl`
-не правит это, потому что memory layout определяется FBO, а не
-rasterization-трансформацией.
+OpenGL: нативный memory layout — bottom-up (row 0 = визуальный низ,
+legacy OpenGL-invariant, не управляется `glClipControl`). Чтобы
+API-контракт выглядел одинаково с Vulkan, `OpenGLRenderDevice`
+применяет **два симметричных преобразования**, которые гасят друг
+друга при парном upload+sample:
 
-Семплирование `texture(sampler, vec2(u, v))`:
+1. **Upload** (`upload_texture`, `upload_texture_region`) — CPU Y-flip
+   строк перед `glTexSubImage2D`. Пользователь подаёт row 0 = top,
+   в GL-памяти строка-верх оказывается на row `h-1`. Для region upload
+   вдобавок пересчитывается `y` top-left → bottom-left.
+2. **Sampling** — `OpenGLRenderDevice::create_shader` после общего
+   preprocess инжектит GLSL overlay: перегрузки `_tgfx_gl_tex(...)` для
+   sampler2D / sampler2DShadow и `#define texture _tgfx_gl_tex` /
+   `#define texelFetch _tgfx_gl_texel`. В итоге любой `texture(s, uv)`
+   превращается в `texture(s, vec2(uv.x, 1.0 - uv.y))`. Для прочих
+   семплеров (sampler3D, samplerCube) — pass-through.
 
-- Vulkan: `v = 0` → верх содержимого.
-- OpenGL: `v = 0` → низ содержимого (из-за bottom-up memory). Чтобы
-  попасть в «верх», надо сэмплировать `1 - v`.
+Для rendered RT на OpenGL: при rendering с `glClipControl(GL_UPPER_LEFT)`
+«визуальный верх» оказывается в memory row `h-1` — и sampling-шейдерная
+инверсия попадает прямиком туда. Симметрия с uploaded путём полная.
 
-Практическое правило для компонентов, которые выбирают UV:
-
-- **Texture из CPU** (шрифты, загруженные картинки, upload из numpy) —
-  row 0 = top of image by convention. Семплирование `v=0` на Vulkan
-  отдаёт top, на OpenGL — bottom. Если компоненту нужен «визуальный
-  top при `v=0`», он обязан инвертировать V сам на OpenGL.
-- **Rendered RT** (FBO / offscreen color attachment) — семплирование
-  тех же координат сдвинуто по той же причине.
-
-API контракт: любой композитор / семплинг должен спрашивать у
-`Tgfx2Context.backend` и решать, нужен ли `flip_v`. Один хелпер —
-`needs_sampling_flip = (ctx.backend == "opengl")`, и дальше всё через
-него.
+Как следствие: никакой `backend == "opengl"` проверки в юзер-коде. Если
+где-то появляется такой branch — это регрессия, её место — внутри
+`OpenGLRenderDevice` / `shader_preprocess` (или расширение overlay).
 
 ## 5. Projection matrices (scene cameras)
 
@@ -139,10 +161,17 @@ dy_data = +dy_pixel / pa_h * span_y       # mouse down  = data y increases (y go
 ## 7. Что считать багом
 
 - Проекция, кодирующая view-up в clip `+Y`, — баг.
-- `glClipControl(GL_LOWER_LEFT)` где-то в коде — баг.
+- `glClipControl(GL_LOWER_LEFT)` или `GL_NEGATIVE_ONE_TO_ONE` где-то в
+  коде — баг.
 - `VkViewport.height < 0` — баг (GL-style Y-flip trick удалён).
 - `(y + h) - framebuffer_h` в пользовательском коде (ручной Y-flip в API слое) — баг. Backend должен сам разобраться.
-- Отсутствие `flip_v` при семплировании rendered RT на OpenGL —
-  будет давать перевёрнутую картинку.
-- `uv.y` хардкод без учёта backend-а при сэмплинге rendered texture —
-  баг.
+- Любой `if ctx.backend == "opengl"` / `if backend == "vulkan"` вне
+  самого OpenGLRenderDevice / VulkanRenderDevice — баг. API
+  одинаковый, backend сам разбирается.
+- `flip_v=True` где-либо снаружи backend'а — баг.
+- `uv.y = 1 - v` в пользовательских шейдерах как подхват OpenGL — баг.
+  Это делает shader_preprocess внутри OpenGLRenderDevice.
+- OpenGL `begin_render_pass` без `glDisable(GL_SCISSOR_TEST)` —
+  утечка scissor state между pass'ами.
+- NDC cube corner с `z = -1` (см. `compute_frustum_corners`) — баг;
+  near plane теперь `z = 0`, `z = 1` остаётся far.
