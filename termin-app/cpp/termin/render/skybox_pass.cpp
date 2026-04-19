@@ -310,7 +310,14 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     };
     ctx.ctx2->set_vertex_layout(cube_layout);
 
-    bind_material_ubo(skybox_layout_, values, {}, params_ubo_, 0, *device2_, *ctx.ctx2);
+    // MaterialParams lands on MATERIAL_UBO_BINDING = 1 — the parser bakes
+    // that explicit `layout(std140, binding = 1)` into the synthesized
+    // block. Binding 0 belongs to LightingBlock; passing 0 here used to
+    // work back when the block was declared without an explicit binding
+    // and GL reassigned it at link time, but since the move to fixed
+    // bindings the slot has to match MATERIAL_UBO_BINDING.
+    bind_material_ubo(skybox_layout_, values, {}, params_ubo_,
+                      MATERIAL_UBO_BINDING, *device2_, *ctx.ctx2);
 
     ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx::IndexType::Uint32);
     ctx.ctx2->end_pass();
