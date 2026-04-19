@@ -107,15 +107,10 @@ class Viewport3D(Widget):
         """Composite the 3D engine's offscreen tgfx2 texture into the
         UI pass via ``UIRenderer.draw_texture``.
 
-        The surface's color texture and the renderer's Tgfx2Context
-        live on the same IRenderDevice by construction (the host binds
-        a process-global context in ``run_editor_tcgui``), so the
-        handle is directly consumable — no GL-id wrap needed.
-
-        Texel-origin convention is uniform across backends: (0,0) is
-        top-left in render-target memory (Vulkan-native; OpenGL is
-        coerced into the same by glClipControl(GL_UPPER_LEFT)), so
-        sampling here needs no flip.
+        Sampling is `v=0 = visual top` on both backends — OpenGL
+        achieves parity via a Y-flip on upload and a `texture()` macro
+        wrapper in `OpenGLRenderDevice` (see coord_system.md §4). No
+        backend branch needed here.
         """
         handle = self._surface.color_tex
         tex_w, tex_h = self._surface.framebuffer_size()
@@ -127,7 +122,6 @@ class Viewport3D(Widget):
             handle=handle,
             tex_w=tex_w,
             tex_h=tex_h,
-            flip_v=False,
         )
 
     # ------------------------------------------------------------------
