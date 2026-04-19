@@ -74,6 +74,13 @@ class UIComponent(InputComponent):
         # Viewport dimensions for input handling before first render
         self._viewport_w: int = 0
         self._viewport_h: int = 0
+        # Widget tree staged before the first render() — UI itself can
+        # only exist once we've been handed a live Tgfx2Context, but
+        # callers (scene deserialisation, editor inspector) want to
+        # load layouts and look up widgets long before that. Kept here
+        # and flushed onto self._ui in render() once graphics arrives.
+        self._pending_root: Widget | None = None
+        self._graphics = None
 
     @property
     def priority(self) -> int:
@@ -91,16 +98,20 @@ class UIComponent(InputComponent):
 
     @property
     def root(self) -> Widget | None:
-        """Root widget of the UI tree."""
-        if self._ui is None:
-            return None
-        return self._ui.root
+        """Root widget of the UI tree. Before the first render (when UI
+        itself still doesn't exist) returns the pending root instead."""
+        if self._ui is not None:
+            return self._ui.root
+        return self._pending_root
 
     @root.setter
     def root(self, widget: Widget | None):
-        """Set the root widget."""
-        self._ensure_ui()
-        self._ui.root = widget
+        """Set the root widget. Stored on the UI if it already exists,
+        otherwise staged until the first render() call builds the UI."""
+        if self._ui is not None:
+            self._ui.root = widget
+        else:
+            self._pending_root = widget
 
     @property
     def font(self) -> FontTextureAtlas | None:
@@ -130,8 +141,7 @@ class UIComponent(InputComponent):
         if handle is None:
             self._ui_handle = None
             self._ui_layout_name = ""
-            self._ensure_ui()
-            self._ui.root = None
+            self.root = None
             return
 
         self._ui_handle = handle
@@ -140,8 +150,7 @@ class UIComponent(InputComponent):
             self._ui_layout_name = asset.name
             widget = handle.widget
             if widget is not None:
-                self._ensure_ui()
-                self._ui.root = widget
+                self.root = widget
         else:
             self._ui_layout_name = ""
 
@@ -154,115 +163,99 @@ class UIComponent(InputComponent):
             self._ui_layout_name = name
             widget = self._ui_handle.widget
             if widget is not None:
-                self._ensure_ui()
-                self._ui.root = widget
+                self.root = widget
         else:
             self._ui_handle = None
             self._ui_layout_name = ""
-            if self._ui is not None:
-                self._ui.root = None
-
-    def _ensure_ui(self):
-        """Lazily create UI."""
-        if self._ui is not None:
-            return
-
-        self._ui = UI(self._font)
+            self.root = None
 
     def load(self, path: str) -> Widget:
-        """
-        Load UI layout from a YAML file.
+        """Load UI layout from a YAML file.
 
-        Args:
-            path: Path to YAML file.
-
-        Returns:
-            The root widget.
+        UILoader builds the widget tree without needing a live UI, so
+        this works before the first render() — the resulting root is
+        staged on self._pending_root and handed to UI when graphics
+        arrives. If UI is already live, the root goes straight in.
         """
-        self._ensure_ui()
-        return self._ui.load(path)
+        from tcgui.widgets.loader import UILoader
+        loader = UILoader()
+        widget = loader.load(path)
+        self.root = widget
+        return widget
 
     def load_string(self, yaml_str: str) -> Widget:
-        """
-        Load UI layout from a YAML string.
+        """Load UI layout from a YAML string. See load() for the timing
+        story — same deal, just a different source."""
+        from tcgui.widgets.loader import UILoader
+        loader = UILoader()
+        widget = loader.load_string(yaml_str)
+        self.root = widget
+        return widget
 
-        Args:
-            yaml_str: YAML content.
-
-        Returns:
-            The root widget.
-        """
-        self._ensure_ui()
-        return self._ui.load_string(yaml_str)
+    def _walk_tree(self, root: Widget):
+        """Generator yielding every widget in the subtree rooted at
+        ``root``. Used for pre-render find()/find_all() when UI itself
+        does not exist yet."""
+        if root is None:
+            return
+        yield root
+        children = getattr(root, "children", None) or []
+        for child in children:
+            yield from self._walk_tree(child)
 
     def find(self, name: str) -> Widget | None:
-        """
-        Find a widget by name.
-
-        Args:
-            name: Widget name to search for.
-
-        Returns:
-            Widget or None if not found.
-        """
-        if self._ui is None:
-            return None
-        return self._ui.find(name)
+        """Find a widget by name. Works both after the first render
+        (via UI.find) and before (manual tree walk over pending root)."""
+        if self._ui is not None:
+            return self._ui.find(name)
+        for w in self._walk_tree(self._pending_root):
+            if getattr(w, "name", None) == name:
+                return w
+        return None
 
     def find_all(self, name: str) -> list[Widget]:
-        """
-        Find all widgets with a given name.
-
-        Args:
-            name: Widget name to search for.
-
-        Returns:
-            List of matching widgets.
-        """
-        if self._ui is None:
-            return []
-        return self._ui.find_all(name)
+        """Find all widgets with a given name. Same timing story as
+        find() — pre-render walks the staged tree manually."""
+        if self._ui is not None:
+            return self._ui.find_all(name)
+        return [w for w in self._walk_tree(self._pending_root)
+                if getattr(w, "name", None) == name]
 
     def render(self, viewport_w: int, viewport_h: int,
                ctx2=None, target_tex2=None):
+        """Render the UI through the framegraph ctx2.
+
+        Called by UIWidgetPass. UI is composited offscreen and the
+        resulting tgfx2 texture is blitted into ``target_tex2``. The UI
+        itself is built lazily on the first call — until then there's
+        no Tgfx2Context to give it, so we stash the layout in
+        _pending_root and construct UI here once ctx2 arrives.
         """
-        Render the UI.
+        if ctx2 is None or target_tex2 is None:
+            # No host-provided ctx ⇒ we have no way to draw (UI needs
+            # graphics). Scene-only UIComponent without a rendering
+            # path is a no-op.
+            return
 
-        Called by UIWidgetPass during the render pipeline.
-
-        When ``ctx2`` and ``target_tex2`` are supplied (framegraph path),
-        the UI is composited offscreen and the resulting tgfx2 texture
-        is blitted into ``target_tex2``. This is the backend-neutral
-        path used by the engine's UIWidgetPass — works on both OpenGL
-        and Vulkan.
-
-        When both are ``None`` (raw SDL/GLFW host), falls back to the
-        legacy ``UI.render`` which publishes the composite to FBO 0 via
-        ``blit_to_external_fbo``. GL-only.
-        """
-        self._ensure_ui()
+        if self._ui is None:
+            # First render — build Tgfx2Context over the framegraph's
+            # ctx2 (same device as every other renderer; keeps
+            # TextureHandles in the same HandlePool so the blit below
+            # resolves them), then create the UI with it and flush any
+            # pre-render layout into place.
+            from tgfx._tgfx_native import Tgfx2Context
+            self._graphics = Tgfx2Context.from_context(ctx2)
+            self._ui = UI(self._graphics, font=self._font)
+            if self._pending_root is not None:
+                self._ui.root = self._pending_root
+                self._pending_root = None
 
         if self._ui.root is None:
             return
 
-        if ctx2 is not None and target_tex2 is not None:
-            # Route the UI's internal renderer through the same device
-            # that owns `ctx2` — the offscreen TextureHandle UIRenderer
-            # will return must live in the same HandlePool that the
-            # subsequent ctx2.blit() reads from, or the blit quietly
-            # skips ("null s" in opengl_command_list.cpp) and the UI
-            # disappears from the scene overlay. Safe no-op when the
-            # renderer already has a holder (e.g. second frame, or
-            # standalone UI demos that supplied their own up front).
-            from tgfx._tgfx_native import Tgfx2Context
-            self._ui.attach_holder(Tgfx2Context.borrow_from_context(ctx2))
-
-            tex = self._ui.render_compose(viewport_w, viewport_h)
-            if tex is not None:
-                ctx2.blit(tex, target_tex2)
-            return
-
-        self._ui.render(viewport_w, viewport_h)
+        tex = self._ui.render_compose(viewport_w, viewport_h)
+        if tex is not None:
+            ctx2.blit(tex, target_tex2)
 
     def _ensure_layout(self):
         """Ensure layout is up to date for input handling."""
@@ -320,7 +313,9 @@ class UIComponent(InputComponent):
 
     def on_mouse_button(self, event: MouseButtonEvent):
         """Handle mouse button events from the input system."""
-        self._ensure_ui()
+        # Input lands before render() may have built the live UI —
+        # drop it silently; once the first render() flushes the pending
+        # layout into place subsequent events go through.
         if self._ui is None or self._ui.root is None:
             return
 
@@ -338,7 +333,9 @@ class UIComponent(InputComponent):
 
     def on_mouse_move(self, event: MouseMoveEvent):
         """Handle mouse move events from the input system."""
-        self._ensure_ui()
+        # Input lands before render() may have built the live UI —
+        # drop it silently; once the first render() flushes the pending
+        # layout into place subsequent events go through.
         if self._ui is None or self._ui.root is None:
             return
 

@@ -36,6 +36,11 @@ class WindowManager:
     def __init__(self, share_group_key: int = 0):
         self._windows: list[WindowEntry] = []
         self._share_group_key = share_group_key
+        # Process-wide Tgfx2Context — set by register_main(). Every
+        # secondary window built via create_window() hands the same
+        # object to its UI so all UIRenderers draw through one
+        # IRenderDevice.
+        self._graphics = None
 
     @property
     def windows(self) -> list[WindowEntry]:
@@ -60,12 +65,20 @@ class WindowManager:
         self._make_current(entry)
         entry.gpu_context = self._create_gpu_context("main_window")
         self._windows.append(entry)
+        # Pick up the Tgfx2Context the main UI was built with so
+        # create_window() can reuse it for secondary windows — single
+        # IRenderDevice invariant for the whole process.
+        self._graphics = ui._renderer.graphics
         ui.create_window = self.create_window
 
     def create_window(self, title: str, width: int, height: int) -> UI | None:
         """Create a new window. Used as ``UI.create_window`` callback."""
+        if self._graphics is None:
+            raise RuntimeError(
+                "WindowManager.create_window called before register_main: "
+                "no graphics context to share with the new window.")
         handle, gl_context = self._create_native_window(title, width, height)
-        window_ui = UI()
+        window_ui = UI(graphics=self._graphics)
         entry = WindowEntry(handle, gl_context, window_ui)
         self._make_current(entry)
         entry.gpu_context = self._create_gpu_context(f"window:{title[:20]}")

@@ -38,7 +38,7 @@ class EditorCanvas(Canvas):
         # handle resolution) and harmless on OpenGL.
         self._gpu_compositing = gpu_compositing
         self._gpu_compositor: GPUCompositor | None = (
-            GPUCompositor(layer_stack, ctx=ctx)
+            GPUCompositor(layer_stack, graphics=ctx)
             if self._gpu_compositing else None)
         self._composite_stale = True  # CPU readback needed
 

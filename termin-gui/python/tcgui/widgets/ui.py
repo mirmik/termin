@@ -33,23 +33,25 @@ class UI:
     and provides an overlay stack for popups / tooltips / menus.
     """
 
-    def __init__(self, font: FontTextureAtlas | None = None,
-                 holder: Tgfx2Context | None = None):
+    def __init__(self, graphics: Tgfx2Context,
+                 font: FontTextureAtlas | None = None):
         """
         Parameters
         ----------
+        graphics : Tgfx2Context
+            The process-wide tgfx2 context (device + RenderContext2) to
+            render through. Required — UI never creates a Tgfx2Context
+            of its own, because that would mint a second IRenderDevice
+            and break cross-widget TextureHandle sharing (Viewport3D
+            consuming FBOSurface.color_tex, etc.), plus Vulkan parity.
+            Obtain from the application host:
+            ``Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())``
+            at the top level, or ``Tgfx2Context.from_context(ctx2)``
+            inside framegraph passes.
         font : FontTextureAtlas or None
             Default font atlas. None → process default.
-        holder : Tgfx2Context or None
-            Externally-owned tgfx2 context to draw through. When a host
-            manages a process-global IRenderDevice (BackendWindow-based
-            editor, tcplot hosted inside one), it passes a borrowed
-            Tgfx2Context here so all rendering lands on the same device
-            — required for cross-widget TextureHandle sharing (Viewport3D
-            consuming FBOSurface.color_tex, etc.) and for Vulkan parity.
-            None → the renderer creates its own owning context.
         """
-        self._renderer = UIRenderer(font, holder=holder)
+        self._renderer = UIRenderer(graphics, font=font)
         self._loader = UILoader()
 
         self._root: Widget | None = None
@@ -121,15 +123,6 @@ class UI:
         """Access to the loader for registering custom widget types."""
         return self._loader
 
-    def attach_holder(self, holder) -> None:
-        """Attach a borrow-mode Tgfx2Context to the underlying renderer.
-
-        See UIRenderer.attach_holder for the rationale — lets in-scene
-        UIComponent hand the framegraph's live RenderContext2 to the UI
-        before the first begin(), so the offscreen TextureHandles land
-        on the same device the external ctx.blit() will read from.
-        """
-        self._renderer.attach_holder(holder)
 
     # ------------------------------------------------------------------
     # Global shortcuts
