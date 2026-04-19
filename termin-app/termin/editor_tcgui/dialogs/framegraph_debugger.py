@@ -42,10 +42,6 @@ class CapturePreviewWidget(Widget):
         # it does ctx2->begin_pass(target_tex), which auto-ends the
         # currently-open tcgui UI pass — the next widget then draws
         # into undefined state and the renderer asserts.
-        #
-        # Render-target memory is top-left on both backends
-        # (Vulkan-native; OpenGL is coerced via glClipControl), so
-        # no flip is needed.
         ctx = renderer._graphics
         dev = ctx.device
         desc = dev.texture_desc(capture_tex)
@@ -54,7 +50,6 @@ class CapturePreviewWidget(Widget):
             handle=capture_tex,
             tex_w=int(desc.width),
             tex_h=int(desc.height),
-            flip_v=False,
         )
 
 
