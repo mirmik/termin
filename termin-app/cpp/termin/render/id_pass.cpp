@@ -219,8 +219,6 @@ void IdPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_write(true);
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
-    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
-    ctx.ctx2->set_depth_format(tgfx::PixelFormat::D32F);
     ctx.ctx2->bind_shader(id_vs2_, id_fs2_);
 
     // PerFrame UBO: view + projection, uploaded once.

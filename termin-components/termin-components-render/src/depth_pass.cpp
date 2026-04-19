@@ -223,12 +223,6 @@ void DepthPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_write(true);
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
-    // DepthPass writes to a legacy r16f FBO. The tgfx2 pipeline key only
-    // uses color_format for cache matching, not for the actual GL write
-    // path — the underlying FBO is already configured as r16f by the
-    // legacy FBOPool and the GL driver clamps/converts on write.
-    ctx.ctx2->set_color_format(tgfx::PixelFormat::R16F);
-    ctx.ctx2->set_depth_format(tgfx::PixelFormat::D32F);
     ctx.ctx2->bind_shader(depth_vs2_, depth_fs2_);
 
     // PerFrame UBO — uploaded ONCE per execute. view + projection +

@@ -117,7 +117,6 @@ class GizmoPass(RenderFramePass):
         ctx2.set_depth_write(False)
         ctx2.set_blend(False)
         ctx2.set_cull(CULL_NONE)
-        ctx2.set_color_format(PIXEL_RGBA8)
         # Пишем только в альфу (id gizmo'а)
         ctx2.set_color_mask(False, False, False, True)
         ctx2.bind_shader(pair.vs, pair.fs)

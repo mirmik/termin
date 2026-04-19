@@ -100,7 +100,6 @@ class UnifiedGizmoPass(RenderFramePass):
                     clear_depth=1.0,
                 )
                 ctx2.set_viewport(0, 0, pw, ph)
-                ctx2.set_color_format(PIXEL_RGBA8)
 
                 view = ctx.camera.get_view_matrix()
                 proj = ctx.camera.get_projection_matrix()

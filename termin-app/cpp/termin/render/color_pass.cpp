@@ -617,12 +617,6 @@ void ColorPass::execute_with_data(
                                ? tgfx::PolygonMode::Line
                                : tgfx::PolygonMode::Fill);
 
-        // Pipeline cache key — needs to match the FBO formats. This is
-        // approximate because the wrapped textures retain their GL
-        // internal format; the cache key just needs to be stable.
-        ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
-        ctx2->set_depth_format(tgfx::PixelFormat::D24_UNorm_S8_UInt);
-
         ctx2->bind_shader(vs2, fs2);
         ctx2->set_vertex_layout(bind.layout);
         ctx2->set_topology(bind.topology);
