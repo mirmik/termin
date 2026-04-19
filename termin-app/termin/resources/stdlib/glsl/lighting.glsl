@@ -34,9 +34,11 @@ struct LightData {
     vec4 outer_cascade;        // outer_angle, cascade_count, cascade_blend, blend_distance
 };
 
-// Lighting uniform block (std140 layout)
-// Note: binding point is set via glUniformBlockBinding in C++ (for GLSL 330 compatibility)
-layout(std140) uniform LightingBlock {
+// Lighting uniform block (std140 layout, binding = 0 matches
+// LIGHTING_UBO_BINDING in C++). Explicit binding so the block lands on
+// the same slot on both Vulkan (baked into SPIR-V) and GL 4.3+ (core
+// support for layout(binding) on blocks via GL_ARB_shading_language_420pack).
+layout(std140, binding = 0) uniform LightingBlock {
     LightData u_lights[MAX_LIGHTS];      // 80 bytes * 8 = 640 bytes
     vec4 u_ambient_data;                 // ambient_color.rgb, ambient_intensity
     vec4 u_camera_light_count;           // camera_position.xyz, light_count

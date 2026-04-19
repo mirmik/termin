@@ -215,6 +215,15 @@ private:
     tgfx::IRenderDevice* per_frame_device_ = nullptr;
     tgfx::BufferHandle   per_frame_ubo_{};
 
+    // Shadow metadata UBO (binding 3). Mirrors the plain shadow uniforms
+    // that used to be pushed one-by-one through set_uniform_*:
+    // u_shadow_map_count, u_light_space_matrix[N], u_shadow_light_index[N],
+    // u_shadow_cascade_index[N], u_shadow_split_near[N], u_shadow_split_far[N].
+    // shadows.glsl reads them through `layout(std140, binding = 3)
+    // uniform ShadowBlock { ... };` — same block on GL and Vulkan.
+    // Shadow map samplers stay on texture slots SHADOW_SLOT_BASE+N.
+    tgfx::BufferHandle shadow_block_ubo_{};
+
     // Cached draw calls vector (reused between frames to avoid allocations)
     std::vector<PhaseDrawCall> cached_draw_calls_;
 
