@@ -551,7 +551,14 @@ void ColorPass::execute_with_data(
     // declare `uniform sampler2D u_shadow_map_N` at binding N keep
     // reading from the right slot.
     constexpr uint32_t SHADOW_SLOT_BASE = 8;
-    constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 0;
+    // Vulkan descriptor set layout reserves bindings 0..3 for UBOs
+    // (lighting, material, per-frame, shadow-block) and 4..7 for
+    // material samplers — see VulkanRenderDevice's shared layout. The
+    // same numbering is used on GL: ctx.bind_sampled_texture(slot, tex)
+    // binds GL texture unit = slot, and set_uniform_int below tells the
+    // shader which unit to sample each named sampler from, so the
+    // non-zero base is backend-neutral.
+    constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
 
     tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
 
