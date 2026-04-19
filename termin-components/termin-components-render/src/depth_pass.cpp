@@ -7,7 +7,7 @@
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
-#include <tgfx2/opengl/opengl_render_device.hpp>
+#include <tgfx2/i_render_device.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
 
 #include <tgfx/resources/tc_shader_registry.h>
@@ -50,10 +50,7 @@ struct DepthPushStd140 {
 static_assert(sizeof(DepthPushStd140) == 64,
               "DepthPushStd140 must be exactly one mat4");
 
-constexpr const char* DEPTH_PASS_VERT_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
-
+constexpr const char* DEPTH_PASS_VERT_UBO = R"(#version 450 core
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in vec2 a_texcoord;
@@ -65,14 +62,19 @@ layout(std140, binding = 0) uniform PerFrame {
     float u_far;
 };
 
-layout(std140, binding = 14) uniform PushConstants {
+struct DepthPushData {
     mat4 u_model;
 };
+#ifdef VULKAN
+layout(push_constant) uniform DepthPushBlock { DepthPushData pc; };
+#else
+layout(std140, binding = 14) uniform DepthPushBlock { DepthPushData pc; };
+#endif
 
-out float v_linear_depth;
+layout(location = 0) out float v_linear_depth;
 
 void main() {
-    vec4 world_pos = u_model * vec4(a_position, 1.0);
+    vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
     vec4 view_pos  = u_view * world_pos;
 
     float y = view_pos.y;
@@ -83,11 +85,9 @@ void main() {
 }
 )";
 
-constexpr const char* DEPTH_PASS_FRAG_UBO = R"(
-#version 330 core
-
-in float v_linear_depth;
-out vec4 FragColor;
+constexpr const char* DEPTH_PASS_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in float v_linear_depth;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     float d = clamp(v_linear_depth, 0.0, 1.0);
@@ -204,13 +204,8 @@ void DepthPass::execute_with_data_tgfx2(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx.ctx2->device());
-    if (!gl_dev) {
-        tc::Log::error("DepthPass/tgfx2: device is not OpenGLRenderDevice");
-        return;
-    }
-
-    ensure_tgfx2_resources(ctx.ctx2->device());
+    auto& device = ctx.ctx2->device();
+    ensure_tgfx2_resources(device);
 
     TcShader& base_shader = get_shader();
     collect_draw_calls(scene, layer_mask, base_shader.handle);
@@ -271,7 +266,7 @@ void DepthPass::execute_with_data_tgfx2(
 
         bool override_is_base = tc_shader_handle_eq(dc.final_shader, base_shader.handle);
 
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
         if (bind.index_count == 0) continue;
 
         if (override_is_base) {
@@ -289,14 +284,12 @@ void DepthPass::execute_with_data_tgfx2(
             // transitional mat4 uniforms + near/far, draw, re-bind.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+                release_mesh_binding(device, bind);
                 continue;
             }
             tgfx::ShaderHandle vs2, fs2;
-            if (!tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &vs2, &fs2)) {
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+            if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
+                release_mesh_binding(device, bind);
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
@@ -317,8 +310,7 @@ void DepthPass::execute_with_data_tgfx2(
             ctx.ctx2->bind_shader(depth_vs2_, depth_fs2_);
         }
 
-        gl_dev->destroy(bind.vertex_buffer);
-        gl_dev->destroy(bind.index_buffer);
+        release_mesh_binding(device, bind);
     }
 
     ctx.ctx2->end_pass();
