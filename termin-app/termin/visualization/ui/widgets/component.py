@@ -253,9 +253,14 @@ class UIComponent(InputComponent):
         if self._ui.root is None:
             return
 
-        tex = self._ui.render_compose(viewport_w, viewport_h)
-        if tex is not None:
-            ctx2.blit(tex, target_tex2)
+        # Pass target_color through so the UI renderer draws straight
+        # into the framegraph's aliased target with LoadOp::Load —
+        # previous passes (scene, bloom) stay visible under the
+        # UI-transparent regions, and we avoid the stale-blit behaviour
+        # where copy_texture wiped the frame because glBlitFramebuffer
+        # has no alpha-blend mode.
+        self._ui.render_compose(viewport_w, viewport_h,
+                                target_color=target_tex2)
 
     def _ensure_layout(self):
         """Ensure layout is up to date for input handling."""

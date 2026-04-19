@@ -266,6 +266,7 @@ class UI:
         viewport_w: int,
         viewport_h: int,
         background_color: tuple[float, float, float, float] | None = None,
+        target_color=None,
     ):
         """Render the UI and return the composite TextureHandle.
 
@@ -274,8 +275,14 @@ class UI:
         ``BackendWindow.present()``, which picks the right backend
         path (GL: blit to FBO 0 + SwapWindow, Vulkan: acquire +
         compose-and-present on the swapchain image).
+
+        When ``target_color`` is given (framegraph in-scene path), UI
+        draws directly into it with LoadOp::Load — no offscreen, no
+        final blit. The returned value is ``target_color`` in that
+        case (already has the UI composited in).
         """
-        if not self._compose(viewport_w, viewport_h, background_color):
+        if not self._compose(viewport_w, viewport_h, background_color,
+                             target_color):
             return None
         return self._renderer.end_compose()
 
@@ -284,6 +291,7 @@ class UI:
         viewport_w: int,
         viewport_h: int,
         background_color: tuple[float, float, float, float] | None,
+        target_color=None,
     ) -> bool:
         if not self._root and not self._overlays:
             return False
@@ -297,7 +305,8 @@ class UI:
         # Check tooltip timer
         self._update_tooltip()
 
-        self._renderer.begin(viewport_w, viewport_h, background_color)
+        self._renderer.begin(viewport_w, viewport_h, background_color,
+                             target_color=target_color)
         if self._root:
             self._root.render(self._renderer)
 
