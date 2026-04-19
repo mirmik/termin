@@ -125,9 +125,11 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
         wid = _get_event_window_id(event)
         target_ui = ui
         if wm is not None and wid is not None:
-            matched = wm.get_ui_for_window_id(wid)
-            if matched is not None:
-                target_ui = matched
+            # termin.display stores UI in entry.host_data (see
+            # BackendWindowManager.register_main / create_window).
+            matched = wm.get_entry_for_window_id(wid)
+            if matched is not None and matched.host_data is not None:
+                target_ui = matched.host_data
 
         if etype == sdl2.SDL_MOUSEMOTION:
             target_ui.mouse_move(float(event.motion.x), float(event.motion.y))
