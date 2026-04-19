@@ -26,6 +26,7 @@ extern "C" {
 
 #include <cmath>
 #include <cstring>
+#include <span>
 #include <algorithm>
 #include <numeric>
 #include <chrono>
@@ -378,11 +379,60 @@ void ColorPass::execute_with_data(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
+    // --- Per-frame UBO (binding 2) ------------------------------------
+    // Carries view / projection / view_projection / camera_position —
+    // the matrices shaders used to read from plain `uniform mat4` decls.
+    // Lazy-create once per device, refresh every frame. Uploaded BEFORE
+    // begin_pass because upload_buffer on Vulkan routes through a
+    // staging copy that must run outside any render pass.
+    struct PerFrameStd140 {
+        float u_view[16];
+        float u_projection[16];
+        float u_view_projection[16];
+        float u_camera_position[4];  // vec3 + pad to vec4
+    };
+    static_assert(sizeof(PerFrameStd140) == 208,
+                  "PerFrameStd140 must be exactly 3*mat4 + vec4");
+
+    if (per_frame_device_ != &device) {
+        if (per_frame_ubo_ && per_frame_device_) {
+            per_frame_device_->destroy(per_frame_ubo_);
+        }
+        per_frame_ubo_ = {};
+        per_frame_device_ = &device;
+    }
+    if (!per_frame_ubo_) {
+        tgfx::BufferDesc bd;
+        bd.size = sizeof(PerFrameStd140);
+        bd.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
+        per_frame_ubo_ = device.create_buffer(bd);
+    }
+    {
+        PerFrameStd140 pf{};
+        std::memcpy(pf.u_view, view.data, sizeof(pf.u_view));
+        std::memcpy(pf.u_projection, projection.data, sizeof(pf.u_projection));
+        Mat44f vp = projection * view;
+        std::memcpy(pf.u_view_projection, vp.data, sizeof(pf.u_view_projection));
+        pf.u_camera_position[0] = static_cast<float>(camera_position.x);
+        pf.u_camera_position[1] = static_cast<float>(camera_position.y);
+        pf.u_camera_position[2] = static_cast<float>(camera_position.z);
+        pf.u_camera_position[3] = 1.0f;
+        device.upload_buffer(
+            per_frame_ubo_,
+            std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(&pf), sizeof(pf)));
+    }
+
     ctx2->begin_pass(color_tex2, depth_tex2,
                      /*clear_color=*/nullptr,
                      /*clear_depth=*/1.0f,
                      /*clear_depth_enabled=*/clear_depth);
     ctx2->set_viewport(0, 0, rect.width, rect.height);
+
+    // Bind the per-frame UBO after the pass is open — ResourceSet
+    // bindings are attached to the next pipeline flush anyway.
+    constexpr uint32_t PER_FRAME_UBO_BINDING = 2;
+    ctx2->bind_uniform_buffer(PER_FRAME_UBO_BINDING, per_frame_ubo_);
 
     // Collect + sort draw calls. Reuses the legacy helpers —
     // gathering logic is backend-agnostic.
@@ -558,11 +608,26 @@ void ColorPass::execute_with_data(
                                        shadow_tex2s[i]);
         }
 
-        // --- Plain-uniform setters through the transitional escape hatch ---
-        // These run after flush_pipeline() inside each setter, so the
-        // tgfx2-compiled program is active before glUniform* is called.
+        // --- Per-draw data ---
+        //
+        // Vulkan-compatible path: push u_model through push_constants
+        // (tgfx2 maps this to `layout(push_constant)` in Vulkan and to
+        // the emulation UBO at binding TGFX2_PUSH_CONSTANTS_BINDING=14
+        // on GL). Shaders that declare `ColorPushBlock { mat4 u_model; }`
+        // pick up the value; shaders that don't simply ignore the push.
+        //
+        // Legacy GL path: set_uniform_mat4 still sets u_model/u_view/
+        // u_projection on the currently-bound program for shaders that
+        // kept their plain `uniform mat4 u_view` declarations. On Vulkan
+        // these calls are no-ops — migrated shaders must read view and
+        // projection from the PerFrame UBO at binding 2.
+        struct ColorPushData {
+            float u_model[16];
+        };
+        ColorPushData push{};
+        std::memcpy(push.u_model, model.data, sizeof(push.u_model));
+        ctx2->set_push_constants(&push, sizeof(push));
 
-        // Per-draw matrices.
         ctx2->set_uniform_mat4("u_model",      model.data,      /*transpose=*/false);
         ctx2->set_uniform_mat4("u_view",       view.data,       /*transpose=*/false);
         ctx2->set_uniform_mat4("u_projection", projection.data, /*transpose=*/false);

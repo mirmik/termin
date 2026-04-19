@@ -208,6 +208,13 @@ private:
     // Lighting UBO for efficient uniform uploads
     LightingUBO lighting_ubo_;
 
+    // Per-frame UBO (binding 2 = PER_FRAME_UBO_BINDING). Carries
+    // view / projection / view_projection / camera_position — the
+    // per-frame data plain `uniform mat4 u_view` shaders used to read.
+    // Lazily created once per device; contents re-uploaded every frame.
+    tgfx::IRenderDevice* per_frame_device_ = nullptr;
+    tgfx::BufferHandle   per_frame_ubo_{};
+
     // Cached draw calls vector (reused between frames to avoid allocations)
     std::vector<PhaseDrawCall> cached_draw_calls_;
 
