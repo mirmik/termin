@@ -241,7 +241,13 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height,
     }
 }
 
-BackendWindow::~BackendWindow() {
+void BackendWindow::close() {
+    // Idempotent teardown — callers (both the dtor and Python
+    // `window.close()`) can invoke this without checking state first.
+    if (!window_ && !impl_->device_ref && !impl_->gl_context) {
+        return;
+    }
+
     // Teardown in reverse dependency order. Secondary windows skip the
     // context/device reset because those are owned by the primary —
     // tearing them down here would yank the rug out from under the
@@ -267,6 +273,10 @@ BackendWindow::~BackendWindow() {
         impl_->cache.reset();
         impl_->device.reset();
     }
+    // Shared devices still accessed through device_ref; stop using it.
+    impl_->device_ref = nullptr;
+    impl_->shared_ctx_owner = nullptr;
+
     if (impl_->gl_context) {
         SDL_GL_DeleteContext(impl_->gl_context);
         impl_->gl_context = nullptr;
@@ -275,6 +285,11 @@ BackendWindow::~BackendWindow() {
         SDL_DestroyWindow(window_);
         window_ = nullptr;
     }
+    should_close_ = true;
+}
+
+BackendWindow::~BackendWindow() {
+    close();
 }
 
 // ---------------------------------------------------------------------------

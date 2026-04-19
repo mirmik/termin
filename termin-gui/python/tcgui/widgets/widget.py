@@ -74,6 +74,10 @@ class Widget:
         # Propagate _ui reference if we're already in a UI tree
         if self._ui is not None:
             self._ui._set_ui_recursive(child)
+            # Tree shape changed — force the next frame to re-layout,
+            # otherwise the new child keeps stale (zero / previous)
+            # geometry until the window is resized.
+            self._ui.request_layout()
         return child
 
     def remove_child(self, child: Widget):
@@ -81,6 +85,8 @@ class Widget:
         if child in self.children:
             child.parent = None
             self.children.remove(child)
+            if self._ui is not None:
+                self._ui.request_layout()
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
         """
