@@ -195,7 +195,9 @@ tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
     desc.format = tgfx::PixelFormat::D24_UNorm;
     desc.sample_count = 1;
     desc.usage = tgfx::TextureUsage::Sampled |
-                 tgfx::TextureUsage::DepthStencilAttachment;
+                 tgfx::TextureUsage::DepthStencilAttachment |
+                 tgfx::TextureUsage::CopySrc;   // needed for Frame Debugger blit
+
     tgfx::TextureHandle tex = device.create_texture(desc);
     if (!tex) {
         tc::Log::error("ShadowPass: failed to create depth texture (res=%d)",
