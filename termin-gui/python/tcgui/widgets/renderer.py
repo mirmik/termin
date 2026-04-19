@@ -99,14 +99,20 @@ _UI_PUSH_SIZE = _struct.calcsize(_UI_PUSH_FMT)
 
 
 def _build_ortho_pixel_to_ndc(w: float, h: float) -> np.ndarray:
-    """Ortho projection: pixel coords (y+ down) → NDC (y+ up)."""
+    """Ortho projection: pixel coords (y+ down) → clip-space (y+ down).
+
+    Matches the unified Vulkan-native NDC convention used in tgfx:
+    pixel_y=0 (top of the window) maps to clip_y=-1, pixel_y=h maps
+    to clip_y=+1. On OpenGL this is enforced by a one-time
+    glClipControl(GL_UPPER_LEFT) in OpenGLRenderDevice.
+    """
     if w <= 0 or h <= 0:
         return np.eye(4, dtype=np.float32)
     return np.array(
         [
             [2.0 / w,  0.0,     0.0, -1.0],
-            [0.0,    -2.0 / h,  0.0,  1.0],
-            [0.0,     0.0,     -1.0,  0.0],
+            [0.0,     2.0 / h,  0.0, -1.0],
+            [0.0,     0.0,      1.0,  0.0],
             [0.0,     0.0,      0.0,  1.0],
         ],
         dtype=np.float32,

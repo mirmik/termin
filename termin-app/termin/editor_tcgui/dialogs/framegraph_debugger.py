@@ -41,22 +41,12 @@ class CapturePreviewWidget(Widget):
         # UI pass. We cannot call FrameGraphPresenter::render here:
         # it does ctx2->begin_pass(target_tex), which auto-ends the
         # currently-open tcgui UI pass — the next widget then draws
-        # into undefined state and the renderer asserts. The Qt
-        # debugger got away with the presenter path because it ran in
-        # a separate SDL debug window with its own GL context; tcgui
-        # composites inline into the editor UI.
+        # into undefined state and the renderer asserts.
         #
-        # Channel-mode / HDR-highlight overlays are not applied in
-        # this simple path. If we want them back, the way forward is
-        # a draw_texture variant that takes a channel-mask uniform.
-        #
-        # flip_v follows the same backend convention as Viewport3D:
-        # OpenGL render targets have texel (0,0) at the bottom-left
-        # so we invert V when sampling into the top-left UI pass;
-        # Vulkan RTs are top-left natively and sample as-is.
+        # Render-target memory is top-left on both backends
+        # (Vulkan-native; OpenGL is coerced via glClipControl), so
+        # no flip is needed.
         ctx = renderer._graphics
-        flip_v = ctx.backend == "opengl"
-
         dev = ctx.device
         desc = dev.texture_desc(capture_tex)
         renderer.draw_texture(
@@ -64,7 +54,7 @@ class CapturePreviewWidget(Widget):
             handle=capture_tex,
             tex_w=int(desc.width),
             tex_h=int(desc.height),
-            flip_v=flip_v,
+            flip_v=False,
         )
 
 
