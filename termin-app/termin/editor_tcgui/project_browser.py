@@ -17,6 +17,50 @@ from tcgui.widgets.message_box import MessageBox
 from tcgui.widgets.input_dialog import show_input_dialog
 
 
+def _sync_stdlib(project_root: Path) -> None:
+    """Синхронизирует stdlib в проекте с встроенной версией.
+
+    Создаёт директорию stdlib если её нет, обновляет файлы с отличающимся
+    размером. Кросс-редакторный дубликат функции из
+    termin.editor.project_browser._sync_stdlib — обе ветки вызывают её при
+    open_project, чтобы материалы/шейдеры/glsl stdlib всегда были актуальными
+    без участия пользователя.
+    """
+    import termin
+
+    stdlib_src = Path(termin.__path__[0]) / "resources" / "stdlib"
+    stdlib_dst = project_root / "stdlib"
+
+    if not stdlib_src.exists():
+        return
+
+    created = not stdlib_dst.exists()
+    updated_count = 0
+
+    for src_file in stdlib_src.rglob("*"):
+        if src_file.is_dir():
+            continue
+
+        rel_path = src_file.relative_to(stdlib_src)
+        dst_file = stdlib_dst / rel_path
+        dst_file.parent.mkdir(parents=True, exist_ok=True)
+
+        need_update = False
+        if not dst_file.exists():
+            need_update = True
+        elif dst_file.stat().st_size != src_file.stat().st_size:
+            need_update = True
+
+        if need_update:
+            shutil.copy2(src_file, dst_file)
+            updated_count += 1
+
+    if created:
+        log.info(f"[ProjectBrowserTcgui] stdlib deployed: {updated_count} file(s)")
+    elif updated_count > 0:
+        log.info(f"[ProjectBrowserTcgui] stdlib synced: {updated_count} file(s) updated")
+
+
 # File extensions that are recognized as known asset types
 _KNOWN_EXTENSIONS = {
     ".material": "Material",
@@ -102,6 +146,8 @@ class ProjectBrowserTcgui:
         if not root.is_dir():
             log.error(f"[ProjectBrowserTcgui] set_root: not a directory: {path}")
             return
+
+        _sync_stdlib(root)
 
         self._root_path = root
         self._selected_dir = root
