@@ -164,7 +164,9 @@ float compute_shadow(int light_index) {
 
         vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
         vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-        proj_coords = proj_coords * 0.5 + 0.5;
+        // Vulkan-native NDC: xy in [-1, 1], z in [0, 1]. Only xy needs the
+        // [0, 1] shift; z is already storable depth.
+        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
@@ -193,7 +195,7 @@ float compute_shadow_pcf(int light_index) {
 
         vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
         vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-        proj_coords = proj_coords * 0.5 + 0.5;
+        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
@@ -232,7 +234,7 @@ float compute_shadow_poisson(int light_index) {
 
         vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
         vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-        proj_coords = proj_coords * 0.5 + 0.5;
+        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
