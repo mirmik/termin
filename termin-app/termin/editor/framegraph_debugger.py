@@ -538,24 +538,18 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
                 if fbo is not None:
                     w, h = fbo.get_size()
                     info_parts.append(f"Размер: {w}×{h}")
-        elif isinstance(resource, dict):
-            # RenderPipeline.get_fbo(key) returns a dict with size, samples,
-            # formats, and native handles. See render_pipeline_bindings.cpp.
-            w = resource.get("width", 0)
-            h = resource.get("height", 0)
-            samples = int(resource.get("samples", 1))
-            has_depth = bool(resource.get("has_depth", False))
-            color_fmt = resource.get("color_format", 0)
-            depth_fmt = resource.get("depth_format", 0)
-            info_parts.append(f"Размер: {w}×{h}")
-            info_parts.append(f"fmt={color_fmt}")
-            if has_depth:
-                info_parts.append(f"depth_fmt={depth_fmt}")
-            if samples > 1:
-                info_parts.append(f"MSAA={samples}x")
-            color_h = resource.get("color_native_handle", 0)
-            if color_h:
-                info_parts.append(f"id={color_h}")
+        elif isinstance(resource, _FboPoolEntryView):
+            # Thin wrapper over RenderPipeline.get_fbo(key) dict — see
+            # _FboPoolEntryView above. Exposes size, samples, formats,
+            # and native handles.
+            info_parts.append(f"Размер: {resource.width}×{resource.height}")
+            info_parts.append(f"fmt={resource.color_format}")
+            if resource.has_depth:
+                info_parts.append(f"depth_fmt={resource.depth_format}")
+            if resource.samples > 1:
+                info_parts.append(f"MSAA={resource.samples}x")
+            if resource.color_native_handle:
+                info_parts.append(f"id={resource.color_native_handle}")
         else:
             info_parts.append(f"Тип: {type(resource).__name__}")
 
