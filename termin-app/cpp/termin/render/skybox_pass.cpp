@@ -301,7 +301,6 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_cull(tgfx::CullMode::None);
 
     ctx.ctx2->bind_shader(vs_, fs_);
-    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
 
     tgfx::VertexBufferLayout cube_layout;
     cube_layout.stride = 3 * sizeof(float);

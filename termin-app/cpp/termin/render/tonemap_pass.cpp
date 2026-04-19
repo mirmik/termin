@@ -157,7 +157,6 @@ void TonemapPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_cull(tgfx::CullMode::None);
 
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs2_);
-    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
 
     tgfx::VertexBufferLayout fsq_layout;
     fsq_layout.stride = 4 * sizeof(float);

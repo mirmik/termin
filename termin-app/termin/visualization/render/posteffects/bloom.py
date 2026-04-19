@@ -353,7 +353,6 @@ class BloomEffect(PostEffect):
             ctx2.set_depth_write(False)
             ctx2.set_blend(False)
             ctx2.set_cull(CULL_NONE)
-            ctx2.set_color_format(PIXEL_RGBA16F)
 
         # === 1. Bright Pass -> mip[0] ===
         bright = _get_bright_shader()

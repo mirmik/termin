@@ -252,8 +252,6 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     ctx2->set_blend_func(tgfx::BlendFactor::SrcAlpha,
                          tgfx::BlendFactor::OneMinusSrcAlpha);
     ctx2->set_cull(tgfx::CullMode::None);
-    ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
-    ctx2->set_depth_format(tgfx::PixelFormat::D24_UNorm_S8_UInt);
 
     // Bind our grid VS/FS (NOT the built-in FSQ VS) and draw the
     // built-in fullscreen quad. The grid VS declares `a_pos` at

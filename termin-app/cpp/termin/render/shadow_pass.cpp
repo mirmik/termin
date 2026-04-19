@@ -426,8 +426,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ctx.ctx2->set_depth_write(true);
             ctx.ctx2->set_blend(false);
             ctx.ctx2->set_cull(tgfx::CullMode::Back);
-            ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
-            ctx.ctx2->set_depth_format(tgfx::PixelFormat::D32F);
             ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
 
             // PerFrame UBO (view + projection) — upload ONCE per

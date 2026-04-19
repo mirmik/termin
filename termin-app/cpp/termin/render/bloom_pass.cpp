@@ -278,20 +278,17 @@ void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
 }
 
 // Helper — common FSQ draw setup for tgfx2 sub-passes. Sets render state,
-// binds the built-in FSQ VS + the provided FS, sets color format + vertex
-// layout. Caller is responsible for begin_pass / set_viewport /
-// bind_uniform_buffer / bind_sampled_texture / draw_fullscreen_quad /
-// end_pass around this.
+// binds the built-in FSQ VS + the provided FS, sets vertex layout. Caller
+// is responsible for begin_pass / set_viewport / bind_uniform_buffer /
+// bind_sampled_texture / draw_fullscreen_quad / end_pass around this.
 static void setup_fsq_state(tgfx::RenderContext2& ctx,
-                            tgfx::ShaderHandle fs,
-                            tgfx::PixelFormat color_fmt) {
+                            tgfx::ShaderHandle fs) {
     ctx.set_depth_test(false);
     ctx.set_depth_write(false);
     ctx.set_blend(false);
     ctx.set_cull(tgfx::CullMode::None);
 
     ctx.bind_shader(ctx.fsq_vertex_shader(), fs);
-    ctx.set_color_format(color_fmt);
 
     tgfx::VertexBufferLayout fsq_layout;
     fsq_layout.stride = 4 * sizeof(float);
@@ -353,7 +350,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(mip_textures_[0]);
         c2.set_viewport(0, 0, w, h);
-        setup_fsq_state(c2, bright_fs2_, tgfx::PixelFormat::RGBA16F);
+        setup_fsq_state(c2, bright_fs2_);
         c2.bind_uniform_buffer(0, bright_ubo_);
         c2.bind_sampled_texture(4, input_tex2);
         c2.draw_fullscreen_quad();
@@ -376,7 +373,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
-        setup_fsq_state(c2, downsample_fs2_, tgfx::PixelFormat::RGBA16F);
+        setup_fsq_state(c2, downsample_fs2_);
         c2.bind_uniform_buffer(0, downsample_ubo_);
         c2.bind_sampled_texture(4, mip_textures_[i - 1]);
         c2.draw_fullscreen_quad();
@@ -406,7 +403,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
         // sampling feedback loop that Vulkan forbids inside a pass.
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
-        setup_fsq_state(c2, upsample_fs2_, tgfx::PixelFormat::RGBA16F);
+        setup_fsq_state(c2, upsample_fs2_);
         c2.set_blend(true);
         c2.set_blend_func(tgfx::BlendFactor::One, tgfx::BlendFactor::One);
         c2.bind_uniform_buffer(0, upsample_ubo_);
@@ -425,7 +422,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(output_tex2);
         c2.set_viewport(0, 0, w, h);
-        setup_fsq_state(c2, composite_fs2_, tgfx::PixelFormat::RGBA8_UNorm);
+        setup_fsq_state(c2, composite_fs2_);
         c2.bind_uniform_buffer(0, composite_ubo_);
         c2.bind_sampled_texture(4, input_tex2);
         c2.bind_sampled_texture(5, mip_textures_[0]);

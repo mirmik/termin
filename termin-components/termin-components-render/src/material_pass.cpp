@@ -141,7 +141,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     ctx2->set_depth_write(false);
     ctx2->set_blend(false);
     ctx2->set_cull(tgfx::CullMode::None);
-    ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
 
     ctx2->bind_shader(vs2, fs2);
 
