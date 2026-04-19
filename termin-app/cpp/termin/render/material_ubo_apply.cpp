@@ -226,14 +226,6 @@ tgfx::BufferHandle ensure_material_phase_ubo(
         phase->ubo_size = block_size;
         phase->ubo_version = shader_version;
         phase->ubo_device = &device;
-
-        // Diagnostic marker: a tc_material_phase grew a new UBO. Fires
-        // once on first draw per material phase and after hot-reload /
-        // resize events. Useful for confirming the pilot path ran.
-        tc::Log::error("[Stage 5.H] allocated material UBO: phase=%s shader_pool_idx=%u "
-                       "block_size=%u buffer_id=%u shader_version=%d",
-                       phase->phase_mark, shader->pool_index, block_size,
-                       fresh.id, shader_version);
         return fresh;
     }
 

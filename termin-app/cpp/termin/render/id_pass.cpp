@@ -275,7 +275,13 @@ void IdPass::execute_with_data_tgfx2(
             push.u_pickColor[3] = 1.0f;
             ctx.ctx2->set_push_constants(&push, sizeof(push));
 
-            ctx.ctx2->set_vertex_layout(bind.layout);
+            // The base id VS only reads a_position (loc 0). shaderc strips
+            // declared-but-unused a_normal / a_texcoord, so the SPIR-V
+            // inputs are a_position only — trim the pipeline's vertex
+            // layout to match, otherwise Vulkan logs performance warnings
+            // about loc 1/2/3 for every pipeline variant.
+            ctx.ctx2->set_vertex_layout(
+                filter_vertex_layout_to_locations(bind.layout, {0}));
             ctx.ctx2->set_topology(bind.topology);
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);

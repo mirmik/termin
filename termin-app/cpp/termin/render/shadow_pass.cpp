@@ -505,7 +505,11 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     std::memcpy(push.u_model, model.data, sizeof(float) * 16);
                     ctx.ctx2->set_push_constants(&push, sizeof(push));
 
-                    ctx.ctx2->set_vertex_layout(bind.layout);
+                    // Shadow VS only reads `a_position`. Filter unused
+                    // attrs so Vulkan doesn't warn about loc 1/2/3 per
+                    // pipeline creation. See filter_vertex_layout_to_locations.
+                    ctx.ctx2->set_vertex_layout(
+                        filter_vertex_layout_to_locations(bind.layout, {0}));
                     ctx.ctx2->set_topology(bind.topology);
                     ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                                    bind.index_count, bind.index_type);
