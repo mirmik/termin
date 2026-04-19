@@ -128,6 +128,47 @@ API-контракт выглядел одинаково с Vulkan, `OpenGLRende
 где-то появляется такой branch — это регрессия, её место — внутри
 `OpenGLRenderDevice` / `shader_preprocess` (или расширение overlay).
 
+## 4a. Triangle winding / front-face
+
+Стандартное mesh-авторинг — **CCW в view-space** (glTF, FBX, Blender
+default). Наша Y-down проекция (§2) visually переворачивает знак Y
+и winding в clip-space: mesh, CCW-авторенный в view, приходит CW в
+clip/window.
+
+Чтобы это не требовало переписывать все meshes, default
+`front_face = FrontFace::CW` (см. `tgfx::RasterState`). Это один из
+двух канонических способов для Y-flipped проекций в Vulkan-community;
+второй — `vp.height = -h` + CCW, но он ломает inter-pass sampling и
+у нас удалён.
+
+Direct3D 11/12 по умолчанию тоже использует CW = front, так что
+convention одинакова с ним.
+
+### Backend-specific mapping для FrontFace
+
+`FrontFace` в API — это **view-space** winding, до Y-flip проекции.
+Backends мапят эту энум в нативные константы **не одинаково**:
+
+- **Vulkan** — винуровый rule работает в framebuffer-space (y-down,
+  native). После нашей Y-flip projection mesh CCW-in-view становится
+  CW-in-framebuffer, так что API `FrontFace::CW` мы mapим в
+  `VK_FRONT_FACE_COUNTER_CLOCKWISE` и `FrontFace::CCW` — в `VK_FRONT_FACE_CLOCKWISE`.
+  Выглядит как «перевёрнутая табличка» — но это из-за того, что Vulkan
+  enum именует winding after проекции + framebuffer, а наш API — до.
+- **OpenGL** с `glClipControl(GL_UPPER_LEFT)` — Khronos спец говорит,
+  что эта опция «reverses the interpretation of clockwise and counter-
+  clockwise polygons», т.е. `glFrontFace(GL_CW)` ведёт себя как
+  `glFrontFace(GL_CCW)` без UPPER_LEFT и наоборот. В итоге прямой
+  mapping `FrontFace::CW → GL_CW` случайно совпадает с правильной
+  семантикой — после обратной инверсии от glClipControl он эффективно
+  работает как «view-space CW = front», что нам и нужно.
+
+Net effect: для **одного и того же API-enum значения** Vulkan и
+OpenGL получают **противоположные** нативные константы. Это не баг,
+а следствие того, что Vulkan rule вычисляется с обратным знаком
+формулы (см. Vulkan spec 24.5.1 vs OpenGL spec 14.6.1), плюс
+`glClipControl` реверсирует GL-интерпретацию.
+
 ## 5. Projection matrices (scene cameras)
 
 Для камер (perspective / orthographic, `termin-base/geom/mat44.hpp`):

@@ -105,7 +105,13 @@ float _get_shadow_bias() {
 float _sample_shadow_map(int sm, vec3 world_pos, float bias) {
     vec4 light_space_pos = u_light_space_matrix[sm] * vec4(world_pos, 1.0);
     vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-    proj_coords = proj_coords * 0.5 + 0.5;
+    // Vulkan-native NDC: xy ∈ [-1, 1], z ∈ [0, 1]. Shift xy into
+    // texture space [0, 1] but leave z alone — shadow map depth is
+    // already stored in [0, 1] so compare_depth must be in the same
+    // range (see docs/coord_system.md §5). The legacy `z * 0.5 + 0.5`
+    // shifted everything into [0.5, 1] and made every pixel always
+    // lose the compare — scene rendered fully in shadow.
+    proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 
     // Bounds check
     if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
