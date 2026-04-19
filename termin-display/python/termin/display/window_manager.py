@@ -91,9 +91,12 @@ class BackendWindowManager:
         if entry.on_destroy is not None:
             entry.on_destroy(entry)
         self._entries.remove(entry)
-        # BackendWindow dtor (run when the last Python reference drops)
-        # tears down the OS window, GL context / Vulkan surface +
-        # swapchain. The shared device stays alive in the primary.
+        # Explicit close: release OS-level resources right now.
+        # Relying on Python GC alone leaves the window visible as long
+        # as any closure (UI handlers, callbacks) still captures
+        # ``entry`` or ``entry.window``. close() is idempotent, so
+        # the eventual BackendWindow dtor is happy to no-op.
+        entry.window.close()
 
     def destroy_all(self) -> None:
         """Tear down all windows, secondary first, then primary.

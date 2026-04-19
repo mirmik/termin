@@ -75,6 +75,15 @@ public:
     bool should_close() const { return should_close_; }
     void set_should_close(bool v) { should_close_ = v; }
 
+    // Release OS-level resources (SDL window, GL context, Vulkan
+    // surface + swapchain). Idempotent — safe to call more than once.
+    // After close(), the instance is "zombie": present() / device() /
+    // etc. return without effect. Python callers need this because
+    // closures in the UI tree can hold the BackendWindow alive long
+    // after the host asked it to go away, so relying on the C++ dtor
+    // leaves the OS window visible.
+    void close();
+
     // Drainable to SDL_QUIT / ESC. Apps that want more fine-grained
     // event handling should use poll_event() in a loop.
     void poll_events();

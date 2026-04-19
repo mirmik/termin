@@ -42,14 +42,15 @@ class CapturePreviewWidget(Widget):
         # it does ctx2->begin_pass(target_tex), which auto-ends the
         # currently-open tcgui UI pass — the next widget then draws
         # into undefined state and the renderer asserts.
-        ctx = renderer._graphics
-        dev = ctx.device
-        desc = dev.texture_desc(capture_tex)
+        tex_w = int(self._core.capture.width)
+        tex_h = int(self._core.capture.height)
+        if tex_w == 0 or tex_h == 0:
+            return
         renderer.draw_texture(
             self.x, self.y, self.width, self.height,
             handle=capture_tex,
-            tex_w=int(desc.width),
-            tex_h=int(desc.height),
+            tex_w=tex_w,
+            tex_h=tex_h,
         )
 
 
@@ -657,10 +658,19 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     mode_row.add_child(mode_combo)
     settings.add_child(mode_row)
 
-    # --- "Resources" panel (initially hidden) ---
+    # --- Slot for the mode-dependent sub-panel (Passes | Resources).
+    # Swap via remove_child/add_child on mode change — tcgui VStack does
+    # not repeat layout when a hidden child becomes visible, so the old
+    # `visible = True/False` dance left the panel invisible until a
+    # force-relayout. The slot is the only child that touches settings
+    # in that region, so swapping is deterministic.
+    panel_slot = VStack()
+    panel_slot.spacing = 4
+    settings.add_child(panel_slot)
+
+    # --- "Resources" panel (built but not parented to settings) ---
     between_panel = VStack()
     between_panel.spacing = 4
-    between_panel.visible = False
     handle._between_panel = between_panel
 
     res_row = HStack()
@@ -694,8 +704,6 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     hdr_stats_label.text = ""
     handle._hdr_stats_label = hdr_stats_label
     between_panel.add_child(hdr_stats_label)
-
-    settings.add_child(between_panel)
 
     # --- "Passes" panel (shown initially) ---
     inside_panel = VStack()
@@ -737,7 +745,8 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     handle._pass_json = pass_json
     inside_panel.add_child(pass_json)
 
-    settings.add_child(inside_panel)
+    # Populate the slot with the initial panel (Passes by default).
+    panel_slot.add_child(inside_panel)
 
     # FBO info
     fbo_info_label = Label()
@@ -840,16 +849,21 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     def on_mode_changed(idx, text):
         if handle._updating:
             return
+        # Swap the slot's contents instead of toggling visibility — see
+        # the panel_slot comment above. tcgui's UI only re-runs layout
+        # when viewport size changes or _needs_layout is set, so we
+        # must nudge request_layout() manually after the swap.
+        panel_slot.children.clear()
         if idx == 0:
             handle._mode = "inside"
-            handle._inside_panel.visible = True
-            handle._between_panel.visible = False
+            panel_slot.add_child(handle._inside_panel)
             handle._update_passes_list()
             handle._update_pass_serialization()
         else:
             handle._mode = "between"
-            handle._inside_panel.visible = False
-            handle._between_panel.visible = True
+            panel_slot.add_child(handle._between_panel)
+        if handle.window_ui is not None:
+            handle.window_ui.request_layout()
         handle._reconnect()
 
     def on_pass_changed(idx, text):

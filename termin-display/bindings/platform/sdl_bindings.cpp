@@ -188,6 +188,9 @@ void bind_sdl(nb::module_& m) {
             "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
         .def("should_close", &BackendWindow::should_close)
         .def("set_should_close", &BackendWindow::set_should_close, nb::arg("value"))
+        .def("close", &BackendWindow::close,
+             "Release OS-level resources (SDL window, GL context, "
+             "Vulkan surface+swapchain). Idempotent.")
         .def("window_id", [](BackendWindow& self) -> uint32_t {
                 SDL_Window* w = self.sdl_window();
                 return w ? SDL_GetWindowID(w) : 0;
