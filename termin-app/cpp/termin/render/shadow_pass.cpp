@@ -434,32 +434,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             Mat44f proj_matrix = build_shadow_projection_matrix(params);
             Mat44f light_space_matrix = compute_light_space_matrix(params);
 
-            // Diagnostic dump — triggers once per cascade on the first three
-            // frames so both backends emit comparable logs. Remove when the
-            // Vulkan/GL shadow parity issue is resolved.
-            if (debug_matrix_dump_count_ < 6) {
-                const float* p = proj_matrix.data;
-                const float* v = view_matrix.data;
-                tc::Log::warn(
-                    "[ShadowDiag] cascade=%d split=[%.3f..%.3f] ortho L=%.2f R=%.2f B=%.2f T=%.2f N=%.2f F=%.2f",
-                    c, cascade_near, cascade_far,
-                    params.ortho_bounds.has_value() ? (*params.ortho_bounds)[0] : -999.f,
-                    params.ortho_bounds.has_value() ? (*params.ortho_bounds)[1] : -999.f,
-                    params.ortho_bounds.has_value() ? (*params.ortho_bounds)[2] : -999.f,
-                    params.ortho_bounds.has_value() ? (*params.ortho_bounds)[3] : -999.f,
-                    params.near, params.far);
-                tc::Log::warn(
-                    "[ShadowDiag] proj col0=%.3f,%.3f,%.3f,%.3f  col1=%.3f,%.3f,%.3f,%.3f",
-                    p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
-                tc::Log::warn(
-                    "[ShadowDiag] proj col2=%.3f,%.3f,%.3f,%.3f  col3=%.3f,%.3f,%.3f,%.3f",
-                    p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
-                tc::Log::warn(
-                    "[ShadowDiag] view col0=%.3f,%.3f,%.3f,%.3f  col3=%.3f,%.3f,%.3f,%.3f",
-                    v[0], v[1], v[2], v[3], v[12], v[13], v[14], v[15]);
-                ++debug_matrix_dump_count_;
-            }
-
             ctx.ctx2->begin_pass(
                 tgfx::TextureHandle{},  // depth-only
                 depth_tex2,
@@ -529,16 +503,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // Fast path: push constants for u_model.
                     ShadowPushStd140 push{};
                     std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-                    if (debug_matrix_dump_count_ < 12) {
-                        const float* m = model.data;
-                        const char* name = dc.entity.name() ? dc.entity.name() : "?";
-                        tc::Log::warn(
-                            "[ShadowDiag] draw c=%d '%s' stride=%u idx=%u vs=%u u_model.trans=(%.3f,%.3f,%.3f) col0=(%.2f,%.2f,%.2f)",
-                            c, name, unsigned(bind.layout.stride),
-                            unsigned(bind.index_count), unsigned(bind.layout.attributes.size()),
-                            m[12], m[13], m[14], m[0], m[1], m[2]);
-                        ++debug_matrix_dump_count_;
-                    }
                     ctx.ctx2->set_push_constants(&push, sizeof(push));
 
                     ctx.ctx2->set_vertex_layout(bind.layout);
