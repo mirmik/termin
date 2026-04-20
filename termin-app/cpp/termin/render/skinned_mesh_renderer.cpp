@@ -20,14 +20,14 @@ extern "C" {
 
 namespace termin {
 
-// Must match `layout(std140, binding = 5) uniform BoneBlock` in
+// Must match `layout(std140, binding = 12) uniform BoneBlock` in
 // shader_skinning.cpp SKINNING_INPUTS. std140: mat4[] is tightly packed
 // as 4 vec4 per matrix (no padding between), the int after the array
 // needs vec4 alignment → 16-byte stride. Total 128*64 + 16 = 8208.
 static constexpr uint32_t BONE_BLOCK_MAX_BONES = 128;
 static constexpr uint64_t BONE_BLOCK_SIZE =
     BONE_BLOCK_MAX_BONES * 16u * sizeof(float) + 16u;
-static constexpr uint32_t BONE_BLOCK_BINDING = 5;
+static constexpr uint32_t BONE_BLOCK_BINDING = 12;
 
 // Hash for TcShader (uses handle.index)
 struct TcShaderHash {
