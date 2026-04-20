@@ -77,21 +77,25 @@ def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData", uuid: str = "") -> "TcMesh":
     is_skinned = glb_mesh.is_skinned
 
     if is_skinned:
-        # Skinned layout: pos(3) + normal(3) + uv(2) + joints(4) + weights(4) = 16 floats = 64 bytes
-        # Note: skinned meshes don't include tangents in current layout
+        # Skinned layout: pos(3) + normal(3) + uv(2) + tangent(4) +
+        # joints(4) + weights(4) = 20 floats = 80 bytes. tangent is
+        # included so PBR shaders that declare `in vec4 a_tangent (loc=3)`
+        # can pair with skinned meshes without Vulkan vertex-input
+        # mismatch (see tgfx_vertex_layout_skinned in tgfx_types.c).
         layout = TcVertexLayout.skinned()
 
-        # Joint indices and weights
         joint_indices = glb_mesh.joint_indices.astype(np.float32)  # stored as float for GPU
         joint_weights = glb_mesh.joint_weights.astype(np.float32)
 
-        # Build interleaved buffer
-        buffer = np.zeros((num_verts, 16), dtype=np.float32)
+        buffer = np.zeros((num_verts, 20), dtype=np.float32)
         buffer[:, 0:3] = vertices
         buffer[:, 3:6] = normals
         buffer[:, 6:8] = uvs
-        buffer[:, 8:12] = joint_indices
-        buffer[:, 12:16] = joint_weights
+        if has_tangents:
+            buffer[:, 8:12] = tangents
+        # else: zeros — fragment shader's Gram-Schmidt branch handles this.
+        buffer[:, 12:16] = joint_indices
+        buffer[:, 16:20] = joint_weights
     elif has_tangents:
         # Layout with tangents: pos(3) + normal(3) + uv(2) + tangent(4) = 12 floats = 48 bytes
         layout = TcVertexLayout.pos_normal_uv_tangent()
@@ -151,19 +155,22 @@ def _populate_tc_mesh_from_glb(tc_mesh: TcMesh, glb_mesh: "GLBMeshData") -> bool
     is_skinned = glb_mesh.is_skinned
 
     if is_skinned:
-        # Skinned layout: pos(3) + normal(3) + uv(2) + joints(4) + weights(4) = 16 floats
-        # Note: skinned meshes don't include tangents in current layout
+        # Skinned layout: pos(3) + normal(3) + uv(2) + tangent(4) +
+        # joints(4) + weights(4) = 20 floats = 80 bytes. See _glb_mesh_to_tc_mesh.
         layout = TcVertexLayout.skinned()
 
         joint_indices = glb_mesh.joint_indices.astype(np.float32)
         joint_weights = glb_mesh.joint_weights.astype(np.float32)
 
-        buffer = np.zeros((num_verts, 16), dtype=np.float32)
+        buffer = np.zeros((num_verts, 20), dtype=np.float32)
         buffer[:, 0:3] = vertices
         buffer[:, 3:6] = normals
         buffer[:, 6:8] = uvs
-        buffer[:, 8:12] = joint_indices
-        buffer[:, 12:16] = joint_weights
+        if has_tangents:
+            buffer[:, 8:12] = tangents
+        # else: zeros — fragment shader handles vec3(0) tangent.
+        buffer[:, 12:16] = joint_indices
+        buffer[:, 16:20] = joint_weights
     elif has_tangents:
         # Layout with tangents: pos(3) + normal(3) + uv(2) + tangent(4) = 12 floats
         layout = TcVertexLayout.pos_normal_uv_tangent()
