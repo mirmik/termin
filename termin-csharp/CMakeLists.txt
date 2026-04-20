@@ -31,6 +31,16 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
     find_package(termin_collision REQUIRED)
     find_package(termin_components_collision REQUIRED)
     find_package(termin_components_kinematic REQUIRED)
+    # These three are pulled in transitively by termin::render_lib and
+    # end up in termin.dll's import table, so they must be copied next
+    # to it — otherwise Windows loader silently falls back to any older
+    # copy it can find on PATH (e.g. ~/AppData/Local/termin-sdk/bin/),
+    # which is almost never ABI-compatible with a fresh build.
+    find_package(termin_components_render REQUIRED)
+    find_package(termin_engine REQUIRED)
+    find_package(termin_display REQUIRED)
+    find_package(termin_animation REQUIRED)
+    find_package(termin_skeleton REQUIRED)
     find_package(termin_render REQUIRED)
     find_package(tcplot REQUIRED)
 
@@ -89,10 +99,17 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         tcplot::tcplot
     )
 
+    # This list MUST cover every transitive DLL that ends up in
+    # termin.dll's PE import table. Missing entries silently go to
+    # Windows loader's default search path (PATH, System32, …) and
+    # pick up whatever stale copy happens to be around — classic
+    # ABI-mismatch source. To verify: dumpbin /DEPENDENTS termin.dll
+    # after a build and diff against the files in runtimes/win-x64/native/.
     set(_termin_csharp_runtime_targets
         termin::trent
         termin::entity_lib
         termin::render_lib
+        termin::termin_core
         tcbase::termin_base
         termin_inspect::termin_inspect
         termin_scene::termin_scene
@@ -100,6 +117,11 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         termin_collision::termin_collision
         termin_components_collision::termin_components_collision
         termin_components_kinematic::termin_components_kinematic
+        termin_components_render::termin_components_render
+        termin_engine::termin_engine
+        termin_display::termin_display
+        termin_animation::termin_animation
+        termin_skeleton::termin_skeleton
         termin_render::termin_render
         tgfx::termin_graphics
         tgfx::termin_graphics2
