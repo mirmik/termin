@@ -221,8 +221,15 @@ void DepthPass::execute_with_data_tgfx2(
     tgfx::ShaderHandle depth_vs2, depth_fs2;
     {
         tc_shader* raw = tc_shader_get(depth_shader_handle_);
-        if (!raw || !tc_shader_ensure_tgfx2(raw, &device, &depth_vs2, &depth_fs2)) {
-            tc::Log::error("DepthPass: tc_shader_ensure_tgfx2 failed for engine depth shader");
+        if (!raw) {
+            tc::Log::error("DepthPass: depth_shader_handle_ stale (index=%u gen=%u)",
+                           depth_shader_handle_.index,
+                           depth_shader_handle_.generation);
+            return;
+        }
+        if (!tc_shader_ensure_tgfx2(raw, &device, &depth_vs2, &depth_fs2)) {
+            tc::Log::error("DepthPass: tc_shader_ensure_tgfx2 failed for '%s'",
+                           raw->name ? raw->name : raw->uuid);
             return;
         }
     }

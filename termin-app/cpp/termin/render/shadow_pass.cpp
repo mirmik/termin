@@ -462,8 +462,16 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             tgfx::ShaderHandle shadow_vs2, shadow_fs2;
             {
                 tc_shader* raw = tc_shader_get(shadow_shader_handle_);
-                if (!raw || !tc_shader_ensure_tgfx2(raw, &device, &shadow_vs2, &shadow_fs2)) {
-                    tc::Log::error("ShadowPass: tc_shader_ensure_tgfx2 failed for engine shadow shader");
+                if (!raw) {
+                    tc::Log::error("ShadowPass: shadow_shader_handle_ stale (index=%u gen=%u)",
+                                   shadow_shader_handle_.index,
+                                   shadow_shader_handle_.generation);
+                    ctx.ctx2->end_pass();
+                    continue;
+                }
+                if (!tc_shader_ensure_tgfx2(raw, &device, &shadow_vs2, &shadow_fs2)) {
+                    tc::Log::error("ShadowPass: tc_shader_ensure_tgfx2 failed for '%s'",
+                                   raw->name ? raw->name : raw->uuid);
                     ctx.ctx2->end_pass();
                     continue;
                 }
