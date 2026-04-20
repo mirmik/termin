@@ -87,6 +87,12 @@ void bind_tgfx2(nb::module_& m) {
         // 2=Geometry, 3=Compute.
         .def("create_shader",
              [](tgfx::IRenderDevice& self, int stage, const std::string& src) {
+                 if (stage < static_cast<int>(tgfx::ShaderStage::Vertex) ||
+                     stage > static_cast<int>(tgfx::ShaderStage::Geometry)) {
+                     throw nb::value_error(
+                         "Tgfx2Device.create_shader: stage must be one of "
+                         "Tgfx2ShaderStage.{Vertex, Fragment, Compute, Geometry}");
+                 }
                  tgfx::ShaderDesc d;
                  d.stage = static_cast<tgfx::ShaderStage>(stage);
                  d.source = src;
@@ -536,6 +542,11 @@ void bind_tgfx2(nb::module_& m) {
             [](Tgfx2ContextHolder& self, uint32_t w, uint32_t h,
                nb::ndarray<uint8_t, nb::c_contig, nb::device::cpu> data)
             -> tgfx::TextureHandle {
+                const size_t expected = static_cast<size_t>(w) * static_cast<size_t>(h);
+                if (data.size() > 0 && data.size() != expected) {
+                    throw nb::value_error(
+                        "create_texture_r8: data size must be width*height bytes");
+                }
                 tgfx::TextureDesc desc;
                 desc.width = w;
                 desc.height = h;
@@ -557,6 +568,12 @@ void bind_tgfx2(nb::module_& m) {
             [](Tgfx2ContextHolder& self, uint32_t w, uint32_t h,
                nb::ndarray<uint8_t, nb::c_contig, nb::device::cpu> data)
             -> tgfx::TextureHandle {
+                const size_t expected = static_cast<size_t>(w) *
+                                        static_cast<size_t>(h) * 4u;
+                if (data.size() > 0 && data.size() != expected) {
+                    throw nb::value_error(
+                        "create_texture_rgba8: data size must be width*height*4 bytes");
+                }
                 tgfx::TextureDesc desc;
                 desc.width = w;
                 desc.height = h;

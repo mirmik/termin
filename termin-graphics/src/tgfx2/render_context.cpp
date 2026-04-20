@@ -7,6 +7,7 @@
 
 #include <glad/glad.h>
 #include <cstring>
+#include <stdexcept>
 
 namespace tgfx {
 
@@ -57,11 +58,20 @@ RenderContext2::~RenderContext2() {
 // ============================================================================
 
 void RenderContext2::begin_frame() {
+    if (cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::begin_frame called while a frame is already open. "
+            "Call end_frame() before starting a new frame.");
+    }
     cmd_ = device_.create_command_list();
     cmd_->begin();
 }
 
 void RenderContext2::end_frame() {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::end_frame called without begin_frame.");
+    }
     if (in_pass_) {
         end_pass();
     }
@@ -98,6 +108,11 @@ void RenderContext2::begin_pass(
     const float* clear_color, float clear_depth,
     bool clear_depth_enabled
 ) {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::begin_pass called outside of a frame. "
+            "Call begin_frame() first.");
+    }
     if (in_pass_) {
         end_pass();
     }
@@ -483,14 +498,26 @@ void RenderContext2::set_block_binding(const char* block_name, uint32_t binding_
 // ============================================================================
 
 void RenderContext2::set_viewport(int x, int y, int w, int h) {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::set_viewport called outside of a frame.");
+    }
     cmd_->set_viewport((float)x, (float)y, (float)w, (float)h);
 }
 
 void RenderContext2::set_scissor(int x, int y, int w, int h) {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::set_scissor called outside of a frame.");
+    }
     cmd_->set_scissor((float)x, (float)y, (float)w, (float)h);
 }
 
 void RenderContext2::clear_scissor() {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::clear_scissor called outside of a frame.");
+    }
     // Reset scissor to full viewport — effectively disabling it.
     // Actual implementation depends on backend; for now set a large rect.
     cmd_->set_scissor(0, 0, 16384, 16384);
@@ -501,6 +528,10 @@ void RenderContext2::clear_scissor() {
 // ============================================================================
 
 void RenderContext2::flush_pipeline() {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::flush_pipeline called outside of a frame.");
+    }
     if (!pipeline_dirty_) return;
 
     PipelineCacheKey key;
@@ -533,6 +564,10 @@ void RenderContext2::flush_pipeline() {
 }
 
 void RenderContext2::flush_resource_set() {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::flush_resource_set called outside of a frame.");
+    }
     if (!bindings_dirty_) return;
 
     // Defer-destroy the previous set: the command buffer we're still
@@ -630,6 +665,10 @@ void RenderContext2::draw(
     BufferHandle vbo, BufferHandle ibo,
     uint32_t index_count, IndexType idx_type
 ) {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::draw called outside of a frame.");
+    }
     flush_pipeline();
     flush_resource_set();
     cmd_->bind_vertex_buffer(0, vbo);
@@ -638,6 +677,10 @@ void RenderContext2::draw(
 }
 
 void RenderContext2::draw_arrays(BufferHandle vbo, uint32_t vertex_count) {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::draw_arrays called outside of a frame.");
+    }
     flush_pipeline();
     flush_resource_set();
     cmd_->bind_vertex_buffer(0, vbo);
@@ -645,6 +688,10 @@ void RenderContext2::draw_arrays(BufferHandle vbo, uint32_t vertex_count) {
 }
 
 void RenderContext2::draw_immediate_lines(const float* data, uint32_t vertex_count) {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::draw_immediate_lines called outside of a frame.");
+    }
     if (vertex_count == 0) return;
 
     // 7 floats per vertex: x,y,z, r,g,b,a
@@ -679,6 +726,10 @@ void RenderContext2::draw_immediate_lines(const float* data, uint32_t vertex_cou
 }
 
 void RenderContext2::draw_immediate_triangles(const float* data, uint32_t vertex_count) {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::draw_immediate_triangles called outside of a frame.");
+    }
     if (vertex_count == 0) return;
 
     size_t byte_size = vertex_count * 7 * sizeof(float);
@@ -708,6 +759,10 @@ void RenderContext2::draw_immediate_triangles(const float* data, uint32_t vertex
 }
 
 void RenderContext2::blit(TextureHandle src, TextureHandle dst) {
+    if (!cmd_) {
+        throw std::runtime_error(
+            "RenderContext2::blit called outside of a frame.");
+    }
     cmd_->copy_texture(src, dst);
 }
 
