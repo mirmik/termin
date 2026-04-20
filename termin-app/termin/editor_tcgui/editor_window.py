@@ -473,6 +473,9 @@ class EditorWindowTcgui:
             self._interaction_system.selection.on_selection_changed = self._on_selection_changed
             self._interaction_system.selection.on_hover_changed = self._on_hover_changed
             self._interaction_system.on_request_update = self._request_viewport_update
+            # Transform gizmo drag-end → push an undo command, same as the
+            # Qt editor (editor_window.py::_on_transform_end).
+            self._interaction_system.on_transform_end = self._on_transform_end
 
         self._refresh_rendering_panel()
 
@@ -689,14 +692,58 @@ class EditorWindowTcgui:
                 self._interaction_system.selection.clear()
 
     def _on_selection_changed(self, entity) -> None:
-        log.info(f"[DBG on_selection_changed] entity={entity}")
+        # The C++ UnifiedGizmoPass pulls its draw target from
+        # EditorInteractionSystem::transform_gizmo, which is empty until
+        # set_gizmo_target is called. Without this line the gizmo stays
+        # invisible even after a successful selection (Qt editor does the
+        # same in editor_window.py::_on_selection_changed).
+        sys = self._interaction_system
+        if sys is not None:
+            sys.set_gizmo_target(entity)
+            self._update_gizmo_screen_scale()
         self._request_viewport_update()
-        if self._inspector_controller is not None and entity:
-            self._inspector_controller.show_entity_inspector(entity)
+        if self.scene_tree_controller is not None and entity and entity.valid():
+            self.scene_tree_controller.select_object(entity)
+        if self._inspector_controller is not None:
+            if entity and entity.valid():
+                self._inspector_controller.show_entity_inspector(entity)
 
     def _on_hover_changed(self, entity) -> None:
-        log.info(f"[DBG on_hover_changed] entity={entity}")
         self._request_viewport_update()
+
+    def _on_transform_end(self, old_pose, new_pose) -> None:
+        """C++ TransformGizmo drag-end callback — push an undo command."""
+        from termin.editor.editor_commands import TransformEditCommand
+        tg = self._interaction_system.transform_gizmo if self._interaction_system else None
+        if tg is None or not tg.target.valid():
+            return
+        cmd = TransformEditCommand(
+            transform=tg.target.transform,
+            old_pose=old_pose,
+            new_pose=new_pose,
+        )
+        self.push_undo_command(cmd, False)
+
+    def _update_gizmo_screen_scale(self) -> None:
+        """Update gizmo size based on camera distance to target."""
+        sys = self._interaction_system
+        if sys is None:
+            return
+        tg = sys.transform_gizmo
+        if tg is None or not tg.target.valid():
+            return
+        display = self._editor_display
+        if display is None or not display.viewports:
+            return
+        viewport = display.viewports[0]
+        camera = viewport.camera if viewport is not None else None
+        if camera is None or camera.entity is None:
+            return
+        import numpy as np
+        camera_pos = camera.entity.transform.global_pose().lin
+        gizmo_pos = tg.target.transform.global_pose().lin
+        distance = np.linalg.norm(np.array(camera_pos) - np.array(gizmo_pos))
+        tg.set_screen_scale(max(0.1, distance * 0.1))
 
     def _on_inspector_transform_changed(self) -> None:
         self._request_viewport_update()
