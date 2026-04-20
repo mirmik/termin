@@ -10,6 +10,11 @@
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
+#include "tgfx2/tc_shader_bridge.hpp"
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 #include <core/tc_scene_render_state.h>
 #include <core/tc_scene_skybox.h>
@@ -157,7 +162,7 @@ std::vector<ResourceSpec> SkyBoxPass::get_resource_specs() const {
 // ============================================================================
 
 void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
-    if (vs_) return;
+    if (!tc_shader_handle_is_invalid(skybox_shader_handle_) && cube_vbo_) return;
     if (!ctx.ctx2) return;
 
     device2_ = &ctx.ctx2->device();
@@ -185,15 +190,12 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
         return;
     }
 
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.source = vs_it->second.source;
-    vs_ = device2_->create_shader(vs_desc);
-
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.source = fs_it->second.source;
-    fs_ = device2_->create_shader(fs_desc);
+    // Register with tc_shader registry — hash-based dedup, so rebuilding
+    // the skybox pass on Play/Stop reuses the already-compiled
+    // VkShaderModule cached on the tc_gpu_slot.
+    skybox_shader_handle_ = tc_shader_from_sources(
+        vs_it->second.source.c_str(), fs_it->second.source.c_str(),
+        nullptr, "SkyboxEngineVSFS", nullptr, nullptr);
 
     tgfx::BufferDesc vbo_desc;
     vbo_desc.size = sizeof(CUBE_VERTICES);
@@ -300,7 +302,16 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::None);
 
-    ctx.ctx2->bind_shader(vs_, fs_);
+    tgfx::ShaderHandle sky_vs, sky_fs;
+    {
+        tc_shader* raw = tc_shader_get(skybox_shader_handle_);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, device2_, &sky_vs, &sky_fs)) {
+            tc::Log::error("SkyBoxPass: tc_shader_ensure_tgfx2 failed for engine skybox shader");
+            ctx.ctx2->end_pass();
+            return;
+        }
+    }
+    ctx.ctx2->bind_shader(sky_vs, sky_fs);
 
     tgfx::VertexBufferLayout cube_layout;
     cube_layout.stride = 3 * sizeof(float);
@@ -324,8 +335,8 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
 
 void SkyBoxPass::destroy() {
     if (device2_) {
-        if (vs_)         { device2_->destroy(vs_);         vs_ = {}; }
-        if (fs_)         { device2_->destroy(fs_);         fs_ = {}; }
+        // Shader lives on the tc_shader registry (see `skybox_shader_handle_`)
+        // — shared across pass re-creations, not owned here.
         if (cube_vbo_)   { device2_->destroy(cube_vbo_);   cube_vbo_ = {}; }
         if (cube_ibo_)   { device2_->destroy(cube_ibo_);   cube_ibo_ = {}; }
         if (params_ubo_) { device2_->destroy(params_ubo_); params_ubo_ = {}; }

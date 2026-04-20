@@ -4,6 +4,9 @@
 #include "termin/render/frame_pass.hpp"
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace tgfx { class IRenderDevice; }
 
@@ -22,7 +25,11 @@ public:
 
 private:
     tgfx::IRenderDevice* device2_ = nullptr;
-    tgfx::ShaderHandle fs2_;
+    // FS lives on the tc_shader registry (FS-only: vertex_source is NULL,
+    // the VS is ctx2's built-in FSQ); hash-based dedup so Play/Stop
+    // doesn't re-run shaderc — see ShadowPass for the matching pattern
+    // on full VS+FS passes.
+    tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
     tgfx::BufferHandle params_ubo_;
     float uploaded_strength_ = -1.0f;
 

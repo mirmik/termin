@@ -139,34 +139,25 @@ void main()
 )";
 
 void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
-    if (device2_ == &device && depth_vs2_ && depth_fs2_ && per_frame_ubo_) {
-        return;
-    }
-    if (device2_ && device2_ != &device) {
-        release_tgfx2_resources();
-    }
     device2_ = &device;
 
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.source = DEPTH_PASS_VERT_UBO;
-    depth_vs2_ = device.create_shader(vs_desc);
+    // Engine-shader cache via tc_shader registry (see ShadowPass).
+    if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
+        depth_shader_handle_ = tc_shader_from_sources(
+            DEPTH_PASS_VERT_UBO, DEPTH_PASS_FRAG_UBO,
+            nullptr, "DepthEngineVSFS", nullptr, nullptr);
+    }
 
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.source = DEPTH_PASS_FRAG_UBO;
-    depth_fs2_ = device.create_shader(fs_desc);
-
-    tgfx::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(DepthPerFrameStd140);
-    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-    per_frame_ubo_ = device.create_buffer(ubo_desc);
+    if (!per_frame_ubo_) {
+        tgfx::BufferDesc ubo_desc;
+        ubo_desc.size = sizeof(DepthPerFrameStd140);
+        ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
+        per_frame_ubo_ = device.create_buffer(ubo_desc);
+    }
 }
 
 void DepthPass::release_tgfx2_resources() {
     if (!device2_) return;
-    if (depth_vs2_) { device2_->destroy(depth_vs2_); depth_vs2_ = {}; }
-    if (depth_fs2_) { device2_->destroy(depth_fs2_); depth_fs2_ = {}; }
     if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
@@ -223,7 +214,16 @@ void DepthPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_write(true);
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
-    ctx.ctx2->bind_shader(depth_vs2_, depth_fs2_);
+
+    tgfx::ShaderHandle depth_vs2, depth_fs2;
+    {
+        tc_shader* raw = tc_shader_get(depth_shader_handle_);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, &device, &depth_vs2, &depth_fs2)) {
+            tc::Log::error("DepthPass: tc_shader_ensure_tgfx2 failed for engine depth shader");
+            return;
+        }
+    }
+    ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
 
     // PerFrame UBO — uploaded ONCE per execute. view + projection +
     // near/far plane. Bound at slot 0.
@@ -304,7 +304,7 @@ void DepthPass::execute_with_data_tgfx2(
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
 
-            ctx.ctx2->bind_shader(depth_vs2_, depth_fs2_);
+            ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
         }
 
         release_mesh_binding(device, bind);

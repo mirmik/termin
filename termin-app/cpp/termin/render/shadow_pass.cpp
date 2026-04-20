@@ -109,25 +109,26 @@ void ShadowPass::destroy() {
 }
 
 void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
-    if (device2_ == &device && shadow_vs2_ && shadow_fs2_) {
-        return;
-    }
-    if (device2_ && device2_ != &device) {
-        // Device changed under us — tear down old handles. This should
-        // never happen in production, but makes pass hot-reload safe.
-        release_tgfx2_resources();
-    }
     device2_ = &device;
 
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.source = SHADOW_VS_UBO;
-    shadow_vs2_ = device.create_shader(vs_desc);
-
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.source = SHADOW_FS_UBO;
-    shadow_fs2_ = device.create_shader(fs_desc);
+    // Register the engine's shadow VS/FS sources as a TcShader so the
+    // global hash-based registry dedups them across pass re-creations.
+    // When the editor toggles Play/Stop and the frame-graph rebuilds its
+    // ShadowPass, `tc_shader_from_sources` returns the existing handle
+    // (same source -> same hash -> same slot), and `tc_shader_ensure_tgfx2`
+    // below finds cached VkShaderModules on the slot — no shaderc recompile.
+    // Used to live as direct `device.create_shader()` calls owned by this
+    // pass; every ShadowPass destruction destroyed the shader modules,
+    // every construction re-ran shaderc (~35 ms × 19 engine shaders on
+    // Play/Stop = ~700 ms lag).
+    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+        shadow_shader_handle_ = tc_shader_from_sources(
+            SHADOW_VS_UBO, SHADOW_FS_UBO,
+            /*geometry=*/nullptr,
+            /*name=*/"ShadowEngineVSFS",
+            /*source_path=*/nullptr,
+            /*uuid=*/nullptr);
+    }
 }
 
 tgfx::BufferHandle ShadowPass::get_or_create_per_frame_ubo(
@@ -147,8 +148,10 @@ tgfx::BufferHandle ShadowPass::get_or_create_per_frame_ubo(
 
 void ShadowPass::release_tgfx2_resources() {
     if (!device2_) return;
-    if (shadow_vs2_) { device2_->destroy(shadow_vs2_); shadow_vs2_ = {}; }
-    if (shadow_fs2_) { device2_->destroy(shadow_fs2_); shadow_fs2_ = {}; }
+    // shadow_shader_handle_ is intentionally NOT destroyed here — it lives
+    // in the global tc_shader registry and is shared across pass
+    // re-creations. Its tgfx2 shader handles get torn down automatically
+    // when the device is released (see tc_gpu_slot teardown).
     for (auto& [_, ubo] : per_frame_ubo_pool_) {
         if (ubo) device2_->destroy(ubo);
     }
@@ -446,7 +449,20 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ctx.ctx2->set_depth_write(true);
             ctx.ctx2->set_blend(false);
             ctx.ctx2->set_cull(tgfx::CullMode::Back);
-            ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
+
+            // Fetch cached VkShaderModule handles from the tc_shader slot.
+            // First call on a fresh device compiles via shaderc; every
+            // subsequent ShadowPass lifetime hits the slot cache.
+            tgfx::ShaderHandle shadow_vs2, shadow_fs2;
+            {
+                tc_shader* raw = tc_shader_get(shadow_shader_handle_);
+                if (!raw || !tc_shader_ensure_tgfx2(raw, &device, &shadow_vs2, &shadow_fs2)) {
+                    tc::Log::error("ShadowPass: tc_shader_ensure_tgfx2 failed for engine shadow shader");
+                    ctx.ctx2->end_pass();
+                    continue;
+                }
+            }
+            ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
 
             // PerFrame UBO (view + projection). Each cascade gets its
             // own UBO slot (per_frame_ubo_pool_, keyed by fbo_index) so
@@ -545,7 +561,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // Next mesh-backed draw must re-bind the base shadow
                     // shader; skinning variant left its own program bound.
                     last_shader = dc.final_shader;
-                    ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
+                    ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
                 }
 
                 release_mesh_binding(device, bind);

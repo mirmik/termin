@@ -12,6 +12,11 @@
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
+#include "tgfx2/tc_shader_bridge.hpp"
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 #include <span>
 #include <tcbase/tc_log.hpp>
@@ -211,19 +216,26 @@ std::set<const char*> BloomPass::compute_writes() const {
 // ----------------------------------------------------------------------------
 
 void BloomPass::ensure_tgfx2_shaders() {
-    if (bright_fs2_) return;
-
-    auto compile = [&](const char* src) -> tgfx::ShaderHandle {
-        tgfx::ShaderDesc desc;
-        desc.stage = tgfx::ShaderStage::Fragment;
-        desc.source = src;
-        return device2_->create_shader(desc);
-    };
-
-    bright_fs2_     = compile(BRIGHT_FRAG_UBO);
-    downsample_fs2_ = compile(DOWNSAMPLE_FRAG_UBO);
-    upsample_fs2_   = compile(UPSAMPLE_FRAG_UBO);
-    composite_fs2_  = compile(COMPOSITE_FRAG_UBO);
+    // FS-only TcShaders (vertex_source is NULL; VS comes from ctx2's
+    // built-in FSQ). Hash-based dedup keeps compiled VkShaderModules
+    // across pass re-creations — see ShadowPass for the matching
+    // pattern on VS+FS passes, and GrayscalePass for the FS-only variant.
+    if (tc_shader_handle_is_invalid(bright_shader_handle_)) {
+        bright_shader_handle_ = tc_shader_from_sources(
+            nullptr, BRIGHT_FRAG_UBO, nullptr, "BloomBrightFS", nullptr, nullptr);
+    }
+    if (tc_shader_handle_is_invalid(downsample_shader_handle_)) {
+        downsample_shader_handle_ = tc_shader_from_sources(
+            nullptr, DOWNSAMPLE_FRAG_UBO, nullptr, "BloomDownsampleFS", nullptr, nullptr);
+    }
+    if (tc_shader_handle_is_invalid(upsample_shader_handle_)) {
+        upsample_shader_handle_ = tc_shader_from_sources(
+            nullptr, UPSAMPLE_FRAG_UBO, nullptr, "BloomUpsampleFS", nullptr, nullptr);
+    }
+    if (tc_shader_handle_is_invalid(composite_shader_handle_)) {
+        composite_shader_handle_ = tc_shader_from_sources(
+            nullptr, COMPOSITE_FRAG_UBO, nullptr, "BloomCompositeFS", nullptr, nullptr);
+    }
 
     auto make_ubo = [&](uint64_t size) -> tgfx::BufferHandle {
         tgfx::BufferDesc desc;
@@ -232,10 +244,22 @@ void BloomPass::ensure_tgfx2_shaders() {
         return device2_->create_buffer(desc);
     };
 
-    bright_ubo_     = make_ubo(sizeof(BloomBrightParamsStd140));
-    downsample_ubo_ = make_ubo(sizeof(BloomDownsampleParamsStd140));
-    upsample_ubo_   = make_ubo(sizeof(BloomUpsampleParamsStd140));
-    composite_ubo_  = make_ubo(sizeof(BloomCompositeParamsStd140));
+    if (!bright_ubo_)     bright_ubo_     = make_ubo(sizeof(BloomBrightParamsStd140));
+    if (!downsample_ubo_) downsample_ubo_ = make_ubo(sizeof(BloomDownsampleParamsStd140));
+    if (!upsample_ubo_)   upsample_ubo_   = make_ubo(sizeof(BloomUpsampleParamsStd140));
+    if (!composite_ubo_)  composite_ubo_  = make_ubo(sizeof(BloomCompositeParamsStd140));
+}
+
+static tgfx::ShaderHandle bloom_resolve_fs(
+    tc_shader_handle h, tgfx::IRenderDevice* device, const char* name)
+{
+    tc_shader* raw = tc_shader_get(h);
+    tgfx::ShaderHandle fs;
+    if (!raw || !tc_shader_ensure_tgfx2(raw, device, nullptr, &fs)) {
+        tc::Log::error("BloomPass: tc_shader_ensure_tgfx2 failed for %s", name);
+        return {};
+    }
+    return fs;
 }
 
 void BloomPass::destroy_tgfx2_mip_textures() {
@@ -339,6 +363,12 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
     auto& c2 = *ctx.ctx2;
 
+    tgfx::ShaderHandle bright_fs     = bloom_resolve_fs(bright_shader_handle_,     device2_, "bright");
+    tgfx::ShaderHandle downsample_fs = bloom_resolve_fs(downsample_shader_handle_, device2_, "downsample");
+    tgfx::ShaderHandle upsample_fs   = bloom_resolve_fs(upsample_shader_handle_,   device2_, "upsample");
+    tgfx::ShaderHandle composite_fs  = bloom_resolve_fs(composite_shader_handle_,  device2_, "composite");
+    if (!bright_fs || !downsample_fs || !upsample_fs || !composite_fs) return;
+
     // === 1. Bright Pass -> mip[0] ===
     {
         BloomBrightParamsStd140 p{};
@@ -350,7 +380,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(mip_textures_[0]);
         c2.set_viewport(0, 0, w, h);
-        setup_fsq_state(c2, bright_fs2_);
+        setup_fsq_state(c2, bright_fs);
         c2.bind_uniform_buffer(0, bright_ubo_);
         c2.bind_sampled_texture(4, input_tex2);
         c2.draw_fullscreen_quad();
@@ -373,7 +403,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
-        setup_fsq_state(c2, downsample_fs2_);
+        setup_fsq_state(c2, downsample_fs);
         c2.bind_uniform_buffer(0, downsample_ubo_);
         c2.bind_sampled_texture(4, mip_textures_[i - 1]);
         c2.draw_fullscreen_quad();
@@ -403,7 +433,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
         // sampling feedback loop that Vulkan forbids inside a pass.
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
-        setup_fsq_state(c2, upsample_fs2_);
+        setup_fsq_state(c2, upsample_fs);
         c2.set_blend(true);
         c2.set_blend_func(tgfx::BlendFactor::One, tgfx::BlendFactor::One);
         c2.bind_uniform_buffer(0, upsample_ubo_);
@@ -422,7 +452,7 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(output_tex2);
         c2.set_viewport(0, 0, w, h);
-        setup_fsq_state(c2, composite_fs2_);
+        setup_fsq_state(c2, composite_fs);
         c2.bind_uniform_buffer(0, composite_ubo_);
         c2.bind_sampled_texture(4, input_tex2);
         c2.bind_sampled_texture(5, mip_textures_[0]);
@@ -434,18 +464,12 @@ void BloomPass::execute(ExecuteContext& ctx) {
 void BloomPass::destroy() {
     if (device2_) {
         destroy_tgfx2_mip_textures();
-        if (bright_fs2_)     device2_->destroy(bright_fs2_);
-        if (downsample_fs2_) device2_->destroy(downsample_fs2_);
-        if (upsample_fs2_)   device2_->destroy(upsample_fs2_);
-        if (composite_fs2_)  device2_->destroy(composite_fs2_);
+        // FS shaders live on the tc_shader registry (`*_shader_handle_`),
+        // shared across pass re-creations — not owned here.
         if (bright_ubo_)     device2_->destroy(bright_ubo_);
         if (downsample_ubo_) device2_->destroy(downsample_ubo_);
         if (upsample_ubo_)   device2_->destroy(upsample_ubo_);
         if (composite_ubo_)  device2_->destroy(composite_ubo_);
-        bright_fs2_ = {};
-        downsample_fs2_ = {};
-        upsample_fs2_ = {};
-        composite_fs2_ = {};
         bright_ubo_ = {};
         downsample_ubo_ = {};
         upsample_ubo_ = {};

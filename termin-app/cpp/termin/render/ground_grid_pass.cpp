@@ -6,6 +6,11 @@
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 #include <cstring>
 #include <span>
@@ -150,8 +155,8 @@ GroundGridPass::GroundGridPass(
 
 GroundGridPass::~GroundGridPass() {
     if (_device) {
-        if (_vs)         _device->destroy(_vs);
-        if (_fs)         _device->destroy(_fs);
+        // Shader handles live on the tc_shader registry (see `_shader_handle`),
+        // shared across pass re-creations.
         if (_params_ubo) _device->destroy(_params_ubo);
     }
 }
@@ -169,21 +174,14 @@ std::vector<std::pair<std::string, std::string>> GroundGridPass::get_inplace_ali
 }
 
 void GroundGridPass::_ensure_resources(tgfx::IRenderDevice* device) {
-    if (_vs && _fs && _params_ubo && _device == device) return;
     _device = device;
 
-    if (!_vs) {
-        tgfx::ShaderDesc vs_desc;
-        vs_desc.stage = tgfx::ShaderStage::Vertex;
-        vs_desc.source = GRID_VERT;
-        _vs = device->create_shader(vs_desc);
+    if (tc_shader_handle_is_invalid(_shader_handle)) {
+        _shader_handle = tc_shader_from_sources(
+            GRID_VERT, GRID_FRAG, nullptr,
+            "GroundGridEngineVSFS", nullptr, nullptr);
     }
-    if (!_fs) {
-        tgfx::ShaderDesc fs_desc;
-        fs_desc.stage = tgfx::ShaderStage::Fragment;
-        fs_desc.source = GRID_FRAG;
-        _fs = device->create_shader(fs_desc);
-    }
+
     if (!_params_ubo) {
         tgfx::BufferDesc ubo_desc;
         ubo_desc.size = sizeof(GridParamsStd140);
@@ -219,7 +217,16 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     float far_clip  = static_cast<float>(ctx.camera->far_clip);
 
     _ensure_resources(&ctx2->device());
-    if (!_vs || !_fs || !_params_ubo) return;
+    if (tc_shader_handle_is_invalid(_shader_handle) || !_params_ubo) return;
+
+    tgfx::ShaderHandle grid_vs, grid_fs;
+    {
+        tc_shader* raw = tc_shader_get(_shader_handle);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, _device, &grid_vs, &grid_fs)) {
+            tc::Log::error("GroundGridPass: tc_shader_ensure_tgfx2 failed for engine grid shader");
+            return;
+        }
+    }
 
     // Upload the param block BEFORE begin_pass — Vulkan forbids
     // vkCmdCopyBuffer inside a render pass, and tgfx2's upload_buffer
@@ -257,7 +264,7 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     // built-in fullscreen quad. The grid VS declares `a_pos` at
     // location 0 — compatible with ctx2's FSQ VBO layout (aPos/aUV);
     // aUV at location 1 is simply ignored by the VS.
-    ctx2->bind_shader(_vs, _fs);
+    ctx2->bind_shader(grid_vs, grid_fs);
     ctx2->bind_uniform_buffer(0, _params_ubo);
 
     ctx2->draw_fullscreen_quad();

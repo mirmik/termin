@@ -118,34 +118,24 @@ void main()
 )";
 
 void NormalPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
-    if (device2_ == &device && normal_vs2_ && normal_fs2_ && per_frame_ubo_) {
-        return;
-    }
-    if (device2_ && device2_ != &device) {
-        release_tgfx2_resources();
-    }
     device2_ = &device;
 
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.source = NORMAL_PASS_VERT_UBO;
-    normal_vs2_ = device.create_shader(vs_desc);
+    if (tc_shader_handle_is_invalid(normal_shader_handle_)) {
+        normal_shader_handle_ = tc_shader_from_sources(
+            NORMAL_PASS_VERT_UBO, NORMAL_PASS_FRAG_UBO,
+            nullptr, "NormalEngineVSFS", nullptr, nullptr);
+    }
 
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.source = NORMAL_PASS_FRAG_UBO;
-    normal_fs2_ = device.create_shader(fs_desc);
-
-    tgfx::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(NormalPerFrameStd140);
-    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-    per_frame_ubo_ = device.create_buffer(ubo_desc);
+    if (!per_frame_ubo_) {
+        tgfx::BufferDesc ubo_desc;
+        ubo_desc.size = sizeof(NormalPerFrameStd140);
+        ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
+        per_frame_ubo_ = device.create_buffer(ubo_desc);
+    }
 }
 
 void NormalPass::release_tgfx2_resources() {
     if (!device2_) return;
-    if (normal_vs2_) { device2_->destroy(normal_vs2_); normal_vs2_ = {}; }
-    if (normal_fs2_) { device2_->destroy(normal_fs2_); normal_fs2_ = {}; }
     if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
@@ -202,7 +192,16 @@ void NormalPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_write(true);
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
-    ctx.ctx2->bind_shader(normal_vs2_, normal_fs2_);
+
+    tgfx::ShaderHandle normal_vs2, normal_fs2;
+    {
+        tc_shader* raw = tc_shader_get(normal_shader_handle_);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &normal_vs2, &normal_fs2)) {
+            tc::Log::error("NormalPass: tc_shader_ensure_tgfx2 failed for engine normal shader");
+            return;
+        }
+    }
+    ctx.ctx2->bind_shader(normal_vs2, normal_fs2);
 
     NormalPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
@@ -275,7 +274,7 @@ void NormalPass::execute_with_data_tgfx2(
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
 
-            ctx.ctx2->bind_shader(normal_vs2_, normal_fs2_);
+            ctx.ctx2->bind_shader(normal_vs2, normal_fs2);
         }
 
         gl_dev->destroy(bind.vertex_buffer);

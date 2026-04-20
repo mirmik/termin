@@ -3,6 +3,9 @@
 #include <termin/render/geometry_pass_base.hpp>
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace termin {
 
@@ -14,11 +17,12 @@ private:
     float _near_plane = 0.1f;
     float _far_plane = 1000.0f;
 
-    // Lazy tgfx2 resources used by execute_with_data_tgfx2. Lifetime
-    // tied to device2_; released in destroy()/dtor.
+    // Lazy tgfx2 resources used by execute_with_data_tgfx2. Shader lives
+    // on the tc_shader registry (hash-based dedup across pass re-creations)
+    // so Play/Stop doesn't re-run shaderc — see ShadowPass for the same
+    // pattern.
     tgfx::IRenderDevice* device2_ = nullptr;
-    tgfx::ShaderHandle depth_vs2_;
-    tgfx::ShaderHandle depth_fs2_;
+    tc_shader_handle depth_shader_handle_ = tc_shader_handle_invalid();
     tgfx::BufferHandle per_frame_ubo_;
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);

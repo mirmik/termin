@@ -132,34 +132,30 @@ void IdPass::id_to_rgb(int id, float& r, float& g, float& b) {
 }
 
 void IdPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
-    if (device2_ == &device && id_vs2_ && id_fs2_ && per_frame_ubo_) {
-        return;
-    }
-    if (device2_ && device2_ != &device) {
-        release_tgfx2_resources();
-    }
     device2_ = &device;
 
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.source = ID_PASS_VERT_UBO;
-    id_vs2_ = device.create_shader(vs_desc);
+    // Engine-shader cache via TcShader registry (see ShadowPass for the
+    // rationale): hash-based dedup keeps the same handle across pass
+    // re-creations, tc_shader_ensure_tgfx2 parks compiled VkShaderModules
+    // on the tc_gpu_slot for zero-compile subsequent binds.
+    if (tc_shader_handle_is_invalid(id_shader_handle_)) {
+        id_shader_handle_ = tc_shader_from_sources(
+            ID_PASS_VERT_UBO, ID_PASS_FRAG_UBO,
+            nullptr, "IdEngineVSFS", nullptr, nullptr);
+    }
 
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.source = ID_PASS_FRAG_UBO;
-    id_fs2_ = device.create_shader(fs_desc);
-
-    tgfx::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(IdPerFrameStd140);
-    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-    per_frame_ubo_ = device.create_buffer(ubo_desc);
+    if (!per_frame_ubo_) {
+        tgfx::BufferDesc ubo_desc;
+        ubo_desc.size = sizeof(IdPerFrameStd140);
+        ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
+        per_frame_ubo_ = device.create_buffer(ubo_desc);
+    }
 }
 
 void IdPass::release_tgfx2_resources() {
     if (!device2_) return;
-    if (id_vs2_) { device2_->destroy(id_vs2_); id_vs2_ = {}; }
-    if (id_fs2_) { device2_->destroy(id_fs2_); id_fs2_ = {}; }
+    // Shader handle lives on the global tc_shader registry and is shared
+    // across pass re-creations.
     if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
@@ -219,7 +215,16 @@ void IdPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_write(true);
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
-    ctx.ctx2->bind_shader(id_vs2_, id_fs2_);
+
+    tgfx::ShaderHandle id_vs2, id_fs2;
+    {
+        tc_shader* raw = tc_shader_get(id_shader_handle_);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, &device, &id_vs2, &id_fs2)) {
+            tc::Log::error("IdPass: tc_shader_ensure_tgfx2 failed for engine id shader");
+            return;
+        }
+    }
+    ctx.ctx2->bind_shader(id_vs2, id_fs2);
 
     // PerFrame UBO: view + projection, uploaded once.
     IdPerFrameStd140 per_frame{};
@@ -314,7 +319,7 @@ void IdPass::execute_with_data_tgfx2(
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
 
-            ctx.ctx2->bind_shader(id_vs2_, id_fs2_);
+            ctx.ctx2->bind_shader(id_vs2, id_fs2);
         }
 
         release_mesh_binding(device, bind);
