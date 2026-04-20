@@ -1083,6 +1083,7 @@ namespace termin {
 %{
 #include "tcplot/styles.hpp"
 #include "tcplot/orbit_camera.hpp"
+#include "tcplot/gpu_host.hpp"
 #include "tcplot/plot_view2d.hpp"
 #include "tcplot/plot_view2d_multi.hpp"
 #include "tcplot/plot_view3d.hpp"
@@ -1227,6 +1228,21 @@ public:
 };
 
 // ----------------------------------------------------------------------------
+// GpuHost — process-wide tgfx2 runtime bundle.
+//
+// Owns the one IRenderDevice/PipelineCache/RenderContext2/FontAtlas
+// that every PlotView* borrows. Created once by the application top
+// level (Alliance/PlotDemoApp) and kept alive for the lifetime of
+// the process. See tcplot/include/tcplot/gpu_host.hpp for the
+// rationale (one device per process, shared GL context).
+// ----------------------------------------------------------------------------
+class GpuHost {
+public:
+    GpuHost(const std::string& ttf_path);
+    ~GpuHost();
+};
+
+// ----------------------------------------------------------------------------
 // PlotView2DMulti — stacked panels with shared X + real-time append.
 // ----------------------------------------------------------------------------
 
@@ -1234,8 +1250,10 @@ public:
 
 class PlotView2DMulti {
 public:
-    PlotView2DMulti(const std::string& ttf_path, int panel_count);
+    PlotView2DMulti(GpuHost& host, int panel_count);
     ~PlotView2DMulti();
+
+    void set_panel_count(int n);
 
     int panel_count() const;
 
