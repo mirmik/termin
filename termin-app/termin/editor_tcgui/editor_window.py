@@ -122,6 +122,13 @@ class EditorWindowTcgui:
         self._editor_attachment = None
         self._rendering_controller = None
         self._editor_viewport_input_managers: list = []
+        # Owns DisplayInputRouter instances that route surface events to the
+        # per-viewport EditorViewportInputManagers. Populated by
+        # _attach_editor_input_router() after the editor display's input
+        # managers are created. Without this the surface's input_manager_ptr
+        # stays on the default (scene-pipeline) router and Viewport3D never
+        # hits the editor picking / hover / gizmo paths.
+        self._display_routers: dict[int, object] = {}
         self._current_project_path: str | None = None
         self._project_name: str | None = None
         self._is_fullscreen: bool = False
@@ -437,6 +444,7 @@ class EditorWindowTcgui:
             )
             self._editor_attachment.attach(self.scene, restore_state=False)
             self._setup_editor_viewport_input_managers(self._editor_display)
+            self._attach_editor_input_router(self._editor_display)
 
             # EditorStateIO for save/load
             self._editor_state_io = EditorStateIO(
@@ -486,6 +494,31 @@ class EditorWindowTcgui:
             vp_idx, vp_gen = vp._viewport_handle()
             editor_im = EditorViewportInputManager(vp_idx, vp_gen, display_id)
             self._editor_viewport_input_managers.append(editor_im)
+
+    def _attach_editor_input_router(self, display) -> None:
+        """Wire a DisplayInputRouter onto the editor display's surface.
+
+        This is the critical link for picking / hover / gizmo: the router
+        dispatches mouse events to the EditorViewportInputManagers that
+        `_setup_editor_viewport_input_managers()` already created, which
+        in turn drive the C++ EditorInteractionSystem. Without it the
+        surface stays on the default scene-pipeline input_manager and
+        Viewport3D never sees editor-aware input.
+        """
+        from termin._native.render import DisplayInputRouter
+
+        display_id = display.tc_display_ptr
+        router = DisplayInputRouter(display_id)
+        self._display_routers[display_id] = router
+
+        surface = display.surface
+        if surface is not None and hasattr(surface, "set_input_manager"):
+            surface.set_input_manager(router.tc_input_manager_ptr)
+
+        # Viewport3D cached the old input_manager_ptr during set_surface();
+        # refresh it now so the widget dispatches into the new router.
+        if self._viewport_widget is not None:
+            self._viewport_widget._connect_input(display)
 
     def _setup_viewport(self) -> None:
         """Create FBO surface, editor display, and connect to Viewport3D."""
@@ -837,6 +870,7 @@ class EditorWindowTcgui:
                 self._editor_attachment.attach(self.scene, restore_state=False)
                 if self._editor_display is not None:
                     self._setup_editor_viewport_input_managers(self._editor_display)
+                    self._attach_editor_input_router(self._editor_display)
 
             # Apply editor state (camera, selection, etc.)
             if self._editor_state_io is not None:
@@ -1247,6 +1281,7 @@ class EditorWindowTcgui:
         if self._editor_attachment is not None:
             self._editor_attachment.attach(game_scene, transfer_camera_state=True)
             self._setup_editor_viewport_input_managers(self._editor_attachment._display)
+            self._attach_editor_input_router(self._editor_attachment._display)
 
         # Set modes
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
@@ -1279,6 +1314,7 @@ class EditorWindowTcgui:
         if self._editor_attachment is not None:
             self._editor_attachment.attach(editor_scene, restore_state=True)
             self._setup_editor_viewport_input_managers(self._editor_attachment._display)
+            self._attach_editor_input_router(self._editor_attachment._display)
 
         self._on_game_mode_changed(False, editor_scene)
 
