@@ -129,9 +129,6 @@ public:
         return entity_names;
     }
 
-    // Shadow shader - set from Python before execute
-    TcShader* shadow_shader = nullptr;
-
 private:
     // Lazy tgfx2 UBO pool owned by the pass.
     //

@@ -198,9 +198,9 @@ void IdPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(device);
 
-    // Resolve base shader for collect_draw_calls' override keying.
-    TcShader& base_shader = get_shader();
-    collect_draw_calls(scene, layer_mask, base_shader.handle);
+    // Use the UBO-based engine shader as base_shader for skinning override
+    // (see DepthPass / ShadowPass for rationale).
+    collect_draw_calls(scene, layer_mask, id_shader_handle_);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -265,21 +265,24 @@ void IdPass::execute_with_data_tgfx2(
             id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
         }
 
-        bool override_is_base = tc_shader_handle_eq(dc.final_shader, base_shader.handle);
+        bool override_is_base =
+            tc_shader_handle_eq(dc.final_shader, id_shader_handle_);
 
         Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
         if (bind.index_count == 0) continue;
 
-        if (override_is_base) {
-            // Fast path: push constants for model + pick color (80 B).
-            IdPushStd140 push{};
-            std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-            push.u_pickColor[0] = pick_r;
-            push.u_pickColor[1] = pick_g;
-            push.u_pickColor[2] = pick_b;
-            push.u_pickColor[3] = 1.0f;
-            ctx.ctx2->set_push_constants(&push, sizeof(push));
+        // Push constants (u_model + u_pickColor) are shared between the
+        // base and skinned paths — the skinned variant is just
+        // ID_PASS_VERT_UBO with injected BoneBlock, same push layout.
+        IdPushStd140 push{};
+        std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+        push.u_pickColor[0] = pick_r;
+        push.u_pickColor[1] = pick_g;
+        push.u_pickColor[2] = pick_b;
+        push.u_pickColor[3] = 1.0f;
+        ctx.ctx2->set_push_constants(&push, sizeof(push));
 
+        if (override_is_base) {
             // The base id VS only reads a_position (loc 0). shaderc strips
             // declared-but-unused a_normal / a_texcoord, so the SPIR-V
             // inputs are a_position only — trim the pipeline's vertex
@@ -291,10 +294,8 @@ void IdPass::execute_with_data_tgfx2(
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
         } else {
-            // Shader override (skinning): compile via bridge, upload
-            // u_model/u_view/u_projection + u_pickColor through ctx2's
-            // transitional plain-uniform helpers, draw, then re-bind
-            // the base id shader for the next iteration.
+            // Skinning variant: compile via bridge, bind, rely on
+            // SkinnedMeshRenderer to upload BoneBlock UBO.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
                 release_mesh_binding(device, bind);
@@ -306,13 +307,10 @@ void IdPass::execute_with_data_tgfx2(
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
-            ctx.ctx2->set_vertex_layout(bind.layout);
+            // a_position (0) + a_normal (1) used by skinning function + joints/weights.
+            ctx.ctx2->set_vertex_layout(
+                filter_vertex_layout_to_locations(bind.layout, {0, 1, 6, 7}));
             ctx.ctx2->set_topology(bind.topology);
-
-            ctx.ctx2->set_uniform_mat4("u_view",       view.data,       false);
-            ctx.ctx2->set_uniform_mat4("u_projection", projection.data, false);
-            ctx.ctx2->set_uniform_mat4("u_model",      model.data,      false);
-            ctx.ctx2->set_uniform_vec3("u_pickColor",  pick_r, pick_g, pick_b);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 

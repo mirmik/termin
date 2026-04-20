@@ -176,8 +176,9 @@ void NormalPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(ctx.ctx2->device());
 
-    TcShader& base_shader = get_shader();
-    collect_draw_calls(scene, layer_mask, base_shader.handle);
+    // Use the UBO-based engine shader as base_shader for skinning override
+    // (see DepthPass / ShadowPass for rationale).
+    collect_draw_calls(scene, layer_mask, normal_shader_handle_);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -232,23 +233,24 @@ void NormalPass::execute_with_data_tgfx2(
             entity_names.push_back(name);
         }
 
-        bool override_is_base = tc_shader_handle_eq(dc.final_shader, base_shader.handle);
+        bool override_is_base =
+            tc_shader_handle_eq(dc.final_shader, normal_shader_handle_);
 
         Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
         if (bind.index_count == 0) continue;
 
-        if (override_is_base) {
-            NormalPushStd140 push{};
-            std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-            ctx.ctx2->set_push_constants(&push, sizeof(push));
+        NormalPushStd140 push{};
+        std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+        ctx.ctx2->set_push_constants(&push, sizeof(push));
 
+        if (override_is_base) {
             ctx.ctx2->set_vertex_layout(bind.layout);
             ctx.ctx2->set_topology(bind.topology);
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
         } else {
-            // Shader override (skinning): compile via bridge, upload
-            // u_model/u_view/u_projection via ctx2 transitional helpers.
+            // Skinning variant: compile via bridge, bind, rely on
+            // SkinnedMeshRenderer to upload BoneBlock UBO.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
                 gl_dev->destroy(bind.vertex_buffer);
@@ -264,10 +266,6 @@ void NormalPass::execute_with_data_tgfx2(
             ctx.ctx2->bind_shader(vs2, fs2);
             ctx.ctx2->set_vertex_layout(bind.layout);
             ctx.ctx2->set_topology(bind.topology);
-
-            ctx.ctx2->set_uniform_mat4("u_view",       view.data,       false);
-            ctx.ctx2->set_uniform_mat4("u_projection", projection.data, false);
-            ctx.ctx2->set_uniform_mat4("u_model",      model.data,      false);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 

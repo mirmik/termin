@@ -198,8 +198,11 @@ void DepthPass::execute_with_data_tgfx2(
     auto& device = ctx.ctx2->device();
     ensure_tgfx2_resources(device);
 
-    TcShader& base_shader = get_shader();
-    collect_draw_calls(scene, layer_mask, base_shader.handle);
+    // Use the UBO-based engine shader as base_shader for skinning override —
+    // the legacy `#version 330 core` source (referenced by get_shader()) is
+    // not Vulkan-compilable and trips shaderc when the skinning injector
+    // wraps it. Matches the pattern in ShadowPass.
+    collect_draw_calls(scene, layer_mask, depth_shader_handle_);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -258,27 +261,29 @@ void DepthPass::execute_with_data_tgfx2(
             entity_names.push_back(name);
         }
 
-        bool override_is_base = tc_shader_handle_eq(dc.final_shader, base_shader.handle);
+        bool override_is_base =
+            tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
 
         Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
         if (bind.index_count == 0) continue;
 
-        if (override_is_base) {
-            // Fast path: push constants for model matrix.
-            DepthPushStd140 push{};
-            std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-            ctx.ctx2->set_push_constants(&push, sizeof(push));
+        // Both paths share push_constants + PerFrame UBO — the skinned
+        // variant is just DEPTH_PASS_VERT_UBO with injected BoneBlock.
+        DepthPushStd140 push{};
+        std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+        ctx.ctx2->set_push_constants(&push, sizeof(push));
 
-            // Base depth VS only reads a_position. See the matching filter
-            // in IdPass / ShadowPass for the rationale.
+        if (override_is_base) {
+            // Base depth VS only reads a_position. See IdPass / ShadowPass
+            // for the rationale of stripping unused attributes.
             ctx.ctx2->set_vertex_layout(
                 filter_vertex_layout_to_locations(bind.layout, {0}));
             ctx.ctx2->set_topology(bind.topology);
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
         } else {
-            // Shader override (skinning): compile via bridge, upload
-            // transitional mat4 uniforms + near/far, draw, re-bind.
+            // Skinning variant: compile via bridge, bind, upload BoneBlock
+            // UBO from SkinnedMeshRenderer, draw.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
                 release_mesh_binding(device, bind);
@@ -290,14 +295,11 @@ void DepthPass::execute_with_data_tgfx2(
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
-            ctx.ctx2->set_vertex_layout(bind.layout);
+            // Skinned depth VS uses a_position (0), a_normal (1),
+            // a_joints (3), a_weights (4). a_texcoord (2) stays unused.
+            ctx.ctx2->set_vertex_layout(
+                filter_vertex_layout_to_locations(bind.layout, {0, 1, 6, 7}));
             ctx.ctx2->set_topology(bind.topology);
-
-            ctx.ctx2->set_uniform_mat4("u_view",       view.data,       false);
-            ctx.ctx2->set_uniform_mat4("u_projection", projection.data, false);
-            ctx.ctx2->set_uniform_mat4("u_model",      model.data,      false);
-            ctx.ctx2->set_uniform_float("u_near",      _near_plane);
-            ctx.ctx2->set_uniform_float("u_far",       _far_plane);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 

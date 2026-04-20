@@ -296,7 +296,12 @@ void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_ma
 
     CollectShadowDrawCallsData data;
     data.draw_calls = &cached_draw_calls_;
-    data.base_shader = shadow_shader ? shadow_shader->handle : tc_shader_handle_invalid();
+    // Use the UBO-based shadow shader as the base. Skinned variants are
+    // generated off of this source (via shader_skinning.cpp inject), which
+    // keeps push_constant / PerFrame UBO layout intact — so the skinning
+    // path below can reuse the same per-frame UBO + push_constants that
+    // the non-skinned fast path already sets up.
+    data.base_shader = shadow_shader_handle_;
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE
@@ -361,14 +366,15 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         tc::Log::error("ShadowPass/tgfx2: ctx2 is null");
         return results;
     }
-    if (!shadow_shader) {
-        tc::Log::error("ShadowPass/tgfx2: shadow_shader not set");
-        return results;
-    }
 
     auto& device = ctx.ctx2->device();
 
     ensure_tgfx2_resources(device);
+
+    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+        tc::Log::error("ShadowPass/tgfx2: shadow_shader_handle_ not registered");
+        return results;
+    }
 
     // Find directional lights that cast shadows.
     std::vector<std::pair<int, const Light*>> shadow_lights;
@@ -508,32 +514,32 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                 Mat44f model = drawable->get_model_matrix(dc.entity);
 
-                bool override_is_base = tc_shader_handle_eq(
-                    dc.final_shader,
-                    shadow_shader ? shadow_shader->handle : tc_shader_handle_invalid());
+                bool override_is_base =
+                    tc_shader_handle_eq(dc.final_shader, shadow_shader_handle_);
 
                 Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
                 if (bind.index_count == 0) continue;
 
-                if (override_is_base) {
-                    // Fast path: push constants for u_model.
-                    ShadowPushStd140 push{};
-                    std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-                    ctx.ctx2->set_push_constants(&push, sizeof(push));
+                // Both paths share the same push_constants + PerFrame UBO
+                // layout (the skinned variant is just SHADOW_VS_UBO with
+                // injected BoneBlock). Push u_model once up-front.
+                ShadowPushStd140 push{};
+                std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+                ctx.ctx2->set_push_constants(&push, sizeof(push));
 
-                    // Shadow VS only reads `a_position`. Filter unused
-                    // attrs so Vulkan doesn't warn about loc 1/2/3 per
-                    // pipeline creation. See filter_vertex_layout_to_locations.
+                if (override_is_base) {
+                    // Non-skinned fast path. Shadow VS only reads
+                    // a_position — filter unused attrs so Vulkan doesn't
+                    // complain about loc 1/2/3 per pipeline creation.
                     ctx.ctx2->set_vertex_layout(
                         filter_vertex_layout_to_locations(bind.layout, {0}));
                     ctx.ctx2->set_topology(bind.topology);
                     ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                                    bind.index_count, bind.index_type);
                 } else {
-                    // Skinning variant (override shader): compile via
-                    // bridge, bind, upload bone matrices + legacy
-                    // u_model/u_view/u_projection via ctx2's
-                    // transitional plain-uniform helpers, draw.
+                    // Skinning variant: compile via bridge, bind, upload
+                    // BoneBlock UBO (SkinnedMeshRenderer takes care of
+                    // that in upload_per_draw_uniforms_tgfx2), draw.
                     tc_shader* raw = tc_shader_get(dc.final_shader);
                     if (!raw) {
                         release_mesh_binding(device, bind);
@@ -545,14 +551,13 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         continue;
                     }
                     ctx.ctx2->bind_shader(vs2, fs2);
-                    ctx.ctx2->set_vertex_layout(bind.layout);
+                    // Skinning VS reads a_position (0) + a_joints (3) +
+                    // a_weights (4). Filter to those three — Normal/UV
+                    // locations stay unused by the injected shadow VS.
+                    ctx.ctx2->set_vertex_layout(
+                        filter_vertex_layout_to_locations(bind.layout, {0, 6, 7}));
                     ctx.ctx2->set_topology(bind.topology);
 
-                    ctx.ctx2->set_uniform_mat4("u_model",      model.data,        false);
-                    ctx.ctx2->set_uniform_mat4("u_view",       view_matrix.data,  false);
-                    ctx.ctx2->set_uniform_mat4("u_projection", proj_matrix.data,  false);
-
-                    // Per-draw uniforms (bone matrices for SkinnedMeshRenderer).
                     drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
                     ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
@@ -595,43 +600,6 @@ void ShadowPass::execute(ExecuteContext& ctx) {
 
     if (ctx.lights.empty()) {
         if (profile) tc_profiler_end_section();
-        return;
-    }
-
-    // Get shadow shader from registry if not set
-    if (!shadow_shader) {
-        tc_shader_handle h = tc_shader_find_by_name("system:shadow");
-        if (!tc_shader_is_valid(h)) {
-            // Create shadow shader if it doesn't exist
-            static const char* shadow_vert = R"(
-#version 330 core
-layout(location = 0) in vec3 a_position;
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-)";
-            static const char* shadow_frag = R"(
-#version 330 core
-void main() {
-    // Depth-only pass
-}
-)";
-            h = tc_shader_from_sources(shadow_vert, shadow_frag, nullptr, "system:shadow", nullptr, nullptr);
-        }
-        if (tc_shader_is_valid(h)) {
-            static TcShader cached_shader;
-            cached_shader = TcShader(h);
-            // tgfx2 path compiles lazily via tc_shader_ensure_tgfx2 in
-            // the inner draw loop — no legacy GL compile needed here.
-            shadow_shader = &cached_shader;
-        }
-    }
-
-    if (!shadow_shader) {
-        tc::Log::error("ShadowPass: failed to create shadow shader");
         return;
     }
 
