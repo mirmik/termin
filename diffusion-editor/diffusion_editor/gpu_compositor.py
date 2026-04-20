@@ -270,14 +270,11 @@ class GPUCompositor:
                 return np.zeros((1, 1, 4), dtype=np.uint8)
             return np.zeros((h, w, 4), dtype=np.uint8)
 
-        from termin._native.render import RenderingManager
-        render_engine = RenderingManager.instance().render_engine
-        if render_engine is None:
-            log.error("GPUCompositor.readback: no render engine")
-            h, w = self._fbo_h, self._fbo_w
-            return np.zeros((h, w, 4), dtype=np.uint8)
-        render_engine.ensure_tgfx2()
-        device = render_engine.tgfx2_device
+        # Use the Tgfx2Context's own device — diffusion-editor is a thin
+        # tcgui app and doesn't link the full termin._native render engine.
+        # Reaching into RenderingManager here would pull in the entire
+        # editor runtime and break the standalone venv.
+        device = self._graphics.device
         if device is None:
             log.error("GPUCompositor.readback: tgfx2 device unavailable")
             h, w = self._fbo_h, self._fbo_w
