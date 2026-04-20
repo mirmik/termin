@@ -177,9 +177,8 @@ void GroundGridPass::_ensure_resources(tgfx::IRenderDevice* device) {
     _device = device;
 
     if (tc_shader_handle_is_invalid(_shader_handle)) {
-        _shader_handle = tc_shader_from_sources(
-            GRID_VERT, GRID_FRAG, nullptr,
-            "GroundGridEngineVSFS", nullptr, nullptr);
+        _shader_handle = tc_shader_register_static(
+            GRID_VERT, GRID_FRAG, nullptr, "GroundGridEngineVSFS");
     }
 
     if (!_params_ubo) {

@@ -139,9 +139,9 @@ void IdPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     // re-creations, tc_shader_ensure_tgfx2 parks compiled VkShaderModules
     // on the tc_gpu_slot for zero-compile subsequent binds.
     if (tc_shader_handle_is_invalid(id_shader_handle_)) {
-        id_shader_handle_ = tc_shader_from_sources(
+        id_shader_handle_ = tc_shader_register_static(
             ID_PASS_VERT_UBO, ID_PASS_FRAG_UBO,
-            nullptr, "IdEngineVSFS", nullptr, nullptr);
+            nullptr, "IdEngineVSFS");
     }
 
     if (!per_frame_ubo_) {
@@ -154,8 +154,7 @@ void IdPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
 
 void IdPass::release_tgfx2_resources() {
     if (!device2_) return;
-    // Shader handle lives on the global tc_shader registry and is shared
-    // across pass re-creations.
+    // id_shader_handle_ is static engine shader — not released here.
     if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }

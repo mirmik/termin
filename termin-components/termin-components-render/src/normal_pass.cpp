@@ -121,9 +121,9 @@ void NormalPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
 
     if (tc_shader_handle_is_invalid(normal_shader_handle_)) {
-        normal_shader_handle_ = tc_shader_from_sources(
+        normal_shader_handle_ = tc_shader_register_static(
             NORMAL_PASS_VERT_UBO, NORMAL_PASS_FRAG_UBO,
-            nullptr, "NormalEngineVSFS", nullptr, nullptr);
+            nullptr, "NormalEngineVSFS");
     }
 
     if (!per_frame_ubo_) {
@@ -136,6 +136,7 @@ void NormalPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
 
 void NormalPass::release_tgfx2_resources() {
     if (!device2_) return;
+    // normal_shader_handle_ is static engine shader — not released here.
     if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }

@@ -190,12 +190,11 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
         return;
     }
 
-    // Register with tc_shader registry — hash-based dedup, so rebuilding
-    // the skybox pass on Play/Stop reuses the already-compiled
-    // VkShaderModule cached on the tc_gpu_slot.
-    skybox_shader_handle_ = tc_shader_from_sources(
+    // Process-lifetime engine shader — hash-dedup keeps one handle
+    // across pass re-creations, compiled VkShaderModule stays cached.
+    skybox_shader_handle_ = tc_shader_register_static(
         vs_it->second.source.c_str(), fs_it->second.source.c_str(),
-        nullptr, "SkyboxEngineVSFS", nullptr, nullptr);
+        nullptr, "SkyboxEngineVSFS");
 
     tgfx::BufferDesc vbo_desc;
     vbo_desc.size = sizeof(CUBE_VERTICES);
@@ -335,8 +334,7 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
 
 void SkyBoxPass::destroy() {
     if (device2_) {
-        // Shader lives on the tc_shader registry (see `skybox_shader_handle_`)
-        // — shared across pass re-creations, not owned here.
+        // skybox_shader_handle_ is static engine shader — not released.
         if (cube_vbo_)   { device2_->destroy(cube_vbo_);   cube_vbo_ = {}; }
         if (cube_ibo_)   { device2_->destroy(cube_ibo_);   cube_ibo_ = {}; }
         if (params_ubo_) { device2_->destroy(params_ubo_); params_ubo_ = {}; }

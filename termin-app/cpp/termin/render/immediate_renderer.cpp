@@ -532,9 +532,8 @@ void ImmediateRenderer::_ensure_shader(tgfx::IRenderDevice* device) {
     // (happens on Play/Stop when a new game viewport spins up its own
     // ctx2 and constructs a fresh ImmediateRenderer).
     if (tc_shader_handle_is_invalid(_shader_handle)) {
-        _shader_handle = tc_shader_from_sources(
-            IMMEDIATE_VERT, IMMEDIATE_FRAG, nullptr,
-            "ImmediateEngineVSFS", nullptr, nullptr);
+        _shader_handle = tc_shader_register_static(
+            IMMEDIATE_VERT, IMMEDIATE_FRAG, nullptr, "ImmediateEngineVSFS");
     }
 }
 

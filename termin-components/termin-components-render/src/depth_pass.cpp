@@ -141,11 +141,11 @@ void main()
 void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
 
-    // Engine-shader cache via tc_shader registry (see ShadowPass).
+    // Engine-shader: process-lifetime ownership via tc_shader registry.
     if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
-        depth_shader_handle_ = tc_shader_from_sources(
+        depth_shader_handle_ = tc_shader_register_static(
             DEPTH_PASS_VERT_UBO, DEPTH_PASS_FRAG_UBO,
-            nullptr, "DepthEngineVSFS", nullptr, nullptr);
+            nullptr, "DepthEngineVSFS");
     }
 
     if (!per_frame_ubo_) {
@@ -158,6 +158,9 @@ void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
 
 void DepthPass::release_tgfx2_resources() {
     if (!device2_) return;
+    // depth_shader_handle_ NOT released — static engine shader, outlives
+    // pass teardown so the compiled VkShaderModule stays cached on the
+    // tc_gpu_slot across Play/Stop. See tc_shader_register_static docs.
     if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
