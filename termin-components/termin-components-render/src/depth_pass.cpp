@@ -148,12 +148,6 @@ void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
             nullptr, "DepthEngineVSFS");
     }
 
-    if (!per_frame_ubo_) {
-        tgfx::BufferDesc ubo_desc;
-        ubo_desc.size = sizeof(DepthPerFrameStd140);
-        ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-        per_frame_ubo_ = device.create_buffer(ubo_desc);
-    }
 }
 
 void DepthPass::release_tgfx2_resources() {
@@ -161,7 +155,6 @@ void DepthPass::release_tgfx2_resources() {
     // depth_shader_handle_ NOT released — static engine shader, outlives
     // pass teardown so the compiled VkShaderModule stays cached on the
     // tc_gpu_slot across Play/Stop. See tc_shader_register_static docs.
-    if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
 
@@ -245,12 +238,7 @@ void DepthPass::execute_with_data_tgfx2(
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     per_frame.u_near = near_plane;
     per_frame.u_far = far_plane;
-    ctx.ctx2->device().upload_buffer(
-        per_frame_ubo_,
-        std::span<const uint8_t>(
-            reinterpret_cast<const uint8_t*>(&per_frame),
-            sizeof(per_frame)));
-    ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo_);
+    ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
 
     const std::string& debug_symbol = get_debug_internal_point();
 

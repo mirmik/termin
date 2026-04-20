@@ -32,18 +32,28 @@ void bind_material_ubo(
     tgfx::IRenderDevice& device,
     tgfx::RenderContext2& ctx)
 {
-    if (!layout.empty() && ubo) {
+    if (!layout.empty()) {
         // Zero-initialised staging — unset properties become zero bytes,
         // which matches std140 padding expectations and gives deterministic
         // defaults when hot-reload drops a property between frames.
         std::vector<uint8_t> staging(layout.block_size, 0);
         std140_pack(layout, values, staging.data());
 
-        device.upload_buffer(
-            ubo,
-            std::span<const uint8_t>(staging.data(), staging.size()));
-
-        ctx.bind_uniform_buffer(ubo_slot, ubo);
+        // Route through the device ring when available (Vulkan): a single
+        // shared buffer holds every material's data this frame, and each
+        // draw's offset rides the dynamic-descriptor path — one
+        // vkAllocateDescriptorSets per unique sampler combo instead of
+        // one per material. OpenGL keeps the per-phase persistent UBO
+        // path for now (ring_ubo_handle() returns {} → bind fallback).
+        if (device.ring_ubo_handle().id != 0) {
+            ctx.bind_uniform_buffer_ring(ubo_slot, staging.data(),
+                                         static_cast<uint32_t>(staging.size()));
+        } else if (ubo) {
+            device.upload_buffer(
+                ubo,
+                std::span<const uint8_t>(staging.data(), staging.size()));
+            ctx.bind_uniform_buffer(ubo_slot, ubo);
+        }
     }
 
     for (const auto& tex : textures) {

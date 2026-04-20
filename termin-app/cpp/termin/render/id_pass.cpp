@@ -144,18 +144,11 @@ void IdPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
             nullptr, "IdEngineVSFS");
     }
 
-    if (!per_frame_ubo_) {
-        tgfx::BufferDesc ubo_desc;
-        ubo_desc.size = sizeof(IdPerFrameStd140);
-        ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-        per_frame_ubo_ = device.create_buffer(ubo_desc);
-    }
 }
 
 void IdPass::release_tgfx2_resources() {
     if (!device2_) return;
     // id_shader_handle_ is static engine shader — not released here.
-    if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
     device2_ = nullptr;
 }
 
@@ -231,16 +224,11 @@ void IdPass::execute_with_data_tgfx2(
     }
     ctx.ctx2->bind_shader(id_vs2, id_fs2);
 
-    // PerFrame UBO: view + projection, uploaded once.
+    // PerFrame UBO: view + projection, one write per pass via the ring.
     IdPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
-    ctx.ctx2->device().upload_buffer(
-        per_frame_ubo_,
-        std::span<const uint8_t>(
-            reinterpret_cast<const uint8_t*>(&per_frame),
-            sizeof(per_frame)));
-    ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo_);
+    ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
 
     const std::string& debug_symbol = get_debug_internal_point();
     int current_pick_id = -1;
