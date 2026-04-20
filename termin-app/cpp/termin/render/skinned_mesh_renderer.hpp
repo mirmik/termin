@@ -33,12 +33,6 @@ public:
     std::vector<float> _bone_matrices_flat;
     int _bone_count = 0;
 
-    // Per-instance BoneBlock UBO (lazy-created on first draw; one per
-    // SkinnedMeshRenderer so multiple skinned drawables in the same
-    // Vulkan command buffer don't clobber each other).
-    tgfx::BufferHandle _bone_ubo{};
-    tgfx::IRenderDevice* _bone_ubo_device = nullptr;
-
     // Note: mesh, material, cast_shadow are inherited from MeshRenderer
     // and already have INSPECT_FIELD registrations there
 
