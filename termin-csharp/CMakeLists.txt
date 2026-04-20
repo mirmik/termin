@@ -121,8 +121,13 @@ endif()
 if(TERMIN_CSHARP_BUILD_MANAGED)
     find_program(DOTNET_EXECUTABLE dotnet REQUIRED)
 
+    # `dotnet build` без `-c` собирает csproj в Debug по умолчанию,
+    # даже если cmake запущен с --config Release. AppsUIMonorepo-овский
+    # update-sdk.ps1 ищет Termin.Native.dll в bin/Release/ — если мы
+    # не пробросим конфигурацию сюда, он молча находит старый Release-
+    # билд или не находит вообще. Пробрасываем через $<CONFIG>.
     add_custom_target(termin_csharp_managed ALL
-        COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Termin.Native.csproj
+        COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Termin.Native.csproj -c $<CONFIG>
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         VERBATIM
     )
@@ -133,7 +138,7 @@ if(TERMIN_CSHARP_BUILD_MANAGED)
 
     if(TERMIN_CSHARP_BUILD_TESTS)
         add_custom_target(termin_csharp_tests ALL
-            COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Test/Termin.Test.csproj
+            COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Test/Termin.Test.csproj -c $<CONFIG>
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             VERBATIM
         )
