@@ -133,6 +133,20 @@ class FBOSurface:
     def tc_surface(self):
         return _TcSurfaceWrapper(self._tc_surface_ptr)
 
+    def set_input_manager(self, input_manager_ptr: int) -> None:
+        """Attach a tc_viewport_input_manager (as raw uintptr) to the
+        underlying tc_render_surface. Passing 0 clears the binding.
+
+        Mirrors SDLEmbeddedSurface::set_input_manager — required by the
+        editor so DisplayInputRouter events reach the surface's dispatch
+        path instead of being swallowed by the default scene-pipeline
+        input manager.
+        """
+        if self._tc_surface_ptr == 0:
+            return
+        from termin._native.render import _render_surface_set_input_manager
+        _render_surface_set_input_manager(self._tc_surface_ptr, input_manager_ptr)
+
     # ------------------------------------------------------------------
     # Python vtable interface (called by C++ tc_render_surface)
     # ------------------------------------------------------------------

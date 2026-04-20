@@ -348,7 +348,7 @@ class RenderingControllerTcgui:
         # the previous router would dispatch events into freed memory once
         # the router dict entry is removed above.
         surface = display.surface
-        if surface is not None and hasattr(surface, "set_input_manager"):
+        if surface is not None:
             surface.set_input_manager(0)
 
         if input_mode == "none":
@@ -364,7 +364,7 @@ class RenderingControllerTcgui:
             # routes through the viewport input managers attached to the
             # display. Without this call picking/hover never fire — the
             # default surface input_manager has no viewport-aware logic.
-            if surface is not None and hasattr(surface, "set_input_manager"):
+            if surface is not None:
                 surface.set_input_manager(input_router.tc_input_manager_ptr)
         elif input_mode == "editor":
             # Editor display is handled by EditorWindowTcgui directly —

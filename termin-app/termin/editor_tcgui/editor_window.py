@@ -512,7 +512,7 @@ class EditorWindowTcgui:
         self._display_routers[display_id] = router
 
         surface = display.surface
-        if surface is not None and hasattr(surface, "set_input_manager"):
+        if surface is not None:
             surface.set_input_manager(router.tc_input_manager_ptr)
 
         # Viewport3D cached the old input_manager_ptr during set_surface();
