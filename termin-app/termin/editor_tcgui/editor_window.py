@@ -128,6 +128,7 @@ class EditorWindowTcgui:
         self._editor_attachment = None
         self._rendering_controller = None
         self._editor_viewport_input_managers: list = []
+        self._ar_logged: bool = False
         # Owns DisplayInputRouter instances that route surface events to the
         # per-viewport EditorViewportInputManagers. Populated by
         # _attach_editor_input_router() after the editor display's input
@@ -688,11 +689,13 @@ class EditorWindowTcgui:
                 self._interaction_system.selection.clear()
 
     def _on_selection_changed(self, entity) -> None:
+        log.info(f"[DBG on_selection_changed] entity={entity}")
         self._request_viewport_update()
         if self._inspector_controller is not None and entity:
             self._inspector_controller.show_entity_inspector(entity)
 
     def _on_hover_changed(self, entity) -> None:
+        log.info(f"[DBG on_hover_changed] entity={entity}")
         self._request_viewport_update()
 
     def _on_inspector_transform_changed(self) -> None:
@@ -1736,6 +1739,9 @@ class EditorWindowTcgui:
             self._framegraph_debugger.update()
 
     def _after_render(self) -> None:
+        if not self._ar_logged:
+            log.info(f"[DBG _after_render] first call, interaction_system={self._interaction_system}")
+            self._ar_logged = True
         if self._interaction_system is not None:
             self._interaction_system.after_render()
         if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
