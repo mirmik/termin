@@ -52,21 +52,7 @@ SkinnedMeshRenderer::SkinnedMeshRenderer()
     // type_entry is set by registry when component is created via factory
 }
 
-SkinnedMeshRenderer::~SkinnedMeshRenderer() {
-    // Skip destroy if the cached device is no longer live — Python
-    // interpreter shutdown tears down the BackendWindow (and its
-    // IRenderDevice) before components are destructed. Borrow-mode
-    // shutdown safety pattern: only talk to the device if it still
-    // matches tgfx2_interop_get_device().
-    if (_bone_ubo.id != 0 && _bone_ubo_device) {
-        void* live = tgfx2_interop_get_device();
-        if (live == _bone_ubo_device) {
-            _bone_ubo_device->destroy(_bone_ubo);
-        }
-    }
-    _bone_ubo = tgfx::BufferHandle{};
-    _bone_ubo_device = nullptr;
-}
+SkinnedMeshRenderer::~SkinnedMeshRenderer() = default;
 
 void SkinnedMeshRenderer::set_skeleton_controller(SkeletonController* controller) {
     _skeleton_controller.reset(controller);
@@ -118,24 +104,6 @@ void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
     update_bone_matrices();
     if (_bone_count <= 0 || _bone_matrices_flat.empty()) return;
 
-    tgfx::IRenderDevice& device = ctx2.device();
-
-    // Lazy-create (or re-create if the device changed) the per-instance
-    // BoneBlock UBO. One buffer per SkinnedMeshRenderer is needed because
-    // Vulkan's deferred command buffer reads the UBO at submit time — a
-    // shared buffer would see the last caller's data for every skinned
-    // draw in the frame (vulkan_ubo_reuse_pitfall).
-    if (_bone_ubo.id == 0 || _bone_ubo_device != &device) {
-        if (_bone_ubo.id != 0 && _bone_ubo_device) {
-            _bone_ubo_device->destroy(_bone_ubo);
-        }
-        tgfx::BufferDesc desc;
-        desc.size = BONE_BLOCK_SIZE;
-        desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-        _bone_ubo = device.create_buffer(desc);
-        _bone_ubo_device = &device;
-    }
-
     // Pack std140 BoneBlock: [mat4 u_bone_matrices[128]; int u_bone_count;].
     // Matrices fill the first MAX_BONES*64 bytes; unused slots stay zeroed.
     // The trailing int sits at offset MAX_BONES*64 (vec4-aligned by std140).
@@ -149,11 +117,17 @@ void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
     std::memcpy(staging.data() + BONE_BLOCK_MAX_BONES * 16u * sizeof(float),
                 &count, sizeof(int32_t));
 
-    device.upload_buffer(_bone_ubo,
-                         std::span<const uint8_t>(staging.data(), staging.size()),
-                         0);
-
-    ctx2.bind_uniform_buffer(BONE_BLOCK_BINDING, _bone_ubo);
+    // Route BoneBlock through the device ring UBO. One ring shared by
+    // every skinned draw in the frame instead of one VkBuffer per mesh
+    // (see vulkan_ubo_reuse_pitfall for why the per-instance buffer was
+    // needed on the old non-ring path: cmd buffers baked the pointer to
+    // the single UBO at record time, so a shared buffer saw the last
+    // writer's contents). With dynamic descriptor offsets the per-draw
+    // offset is baked into vkCmdBindDescriptorSets and the ring can
+    // safely hold every draw's data side-by-side in one allocation.
+    ctx2.bind_uniform_buffer_ring(BONE_BLOCK_BINDING,
+                                   staging.data(),
+                                   static_cast<uint32_t>(staging.size()));
     // Redundant on Vulkan (binding is baked into the SPIR-V) but needed on
     // GL when the driver doesn't honour explicit `layout(binding=N)` on
     // the UBO block — glUniformBlockBinding makes the lookup match.
