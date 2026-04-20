@@ -169,7 +169,6 @@ std::string inject_skinning_into_vertex_shader(const std::string& vertex_source)
     bool has_normal = vertex_source.find("a_normal") != std::string::npos;
 
     // Find insertion points
-    int last_layout = find_last_layout_line(lines);
     auto [main_decl, main_brace] = find_main_function(lines);
 
     if (main_decl < 0) {
@@ -177,20 +176,14 @@ std::string inject_skinning_into_vertex_shader(const std::string& vertex_source)
         return vertex_source;
     }
 
-    // Determine where to insert inputs
-    int insert_inputs_at;
-    if (last_layout >= 0) {
-        insert_inputs_at = last_layout + 1;
-    } else {
-        // Find #version line
-        insert_inputs_at = 0;
-        for (size_t i = 0; i < lines.size(); ++i) {
-            if (lines[i].find("#version") != std::string::npos) {
-                insert_inputs_at = static_cast<int>(i) + 1;
-                break;
-            }
-        }
-    }
+    // Inputs go right before `void main()`. This sidesteps nested
+    // preprocessor blocks: the engine VS sources have `#ifdef VULKAN …
+    // #else layout(push_constant emulation) … #endif` near the top, and
+    // the old "after last layout()" heuristic would land skinning
+    // declarations INSIDE the #else branch, leaving them undeclared on
+    // the Vulkan path. `main()` is always at file scope, outside any
+    // #ifdef — safe anchor for every engine and user-authored VS.
+    int insert_inputs_at = main_decl;
 
     // Choose skinning code based on whether shader uses normals
     const char* skinning_func = has_normal ? SKINNING_FUNCTION : SKINNING_FUNCTION_POS_ONLY;
