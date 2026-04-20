@@ -96,6 +96,12 @@ class EditorWindowTcgui:
         # Scene manager
         self.scene_manager = scene_manager
         self.scene_manager.set_on_before_scene_close(self._on_before_scene_close)
+        # Pump EditorInteractionSystem's pending press / release / hover at the
+        # exact moment the render finishes — matches the Qt editor. Without
+        # this hook the press/hover events that reach EditorViewportInput-
+        # Manager just queue in _pending_* and never get processed, so
+        # picking / selection / gizmo hover all silently no-op.
+        self.scene_manager.set_on_after_render(self._after_render)
 
         self._editor_data: dict[str, dict] = {}
         self._editor_scene_name = "untitled"
