@@ -128,9 +128,8 @@ void TonemapPass::execute(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = tc_shader_from_sources(
-            /*vertex=*/nullptr, TONEMAP_FRAG_UBO, nullptr,
-            "TonemapEngineFS", nullptr, nullptr);
+        shader_handle_ = tc_shader_register_static(
+            /*vertex=*/nullptr, TONEMAP_FRAG_UBO, nullptr, "TonemapEngineFS");
     }
     if (!params_ubo_) {
         tgfx::BufferDesc ubo_desc;

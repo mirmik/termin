@@ -106,9 +106,8 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     // the shader is FS-only and vertex_source stays NULL).
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = tc_shader_from_sources(
-            /*vertex=*/nullptr, GRAYSCALE_FRAG_UBO, nullptr,
-            "GrayscaleEngineFS", nullptr, nullptr);
+        shader_handle_ = tc_shader_register_static(
+            /*vertex=*/nullptr, GRAYSCALE_FRAG_UBO, nullptr, "GrayscaleEngineFS");
     }
 
     if (!params_ubo_) {

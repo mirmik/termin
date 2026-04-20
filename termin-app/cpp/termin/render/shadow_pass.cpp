@@ -122,12 +122,13 @@ void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     // every construction re-ran shaderc (~35 ms × 19 engine shaders on
     // Play/Stop = ~700 ms lag).
     if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
-        shadow_shader_handle_ = tc_shader_from_sources(
+        // Process-lifetime engine shader: never destroyed (transient
+        // TcShader wrappers from material phases / Python bindings
+        // can't bounce ref_count through zero and take it down).
+        shadow_shader_handle_ = tc_shader_register_static(
             SHADOW_VS_UBO, SHADOW_FS_UBO,
             /*geometry=*/nullptr,
-            /*name=*/"ShadowEngineVSFS",
-            /*source_path=*/nullptr,
-            /*uuid=*/nullptr);
+            /*name=*/"ShadowEngineVSFS");
     }
 }
 
@@ -148,10 +149,13 @@ tgfx::BufferHandle ShadowPass::get_or_create_per_frame_ubo(
 
 void ShadowPass::release_tgfx2_resources() {
     if (!device2_) return;
-    // shadow_shader_handle_ is intentionally NOT destroyed here — it lives
-    // in the global tc_shader registry and is shared across pass
-    // re-creations. Its tgfx2 shader handles get torn down automatically
-    // when the device is released (see tc_gpu_slot teardown).
+    // shadow_shader_handle_ intentionally NOT released here. The +1 ref
+    // we took in ensure_tgfx2_resources is an intentional process-
+    // lifetime hold: engine shaders need to survive ShadowPass teardown
+    // on Play/Stop (frame-graph rebuild) so the compiled VkShaderModule
+    // stays cached on the tc_gpu_slot — dropping the ref would evict
+    // the shader from the registry and force shaderc to recompile on
+    // the next pass creation, reintroducing the ~700 ms Play/Stop lag.
     for (auto& [_, ubo] : per_frame_ubo_pool_) {
         if (ubo) device2_->destroy(ubo);
     }

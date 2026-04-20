@@ -221,20 +221,20 @@ void BloomPass::ensure_tgfx2_shaders() {
     // across pass re-creations — see ShadowPass for the matching
     // pattern on VS+FS passes, and GrayscalePass for the FS-only variant.
     if (tc_shader_handle_is_invalid(bright_shader_handle_)) {
-        bright_shader_handle_ = tc_shader_from_sources(
-            nullptr, BRIGHT_FRAG_UBO, nullptr, "BloomBrightFS", nullptr, nullptr);
+        bright_shader_handle_ = tc_shader_register_static(
+            nullptr, BRIGHT_FRAG_UBO, nullptr, "BloomBrightFS");
     }
     if (tc_shader_handle_is_invalid(downsample_shader_handle_)) {
-        downsample_shader_handle_ = tc_shader_from_sources(
-            nullptr, DOWNSAMPLE_FRAG_UBO, nullptr, "BloomDownsampleFS", nullptr, nullptr);
+        downsample_shader_handle_ = tc_shader_register_static(
+            nullptr, DOWNSAMPLE_FRAG_UBO, nullptr, "BloomDownsampleFS");
     }
     if (tc_shader_handle_is_invalid(upsample_shader_handle_)) {
-        upsample_shader_handle_ = tc_shader_from_sources(
-            nullptr, UPSAMPLE_FRAG_UBO, nullptr, "BloomUpsampleFS", nullptr, nullptr);
+        upsample_shader_handle_ = tc_shader_register_static(
+            nullptr, UPSAMPLE_FRAG_UBO, nullptr, "BloomUpsampleFS");
     }
     if (tc_shader_handle_is_invalid(composite_shader_handle_)) {
-        composite_shader_handle_ = tc_shader_from_sources(
-            nullptr, COMPOSITE_FRAG_UBO, nullptr, "BloomCompositeFS", nullptr, nullptr);
+        composite_shader_handle_ = tc_shader_register_static(
+            nullptr, COMPOSITE_FRAG_UBO, nullptr, "BloomCompositeFS");
     }
 
     auto make_ubo = [&](uint64_t size) -> tgfx::BufferHandle {
