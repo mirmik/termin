@@ -219,8 +219,14 @@ void IdPass::execute_with_data_tgfx2(
     tgfx::ShaderHandle id_vs2, id_fs2;
     {
         tc_shader* raw = tc_shader_get(id_shader_handle_);
-        if (!raw || !tc_shader_ensure_tgfx2(raw, &device, &id_vs2, &id_fs2)) {
-            tc::Log::error("IdPass: tc_shader_ensure_tgfx2 failed for engine id shader");
+        if (!raw) {
+            tc::Log::error("IdPass: id_shader_handle_ stale (index=%u gen=%u)",
+                           id_shader_handle_.index, id_shader_handle_.generation);
+            return;
+        }
+        if (!tc_shader_ensure_tgfx2(raw, &device, &id_vs2, &id_fs2)) {
+            tc::Log::error("IdPass: tc_shader_ensure_tgfx2 failed for '%s'",
+                           raw->name ? raw->name : raw->uuid);
             return;
         }
     }
