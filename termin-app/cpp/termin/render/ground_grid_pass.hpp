@@ -3,6 +3,9 @@
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "tgfx2/handles.hpp"
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace tgfx { class IRenderDevice; }
 
@@ -27,9 +30,10 @@ private:
     // Cached tgfx2 resources. Parameters don't fit the 128-byte
     // push-constant guarantee (3 mat4 + 2 float = 200 bytes padded to
     // 208), so everything lives in a std140 UBO at binding 0.
+    // Shader handle lives on the tc_shader registry (hash-based dedup) so
+    // Play/Stop doesn't re-run shaderc — see ShadowPass for the pattern.
     tgfx::IRenderDevice* _device = nullptr;
-    tgfx::ShaderHandle _vs;
-    tgfx::ShaderHandle _fs;
+    tc_shader_handle _shader_handle = tc_shader_handle_invalid();
     tgfx::BufferHandle _params_ubo;
 
 public:

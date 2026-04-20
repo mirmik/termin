@@ -236,15 +236,19 @@ class UIRenderer:
             self._text2d = Text2DRenderer(font=self._font)
 
         if self._ui_vs is None:
-            # Compile the UI shader directly on the tgfx2 device. The old
-            # TcShader + tc_shader_ensure_tgfx2 path is GL-only (it routes
-            # through the legacy tc_gpu_slot cache); the direct call works
-            # on both OpenGL and Vulkan and is what Vulkan hosts need.
-            dev = self._graphics.device
-            self._ui_vs = dev.create_shader(Tgfx2ShaderStage.Vertex,
-                                            UI_VERTEX_SHADER)
-            self._ui_fs = dev.create_shader(Tgfx2ShaderStage.Fragment,
-                                            UI_FRAGMENT_SHADER)
+            # Register the UI shader with the tc_shader registry — hash-
+            # based dedup keeps compiled VkShaderModules / GL programs
+            # alive across UIRenderer instances (each new RenderContext2
+            # on Play/Stop otherwise re-runs shaderc). Callers must ensure
+            # a tc_gpu_context is active before the first render; the
+            # editor's WindowManager and the launcher both do this.
+            if self._ui_tc_shader is None:
+                self._ui_tc_shader = TcShader.from_sources(
+                    UI_VERTEX_SHADER, UI_FRAGMENT_SHADER,
+                    geometry="", name="UIEngineVSFS")
+            pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
+            self._ui_vs = pair.vs
+            self._ui_fs = pair.fs
             if not self._ui_vs or not self._ui_fs:
                 raise RuntimeError("UIRenderer: UI shader compile failed")
 

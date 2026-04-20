@@ -5,6 +5,11 @@
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
 #include <tgfx2/vertex_layout.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 extern "C" {
 #include "tc_profiler.h"
@@ -521,18 +526,16 @@ void ImmediateRenderer::arrow_solid(
 // ============================================================
 
 void ImmediateRenderer::_ensure_shader(tgfx::IRenderDevice* device) {
-    if (_vs && _fs && _device == device) return;
     _device = device;
-
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.source = IMMEDIATE_VERT;
-    _vs = device->create_shader(vs_desc);
-
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.source = IMMEDIATE_FRAG;
-    _fs = device->create_shader(fs_desc);
+    // Engine VS+FS via the tc_shader registry — hash-based dedup keeps
+    // the compiled modules alive across RenderContext2 re-creations
+    // (happens on Play/Stop when a new game viewport spins up its own
+    // ctx2 and constructs a fresh ImmediateRenderer).
+    if (tc_shader_handle_is_invalid(_shader_handle)) {
+        _shader_handle = tc_shader_from_sources(
+            IMMEDIATE_VERT, IMMEDIATE_FRAG, nullptr,
+            "ImmediateEngineVSFS", nullptr, nullptr);
+    }
 }
 
 void ImmediateRenderer::_flush_buffers(
@@ -550,7 +553,13 @@ void ImmediateRenderer::_flush_buffers(
     bool detailed = tc_profiler_detailed_rendering();
 
     _ensure_shader(&ctx2->device());
-    if (!_vs || !_fs) return;
+    tgfx::ShaderHandle imm_vs, imm_fs;
+    {
+        tc_shader* raw = tc_shader_get(_shader_handle);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, _device, &imm_vs, &imm_fs)) {
+            return;
+        }
+    }
 
     if (detailed) tc_profiler_begin_section("Setup");
     ctx2->set_depth_test(depth_test);
@@ -561,7 +570,7 @@ void ImmediateRenderer::_flush_buffers(
                              tgfx::BlendFactor::OneMinusSrcAlpha);
     }
     ctx2->set_cull(tgfx::CullMode::None);
-    ctx2->bind_shader(_vs, _fs);
+    ctx2->bind_shader(imm_vs, imm_fs);
 
     // View-projection combined on CPU: shader only needs one matrix,
     // fits comfortably in 128-byte push constants. Double→float narrow

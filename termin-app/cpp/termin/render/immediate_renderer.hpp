@@ -4,6 +4,9 @@
 #include <termin/geom/mat44.hpp>
 #include "tgfx/types.hpp"
 #include "tgfx2/handles.hpp"
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 #include <vector>
 #include <memory>
@@ -242,11 +245,10 @@ private:
         bool blend
     );
 
-    // tgfx2 shader pair — compiled lazily on first flush against the
-    // caller's device. Leaked at process exit (no explicit release):
-    // caller-supplied context outlives this renderer.
-    tgfx::ShaderHandle _vs;
-    tgfx::ShaderHandle _fs;
+    // Shader lives on the tc_shader registry (hash-based dedup across
+    // RenderContext2 re-creations) — see the comment in _ensure_shader
+    // and the broader pattern in ShadowPass.
+    tc_shader_handle _shader_handle = tc_shader_handle_invalid();
     tgfx::IRenderDevice* _device = nullptr;
 };
 

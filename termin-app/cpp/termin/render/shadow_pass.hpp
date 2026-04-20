@@ -22,6 +22,9 @@
 #include "core/tc_scene_pool.h"
 #include "tc_inspect_cpp.hpp"
 #include <tgfx/tgfx_shader_handle.hpp>
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace termin {
 
@@ -130,7 +133,7 @@ public:
     TcShader* shadow_shader = nullptr;
 
 private:
-    // Lazy tgfx2 shader + UBO resources owned by the pass.
+    // Lazy tgfx2 UBO pool owned by the pass.
     //
     // NOTE on `per_frame_ubo_pool_`: Vulkan records commands into a deferred
     // command buffer — all the frame's vkCmdDrawIndexed calls accumulate
@@ -148,9 +151,12 @@ private:
     // Fix: one UBO per cascade slot, keyed by the same `fbo_index` the
     // depth pool uses. Each cascade writes its own UBO; draws read
     // unchanged data when the command buffer finally executes.
+    //
+    // Shader handles are NOT owned by the pass — they live on the
+    // tc_shader global registry (see `shadow_shader_handle_`) so repeated
+    // pass construction/destruction doesn't re-run shaderc.
     tgfx::IRenderDevice* device2_ = nullptr;
-    tgfx::ShaderHandle shadow_vs2_;
-    tgfx::ShaderHandle shadow_fs2_;
+    tc_shader_handle shadow_shader_handle_ = tc_shader_handle_invalid();
     std::unordered_map<int, tgfx::BufferHandle> per_frame_ubo_pool_;
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
