@@ -2,19 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Optional, Set
+from typing import Set
 
 from termin.visualization.render.postprocess import PostEffect
 from termin._native.render import TcMaterial
 from termin.editor.inspect_field import InspectField
 from tcbase import log
 from tgfx._tgfx_native import Tgfx2ShaderStage
-
-if TYPE_CHECKING:
-    from tgfx import TcShader
-
-# Callback type: (shader) -> None
-BeforeDrawCallback = Callable[["TcShader"], None]
 
 
 # Passthrough FSQ shader for the fallback path — backend-neutral pattern
@@ -55,14 +49,8 @@ class MaterialPostEffect(PostEffect):
     - u_resolution: vec2 with (width, height)
     - Extra resources specified via add_resource() as their uniform names
 
-    Additional textures and uniforms come from the material itself.
-
-    Known limitation: the material path still relies on set_uniform_* and
-    binds samplers at legacy GL slots 0..N. This works on OpenGL. On
-    Vulkan it falls back to the passthrough shader when the material
-    shader can't be compiled (missing layout qualifiers, etc.) — a full
-    rewrite of user-authored .material shaders is a separate migration
-    step.
+    Per-frame parameters come from the material itself — callers update
+    them via TcMaterial.set_uniform_* (Unity-style Material.SetFloat).
     """
 
     name = "material"
@@ -103,7 +91,6 @@ class MaterialPostEffect(PostEffect):
         if material_path:
             self._material = TcMaterial.from_name(material_path)
         self._required_depth = required_depth
-        self._before_draw: Optional[BeforeDrawCallback] = None
         # Map: resource_name -> uniform_name
         self._extra_resources: dict[str, str] = {}
 
@@ -128,22 +115,6 @@ class MaterialPostEffect(PostEffect):
                 uni = uni.strip()
                 if res and uni:
                     self._extra_resources[res] = uni
-
-    def set_before_draw(self, callback: Optional[BeforeDrawCallback]) -> None:
-        """
-        Set callback to be called before drawing.
-
-        The callback receives the shader program and can set additional uniforms.
-        Called after the shader is bound but before drawing the quad.
-
-        Args:
-            callback: Callable[[TcShader], None] or None to clear.
-        """
-        self._before_draw = callback
-
-    def clear_callbacks(self) -> None:
-        """Clear before_draw callback."""
-        self._before_draw = None
 
     def add_resource(self, resource_name: str, uniform_name: str) -> "MaterialPostEffect":
         """
@@ -237,9 +208,6 @@ class MaterialPostEffect(PostEffect):
 
             for uniform_name, uniform_value in phase.uniforms.items():
                 self._set_uniform(ctx2, uniform_name, uniform_value)
-
-            if self._before_draw is not None:
-                self._before_draw(shader)
 
             ctx2.draw_fullscreen_quad()
 
