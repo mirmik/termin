@@ -5,6 +5,11 @@
 #include <termin/render/mesh_renderer.hpp>
 #include "termin/entity/cmp_ref.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
+#include <tgfx2/handles.hpp>
+
+namespace tgfx {
+class IRenderDevice;
+}
 
 namespace termin {
 
@@ -16,7 +21,7 @@ class SkeletonController;
  *
  * Extends MeshRenderer with:
  * - skeleton_controller: Reference to SkeletonController for bone matrices
- * - Automatic upload of u_bone_matrices uniform before drawing
+ * - Per-instance std140 UBO (BoneBlock, binding=5) uploaded before drawing
  * - Skinned shader variant injection via get_skinned_material()
  */
 class SkinnedMeshRenderer : public MeshRenderer {
@@ -28,11 +33,17 @@ public:
     std::vector<float> _bone_matrices_flat;
     int _bone_count = 0;
 
+    // Per-instance BoneBlock UBO (lazy-created on first draw; one per
+    // SkinnedMeshRenderer so multiple skinned drawables in the same
+    // Vulkan command buffer don't clobber each other).
+    tgfx::BufferHandle _bone_ubo{};
+    tgfx::IRenderDevice* _bone_ubo_device = nullptr;
+
     // Note: mesh, material, cast_shadow are inherited from MeshRenderer
     // and already have INSPECT_FIELD registrations there
 
     SkinnedMeshRenderer();
-    ~SkinnedMeshRenderer() override = default;
+    ~SkinnedMeshRenderer() override;
 
     /**
      * Get skeleton controller (nullptr if entity is dead).

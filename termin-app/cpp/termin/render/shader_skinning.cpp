@@ -8,15 +8,31 @@
 
 namespace termin {
 
-// Skinning inputs to inject after existing layout declarations
+// Skinning inputs to inject after existing layout declarations.
+//
+// Bone data rides a dedicated std140 UBO at binding=5. Plain `uniform mat4[]`
+// at global scope is a GL-only dialect and shaderc rejects it on Vulkan
+// ("non-opaque uniforms outside a block"). std140 + explicit binding works
+// on both: GL 4.2+ honours layout(binding=N), Vulkan maps it straight to
+// descriptor set 0. CPU side (SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2)
+// matches the byte layout exactly.
+//
+// Slot map (see also material_pipeline_vulkan memory):
+//   0 = Lighting, 1 = Material, 2 = PerFrame, 3 = ShadowBlock,
+//   4 = material samplers (base), 5 = BoneBlock (this), 8 = shadow sampler array.
 static const char* SKINNING_INPUTS = R"(
 // === Skinning inputs (injected) ===
-layout(location = 3) in vec4 a_joints;
-layout(location = 4) in vec4 a_weights;
+// Locations 6/7 match tgfx_vertex_layout_skinned's joints/weights offsets.
+// Locations 3-5 intentionally left free so the same VS source can accept
+// meshes that also declare `tangent` (loc 3) or `color` (loc 5).
+layout(location = 6) in vec4 a_joints;
+layout(location = 7) in vec4 a_weights;
 
 const int MAX_BONES = 128;
-uniform mat4 u_bone_matrices[MAX_BONES];
-uniform int u_bone_count;
+layout(std140, binding = 5) uniform BoneBlock {
+    mat4 u_bone_matrices[MAX_BONES];
+    int u_bone_count;
+};
 )";
 
 // Skinning function - full version with normals
