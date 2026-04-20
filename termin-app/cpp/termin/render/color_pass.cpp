@@ -394,38 +394,15 @@ void ColorPass::execute_with_data(
     static_assert(sizeof(PerFrameStd140) == 208,
                   "PerFrameStd140 must be exactly 3*mat4 + vec4");
 
-    if (per_frame_device_ != &device) {
-        if (per_frame_ubo_ && per_frame_device_) {
-            per_frame_device_->destroy(per_frame_ubo_);
-            per_frame_ubo_ = {};
-        }
-        if (shadow_block_ubo_ && per_frame_device_) {
-            per_frame_device_->destroy(shadow_block_ubo_);
-            shadow_block_ubo_ = {};
-        }
-        per_frame_device_ = &device;
-    }
-    if (!per_frame_ubo_) {
-        tgfx::BufferDesc bd;
-        bd.size = sizeof(PerFrameStd140);
-        bd.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-        per_frame_ubo_ = device.create_buffer(bd);
-    }
-    {
-        PerFrameStd140 pf{};
-        std::memcpy(pf.u_view, view.data, sizeof(pf.u_view));
-        std::memcpy(pf.u_projection, projection.data, sizeof(pf.u_projection));
-        Mat44f vp = projection * view;
-        std::memcpy(pf.u_view_projection, vp.data, sizeof(pf.u_view_projection));
-        pf.u_camera_position[0] = static_cast<float>(camera_position.x);
-        pf.u_camera_position[1] = static_cast<float>(camera_position.y);
-        pf.u_camera_position[2] = static_cast<float>(camera_position.z);
-        pf.u_camera_position[3] = 1.0f;
-        device.upload_buffer(
-            per_frame_ubo_,
-            std::span<const uint8_t>(
-                reinterpret_cast<const uint8_t*>(&pf), sizeof(pf)));
-    }
+    PerFrameStd140 pf{};
+    std::memcpy(pf.u_view, view.data, sizeof(pf.u_view));
+    std::memcpy(pf.u_projection, projection.data, sizeof(pf.u_projection));
+    Mat44f vp = projection * view;
+    std::memcpy(pf.u_view_projection, vp.data, sizeof(pf.u_view_projection));
+    pf.u_camera_position[0] = static_cast<float>(camera_position.x);
+    pf.u_camera_position[1] = static_cast<float>(camera_position.y);
+    pf.u_camera_position[2] = static_cast<float>(camera_position.z);
+    pf.u_camera_position[3] = 1.0f;
 
     // --- Shadow metadata UBO (binding 3) ------------------------------
     // Packs the plain shadow uniforms shadows.glsl used to read through
@@ -453,14 +430,8 @@ void ColorPass::execute_with_data(
                   16 + 1024 + 256 + 256 + 256 + 256,
                   "ShadowBlockStd140 must match std140 layout (2064 B)");
 
-    if (!shadow_block_ubo_) {
-        tgfx::BufferDesc bd;
-        bd.size = sizeof(ShadowBlockStd140);
-        bd.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-        shadow_block_ubo_ = device.create_buffer(bd);
-    }
+    ShadowBlockStd140 sb{};
     {
-        ShadowBlockStd140 sb{};
         int sm_count = static_cast<int>(
             std::min(shadow_maps.size(), static_cast<size_t>(SHADOW_UBO_MAX)));
         sb.u_shadow_map_count = sm_count;
@@ -474,10 +445,6 @@ void ColorPass::execute_with_data(
             sb.u_shadow_split_near[i][0]    = e.cascade_split_near;
             sb.u_shadow_split_far[i][0]     = e.cascade_split_far;
         }
-        device.upload_buffer(
-            shadow_block_ubo_,
-            std::span<const uint8_t>(
-                reinterpret_cast<const uint8_t*>(&sb), sizeof(sb)));
     }
 
     ctx2->begin_pass(color_tex2, depth_tex2,
@@ -492,8 +459,8 @@ void ColorPass::execute_with_data(
     // (material UBO, lighting UBO, shadow samplers) are set below.
     constexpr uint32_t PER_FRAME_UBO_BINDING = 2;
     constexpr uint32_t SHADOW_UBO_BINDING    = 3;
-    ctx2->bind_uniform_buffer(PER_FRAME_UBO_BINDING, per_frame_ubo_);
-    ctx2->bind_uniform_buffer(SHADOW_UBO_BINDING,    shadow_block_ubo_);
+    ctx2->bind_uniform_buffer_ring(PER_FRAME_UBO_BINDING, &pf, sizeof(pf));
+    ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING,    &sb, sizeof(sb));
 
     // Collect + sort draw calls. Reuses the legacy helpers —
     // gathering logic is backend-agnostic.

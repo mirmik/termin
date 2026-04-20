@@ -132,21 +132,6 @@ void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     }
 }
 
-tgfx::BufferHandle ShadowPass::get_or_create_per_frame_ubo(
-    tgfx::IRenderDevice& device,
-    int index
-) {
-    auto it = per_frame_ubo_pool_.find(index);
-    if (it != per_frame_ubo_pool_.end()) return it->second;
-
-    tgfx::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(ShadowPerFrameStd140);
-    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-    tgfx::BufferHandle ubo = device.create_buffer(ubo_desc);
-    per_frame_ubo_pool_[index] = ubo;
-    return ubo;
-}
-
 void ShadowPass::release_tgfx2_resources() {
     if (!device2_) return;
     // shadow_shader_handle_ intentionally NOT released here. The +1 ref
@@ -156,10 +141,6 @@ void ShadowPass::release_tgfx2_resources() {
     // stays cached on the tc_gpu_slot — dropping the ref would evict
     // the shader from the registry and force shaderc to recompile on
     // the next pass creation, reintroducing the ~700 ms Play/Stop lag.
-    for (auto& [_, ubo] : per_frame_ubo_pool_) {
-        if (ubo) device2_->destroy(ubo);
-    }
-    per_frame_ubo_pool_.clear();
     device2_ = nullptr;
 }
 
@@ -482,25 +463,15 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             }
             ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
 
-            // PerFrame UBO (view + projection). Each cascade gets its
-            // own UBO slot (per_frame_ubo_pool_, keyed by fbo_index) so
-            // Vulkan's deferred command buffer sees the right data at
-            // draw-execute time. A single shared UBO would be overwritten
-            // between cascades during recording and all cascades' draws
-            // would end up reading the final cascade's matrices — see
-            // the extended note in shadow_pass.hpp. The depth pool uses
-            // the same `fbo_index` keying so slot lifetimes match.
-            tgfx::BufferHandle per_frame_ubo =
-                get_or_create_per_frame_ubo(ctx.ctx2->device(), fbo_index - 1);
+            // PerFrame UBO through the ring: a fresh offset per cascade,
+            // so the per-cascade matrices survive into draw-execute time
+            // without a slot-per-cascade pool (the shared ring buffer and
+            // dynamic descriptor offsets do what per_frame_ubo_pool_ used
+            // to do on the per-UBO path).
             ShadowPerFrameStd140 per_frame{};
             std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
             std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
-            ctx.ctx2->device().upload_buffer(
-                per_frame_ubo,
-                std::span<const uint8_t>(
-                    reinterpret_cast<const uint8_t*>(&per_frame),
-                    sizeof(per_frame)));
-            ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo);
+            ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
 
             if (cached_draw_calls_.empty()) {
                 ctx.ctx2->end_pass();

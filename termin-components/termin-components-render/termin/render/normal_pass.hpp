@@ -19,7 +19,6 @@ private:
     // re-run shaderc — see ShadowPass for the pattern + rationale.
     tgfx::IRenderDevice* device2_ = nullptr;
     tc_shader_handle normal_shader_handle_ = tc_shader_handle_invalid();
-    tgfx::BufferHandle per_frame_ubo_;
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();

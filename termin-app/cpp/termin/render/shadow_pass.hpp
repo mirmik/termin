@@ -130,36 +130,20 @@ public:
     }
 
 private:
-    // Lazy tgfx2 UBO pool owned by the pass.
+    // Lazy tgfx2 state owned by the pass.
     //
-    // NOTE on `per_frame_ubo_pool_`: Vulkan records commands into a deferred
-    // command buffer — all the frame's vkCmdDrawIndexed calls accumulate
-    // and execute together at submit time, reading whatever the UBO
-    // contains *then*. If every cascade's draws shared a single UBO and we
-    // re-uploaded it between cascades (via execute_immediate, which merely
-    // serialises a staging copy on the GPU, not against the main buffer's
-    // recording), every draw would end up reading the last-written
-    // cascade's matrices. Symptom: shadow map renders all casters with
-    // the final cascade's ortho bounds — geometry ~4× too small, landing
-    // wherever the largest cascade projected the scene origin. OpenGL
-    // hides the bug because glBufferSubData is immediate relative to the
-    // driver's command stream.
-    //
-    // Fix: one UBO per cascade slot, keyed by the same `fbo_index` the
-    // depth pool uses. Each cascade writes its own UBO; draws read
-    // unchanged data when the command buffer finally executes.
-    //
-    // Shader handles are NOT owned by the pass — they live on the
-    // tc_shader global registry (see `shadow_shader_handle_`) so repeated
-    // pass construction/destruction doesn't re-run shaderc.
+    // PerFrame data is written into the device ring UBO per cascade now;
+    // the dynamic descriptor offset bakes a fresh offset into each draw,
+    // which is what the old per_frame_ubo_pool_ achieved with one VkBuffer
+    // per cascade slot (Vulkan cmd-buffer deferred read + shared UBO =
+    // stale data bug, vulkan_ubo_reuse_pitfall). Shader handles are NOT
+    // owned — they live on the tc_shader global registry so repeated pass
+    // construction/destruction doesn't re-run shaderc.
     tgfx::IRenderDevice* device2_ = nullptr;
     tc_shader_handle shadow_shader_handle_ = tc_shader_handle_invalid();
-    std::unordered_map<int, tgfx::BufferHandle> per_frame_ubo_pool_;
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
-    tgfx::BufferHandle get_or_create_per_frame_ubo(
-        tgfx::IRenderDevice& device, int index);
 
     // Native shadow-map pool: index -> depth texture.
     // Owned via tgfx2 IRenderDevice. Destroyed in destroy().
