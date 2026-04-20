@@ -290,6 +290,23 @@ TcShader get_skinned_shader(TcShader original_shader) {
     // Copy features from original
     skinned.set_features(original_shader.features());
 
+    // Copy material UBO layout from the original. The shader parser populates
+    // this on `.shader` load (shader_asset.py / material_asset.py), but the
+    // skinned variant is created here at runtime without going through the
+    // parser — so the layout has to be transported manually. Without this,
+    // apply_material_phase_ubo bails out on `material_ubo_block_size == 0`
+    // and skinned meshes render with zeroed material parameters (black /
+    // camera-dependent trash colour).
+    tc_shader* orig_raw = original_shader.get();
+    tc_shader* skinned_raw = skinned.get();
+    if (orig_raw && skinned_raw) {
+        tc_shader_set_material_ubo_layout(
+            skinned_raw,
+            orig_raw->material_ubo_entries,
+            orig_raw->material_ubo_entry_count,
+            orig_raw->material_ubo_block_size);
+    }
+
     // Mark as variant
     skinned.set_variant_info(original_shader, TC_SHADER_VARIANT_SKINNING);
 
