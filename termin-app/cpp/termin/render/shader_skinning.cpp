@@ -18,8 +18,9 @@ namespace termin {
 // matches the byte layout exactly.
 //
 // Slot map (see also material_pipeline_vulkan memory):
-//   0 = Lighting, 1 = Material, 2 = PerFrame, 3 = ShadowBlock,
-//   4 = material samplers (base), 5 = BoneBlock (this), 8 = shadow sampler array.
+//   0 = Lighting, 1 = MaterialParams, 2 = PerFrame, 3 = ShadowBlock,
+//   4-7 = material sampler base range, 8-11 = shadow sampler array,
+//   12 = BoneBlock (this), 14 = push-constants emulation UBO (GL).
 static const char* SKINNING_INPUTS = R"(
 // === Skinning inputs (injected) ===
 // Locations 6/7 match tgfx_vertex_layout_skinned's joints/weights offsets.
@@ -29,7 +30,7 @@ layout(location = 6) in vec4 a_joints;
 layout(location = 7) in vec4 a_weights;
 
 const int MAX_BONES = 128;
-layout(std140, binding = 5) uniform BoneBlock {
+layout(std140, binding = 12) uniform BoneBlock {
     mat4 u_bone_matrices[MAX_BONES];
     int u_bone_count;
 };
