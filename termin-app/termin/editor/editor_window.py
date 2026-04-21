@@ -855,17 +855,6 @@ class EditorWindow(QMainWindow):
             return None
         return self._project_controller.get_project_path()
 
-    def _get_window_backend(self):
-        """Get WindowBackend from world."""
-        if self.world is not None:
-            return self._sdl_backend
-        return None
-
-    def _get_render_engine(self):
-        """Get RenderEngine from RenderingController."""
-        if self._rendering_controller is not None:
-            return self._rendering_controller._render_engine
-        return None
 
     def _log_to_console(self, message: str) -> None:
         """Log message to console output (native logs already print to stderr)."""
@@ -1000,7 +989,6 @@ class EditorWindow(QMainWindow):
             inspector_controller=self._inspector_controller,
             center_tab_widget=self._center_tab_widget,
             get_scene=lambda: self.scene,
-            get_window_backend=self._get_window_backend,
             get_sdl_backend=lambda: self._sdl_backend,
             on_entity_selected=self.show_entity_inspector,
             on_request_update=self._request_viewport_update,

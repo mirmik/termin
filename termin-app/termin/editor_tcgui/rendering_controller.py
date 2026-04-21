@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Optional
 
 from tcbase import log
-from termin.visualization.core.scene import scene_render_mount
 
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
