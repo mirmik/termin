@@ -379,6 +379,9 @@ class EditorWindow(QMainWindow):
         # (also recreates EditorViewportInputManagers for the new viewport)
         self._sync_attachment_refs()
 
+        # Wire mode controller's model with fully-initialized deps.
+        self._mode_controller.bind_late()
+
         # --- C++ SelectionManager callbacks ---
         self._interaction_system.selection.on_selection_changed = self._on_selection_changed
         self._interaction_system.selection.on_hover_changed = self._on_hover_changed

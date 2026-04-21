@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import QLabel, QStatusBar
 
 from termin.editor.scene_manager import SceneMode
+from termin.editor_core.game_mode_model import GameModeModel
 
 if TYPE_CHECKING:
     from termin.editor.editor_window import EditorWindow
@@ -16,24 +17,42 @@ class EditorModeController:
         self._status_bar_label: QLabel | None = None
         self._fps_smooth: float | None = None
         self._fps_alpha: float = 0.1  # f_new = f_prev*(1-α) + f_curr*α
-        self._game_scene_name: str | None = None
-        self._saved_tree_expanded_uuids: list[str] | None = None
         self._is_fullscreen: bool = False
         self._pre_fullscreen_state: dict | None = None
 
+        # Model is created lazily in bind_late() — EditorModeController is
+        # constructed at the very top of EditorWindow.__init__, before
+        # scene_manager / rendering_controller / editor_attachment exist.
+        self._model: GameModeModel | None = None
+
+    def bind_late(self) -> None:
+        """Called by EditorWindow once scene_manager / editor_attachment /
+        rendering_controller / scene_tree_controller are all initialized."""
+        self._model = GameModeModel(
+            scene_manager=self._window.scene_manager,
+            editor_attachment=self._window._editor_attachment,
+            rendering_controller=self._window._rendering_controller,
+            get_editor_scene_name=lambda: self._window._editor_scene_name,
+            scene_tree_controller=self._window.scene_tree_controller,
+        )
+        self._model.state_changed.connect(self._on_state_changed)
+        self._model.mode_entered.connect(self._on_mode_entered)
+
+    @property
+    def model(self) -> "GameModeModel | None":
+        return self._model
+
     @property
     def game_scene_name(self) -> str | None:
-        return self._game_scene_name
+        return self._model.game_scene_name if self._model is not None else None
 
     @property
     def is_game_mode(self) -> bool:
-        return self._game_scene_name is not None
+        return self._model.is_game_mode if self._model is not None else False
 
     @property
     def is_game_paused(self) -> bool:
-        if not self.is_game_mode:
-            return False
-        return self._window.scene_manager.get_mode(self._game_scene_name) == SceneMode.STOP
+        return self._model.is_game_paused if self._model is not None else False
 
     @property
     def is_fullscreen(self) -> bool:
@@ -196,162 +215,42 @@ class EditorModeController:
     # ----------- game mode -----------#
 
     def toggle_game_mode(self) -> None:
-        """Переключает режим игры."""
-        if self.is_game_mode:
-            self._stop_game_mode()
-        else:
-            self._start_game_mode()
+        if self._model is None:
+            return
+        self._model.toggle_game_mode()
 
     def toggle_pause(self) -> None:
-        """Переключает паузу в игровом режиме."""
-        if not self.is_game_mode or self._game_scene_name is None:
+        if self._model is None:
             return
-
-        current_mode = self._window.scene_manager.get_mode(self._game_scene_name)
-        if current_mode == SceneMode.PLAY:
-            # Pause: PLAY -> STOP
-            self._window.scene_manager.set_mode(self._game_scene_name, SceneMode.STOP)
-            if self._window._pause_button is not None:
-                self._window._pause_button.setChecked(True)
-        else:
-            # Resume: STOP -> PLAY
-            self._window.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
-            if self._window._pause_button is not None:
-                self._window._pause_button.setChecked(False)
-
+        self._model.toggle_pause()
+        if self._window._pause_button is not None:
+            self._window._pause_button.setChecked(self._model.is_game_paused)
         self.update_status_bar()
         self._window._request_viewport_update()
 
-    def _start_game_mode(self) -> None:
-        """Входит в игровой режим."""
-        if self.is_game_mode:
-            return
-        if self._window._editor_scene_name is None:
-            return
+    def _on_state_changed(self, _model) -> None:
+        """Called by model after toggle_pause / start / stop to refresh UI."""
+        self._update_game_mode_ui()
 
-        # Rebuild stale modules before entering game mode
-        from termin.modules import get_project_modules_runtime
-        get_project_modules_runtime().rebuild_stale_modules()
-
-        editor_scene = self._window.scene_manager.get_scene(self._window._editor_scene_name)
-        if editor_scene is None:
-            return
-
-        # Сохраняем раскрытые ноды дерева (для переноса в game scene и обратно)
-        self._saved_tree_expanded_uuids = None
-        if self._window.scene_tree_controller is not None:
-            self._saved_tree_expanded_uuids = (
-                self._window.scene_tree_controller.get_expanded_entity_uuids()
-            )
-
-        # Сохраняем камеру editor viewport в editor сцену
-        self._save_editor_viewport_camera_to_scene(editor_scene)
-
-        # Сохраняем viewport_configs перед копированием (для восстановления через attach_scene)
-        if self._window._rendering_controller is not None:
-            self._window._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
-
-        # Сохраняем состояние EditorEntities в editor_scene для восстановления после game mode
-        if self._window._editor_attachment is not None:
-            self._window._editor_attachment.save_state()
-
-        # Создаём копию сцены для game mode (копируется и editor_viewport_camera_name)
-        self._game_scene_name = f"{self._window._editor_scene_name}(game)"
-        game_scene = self._window.scene_manager.copy_scene(
-            self._window._editor_scene_name,
-            self._game_scene_name,
-        )
-
-        # Detach editor scene from RenderingManager BEFORE attaching game scene
-        # (иначе editor scene's CameraViewportComponent обнулит камеру при detach)
-        if self._window._rendering_controller is not None:
-            self._window._rendering_controller.detach_scene(editor_scene)
-
-        # Detach from editor_scene, attach to game_scene with same camera state
-        if self._window._editor_attachment is not None:
-            self._window._editor_attachment.attach(game_scene, transfer_camera_state=True)
-        self._window._sync_attachment_refs()
-
-        # Устанавливаем режимы (таймер запустится автоматически)
-        self._window.scene_manager.set_mode(self._window._editor_scene_name, SceneMode.INACTIVE)
-        self._window.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
-
-        self._on_game_mode_changed(True, game_scene, self._saved_tree_expanded_uuids)
-
-    def _stop_game_mode(self) -> None:
-        """Выходит из игрового режима."""
-        if not self.is_game_mode:
-            return
-
-        # Detach from game_scene (don't save state - we discard game changes)
-        if self._window._editor_attachment is not None:
-            self._window._editor_attachment.detach(save_state=False)
-
-        # Detach game scene from RenderingManager before closing
-        game_scene = self._window.scene_manager.get_scene(self._game_scene_name)
-        if game_scene is not None and self._window._rendering_controller is not None:
-            self._window._rendering_controller.detach_scene(game_scene)
-
-        # Закрываем game сцену (теперь is_game_mode станет False)
-        if self._game_scene_name is not None:
-            self._window.scene_manager.close_scene(self._game_scene_name)
-        self._game_scene_name = None
-
-        # Возвращаемся к editor сцене
-        self._window.scene_manager.set_mode(self._window._editor_scene_name, SceneMode.STOP)
-        editor_scene = self._window.scene_manager.get_scene(self._window._editor_scene_name)
-
-        # Attach to editor_scene, restore state from scene.editor_entities_data
-        if self._window._editor_attachment is not None:
-            self._window._editor_attachment.attach(editor_scene, restore_state=True)
-        self._window._sync_attachment_refs()
-
-        # Создаём viewports для editor сцены (камера читается из scene.editor_viewport_camera_name)
-        # Передаём сохранённые expanded_uuids для восстановления состояния дерева
-        self._on_game_mode_changed(False, editor_scene, self._saved_tree_expanded_uuids)
-        self._saved_tree_expanded_uuids = None  # Очищаем после использования
-
-    def _save_editor_viewport_camera_to_scene(self, scene) -> None:
-        """Сохраняет имя камеры editor viewport в сцену."""
-        if self._window._rendering_controller is None:
-            return
-        editor_display = self._window._rendering_controller.editor_display
-        if editor_display is None or not editor_display.viewports:
-            return
-        viewport = editor_display.viewports[0]
-        camera_name = None
-        if viewport.camera is not None and viewport.camera.entity is not None:
-            camera_name = viewport.camera.entity.name
-        scene.set_metadata_value("termin.editor.viewport_camera_name", camera_name)
-
-    def _on_game_mode_changed(
+    def _on_mode_entered(
         self,
         is_playing: bool,
         scene,
-        expanded_uuids: list[str] | None = None,
+        expanded_uuids: list[str] | None,
     ) -> None:
-        """Колбэк при изменении игрового режима."""
-        if self._window._rendering_controller is None:
-            return
+        """Called by model after _start/_stop — rebuilds scene tree, clears
+        inspector, refreshes framegraph debugger. View-specific glue."""
+        self._window._sync_attachment_refs()
 
-        # attach_scene уже вызван из EditorSceneAttachment.attach()
-        # (создаёт viewports из viewport_configs, вызывает notify_render_attach)
-
-        # Обновляем scene tree на новую сцену
         if self._window.scene_tree_controller is not None:
             self._window.scene_tree_controller.set_scene(scene)
             self._window.scene_tree_controller.rebuild()
-            # Восстанавливаем раскрытые ноды (сохранённые из editor scene)
             if expanded_uuids:
                 self._window.scene_tree_controller.set_expanded_entity_uuids(expanded_uuids)
 
-        # Очищаем инспектор (выбранный entity мог измениться)
         self._window.show_entity_inspector(None)
-
-        # Обновляем framegraph debugger если открыт
         self._window._refresh_framegraph_debugger()
 
-        # Сбрасываем сглаженное значение FPS при входе/выходе
         self._fps_smooth = None
         self._update_game_mode_ui()
         self._window._request_viewport_update()
