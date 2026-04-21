@@ -9,40 +9,6 @@ if TYPE_CHECKING:
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 
 
-class _FboPoolEntryView:
-    """Shim around the dict returned by RenderPipeline.get_fbo(key).
-
-    Exposes the minimum API the Qt framegraph debugger touches on FBO
-    entries — size + formats + the native GPU handles for preview hooks.
-    Kept thin on purpose: the underlying dict is authoritative and can
-    grow new keys without changing this class.
-    """
-
-    key: str = ""
-    width: int = 0
-    height: int = 0
-    samples: int = 1
-    has_depth: bool = False
-    color_format: int = 0
-    depth_format: int = 0
-    color_native_handle: int = 0
-    depth_native_handle: int = 0
-
-    def __init__(self, raw: dict) -> None:
-        self.key = raw.get("key", "")
-        self.width = int(raw.get("width", 0))
-        self.height = int(raw.get("height", 0))
-        self.samples = int(raw.get("samples", 1))
-        self.has_depth = bool(raw.get("has_depth", False))
-        self.color_format = int(raw.get("color_format", 0))
-        self.depth_format = int(raw.get("depth_format", 0))
-        self.color_native_handle = int(raw.get("color_native_handle", 0))
-        self.depth_native_handle = int(raw.get("depth_native_handle", 0))
-
-    def get_size(self) -> Tuple[int, int]:
-        return (self.width, self.height)
-
-
 class FramegraphDebugDialog(QtWidgets.QDialog):
     """
     Framegraph debugger window with two connection modes:
@@ -464,25 +430,7 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         self._viewport_combo.blockSignals(False)
 
     def _update_render_stats(self) -> None:
-        from termin.visualization.render.manager import RenderingManager
-        rm = RenderingManager.instance()
-        stats = rm.get_render_stats()
-
-        parts = []
-        parts.append(f"Scenes: {stats['attached_scenes']}")
-        parts.append(f"Pipelines: {stats['scene_pipelines']}")
-        parts.append(f"Unmanaged: {stats['unmanaged_viewports']}")
-
-        details = []
-        if stats["scene_names"]:
-            details.append(f"[{', '.join(stats['scene_names'])}]")
-        if stats["pipeline_names"]:
-            details.append(f"({', '.join(stats['pipeline_names'])})")
-
-        text = " | ".join(parts)
-        if details:
-            text += "  " + " ".join(details)
-        self._render_stats_label.setText(text)
+        self._render_stats_label.setText(self._model.format_render_stats())
 
     def _on_refresh_render_stats_clicked(self) -> None:
         self._update_render_stats()
@@ -494,97 +442,17 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             return None
         return self._rendering_controller.get_viewport_state(self._current_viewport)
 
-    def _get_fbos(self) -> dict:
-        """Wrap raw FBO dicts in ``_FboPoolEntryView`` for Qt widgets that
-        assume attribute access. Model returns raw dicts.
-        """
-        raw_fbos = self._model.get_fbos()
-        return {key: _FboPoolEntryView(raw) for key, raw in raw_fbos.items()}
-
     def _get_current_pipeline(self):
         return self._model.get_current_pipeline()
 
     def _update_fbo_info(self) -> None:
-        fbos = self._get_fbos()
-        resource_name = self._resource_name if self._mode == "between" else self._debug_source_res
-        resource = fbos.get(resource_name) if fbos else None
-
-        if resource is None:
-            self._fbo_info_label.setText(f"Ресурс '{resource_name}': не найден")
-            return
-
-        info_parts = [f"<b>{resource_name}</b>"]
-
-        from termin.visualization.render.framegraph.resource import (
-            ShadowMapArrayResource,
-        )
-
-        if isinstance(resource, ShadowMapArrayResource):
-            info_parts.append(f"Тип: ShadowMapArray ({len(resource)} entries)")
-            if len(resource) > 0:
-                entry = resource[0]
-                fbo = entry.fbo
-                if fbo is not None:
-                    w, h = fbo.get_size()
-                    info_parts.append(f"Размер: {w}×{h}")
-        elif isinstance(resource, _FboPoolEntryView):
-            # Thin wrapper over RenderPipeline.get_fbo(key) dict — see
-            # _FboPoolEntryView above. Exposes size, samples, formats,
-            # and native handles.
-            info_parts.append(f"Размер: {resource.width}×{resource.height}")
-            info_parts.append(f"fmt={resource.color_format}")
-            if resource.has_depth:
-                info_parts.append(f"depth_fmt={resource.depth_format}")
-            if resource.samples > 1:
-                info_parts.append(f"MSAA={resource.samples}x")
-            if resource.color_native_handle:
-                info_parts.append(f"id={resource.color_native_handle}")
-        else:
-            info_parts.append(f"Тип: {type(resource).__name__}")
-
-        self._fbo_info_label.setText(" | ".join(info_parts))
+        self._fbo_info_label.setText(self._model.format_fbo_info())
 
     def _update_writer_pass_label(self) -> None:
-        resource_name = self._debug_source_res
-        if not resource_name:
-            self._writer_pass_label.setText("")
-            return
-
-        schedule = self._build_schedule(exclude_debugger=True)
-        writer_pass = None
-        for p in schedule:
-            if resource_name in p.writes:
-                writer_pass = p.pass_name
-                break
-
-        if writer_pass:
-            self._writer_pass_label.setText(f"← {writer_pass}")
-        else:
-            self._writer_pass_label.setText("(read-only)")
+        self._writer_pass_label.setText(self._model.format_writer_pass())
 
     def _update_pass_serialization(self) -> None:
-        import json
-
-        if self._selected_pass is None:
-            self._pass_serialization.clear()
-            return
-
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            self._pass_serialization.setText("<no pipeline>")
-            return
-
-        for p in pipeline.passes:
-            if p.pass_name == self._selected_pass:
-                try:
-                    data = p.serialize()
-                    text = json.dumps(data, indent=2, ensure_ascii=False)
-                    self._pass_serialization.setText(text)
-                except Exception as e:
-                    self._pass_serialization.setText(f"<error: {e}>")
-                return
-
-        self._pass_serialization.setText(f"<pass '{self._selected_pass}' not found>")
+        self._pass_serialization.setText(self._model.format_pass_json())
 
     # ============ Present phase ============
 
@@ -818,30 +686,11 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     def _update_timing_label(self) -> None:
         if self._timing_label is None:
             return
-
-        if self._selected_pass is None or self._selected_symbol is None:
+        text = self._model.format_timing()
+        if not text:
             self._timing_label.hide()
             return
-
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            self._timing_label.hide()
-            return
-
-        for p in pipeline.passes:
-            if p.pass_name == self._selected_pass:
-                timings = p.get_internal_symbols_with_timing()
-                for t in timings:
-                    if t.name == self._selected_symbol:
-                        gpu_str = f"{t.gpu_time_ms:.3f}ms" if t.gpu_time_ms >= 0 else "pending..."
-                        self._timing_label.setText(
-                            f"CPU: {t.cpu_time_ms:.3f}ms | GPU: {gpu_str}"
-                        )
-                        self._timing_label.show()
-                        return
-                break
-
-        self._timing_label.setText("Timing: no data")
+        self._timing_label.setText(text)
         self._timing_label.show()
 
     def _on_pause_toggled(self, checked: bool) -> None:
@@ -860,60 +709,19 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         return self._model._build_schedule(exclude_debugger)
 
     def _update_pipeline_info(self) -> None:
-        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
-
-        schedule = self._build_schedule()
-        if not schedule:
-            self._pipeline_info.setHtml("<i>Pipeline пуст</i>")
-            return
-
-        current_resource = self._debug_source_res
-
-        lines = []
-        for p in schedule:
-            reads_str = ", ".join(sorted(p.reads)) if p.reads else "∅"
-            writes_str = ", ".join(sorted(p.writes)) if p.writes else "∅"
-            line = f"{p.pass_name}: {{{reads_str}}} → {{{writes_str}}}"
-
-            if isinstance(p, FrameDebuggerPass):
-                line = f"<span style='color: #ffb86c;'>► {line}</span>"
-            elif current_resource and current_resource in p.writes:
-                line = f"<span style='color: #50fa7b; font-weight: bold;'>● {line}</span>"
-
-            lines.append(line)
-
-        self._pipeline_info.setHtml("<pre>" + "<br>".join(lines) + "</pre>")
+        text = self._model.format_pipeline_info()
+        if text == "<i>Pipeline пуст</i>":
+            self._pipeline_info.setHtml(text)
+        else:
+            # Model returns HTML (<pre>...<br>...</pre>); pass through.
+            self._pipeline_info.setHtml(text)
 
     def _update_resource_list(self) -> None:
         self._update_pipeline_info()
 
-        schedule = self._build_schedule(exclude_debugger=True)
-
-        if schedule:
-            written: set[str] = set()
-            for p in schedule:
-                written.update(p.writes)
-            written.discard("DISPLAY")
-
-            read_only: list[str] = []
-            for p in schedule:
-                for r in sorted(p.reads):
-                    if r not in written and r != "DISPLAY" and r not in read_only:
-                        read_only.append(r)
-
-            seen: set[str] = set()
-            write_order: list[str] = []
-            for p in schedule:
-                for w in sorted(p.writes):
-                    if w not in seen and w != "DISPLAY":
-                        seen.add(w)
-                        write_order.append(w)
-
-            names = read_only + write_order
-        else:
-            names = sorted(self._get_fbos().keys())
-
-        current_items = [self._resource_combo.itemText(i) for i in range(self._resource_combo.count())]
+        names = self._model.get_resources()
+        current_items = [self._resource_combo.itemText(i)
+                         for i in range(self._resource_combo.count())]
         if current_items == names:
             return
 
@@ -923,28 +731,14 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         for name in names:
             self._resource_combo.addItem(name)
         if current and current in names:
-            index = self._resource_combo.findText(current)
-            if index >= 0:
-                self._resource_combo.setCurrentIndex(index)
+            self._resource_combo.setCurrentIndex(self._resource_combo.findText(current))
         self._resource_combo.blockSignals(False)
 
     def _update_passes_list(self) -> None:
         previous_pass = self._selected_pass
-
-        passes_info: List[Tuple[str, bool]] = []
-
-        pipeline = self._get_current_pipeline()
-        if pipeline is not None:
-            from termin.visualization.render.framegraph.passes.shadow import ShadowPass
-            for p in pipeline.passes:
-                if isinstance(p, ShadowPass):
-                    has_symbols = False
-                else:
-                    symbols = p.get_internal_symbols()
-                    has_symbols = len(symbols) > 0
-                passes_info.append((p.pass_name, has_symbols))
-
-        new_items = [(f"{name} ●" if has_sym else name, name) for name, has_sym in passes_info]
+        passes_info = self._model.get_passes()
+        new_items = [(f"{name} ●" if has_sym else name, name)
+                     for name, has_sym in passes_info]
 
         current_items = [(self._pass_combo.itemText(i), self._pass_combo.itemData(i))
                          for i in range(self._pass_combo.count())]
@@ -953,14 +747,11 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
         self._pass_combo.blockSignals(True)
         self._pass_combo.clear()
-
         selected_index = -1
-
         for index, (display_name, pass_name) in enumerate(new_items):
             self._pass_combo.addItem(display_name, pass_name)
             if previous_pass is not None and pass_name == previous_pass:
                 selected_index = index
-
         self._pass_combo.blockSignals(False)
 
         if previous_pass is not None and selected_index < 0:
@@ -986,36 +777,24 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
 
     def _update_symbols_list(self) -> None:
         previous_symbol = self._selected_symbol
+        symbols = self._model.get_symbols()
 
-        symbols: List[str] = []
-
-        if self._selected_pass:
-            pipeline = self._get_current_pipeline()
-            if pipeline is not None:
-                for p in pipeline.passes:
-                    if p.pass_name == self._selected_pass:
-                        symbols = list(p.get_internal_symbols())
-                        break
-
-        current_items = [self._symbol_combo.itemText(i) for i in range(self._symbol_combo.count())]
+        current_items = [self._symbol_combo.itemText(i)
+                         for i in range(self._symbol_combo.count())]
         if current_items == symbols:
             return
 
         self._symbol_combo.blockSignals(True)
         self._symbol_combo.clear()
-
         selected_index = -1
-
         for index, sym in enumerate(symbols):
             self._symbol_combo.addItem(sym)
             if previous_symbol is not None and sym == previous_symbol:
                 selected_index = index
-
         if previous_symbol is not None and selected_index < 0:
             self._symbol_combo.setCurrentIndex(-1)
         elif selected_index >= 0:
             self._symbol_combo.setCurrentIndex(selected_index)
-
         self._symbol_combo.setEnabled(len(symbols) > 0)
         self._symbol_combo.blockSignals(False)
 
