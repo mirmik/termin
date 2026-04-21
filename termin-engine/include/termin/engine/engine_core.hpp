@@ -26,6 +26,7 @@ public:
 private:
     std::atomic<bool> _running{false};
     double _target_fps = 60.0;
+    bool _profile_ui = false;
 
     // Callbacks for external integration (set from Python)
     std::function<void()> _poll_events_callback;
@@ -48,6 +49,15 @@ public:
     // --- Configuration ---
     void set_target_fps(double fps) { _target_fps = fps; }
     double target_fps() const { return _target_fps; }
+
+    // When true, run() wraps the poll_events callback in a profiler "UI"
+    // section and extends the frame scope to cover both UI and
+    // tick_and_render. When false, tick_and_render owns its own frame scope
+    // and UI time stays outside the profile — same behaviour the profiler
+    // had historically, useful for apples-to-apples comparison with other
+    // hosts (e.g. the Qt editor).
+    void set_profile_ui(bool v) { _profile_ui = v; }
+    bool profile_ui() const { return _profile_ui; }
 
     // --- Callbacks ---
     // Called each frame to process UI/input events (Qt, SDL)

@@ -33,6 +33,12 @@ void bind_engine_core(nb::module_& m) {
             &EngineCore::set_target_fps,
             "Target frames per second for main loop")
 
+        .def_prop_rw("profile_ui",
+            &EngineCore::profile_ui,
+            &EngineCore::set_profile_ui,
+            "When true, run() wraps poll_events in a 'UI' profiler section "
+            "and the frame scope covers both UI and tick_and_render.")
+
         // Callbacks
         .def("set_poll_events_callback", [](EngineCore& self, nb::object callback) {
             if (callback.is_none()) {

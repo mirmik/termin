@@ -123,6 +123,16 @@ class ProfilerPanel(VStack):
         self._detailed_check.on_changed = self._on_detailed_toggled
         toolbar.add_child(self._detailed_check)
 
+        self._include_ui_check = Checkbox()
+        self._include_ui_check.text = "Include UI"
+        self._include_ui_check.font_size = 12
+        self._include_ui_check.on_changed = self._on_include_ui_toggled
+        from termin._native import EngineCore
+        engine = EngineCore.instance()
+        if engine is not None:
+            self._include_ui_check.checked = engine.profile_ui
+        toolbar.add_child(self._include_ui_check)
+
         clear_btn = Button()
         clear_btn.text = "Clear"
         clear_btn.font_size = 11
@@ -191,6 +201,12 @@ class ProfilerPanel(VStack):
 
     def _on_detailed_toggled(self, checked: bool) -> None:
         self._profiler.detailed_rendering = checked
+
+    def _on_include_ui_toggled(self, checked: bool) -> None:
+        from termin._native import EngineCore
+        engine = EngineCore.instance()
+        if engine is not None:
+            engine.profile_ui = checked
 
     def _on_clear(self) -> None:
         self._profiler.clear_history()
