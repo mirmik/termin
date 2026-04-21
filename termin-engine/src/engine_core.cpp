@@ -41,8 +41,11 @@ EngineCore::~EngineCore() {
 
 bool EngineCore::tick_and_render(double dt) {
     bool profile = tc_profiler_enabled();
+    // When profile_ui is on, run() owns the frame scope and has already
+    // opened it around the UI callback.
+    bool manage_frame = profile && !_profile_ui;
 
-    if (profile) tc_profiler_begin_frame();
+    if (manage_frame) tc_profiler_begin_frame();
 
     bool should_render = scene_manager.tick(dt);
 
@@ -60,7 +63,7 @@ bool EngineCore::tick_and_render(double dt) {
         if (profile) tc_profiler_end_section();
     }
 
-    if (profile) tc_profiler_end_frame();
+    if (manage_frame) tc_profiler_end_frame();
 
     return should_render;
 }
@@ -84,19 +87,30 @@ void EngineCore::run() {
         double dt = std::chrono::duration<double>(frame_start - last_time).count();
         last_time = frame_start;
 
+        bool profile_ui = tc_profiler_enabled() && _profile_ui;
+        if (profile_ui) {
+            tc_profiler_begin_frame();
+            tc_profiler_begin_section("UI");
+        }
+
         // Poll events (Qt, SDL, etc.)
         if (_poll_events_callback) {
             _poll_events_callback();
         }
 
+        if (profile_ui) tc_profiler_end_section();
+
         // Check if should continue
         if (_should_continue_callback && !_should_continue_callback()) {
+            if (profile_ui) tc_profiler_end_frame();
             _running = false;
             break;
         }
 
         // Tick and render
         tick_and_render(dt);
+
+        if (profile_ui) tc_profiler_end_frame();
 
         // Frame limiting with sleep_until for stable pacing
         next_frame_time += frame_duration;

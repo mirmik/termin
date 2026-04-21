@@ -224,13 +224,18 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     sdl2.SDL_StartTextInput()
 
-    def poll_events() -> None:
-        if not _dispatch_sdl_events(main_window, ui, wm):
-            win.close()
-            return
+    from termin.core.profiler import Profiler
+    profiler = Profiler.instance()
 
-        win.poll_file_watcher()
-        wm.render_all()
+    def poll_events() -> None:
+        with profiler.section("Events"):
+            if not _dispatch_sdl_events(main_window, ui, wm):
+                win.close()
+                return
+            win.poll_file_watcher()
+
+        with profiler.section("Render Compose"):
+            wm.render_all()
 
     def should_continue() -> bool:
         return not (win.should_close() or main_window.should_close())
