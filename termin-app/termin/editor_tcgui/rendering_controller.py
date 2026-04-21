@@ -21,21 +21,6 @@ if TYPE_CHECKING:
     from tgfx._tgfx_native import Tgfx2Context
 
 
-class _NoOpViewportList:
-    """Stub for EditorSceneAttachment compatibility (calls _viewport_list.refresh())."""
-
-    def refresh(self) -> None:
-        pass
-
-    def set_render_targets(self, targets) -> None:
-        # Qt editor used this to populate a side panel listing
-        # offscreen render targets. The tcgui editor has no such panel
-        # yet — the list is silently dropped until M14 restores a
-        # parity panel.
-        pass
-
-
-
 class RenderingControllerTcgui:
     """Controller for managing rendering displays and viewports in tcgui editor.
 
@@ -48,12 +33,17 @@ class RenderingControllerTcgui:
 
     def __init__(
         self,
+        viewport_list_widget,
         offscreen_context: "OffscreenContext",
         ctx: "Tgfx2Context",
         get_scene: Callable[[], "Scene | None"] | None = None,
         make_editor_pipeline: Callable[[], "RenderPipeline"] | None = None,
         on_request_update: Callable[[], None] | None = None,
         on_rendering_changed: Callable[[], None] | None = None,
+        on_display_selected: Callable[["Display | None"], None] | None = None,
+        on_viewport_selected: Callable[["Viewport | None"], None] | None = None,
+        on_entity_selected: Callable[[object], None] | None = None,
+        on_render_target_selected: Callable[[object], None] | None = None,
     ) -> None:
         from termin._native.render import RenderingManager
         from termin.editor_core.rendering_model import RenderingModel
@@ -70,11 +60,18 @@ class RenderingControllerTcgui:
         self._make_editor_pipeline = make_editor_pipeline
         self._on_request_update = on_request_update
         self._on_rendering_changed = on_rendering_changed
+        self._on_display_selected = on_display_selected
+        self._on_viewport_selected = on_viewport_selected
+        self._on_entity_selected = on_entity_selected
+        self._on_render_target_selected = on_render_target_selected
+
+        self._selected_display = None
+        self._selected_viewport = None
 
         self._display_surfaces: dict[int, object] = {}
         self._display_viewports: dict[int, object] = {}  # display_id -> Viewport3D
         self._display_input_managers: dict[int, object] = {}
-        self._viewport_list = _NoOpViewportList()
+        self._viewport_list = viewport_list_widget
         self._center_tabs = None
 
         # Register offscreen context with RenderingManager. Under
@@ -92,6 +89,21 @@ class RenderingControllerTcgui:
         self._manager.set_display_factory(self._create_display_for_name)
         self._manager.set_pipeline_factory(self._create_pipeline_for_name)
         self._manager.set_display_removed_callback(self._on_display_removed)
+
+        self._connect_viewport_list_signals()
+
+    def _connect_viewport_list_signals(self) -> None:
+        vl = self._viewport_list
+        vl.display_selected.connect(self._on_display_selected_from_list)
+        vl.viewport_selected.connect(self._on_viewport_selected_from_list)
+        vl.entity_selected.connect(self._on_entity_selected_from_list)
+        vl.render_target_selected.connect(self._on_render_target_selected_from_list)
+        vl.display_add_requested.connect(self._on_add_display_requested)
+        vl.viewport_add_requested.connect(self._on_add_viewport_requested)
+        vl.display_remove_requested.connect(self._on_remove_display_requested)
+        vl.viewport_remove_requested.connect(self._on_remove_viewport_requested)
+        vl.render_target_add_requested.connect(self._on_add_render_target_requested)
+        vl.render_target_remove_requested.connect(self._on_remove_render_target_requested)
 
     # ------------------------------------------------------------------
     # Properties
@@ -126,12 +138,28 @@ class RenderingControllerTcgui:
     def set_center_tabs(self, tabs) -> None:
         self._center_tabs = tabs
 
+    def add_display(self, display: "Display", name: str | None = None) -> None:
+        """Register an externally-created display with the manager and viewport list."""
+        if display in self._manager.displays:
+            return
+        display_name = name or display.name or ""
+        self._manager.add_display(display, display_name)
+        self._viewport_list.add_display(display, self._manager.get_display_name(display))
+
+    def remove_display(self, display: "Display") -> None:
+        if display not in self._manager.displays:
+            return
+        self._manager.remove_display(display)
+
     def _refresh_render_targets(self) -> None:
-        """Refresh render target list from pool. Kept as a no-op method
-        for EditorSceneAttachment parity with the Qt controller — the
-        tcgui editor has not yet restored the render-targets debug
-        panel, so there's nothing to refresh."""
-        pass
+        """Refresh render target list in the viewport list widget."""
+        from termin.render_framework._render_framework_native import render_target_pool_list
+        self._viewport_list.set_render_targets(render_target_pool_list())
+
+    def sync_viewport_list_from_manager(self) -> None:
+        """Push current manager state (displays + render targets) into the widget."""
+        self._viewport_list.set_displays(self._manager.displays)
+        self._refresh_render_targets()
 
     # ------------------------------------------------------------------
     # Factories
@@ -178,6 +206,7 @@ class RenderingControllerTcgui:
             self._center_tabs.add_tab(name, vp3d)
             self._display_viewports[display_id] = vp3d
 
+        self._viewport_list.add_display(display, name)
         return display
 
     # ------------------------------------------------------------------
@@ -350,23 +379,13 @@ class RenderingControllerTcgui:
         return None
 
     def set_displays_data(self, data: list | None) -> None:
-        """Attach scene if it has viewport_configs and not already attached."""
-        scene = self._get_scene() if self._get_scene is not None else None
-        if scene is None:
-            return
+        """Refresh viewport list after scene load.
 
-        if not scene_render_mount(scene).viewport_configs:
-            return
-
-        # Check if scene already has non-editor viewports (already attached)
-        for display in self._manager.displays:
-            if display.tc_display_ptr == self._editor_display_ptr:
-                continue
-            for vp in display.viewports:
-                if vp.scene is scene:
-                    return  # Already attached
-
-        self.attach_scene(scene)
+        Viewport creation happens in ``EditorSceneAttachment.attach`` which
+        calls ``attach_scene`` — no need to re-attach here. Matches the
+        Qt editor's ``_set_displays_data`` behavior.
+        """
+        self.sync_viewport_list_from_manager()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -410,7 +429,103 @@ class RenderingControllerTcgui:
         if display_id in self._display_input_managers:
             del self._display_input_managers[display_id]
 
+        self._viewport_list.remove_display(display)
+
+        if self._selected_display is display:
+            self._selected_display = None
+
         self._notify_rendering_changed()
+
+    # ------------------------------------------------------------------
+    # Viewport list signal handlers
+    # ------------------------------------------------------------------
+
+    def _on_display_selected_from_list(self, display) -> None:
+        self._selected_display = display
+        if self._on_display_selected is not None:
+            self._on_display_selected(display)
+
+    def _on_viewport_selected_from_list(self, viewport) -> None:
+        self._selected_viewport = viewport
+        if self._on_viewport_selected is not None:
+            self._on_viewport_selected(viewport)
+
+    def _on_entity_selected_from_list(self, entity) -> None:
+        if self._on_entity_selected is not None:
+            self._on_entity_selected(entity)
+
+    def _on_render_target_selected_from_list(self, render_target) -> None:
+        if self._on_render_target_selected is not None:
+            self._on_render_target_selected(render_target)
+
+    # ------------------------------------------------------------------
+    # Add/Remove display / viewport / render target
+    # ------------------------------------------------------------------
+
+    def _on_add_display_requested(self) -> None:
+        existing_names = {self._manager.get_display_name(d) for d in self._manager.displays}
+        idx = 0
+        while True:
+            name = f"Display {idx}"
+            if name not in existing_names:
+                break
+            idx += 1
+
+        display = self._create_display_for_name(name)
+        if display is None:
+            return
+
+        self._manager.add_display(display, name)
+        self._viewport_list.add_display(display, name)
+        self._request_update()
+        self._notify_rendering_changed()
+
+    def _on_add_viewport_requested(self, display: "Display") -> None:
+        scene = self._get_scene() if self._get_scene is not None else None
+        if scene is None:
+            return
+
+        from termin.visualization.core.camera import CameraComponent
+
+        camera = None
+        for entity in scene.entities:
+            cam = entity.get_component(CameraComponent)
+            if cam is not None:
+                camera = cam
+                break
+        if camera is None:
+            log.warn("No camera in scene — cannot create viewport")
+            return
+
+        display.create_viewport(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
+        self._viewport_list.refresh()
+        self._request_update()
+        self._notify_rendering_changed()
+
+    def _on_remove_display_requested(self, display: "Display") -> None:
+        if display not in self._manager.displays:
+            return
+        self._manager.remove_display(display)
+        self._request_update()
+
+    def _on_remove_viewport_requested(self, viewport: "Viewport") -> None:
+        display = self._manager.get_display_for_viewport(viewport)
+        if display is not None:
+            display.remove_viewport(viewport)
+        if self._selected_viewport is viewport:
+            self._selected_viewport = None
+        self._viewport_list.refresh()
+        self._request_update()
+        self._notify_rendering_changed()
+
+    def _on_add_render_target_requested(self) -> None:
+        from termin.render_framework._render_framework_native import render_target_new
+        render_target_new("RenderTarget")
+        self._refresh_render_targets()
+
+    def _on_remove_render_target_requested(self, render_target) -> None:
+        render_target.free()
+        self._refresh_render_targets()
 
     def _request_update(self) -> None:
         if self._on_request_update is not None:
