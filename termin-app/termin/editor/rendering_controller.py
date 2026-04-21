@@ -90,6 +90,9 @@ class RenderingController:
         from termin.visualization.render.manager import RenderingManager
         self._manager = RenderingManager.instance()
 
+        from termin.editor_core.rendering_model import RenderingModel
+        self._model = RenderingModel(self._manager)
+
         self._viewport_list = viewport_list_widget
         self._inspector = inspector_controller
         self._center_tabs = center_tab_widget
@@ -113,9 +116,6 @@ class RenderingController:
         # Map tc_display_ptr -> input manager (to prevent GC)
         self._display_input_managers: dict[int, object] = {}
 
-        # Editor display tc_display_ptr (not serialized, created before scene)
-        self._editor_display_ptr: Optional[int] = None
-
         # Register display factory with RenderingManager
         self._manager.set_display_factory(self._create_display_for_name)
 
@@ -128,11 +128,24 @@ class RenderingController:
         # Create dedicated GL context for rendering, shared by all displays
         from termin.visualization.render.offscreen_context import OffscreenContext
         self._offscreen_context: OffscreenContext = OffscreenContext()
+        self._model.set_offscreen_context(self._offscreen_context)
 
         # Pass graphics backend and make_current callback to RenderingManager
         self._manager.set_make_current_callback(self._offscreen_context.make_current)
 
         self._connect_signals()
+
+    # ------------------------------------------------------------------
+    # Editor display pointer — backed by RenderingModel
+    # ------------------------------------------------------------------
+
+    @property
+    def _editor_display_ptr(self) -> Optional[int]:
+        return self._model.editor_display_ptr
+
+    @_editor_display_ptr.setter
+    def _editor_display_ptr(self, value: Optional[int]) -> None:
+        self._model.set_editor_display_ptr(value)
 
     def _connect_signals(self) -> None:
         """Connect ViewportListWidget signals."""
@@ -417,83 +430,12 @@ class RenderingController:
                 self._on_display_input_mode_changed_callback(display, input_mode)
 
     def sync_viewport_configs_to_scene(self, scene: "Scene") -> None:
-        """
-        Sync current viewport state to scene.viewport_configs.
-
-        Call this before saving to ensure viewport_configs reflects current state.
-        Excludes editor display viewports (they are managed separately).
-
-        Args:
-            scene: Scene to update viewport_configs for.
-        """
-        from termin.visualization.core.viewport_config import ViewportConfig
-        from termin.visualization.core.scene import scene_render_mount
-        rm = scene_render_mount(scene)
-
-        rm.clear_viewport_configs()
-
-        for display in self._manager.displays:
-            # Skip editor display - it's managed separately
-            if display.tc_display_ptr == self._editor_display_ptr:
-                continue
-
-            for viewport in display.viewports:
-                rt = viewport.render_target
-                rt_name = rt.name if rt is not None else ""
-
-                rect = viewport.rect
-                config = ViewportConfig()
-                config.name = viewport.name or ""
-                config.display_name = display.name
-                config.render_target_name = rt_name
-                config.region_x = rect[0]
-                config.region_y = rect[1]
-                config.region_w = rect[2]
-                config.region_h = rect[3]
-                config.depth = viewport.depth
-                config.input_mode = viewport.input_mode
-                config.block_input_in_editor = viewport.block_input_in_editor
-                config.enabled = viewport.enabled
-                rm.add_viewport_config(config)
+        """Snapshot viewport state of ``scene`` into its viewport_configs."""
+        self._model.sync_viewport_configs_to_scene(scene)
 
     def sync_render_target_configs_to_scene(self, scene: "Scene") -> None:
-        """
-        Sync registered render targets to scene.render_target_configs.
-
-        Call this before saving.
-        """
-        from termin.visualization.core.render_target_config import RenderTargetConfig
-        from termin.visualization.core.scene import scene_render_mount
-        rm = scene_render_mount(scene)
-
-        rm.clear_render_target_configs()
-
-        from termin.render_framework._render_framework_native import render_target_pool_list
-        for rt in render_target_pool_list():
-            if rt.locked:
-                continue
-
-            camera_uuid = ""
-            if rt.camera is not None and rt.camera.entity is not None:
-                camera_uuid = rt.camera.entity.uuid
-
-            pipeline_uuid = None
-            pipeline_name = None
-            if rt.pipeline is not None:
-                pipeline_uuid = self._get_pipeline_uuid(rt.pipeline)
-                if rt.pipeline.name:
-                    pipeline_name = rt.pipeline.name
-
-            config = RenderTargetConfig()
-            config.name = rt.name or ""
-            config.camera_uuid = camera_uuid
-            config.width = rt.width
-            config.height = rt.height
-            config.pipeline_uuid = pipeline_uuid or ""
-            config.pipeline_name = pipeline_name or ""
-            config.layer_mask = rt.layer_mask
-            config.enabled = rt.enabled
-            rm.add_render_target_config(config)
+        """Snapshot the render target pool into scene.render_target_configs."""
+        self._model.sync_render_target_configs_to_scene(scene)
 
     def detach_scene(self, scene: "Scene") -> None:
         """
@@ -647,34 +589,8 @@ class RenderingController:
         self._update_center_tabs()
 
     def remove_viewports_for_scene(self, scene: "Scene") -> None:
-        """
-        Remove all viewports that reference the given scene.
-
-        Called before scene is destroyed or deactivated.
-        Destroys pipelines to clear callbacks, clears FBOs, then removes viewports.
-        """
-        # Make offscreen GL context current before deleting GPU resources
-        self._offscreen_context.make_current()
-
-        for display in self._manager.displays:
-            # Skip editor display — its viewport is managed by EditorSceneAttachment
-            if display.tc_display_ptr == self._editor_display_ptr:
-                continue
-            display_id = display.tc_display_ptr
-            viewports_to_remove = list(display.viewports)
-            if not viewports_to_remove:
-                continue
-
-            for vp in viewports_to_remove:
-                # Destroy pipeline
-                if vp.pipeline is not None:
-                    vp.pipeline.destroy()
-                # Clear viewport state (output_fbo)
-                state = self._manager.get_viewport_state(vp)
-                if state is not None:
-                    state.clear_all()
-                self._manager.remove_viewport_state(vp)
-                display.remove_viewport(vp)
+        """Remove all viewports that belong to ``scene`` (editor display excluded)."""
+        self._model.remove_viewports_for_scene(scene)
         self._viewport_list.refresh()
 
     # --- Editor display ---
@@ -1209,16 +1125,6 @@ class RenderingController:
                 old_pipeline.destroy()
 
         self._request_update()
-
-    def _get_pipeline_uuid(self, pipeline: "RenderPipeline") -> str | None:
-        """Get UUID for a pipeline by looking up its asset."""
-        from termin.assets.resources import ResourceManager
-
-        rm = ResourceManager.instance()
-        asset = rm.get_pipeline_asset(pipeline.name)
-        if asset is not None:
-            return asset.uuid
-        return None
 
     def _get_pipeline_by_uuid(self, uuid: str) -> "RenderPipeline | None":
         """Get pipeline by UUID."""
