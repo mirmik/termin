@@ -106,9 +106,6 @@ class RenderingController:
         self._make_editor_pipeline = make_editor_pipeline
         self._on_display_input_mode_changed_callback = on_display_input_mode_changed
 
-        self._selected_display: Optional["Display"] = None
-        self._selected_viewport: Optional["Viewport"] = None
-
         # Map tc_display_ptr -> (tab container widget, SDLWindowRenderSurface, QWindow)
         # QWindow is stored to prevent garbage collection
         self._display_tabs: dict[int, Tuple[QWidget, object, QWindow]] = {}
@@ -146,6 +143,22 @@ class RenderingController:
     @_editor_display_ptr.setter
     def _editor_display_ptr(self, value: Optional[int]) -> None:
         self._model.set_editor_display_ptr(value)
+
+    @property
+    def _selected_display(self) -> Optional["Display"]:
+        return self._model.selected_display
+
+    @_selected_display.setter
+    def _selected_display(self, value: Optional["Display"]) -> None:
+        self._model.set_selected_display(value)
+
+    @property
+    def _selected_viewport(self) -> Optional["Viewport"]:
+        return self._model.selected_viewport
+
+    @_selected_viewport.setter
+    def _selected_viewport(self, value: Optional["Viewport"]) -> None:
+        self._model.set_selected_viewport(value)
 
     def _connect_signals(self) -> None:
         """Connect ViewportListWidget signals."""
