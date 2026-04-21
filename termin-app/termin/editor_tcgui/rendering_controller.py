@@ -67,7 +67,6 @@ class RenderingControllerTcgui:
 
         self._display_surfaces: dict[int, object] = {}
         self._display_viewports: dict[int, object] = {}  # display_id -> Viewport3D
-        self._display_input_managers: dict[int, object] = {}
         self._viewport_list = viewport_list_widget
         self._center_tabs = None
 
@@ -141,6 +140,10 @@ class RenderingControllerTcgui:
     @_selected_viewport.setter
     def _selected_viewport(self, value: "Viewport | None") -> None:
         self._model.set_selected_viewport(value)
+
+    @property
+    def _display_input_managers(self) -> dict[int, object]:
+        return self._model.display_input_managers
 
     def set_editor_display_ptr(self, ptr: int) -> None:
         self._model.set_editor_display_ptr(ptr)
@@ -229,37 +232,13 @@ class RenderingControllerTcgui:
     def attach_scene(self, scene: "Scene") -> list["Viewport"]:
         """Attach scene using its viewport configuration.
 
-        Creates displays via factory, mounts viewports, sets up input managers.
+        Creates displays via factory, mounts viewports via the model,
+        and asks the view to configure input per non-editor display.
         """
-        viewports = self._manager.attach_scene(scene)
-
-        # Set up input managers for each display based on viewport configs
-        display_viewports: dict[int, list] = {}
-
-        for viewport in viewports:
-            display = self._manager.get_display_for_viewport(viewport)
-            if display is None:
-                continue
-            display_id = display.tc_display_ptr
-
-            config = self._find_viewport_config(scene, viewport, display)
-            if config is None:
-                continue
-
-            if display_id not in display_viewports:
-                display_viewports[display_id] = []
-            display_viewports[display_id].append((viewport, config, display))
-
-        for display_id, vp_configs in display_viewports.items():
-            if not vp_configs:
-                continue
-
-            viewport, config, display = vp_configs[0]
-
-            if display_id == self._editor_display_ptr:
-                continue
-
-            self._setup_display_input(display, config.input_mode)
+        viewports = self._model.attach_scene(
+            scene,
+            setup_display_input=self._setup_display_input,
+        )
 
         self._request_update()
         self._notify_rendering_changed()
@@ -267,26 +246,11 @@ class RenderingControllerTcgui:
         return viewports
 
     def detach_scene(self, scene: "Scene") -> None:
-        """Detach scene from all displays."""
-        displays_to_check: set[int] = set()
-        for display in self._manager.displays:
-            for viewport in display.viewports:
-                if viewport.scene is scene:
-                    displays_to_check.add(display.tc_display_ptr)
+        """Detach scene and clean up per-display input managers."""
+        emptied = self._model.detach_scene(scene)
 
-        self.remove_viewports_for_scene(scene)
-        self._manager.detach_scene(scene)
-
-        for display_ptr in displays_to_check:
-            display = None
-            for d in self._manager.displays:
-                if d.tc_display_ptr == display_ptr:
-                    display = d
-                    break
-
-            if display is not None and not display.viewports:
-                if display_ptr in self._display_input_managers:
-                    del self._display_input_managers[display_ptr]
+        for display_ptr in emptied:
+            self._display_input_managers.pop(display_ptr, None)
 
         self._request_update()
         self._notify_rendering_changed()
@@ -308,38 +272,19 @@ class RenderingControllerTcgui:
     # ------------------------------------------------------------------
 
     def _setup_display_input(self, display: "Display", input_mode: str) -> None:
+        """Set up input manager for a display (delegates to RenderingModel).
+
+        The raw ``TcDisplay`` returned by ``RenderingManager`` doesn't carry
+        the Python ``.surface`` attribute, so we look the FBOSurface up
+        through the dict the factory populates at create time and pass it
+        in explicitly.
+        """
         display_id = display.tc_display_ptr
-
-        if display_id in self._display_input_managers:
-            del self._display_input_managers[display_id]
-
-        # Clear input manager on surface first — leaving a dangling ptr from
-        # the previous router would dispatch events into freed memory once
-        # the router dict entry is removed above.
-        surface = display.surface
-        if surface is not None:
-            surface.set_input_manager(0)
-
-        if input_mode == "none":
-            pass
-        elif input_mode in ("simple", "basic"):
-            from termin.visualization.platform.input_manager import DisplayInputRouter
-
-            input_router = DisplayInputRouter(display.tc_display_ptr)
-            self._display_input_managers[display_id] = input_router
-            # Surface must know the router's tc_input_manager_ptr so the
-            # SDL/FBO dispatch path (and Viewport3D._connect_input, which
-            # reads it via _render_surface_get_input_manager) actually
-            # routes through the viewport input managers attached to the
-            # display. Without this call picking/hover never fire — the
-            # default surface input_manager has no viewport-aware logic.
-            if surface is not None:
-                surface.set_input_manager(input_router.tc_input_manager_ptr)
-        elif input_mode == "editor":
-            # Editor display is handled by EditorWindowTcgui directly —
-            # it creates its own DisplayInputRouter + EditorViewportInput-
-            # Managers and calls surface.set_input_manager() there.
-            pass
+        surface = self._display_surfaces.get(display_id)
+        # Editor mode here is a no-op — the editor display has its input
+        # handling wired up by ``EditorWindowTcgui._attach_editor_input_router``
+        # directly; non-editor displays never carry input_mode="editor".
+        self._model.apply_display_input(display, input_mode, surface)
 
     # ------------------------------------------------------------------
     # Viewport state (needed by EditorSceneAttachment.detach)
@@ -403,26 +348,6 @@ class RenderingControllerTcgui:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    def _find_viewport_config(self, scene: "Scene", viewport: "Viewport", display: "Display | None" = None):
-        if display is None:
-            display = self._manager.get_display_for_viewport(viewport)
-        if display is None or viewport.camera is None:
-            return None
-
-        # Match by (display_name, camera_uuid). camera.entity.uuid is
-        # the stable identifier for a viewport across save/load — unique
-        # within a scene and invariant under renames / reordering.
-        display_name = display.name
-        camera_uuid = ""
-        if viewport.camera.entity is not None:
-            camera_uuid = viewport.camera.entity.uuid
-
-        for config in scene_render_mount(scene).viewport_configs:
-            if config.display_name == display_name and config.camera_uuid == camera_uuid:
-                return config
-
-        return None
 
     def _on_display_removed(self, display: "Display") -> None:
         display_id = display.tc_display_ptr

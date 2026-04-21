@@ -110,9 +110,6 @@ class RenderingController:
         # QWindow is stored to prevent garbage collection
         self._display_tabs: dict[int, Tuple[QWidget, object, QWindow]] = {}
 
-        # Map tc_display_ptr -> input manager (to prevent GC)
-        self._display_input_managers: dict[int, object] = {}
-
         # Register display factory with RenderingManager
         self._manager.set_display_factory(self._create_display_for_name)
 
@@ -159,6 +156,10 @@ class RenderingController:
     @_selected_viewport.setter
     def _selected_viewport(self, value: Optional["Viewport"]) -> None:
         self._model.set_selected_viewport(value)
+
+    @property
+    def _display_input_managers(self) -> dict[int, object]:
+        return self._model.display_input_managers
 
     def _connect_signals(self) -> None:
         """Connect ViewportListWidget signals."""
@@ -319,60 +320,19 @@ class RenderingController:
         return display
 
     def attach_scene(self, scene: "Scene") -> List["Viewport"]:
+        """Attach scene using its viewport configuration.
+
+        Creates displays via factory, mounts viewports via the model,
+        then creates per-viewport input managers and refreshes the UI.
         """
-        Attach scene using its viewport configuration.
+        viewports = self._model.attach_scene(
+            scene,
+            setup_display_input=self._setup_display_input,
+        )
 
-        Creates displays via factory, mounts viewports, sets up input managers.
-
-        Args:
-            scene: Scene with viewport_configs to attach.
-
-        Returns:
-            List of created viewports.
-        """
-        from termin.visualization.core.viewport_config import ViewportConfig
-
-        # Use RenderingManager to create viewports
-        viewports = self._manager.attach_scene(scene)
-
-        # Create viewport input managers
         for viewport in viewports:
             self._ensure_viewport_input_manager(viewport)
 
-        # Set up input managers for each display based on viewport configs
-        # Group viewports by display
-        display_viewports: dict[int, list[tuple["Viewport", ViewportConfig]]] = {}
-
-        for viewport in viewports:
-            display = self._manager.get_display_for_viewport(viewport)
-            if display is None:
-                continue
-            display_id = display.tc_display_ptr
-
-            # Find matching ViewportConfig
-            config = self._find_viewport_config(scene, viewport, display)
-            if config is None:
-                continue
-
-            if display_id not in display_viewports:
-                display_viewports[display_id] = []
-            display_viewports[display_id].append((viewport, config, display))
-
-        # Set up input for each display
-        for display_id, vp_configs in display_viewports.items():
-            if not vp_configs:
-                continue
-
-            # Use first viewport's input mode for the display
-            viewport, config, display = vp_configs[0]
-
-            # Skip editor display - it has its own input handling
-            if display_id == self._editor_display_ptr:
-                continue
-
-            self._setup_display_input(display, config.input_mode)
-
-        # Refresh UI
         self._viewport_list.refresh()
         self._refresh_render_targets()
         self._request_update()
@@ -380,21 +340,7 @@ class RenderingController:
         return viewports
 
     def _find_viewport_config(self, scene: "Scene", viewport: "Viewport", display: "Display" = None):
-        """Find ViewportConfig that matches a viewport."""
-        if display is None:
-            display = self._manager.get_display_for_viewport(viewport)
-        if display is None:
-            return None
-
-        vp_name = viewport.name or ""
-        display_name = display.name or ""
-
-        from termin.visualization.core.scene import scene_render_mount
-        for config in scene_render_mount(scene).viewport_configs:
-            if config.display_name == display_name and config.name == vp_name:
-                return config
-
-        return None
+        return self._model.find_viewport_config(scene, viewport, display)
 
     def _ensure_viewport_input_manager(self, viewport: "Viewport") -> None:
         """Create appropriate input manager for viewport based on input_mode."""
@@ -407,40 +353,18 @@ class RenderingController:
             _viewport_input_manager_new(idx, gen)
 
     def _setup_display_input(self, display: "Display", input_mode: str) -> None:
-        """
-        Set up input manager for a display.
-
-        Args:
-            display: Display to set up input for.
-            input_mode: Input mode ("none", "simple", "basic", "editor").
-        """
-        display_id = display.tc_display_ptr
-
-        # Get surface from _display_tabs
-        surface = self._get_surface_for_display(display)
-        if surface is None:
-            return
-
-        # Remove old input manager
-        if display_id in self._display_input_managers:
-            del self._display_input_managers[display_id]
-
-        # Clear input manager on surface
-        surface.set_input_manager(0)
-
-        if input_mode == "none":
-            pass
-        elif input_mode in ("simple", "basic"):
-            from termin.visualization.platform.input_manager import DisplayInputRouter
-
-            input_router = DisplayInputRouter(display.tc_display_ptr)
-            self._display_input_managers[display_id] = input_router
-            # Sync Python-cached input_manager_ptr
-            surface.set_input_manager(input_router.tc_input_manager_ptr)
-        elif input_mode == "editor":
-            # Editor mode is handled by EditorWindow via callback
+        """Set up input manager for a display (delegates to RenderingModel)."""
+        def _on_editor_mode(d: "Display") -> None:
             if self._on_display_input_mode_changed_callback is not None:
-                self._on_display_input_mode_changed_callback(display, input_mode)
+                self._on_display_input_mode_changed_callback(d, "editor")
+
+        surface = self._get_surface_for_display(display)
+        self._model.apply_display_input(
+            display,
+            input_mode,
+            surface,
+            on_editor_mode=_on_editor_mode,
+        )
 
     def sync_viewport_configs_to_scene(self, scene: "Scene") -> None:
         """Snapshot viewport state of ``scene`` into its viewport_configs."""
@@ -451,54 +375,13 @@ class RenderingController:
         self._model.sync_render_target_configs_to_scene(scene)
 
     def detach_scene(self, scene: "Scene") -> None:
-        """
-        Detach scene from all displays.
+        """Detach scene and clean up per-display input managers."""
+        emptied = self._model.detach_scene(scene)
 
-        Removes viewports and cleans up input managers for non-editor displays.
+        for display_ptr in emptied:
+            self._display_input_managers.pop(display_ptr, None)
 
-        Args:
-            scene: Scene to detach.
-        """
-        # Get displays that will lose all viewports (track by tc_display_ptr)
-        displays_to_check = set()
-        for display in self._manager.displays:
-            if display.tc_display_ptr == self._editor_display_ptr:
-                continue
-            if display.viewports:
-                displays_to_check.add(display.tc_display_ptr)
-
-        # Remove viewports for this scene (destroys pipelines, clears FBOs)
-        self.remove_viewports_for_scene(scene)
-
-        # Free unlocked render targets for this scene
-        from termin.render_framework._render_framework_native import render_target_pool_list
-        scene_h = scene.scene_handle()
-        for rt in render_target_pool_list():
-            if rt.locked:
-                continue
-            rt_scene = rt.scene
-            if rt_scene is not None and rt_scene.scene_handle().index == scene_h.index:
-                rt.free()
         self._refresh_render_targets()
-
-        # Detach scene pipelines
-        self._manager.detach_scene(scene)
-
-        # Clean up input managers for displays that now have no viewports
-        for display_ptr in displays_to_check:
-            # Find display
-            display = None
-            for d in self._manager.displays:
-                if d.tc_display_ptr == display_ptr:
-                    display = d
-                    break
-
-            if display is not None and not display.viewports:
-                # Remove input manager
-                if display_ptr in self._display_input_managers:
-                    del self._display_input_managers[display_ptr]
-
-        # Refresh UI
         self._viewport_list.refresh()
         self._request_update()
 
