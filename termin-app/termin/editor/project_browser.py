@@ -494,6 +494,7 @@ class ProjectBrowser:
         self,
         dir_tree: QTreeView,
         file_list: QListView,
+        dialog_service=None,
         root_path: str | Path | None = None,
         on_file_selected: Callable[[Path], None] | None = None,
         on_file_double_clicked: Callable[[Path], None] | None = None,
@@ -502,6 +503,14 @@ class ProjectBrowser:
         self._file_list = file_list
         self._on_file_selected = on_file_selected
         self._on_file_double_clicked = on_file_double_clicked
+
+        # ProjectOperations handles directory/file CRUD + extract via
+        # DialogService; Qt caller passes a QtDialogService instance.
+        from termin.editor_core.project_operations import ProjectOperations
+        if dialog_service is not None:
+            self._ops = ProjectOperations(dialog_service)
+        else:
+            self._ops = None
 
         # Провайдер иконок для ассетов
         self._icon_provider = AssetIconProvider()
@@ -814,34 +823,8 @@ class ProjectBrowser:
             subprocess.run(["xdg-open", str(path.parent if path.is_file() else path)])
 
     def _create_directory(self) -> None:
-        """Создать новую директорию в текущей папке."""
-        current_dir = self.current_directory
-        if current_dir is None:
-            return
-
-        name, ok = QInputDialog.getText(
-            self._file_list,
-            "Create Directory",
-            "Directory name:",
-        )
-
-        if ok and name:
-            new_dir = current_dir / name
-            try:
-                new_dir.mkdir(parents=False, exist_ok=False)
-                self._refresh()
-            except FileExistsError:
-                QMessageBox.warning(
-                    self._file_list,
-                    "Error",
-                    f"Directory '{name}' already exists.",
-                )
-            except OSError as e:
-                QMessageBox.warning(
-                    self._file_list,
-                    "Error",
-                    f"Failed to create directory: {e}",
-                )
+        if self._ops is not None:
+            self._ops.create_directory(self.current_directory, self._refresh)
 
     def _refresh(self) -> None:
         """Обновить содержимое."""
@@ -855,37 +838,8 @@ class ProjectBrowser:
             self._delete_item(selected)
 
     def _delete_item(self, path: Path) -> None:
-        """Удалить файл или директорию."""
-        import shutil
-
-        if path.is_file():
-            msg = f"Delete file '{path.name}'?"
-        else:
-            msg = f"Delete directory '{path.name}' and all its contents?"
-
-        reply = QMessageBox.question(
-            self._file_list,
-            "Confirm Delete",
-            msg,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-
-        try:
-            if path.is_file():
-                path.unlink()
-            else:
-                shutil.rmtree(path)
-            self._refresh()
-        except OSError as e:
-            QMessageBox.warning(
-                self._file_list,
-                "Error",
-                f"Failed to delete: {e}",
-            )
+        if self._ops is not None:
+            self._ops.delete_item(path, self._refresh)
 
     def _extract_fbx(self, fbx_path: Path) -> None:
         """Extract FBX file contents (meshes, textures) to a directory."""
@@ -966,54 +920,8 @@ class ProjectBrowser:
             )
 
     def _create_material(self) -> None:
-        """Создать новый файл материала."""
-        current_dir = self.current_directory
-        if current_dir is None:
-            return
-
-        name, ok = QInputDialog.getText(
-            self._file_list,
-            "Create Material",
-            "Material name:",
-            text="NewMaterial",
-        )
-
-        if not ok or not name:
-            return
-
-        # Убираем расширение если пользователь его ввёл
-        if name.endswith(".material"):
-            name = name[:-9]
-
-        file_path = current_dir / f"{name}.material"
-
-        if file_path.exists():
-            QMessageBox.warning(
-                self._file_list,
-                "Error",
-                f"File '{file_path.name}' already exists.",
-            )
-            return
-
-        # Болванка материала
-        template = '''{
-    "shader": "DefaultShader",
-    "uniforms": {
-    },
-    "textures": {
-    }
-}
-'''
-
-        try:
-            file_path.write_text(template, encoding="utf-8")
-            self._refresh()
-        except OSError as e:
-            QMessageBox.warning(
-                self._file_list,
-                "Error",
-                f"Failed to create material: {e}",
-            )
+        if self._ops is not None:
+            self._ops.create_material(self.current_directory, self._refresh)
 
     def _create_shader(self) -> None:
         """Создать новый файл шейдера."""
@@ -1269,79 +1177,8 @@ void main() {{
             )
 
     def _create_component(self) -> None:
-        """Создать новый файл компонента."""
-        current_dir = self.current_directory
-        if current_dir is None:
-            return
-
-        file_name, ok = QInputDialog.getText(
-            self._file_list,
-            "Create Component",
-            "File name:",
-            text="my_component",
-        )
-
-        if not ok or not file_name:
-            return
-
-        # Убираем расширение если пользователь его ввёл
-        if file_name.endswith(".py"):
-            file_name = file_name[:-3]
-
-        file_path = current_dir / f"{file_name}.py"
-
-        if file_path.exists():
-            QMessageBox.warning(
-                self._file_list,
-                "Error",
-                f"File '{file_path.name}' already exists.",
-            )
-            return
-
-        # Болванка компонента
-        template = '''"""
-MyComponent component.
-"""
-
-from __future__ import annotations
-
-from termin.visualization.core.python_component import PythonComponent
-
-
-class MyComponent(PythonComponent):
-    """
-    Custom component.
-
-    Attributes:
-        speed: Movement speed.
-    """
-
-    def __init__(self, speed: float = 1.0):
-        super().__init__()
-        self.speed = speed
-
-    def start(self) -> None:
-        """Called when the component is first activated."""
-        super().start()
-
-    def update(self, dt: float) -> None:
-        """Called every frame.
-
-        Args:
-            dt: Delta time in seconds.
-        """
-        pass
-'''
-
-        try:
-            file_path.write_text(template, encoding="utf-8")
-            self._refresh()
-        except OSError as e:
-            QMessageBox.warning(
-                self._file_list,
-                "Error",
-                f"Failed to create component: {e}",
-            )
+        if self._ops is not None:
+            self._ops.create_component(self.current_directory, self._refresh)
 
     def _create_pipeline(self) -> None:
         """Создать новый файл рендер-пайплайна."""
@@ -1431,46 +1268,5 @@ class MyComponent(PythonComponent):
             )
 
     def _create_prefab(self) -> None:
-        """Создать новый файл префаба."""
-        current_dir = self.current_directory
-        if current_dir is None:
-            return
-
-        name, ok = QInputDialog.getText(
-            self._file_list,
-            "Create Prefab",
-            "Prefab name:",
-            text="NewPrefab",
-        )
-
-        if not ok or not name:
-            return
-
-        # Убираем расширение если пользователь его ввёл
-        if name.endswith(".prefab"):
-            name = name[:-7]
-
-        file_path = current_dir / f"{name}.prefab"
-
-        if file_path.exists():
-            QMessageBox.warning(
-                self._file_list,
-                "Error",
-                f"File '{file_path.name}' already exists.",
-            )
-            return
-
-        # Создаём пустой префаб через PrefabPersistence
-        try:
-            from termin.editor.prefab_persistence import PrefabPersistence
-            from termin.visualization.core.resources import ResourceManager
-
-            persistence = PrefabPersistence(ResourceManager.instance())
-            persistence.create_empty(file_path, name=name)
-            self._refresh()
-        except Exception as e:
-            QMessageBox.warning(
-                self._file_list,
-                "Error",
-                f"Failed to create prefab: {e}",
-            )
+        if self._ops is not None:
+            self._ops.create_prefab(self.current_directory, self._refresh)
