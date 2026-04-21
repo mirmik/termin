@@ -1,15 +1,13 @@
-// profiler_bindings.cpp - Python bindings for tc_profiler
+// profiler.cpp - Python bindings for tc_profiler (base-level, no termin dep)
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include "tc_profiler.h"
-#include "profiler_bindings.hpp"
 
 namespace nb = nanobind;
 
-namespace termin {
+namespace {
 
-// Python-friendly section timing data
 struct PySectionTiming {
     std::string name;
     double cpu_ms;
@@ -20,14 +18,12 @@ struct PySectionTiming {
     int next_sibling;
 };
 
-// Python-friendly frame profile
 struct PyFrameProfile {
     int frame_number;
     double total_ms;
     std::vector<PySectionTiming> sections;
 };
 
-// Convert C frame to Python-friendly struct
 static PyFrameProfile convert_frame(const tc_frame_profile* frame) {
     PyFrameProfile result;
     result.frame_number = frame->frame_number;
@@ -49,7 +45,6 @@ static PyFrameProfile convert_frame(const tc_frame_profile* frame) {
     return result;
 }
 
-// Wrapper class for tc_profiler
 class TcProfiler {
 public:
     static TcProfiler& instance() {
@@ -106,8 +101,9 @@ private:
     TcProfiler() = default;
 };
 
+} // namespace
+
 void bind_profiler(nb::module_& m) {
-    // Section timing struct
     nb::class_<PySectionTiming>(m, "SectionTiming")
         .def_ro("name", &PySectionTiming::name)
         .def_ro("cpu_ms", &PySectionTiming::cpu_ms)
@@ -118,14 +114,12 @@ void bind_profiler(nb::module_& m) {
         .def_ro("next_sibling", &PySectionTiming::next_sibling)
         ;
 
-    // Frame profile struct
     nb::class_<PyFrameProfile>(m, "FrameProfile")
         .def_ro("frame_number", &PyFrameProfile::frame_number)
         .def_ro("total_ms", &PyFrameProfile::total_ms)
         .def_ro("sections", &PyFrameProfile::sections)
         ;
 
-    // TcProfiler singleton
     nb::class_<TcProfiler>(m, "TcProfiler")
         .def_static("instance", &TcProfiler::instance, nb::rv_policy::reference)
         .def_prop_rw("enabled", &TcProfiler::enabled, &TcProfiler::set_enabled)
@@ -143,5 +137,3 @@ void bind_profiler(nb::module_& m) {
         .def_prop_ro("current_frame", &TcProfiler::current_frame)
         ;
 }
-
-} // namespace termin

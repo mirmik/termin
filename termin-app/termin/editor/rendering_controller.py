@@ -1393,9 +1393,6 @@ class RenderingController:
             self._manager._present_display(display)
             surface.clear_render_flag()
 
-        if frame_started_here:
-            profiler.end_frame()
-
-        # Завершаем frame только если мы его начали (не в game mode)
+        # Завершаем frame только если мы его начали (не в game mode).
         if frame_started_here:
             profiler.end_frame()

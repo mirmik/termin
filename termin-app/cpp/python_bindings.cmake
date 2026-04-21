@@ -72,7 +72,6 @@ nanobind_add_module(_native NB_SHARED
     termin/bindings/modules/term_modules_integration_bindings.cpp
     termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp
-    termin/profiler_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
     termin/kind_bindings.cpp

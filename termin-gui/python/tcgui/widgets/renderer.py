@@ -192,6 +192,19 @@ class UIRenderer:
         # target_color (in-scene).
         self._current_target: Tgfx2TextureHandle | None = None
 
+        # Batched solid/textured quads. Each draw_rect/draw_line/etc.
+        # appends into _batch_verts; _flush_batch emits one
+        # draw_immediate_triangles covering every quad with the current
+        # (color, texture_mode, texture_handle) state. Anything that
+        # would change those — different color, switch to textured,
+        # scissor change, Text2D draw, end_pass — calls _flush_batch
+        # first. Turns N tiny draws into 1 big one on OpenGL where
+        # immediate draws are CPU-synchronous in the driver.
+        self._batch_verts: list[float] = []
+        self._batch_color: tuple[float, float, float, float] | None = None
+        self._batch_mode: int = 0  # 0 = solid, 2 = textured
+        self._batch_texture = None  # Tgfx2TextureHandle for mode == 2
+
     # ------------------------------------------------------------------
     # Font property
     # ------------------------------------------------------------------
