@@ -40,12 +40,10 @@ EngineCore::~EngineCore() {
 }
 
 bool EngineCore::tick_and_render(double dt) {
+    // Frame scope is owned by run() — tick_and_render only opens sections
+    // inside the already-open frame. When called standalone (outside run),
+    // sections are no-ops because current_frame is NULL.
     bool profile = tc_profiler_enabled();
-    // When profile_ui is on, run() owns the frame scope and has already
-    // opened it around the UI callback.
-    bool manage_frame = profile && !_profile_ui;
-
-    if (manage_frame) tc_profiler_begin_frame();
 
     bool should_render = scene_manager.tick(dt);
 
@@ -62,8 +60,6 @@ bool EngineCore::tick_and_render(double dt) {
         scene_manager.invoke_after_render();
         if (profile) tc_profiler_end_section();
     }
-
-    if (manage_frame) tc_profiler_end_frame();
 
     return should_render;
 }
@@ -87,30 +83,30 @@ void EngineCore::run() {
         double dt = std::chrono::duration<double>(frame_start - last_time).count();
         last_time = frame_start;
 
-        bool profile_ui = tc_profiler_enabled() && _profile_ui;
-        if (profile_ui) {
-            tc_profiler_begin_frame();
-            tc_profiler_begin_section("UI");
-        }
+        bool profile = tc_profiler_enabled();
+        if (profile) tc_profiler_begin_frame();
 
-        // Poll events (Qt, SDL, etc.)
-        if (_poll_events_callback) {
-            _poll_events_callback();
-        }
-
+        // Poll events (Qt, SDL, etc.). When profile_ui is on, UI time
+        // goes into a dedicated "UI" section; when off, the frame scope
+        // still covers UI work but the panel sees no root for it, which
+        // mirrors how hosts without profile_ui (e.g. Qt editor) look.
+        bool profile_ui = profile && _profile_ui;
+        if (profile_ui) tc_profiler_begin_section("UI");
+        if (_poll_events_callback) _poll_events_callback();
         if (profile_ui) tc_profiler_end_section();
 
         // Check if should continue
         if (_should_continue_callback && !_should_continue_callback()) {
-            if (profile_ui) tc_profiler_end_frame();
+            if (profile) tc_profiler_end_frame();
             _running = false;
             break;
         }
 
-        // Tick and render
+        // Tick and render — opens its own sections inside the frame
+        // scope owned by this function.
         tick_and_render(dt);
 
-        if (profile_ui) tc_profiler_end_frame();
+        if (profile) tc_profiler_end_frame();
 
         // Frame limiting with sleep_until for stable pacing
         next_frame_time += frame_duration;
