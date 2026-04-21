@@ -102,6 +102,7 @@ class ProfilerPanel(VStack):
         self._ema_total: float | None = None
         self._ema_alpha: float = 0.1
         self._last_sections: Dict[str, SectionStats] = {}
+        self._debug_dump_pending: int = 0
 
         self._build_ui()
 
@@ -207,6 +208,8 @@ class ProfilerPanel(VStack):
         engine = EngineCore.instance()
         if engine is not None:
             engine.profile_ui = checked
+            log.error(f"[ProfilerPanel] profile_ui toggled: set={checked} readback={engine.profile_ui}")
+        self._debug_dump_pending = 5
 
     def _on_clear(self) -> None:
         self._profiler.clear_history()
@@ -232,11 +235,25 @@ class ProfilerPanel(VStack):
 
         tc = self._profiler._tc
         count = tc.history_count
-        if count <= 0:
+        # history_count is bumped in begin_frame, so history_at(count-1) is
+        # the still-open current frame when update_display runs inside the
+        # UI dispatch path. Skip it and read the previous one, which is
+        # the last fully closed frame with complete sections and total_ms.
+        last_idx = count - 2 if tc.current_frame is not None else count - 1
+        if last_idx < 0:
             return
 
-        frame = tc.history_at(count - 1)
+        frame = tc.history_at(last_idx)
         detailed = self._collect_sections(frame)
+        if self._debug_dump_pending > 0:
+            self._debug_dump_pending -= 1
+            from termin._native import EngineCore
+            eng = EngineCore.instance()
+            pui = eng.profile_ui if eng is not None else "NONE"
+            sec_count = len(frame.sections) if frame and frame.sections else 0
+            dump = ", ".join(f"{k}={v.cpu_ms:.2f}" for k, v in sorted(detailed.items()))
+            log.error(f"[ProfilerPanel] profile_ui={pui} sections={sec_count} total_ms={frame.total_ms:.2f}")
+            log.error(f"[ProfilerPanel] detail: {dump if dump else '<empty>'}")
         if not detailed:
             return
 
