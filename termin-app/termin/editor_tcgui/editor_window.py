@@ -21,7 +21,6 @@ from tcgui.widgets.status_bar import StatusBar
 from tcgui.widgets.viewport3d import Viewport3D
 from tcgui.widgets.label import Label
 from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.input_dialog import show_input_dialog
 from tcgui.widgets.message_box import MessageBox
 
 from termin.editor.undo_stack import UndoStack, UndoCommand
@@ -386,15 +385,20 @@ class EditorWindowTcgui:
         # Setup FBO surface and Viewport3D
         self._setup_viewport()
 
+        # Dialog service (shared between controllers)
+        from termin.editor_tcgui.tcgui_dialog_service import TcguiDialogService
+        self._dialog_service = TcguiDialogService()
+        self._dialog_service.ui = ui
+
         # Setup scene tree controller
         self.scene_tree_controller = SceneTreeControllerTcgui(
             tree_widget=scene_tree,
             scene=self.scene,
             undo_handler=self.push_undo_command,
+            dialog_service=self._dialog_service,
             on_object_selected=self._on_tree_object_selected,
             request_viewport_update=self._request_viewport_update,
         )
-        self.scene_tree_controller._on_rename_requested = self._rename_entity_dialog
 
         # Setup inspector controller
         self._inspector_controller = InspectorControllerTcgui(
@@ -1109,36 +1113,6 @@ class EditorWindowTcgui:
             return
 
     # ------------------------------------------------------------------
-    # Rename entity dialog
-    # ------------------------------------------------------------------
-
-    def _rename_entity_dialog(self, entity) -> None:
-        from termin.visualization.core.entity import Entity
-        if self._ui is None or not isinstance(entity, Entity):
-            return
-        old_name = entity.name or ""
-        show_input_dialog(
-            self._ui,
-            title="Rename Entity",
-            message="Name:",
-            default=old_name,
-            on_result=lambda new_name: self._do_rename_entity(entity, old_name, new_name),
-        )
-
-    def _do_rename_entity(self, entity, old_name: str, new_name: str | None) -> None:
-        if new_name is None:
-            return
-        new_name = new_name.strip()
-        if not new_name or new_name == old_name:
-            return
-        from termin.editor.editor_commands import RenameEntityCommand
-        cmd = RenameEntityCommand(entity, old_name, new_name)
-        self.push_undo_command(cmd, False)
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.update_entity(entity)
-        self._request_viewport_update()
-
-    # ------------------------------------------------------------------
     # Menu action stubs / helpers
     # ------------------------------------------------------------------
 
@@ -1763,7 +1737,7 @@ class EditorWindowTcgui:
         if self._interaction_system is not None:
             parent_entity = self._interaction_system.selection.selected
         if self.scene_tree_controller is not None:
-            self.scene_tree_controller.handle_prefab_drop(path, parent_entity)
+            self.scene_tree_controller.operations.drop_prefab(path, parent_entity)
 
     # ------------------------------------------------------------------
     # Per-frame polling
