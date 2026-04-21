@@ -56,8 +56,10 @@ class RenderingControllerTcgui:
         on_rendering_changed: Callable[[], None] | None = None,
     ) -> None:
         from termin._native.render import RenderingManager
+        from termin.editor_core.rendering_model import RenderingModel
 
         self._manager = RenderingManager.instance()
+        self._model = RenderingModel(self._manager, offscreen_context=offscreen_context)
         self._offscreen_context = offscreen_context
         # Process-global tgfx2 context — every FBOSurface this controller
         # creates allocates its color/depth textures on this device.
@@ -69,7 +71,6 @@ class RenderingControllerTcgui:
         self._on_request_update = on_request_update
         self._on_rendering_changed = on_rendering_changed
 
-        self._editor_display_ptr: int | None = None
         self._display_surfaces: dict[int, object] = {}
         self._display_viewports: dict[int, object] = {}  # display_id -> Viewport3D
         self._display_input_managers: dict[int, object] = {}
@@ -105,11 +106,19 @@ class RenderingControllerTcgui:
         return self._manager.displays
 
     # ------------------------------------------------------------------
-    # Editor display
+    # Editor display — backed by RenderingModel
     # ------------------------------------------------------------------
 
+    @property
+    def _editor_display_ptr(self) -> int | None:
+        return self._model.editor_display_ptr
+
+    @_editor_display_ptr.setter
+    def _editor_display_ptr(self, value: int | None) -> None:
+        self._model.set_editor_display_ptr(value)
+
     def set_editor_display_ptr(self, ptr: int) -> None:
-        self._editor_display_ptr = ptr
+        self._model.set_editor_display_ptr(ptr)
 
     def is_editor_display(self, display: "Display") -> bool:
         return display.tc_display_ptr == self._editor_display_ptr
@@ -242,97 +251,15 @@ class RenderingControllerTcgui:
 
     def remove_viewports_for_scene(self, scene: "Scene") -> None:
         """Remove all viewports referencing the given scene."""
-        if self._offscreen_context is not None:
-            self._offscreen_context.make_current()
-
-        for display in self._manager.displays:
-            viewports_to_remove = [vp for vp in display.viewports if vp.scene is scene]
-            if not viewports_to_remove:
-                continue
-
-            for vp in viewports_to_remove:
-                if vp.pipeline is not None:
-                    vp.pipeline.destroy()
-                state = self._manager.get_viewport_state(vp)
-                if state is not None:
-                    state.clear_all()
-                self._manager.remove_viewport_state(vp)
-                display.remove_viewport(vp)
+        self._model.remove_viewports_for_scene(scene)
 
     def sync_viewport_configs_to_scene(self, scene: "Scene") -> None:
-        """Sync current viewport state to scene_render_mount(scene).viewport_configs.
-
-        Call before saving. Excludes editor display viewports.
-        """
-        from termin.visualization.core.viewport_config import ViewportConfig
-
-        scene_render_mount(scene).clear_viewport_configs()
-
-        for display in self._manager.displays:
-            if display.tc_display_ptr == self._editor_display_ptr:
-                continue
-
-            for viewport in display.viewports:
-                if viewport.scene is not scene:
-                    continue
-
-                rt = viewport.render_target
-                rt_name = rt.name if rt is not None else ""
-
-                rect = viewport.rect
-                camera_uuid = ""
-                if viewport.camera is not None and viewport.camera.entity is not None:
-                    camera_uuid = viewport.camera.entity.uuid
-                config = ViewportConfig()
-                config.name = viewport.name or ""
-                config.display_name = display.name
-                config.render_target_name = rt_name
-                config.camera_uuid = camera_uuid
-                config.region_x = rect[0]
-                config.region_y = rect[1]
-                config.region_w = rect[2]
-                config.region_h = rect[3]
-                config.depth = viewport.depth
-                config.input_mode = viewport.input_mode
-                config.block_input_in_editor = viewport.block_input_in_editor
-                config.enabled = viewport.enabled
-                scene_render_mount(scene).add_viewport_config(config)
+        """Snapshot this scene's viewports into its viewport_configs."""
+        self._model.sync_viewport_configs_to_scene(scene)
 
     def sync_render_target_configs_to_scene(self, scene: "Scene") -> None:
-        """Sync registered render targets to scene_render_mount(scene).render_target_configs.
-
-        Call before saving.
-        """
-        from termin.visualization.core.render_target_config import RenderTargetConfig
-
-        scene_render_mount(scene).clear_render_target_configs()
-
-        from termin.render_framework._render_framework_native import render_target_pool_list
-        for rt in render_target_pool_list():
-            if rt.locked:
-                continue
-
-            camera_uuid = ""
-            if rt.camera is not None and rt.camera.entity is not None:
-                camera_uuid = rt.camera.entity.uuid
-
-            pipeline_uuid = None
-            pipeline_name = None
-            if rt.pipeline is not None:
-                pipeline_uuid = self._get_pipeline_uuid(rt.pipeline)
-                if pipeline_uuid is None:
-                    pipeline_name = rt.pipeline.name or ""
-
-            config = RenderTargetConfig()
-            config.name = rt.name or ""
-            config.camera_uuid = camera_uuid
-            config.width = rt.width
-            config.height = rt.height
-            config.pipeline_uuid = pipeline_uuid or ""
-            config.pipeline_name = pipeline_name or ""
-            config.layer_mask = rt.layer_mask
-            config.enabled = rt.enabled
-            scene_render_mount(scene).add_render_target_config(config)
+        """Snapshot the render target pool into scene.render_target_configs."""
+        self._model.sync_render_target_configs_to_scene(scene)
 
     # ------------------------------------------------------------------
     # Input
@@ -463,15 +390,6 @@ class RenderingControllerTcgui:
             if config.display_name == display_name and config.camera_uuid == camera_uuid:
                 return config
 
-        return None
-
-    def _get_pipeline_uuid(self, pipeline: "RenderPipeline") -> str | None:
-        from termin.assets.resources import ResourceManager
-        rm = ResourceManager.instance()
-        for name in rm.pipeline_names:
-            p = rm.get_pipeline(name)
-            if p is pipeline:
-                return name
         return None
 
     def _on_display_removed(self, display: "Display") -> None:
