@@ -750,7 +750,6 @@ class EditorWindow:
             self.ui, _on_result,
             title="Export Image", directory=self._last_dir,
             filter_str="PNG | *.png;;JPEG | *.jpg *.jpeg")
-        self._statusbar.text = f"Exported: {path}"
 
     def _fit(self):
         self._canvas.fit_in_view()
