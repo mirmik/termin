@@ -140,7 +140,7 @@ class EditorWindowTcgui:
         self._is_fullscreen: bool = False
         self._pre_fullscreen_state: dict | None = None
         self._editor_state_io: EditorStateIO | None = None
-        self._rendering_tree = None
+        self._viewport_list = None
         self._left_tabs: TabView | None = None
         self._right_scroll: ScrollArea | None = None
         self._bottom_tabs: TabView | None = None
@@ -230,13 +230,10 @@ class EditorWindowTcgui:
         scene_tab_content.add_child(scene_tree)
         left_tabs.add_tab("Scene", scene_tab_content)
 
-        rendering_tab_content = VStack()
-        rendering_tab_content.spacing = 4
-        from tcgui.widgets.tree import TreeWidget as RenderTreeWidget
-        self._rendering_tree = RenderTreeWidget()
-        self._rendering_tree.stretch = True
-        rendering_tab_content.add_child(self._rendering_tree)
-        left_tabs.add_tab("Rendering", rendering_tab_content)
+        from termin.editor_tcgui.viewport_list_widget import ViewportListWidgetTcgui
+        self._viewport_list = ViewportListWidgetTcgui()
+        self._viewport_list.stretch = True
+        left_tabs.add_tab("Rendering", self._viewport_list)
 
         main_area.add_child(left_tabs)
         self._left_splitter = Splitter(target=left_tabs, side="right")
@@ -422,8 +419,6 @@ class EditorWindowTcgui:
             on_file_selected=self._on_project_file_selected,
         )
 
-        self._rendering_tree.on_select = self._on_render_tree_selected
-
         # Setup rendering controller and editor display
         if self._editor_display is not None:
             from termin.editor.editor_pipeline import make_editor_pipeline
@@ -433,18 +428,23 @@ class EditorWindowTcgui:
 
             # Create rendering controller (registers factories with RenderingManager)
             self._rendering_controller = RenderingControllerTcgui(
+                viewport_list_widget=self._viewport_list,
                 offscreen_context=self._offscreen_context,
                 ctx=self._ctx,
                 get_scene=lambda: self.scene,
                 make_editor_pipeline=make_editor_pipeline,
                 on_request_update=self._request_viewport_update,
-                on_rendering_changed=self._refresh_rendering_panel,
+                on_rendering_changed=self._on_rendering_changed,
+                on_display_selected=self._on_render_display_selected,
+                on_viewport_selected=self._on_render_viewport_selected,
+                on_entity_selected=self._on_render_entity_selected,
+                on_render_target_selected=self._on_render_target_selected,
             )
 
             self._rendering_controller.set_center_tabs(self._center_tabs)
 
             # Register editor display and mark it as non-serializable
-            RenderingManager.instance().add_display(self._editor_display, "Editor")
+            self._rendering_controller.add_display(self._editor_display, "Editor")
             self._rendering_controller.set_editor_display_ptr(self._editor_display.tc_display_ptr)
 
             # Create editor scene attachment (now with rendering controller)
@@ -481,7 +481,7 @@ class EditorWindowTcgui:
             # Qt editor (editor_window.py::_on_transform_end).
             self._interaction_system.on_transform_end = self._on_transform_end
 
-        self._refresh_rendering_panel()
+        self._on_rendering_changed()
 
         # Setup menu bar (after scene tree and inspector are ready)
         self._setup_menu_bar(menu_bar)
@@ -755,60 +755,44 @@ class EditorWindowTcgui:
     def _on_inspector_component_changed(self) -> None:
         self._request_viewport_update()
 
-    def _on_render_tree_selected(self, node) -> None:
-        if self._inspector_controller is None:
+    def _on_render_display_selected(self, display) -> None:
+        if self._inspector_controller is None or display is None:
             return
-        if node is None:
-            self._inspector_controller.clear()
+        self._inspector_controller.show_display_inspector(display, display.name or "Display")
+
+    def _on_render_viewport_selected(self, viewport) -> None:
+        if self._inspector_controller is None or viewport is None:
             return
+        displays = (
+            self._rendering_controller.displays
+            if self._rendering_controller is not None else None
+        )
+        current_display = None
+        if self._rendering_controller is not None:
+            from termin._native.render import RenderingManager
+            current_display = RenderingManager.instance().get_display_for_viewport(viewport)
+        self._inspector_controller.show_viewport_inspector(
+            viewport=viewport,
+            displays=displays,
+            scene=self.scene,
+            current_display=current_display,
+        )
 
-        obj = node.data
-        from termin.visualization.core.display import Display
-        from termin.visualization.core.viewport import Viewport
-        from termin.visualization.core.entity import Entity
-
-        if isinstance(obj, Display):
-            self._inspector_controller.show_display_inspector(obj, obj.name or "Display")
+    def _on_render_entity_selected(self, entity) -> None:
+        if self._inspector_controller is None or entity is None:
             return
+        self._inspector_controller.show_entity_inspector(entity)
 
-        if isinstance(obj, Viewport):
-            current_display = None
-            parent = self._find_tree_parent(node)
-            if parent is not None and isinstance(parent.data, Display):
-                current_display = parent.data
-            displays = self._rendering_controller.displays if self._rendering_controller is not None else None
-            self._inspector_controller.show_viewport_inspector(
-                viewport=obj,
-                displays=displays,
-                scene=self.scene,
-                current_display=current_display,
-            )
+    def _on_render_target_selected(self, render_target) -> None:
+        if self._inspector_controller is None or render_target is None:
             return
+        self._inspector_controller.show_render_target_inspector(render_target, self.scene)
 
-        if isinstance(obj, Entity):
-            self._inspector_controller.show_entity_inspector(obj)
-            return
-
-        self._inspector_controller.clear()
-
-    def _find_tree_parent(self, target_node):
-        if self._rendering_tree is None:
-            return None
-
-        def walk(node):
-            for child in node.subnodes:
-                if child is target_node:
-                    return node
-                found = walk(child)
-                if found is not None:
-                    return found
-            return None
-
-        for root in self._rendering_tree.root_nodes:
-            found = walk(root)
-            if found is not None:
-                return found
-        return None
+    def _on_rendering_changed(self) -> None:
+        if self._rendering_controller is not None:
+            self._rendering_controller.sync_viewport_list_from_manager()
+        elif self._viewport_list is not None:
+            self._viewport_list.refresh()
 
     # ------------------------------------------------------------------
     # Viewport update
@@ -935,7 +919,7 @@ class EditorWindowTcgui:
             # Apply editor state (camera, selection, etc.)
             if self._editor_state_io is not None:
                 self._editor_state_io.apply(editor_data)
-            self._refresh_rendering_panel()
+            self._on_rendering_changed()
             self._request_viewport_update()
         except Exception as e:
             log.error(f"Failed to load scene: {e}")
@@ -1619,64 +1603,6 @@ class EditorWindowTcgui:
 
     def _on_resource_reloaded(self, name: str, kind: str) -> None:
         self._request_viewport_update()
-
-    def _refresh_rendering_panel(self) -> None:
-        """Rebuild the rendering tree to show all Display > Viewport > Entity hierarchies."""
-        if self._rendering_tree is None:
-            return
-        from tcgui.widgets.tree import TreeNode
-
-        # Clear existing
-        for node in list(self._rendering_tree.root_nodes):
-            self._rendering_tree.remove_root(node)
-
-        # Get all displays from RenderingManager
-        from termin._native.render import RenderingManager
-        rm = RenderingManager.instance()
-        displays = rm.displays
-
-        for display in displays:
-            display_name = display.name if display.name else "Display"
-            display_node = self._make_render_tree_node(display_name)
-            display_node.data = display
-
-            for vp in display.viewports:
-                vp_name = vp.name if vp.name else "Viewport"
-                camera_name = "No Camera"
-                camera = vp.camera
-                if camera is not None:
-                    entity = camera.entity
-                    if entity is not None:
-                        camera_name = entity.name or "Camera"
-                vp_node = self._make_render_tree_node(f"{vp_name} ({camera_name})")
-                vp_node.data = vp
-
-                # Internal entities hierarchy
-                internal = vp.internal_entities
-                if internal is not None:
-                    self._add_entity_to_render_tree(vp_node, internal)
-
-                display_node.add_node(vp_node)
-
-            self._rendering_tree.add_root(display_node)
-            display_node.expanded = True
-
-    def _make_render_tree_node(self, text: str):
-        from tcgui.widgets.tree import TreeNode
-        lbl = Label()
-        lbl.text = text
-        node = TreeNode(lbl)
-        return node
-
-    def _add_entity_to_render_tree(self, parent_node, entity) -> None:
-        name = entity.name or "(unnamed)"
-        node = self._make_render_tree_node(name)
-        node.data = entity
-        parent_node.add_node(node)
-        for child_tf in entity.transform.children:
-            child_entity = child_tf.entity
-            if child_entity is not None:
-                self._add_entity_to_render_tree(node, child_entity)
 
     def _rescan_file_resources(self) -> None:
         project_path = self._get_project_path()
