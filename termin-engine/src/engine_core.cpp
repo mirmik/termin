@@ -86,14 +86,18 @@ void EngineCore::run() {
         bool profile = tc_profiler_enabled();
         if (profile) tc_profiler_begin_frame();
 
-        // Poll events (Qt, SDL, etc.). When profile_ui is on, UI time
-        // goes into a dedicated "UI" section; when off, the frame scope
-        // still covers UI work but the panel sees no root for it, which
-        // mirrors how hosts without profile_ui (e.g. Qt editor) look.
-        bool profile_ui = profile && _profile_ui;
-        if (profile_ui) tc_profiler_begin_section("UI");
+        // Always wrap the UI callback in a section so the sub-sections
+        // the callback opens (Events, Render Compose, …) are nested
+        // under a single root instead of bubbling up as siblings of
+        // SceneManager Render. When profile_ui is off the wrap is
+        // *muted* — the section and everything inside it doesn't
+        // record; callees don't need to know about the flag.
+        if (profile) {
+            if (_profile_ui) tc_profiler_begin_section("UI");
+            else             tc_profiler_begin_section_muted("UI");
+        }
         if (_poll_events_callback) _poll_events_callback();
-        if (profile_ui) tc_profiler_end_section();
+        if (profile) tc_profiler_end_section();
 
         // Check if should continue
         if (_should_continue_callback && !_should_continue_callback()) {
