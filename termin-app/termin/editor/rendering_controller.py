@@ -24,9 +24,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.entity import Entity
-    from tgfx.window import BackendWindow, WindowBackend
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-    from termin.visualization.render import RenderEngine
     from termin._native.render import ViewportRenderState
     from termin.visualization.render.framegraph import RenderPipeline
     from termin.visualization.render.offscreen_context import OffscreenContext
@@ -60,7 +58,6 @@ class RenderingController:
         inspector_controller: "InspectorController",
         center_tab_widget: Optional[QTabWidget] = None,
         get_scene: Optional[Callable[[], "Scene"]] = None,
-        get_window_backend: Optional[Callable[[], "WindowBackend"]] = None,
         get_sdl_backend: Optional[Callable[[], "SDLEmbeddedWindowBackend"]] = None,
         on_display_selected: Optional[Callable[["Display"], None]] = None,
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
@@ -77,7 +74,6 @@ class RenderingController:
             inspector_controller: Controller for inspector panels.
             center_tab_widget: Tab widget for display switching.
             get_scene: Callback to get current scene.
-            get_window_backend: Callback to get WindowBackend for creating GL widgets.
             get_sdl_backend: Callback to get SDLEmbeddedWindowBackend for creating SDL windows.
             on_display_selected: Callback when display is selected.
             on_viewport_selected: Callback when viewport is selected.
@@ -97,7 +93,6 @@ class RenderingController:
         self._inspector = inspector_controller
         self._center_tabs = center_tab_widget
         self._get_scene = get_scene
-        self._get_window_backend = get_window_backend
         self._get_sdl_backend = get_sdl_backend
         self._on_display_selected = on_display_selected
         self._on_viewport_selected = on_viewport_selected
@@ -625,30 +620,6 @@ class RenderingController:
             return layout.itemAt(0).widget()
         return None
 
-    def get_editor_fbo_pool(self):
-        """Get FBO pool (pipeline) for the editor viewport (for picking)."""
-        from tcbase import log
-        result = self.get_display_fbo_pool(self.editor_display)
-        if result is None:
-            ed = self.editor_display
-            log.debug(f"[get_editor_fbo_pool] returning None! editor_display={ed}")
-            if ed is not None:
-                log.debug(f"[get_editor_fbo_pool] viewports={list(ed.viewports)}")
-                if ed.viewports:
-                    vp = ed.viewports[0]
-                    log.debug(f"[get_editor_fbo_pool] viewport[0].pipeline={vp.pipeline}")
-        return result
-
-    def get_display_fbo_pool(self, display: Optional["Display"]):
-        """Get FBO pool (pipeline) for a display's primary viewport (for picking).
-
-        Returns the RenderPipeline which has get_fbo(key) method.
-        """
-        if display is None or not display.viewports:
-            return None
-        viewport = display.viewports[0]
-        return viewport.pipeline
-
     def get_display_sfc(self, display: "Display") -> Optional[object]:
         """Get SDLWindowRenderSurface for a display."""
         display_id = display.tc_display_ptr
@@ -854,84 +825,6 @@ class RenderingController:
         if self._selected_display is not None:
             self.set_display_name(self._selected_display, new_name)
 
-    def _on_display_input_mode_changed(self, mode: str) -> None:
-        """Handle display input mode change from inspector."""
-        if self._selected_display is None:
-            return
-
-        display = self._selected_display
-        display_id = display.tc_display_ptr
-
-        # Get surface for this display
-        tab_info = self._display_tabs.get(display_id)
-        if tab_info is None:
-            return
-
-        _tab_container, surface, _qwindow = tab_info
-
-        self._apply_display_input_mode(display, surface, mode)
-
-        # Notify EditorWindow to handle editor mode setup/teardown
-        if self._on_display_input_mode_changed_callback is not None:
-            self._on_display_input_mode_changed_callback(display, mode)
-
-        self._request_update()
-
-    def _apply_display_input_mode(self, display: "Display", surface, mode: str) -> None:
-        """Apply input mode to a display."""
-        if surface is None:
-            return
-        display_id = display.tc_display_ptr
-
-        # Check if blocked from first viewport
-        is_blocked = False
-        if display.viewports:
-            is_blocked = display.viewports[0].block_input_in_editor
-
-        # Remove old input manager
-        if display_id in self._display_input_managers:
-            del self._display_input_managers[display_id]
-
-        # Clear input manager on surface
-        surface.set_input_manager(0)
-
-        # Create new input manager based on mode (unless blocked in editor)
-        if mode == "none" or (mode == "editor" and is_blocked):
-            # No input handling - input manager already cleared
-            pass
-        elif mode in ("simple", "basic"):
-            from termin.visualization.platform.input_manager import DisplayInputRouter
-
-            input_router = DisplayInputRouter(display.tc_display_ptr)
-            self._display_input_managers[display_id] = input_router
-            # Sync Python-cached input_manager_ptr
-            surface.set_input_manager(input_router.tc_input_manager_ptr)
-        elif mode == "editor":
-            # Editor mode is handled by EditorWindow via callback
-            # EditorWindow creates DisplayInputRouter + EditorViewportInputManager
-            pass
-
-        # Update viewport input_mode
-        for viewport in display.viewports:
-            viewport.input_mode = mode
-
-    def _on_display_block_input_in_editor_changed(self, blocked: bool) -> None:
-        """Handle 'block input in editor' checkbox change from inspector."""
-        if self._selected_display is None:
-            return
-
-        display = self._selected_display
-
-        # Update blocked state on all viewports
-        for viewport in display.viewports:
-            viewport.block_input_in_editor = blocked
-
-        # Reapply current mode (which will check blocked flag)
-        mode = "simple"
-        if display.viewports:
-            mode = display.viewports[0].input_mode
-        self._on_display_input_mode_changed(mode)
-
     def _on_viewport_display_changed(self, new_display: "Display") -> None:
         """Handle viewport display change from inspector."""
         if self._selected_viewport is None:
@@ -943,25 +836,6 @@ class RenderingController:
 
         if new_display is not None:
             new_display.add_viewport(self._selected_viewport)
-
-        self._viewport_list.refresh()
-        self._request_update()
-
-    def _on_viewport_camera_changed(self, new_camera: "CameraComponent") -> None:
-        """Handle viewport camera change from inspector."""
-        if self._selected_viewport is None:
-            return
-
-        viewport = self._selected_viewport
-
-        # Remove viewport from old camera's list
-        old_camera = viewport.camera
-        if old_camera is not None and old_camera is not new_camera:
-            old_camera.remove_viewport(viewport)
-
-        # Update viewport camera and add to new camera's list
-        viewport.camera = new_camera
-        new_camera.add_viewport(viewport)
 
         self._viewport_list.refresh()
         self._request_update()
@@ -1022,13 +896,6 @@ class RenderingController:
 
         self._request_update()
 
-    def _get_pipeline_by_uuid(self, uuid: str) -> "RenderPipeline | None":
-        """Get pipeline by UUID."""
-        from termin.assets.resources import ResourceManager
-
-        rm = ResourceManager.instance()
-        return rm.get_pipeline_by_uuid(uuid)
-
     # --- Center tabs management ---
 
     def _on_center_tab_changed(self, index: int) -> None:
@@ -1049,10 +916,6 @@ class RenderingController:
 
         # Request redraw when switching tabs
         self._request_update()
-
-    def _get_or_create_viewport_state(self, display_id: int, viewport: "Viewport"):
-        """Get or create ViewportRenderState for a viewport."""
-        return self._manager.get_or_create_viewport_state(viewport)
 
     def get_viewport_state(self, viewport: "Viewport") -> Optional["ViewportRenderState"]:
         """Get ViewportRenderState for a viewport."""

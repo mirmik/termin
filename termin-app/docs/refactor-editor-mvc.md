@@ -120,6 +120,34 @@
 4. **Диалоги (15+ штук)** — каждый `QDialog` с внутренней логикой; tcgui часть уже дублирует
 5. **`ViewportListWidget` (Qt)** vs `_NoOpViewportList` заглушка в tcgui — прямая причина расхождений в панелях рендеринга
 
+## Статус
+
+| Фаза | Статус | Что сделано |
+|------|--------|-------------|
+| 0 | ✅ | `editor_core/` скелет, `Signal`, `DialogService` абстрактный + Qt/tcgui реализации |
+| 1 | ✅ | `EntityOperations` (SceneTree pilot) — create/delete/rename/reparent/duplicate + prefab/fbx/glb drops. Оба контроллера делегируют. |
+| 2 | ✅ | `InspectorModel` (kind + target + extras + Signal). Qt/tcgui `InspectorController` подписываются. |
+| 3 | ✅ | `RenderingModel`: editor_display_ptr, offscreen_context, selected display/viewport, display_input_managers, attach/detach scene, config sync, find_viewport_config, apply_display_input. Селекшн-стейт через Signal. ViewportListWidget портирован на tcgui. |
+| 4 | ⏳ opportunistic | Диалоги во view-specific коде (pipeline_inspector, project_browser, scene_manager_viewer) остаются на прямых Qt/tcgui вызовах. Переводим на `DialogService` по мере касания. |
+| 5 | ✅ | Cleanup: мёртвый код удалён (-137 LOC в Qt rendering_controller). Архитектура задокументирована — см. [`editor-architecture.md`](editor-architecture.md). |
+
+## Что получено в цифрах
+
+- Qt `rendering_controller.py`: 1398 → 1063 LOC (−24%)
+- tcgui `rendering_controller.py`: 503 → 473 LOC (−6%)
+- Общий UI-agnostic код в `editor_core/`: ~700 LOC (signal, dialog_service, entity_operations, inspector_model, rendering_model)
+- Оба редактора делят один и тот же код entity-операций, инспектор-диспатча, scene attach/detach и input-mode routing.
+
+## Как поддерживать
+
+- Новая scene-операция → метод в `EntityOperations`, вызов через `self._ops` из view.
+- Новый inspector kind → enum + `show_X` в `InspectorModel` + ветка в `_on_model_changed` в обоих view.
+- Новое rendering-состояние → поле + Signal в `RenderingModel`, view подписывается.
+- Новый diagnostic/CRUD диалог → метод в `DialogService` (если shared) или напрямую в view (если UI-specific).
+
+Подробности: [`editor-architecture.md`](editor-architecture.md).
+
 ## Журнал
 
-Начат: 2026-04-21.
+- Начат: 2026-04-21
+- Завершён (фазы 0–3, 5): 2026-04-22
