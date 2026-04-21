@@ -7,58 +7,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Callable
-import shutil
 import subprocess
 import platform
 
 from tcbase import log
 from tcgui.widgets.menu import Menu, MenuItem
-from tcgui.widgets.message_box import MessageBox
-from tcgui.widgets.input_dialog import show_input_dialog
 
-
-def _sync_stdlib(project_root: Path) -> None:
-    """Синхронизирует stdlib в проекте с встроенной версией.
-
-    Создаёт директорию stdlib если её нет, обновляет файлы с отличающимся
-    размером. Кросс-редакторный дубликат функции из
-    termin.editor.project_browser._sync_stdlib — обе ветки вызывают её при
-    open_project, чтобы материалы/шейдеры/glsl stdlib всегда были актуальными
-    без участия пользователя.
-    """
-    import termin
-
-    stdlib_src = Path(termin.__path__[0]) / "resources" / "stdlib"
-    stdlib_dst = project_root / "stdlib"
-
-    if not stdlib_src.exists():
-        return
-
-    created = not stdlib_dst.exists()
-    updated_count = 0
-
-    for src_file in stdlib_src.rglob("*"):
-        if src_file.is_dir():
-            continue
-
-        rel_path = src_file.relative_to(stdlib_src)
-        dst_file = stdlib_dst / rel_path
-        dst_file.parent.mkdir(parents=True, exist_ok=True)
-
-        need_update = False
-        if not dst_file.exists():
-            need_update = True
-        elif dst_file.stat().st_size != src_file.stat().st_size:
-            need_update = True
-
-        if need_update:
-            shutil.copy2(src_file, dst_file)
-            updated_count += 1
-
-    if created:
-        log.info(f"[ProjectBrowserTcgui] stdlib deployed: {updated_count} file(s)")
-    elif updated_count > 0:
-        log.info(f"[ProjectBrowserTcgui] stdlib synced: {updated_count} file(s) updated")
+from termin.editor_core.project_operations import ProjectOperations, sync_stdlib
 
 
 # File extensions that are recognized as known asset types
@@ -115,6 +70,7 @@ class ProjectBrowserTcgui:
         self,
         dir_tree,
         file_list,
+        dialog_service,
         on_file_activated: Callable[[str], None] | None = None,
         on_file_selected: Callable[[str], None] | None = None,
     ) -> None:
@@ -128,6 +84,7 @@ class ProjectBrowserTcgui:
 
         self._root_path: Path | None = None
         self._selected_dir: Path | None = None
+        self._ops = ProjectOperations(dialog_service)
 
         # Wire up callbacks
         self._dir_tree.on_select = self._on_dir_selected
@@ -147,7 +104,7 @@ class ProjectBrowserTcgui:
             log.error(f"[ProjectBrowserTcgui] set_root: not a directory: {path}")
             return
 
-        _sync_stdlib(root)
+        sync_stdlib(root)
 
         self._root_path = root
         self._selected_dir = root
@@ -384,218 +341,28 @@ class ProjectBrowserTcgui:
             log.error(f"[ProjectBrowserTcgui] reveal failed: {e}")
 
     def _create_directory(self) -> None:
-        if self._selected_dir is None:
-            return
-        self._create_directory_in(self._selected_dir)
-
-    def _create_directory_in(self, base_dir: Path) -> None:
-        ui = self._file_list._ui or self._dir_tree._ui
-        if ui is None:
-            return
-        show_input_dialog(
-            ui,
-            title="Create Directory",
-            message="Directory name:",
-            on_result=lambda name, d=base_dir: self._apply_create_directory(d, name),
-        )
-
-    def _apply_create_directory(self, base_dir: Path, name: str | None) -> None:
-        if not name:
-            return
-        directory_name = name.strip()
-        if not directory_name:
-            return
-        target = base_dir / directory_name
-        try:
-            target.mkdir(parents=False, exist_ok=False)
-        except FileExistsError:
-            ui = self._file_list._ui or self._dir_tree._ui
-            if ui is not None:
-                MessageBox.warning(ui, "Error", f"Directory '{directory_name}' already exists.")
-            return
-        except OSError as e:
-            ui = self._file_list._ui or self._dir_tree._ui
-            if ui is not None:
-                MessageBox.warning(ui, "Error", f"Failed to create directory: {e}")
-            return
-        self.refresh()
+        self._ops.create_directory(self._selected_dir, self.refresh)
 
     def _delete_item(self, path: Path) -> None:
-        ui = self._file_list._ui or self._dir_tree._ui
-        if ui is None:
-            return
-        message = (
-            f"Delete file '{path.name}'?"
-            if path.is_file()
-            else f"Delete directory '{path.name}' and all its contents?"
-        )
-        MessageBox.question(
-            ui,
-            title="Confirm Delete",
-            message=message,
-            buttons=["Yes", "No"],
-            on_result=lambda result, p=path: self._apply_delete_item(p, result),
-        )
-
-    def _apply_delete_item(self, path: Path, result: str) -> None:
-        if result != "Yes":
-            return
-        try:
-            if path.is_file():
-                path.unlink()
-            else:
-                shutil.rmtree(path)
-        except OSError as e:
-            ui = self._file_list._ui or self._dir_tree._ui
-            if ui is not None:
-                MessageBox.warning(ui, "Error", f"Failed to delete: {e}")
-            return
-        self.refresh()
+        self._ops.delete_item(path, self.refresh)
 
     def _extract_fbx(self, fbx_path: Path) -> None:
-        from termin.loaders.fbx_extractor import extract_fbx
-
-        output_dir = fbx_path.parent / fbx_path.stem
-        try:
-            _output_dir, _created_files = extract_fbx(fbx_path, output_dir)
-        except Exception as e:
-            ui = self._file_list._ui
-            if ui is not None:
-                MessageBox.warning(ui, "Extract Failed", f"Failed to extract FBX:\n{e}")
-            log.error(f"[ProjectBrowserTcgui] extract FBX failed: {e}")
-            return
-        self.refresh()
+        self._ops.extract_fbx(fbx_path, self.refresh)
 
     def _extract_glb(self, glb_path: Path) -> None:
-        from termin.loaders.glb_extractor import extract_glb
-
-        output_dir = glb_path.parent / glb_path.stem
-        try:
-            _output_dir, _created_files = extract_glb(glb_path, output_dir)
-        except Exception as e:
-            ui = self._file_list._ui
-            if ui is not None:
-                MessageBox.warning(ui, "Extract Failed", f"Failed to extract GLB:\n{e}")
-            log.error(f"[ProjectBrowserTcgui] extract GLB failed: {e}")
-            return
-        self.refresh()
+        self._ops.extract_glb(glb_path, self.refresh)
 
     def _create_material(self) -> None:
-        self._create_text_file(
-            title="Create Material",
-            message="Material name:",
-            default="NewMaterial",
-            suffix=".material",
-            content='''{\n  "shader": "DefaultShader",\n  "uniforms": {},\n  "textures": {}\n}\n''',
-        )
+        self._ops.create_material(self._selected_dir, self.refresh)
 
     def _create_shader(self) -> None:
-        self._create_text_file(
-            title="Create Shader",
-            message="Shader name:",
-            default="NewShader",
-            suffix=".shader",
-            content='''@program NewShader\n\n@phase opaque\n\n@stage vertex\n#version 330 core\n\nvoid main() {}\n\n@stage fragment\n#version 330 core\n\nout vec4 frag_color;\nvoid main() { frag_color = vec4(1.0); }\n''',
-        )
+        self._ops.create_shader(self._selected_dir, self.refresh)
 
     def _create_component(self) -> None:
-        self._create_text_file(
-            title="Create Component",
-            message="File name:",
-            default="my_component",
-            suffix=".py",
-            content='''from __future__ import annotations\n\nfrom termin.visualization.core.python_component import PythonComponent\n\n\nclass MyComponent(PythonComponent):\n    def __init__(self, speed: float = 1.0):\n        super().__init__()\n        self.speed = speed\n\n    def update(self, dt: float) -> None:\n        pass\n''',
-        )
+        self._ops.create_component(self._selected_dir, self.refresh)
 
     def _create_pipeline(self) -> None:
-        self._create_text_file(
-            title="Create Render Pipeline",
-            message="Pipeline name:",
-            default="NewPipeline",
-            suffix=".pipeline",
-            content='''{\n  "name": "NewPipeline",\n  "passes": [],\n  "resource_specs": []\n}\n''',
-        )
+        self._ops.create_pipeline(self._selected_dir, self.refresh)
 
     def _create_prefab(self) -> None:
-        if self._selected_dir is None:
-            return
-        ui = self._file_list._ui or self._dir_tree._ui
-        if ui is None:
-            return
-        show_input_dialog(
-            ui,
-            title="Create Prefab",
-            message="Prefab name:",
-            default="NewPrefab",
-            on_result=self._apply_create_prefab,
-        )
-
-    def _apply_create_prefab(self, name: str | None) -> None:
-        if self._selected_dir is None or not name:
-            return
-        clean_name = name.strip()
-        if not clean_name:
-            return
-        file_path = self._selected_dir / f"{clean_name}.prefab"
-        if file_path.exists():
-            ui = self._file_list._ui or self._dir_tree._ui
-            if ui is not None:
-                MessageBox.warning(ui, "Error", f"File '{file_path.name}' already exists.")
-            return
-        try:
-            from termin.editor.prefab_persistence import PrefabPersistence
-            from termin.visualization.core.resources import ResourceManager
-
-            persistence = PrefabPersistence(ResourceManager.instance())
-            persistence.create_empty(file_path, name=clean_name)
-        except Exception as e:
-            ui = self._file_list._ui or self._dir_tree._ui
-            if ui is not None:
-                MessageBox.warning(ui, "Error", f"Failed to create prefab: {e}")
-            log.error(f"[ProjectBrowserTcgui] create prefab failed: {e}")
-            return
-        self.refresh()
-
-    def _create_text_file(
-        self,
-        title: str,
-        message: str,
-        default: str,
-        suffix: str,
-        content: str,
-    ) -> None:
-        if self._selected_dir is None:
-            return
-        ui = self._file_list._ui or self._dir_tree._ui
-        if ui is None:
-            return
-        show_input_dialog(
-            ui,
-            title=title,
-            message=message,
-            default=default,
-            on_result=lambda name, s=suffix, c=content: self._apply_create_text_file(name, s, c),
-        )
-
-    def _apply_create_text_file(self, name: str | None, suffix: str, content: str) -> None:
-        if self._selected_dir is None or not name:
-            return
-        clean_name = name.strip()
-        if not clean_name:
-            return
-        if clean_name.endswith(suffix):
-            clean_name = clean_name[: -len(suffix)]
-        file_path = self._selected_dir / f"{clean_name}{suffix}"
-        if file_path.exists():
-            ui = self._file_list._ui or self._dir_tree._ui
-            if ui is not None:
-                MessageBox.warning(ui, "Error", f"File '{file_path.name}' already exists.")
-            return
-        try:
-            file_path.write_text(content, encoding="utf-8")
-        except OSError as e:
-            ui = self._file_list._ui or self._dir_tree._ui
-            if ui is not None:
-                MessageBox.warning(ui, "Error", f"Failed to create file: {e}")
-            return
-        self.refresh()
+        self._ops.create_prefab(self._selected_dir, self.refresh)

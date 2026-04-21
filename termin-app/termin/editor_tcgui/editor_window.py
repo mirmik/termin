@@ -417,6 +417,7 @@ class EditorWindowTcgui:
         self._project_browser = ProjectBrowserTcgui(
             dir_tree=project_dir_tree,
             file_list=project_file_list,
+            dialog_service=self._dialog_service,
             on_file_activated=self._on_project_file_activated,
             on_file_selected=self._on_project_file_selected,
         )

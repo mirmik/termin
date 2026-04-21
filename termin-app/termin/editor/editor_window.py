@@ -318,6 +318,7 @@ class EditorWindow(QMainWindow):
             on_project_reset=self.scene_manager.close_all_scenes,
             on_load_scene=self._load_scene_from_file,
             on_open_prefab=self._open_prefab,
+            dialog_service=self._dialog_service,
         )
 
         # --- UI: menu bar and project browser ---
