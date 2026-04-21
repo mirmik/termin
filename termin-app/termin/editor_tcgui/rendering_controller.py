@@ -65,9 +65,6 @@ class RenderingControllerTcgui:
         self._on_entity_selected = on_entity_selected
         self._on_render_target_selected = on_render_target_selected
 
-        self._selected_display = None
-        self._selected_viewport = None
-
         self._display_surfaces: dict[int, object] = {}
         self._display_viewports: dict[int, object] = {}  # display_id -> Viewport3D
         self._display_input_managers: dict[int, object] = {}
@@ -128,6 +125,22 @@ class RenderingControllerTcgui:
     @_editor_display_ptr.setter
     def _editor_display_ptr(self, value: int | None) -> None:
         self._model.set_editor_display_ptr(value)
+
+    @property
+    def _selected_display(self) -> "Display | None":
+        return self._model.selected_display
+
+    @_selected_display.setter
+    def _selected_display(self, value: "Display | None") -> None:
+        self._model.set_selected_display(value)
+
+    @property
+    def _selected_viewport(self) -> "Viewport | None":
+        return self._model.selected_viewport
+
+    @_selected_viewport.setter
+    def _selected_viewport(self, value: "Viewport | None") -> None:
+        self._model.set_selected_viewport(value)
 
     def set_editor_display_ptr(self, ptr: int) -> None:
         self._model.set_editor_display_ptr(ptr)

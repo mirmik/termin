@@ -25,6 +25,7 @@ from termin.editor_core.signal import Signal
 if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.core.scene import Scene
+    from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.render_pipeline import RenderPipeline
     from termin._native.render import RenderingManager
 
@@ -35,7 +36,11 @@ class RenderingModel:
         self._offscreen_context = offscreen_context
         self._editor_display_ptr: int | None = None
 
+        self._selected_display: "Display | None" = None
+        self._selected_viewport: "Viewport | None" = None
+
         self.changed = Signal()
+        self.selection_changed = Signal()
 
     @property
     def manager(self) -> "RenderingManager":
@@ -54,6 +59,45 @@ class RenderingModel:
 
     def set_offscreen_context(self, ctx) -> None:
         self._offscreen_context = ctx
+
+    # ------------------------------------------------------------------
+    # Selection state (display / viewport)
+    # ------------------------------------------------------------------
+
+    @property
+    def selected_display(self) -> "Display | None":
+        return self._selected_display
+
+    @property
+    def selected_viewport(self) -> "Viewport | None":
+        return self._selected_viewport
+
+    def set_selected_display(self, display: "Display | None") -> None:
+        if self._selected_display is display:
+            return
+        self._selected_display = display
+        self.selection_changed.emit(self)
+
+    def set_selected_viewport(self, viewport: "Viewport | None") -> None:
+        if self._selected_viewport is viewport:
+            return
+        self._selected_viewport = viewport
+        self.selection_changed.emit(self)
+
+    def set_selection(
+        self,
+        display: "Display | None",
+        viewport: "Viewport | None",
+    ) -> None:
+        """Set both in one shot; emits ``selection_changed`` once if anything differs."""
+        if self._selected_display is display and self._selected_viewport is viewport:
+            return
+        self._selected_display = display
+        self._selected_viewport = viewport
+        self.selection_changed.emit(self)
+
+    def clear_selection(self) -> None:
+        self.set_selection(None, None)
 
     # ------------------------------------------------------------------
     # Iteration helpers
