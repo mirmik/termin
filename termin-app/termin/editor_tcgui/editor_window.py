@@ -151,7 +151,9 @@ class EditorWindowTcgui:
         self._center_tabs: TabView | None = None
         self._play_button = None
         self._pause_button = None
-        self._game_scene_name: str | None = None
+        # Game mode state + transitions live in GameModeModel. The model is
+        # created after editor_attachment/rendering_controller exist (end of build()).
+        self._game_mode_model = None
         self._saved_tree_expanded_uuids: list[str] | None = None
         self._spacemouse = None
 
@@ -456,6 +458,17 @@ class EditorWindowTcgui:
             self._editor_attachment.attach(self.scene, restore_state=False)
             self._setup_editor_viewport_input_managers(self._editor_display)
             self._attach_editor_input_router(self._editor_display)
+
+            # GameModeModel owns Play/Stop/Pause state + transitions.
+            from termin.editor_core.game_mode_model import GameModeModel
+            self._game_mode_model = GameModeModel(
+                scene_manager=self.scene_manager,
+                editor_attachment=self._editor_attachment,
+                rendering_controller=self._rendering_controller,
+                get_editor_scene_name=lambda: self._editor_scene_name,
+                scene_tree_controller=self.scene_tree_controller,
+            )
+            self._game_mode_model.mode_entered.connect(self._on_game_mode_entered)
 
             # EditorStateIO for save/load
             self._editor_state_io = EditorStateIO(
@@ -1246,124 +1259,42 @@ class EditorWindowTcgui:
             log.error(f"[EditorWindowTcgui] Failed to open Pipeline Editor: {e}")
             self._log_to_console(f"Pipeline Editor error: {e}")
 
+    @property
+    def _game_scene_name(self) -> str | None:
+        return self._game_mode_model.game_scene_name if self._game_mode_model else None
+
     def _toggle_game_mode(self) -> None:
-        if self._game_scene_name is not None:
-            self._stop_game_mode()
-        else:
-            self._start_game_mode()
-
-    def _start_game_mode(self) -> None:
-        if self._game_scene_name is not None:
-            return
-        if self._editor_scene_name is None:
-            return
-
-        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
-        if editor_scene is None:
-            return
-
-        # Save expanded tree nodes
-        if self.scene_tree_controller is not None:
-            self._saved_tree_expanded_uuids = (
-                self.scene_tree_controller.get_expanded_entity_uuids()
-            )
-
-        # Save editor viewport camera to scene
-        self._save_editor_viewport_camera_to_scene(editor_scene)
-
-        # Save viewport configs before copying
-        if self._rendering_controller is not None:
-            self._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
-
-        # Save editor entities state
-        if self._editor_attachment is not None:
-            self._editor_attachment.save_state()
-
-        # Copy scene for game mode
-        self._game_scene_name = f"{self._editor_scene_name}(game)"
-        self.scene_manager.copy_scene(
-            self._editor_scene_name,
-            self._game_scene_name,
-        )
-
-        # Detach editor scene from rendering BEFORE attaching game scene
-        if self._rendering_controller is not None:
-            self._rendering_controller.detach_scene(editor_scene)
-
-        # Attach to game scene
-        game_scene = self.scene_manager.get_scene(self._game_scene_name)
-        if self._editor_attachment is not None:
-            self._editor_attachment.attach(game_scene, transfer_camera_state=True)
-            self._setup_editor_viewport_input_managers(self._editor_attachment._display)
-            self._attach_editor_input_router(self._editor_attachment._display)
-
-        # Set modes
-        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
-        self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
-
-        self._on_game_mode_changed(True, game_scene)
-
-    def _stop_game_mode(self) -> None:
-        if self._game_scene_name is None:
-            return
-
-        # Detach from game scene (discard changes)
-        if self._editor_attachment is not None:
-            self._editor_attachment.detach(save_state=False)
-
-        # Detach game scene from rendering
-        game_scene = self.scene_manager.get_scene(self._game_scene_name)
-        if game_scene is not None and self._rendering_controller is not None:
-            self._rendering_controller.detach_scene(game_scene)
-
-        # Close game scene
-        self.scene_manager.close_scene(self._game_scene_name)
-        self._game_scene_name = None
-
-        # Return to editor scene
-        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
-        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
-
-        # Re-attach editor scene
-        if self._editor_attachment is not None:
-            self._editor_attachment.attach(editor_scene, restore_state=True)
-            self._setup_editor_viewport_input_managers(self._editor_attachment._display)
-            self._attach_editor_input_router(self._editor_attachment._display)
-
-        self._on_game_mode_changed(False, editor_scene)
+        if self._game_mode_model is not None:
+            self._game_mode_model.toggle_game_mode()
 
     def _toggle_pause(self) -> None:
-        if self._game_scene_name is None:
+        if self._game_mode_model is None:
             return
-
+        self._game_mode_model.toggle_pause()
         from tcgui.widgets.theme import current_theme as _t
-        current_mode = self.scene_manager.get_mode(self._game_scene_name)
-        if current_mode == SceneMode.PLAY:
-            self.scene_manager.set_mode(self._game_scene_name, SceneMode.STOP)
-            if self._pause_button is not None:
+        if self._pause_button is not None:
+            if self._game_mode_model.is_game_paused:
                 self._pause_button.text = "Resume"
                 self._pause_button.background_color = (0.85, 0.63, 0.29, 1.0)
-        else:
-            self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
-            if self._pause_button is not None:
+            else:
                 self._pause_button.text = "Pause"
                 self._pause_button.background_color = _t.bg_surface
-
         self._request_viewport_update()
 
-    def _on_game_mode_changed(self, is_playing: bool, scene) -> None:
-        # Update scene tree
+    def _on_game_mode_entered(self, is_playing: bool, scene, expanded_uuids) -> None:
+        """GameModeModel.mode_entered handler — post-attach view setup."""
+        # tcgui-specific: rebuild per-viewport input managers + router after
+        # attach swapped to new scene.
+        if self._editor_attachment is not None:
+            self._setup_editor_viewport_input_managers(self._editor_attachment._display)
+            self._attach_editor_input_router(self._editor_attachment._display)
+
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(scene)
             self.scene_tree_controller.rebuild()
-            if self._saved_tree_expanded_uuids:
-                self.scene_tree_controller.set_expanded_entity_uuids(
-                    self._saved_tree_expanded_uuids
-                )
-            if not is_playing:
-                self._saved_tree_expanded_uuids = None
+            if expanded_uuids:
+                self.scene_tree_controller.set_expanded_entity_uuids(expanded_uuids)
 
-        # Clear inspector
         if self._inspector_controller is not None:
             self._inspector_controller.clear()
 
@@ -1392,17 +1323,6 @@ class EditorWindowTcgui:
                 self._status_bar.text = "Game mode"
             else:
                 self._status_bar.text = "Editor mode"
-
-    def _save_editor_viewport_camera_to_scene(self, scene) -> None:
-        if self._rendering_controller is None:
-            return
-        if self._editor_display is None or not self._editor_display.viewports:
-            return
-        viewport = self._editor_display.viewports[0]
-        camera_name = None
-        if viewport.camera is not None and viewport.camera.entity is not None:
-            camera_name = viewport.camera.entity.name
-        scene.set_metadata_value("termin.editor.viewport_camera_name", camera_name)
 
     def _run_standalone(self) -> None:
         if self._current_project_path is None:

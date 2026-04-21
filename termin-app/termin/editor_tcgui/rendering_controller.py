@@ -112,6 +112,16 @@ class RenderingControllerTcgui:
     def displays(self) -> list["Display"]:
         return self._manager.displays
 
+    @property
+    def editor_display(self) -> "Display | None":
+        ptr = self._model.editor_display_ptr
+        if ptr is None:
+            return None
+        for display in self._manager.displays:
+            if display.tc_display_ptr == ptr:
+                return display
+        return None
+
     # ------------------------------------------------------------------
     # Editor display — backed by RenderingModel
     # ------------------------------------------------------------------
