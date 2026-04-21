@@ -140,25 +140,39 @@ class FramegraphDebuggerModel:
         self.lists_changed.emit(self)
 
     def get_resources(self) -> list[str]:
-        """Names of FBO resources available in the current pipeline, sorted by
-        schedule order."""
+        """FBO resource names available in the current pipeline, ordered so
+        read-only resources come first, followed by written resources in
+        schedule order. ``DISPLAY`` is excluded."""
         schedule = self._build_schedule(exclude_debugger=True)
-        seen: set[str] = set()
-        result: list[str] = []
+        if not schedule:
+            return sorted(self.get_fbos().keys())
+
+        written: set[str] = set()
         for p in schedule:
-            for res in p.writes:
-                if res and res not in seen:
-                    seen.add(res)
-                    result.append(res)
-        for key in self.get_fbos().keys():
-            if key not in seen:
-                seen.add(key)
-                result.append(key)
-        return result
+            written.update(p.writes)
+        written.discard("DISPLAY")
+
+        read_only: list[str] = []
+        for p in schedule:
+            for r in sorted(p.reads):
+                if r not in written and r != "DISPLAY" and r not in read_only:
+                    read_only.append(r)
+
+        seen: set[str] = set()
+        write_order: list[str] = []
+        for p in schedule:
+            for w in sorted(p.writes):
+                if w not in seen and w != "DISPLAY":
+                    seen.add(w)
+                    write_order.append(w)
+        return read_only + write_order
 
     def get_passes(self) -> list[tuple[str, bool]]:
         """List of (pass_name, has_internal_symbols) from current pipeline,
-        with the debugger pass filtered out."""
+        with the debugger pass filtered out. ShadowPass is treated as having
+        no symbols (matches Qt behaviour)."""
+        from termin.visualization.render.framegraph.passes.shadow import ShadowPass
+
         pipeline = self.get_current_pipeline()
         if pipeline is None:
             return []
@@ -166,11 +180,13 @@ class FramegraphDebuggerModel:
         for p in pipeline.passes:
             if p.pass_name == "FrameDebugger":
                 continue
-            try:
-                symbols = p.get_internal_symbols_with_timing()
-                has_syms = bool(symbols)
-            except AttributeError:
+            if isinstance(p, ShadowPass):
                 has_syms = False
+            else:
+                try:
+                    has_syms = bool(p.get_internal_symbols())
+                except AttributeError:
+                    has_syms = False
             result.append((p.pass_name, has_syms))
         return result
 
@@ -182,10 +198,9 @@ class FramegraphDebuggerModel:
             if p.pass_name != self._selected_pass:
                 continue
             try:
-                symbols = p.get_internal_symbols_with_timing()
+                return list(p.get_internal_symbols())
             except AttributeError:
                 return []
-            return [name for name, _timing in symbols]
         return []
 
     # ------------------------------------------------------------------
@@ -193,6 +208,12 @@ class FramegraphDebuggerModel:
     # ------------------------------------------------------------------
 
     def format_fbo_info(self) -> str:
+        """Info line for the currently-selected source resource.
+
+        ``RenderPipeline.get_fbo(key)`` returns a dict (see
+        render_pipeline_bindings.cpp); ``ShadowMapArrayResource`` is a
+        separate dataclass-like type — check its type first.
+        """
         from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
 
         fbos = self.get_fbos()
@@ -209,22 +230,21 @@ class FramegraphDebuggerModel:
                 if fbo is not None:
                     w, h = fbo.get_size()
                     parts.append(f"Размер: {w}×{h}")
-        else:
-            w = getattr(resource, "width", None)
-            h = getattr(resource, "height", None)
-            if w is not None and h is not None:
-                parts.append(f"Размер: {w}×{h}")
-            fmt = getattr(resource, "color_format", None)
-            if fmt is not None:
-                parts.append(f"fmt={fmt}")
-            if getattr(resource, "has_depth", False):
-                parts.append(f"depth_fmt={resource.depth_format}")
-            samples = getattr(resource, "samples", 0) or 0
+        elif isinstance(resource, dict):
+            w = int(resource.get("width", 0))
+            h = int(resource.get("height", 0))
+            parts.append(f"Размер: {w}×{h}")
+            parts.append(f"fmt={resource.get('color_format', 0)}")
+            if resource.get("has_depth", False):
+                parts.append(f"depth_fmt={resource.get('depth_format', 0)}")
+            samples = int(resource.get("samples", 1))
             if samples > 1:
                 parts.append(f"MSAA={samples}x")
-            handle = getattr(resource, "color_native_handle", None)
+            handle = resource.get("color_native_handle", 0)
             if handle:
                 parts.append(f"id={handle}")
+        else:
+            parts.append(f"Тип: {type(resource).__name__}")
         return " | ".join(parts)
 
     def format_writer_pass(self) -> str:
@@ -238,16 +258,26 @@ class FramegraphDebuggerModel:
         return "(read-only)"
 
     def format_pipeline_info(self) -> str:
-        pipeline = self.get_current_pipeline()
-        if pipeline is None:
-            return "<no pipeline>"
-        schedule = self._build_schedule(exclude_debugger=True)
+        """HTML pipeline schedule with FrameDebugger highlighted in orange
+        and the writer of the current debug-source resource in green."""
+        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
+
+        schedule = self._build_schedule(exclude_debugger=False)
+        if not schedule:
+            return "<i>Pipeline пуст</i>"
+
+        current_resource = self._debug_source_res
         lines: list[str] = []
         for p in schedule:
-            reads = ", ".join(p.reads) if p.reads else "—"
-            writes = ", ".join(p.writes) if p.writes else "—"
-            lines.append(f"{p.pass_name}: reads=[{reads}] writes=[{writes}]")
-        return "\n".join(lines)
+            reads_str = ", ".join(sorted(p.reads)) if p.reads else "∅"
+            writes_str = ", ".join(sorted(p.writes)) if p.writes else "∅"
+            line = f"{p.pass_name}: {{{reads_str}}} → {{{writes_str}}}"
+            if isinstance(p, FrameDebuggerPass):
+                line = f"<span style='color: #ffb86c;'>► {line}</span>"
+            elif current_resource and current_resource in p.writes:
+                line = f"<span style='color: #50fa7b; font-weight: bold;'>● {line}</span>"
+            lines.append(line)
+        return "<pre>" + "<br>".join(lines) + "</pre>"
 
     def format_pass_json(self) -> str:
         if self._selected_pass is None:
@@ -273,12 +303,14 @@ class FramegraphDebuggerModel:
             if p.pass_name != self._selected_pass:
                 continue
             try:
-                symbols = p.get_internal_symbols_with_timing()
+                timings = p.get_internal_symbols_with_timing()
             except AttributeError:
                 return ""
-            for name, timing in symbols:
-                if name == self._selected_symbol:
-                    return f"{name}: {timing:.3f} ms" if timing is not None else f"{name}: —"
+            for t in timings:
+                if t.name == self._selected_symbol:
+                    gpu_str = f"{t.gpu_time_ms:.3f}ms" if t.gpu_time_ms >= 0 else "pending..."
+                    return f"CPU: {t.cpu_time_ms:.3f}ms | GPU: {gpu_str}"
+            return "Timing: no data"
         return ""
 
     def format_render_stats(self) -> str:
@@ -490,13 +522,25 @@ class FramegraphDebuggerModel:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _build_schedule(self, exclude_debugger: bool = True) -> list:
-        """Return ordered pass list from the current pipeline (optionally
-        excluding the FrameDebugger pass itself)."""
+    def _build_schedule(self, exclude_debugger: bool = False) -> list:
+        """Ordered pass list resolved by FrameGraph dependency analysis
+        (mirrors Qt ``FramegraphDebugDialog._build_schedule``). Every pass
+        is asked for its required_resources before the graph is built."""
+        from termin.visualization.render.framegraph.core import FrameGraph
+        from termin.visualization.render.framegraph.passes.base import RenderFramePass
+        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
+
         pipeline = self.get_current_pipeline()
         if pipeline is None:
             return []
-        passes = list(pipeline.passes)
+
+        passes = pipeline.passes
         if exclude_debugger:
-            passes = [p for p in passes if p.pass_name != "FrameDebugger"]
-        return passes
+            passes = [p for p in passes if not isinstance(p, FrameDebuggerPass)]
+
+        for render_pass in passes:
+            if isinstance(render_pass, RenderFramePass):
+                render_pass.required_resources()
+
+        graph = FrameGraph(passes)
+        return graph.build_schedule()
