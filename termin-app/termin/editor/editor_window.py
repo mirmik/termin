@@ -291,11 +291,16 @@ class EditorWindow(QMainWindow):
         self._display_routers: dict[int, DisplayInputRouter] = {}
         self._editor_viewport_input_managers: list[CppEditorViewportInputManager] = []
 
+        # --- dialog service (shared between controllers) ---
+        from termin.editor.qt_dialog_service import QtDialogService
+        self._dialog_service = QtDialogService(parent=self)
+
         # --- дерево сцены ---
         self.scene_tree_controller = SceneTreeController(
             tree_view=self.sceneTree,
             scene=self.scene,
             undo_handler=self.push_undo_command,
+            dialog_service=self._dialog_service,
             on_object_selected=self._on_tree_object_selected,
             request_viewport_update=self._request_viewport_update,
         )
