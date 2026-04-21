@@ -9,7 +9,6 @@ extern "C" {
 
 #include "render_bindings.hpp"
 #include "bindings/modules/term_modules_integration_bindings.hpp"
-#include "profiler_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
 #include "kind_bindings.hpp"
@@ -155,7 +154,6 @@ NB_MODULE(_native, m) {
     // SDL platform bindings moved to termin-display/_platform_native
     auto scene_module = m.def_submodule("scene", "Scene module");
     auto modules_module = m.def_submodule("modules", "Modules integration");
-    auto profiler_module = m.def_submodule("profiler", "Profiler module");
     auto skeleton_module = m.def_submodule("skeleton", "Skeleton module");
     auto inspect_module = m.def_submodule("inspect", "Inspect module");
     // log_module removed — log is imported from tcbase
@@ -169,12 +167,12 @@ NB_MODULE(_native, m) {
     termin::bind_editor_interaction(editor_module);
     termin::bind_frame_graph_debugger(editor_module);
     termin::bind_term_modules_integration(modules_module);
-    termin::bind_profiler(profiler_module);
     termin::bind_skeleton(skeleton_module);
     termin::bind_inspect(inspect_module);
-    // Import log from tcbase instead of local bindings
+    // Import log and profiler from tcbase instead of keeping local bindings
     nb::module_ tcbase = nb::module_::import_("tcbase._tcbase_native");
     m.attr("log") = tcbase.attr("log");
+    m.attr("profiler") = tcbase.attr("profiler");
     termin::bind_kind(kind_module);
 
     // TcComponent is registered in _scene_native — re-export it

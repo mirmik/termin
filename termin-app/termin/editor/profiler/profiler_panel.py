@@ -192,12 +192,18 @@ class ProfilerPanel(QtWidgets.QDockWidget):
             self._last_sections = detailed_ema.copy()
 
     def _get_last_frame(self):
-        """Возвращает последний кадр профайлера без конвертации всей истории."""
+        """Возвращает последний кадр профайлера без конвертации всей истории.
+
+        ``history_count`` инкрементируется в ``begin_frame``, поэтому
+        ``history_at(count-1)`` — это текущий открытый кадр, если он
+        есть. Берём предыдущий, где секции и ``total_ms`` уже зафиксированы.
+        """
         tc = self._profiler._tc
         count = tc.history_count
-        if count <= 0:
+        last_idx = count - 2 if tc.current_frame is not None else count - 1
+        if last_idx < 0:
             return None
-        return tc.history_at(count - 1)
+        return tc.history_at(last_idx)
 
     def _collect_sections_from_frame(self, frame) -> Dict[str, SectionStats]:
         """Собирает секции из одного кадра в формате path -> SectionStats."""

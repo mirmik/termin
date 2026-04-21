@@ -14,6 +14,9 @@ from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent, TextEven
 from tcgui.widgets.renderer import UIRenderer
 from tcgui.widgets.loader import UILoader
 from tcgui.widgets.shortcuts import ShortcutRegistry
+from tcbase.profiler import Profiler
+
+_profiler = Profiler.instance()
 
 
 @dataclass
@@ -284,7 +287,8 @@ class UI:
         if not self._compose(viewport_w, viewport_h, background_color,
                              target_color):
             return None
-        return self._renderer.end_compose()
+        with _profiler.section("Renderer.end"):
+            return self._renderer.end_compose()
 
     def _compose(
         self,
@@ -297,29 +301,33 @@ class UI:
             return False
 
         # Re-layout if viewport changed or layout invalidated
-        if (viewport_w != self._viewport_w or viewport_h != self._viewport_h
-                or self._needs_layout):
-            self._needs_layout = False
-            self.layout(viewport_w, viewport_h)
+        with _profiler.section("Layout"):
+            if (viewport_w != self._viewport_w or viewport_h != self._viewport_h
+                    or self._needs_layout):
+                self._needs_layout = False
+                self.layout(viewport_w, viewport_h)
 
-        # Check tooltip timer
-        self._update_tooltip()
+            # Check tooltip timer
+            self._update_tooltip()
 
-        self._renderer.begin(viewport_w, viewport_h, background_color,
-                             target_color=target_color)
-        if self._root:
-            self._root.render(self._renderer)
+        with _profiler.section("Renderer.begin"):
+            self._renderer.begin(viewport_w, viewport_h, background_color,
+                                 target_color=target_color)
+        with _profiler.section("Root.render"):
+            if self._root:
+                self._root.render(self._renderer)
 
         # Render overlays on top (re-center modal dialogs if viewport changed)
-        for entry in self._overlays:
-            if entry.modal:
-                w, h = entry.widget.compute_size(viewport_w, viewport_h)
-                x = (viewport_w - w) / 2
-                y = (viewport_h - h) / 2
-                entry.widget.layout(x, y, w, h, viewport_w, viewport_h)
-                self._renderer.draw_rect(0, 0, viewport_w, viewport_h,
-                                         (0, 0, 0, 0.3))
-            entry.widget.render(self._renderer)
+        with _profiler.section("Overlays"):
+            for entry in self._overlays:
+                if entry.modal:
+                    w, h = entry.widget.compute_size(viewport_w, viewport_h)
+                    x = (viewport_w - w) / 2
+                    y = (viewport_h - h) / 2
+                    entry.widget.layout(x, y, w, h, viewport_w, viewport_h)
+                    self._renderer.draw_rect(0, 0, viewport_w, viewport_h,
+                                             (0, 0, 0, 0.3))
+                entry.widget.render(self._renderer)
         return True
 
     # ------------------------------------------------------------------
