@@ -32,6 +32,9 @@ from tgfx._tgfx_native import (
     CULL_NONE,
     PIXEL_RGBA8,
 )
+from tcbase.profiler import Profiler
+
+_prof = Profiler.instance()
 
 
 # UI shader: solid colour (mode 0) and RGBA-image sampling (mode 2).
@@ -569,9 +572,12 @@ class UIRenderer:
         ignored (the legacy implementation also ignored it)."""
         if w <= 0 or h <= 0:
             return
-        self._bind_ui_shader_solid(color)
-        verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
-        self._ctx.draw_immediate_triangles(verts, 6)
+        with _prof.section("draw_rect.push"):
+            self._bind_ui_shader_solid(color)
+        with _prof.section("draw_rect.emit"):
+            verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
+        with _prof.section("draw_rect.draw"):
+            self._ctx.draw_immediate_triangles(verts, 6)
 
     def draw_rect_outline(
         self, x: float, y: float, w: float, h: float,
@@ -644,10 +650,11 @@ class UIRenderer:
         # uses top-left anchoring.
         top_y = y - ascent * scale
 
-        self._text2d.draw(
-            text, x, top_y,
-            color=color, size=float(font_size), anchor="left",
-        )
+        with _prof.section("text2d.draw"):
+            self._text2d.draw(
+                text, x, top_y,
+                color=color, size=float(font_size), anchor="left",
+            )
 
     def draw_text_centered(
         self, cx: float, cy: float, text: str,
@@ -659,8 +666,8 @@ class UIRenderer:
         if not font or not text or self._text2d is None:
             return
 
-        # Legacy semantics: convert to a draw_text call at the baseline.
-        text_width, _ = font.measure_text(text, font_size)
+        with _prof.section("draw_text_centered.measure"):
+            text_width, _ = font.measure_text(text, font_size)
         x = cx - text_width / 2
         y = cy + font_size / 2  # baseline offset (legacy)
         self.draw_text(x, y, text, color, font_size)
