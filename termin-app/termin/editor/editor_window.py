@@ -240,6 +240,10 @@ class EditorWindow(QMainWindow):
 
         EditorUIBuilder.fix_splitters(self.topSplitter, self.verticalSplitter)
 
+        # --- dialog service (shared between controllers) ---
+        from termin.editor.qt_dialog_service import QtDialogService
+        self._dialog_service = QtDialogService(parent=self)
+
         # --- InspectorController ---
         self._inspector_controller = InspectorController(
             container=self.inspectorContainer,
@@ -249,6 +253,7 @@ class EditorWindow(QMainWindow):
             on_component_changed=self._on_inspector_component_changed,
             on_material_changed=self._on_material_inspector_changed,
             window_backend=self._sdl_backend,
+            dialog_service=self._dialog_service,
         )
 
         # Для обратной совместимости
@@ -290,10 +295,6 @@ class EditorWindow(QMainWindow):
         from termin._native.render import DisplayInputRouter
         self._display_routers: dict[int, DisplayInputRouter] = {}
         self._editor_viewport_input_managers: list[CppEditorViewportInputManager] = []
-
-        # --- dialog service (shared between controllers) ---
-        from termin.editor.qt_dialog_service import QtDialogService
-        self._dialog_service = QtDialogService(parent=self)
 
         # --- дерево сцены ---
         self.scene_tree_controller = SceneTreeController(

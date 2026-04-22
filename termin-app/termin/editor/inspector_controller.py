@@ -58,6 +58,7 @@ class InspectorController:
         on_viewport_changed: Optional[Callable] = None,
         on_pipeline_changed: Optional[Callable] = None,
         window_backend: Optional["SDLEmbeddedWindowBackend"] = None,
+        dialog_service=None,
     ):
         self._resource_manager = resource_manager
         self._push_undo_command = push_undo_command
@@ -65,6 +66,7 @@ class InspectorController:
         self._on_viewport_changed = on_viewport_changed
         self._on_pipeline_changed = on_pipeline_changed
         self._window_backend = window_backend
+        self._dialog_service = dialog_service
 
         self._model = InspectorModel(resource_manager)
 
@@ -95,7 +97,7 @@ class InspectorController:
         self._stack.addWidget(self._viewport_inspector)
 
         from termin.editor.pipeline_inspector import PipelineInspector
-        self._pipeline_inspector = PipelineInspector()
+        self._pipeline_inspector = PipelineInspector(dialog_service=dialog_service)
         if on_pipeline_changed is not None:
             self._pipeline_inspector.pipeline_changed.connect(on_pipeline_changed)
         self._stack.addWidget(self._pipeline_inspector)

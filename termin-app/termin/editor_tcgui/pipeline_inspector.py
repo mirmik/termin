@@ -26,7 +26,7 @@ from termin.editor_tcgui.inspect_field_panel import InspectFieldPanel
 class PipelineInspectorTcgui(VStack):
     """Specialized tcgui inspector for RenderPipeline."""
 
-    def __init__(self, resource_manager) -> None:
+    def __init__(self, resource_manager, dialog_service=None) -> None:
         super().__init__()
         self.spacing = 4
 
@@ -40,6 +40,13 @@ class PipelineInspectorTcgui(VStack):
         self._updating_spec = False
 
         self.on_changed: Optional[Callable[[], None]] = None
+
+        # All pipeline mutations (passes/effects/specs) + save/load go through
+        # the shared PipelineOperations so both editors hit the same code path.
+        from termin.editor_core.pipeline_operations import PipelineOperations
+        self._ops: PipelineOperations | None = (
+            PipelineOperations(dialog_service) if dialog_service is not None else None
+        )
 
         self._build_ui()
         self._set_visible_state(False)
@@ -301,6 +308,8 @@ class PipelineInspectorTcgui(VStack):
         self._pipeline = pipeline
         self._subtitle.text = subtitle
         self._source_path = source_path
+        if self._ops is not None:
+            self._ops.set_pipeline(pipeline)
         self._rebuild_all()
 
     def load_pipeline_file(self, file_path: str) -> None:
@@ -309,6 +318,22 @@ class PipelineInspectorTcgui(VStack):
         asset = self._rm.get_pipeline_asset(name)
         pipeline = asset.data if asset is not None else None
         self.set_pipeline(pipeline, f"File: {file_path}", file_path)
+
+    def save_pipeline_file(self, file_path: str | None = None) -> bool:
+        """Save the currently-edited pipeline to ``file_path``; falls back to
+        the source path the pipeline was loaded from when ``file_path`` is
+        None. Returns True on success."""
+        if self._ops is None:
+            log.error("[PipelineInspectorTcgui] save requested without dialog_service")
+            return False
+        target = file_path or self._source_path
+        if not target:
+            self._ops._dialog.show_error(
+                "Save Pipeline Failed",
+                "No destination path — open a pipeline file first or pass one in.",
+            )
+            return False
+        return self._ops.save_to_file(target)
 
     # ------------------------------------------------------------------
     # Rebuild
@@ -450,26 +475,24 @@ class PipelineInspectorTcgui(VStack):
                 self._ui.request_layout()
 
     def _on_pass_enabled_changed(self, checked: bool) -> None:
-        if self._updating:
+        if self._updating or self._ops is None:
             return
         p = self._current_pass()
         if p is None:
             return
-        p.enabled = bool(checked)
+        self._ops.set_pass_enabled(p, checked)
         self._rebuild_passes()
         self._passes_list.selected_index = self._current_pass_index()
         self._emit_changed()
 
     def _on_pass_name_submitted(self, text: str) -> None:
-        if self._updating:
+        if self._updating or self._ops is None:
             return
         p = self._current_pass()
         if p is None:
             return
-        new_name = text.strip()
-        if not new_name or new_name == p.pass_name:
+        if not self._ops.rename_pass(p, text):
             return
-        p.pass_name = new_name
         self._rebuild_passes()
         self._emit_changed()
 
@@ -491,7 +514,7 @@ class PipelineInspectorTcgui(VStack):
         menu.show(self._ui, x, y)
 
     def _create_pass_of_type(self, pass_type: str) -> None:
-        if self._pipeline is None or self._ui is None:
+        if self._pipeline is None or self._ui is None or self._ops is None:
             return
 
         pass_cls = self._rm.get_frame_pass(pass_type)
@@ -511,16 +534,13 @@ class PipelineInspectorTcgui(VStack):
                 return
 
             idx = self._current_pass_index()
-            if idx < 0:
-                self._pipeline.add_pass(new_pass)
-                idx = len(self._pipeline.passes) - 1
-            else:
-                self._pipeline.insert_pass(idx + 1, new_pass)
-                idx += 1
+            insert_at = idx + 1 if idx >= 0 else -1
+            self._ops.add_pass(new_pass, insert_at)
+            new_idx = (idx + 1) if idx >= 0 else (len(self._pipeline.passes) - 1)
 
             self._rebuild_passes()
-            self._passes_list.selected_index = idx
-            self._on_pass_selected(idx, {})
+            self._passes_list.selected_index = new_idx
+            self._on_pass_selected(new_idx, {})
             self._emit_changed()
 
         show_input_dialog(
@@ -532,7 +552,7 @@ class PipelineInspectorTcgui(VStack):
         )
 
     def _on_remove_pass(self) -> None:
-        if self._pipeline is None or self._ui is None:
+        if self._pipeline is None or self._ui is None or self._ops is None:
             return
         p = self._current_pass()
         if p is None:
@@ -542,7 +562,7 @@ class PipelineInspectorTcgui(VStack):
             if btn != "Yes":
                 return
             idx = self._current_pass_index()
-            self._pipeline.remove_pass(p)
+            self._ops.remove_pass(p)
             self._rebuild_passes()
             if self._pipeline.passes:
                 idx = max(0, min(idx, len(self._pipeline.passes) - 1))
@@ -560,24 +580,24 @@ class PipelineInspectorTcgui(VStack):
         )
 
     def _on_move_pass_up(self) -> None:
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
         idx = self._current_pass_index()
         if idx <= 0:
             return
-        self._pipeline.move_pass(idx, idx - 1)
+        self._ops.move_pass(idx, idx - 1)
         self._rebuild_passes()
         self._passes_list.selected_index = idx - 1
         self._on_pass_selected(idx - 1, {})
         self._emit_changed()
 
     def _on_move_pass_down(self) -> None:
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
         idx = self._current_pass_index()
         if idx < 0 or idx >= len(self._pipeline.passes) - 1:
             return
-        self._pipeline.move_pass(idx, idx + 1)
+        self._ops.move_pass(idx, idx + 1)
         self._rebuild_passes()
         self._passes_list.selected_index = idx + 1
         self._on_pass_selected(idx + 1, {})
@@ -625,7 +645,7 @@ class PipelineInspectorTcgui(VStack):
         menu.show(self._ui, x, y)
 
     def _create_effect_of_type(self, effect_type: str) -> None:
-        if self._selected_postprocess is None:
+        if self._selected_postprocess is None or self._ops is None:
             return
         effect_cls = self._rm.get_post_effect(effect_type)
         if effect_cls is None:
@@ -633,13 +653,13 @@ class PipelineInspectorTcgui(VStack):
             return
         try:
             effect = effect_cls()
-            self._selected_postprocess.effects.append(effect)
         except Exception as e:
             log.error(f"[PipelineInspectorTcgui] failed to create effect {effect_type}: {e}")
             if self._ui is not None:
                 MessageBox.error(self._ui, "Create Effect Failed", str(e))
             return
 
+        self._ops.add_effect(self._selected_postprocess, effect)
         self._rebuild_effects()
         idx = len(self._selected_postprocess.effects) - 1
         self._effects_list.selected_index = idx
@@ -647,7 +667,7 @@ class PipelineInspectorTcgui(VStack):
         self._emit_changed()
 
     def _on_remove_effect(self) -> None:
-        if self._selected_postprocess is None or self._ui is None:
+        if self._selected_postprocess is None or self._ui is None or self._ops is None:
             return
         idx = self._current_effect_index()
         eff = self._current_effect()
@@ -658,7 +678,7 @@ class PipelineInspectorTcgui(VStack):
         def _on_result(btn: str) -> None:
             if btn != "Yes":
                 return
-            del self._selected_postprocess.effects[idx]
+            self._ops.remove_effect(self._selected_postprocess, idx)
             self._rebuild_effects()
             if self._selected_postprocess.effects:
                 idx2 = max(0, min(idx, len(self._selected_postprocess.effects) - 1))
@@ -676,39 +696,38 @@ class PipelineInspectorTcgui(VStack):
         )
 
     def _on_move_effect_up(self) -> None:
-        if self._selected_postprocess is None:
+        if self._selected_postprocess is None or self._ops is None:
             return
         idx = self._current_effect_index()
         if idx <= 0:
             return
-        effects = self._selected_postprocess.effects
-        effects[idx], effects[idx - 1] = effects[idx - 1], effects[idx]
+        self._ops.move_effect(self._selected_postprocess, idx, idx - 1)
         self._rebuild_effects()
         self._effects_list.selected_index = idx - 1
         self._on_effect_selected(idx - 1, {})
         self._emit_changed()
 
     def _on_move_effect_down(self) -> None:
-        if self._selected_postprocess is None:
+        if self._selected_postprocess is None or self._ops is None:
             return
         idx = self._current_effect_index()
         effects = self._selected_postprocess.effects
         if idx < 0 or idx >= len(effects) - 1:
             return
-        effects[idx], effects[idx + 1] = effects[idx + 1], effects[idx]
+        self._ops.move_effect(self._selected_postprocess, idx, idx + 1)
         self._rebuild_effects()
         self._effects_list.selected_index = idx + 1
         self._on_effect_selected(idx + 1, {})
         self._emit_changed()
 
     def _on_effect_name_submitted(self, text: str) -> None:
+        if self._ops is None:
+            return
         eff = self._current_effect()
-        if eff is None or not hasattr(eff, "name"):
+        if eff is None:
             return
-        new_name = text.strip()
-        if not new_name or new_name == eff.name:
+        if not self._ops.rename_effect(eff, text):
             return
-        eff.name = new_name
         self._rebuild_effects()
         self._emit_changed()
 
@@ -736,7 +755,7 @@ class PipelineInspectorTcgui(VStack):
             self._ui.request_layout()
 
     def _on_add_spec(self) -> None:
-        if self._pipeline is None or self._ui is None:
+        if self._pipeline is None or self._ui is None or self._ops is None:
             return
 
         def _on_name(text: str | None) -> None:
@@ -745,12 +764,8 @@ class PipelineInspectorTcgui(VStack):
             name = text.strip()
             if not name:
                 return
-            for spec in self._pipeline.pipeline_specs:
-                if spec.resource == name:
-                    MessageBox.warning(self._ui, "Duplicate Resource", f"Resource '{name}' already exists.")
-                    return
-            from termin.visualization.render.framegraph.resource_spec import ResourceSpec
-            self._pipeline.pipeline_specs.append(ResourceSpec(resource=name, resource_type="fbo"))
+            if self._ops.add_resource_spec(name) is None:
+                return
             self._rebuild_specs()
             idx = len(self._pipeline.pipeline_specs) - 1
             self._specs_list.selected_index = idx
@@ -766,7 +781,7 @@ class PipelineInspectorTcgui(VStack):
         )
 
     def _on_remove_spec(self) -> None:
-        if self._pipeline is None or self._ui is None:
+        if self._pipeline is None or self._ui is None or self._ops is None:
             return
         idx = self._selected_spec_index
         spec = self._current_spec()
@@ -776,7 +791,7 @@ class PipelineInspectorTcgui(VStack):
         def _on_result(btn: str) -> None:
             if btn != "Yes":
                 return
-            del self._pipeline.pipeline_specs[idx]
+            self._ops.remove_resource_spec(idx)
             self._rebuild_specs()
             if self._pipeline.pipeline_specs:
                 idx2 = max(0, min(idx, len(self._pipeline.pipeline_specs) - 1))
@@ -861,61 +876,43 @@ class PipelineInspectorTcgui(VStack):
         self._on_spec_field_changed("")
 
     def _on_spec_field_changed(self, _text: str) -> None:
-        if self._updating_spec:
+        if self._updating_spec or self._ops is None:
             return
         spec = self._current_spec()
         if spec is None:
             return
 
-        # Name
         new_name = self._spec_resource.text.strip()
         if new_name and new_name != spec.resource:
-            duplicate = False
-            if self._pipeline is not None:
-                for i, s in enumerate(self._pipeline.pipeline_specs):
-                    if i != self._selected_spec_index and s.resource == new_name:
-                        duplicate = True
-                        break
-            if duplicate:
+            if not self._ops.update_spec_field(spec, "resource", new_name):
                 self._spec_resource.text = spec.resource
-            else:
-                spec.resource = new_name
 
-        # Samples and format
         samples_map = [1, 2, 4, 8]
         sidx = self._spec_samples.selected_index
         if 0 <= sidx < len(samples_map):
-            spec.samples = samples_map[sidx]
-        spec.format = self._spec_format.selected_text
+            self._ops.update_spec_field(spec, "samples", samples_map[sidx])
+        self._ops.update_spec_field(spec, "format", self._spec_format.selected_text)
 
-        # Clear color
         if self._spec_clear_color.checked:
             try:
-                spec.clear_color = (
+                self._ops.update_spec_field(spec, "clear_color", (
                     float(self._spec_clear_r.text),
                     float(self._spec_clear_g.text),
                     float(self._spec_clear_b.text),
                     float(self._spec_clear_a.text),
-                )
+                ))
             except ValueError:
                 pass
         else:
-            try:
-                spec.clear_color = None
-            except TypeError:
-                pass
+            self._ops.update_spec_field(spec, "clear_color", None)
 
-        # Clear depth
         if self._spec_clear_depth_check.checked:
             try:
-                spec.clear_depth = float(self._spec_clear_depth.text)
+                self._ops.update_spec_field(spec, "clear_depth", float(self._spec_clear_depth.text))
             except ValueError:
                 pass
         else:
-            try:
-                spec.clear_depth = None
-            except TypeError:
-                pass
+            self._ops.update_spec_field(spec, "clear_depth", None)
 
         self._rebuild_specs()
         if self._selected_spec_index >= 0:
