@@ -9,7 +9,6 @@ Displays and allows editing of RenderPipeline configuration:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -52,7 +51,7 @@ class PipelineInspector(QWidget):
     pipeline_changed = pyqtSignal(object)  # emits RenderPipeline or None
     apply_to_viewport = pyqtSignal(object)  # emits RenderPipeline
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, dialog_service=None):
         super().__init__(parent)
         self._pipeline: Optional["RenderPipeline"] = None
         self._pipeline_name: str = ""
@@ -60,6 +59,14 @@ class PipelineInspector(QWidget):
         self._selected_postprocess: Optional["PostProcessPass"] = None
         self._selected_spec_index: int = -1
         self._updating_spec_ui: bool = False  # Prevent recursive updates
+
+        # UI-agnostic pipeline mutations + I/O (save/load) live in the model.
+        # View calls into it for every add/remove/move/rename/update; view
+        # only handles widget layout + combo population + change signals.
+        from termin.editor_core.pipeline_operations import PipelineOperations
+        self._ops: PipelineOperations | None = (
+            PipelineOperations(dialog_service) if dialog_service is not None else None
+        )
 
         self._setup_ui()
 
@@ -380,12 +387,13 @@ class PipelineInspector(QWidget):
         self._pipeline = pipeline
         self._pipeline_name = name
         self._source_path = source_path
+        if self._ops is not None:
+            self._ops.set_pipeline(pipeline)
         self._rebuild_ui()
 
     def load_pipeline_file(self, path: str | Path) -> None:
         """Load pipeline from .pipeline file."""
         from termin.visualization.core.resources import ResourceManager
-        from termin.visualization.render.framegraph.pipeline import RenderPipeline
 
         path = Path(path)
         if not path.exists():
@@ -397,26 +405,18 @@ class PipelineInspector(QWidget):
         # Try to get from ResourceManager first (loaded by watcher)
         pipeline = rm.get_pipeline(pipeline_name)
 
+        if pipeline is None and self._ops is not None:
+            pipeline = self._ops.load_from_file(str(path))
+
         if pipeline is None:
-            # Load directly
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                pipeline = RenderPipeline.deserialize(data, rm)
-            except Exception as e:
-                QMessageBox.warning(
-                    self,
-                    "Error Loading Pipeline",
-                    f"Failed to load pipeline:\n{path}\n\nError: {e}",
-                )
-                return
+            return
 
         self.set_pipeline(pipeline, pipeline_name, str(path))
         self.pipeline_changed.emit(self._pipeline)
 
     def save_pipeline_file(self, path: str | Path | None = None) -> bool:
         """Save pipeline to .pipeline file."""
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return False
 
         if path is None:
@@ -425,24 +425,7 @@ class PipelineInspector(QWidget):
         if path is None:
             return False
 
-        path = Path(path)
-
-        try:
-            data = self._pipeline.serialize()
-
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
-            return True
-
-        except Exception as e:
-            import traceback
-            QMessageBox.critical(
-                self,
-                "Error Saving Pipeline",
-                f"Failed to save pipeline:\n{path}\n\nError: {e}\n\n{traceback.format_exc()}",
-            )
-            return False
+        return self._ops.save_to_file(str(Path(path)))
 
     def _rebuild_ui(self) -> None:
         """Rebuild UI for current pipeline."""
@@ -487,13 +470,12 @@ class PipelineInspector(QWidget):
 
     def _on_pass_toggled(self, item: QListWidgetItem) -> None:
         """Handle pass enable/disable toggle."""
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
-
         row = self._pass_list.row(item)
         if 0 <= row < len(self._pipeline.passes):
             enabled = item.checkState() == Qt.CheckState.Checked
-            self._pipeline.passes[row].enabled = enabled
+            self._ops.set_pass_enabled(self._pipeline.passes[row], enabled)
             self.pipeline_changed.emit(self._pipeline)
 
     def _on_pass_selected(self, row: int) -> None:
@@ -546,7 +528,7 @@ class PipelineInspector(QWidget):
 
     def _on_pass_name_changed(self) -> None:
         """Handle pass name change."""
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
 
         row = self._pass_list.currentRow()
@@ -556,9 +538,7 @@ class PipelineInspector(QWidget):
         p = self._pipeline.passes[row]
         new_name = self._pass_name_edit.text().strip()
 
-        if new_name and new_name != p.pass_name:
-            p.pass_name = new_name
-            # Update list item text
+        if new_name and new_name != p.pass_name and self._ops.rename_pass(p, new_name):
             item = self._pass_list.item(row)
             if item:
                 item.setText(f"{new_name} ({p.__class__.__name__})")
@@ -607,7 +587,7 @@ class PipelineInspector(QWidget):
 
     def _on_add_effect(self) -> None:
         """Add a new effect to the PostProcessPass."""
-        if self._selected_postprocess is None:
+        if self._selected_postprocess is None or self._ops is None:
             return
 
         from termin.visualization.core.resources import ResourceManager
@@ -623,7 +603,6 @@ class PipelineInspector(QWidget):
             )
             return
 
-        # Show selection dialog
         effect_type, ok = QInputDialog.getItem(
             self,
             "Add Effect",
@@ -636,26 +615,27 @@ class PipelineInspector(QWidget):
         if not ok or not effect_type:
             return
 
-        # Get effect class and create instance
         effect_cls = rm.get_post_effect(effect_type)
         if effect_cls is None:
             return
 
         try:
             new_effect = effect_cls()
-            self._selected_postprocess.effects.append(new_effect)
-            self._rebuild_effects_list()
-            self.pipeline_changed.emit(self._pipeline)
         except Exception as e:
             QMessageBox.warning(
                 self,
                 "Error Creating Effect",
                 f"Failed to create effect:\n{e}",
             )
+            return
+
+        self._ops.add_effect(self._selected_postprocess, new_effect)
+        self._rebuild_effects_list()
+        self.pipeline_changed.emit(self._pipeline)
 
     def _on_remove_effect(self) -> None:
         """Remove the selected effect from the PostProcessPass."""
-        if self._selected_postprocess is None:
+        if self._selected_postprocess is None or self._ops is None:
             return
 
         row = self._effects_list.currentRow()
@@ -676,7 +656,7 @@ class PipelineInspector(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        del self._selected_postprocess.effects[row]
+        self._ops.remove_effect(self._selected_postprocess, row)
         self._rebuild_effects_list()
         self._effect_inspector.set_target(None)
         self.pipeline_changed.emit(self._pipeline)
@@ -687,7 +667,7 @@ class PipelineInspector(QWidget):
 
     def _on_effect_name_changed(self) -> None:
         """Handle effect name change."""
-        if self._selected_postprocess is None:
+        if self._selected_postprocess is None or self._ops is None:
             return
 
         row = self._effects_list.currentRow()
@@ -697,42 +677,35 @@ class PipelineInspector(QWidget):
         eff = self._selected_postprocess.effects[row]
         new_name = self._effect_name_edit.text().strip()
 
-        if new_name and new_name != eff.name:
-            eff.name = new_name
+        if new_name and new_name != eff.name and self._ops.rename_effect(eff, new_name):
             self._rebuild_effects_list()
             self._effects_list.setCurrentRow(row)
             self.pipeline_changed.emit(self._pipeline)
 
     def _on_effect_move_up(self) -> None:
         """Move the selected effect up in the list."""
-        if self._selected_postprocess is None:
+        if self._selected_postprocess is None or self._ops is None:
             return
 
         row = self._effects_list.currentRow()
         if row <= 0 or row >= len(self._selected_postprocess.effects):
             return
 
-        # Swap effects
-        effects = self._selected_postprocess.effects
-        effects[row], effects[row - 1] = effects[row - 1], effects[row]
-
+        self._ops.move_effect(self._selected_postprocess, row, row - 1)
         self._rebuild_effects_list()
         self._effects_list.setCurrentRow(row - 1)
         self.pipeline_changed.emit(self._pipeline)
 
     def _on_effect_move_down(self) -> None:
         """Move the selected effect down in the list."""
-        if self._selected_postprocess is None:
+        if self._selected_postprocess is None or self._ops is None:
             return
 
         row = self._effects_list.currentRow()
         if row < 0 or row >= len(self._selected_postprocess.effects) - 1:
             return
 
-        # Swap effects
-        effects = self._selected_postprocess.effects
-        effects[row], effects[row + 1] = effects[row + 1], effects[row]
-
+        self._ops.move_effect(self._selected_postprocess, row, row + 1)
         self._rebuild_effects_list()
         self._effects_list.setCurrentRow(row + 1)
         self.pipeline_changed.emit(self._pipeline)
@@ -808,37 +781,26 @@ class PipelineInspector(QWidget):
             return
 
         try:
-            # Create pass with default parameters
             new_pass = pass_cls(pass_name=pass_name)
+        except Exception as e:
+            QMessageBox.warning(self, "Error Creating Pass", f"Failed to create pass:\n{e}")
+            return
 
-            # Insert after current selection or at end
+        if self._ops is not None:
             row = self._pass_list.currentRow()
-            if row < 0:
-                self._pipeline.add_pass(new_pass)
-            else:
-                self._pipeline.insert_pass(row + 1, new_pass)
-
+            insert_at = row + 1 if row >= 0 else -1
+            self._ops.add_pass(new_pass, insert_at)
             self._rebuild_ui()
             self.pipeline_changed.emit(self._pipeline)
 
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                "Error Creating Pass",
-                f"Failed to create pass:\n{e}",
-            )
-
     def _on_remove_pass(self) -> None:
         """Remove the selected pass from the pipeline."""
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
-
         row = self._pass_list.currentRow()
         if row < 0 or row >= len(self._pipeline.passes):
             return
-
         pass_obj = self._pipeline.passes[row]
-
         reply = QMessageBox.question(
             self,
             "Remove Pass",
@@ -846,42 +808,30 @@ class PipelineInspector(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
-
         if reply != QMessageBox.StandardButton.Yes:
             return
-
-        self._pipeline.remove_pass(pass_obj)
+        self._ops.remove_pass(pass_obj)
         self._rebuild_ui()
         self.pipeline_changed.emit(self._pipeline)
 
     def _on_move_up(self) -> None:
-        """Move the selected pass up in the list."""
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
-
         row = self._pass_list.currentRow()
         if row <= 0 or row >= len(self._pipeline.passes):
             return
-
-        # Move pass up
-        self._pipeline.move_pass(row, row - 1)
-
+        self._ops.move_pass(row, row - 1)
         self._rebuild_ui()
         self._pass_list.setCurrentRow(row - 1)
         self.pipeline_changed.emit(self._pipeline)
 
     def _on_move_down(self) -> None:
-        """Move the selected pass down in the list."""
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
-
         row = self._pass_list.currentRow()
         if row < 0 or row >= len(self._pipeline.passes) - 1:
             return
-
-        # Move pass down
-        self._pipeline.move_pass(row, row + 1)
-
+        self._ops.move_pass(row, row + 1)
         self._rebuild_ui()
         self._pass_list.setCurrentRow(row + 1)
         self.pipeline_changed.emit(self._pipeline)
@@ -989,12 +939,9 @@ class PipelineInspector(QWidget):
 
     def _on_add_spec(self) -> None:
         """Add a new ResourceSpec to the pipeline."""
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
 
-        from termin.visualization.render.framegraph.resource_spec import ResourceSpec
-
-        # Ask for resource name
         resource_name, ok = QInputDialog.getText(
             self,
             "Add Resource Spec",
@@ -1005,30 +952,17 @@ class PipelineInspector(QWidget):
         if not ok or not resource_name.strip():
             return
 
-        resource_name = resource_name.strip()
-
-        # Check for duplicates
-        for spec in self._pipeline.pipeline_specs:
-            if spec.resource == resource_name:
-                QMessageBox.warning(
-                    self,
-                    "Duplicate Resource",
-                    f"Resource '{resource_name}' already exists.",
-                )
-                return
-
-        # Create new spec with defaults
-        new_spec = ResourceSpec(resource=resource_name, resource_type="fbo")
-        self._pipeline.pipeline_specs.append(new_spec)
+        new_spec = self._ops.add_resource_spec(resource_name.strip())
+        if new_spec is None:
+            return
 
         self._rebuild_specs_list()
-        # Select the new spec
         self._specs_list.setCurrentRow(len(self._pipeline.pipeline_specs) - 1)
         self.pipeline_changed.emit(self._pipeline)
 
     def _on_remove_spec(self) -> None:
         """Remove the selected ResourceSpec from the pipeline."""
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
 
         row = self._specs_list.currentRow()
@@ -1048,7 +982,7 @@ class PipelineInspector(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        del self._pipeline.pipeline_specs[row]
+        self._ops.remove_resource_spec(row)
         self._rebuild_specs_list()
         self._spec_editor_widget.setVisible(False)
         self._update_specs_buttons_state()
@@ -1059,7 +993,7 @@ class PipelineInspector(QWidget):
         if self._updating_spec_ui:
             return
 
-        if self._pipeline is None:
+        if self._pipeline is None or self._ops is None:
             return
 
         row = self._selected_spec_index
@@ -1068,34 +1002,22 @@ class PipelineInspector(QWidget):
 
         spec = self._pipeline.pipeline_specs[row]
 
-        # Update resource name
         new_resource = self._spec_resource_edit.text().strip()
         if new_resource and new_resource != spec.resource:
-            # Check for duplicates
-            for i, s in enumerate(self._pipeline.pipeline_specs):
-                if i != row and s.resource == new_resource:
-                    # Duplicate - don't update
-                    self._spec_resource_edit.setText(spec.resource)
-                    return
-            spec.resource = new_resource
-            # Update list item
-            item = self._specs_list.item(row)
-            if item:
-                label = spec.resource
-                if spec.samples > 1:
-                    label += f" ({spec.samples}x MSAA)"
-                item.setText(label)
+            if not self._ops.update_spec_field(spec, "resource", new_resource):
+                self._spec_resource_edit.setText(spec.resource)
+                return
 
-        # Update samples
         samples_values = [1, 2, 4, 8]
-        spec.samples = samples_values[self._spec_samples_combo.currentIndex()]
+        self._ops.update_spec_field(
+            spec, "samples", samples_values[self._spec_samples_combo.currentIndex()]
+        )
 
-        # Update format
         format_values = ["", "rgba16f", "rgba32f", "r8", "r16f", "r32f"]
-        format_idx = self._spec_format_combo.currentIndex()
-        spec.format = format_values[format_idx]
+        self._ops.update_spec_field(
+            spec, "format", format_values[self._spec_format_combo.currentIndex()]
+        )
 
-        # Update list item text
         item = self._specs_list.item(row)
         if item:
             label = spec.resource
@@ -1108,35 +1030,25 @@ class PipelineInspector(QWidget):
                 label += f" ({', '.join(parts)})"
             item.setText(label)
 
-        # Update clear color
         if self._spec_clear_color_check.isChecked():
             try:
                 r = float(self._spec_clear_r.text())
                 g = float(self._spec_clear_g.text())
                 b = float(self._spec_clear_b.text())
                 a = float(self._spec_clear_a.text())
-                spec.clear_color = (r, g, b, a)
+                self._ops.update_spec_field(spec, "clear_color", (r, g, b, a))
             except ValueError:
-                pass  # Invalid input, keep old value
-        else:
-            try:
-                spec.clear_color = None
-            except TypeError:
-                # Workaround: C++ bindings may not accept None directly
                 pass
+        else:
+            self._ops.update_spec_field(spec, "clear_color", None)
 
-        # Update clear depth
         if self._spec_clear_depth_check.isChecked():
             try:
                 depth = float(self._spec_clear_depth.text())
-                spec.clear_depth = depth
+                self._ops.update_spec_field(spec, "clear_depth", depth)
             except ValueError:
-                pass  # Invalid input, keep old value
-        else:
-            try:
-                spec.clear_depth = None
-            except TypeError:
-                # Workaround: C++ bindings may not accept None directly
                 pass
+        else:
+            self._ops.update_spec_field(spec, "clear_depth", None)
 
         self.pipeline_changed.emit(self._pipeline)

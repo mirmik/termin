@@ -43,6 +43,7 @@ class InspectorControllerTcgui:
         on_display_changed: Optional[Callable] = None,
         on_viewport_changed: Optional[Callable] = None,
         on_pipeline_changed: Optional[Callable] = None,
+        dialog_service=None,
     ) -> None:
         self._resource_manager = resource_manager
         self._push_undo_command = push_undo_command
@@ -63,7 +64,7 @@ class InspectorControllerTcgui:
         self._material_inspector = MaterialInspectorTcgui(resource_manager)
         self._display_inspector = DisplayInspectorTcgui()
         self._viewport_inspector = ViewportInspectorTcgui(resource_manager)
-        self._pipeline_inspector = PipelineInspectorTcgui(resource_manager)
+        self._pipeline_inspector = PipelineInspectorTcgui(resource_manager, dialog_service=dialog_service)
         self._texture_inspector = TextureInspectorTcgui(resource_manager)
         self._mesh_inspector = MeshInspectorTcgui(resource_manager)
         self._glb_inspector = GLBInspectorTcgui(resource_manager)
