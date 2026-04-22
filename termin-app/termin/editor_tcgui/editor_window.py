@@ -604,12 +604,17 @@ class EditorWindowTcgui:
             on_redo=self.redo,
             on_settings=self._show_settings,
             on_project_settings=self._show_project_settings,
+            on_toggle_fullscreen=self._toggle_fullscreen,
+            on_show_spacemouse_settings=self._show_spacemouse_settings,
             on_scene_properties=self._show_scene_properties,
             on_layers_settings=self._show_layers_settings,
             on_shadow_settings=self._show_shadow_settings,
             on_pipeline_editor=self._show_pipeline_editor,
+            on_show_agent_types=self._show_agent_types,
             on_toggle_game_mode=self._toggle_game_mode,
             on_run_standalone=self._run_standalone,
+            on_toggle_profiler=self._toggle_profiler,
+            on_toggle_modules=self._toggle_modules,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
@@ -618,11 +623,8 @@ class EditorWindowTcgui:
             on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
             on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
-            on_toggle_profiler=self._toggle_profiler,
-            on_toggle_modules=self._toggle_modules,
-            on_toggle_fullscreen=self._toggle_fullscreen,
-            on_show_agent_types=self._show_agent_types,
-            on_show_spacemouse_settings=self._show_spacemouse_settings,
+            on_import_rfmeas=self._import_rfmeas,
+            on_export_rfmeas=self._export_rfmeas,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._is_fullscreen,
@@ -1181,6 +1183,18 @@ class EditorWindowTcgui:
         else:
             self._spacemouse = None
 
+    # ------------------------------------------------------------------
+    # Utils (rfmeas) — not yet implemented for tcgui
+    # ------------------------------------------------------------------
+
+    def _import_rfmeas(self) -> None:
+        from tcbase import log
+        log.warn("rfmeas import is not yet available in tcgui editor")
+
+    def _export_rfmeas(self) -> None:
+        from tcbase import log
+        log.warn("rfmeas export is not yet available in tcgui editor")
+
     def _show_resource_manager_viewer(self) -> None:
         if self._ui is None:
             return
@@ -1357,10 +1371,12 @@ class EditorWindowTcgui:
     def _toggle_profiler(self) -> None:
         self._profiler_visible = not self._profiler_visible
         self._update_debug_panel_visibility()
+        self._menu_bar_controller.update_profiler_action()
 
     def _toggle_modules(self) -> None:
         self._modules_visible = not self._modules_visible
         self._update_debug_panel_visibility()
+        self._menu_bar_controller.update_modules_action()
 
     def _update_debug_panel_visibility(self) -> None:
         visible = self._profiler_visible or self._modules_visible
@@ -1401,6 +1417,7 @@ class EditorWindowTcgui:
                     self._pre_fullscreen_state[id(w)] = w.visible
                     w.visible = False
             self._is_fullscreen = True
+        self._menu_bar_controller.update_fullscreen_action()
 
     def _load_material_from_file(self) -> None:
         if self._ui is None:
