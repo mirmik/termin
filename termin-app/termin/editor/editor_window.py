@@ -1288,7 +1288,7 @@ class EditorWindow(QMainWindow):
 
         # Нормализованные координаты в пределах viewport
         nx = (x / w) * 2.0 - 1.0
-        ny = (y / h) * -2.0 + 1.0  # Y инвертирован
+        ny = (y / h) * 2.0 - 1.0
 
         # Глубина в NDC (OpenGL: 0..1 -> -1..1)
         z_ndc = depth * 2.0 - 1.0
