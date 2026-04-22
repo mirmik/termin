@@ -1289,6 +1289,7 @@ public:
     void set_label_color    (float r, float g, float b, float a);
     void set_font_size      (float label_px, float title_px);
     void set_panel_margins  (int left, int right, int top, int bottom);
+    void set_title_pad      (float pad);
 
     void render(int width, int height, unsigned int dst_gl_fbo);
     void release_gpu();
