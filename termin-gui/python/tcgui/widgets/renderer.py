@@ -643,12 +643,14 @@ class UIRenderer:
         if not font or not text or self._text2d is None:
             return
 
-        scale = font_size / font.size
-        ascent = font.ascent if hasattr(font, "ascent") else font.size
+        # `ascent_at` returns the ascent already in display pixels at
+        # this font_size — the atlas bakes per (codepoint, integer px)
+        # so no caller-side scale multiplication is needed.
+        ascent = font.ascent_at(font_size)
 
         # Translate baseline → top-of-glyph for Text2DRenderer, which
         # uses top-left anchoring.
-        top_y = y - ascent * scale
+        top_y = y - ascent
 
         with _prof.section("text2d.draw"):
             self._text2d.draw(
@@ -667,7 +669,11 @@ class UIRenderer:
             return
 
         with _prof.section("draw_text_centered.measure"):
-            text_width, _ = font.measure_text(text, font_size)
+            # Route through self.measure_text so glyphs get baked at
+            # this size before the width query — otherwise the first
+            # draw at a new size would centre on a zero width (atlas
+            # has per-size caches; unbaked size means missing entries).
+            text_width, _ = self.measure_text(text, font_size)
         x = cx - text_width / 2
         y = cy + font_size / 2  # baseline offset (legacy)
         self.draw_text(x, y, text, color, font_size)
@@ -680,7 +686,10 @@ class UIRenderer:
         if not font or not text:
             return (0.0, 0.0)
 
-        font.ensure_glyphs(text)
+        # Bake glyphs at this size so the measurement is accurate for
+        # strings we haven't drawn yet. CPU-only — GPU re-upload is
+        # deferred to the next draw call (which passes a ctx).
+        font.ensure_glyphs(text, font_size)
         return font.measure_text(text, font_size)
 
     # ------------------------------------------------------------------
