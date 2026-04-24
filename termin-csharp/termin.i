@@ -1287,6 +1287,10 @@ public:
     void set_grid_color     (float r, float g, float b, float a);
     void set_axis_color     (float r, float g, float b, float a);
     void set_label_color    (float r, float g, float b, float a);
+    void set_title_color    (float r, float g, float b, float a);
+    void clear_title_color  ();
+    void set_line_color     (int panel_idx, int series_idx,
+                             float r, float g, float b, float a);
     void set_font_size      (float label_px, float title_px);
     void set_panel_margins  (int left, int right, int top, int bottom);
     void set_title_pad      (float pad);
