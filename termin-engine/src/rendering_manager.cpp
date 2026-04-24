@@ -25,6 +25,8 @@ extern "C" {
 #include "render/tc_rendering_manager.h"
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
+#include "render/tc_render_target.h"
+#include "termin/render/tgfx2_bridge.hpp"
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_inspect_pass_adapter.h"
 }
@@ -822,14 +824,14 @@ void RenderingManager::render_scene_pipeline_offscreen(
             continue;
         }
 
-        // Ensure output textures (native) stored on the render-target state
+        // Resolve the viewport's color + depth output. Two paths:
+        //   - Render-target-backed viewport: tc_render_target owns the
+        //     tc_textures (Phase 3); we just ensure they exist and wrap
+        //     them as tgfx2 handles via the bridge.
+        //   - Plain viewport (no RT): legacy ViewportRenderState owns
+        //     the tgfx2 textures directly. Stays as-is until the
+        //     non-RT path is also migrated.
         tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
-        ViewportRenderState* state = nullptr;
-        if (tc_render_target_handle_valid(rt)) {
-            state = get_or_create_render_target_state(rt);
-        } else {
-            state = get_or_create_viewport_state(viewport);
-        }
 
         RenderEngine* vp_engine = render_engine();
         if (vp_engine) vp_engine->ensure_tgfx2();
@@ -839,7 +841,22 @@ void RenderingManager::render_scene_pipeline_offscreen(
                    vp_name.c_str());
             continue;
         }
-        state->ensure_output_textures(*vp_device, pw, ph);
+
+        tgfx::TextureHandle out_color{}, out_depth{};
+        if (tc_render_target_handle_valid(rt)) {
+            tc_render_target_set_width(rt, pw);
+            tc_render_target_set_height(rt, ph);
+            tc_render_target_ensure_textures(rt);
+            out_color = wrap_tc_texture_as_tgfx2(*vp_device,
+                tc_render_target_get_color_texture(rt));
+            out_depth = wrap_tc_texture_as_tgfx2(*vp_device,
+                tc_render_target_get_depth_texture(rt));
+        } else {
+            ViewportRenderState* state = get_or_create_viewport_state(viewport);
+            state->ensure_output_textures(*vp_device, pw, ph);
+            out_color = state->output_color_tex;
+            out_depth = state->output_depth_tex;
+        }
 
         // Create viewport context
         ViewportContext ctx;
@@ -848,8 +865,8 @@ void RenderingManager::render_scene_pipeline_offscreen(
         ctx.rect = {0, 0, pw, ph};  // Full FBO, offset at blit time
         ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
         ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
-        ctx.output_color_tex = state->output_color_tex;
-        ctx.output_depth_tex = state->output_depth_tex;
+        ctx.output_color_tex = out_color;
+        ctx.output_depth_tex = out_depth;
         contexts[vp_name] = std::move(ctx);
     }
 
@@ -920,8 +937,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         return;
     }
 
-    // Ensure output textures (native tgfx2)
-    ViewportRenderState* state = get_or_create_render_target_state(rt);
+    // Output textures are owned by the render target itself (Phase 3).
     RenderEngine* engine = render_engine();
     if (engine) engine->ensure_tgfx2();
     tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
@@ -930,7 +946,13 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
                vp_name ? vp_name : "(null)");
         return;
     }
-    state->ensure_output_textures(*device, pw, ph);
+    tc_render_target_set_width(rt, pw);
+    tc_render_target_set_height(rt, ph);
+    tc_render_target_ensure_textures(rt);
+    tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
+        *device, tc_render_target_get_color_texture(rt));
+    tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
+        *device, tc_render_target_get_depth_texture(rt));
 
     // Collect lights
     std::vector<Light> lights = collect_lights(scene);
@@ -944,8 +966,8 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     ctx.rect = {0, 0, pw, ph};
     ctx.internal_entities = internal_entities;
     ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
-    ctx.output_color_tex = state->output_color_tex;
-    ctx.output_depth_tex = state->output_depth_tex;
+    ctx.output_color_tex = out_color;
+    ctx.output_depth_tex = out_depth;
     contexts[ctx.name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
         render_pipeline, scene, contexts, lights, vp_name ? vp_name : ""
@@ -1014,7 +1036,6 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
 
     RenderPipeline render_pipeline(pipeline);
 
-    ViewportRenderState* state = get_or_create_render_target_state(rt);
     RenderEngine* engine = render_engine();
     if (engine) engine->ensure_tgfx2();
     tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
@@ -1023,7 +1044,12 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
                rt_name ? rt_name : "?");
         return;
     }
-    state->ensure_output_textures(*device, w, h);
+    // Output textures are owned by the render target (Phase 3).
+    tc_render_target_ensure_textures(rt);
+    tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
+        *device, tc_render_target_get_color_texture(rt));
+    tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
+        *device, tc_render_target_get_depth_texture(rt));
 
     std::vector<Light> lights = collect_lights(scene);
 
@@ -1035,8 +1061,8 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     ctx.rect = {0, 0, w, h};
     ctx.internal_entities = TC_ENTITY_HANDLE_INVALID;
     ctx.layer_mask = tc_render_target_get_layer_mask(rt);
-    ctx.output_color_tex = state->output_color_tex;
-    ctx.output_depth_tex = state->output_depth_tex;
+    ctx.output_color_tex = out_color;
+    ctx.output_depth_tex = out_depth;
     contexts[name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
         render_pipeline, scene, contexts, lights, name
