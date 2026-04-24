@@ -88,6 +88,32 @@ TERMIN_COLLISION_API void tc_scene_collision_update(tc_scene_handle scene) {
     world->update_all();
 }
 
+TERMIN_COLLISION_API void tc_scene_collision_set_broad_phase_mode(tc_scene_handle scene, int mode) {
+    void* cw = tc_collision_world_get_scene(scene);
+    if (!cw) return;
+
+    auto* world = static_cast<CollisionWorld*>(cw);
+    switch (mode) {
+        case TC_COLLISION_BROAD_PHASE_NAIVE:
+            world->set_broad_phase_mode(BroadPhaseMode::Naive);
+            break;
+        case TC_COLLISION_BROAD_PHASE_BVH:
+        default:
+            world->set_broad_phase_mode(BroadPhaseMode::BVH);
+            break;
+    }
+}
+
+TERMIN_COLLISION_API int tc_scene_collision_get_broad_phase_mode(tc_scene_handle scene) {
+    void* cw = tc_collision_world_get_scene(scene);
+    if (!cw) return TC_COLLISION_BROAD_PHASE_BVH;
+
+    auto* world = static_cast<CollisionWorld*>(cw);
+    return world->broad_phase_mode() == BroadPhaseMode::Naive
+        ? TC_COLLISION_BROAD_PHASE_NAIVE
+        : TC_COLLISION_BROAD_PHASE_BVH;
+}
+
 TERMIN_COLLISION_API int tc_scene_has_collisions(tc_scene_handle scene) {
     void* cw = tc_collision_world_get_scene(scene);
     if (!cw) return 0;

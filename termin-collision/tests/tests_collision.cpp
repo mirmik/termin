@@ -203,6 +203,19 @@ TEST_CASE("CollisionWorld add/remove")
     CHECK(!world.contains(&sphere));
 }
 
+TEST_CASE("CollisionWorld broad phase mode")
+{
+    CollisionWorld world;
+
+    CHECK(world.broad_phase_mode() == BroadPhaseMode::BVH);
+
+    world.set_broad_phase_mode(BroadPhaseMode::Naive);
+    CHECK(world.broad_phase_mode() == BroadPhaseMode::Naive);
+
+    world.set_broad_phase_mode(BroadPhaseMode::BVH);
+    CHECK(world.broad_phase_mode() == BroadPhaseMode::BVH);
+}
+
 TEST_CASE("CollisionWorld detect_contacts no collision")
 {
     CollisionWorld world;
@@ -246,6 +259,50 @@ TEST_CASE("CollisionWorld detect_contacts multiple")
 
     auto manifolds = world.detect_contacts();
     CHECK_EQ(manifolds.size(), 2u);  // s1-s2 and s1-s3
+}
+
+TEST_CASE("CollisionWorld naive broad phase detects contacts with current AABBs")
+{
+    CollisionWorld world;
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0)));
+
+    world.add(&s1);
+    world.add(&s2);
+
+    auto manifolds = world.detect_contacts();
+    CHECK(manifolds.empty());
+
+    // Move s2 without updating the BVH. Naive mode should use current collider AABBs.
+    s2 = SphereCollider(1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0)));
+
+    manifolds = world.detect_contacts();
+    CHECK(manifolds.empty());
+
+    world.set_broad_phase_mode(BroadPhaseMode::Naive);
+    manifolds = world.detect_contacts();
+    CHECK_EQ(manifolds.size(), 1u);
+}
+
+TEST_CASE("CollisionWorld naive broad phase matches BVH broad phase")
+{
+    CollisionWorld world;
+    SphereCollider s1(1.0);
+    SphereCollider s2(1.0, GeneralPose3(Quat::identity(), Vec3(1.5, 0, 0)));
+    SphereCollider s3(1.0, GeneralPose3(Quat::identity(), Vec3(0, 1.5, 0)));
+    SphereCollider s4(1.0, GeneralPose3(Quat::identity(), Vec3(10, 0, 0)));
+
+    world.add(&s1);
+    world.add(&s2);
+    world.add(&s3);
+    world.add(&s4);
+
+    auto bvh_manifolds = world.detect_contacts();
+
+    world.set_broad_phase_mode(BroadPhaseMode::Naive);
+    auto naive_manifolds = world.detect_contacts();
+
+    CHECK_EQ(naive_manifolds.size(), bvh_manifolds.size());
 }
 
 TEST_CASE("CollisionWorld update_pose")

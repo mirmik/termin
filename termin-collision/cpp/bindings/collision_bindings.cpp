@@ -94,6 +94,13 @@ NB_MODULE(_collision_native, m) {
         .def_rw("b", &ColliderPair::b)
         .def("__eq__", &ColliderPair::operator==);
 
+    // ==================== BroadPhaseMode ====================
+
+    nb::enum_<BroadPhaseMode>(m, "BroadPhaseMode")
+        .value("BVH", BroadPhaseMode::BVH)
+        .value("Naive", BroadPhaseMode::Naive)
+        .export_values();
+
     // ==================== BVH ====================
 
     nb::class_<BVH>(m, "BVH")
@@ -145,6 +152,8 @@ NB_MODULE(_collision_native, m) {
         .def("update_all", &CollisionWorld::update_all)
         .def("contains", &CollisionWorld::contains, nb::arg("collider"))
         .def("size", &CollisionWorld::size)
+        .def("set_broad_phase_mode", &CollisionWorld::set_broad_phase_mode, nb::arg("mode"))
+        .def("broad_phase_mode", &CollisionWorld::broad_phase_mode)
         .def("detect_contacts", &CollisionWorld::detect_contacts)
         .def("query_aabb", &CollisionWorld::query_aabb, nb::arg("aabb"))
         .def("raycast", &CollisionWorld::raycast, nb::arg("ray"))

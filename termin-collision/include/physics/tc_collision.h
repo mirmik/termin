@@ -18,6 +18,11 @@ extern "C" {
 // Collision World Operations (via scene)
 // ============================================================================
 
+typedef enum tc_collision_broad_phase_mode {
+    TC_COLLISION_BROAD_PHASE_BVH = 0,
+    TC_COLLISION_BROAD_PHASE_NAIVE = 1,
+} tc_collision_broad_phase_mode;
+
 /**
  * Update all collider positions in the collision world.
  * Call this after kinematic components have been updated.
@@ -25,6 +30,22 @@ extern "C" {
  * @param scene Scene handle containing the collision world
  */
 TERMIN_COLLISION_API void tc_scene_collision_update(tc_scene_handle scene);
+
+/**
+ * Select pair generation strategy used by scene collision detection.
+ *
+ * @param scene Scene handle containing the collision world
+ * @param mode One of tc_collision_broad_phase_mode values
+ */
+TERMIN_COLLISION_API void tc_scene_collision_set_broad_phase_mode(tc_scene_handle scene, int mode);
+
+/**
+ * Get current scene collision pair generation strategy.
+ *
+ * @param scene Scene handle containing the collision world
+ * @return One of tc_collision_broad_phase_mode values, or BVH if scene/world is invalid
+ */
+TERMIN_COLLISION_API int tc_scene_collision_get_broad_phase_mode(tc_scene_handle scene);
 
 /**
  * Check if there are any collisions in the scene.

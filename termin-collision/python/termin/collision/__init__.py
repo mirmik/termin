@@ -35,6 +35,7 @@ from ._collision_native import (
     ContactManifold,
     RayHit,
     ColliderPair,
+    BroadPhaseMode,
     BVH,
     CollisionWorld,
 )
@@ -45,6 +46,7 @@ __all__ = [
     'ContactManifold',
     'RayHit',
     'ColliderPair',
+    'BroadPhaseMode',
     'BVH',
     'CollisionWorld',
 ]
