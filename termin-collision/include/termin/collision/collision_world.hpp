@@ -5,7 +5,7 @@
  * @brief Main collision detection world.
  *
  * Provides unified collision detection for all physics engines.
- * Uses BVH for broad-phase and the existing collider algorithms for narrow-phase.
+ * Uses selectable broad-phase and the existing collider algorithms for narrow-phase.
  */
 
 #include "bvh.hpp"
@@ -21,6 +21,11 @@ namespace termin {
 namespace collision {
 
 using colliders::Collider;
+
+enum class BroadPhaseMode {
+    BVH = 0,
+    Naive = 1,
+};
 
 /**
  * Collision world manages colliders and performs collision detection.
@@ -95,48 +100,83 @@ public:
         return colliders_.size();
     }
 
+    /**
+     * Select pair generation strategy for detect_contacts().
+     */
+    void set_broad_phase_mode(BroadPhaseMode mode) {
+        broad_phase_mode_ = mode;
+    }
+
+    /**
+     * Get current pair generation strategy.
+     */
+    BroadPhaseMode broad_phase_mode() const {
+        return broad_phase_mode_;
+    }
+
     // ==================== Collision detection ====================
 
     /**
      * Detect all contacts between colliders.
-     * Performs broad-phase (BVH) then narrow-phase (collider algorithms).
+     * Performs broad-phase then narrow-phase (collider algorithms).
      */
     std::vector<ContactManifold> detect_contacts() {
         std::vector<ContactManifold> manifolds;
 
-        // Get potentially overlapping pairs from BVH
-        bvh_.query_all_pairs([&](Collider* a, Collider* b) {
-            // Narrow-phase: compute actual contact
-            ColliderHit hit = a->closest_to_collider(*b);
+        if (broad_phase_mode_ == BroadPhaseMode::Naive) {
+            for (size_t i = 0; i < colliders_.size(); ++i) {
+                for (size_t j = i + 1; j < colliders_.size(); ++j) {
+                    Collider* a = colliders_[i];
+                    Collider* b = colliders_[j];
 
-            if (hit.colliding()) {
-                ContactManifold manifold;
-                manifold.collider_a = a;
-                manifold.collider_b = b;
-                manifold.normal = hit.normal;
+                    if (!a->aabb().intersects(b->aabb())) {
+                        continue;
+                    }
 
-                // For box-box collisions, generate multiple contact points
-                if (a->type() == colliders::ColliderType::Box &&
-                    b->type() == colliders::ColliderType::Box) {
-                    generate_box_box_contacts(a, b, hit, manifold);
-                } else {
-                    // Single contact point for other types
-                    ContactPoint point;
-                    point.position = (hit.point_on_a + hit.point_on_b) * 0.5;
-                    point.local_a = hit.point_on_a;
-                    point.local_b = hit.point_on_b;
-                    point.penetration = hit.distance;  // negative = penetrating
-                    manifold.add_point(point);
+                    test_contact_pair(a, b, manifolds);
                 }
-
-                manifolds.push_back(manifold);
             }
-        });
+        } else {
+            // Get potentially overlapping pairs from BVH
+            bvh_.query_all_pairs([&](Collider* a, Collider* b) {
+                test_contact_pair(a, b, manifolds);
+            });
+        }
 
         return manifolds;
     }
 
 private:
+    void test_contact_pair(Collider* a, Collider* b, std::vector<ContactManifold>& manifolds) {
+        // Narrow-phase: compute actual contact
+        ColliderHit hit = a->closest_to_collider(*b);
+
+        if (!hit.colliding()) {
+            return;
+        }
+
+        ContactManifold manifold;
+        manifold.collider_a = a;
+        manifold.collider_b = b;
+        manifold.normal = hit.normal;
+
+        // For box-box collisions, generate multiple contact points
+        if (a->type() == colliders::ColliderType::Box &&
+            b->type() == colliders::ColliderType::Box) {
+            generate_box_box_contacts(a, b, hit, manifold);
+        } else {
+            // Single contact point for other types
+            ContactPoint point;
+            point.position = (hit.point_on_a + hit.point_on_b) * 0.5;
+            point.local_a = hit.point_on_a;
+            point.local_b = hit.point_on_b;
+            point.penetration = hit.distance;  // negative = penetrating
+            manifold.add_point(point);
+        }
+
+        manifolds.push_back(manifold);
+    }
+
     // ==================== Box-Box Clipping ====================
 
     struct ClipVertex {
@@ -507,6 +547,7 @@ public:
 
 private:
     BVH bvh_;
+    BroadPhaseMode broad_phase_mode_ = BroadPhaseMode::BVH;
     std::vector<Collider*> colliders_;
 };
 
