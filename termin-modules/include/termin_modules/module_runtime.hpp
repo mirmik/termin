@@ -13,6 +13,9 @@
 namespace termin_modules {
 
 class ModuleRuntime {
+public:
+    using ModuleEventCallback = std::function<void(const ModuleEvent&)>;
+
 private:
     ModuleEnvironment _environment;
     CppModuleCallbacks _cpp_callbacks;
@@ -25,8 +28,6 @@ private:
     std::string _last_error;
 
 public:
-    using ModuleEventCallback = std::function<void(const ModuleEvent&)>;
-
     void set_environment(ModuleEnvironment environment);
     void set_cpp_callbacks(CppModuleCallbacks callbacks);
     void set_python_callbacks(PythonModuleCallbacks callbacks);
