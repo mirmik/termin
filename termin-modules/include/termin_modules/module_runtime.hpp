@@ -13,6 +13,17 @@
 namespace termin_modules {
 
 class ModuleRuntime {
+private:
+    ModuleEnvironment _environment;
+    CppModuleCallbacks _cpp_callbacks;
+    PythonModuleCallbacks _python_callbacks;
+    std::shared_ptr<ModuleDescriptorParser> _parser;
+    std::unordered_map<ModuleKind, std::shared_ptr<IModuleBackend>> _backends;
+    std::vector<ModuleRecord> _records;
+    ModuleEventCallback _event_callback;
+    BuildOutputCallback _build_output_callback;
+    std::string _last_error;
+
 public:
     using ModuleEventCallback = std::function<void(const ModuleEvent&)>;
 
@@ -54,16 +65,6 @@ private:
     IModuleBackend* get_backend(ModuleKind kind) const;
     void emit(ModuleEventKind kind, const std::string& module_id, const std::string& message = std::string());
     bool should_skip(const ModuleSpec& spec) const;
-
-    ModuleEnvironment _environment;
-    CppModuleCallbacks _cpp_callbacks;
-    PythonModuleCallbacks _python_callbacks;
-    std::shared_ptr<ModuleDescriptorParser> _parser;
-    std::unordered_map<ModuleKind, std::shared_ptr<IModuleBackend>> _backends;
-    std::vector<ModuleRecord> _records;
-    ModuleEventCallback _event_callback;
-    BuildOutputCallback _build_output_callback;
-    std::string _last_error;
 };
 
 } // namespace termin_modules
