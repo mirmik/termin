@@ -9,7 +9,6 @@ import subprocess
 import time
 
 import sdl2
-from sdl2 import video
 
 from tcgui.widgets.ui import UI
 from tcgui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
@@ -20,48 +19,12 @@ from termin.launcher.recent import RecentProjects, create_project, write_launch_
 
 
 # ---------------------------------------------------------------------------
-# SDL helpers
+# Window helpers
 # ---------------------------------------------------------------------------
 
-def _create_sdl_window(title: str, width: int, height: int) -> tuple:
-    """Create SDL window with OpenGL 3.3 core context."""
-    if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
-        raise RuntimeError(f"SDL_Init failed: {sdl2.SDL_GetError()}")
-
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MINOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(
-        video.SDL_GL_CONTEXT_PROFILE_MASK,
-        video.SDL_GL_CONTEXT_PROFILE_CORE,
-    )
-    video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
-    video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
-
-    flags = video.SDL_WINDOW_OPENGL | video.SDL_WINDOW_RESIZABLE | video.SDL_WINDOW_SHOWN
-    window = video.SDL_CreateWindow(
-        title.encode("utf-8"),
-        video.SDL_WINDOWPOS_CENTERED,
-        video.SDL_WINDOWPOS_CENTERED,
-        width, height, flags,
-    )
-    if not window:
-        raise RuntimeError(f"SDL_CreateWindow failed: {sdl2.SDL_GetError()}")
-
-    gl_context = video.SDL_GL_CreateContext(window)
-    if not gl_context:
-        video.SDL_DestroyWindow(window)
-        raise RuntimeError(f"SDL_GL_CreateContext failed: {sdl2.SDL_GetError()}")
-
-    video.SDL_GL_MakeCurrent(window, gl_context)
-    video.SDL_GL_SetSwapInterval(1)
-    return window, gl_context
-
-
-def _get_drawable_size(window) -> tuple[int, int]:
-    w = ctypes.c_int()
-    h = ctypes.c_int()
-    video.SDL_GL_GetDrawableSize(window, ctypes.byref(w), ctypes.byref(h))
-    return w.value, h.value
+def _get_drawable_size_from_backend(window) -> tuple[int, int]:
+    """Drawable size for a BackendWindow (handles HiDPI + post-resize)."""
+    return window.framebuffer_size()
 
 
 def _translate_sdl_key(scancode: int) -> int:
@@ -166,8 +129,8 @@ class LauncherApp:
     _BTN_NORMAL_PRESSED = (0.18, 0.18, 0.22, 1.0)
     _BTN_DISABLED = (0.18, 0.18, 0.2, 0.6)
 
-    def __init__(self, ui_backend: str = "qt"):
-        self.ui = UI()
+    def __init__(self, graphics, ui_backend: str = "qt"):
+        self.ui = UI(graphics=graphics)
         self.recent = RecentProjects()
         self._ui_backend = ui_backend
         self._bg_image_path = os.path.join(os.path.dirname(__file__), "back.png")
@@ -602,9 +565,18 @@ def run():
         subprocess.Popen([editor_exe, f"--ui={ui_backend}"], env=env)
         return
 
-    window, gl_context = _create_sdl_window("Termin Launcher", 1024, 640)
+    # Route the window through BackendWindow so the launcher runs on
+    # whichever backend TERMIN_BACKEND selects (OpenGL or Vulkan). The
+    # raw SDL GL context + SwapWindow path used to work only on GL —
+    # on Vulkan UIRenderer.end() routes through blit_to_external_fbo
+    # which has no meaningful analogue.
+    from termin.display._platform_native import BackendWindow
+    from tgfx import Tgfx2Context
 
-    app = LauncherApp(ui_backend=ui_backend)
+    window = BackendWindow("Termin Launcher", 1024, 640)
+    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
+
+    app = LauncherApp(graphics=graphics, ui_backend=ui_backend)
 
     sdl2.SDL_StartTextInput()
 
@@ -617,7 +589,7 @@ def run():
         if etype == sdl2.SDL_QUIT:
             running = False
         elif etype == sdl2.SDL_WINDOWEVENT:
-            if ev.window.event == video.SDL_WINDOWEVENT_CLOSE:
+            if ev.window.event == sdl2.SDL_WINDOWEVENT_CLOSE:
                 running = False
         elif etype == sdl2.SDL_MOUSEMOTION:
             app.ui.mouse_move(float(ev.motion.x), float(ev.motion.y))
@@ -648,13 +620,11 @@ def run():
         if not running:
             break
 
-        vw, vh = _get_drawable_size(window)
-        app.ui.render(vw, vh, background_color=(0.08, 0.08, 0.10, 1.0))
+        vw, vh = _get_drawable_size_from_backend(window)
+        tex = app.ui.render_compose(vw, vh, background_color=(0.08, 0.08, 0.10, 1.0))
+        if tex is not None:
+            window.present(tex)
 
-        video.SDL_GL_SwapWindow(window)
-
-    video.SDL_GL_DeleteContext(gl_context)
-    video.SDL_DestroyWindow(window)
     sdl2.SDL_Quit()
 
 

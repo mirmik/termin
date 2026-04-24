@@ -12,11 +12,12 @@
 #include <tgfx2/enums.hpp>
 #include <tgfx2/font_atlas.hpp>
 #include <tgfx2/handles.hpp>
-#include <tgfx2/opengl/opengl_render_device.hpp>
+#include <tgfx2/i_render_device.hpp>
 #include <tgfx2/pipeline_cache.hpp>
 #include <tgfx2/render_context.hpp>
 
 #include "tcplot/engine2d.hpp"
+#include "tcplot/gpu_host.hpp"
 
 namespace tcplot {
 
@@ -30,27 +31,64 @@ std::vector<double> to_vec(const double* p, size_t n) {
 // Construction / lifecycle
 // ---------------------------------------------------------------------------
 
-PlotView2DMulti::PlotView2DMulti(const std::string& ttf_path, int panel_count)
-    : ttf_path_(ttf_path) {
+PlotView2DMulti::PlotView2DMulti(tgfx::IRenderDevice& device,
+                                 tgfx::PipelineCache& cache,
+                                 tgfx::RenderContext2& ctx,
+                                 tgfx::FontAtlas& font,
+                                 int panel_count)
+    : device_(&device),
+      cache_(&cache),
+      ctx_(&ctx),
+      font_(&font) {
     if (panel_count < 1) panel_count = 1;
-
-    device_ = std::make_unique<tgfx::OpenGLRenderDevice>();
-    cache_  = std::make_unique<tgfx::PipelineCache>(*device_);
-    ctx_    = std::make_unique<tgfx::RenderContext2>(*device_, *cache_);
-    font_   = std::make_unique<tgfx::FontAtlas>(ttf_path);
-
     panels_.reserve(panel_count);
     for (int i = 0; i < panel_count; ++i) {
         panels_.emplace_back(std::make_unique<PlotEngine2D>());
     }
 }
 
+PlotView2DMulti::PlotView2DMulti(GpuHost& host, int panel_count)
+    : PlotView2DMulti(host.device(), host.cache(), host.ctx(), host.font(),
+                      panel_count) {}
+
 PlotView2DMulti::~PlotView2DMulti() {
+    // Release only what THIS view owns: per-panel GPU state and the
+    // offscreen target. device/cache/ctx/font are borrowed — host
+    // tears them down with the process.
     release_gpu();
 }
 
 int PlotView2DMulti::panel_count() const {
     return static_cast<int>(panels_.size());
+}
+
+void PlotView2DMulti::set_panel_count(int n) {
+    if (n < 1) n = 1;
+    if ((int)panels_.size() == n) return;
+
+    if ((int)panels_.size() > n) {
+        // Shrink: release GL resources of panels we're about to drop.
+        // PlotEngine2D's destructor does this too via
+        // release_gpu_resources(), but doing it explicitly keeps the
+        // moment-of-release predictable (right here, with the right
+        // GL context current) instead of relying on unique_ptr
+        // destruction order.
+        for (size_t i = static_cast<size_t>(n); i < panels_.size(); ++i) {
+            if (panels_[i]) panels_[i]->release_gpu_resources();
+        }
+        panels_.resize(static_cast<size_t>(n));
+    } else {
+        panels_.reserve(static_cast<size_t>(n));
+        while ((int)panels_.size() < n) {
+            panels_.emplace_back(std::make_unique<PlotEngine2D>());
+        }
+    }
+
+    // Layout caches are indexed by panel id — drop them so the next
+    // render rebuilds against the new size.
+    panel_rects_.clear();
+    visible_panels_.clear();
+    dragging_panel_ = -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +256,22 @@ void PlotView2DMulti::set_panel_margins(int left, int right, int top, int bottom
         p->margin_bottom = bottom;
     }
 }
+void PlotView2DMulti::set_title_pad(float pad) {
+    for (auto& p : panels_) p->title_pad = pad;
+}
+void PlotView2DMulti::set_title_color(float r, float g, float b, float a) {
+    for (auto& p : panels_) p->title_color = Color4{r, g, b, a};
+}
+void PlotView2DMulti::clear_title_color() {
+    for (auto& p : panels_) p->title_color.reset();
+}
+void PlotView2DMulti::set_line_color(int panel_idx, int series_idx,
+                                     float r, float g, float b, float a) {
+    if (panel_idx < 0 || panel_idx >= (int)panels_.size()) return;
+    if (series_idx < 0) return;
+    panels_[panel_idx]->set_line_color(
+        static_cast<size_t>(series_idx), Color4{r, g, b, a});
+}
 
 // ---------------------------------------------------------------------------
 // Virtual scrolling
@@ -355,7 +409,6 @@ void PlotView2DMulti::render(int width, int height, uint32_t dst_gl_fbo) {
     update_shared_x_();
 
     ctx_->begin_frame();
-    ctx_->set_sample_count(static_cast<uint32_t>(msaa_samples_));
 
     // Clear to the first panel's bg_color so host overrides via
     // set_bg_color are visible even in the gaps between panel rects
@@ -381,7 +434,7 @@ void PlotView2DMulti::render(int width, int height, uint32_t dst_gl_fbo) {
         eng.set_fbo_height(static_cast<float>(height));
         // Make sure the engine uses the shared X (update_shared_x_
         // already pushed it; if no data yet, leave engine at auto-fit).
-        eng.render(ctx_.get(), font_.get());
+        eng.render(ctx_, font_);
     }
 
     ctx_->end_pass();
@@ -398,8 +451,12 @@ void PlotView2DMulti::render(int width, int height, uint32_t dst_gl_fbo) {
 }
 
 void PlotView2DMulti::release_gpu() {
+    // Only this view's own GPU state: per-panel engine resources and
+    // the offscreen target. device/cache/ctx/font are borrowed —
+    // NEVER release them here (font in particular: a sibling view
+    // may still be using the same FontAtlas through the host's
+    // Tgfx2Context).
     for (auto& p : panels_) p->release_gpu_resources();
-    if (font_) font_->release_gpu();
 
     if (device_ && offscreen_color_.id != 0) {
         device_->destroy(offscreen_color_);

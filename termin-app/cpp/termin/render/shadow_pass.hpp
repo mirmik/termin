@@ -22,6 +22,9 @@
 #include "core/tc_scene_pool.h"
 #include "tc_inspect_cpp.hpp"
 #include <tgfx/tgfx_shader_handle.hpp>
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace termin {
 
@@ -126,15 +129,18 @@ public:
         return entity_names;
     }
 
-    // Shadow shader - set from Python before execute
-    TcShader* shadow_shader = nullptr;
-
 private:
-    // Lazy tgfx2 shader + UBO resources owned by the pass.
+    // Lazy tgfx2 state owned by the pass.
+    //
+    // PerFrame data is written into the device ring UBO per cascade now;
+    // the dynamic descriptor offset bakes a fresh offset into each draw,
+    // which is what the old per_frame_ubo_pool_ achieved with one VkBuffer
+    // per cascade slot (Vulkan cmd-buffer deferred read + shared UBO =
+    // stale data bug, vulkan_ubo_reuse_pitfall). Shader handles are NOT
+    // owned — they live on the tc_shader global registry so repeated pass
+    // construction/destruction doesn't re-run shaderc.
     tgfx::IRenderDevice* device2_ = nullptr;
-    tgfx::ShaderHandle shadow_vs2_;
-    tgfx::ShaderHandle shadow_fs2_;
-    tgfx::BufferHandle per_frame_ubo_;
+    tc_shader_handle shadow_shader_handle_ = tc_shader_handle_invalid();
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();

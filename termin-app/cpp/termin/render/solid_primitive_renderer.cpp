@@ -3,13 +3,9 @@
 
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/i_render_device.hpp>
-#include <tgfx2/tc_shader_bridge.hpp>
+#include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
 #include <tgfx2/vertex_layout.hpp>
-
-extern "C" {
-#include <tgfx/resources/tc_mesh.h>
-}
 
 #include <vector>
 #include <cmath>
@@ -24,32 +20,58 @@ namespace termin {
 
 namespace {
 
-const char* SOLID_VERT = R"(
-#version 330 core
+// Push constants (80 bytes: mat4 mvp + vec4 color) fit Vulkan's guaranteed
+// 128-byte minimum. Caller pre-multiplies proj * view * model on CPU so
+// the vertex shader only needs one matrix. `#ifdef VULKAN` selects the
+// native push_constant block; on GL we fall back to the std140 UBO at
+// binding 14 (the ring buffer tgfx2 uses to emulate push constants).
+const char* SOLID_COMMON_PUSH = R"(
+struct SolidPushData {
+    mat4 u_mvp;
+    vec4 u_color;
+};
+#ifdef VULKAN
+layout(push_constant) uniform SolidPushBlock { SolidPushData pc; };
+#else
+layout(std140, binding = 14) uniform SolidPushBlock { SolidPushData pc; };
+#endif
+)";
+
+const char* SOLID_VERT = R"(#version 450 core
+struct SolidPushData {
+    mat4 u_mvp;
+    vec4 u_color;
+};
+#ifdef VULKAN
+layout(push_constant) uniform SolidPushBlock { SolidPushData pc; };
+#else
+layout(std140, binding = 14) uniform SolidPushBlock { SolidPushData pc; };
+#endif
+
 layout(location = 0) in vec3 a_position;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-uniform vec4 u_color;
-
-out vec4 v_color;
+layout(location = 0) out vec4 v_color;
 
 void main() {
-    v_color = u_color;
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+    v_color = pc.u_color;
+    gl_Position = pc.u_mvp * vec4(a_position, 1.0);
 }
 )";
 
-const char* SOLID_FRAG = R"(
-#version 330 core
-in vec4 v_color;
-out vec4 fragColor;
+const char* SOLID_FRAG = R"(#version 450 core
+layout(location = 0) in vec4 v_color;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     fragColor = v_color;
 }
 )";
+
+struct SolidPushData {
+    float u_mvp[16];
+    float u_color[4];
+};
+static_assert(sizeof(SolidPushData) == 80,
+              "SolidPushData must be 80 bytes (mat4 + vec4)");
 
 struct IndexedMesh {
     std::vector<float> vertices;
@@ -319,6 +341,10 @@ SolidPrimitiveRenderer::~SolidPrimitiveRenderer() {
         destroy_mesh(_cylinder);
         destroy_mesh(_cone);
         destroy_mesh(_quad);
+        if (_vs) _device->destroy(_vs);
+        if (_fs) _device->destroy(_fs);
+        _vs = {};
+        _fs = {};
     }
 }
 
@@ -333,9 +359,11 @@ SolidPrimitiveRenderer& SolidPrimitiveRenderer::operator=(SolidPrimitiveRenderer
         _cone = other._cone;         other._cone = {};
         _quad = other._quad;         other._quad = {};
         _initialized = other._initialized;
-        _shader = std::move(other._shader);
+        _vs = other._vs; other._vs = {};
+        _fs = other._fs; other._fs = {};
         _device = other._device;
         _ctx2 = other._ctx2;
+        _vp = other._vp;
 
         other._initialized = false;
         other._device = nullptr;
@@ -357,14 +385,25 @@ void SolidPrimitiveRenderer::_ensure_initialized(tgfx::IRenderDevice* device) {
         if (_cone.ibo) _device->destroy(_cone.ibo);
         if (_quad.vbo) _device->destroy(_quad.vbo);
         if (_quad.ibo) _device->destroy(_quad.ibo);
+        if (_vs) _device->destroy(_vs);
+        if (_fs) _device->destroy(_fs);
         _torus = _cylinder = _cone = _quad = {};
+        _vs = {};
+        _fs = {};
     }
     _device = device;
 
-    // Shader source — will be compiled to tgfx2 via tc_shader_ensure_tgfx2
-    // inside begin().
-    if (!_shader.is_valid()) {
-        _shader = TcShader::from_sources(SOLID_VERT, SOLID_FRAG, "", "SolidPrimitiveRenderer");
+    if (!_vs) {
+        tgfx::ShaderDesc vs_desc;
+        vs_desc.stage = tgfx::ShaderStage::Vertex;
+        vs_desc.source = SOLID_VERT;
+        _vs = device->create_shader(vs_desc);
+    }
+    if (!_fs) {
+        tgfx::ShaderDesc fs_desc;
+        fs_desc.stage = tgfx::ShaderStage::Fragment;
+        fs_desc.source = SOLID_FRAG;
+        _fs = device->create_shader(fs_desc);
     }
 
     // Upload unit primitives as tgfx2 buffers (pos-only, vec3 at loc 0).
@@ -391,6 +430,8 @@ void SolidPrimitiveRenderer::begin(
     _ctx2 = ctx2;
     _ensure_initialized(&ctx2->device());
 
+    _vp = proj * view;
+
     // ctx2 state. Caller owns the render pass boundary; we just set
     // pipeline state and shader binding.
     ctx2->set_depth_test(depth_test);
@@ -404,12 +445,7 @@ void SolidPrimitiveRenderer::begin(
     }
     ctx2->set_cull(tgfx::CullMode::Back);
 
-    // Compile our shader into tgfx2 handles and bind.
-    tc_shader* raw = tc_shader_get(_shader.handle);
-    if (!raw) return;
-    tgfx::ShaderHandle vs2, fs2;
-    if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
-    ctx2->bind_shader(vs2, fs2);
+    ctx2->bind_shader(_vs, _fs);
 
     // Vertex layout: single vec3 position at location 0, tightly packed.
     tgfx::VertexBufferLayout layout;
@@ -417,41 +453,41 @@ void SolidPrimitiveRenderer::begin(
     layout.attributes.push_back({0, tgfx::VertexFormat::Float3, 0});
     ctx2->set_vertex_layout(layout);
     ctx2->set_topology(tgfx::PrimitiveTopology::TriangleList);
-
-    ctx2->set_uniform_mat4("u_view",       view.data, /*transpose=*/false);
-    ctx2->set_uniform_mat4("u_projection", proj.data, /*transpose=*/false);
 }
 
 void SolidPrimitiveRenderer::end() {
     // Nothing needed — caller closes its ctx2 pass.
 }
 
-void SolidPrimitiveRenderer::draw_torus(const Mat44f& model, const Color4& color) {
+void SolidPrimitiveRenderer::_push_and_draw(const Mat44f& model,
+                                            const Color4& color,
+                                            const MeshRes& mesh) {
     if (!_ctx2) return;
-    _ctx2->set_uniform_mat4("u_model", model.data, /*transpose=*/false);
-    _ctx2->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
-    _ctx2->draw(_torus.vbo, _torus.ibo, _torus.index_count);
+    Mat44f mvp = _vp * model;
+    SolidPushData push{};
+    std::memcpy(push.u_mvp, mvp.data, sizeof(push.u_mvp));
+    push.u_color[0] = color.r;
+    push.u_color[1] = color.g;
+    push.u_color[2] = color.b;
+    push.u_color[3] = color.a;
+    _ctx2->set_push_constants(&push, static_cast<uint32_t>(sizeof(push)));
+    _ctx2->draw(mesh.vbo, mesh.ibo, mesh.index_count);
+}
+
+void SolidPrimitiveRenderer::draw_torus(const Mat44f& model, const Color4& color) {
+    _push_and_draw(model, color, _torus);
 }
 
 void SolidPrimitiveRenderer::draw_cylinder(const Mat44f& model, const Color4& color) {
-    if (!_ctx2) return;
-    _ctx2->set_uniform_mat4("u_model", model.data, /*transpose=*/false);
-    _ctx2->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
-    _ctx2->draw(_cylinder.vbo, _cylinder.ibo, _cylinder.index_count);
+    _push_and_draw(model, color, _cylinder);
 }
 
 void SolidPrimitiveRenderer::draw_cone(const Mat44f& model, const Color4& color) {
-    if (!_ctx2) return;
-    _ctx2->set_uniform_mat4("u_model", model.data, /*transpose=*/false);
-    _ctx2->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
-    _ctx2->draw(_cone.vbo, _cone.ibo, _cone.index_count);
+    _push_and_draw(model, color, _cone);
 }
 
 void SolidPrimitiveRenderer::draw_quad(const Mat44f& model, const Color4& color) {
-    if (!_ctx2) return;
-    _ctx2->set_uniform_mat4("u_model", model.data, /*transpose=*/false);
-    _ctx2->set_uniform_vec4("u_color", color.r, color.g, color.b, color.a);
-    _ctx2->draw(_quad.vbo, _quad.ibo, _quad.index_count);
+    _push_and_draw(model, color, _quad);
 }
 
 void SolidPrimitiveRenderer::draw_arrow(

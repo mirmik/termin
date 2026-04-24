@@ -11,26 +11,31 @@
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
+#include "tgfx2/tc_shader_bridge.hpp"
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 #include <span>
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
 
-// tgfx2 path — parameters live in a std140 UBO bound at slot 0. The sampler
-// is still a plain GL 3.3 `uniform sampler2D` which defaults to texture unit 0
-// at link time, so binding the input texture at resource slot 0 lines up.
+// Backend-neutral: `#version 450 core` compiles directly on GL 4.3+ and
+// via shaderc for Vulkan. UBO at binding 0, sampler at binding 4 — matches
+// the shared descriptor set layout (UBO 0-3, COMBINED_IMAGE_SAMPLER 4-7).
 static const char* GRAYSCALE_FRAG_UBO = R"(
-#version 330 core
-in vec2 vUV;
+#version 450 core
+layout(location=0) in vec2 vUV;
 
-layout(std140) uniform GrayscaleParams {
+layout(std140, binding = 0) uniform GrayscaleParams {
     float u_strength;
 };
 
-uniform sampler2D u_input;
+layout(binding = 4) uniform sampler2D u_input;
 
-out vec4 FragColor;
+layout(location=0) out vec4 FragColor;
 
 void main() {
     vec3 color = texture(u_input, vUV).rgb;
@@ -96,17 +101,16 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     const int h = static_cast<int>(out_desc.height);
     if (w <= 0 || h <= 0) return;
 
-    // Lazily create the tgfx2 fragment shader and the params UBO. The device
-    // pointer is captured on first use so destroy() can release both without
-    // an ExecuteContext.
-    if (!fs2_) {
-        device2_ = &ctx.ctx2->device();
+    // Lazily register the FS with the tc_shader registry (hash-based
+    // dedup across pass re-creations; the VS is ctx2's built-in FSQ, so
+    // the shader is FS-only and vertex_source stays NULL).
+    device2_ = &ctx.ctx2->device();
+    if (tc_shader_handle_is_invalid(shader_handle_)) {
+        shader_handle_ = tc_shader_register_static(
+            /*vertex=*/nullptr, GRAYSCALE_FRAG_UBO, nullptr, "GrayscaleEngineFS");
+    }
 
-        tgfx::ShaderDesc fs_desc;
-        fs_desc.stage = tgfx::ShaderStage::Fragment;
-        fs_desc.source = GRAYSCALE_FRAG_UBO;
-        fs2_ = device2_->create_shader(fs_desc);
-
+    if (!params_ubo_) {
         tgfx::BufferDesc ubo_desc;
         ubo_desc.size = sizeof(GrayscaleParamsStd140);
         ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
@@ -134,8 +138,16 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::None);
 
-    ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs2_);
-    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
+    tgfx::ShaderHandle gs_fs;
+    {
+        tc_shader* raw = tc_shader_get(shader_handle_);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, device2_, nullptr, &gs_fs)) {
+            tc::Log::error("GrayscalePass: tc_shader_ensure_tgfx2 failed");
+            ctx.ctx2->end_pass();
+            return;
+        }
+    }
+    ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), gs_fs);
 
     tgfx::VertexBufferLayout fsq_layout;
     fsq_layout.stride = 4 * sizeof(float);
@@ -145,10 +157,11 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     };
     ctx.ctx2->set_vertex_layout(fsq_layout);
 
-    // GrayscaleParams UBO at binding 0; input texture at sampler slot 0
-    // (matches the default unit for the shader's sole `sampler2D u_input`).
+    // GrayscaleParams UBO at binding 0; input texture at sampler slot 4
+    // (matches shader's `layout(binding=4) uniform sampler2D u_input` and
+    // the shared descriptor layout).
     ctx.ctx2->bind_uniform_buffer(0, params_ubo_);
-    ctx.ctx2->bind_sampled_texture(0, input_tex2);
+    ctx.ctx2->bind_sampled_texture(4, input_tex2);
 
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
@@ -156,10 +169,8 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
 
 void GrayscalePass::destroy() {
     if (device2_) {
-        if (fs2_) {
-            device2_->destroy(fs2_);
-            fs2_ = {};
-        }
+        // Shader lives on the tc_shader registry (`shader_handle_`),
+        // shared across pass re-creations — not owned here.
         if (params_ubo_) {
             device2_->destroy(params_ubo_);
             params_ubo_ = {};

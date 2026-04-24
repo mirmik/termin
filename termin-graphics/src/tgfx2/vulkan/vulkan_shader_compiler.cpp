@@ -33,11 +33,31 @@ SpirvCompileResult compile_glsl_to_spirv(
     // Force GLSL 450 profile to handle #version 330 sources
     options.SetForcedVersionProfile(450, shaderc_profile_core);
 
-    // Shaders fork their declarations with `#ifdef VULKAN` — shaderc
-    // auto-defines `VULKAN=100` when `shaderc_target_env_vulkan` is
-    // set (see SetTargetEnvironment above), so we rely on that and
-    // don't redefine the macro ourselves (redefining with a different
-    // substitution gives "Macro redefined" errors).
+    // Auto-assign `layout(location=N)` to `in`/`out` varyings that
+    // lack an explicit qualifier. Legacy shaders inherited from the
+    // GL 3.3 era declare `in vec3 a_position;` / `out vec3 v_normal;`
+    // without locations — SPIR-V requires locations for user inputs
+    // and outputs, and shaderc honours this flag to emit them
+    // automatically (in declaration order).
+    //
+    // Auto-bind for resources at the same time: auto-picks binding
+    // slots for `uniform sampler2D u_foo;` declarations lacking an
+    // explicit `layout(binding=N)`. UBOs/SSBOs we always tag with
+    // explicit bindings in the engine, so auto-bind for those would
+    // never fire; leaving it on is free.
+    options.SetAutoMapLocations(true);
+    options.SetAutoBindUniforms(true);
+
+    // Shaders fork their declarations with `#ifdef VULKAN`. shaderc is
+    // supposed to auto-define `VULKAN=100` when targeting Vulkan, but in
+    // practice that depends on the target env + SPIR-V version combo and
+    // proved unreliable here (shaders kept landing in the `#else` branch
+    // and trying to bind the GL-emulation UBO at slot 14, breaking
+    // pipeline layout validation). Define the macro explicitly — safe
+    // because shaderc's own define (if any) uses the same name and
+    // compatible numeric value, and in that rare case shaderc silently
+    // accepts a matching redefinition.
+    options.AddMacroDefinition("VULKAN", "100");
 
     auto kind = to_shaderc_kind(stage);
     auto module = compiler.CompileGlslToSpv(source, kind, "shader", entry_point.c_str(), options);
@@ -45,6 +65,22 @@ SpirvCompileResult compile_glsl_to_spirv(
     if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
         result.success = false;
         result.error_message = module.GetErrorMessage();
+        // Dump the offending source with line numbers so the error
+        // position ("shader:11:") actually means something. Stderr
+        // because the log channel may be routed elsewhere.
+        fprintf(stderr, "=== shader compile failed — source dump ===\n");
+        size_t line_no = 1;
+        size_t pos = 0;
+        while (pos < source.size()) {
+            size_t eol = source.find('\n', pos);
+            size_t end = (eol == std::string::npos) ? source.size() : eol;
+            fprintf(stderr, "%3zu: %.*s\n",
+                    line_no, static_cast<int>(end - pos), source.data() + pos);
+            if (eol == std::string::npos) break;
+            pos = eol + 1;
+            ++line_no;
+        }
+        fprintf(stderr, "=== end source dump ===\n");
         return result;
     }
 

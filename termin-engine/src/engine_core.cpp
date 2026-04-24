@@ -40,9 +40,10 @@ EngineCore::~EngineCore() {
 }
 
 bool EngineCore::tick_and_render(double dt) {
+    // Frame scope is owned by run() — tick_and_render only opens sections
+    // inside the already-open frame. When called standalone (outside run),
+    // sections are no-ops because current_frame is NULL.
     bool profile = tc_profiler_enabled();
-
-    if (profile) tc_profiler_begin_frame();
 
     bool should_render = scene_manager.tick(dt);
 
@@ -59,8 +60,6 @@ bool EngineCore::tick_and_render(double dt) {
         scene_manager.invoke_after_render();
         if (profile) tc_profiler_end_section();
     }
-
-    if (profile) tc_profiler_end_frame();
 
     return should_render;
 }
@@ -84,19 +83,34 @@ void EngineCore::run() {
         double dt = std::chrono::duration<double>(frame_start - last_time).count();
         last_time = frame_start;
 
-        // Poll events (Qt, SDL, etc.)
-        if (_poll_events_callback) {
-            _poll_events_callback();
+        bool profile = tc_profiler_enabled();
+        if (profile) tc_profiler_begin_frame();
+
+        // Always wrap the UI callback in a section so the sub-sections
+        // the callback opens (Events, Render Compose, …) are nested
+        // under a single root instead of bubbling up as siblings of
+        // SceneManager Render. When profile_ui is off the wrap is
+        // *muted* — the section and everything inside it doesn't
+        // record; callees don't need to know about the flag.
+        if (profile) {
+            if (_profile_ui) tc_profiler_begin_section("UI");
+            else             tc_profiler_begin_section_muted("UI");
         }
+        if (_poll_events_callback) _poll_events_callback();
+        if (profile) tc_profiler_end_section();
 
         // Check if should continue
         if (_should_continue_callback && !_should_continue_callback()) {
+            if (profile) tc_profiler_end_frame();
             _running = false;
             break;
         }
 
-        // Tick and render
+        // Tick and render — opens its own sections inside the frame
+        // scope owned by this function.
         tick_and_render(dt);
+
+        if (profile) tc_profiler_end_frame();
 
         // Frame limiting with sleep_until for stable pacing
         next_frame_time += frame_duration;

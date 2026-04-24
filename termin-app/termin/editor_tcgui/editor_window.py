@@ -21,7 +21,6 @@ from tcgui.widgets.status_bar import StatusBar
 from tcgui.widgets.viewport3d import Viewport3D
 from tcgui.widgets.label import Label
 from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.input_dialog import show_input_dialog
 from tcgui.widgets.message_box import MessageBox
 
 from termin.editor.undo_stack import UndoStack, UndoCommand
@@ -96,6 +95,12 @@ class EditorWindowTcgui:
         # Scene manager
         self.scene_manager = scene_manager
         self.scene_manager.set_on_before_scene_close(self._on_before_scene_close)
+        # Pump EditorInteractionSystem's pending press / release / hover at the
+        # exact moment the render finishes — matches the Qt editor. Without
+        # this hook the press/hover events that reach EditorViewportInput-
+        # Manager just queue in _pending_* and never get processed, so
+        # picking / selection / gizmo hover all silently no-op.
+        self.scene_manager.set_on_after_render(self._after_render)
 
         self._editor_data: dict[str, dict] = {}
         self._editor_scene_name = "untitled"
@@ -122,12 +127,20 @@ class EditorWindowTcgui:
         self._editor_attachment = None
         self._rendering_controller = None
         self._editor_viewport_input_managers: list = []
+        self._ar_logged: bool = False
+        # Owns DisplayInputRouter instances that route surface events to the
+        # per-viewport EditorViewportInputManagers. Populated by
+        # _attach_editor_input_router() after the editor display's input
+        # managers are created. Without this the surface's input_manager_ptr
+        # stays on the default (scene-pipeline) router and Viewport3D never
+        # hits the editor picking / hover / gizmo paths.
+        self._display_routers: dict[int, object] = {}
         self._current_project_path: str | None = None
         self._project_name: str | None = None
         self._is_fullscreen: bool = False
         self._pre_fullscreen_state: dict | None = None
         self._editor_state_io: EditorStateIO | None = None
-        self._rendering_tree = None
+        self._viewport_list = None
         self._left_tabs: TabView | None = None
         self._right_scroll: ScrollArea | None = None
         self._bottom_tabs: TabView | None = None
@@ -138,7 +151,9 @@ class EditorWindowTcgui:
         self._center_tabs: TabView | None = None
         self._play_button = None
         self._pause_button = None
-        self._game_scene_name: str | None = None
+        # Game mode state + transitions live in GameModeModel. The model is
+        # created after editor_attachment/rendering_controller exist (end of build()).
+        self._game_mode_model = None
         self._saved_tree_expanded_uuids: list[str] | None = None
         self._spacemouse = None
 
@@ -217,13 +232,10 @@ class EditorWindowTcgui:
         scene_tab_content.add_child(scene_tree)
         left_tabs.add_tab("Scene", scene_tab_content)
 
-        rendering_tab_content = VStack()
-        rendering_tab_content.spacing = 4
-        from tcgui.widgets.tree import TreeWidget as RenderTreeWidget
-        self._rendering_tree = RenderTreeWidget()
-        self._rendering_tree.stretch = True
-        rendering_tab_content.add_child(self._rendering_tree)
-        left_tabs.add_tab("Rendering", rendering_tab_content)
+        from termin.editor_tcgui.viewport_list_widget import ViewportListWidgetTcgui
+        self._viewport_list = ViewportListWidgetTcgui()
+        self._viewport_list.stretch = True
+        left_tabs.add_tab("Rendering", self._viewport_list)
 
         main_area.add_child(left_tabs)
         self._left_splitter = Splitter(target=left_tabs, side="right")
@@ -372,15 +384,20 @@ class EditorWindowTcgui:
         # Setup FBO surface and Viewport3D
         self._setup_viewport()
 
+        # Dialog service (shared between controllers)
+        from termin.editor_tcgui.tcgui_dialog_service import TcguiDialogService
+        self._dialog_service = TcguiDialogService()
+        self._dialog_service.ui = ui
+
         # Setup scene tree controller
         self.scene_tree_controller = SceneTreeControllerTcgui(
             tree_widget=scene_tree,
             scene=self.scene,
             undo_handler=self.push_undo_command,
+            dialog_service=self._dialog_service,
             on_object_selected=self._on_tree_object_selected,
             request_viewport_update=self._request_viewport_update,
         )
-        self.scene_tree_controller._on_rename_requested = self._rename_entity_dialog
 
         # Setup inspector controller
         self._inspector_controller = InspectorControllerTcgui(
@@ -393,6 +410,7 @@ class EditorWindowTcgui:
             on_display_changed=self._request_viewport_update,
             on_viewport_changed=self._request_viewport_update,
             on_pipeline_changed=self._request_viewport_update,
+            dialog_service=self._dialog_service,
         )
         self._inspector_controller.set_scene(self.scene)
 
@@ -400,11 +418,10 @@ class EditorWindowTcgui:
         self._project_browser = ProjectBrowserTcgui(
             dir_tree=project_dir_tree,
             file_list=project_file_list,
+            dialog_service=self._dialog_service,
             on_file_activated=self._on_project_file_activated,
             on_file_selected=self._on_project_file_selected,
         )
-
-        self._rendering_tree.on_select = self._on_render_tree_selected
 
         # Setup rendering controller and editor display
         if self._editor_display is not None:
@@ -415,18 +432,23 @@ class EditorWindowTcgui:
 
             # Create rendering controller (registers factories with RenderingManager)
             self._rendering_controller = RenderingControllerTcgui(
+                viewport_list_widget=self._viewport_list,
                 offscreen_context=self._offscreen_context,
                 ctx=self._ctx,
                 get_scene=lambda: self.scene,
                 make_editor_pipeline=make_editor_pipeline,
                 on_request_update=self._request_viewport_update,
-                on_rendering_changed=self._refresh_rendering_panel,
+                on_rendering_changed=self._on_rendering_changed,
+                on_display_selected=self._on_render_display_selected,
+                on_viewport_selected=self._on_render_viewport_selected,
+                on_entity_selected=self._on_render_entity_selected,
+                on_render_target_selected=self._on_render_target_selected,
             )
 
             self._rendering_controller.set_center_tabs(self._center_tabs)
 
             # Register editor display and mark it as non-serializable
-            RenderingManager.instance().add_display(self._editor_display, "Editor")
+            self._rendering_controller.add_display(self._editor_display, "Editor")
             self._rendering_controller.set_editor_display_ptr(self._editor_display.tc_display_ptr)
 
             # Create editor scene attachment (now with rendering controller)
@@ -437,6 +459,18 @@ class EditorWindowTcgui:
             )
             self._editor_attachment.attach(self.scene, restore_state=False)
             self._setup_editor_viewport_input_managers(self._editor_display)
+            self._attach_editor_input_router(self._editor_display)
+
+            # GameModeModel owns Play/Stop/Pause state + transitions.
+            from termin.editor_core.game_mode_model import GameModeModel
+            self._game_mode_model = GameModeModel(
+                scene_manager=self.scene_manager,
+                editor_attachment=self._editor_attachment,
+                rendering_controller=self._rendering_controller,
+                get_editor_scene_name=lambda: self._editor_scene_name,
+                scene_tree_controller=self.scene_tree_controller,
+            )
+            self._game_mode_model.mode_entered.connect(self._on_game_mode_entered)
 
             # EditorStateIO for save/load
             self._editor_state_io = EditorStateIO(
@@ -458,8 +492,11 @@ class EditorWindowTcgui:
             self._interaction_system.selection.on_selection_changed = self._on_selection_changed
             self._interaction_system.selection.on_hover_changed = self._on_hover_changed
             self._interaction_system.on_request_update = self._request_viewport_update
+            # Transform gizmo drag-end → push an undo command, same as the
+            # Qt editor (editor_window.py::_on_transform_end).
+            self._interaction_system.on_transform_end = self._on_transform_end
 
-        self._refresh_rendering_panel()
+        self._on_rendering_changed()
 
         # Setup menu bar (after scene tree and inspector are ready)
         self._setup_menu_bar(menu_bar)
@@ -486,6 +523,31 @@ class EditorWindowTcgui:
             vp_idx, vp_gen = vp._viewport_handle()
             editor_im = EditorViewportInputManager(vp_idx, vp_gen, display_id)
             self._editor_viewport_input_managers.append(editor_im)
+
+    def _attach_editor_input_router(self, display) -> None:
+        """Wire a DisplayInputRouter onto the editor display's surface.
+
+        This is the critical link for picking / hover / gizmo: the router
+        dispatches mouse events to the EditorViewportInputManagers that
+        `_setup_editor_viewport_input_managers()` already created, which
+        in turn drive the C++ EditorInteractionSystem. Without it the
+        surface stays on the default scene-pipeline input_manager and
+        Viewport3D never sees editor-aware input.
+        """
+        from termin._native.render import DisplayInputRouter
+
+        display_id = display.tc_display_ptr
+        router = DisplayInputRouter(display_id)
+        self._display_routers[display_id] = router
+
+        surface = display.surface
+        if surface is not None:
+            surface.set_input_manager(router.tc_input_manager_ptr)
+
+        # Viewport3D cached the old input_manager_ptr during set_surface();
+        # refresh it now so the widget dispatches into the new router.
+        if self._viewport_widget is not None:
+            self._viewport_widget._connect_input(display)
 
     def _setup_viewport(self) -> None:
         """Create FBO surface, editor display, and connect to Viewport3D."""
@@ -542,12 +604,17 @@ class EditorWindowTcgui:
             on_redo=self.redo,
             on_settings=self._show_settings,
             on_project_settings=self._show_project_settings,
+            on_toggle_fullscreen=self._toggle_fullscreen,
+            on_show_spacemouse_settings=self._show_spacemouse_settings,
             on_scene_properties=self._show_scene_properties,
             on_layers_settings=self._show_layers_settings,
             on_shadow_settings=self._show_shadow_settings,
             on_pipeline_editor=self._show_pipeline_editor,
+            on_show_agent_types=self._show_agent_types,
             on_toggle_game_mode=self._toggle_game_mode,
             on_run_standalone=self._run_standalone,
+            on_toggle_profiler=self._toggle_profiler,
+            on_toggle_modules=self._toggle_modules,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
@@ -556,11 +623,8 @@ class EditorWindowTcgui:
             on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
             on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
-            on_toggle_profiler=self._toggle_profiler,
-            on_toggle_modules=self._toggle_modules,
-            on_toggle_fullscreen=self._toggle_fullscreen,
-            on_show_agent_types=self._show_agent_types,
-            on_show_spacemouse_settings=self._show_spacemouse_settings,
+            on_import_rfmeas=self._import_rfmeas,
+            on_export_rfmeas=self._export_rfmeas,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._is_fullscreen,
@@ -649,12 +713,58 @@ class EditorWindowTcgui:
                 self._interaction_system.selection.clear()
 
     def _on_selection_changed(self, entity) -> None:
+        # The C++ UnifiedGizmoPass pulls its draw target from
+        # EditorInteractionSystem::transform_gizmo, which is empty until
+        # set_gizmo_target is called. Without this line the gizmo stays
+        # invisible even after a successful selection (Qt editor does the
+        # same in editor_window.py::_on_selection_changed).
+        sys = self._interaction_system
+        if sys is not None:
+            sys.set_gizmo_target(entity)
+            self._update_gizmo_screen_scale()
         self._request_viewport_update()
-        if self._inspector_controller is not None and entity:
-            self._inspector_controller.show_entity_inspector(entity)
+        if self.scene_tree_controller is not None and entity and entity.valid():
+            self.scene_tree_controller.select_object(entity)
+        if self._inspector_controller is not None:
+            if entity and entity.valid():
+                self._inspector_controller.show_entity_inspector(entity)
 
     def _on_hover_changed(self, entity) -> None:
         self._request_viewport_update()
+
+    def _on_transform_end(self, old_pose, new_pose) -> None:
+        """C++ TransformGizmo drag-end callback — push an undo command."""
+        from termin.editor.editor_commands import TransformEditCommand
+        tg = self._interaction_system.transform_gizmo if self._interaction_system else None
+        if tg is None or not tg.target.valid():
+            return
+        cmd = TransformEditCommand(
+            transform=tg.target.transform,
+            old_pose=old_pose,
+            new_pose=new_pose,
+        )
+        self.push_undo_command(cmd, False)
+
+    def _update_gizmo_screen_scale(self) -> None:
+        """Update gizmo size based on camera distance to target."""
+        sys = self._interaction_system
+        if sys is None:
+            return
+        tg = sys.transform_gizmo
+        if tg is None or not tg.target.valid():
+            return
+        display = self._editor_display
+        if display is None or not display.viewports:
+            return
+        viewport = display.viewports[0]
+        camera = viewport.camera if viewport is not None else None
+        if camera is None or camera.entity is None:
+            return
+        import numpy as np
+        camera_pos = camera.entity.transform.global_pose().lin
+        gizmo_pos = tg.target.transform.global_pose().lin
+        distance = np.linalg.norm(np.array(camera_pos) - np.array(gizmo_pos))
+        tg.set_screen_scale(max(0.1, distance * 0.1))
 
     def _on_inspector_transform_changed(self) -> None:
         self._request_viewport_update()
@@ -662,60 +772,44 @@ class EditorWindowTcgui:
     def _on_inspector_component_changed(self) -> None:
         self._request_viewport_update()
 
-    def _on_render_tree_selected(self, node) -> None:
-        if self._inspector_controller is None:
+    def _on_render_display_selected(self, display) -> None:
+        if self._inspector_controller is None or display is None:
             return
-        if node is None:
-            self._inspector_controller.clear()
+        self._inspector_controller.show_display_inspector(display, display.name or "Display")
+
+    def _on_render_viewport_selected(self, viewport) -> None:
+        if self._inspector_controller is None or viewport is None:
             return
+        displays = (
+            self._rendering_controller.displays
+            if self._rendering_controller is not None else None
+        )
+        current_display = None
+        if self._rendering_controller is not None:
+            from termin._native.render import RenderingManager
+            current_display = RenderingManager.instance().get_display_for_viewport(viewport)
+        self._inspector_controller.show_viewport_inspector(
+            viewport=viewport,
+            displays=displays,
+            scene=self.scene,
+            current_display=current_display,
+        )
 
-        obj = node.data
-        from termin.visualization.core.display import Display
-        from termin.visualization.core.viewport import Viewport
-        from termin.visualization.core.entity import Entity
-
-        if isinstance(obj, Display):
-            self._inspector_controller.show_display_inspector(obj, obj.name or "Display")
+    def _on_render_entity_selected(self, entity) -> None:
+        if self._inspector_controller is None or entity is None:
             return
+        self._inspector_controller.show_entity_inspector(entity)
 
-        if isinstance(obj, Viewport):
-            current_display = None
-            parent = self._find_tree_parent(node)
-            if parent is not None and isinstance(parent.data, Display):
-                current_display = parent.data
-            displays = self._rendering_controller.displays if self._rendering_controller is not None else None
-            self._inspector_controller.show_viewport_inspector(
-                viewport=obj,
-                displays=displays,
-                scene=self.scene,
-                current_display=current_display,
-            )
+    def _on_render_target_selected(self, render_target) -> None:
+        if self._inspector_controller is None or render_target is None:
             return
+        self._inspector_controller.show_render_target_inspector(render_target, self.scene)
 
-        if isinstance(obj, Entity):
-            self._inspector_controller.show_entity_inspector(obj)
-            return
-
-        self._inspector_controller.clear()
-
-    def _find_tree_parent(self, target_node):
-        if self._rendering_tree is None:
-            return None
-
-        def walk(node):
-            for child in node.subnodes:
-                if child is target_node:
-                    return node
-                found = walk(child)
-                if found is not None:
-                    return found
-            return None
-
-        for root in self._rendering_tree.root_nodes:
-            found = walk(root)
-            if found is not None:
-                return found
-        return None
+    def _on_rendering_changed(self) -> None:
+        if self._rendering_controller is not None:
+            self._rendering_controller.sync_viewport_list_from_manager()
+        elif self._viewport_list is not None:
+            self._viewport_list.refresh()
 
     # ------------------------------------------------------------------
     # Viewport update
@@ -837,11 +931,12 @@ class EditorWindowTcgui:
                 self._editor_attachment.attach(self.scene, restore_state=False)
                 if self._editor_display is not None:
                     self._setup_editor_viewport_input_managers(self._editor_display)
+                    self._attach_editor_input_router(self._editor_display)
 
             # Apply editor state (camera, selection, etc.)
             if self._editor_state_io is not None:
                 self._editor_state_io.apply(editor_data)
-            self._refresh_rendering_panel()
+            self._on_rendering_changed()
             self._request_viewport_update()
         except Exception as e:
             log.error(f"Failed to load scene: {e}")
@@ -1019,36 +1114,6 @@ class EditorWindowTcgui:
             return
 
     # ------------------------------------------------------------------
-    # Rename entity dialog
-    # ------------------------------------------------------------------
-
-    def _rename_entity_dialog(self, entity) -> None:
-        from termin.visualization.core.entity import Entity
-        if self._ui is None or not isinstance(entity, Entity):
-            return
-        old_name = entity.name or ""
-        show_input_dialog(
-            self._ui,
-            title="Rename Entity",
-            message="Name:",
-            default=old_name,
-            on_result=lambda new_name: self._do_rename_entity(entity, old_name, new_name),
-        )
-
-    def _do_rename_entity(self, entity, old_name: str, new_name: str | None) -> None:
-        if new_name is None:
-            return
-        new_name = new_name.strip()
-        if not new_name or new_name == old_name:
-            return
-        from termin.editor.editor_commands import RenameEntityCommand
-        cmd = RenameEntityCommand(entity, old_name, new_name)
-        self.push_undo_command(cmd, False)
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.update_entity(entity)
-        self._request_viewport_update()
-
-    # ------------------------------------------------------------------
     # Menu action stubs / helpers
     # ------------------------------------------------------------------
 
@@ -1118,6 +1183,18 @@ class EditorWindowTcgui:
         else:
             self._spacemouse = None
 
+    # ------------------------------------------------------------------
+    # Utils (rfmeas) — not yet implemented for tcgui
+    # ------------------------------------------------------------------
+
+    def _import_rfmeas(self) -> None:
+        from tcbase import log
+        log.warn("rfmeas import is not yet available in tcgui editor")
+
+    def _export_rfmeas(self) -> None:
+        from tcbase import log
+        log.warn("rfmeas export is not yet available in tcgui editor")
+
     def _show_resource_manager_viewer(self) -> None:
         if self._ui is None:
             return
@@ -1149,7 +1226,8 @@ class EditorWindowTcgui:
             return
         from termin.editor_tcgui.dialogs.framegraph_debugger import show_framegraph_debugger
         self._framegraph_debugger = show_framegraph_debugger(
-            self._ui, self._rendering_controller, self._fbo_surface)
+            self._ui, self._rendering_controller, self._fbo_surface,
+            on_request_update=self._request_viewport_update)
 
     def _show_audio_debugger(self) -> None:
         if self._ui is None:
@@ -1197,122 +1275,42 @@ class EditorWindowTcgui:
             log.error(f"[EditorWindowTcgui] Failed to open Pipeline Editor: {e}")
             self._log_to_console(f"Pipeline Editor error: {e}")
 
+    @property
+    def _game_scene_name(self) -> str | None:
+        return self._game_mode_model.game_scene_name if self._game_mode_model else None
+
     def _toggle_game_mode(self) -> None:
-        if self._game_scene_name is not None:
-            self._stop_game_mode()
-        else:
-            self._start_game_mode()
-
-    def _start_game_mode(self) -> None:
-        if self._game_scene_name is not None:
-            return
-        if self._editor_scene_name is None:
-            return
-
-        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
-        if editor_scene is None:
-            return
-
-        # Save expanded tree nodes
-        if self.scene_tree_controller is not None:
-            self._saved_tree_expanded_uuids = (
-                self.scene_tree_controller.get_expanded_entity_uuids()
-            )
-
-        # Save editor viewport camera to scene
-        self._save_editor_viewport_camera_to_scene(editor_scene)
-
-        # Save viewport configs before copying
-        if self._rendering_controller is not None:
-            self._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
-
-        # Save editor entities state
-        if self._editor_attachment is not None:
-            self._editor_attachment.save_state()
-
-        # Copy scene for game mode
-        self._game_scene_name = f"{self._editor_scene_name}(game)"
-        self.scene_manager.copy_scene(
-            self._editor_scene_name,
-            self._game_scene_name,
-        )
-
-        # Detach editor scene from rendering BEFORE attaching game scene
-        if self._rendering_controller is not None:
-            self._rendering_controller.detach_scene(editor_scene)
-
-        # Attach to game scene
-        game_scene = self.scene_manager.get_scene(self._game_scene_name)
-        if self._editor_attachment is not None:
-            self._editor_attachment.attach(game_scene, transfer_camera_state=True)
-            self._setup_editor_viewport_input_managers(self._editor_attachment._display)
-
-        # Set modes
-        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.INACTIVE)
-        self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
-
-        self._on_game_mode_changed(True, game_scene)
-
-    def _stop_game_mode(self) -> None:
-        if self._game_scene_name is None:
-            return
-
-        # Detach from game scene (discard changes)
-        if self._editor_attachment is not None:
-            self._editor_attachment.detach(save_state=False)
-
-        # Detach game scene from rendering
-        game_scene = self.scene_manager.get_scene(self._game_scene_name)
-        if game_scene is not None and self._rendering_controller is not None:
-            self._rendering_controller.detach_scene(game_scene)
-
-        # Close game scene
-        self.scene_manager.close_scene(self._game_scene_name)
-        self._game_scene_name = None
-
-        # Return to editor scene
-        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
-        editor_scene = self.scene_manager.get_scene(self._editor_scene_name)
-
-        # Re-attach editor scene
-        if self._editor_attachment is not None:
-            self._editor_attachment.attach(editor_scene, restore_state=True)
-            self._setup_editor_viewport_input_managers(self._editor_attachment._display)
-
-        self._on_game_mode_changed(False, editor_scene)
+        if self._game_mode_model is not None:
+            self._game_mode_model.toggle_game_mode()
 
     def _toggle_pause(self) -> None:
-        if self._game_scene_name is None:
+        if self._game_mode_model is None:
             return
-
+        self._game_mode_model.toggle_pause()
         from tcgui.widgets.theme import current_theme as _t
-        current_mode = self.scene_manager.get_mode(self._game_scene_name)
-        if current_mode == SceneMode.PLAY:
-            self.scene_manager.set_mode(self._game_scene_name, SceneMode.STOP)
-            if self._pause_button is not None:
+        if self._pause_button is not None:
+            if self._game_mode_model.is_game_paused:
                 self._pause_button.text = "Resume"
                 self._pause_button.background_color = (0.85, 0.63, 0.29, 1.0)
-        else:
-            self.scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
-            if self._pause_button is not None:
+            else:
                 self._pause_button.text = "Pause"
                 self._pause_button.background_color = _t.bg_surface
-
         self._request_viewport_update()
 
-    def _on_game_mode_changed(self, is_playing: bool, scene) -> None:
-        # Update scene tree
+    def _on_game_mode_entered(self, is_playing: bool, scene, expanded_uuids) -> None:
+        """GameModeModel.mode_entered handler — post-attach view setup."""
+        # tcgui-specific: rebuild per-viewport input managers + router after
+        # attach swapped to new scene.
+        if self._editor_attachment is not None:
+            self._setup_editor_viewport_input_managers(self._editor_attachment._display)
+            self._attach_editor_input_router(self._editor_attachment._display)
+
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(scene)
             self.scene_tree_controller.rebuild()
-            if self._saved_tree_expanded_uuids:
-                self.scene_tree_controller.set_expanded_entity_uuids(
-                    self._saved_tree_expanded_uuids
-                )
-            if not is_playing:
-                self._saved_tree_expanded_uuids = None
+            if expanded_uuids:
+                self.scene_tree_controller.set_expanded_entity_uuids(expanded_uuids)
 
-        # Clear inspector
         if self._inspector_controller is not None:
             self._inspector_controller.clear()
 
@@ -1341,17 +1339,6 @@ class EditorWindowTcgui:
                 self._status_bar.text = "Game mode"
             else:
                 self._status_bar.text = "Editor mode"
-
-    def _save_editor_viewport_camera_to_scene(self, scene) -> None:
-        if self._rendering_controller is None:
-            return
-        if self._editor_display is None or not self._editor_display.viewports:
-            return
-        viewport = self._editor_display.viewports[0]
-        camera_name = None
-        if viewport.camera is not None and viewport.camera.entity is not None:
-            camera_name = viewport.camera.entity.name
-        scene.set_metadata_value("termin.editor.viewport_camera_name", camera_name)
 
     def _run_standalone(self) -> None:
         if self._current_project_path is None:
@@ -1384,10 +1371,12 @@ class EditorWindowTcgui:
     def _toggle_profiler(self) -> None:
         self._profiler_visible = not self._profiler_visible
         self._update_debug_panel_visibility()
+        self._menu_bar_controller.update_profiler_action()
 
     def _toggle_modules(self) -> None:
         self._modules_visible = not self._modules_visible
         self._update_debug_panel_visibility()
+        self._menu_bar_controller.update_modules_action()
 
     def _update_debug_panel_visibility(self) -> None:
         visible = self._profiler_visible or self._modules_visible
@@ -1428,6 +1417,7 @@ class EditorWindowTcgui:
                     self._pre_fullscreen_state[id(w)] = w.visible
                     w.visible = False
             self._is_fullscreen = True
+        self._menu_bar_controller.update_fullscreen_action()
 
     def _load_material_from_file(self) -> None:
         if self._ui is None:
@@ -1553,64 +1543,6 @@ class EditorWindowTcgui:
     def _on_resource_reloaded(self, name: str, kind: str) -> None:
         self._request_viewport_update()
 
-    def _refresh_rendering_panel(self) -> None:
-        """Rebuild the rendering tree to show all Display > Viewport > Entity hierarchies."""
-        if self._rendering_tree is None:
-            return
-        from tcgui.widgets.tree import TreeNode
-
-        # Clear existing
-        for node in list(self._rendering_tree.root_nodes):
-            self._rendering_tree.remove_root(node)
-
-        # Get all displays from RenderingManager
-        from termin._native.render import RenderingManager
-        rm = RenderingManager.instance()
-        displays = rm.displays
-
-        for display in displays:
-            display_name = display.name if display.name else "Display"
-            display_node = self._make_render_tree_node(display_name)
-            display_node.data = display
-
-            for vp in display.viewports:
-                vp_name = vp.name if vp.name else "Viewport"
-                camera_name = "No Camera"
-                camera = vp.camera
-                if camera is not None:
-                    entity = camera.entity
-                    if entity is not None:
-                        camera_name = entity.name or "Camera"
-                vp_node = self._make_render_tree_node(f"{vp_name} ({camera_name})")
-                vp_node.data = vp
-
-                # Internal entities hierarchy
-                internal = vp.internal_entities
-                if internal is not None:
-                    self._add_entity_to_render_tree(vp_node, internal)
-
-                display_node.add_node(vp_node)
-
-            self._rendering_tree.add_root(display_node)
-            display_node.expanded = True
-
-    def _make_render_tree_node(self, text: str):
-        from tcgui.widgets.tree import TreeNode
-        lbl = Label()
-        lbl.text = text
-        node = TreeNode(lbl)
-        return node
-
-    def _add_entity_to_render_tree(self, parent_node, entity) -> None:
-        name = entity.name or "(unnamed)"
-        node = self._make_render_tree_node(name)
-        node.data = entity
-        parent_node.add_node(node)
-        for child_tf in entity.transform.children:
-            child_entity = child_tf.entity
-            if child_entity is not None:
-                self._add_entity_to_render_tree(node, child_entity)
-
     def _rescan_file_resources(self) -> None:
         project_path = self._get_project_path()
         if project_path:
@@ -1670,7 +1602,7 @@ class EditorWindowTcgui:
         if self._interaction_system is not None:
             parent_entity = self._interaction_system.selection.selected
         if self.scene_tree_controller is not None:
-            self.scene_tree_controller.handle_prefab_drop(path, parent_entity)
+            self.scene_tree_controller.operations.drop_prefab(path, parent_entity)
 
     # ------------------------------------------------------------------
     # Per-frame polling
@@ -1693,6 +1625,9 @@ class EditorWindowTcgui:
             self._framegraph_debugger.update()
 
     def _after_render(self) -> None:
+        if not self._ar_logged:
+            log.info(f"[DBG _after_render] first call, interaction_system={self._interaction_system}")
+            self._ar_logged = True
         if self._interaction_system is not None:
             self._interaction_system.after_render()
         if self._framegraph_debugger is not None and self._framegraph_debugger.visible:

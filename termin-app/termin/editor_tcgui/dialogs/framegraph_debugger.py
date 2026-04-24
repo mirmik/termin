@@ -1,13 +1,15 @@
-"""Framegraph Debugger — visualize intermediate FBOs and debug render passes."""
+"""Framegraph Debugger — visualize intermediate FBOs and debug render passes.
 
+UI layer only. State + business logic lives in
+:class:`termin.editor_core.framegraph_debugger_model.FramegraphDebuggerModel`.
+This file builds tcgui widgets, subscribes to model Signals, and forwards
+widget events back into model setters.
+"""
 from __future__ import annotations
-
-import json
 
 from tcbase import log
 
 from tcgui.widgets.widget import Widget
-from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.vstack import VStack
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
@@ -15,7 +17,9 @@ from tcgui.widgets.button import Button
 from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.units import px
+from tcgui.widgets.units import px, pct
+
+from termin.editor_core.framegraph_debugger_model import FramegraphDebuggerModel
 
 
 class CapturePreviewWidget(Widget):
@@ -24,7 +28,7 @@ class CapturePreviewWidget(Widget):
     def __init__(self) -> None:
         super().__init__()
         self._core = None
-        self._fbo_surface = None  # FBOSurface backing the tcgui editor
+        self._fbo_surface = None
         self.channel_mode: int = 0
         self.highlight_hdr: bool = False
         self.has_content: bool = False
@@ -34,76 +38,37 @@ class CapturePreviewWidget(Widget):
                            (0.08, 0.08, 0.08, 1.0))
         if not self.has_content or self._core is None:
             return
-        if self._fbo_surface is None:
-            return
         capture_tex = self._core.capture_tex
         if not capture_tex:
             return
-
-        from termin.visualization.render.manager import RenderingManager
-        render_engine = RenderingManager.instance().render_engine
-        if render_engine is None:
+        tex_w = int(self._core.capture.width)
+        tex_h = int(self._core.capture.height)
+        if tex_w == 0 or tex_h == 0:
             return
-        render_engine.ensure_tgfx2()
-        ctx2 = render_engine.tgfx2_ctx
-        if ctx2 is None:
-            return
-
-        vp_w = renderer._viewport_w
-        vp_h = renderer._viewport_h
-        dst_x = int(self.x)
-        dst_y = int(vp_h - self.y - self.height)
-        dst_w, dst_h = int(self.width), int(self.height)
-
-        # Wrap the tcgui FBOSurface's color texture (raw GL id) as a
-        # non-owning tgfx2 handle so the C++ presenter can open a
-        # render pass on it.
-        from tgfx._tgfx_native import PIXEL_RGBA8
-        target_tex = ctx2.wrap_gl_texture(
-            self._fbo_surface.color_texture_id,
-            vp_w, vp_h, PIXEL_RGBA8,
+        renderer.draw_texture(
+            self.x, self.y, self.width, self.height,
+            handle=capture_tex,
+            tex_w=tex_w,
+            tex_h=tex_h,
         )
-
-        # The C++ presenter handles scissor via ctx2->clear_scissor
-        # inside the pass; here we restore tcgui's clip afterwards
-        # because clear_scissor leaks GL scissor rect state.
-        self._core.presenter.render(
-            ctx2, capture_tex, target_tex,
-            dst_x, dst_y, dst_w, dst_h,
-            self.channel_mode, self.highlight_hdr,
-        )
-        ctx2.destroy_texture(target_tex)
-        if renderer._clip_stack:
-            renderer._ctx.set_scissor(*renderer._clip_stack[-1])
 
 
 class _FramegraphDebuggerHandle:
-    """Handle returned by show_framegraph_debugger() for external update calls."""
+    """Public handle returned by ``show_framegraph_debugger``.
 
-    def __init__(self) -> None:
-        self.dialog: Dialog | None = None
+    The editor calls ``update()`` per frame and ``close()`` to tear down.
+    All real state lives in ``self.model``; this class is responsible for
+    turning model signals into widget updates and widget events into
+    model setter calls.
+    """
+
+    def __init__(self, model: FramegraphDebuggerModel) -> None:
+        self.model = model
+        self.window_ui = None
         self.visible: bool = False
 
-        # State
-        self._core = None
-        self._rendering_controller = None
-        self._fbo_surface = None
+        self._updating: bool = False
 
-        self._current_viewport = None
-        self._viewports_list: list[tuple[object, str]] = []
-
-        self._mode: str = "inside"  # "inside" or "between"
-        self._selected_pass: str | None = None
-        self._selected_symbol: str | None = None
-        self._debug_source_res: str = ""
-        self._debug_paused: bool = False
-        self._channel_mode: int = 0
-        self._highlight_hdr: bool = False
-
-        self._frame_debugger_pass = None
-        self._connected_pipeline = None
-
-        # Widgets (set during build)
         self._viewport_combo: ComboBox | None = None
         self._mode_combo: ComboBox | None = None
         self._pass_combo: ComboBox | None = None
@@ -111,511 +76,238 @@ class _FramegraphDebuggerHandle:
         self._resource_combo: ComboBox | None = None
         self._channel_combo: ComboBox | None = None
         self._pause_check: Checkbox | None = None
+        self._hdr_highlight_check: Checkbox | None = None
+
         self._timing_label: Label | None = None
-        self._pass_json: TextArea | None = None
         self._fbo_info_label: Label | None = None
         self._render_stats_label: Label | None = None
         self._writer_pass_label: Label | None = None
         self._hdr_stats_label: Label | None = None
-        self._pipeline_text: TextArea | None = None
         self._status_label: Label | None = None
+
+        self._pipeline_text: TextArea | None = None
+        self._pass_json: TextArea | None = None
+
         self._preview: CapturePreviewWidget | None = None
 
         self._inside_panel: VStack | None = None
         self._between_panel: VStack | None = None
+        self._panel_slot: VStack | None = None
 
-        self._updating: bool = False
+    # ------------------------------------------------------------------
+    # Subscribe to model
+    # ------------------------------------------------------------------
 
-    # ---- Pipeline access ----
+    def bind_signals(self) -> None:
+        self.model.lists_changed.connect(self._on_lists_changed)
+        self.model.selection_changed.connect(self._on_selection_changed)
+        self.model.info_changed.connect(self._on_info_changed)
+        self.model.capture_updated.connect(self._on_capture_updated)
+        self.model.preview_params_changed.connect(self._on_preview_params_changed)
+        self.model.hdr_stats_changed.connect(self._on_hdr_stats_changed)
 
-    def _get_current_pipeline(self):
-        if self._current_viewport is None:
-            return None
-        managed_by = self._current_viewport.managed_by_scene_pipeline
-        if managed_by and self._current_viewport.scene is not None:
-            from termin.visualization.core.scene import scene_render_mount
-            return scene_render_mount(self._current_viewport.scene).get_pipeline(managed_by)
-        return self._current_viewport.pipeline
+    # ------------------------------------------------------------------
+    # Model → widget updates
+    # ------------------------------------------------------------------
 
-    def _get_fbos(self) -> dict:
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            return {}
-        result = {}
-        for key in pipeline.get_fbo_keys():
-            fbo = pipeline.get_fbo(key)
-            if fbo is not None:
-                result[key] = fbo
-        return result
+    def _on_lists_changed(self, _model) -> None:
+        self._refresh_viewport_combo()
+        self._refresh_resource_combo()
+        self._refresh_pass_combo()
+        self._refresh_symbol_combo()
 
-    # ---- Connection management ----
+    def _on_selection_changed(self, _model) -> None:
+        # Mode panel swap happens here because it's a structural change
+        # to the widget tree: tcgui VStack doesn't re-layout when an
+        # existing child toggles visibility, so we swap children.
+        if self._panel_slot is not None:
+            self._panel_slot.children.clear()
+            if self.model.mode == "inside":
+                if self._inside_panel is not None:
+                    self._panel_slot.add_child(self._inside_panel)
+            else:
+                if self._between_panel is not None:
+                    self._panel_slot.add_child(self._between_panel)
+            if self.window_ui is not None:
+                self.window_ui.request_layout()
 
-    def _disconnect(self) -> None:
-        pipeline = self._connected_pipeline or self._get_current_pipeline()
-
-        if pipeline is not None:
-            pipeline.remove_passes_by_name("FrameDebugger")
-
-        self._frame_debugger_pass = None
-
-        if pipeline is not None:
-            for p in pipeline.passes:
-                try:
-                    p.set_debug_internal_point("")
-                    p.clear_debug_capture()
-                except AttributeError:
-                    pass
-
-        self._connected_pipeline = None
-        self._core.capture.reset_capture()
-
-    def _connect(self) -> None:
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            return
-
-        self._connected_pipeline = pipeline
-
-        if self._mode == "between":
-            if not self._debug_source_res:
-                return
-
-            from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
-
-            paused_ref = self
-            source_ref = self
-
-            def get_source():
-                if paused_ref._debug_paused:
-                    return None
-                return source_ref._debug_source_res
-
-            self._frame_debugger_pass = FrameDebuggerPass(
-                get_source_res=get_source,
-                pass_name="FrameDebugger",
-            )
-            self._frame_debugger_pass.set_capture(self._core.capture)
-            pipeline.add_pass(self._frame_debugger_pass)
-            log.info(f"[FrameDebugger] Connected: between mode, resource='{self._debug_source_res}'")
-
-        elif self._mode == "inside":
-            if not self._selected_pass or not self._selected_symbol:
-                return
-
-            for p in pipeline.passes:
-                if p.pass_name == self._selected_pass:
-                    p.set_debug_internal_point(self._selected_symbol)
-                    p.set_debug_capture(self._core.capture)
-                    log.info(f"[FrameDebugger] Connected: inside mode, pass='{self._selected_pass}', symbol='{self._selected_symbol}'")
-                    return
-
-            log.warn(f"[FrameDebugger] Pass '{self._selected_pass}' not found")
-
-    def _reconnect(self) -> None:
-        self._disconnect()
-        self._connect()
-
-    # ---- Schedule building ----
-
-    def _build_schedule(self, exclude_debugger: bool = False) -> list:
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            return []
-
-        from termin.visualization.render.framegraph.core import FrameGraph
-        from termin.visualization.render.framegraph.passes.base import RenderFramePass
-        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
-
-        passes = pipeline.passes
-        if exclude_debugger:
-            passes = [p for p in passes if not isinstance(p, FrameDebuggerPass)]
-
-        for render_pass in passes:
-            if isinstance(render_pass, RenderFramePass):
-                render_pass.required_resources()
-
-        graph = FrameGraph(passes)
-        return graph.build_schedule()
-
-    # ---- List updates ----
-
-    def _update_viewport_list(self) -> None:
-        if self._rendering_controller is None:
-            return
-        self._viewports_list = self._rendering_controller.get_all_viewports_info()
+        # Reflect current selection in combos without triggering events.
         self._updating = True
-        self._viewport_combo.clear()
-        for _, label in self._viewports_list:
-            self._viewport_combo.add_item(label)
-        if self._viewports_list:
-            self._viewport_combo.selected_index = 0
-            self._current_viewport = self._viewports_list[0][0]
+        if self._mode_combo is not None:
+            self._mode_combo.selected_index = 0 if self.model.mode == "inside" else 1
+        if self._pass_combo is not None and self.model.selected_pass is not None:
+            for i in range(self._pass_combo.item_count):
+                name = self._pass_name_from_display(self._pass_combo.item_text(i))
+                if name == self.model.selected_pass:
+                    self._pass_combo.selected_index = i
+                    break
+        if self._symbol_combo is not None and self.model.selected_symbol is not None:
+            for i in range(self._symbol_combo.item_count):
+                if self._symbol_combo.item_text(i) == self.model.selected_symbol:
+                    self._symbol_combo.selected_index = i
+                    break
+        if self._resource_combo is not None and self.model.debug_source_res:
+            for i in range(self._resource_combo.item_count):
+                if self._resource_combo.item_text(i) == self.model.debug_source_res:
+                    self._resource_combo.selected_index = i
+                    break
         self._updating = False
 
-    def _update_resource_list(self) -> None:
-        self._update_pipeline_info()
+    def _on_info_changed(self, _model) -> None:
+        if self._fbo_info_label is not None:
+            self._fbo_info_label.text = self.model.format_fbo_info()
+        if self._writer_pass_label is not None:
+            self._writer_pass_label.text = self.model.format_writer_pass()
+        if self._pipeline_text is not None:
+            self._pipeline_text.text = self.model.format_pipeline_info()
+        if self._pass_json is not None:
+            self._pass_json.text = self.model.format_pass_json()
+        if self._timing_label is not None:
+            self._timing_label.text = self.model.format_timing()
+        if self._render_stats_label is not None:
+            self._render_stats_label.text = self.model.format_render_stats()
 
-        schedule = self._build_schedule(exclude_debugger=True)
+    def _on_capture_updated(self, _model) -> None:
+        if self._preview is not None:
+            self._preview.has_content = True
 
-        if schedule:
-            written: set[str] = set()
-            for p in schedule:
-                written.update(p.writes)
-            written.discard("DISPLAY")
+    def _on_preview_params_changed(self, _model) -> None:
+        if self._preview is not None:
+            self._preview.channel_mode = self.model.channel_mode
+            self._preview.highlight_hdr = self.model.highlight_hdr
 
-            read_only: list[str] = []
-            for p in schedule:
-                for r in sorted(p.reads):
-                    if r not in written and r != "DISPLAY" and r not in read_only:
-                        read_only.append(r)
+    def _on_hdr_stats_changed(self, text: str) -> None:
+        if self._hdr_stats_label is not None:
+            self._hdr_stats_label.text = text
 
-            seen: set[str] = set()
-            write_order: list[str] = []
-            for p in schedule:
-                for w in sorted(p.writes):
-                    if w not in seen and w != "DISPLAY":
-                        seen.add(w)
-                        write_order.append(w)
+    # ------------------------------------------------------------------
+    # Combo refreshers
+    # ------------------------------------------------------------------
 
-            names = read_only + write_order
-        else:
-            names = sorted(self._get_fbos().keys())
-
-        current_items = [self._resource_combo.item_text(i)
-                         for i in range(self._resource_combo.item_count)]
-        if current_items == names:
+    def _refresh_viewport_combo(self) -> None:
+        if self._viewport_combo is None:
             return
+        viewports = self.model.viewports
+        self._updating = True
+        self._viewport_combo.clear()
+        for _, label in viewports:
+            self._viewport_combo.add_item(label)
+        if viewports:
+            current = self.model.current_viewport
+            idx = 0
+            for i, (vp, _) in enumerate(viewports):
+                if vp is current:
+                    idx = i
+                    break
+            self._viewport_combo.selected_index = idx
+        self._updating = False
 
-        current = self._resource_combo.selected_text
+    def _refresh_resource_combo(self) -> None:
+        if self._resource_combo is None:
+            return
+        names = self.model.get_resources()
         self._updating = True
         self._resource_combo.clear()
         for name in names:
             self._resource_combo.add_item(name)
-        if current and current in names:
-            self._resource_combo.selected_index = names.index(current)
+        if names and self.model.debug_source_res in names:
+            self._resource_combo.selected_index = names.index(self.model.debug_source_res)
+        elif names:
+            self._resource_combo.selected_index = 0
         self._updating = False
 
-    def _update_passes_list(self) -> None:
-        previous_pass = self._selected_pass
-
-        passes_info: list[tuple[str, bool]] = []
-        pipeline = self._get_current_pipeline()
-        if pipeline is not None:
-            from termin.visualization.render.framegraph.passes.shadow import ShadowPass
-            for p in pipeline.passes:
-                if isinstance(p, ShadowPass):
-                    has_symbols = False
-                else:
-                    symbols = p.get_internal_symbols()
-                    has_symbols = len(symbols) > 0
-                passes_info.append((p.pass_name, has_symbols))
-
-        new_items = [(f"{name} *" if has_sym else name, name)
-                     for name, has_sym in passes_info]
-
-        current_items = [(self._pass_combo.item_text(i),
-                          self._pass_combo.item_text(i).rstrip(" *"))
-                         for i in range(self._pass_combo.item_count)]
-        if current_items == new_items:
+    def _refresh_pass_combo(self) -> None:
+        if self._pass_combo is None:
             return
-
+        passes_info = self.model.get_passes()
         self._updating = True
         self._pass_combo.clear()
         selected_index = -1
-        for index, (display_name, pass_name) in enumerate(new_items):
+        for i, (name, has_sym) in enumerate(passes_info):
+            display_name = f"{name} *" if has_sym else name
             self._pass_combo.add_item(display_name)
-            if previous_pass is not None and pass_name == previous_pass:
-                selected_index = index
-
-        if previous_pass is not None and selected_index < 0:
-            self._pass_combo.selected_index = -1
-            self._updating = False
-            return
-
-        if previous_pass is None:
-            if self._pass_combo.item_count > 0:
-                self._pass_combo.selected_index = 0
-                self._selected_pass = self._pass_name_from_display(
-                    self._pass_combo.item_text(0))
-                self._updating = False
-                self._update_symbols_list()
-            else:
-                self._updating = False
-            return
-
+            if name == self.model.selected_pass:
+                selected_index = i
         if selected_index >= 0:
             self._pass_combo.selected_index = selected_index
         self._updating = False
-        self._update_symbols_list()
 
-    def _pass_name_from_display(self, display_name: str) -> str:
+    def _refresh_symbol_combo(self) -> None:
+        if self._symbol_combo is None:
+            return
+        symbols = self.model.get_symbols()
+        self._updating = True
+        self._symbol_combo.clear()
+        selected_index = -1
+        for i, sym in enumerate(symbols):
+            self._symbol_combo.add_item(sym)
+            if sym == self.model.selected_symbol:
+                selected_index = i
+        if selected_index >= 0:
+            self._symbol_combo.selected_index = selected_index
+        self._updating = False
+
+    @staticmethod
+    def _pass_name_from_display(display_name: str) -> str:
         if display_name.endswith(" *"):
             return display_name[:-2]
         return display_name
 
-    def _update_symbols_list(self) -> None:
-        previous_symbol = self._selected_symbol
-        symbols: list[str] = []
-
-        if self._selected_pass:
-            pipeline = self._get_current_pipeline()
-            if pipeline is not None:
-                for p in pipeline.passes:
-                    if p.pass_name == self._selected_pass:
-                        symbols = list(p.get_internal_symbols())
-                        break
-
-        current_items = [self._symbol_combo.item_text(i)
-                         for i in range(self._symbol_combo.item_count)]
-        if current_items == symbols:
-            return
-
-        self._updating = True
-        self._symbol_combo.clear()
-        selected_index = -1
-        for index, sym in enumerate(symbols):
-            self._symbol_combo.add_item(sym)
-            if previous_symbol is not None and sym == previous_symbol:
-                selected_index = index
-
-        if previous_symbol is not None and selected_index < 0:
-            self._symbol_combo.selected_index = -1
-        elif selected_index >= 0:
-            self._symbol_combo.selected_index = selected_index
-        self._updating = False
-
-    # ---- Info updates ----
-
-    def _update_fbo_info(self) -> None:
-        fbos = self._get_fbos()
-        resource_name = self._debug_source_res
-
-        resource = fbos.get(resource_name) if fbos else None
-        if resource is None:
-            self._fbo_info_label.text = f"Resource '{resource_name}': not found"
-            return
-
-        from termin.visualization.render.framegraph.resource import (
-            ShadowMapArrayResource,
-        )
-
-        parts = [resource_name]
-
-        if isinstance(resource, ShadowMapArrayResource):
-            parts.append(f"ShadowMapArray ({len(resource)} entries)")
-            if len(resource) > 0:
-                entry = resource[0]
-                fbo = entry.fbo
-                if fbo is not None:
-                    w, h = fbo.get_size()
-                    parts.append(f"{w}x{h}")
-        else:
-            parts.append(type(resource).__name__)
-
-        self._fbo_info_label.text = " | ".join(parts)
-
-    def _update_writer_pass_label(self) -> None:
-        resource_name = self._debug_source_res
-        if not resource_name:
-            self._writer_pass_label.text = ""
-            return
-
-        schedule = self._build_schedule(exclude_debugger=True)
-        writer_pass = None
-        for p in schedule:
-            if resource_name in p.writes:
-                writer_pass = p.pass_name
-                break
-
-        if writer_pass:
-            self._writer_pass_label.text = f"Writer: {writer_pass}"
-        else:
-            self._writer_pass_label.text = "(read-only)"
-
-    def _update_pass_serialization(self) -> None:
-        if self._selected_pass is None:
-            self._pass_json.text = ""
-            return
-
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            self._pass_json.text = "<no pipeline>"
-            return
-
-        for p in pipeline.passes:
-            if p.pass_name == self._selected_pass:
-                try:
-                    data = p.serialize()
-                    self._pass_json.text = json.dumps(data, indent=2, ensure_ascii=False)
-                except Exception as e:
-                    log.error(f"[FrameDebugger] serialize failed: {e}")
-                    self._pass_json.text = f"<error: {e}>"
-                return
-
-        self._pass_json.text = f"<pass '{self._selected_pass}' not found>"
-
-    def _update_timing_label(self) -> None:
-        if self._selected_pass is None or self._selected_symbol is None:
-            self._timing_label.text = ""
-            return
-
-        pipeline = self._get_current_pipeline()
-        if pipeline is None:
-            self._timing_label.text = ""
-            return
-
-        for p in pipeline.passes:
-            if p.pass_name == self._selected_pass:
-                timings = p.get_internal_symbols_with_timing()
-                for t in timings:
-                    if t.name == self._selected_symbol:
-                        gpu_str = f"{t.gpu_time_ms:.3f}ms" if t.gpu_time_ms >= 0 else "pending..."
-                        self._timing_label.text = f"CPU: {t.cpu_time_ms:.3f}ms | GPU: {gpu_str}"
-                        return
-                break
-
-        self._timing_label.text = "Timing: no data"
-
-    def _update_pipeline_info(self) -> None:
-        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
-
-        schedule = self._build_schedule()
-        if not schedule:
-            self._pipeline_text.text = "(pipeline empty)"
-            return
-
-        current_resource = self._debug_source_res
-        lines = []
-        for p in schedule:
-            reads_str = ", ".join(sorted(p.reads)) if p.reads else "{}"
-            writes_str = ", ".join(sorted(p.writes)) if p.writes else "{}"
-            line = f"{p.pass_name}: {{{reads_str}}} -> {{{writes_str}}}"
-
-            if isinstance(p, FrameDebuggerPass):
-                line = f">>> {line}"
-            elif current_resource and current_resource in p.writes:
-                line = f"*** {line}"
-            else:
-                line = f"    {line}"
-
-            lines.append(line)
-
-        self._pipeline_text.text = "\n".join(lines)
-
-    def _update_render_stats(self) -> None:
-        from termin.visualization.render.manager import RenderingManager
-        rm = RenderingManager.instance()
-        stats = rm.get_render_stats()
-
-        parts = []
-        parts.append(f"Scenes: {stats['attached_scenes']}")
-        parts.append(f"Pipelines: {stats['scene_pipelines']}")
-        parts.append(f"Unmanaged: {stats['unmanaged_viewports']}")
-
-        details = []
-        if stats["scene_names"]:
-            details.append(f"[{', '.join(stats['scene_names'])}]")
-        if stats["pipeline_names"]:
-            details.append(f"({', '.join(stats['pipeline_names'])})")
-
-        text = " | ".join(parts)
-        if details:
-            text += "  " + " ".join(details)
-        self._render_stats_label.text = text
-
-    # ---- Present / depth ----
-
-    def _update_preview_state(self) -> None:
-        if self._preview is None:
-            return
-        has_capture = self._core.capture.has_capture()
-        self._preview.has_content = has_capture
-        self._preview.channel_mode = self._channel_mode
-        self._preview.highlight_hdr = self._highlight_hdr
-
-    def _on_refresh_depth(self) -> None:
-        capture_tex = self._core.capture_tex
-        if not capture_tex:
-            self._status_label.text = "No capture for depth"
-            return
-        from termin.visualization.render.manager import RenderingManager
-        render_engine = RenderingManager.instance().render_engine
-        if render_engine is None:
-            self._status_label.text = "No render engine"
-            return
-        render_engine.ensure_tgfx2()
-        device = render_engine.tgfx2_device
-        if device is None:
-            self._status_label.text = "No tgfx2 device"
-            return
-        try:
-            result = self._core.presenter.read_depth_normalized(device, capture_tex)
-            if result is None:
-                self._status_label.text = "No depth data"
-            else:
-                _, w, h = result
-                self._status_label.text = f"Depth: {w}x{h} read OK"
-        except Exception as e:
-            log.error(f"[FrameDebugger] depth read failed: {e}")
-            self._status_label.text = f"Depth error: {e}"
-
-    # ---- Update (called from editor per frame) ----
+    # ------------------------------------------------------------------
+    # Per-frame update — editor calls this
+    # ------------------------------------------------------------------
 
     def update(self) -> None:
         if not self.visible:
             return
-
-        self._update_resource_list()
-        if self._mode == "inside":
-            self._update_passes_list()
-            self._update_timing_label()
-        self._update_fbo_info()
-        self._update_preview_state()
+        self.model.notify_frame_rendered()
 
     def close(self) -> None:
-        self._disconnect()
+        self.model.disconnect()
         self.visible = False
 
 
-def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _FramegraphDebuggerHandle:
-    """Create and show the Framegraph Debugger dialog. Returns handle for updates."""
+def show_framegraph_debugger(
+    ui, rendering_controller, fbo_surface,
+    on_request_update=None,
+) -> _FramegraphDebuggerHandle | None:
+    """Create and show the Framegraph Debugger in a dedicated tcgui window."""
+
+    if ui.create_window is None:
+        log.error("[FrameDebugger] ui.create_window is not available — cannot open")
+        return None
 
     from termin._native.editor import FrameGraphDebuggerCore
 
-    handle = _FramegraphDebuggerHandle()
-    handle._rendering_controller = rendering_controller
-    handle._fbo_surface = fbo_surface
-    handle._core = FrameGraphDebuggerCore()
+    core = FrameGraphDebuggerCore()
+    model = FramegraphDebuggerModel(
+        rendering_controller=rendering_controller,
+        core=core,
+        on_request_update=on_request_update,
+    )
+    handle = _FramegraphDebuggerHandle(model)
 
     # ---- Build UI ----
-    # Layout matches Qt6 original:
-    #   VStack (main)
-    #   ├── HStack (top_area)
-    #   │   ├── VStack (settings)
-    #   │   └── VStack (pipeline schedule)
-    #   └── HStack (viewer_area, stretch)
-    #       ├── CapturePreviewWidget (stretch)
-    #       └── VStack (depth)
 
     content = VStack()
+    content.preferred_width = pct(100)
+    content.preferred_height = pct(100)
+    content.padding = 6
     content.spacing = 6
 
-    # ============ Top area: settings (left) + pipeline schedule (right) ============
-
+    # Top area: settings (left) + pipeline schedule (right)
     top_area = HStack()
     top_area.spacing = 8
     top_area.preferred_height = px(320)
 
-    # --- Left: settings ---
     settings = VStack()
     settings.spacing = 4
     settings.stretch = True
 
-    # Viewport selection
+    # Viewport row
     vp_row = HStack()
     vp_row.spacing = 4
-    vp_label = Label()
-    vp_label.text = "Viewport:"
+    vp_label = Label(); vp_label.text = "Viewport:"
     vp_row.add_child(vp_label)
     viewport_combo = ComboBox()
     viewport_combo.stretch = True
@@ -626,21 +318,18 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     # Render stats
     stats_row = HStack()
     stats_row.spacing = 4
-    render_stats_label = Label()
-    render_stats_label.text = ""
+    render_stats_label = Label(); render_stats_label.text = ""
     handle._render_stats_label = render_stats_label
     stats_row.add_child(render_stats_label)
     refresh_stats_btn = Button()
-    refresh_stats_btn.text = "Refresh"
-    refresh_stats_btn.padding = 4
+    refresh_stats_btn.text = "Refresh"; refresh_stats_btn.padding = 4
     stats_row.add_child(refresh_stats_btn)
     settings.add_child(stats_row)
 
     # Mode selection
     mode_row = HStack()
     mode_row.spacing = 4
-    mode_label = Label()
-    mode_label.text = "Mode:"
+    mode_label = Label(); mode_label.text = "Mode:"
     mode_row.add_child(mode_label)
     mode_combo = ComboBox()
     mode_combo.items = ["Passes", "Resources"]
@@ -650,16 +339,20 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     mode_row.add_child(mode_combo)
     settings.add_child(mode_row)
 
-    # --- "Resources" panel (initially hidden) ---
+    # Mode-dependent slot
+    panel_slot = VStack()
+    panel_slot.spacing = 4
+    handle._panel_slot = panel_slot
+    settings.add_child(panel_slot)
+
+    # "Resources" panel
     between_panel = VStack()
     between_panel.spacing = 4
-    between_panel.visible = False
     handle._between_panel = between_panel
 
     res_row = HStack()
     res_row.spacing = 4
-    r_label = Label()
-    r_label.text = "Resource:"
+    r_label = Label(); r_label.text = "Resource:"
     res_row.add_child(r_label)
     resource_combo = ComboBox()
     resource_combo.stretch = True
@@ -667,8 +360,7 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     res_row.add_child(resource_combo)
     between_panel.add_child(res_row)
 
-    writer_pass_label = Label()
-    writer_pass_label.text = ""
+    writer_pass_label = Label(); writer_pass_label.text = ""
     handle._writer_pass_label = writer_pass_label
     between_panel.add_child(writer_pass_label)
 
@@ -676,29 +368,25 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     hdr_row.spacing = 4
     hdr_highlight_check = Checkbox()
     hdr_highlight_check.text = "Highlight HDR"
+    handle._hdr_highlight_check = hdr_highlight_check
     hdr_row.add_child(hdr_highlight_check)
     analyze_btn = Button()
-    analyze_btn.text = "Analyze"
-    analyze_btn.padding = 4
+    analyze_btn.text = "Analyze"; analyze_btn.padding = 4
     hdr_row.add_child(analyze_btn)
     between_panel.add_child(hdr_row)
 
-    hdr_stats_label = Label()
-    hdr_stats_label.text = ""
+    hdr_stats_label = Label(); hdr_stats_label.text = ""
     handle._hdr_stats_label = hdr_stats_label
     between_panel.add_child(hdr_stats_label)
 
-    settings.add_child(between_panel)
-
-    # --- "Passes" panel (shown initially) ---
+    # "Passes" panel
     inside_panel = VStack()
     inside_panel.spacing = 4
     handle._inside_panel = inside_panel
 
     pass_row = HStack()
     pass_row.spacing = 4
-    p_label = Label()
-    p_label.text = "Pass:"
+    p_label = Label(); p_label.text = "Pass:"
     pass_row.add_child(p_label)
     pass_combo = ComboBox()
     pass_combo.stretch = True
@@ -708,8 +396,7 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
 
     sym_row = HStack()
     sym_row.spacing = 4
-    s_label = Label()
-    s_label.text = "Symbol:"
+    s_label = Label(); s_label.text = "Symbol:"
     sym_row.add_child(s_label)
     symbol_combo = ComboBox()
     symbol_combo.stretch = True
@@ -717,8 +404,7 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     sym_row.add_child(symbol_combo)
     inside_panel.add_child(sym_row)
 
-    timing_label = Label()
-    timing_label.text = ""
+    timing_label = Label(); timing_label.text = ""
     handle._timing_label = timing_label
     inside_panel.add_child(timing_label)
 
@@ -730,23 +416,22 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     handle._pass_json = pass_json
     inside_panel.add_child(pass_json)
 
-    settings.add_child(inside_panel)
+    # Default: Passes panel
+    panel_slot.add_child(inside_panel)
 
     # FBO info
-    fbo_info_label = Label()
-    fbo_info_label.text = ""
+    fbo_info_label = Label(); fbo_info_label.text = ""
     handle._fbo_info_label = fbo_info_label
     settings.add_child(fbo_info_label)
 
-    # Pause + channel controls
+    # Pause + channel
     controls_row = HStack()
     controls_row.spacing = 8
     pause_check = Checkbox()
     pause_check.text = "Pause"
     handle._pause_check = pause_check
     controls_row.add_child(pause_check)
-    ch_label = Label()
-    ch_label.text = "Channel:"
+    ch_label = Label(); ch_label.text = "Channel:"
     controls_row.add_child(ch_label)
     channel_combo = ComboBox()
     channel_combo.items = ["RGB", "R", "G", "B", "A"]
@@ -758,15 +443,12 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
 
     top_area.add_child(settings)
 
-    # --- Right: pipeline schedule ---
+    # Pipeline schedule
     pipeline_panel = VStack()
     pipeline_panel.spacing = 4
     pipeline_panel.stretch = True
-
-    sched_title = Label()
-    sched_title.text = "Pipeline Schedule"
+    sched_title = Label(); sched_title.text = "Pipeline Schedule"
     pipeline_panel.add_child(sched_title)
-
     pipeline_text = TextArea()
     pipeline_text.read_only = True
     pipeline_text.word_wrap = False
@@ -778,183 +460,119 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     top_area.add_child(pipeline_panel)
     content.add_child(top_area)
 
-    # ============ Bottom area: viewer (left) + depth (right) ============
-
+    # Viewer: preview + depth panel
     viewer_area = HStack()
     viewer_area.spacing = 8
     viewer_area.stretch = True
 
-    # Capture preview (takes most space)
     preview = CapturePreviewWidget()
     preview.stretch = True
-    preview._core = handle._core
+    preview._core = core
     preview._fbo_surface = fbo_surface
     handle._preview = preview
     viewer_area.add_child(preview)
 
-    # Depth panel
     depth_panel = VStack()
     depth_panel.spacing = 4
     depth_panel.preferred_width = px(300)
-
     depth_header = HStack()
     depth_header.spacing = 4
-    depth_title = Label()
-    depth_title.text = "Depth Buffer"
+    depth_title = Label(); depth_title.text = "Depth Buffer"
     depth_header.add_child(depth_title)
     refresh_depth_btn = Button()
-    refresh_depth_btn.text = "Refresh"
-    refresh_depth_btn.padding = 4
+    refresh_depth_btn.text = "Refresh"; refresh_depth_btn.padding = 4
     depth_header.add_child(refresh_depth_btn)
     depth_panel.add_child(depth_header)
-
-    status_label = Label()
-    status_label.text = ""
+    status_label = Label(); status_label.text = ""
     handle._status_label = status_label
     depth_panel.add_child(status_label)
-
     viewer_area.add_child(depth_panel)
     content.add_child(viewer_area)
 
-    # ---- Event handlers (closures) ----
+    # Footer
+    footer = HStack()
+    footer.spacing = 6
+    footer.preferred_height = px(32)
+    footer_spacer = Label(); footer_spacer.text = ""; footer_spacer.stretch = True
+    footer.add_child(footer_spacer)
+    close_btn = Button()
+    close_btn.text = "Close"
+    close_btn.preferred_width = px(90)
+    close_btn.padding = 4
+    footer.add_child(close_btn)
+    content.add_child(footer)
 
-    def on_viewport_changed(idx, text):
+    # ---- Event handlers ----
+
+    def on_viewport_changed(idx, _text):
         if handle._updating:
             return
-        if idx < 0 or idx >= len(handle._viewports_list):
-            handle._current_viewport = None
-        else:
-            handle._current_viewport = handle._viewports_list[idx][0]
-        handle._update_resource_list()
-        handle._update_passes_list()
-        _sync_initial_resource()
-        handle._reconnect()
+        model.set_viewport_by_index(idx)
 
-    def on_mode_changed(idx, text):
+    def on_mode_changed(idx, _text):
         if handle._updating:
             return
-        if idx == 0:
-            handle._mode = "inside"
-            handle._inside_panel.visible = True
-            handle._between_panel.visible = False
-            handle._update_passes_list()
-            handle._update_pass_serialization()
-        else:
-            handle._mode = "between"
-            handle._inside_panel.visible = False
-            handle._between_panel.visible = True
-        handle._reconnect()
+        model.set_mode("inside" if idx == 0 else "between")
 
     def on_pass_changed(idx, text):
-        if handle._updating:
+        if handle._updating or idx < 0:
             return
-        if idx < 0:
-            return
-        handle._selected_pass = handle._pass_name_from_display(text)
-        handle._selected_symbol = None
-        handle._update_symbols_list()
-        handle._update_pass_serialization()
-        # Auto-select last symbol
-        if handle._symbol_combo.item_count > 0:
-            last = handle._symbol_combo.item_count - 1
-            handle._updating = True
-            handle._symbol_combo.selected_index = last
-            handle._updating = False
-            handle._selected_symbol = handle._symbol_combo.item_text(last)
-        if handle._selected_symbol:
-            handle._update_timing_label()
-        else:
-            handle._timing_label.text = ""
-        handle._reconnect()
+        model.set_selected_pass(handle._pass_name_from_display(text))
 
     def on_symbol_changed(idx, text):
-        if handle._updating:
+        if handle._updating or not text:
             return
-        if not text or handle._selected_pass is None:
-            return
-        handle._selected_symbol = text
-        handle._update_timing_label()
-        handle._reconnect()
+        model.set_selected_symbol(text)
 
     def on_resource_changed(idx, text):
-        if handle._updating:
+        if handle._updating or not text:
             return
-        if not text:
-            return
-        handle._debug_source_res = text
-        handle._update_fbo_info()
-        handle._update_writer_pass_label()
-        handle._update_pipeline_info()
-        handle._hdr_stats_label.text = ""
-        handle._reconnect()
+        model.set_source_resource(text)
 
     def on_pause_changed(checked):
-        handle._debug_paused = checked
-        handle._reconnect()
+        model.set_paused(bool(checked))
 
-    def on_channel_changed(idx, text):
+    def on_channel_changed(idx, _text):
         if handle._updating:
             return
-        handle._channel_mode = idx
-        if handle._preview is not None:
-            handle._preview.channel_mode = idx
+        model.set_channel_mode(idx)
 
     def on_hdr_highlight_changed(checked):
-        handle._highlight_hdr = checked
-        if handle._preview is not None:
-            handle._preview.highlight_hdr = checked
+        model.set_highlight_hdr(bool(checked))
 
     def on_analyze_hdr():
-        capture_tex = handle._core.capture_tex
+        model.analyze_hdr()
+
+    def on_refresh_depth():
+        capture_tex = core.capture_tex
         if not capture_tex:
-            handle._hdr_stats_label.text = "No capture available"
+            status_label.text = "No capture for depth"
             return
         from termin.visualization.render.manager import RenderingManager
         render_engine = RenderingManager.instance().render_engine
         if render_engine is None:
-            handle._hdr_stats_label.text = "No render engine"
+            status_label.text = "No render engine"
             return
         render_engine.ensure_tgfx2()
         device = render_engine.tgfx2_device
         if device is None:
-            handle._hdr_stats_label.text = "No tgfx2 device"
+            status_label.text = "No tgfx2 device"
             return
         try:
-            stats = handle._core.presenter.compute_hdr_stats(device, capture_tex)
-            lines = []
-            lines.append(f"R: {stats.min_r:.3f} - {stats.max_r:.3f} (avg: {stats.avg_r:.3f})")
-            lines.append(f"G: {stats.min_g:.3f} - {stats.max_g:.3f} (avg: {stats.avg_g:.3f})")
-            lines.append(f"B: {stats.min_b:.3f} - {stats.max_b:.3f} (avg: {stats.avg_b:.3f})")
-            lines.append(f"Max: {stats.max_value:.3f}")
-            if stats.hdr_percent > 0:
-                lines.append(f"HDR pixels: {stats.hdr_pixel_count:,} ({stats.hdr_percent:.2f}%)")
+            result = core.presenter.read_depth_normalized(device, capture_tex)
+            if result is None:
+                status_label.text = "No depth data"
             else:
-                lines.append("HDR pixels: 0 (0%)")
-            handle._hdr_stats_label.text = "\n".join(lines)
+                _, w, h = result
+                status_label.text = f"Depth: {w}x{h} read OK"
         except Exception as e:
-            log.error(f"[FrameDebugger] HDR analyze failed: {e}")
-            handle._hdr_stats_label.text = f"Error: {e}"
-
-    def on_refresh_depth():
-        handle._on_refresh_depth()
+            log.error(f"[FrameDebugger] depth read failed: {e}")
+            status_label.text = f"Depth error: {e}"
 
     def on_refresh_stats():
-        handle._update_render_stats()
+        model.refresh_render_stats()
 
-    def _sync_initial_resource():
-        if handle._resource_combo.item_count == 0:
-            return
-        handle._updating = True
-        handle._resource_combo.selected_index = 0
-        handle._updating = False
-        first_resource = handle._resource_combo.selected_text
-        if first_resource:
-            handle._debug_source_res = first_resource
-            handle._update_fbo_info()
-            handle._update_writer_pass_label()
-            handle._update_pipeline_info()
-
-    # Wire callbacks
+    # Wire widget events
     viewport_combo.on_changed = on_viewport_changed
     mode_combo.on_changed = on_mode_changed
     pass_combo.on_changed = on_pass_changed
@@ -967,31 +585,36 @@ def show_framegraph_debugger(ui, rendering_controller, fbo_surface) -> _Framegra
     refresh_depth_btn.on_click = on_refresh_depth
     refresh_stats_btn.on_click = on_refresh_stats
 
-    # ---- Dialog ----
+    # ---- Create dedicated window ----
 
-    dialog = Dialog()
-    dialog.title = "Framegraph Debugger"
-    dialog.content = content
-    dialog.buttons = ["Close"]
-    dialog.cancel_button = "Close"
-    dialog.preferred_width = px(950)
-    dialog.preferred_height = px(700)
+    window_ui = ui.create_window("Framegraph Debugger", 950, 700)
+    if window_ui is None:
+        log.error("[FrameDebugger] create_window returned None")
+        return None
 
-    def on_dialog_result(btn):
-        handle.close()
-
-    dialog.on_result = on_dialog_result
-    handle.dialog = dialog
+    handle.window_ui = window_ui
     handle.visible = True
+    window_ui.root = content
 
-    dialog.show(ui, windowed=True)
+    native_close = window_ui.close_window
 
-    # Initial population
-    handle._update_viewport_list()
-    handle._update_resource_list()
-    handle._update_passes_list()
-    handle._update_render_stats()
-    _sync_initial_resource()
-    handle._reconnect()
+    def _on_close():
+        handle.close()
+        if native_close is not None:
+            native_close()
+
+    window_ui.close_window = _on_close
+    window_ui.on_empty = _on_close
+    close_btn.on_click = _on_close
+
+    # Subscribe handle to model and do initial population.
+    handle.bind_signals()
+    model.refresh_viewports()
+    # ``refresh_viewports`` fires lists_changed but not info_changed, so
+    # pull initial info text now.
+    handle._on_info_changed(model)
+    # Auto-select the first resource so schedule/writer info populate.
+    if resource_combo.item_count > 0:
+        model.set_source_resource(resource_combo.item_text(0))
 
     return handle

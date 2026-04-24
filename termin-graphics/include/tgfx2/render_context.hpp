@@ -52,6 +52,11 @@ public:
     // --- Frame lifecycle ---
     void begin_frame();
     void end_frame();   // submits command list
+    // True between begin_frame() and end_frame() — i.e. command list
+    // is live and draws/passes can be recorded. Used by guest renderers
+    // (UIRenderer, posteffects) to decide whether they need to open a
+    // frame themselves or the host already has one running.
+    bool in_frame() const { return cmd_ != nullptr; }
 
     // --- Render pass ---
     // Begin render pass with color attachment (and optional depth).
@@ -90,6 +95,19 @@ public:
     // Passing range=0 means "bind whole buffer" (backend uses glBindBufferBase).
     void bind_uniform_buffer(uint32_t binding, BufferHandle buffer,
                              uint64_t offset = 0, uint64_t range = 0);
+
+    // Write `size` bytes of `data` into the backend's shared ring UBO
+    // and bind it at `binding`. No caller-managed BufferHandle, no
+    // per-draw upload_buffer, no descriptor-set allocation for UBO-only
+    // differences between draws: on Vulkan this lands as a dynamic
+    // descriptor offset on the shared set; on OpenGL as a
+    // `glBindBufferRange` into the ring buffer. `size` must be ≤ the
+    // UBO block size declared by the shader.
+    //
+    // `binding` must be one of the layout's UNIFORM_BUFFER_DYNAMIC slots
+    // (0..3, 16). Other slots fall back to the classic bind_uniform_buffer
+    // path and pay the old per-draw churn.
+    void bind_uniform_buffer_ring(uint32_t binding, const void* data, uint32_t size);
 
     // Set per-draw push constants. Payload becomes visible to the next
     // draw call at binding slot TGFX2_PUSH_CONSTANTS_BINDING (GL) or via
@@ -148,11 +166,6 @@ public:
     // resource set.
     void clear_resource_bindings();
 
-    // --- Target format info (for pipeline cache key) ---
-    void set_color_format(PixelFormat fmt);
-    void set_depth_format(PixelFormat fmt);
-    void set_sample_count(uint32_t samples);
-
     // --- Viewport / Scissor ---
     void set_viewport(int x, int y, int w, int h);
     void set_scissor(int x, int y, int w, int h);
@@ -169,11 +182,13 @@ public:
     // Draw non-indexed.
     void draw_arrays(BufferHandle vbo, uint32_t vertex_count);
 
-    // --- Immediate drawing (creates temp buffers) ---
-    // Lines: vertex data is [x,y,z, r,g,b,a] per vertex.
+    // --- Immediate drawing ---
+    // Fast-path for transient UI/debug streams: hands vertices to the
+    // device's transient vertex ring (persistent VBO with sub-upload)
+    // when available, falls back to per-draw buffer creation when the
+    // backend doesn't provide a ring. Vertex layout is fixed:
+    // [x,y,z, r,g,b,a] — 7 floats per vertex.
     void draw_immediate_lines(const float* data, uint32_t vertex_count);
-
-    // Triangles: same vertex format.
     void draw_immediate_triangles(const float* data, uint32_t vertex_count);
 
     // --- Blit ---
@@ -212,6 +227,9 @@ public:
     ShaderHandle fsq_vertex_shader();
 
 private:
+    // Shared body for draw_immediate_lines / draw_immediate_triangles.
+    void draw_immediate_generic(const float* data, uint32_t vertex_count,
+                                PrimitiveTopology topo);
 
     IRenderDevice& device_;
     PipelineCache& cache_;
@@ -225,6 +243,10 @@ private:
 
     ShaderHandle bound_vs_, bound_fs_, bound_gs_;
     VertexBufferLayout vertex_layout_;
+    // Hash of `vertex_layout_`, recomputed only when set_vertex_layout is
+    // called. Fed into PipelineCacheKey so flush_pipeline's lookup skips
+    // re-hashing the attributes vector on every draw.
+    size_t vertex_layout_hash_ = 0;
     PrimitiveTopology topology_ = PrimitiveTopology::TriangleList;
 
     // Synced from begin_pass() with the actual attachment formats.
@@ -248,6 +270,12 @@ private:
     // or the current ring UBO offset (OpenGL). Cleared when the caller
     // passes an empty payload.
     std::vector<uint8_t> pending_push_constants_;
+    // True when pending_push_constants_ hasn't been emitted into the cmd
+    // buffer yet since the last set_push_constants() call. Cleared after
+    // flush_pipeline() pushes them. Kills the double-emit that happened
+    // when set_push_constants() pushed immediately *and* flush_pipeline
+    // re-pushed after a state change — visible as pushC ~1.4 per draw.
+    bool push_constants_dirty_ = false;
 
     // Per-frame deferred-destruction list for non-owning external
     // wrappers (register_external_texture / register_external_buffer)
@@ -260,6 +288,19 @@ private:
     BufferHandle fsq_vbo_;
     BufferHandle fsq_ibo_;
     ShaderHandle fsq_vs_;
+
+    // Last vbo/ibo bound on the command list — lets draw() skip the
+    // redundant vkCmdBindVertexBuffers / vkCmdBindIndexBuffer when the
+    // next draw reuses the same mesh (chronosquad scenes hit the same
+    // VBO for hundreds of instanced draws — thousand-scale reduction in
+    // bind cmd recording). Reset to {} at begin_pass so a new pass
+    // always re-binds.
+    BufferHandle last_bound_vbo_ = {};
+    BufferHandle last_bound_ibo_ = {};
+    // Last pipeline handle passed to cmd_->bind_pipeline(). Used by
+    // flush_pipeline() to skip a redundant vkCmdBindPipeline when the
+    // pipeline cache returned the same handle again (same state combo).
+    PipelineHandle last_bound_pipeline_ = {};
 
     void ensure_fsq_resources();
     void flush_resource_set();

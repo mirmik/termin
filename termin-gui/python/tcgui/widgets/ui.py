@@ -14,6 +14,9 @@ from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent, TextEven
 from tcgui.widgets.renderer import UIRenderer
 from tcgui.widgets.loader import UILoader
 from tcgui.widgets.shortcuts import ShortcutRegistry
+from tcbase.profiler import Profiler
+
+_profiler = Profiler.instance()
 
 
 @dataclass
@@ -33,23 +36,25 @@ class UI:
     and provides an overlay stack for popups / tooltips / menus.
     """
 
-    def __init__(self, font: FontTextureAtlas | None = None,
-                 holder: Tgfx2Context | None = None):
+    def __init__(self, graphics: Tgfx2Context,
+                 font: FontTextureAtlas | None = None):
         """
         Parameters
         ----------
+        graphics : Tgfx2Context
+            The process-wide tgfx2 context (device + RenderContext2) to
+            render through. Required — UI never creates a Tgfx2Context
+            of its own, because that would mint a second IRenderDevice
+            and break cross-widget TextureHandle sharing (Viewport3D
+            consuming FBOSurface.color_tex, etc.), plus Vulkan parity.
+            Obtain from the application host:
+            ``Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())``
+            at the top level, or ``Tgfx2Context.from_context(ctx2)``
+            inside framegraph passes.
         font : FontTextureAtlas or None
             Default font atlas. None → process default.
-        holder : Tgfx2Context or None
-            Externally-owned tgfx2 context to draw through. When a host
-            manages a process-global IRenderDevice (BackendWindow-based
-            editor, tcplot hosted inside one), it passes a borrowed
-            Tgfx2Context here so all rendering lands on the same device
-            — required for cross-widget TextureHandle sharing (Viewport3D
-            consuming FBOSurface.color_tex, etc.) and for Vulkan parity.
-            None → the renderer creates its own owning context.
         """
-        self._renderer = UIRenderer(font, holder=holder)
+        self._renderer = UIRenderer(graphics, font=font)
         self._loader = UILoader()
 
         self._root: Widget | None = None
@@ -120,6 +125,7 @@ class UI:
     def loader(self) -> UILoader:
         """Access to the loader for registering custom widget types."""
         return self._loader
+
 
     # ------------------------------------------------------------------
     # Global shortcuts
@@ -263,6 +269,7 @@ class UI:
         viewport_w: int,
         viewport_h: int,
         background_color: tuple[float, float, float, float] | None = None,
+        target_color=None,
     ):
         """Render the UI and return the composite TextureHandle.
 
@@ -271,43 +278,56 @@ class UI:
         ``BackendWindow.present()``, which picks the right backend
         path (GL: blit to FBO 0 + SwapWindow, Vulkan: acquire +
         compose-and-present on the swapchain image).
+
+        When ``target_color`` is given (framegraph in-scene path), UI
+        draws directly into it with LoadOp::Load — no offscreen, no
+        final blit. The returned value is ``target_color`` in that
+        case (already has the UI composited in).
         """
-        if not self._compose(viewport_w, viewport_h, background_color):
+        if not self._compose(viewport_w, viewport_h, background_color,
+                             target_color):
             return None
-        return self._renderer.end_compose()
+        with _profiler.section("Renderer.end"):
+            return self._renderer.end_compose()
 
     def _compose(
         self,
         viewport_w: int,
         viewport_h: int,
         background_color: tuple[float, float, float, float] | None,
+        target_color=None,
     ) -> bool:
         if not self._root and not self._overlays:
             return False
 
         # Re-layout if viewport changed or layout invalidated
-        if (viewport_w != self._viewport_w or viewport_h != self._viewport_h
-                or self._needs_layout):
-            self._needs_layout = False
-            self.layout(viewport_w, viewport_h)
+        with _profiler.section("Layout"):
+            if (viewport_w != self._viewport_w or viewport_h != self._viewport_h
+                    or self._needs_layout):
+                self._needs_layout = False
+                self.layout(viewport_w, viewport_h)
 
-        # Check tooltip timer
-        self._update_tooltip()
+            # Check tooltip timer
+            self._update_tooltip()
 
-        self._renderer.begin(viewport_w, viewport_h, background_color)
-        if self._root:
-            self._root.render(self._renderer)
+        with _profiler.section("Renderer.begin"):
+            self._renderer.begin(viewport_w, viewport_h, background_color,
+                                 target_color=target_color)
+        with _profiler.section("Root.render"):
+            if self._root:
+                self._root.render(self._renderer)
 
         # Render overlays on top (re-center modal dialogs if viewport changed)
-        for entry in self._overlays:
-            if entry.modal:
-                w, h = entry.widget.compute_size(viewport_w, viewport_h)
-                x = (viewport_w - w) / 2
-                y = (viewport_h - h) / 2
-                entry.widget.layout(x, y, w, h, viewport_w, viewport_h)
-                self._renderer.draw_rect(0, 0, viewport_w, viewport_h,
-                                         (0, 0, 0, 0.3))
-            entry.widget.render(self._renderer)
+        with _profiler.section("Overlays"):
+            for entry in self._overlays:
+                if entry.modal:
+                    w, h = entry.widget.compute_size(viewport_w, viewport_h)
+                    x = (viewport_w - w) / 2
+                    y = (viewport_h - h) / 2
+                    entry.widget.layout(x, y, w, h, viewport_w, viewport_h)
+                    self._renderer.draw_rect(0, 0, viewport_w, viewport_h,
+                                             (0, 0, 0, 0.3))
+                entry.widget.render(self._renderer)
         return True
 
     # ------------------------------------------------------------------

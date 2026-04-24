@@ -214,9 +214,6 @@ void bind_frame_pass(nb::module_& m) {
              nb::arg("caster_offset") = 50.0f)
         .def_rw("output_res", &ShadowPass::output_res)
         .def_rw("caster_offset", &ShadowPass::caster_offset)
-        .def_prop_rw("shadow_shader",
-            [](ShadowPass& self) -> TcShader* { return self.shadow_shader; },
-            [](ShadowPass& self, TcShader* s) { self.shadow_shader = s; })
         .def("get_internal_symbols", &ShadowPass::get_internal_symbols)
         .def_prop_ro("reads", &ShadowPass::compute_reads)
         .def_prop_ro("writes", &ShadowPass::compute_writes)

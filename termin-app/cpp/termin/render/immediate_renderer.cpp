@@ -2,15 +2,21 @@
 
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/i_render_device.hpp>
-#include <tgfx2/tc_shader_bridge.hpp>
+#include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
 #include <tgfx2/vertex_layout.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 extern "C" {
 #include "tc_profiler.h"
 }
 
 #include <cmath>
+#include <cstring>
 #include <algorithm>
 
 // MSVC doesn't define M_PI by default
@@ -22,31 +28,44 @@ namespace termin {
 
 namespace {
 
-const char* IMMEDIATE_VERT = R"(
-#version 330 core
+// Push constants: single mat4 u_vp (proj*view pre-multiplied on CPU) =
+// 64 bytes, well inside Vulkan's 128-byte guarantee. `#ifdef VULKAN`
+// picks the native push_constant block; GL path falls back to the
+// std140 UBO at binding 14 that tgfx2 uses to emulate push constants.
+const char* IMMEDIATE_VERT = R"(#version 450 core
+struct ImmediatePushData {
+    mat4 u_vp;
+};
+#ifdef VULKAN
+layout(push_constant) uniform ImmediatePushBlock { ImmediatePushData pc; };
+#else
+layout(std140, binding = 14) uniform ImmediatePushBlock { ImmediatePushData pc; };
+#endif
+
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec4 a_color;
-
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-out vec4 v_color;
+layout(location = 0) out vec4 v_color;
 
 void main() {
     v_color = a_color;
-    gl_Position = u_projection * u_view * vec4(a_position, 1.0);
+    gl_Position = pc.u_vp * vec4(a_position, 1.0);
 }
 )";
 
-const char* IMMEDIATE_FRAG = R"(
-#version 330 core
-in vec4 v_color;
-out vec4 fragColor;
+const char* IMMEDIATE_FRAG = R"(#version 450 core
+layout(location = 0) in vec4 v_color;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     fragColor = v_color;
 }
 )";
+
+struct ImmediatePushData {
+    float u_vp[16];
+};
+static_assert(sizeof(ImmediatePushData) == 64,
+              "ImmediatePushData must be 64 bytes (mat4)");
 
 } // anonymous namespace
 
@@ -506,9 +525,16 @@ void ImmediateRenderer::arrow_solid(
 // Rendering
 // ============================================================
 
-void ImmediateRenderer::_ensure_shader() {
-    if (_shader.is_valid()) return;
-    _shader = TcShader::from_sources(IMMEDIATE_VERT, IMMEDIATE_FRAG, "", "ImmediateRenderer");
+void ImmediateRenderer::_ensure_shader(tgfx::IRenderDevice* device) {
+    _device = device;
+    // Engine VS+FS via the tc_shader registry — hash-based dedup keeps
+    // the compiled modules alive across RenderContext2 re-creations
+    // (happens on Play/Stop when a new game viewport spins up its own
+    // ctx2 and constructs a fresh ImmediateRenderer).
+    if (tc_shader_handle_is_invalid(_shader_handle)) {
+        _shader_handle = tc_shader_register_static(
+            IMMEDIATE_VERT, IMMEDIATE_FRAG, nullptr, "ImmediateEngineVSFS");
+    }
 }
 
 void ImmediateRenderer::_flush_buffers(
@@ -525,14 +551,14 @@ void ImmediateRenderer::_flush_buffers(
 
     bool detailed = tc_profiler_detailed_rendering();
 
-    _ensure_shader();
-    if (!_shader.is_valid()) return;
-
-    // Compile to tgfx2 ShaderHandle pair via bridge (cached per shader).
-    tc_shader* raw = tc_shader_get(_shader.handle);
-    if (!raw) return;
-    tgfx::ShaderHandle vs2, fs2;
-    if (!tc_shader_ensure_tgfx2(raw, &ctx2->device(), &vs2, &fs2)) return;
+    _ensure_shader(&ctx2->device());
+    tgfx::ShaderHandle imm_vs, imm_fs;
+    {
+        tc_shader* raw = tc_shader_get(_shader_handle);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, _device, &imm_vs, &imm_fs)) {
+            return;
+        }
+    }
 
     if (detailed) tc_profiler_begin_section("Setup");
     ctx2->set_depth_test(depth_test);
@@ -543,17 +569,17 @@ void ImmediateRenderer::_flush_buffers(
                              tgfx::BlendFactor::OneMinusSrcAlpha);
     }
     ctx2->set_cull(tgfx::CullMode::None);
-    ctx2->bind_shader(vs2, fs2);
+    ctx2->bind_shader(imm_vs, imm_fs);
 
-    // 7 floats per vertex: x,y,z, r,g,b,a — matches draw_immediate_*
-    // vertex layout set inside ctx2's own helper. Pass uniforms now.
-    float view_f[16], proj_f[16];
+    // View-projection combined on CPU: shader only needs one matrix,
+    // fits comfortably in 128-byte push constants. Double→float narrow
+    // happens here because Mat44 internal storage is double.
+    Mat44 vp = proj_matrix * view_matrix;
+    ImmediatePushData push{};
     for (int i = 0; i < 16; ++i) {
-        view_f[i] = static_cast<float>(view_matrix.data[i]);
-        proj_f[i] = static_cast<float>(proj_matrix.data[i]);
+        push.u_vp[i] = static_cast<float>(vp.data[i]);
     }
-    ctx2->set_uniform_mat4("u_view", view_f, /*transpose=*/false);
-    ctx2->set_uniform_mat4("u_projection", proj_f, /*transpose=*/false);
+    ctx2->set_push_constants(&push, static_cast<uint32_t>(sizeof(push)));
     if (detailed) tc_profiler_end_section();
 
     if (!lines.empty()) {

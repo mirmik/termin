@@ -3,7 +3,6 @@
 
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/i_render_device.hpp"
-#include "tgfx2/opengl/opengl_render_device.hpp"
 
 #include <tcbase/tc_log.hpp>
 
@@ -45,7 +44,9 @@ bool FBOPool::ensure_native(
         cdesc.format = color_format;
         cdesc.sample_count = static_cast<uint32_t>(samples);
         cdesc.usage = tgfx::TextureUsage::Sampled |
-                      tgfx::TextureUsage::ColorAttachment;
+                      tgfx::TextureUsage::ColorAttachment |
+                      tgfx::TextureUsage::CopySrc |
+                      tgfx::TextureUsage::CopyDst;
         entry.color_tgfx2 = device.create_texture(cdesc);
         if (has_depth) {
             tgfx::TextureDesc ddesc;
@@ -73,15 +74,14 @@ bool FBOPool::ensure_native(
             return true;
         }
         release_tgfx2_wrappers(entry);
-        // The GL textures we just destroyed may have their gl_ids
-        // immediately reused by create_texture below. Any FBO the
-        // device cached keyed on the old gl_id would then point at
+        // The textures we just destroyed may have their native ids
+        // immediately reused by create_texture below. Any framebuffer
+        // the device cached keyed on the old id would then point at
         // fresh attachments whose size/format may differ — silent
-        // black-screen territory. Dump the whole cache here so
-        // begin_pass rebuilds FBOs against the new textures.
-        if (auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device)) {
-            gl_dev->invalidate_fbo_cache();
-        }
+        // black-screen territory. Dump the cache here so begin_pass
+        // rebuilds the framebuffer against the new textures. No-op
+        // on backends that don't cache render targets.
+        device.invalidate_render_target_cache();
         entry.native_device = &device;
         entry.width = width;
         entry.height = height;

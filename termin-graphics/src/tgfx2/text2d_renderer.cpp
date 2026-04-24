@@ -8,6 +8,7 @@
 
 #include "tgfx2/text2d_renderer.hpp"
 
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -16,6 +17,15 @@
 #include "tgfx2/font_atlas.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/render_context.hpp"
+#include "tgfx2/tc_shader_bridge.hpp"
+
+extern "C" {
+#include "tc_profiler.h"
+}
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 #include "internal/utf8_decode.hpp"
 
@@ -68,7 +78,11 @@ layout(location=0) out vec4 frag_color;
 
 void main() {
     float a = texture(u_font_atlas, v_uv).r * pc.u_color.a;
-    if (a < 0.01) discard;
+    // Threshold at one 8-bit alpha level. Anything we'd discard above
+    // this can't contribute to the blended output anyway; anything
+    // below this (but > 0) is AA tail we want to keep — the old 0.01
+    // cutoff was high enough to nibble visible edge gradients.
+    if (a < (1.0/255.0)) discard;
     frag_color = vec4(pc.u_color.rgb, a);
 }
 )";
@@ -83,27 +97,24 @@ static_assert(sizeof(Text2DPushData) == 80,
               "Text2DPushData layout drift — shader and C++ disagree");
 
 // Build an ortho matrix (column-major) that maps pixel coords y+down
-// → NDC y+up. (0,0) pixel → (-1,+1) NDC (top-left corner).
+// → clip-space y+down (Vulkan-native; OpenGL reaches this via
+// glClipControl(GL_UPPER_LEFT), which tgfx2 re-applies at the start
+// of every render pass in OpenGLCommandList::begin_render_pass).
+// Pixel (0,0) maps to clip (-1,-1), i.e. the top-left corner.
 //
-// The matrix is written here in math (row-major) notation but stored
+// The matrix is written in math (row-major) notation but stored
 // column-major so we pass `transpose=true` to set_uniform_mat4. That
 // mirrors what the Python version does with np.array + flatten.
 void build_ortho_pixel_to_ndc(float w, float h, float out[16]) {
-    // Identity for degenerate viewport — avoids NaN downstream.
     if (w <= 0.0f || h <= 0.0f) {
         std::memset(out, 0, 16 * sizeof(float));
         out[0] = out[5] = out[10] = out[15] = 1.0f;
         return;
     }
-    // Row-major layout (we upload with transpose=true):
-    //   [ 2/w,  0,     0,   -1 ]
-    //   [ 0,   -2/h,   0,    1 ]
-    //   [ 0,    0,    -1,    0 ]
-    //   [ 0,    0,     0,    1 ]
     float m[16] = {
         2.0f / w,  0.0f,      0.0f, -1.0f,
-        0.0f,     -2.0f / h,  0.0f,  1.0f,
-        0.0f,      0.0f,     -1.0f,  0.0f,
+        0.0f,      2.0f / h,  0.0f, -1.0f,
+        0.0f,      0.0f,      1.0f,  0.0f,
         0.0f,      0.0f,      0.0f,  1.0f,
     };
     std::memcpy(out, m, sizeof(m));
@@ -123,47 +134,49 @@ Text2DRenderer::~Text2DRenderer() {
 }
 
 void Text2DRenderer::ensure_shader_(IRenderDevice& device) {
-    if (compiled_on_ == &device && vs_.id != 0 && fs_.id != 0) {
-        return;
+    if (compiled_on_ == &device && vs_.id != 0 && fs_.id != 0) return;
+    compiled_on_ = &device;
+
+    // Try the tc_shader registry path first — hash-based dedup keeps
+    // compiled VkShaderModules alive across Text2DRenderer instances
+    // (relevant because each new RenderContext2 on Play/Stop builds a
+    // fresh Text2DRenderer). The registry needs tc_gpu_context, which
+    // the full editor sets up but the bare launcher UI does not; fall
+    // back to direct create_shader for that case.
+    if (tc_shader_handle_is_invalid(shader_handle_)) {
+        std::string vs = make_text2d_vert();
+        std::string fs = make_text2d_frag();
+        shader_handle_ = tc_shader_register_static(
+            vs.c_str(), fs.c_str(), nullptr, "Text2DEngineVSFS");
     }
-    // Device changed or first time — drop any prior handles and
-    // recompile. Handles only live across a single device's lifetime.
-    if (compiled_on_ != nullptr) {
-        if (vs_.id != 0) compiled_on_->destroy(vs_);
-        if (fs_.id != 0) compiled_on_->destroy(fs_);
-    }
+
     vs_ = ShaderHandle{};
     fs_ = ShaderHandle{};
+    if (!tc_shader_handle_is_invalid(shader_handle_)) {
+        tc_shader* raw = tc_shader_get(shader_handle_);
+        if (raw) {
+            termin::tc_shader_ensure_tgfx2(raw, &device, &vs_, &fs_);
+        }
+    }
 
-    ShaderDesc vs_desc;
-    vs_desc.stage = ShaderStage::Vertex;
-    vs_desc.source = make_text2d_vert();
-    vs_ = device.create_shader(vs_desc);
+    if (vs_.id == 0 || fs_.id == 0) {
+        ShaderDesc vs_desc;
+        vs_desc.stage = ShaderStage::Vertex;
+        vs_desc.source = make_text2d_vert();
+        vs_ = device.create_shader(vs_desc);
 
-    ShaderDesc fs_desc;
-    fs_desc.stage = ShaderStage::Fragment;
-    fs_desc.source = make_text2d_frag();
-    fs_ = device.create_shader(fs_desc);
-
-    compiled_on_ = &device;
+        ShaderDesc fs_desc;
+        fs_desc.stage = ShaderStage::Fragment;
+        fs_desc.source = make_text2d_frag();
+        fs_ = device.create_shader(fs_desc);
+    }
 }
 
 void Text2DRenderer::release_gpu() {
-    // Only destroy shaders if the device pointer is still the live
-    // interop target. At Python interpreter shutdown the BackendWindow
-    // that owned the device may be torn down before we get here, in
-    // which case `compiled_on_` is dangling and calling ->destroy on it
-    // segfaults. Leaking the handles at shutdown is safe: the driver
-    // reclaims them on process exit. The interop pointer is cleared by
-    // Tgfx2ContextHolder's destructor, so a null here means "device is
-    // gone; leak and move on".
-    if (compiled_on_ != nullptr) {
-        void* live = tgfx2_interop_get_device();
-        if (live == compiled_on_) {
-            if (vs_.id != 0) compiled_on_->destroy(vs_);
-            if (fs_.id != 0) compiled_on_->destroy(fs_);
-        }
-    }
+    // Shaders live on the tc_shader registry (`shader_handle_`) and are
+    // shared across Text2DRenderer instances — nothing to destroy here.
+    // Cached handles (vs_/fs_) are just local views into the slot's
+    // current tgfx2 ids, stale after the device goes away.
     vs_ = ShaderHandle{};
     fs_ = ShaderHandle{};
     compiled_on_ = nullptr;
@@ -197,12 +210,19 @@ void Text2DRenderer::draw(std::string_view text_utf8,
                            Anchor anchor) {
     if (text_utf8.empty() || font_ == nullptr || ctx_ == nullptr) return;
 
-    // Rasterise any missing glyphs and re-upload the atlas if needed.
-    font_->ensure_glyphs(text_utf8, ctx_);
+    const bool profile = tc_profiler_enabled();
 
-    const float scale = size / static_cast<float>(font_->rasterize_size());
+    // Rasterise any missing glyphs for this display size and re-upload
+    // the atlas if needed. Each unique integer size has its own per-
+    // glyph bake; the atlas handles quantisation internally.
+    if (profile) tc_profiler_begin_section("text.ensure_glyphs");
+    font_->ensure_glyphs(text_utf8, size, ctx_);
+    if (profile) tc_profiler_end_section();
+
+    if (profile) tc_profiler_begin_section("text.measure");
     auto total = font_->measure_text(text_utf8, size);
     const float total_w = total.width;
+    if (profile) tc_profiler_end_section();
 
     float start_x = x;
     float start_y = y;
@@ -219,14 +239,28 @@ void Text2DRenderer::draw(std::string_view text_utf8,
             break;
     }
 
+    // Snap the text origin to the nearest integer pixel so the first
+    // glyph's left edge lands on a texel boundary. Without this a
+    // fractional start (common after anchor math, DPI scaling, or
+    // caller-side sub-pixel layout) spreads every glyph across two
+    // columns via bilinear filtering — the dominant cause of the
+    // "mыло" / ghosting look on small text. The cursor itself
+    // accumulates in float below so kerning / advance don't drift.
+    start_x = std::floor(start_x + 0.5f);
+    start_y = std::floor(start_y + 0.5f);
+
     // Rebind shader + push-constants + atlas on every draw — a caller
     // (e.g. UIRenderer) may have bound a different shader between
     // our own begin() and this draw. Uses push-constants on both
     // backends: Vulkan ships them via vkCmdPushConstants, OpenGL
     // through the ring UBO at TGFX2_PUSH_CONSTANTS_BINDING.
     RenderContext2& ctx = *ctx_;
-    ctx.bind_shader(vs_, fs_);
 
+    if (profile) tc_profiler_begin_section("text.bind_shader");
+    ctx.bind_shader(vs_, fs_);
+    if (profile) tc_profiler_end_section();
+
+    if (profile) tc_profiler_begin_section("text.push_constants");
     Text2DPushData push;
     // Shader expects column-major mat4; `proj_` was stored row-major
     // (see build_ortho_pixel_to_ndc's comment). Transpose here before
@@ -241,13 +275,20 @@ void Text2DRenderer::draw(std::string_view text_utf8,
     push.color[2] = b;
     push.color[3] = a;
     ctx.set_push_constants(&push, static_cast<uint32_t>(sizeof(push)));
+    if (profile) tc_profiler_end_section();
 
+    if (profile) tc_profiler_begin_section("text.ensure_texture");
     TextureHandle atlas = font_->ensure_texture(&ctx);
+    if (profile) tc_profiler_end_section();
+
+    if (profile) tc_profiler_begin_section("text.bind_texture");
     // Binding 4 matches `layout(binding=4) uniform sampler2D
     // u_font_atlas` in make_text2d_frag().
     ctx.bind_sampled_texture(4, atlas);
+    if (profile) tc_profiler_end_section();
 
     // Build one flat vertex array for the whole string.
+    if (profile) tc_profiler_begin_section("text.build_quads");
     std::vector<float> verts;
     verts.reserve(text_utf8.size() * 6 * 7);  // rough upper bound
 
@@ -255,16 +296,23 @@ void Text2DRenderer::draw(std::string_view text_utf8,
     size_t i = 0;
     while (i < text_utf8.size()) {
         uint32_t cp = internal::utf8_decode(text_utf8, i);
-        const FontAtlas::GlyphInfo* gi = font_->get_glyph(cp);
+        const FontAtlas::GlyphInfo* gi = font_->get_glyph(cp, size);
         if (!gi) continue;
 
-        const float char_w = gi->width_px * scale;
-        const float char_h = gi->height_px * scale;
+        // Metrics are already in display pixels at this size — no
+        // scale multiplication here. Matches the atlas contract.
+        const float char_w = gi->width_px;
+        const float char_h = gi->height_px;
 
-        const float px0 = cursor_x;
-        const float px1 = cursor_x + char_w;
-        const float py0 = start_y;              // top edge in y+down
-        const float py1 = start_y + char_h;     // bottom edge
+        // Snap the quad's left edge to an integer pixel; keep the
+        // width as-is so the glyph shape isn't distorted by rounding
+        // both edges (that produces uneven widths across neighbours).
+        // cursor_x continues to accumulate in float — round-to-draw
+        // doesn't feed back into the advance chain.
+        const float px0 = std::floor(cursor_x + 0.5f);
+        const float px1 = px0 + char_w;
+        const float py0 = start_y;              // top edge in y+down, already snapped
+        const float py1 = py0 + char_h;         // bottom edge
 
         // 6 vertices (2 triangles). CCW in pixel y+down visual →
         // after ortho y-flip → CCW in NDC y+up → front-facing.
@@ -286,9 +334,12 @@ void Text2DRenderer::draw(std::string_view text_utf8,
         // Advance by the glyph's true horizontal advance, not the ink
         // width: the quad is sized by ink (what we rasterise), the
         // cursor moves by advance (metric that includes sidebearings
-        // and gives space characters their width).
-        cursor_x += gi->advance_px * scale;
+        // and gives space characters their width). Advance is already
+        // in display pixels at this size.
+        cursor_x += gi->advance_px;
     }
+
+    if (profile) tc_profiler_end_section();  // text.build_quads
 
     if (verts.empty()) return;
 

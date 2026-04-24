@@ -19,7 +19,9 @@ public:
     void end_render_pass() override;
 
     void bind_pipeline(PipelineHandle pipeline) override;
-    void bind_resource_set(ResourceSetHandle set) override;
+    void bind_resource_set(ResourceSetHandle set,
+                           const uint32_t* dynamic_offsets = nullptr,
+                           uint32_t dynamic_offset_count = 0) override;
     void set_push_constants(const void* data, uint32_t size) override;
 
     void bind_vertex_buffer(uint32_t slot, BufferHandle buffer, uint64_t offset = 0) override;
@@ -53,14 +55,13 @@ private:
     GLintptr   pending_push_offset_ = 0;
     GLsizeiptr pending_push_size_ = 0;
 
-    // Cached viewport height — set in set_viewport, consumed by
-    // set_scissor to flip the caller's top-left-origin rect into the
-    // bottom-left-origin rect glScissor expects. tcgui / host editors
-    // always set the viewport to cover the whole framebuffer, so
-    // viewport height == fb height here. If a future caller uses a
-    // smaller viewport with scissor, this fails quietly; we'll
-    // revisit the API then.
-    int cached_viewport_height_ = 0;
+    // Framebuffer height recorded at begin_render_pass. Consumed by
+    // set_viewport / set_scissor to flip the caller's top-left-origin
+    // rect into the bottom-left-origin rect glViewport / glScissor
+    // expect. glClipControl(GL_UPPER_LEFT) only flips the rasterization
+    // clip→window mapping — glViewport and glScissor still take
+    // window coordinates with their origin at the bottom-left.
+    int cached_fb_height_ = 0;
 
     void apply_pending_push_constants();
 

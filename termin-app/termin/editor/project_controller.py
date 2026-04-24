@@ -25,8 +25,10 @@ class EditorProjectController:
         on_project_reset: Callable[[], None],
         on_load_scene: Callable[[str], None],
         on_open_prefab: Callable[[str], None],
+        dialog_service=None,
     ) -> None:
         self._parent = parent
+        self._dialog_service = dialog_service
         self._settings = settings
         self._inspector_controller = inspector_controller
         self._log_message = log_message
@@ -97,6 +99,7 @@ class EditorProjectController:
         self._project_browser = ProjectBrowser(
             dir_tree=project_dir_tree,
             file_list=project_file_list,
+            dialog_service=self._dialog_service,
             root_path=project_root,
             on_file_selected=self._on_project_file_selected,
             on_file_double_clicked=self._on_project_file_double_clicked,

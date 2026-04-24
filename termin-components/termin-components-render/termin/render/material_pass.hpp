@@ -1,11 +1,11 @@
-// material_pass.hpp - Post-processing pass using a Material
+// material_pass.hpp - Post-processing pass using a Material.
 //
-// C++ port of Python MaterialPass. Uses TcMaterial for rendering with
-// optional before_draw callback for custom uniform setup.
+// Uses TcMaterial for rendering. Per-frame uniform updates come via
+// TcMaterial::set_uniform_* on the referenced material (Unity-style
+// Material.SetFloat / SetMatrix / ...); the pass itself is agnostic.
 
 #pragma once
 
-#include <functional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -16,10 +16,6 @@
 #include <tgfx/tgfx_material_handle.hpp>
 
 namespace termin {
-
-class TcShader;
-
-using BeforeDrawCallback = std::function<void(TcShader*)>;
 
 class MaterialPass : public CxxFramePass {
 public:
@@ -32,7 +28,6 @@ public:
     INSPECT_FIELD(MaterialPass, output_res, "Output Resource", "string")
 
 private:
-    BeforeDrawCallback before_draw_callback_;
     static uint32_t s_quad_vao;
     static uint32_t s_quad_vbo;
 
@@ -43,8 +38,6 @@ public:
     void set_texture_resource(const std::string& uniform_name, const std::string& resource_name);
     void add_resource(const std::string& resource_name, const std::string& uniform_name = "");
     void remove_resource(const std::string& resource_name);
-    void set_before_draw(BeforeDrawCallback callback);
-    BeforeDrawCallback before_draw() const { return before_draw_callback_; }
 
     void execute(ExecuteContext& ctx) override;
     std::set<const char*> compute_reads() const override;

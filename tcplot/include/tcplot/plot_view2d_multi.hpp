@@ -9,9 +9,14 @@
 // each panel's Y range auto-grows (never shrinks) to fit incoming
 // data without user intervention.
 //
-// Self-contained the same way PlotView2D is — takes a TTF path,
-// exposes a single `render(w, h, dst_fbo)` entry point, forwards
-// WPF-style mouse events to the panel under the cursor.
+// Non-owning: `device/cache/ctx/font` are provided by the caller (a
+// process-wide Tgfx2Context) and must outlive the view. This mirrors
+// the `RenderEngine::ensure_tgfx2` pattern and the Python-side
+// `Tgfx2Context.from_window` contract — application-level host owns
+// exactly one OpenGLRenderDevice, every renderer borrows it. The old
+// self-contained-ctor model (view builds its own device) is gone:
+// recreating a device to change panel count caused GL resource
+// collisions on shared contexts (two GLWpfControls in one window).
 #pragma once
 
 #include <cstdint>
@@ -19,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include <tgfx2/enums.hpp>
 #include <tgfx2/handles.hpp>
 
 #include "tcplot/plot_data.hpp"
@@ -26,7 +32,7 @@
 #include "tcplot/tcplot_api.h"
 
 namespace tgfx {
-class OpenGLRenderDevice;
+class IRenderDevice;
 class PipelineCache;
 class RenderContext2;
 class FontAtlas;
@@ -34,17 +40,39 @@ class FontAtlas;
 
 namespace tcplot {
 
+class GpuHost;
 class PlotEngine2D;
 
 class TCPLOT_API PlotView2DMulti {
 public:
-    PlotView2DMulti(const std::string& ttf_path, int panel_count);
+    // Borrow device/cache/ctx/font from the caller. Host must guarantee
+    // they outlive this view (typical lifecycle: application-level
+    // singleton, process-wide). The view never destroys them.
+    PlotView2DMulti(tgfx::IRenderDevice& device,
+                    tgfx::PipelineCache& cache,
+                    tgfx::RenderContext2& ctx,
+                    tgfx::FontAtlas& font,
+                    int panel_count);
+
+    // Convenience ctor that pulls all four references from a GpuHost.
+    // Prefer this in application code — host owns one GpuHost for the
+    // process, every view takes it by reference.
+    PlotView2DMulti(GpuHost& host, int panel_count);
+
     ~PlotView2DMulti();
 
     PlotView2DMulti(const PlotView2DMulti&) = delete;
     PlotView2DMulti& operator=(const PlotView2DMulti&) = delete;
 
     int panel_count() const;
+
+    // Resize `panels_` in place. Existing panels up to the new count
+    // keep their state (data, Y ranges, titles). Extra panels are
+    // appended fresh; panels shed when shrinking release their GL
+    // resources before being dropped. Device, cache, ctx, font — all
+    // untouched. This is the no-recreate path that replaces the old
+    // "dispose view + new view" idiom.
+    void set_panel_count(int n);
 
     // Add a line series to `panel_idx`. Returns index of the series
     // within that panel (0-based), or -1 if panel_idx is out of range.
@@ -98,9 +126,23 @@ public:
     void set_grid_color      (float r, float g, float b, float a);
     void set_axis_color      (float r, float g, float b, float a);
     void set_label_color     (float r, float g, float b, float a);
+    // Explicit title colour applied to every panel. Overrides the
+    // default (which is the panel's label_color). Typical use: pick a
+    // theme-specific title colour once per theme switch.
+    void set_title_color     (float r, float g, float b, float a);
+    // Reset title colour to default (= each panel's label_color).
+    void clear_title_color   ();
+    // Change the colour of an already-added series. For theme
+    // switching — no need to clear + re-add. Silent no-op if indices
+    // are out of range.
+    void set_line_color      (int panel_idx, int series_idx,
+                              float r, float g, float b, float a);
     // Per-panel font sizes in pixels. Margins auto-scale to fit.
     void set_font_size       (float label_px, float title_px);
     void set_panel_margins   (int left, int right, int top, int bottom);
+    // Vertical gap (px) between every panel's title bottom edge and
+    // the top of its plot area. See PlotEngine2D::title_pad.
+    void set_title_pad       (float pad);
 
     // --- Virtual scrolling ---
     // Fixed panel height in pixels. When > 0 the view lays panels out
@@ -149,12 +191,11 @@ private:
     // individual engines render.
     void update_shared_x_();
 
-    std::string ttf_path_;
-
-    std::unique_ptr<tgfx::OpenGLRenderDevice> device_;
-    std::unique_ptr<tgfx::PipelineCache>      cache_;
-    std::unique_ptr<tgfx::RenderContext2>     ctx_;
-    std::unique_ptr<tgfx::FontAtlas>          font_;
+    // Borrowed, non-owning. Lifetime is the host's responsibility.
+    tgfx::IRenderDevice*  device_ = nullptr;
+    tgfx::PipelineCache*  cache_  = nullptr;
+    tgfx::RenderContext2* ctx_    = nullptr;
+    tgfx::FontAtlas*      font_   = nullptr;
 
     std::vector<std::unique_ptr<PlotEngine2D>> panels_;
 

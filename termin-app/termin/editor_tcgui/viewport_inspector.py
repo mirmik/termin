@@ -17,7 +17,12 @@ from tcgui.widgets.units import px
 
 
 class ViewportInspectorTcgui(VStack):
-    """Inspector panel for Viewport properties."""
+    """Inspector panel for Viewport properties.
+
+    Camera and pipeline live on RenderTarget — this panel only controls
+    viewport-level properties (display, render target binding, rect,
+    depth, input mode, block-input-in-editor).
+    """
 
     def __init__(self, resource_manager) -> None:
         super().__init__()
@@ -28,7 +33,7 @@ class ViewportInspectorTcgui(VStack):
         self._scene = None
         self._displays = []
         self._current_display = None
-        self._cameras = []
+        self._render_target_list: list = []
         self._updating = False
         self.on_changed: Optional[Callable[[], None]] = None
 
@@ -59,17 +64,26 @@ class ViewportInspectorTcgui(VStack):
         self._display_combo.on_changed = self._on_display_changed
         grid.add(self._display_combo, 1, 1)
 
-        cam_lbl = Label(); cam_lbl.text = "Camera:"; cam_lbl.preferred_width = px(96)
-        grid.add(cam_lbl, 2, 0)
-        self._camera_combo = ComboBox()
-        self._camera_combo.on_changed = self._on_camera_changed
-        grid.add(self._camera_combo, 2, 1)
+        rt_lbl = Label(); rt_lbl.text = "Render Target:"; rt_lbl.preferred_width = px(96)
+        grid.add(rt_lbl, 2, 0)
+        self._render_target_combo = ComboBox()
+        self._render_target_combo.on_changed = self._on_render_target_changed
+        grid.add(self._render_target_combo, 2, 1)
 
-        pipe_lbl = Label(); pipe_lbl.text = "Pipeline:"; pipe_lbl.preferred_width = px(96)
-        grid.add(pipe_lbl, 3, 0)
-        self._pipeline_combo = ComboBox()
-        self._pipeline_combo.on_changed = self._on_pipeline_changed
-        grid.add(self._pipeline_combo, 3, 1)
+        input_mode_lbl = Label(); input_mode_lbl.text = "Input Mode:"; input_mode_lbl.preferred_width = px(96)
+        grid.add(input_mode_lbl, 3, 0)
+        self._input_mode_combo = ComboBox()
+        self._input_mode_combo.add_item("none")
+        self._input_mode_combo.add_item("simple")
+        self._input_mode_combo.add_item("editor")
+        self._input_mode_combo.on_changed = self._on_input_mode_changed
+        grid.add(self._input_mode_combo, 3, 1)
+
+        block_lbl = Label(); block_lbl.text = "Block in Editor:"; block_lbl.preferred_width = px(96)
+        grid.add(block_lbl, 4, 0)
+        self._block_input = Checkbox()
+        self._block_input.on_changed = self._on_block_input_changed
+        grid.add(self._block_input, 4, 1)
 
         rect_title = Label()
         rect_title.text = "Rect (0..1)"
@@ -102,6 +116,18 @@ class ViewportInspectorTcgui(VStack):
         self._empty.color = (0.52, 0.56, 0.62, 1.0)
         self.add_child(self._empty)
 
+        self._interactive_widgets = [
+            self._enabled,
+            self._display_combo,
+            self._render_target_combo,
+            self._input_mode_combo,
+            self._block_input,
+            self._x,
+            self._y,
+            self._w,
+            self._h,
+            self._depth,
+        ]
         self._set_visible_state(False)
 
     def _make_rect_spin(self, default: float = 0.0) -> SpinBox:
@@ -121,7 +147,6 @@ class ViewportInspectorTcgui(VStack):
 
     def set_scene(self, scene) -> None:
         self._scene = scene
-        self._refresh_camera_combo()
 
     def set_viewport(self, viewport=None, current_display=None) -> None:
         self._viewport = viewport
@@ -143,10 +168,15 @@ class ViewportInspectorTcgui(VStack):
                 idx = self._find_display_index(current_display)
                 self._display_combo.selected_index = idx
 
-            self._refresh_camera_combo()
-            self._select_current_camera()
-            self._refresh_pipeline_combo()
-            self._select_current_pipeline()
+            self._refresh_render_target_combo()
+            self._select_current_render_target()
+
+            mode = viewport.input_mode or "none"
+            for i in range(self._input_mode_combo.item_count):
+                if self._input_mode_combo.item_text(i) == mode:
+                    self._input_mode_combo.selected_index = i
+                    break
+            self._block_input.checked = bool(viewport.block_input_in_editor)
 
             x, y, w, h = viewport.rect
             self._x.value = float(x)
@@ -160,15 +190,8 @@ class ViewportInspectorTcgui(VStack):
                 self._ui.request_layout()
 
     def _set_visible_state(self, has_viewport: bool) -> None:
-        self._enabled.visible = has_viewport
-        self._display_combo.visible = has_viewport
-        self._camera_combo.visible = has_viewport
-        self._pipeline_combo.visible = has_viewport
-        self._x.visible = has_viewport
-        self._y.visible = has_viewport
-        self._w.visible = has_viewport
-        self._h.visible = has_viewport
-        self._depth.visible = has_viewport
+        for w in self._interactive_widgets:
+            w.visible = has_viewport
         self._empty.visible = not has_viewport
 
     def _refresh_display_combo(self, display_names: dict) -> None:
@@ -186,58 +209,34 @@ class ViewportInspectorTcgui(VStack):
                 return i
         return -1
 
-    def _refresh_camera_combo(self) -> None:
-        old = self._camera_combo.on_changed
-        self._camera_combo.on_changed = None
-        self._camera_combo.clear()
-        self._cameras.clear()
+    def _refresh_render_target_combo(self) -> None:
+        old = self._render_target_combo.on_changed
+        self._render_target_combo.on_changed = None
+        self._render_target_combo.clear()
+        self._render_target_combo.add_item("(none)")
+        try:
+            from termin.render_framework._render_framework_native import render_target_pool_list
+            self._render_target_list = list(render_target_pool_list())
+        except Exception as e:
+            log.error(f"[ViewportInspectorTcgui] render_target_pool_list failed: {e}")
+            self._render_target_list = []
+        for rt in self._render_target_list:
+            self._render_target_combo.add_item(rt.name or "(unnamed)")
+        self._render_target_combo.on_changed = old
 
-        self._camera_combo.add_item("(none)")
-        if self._scene is not None:
-            try:
-                from termin.visualization.core.camera import CameraComponent
-                for ent in self._scene.entities:
-                    cam = ent.get_component(CameraComponent)
-                    if cam is None:
-                        continue
-                    label = ent.name or ent.uuid or "Camera"
-                    self._cameras.append(cam)
-                    self._camera_combo.add_item(label)
-            except Exception as e:
-                log.error(f"[ViewportInspectorTcgui] camera scan failed: {e}")
-
-        self._camera_combo.on_changed = old
-
-    def _select_current_camera(self) -> None:
-        if self._viewport is None or self._viewport.camera is None:
-            self._camera_combo.selected_index = 0
+    def _select_current_render_target(self) -> None:
+        if self._viewport is None:
+            self._render_target_combo.selected_index = 0
             return
-        for i, cam in enumerate(self._cameras):
-            if cam is self._viewport.camera:
-                self._camera_combo.selected_index = i + 1
-                return
-        self._camera_combo.selected_index = 0
-
-    def _refresh_pipeline_combo(self) -> None:
-        old = self._pipeline_combo.on_changed
-        self._pipeline_combo.on_changed = None
-        self._pipeline_combo.clear()
-        self._pipeline_combo.add_item("(none)")
-        self._pipeline_combo.add_item("(Default)")
-        for name in self._rm.list_pipeline_names():
-            self._pipeline_combo.add_item(name)
-        self._pipeline_combo.on_changed = old
-
-    def _select_current_pipeline(self) -> None:
-        if self._viewport is None or self._viewport.pipeline is None:
-            self._pipeline_combo.selected_index = 0
+        rt = self._viewport.render_target
+        if rt is None:
+            self._render_target_combo.selected_index = 0
             return
-        current = self._viewport.pipeline.name or ""
-        for i in range(self._pipeline_combo.item_count):
-            if self._pipeline_combo.item_text(i) == current:
-                self._pipeline_combo.selected_index = i
+        for i, pool_rt in enumerate(self._render_target_list):
+            if pool_rt.index == rt.index and pool_rt.generation == rt.generation:
+                self._render_target_combo.selected_index = i + 1
                 return
-        self._pipeline_combo.selected_index = 1 if current == "Default" else 0
+        self._render_target_combo.selected_index = 0
 
     def _on_enabled_changed(self, checked: bool) -> None:
         if self._updating or self._viewport is None:
@@ -263,40 +262,28 @@ class ViewportInspectorTcgui(VStack):
         except Exception as e:
             log.error(f"[ViewportInspectorTcgui] failed to move viewport between displays: {e}")
 
-    def _on_camera_changed(self, index: int, _text: str) -> None:
+    def _on_render_target_changed(self, index: int, _text: str) -> None:
         if self._updating or self._viewport is None:
             return
         if index <= 0:
-            self._viewport.camera = None
+            self._viewport.render_target = None
             self._emit_changed()
             return
-        idx = index - 1
-        if 0 <= idx < len(self._cameras):
-            self._viewport.camera = self._cameras[idx]
+        rt_idx = index - 1
+        if 0 <= rt_idx < len(self._render_target_list):
+            self._viewport.render_target = self._render_target_list[rt_idx]
             self._emit_changed()
 
-    def _on_pipeline_changed(self, index: int, text: str) -> None:
+    def _on_input_mode_changed(self, _index: int, text: str) -> None:
         if self._updating or self._viewport is None:
             return
-        if index == 0:
-            self._viewport.pipeline = None
-            self._emit_changed()
-            return
+        self._viewport.input_mode = text
+        self._emit_changed()
 
-        if text == "(Default)":
-            try:
-                from termin.visualization.core.viewport import make_default_pipeline
-                self._viewport.pipeline = make_default_pipeline()
-                self._emit_changed()
-            except Exception as e:
-                log.error(f"[ViewportInspectorTcgui] make_default_pipeline failed: {e}")
+    def _on_block_input_changed(self, checked: bool) -> None:
+        if self._updating or self._viewport is None:
             return
-
-        pipeline = self._rm.get_pipeline(text)
-        if pipeline is None:
-            log.error(f"[ViewportInspectorTcgui] pipeline not found: {text}")
-            return
-        self._viewport.pipeline = pipeline
+        self._viewport.block_input_in_editor = bool(checked)
         self._emit_changed()
 
     def _on_rect_changed(self, _value: float) -> None:

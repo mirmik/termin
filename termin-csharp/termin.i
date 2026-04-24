@@ -1083,6 +1083,7 @@ namespace termin {
 %{
 #include "tcplot/styles.hpp"
 #include "tcplot/orbit_camera.hpp"
+#include "tcplot/gpu_host.hpp"
 #include "tcplot/plot_view2d.hpp"
 #include "tcplot/plot_view2d_multi.hpp"
 #include "tcplot/plot_view3d.hpp"
@@ -1227,6 +1228,21 @@ public:
 };
 
 // ----------------------------------------------------------------------------
+// GpuHost — process-wide tgfx2 runtime bundle.
+//
+// Owns the one IRenderDevice/PipelineCache/RenderContext2/FontAtlas
+// that every PlotView* borrows. Created once by the application top
+// level (Alliance/PlotDemoApp) and kept alive for the lifetime of
+// the process. See tcplot/include/tcplot/gpu_host.hpp for the
+// rationale (one device per process, shared GL context).
+// ----------------------------------------------------------------------------
+class GpuHost {
+public:
+    GpuHost(const std::string& ttf_path);
+    ~GpuHost();
+};
+
+// ----------------------------------------------------------------------------
 // PlotView2DMulti — stacked panels with shared X + real-time append.
 // ----------------------------------------------------------------------------
 
@@ -1234,8 +1250,10 @@ public:
 
 class PlotView2DMulti {
 public:
-    PlotView2DMulti(const std::string& ttf_path, int panel_count);
+    PlotView2DMulti(GpuHost& host, int panel_count);
     ~PlotView2DMulti();
+
+    void set_panel_count(int n);
 
     int panel_count() const;
 
@@ -1269,8 +1287,13 @@ public:
     void set_grid_color     (float r, float g, float b, float a);
     void set_axis_color     (float r, float g, float b, float a);
     void set_label_color    (float r, float g, float b, float a);
+    void set_title_color    (float r, float g, float b, float a);
+    void clear_title_color  ();
+    void set_line_color     (int panel_idx, int series_idx,
+                             float r, float g, float b, float a);
     void set_font_size      (float label_px, float title_px);
     void set_panel_margins  (int left, int right, int top, int bottom);
+    void set_title_pad      (float pad);
 
     void render(int width, int height, unsigned int dst_gl_fbo);
     void release_gpu();

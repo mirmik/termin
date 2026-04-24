@@ -7,7 +7,7 @@
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
-#include <tgfx2/opengl/opengl_render_device.hpp>
+#include <tgfx2/i_render_device.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
 
 #include <tgfx/resources/tc_shader_registry.h>
@@ -50,10 +50,7 @@ struct DepthPushStd140 {
 static_assert(sizeof(DepthPushStd140) == 64,
               "DepthPushStd140 must be exactly one mat4");
 
-constexpr const char* DEPTH_PASS_VERT_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
-
+constexpr const char* DEPTH_PASS_VERT_UBO = R"(#version 450 core
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in vec2 a_texcoord;
@@ -65,14 +62,19 @@ layout(std140, binding = 0) uniform PerFrame {
     float u_far;
 };
 
-layout(std140, binding = 14) uniform PushConstants {
+struct DepthPushData {
     mat4 u_model;
 };
+#ifdef VULKAN
+layout(push_constant) uniform DepthPushBlock { DepthPushData pc; };
+#else
+layout(std140, binding = 14) uniform DepthPushBlock { DepthPushData pc; };
+#endif
 
-out float v_linear_depth;
+layout(location = 0) out float v_linear_depth;
 
 void main() {
-    vec4 world_pos = u_model * vec4(a_position, 1.0);
+    vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
     vec4 view_pos  = u_view * world_pos;
 
     float y = view_pos.y;
@@ -83,11 +85,9 @@ void main() {
 }
 )";
 
-constexpr const char* DEPTH_PASS_FRAG_UBO = R"(
-#version 330 core
-
-in float v_linear_depth;
-out vec4 FragColor;
+constexpr const char* DEPTH_PASS_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in float v_linear_depth;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     float d = clamp(v_linear_depth, 0.0, 1.0);
@@ -139,35 +139,22 @@ void main()
 )";
 
 void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
-    if (device2_ == &device && depth_vs2_ && depth_fs2_ && per_frame_ubo_) {
-        return;
-    }
-    if (device2_ && device2_ != &device) {
-        release_tgfx2_resources();
-    }
     device2_ = &device;
 
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.source = DEPTH_PASS_VERT_UBO;
-    depth_vs2_ = device.create_shader(vs_desc);
+    // Engine-shader: process-lifetime ownership via tc_shader registry.
+    if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
+        depth_shader_handle_ = tc_shader_register_static(
+            DEPTH_PASS_VERT_UBO, DEPTH_PASS_FRAG_UBO,
+            nullptr, "DepthEngineVSFS");
+    }
 
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.source = DEPTH_PASS_FRAG_UBO;
-    depth_fs2_ = device.create_shader(fs_desc);
-
-    tgfx::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(DepthPerFrameStd140);
-    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-    per_frame_ubo_ = device.create_buffer(ubo_desc);
 }
 
 void DepthPass::release_tgfx2_resources() {
     if (!device2_) return;
-    if (depth_vs2_) { device2_->destroy(depth_vs2_); depth_vs2_ = {}; }
-    if (depth_fs2_) { device2_->destroy(depth_fs2_); depth_fs2_ = {}; }
-    if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
+    // depth_shader_handle_ NOT released — static engine shader, outlives
+    // pass teardown so the compiled VkShaderModule stays cached on the
+    // tc_gpu_slot across Play/Stop. See tc_shader_register_static docs.
     device2_ = nullptr;
 }
 
@@ -204,16 +191,14 @@ void DepthPass::execute_with_data_tgfx2(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx.ctx2->device());
-    if (!gl_dev) {
-        tc::Log::error("DepthPass/tgfx2: device is not OpenGLRenderDevice");
-        return;
-    }
+    auto& device = ctx.ctx2->device();
+    ensure_tgfx2_resources(device);
 
-    ensure_tgfx2_resources(ctx.ctx2->device());
-
-    TcShader& base_shader = get_shader();
-    collect_draw_calls(scene, layer_mask, base_shader.handle);
+    // Use the UBO-based engine shader as base_shader for skinning override —
+    // the legacy `#version 330 core` source (referenced by get_shader()) is
+    // not Vulkan-compilable and trips shaderc when the skinning injector
+    // wraps it. Matches the pattern in ShadowPass.
+    collect_draw_calls(scene, layer_mask, depth_shader_handle_);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -228,13 +213,23 @@ void DepthPass::execute_with_data_tgfx2(
     ctx.ctx2->set_depth_write(true);
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
-    // DepthPass writes to a legacy r16f FBO. The tgfx2 pipeline key only
-    // uses color_format for cache matching, not for the actual GL write
-    // path — the underlying FBO is already configured as r16f by the
-    // legacy FBOPool and the GL driver clamps/converts on write.
-    ctx.ctx2->set_color_format(tgfx::PixelFormat::R16F);
-    ctx.ctx2->set_depth_format(tgfx::PixelFormat::D32F);
-    ctx.ctx2->bind_shader(depth_vs2_, depth_fs2_);
+
+    tgfx::ShaderHandle depth_vs2, depth_fs2;
+    {
+        tc_shader* raw = tc_shader_get(depth_shader_handle_);
+        if (!raw) {
+            tc::Log::error("DepthPass: depth_shader_handle_ stale (index=%u gen=%u)",
+                           depth_shader_handle_.index,
+                           depth_shader_handle_.generation);
+            return;
+        }
+        if (!tc_shader_ensure_tgfx2(raw, &device, &depth_vs2, &depth_fs2)) {
+            tc::Log::error("DepthPass: tc_shader_ensure_tgfx2 failed for '%s'",
+                           raw->name ? raw->name : raw->uuid);
+            return;
+        }
+    }
+    ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
 
     // PerFrame UBO — uploaded ONCE per execute. view + projection +
     // near/far plane. Bound at slot 0.
@@ -243,12 +238,7 @@ void DepthPass::execute_with_data_tgfx2(
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     per_frame.u_near = near_plane;
     per_frame.u_far = far_plane;
-    ctx.ctx2->device().upload_buffer(
-        per_frame_ubo_,
-        std::span<const uint8_t>(
-            reinterpret_cast<const uint8_t*>(&per_frame),
-            sizeof(per_frame)));
-    ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo_);
+    ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
 
     const std::string& debug_symbol = get_debug_internal_point();
 
@@ -269,56 +259,55 @@ void DepthPass::execute_with_data_tgfx2(
             entity_names.push_back(name);
         }
 
-        bool override_is_base = tc_shader_handle_eq(dc.final_shader, base_shader.handle);
+        bool override_is_base =
+            tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
 
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
         if (bind.index_count == 0) continue;
 
-        if (override_is_base) {
-            // Fast path: push constants for model matrix.
-            DepthPushStd140 push{};
-            std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-            ctx.ctx2->set_push_constants(&push, sizeof(push));
+        // Both paths share push_constants + PerFrame UBO — the skinned
+        // variant is just DEPTH_PASS_VERT_UBO with injected BoneBlock.
+        DepthPushStd140 push{};
+        std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+        ctx.ctx2->set_push_constants(&push, sizeof(push));
 
-            ctx.ctx2->set_vertex_layout(bind.layout);
+        if (override_is_base) {
+            // Base depth VS only reads a_position. See IdPass / ShadowPass
+            // for the rationale of stripping unused attributes.
+            ctx.ctx2->set_vertex_layout(
+                filter_vertex_layout_to_locations(bind.layout, {0}));
             ctx.ctx2->set_topology(bind.topology);
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
         } else {
-            // Shader override (skinning): compile via bridge, upload
-            // transitional mat4 uniforms + near/far, draw, re-bind.
+            // Skinning variant: compile via bridge, bind, upload BoneBlock
+            // UBO from SkinnedMeshRenderer, draw.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+                release_mesh_binding(device, bind);
                 continue;
             }
             tgfx::ShaderHandle vs2, fs2;
-            if (!tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &vs2, &fs2)) {
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+            if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
+                release_mesh_binding(device, bind);
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
-            ctx.ctx2->set_vertex_layout(bind.layout);
+            // Skinned depth VS uses a_position (0), a_normal (1),
+            // a_joints (3), a_weights (4). a_texcoord (2) stays unused.
+            ctx.ctx2->set_vertex_layout(
+                filter_vertex_layout_to_locations(bind.layout, {0, 1, 6, 7}));
             ctx.ctx2->set_topology(bind.topology);
-
-            ctx.ctx2->set_uniform_mat4("u_view",       view.data,       false);
-            ctx.ctx2->set_uniform_mat4("u_projection", projection.data, false);
-            ctx.ctx2->set_uniform_mat4("u_model",      model.data,      false);
-            ctx.ctx2->set_uniform_float("u_near",      _near_plane);
-            ctx.ctx2->set_uniform_float("u_far",       _far_plane);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
 
-            ctx.ctx2->bind_shader(depth_vs2_, depth_fs2_);
+            ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
         }
 
-        gl_dev->destroy(bind.vertex_buffer);
-        gl_dev->destroy(bind.index_buffer);
+        release_mesh_binding(device, bind);
     }
 
     ctx.ctx2->end_pass();

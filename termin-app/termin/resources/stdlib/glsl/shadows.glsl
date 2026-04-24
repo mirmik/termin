@@ -1,22 +1,24 @@
-/**
- * Shadow mapping utilities for Termin engine.
- *
- * Usage in your shader:
- *   #include "shadows.glsl"
- *
- * This file declares all required uniforms automatically.
- * The engine sets these uniforms via upload_shadow_maps_to_shader().
- *
- * Functions:
- *   float compute_shadow(int light_index) - hard shadow with hardware PCF
- *   float compute_shadow_pcf(int light_index) - 5x5 PCF soft shadow
- *   float compute_shadow_poisson(int light_index) - Poisson disk (best quality)
- *   float compute_shadow_cascaded(int light_index) - CSM with cascade blending
- *   float compute_shadow_auto(int light_index) - auto-select based on settings
- *
- * Required varying (must be defined in your shader):
- *   in vec3 v_world_pos;
- */
+// Shadow mapping utilities for Termin engine.
+//
+// Usage in your shader:
+//   #include "shadows.glsl"
+//
+// The engine supplies shadow metadata through ShadowBlock (UBO at
+// binding = 3, packed in C++ by ColorPass::execute_with_data) and shadow
+// depth maps through sampler2DShadow slots starting at binding = 8.
+// View matrix lives in the PerFrame UBO (binding = 2) — included
+// automatically by the engine-uniforms injection in shader_parser, so
+// shadows.glsl does NOT redeclare `u_view`.
+//
+// Required varying (must be defined by the host shader):
+//   in vec3 v_world_pos;
+//
+// Functions:
+//   float compute_shadow(int light_index) - hard shadow with hardware PCF
+//   float compute_shadow_pcf(int light_index) - 5x5 PCF soft shadow
+//   float compute_shadow_poisson(int light_index) - Poisson disk (best quality)
+//   float compute_shadow_cascaded(int light_index) - CSM with cascade blending
+//   float compute_shadow_auto(int light_index) - auto-select based on settings
 
 #ifndef SHADOWS_GLSL
 #define SHADOWS_GLSL
@@ -33,51 +35,44 @@
 #define SHADOW_BIAS 0.005
 #endif
 
-// Shadow map uniforms (set by engine)
-uniform int u_shadow_map_count;
-uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
-uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
-uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
+// Shadow metadata. Packed by ColorPass into ShadowBlockStd140. std140
+// forces each scalar-in-array element to a 16-byte stride, which is
+// exactly how the C++ side lays the memory out — the GLSL side reads
+// only the leading component of each padded slot. Matching binding on
+// OpenGL comes from the `set_block_binding("ShadowBlock", 3)` call in
+// ColorPass after bind_shader; on Vulkan the explicit binding is baked
+// into SPIR-V.
+layout(std140, binding = 3) uniform ShadowBlock {
+    int  u_shadow_map_count;
+    mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
+    int   u_shadow_light_index[MAX_SHADOW_MAPS];
+    int   u_shadow_cascade_index[MAX_SHADOW_MAPS];
+    float u_shadow_split_near[MAX_SHADOW_MAPS];
+    float u_shadow_split_far[MAX_SHADOW_MAPS];
+};
 
-// Cascade uniforms (set by engine)
-uniform int u_shadow_cascade_index[MAX_SHADOW_MAPS];
-uniform float u_shadow_split_near[MAX_SHADOW_MAPS];
-uniform float u_shadow_split_far[MAX_SHADOW_MAPS];
+// Shadow depth maps. Explicit bindings 8..8+MAX_SHADOW_MAPS-1 — matches
+// SHADOW_SLOT_BASE in ColorPass. Array-of-sampler with layout(binding =
+// N) consumes N, N+1, ... consecutively (GLSL 4.20 spec + SPIR-V).
+layout(binding = 8) uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
 
-// Per-light cascade settings (only if lighting.glsl not included)
+// Per-light cascade settings (only if lighting.glsl not included).
+// Plain uniforms here would violate Vulkan's non-opaque rule, so pack
+// them into a secondary UBO. Currently the engine-side path always
+// includes lighting.glsl, so this fallback is compiled out in practice;
+// leaving it disabled for now — if a shader actually needs it, the UBO
+// must be added on the C++ side and wired in.
 #ifndef LIGHTING_GLSL
-uniform int u_light_cascade_count[MAX_LIGHTS];
-uniform int u_light_cascade_blend[MAX_LIGHTS];
-uniform float u_light_blend_distance[MAX_LIGHTS];
+#error "shadows.glsl currently requires lighting.glsl to also be included"
 #endif
 
-// View matrix for computing view-space depth
-uniform mat4 u_view;
-
-// Shadow settings accessors
-// If lighting.glsl is included, use its accessors; otherwise define our own uniforms
-
-#ifdef LIGHTING_GLSL
-// lighting.glsl is included - use its accessors
+// lighting.glsl is included — use its accessors.
 int _get_shadow_method_val() { return get_shadow_method(); }
 float _get_shadow_softness_val() { return get_shadow_softness(); }
 float _get_shadow_bias_val() { return get_shadow_bias(); }
 int _get_cascade_count(int i) { return get_light_cascade_count(i); }
 int _get_cascade_blend(int i) { return get_light_cascade_blend(i); }
 float _get_blend_distance(int i) { return get_light_blend_distance(i); }
-#else
-// lighting.glsl not included - define our own uniforms
-uniform int u_shadow_method;
-uniform float u_shadow_softness;
-uniform float u_shadow_bias;
-
-int _get_shadow_method_val() { return u_shadow_method; }
-float _get_shadow_softness_val() { return u_shadow_softness; }
-float _get_shadow_bias_val() { return u_shadow_bias; }
-int _get_cascade_count(int i) { return u_light_cascade_count[i]; }
-int _get_cascade_blend(int i) { return u_light_cascade_blend[i]; }
-float _get_blend_distance(int i) { return u_light_blend_distance[i]; }
-#endif
 
 // 16-sample Poisson disk for high-quality shadow sampling
 const int POISSON_SAMPLES = 16;
@@ -100,21 +95,23 @@ const vec2 poissonDisk[16] = vec2[](
     vec2( 0.14383161, -0.14100790)
 );
 
-/**
- * Get effective shadow bias (uniform or fallback to define).
- */
+// Get effective shadow bias (uniform or fallback to define).
 float _get_shadow_bias() {
     float bias = _get_shadow_bias_val();
     return bias > 0.0 ? bias : SHADOW_BIAS;
 }
 
-/**
- * Sample single shadow map at given index using selected method.
- */
+// Sample single shadow map at given index using selected method.
 float _sample_shadow_map(int sm, vec3 world_pos, float bias) {
     vec4 light_space_pos = u_light_space_matrix[sm] * vec4(world_pos, 1.0);
     vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-    proj_coords = proj_coords * 0.5 + 0.5;
+    // Vulkan-native NDC: xy ∈ [-1, 1], z ∈ [0, 1]. Shift xy into
+    // texture space [0, 1] but leave z alone — shadow map depth is
+    // already stored in [0, 1] so compare_depth must be in the same
+    // range (see docs/coord_system.md §5). The legacy `z * 0.5 + 0.5`
+    // shifted everything into [0.5, 1] and made every pixel always
+    // lose the compare — scene rendered fully in shadow.
+    proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 
     // Bounds check
     if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
@@ -155,10 +152,8 @@ float _sample_shadow_map(int sm, vec3 world_pos, float bias) {
     }
 }
 
-/**
- * Compute hard shadow using hardware PCF (sampler2DShadow).
- * Single sample with automatic depth comparison + bilinear filtering.
- */
+// Compute hard shadow using hardware PCF (sampler2DShadow).
+// Single sample with automatic depth comparison + bilinear filtering.
 float compute_shadow(int light_index) {
     float bias = _get_shadow_bias();
 
@@ -169,7 +164,9 @@ float compute_shadow(int light_index) {
 
         vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
         vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-        proj_coords = proj_coords * 0.5 + 0.5;
+        // Vulkan-native NDC: xy in [-1, 1], z in [0, 1]. Only xy needs the
+        // [0, 1] shift; z is already storable depth.
+        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
@@ -184,11 +181,9 @@ float compute_shadow(int light_index) {
     return 1.0;
 }
 
-/**
- * Compute soft shadow with 5x5 PCF grid.
- * 25 samples using hardware depth comparison.
- * Softness controlled by shadow_softness setting.
- */
+// Compute soft shadow with 5x5 PCF grid.
+// 25 samples using hardware depth comparison.
+// Softness controlled by shadow_softness setting.
 float compute_shadow_pcf(int light_index) {
     float bias = _get_shadow_bias();
     float softness = max(_get_shadow_softness_val(), 0.0);
@@ -200,7 +195,7 @@ float compute_shadow_pcf(int light_index) {
 
         vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
         vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-        proj_coords = proj_coords * 0.5 + 0.5;
+        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
@@ -225,11 +220,9 @@ float compute_shadow_pcf(int light_index) {
     return 1.0;
 }
 
-/**
- * Compute high-quality soft shadow with Poisson disk sampling.
- * 16 samples with better distribution than grid, reduces banding artifacts.
- * Softness controlled by shadow_softness setting.
- */
+// Compute high-quality soft shadow with Poisson disk sampling.
+// 16 samples with better distribution than grid, reduces banding artifacts.
+// Softness controlled by shadow_softness setting.
 float compute_shadow_poisson(int light_index) {
     float bias = _get_shadow_bias();
     float softness = max(_get_shadow_softness_val(), 0.0);
@@ -241,7 +234,7 @@ float compute_shadow_poisson(int light_index) {
 
         vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
         vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-        proj_coords = proj_coords * 0.5 + 0.5;
+        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
 
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
@@ -265,11 +258,9 @@ float compute_shadow_poisson(int light_index) {
     return 1.0;
 }
 
-/**
- * Compute shadow using Cascaded Shadow Maps (CSM).
- * Selects appropriate cascade based on view-space depth.
- * Optionally blends between cascades for smooth transitions.
- */
+// Compute shadow using Cascaded Shadow Maps (CSM).
+// Selects appropriate cascade based on view-space depth.
+// Optionally blends between cascades for smooth transitions.
 float compute_shadow_cascaded(int light_index) {
     float bias = _get_shadow_bias();
 
@@ -334,13 +325,11 @@ float compute_shadow_cascaded(int light_index) {
     return shadow1;
 }
 
-/**
- * Compute shadow using method selected by shadow settings.
- * Automatically uses cascaded shadows if cascade_count > 1.
- * 0 = hard (single sample)
- * 1 = PCF 5x5 grid (default)
- * 2 = Poisson disk (16 samples)
- */
+// Compute shadow using method selected by shadow settings.
+// Automatically uses cascaded shadows if cascade_count > 1.
+// 0 = hard (single sample)
+// 1 = PCF 5x5 grid (default)
+// 2 = Poisson disk (16 samples)
 float compute_shadow_auto(int light_index) {
     // Check if this light uses cascades
     int cascade_count = _get_cascade_count(light_index);

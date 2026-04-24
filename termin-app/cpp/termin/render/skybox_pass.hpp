@@ -13,6 +13,9 @@
 #include "termin/render/shader_parser.hpp"
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 #include <string>
 
@@ -28,9 +31,10 @@ public:
 private:
     // tgfx2 resources, all created lazily on first execute when the device
     // becomes reachable through ExecuteContext::ctx2. Destroyed in destroy().
+    // Shader handle lives on the tc_shader registry (hash-based dedup across
+    // pass re-creations) so Play/Stop doesn't re-run shaderc.
     tgfx::IRenderDevice* device2_ = nullptr;
-    tgfx::ShaderHandle vs_;
-    tgfx::ShaderHandle fs_;
+    tc_shader_handle skybox_shader_handle_ = tc_shader_handle_invalid();
     tgfx::BufferHandle cube_vbo_;
     tgfx::BufferHandle cube_ibo_;
     tgfx::BufferHandle params_ubo_;

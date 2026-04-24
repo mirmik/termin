@@ -32,18 +32,28 @@ void bind_material_ubo(
     tgfx::IRenderDevice& device,
     tgfx::RenderContext2& ctx)
 {
-    if (!layout.empty() && ubo) {
+    if (!layout.empty()) {
         // Zero-initialised staging — unset properties become zero bytes,
         // which matches std140 padding expectations and gives deterministic
         // defaults when hot-reload drops a property between frames.
         std::vector<uint8_t> staging(layout.block_size, 0);
         std140_pack(layout, values, staging.data());
 
-        device.upload_buffer(
-            ubo,
-            std::span<const uint8_t>(staging.data(), staging.size()));
-
-        ctx.bind_uniform_buffer(ubo_slot, ubo);
+        // Route through the device ring when available (Vulkan): a single
+        // shared buffer holds every material's data this frame, and each
+        // draw's offset rides the dynamic-descriptor path — one
+        // vkAllocateDescriptorSets per unique sampler combo instead of
+        // one per material. OpenGL keeps the per-phase persistent UBO
+        // path for now (ring_ubo_handle() returns {} → bind fallback).
+        if (device.ring_ubo_handle().id != 0) {
+            ctx.bind_uniform_buffer_ring(ubo_slot, staging.data(),
+                                         static_cast<uint32_t>(staging.size()));
+        } else if (ubo) {
+            device.upload_buffer(
+                ubo,
+                std::span<const uint8_t>(staging.data(), staging.size()));
+            ctx.bind_uniform_buffer(ubo_slot, ubo);
+        }
     }
 
     for (const auto& tex : textures) {
@@ -226,14 +236,6 @@ tgfx::BufferHandle ensure_material_phase_ubo(
         phase->ubo_size = block_size;
         phase->ubo_version = shader_version;
         phase->ubo_device = &device;
-
-        // Diagnostic marker: a tc_material_phase grew a new UBO. Fires
-        // once on first draw per material phase and after hot-reload /
-        // resize events. Useful for confirming the pilot path ran.
-        tc::Log::error("[Stage 5.H] allocated material UBO: phase=%s shader_pool_idx=%u "
-                       "block_size=%u buffer_id=%u shader_version=%d",
-                       phase->phase_mark, shader->pool_index, block_size,
-                       fresh.id, shader_version);
         return fresh;
     }
 
@@ -267,37 +269,38 @@ bool apply_material_phase_ubo(
     // Build the layout view on the tc_shader C-side entries.
     MaterialUboLayout layout = layout_from_tc_shader(shader);
 
-    // Wrap each phase texture as a tgfx::TextureHandle for the duration
-    // of the frame. Sampler slots start at tex_slot_start and increment
-    // in declaration order — shader authors must keep their fragment
-    // sampler bindings in the same order as the .shader @property
-    // Texture entries.
-    //
-    // The wrappers are single-use: registered here, bound into the
-    // resource set by bind_material_ubo, and deferred-destroyed at
-    // ctx.end_frame() so their HandlePool slots don't leak.
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device);
+    // Wrap each phase texture as a tgfx::TextureHandle. OpenGL wraps the
+    // share-group texture as a non-owning external handle — that handle
+    // is single-frame and must be defer-destroyed at ctx.end_frame().
+    // Vulkan uploads pixel data into a cached per-(texture, device)
+    // tgfx2 texture and returns the cached handle — it MUST NOT be
+    // destroyed (see release_texture_binding / wrap_tc_texture_as_tgfx2
+    // contract). Sampler slots start at tex_slot_start and increment in
+    // declaration order; shader authors must keep their fragment sampler
+    // bindings in the same order as the .shader @property Texture
+    // entries.
     std::vector<MaterialTextureBinding> textures;
-    if (gl_dev) {
-        textures.reserve(phase->texture_count);
-        uint32_t slot = tex_slot_start;
-        for (size_t i = 0; i < phase->texture_count; i++) {
-            const tc_material_texture& mat_tex = phase->textures[i];
-            if (tc_texture_handle_is_invalid(mat_tex.texture)) {
-                slot++;
-                continue;
-            }
-            tgfx::TextureHandle tex2 =
-                wrap_tc_texture_as_tgfx2(*gl_dev, mat_tex.texture);
-            if (tex2) {
-                MaterialTextureBinding b;
-                b.slot = slot;
-                b.texture = tex2;
-                textures.push_back(b);
+    bool is_gl = device.backend_type() == tgfx::BackendType::OpenGL;
+    textures.reserve(phase->texture_count);
+    uint32_t slot = tex_slot_start;
+    for (size_t i = 0; i < phase->texture_count; i++) {
+        const tc_material_texture& mat_tex = phase->textures[i];
+        if (tc_texture_handle_is_invalid(mat_tex.texture)) {
+            slot++;
+            continue;
+        }
+        tgfx::TextureHandle tex2 =
+            wrap_tc_texture_as_tgfx2(device, mat_tex.texture);
+        if (tex2) {
+            MaterialTextureBinding b;
+            b.slot = slot;
+            b.texture = tex2;
+            textures.push_back(b);
+            if (is_gl) {
                 ctx.defer_destroy(tex2);
             }
-            slot++;
         }
+        slot++;
     }
 
     bind_material_ubo(layout, values, textures, ubo, ubo_slot, device, ctx);

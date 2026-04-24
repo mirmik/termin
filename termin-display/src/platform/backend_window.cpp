@@ -33,16 +33,34 @@ namespace termin {
 
 struct BackendWindow::Impl {
     tgfx::BackendType backend = tgfx::BackendType::OpenGL;
+    // Owned IRenderDevice for primary windows; left empty on secondary
+    // windows (they point `device_ref` at the primary's device instead).
     std::unique_ptr<tgfx::IRenderDevice> device;
+    // Non-owning pointer used by the rest of the class. Always set —
+    // equals device.get() for primary, or the shared device for
+    // secondary.
+    tgfx::IRenderDevice* device_ref = nullptr;
     // Lazily-built pipeline cache + RenderContext2 bound to `device`.
+    // Owned only by primary windows; secondary windows forward context()
+    // calls to the primary via `shared_ctx_owner`.
     std::unique_ptr<tgfx::PipelineCache> cache;
     std::unique_ptr<tgfx::RenderContext2> ctx;
+    // Primary the secondary window borrows its device/context from.
+    // nullptr on primaries. Used so context() / device() return the
+    // same objects everywhere.
+    BackendWindow* shared_ctx_owner = nullptr;
 
     // OpenGL state (only used when backend == OpenGL).
     SDL_GLContext gl_context = nullptr;
 
-    // Vulkan state is owned by VulkanRenderDevice (swapchain there);
-    // nothing extra to store here.
+    // Vulkan state for secondary windows — each one owns its own
+    // swapchain bound to its own VkSurfaceKHR. Primary windows have
+    // the surface/swapchain owned by VulkanRenderDevice itself and
+    // leave these empty.
+#ifdef TGFX2_HAS_VULKAN
+    VkSurfaceKHR secondary_surface = VK_NULL_HANDLE;
+    std::unique_ptr<tgfx::VulkanSwapchain> secondary_swapchain;
+#endif
 };
 
 // ---------------------------------------------------------------------------
@@ -92,6 +110,7 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height)
         // OpenGLRenderDevice ctor loads GLAD and validates the live
         // context — it expects MakeCurrent to already have happened.
         impl_->device = tgfx::create_device(tgfx::BackendType::OpenGL);
+        impl_->device_ref = impl_->device.get();
 
         // Wire up legacy tgfx_gpu_ops so TcShader / TcTexture / TcMesh
         // calls (tc_shader_ensure_tgfx2, tc_mesh_upload_gpu, ...) route
@@ -135,6 +154,7 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height)
         };
 
         impl_->device = std::make_unique<tgfx::VulkanRenderDevice>(info);
+        impl_->device_ref = impl_->device.get();
     }
 #endif
     else {
@@ -143,12 +163,120 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height)
     }
 }
 
-BackendWindow::~BackendWindow() {
-    // Teardown in reverse dependency order: ctx → cache → device →
-    // GL context → SDL window.
-    impl_->ctx.reset();
-    impl_->cache.reset();
-    impl_->device.reset();
+// ---------------------------------------------------------------------------
+// Secondary window — reuses the primary's IRenderDevice, adds its own
+// OS window + surface/GL-context + (Vulkan) swapchain. The whole point
+// is "one IRenderDevice per process" — secondary windows must not spin
+// up their own devices.
+// ---------------------------------------------------------------------------
+
+BackendWindow::BackendWindow(const std::string& title, int width, int height,
+                              BackendWindow& share_with)
+    : impl_(std::make_unique<Impl>())
+{
+    if (!share_with.impl_->device_ref) {
+        throw std::runtime_error(
+            "BackendWindow(secondary): primary window has no device");
+    }
+    impl_->backend = share_with.impl_->backend;
+    impl_->device_ref = share_with.impl_->device_ref;
+    impl_->shared_ctx_owner = &share_with;
+
+    if (impl_->backend == tgfx::BackendType::OpenGL) {
+        // Secondary GL windows don't get their own GL context — they
+        // borrow the primary's. One context can be made current against
+        // any of its owner's compatible windows, which is exactly what
+        // we need here: no share-group complexity, no second set of
+        // cached FBOs, no risk of desynchronised GLAD function tables.
+        // present() will MakeCurrent the primary's context against
+        // this window before blitting + SwapWindow.
+        Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
+        window_ = SDL_CreateWindow(title.c_str(),
+                                    SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                    width, height, flags);
+        if (!window_) {
+            throw std::runtime_error(std::string("SDL_CreateWindow(secondary) failed: ") +
+                                     SDL_GetError());
+        }
+        // impl_->gl_context stays null — the dtor skips SDL_GL_DeleteContext.
+
+        // Re-make the primary context current. Creating a new
+        // SDL_WINDOW_OPENGL window can unbind the current GL context
+        // on some drivers (Mesa/GLX in particular), after which any
+        // GL call dispatched through GLAD hits a null function pointer
+        // and segfaults.
+        SDL_GL_MakeCurrent(share_with.window_, share_with.impl_->gl_context);
+    }
+#ifdef TGFX2_HAS_VULKAN
+    else if (impl_->backend == tgfx::BackendType::Vulkan) {
+        Uint32 flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
+        window_ = SDL_CreateWindow(title.c_str(),
+                                    SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                    width, height, flags);
+        if (!window_) {
+            throw std::runtime_error(std::string("SDL_CreateWindow(Vulkan secondary) failed: ") +
+                                     SDL_GetError());
+        }
+
+        auto* vk_dev = static_cast<tgfx::VulkanRenderDevice*>(impl_->device_ref);
+        VkSurfaceKHR surf = VK_NULL_HANDLE;
+        if (!SDL_Vulkan_CreateSurface(window_, vk_dev->instance(), &surf)) {
+            SDL_DestroyWindow(window_);
+            throw std::runtime_error(std::string("SDL_Vulkan_CreateSurface(secondary) failed: ") +
+                                     SDL_GetError());
+        }
+        impl_->secondary_surface = surf;
+
+        int fb_w = 0, fb_h = 0;
+        SDL_Vulkan_GetDrawableSize(window_, &fb_w, &fb_h);
+        impl_->secondary_swapchain = std::make_unique<tgfx::VulkanSwapchain>(
+            *vk_dev, surf,
+            static_cast<uint32_t>(fb_w),
+            static_cast<uint32_t>(fb_h));
+    }
+#endif
+    else {
+        SDL_DestroyWindow(window_);
+        throw std::runtime_error("BackendWindow(secondary): unsupported backend");
+    }
+}
+
+void BackendWindow::close() {
+    // Idempotent teardown — callers (both the dtor and Python
+    // `window.close()`) can invoke this without checking state first.
+    if (!window_ && !impl_->device_ref && !impl_->gl_context) {
+        return;
+    }
+
+    // Teardown in reverse dependency order. Secondary windows skip the
+    // context/device reset because those are owned by the primary —
+    // tearing them down here would yank the rug out from under the
+    // primary and every other secondary.
+#ifdef TGFX2_HAS_VULKAN
+    // Vulkan secondary: wait idle before destroying the swapchain /
+    // surface to avoid killing resources still in flight.
+    if (impl_->secondary_swapchain) {
+        if (impl_->device_ref) {
+            impl_->device_ref->wait_idle();
+        }
+        impl_->secondary_swapchain.reset();
+    }
+    if (impl_->secondary_surface != VK_NULL_HANDLE && impl_->device_ref) {
+        auto* vk_dev = static_cast<tgfx::VulkanRenderDevice*>(impl_->device_ref);
+        vkDestroySurfaceKHR(vk_dev->instance(), impl_->secondary_surface, nullptr);
+        impl_->secondary_surface = VK_NULL_HANDLE;
+    }
+#endif
+    if (impl_->shared_ctx_owner == nullptr) {
+        // Primary window — we own the device/ctx/cache chain.
+        impl_->ctx.reset();
+        impl_->cache.reset();
+        impl_->device.reset();
+    }
+    // Shared devices still accessed through device_ref; stop using it.
+    impl_->device_ref = nullptr;
+    impl_->shared_ctx_owner = nullptr;
+
     if (impl_->gl_context) {
         SDL_GL_DeleteContext(impl_->gl_context);
         impl_->gl_context = nullptr;
@@ -157,6 +285,11 @@ BackendWindow::~BackendWindow() {
         SDL_DestroyWindow(window_);
         window_ = nullptr;
     }
+    should_close_ = true;
+}
+
+BackendWindow::~BackendWindow() {
+    close();
 }
 
 // ---------------------------------------------------------------------------
@@ -164,13 +297,19 @@ BackendWindow::~BackendWindow() {
 // ---------------------------------------------------------------------------
 
 tgfx::IRenderDevice* BackendWindow::device() {
-    return impl_->device.get();
+    return impl_->device_ref;
 }
 
 tgfx::RenderContext2* BackendWindow::context() {
-    if (!impl_->ctx && impl_->device) {
-        impl_->cache = std::make_unique<tgfx::PipelineCache>(*impl_->device);
-        impl_->ctx = std::make_unique<tgfx::RenderContext2>(*impl_->device, *impl_->cache);
+    // Secondary windows never build their own RenderContext2 — that
+    // would defeat "one PipelineCache per device" and force redundant
+    // pipeline compilations. They forward to the primary instead.
+    if (impl_->shared_ctx_owner) {
+        return impl_->shared_ctx_owner->context();
+    }
+    if (!impl_->ctx && impl_->device_ref) {
+        impl_->cache = std::make_unique<tgfx::PipelineCache>(*impl_->device_ref);
+        impl_->ctx = std::make_unique<tgfx::RenderContext2>(*impl_->device_ref, *impl_->cache);
     }
     return impl_->ctx.get();
 }
@@ -221,24 +360,30 @@ void BackendWindow::poll_events() {
 // ---------------------------------------------------------------------------
 
 void BackendWindow::present(tgfx::TextureHandle color_tex) {
-    if (!impl_->device || !window_) return;
+    if (!impl_->device_ref || !window_) return;
 
     auto [w, h] = framebuffer_size();
     if (w <= 0 || h <= 0) return;
 
     if (impl_->backend == tgfx::BackendType::OpenGL) {
-        // Ensure the window's GL context is current — in some hosts
-        // other threads / widgets may have taken it over.
-        SDL_GL_MakeCurrent(window_, impl_->gl_context);
+        // Secondary windows borrow the primary's GL context. Find it:
+        // either we own it (primary) or the shared owner does.
+        SDL_GLContext gl_ctx = impl_->gl_context
+            ? impl_->gl_context
+            : (impl_->shared_ctx_owner
+                ? impl_->shared_ctx_owner->impl_->gl_context
+                : nullptr);
+        if (!gl_ctx) return;
+        SDL_GL_MakeCurrent(window_, gl_ctx);
 
         // Query src size from the tgfx2 device so partial-resolution
         // FBOs composite correctly.
-        auto desc = impl_->device->texture_desc(color_tex);
+        auto desc = impl_->device_ref->texture_desc(color_tex);
         int src_w = static_cast<int>(desc.width);
         int src_h = static_cast<int>(desc.height);
         if (src_w <= 0 || src_h <= 0) { src_w = w; src_h = h; }
 
-        impl_->device->blit_to_external_target(
+        impl_->device_ref->blit_to_external_target(
             /*dst=*/0,  // OpenGL default FBO = window framebuffer
             color_tex,
             0, 0, src_w, src_h,
@@ -248,8 +393,13 @@ void BackendWindow::present(tgfx::TextureHandle color_tex) {
     }
 #ifdef TGFX2_HAS_VULKAN
     else if (impl_->backend == tgfx::BackendType::Vulkan) {
-        auto* vk_dev = static_cast<tgfx::VulkanRenderDevice*>(impl_->device.get());
-        tgfx::VulkanSwapchain* sc = vk_dev->swapchain();
+        auto* vk_dev = static_cast<tgfx::VulkanRenderDevice*>(impl_->device_ref);
+        // Secondary windows carry their own swapchain; primary windows
+        // use the one owned by VulkanRenderDevice. Either way, pick
+        // the one that belongs to this window.
+        tgfx::VulkanSwapchain* sc = impl_->secondary_swapchain
+                                        ? impl_->secondary_swapchain.get()
+                                        : vk_dev->swapchain();
         if (!sc) return;
 
         // If the window drawable size changed (resize event), recreate

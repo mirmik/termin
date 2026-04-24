@@ -12,6 +12,11 @@
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
+#include "tgfx2/tc_shader_bridge.hpp"
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 #include <span>
 #include <tcbase/tc_log.hpp>
@@ -28,20 +33,17 @@ namespace termin {
 // binding works without a post-link glUniform1i.
 // ================================================================
 
-static const char* BRIGHT_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+static const char* BRIGHT_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform BloomBrightParams {
+layout(std140, binding = 0) uniform BloomBrightParams {
     float u_threshold;
     float u_soft_threshold;
 };
 
-layout(binding = 0) uniform sampler2D u_texture;
+layout(binding = 4) uniform sampler2D u_texture;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec3 color = texture(u_texture, vUV).rgb;
@@ -56,19 +58,16 @@ void main() {
 }
 )";
 
-static const char* DOWNSAMPLE_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+static const char* DOWNSAMPLE_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform BloomDownsampleParams {
+layout(std140, binding = 0) uniform BloomDownsampleParams {
     vec2 u_texel_size;
 };
 
-layout(binding = 0) uniform sampler2D u_texture;
+layout(binding = 4) uniform sampler2D u_texture;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec2 ts = u_texel_size;
@@ -93,21 +92,21 @@ void main() {
 }
 )";
 
-static const char* UPSAMPLE_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+// Upsample outputs only the blended delta; `u_higher_mip` read has been
+// removed. Caller enables additive blending (ONE, ONE) so the existing
+// mip[i] content is preserved and summed in the framebuffer — avoids
+// the self-sampling feedback loop that Vulkan forbids inside a render pass.
+static const char* UPSAMPLE_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform BloomUpsampleParams {
+layout(std140, binding = 0) uniform BloomUpsampleParams {
     vec2 u_texel_size;
     float u_blend_factor;
 };
 
-layout(binding = 0) uniform sampler2D u_texture;
-layout(binding = 1) uniform sampler2D u_higher_mip;
+layout(binding = 4) uniform sampler2D u_texture;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec2 ts = u_texel_size;
@@ -124,25 +123,21 @@ void main() {
     upsampled += (b + d + f + h) * 2.0;
     upsampled += (a + c + g + i);
     upsampled /= 16.0;
-    vec3 higher = texture(u_higher_mip, vUV).rgb;
-    FragColor = vec4(higher + upsampled * u_blend_factor, 1.0);
+    FragColor = vec4(upsampled * u_blend_factor, 1.0);
 }
 )";
 
-static const char* COMPOSITE_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+static const char* COMPOSITE_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform BloomCompositeParams {
+layout(std140, binding = 0) uniform BloomCompositeParams {
     float u_intensity;
 };
 
-layout(binding = 0) uniform sampler2D u_original;
-layout(binding = 1) uniform sampler2D u_bloom;
+layout(binding = 4) uniform sampler2D u_original;
+layout(binding = 5) uniform sampler2D u_bloom;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec3 original = texture(u_original, vUV).rgb;
@@ -221,19 +216,26 @@ std::set<const char*> BloomPass::compute_writes() const {
 // ----------------------------------------------------------------------------
 
 void BloomPass::ensure_tgfx2_shaders() {
-    if (bright_fs2_) return;
-
-    auto compile = [&](const char* src) -> tgfx::ShaderHandle {
-        tgfx::ShaderDesc desc;
-        desc.stage = tgfx::ShaderStage::Fragment;
-        desc.source = src;
-        return device2_->create_shader(desc);
-    };
-
-    bright_fs2_     = compile(BRIGHT_FRAG_UBO);
-    downsample_fs2_ = compile(DOWNSAMPLE_FRAG_UBO);
-    upsample_fs2_   = compile(UPSAMPLE_FRAG_UBO);
-    composite_fs2_  = compile(COMPOSITE_FRAG_UBO);
+    // FS-only TcShaders (vertex_source is NULL; VS comes from ctx2's
+    // built-in FSQ). Hash-based dedup keeps compiled VkShaderModules
+    // across pass re-creations — see ShadowPass for the matching
+    // pattern on VS+FS passes, and GrayscalePass for the FS-only variant.
+    if (tc_shader_handle_is_invalid(bright_shader_handle_)) {
+        bright_shader_handle_ = tc_shader_register_static(
+            nullptr, BRIGHT_FRAG_UBO, nullptr, "BloomBrightFS");
+    }
+    if (tc_shader_handle_is_invalid(downsample_shader_handle_)) {
+        downsample_shader_handle_ = tc_shader_register_static(
+            nullptr, DOWNSAMPLE_FRAG_UBO, nullptr, "BloomDownsampleFS");
+    }
+    if (tc_shader_handle_is_invalid(upsample_shader_handle_)) {
+        upsample_shader_handle_ = tc_shader_register_static(
+            nullptr, UPSAMPLE_FRAG_UBO, nullptr, "BloomUpsampleFS");
+    }
+    if (tc_shader_handle_is_invalid(composite_shader_handle_)) {
+        composite_shader_handle_ = tc_shader_register_static(
+            nullptr, COMPOSITE_FRAG_UBO, nullptr, "BloomCompositeFS");
+    }
 
     auto make_ubo = [&](uint64_t size) -> tgfx::BufferHandle {
         tgfx::BufferDesc desc;
@@ -242,10 +244,22 @@ void BloomPass::ensure_tgfx2_shaders() {
         return device2_->create_buffer(desc);
     };
 
-    bright_ubo_     = make_ubo(sizeof(BloomBrightParamsStd140));
-    downsample_ubo_ = make_ubo(sizeof(BloomDownsampleParamsStd140));
-    upsample_ubo_   = make_ubo(sizeof(BloomUpsampleParamsStd140));
-    composite_ubo_  = make_ubo(sizeof(BloomCompositeParamsStd140));
+    if (!bright_ubo_)     bright_ubo_     = make_ubo(sizeof(BloomBrightParamsStd140));
+    if (!downsample_ubo_) downsample_ubo_ = make_ubo(sizeof(BloomDownsampleParamsStd140));
+    if (!upsample_ubo_)   upsample_ubo_   = make_ubo(sizeof(BloomUpsampleParamsStd140));
+    if (!composite_ubo_)  composite_ubo_  = make_ubo(sizeof(BloomCompositeParamsStd140));
+}
+
+static tgfx::ShaderHandle bloom_resolve_fs(
+    tc_shader_handle h, tgfx::IRenderDevice* device, const char* name)
+{
+    tc_shader* raw = tc_shader_get(h);
+    tgfx::ShaderHandle fs;
+    if (!raw || !tc_shader_ensure_tgfx2(raw, device, nullptr, &fs)) {
+        tc::Log::error("BloomPass: tc_shader_ensure_tgfx2 failed for %s", name);
+        return {};
+    }
+    return fs;
 }
 
 void BloomPass::destroy_tgfx2_mip_textures() {
@@ -288,20 +302,17 @@ void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
 }
 
 // Helper — common FSQ draw setup for tgfx2 sub-passes. Sets render state,
-// binds the built-in FSQ VS + the provided FS, sets color format + vertex
-// layout. Caller is responsible for begin_pass / set_viewport /
-// bind_uniform_buffer / bind_sampled_texture / draw_fullscreen_quad /
-// end_pass around this.
+// binds the built-in FSQ VS + the provided FS, sets vertex layout. Caller
+// is responsible for begin_pass / set_viewport / bind_uniform_buffer /
+// bind_sampled_texture / draw_fullscreen_quad / end_pass around this.
 static void setup_fsq_state(tgfx::RenderContext2& ctx,
-                            tgfx::ShaderHandle fs,
-                            tgfx::PixelFormat color_fmt) {
+                            tgfx::ShaderHandle fs) {
     ctx.set_depth_test(false);
     ctx.set_depth_write(false);
     ctx.set_blend(false);
     ctx.set_cull(tgfx::CullMode::None);
 
     ctx.bind_shader(ctx.fsq_vertex_shader(), fs);
-    ctx.set_color_format(color_fmt);
 
     tgfx::VertexBufferLayout fsq_layout;
     fsq_layout.stride = 4 * sizeof(float);
@@ -352,6 +363,12 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
     auto& c2 = *ctx.ctx2;
 
+    tgfx::ShaderHandle bright_fs     = bloom_resolve_fs(bright_shader_handle_,     device2_, "bright");
+    tgfx::ShaderHandle downsample_fs = bloom_resolve_fs(downsample_shader_handle_, device2_, "downsample");
+    tgfx::ShaderHandle upsample_fs   = bloom_resolve_fs(upsample_shader_handle_,   device2_, "upsample");
+    tgfx::ShaderHandle composite_fs  = bloom_resolve_fs(composite_shader_handle_,  device2_, "composite");
+    if (!bright_fs || !downsample_fs || !upsample_fs || !composite_fs) return;
+
     // === 1. Bright Pass -> mip[0] ===
     {
         BloomBrightParamsStd140 p{};
@@ -363,9 +380,9 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(mip_textures_[0]);
         c2.set_viewport(0, 0, w, h);
-        setup_fsq_state(c2, bright_fs2_, tgfx::PixelFormat::RGBA16F);
+        setup_fsq_state(c2, bright_fs);
         c2.bind_uniform_buffer(0, bright_ubo_);
-        c2.bind_sampled_texture(0, input_tex2);
+        c2.bind_sampled_texture(4, input_tex2);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -386,14 +403,14 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
-        setup_fsq_state(c2, downsample_fs2_, tgfx::PixelFormat::RGBA16F);
+        setup_fsq_state(c2, downsample_fs);
         c2.bind_uniform_buffer(0, downsample_ubo_);
-        c2.bind_sampled_texture(0, mip_textures_[i - 1]);
+        c2.bind_sampled_texture(4, mip_textures_[i - 1]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
 
-    // === 3. Progressive Upsample (accumulate bloom) ===
+    // === 3. Progressive Upsample (accumulate bloom via additive blend) ===
     for (int i = count - 2; i >= 0; i--) {
         if (i + 1 >= (int)mip_textures_.size()) continue;
 
@@ -410,16 +427,17 @@ void BloomPass::execute(ExecuteContext& ctx) {
             upsample_ubo_,
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&p), sizeof(p)));
 
-        // Note: mip_textures_[i] is bound both as the render target and
-        // as u_higher_mip sampler — same read-write feedback pattern as
-        // the legacy path. OpenGL tolerates it since the shader only reads
-        // the current texel (no cross-pixel sample).
+        // Additive blend (ONE, ONE) preserves existing mip[i] content
+        // and sums the upsampled delta on top — equivalent to the former
+        // in-shader `higher + upsampled*blend` but without the self-
+        // sampling feedback loop that Vulkan forbids inside a pass.
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
-        setup_fsq_state(c2, upsample_fs2_, tgfx::PixelFormat::RGBA16F);
+        setup_fsq_state(c2, upsample_fs);
+        c2.set_blend(true);
+        c2.set_blend_func(tgfx::BlendFactor::One, tgfx::BlendFactor::One);
         c2.bind_uniform_buffer(0, upsample_ubo_);
-        c2.bind_sampled_texture(0, mip_textures_[i + 1]);
-        c2.bind_sampled_texture(1, mip_textures_[i]);
+        c2.bind_sampled_texture(4, mip_textures_[i + 1]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -434,10 +452,10 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
         c2.begin_pass(output_tex2);
         c2.set_viewport(0, 0, w, h);
-        setup_fsq_state(c2, composite_fs2_, tgfx::PixelFormat::RGBA8_UNorm);
+        setup_fsq_state(c2, composite_fs);
         c2.bind_uniform_buffer(0, composite_ubo_);
-        c2.bind_sampled_texture(0, input_tex2);
-        c2.bind_sampled_texture(1, mip_textures_[0]);
+        c2.bind_sampled_texture(4, input_tex2);
+        c2.bind_sampled_texture(5, mip_textures_[0]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -446,18 +464,12 @@ void BloomPass::execute(ExecuteContext& ctx) {
 void BloomPass::destroy() {
     if (device2_) {
         destroy_tgfx2_mip_textures();
-        if (bright_fs2_)     device2_->destroy(bright_fs2_);
-        if (downsample_fs2_) device2_->destroy(downsample_fs2_);
-        if (upsample_fs2_)   device2_->destroy(upsample_fs2_);
-        if (composite_fs2_)  device2_->destroy(composite_fs2_);
+        // FS shaders live on the tc_shader registry (`*_shader_handle_`),
+        // shared across pass re-creations — not owned here.
         if (bright_ubo_)     device2_->destroy(bright_ubo_);
         if (downsample_ubo_) device2_->destroy(downsample_ubo_);
         if (upsample_ubo_)   device2_->destroy(upsample_ubo_);
         if (composite_ubo_)  device2_->destroy(composite_ubo_);
-        bright_fs2_ = {};
-        downsample_fs2_ = {};
-        upsample_fs2_ = {};
-        composite_fs2_ = {};
         bright_ubo_ = {};
         downsample_ubo_ = {};
         upsample_ubo_ = {};

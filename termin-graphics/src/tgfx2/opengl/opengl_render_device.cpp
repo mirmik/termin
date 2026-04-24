@@ -11,6 +11,49 @@
 #include <cstring>
 #include <tcbase/tc_log.hpp>
 
+// glClipControl is GL 4.5 / ARB_clip_control. Our glad generator targets
+// 3.3 core and doesn't expose it. On Linux libGL.so exports the symbol
+// so a forward-declare + dynamic link resolves it; on Windows
+// opengl32.lib only exports GL 1.1, so we have to fetch the entry
+// point through wglGetProcAddress at runtime.
+#ifndef GL_UPPER_LEFT
+#define GL_UPPER_LEFT 0x8CA2
+#endif
+#ifndef GL_ZERO_TO_ONE
+#define GL_ZERO_TO_ONE 0x935F
+#endif
+// Enum queries from GL 4.5, not in our glad-3.3 header.
+#ifndef GL_CLIP_ORIGIN
+#define GL_CLIP_ORIGIN 0x935C
+#endif
+#ifndef GL_CLIP_DEPTH_MODE
+#define GL_CLIP_DEPTH_MODE 0x935D
+#endif
+#if defined(_WIN32)
+// windows.h drags in min/max macros that collide with std::min/std::max
+// (and with std::numeric_limits<T>::max()). Suppress them.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+typedef void (APIENTRY *PFN_glClipControl)(GLenum, GLenum);
+static PFN_glClipControl s_glClipControl = nullptr;
+static void load_clip_control_win32() {
+    if (s_glClipControl) return;
+    s_glClipControl = reinterpret_cast<PFN_glClipControl>(
+        wglGetProcAddress("glClipControl"));
+}
+static void glClipControl(GLenum origin, GLenum depth) {
+    load_clip_control_win32();
+    if (s_glClipControl) s_glClipControl(origin, depth);
+}
+#else
+extern "C" void glClipControl(GLenum origin, GLenum depth);
+#endif
+
 extern "C" {
 #include "tgfx/tgfx_resource_gpu.h"
 }
@@ -23,6 +66,17 @@ OpenGLRenderDevice::OpenGLRenderDevice() {
     if (!gladLoaderLoadGL()) {
         throw std::runtime_error("Failed to initialize OpenGL function pointers (glad)");
     }
+
+    // Align OpenGL's NDC + window-coord convention with Vulkan:
+    //   GL_UPPER_LEFT   — window-coord origin at top-left (like Vulkan),
+    //                     so glScissor / glViewport y=0 is the top row
+    //                     and no per-call Y-flip is needed.
+    //   GL_ZERO_TO_ONE  — clip-space Z ∈ [0, 1] (Vulkan default).
+    // All our projection matrices (termin-base/geom/mat44.hpp) target
+    // this convention; shaders write clip-space Y pointing down already.
+    // Requires GL 4.5 or ARB_clip_control (ubiquitous on desktop GL).
+    glClipControl(GL_UPPER_LEFT, GL_ZERO_TO_ONE);
+
     query_capabilities();
 }
 
@@ -37,6 +91,20 @@ OpenGLRenderDevice::~OpenGLRenderDevice() {
     if (push_ring_buf_) {
         glDeleteBuffers(1, &push_ring_buf_);
         push_ring_buf_ = 0;
+    }
+
+    // Clean up transient vertex ring
+    if (transient_vb_gl_) {
+        glDeleteBuffers(1, &transient_vb_gl_);
+        transient_vb_gl_ = 0;
+        // Release the BufferHandle slot in our HandlePool too.
+        if (transient_vb_handle_) {
+            // Don't route through destroy(BufferHandle) — that would
+            // glDeleteBuffers the id we just freed above. Just drop the
+            // slot.
+            buffers_.remove(transient_vb_handle_.id);
+            transient_vb_handle_ = {};
+        }
     }
 
     // Clean up all remaining GL resources
@@ -171,6 +239,78 @@ SamplerHandle OpenGLRenderDevice::create_sampler(const SamplerDesc& desc) {
 
 // --- Shader ---
 
+// GLSL overlay injected after #version / extension lines on OpenGL
+// shaders. Pairs with the Y-flip of upload_texture payloads so that
+// sampling reads the "Vulkan row 0 = visual top" convention uniformly
+// on both backends. See docs/coord_system.md §4.
+//
+// Rules:
+//   - Only sampler2D / sampler2DShadow get the V-flip. 3D / Cube / array
+//     shadow variants pass the coord through unchanged.
+//   - textureLod, textureGrad, texelFetch keep the same flip behaviour.
+//   - Other overloads (textureGather, textureProj, etc.) are *not*
+//     covered yet — add them here if a shader needs them.
+//   - The helpers are declared before the `#define` so that their bodies
+//     can still call the original builtin `texture()` / `texelFetch()`.
+//     Macros only expand in source that follows the `#define` lines,
+//     so the helpers' internal use of `texture` / `texelFetch` resolves
+//     to the builtin, not to itself.
+static constexpr const char* kGLSamplingFlipOverlay =
+    "// tgfx2-GL-sampling-flip\n"
+    "vec4  _tgfx_gl_tex(sampler2D s, vec2 uv)             { return texture(s, vec2(uv.x, 1.0 - uv.y)); }\n"
+    "vec4  _tgfx_gl_tex(sampler2D s, vec2 uv, float lod)  { return textureLod(s, vec2(uv.x, 1.0 - uv.y), lod); }\n"
+    "vec4  _tgfx_gl_tex(sampler3D s, vec3 uvw)            { return texture(s, uvw); }\n"
+    "vec4  _tgfx_gl_tex(samplerCube s, vec3 dir)          { return texture(s, dir); }\n"
+    "float _tgfx_gl_tex(sampler2DShadow s, vec3 uvz)      { return texture(s, vec3(uvz.x, 1.0 - uvz.y, uvz.z)); }\n"
+    "vec4  _tgfx_gl_texel(sampler2D s, ivec2 p, int lod) {\n"
+    "    ivec2 sz = textureSize(s, lod);\n"
+    "    return texelFetch(s, ivec2(p.x, sz.y - 1 - p.y), lod);\n"
+    "}\n"
+    "#define texture _tgfx_gl_tex\n"
+    "#define texelFetch _tgfx_gl_texel\n";
+
+// Find the end of the #version directive (and subsequent #extension
+// lines — they must precede any non-preprocessor code in GLSL) and
+// insert `overlay` there. If no #version is present, insert at the
+// very start.
+static std::string inject_after_version(const std::string& source,
+                                        const char* overlay) {
+    size_t ver_pos = source.find("#version");
+    if (ver_pos == std::string::npos) {
+        return std::string(overlay) + source;
+    }
+    // Find the end of the line that contains #version.
+    size_t eol = source.find('\n', ver_pos);
+    if (eol == std::string::npos) {
+        return source + "\n" + overlay;
+    }
+    // Consume any subsequent #extension lines so we don't split the
+    // preprocessor block.
+    size_t insert_pos = eol + 1;
+    while (insert_pos < source.size()) {
+        // Skip whitespace/newlines between directives.
+        size_t line_start = insert_pos;
+        while (line_start < source.size() &&
+               (source[line_start] == ' ' || source[line_start] == '\t' ||
+                source[line_start] == '\r' || source[line_start] == '\n')) {
+            ++line_start;
+        }
+        if (source.compare(line_start, 10, "#extension") != 0) break;
+        size_t next_eol = source.find('\n', line_start);
+        if (next_eol == std::string::npos) {
+            insert_pos = source.size();
+            break;
+        }
+        insert_pos = next_eol + 1;
+    }
+    std::string out;
+    out.reserve(source.size() + std::strlen(overlay));
+    out.append(source, 0, insert_pos);
+    out.append(overlay);
+    out.append(source, insert_pos, std::string::npos);
+    return out;
+}
+
 ShaderHandle OpenGLRenderDevice::create_shader(const ShaderDesc& desc) {
     if (desc.source.empty()) {
         return {0};
@@ -187,6 +327,10 @@ ShaderHandle OpenGLRenderDevice::create_shader(const ShaderDesc& desc) {
     // create_shader runs the exact same step so shaders line up
     // across backends.
     std::string resolved = internal::preprocess_shader_source(desc.source);
+    // On OpenGL, wrap sampling builtins so v=0 = top of content
+    // regardless of whether the texture was uploaded from CPU (flipped
+    // in upload_texture) or rendered into (bottom-up FBO memory).
+    resolved = inject_after_version(resolved, kGLSamplingFlipOverlay);
     const char* src = resolved.c_str();
 
     glShaderSource(mod.gl_shader, 1, &src, nullptr);
@@ -400,6 +544,20 @@ void OpenGLRenderDevice::upload_buffer(BufferHandle dst, std::span<const uint8_t
     glBindBuffer(buf->target, 0);
 }
 
+// Fill `dst` with the byte-reversed rows of `src`. Caller supplies
+// `row_bytes` (bytes per row) and `rows` (number of rows). dst and src
+// must not overlap. Used by the OpenGL backend to Y-flip upload payloads
+// so that sampling (also Y-flipped in shaders) pairs up to produce
+// Vulkan-native behaviour — see docs/coord_system.md §4.
+static void flip_rows(uint8_t* dst, const uint8_t* src,
+                      uint32_t row_bytes, uint32_t rows) {
+    for (uint32_t r = 0; r < rows; ++r) {
+        std::memcpy(dst + r * row_bytes,
+                    src + (rows - 1 - r) * row_bytes,
+                    row_bytes);
+    }
+}
+
 void OpenGLRenderDevice::upload_texture(TextureHandle dst, std::span<const uint8_t> data, uint32_t mip) {
     auto* tex = textures_.get(dst.id);
     if (!tex) return;
@@ -407,9 +565,22 @@ void OpenGLRenderDevice::upload_texture(TextureHandle dst, std::span<const uint8
     auto fmt = gl::to_gl_format(tex->desc.format);
     uint32_t w = std::max(1u, tex->desc.width >> mip);
     uint32_t h = std::max(1u, tex->desc.height >> mip);
+    uint32_t row_bytes = w * gl::pixel_bytes(tex->desc.format);
+
+    // Y-flip the payload: user supplies row 0 = top of image (Vulkan
+    // convention), but GL sampling is Y-flipped as well (see the GLSL
+    // macro injection in create_shader), so storing the image upside
+    // down here cancels out and gives v=0 = user's top on sampling.
+    std::vector<uint8_t> flipped;
+    const uint8_t* upload_ptr = data.data();
+    if (row_bytes > 0 && h > 1 && data.size() >= static_cast<size_t>(row_bytes) * h) {
+        flipped.resize(static_cast<size_t>(row_bytes) * h);
+        flip_rows(flipped.data(), data.data(), row_bytes, h);
+        upload_ptr = flipped.data();
+    }
 
     glBindTexture(tex->target, tex->gl_id);
-    glTexSubImage2D(tex->target, mip, 0, 0, w, h, fmt.format, fmt.type, data.data());
+    glTexSubImage2D(tex->target, mip, 0, 0, w, h, fmt.format, fmt.type, upload_ptr);
     glBindTexture(tex->target, 0);
 }
 
@@ -422,12 +593,27 @@ void OpenGLRenderDevice::upload_texture_region(TextureHandle dst,
     if (!tex) return;
 
     auto fmt = gl::to_gl_format(tex->desc.format);
+    uint32_t row_bytes = w * gl::pixel_bytes(tex->desc.format);
+
+    // Flip the region's rows in place (so data's row 0 = top of the
+    // sub-image ends up at the bottom of the GL upload) and translate
+    // the destination Y from top-left to bottom-left framebuffer coords.
+    std::vector<uint8_t> flipped;
+    const uint8_t* upload_ptr = data.data();
+    if (row_bytes > 0 && h > 1 && data.size() >= static_cast<size_t>(row_bytes) * h) {
+        flipped.resize(static_cast<size_t>(row_bytes) * h);
+        flip_rows(flipped.data(), data.data(), row_bytes, h);
+        upload_ptr = flipped.data();
+    }
+
+    uint32_t tex_h = std::max(1u, tex->desc.height >> mip);
+    uint32_t gl_y = (tex_h > y + h) ? (tex_h - y - h) : 0;
 
     glBindTexture(tex->target, tex->gl_id);
     glTexSubImage2D(tex->target, mip,
-                    static_cast<GLint>(x), static_cast<GLint>(y),
+                    static_cast<GLint>(x), static_cast<GLint>(gl_y),
                     static_cast<GLsizei>(w), static_cast<GLsizei>(h),
-                    fmt.format, fmt.type, data.data());
+                    fmt.format, fmt.type, upload_ptr);
     glBindTexture(tex->target, 0);
 }
 
@@ -651,9 +837,14 @@ bool OpenGLRenderDevice::read_pixel_rgba8(
 
     bool ok = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
     if (ok) {
+        // IRenderDevice::read_pixel_rgba8 takes top-down pixel coords
+        // (window-space convention). glReadPixels wants bottom-up, so
+        // flip Y here — stays a backend-local detail instead of leaking
+        // into the caller.
+        const int gl_y = static_cast<int>(t->desc.height) - y - 1;
         uint8_t pixel[4] = {0, 0, 0, 0};
         glReadBuffer(GL_COLOR_ATTACHMENT0);
-        glReadPixels(x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+        glReadPixels(x, gl_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
         out_rgba[0] = pixel[0] / 255.0f;
         out_rgba[1] = pixel[1] / 255.0f;
         out_rgba[2] = pixel[2] / 255.0f;
@@ -910,6 +1101,68 @@ GLintptr OpenGLRenderDevice::push_constants_write(const void* data, uint32_t siz
 
     push_ring_offset_ = offset + padded;
     return offset;
+}
+
+// --- Transient vertex ring ---
+//
+// Mirrors push_ring_: a persistent VBO the immediate-mode draw paths
+// sub-upload into. No alignment requirement on vertex buffers (unlike
+// UBOs), so the cursor advances by raw size. On overflow the whole
+// storage is orphaned via glBufferData(NULL) and the cursor rewinds —
+// same pattern, same stall avoidance.
+//
+// The HandlePool slot is allocated once; transient_vertex_buffer()
+// returns the same BufferHandle for the process lifetime. Destructor
+// takes care of releasing both the GL id and the slot.
+
+void OpenGLRenderDevice::ensure_transient_vb() {
+    if (transient_vb_initialized_) return;
+
+    glGenBuffers(1, &transient_vb_gl_);
+    glBindBuffer(GL_ARRAY_BUFFER, transient_vb_gl_);
+    glBufferData(GL_ARRAY_BUFFER, transient_vb_size_, nullptr, GL_STREAM_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    GLBuffer b;
+    b.gl_id = transient_vb_gl_;
+    b.desc.size = static_cast<uint64_t>(transient_vb_size_);
+    b.desc.usage = BufferUsage::Vertex;
+    b.target = GL_ARRAY_BUFFER;
+    b.external = false;
+    transient_vb_handle_ = BufferHandle{buffers_.add(std::move(b))};
+
+    transient_vb_offset_ = 0;
+    transient_vb_initialized_ = true;
+}
+
+BufferHandle OpenGLRenderDevice::transient_vertex_buffer() {
+    ensure_transient_vb();
+    return transient_vb_handle_;
+}
+
+uint64_t OpenGLRenderDevice::transient_vertex_write(const void* data,
+                                                   uint32_t size) {
+    if (!data || size == 0 || size > static_cast<uint32_t>(transient_vb_size_)) {
+        return UINT64_MAX;
+    }
+
+    ensure_transient_vb();
+
+    GLintptr offset = transient_vb_offset_;
+    if (offset + static_cast<GLintptr>(size) > transient_vb_size_) {
+        // Orphan + rewind.
+        glBindBuffer(GL_ARRAY_BUFFER, transient_vb_gl_);
+        glBufferData(GL_ARRAY_BUFFER, transient_vb_size_, nullptr, GL_STREAM_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        offset = 0;
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, transient_vb_gl_);
+    glBufferSubData(GL_ARRAY_BUFFER, offset, static_cast<GLsizeiptr>(size), data);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    transient_vb_offset_ = offset + static_cast<GLintptr>(size);
+    return static_cast<uint64_t>(offset);
 }
 
 } // namespace tgfx

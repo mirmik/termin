@@ -142,6 +142,7 @@ void bind_tc_scene(nb::module_& m) {
         .def_rw("name", &ViewportConfig::name)
         .def_rw("display_name", &ViewportConfig::display_name)
         .def_rw("render_target_name", &ViewportConfig::render_target_name)
+        .def_rw("camera_uuid", &ViewportConfig::camera_uuid)
         .def_rw("region_x", &ViewportConfig::region_x)
         .def_rw("region_y", &ViewportConfig::region_y)
         .def_rw("region_w", &ViewportConfig::region_w)

@@ -6,6 +6,11 @@
 #include <tgfx2/enums.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/opengl/opengl_render_device.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 extern "C" {
 #include <tcbase/tc_log.h>
@@ -79,14 +84,32 @@ void FrameGraphCapture::ensure_capture_tex(
     height_ = h;
     format_ = fmt;
 
+    auto is_depth = [](tgfx::PixelFormat f) {
+        return f == tgfx::PixelFormat::D24_UNorm ||
+               f == tgfx::PixelFormat::D24_UNorm_S8_UInt ||
+               f == tgfx::PixelFormat::D32F;
+    };
+
     tgfx::TextureDesc desc;
     desc.width = static_cast<uint32_t>(w);
     desc.height = static_cast<uint32_t>(h);
     desc.format = fmt;
     desc.sample_count = 1;
-    desc.usage = tgfx::TextureUsage::Sampled |
-                 tgfx::TextureUsage::ColorAttachment |
-                 tgfx::TextureUsage::CopyDst;
+    // Color vs depth-stencil attachment is mutually exclusive on Vulkan;
+    // picking the right bit lets blit targets for shadow maps succeed.
+    // CopySrc/CopyDst stay on both paths — Frame Debugger eventually
+    // reads the capture out and/or re-blits it.
+    if (is_depth(fmt)) {
+        desc.usage = tgfx::TextureUsage::Sampled |
+                     tgfx::TextureUsage::DepthStencilAttachment |
+                     tgfx::TextureUsage::CopySrc |
+                     tgfx::TextureUsage::CopyDst;
+    } else {
+        desc.usage = tgfx::TextureUsage::Sampled |
+                     tgfx::TextureUsage::ColorAttachment |
+                     tgfx::TextureUsage::CopySrc |
+                     tgfx::TextureUsage::CopyDst;
+    }
     capture_tex_ = device.create_texture(desc);
 }
 
@@ -101,7 +124,24 @@ void FrameGraphCapture::capture_direct_via_ctx2(
         return;
     }
 
-    ensure_capture_tex(ctx2->device(), width, height, format);
+    // The caller-supplied `format` is a hint — e.g. the classic call
+    // paths default it to RGBA8_UNorm. But Vulkan's blit refuses to
+    // mix aspects (depth → color produces a validation error and a
+    // silent no-op), and depth-stencil resources can't be sampled as
+    // plain RGBA anyway. So we look up the actual source format via
+    // the device and override the hint whenever the source is depth.
+    auto src_desc = ctx2->device().texture_desc(src_tex);
+    tgfx::PixelFormat effective = format;
+    auto is_depth = [](tgfx::PixelFormat f) {
+        return f == tgfx::PixelFormat::D24_UNorm ||
+               f == tgfx::PixelFormat::D24_UNorm_S8_UInt ||
+               f == tgfx::PixelFormat::D32F;
+    };
+    if (is_depth(src_desc.format)) {
+        effective = src_desc.format;
+    }
+
+    ensure_capture_tex(ctx2->device(), width, height, effective);
     if (!capture_tex_) {
         return;
     }
@@ -141,26 +181,15 @@ FrameGraphPresenter::~FrameGraphPresenter() {
 }
 
 void FrameGraphPresenter::release_tgfx2_resources() {
-    if (device2_ && fs2_) {
-        device2_->destroy(fs2_);
-        fs2_ = {};
-    }
+    // FS handle lives on the tc_shader registry; not owned here.
     device2_ = nullptr;
 }
 
 void FrameGraphPresenter::ensure_fs(tgfx::IRenderDevice& device) {
-    if (fs2_ && device2_ == &device) return;
-    if (device2_ && device2_ != &device) {
-        release_tgfx2_resources();
-    }
     device2_ = &device;
-
-    tgfx::ShaderDesc desc;
-    desc.stage = tgfx::ShaderStage::Fragment;
-    desc.source = PRESENTER_FRAG_SRC;
-    fs2_ = device.create_shader(desc);
-    if (!fs2_) {
-        tc::Log::error("FrameGraphPresenter: failed to create fs2");
+    if (tc_shader_handle_is_invalid(shader_handle_)) {
+        shader_handle_ = tc_shader_register_static(
+            nullptr, PRESENTER_FRAG_SRC, nullptr, "FrameGraphPresenterFS");
     }
 }
 
@@ -180,8 +209,12 @@ void FrameGraphPresenter::render(
     }
 
     ensure_fs(ctx2->device());
-    if (!fs2_) {
-        return;
+    tgfx::ShaderHandle fs;
+    {
+        tc_shader* raw = tc_shader_get(shader_handle_);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, device2_, nullptr, &fs)) {
+            return;
+        }
     }
 
     ctx2->begin_pass(target_tex, tgfx::TextureHandle{}, nullptr, 1.0f, false);
@@ -193,9 +226,8 @@ void FrameGraphPresenter::render(
     ctx2->set_depth_write(false);
     ctx2->set_blend(false);
     ctx2->set_cull(tgfx::CullMode::None);
-    ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
 
-    ctx2->bind_shader(ctx2->fsq_vertex_shader(), fs2_);
+    ctx2->bind_shader(ctx2->fsq_vertex_shader(), fs);
 
     ctx2->bind_sampled_texture(0, capture_tex);
     ctx2->set_uniform_int("u_tex", 0);

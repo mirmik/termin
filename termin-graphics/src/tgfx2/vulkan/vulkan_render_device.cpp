@@ -13,7 +13,30 @@
 #include <stdexcept>
 #include <cstring>
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <set>
+
+extern "C" {
+#include <tcbase/tc_log.h>
+}
+
+namespace tgfx {
+// Vulkan hot-path counters — swept once per second from submit().
+static std::atomic<uint64_t> g_resource_set_count{0};
+static std::atomic<uint64_t> g_pipeline_count{0};
+// Defined here (non-static), incremented from vulkan_command_list.cpp's
+// per-command methods. The extern decls in that file live inside
+// `namespace tgfx`, so the fully-qualified symbols are `tgfx::g_*`.
+std::atomic<uint64_t> g_draw_count{0};
+std::atomic<uint64_t> g_bind_pipeline_count{0};
+std::atomic<uint64_t> g_bind_rset_count{0};
+std::atomic<uint64_t> g_bind_vbo_count{0};
+std::atomic<uint64_t> g_bind_ibo_count{0};
+std::atomic<uint64_t> g_push_constants_count{0};
+std::atomic<uint64_t> g_record_us{0};
+std::atomic<uint64_t> g_submit_us{0};
+}
 
 namespace tgfx {
 
@@ -61,6 +84,18 @@ VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info) {
     create_command_pool();
     create_descriptor_pool();
     create_shared_layouts();
+    create_ring_ubo();
+
+    // Frame fence: tracks in-flight submits. Created unsignaled — the
+    // first `submit()` sees `frame_fence_in_flight_ == false` and skips
+    // the wait; subsequent submits wait on it before reusing it.
+    {
+        VkFenceCreateInfo fci{};
+        fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        if (vkCreateFence(device_, &fci, nullptr, &frame_fence_) != VK_SUCCESS) {
+            throw std::runtime_error("VulkanRenderDevice: vkCreateFence failed");
+        }
+    }
 
     // Build the swapchain now that queues/allocator are ready. A
     // surface without a size is a hosting bug; refuse to guess.
@@ -90,11 +125,25 @@ VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info) {
 }
 
 VulkanRenderDevice::~VulkanRenderDevice() {
+    // Shutdown is the one place where a full device-wide wait is actually
+    // correct: everything queued must finish before we tear down VkImages,
+    // VkBuffers, VkShaderModules etc. (freeing while in-flight is UB).
+    // During normal frame lifecycle `destroy()` queues into
+    // pending_destroy_{current,in_flight}_ and the per-submit fence keeps
+    // them safe — see VulkanRenderDevice::submit.
     if (device_) vkDeviceWaitIdle(device_);
 
     // Tear down the swapchain first — its sync objects and image
     // views are bound to device_ which is still alive at this point.
     swapchain_.reset();
+
+    // Both deferred-destroy queues are now safe to release (GPU is idle).
+    // The `in_flight` queue represents handles the previous frame freed;
+    // `current` holds handles freed during the current frame that were
+    // never submitted. Handle-pool lookups are still valid at this point,
+    // so drain them through the normal per-type helper.
+    drain_pending_destroy(pending_destroy_in_flight_);
+    drain_pending_destroy(pending_destroy_current_);
 
     // Destroy cached framebuffers
     for (auto& [k, fb] : framebuffer_cache_)
@@ -104,7 +153,9 @@ VulkanRenderDevice::~VulkanRenderDevice() {
     for (auto& [k, rp] : render_pass_cache_)
         vkDestroyRenderPass(device_, rp, nullptr);
 
-    // Destroy resources
+    // Destroy any resources that were never explicitly `destroy()`-ed and
+    // are still live in the handle pools. Keeps shutdown leak-free for
+    // callers that forgot to clean up.
     for (auto& [id, r] : buffers_) {
         if (r.buffer) vmaDestroyBuffer(allocator_, r.buffer, r.allocation);
     }
@@ -123,10 +174,25 @@ VulkanRenderDevice::~VulkanRenderDevice() {
         // layout and render_pass are shared/cached, cleaned separately
     }
 
+    if (immediate_cb_ != VK_NULL_HANDLE) {
+        vkFreeCommandBuffers(device_, command_pool_, 1, &immediate_cb_);
+        immediate_cb_ = VK_NULL_HANDLE;
+    }
+    if (ring_ubo_buffer_ != VK_NULL_HANDLE) {
+        vmaDestroyBuffer(allocator_, ring_ubo_buffer_, ring_ubo_allocation_);
+        ring_ubo_buffer_ = VK_NULL_HANDLE;
+        ring_ubo_allocation_ = VK_NULL_HANDLE;
+        ring_ubo_mapped_ = nullptr;
+    }
+    if (frame_fence_) vkDestroyFence(device_, frame_fence_, nullptr);
     if (default_sampler_) vkDestroySampler(device_, default_sampler_, nullptr);
     if (shared_pipeline_layout_) vkDestroyPipelineLayout(device_, shared_pipeline_layout_, nullptr);
     if (descriptor_set_layout_) vkDestroyDescriptorSetLayout(device_, descriptor_set_layout_, nullptr);
-    if (descriptor_pool_) vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
+    for (int i = 0; i < 2; ++i) {
+        if (descriptor_pools_[i]) {
+            vkDestroyDescriptorPool(device_, descriptor_pools_[i], nullptr);
+        }
+    }
     if (command_pool_) vkDestroyCommandPool(device_, command_pool_, nullptr);
     if (allocator_) vmaDestroyAllocator(allocator_);
     if (device_) vkDestroyDevice(device_, nullptr);
@@ -260,11 +326,24 @@ void VulkanRenderDevice::create_logical_device() {
 
     VkPhysicalDeviceFeatures features{};
     features.fillModeNonSolid = VK_TRUE; // for wireframe
+    // Shadow shaders index `sampler2DShadow u_shadow_map[N]` with a
+    // runtime loop variable. In Vulkan that requires the
+    // `shaderSampledImageArrayDynamicIndexing` feature — without it
+    // access is undefined and shadow lookups silently return 1.0 (no
+    // shadow) on most drivers. Matches GL's always-available dynamic
+    // indexing of sampler arrays.
+    features.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
 
     std::vector<const char*> extensions;
     if (surface_) {
         extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     }
+    // NDC-Z convention: Vulkan-native Z ∈ [0, 1]. OpenGL reaches the
+    // same convention via a one-time glClipControl(GL_UPPER_LEFT,
+    // GL_ZERO_TO_ONE) in OpenGLRenderDevice, and scene/shadow
+    // projection matrices (see termin-base/geom/mat44.hpp) build
+    // matrices that target exactly that. No VK_EXT_depth_clip_control
+    // needed.
 
     VkDeviceCreateInfo ci{};
     ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -314,54 +393,109 @@ void VulkanRenderDevice::create_command_pool() {
 // --- Descriptor pool ---
 
 void VulkanRenderDevice::create_descriptor_pool() {
+    // Two pools, double-buffered with the frame fence. Each frame's draws
+    // allocate from `descriptor_pools_[current_pool_idx_]`; at submit(),
+    // after the previous submit's fence signals, we flip to the other
+    // pool and `vkResetDescriptorPool` it in one call — no individual
+    // `vkFreeDescriptorSets`, no FREE_DESCRIPTOR_SET_BIT flag (the driver
+    // can use a faster bump allocator internally).
+    //
+    // Pool size covers a single frame's worst case for chronosquad-like
+    // scenes: ~30 skinned meshes × 4 shadow cascades + color/depth/id/
+    // normal + UI draws ≈ 500-800 sets. Headroom to 2048 accommodates
+    // heavier future scenes without re-sizing. Each set may touch up to
+    // ~5 UBOs and ~6 samplers, hence the pool-size multipliers below.
     VkDescriptorPoolSize pool_sizes[] = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 256},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 64},
-        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 256},
-        {VK_DESCRIPTOR_TYPE_SAMPLER, 256},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 256},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,          8 * 2048},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,          512},
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,           2 * 2048},
+        {VK_DESCRIPTOR_TYPE_SAMPLER,                 2 * 2048},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 20 * 2048},
     };
 
     VkDescriptorPoolCreateInfo ci{};
     ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    ci.maxSets = 256;
+    ci.flags = 0;  // No per-set free — pool reset frees everything at once.
+    ci.maxSets = 2048;
     ci.poolSizeCount = 5;
     ci.pPoolSizes = pool_sizes;
 
-    if (vkCreateDescriptorPool(device_, &ci, nullptr, &descriptor_pool_) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create descriptor pool");
+    for (int i = 0; i < 2; ++i) {
+        if (vkCreateDescriptorPool(device_, &ci, nullptr, &descriptor_pools_[i])
+                != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create descriptor pool");
+        }
     }
 }
 
 // --- Shared layouts (MVP: universal layout) ---
 
 void VulkanRenderDevice::create_shared_layouts() {
-    // Universal descriptor set layout: binding 0-3 = UBO, 4-7 = sampled image, 8-11 = sampler
+    // Universal descriptor set layout:
+    //   binding 0..3  = UBO  (lighting=0, material=1, per-frame=2, shadow-block=3)
+    //   binding 4..7  = COMBINED_IMAGE_SAMPLER, 1 each (material textures)
+    //   binding 8     = COMBINED_IMAGE_SAMPLER, MAX_SHADOW_MAPS (shadow depth array;
+    //                    `layout(binding = 8) sampler2DShadow u_shadow_map[N]`
+    //                    compiles to a single array descriptor, so Vulkan
+    //                    needs descriptorCount = N on binding 8)
+    //   binding 9..15 = COMBINED_IMAGE_SAMPLER, 1 each (extra slots)
+    //   binding 16    = UBO  (BoneBlock — SkinnedMeshRenderer bone matrices,
+    //                          used by VS only, see shader_skinning.cpp)
+    //
+    // MAX_SHADOW_MAPS must match the GLSL macro in shadows.glsl (currently 16).
+    constexpr uint32_t MAX_SHADOW_MAPS = 16;
     std::vector<VkDescriptorSetLayoutBinding> bindings;
+    // UBO bindings 0..3 are DYNAMIC: per-draw offset supplied via the
+    // last argument of vkCmdBindDescriptorSets, not baked into the
+    // descriptor write. Lets a single ring buffer back many draws without
+    // per-draw vkUpdateDescriptorSets churn (see create_ring_ubo).
     for (uint32_t i = 0; i < 4; ++i) {
         VkDescriptorSetLayoutBinding b{};
         b.binding = i;
-        b.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        b.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
         b.descriptorCount = 1;
         b.stageFlags = VK_SHADER_STAGE_ALL;
         bindings.push_back(b);
     }
-    // Bindings 4-7 are combined image+sampler. GLSL `sampler2D` maps
-    // to a single COMBINED_IMAGE_SAMPLER descriptor in SPIR-V, not
-    // separate SAMPLED_IMAGE + SAMPLER. Matching the descriptor type
-    // here lets stock Vulkan-targeted GLSL (`layout(binding=4)
-    // uniform sampler2D ...`) compile against our shared layout
-    // without the caller needing to split uniform sampler + uniform
-    // texture2D. bind_sampled_texture on the render_context side
-    // still carries both a TextureHandle and a SamplerHandle — the
-    // Vulkan write path packs them into one VkDescriptorImageInfo.
+    // Material samplers 4..7 (individual).
     for (uint32_t i = 4; i < 8; ++i) {
         VkDescriptorSetLayoutBinding b{};
         b.binding = i;
         b.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         b.descriptorCount = 1;
         b.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        bindings.push_back(b);
+    }
+    // Shadow-map array at binding 8 (MAX_SHADOW_MAPS descriptors).
+    {
+        VkDescriptorSetLayoutBinding b{};
+        b.binding = 8;
+        b.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        b.descriptorCount = MAX_SHADOW_MAPS;
+        b.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        bindings.push_back(b);
+    }
+    // Extras 9..15 (individual — debug overlays etc.).
+    for (uint32_t i = 9; i < 16; ++i) {
+        VkDescriptorSetLayoutBinding b{};
+        b.binding = i;
+        b.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        b.descriptorCount = 1;
+        b.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        bindings.push_back(b);
+    }
+    // BoneBlock UBO at binding 16 (skinning variant VS, see
+    // shader_skinning.cpp). Kept out of the 0..3 UBO block because the
+    // skinned path is optional — materials without skinning never touch
+    // this slot and Vulkan allows declared-but-unused descriptors.
+    // DYNAMIC for the same reason as 0..3 — SkinnedMeshRenderer will
+    // route bone matrices through the ring buffer.
+    {
+        VkDescriptorSetLayoutBinding b{};
+        b.binding = 16;
+        b.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        b.descriptorCount = 1;
+        b.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         bindings.push_back(b);
     }
 
@@ -398,6 +532,112 @@ void VulkanRenderDevice::create_shared_layouts() {
     }
 }
 
+// --- Ring UBO ---
+
+void VulkanRenderDevice::create_ring_ubo() {
+    // Cache the alignment required by dynamic UBO offsets. Every write into
+    // the ring rounds up to this granularity. Queried from the physical
+    // device rather than hard-coded because it varies: 256 on NVIDIA desktop,
+    // 64 on AMD desktop, 256 on most mobile GPUs.
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(physical_device_, &props);
+    ubo_alignment_ = static_cast<uint32_t>(
+        std::max<VkDeviceSize>(props.limits.minUniformBufferOffsetAlignment, 1));
+
+    // 16 MB total — 8 MB per slot. Budget ~10 KB UBO data per draw × 1600
+    // worst-case draws/frame = 16 MB needed, so per-slot headroom is tight
+    // on adversarial scenes; logged (rare) overflow falls back to offset 0.
+    // If that ever fires in practice, grow the ring or shrink per-pass UBOs.
+    ring_ubo_size_ = 16 * 1024 * 1024;
+    ring_ubo_slot_size_ = ring_ubo_size_ / 2;
+
+    VkBufferCreateInfo bi{};
+    bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bi.size = ring_ubo_size_;
+    // TRANSFER_DST kept cheap — we don't copy into the ring (host writes only),
+    // but leaving it set costs nothing and makes future debug copies legal.
+    bi.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo ai{};
+    ai.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    ai.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    VmaAllocationInfo alloc_info{};
+    if (vmaCreateBuffer(allocator_, &bi, &ai, &ring_ubo_buffer_,
+                        &ring_ubo_allocation_, &alloc_info) != VK_SUCCESS) {
+        throw std::runtime_error("VulkanRenderDevice: failed to allocate ring UBO");
+    }
+    ring_ubo_mapped_ = alloc_info.pMappedData;
+
+    // Query the memory type's coherency flag so writes can skip
+    // vmaFlushAllocation on desktop Linux drivers (always coherent on
+    // NVIDIA/AMD discrete).
+    VkPhysicalDeviceMemoryProperties mem_props;
+    vkGetPhysicalDeviceMemoryProperties(physical_device_, &mem_props);
+    ring_ubo_coherent_ =
+        (mem_props.memoryTypes[alloc_info.memoryType].propertyFlags
+         & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
+    ring_ubo_heads_[0].store(0, std::memory_order_relaxed);
+    ring_ubo_heads_[1].store(0, std::memory_order_relaxed);
+    ring_ubo_slot_idx_ = 0;
+
+    // Expose the ring as a BufferHandle so callers can route per-draw UBO
+    // bindings through it via the normal ResourceBinding path. The entry
+    // in buffers_ carries no allocation of its own (VK_NULL_HANDLE alloc),
+    // and destroy(ring_ubo_handle_) is a no-op guarded below — the real
+    // buffer lives until ~VulkanRenderDevice.
+    VkBufferResource ring_res{};
+    ring_res.buffer = ring_ubo_buffer_;
+    ring_res.allocation = VK_NULL_HANDLE; // not owned by the handle pool
+    ring_res.desc.size = ring_ubo_size_;
+    ring_res.desc.usage = BufferUsage::Uniform;
+    ring_res.desc.cpu_visible = true;
+    ring_res.mapped_ptr = ring_ubo_mapped_;
+    ring_ubo_handle_.id = buffers_.add(std::move(ring_res));
+}
+
+uint32_t VulkanRenderDevice::ring_ubo_write(const void* data, uint32_t size) {
+    // Reserve an aligned slice at the head. fetch_add returns the pre-update
+    // value → that's our offset within the slot. The advance is aligned(size)
+    // so the NEXT allocation starts on a legal dynamic-offset boundary.
+    const uint32_t align = ubo_alignment_;
+    const uint32_t padded = (size + align - 1) & ~(align - 1);
+
+    const uint32_t slot = ring_ubo_slot_idx_;
+    const uint64_t base = static_cast<uint64_t>(slot) * ring_ubo_slot_size_;
+
+    uint64_t offset_in_slot =
+        ring_ubo_heads_[slot].fetch_add(padded, std::memory_order_relaxed);
+
+    if (offset_in_slot + padded > ring_ubo_slot_size_) {
+        // Per-slot overflow: rest of the frame's UBO writes are invalid.
+        // Log once so it's obvious in a profile run; return the slot base
+        // so the caller still gets a legal (but stale) offset instead of
+        // crashing. A real fix either raises ring_ubo_size_ or trims a pass.
+        static thread_local bool s_warned = false;
+        if (!s_warned) {
+            tc_log(TC_LOG_ERROR,
+                   "[RingUBO] slot %u overflow: head=%llu size=%u slot_cap=%llu — raise ring_ubo_size_",
+                   slot, (unsigned long long)offset_in_slot, size,
+                   (unsigned long long)ring_ubo_slot_size_);
+            s_warned = true;
+        }
+        return static_cast<uint32_t>(base);
+    }
+
+    const uint64_t offset = base + offset_in_slot;
+    // Persistent-mapped memcpy is the whole host-side cost on desktop
+    // Linux (HOST_COHERENT → flush is a no-op). The coherent-aware skip
+    // drops the vmaFlushAllocation call overhead on the hundreds of
+    // ring_ubo_write()s per frame.
+    std::memcpy(static_cast<uint8_t*>(ring_ubo_mapped_) + offset, data, size);
+    if (!ring_ubo_coherent_) {
+        vmaFlushAllocation(allocator_, ring_ubo_allocation_, offset, size);
+    }
+    return static_cast<uint32_t>(offset);
+}
+
 VkSampler VulkanRenderDevice::ensure_default_sampler() {
     if (default_sampler_) return default_sampler_;
     VkSamplerCreateInfo sci{};
@@ -421,34 +661,40 @@ void VulkanRenderDevice::wait_idle() { vkDeviceWaitIdle(device_); }
 
 // --- Immediate command execution ---
 
-void VulkanRenderDevice::execute_immediate(std::function<void(VkCommandBuffer)> fn) {
+VkCommandBuffer VulkanRenderDevice::ensure_immediate_cb() {
+    if (immediate_cb_open_) return immediate_cb_;
+
+    // Always allocate a fresh cb. The previous frame's immediate_cb was
+    // handed over to pending_destroy_current_ in submit(), so it will
+    // be freed after the frame fence signals — safe. Re-recording the
+    // same cb here would hit "buffer is in use" validation because
+    // submit()'s fence wait hasn't necessarily run yet between calls.
     VkCommandBufferAllocateInfo ai{};
     ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     ai.commandPool = command_pool_;
     ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     ai.commandBufferCount = 1;
-
-    VkCommandBuffer cmd;
-    vkAllocateCommandBuffers(device_, &ai, &cmd);
+    vkAllocateCommandBuffers(device_, &ai, &immediate_cb_);
 
     VkCommandBufferBeginInfo bi{};
     bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(cmd, &bi);
+    vkBeginCommandBuffer(immediate_cb_, &bi);
 
-    fn(cmd);
+    immediate_cb_open_ = true;
+    return immediate_cb_;
+}
 
-    vkEndCommandBuffer(cmd);
-
-    VkSubmitInfo si{};
-    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    si.commandBufferCount = 1;
-    si.pCommandBuffers = &cmd;
-
-    vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
-    vkQueueWaitIdle(graphics_queue_);
-
-    vkFreeCommandBuffers(device_, command_pool_, 1, &cmd);
+void VulkanRenderDevice::execute_immediate(std::function<void(VkCommandBuffer)> fn) {
+    // Record into the shared immediate cb. No submit, no wait — the cb
+    // gets submitted together with the main draw cb in `submit()`, as
+    // entry 0 of a multi-cb `vkQueueSubmit` so the copies/transitions
+    // complete before the draws that depend on them.
+    //
+    // Callers that used to do `staging; execute_immediate; destroy
+    // staging;` must now push staging into `defer_vma_buffer_destroy` —
+    // the GPU hasn't run the copy by the time this function returns.
+    fn(ensure_immediate_cb());
 }
 
 // --- Image layout transition ---
@@ -479,9 +725,18 @@ void VulkanRenderDevice::transition_image_layout(
     } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
     } else if (old_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
         barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    } else if (old_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        src_stage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    } else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        src_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     }
 
     if (new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
@@ -514,12 +769,39 @@ BufferHandle VulkanRenderDevice::create_buffer(const BufferDesc& desc) {
     ci.usage = vk::to_vk_buffer_usage(desc.usage);
     ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VmaAllocationCreateInfo alloc_ci{};
-    alloc_ci.usage = desc.cpu_visible ? VMA_MEMORY_USAGE_CPU_TO_GPU : VMA_MEMORY_USAGE_GPU_ONLY;
+    // Uniform buffers are effectively always per-frame data (camera
+    // matrices, material params, bones, ...) — uploaded every frame
+    // and read once. Placing them in HOST_VISIBLE|DEVICE_LOCAL memory
+    // (CPU_TO_GPU) lets upload_buffer go through a plain map+memcpy,
+    // skipping the staging buffer + execute_immediate + vkQueueWaitIdle
+    // path entirely. Without this, a frame with ~30 UBO uploads would
+    // do ~30 full GPU stalls — the dominant Vulkan perf regression vs
+    // OpenGL on shadow/color passes.
+    //
+    // The caller-set `cpu_visible` still forces HOST_VISIBLE for other
+    // use cases (e.g. readback staging mirrors). Vertex/index buffers
+    // and large static textures stay GPU_ONLY as intended.
+    const bool want_host_visible =
+        desc.cpu_visible ||
+        (static_cast<uint32_t>(desc.usage & BufferUsage::Uniform) != 0);
+    res.desc.cpu_visible = want_host_visible;
 
-    if (vmaCreateBuffer(allocator_, &ci, &alloc_ci, &res.buffer, &res.allocation, nullptr) != VK_SUCCESS) {
+    VmaAllocationCreateInfo alloc_ci{};
+    alloc_ci.usage = want_host_visible ? VMA_MEMORY_USAGE_CPU_TO_GPU
+                                       : VMA_MEMORY_USAGE_GPU_ONLY;
+    // Persistently-mapped host-visible buffers: VMA keeps a pointer on
+    // `VmaAllocationInfo::pMappedData`, so upload_buffer skips
+    // vmaMapMemory/vmaUnmapMemory and does a plain memcpy.
+    if (want_host_visible) {
+        alloc_ci.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    }
+
+    VmaAllocationInfo alloc_info{};
+    if (vmaCreateBuffer(allocator_, &ci, &alloc_ci,
+                        &res.buffer, &res.allocation, &alloc_info) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create Vulkan buffer");
     }
+    res.mapped_ptr = alloc_info.pMappedData;  // NULL for GPU-only buffers
 
     return {buffers_.add(std::move(res))};
 }
@@ -568,6 +850,29 @@ TextureHandle VulkanRenderDevice::create_texture(const TextureDesc& desc) {
     }
 
     res.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    // If the caller flagged this as a sampled texture, pre-transition to
+    // SHADER_READ_ONLY_OPTIMAL so a bind that happens before any
+    // upload / blit / render-pass write doesn't see UNDEFINED at submit
+    // time. Contents are undefined until something writes in — that's
+    // the caller's concern — but the layout matches the descriptor the
+    // pipeline expects. begin_render_pass will transition out to
+    // COLOR/DEPTH attachment if the texture is used as an attachment
+    // first. Cheap (one immediate barrier, no allocation).
+    bool is_sampled = (static_cast<uint32_t>(desc.usage) &
+                       static_cast<uint32_t>(TextureUsage::Sampled)) != 0;
+    if (is_sampled) {
+        VkImage image = res.image;
+        VkImageAspectFlags aspect = vk::format_aspect_flags(desc.format);
+        execute_immediate([&](VkCommandBuffer cb) {
+            transition_image_layout(cb, image,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                aspect);
+        });
+        res.current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
     return {textures_.add(std::move(res))};
 }
 
@@ -651,8 +956,19 @@ PipelineHandle VulkanRenderDevice::create_pipeline(const PipelineDesc& desc) {
     // depth attachment. Conversely a pass with no depth attachment must
     // produce a pipeline whose cached RP also has no depth slot, or
     // vkCmdDraw fails with "RenderPasses incompatible".
+    // Pass the raw color_formats through — depth-only passes (ShadowPass,
+    // DepthPass) carry an empty list, and the pipeline's cached render
+    // pass must also have zero color attachments to stay compatible with
+    // the framebuffer begin_render_pass binds. Previous behaviour of
+    // force-pushing RGBA8_UNorm produced a 1-color RP that mismatched a
+    // 0-color framebuffer → vkCreateFramebuffer attachmentCount error.
     std::vector<PixelFormat> color_fmts = desc.color_formats;
-    if (color_fmts.empty()) color_fmts.push_back(PixelFormat::RGBA8_UNorm);
+    // Drop any `Undefined` entries — caller may have zero-initialised
+    // slots we should not attach.
+    color_fmts.erase(
+        std::remove(color_fmts.begin(), color_fmts.end(),
+                    PixelFormat::Undefined),
+        color_fmts.end());
     bool needs_depth = desc.depth_format != PixelFormat::Undefined;
     res.render_pass = get_or_create_render_pass(
         color_fmts, desc.depth_format, needs_depth, desc.sample_count,
@@ -706,7 +1022,9 @@ PipelineHandle VulkanRenderDevice::create_pipeline(const PipelineDesc& desc) {
     input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly.topology = vk::to_vk_topology(desc.topology);
 
-    // Dynamic viewport/scissor
+    // Dynamic viewport/scissor. No VkPipelineViewportDepthClipControl —
+    // we target Vulkan-native NDC Z ∈ [0,1] everywhere; OpenGL reaches
+    // the same convention via glClipControl(GL_UPPER_LEFT, GL_ZERO_TO_ONE).
     VkPipelineViewportStateCreateInfo viewport_state{};
     viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewport_state.viewportCount = 1;
@@ -738,22 +1056,28 @@ PipelineHandle VulkanRenderDevice::create_pipeline(const PipelineDesc& desc) {
     depth_stencil.depthWriteEnable = desc.depth_stencil.depth_write ? VK_TRUE : VK_FALSE;
     depth_stencil.depthCompareOp = vk::to_vk_compare(desc.depth_stencil.depth_compare);
 
-    // Blend
-    VkPipelineColorBlendAttachmentState blend_att{};
-    blend_att.blendEnable = desc.blend.enabled ? VK_TRUE : VK_FALSE;
-    blend_att.srcColorBlendFactor = vk::to_vk_blend_factor(desc.blend.src_color);
-    blend_att.dstColorBlendFactor = vk::to_vk_blend_factor(desc.blend.dst_color);
-    blend_att.colorBlendOp = vk::to_vk_blend_op(desc.blend.color_op);
-    blend_att.srcAlphaBlendFactor = vk::to_vk_blend_factor(desc.blend.src_alpha);
-    blend_att.dstAlphaBlendFactor = vk::to_vk_blend_factor(desc.blend.dst_alpha);
-    blend_att.alphaBlendOp = vk::to_vk_blend_op(desc.blend.alpha_op);
-    blend_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    // Blend — one attachment per color output. Must match subpass's
+    // colorAttachmentCount, else VUID-VkGraphicsPipelineCreateInfo-
+    // renderPass-06041 fires and some drivers silently reject the draw
+    // (shadow/depth-only passes were hit by this — 0 color attachments
+    // in the subpass but attachmentCount=1 on the pipeline).
+    std::vector<VkPipelineColorBlendAttachmentState> blend_atts(color_fmts.size());
+    for (auto& ba : blend_atts) {
+        ba.blendEnable = desc.blend.enabled ? VK_TRUE : VK_FALSE;
+        ba.srcColorBlendFactor = vk::to_vk_blend_factor(desc.blend.src_color);
+        ba.dstColorBlendFactor = vk::to_vk_blend_factor(desc.blend.dst_color);
+        ba.colorBlendOp = vk::to_vk_blend_op(desc.blend.color_op);
+        ba.srcAlphaBlendFactor = vk::to_vk_blend_factor(desc.blend.src_alpha);
+        ba.dstAlphaBlendFactor = vk::to_vk_blend_factor(desc.blend.dst_alpha);
+        ba.alphaBlendOp = vk::to_vk_blend_op(desc.blend.alpha_op);
+        ba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    }
 
     VkPipelineColorBlendStateCreateInfo blend{};
     blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    blend.attachmentCount = 1;
-    blend.pAttachments = &blend_att;
+    blend.attachmentCount = static_cast<uint32_t>(blend_atts.size());
+    blend.pAttachments = blend_atts.empty() ? nullptr : blend_atts.data();
 
     // Create pipeline
     VkGraphicsPipelineCreateInfo pi{};
@@ -775,19 +1099,63 @@ PipelineHandle VulkanRenderDevice::create_pipeline(const PipelineDesc& desc) {
     if (vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pi, nullptr, &res.pipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create graphics pipeline");
     }
+    g_pipeline_count.fetch_add(1, std::memory_order_relaxed);
 
     return {pipelines_.add(std::move(res))};
 }
 
 // --- Resource set ---
 
+static uint64_t hash_resource_set_desc(const ResourceSetDesc& desc) {
+    // FNV-1a over the stable-key fields of each binding. Handles live in
+    // HandlePool slots and are stable within a frame, so we can hash the
+    // raw ids without worrying about pointer churn.
+    //
+    // UBO offsets are INTENTIONALLY excluded from the hash: UBOs on the
+    // DYNAMIC slots supply their per-draw offset through the
+    // dynamic_offsets[] argument at bind time, not through the descriptor
+    // write, so two draws that differ only in ring-offset must reuse the
+    // same descriptor set instead of paying another vkAllocateDescriptorSets.
+    // Range still participates (different range → different buffer_info).
+    uint64_t h = 0xcbf29ce484222325ull;
+    auto mix = [&h](uint64_t v) {
+        h ^= v;
+        h *= 0x100000001b3ull;
+    };
+    for (const auto& b : desc.bindings) {
+        mix(b.binding);
+        mix(static_cast<uint64_t>(b.kind));
+        mix(b.buffer.id);
+        if (b.kind != ResourceBinding::Kind::UniformBuffer) {
+            mix(b.offset);
+        }
+        mix(b.range);
+        mix(b.texture.id);
+        mix(b.sampler.id);
+    }
+    return h;
+}
+
 ResourceSetHandle VulkanRenderDevice::create_resource_set(const ResourceSetDesc& desc) {
+    // Per-frame cache: multiple draws with the same bindings (typical —
+    // many meshes share a material + PerFrame UBO + shadow array) reuse
+    // one VkDescriptorSet instead of paying for another
+    // vkAllocateDescriptorSets + vkUpdateDescriptorSets. Cache is
+    // cleared when the pool is reset in submit(), so every entry is
+    // always backed by a live set in descriptor_pools_[current_pool_idx_].
+    const uint64_t key = hash_resource_set_desc(desc);
+    auto& cache = descriptor_cache_[current_pool_idx_];
+    if (auto it = cache.find(key); it != cache.end()) {
+        return it->second;
+    }
+
+    g_resource_set_count.fetch_add(1, std::memory_order_relaxed);
     VkResourceSetResource res;
     res.desc = desc;
 
     VkDescriptorSetAllocateInfo ai{};
     ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    ai.descriptorPool = descriptor_pool_;
+    ai.descriptorPool = descriptor_pools_[current_pool_idx_];
     ai.descriptorSetCount = 1;
     ai.pSetLayouts = &descriptor_set_layout_;
 
@@ -802,6 +1170,34 @@ ResourceSetHandle VulkanRenderDevice::create_resource_set(const ResourceSetDesc&
     buf_infos.reserve(desc.bindings.size());
     img_infos.reserve(desc.bindings.size());
 
+    // Shadow-map array spans slots 8..8+MAX_SHADOW_MAPS-1 (matches
+    // SHADOW_SLOT_BASE in ColorPass and the `u_shadow_map[N]` array in
+    // shadows.glsl). The shared descriptor set layout folds those slots
+    // into a single binding=8 with descriptorCount=N, so sampler writes
+    // in that range must be re-targeted to binding=8,
+    // dstArrayElement=slot-8.
+    //
+    // IMPORTANT: the re-target only applies to SampledTexture bindings —
+    // UBOs on the same numeric slot live at their own binding in the
+    // layout (e.g. BoneBlock at binding 16, inside the shadow-array
+    // numeric range). Without this check the UBO write gets retargeted
+    // to binding=8 and Vulkan complains about type mismatch
+    // (VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER vs COMBINED_IMAGE_SAMPLER).
+    constexpr uint32_t SHADOW_SLOT_BASE  = 8;
+    constexpr uint32_t MAX_SHADOW_MAPS_W = 16;
+
+    // Dynamic-UBO bindings declared by the shared layout, in the exact
+    // order vkCmdBindDescriptorSets consumes the dynamic_offsets[] array
+    // (sorted ascending by binding, per Vulkan spec).
+    // Keep in sync with create_shared_layouts().
+    constexpr uint32_t DYNAMIC_UBO_BINDINGS[VkResourceSetResource::DYNAMIC_UBO_COUNT] =
+        {0, 1, 2, 3, 16};
+    auto dynamic_idx_for_binding = [&](uint32_t binding) -> int {
+        for (uint32_t i = 0; i < VkResourceSetResource::DYNAMIC_UBO_COUNT; ++i)
+            if (DYNAMIC_UBO_BINDINGS[i] == binding) return static_cast<int>(i);
+        return -1;
+    };
+
     for (const auto& b : desc.bindings) {
         VkWriteDescriptorSet w{};
         w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -809,15 +1205,53 @@ ResourceSetHandle VulkanRenderDevice::create_resource_set(const ResourceSetDesc&
         w.dstBinding = b.binding;
         w.dstArrayElement = 0;
         w.descriptorCount = 1;
+        const bool is_sampled = (b.kind == ResourceBinding::Kind::SampledTexture);
+        if (is_sampled &&
+            b.binding >= SHADOW_SLOT_BASE &&
+            b.binding <  SHADOW_SLOT_BASE + MAX_SHADOW_MAPS_W) {
+            w.dstBinding = SHADOW_SLOT_BASE;
+            w.dstArrayElement = b.binding - SHADOW_SLOT_BASE;
+        }
 
         switch (b.kind) {
             case ResourceBinding::Kind::UniformBuffer:
             case ResourceBinding::Kind::StorageBuffer: {
                 auto* buf = get_buffer(b.buffer);
                 if (!buf) continue;
-                buf_infos.push_back({buf->buffer, b.offset, b.range ? b.range : VK_WHOLE_SIZE});
-                w.descriptorType = (b.kind == ResourceBinding::Kind::UniformBuffer)
-                    ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                // UBOs on the five DYNAMIC slots route their offset through
+                // the dynamic_offsets[] argument at bind time — the write
+                // itself uses offset=0 with an explicit range. Two hard
+                // Vulkan rules apply to this binding type:
+                //   1. range must be <= maxUniformBufferRange (64 KB min).
+                //      Setting VK_WHOLE_SIZE on a 16 MB ring buffer
+                //      trips VUID-VkWriteDescriptorSet-descriptorType-00332.
+                //   2. With VK_WHOLE_SIZE the dynamic offset must be 0
+                //      (VUID-vkCmdBindDescriptorSets-pDescriptorSets-06715) —
+                //      defeating the whole point of dynamic bindings.
+                // So we *always* bake an explicit range. Callers supply
+                // the block size through ResourceBinding::range; for the
+                // legacy bind_uniform_buffer(handle) path where range==0
+                // we fall back to min(buffer.size, 64 KB) — the per-UBO
+                // buffers are small (a few KB), so this lands at the real
+                // size and not a truncated view.
+                const int dyn_idx = (b.kind == ResourceBinding::Kind::UniformBuffer)
+                    ? dynamic_idx_for_binding(b.binding) : -1;
+                const bool is_dynamic_ubo = (dyn_idx >= 0);
+                if (is_dynamic_ubo) {
+                    constexpr uint64_t VK_MIN_MAX_UBO_RANGE = 65536;
+                    uint64_t range = b.range;
+                    if (range == 0) {
+                        range = std::min<uint64_t>(buf->desc.size, VK_MIN_MAX_UBO_RANGE);
+                    }
+                    if (range > VK_MIN_MAX_UBO_RANGE) range = VK_MIN_MAX_UBO_RANGE;
+                    buf_infos.push_back({buf->buffer, 0, range});
+                    w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+                    res.dynamic_offsets[dyn_idx] = static_cast<uint32_t>(b.offset);
+                } else {
+                    buf_infos.push_back({buf->buffer, b.offset, b.range ? b.range : VK_WHOLE_SIZE});
+                    w.descriptorType = (b.kind == ResourceBinding::Kind::UniformBuffer)
+                        ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                }
                 w.pBufferInfo = &buf_infos.back();
                 break;
             }
@@ -864,7 +1298,9 @@ ResourceSetHandle VulkanRenderDevice::create_resource_set(const ResourceSetDesc&
         vkUpdateDescriptorSets(device_, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
 
-    return {resource_sets_.add(std::move(res))};
+    ResourceSetHandle handle{resource_sets_.add(std::move(res))};
+    cache[key] = handle;
+    return handle;
 }
 
 // --- Destroy ---
@@ -880,55 +1316,87 @@ TextureDesc VulkanRenderDevice::texture_desc(TextureHandle handle) const {
     return {};
 }
 
+// All `destroy(*Handle)` calls queue the handle into
+// `pending_destroy_current_`; actual Vk releases happen after the
+// current frame's fence signals (see `submit()`). Caller's handle is
+// invalid to use after this returns — the pool entry stays reserved
+// until drain time.
+
 void VulkanRenderDevice::destroy(BufferHandle h) {
-    if (auto* r = buffers_.get(h.id)) {
-        vkDeviceWaitIdle(device_);
-        if (r->buffer) vmaDestroyBuffer(allocator_, r->buffer, r->allocation);
-        buffers_.remove(h.id);
-    }
+    if (h.id == 0) return;
+    // The ring UBO handle aliases a device-owned buffer; its real lifetime
+    // is tied to the device, and destroying it mid-frame would wipe the
+    // UBO store for every pending dynamic-offset binding.
+    if (ring_ubo_handle_.id != 0 && h.id == ring_ubo_handle_.id) return;
+    pending_destroy_current_.buffers.push_back(h);
 }
 
 void VulkanRenderDevice::destroy(TextureHandle h) {
-    if (auto* r = textures_.get(h.id)) {
-        vkDeviceWaitIdle(device_);
-        if (r->view) vkDestroyImageView(device_, r->view, nullptr);
-        if (r->image) vmaDestroyImage(allocator_, r->image, r->allocation);
-        textures_.remove(h.id);
-    }
+    if (h.id != 0) pending_destroy_current_.textures.push_back(h);
 }
 
 void VulkanRenderDevice::destroy(SamplerHandle h) {
-    if (auto* r = samplers_.get(h.id)) {
-        vkDeviceWaitIdle(device_);
-        if (r->sampler) vkDestroySampler(device_, r->sampler, nullptr);
-        samplers_.remove(h.id);
-    }
+    if (h.id != 0) pending_destroy_current_.samplers.push_back(h);
 }
 
 void VulkanRenderDevice::destroy(ShaderHandle h) {
-    if (auto* r = shaders_.get(h.id)) {
-        vkDeviceWaitIdle(device_);
-        if (r->module) vkDestroyShaderModule(device_, r->module, nullptr);
-        shaders_.remove(h.id);
-    }
+    if (h.id != 0) pending_destroy_current_.shaders.push_back(h);
 }
 
 void VulkanRenderDevice::destroy(PipelineHandle h) {
-    if (auto* r = pipelines_.get(h.id)) {
-        vkDeviceWaitIdle(device_);
-        if (r->pipeline) vkDestroyPipeline(device_, r->pipeline, nullptr);
-        pipelines_.remove(h.id);
-    }
+    if (h.id != 0) pending_destroy_current_.pipelines.push_back(h);
 }
 
 void VulkanRenderDevice::destroy(ResourceSetHandle h) {
-    if (auto* r = resource_sets_.get(h.id)) {
-        vkDeviceWaitIdle(device_);
-        if (r->descriptor_set) {
-            vkFreeDescriptorSets(device_, descriptor_pool_, 1, &r->descriptor_set);
+    if (h.id != 0) pending_destroy_current_.resource_sets.push_back(h);
+}
+
+void VulkanRenderDevice::drain_pending_destroy(PendingDestroyQueue& q) {
+    for (auto h : q.buffers) {
+        if (auto* r = buffers_.get(h.id)) {
+            if (r->buffer) vmaDestroyBuffer(allocator_, r->buffer, r->allocation);
+            buffers_.remove(h.id);
         }
-        resource_sets_.remove(h.id);
     }
+    for (auto h : q.textures) {
+        if (auto* r = textures_.get(h.id)) {
+            if (r->view) vkDestroyImageView(device_, r->view, nullptr);
+            if (r->image) vmaDestroyImage(allocator_, r->image, r->allocation);
+            textures_.remove(h.id);
+        }
+    }
+    for (auto h : q.samplers) {
+        if (auto* r = samplers_.get(h.id)) {
+            if (r->sampler) vkDestroySampler(device_, r->sampler, nullptr);
+            samplers_.remove(h.id);
+        }
+    }
+    for (auto h : q.shaders) {
+        if (auto* r = shaders_.get(h.id)) {
+            if (r->module) vkDestroyShaderModule(device_, r->module, nullptr);
+            shaders_.remove(h.id);
+        }
+    }
+    for (auto h : q.pipelines) {
+        if (auto* r = pipelines_.get(h.id)) {
+            if (r->pipeline) vkDestroyPipeline(device_, r->pipeline, nullptr);
+            pipelines_.remove(h.id);
+        }
+    }
+    // Resource-set handles are owned by the per-pool descriptor cache —
+    // removed together with the VkDescriptorSet when the pool is reset
+    // (see `descriptor_cache_[current_pool_idx_].clear()` in submit()).
+    // Do NOT remove from HandlePool here: the same handle id may still
+    // be live in the cache for its slot, and a subsequent cache-hit
+    // would otherwise return a dangling entry.
+    (void)q.resource_sets;
+    for (auto cb : q.cmd_buffers) {
+        vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
+    }
+    for (auto& [buf, alloc] : q.vma_buffers) {
+        vmaDestroyBuffer(allocator_, buf, alloc);
+    }
+    q = {};
 }
 
 // --- Upload ---
@@ -937,7 +1405,19 @@ void VulkanRenderDevice::upload_buffer(BufferHandle dst, std::span<const uint8_t
     auto* res = buffers_.get(dst.id);
     if (!res) return;
 
-    if (res->desc.cpu_visible) {
+    if (res->mapped_ptr) {
+        // Persistently-mapped host-visible buffer. The common path for
+        // every per-frame UBO (PerFrame / ShadowBlock / BoneBlock /
+        // material params). One memcpy — no map/unmap, no submit, no
+        // stall. vmaFlushAllocation covers non-coherent memory types
+        // (NVIDIA/AMD desktop Linux is coherent in practice, but flush
+        // is a no-op when the allocation is coherent, so always call).
+        std::memcpy(static_cast<uint8_t*>(res->mapped_ptr) + offset,
+                    data.data(), data.size());
+        vmaFlushAllocation(allocator_, res->allocation, offset, data.size());
+    } else if (res->desc.cpu_visible) {
+        // Fallback: host-visible but not persistently mapped (e.g. buffer
+        // registered externally). Keep the old explicit map path.
         void* mapped;
         vmaMapMemory(allocator_, res->allocation, &mapped);
         std::memcpy(static_cast<uint8_t*>(mapped) + offset, data.data(), data.size());
@@ -969,7 +1449,8 @@ void VulkanRenderDevice::upload_buffer(BufferHandle dst, std::span<const uint8_t
             vkCmdCopyBuffer(cmd, staging, res->buffer, 1, &region);
         });
 
-        vmaDestroyBuffer(allocator_, staging, staging_alloc);
+        // Defer staging destroy — GPU runs the copy after the frame submit.
+        defer_vma_buffer_destroy(staging, staging_alloc);
     }
 }
 
@@ -1018,7 +1499,7 @@ void VulkanRenderDevice::upload_texture(TextureHandle dst, std::span<const uint8
     });
 
     res->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    vmaDestroyBuffer(allocator_, staging, staging_alloc);
+    defer_vma_buffer_destroy(staging, staging_alloc);
 }
 
 void VulkanRenderDevice::upload_texture_region(TextureHandle /*dst*/,
@@ -1045,7 +1526,11 @@ void VulkanRenderDevice::read_buffer(BufferHandle src, std::span<uint8_t> data, 
         std::memcpy(data.data(), static_cast<uint8_t*>(mapped) + offset, data.size());
         vmaUnmapMemory(allocator_, res->allocation);
     } else {
-        // Staging readback
+        // Blocking readback — caller needs CPU-side bytes right after
+        // this returns. Deliberately NOT routed through the shared
+        // immediate_cb_ path, because that one is batched and drained
+        // asynchronously by submit(). A readback call is rare (screen-
+        // shot / GPU debug) so the extra submit+wait here is fine.
         VkBufferCreateInfo stage_ci{};
         stage_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         stage_ci.size = data.size();
@@ -1058,19 +1543,135 @@ void VulkanRenderDevice::read_buffer(BufferHandle src, std::span<uint8_t> data, 
         VmaAllocation staging_alloc_h;
         vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc, &staging, &staging_alloc_h, nullptr);
 
-        execute_immediate([&](VkCommandBuffer cmd) {
-            VkBufferCopy region{};
-            region.srcOffset = offset;
-            region.size = data.size();
-            vkCmdCopyBuffer(cmd, res->buffer, staging, 1, &region);
-        });
+        VkCommandBufferAllocateInfo ai{};
+        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        ai.commandPool = command_pool_;
+        ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        ai.commandBufferCount = 1;
+        VkCommandBuffer cb;
+        vkAllocateCommandBuffers(device_, &ai, &cb);
+
+        VkCommandBufferBeginInfo bi{};
+        bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(cb, &bi);
+        VkBufferCopy region{};
+        region.srcOffset = offset;
+        region.size = data.size();
+        vkCmdCopyBuffer(cb, res->buffer, staging, 1, &region);
+        vkEndCommandBuffer(cb);
+
+        VkSubmitInfo si{};
+        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        si.commandBufferCount = 1;
+        si.pCommandBuffers = &cb;
+        vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
+        vkQueueWaitIdle(graphics_queue_);
 
         void* mapped;
         vmaMapMemory(allocator_, staging_alloc_h, &mapped);
         std::memcpy(data.data(), mapped, data.size());
         vmaUnmapMemory(allocator_, staging_alloc_h);
         vmaDestroyBuffer(allocator_, staging, staging_alloc_h);
+        vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
     }
+}
+
+bool VulkanRenderDevice::read_pixel_rgba8(
+    TextureHandle tex, int x, int y, float out_rgba[4]
+) {
+    auto* res = textures_.get(tex.id);
+    if (!res || !out_rgba) return false;
+
+    // Clamp to texture bounds — caller's (x, y) in pixel coords from the
+    // editor picking path is not guaranteed to land inside the attachment.
+    const int w = static_cast<int>(res->desc.width);
+    const int h = static_cast<int>(res->desc.height);
+    if (x < 0 || y < 0 || x >= w || y >= h) return false;
+
+    VkBufferCreateInfo stage_ci{};
+    stage_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    stage_ci.size = 4;
+    stage_ci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+    VmaAllocationCreateInfo stage_alloc{};
+    stage_alloc.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+
+    VkBuffer staging = VK_NULL_HANDLE;
+    VmaAllocation staging_alloc_h = VK_NULL_HANDLE;
+    if (vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc,
+                        &staging, &staging_alloc_h, nullptr) != VK_SUCCESS) {
+        return false;
+    }
+
+    VkCommandBufferAllocateInfo ai{};
+    ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    ai.commandPool = command_pool_;
+    ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    ai.commandBufferCount = 1;
+    VkCommandBuffer cb = VK_NULL_HANDLE;
+    vkAllocateCommandBuffers(device_, &ai, &cb);
+
+    VkCommandBufferBeginInfo bi{};
+    bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cb, &bi);
+
+    // Move the image from whatever layout it is in now into TRANSFER_SRC
+    // for the copy; the end_render_pass hook already transitions color
+    // attachments to SHADER_READ_ONLY_OPTIMAL, so that is the common
+    // source layout, but we don't assume — transition_image_layout
+    // handles the generic case.
+    VkImageLayout prev_layout = res->current_layout;
+    transition_image_layout(cb, res->image, prev_layout,
+                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                            VK_IMAGE_ASPECT_COLOR_BIT);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {x, y, 0};
+    region.imageExtent = {1, 1, 1};
+    vkCmdCopyImageToBuffer(cb, res->image,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           staging, 1, &region);
+
+    // Put the image back where we found it so the next frame's
+    // sampling / render-pass-load doesn't start from an unexpected layout.
+    transition_image_layout(cb, res->image,
+                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                            prev_layout, VK_IMAGE_ASPECT_COLOR_BIT);
+    res->current_layout = prev_layout;
+
+    vkEndCommandBuffer(cb);
+
+    VkSubmitInfo si{};
+    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    si.commandBufferCount = 1;
+    si.pCommandBuffers = &cb;
+    vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
+    vkQueueWaitIdle(graphics_queue_);
+
+    void* mapped = nullptr;
+    uint8_t pixel[4] = {0, 0, 0, 0};
+    if (vmaMapMemory(allocator_, staging_alloc_h, &mapped) == VK_SUCCESS && mapped) {
+        std::memcpy(pixel, mapped, 4);
+        vmaUnmapMemory(allocator_, staging_alloc_h);
+    }
+
+    vmaDestroyBuffer(allocator_, staging, staging_alloc_h);
+    vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
+
+    out_rgba[0] = pixel[0] / 255.0f;
+    out_rgba[1] = pixel[1] / 255.0f;
+    out_rgba[2] = pixel[2] / 255.0f;
+    out_rgba[3] = pixel[3] / 255.0f;
+    return true;
 }
 
 // --- Command list ---
@@ -1081,15 +1682,136 @@ std::unique_ptr<ICommandList> VulkanRenderDevice::create_command_list(QueueType 
 
 void VulkanRenderDevice::submit(ICommandList& cmd) {
     auto& vcmd = static_cast<VulkanCommandList&>(cmd);
-    VkCommandBuffer cb = vcmd.command_buffer();
+    VkCommandBuffer main_cb = vcmd.command_buffer();
+
+    // Per-second Vulkan hot-path summary. Counts since last submit, and
+    // cumulative over the ~1s sliding window: draws, resource-set
+    // allocations, and pipeline creations. Pipelines should drop to ~0
+    // after startup if the PipelineCache is doing its job; resource
+    // sets should scale with draws (one per pipeline-state change).
+    static thread_local uint64_t s_submits = 0;
+    static thread_local auto     s_window_start = std::chrono::steady_clock::now();
+    static thread_local uint64_t s_last_fence_wait_us = 0;
+
+    auto t_wait0 = std::chrono::steady_clock::now();
+
+    // Before kicking off a new submit, retire the previous one. If the
+    // fence is in-flight we wait (usually signaled already by the time we
+    // get here — GPU rendering a shadow cascade takes a few ms at most),
+    // then drain the destroy queue that was waiting on it. These
+    // resources are now GPU-safe to free.
+    if (frame_fence_in_flight_) {
+        vkWaitForFences(device_, 1, &frame_fence_, VK_TRUE, UINT64_MAX);
+        vkResetFences(device_, 1, &frame_fence_);
+        drain_pending_destroy(pending_destroy_in_flight_);
+        frame_fence_in_flight_ = false;
+    }
+    auto t_wait1 = std::chrono::steady_clock::now();
+    s_last_fence_wait_us +=
+        std::chrono::duration<double, std::micro>(t_wait1 - t_wait0).count();
+
+    // Destroys queued during *this* submit's recording graduate to
+    // in-flight status and will be freed after the fence signals.
+    pending_destroy_in_flight_ = std::move(pending_destroy_current_);
+    pending_destroy_current_ = {};
+
+    // Flip descriptor pools. The pool we're about to switch *into* has
+    // just been retired (its fence — the one we waited on above — was
+    // from the frame that used it), so it is GPU-safe to reset. Reset
+    // as a single call returns every descriptor set in that pool to the
+    // free list; much cheaper than per-set vkFreeDescriptorSets and
+    // completely removes the "pool fills during a long frame" failure.
+    current_pool_idx_ = 1 - current_pool_idx_;
+    vkResetDescriptorPool(device_, descriptor_pools_[current_pool_idx_], 0);
+    // Cache entries point into the pool we just reset — their VkDescriptorSets
+    // are gone. Also retire the HandlePool entries they aliased so freed
+    // ids can be reused in the new frame.
+    for (const auto& [_, h] : descriptor_cache_[current_pool_idx_]) {
+        resource_sets_.remove(h.id);
+    }
+    descriptor_cache_[current_pool_idx_].clear();
+
+    // Flip the ring-UBO slot. Same double-buffered logic as the descriptor
+    // pool above: the slot we switch INTO was last written two frames ago
+    // (its fence long since signaled). Resetting its head lets the upcoming
+    // frame start writing at offset 0 of that slot while the just-submitted
+    // frame's GPU work keeps reading from the other slot.
+    ring_ubo_slot_idx_ = 1 - ring_ubo_slot_idx_;
+    ring_ubo_heads_[ring_ubo_slot_idx_].store(0, std::memory_order_relaxed);
+
+    // Close the immediate cb (copies / transitions / clears accumulated
+    // since last submit) and submit it together with the main draw cb in
+    // ONE vkQueueSubmit. Queue-submit ordering guarantees immediate_cb's
+    // GPU work completes before the main cb starts — no explicit barrier
+    // needed for the "staging → device UBO, then draw reads UBO" pattern.
+    VkCommandBuffer cbs[2];
+    uint32_t cb_count = 0;
+    VkCommandBuffer submitted_immediate_cb = VK_NULL_HANDLE;
+    if (immediate_cb_open_) {
+        vkEndCommandBuffer(immediate_cb_);
+        immediate_cb_open_ = false;
+        cbs[cb_count++] = immediate_cb_;
+        submitted_immediate_cb = immediate_cb_;
+        immediate_cb_ = VK_NULL_HANDLE;  // next frame allocates a fresh one
+    }
+    cbs[cb_count++] = main_cb;
 
     VkSubmitInfo si{};
     si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    si.commandBufferCount = 1;
-    si.pCommandBuffers = &cb;
+    si.commandBufferCount = cb_count;
+    si.pCommandBuffers = cbs;
 
-    vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
-    vkQueueWaitIdle(graphics_queue_); // MVP: simple sync
+    auto t_submit0 = std::chrono::steady_clock::now();
+    vkQueueSubmit(graphics_queue_, 1, &si, frame_fence_);
+    auto t_submit1 = std::chrono::steady_clock::now();
+    g_submit_us.fetch_add(
+        std::chrono::duration_cast<std::chrono::microseconds>(t_submit1 - t_submit0).count(),
+        std::memory_order_relaxed);
+    frame_fence_in_flight_ = true;
+
+    // Defer-free the immediate cb we just submitted — it's in-flight on
+    // the graphics queue, so vkFreeCommandBuffers can only run after the
+    // frame fence signals. The drain at the top of the NEXT submit()
+    // picks this up.
+    if (submitted_immediate_cb != VK_NULL_HANDLE) {
+        pending_destroy_current_.cmd_buffers.push_back(submitted_immediate_cb);
+    }
+
+    ++s_submits;
+
+    auto now = std::chrono::steady_clock::now();
+    if (std::chrono::duration<double>(now - s_window_start).count() >= 1.0) {
+        uint64_t draws    = g_draw_count.exchange(0, std::memory_order_relaxed);
+        uint64_t rsets    = g_resource_set_count.exchange(0, std::memory_order_relaxed);
+        uint64_t pipes    = g_pipeline_count.exchange(0, std::memory_order_relaxed);
+        uint64_t bp       = g_bind_pipeline_count.exchange(0, std::memory_order_relaxed);
+        uint64_t brs      = g_bind_rset_count.exchange(0, std::memory_order_relaxed);
+        uint64_t bvb      = g_bind_vbo_count.exchange(0, std::memory_order_relaxed);
+        uint64_t bib      = g_bind_ibo_count.exchange(0, std::memory_order_relaxed);
+        uint64_t bpc      = g_push_constants_count.exchange(0, std::memory_order_relaxed);
+        uint64_t rec_us   = g_record_us.exchange(0, std::memory_order_relaxed);
+        uint64_t subm_us  = g_submit_us.exchange(0, std::memory_order_relaxed);
+        tc_log(TC_LOG_INFO,
+               "[VkHotPath] %llu submits, %llu draws, %llu rsets, %llu new-pipelines, "
+               "%.1f fence-ms — "
+               "bindPipe=%llu bindRS=%llu bindVBO=%llu bindIBO=%llu pushC=%llu — "
+               "record=%.1fms submit=%.2fms",
+               (unsigned long long)s_submits,
+               (unsigned long long)draws,
+               (unsigned long long)rsets,
+               (unsigned long long)pipes,
+               s_last_fence_wait_us / 1000.0,
+               (unsigned long long)bp,
+               (unsigned long long)brs,
+               (unsigned long long)bvb,
+               (unsigned long long)bib,
+               (unsigned long long)bpc,
+               rec_us / 1000.0,
+               subm_us / 1000.0);
+        s_submits = 0;
+        s_last_fence_wait_us = 0;
+        s_window_start = now;
+    }
 }
 
 void VulkanRenderDevice::present() {
@@ -1104,11 +1826,20 @@ VkRenderPass VulkanRenderDevice::get_or_create_render_pass(
     uint32_t sample_count,
     LoadOp color_load, LoadOp depth_load)
 {
-    // Build key
+    // Build key — formats + sample_count + load ops. LoadOp must be part
+    // of the key: for LoadOp::Load the render pass is built with
+    // initialLayout = COLOR/DEPTH_ATTACHMENT_OPTIMAL (the layout
+    // begin_render_pass transitions the attachment into); for Clear/
+    // DontCare we keep initialLayout = UNDEFINED. Collapsing Load and
+    // Clear into one cache entry would either cause a "loadOp=LOAD with
+    // initialLayout=UNDEFINED" validation error or silently clear
+    // content the caller wanted preserved.
     std::vector<VkFormat> key;
     for (auto f : color_formats) key.push_back(vk::to_vk_format(f));
     if (has_depth) key.push_back(vk::to_vk_format(depth_format));
-    key.push_back(static_cast<VkFormat>(sample_count)); // encode sample count in key
+    key.push_back(static_cast<VkFormat>(sample_count));
+    key.push_back(static_cast<VkFormat>(static_cast<int>(color_load) + 0x10000));
+    key.push_back(static_cast<VkFormat>(static_cast<int>(depth_load) + 0x20000));
 
     auto it = render_pass_cache_.find(key);
     if (it != render_pass_cache_.end()) return it->second;
@@ -1134,7 +1865,9 @@ VkRenderPass VulkanRenderDevice::get_or_create_render_pass(
         att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         att.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        att.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        att.initialLayout = (color_load == LoadOp::Load)
+            ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+            : VK_IMAGE_LAYOUT_UNDEFINED;
         att.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         attachments.push_back(att);
 
@@ -1150,7 +1883,9 @@ VkRenderPass VulkanRenderDevice::get_or_create_render_pass(
         att.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         att.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        att.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        att.initialLayout = (depth_load == LoadOp::Load)
+            ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            : VK_IMAGE_LAYOUT_UNDEFINED;
         att.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         attachments.push_back(att);
 
@@ -1164,14 +1899,35 @@ VkRenderPass VulkanRenderDevice::get_or_create_render_pass(
     subpass.pColorAttachments = color_refs.data();
     subpass.pDepthStencilAttachment = has_depth ? &depth_ref : nullptr;
 
+    // Single EXTERNAL→0 dependency covering color/depth writes and
+    // fragment reads. No self-dependency: inside the pass we never emit
+    // vkCmdPipelineBarrier. Every caller is required to deliver sampled
+    // textures already in SHADER_READ_ONLY_OPTIMAL (via upload_texture,
+    // end_render_pass or copy_texture/blit_to_texture, all of which
+    // leave that layout on exit).
+    //
+    // dstStageMask/dstAccessMask must only reference stages supported by
+    // a graphics subpass (the VUID-00838 check). TRANSFER stays on the
+    // EXTERNAL side so that transitions to SHADER_READ_ONLY done before
+    // vkCmdBeginRenderPass synchronize into the pass's fragment shader
+    // reads.
     VkSubpassDependency dep{};
     dep.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep.dstSubpass = 0;
     dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dep.dstStageMask = dep.srcStageMask;
-    dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+                       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                       VK_PIPELINE_STAGE_TRANSFER_BIT;
+    dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dep.srcAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                        VK_ACCESS_TRANSFER_WRITE_BIT;
+    dep.dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
     VkRenderPassCreateInfo rp_ci{};
     rp_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1231,12 +1987,45 @@ void VulkanRenderDevice::blit_to_texture(
     auto* dst = textures_.get(dst_handle.id);
     if (!src || !dst) return;
 
-    // Remember the caller-visible layouts so the texture can be resumed
-    // in whatever state the next render pass expects (typically
-    // COLOR_ATTACHMENT_OPTIMAL for the offscreen RT). Without the restore,
-    // the next begin_pass hits a layout mismatch barrier.
+    // Self-blit is meaningless and would emit contradictory
+    // TRANSFER_SRC/DST barriers on the same image.
+    if (src == dst) return;
+
+    // Require the usage flags that the transitions below need. Without
+    // them Vulkan rejects the layout transition outright. Callers are
+    // expected to create host-owned scan-out textures with CopyDst and
+    // renderer outputs with CopySrc.
+    auto has = [](TextureUsage u, TextureUsage bit) {
+        return (static_cast<uint32_t>(u) & static_cast<uint32_t>(bit)) != 0;
+    };
+    if (!has(src->desc.usage, TextureUsage::CopySrc)) {
+        fprintf(stderr, "[Vulkan] blit_to_texture: src missing CopySrc usage — skipping\n");
+        return;
+    }
+    if (!has(dst->desc.usage, TextureUsage::CopyDst)) {
+        fprintf(stderr, "[Vulkan] blit_to_texture: dst missing CopyDst usage — skipping\n");
+        return;
+    }
+    // single → MSAA has no single Vulkan command — semantically ambiguous
+    // (how do you broadcast one sample across N?). Reject with a warn.
+    if (dst->desc.sample_count > 1 && src->desc.sample_count == 1) {
+        fprintf(stderr, "[Vulkan] blit_to_texture: single → MSAA — skipping "
+                        "(src h=%u %ux%u fmt=%d samples=1 usage=0x%x, "
+                        "dst h=%u %ux%u fmt=%d samples=%u usage=0x%x)\n",
+                src_handle.id, src->desc.width, src->desc.height,
+                (int)src->desc.format,
+                (unsigned)src->desc.usage,
+                dst_handle.id, dst->desc.width, dst->desc.height,
+                (int)dst->desc.format, dst->desc.sample_count,
+                (unsigned)dst->desc.usage);
+        return;
+    }
+
     VkImageLayout prev_src = src->current_layout;
     VkImageLayout prev_dst = dst->current_layout;
+
+    bool msaa_resolve = src->desc.sample_count > 1 && dst->desc.sample_count == 1;
+    bool msaa_copy = src->desc.sample_count > 1 && dst->desc.sample_count == src->desc.sample_count;
 
     execute_immediate([&](VkCommandBuffer cb) {
         transition_image_layout(cb, src->image,
@@ -1246,41 +2035,82 @@ void VulkanRenderDevice::blit_to_texture(
             prev_dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_IMAGE_ASPECT_COLOR_BIT);
 
-        VkImageBlit blit{};
-        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        blit.srcSubresource.layerCount = 1;
-        blit.srcOffsets[0] = {src_x, src_y, 0};
-        blit.srcOffsets[1] = {src_x + src_w, src_y + src_h, 1};
-        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        blit.dstSubresource.layerCount = 1;
-        blit.dstOffsets[0] = {dst_x, dst_y, 0};
-        blit.dstOffsets[1] = {dst_x + dst_w, dst_y + dst_h, 1};
-
-        vkCmdBlitImage(cb,
-            src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &blit, VK_FILTER_LINEAR);
-
-        // Restore layouts so the next render pass / sampler bind does
-        // not see an unexpected transition cost (or worse, a validation
-        // error on an unsynchronised access). If prev_* was UNDEFINED
-        // (never rendered), leave the images in their transfer layout —
-        // the next pass's begin will transition again from whatever it
-        // observes.
-        if (prev_src != VK_IMAGE_LAYOUT_UNDEFINED) {
-            transition_image_layout(cb, src->image,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, prev_src,
-                VK_IMAGE_ASPECT_COLOR_BIT);
-        }
-        if (prev_dst != VK_IMAGE_LAYOUT_UNDEFINED) {
-            transition_image_layout(cb, dst->image,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, prev_dst,
-                VK_IMAGE_ASPECT_COLOR_BIT);
+        if (msaa_resolve) {
+            // Resolve copies exactly the same rect in src/dst — no
+            // scaling. If the caller requested different dst dims, fall
+            // back to a no-op (vkCmdResolveImage can't rescale).
+            if (src_w != dst_w || src_h != dst_h) {
+                fprintf(stderr, "[Vulkan] blit_to_texture: MSAA resolve "
+                                "cannot rescale (%dx%d → %dx%d)\n",
+                        src_w, src_h, dst_w, dst_h);
+            } else {
+                VkImageResolve resolve{};
+                resolve.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                resolve.srcOffset = {src_x, src_y, 0};
+                resolve.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                resolve.dstOffset = {dst_x, dst_y, 0};
+                resolve.extent = {static_cast<uint32_t>(src_w),
+                                  static_cast<uint32_t>(src_h), 1};
+                vkCmdResolveImage(cb,
+                    src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1, &resolve);
+            }
+        } else if (msaa_copy) {
+            // Matching MSAA→MSAA. vkCmdCopyImage requires matching
+            // formats + samples and no scaling. vkCmdBlitImage forbids
+            // MSAA dst, so a scale+MSAA combined op isn't legal — warn
+            // if sizes differ.
+            if (src_w != dst_w || src_h != dst_h) {
+                fprintf(stderr, "[Vulkan] blit_to_texture: MSAA→MSAA cannot "
+                                "rescale (%dx%d → %dx%d)\n",
+                        src_w, src_h, dst_w, dst_h);
+            } else if (src->desc.format != dst->desc.format) {
+                fprintf(stderr, "[Vulkan] blit_to_texture: MSAA→MSAA format "
+                                "mismatch (src fmt=%d, dst fmt=%d)\n",
+                        (int)src->desc.format, (int)dst->desc.format);
+            } else {
+                VkImageCopy region{};
+                region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                region.srcOffset = {src_x, src_y, 0};
+                region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                region.dstOffset = {dst_x, dst_y, 0};
+                region.extent = {static_cast<uint32_t>(src_w),
+                                 static_cast<uint32_t>(src_h), 1};
+                vkCmdCopyImage(cb,
+                    src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1, &region);
+            }
         } else {
-            // First-write case: stamp the layout we left the image in
-            // so the next user sees a real state instead of UNDEFINED.
-            dst->current_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            VkImageBlit blit{};
+            blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            blit.srcOffsets[0] = {src_x, src_y, 0};
+            blit.srcOffsets[1] = {src_x + src_w, src_y + src_h, 1};
+            blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            blit.dstOffsets[0] = {dst_x, dst_y, 0};
+            blit.dstOffsets[1] = {dst_x + dst_w, dst_y + dst_h, 1};
+            vkCmdBlitImage(cb,
+                src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &blit, VK_FILTER_LINEAR);
         }
+
+        // Leave both images in SHADER_READ_ONLY_OPTIMAL so downstream
+        // samplers (including bind_resource_set, which cannot transition
+        // from inside a render pass) work without further fix-ups. If
+        // prev_src was COLOR_ATTACHMENT_OPTIMAL the next render-pass
+        // begin will transition it back — one cheap barrier.
+        transition_image_layout(cb, src->image,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_IMAGE_ASPECT_COLOR_BIT);
+        transition_image_layout(cb, dst->image,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_IMAGE_ASPECT_COLOR_BIT);
+        src->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        dst->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     });
 }
 

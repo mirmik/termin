@@ -20,6 +20,8 @@ def serialize_viewport_config(config: ViewportConfig) -> dict:
     }
     if config.render_target_name:
         result["render_target_name"] = config.render_target_name
+    if config.camera_uuid:
+        result["camera_uuid"] = config.camera_uuid
     if not config.enabled:
         result["enabled"] = config.enabled
     return result
@@ -33,6 +35,7 @@ def deserialize_viewport_config(data: dict) -> ViewportConfig:
     config.name = data.get("name", "")
     config.display_name = data.get("display_name", "Main")
     config.render_target_name = data.get("render_target_name", "")
+    config.camera_uuid = data.get("camera_uuid", "")
     config.region_x = float(region[0])
     config.region_y = float(region[1])
     config.region_w = float(region[2])

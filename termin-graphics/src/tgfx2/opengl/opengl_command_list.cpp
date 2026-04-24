@@ -2,6 +2,47 @@
 #include "tgfx2/opengl/opengl_render_device.hpp"
 #include "tgfx2/opengl/opengl_type_conversions.hpp"
 
+#include <algorithm>
+
+// GL 4.5 enums missing from our glad-3.3 header.
+#ifndef GL_UPPER_LEFT
+#define GL_UPPER_LEFT 0x8CA2
+#endif
+#ifndef GL_ZERO_TO_ONE
+#define GL_ZERO_TO_ONE 0x935F
+#endif
+
+// Platform-specific dynamic resolve for glClipControl. Matches the
+// pattern in opengl_render_device.cpp so both call sites use the same
+// loader. On Linux libGL exports the symbol natively.
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+namespace {
+using PFN_glClipControl = void (APIENTRY *)(GLenum, GLenum);
+PFN_glClipControl s_glClipControl = nullptr;
+inline void reapply_clip_control_upper_left() {
+    if (!s_glClipControl) {
+        s_glClipControl = reinterpret_cast<PFN_glClipControl>(
+            wglGetProcAddress("glClipControl"));
+    }
+    if (s_glClipControl) s_glClipControl(GL_UPPER_LEFT, GL_ZERO_TO_ONE);
+}
+}  // namespace
+#else
+extern "C" void glClipControl(GLenum origin, GLenum depth);
+namespace {
+inline void reapply_clip_control_upper_left() {
+    glClipControl(GL_UPPER_LEFT, GL_ZERO_TO_ONE);
+}
+}  // namespace
+#endif
+
 namespace tgfx {
 
 OpenGLCommandList::OpenGLCommandList(OpenGLRenderDevice& device)
@@ -35,16 +76,41 @@ void OpenGLCommandList::begin_render_pass(const RenderPassDesc& pass) {
     current_fbo_ = device_.get_or_create_fbo(pass);
     glBindFramebuffer(GL_FRAMEBUFFER, current_fbo_);
 
+    // Re-apply clip-control at the start of every pass. Our ortho
+    // matrices (engine2d, text2d_renderer) assume y-down clip space
+    // — OpenGL reaches that via glClipControl(UPPER_LEFT). The call
+    // is issued once in OpenGLRenderDevice::ctor, but some hosts
+    // reset it between frames: GLWpfControl's D3D9 shared-surface
+    // interop in particular sheds GL state when more than one
+    // control is alive in the same window, which otherwise flips
+    // every tcplot panel upside-down. Issuing it here makes every
+    // pass self-contained. Safe if the driver actually honoured the
+    // first call (a no-op at negligible cost) and helps on drivers
+    // where the first call's effect is lost.
+    reapply_clip_control_upper_left();
+
+    // Reset GL scissor — it is global state and survives across passes
+    // and frames. If a previous pass (a UI widget with a begin_clip,
+    // say) left scissor enabled with its widget's rect, the upcoming
+    // glClear + draws in *this* pass would be clipped to that stale
+    // rectangle. Disabling here gives every pass a clean slate; the
+    // caller re-enables with set_scissor when it actually wants to
+    // clip. Vulkan has no equivalent leak because scissor there is
+    // part of the command buffer, not global state.
+    glDisable(GL_SCISSOR_TEST);
+
     // Set viewport to match first color attachment size, or depth if no color
     if (!pass.colors.empty() && pass.colors[0].texture) {
         auto* tex = device_.get_texture(pass.colors[0].texture);
         if (tex) {
             glViewport(0, 0, tex->desc.width, tex->desc.height);
+            cached_fb_height_ = static_cast<int>(tex->desc.height);
         }
     } else if (pass.has_depth && pass.depth.texture) {
         auto* tex = device_.get_texture(pass.depth.texture);
         if (tex) {
             glViewport(0, 0, tex->desc.width, tex->desc.height);
+            cached_fb_height_ = static_cast<int>(tex->desc.height);
         }
     }
 
@@ -193,9 +259,16 @@ void OpenGLCommandList::apply_pending_push_constants() {
 
 // --- Resource binding ---
 
-void OpenGLCommandList::bind_resource_set(ResourceSetHandle set) {
+void OpenGLCommandList::bind_resource_set(ResourceSetHandle set,
+                                           const uint32_t* /*dynamic_offsets*/,
+                                           uint32_t /*dynamic_offset_count*/) {
     auto* rs = device_.get_resource_set(set);
     if (!rs) return;
+
+    // OpenGL doesn't have Vulkan-style dynamic descriptor offsets — each
+    // UBO binding carries its own offset via glBindBufferRange baked into
+    // ResourceBinding::offset. The Vulkan-only `dynamic_offsets` argument
+    // is ignored here.
 
     for (const auto& b : rs->desc.bindings) {
         switch (b.kind) {
@@ -340,46 +413,97 @@ void OpenGLCommandList::copy_texture(TextureHandle src, TextureHandle dst) {
     auto* d = device_.get_texture(dst);
     if (!s || !d) return;
 
-    // glCopyImageSubData requires GL 4.3; fallback via FBO blit
+    // Attachment point + blit mask depend on whether this is colour
+    // or depth/stencil. Previously we hard-wired COLOR_ATTACHMENT0 +
+    // COLOR_BUFFER_BIT, which made the FBO incomplete for depth textures
+    // and blit silently no-op'd — shadow-map captures in Frame Debugger
+    // came back all zero.
+    auto is_depth = [](PixelFormat f) {
+        return f == PixelFormat::D24_UNorm ||
+               f == PixelFormat::D24_UNorm_S8_UInt ||
+               f == PixelFormat::D32F;
+    };
+    const bool depth_copy = is_depth(s->desc.format);
+    const GLenum attach = depth_copy ? GL_DEPTH_ATTACHMENT : GL_COLOR_ATTACHMENT0;
+    const GLbitfield bit = depth_copy ? GL_DEPTH_BUFFER_BIT : GL_COLOR_BUFFER_BIT;
+    // Depth blits must be GL_NEAREST per spec; linear only valid for color.
+    const GLenum filter = depth_copy ? GL_NEAREST : GL_NEAREST;
+
+    // glBlitFramebuffer honours GL_SCISSOR_TEST and the color write mask.
+    // Previous UI/clipping passes may leave scissor enabled with a tiny
+    // rect — then blit copies only that rect and PostFX's color_pp shows
+    // up as a diagonal sliver (or whatever leaked through). Save and
+    // disable both, restore afterwards. glCopyImageSubData (GL 4.3)
+    // would sidestep this entirely but glad in this project is loaded
+    // for GL 4.1 only.
+    GLboolean was_scissor = glIsEnabled(GL_SCISSOR_TEST);
+    GLboolean color_mask[4];
+    glGetBooleanv(GL_COLOR_WRITEMASK, color_mask);
+    GLboolean depth_mask = GL_TRUE;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
+
+    if (was_scissor) glDisable(GL_SCISSOR_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_TRUE);
+
     GLuint fbo_read = 0, fbo_draw = 0;
     glGenFramebuffers(1, &fbo_read);
     glGenFramebuffers(1, &fbo_draw);
 
     glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo_read);
-    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, s->target, s->gl_id, 0);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, attach, s->target, s->gl_id, 0);
+    if (!depth_copy) {
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+    }
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo_draw);
-    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, d->target, d->gl_id, 0);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, attach, d->target, d->gl_id, 0);
+    if (!depth_copy) {
+        GLenum draw_buf = GL_COLOR_ATTACHMENT0;
+        glDrawBuffers(1, &draw_buf);
+    } else {
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+    }
 
     glBlitFramebuffer(0, 0, s->desc.width, s->desc.height,
                       0, 0, d->desc.width, d->desc.height,
-                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+                      bit, filter);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glDeleteFramebuffers(1, &fbo_read);
     glDeleteFramebuffers(1, &fbo_draw);
+
+    glColorMask(color_mask[0], color_mask[1], color_mask[2], color_mask[3]);
+    glDepthMask(depth_mask);
+    if (was_scissor) glEnable(GL_SCISSOR_TEST);
 }
 
 // --- Dynamic state ---
 
+// Caller contract for set_viewport/set_scissor is top-left origin
+// pixel coords (matches Vulkan and tcgui). GL's glViewport / glScissor
+// still use bottom-left origin in window coordinates — glClipControl
+// changes the clip→window mapping only, not the viewport/scissor
+// origin. We flip the y here using the framebuffer height recorded
+// in begin_render_pass so callers can stay backend-agnostic.
+
 void OpenGLCommandList::set_viewport(int x, int y, int width, int height) {
-    glViewport(x, y, width, height);
-    cached_viewport_height_ = height;
+    const int gl_y = (cached_fb_height_ > 0)
+        ? (cached_fb_height_ - (y + height))
+        : y;
+    glViewport(x, gl_y, width, height);
 }
 
 void OpenGLCommandList::set_scissor(int x, int y, int width, int height) {
     if (width == 0 && height == 0) {
         glDisable(GL_SCISSOR_TEST);
     } else {
-        // Backend-neutral contract: caller passes top-left-origin
-        // coords (matching Vulkan framebuffer space). glScissor wants
-        // bottom-left-origin — flip using the cached viewport height.
-        // Without this flip a TextInput clip rect near the top of the
-        // widget gets applied near the bottom of the framebuffer on
-        // Vulkan vs. OpenGL — text never shows, edges crop wrong.
-        int y_flipped = cached_viewport_height_ - (y + height);
+        const int gl_y = (cached_fb_height_ > 0)
+            ? (cached_fb_height_ - (y + height))
+            : y;
         glEnable(GL_SCISSOR_TEST);
-        glScissor(x, y_flipped, width, height);
+        glScissor(x, gl_y, width, height);
     }
 }
 

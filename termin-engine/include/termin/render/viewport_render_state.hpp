@@ -83,6 +83,7 @@ public:
         color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
         color_desc.usage = tgfx::TextureUsage::Sampled |
                            tgfx::TextureUsage::ColorAttachment |
+                           tgfx::TextureUsage::CopySrc |
                            tgfx::TextureUsage::CopyDst;
         output_color_tex = device.create_texture(color_desc);
 

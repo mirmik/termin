@@ -391,8 +391,12 @@ tc_shader_handle tc_shader_from_sources(
     const char* source_path,
     const char* uuid
 ) {
-    if (!vertex_source || !fragment_source) {
-        tc_log(TC_LOG_ERROR, "tc_shader_from_sources: vertex and fragment sources required");
+    // NULL vertex_source is permitted for FS-only shaders — e.g. post-
+    // effect passes that reuse RenderContext2's built-in FSQ vertex shader
+    // and only need to register the FS in the tc_shader registry for
+    // hash-based dedup + compile caching.
+    if (!fragment_source) {
+        tc_log(TC_LOG_ERROR, "tc_shader_from_sources: fragment_source required");
         return tc_shader_handle_invalid();
     }
 
@@ -439,6 +443,29 @@ tc_shader_handle tc_shader_from_sources(
         return tc_shader_handle_invalid();
     }
 
+    return h;
+}
+
+tc_shader_handle tc_shader_register_static(
+    const char* vertex_source,
+    const char* fragment_source,
+    const char* geometry_source,
+    const char* name
+) {
+    // Re-use the normal creation / hash-dedup path, then mark the shader
+    // as static and install the registry-held ref. The `is_static` flag
+    // guards against double-ref on repeated calls with the same source
+    // (hash hit returns the already-static handle — no extra add_ref).
+    tc_shader_handle h = tc_shader_from_sources(
+        vertex_source, fragment_source, geometry_source,
+        name, /*source_path=*/NULL, /*uuid=*/NULL);
+    if (tc_shader_handle_is_invalid(h)) return h;
+
+    tc_shader* shader = tc_shader_get(h);
+    if (shader && !shader->is_static) {
+        shader->is_static = 1;
+        tc_shader_add_ref(shader);
+    }
     return h;
 }
 
@@ -607,12 +634,6 @@ void tc_shader_set_material_ubo_layout(
         tc_log(TC_LOG_ERROR, "[Stage 5.H bridge] set_material_ubo_layout called with NULL shader");
         return;
     }
-
-    tc_log(TC_LOG_ERROR,
-           "[Stage 5.H bridge] set_material_ubo_layout: shader uuid=%s name=%s count=%u block_size=%u",
-           shader->uuid,
-           shader->name ? shader->name : "<null>",
-           count, block_size);
 
     // Release any previous layout.
     if (shader->material_ubo_entries) {

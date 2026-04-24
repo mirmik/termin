@@ -126,7 +126,7 @@ def main():
     # TERMIN_BACKEND env-var (default: opengl). Vulkan is an opt-in:
     # `TERMIN_BACKEND=vulkan ./run.sh`.
     window = BackendWindow("Diffusion Editor", 1280, 800)
-    tgfx2_ctx = Tgfx2Context.borrow(window.device_ptr(), window.context_ptr())
+    tgfx2_ctx = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
     log.info("[main] Window created")
 
     editor = EditorWindow(ctx=tgfx2_ctx)
