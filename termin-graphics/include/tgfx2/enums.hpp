@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace tgfx2 {
+namespace tgfx {
 
 enum class BackendType { OpenGL, Vulkan, Metal, D3D12, Null };
 enum class QueueType { Graphics, Compute, Transfer };
@@ -61,8 +61,15 @@ enum class PixelFormat {
     R32F,
     RG32F,
     RGBA32F,
+    D24_UNorm,
     D24_UNorm_S8_UInt,
     D32F,
+    // Sentinel: "no attachment of this kind". Used by RenderContext2
+    // to tell the pipeline cache that the current pass has no depth
+    // attachment, so the cached pipeline's VkRenderPass must be built
+    // without one. Added at the end to preserve existing numeric values
+    // of real formats.
+    Undefined,
 };
 
 // --- Render pass ops ---
@@ -108,4 +115,4 @@ enum class AddressMode {
     Repeat, MirroredRepeat, ClampToEdge, ClampToBorder,
 };
 
-} // namespace tgfx2
+} // namespace tgfx

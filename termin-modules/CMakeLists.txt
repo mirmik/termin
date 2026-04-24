@@ -17,14 +17,25 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
 # ── Core library (pure C++, no Python dependency) ──
-add_library(termin_modules STATIC
+# SHARED to match every other termin subproject. A static core would leave
+# `libtermin_modules.so` absent from sdk/lib/, breaking
+# `preload_sdk_libs("termin_modules")` in the Python wrapper and forcing
+# consumers to pull the core's symbols transitively through
+# `libtermin_modules_python.so`.
+add_library(termin_modules SHARED
     src/module_cpp_backend.cpp
     src/module_descriptor_parser.cpp
     src/module_runtime.cpp
 )
+add_library(termin_modules::termin_modules ALIAS termin_modules)
 
 target_compile_features(termin_modules PUBLIC cxx_std_20)
-set_target_properties(termin_modules PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(termin_modules PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
+target_compile_definitions(termin_modules PRIVATE TC_EXPORTS)
+termin_set_rpath_lib(termin_modules)
 
 if(MSVC)
     target_compile_options(termin_modules PRIVATE /wd4251 /wd4275)

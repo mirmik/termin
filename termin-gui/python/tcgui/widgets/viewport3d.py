@@ -44,10 +44,6 @@ class Viewport3D(Widget):
         # Коллбек вызывается при изменении размера (до того как FBO пересоздан)
         self.on_before_resize: Callable[[int, int], None] | None = None
 
-        # Local FBO in main window context wrapping the shared color texture.
-        self._local_blit_fbo: int = 0
-        self._local_blit_tex: int = 0
-
     # ------------------------------------------------------------------
     # Подключение
     # ------------------------------------------------------------------
@@ -99,67 +95,40 @@ class Viewport3D(Widget):
     # ------------------------------------------------------------------
 
     def render(self, renderer: 'UIRenderer') -> None:
-        if self._surface is None or self._surface.color_texture_id == 0:
-            # FBO не готов — заглушка
+        if self._surface is None or self._surface.color_tex is None:
+            # Render target not ready — placeholder rectangle
             renderer.draw_rect(self.x, self.y, self.width, self.height,
                                (0.05, 0.05, 0.05, 1.0))
             return
 
-        self._blit_fbo(renderer)
+        self._composite_texture(renderer)
 
-    def _blit_fbo(self, renderer: 'UIRenderer') -> None:
-        from OpenGL.GL import (
-            glBindFramebuffer, GL_READ_FRAMEBUFFER, GL_DRAW_FRAMEBUFFER,
-            GL_FRAMEBUFFER,
-            glBlitFramebuffer, GL_COLOR_BUFFER_BIT, GL_LINEAR,
-            glDisable, GL_SCISSOR_TEST,
-            glGenFramebuffers, glFramebufferTexture2D,
-            GL_TEXTURE_2D, GL_COLOR_ATTACHMENT0,
+    def _composite_texture(self, renderer: 'UIRenderer') -> None:
+        """Composite the 3D engine's offscreen tgfx2 texture into the
+        UI pass via ``UIRenderer.draw_texture``.
+
+        The surface's color texture and the renderer's Tgfx2Context
+        live on the same IRenderDevice by construction (the host binds
+        a process-global context in ``run_editor_tcgui``), so the
+        handle is directly consumable — no GL-id wrap needed. Works on
+        both OpenGL and Vulkan.
+
+        ``flip_v=True`` because tgfx2 color attachments follow the GL
+        origin convention (texel (0, 0) at the bottom-left), while the
+        UI ortho projection samples top-left.
+        """
+        handle = self._surface.color_tex
+        tex_w, tex_h = self._surface.framebuffer_size()
+        if handle is None or tex_w == 0 or tex_h == 0:
+            return
+
+        renderer.draw_texture(
+            self.x, self.y, self.width, self.height,
+            handle=handle,
+            tex_w=tex_w,
+            tex_h=tex_h,
+            flip_v=True,
         )
-
-        tex_id = self._surface.color_texture_id
-        fbo_w, fbo_h = self._surface.framebuffer_size()
-
-        # Create/update local FBO wrapping the shared color texture.
-        # The surface's FBO lives in the offscreen context and is not
-        # accessible here (main window context). But the color texture
-        # is shared between contexts, so we wrap it in a local FBO.
-        if self._local_blit_fbo == 0:
-            self._local_blit_fbo = int(glGenFramebuffers(1))
-
-        if self._local_blit_tex != tex_id:
-            glBindFramebuffer(GL_FRAMEBUFFER, self._local_blit_fbo)
-            glFramebufferTexture2D(
-                GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                GL_TEXTURE_2D, tex_id, 0,
-            )
-            glBindFramebuffer(GL_FRAMEBUFFER, 0)
-            self._local_blit_tex = tex_id
-
-        # Координаты виджета в GL (Y=0 снизу, Y-flip от экранных координат)
-        vp_h = renderer._viewport_h
-        dst_x = int(self.x)
-        dst_y = int(vp_h - self.y - self.height)
-        dst_w = int(self.width)
-        dst_h = int(self.height)
-
-        # Blit не использует scissor корректно на некоторых драйверах —
-        # отключаем на время blit, восстанавливаем после
-        glDisable(GL_SCISSOR_TEST)
-
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, self._local_blit_fbo)
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0)
-        glBlitFramebuffer(
-            0, 0, fbo_w, fbo_h,
-            dst_x, dst_y, dst_x + dst_w, dst_y + dst_h,
-            GL_COLOR_BUFFER_BIT, GL_LINEAR,
-        )
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)
-
-        # Восстанавливаем scissor если был активен
-        if renderer._clip_stack:
-            px, py, pw, ph = renderer._clip_stack[-1]
-            renderer._graphics.enable_scissor(px, py, pw, ph)
 
     # ------------------------------------------------------------------
     # Mouse events → input manager

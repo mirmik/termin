@@ -30,11 +30,4 @@ public static class TerminOpenGL
     /// </summary>
     [DllImport(DLL, EntryPoint = "tc_opengl_shutdown")]
     public static extern void Shutdown();
-
-    /// <summary>
-    /// Get the global OpenGL graphics backend.
-    /// Returns NULL if not initialized.
-    /// </summary>
-    [DllImport(DLL, EntryPoint = "tc_opengl_get_graphics")]
-    public static extern IntPtr GetGraphics();
 }

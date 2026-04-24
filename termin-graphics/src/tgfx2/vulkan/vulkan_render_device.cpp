@@ -5,15 +5,17 @@
 #include <vk_mem_alloc.h>
 #include "tgfx2/vulkan/vulkan_render_device.hpp"
 #include "tgfx2/vulkan/vulkan_command_list.hpp"
+#include "tgfx2/vulkan/vulkan_swapchain.hpp"
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
 #include "tgfx2/vulkan/vulkan_shader_compiler.hpp"
+#include "tgfx2/internal/shader_preprocess.hpp"
 
 #include <stdexcept>
 #include <cstring>
 #include <algorithm>
 #include <set>
 
-namespace tgfx2 {
+namespace tgfx {
 
 // --- Debug callback ---
 
@@ -35,8 +37,22 @@ VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info) {
     validation_enabled_ = info.enable_validation;
     init_instance(info);
 
+    // Resolve the surface. Two supply paths:
+    //   1. info.surface — pre-made surface (embedded hosts with their
+    //      own VkInstance via shared layers; rare).
+    //   2. info.surface_factory — a callback invoked with our freshly
+    //      created instance. This is the SDL/GLFW path: the host
+    //      supplies required instance extensions via
+    //      info.instance_extensions, then hands us a factory that
+    //      wraps SDL_Vulkan_CreateSurface(window, instance, &surf)
+    //      / glfwCreateWindowSurface(instance, window, ...).
     if (info.surface != VK_NULL_HANDLE) {
         surface_ = info.surface;
+    } else if (info.surface_factory) {
+        surface_ = info.surface_factory(instance_);
+        if (surface_ == VK_NULL_HANDLE) {
+            throw std::runtime_error("VulkanRenderDevice: surface_factory returned VK_NULL_HANDLE");
+        }
     }
 
     pick_physical_device();
@@ -45,6 +61,17 @@ VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info) {
     create_command_pool();
     create_descriptor_pool();
     create_shared_layouts();
+
+    // Build the swapchain now that queues/allocator are ready. A
+    // surface without a size is a hosting bug; refuse to guess.
+    if (surface_ != VK_NULL_HANDLE) {
+        if (info.swapchain_width == 0 || info.swapchain_height == 0) {
+            throw std::runtime_error(
+                "VulkanRenderDevice: surface provided but swapchain_width/height is 0");
+        }
+        swapchain_ = std::make_unique<VulkanSwapchain>(
+            *this, surface_, info.swapchain_width, info.swapchain_height);
+    }
 
     // Query capabilities
     VkPhysicalDeviceProperties props;
@@ -64,6 +91,10 @@ VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info) {
 
 VulkanRenderDevice::~VulkanRenderDevice() {
     if (device_) vkDeviceWaitIdle(device_);
+
+    // Tear down the swapchain first — its sync objects and image
+    // views are bound to device_ which is still alive at this point.
+    swapchain_.reset();
 
     // Destroy cached framebuffers
     for (auto& [k, fb] : framebuffer_cache_)
@@ -92,6 +123,7 @@ VulkanRenderDevice::~VulkanRenderDevice() {
         // layout and render_pass are shared/cached, cleaned separately
     }
 
+    if (default_sampler_) vkDestroySampler(device_, default_sampler_, nullptr);
     if (shared_pipeline_layout_) vkDestroyPipelineLayout(device_, shared_pipeline_layout_, nullptr);
     if (descriptor_set_layout_) vkDestroyDescriptorSetLayout(device_, descriptor_set_layout_, nullptr);
     if (descriptor_pool_) vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
@@ -104,7 +136,12 @@ VulkanRenderDevice::~VulkanRenderDevice() {
             vkGetInstanceProcAddr(instance_, "vkDestroyDebugUtilsMessengerEXT");
         if (func) func(instance_, debug_messenger_, nullptr);
     }
-    // Note: surface_ is NOT destroyed here — it's owned by the caller
+    // Surface is a child of instance — must go BEFORE instance
+    // destruction. We own it (either passed via info.surface, where
+    // caller cedes ownership, or produced by surface_factory).
+    if (surface_ && instance_) {
+        vkDestroySurfaceKHR(instance_, surface_, nullptr);
+    }
     if (instance_) vkDestroyInstance(instance_, nullptr);
 }
 
@@ -310,18 +347,19 @@ void VulkanRenderDevice::create_shared_layouts() {
         b.stageFlags = VK_SHADER_STAGE_ALL;
         bindings.push_back(b);
     }
+    // Bindings 4-7 are combined image+sampler. GLSL `sampler2D` maps
+    // to a single COMBINED_IMAGE_SAMPLER descriptor in SPIR-V, not
+    // separate SAMPLED_IMAGE + SAMPLER. Matching the descriptor type
+    // here lets stock Vulkan-targeted GLSL (`layout(binding=4)
+    // uniform sampler2D ...`) compile against our shared layout
+    // without the caller needing to split uniform sampler + uniform
+    // texture2D. bind_sampled_texture on the render_context side
+    // still carries both a TextureHandle and a SamplerHandle — the
+    // Vulkan write path packs them into one VkDescriptorImageInfo.
     for (uint32_t i = 4; i < 8; ++i) {
         VkDescriptorSetLayoutBinding b{};
         b.binding = i;
-        b.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        b.descriptorCount = 1;
-        b.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        bindings.push_back(b);
-    }
-    for (uint32_t i = 8; i < 12; ++i) {
-        VkDescriptorSetLayoutBinding b{};
-        b.binding = i;
-        b.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+        b.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         b.descriptorCount = 1;
         b.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         bindings.push_back(b);
@@ -336,14 +374,44 @@ void VulkanRenderDevice::create_shared_layouts() {
         throw std::runtime_error("Failed to create descriptor set layout");
     }
 
+    // Push-constant range: 128 bytes accessible from every graphics
+    // stage. That is the minimum guaranteed by `maxPushConstantsSize`
+    // in Vulkan 1.0 (lots of mobile GPUs stop at exactly 128). Fits
+    // a mat4 + a vec4 + spare ints, which covers the UIRenderer /
+    // Text2D / Text3D style where a single `layout(push_constant)`
+    // block carries all per-draw state. Shaders that need more must
+    // fall back to UBO bindings 0-3.
+    VkPushConstantRange pc_range{};
+    pc_range.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+    pc_range.offset = 0;
+    pc_range.size = 128;
+
     VkPipelineLayoutCreateInfo pl_ci{};
     pl_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pl_ci.setLayoutCount = 1;
     pl_ci.pSetLayouts = &descriptor_set_layout_;
+    pl_ci.pushConstantRangeCount = 1;
+    pl_ci.pPushConstantRanges = &pc_range;
 
     if (vkCreatePipelineLayout(device_, &pl_ci, nullptr, &shared_pipeline_layout_) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create pipeline layout");
     }
+}
+
+VkSampler VulkanRenderDevice::ensure_default_sampler() {
+    if (default_sampler_) return default_sampler_;
+    VkSamplerCreateInfo sci{};
+    sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sci.magFilter = VK_FILTER_LINEAR;
+    sci.minFilter = VK_FILTER_LINEAR;
+    sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sci.anisotropyEnable = VK_FALSE;
+    sci.maxLod = VK_LOD_CLAMP_NONE;
+    vkCreateSampler(device_, &sci, nullptr, &default_sampler_);
+    return default_sampler_;
 }
 
 // --- Capabilities ---
@@ -539,8 +607,12 @@ ShaderHandle VulkanRenderDevice::create_shader(const ShaderDesc& desc) {
         spirv.resize(desc.bytecode.size() / 4);
         std::memcpy(spirv.data(), desc.bytecode.data(), desc.bytecode.size());
     } else if (!desc.source.empty()) {
-        // Compile GLSL to SPIR-V
-        auto result = vk::compile_glsl_to_spirv(desc.source, desc.stage, desc.entry_point);
+        // Resolve #include / @features etc. through the shared
+        // preprocessor hook, then compile the GLSL to SPIR-V via
+        // shaderc. OpenGL runs the same preprocess step — shaders
+        // stay identical across backends.
+        std::string resolved = internal::preprocess_shader_source(desc.source);
+        auto result = vk::compile_glsl_to_spirv(resolved, desc.stage, desc.entry_point);
         if (!result.success) {
             throw std::runtime_error("Shader compilation failed: " + result.error_message);
         }
@@ -572,10 +644,16 @@ PipelineHandle VulkanRenderDevice::create_pipeline(const PipelineDesc& desc) {
     res.desc = desc;
     res.layout = shared_pipeline_layout_;
 
-    // Get or create render pass from formats
+    // Get or create render pass from formats. `needs_depth` is driven
+    // by the attachment presence (depth_format != Undefined), NOT by the
+    // depth_test/depth_write flags — a pipeline that has depth_test off
+    // still needs a render pass compatible with passes that carry a
+    // depth attachment. Conversely a pass with no depth attachment must
+    // produce a pipeline whose cached RP also has no depth slot, or
+    // vkCmdDraw fails with "RenderPasses incompatible".
     std::vector<PixelFormat> color_fmts = desc.color_formats;
     if (color_fmts.empty()) color_fmts.push_back(PixelFormat::RGBA8_UNorm);
-    bool needs_depth = desc.depth_stencil.depth_test || desc.depth_stencil.depth_write;
+    bool needs_depth = desc.depth_format != PixelFormat::Undefined;
     res.render_pass = get_or_create_render_pass(
         color_fmts, desc.depth_format, needs_depth, desc.sample_count,
         LoadOp::Clear, LoadOp::Clear);
@@ -744,14 +822,33 @@ ResourceSetHandle VulkanRenderDevice::create_resource_set(const ResourceSetDesc&
                 break;
             }
             case ResourceBinding::Kind::SampledTexture: {
+                // GLSL `sampler2D` compiles to a COMBINED_IMAGE_SAMPLER
+                // descriptor in SPIR-V; layout bindings 4-7 are of that
+                // type. Pack the view + sampler into a single image info.
+                // If caller didn't supply a sampler, fall back to a
+                // cached default linear-clamp one so the slot is never
+                // descriptor-wise empty.
                 auto* tex = get_texture(b.texture);
                 if (!tex) continue;
-                img_infos.push_back({VK_NULL_HANDLE, tex->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
-                w.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+                VkSampler samp_vk = VK_NULL_HANDLE;
+                if (b.sampler) {
+                    auto* samp = get_sampler(b.sampler);
+                    if (samp) samp_vk = samp->sampler;
+                }
+                if (samp_vk == VK_NULL_HANDLE) {
+                    samp_vk = ensure_default_sampler();
+                }
+                img_infos.push_back({samp_vk, tex->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+                w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 w.pImageInfo = &img_infos.back();
                 break;
             }
             case ResourceBinding::Kind::Sampler: {
+                // Kept for forward compatibility with shaders using the
+                // separate texture2D + sampler split. No layout slots
+                // for it in the current descriptor set layout; the
+                // write is effectively a no-op on the shared layout
+                // but other layouts may use it.
                 auto* samp = get_sampler(b.sampler);
                 if (!samp) continue;
                 img_infos.push_back({samp->sampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED});
@@ -771,6 +868,17 @@ ResourceSetHandle VulkanRenderDevice::create_resource_set(const ResourceSetDesc&
 }
 
 // --- Destroy ---
+
+TextureDesc VulkanRenderDevice::texture_desc(TextureHandle handle) const {
+    // Re-declare a local VkTextureResource* lookup because the member
+    // accessor is non-const; this is a read-only query so const_cast
+    // is safe — the pool's map is the only thing we touch.
+    auto* self = const_cast<VulkanRenderDevice*>(this);
+    if (auto* r = self->textures_.get(handle.id)) {
+        return r->desc;
+    }
+    return {};
+}
 
 void VulkanRenderDevice::destroy(BufferHandle h) {
     if (auto* r = buffers_.get(h.id)) {
@@ -911,6 +1019,18 @@ void VulkanRenderDevice::upload_texture(TextureHandle dst, std::span<const uint8
 
     res->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     vmaDestroyBuffer(allocator_, staging, staging_alloc);
+}
+
+void VulkanRenderDevice::upload_texture_region(TextureHandle /*dst*/,
+                                               uint32_t /*x*/, uint32_t /*y*/,
+                                               uint32_t /*w*/, uint32_t /*h*/,
+                                               std::span<const uint8_t> /*data*/,
+                                               uint32_t /*mip*/) {
+    // TODO: implement proper region upload via staging buffer +
+    // vkCmdCopyBufferToImage with VkBufferImageCopy.imageOffset /
+    // imageExtent. The OpenGL path (glTexSubImage2D) is the primary
+    // consumer right now; Vulkan gets a stub so the interface stays
+    // abstract-class compatible.
 }
 
 // --- Readback ---
@@ -1099,6 +1219,123 @@ VkFramebuffer VulkanRenderDevice::get_or_create_framebuffer(
     return fb;
 }
 
-} // namespace tgfx2
+// --- Texture-to-texture blit (backend-neutral external-target replacement) ---
+
+void VulkanRenderDevice::blit_to_texture(
+    TextureHandle dst_handle,
+    TextureHandle src_handle,
+    int src_x, int src_y, int src_w, int src_h,
+    int dst_x, int dst_y, int dst_w, int dst_h)
+{
+    auto* src = textures_.get(src_handle.id);
+    auto* dst = textures_.get(dst_handle.id);
+    if (!src || !dst) return;
+
+    // Remember the caller-visible layouts so the texture can be resumed
+    // in whatever state the next render pass expects (typically
+    // COLOR_ATTACHMENT_OPTIMAL for the offscreen RT). Without the restore,
+    // the next begin_pass hits a layout mismatch barrier.
+    VkImageLayout prev_src = src->current_layout;
+    VkImageLayout prev_dst = dst->current_layout;
+
+    execute_immediate([&](VkCommandBuffer cb) {
+        transition_image_layout(cb, src->image,
+            prev_src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_IMAGE_ASPECT_COLOR_BIT);
+        transition_image_layout(cb, dst->image,
+            prev_dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_ASPECT_COLOR_BIT);
+
+        VkImageBlit blit{};
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.srcSubresource.layerCount = 1;
+        blit.srcOffsets[0] = {src_x, src_y, 0};
+        blit.srcOffsets[1] = {src_x + src_w, src_y + src_h, 1};
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstSubresource.layerCount = 1;
+        blit.dstOffsets[0] = {dst_x, dst_y, 0};
+        blit.dstOffsets[1] = {dst_x + dst_w, dst_y + dst_h, 1};
+
+        vkCmdBlitImage(cb,
+            src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit, VK_FILTER_LINEAR);
+
+        // Restore layouts so the next render pass / sampler bind does
+        // not see an unexpected transition cost (or worse, a validation
+        // error on an unsynchronised access). If prev_* was UNDEFINED
+        // (never rendered), leave the images in their transfer layout —
+        // the next pass's begin will transition again from whatever it
+        // observes.
+        if (prev_src != VK_IMAGE_LAYOUT_UNDEFINED) {
+            transition_image_layout(cb, src->image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, prev_src,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+        }
+        if (prev_dst != VK_IMAGE_LAYOUT_UNDEFINED) {
+            transition_image_layout(cb, dst->image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, prev_dst,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+        } else {
+            // First-write case: stamp the layout we left the image in
+            // so the next user sees a real state instead of UNDEFINED.
+            dst->current_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        }
+    });
+}
+
+void VulkanRenderDevice::clear_texture(
+    TextureHandle dst_handle,
+    float r, float g, float b, float a,
+    int viewport_x, int viewport_y,
+    int viewport_w, int viewport_h)
+{
+    auto* dst = textures_.get(dst_handle.id);
+    if (!dst) return;
+
+    VkImageLayout prev = dst->current_layout;
+
+    execute_immediate([&](VkCommandBuffer cb) {
+        transition_image_layout(cb, dst->image,
+            prev, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_ASPECT_COLOR_BIT);
+
+        VkClearColorValue clear{};
+        clear.float32[0] = r;
+        clear.float32[1] = g;
+        clear.float32[2] = b;
+        clear.float32[3] = a;
+
+        // vkCmdClearColorImage requires a full-image range with an
+        // offset-based mechanism — it does not natively support a
+        // viewport subrect. For a subrect clear we'd need a render pass
+        // with LoadOp::Clear + scissor. In practice callers pass the
+        // full texture extent here (PullRenderingManager clears the
+        // whole display before compositing viewports), so clearing the
+        // whole image is correct; if a future caller needs a true rect
+        // clear, route through begin_pass + scissor instead.
+        (void)viewport_x; (void)viewport_y;
+        (void)viewport_w; (void)viewport_h;
+
+        VkImageSubresourceRange range{};
+        range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        range.levelCount = 1;
+        range.layerCount = 1;
+
+        vkCmdClearColorImage(cb, dst->image,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            &clear, 1, &range);
+
+        if (prev != VK_IMAGE_LAYOUT_UNDEFINED) {
+            transition_image_layout(cb, dst->image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, prev,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+        } else {
+            dst->current_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        }
+    });
+}
+
+} // namespace tgfx
 
 #endif // TGFX2_HAS_VULKAN

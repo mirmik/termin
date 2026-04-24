@@ -1,6 +1,8 @@
 #pragma once
 
 #include <termin/render/geometry_pass_base.hpp>
+#include "tgfx2/handles.hpp"
+#include "tgfx2/i_render_device.hpp"
 
 namespace termin {
 
@@ -12,6 +14,16 @@ private:
     float _near_plane = 0.1f;
     float _far_plane = 1000.0f;
 
+    // Lazy tgfx2 resources used by execute_with_data_tgfx2. Lifetime
+    // tied to device2_; released in destroy()/dtor.
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tgfx::ShaderHandle depth_vs2_;
+    tgfx::ShaderHandle depth_fs2_;
+    tgfx::BufferHandle per_frame_ubo_;
+
+    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
+    void release_tgfx2_resources();
+
 public:
     DepthPass(
         const std::string& input_res = "empty_depth",
@@ -19,10 +31,16 @@ public:
         const std::string& pass_name = "Depth"
     ) : GeometryPassBase(pass_name, input_res, output_res) {}
 
-    void execute_with_data(
-        GraphicsBackend* graphics,
-        const FBOMap& reads_fbos,
-        const FBOMap& writes_fbos,
+    ~DepthPass() override { release_tgfx2_resources(); }
+
+    void destroy() override {
+        GeometryPassBase::destroy();
+        release_tgfx2_resources();
+    }
+
+    // tgfx2-native DepthPass entry — requires ctx.ctx2 to be non-null.
+    void execute_with_data_tgfx2(
+        ExecuteContext& ctx,
         const Rect4i& rect,
         tc_scene_handle scene,
         const Mat44f& view,
@@ -44,17 +62,6 @@ protected:
     std::array<float, 4> clear_color() const override { return {1.0f, 1.0f, 1.0f, 1.0f}; }
     const char* phase_name() const override { return "depth"; }
     std::optional<std::string> fbo_format() const override { return "r16f"; }
-
-    void setup_extra_uniforms(
-        const DrawCall& dc,
-        TcShader& shader,
-        RenderContext& context
-    ) override {
-        (void)dc;
-        (void)context;
-        shader.set_uniform_float("u_near", _near_plane);
-        shader.set_uniform_float("u_far", _far_plane);
-    }
 };
 
 } // namespace termin

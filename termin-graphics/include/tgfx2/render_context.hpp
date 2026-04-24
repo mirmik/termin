@@ -18,6 +18,7 @@
 
 #include <array>
 #include <memory>
+#include <vector>
 
 #include "tgfx2/tgfx2_api.h"
 #include "tgfx2/enums.hpp"
@@ -26,7 +27,7 @@
 #include "tgfx2/vertex_layout.hpp"
 #include "tgfx2/descriptors.hpp"
 
-namespace tgfx2 {
+namespace tgfx {
 
 class IRenderDevice;
 class ICommandList;
@@ -35,7 +36,14 @@ class PipelineCache;
 class TGFX2_API RenderContext2 {
 public:
     RenderContext2(IRenderDevice& device, PipelineCache& cache);
-    ~RenderContext2();
+    // Virtual so the compiler emits a vtable + typeinfo in a single
+    // translation unit (render_context.cpp) and exports them from
+    // libtermin_graphics2.so. Without this, each nanobind extension
+    // module that includes render_context.hpp generates its own
+    // hidden-visibility typeinfo, and cross-module
+    // nb::class_<RenderContext2> lookups fail with
+    // "Unable to convert function return value to a Python type".
+    virtual ~RenderContext2();
 
     // Non-copyable
     RenderContext2(const RenderContext2&) = delete;
@@ -47,10 +55,14 @@ public:
 
     // --- Render pass ---
     // Begin render pass with color attachment (and optional depth).
-    // clear_color = nullptr means LoadOp::Load (don't clear).
+    // clear_color = nullptr means LoadOp::Load for the color attachment.
+    // Pass `color = {}` (id=0) for a depth-only pass (e.g. shadow maps);
+    // the backend will set glDrawBuffer/ReadBuffer = NONE.
+    // `clear_depth_enabled` controls depth LoadOp independently of color.
     void begin_pass(TextureHandle color, TextureHandle depth = {},
                     const float* clear_color = nullptr,
-                    float clear_depth = 1.0f);
+                    float clear_depth = 1.0f,
+                    bool clear_depth_enabled = true);
     void end_pass();
 
     // --- Mutable render state (applied at draw time) ---
@@ -71,9 +83,70 @@ public:
     void set_vertex_layout(const VertexBufferLayout& layout);
     void set_topology(PrimitiveTopology topo);
 
-    // --- Texture binding (for legacy uniform-based passes) ---
-    // These set pending texture slots. Actual binding depends on backend.
-    void bind_texture(uint32_t unit, TextureHandle tex);
+    // --- Resource bindings (UBOs, textures, samplers) ---
+    // Register a uniform buffer at the given binding slot. The buffer is
+    // resolved into a ResourceSet lazily at draw time; call-sites do not
+    // manage ResourceSetHandle lifecycles.
+    // Passing range=0 means "bind whole buffer" (backend uses glBindBufferBase).
+    void bind_uniform_buffer(uint32_t binding, BufferHandle buffer,
+                             uint64_t offset = 0, uint64_t range = 0);
+
+    // Set per-draw push constants. Payload becomes visible to the next
+    // draw call at binding slot TGFX2_PUSH_CONSTANTS_BINDING (GL) or via
+    // `layout(push_constant)` on Vulkan. Max payload is
+    // TGFX2_PUSH_CONSTANTS_MAX_BYTES (128 bytes, Vulkan-compat). Typical
+    // use: model matrix and other per-object data that changes every
+    // draw — avoids the churn of uploading/rebinding a full UBO.
+    void set_push_constants(const void* data, uint32_t size);
+
+    // Queue a handle for destruction at the end of the current frame.
+    // Used by pass code that wraps legacy GL resources as non-owning
+    // tgfx2 handles (register_external_texture / register_external_buffer)
+    // and needs them alive only for the draws in this frame. The
+    // underlying GL object is preserved; only the tgfx2 HandlePool entry
+    // is removed.
+    void defer_destroy(TextureHandle handle);
+    void defer_destroy(BufferHandle handle);
+
+    // --- Transitional legacy-uniform setters ---
+    //
+    // These exist to bridge pre-existing .shader files that still declare
+    // plain `uniform mat4 u_view` / `uniform sampler2D u_shadow_map_0`
+    // etc. onto the tgfx2 draw path. They flush the pending pipeline
+    // (so the shader program is actually bound in GL) and then route
+    // through glUniform*/glUniformMatrix*/glUniform1i on the currently-
+    // bound program.
+    //
+    // Vulkan has no equivalent — Vulkan shaders must use UBOs or push
+    // constants. On a Vulkan backend these methods would be no-ops or
+    // assertions. Treat them as *temporary*: every caller is a candidate
+    // for migration to bind_uniform_buffer / set_push_constants.
+    void set_uniform_int(const char* name, int value);
+    void set_uniform_float(const char* name, float value);
+    void set_uniform_vec2(const char* name, float x, float y);
+    void set_uniform_vec3(const char* name, float x, float y, float z);
+    void set_uniform_vec4(const char* name, float x, float y, float z, float w);
+    void set_uniform_mat4(const char* name, const float* data,
+                          bool transpose = false);
+    void set_uniform_mat4_array(const char* name, const float* data,
+                                int count, bool transpose = false);
+
+    // Link a `layout(std140) uniform NAME { ... }` block declared in
+    // the currently bound program to a binding slot. On Vulkan the
+    // binding is compiled into the shader via SPIR-V; this call is
+    // GL-only transitional, wrapping glUniformBlockBinding on the
+    // current program.
+    void set_block_binding(const char* block_name, uint32_t binding_slot);
+
+    // Register a sampled texture at the given binding slot. The sampler is
+    // optional; if omitted, the backend uses the texture's default sampling
+    // parameters (useful for GL 3.3 style shaders without separate samplers).
+    void bind_sampled_texture(uint32_t binding, TextureHandle tex,
+                              SamplerHandle sampler = {});
+
+    // Drop all pending resource bindings — next draw starts from an empty
+    // resource set.
+    void clear_resource_bindings();
 
     // --- Target format info (for pipeline cache key) ---
     void set_color_format(PixelFormat fmt);
@@ -106,12 +179,39 @@ public:
     // --- Blit ---
     void blit(TextureHandle src, TextureHandle dst);
 
+    // --- Diagnostics ---
+    // Return the most recent GL error code (backend-specific) and
+    // clear it. On OpenGL this forwards to ``glGetError()``. Useful
+    // for ad-hoc debugging from higher layers (Python bindings,
+    // tests) where glad is not initialised and the direct symbol is
+    // not available.
+    uint32_t last_gl_error();
+
     // --- Access ---
     IRenderDevice& device() { return device_; }
     ICommandList* cmd() { return cmd_.get(); }
 
+    // Force pending render state to be resolved into an active pipeline.
+    // Normally called internally from draw*() methods; exposed publicly as
+    // an escape hatch for Phase 2 pass migration where a pass needs to set
+    // uniforms or bind textures on the underlying GL program BEFORE issuing
+    // a draw call — via glGetIntegerv(GL_CURRENT_PROGRAM) + glUniform*.
+    // After this method returns, the backend-specific pipeline (e.g. GL
+    // program) is bound and ready for state setting.
+    void flush_pipeline();
+
+    // Return the built-in fullscreen-quad vertex shader, lazily creating it
+    // and the FSQ VBO/IBO on first access. Exposed so Phase 2 passes can
+    // bind_shader(fsq_vertex_shader(), their_fs) explicitly and then
+    // flush_pipeline() before setting uniforms via raw GL, avoiding the
+    // "Pipeline requires valid vertex and fragment shaders" error that
+    // would otherwise fire when flush_pipeline() runs while bound_vs_ is
+    // still empty (the VS substitution inside draw_fullscreen_quad() only
+    // happens at the start of that method, too late for a pre-draw uniform
+    // set).
+    ShaderHandle fsq_vertex_shader();
+
 private:
-    void flush_pipeline();  // resolve pending state → bind pipeline
 
     IRenderDevice& device_;
     PipelineCache& cache_;
@@ -127,12 +227,34 @@ private:
     VertexBufferLayout vertex_layout_;
     PrimitiveTopology topology_ = PrimitiveTopology::TriangleList;
 
-    PixelFormat color_format_ = PixelFormat::RGBA8_UNorm;
-    PixelFormat depth_format_ = PixelFormat::D32F;
+    // Synced from begin_pass() with the actual attachment formats.
+    // `Undefined` means "no attachment of this kind in the current
+    // pass" — the pipeline cache builds a VkRenderPass with matching
+    // attachment count, so vkCmdDraw's compatibility check passes.
+    PixelFormat color_format_ = PixelFormat::Undefined;
+    PixelFormat depth_format_ = PixelFormat::Undefined;
     uint32_t sample_count_ = 1;
 
     bool in_pass_ = false;
     bool pipeline_dirty_ = true;
+
+    // Pending resource bindings, rebuilt into a ResourceSet on dirty.
+    std::vector<ResourceBinding> pending_bindings_;
+    bool bindings_dirty_ = true;
+    ResourceSetHandle current_resource_set_;
+
+    // Queued push-constant bytes. Re-emitted after every flush_pipeline
+    // so the data lands on the freshly-bound VkPipelineLayout (Vulkan)
+    // or the current ring UBO offset (OpenGL). Cleared when the caller
+    // passes an empty payload.
+    std::vector<uint8_t> pending_push_constants_;
+
+    // Per-frame deferred-destruction list for non-owning external
+    // wrappers (register_external_texture / register_external_buffer)
+    // created and used inside a single frame. Drained in end_frame().
+    std::vector<TextureHandle> deferred_destroy_textures_;
+    std::vector<BufferHandle>  deferred_destroy_buffers_;
+    std::vector<ResourceSetHandle> deferred_destroy_resource_sets_;
 
     // Fullscreen quad resources (created on first use)
     BufferHandle fsq_vbo_;
@@ -140,6 +262,7 @@ private:
     ShaderHandle fsq_vs_;
 
     void ensure_fsq_resources();
+    void flush_resource_set();
 };
 
-} // namespace tgfx2
+} // namespace tgfx

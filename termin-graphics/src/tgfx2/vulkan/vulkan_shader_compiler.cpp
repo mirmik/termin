@@ -3,7 +3,7 @@
 #include "tgfx2/vulkan/vulkan_shader_compiler.hpp"
 #include <shaderc/shaderc.hpp>
 
-namespace tgfx2::vk {
+namespace tgfx::vk {
 
 static shaderc_shader_kind to_shaderc_kind(ShaderStage stage) {
     switch (stage) {
@@ -33,6 +33,12 @@ SpirvCompileResult compile_glsl_to_spirv(
     // Force GLSL 450 profile to handle #version 330 sources
     options.SetForcedVersionProfile(450, shaderc_profile_core);
 
+    // Shaders fork their declarations with `#ifdef VULKAN` — shaderc
+    // auto-defines `VULKAN=100` when `shaderc_target_env_vulkan` is
+    // set (see SetTargetEnvironment above), so we rely on that and
+    // don't redefine the macro ourselves (redefining with a different
+    // substitution gives "Macro redefined" errors).
+
     auto kind = to_shaderc_kind(stage);
     auto module = compiler.CompileGlslToSpv(source, kind, "shader", entry_point.c_str(), options);
 
@@ -47,6 +53,6 @@ SpirvCompileResult compile_glsl_to_spirv(
     return result;
 }
 
-} // namespace tgfx2::vk
+} // namespace tgfx::vk
 
 #endif // TGFX2_HAS_VULKAN

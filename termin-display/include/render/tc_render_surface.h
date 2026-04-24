@@ -71,6 +71,17 @@ struct tc_render_surface_vtable {
     // Share group key — surfaces with the same key share GL resources
     // (textures, shaders, VBO/EBO). NULL = fallback to context_key (no sharing).
     uintptr_t (*share_group_key)(tc_render_surface* self);
+
+    // --- tgfx2 composite target (backend-neutral) -------------------------
+    // Return the tgfx2 TextureHandle id (uint32_t) that the engine should
+    // composite viewports into. When non-zero, PullRenderingManager
+    // prefers this path over the legacy `get_framebuffer`+blit-to-FBO
+    // path and routes through IRenderDevice::blit_to_texture /
+    // clear_texture — the only path that works on Vulkan.
+    //
+    // A surface that has not yet been migrated (legacy FBO-only) leaves
+    // this NULL or returns 0 and falls back to the FBO path.
+    uint32_t (*get_tgfx_color_tex_id)(tc_render_surface* self);
 };
 
 // ============================================================================
@@ -177,6 +188,13 @@ static inline uintptr_t tc_render_surface_share_group_key(tc_render_surface* s) 
     }
     // Fallback: same as context_key (no sharing, each surface = own group)
     return tc_render_surface_context_key(s);
+}
+
+static inline uint32_t tc_render_surface_get_tgfx_color_tex_id(tc_render_surface* s) {
+    if (s && s->vtable && s->vtable->get_tgfx_color_tex_id) {
+        return s->vtable->get_tgfx_color_tex_id(s);
+    }
+    return 0;
 }
 
 static inline void tc_render_surface_poll_events(tc_render_surface* s) {

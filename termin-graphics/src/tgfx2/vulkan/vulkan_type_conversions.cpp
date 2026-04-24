@@ -2,7 +2,7 @@
 
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
 
-namespace tgfx2::vk {
+namespace tgfx::vk {
 
 VkFormat to_vk_format(PixelFormat fmt) {
     switch (fmt) {
@@ -19,6 +19,8 @@ VkFormat to_vk_format(PixelFormat fmt) {
         case PixelFormat::RGBA32F:           return VK_FORMAT_R32G32B32A32_SFLOAT;
         case PixelFormat::D24_UNorm_S8_UInt: return VK_FORMAT_D24_UNORM_S8_UINT;
         case PixelFormat::D32F:              return VK_FORMAT_D32_SFLOAT;
+        case PixelFormat::D24_UNorm:         return VK_FORMAT_X8_D24_UNORM_PACK32;
+        case PixelFormat::Undefined:         return VK_FORMAT_UNDEFINED;
     }
     return VK_FORMAT_R8G8B8A8_UNORM;
 }
@@ -185,9 +187,11 @@ VkImageAspectFlags format_aspect_flags(PixelFormat fmt) {
 }
 
 bool is_depth_format(PixelFormat fmt) {
-    return fmt == PixelFormat::D24_UNorm_S8_UInt || fmt == PixelFormat::D32F;
+    return fmt == PixelFormat::D24_UNorm_S8_UInt
+        || fmt == PixelFormat::D24_UNorm
+        || fmt == PixelFormat::D32F;
 }
 
-} // namespace tgfx2::vk
+} // namespace tgfx::vk
 
 #endif // TGFX2_HAS_VULKAN

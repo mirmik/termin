@@ -1,6 +1,12 @@
 #include <termin/render/frame_graph_debugger_core.hpp>
 #include <termin/render/frame_pass.hpp>
 
+#include <tgfx2/render_context.hpp>
+#include <tgfx2/descriptors.hpp>
+#include <tgfx2/enums.hpp>
+#include <tgfx2/i_render_device.hpp>
+#include <tgfx2/opengl/opengl_render_device.hpp>
+
 extern "C" {
 #include <tcbase/tc_log.h>
 }
@@ -10,168 +16,216 @@ extern "C" {
 
 namespace termin {
 
-void FrameGraphCapture::capture(CxxFramePass* caller, FramebufferHandle* src, GraphicsBackend* graphics) {
-    if (!should_capture(caller)) {
-        return;
-    }
-    capture_direct(src, graphics);
+namespace {
+
+bool is_depth_format(tgfx::PixelFormat fmt) {
+    return fmt == tgfx::PixelFormat::D24_UNorm
+        || fmt == tgfx::PixelFormat::D24_UNorm_S8_UInt
+        || fmt == tgfx::PixelFormat::D32F;
 }
 
-void FrameGraphCapture::capture_direct(FramebufferHandle* src, GraphicsBackend* graphics) {
-    if (!src || !graphics) {
+std::string pixel_format_name(tgfx::PixelFormat fmt) {
+    switch (fmt) {
+        case tgfx::PixelFormat::R8_UNorm:           return "r8";
+        case tgfx::PixelFormat::RG8_UNorm:          return "rg8";
+        case tgfx::PixelFormat::RGB8_UNorm:         return "rgb8";
+        case tgfx::PixelFormat::RGBA8_UNorm:        return "rgba8";
+        case tgfx::PixelFormat::BGRA8_UNorm:        return "bgra8";
+        case tgfx::PixelFormat::R16F:               return "r16f";
+        case tgfx::PixelFormat::RG16F:              return "rg16f";
+        case tgfx::PixelFormat::RGBA16F:            return "rgba16f";
+        case tgfx::PixelFormat::R32F:               return "r32f";
+        case tgfx::PixelFormat::RG32F:              return "rg32f";
+        case tgfx::PixelFormat::RGBA32F:            return "rgba32f";
+        case tgfx::PixelFormat::D24_UNorm:          return "depth24";
+        case tgfx::PixelFormat::D24_UNorm_S8_UInt:  return "depth24_stencil8";
+        case tgfx::PixelFormat::D32F:               return "depth32f";
+    }
+    return "unknown";
+}
+
+} // namespace
+
+FrameGraphCapture::~FrameGraphCapture() {
+    release();
+}
+
+void FrameGraphCapture::release() {
+    if (device_ && capture_tex_) {
+        device_->destroy(capture_tex_);
+    }
+    capture_tex_ = {};
+    device_ = nullptr;
+    width_ = 0;
+    height_ = 0;
+    captured_ = false;
+}
+
+void FrameGraphCapture::ensure_capture_tex(
+    tgfx::IRenderDevice& device, int w, int h, tgfx::PixelFormat fmt
+) {
+    if (device_ == &device && capture_tex_ &&
+        width_ == w && height_ == h && format_ == fmt) {
         return;
     }
-    ensure_capture_fbo(src, graphics);
-    if (!capture_fbo_) {
+    // Size, format, or device changed — drop the old texture and
+    // allocate afresh.
+    if (device_ && capture_tex_) {
+        device_->destroy(capture_tex_);
+        capture_tex_ = {};
+    }
+    device_ = &device;
+    width_ = w;
+    height_ = h;
+    format_ = fmt;
+
+    tgfx::TextureDesc desc;
+    desc.width = static_cast<uint32_t>(w);
+    desc.height = static_cast<uint32_t>(h);
+    desc.format = fmt;
+    desc.sample_count = 1;
+    desc.usage = tgfx::TextureUsage::Sampled |
+                 tgfx::TextureUsage::ColorAttachment |
+                 tgfx::TextureUsage::CopyDst;
+    capture_tex_ = device.create_texture(desc);
+}
+
+void FrameGraphCapture::capture_direct_via_ctx2(
+    tgfx::RenderContext2* ctx2,
+    tgfx::TextureHandle src_tex,
+    int width,
+    int height,
+    tgfx::PixelFormat format
+) {
+    if (!ctx2 || !src_tex || width <= 0 || height <= 0) {
         return;
     }
-    do_blit(src, graphics);
+
+    ensure_capture_tex(ctx2->device(), width, height, format);
+    if (!capture_tex_) {
+        return;
+    }
+
+    ctx2->blit(src_tex, capture_tex_);
     captured_ = true;
 }
 
-void FrameGraphCapture::ensure_capture_fbo(FramebufferHandle* src, GraphicsBackend* graphics) {
-    int w = src->get_width();
-    int h = src->get_height();
-    std::string fmt = src->get_format();
-
-    if (capture_fbo_ && fbo_w_ == w && fbo_h_ == h && fbo_format_ == fmt) {
-        return;
+static const char* PRESENTER_FRAG_SRC = R"(
+#version 330 core
+in vec2 vUV;
+uniform sampler2D u_tex;
+uniform int u_channel;
+uniform int u_highlight_hdr;
+out vec4 FragColor;
+void main() {
+    vec4 c = texture(u_tex, vUV);
+    vec3 result;
+    if (u_channel == 1)      result = vec3(c.r);
+    else if (u_channel == 2) result = vec3(c.g);
+    else if (u_channel == 3) result = vec3(c.b);
+    else if (u_channel == 4) result = vec3(c.a);
+    else                     result = c.rgb;
+    if (u_highlight_hdr == 1) {
+        float max_val = max(max(c.r, c.g), c.b);
+        if (max_val > 1.0) {
+            float intensity = clamp((max_val - 1.0) / 2.0, 0.0, 1.0);
+            result = mix(result, vec3(1.0, 0.0, 1.0), 0.5 + intensity * 0.5);
+        }
     }
+    FragColor = vec4(result, 1.0);
+}
+)";
 
-    capture_fbo_ = graphics->create_framebuffer(w, h, 1, fmt);
-    fbo_w_ = w;
-    fbo_h_ = h;
-    fbo_format_ = fmt;
+FrameGraphPresenter::~FrameGraphPresenter() {
+    release_tgfx2_resources();
 }
 
-void FrameGraphCapture::do_blit(FramebufferHandle* src, GraphicsBackend* graphics) {
-    int w = src->get_width();
-    int h = src->get_height();
-
-    if (src->is_msaa()) {
-        graphics->blit_framebuffer(src, capture_fbo_.get(), 0, 0, w, h, 0, 0, w, h, true, false);
-        graphics->blit_framebuffer(src, capture_fbo_.get(), 0, 0, w, h, 0, 0, w, h, false, true);
-    } else {
-        graphics->blit_framebuffer(src, capture_fbo_.get(), 0, 0, w, h, 0, 0, w, h, true, true);
+void FrameGraphPresenter::release_tgfx2_resources() {
+    if (device2_ && fs2_) {
+        device2_->destroy(fs2_);
+        fs2_ = {};
     }
-
-    graphics->bind_framebuffer(src);
+    device2_ = nullptr;
 }
 
-void FrameGraphPresenter::ensure_shader() {
-    if (shader_ready_) {
-        return;
+void FrameGraphPresenter::ensure_fs(tgfx::IRenderDevice& device) {
+    if (fs2_ && device2_ == &device) return;
+    if (device2_ && device2_ != &device) {
+        release_tgfx2_resources();
     }
+    device2_ = &device;
 
-    const char* vert_src = R"(
-        #version 330 core
-        layout(location = 0) in vec2 a_pos;
-        layout(location = 1) in vec2 a_uv;
-        out vec2 v_uv;
-        void main() {
-            v_uv = a_uv;
-            gl_Position = vec4(a_pos, 0.0, 1.0);
-        }
-    )";
-
-    const char* frag_src = R"(
-        #version 330 core
-        in vec2 v_uv;
-        uniform sampler2D u_tex;
-        uniform int u_channel;
-        uniform int u_highlight_hdr;
-        out vec4 FragColor;
-        void main() {
-            vec4 c = texture(u_tex, v_uv);
-            vec3 result;
-
-            if (u_channel == 1) {
-                result = vec3(c.r);
-            } else if (u_channel == 2) {
-                result = vec3(c.g);
-            } else if (u_channel == 3) {
-                result = vec3(c.b);
-            } else if (u_channel == 4) {
-                result = vec3(c.a);
-            } else {
-                result = c.rgb;
-            }
-
-            if (u_highlight_hdr == 1) {
-                float max_val = max(max(c.r, c.g), c.b);
-                if (max_val > 1.0) {
-                    float intensity = clamp((max_val - 1.0) / 2.0, 0.0, 1.0);
-                    result = mix(result, vec3(1.0, 0.0, 1.0), 0.5 + intensity * 0.5);
-                }
-            }
-
-            FragColor = vec4(result, 1.0);
-        }
-    )";
-
-    shader_ = TcShader::from_sources(vert_src, frag_src, "", "FrameGraphDebuggerPresenter");
-    shader_ready_ = shader_.is_valid();
-    if (!shader_ready_) {
-        tc::Log::error("FrameGraphPresenter: failed to create shader");
+    tgfx::ShaderDesc desc;
+    desc.stage = tgfx::ShaderStage::Fragment;
+    desc.source = PRESENTER_FRAG_SRC;
+    fs2_ = device.create_shader(desc);
+    if (!fs2_) {
+        tc::Log::error("FrameGraphPresenter: failed to create fs2");
     }
 }
 
 void FrameGraphPresenter::render(
-    GraphicsBackend* graphics,
-    FramebufferHandle* capture_fbo,
+    tgfx::RenderContext2* ctx2,
+    tgfx::TextureHandle capture_tex,
+    tgfx::TextureHandle target_tex,
+    int dst_x,
+    int dst_y,
     int dst_w,
     int dst_h,
     int channel_mode,
     bool highlight_hdr
 ) {
-    if (!graphics || !capture_fbo) {
+    if (!ctx2 || !capture_tex || !target_tex) {
         return;
     }
 
-    ensure_shader();
-    if (!shader_ready_) {
+    ensure_fs(ctx2->device());
+    if (!fs2_) {
         return;
     }
 
-    GPUTextureHandle* tex = capture_fbo->color_texture();
-    if (!tex) {
-        return;
-    }
+    ctx2->begin_pass(target_tex, tgfx::TextureHandle{}, nullptr, 1.0f, false);
+    ctx2->set_viewport(dst_x, dst_y, dst_w, dst_h);
+    // The debugger widget may be called with an active tcgui clip
+    // rect. Make sure our fullscreen-quad draw isn't trimmed.
+    ctx2->clear_scissor();
+    ctx2->set_depth_test(false);
+    ctx2->set_depth_write(false);
+    ctx2->set_blend(false);
+    ctx2->set_cull(tgfx::CullMode::None);
+    ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
 
-    graphics->set_viewport(0, 0, dst_w, dst_h);
-    graphics->clear_color(0.1f, 0.1f, 0.1f, 1.0f);
-    graphics->set_depth_test(false);
-    graphics->set_depth_mask(false);
+    ctx2->bind_shader(ctx2->fsq_vertex_shader(), fs2_);
 
-    shader_.use();
-    shader_.set_uniform_int("u_tex", 0);
-    shader_.set_uniform_int("u_channel", channel_mode);
-    shader_.set_uniform_int("u_highlight_hdr", highlight_hdr ? 1 : 0);
+    ctx2->bind_sampled_texture(0, capture_tex);
+    ctx2->set_uniform_int("u_tex", 0);
+    ctx2->set_uniform_int("u_channel", channel_mode);
+    ctx2->set_uniform_int("u_highlight_hdr", highlight_hdr ? 1 : 0);
 
-    tex->bind(0);
-    graphics->draw_ui_textured_quad();
-
-    graphics->set_depth_test(true);
-    graphics->set_depth_mask(true);
+    ctx2->draw_fullscreen_quad();
+    ctx2->end_pass();
 }
 
-HDRStats FrameGraphPresenter::compute_hdr_stats(GraphicsBackend* graphics, FramebufferHandle* fbo) {
+HDRStats FrameGraphPresenter::compute_hdr_stats(
+    tgfx::IRenderDevice* device,
+    tgfx::TextureHandle tex
+) {
     HDRStats stats{};
 
-    if (!graphics || !fbo) {
+    if (!device || !tex) {
         return stats;
     }
-
-    int w = fbo->get_width();
-    int h = fbo->get_height();
+    auto desc = device->texture_desc(tex);
+    int w = static_cast<int>(desc.width);
+    int h = static_cast<int>(desc.height);
     int total = w * h;
     if (total <= 0) {
         return stats;
     }
 
     std::vector<float> pixels(total * 4);
-    if (!graphics->read_color_buffer_float(fbo, pixels.data())) {
-        tc::Log::error("FrameGraphPresenter: read_color_buffer_float failed");
+    if (!device->read_texture_rgba_float(tex, pixels.data())) {
+        tc::Log::error("FrameGraphPresenter: read_texture_rgba_float failed");
         return stats;
     }
 
@@ -225,20 +279,21 @@ HDRStats FrameGraphPresenter::compute_hdr_stats(GraphicsBackend* graphics, Frame
 }
 
 std::vector<uint8_t> FrameGraphPresenter::read_depth_normalized(
-    GraphicsBackend* graphics,
-    FramebufferHandle* fbo,
+    tgfx::IRenderDevice* device,
+    tgfx::TextureHandle tex,
     int* out_w,
     int* out_h
 ) {
     if (out_w) *out_w = 0;
     if (out_h) *out_h = 0;
 
-    if (!graphics || !fbo) {
+    if (!device || !tex) {
         return {};
     }
 
-    int w = fbo->get_width();
-    int h = fbo->get_height();
+    auto desc = device->texture_desc(tex);
+    int w = static_cast<int>(desc.width);
+    int h = static_cast<int>(desc.height);
     if (out_w) *out_w = w;
     if (out_h) *out_h = h;
     if (w <= 0 || h <= 0) {
@@ -246,8 +301,8 @@ std::vector<uint8_t> FrameGraphPresenter::read_depth_normalized(
     }
 
     std::vector<float> depth(w * h);
-    if (!graphics->read_depth_buffer(fbo, depth.data())) {
-        tc::Log::error("FrameGraphPresenter: read_depth_buffer failed");
+    if (!device->read_texture_depth_float(tex, depth.data())) {
+        tc::Log::error("FrameGraphPresenter: read_texture_depth_float failed");
         return {};
     }
 
@@ -271,25 +326,21 @@ std::vector<uint8_t> FrameGraphPresenter::read_depth_normalized(
     return out;
 }
 
-FBOInfo FrameGraphPresenter::get_fbo_info(FramebufferHandle* fbo) {
-    FBOInfo info;
-    if (!fbo) {
+TextureInfo FrameGraphPresenter::get_texture_info(
+    tgfx::IRenderDevice* device,
+    tgfx::TextureHandle tex
+) {
+    TextureInfo info;
+    if (!device || !tex) {
         return info;
     }
-
-    info.type_name = fbo->resource_type();
-    info.width = fbo->get_width();
-    info.height = fbo->get_height();
-    info.samples = fbo->get_samples();
-    info.is_msaa = fbo->is_msaa();
-    info.format = fbo->get_format();
-    info.fbo_id = fbo->get_fbo_id();
-    info.gl_width = info.width;
-    info.gl_height = info.height;
-    info.gl_samples = info.samples;
-    info.gl_format = info.format;
-    info.filter = fbo->is_msaa() ? "n/a" : "linear";
-    info.gl_filter = info.filter;
+    auto desc = device->texture_desc(tex);
+    info.width = static_cast<int>(desc.width);
+    info.height = static_cast<int>(desc.height);
+    info.samples = static_cast<int>(desc.sample_count);
+    info.is_msaa = desc.sample_count > 1;
+    info.format = desc.format;
+    info.format_name = pixel_format_name(desc.format);
     return info;
 }
 

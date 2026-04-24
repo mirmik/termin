@@ -35,6 +35,21 @@
 // Use std::string
 %include "std_string.i"
 
+// --- Marshal strings as UTF-8 instead of the platform default (ANSI/CP125x) ---
+// Without this, Cyrillic / any non-ASCII text passed from C# to C++ arrives
+// in the host codepage (e.g. Windows-1251 on RU Windows), which our tgfx2
+// FontAtlas then tries to decode as UTF-8 and rejects → "?" in the atlas.
+// LPUTF8Str asks .NET to encode the managed string as UTF-8 bytes on the way
+// out, so C++ sees valid UTF-8 exactly as written in the source.
+%typemap(imtype,
+         inattributes="[global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)]")
+    const char *, char *
+    "string"
+%typemap(imtype,
+         inattributes="[global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)]")
+    std::string, std::string const &, std::string &
+    "string"
+
 // ============================================================================
 // C# Owner Ref Support — prevent GC while C++ holds a reference
 //
@@ -492,29 +507,16 @@ void tc_pass_set_enabled(tc_pass* p, bool enabled);
 #include "termin/render/present_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/camera/camera_component.hpp"
-#include <tgfx/graphics_backend.hpp>
 #include "termin/lighting/light.hpp"
 %}
 
 // Forward declarations
 namespace termin {
-    class GraphicsBackend;
     class Component;
     class CxxComponent;
     class Drawable;
     struct TcMesh;
     struct TcMaterial;
-}
-
-// FramebufferHandle - minimal interface for FBO access
-namespace termin {
-class FramebufferHandle {
-public:
-    virtual ~FramebufferHandle() = default;
-    virtual unsigned int get_fbo_id() const = 0;
-    virtual int get_width() const = 0;
-    virtual int get_height() const = 0;
-};
 }
 
 // Ignore problematic members
@@ -634,9 +636,6 @@ public:
     size_t spec_count() const;
     const ResourceSpec* get_spec_at(size_t index) const;
 
-    // FBO access (for manual blit)
-    FramebufferHandle* get_fbo(const std::string& name);
-
     // Access tc_pipeline pointer (for viewport binding)
     tc_pipeline* ptr();
 
@@ -653,10 +652,7 @@ public:
 
 class RenderEngine {
 public:
-    GraphicsBackend* graphics;
-
     RenderEngine();
-    explicit RenderEngine(GraphicsBackend* graphics);
 
     // Render to screen (default FBO)
     void render_to_screen(
@@ -691,9 +687,6 @@ public:
     static void reset_for_testing();
 
     // Configuration
-    void set_graphics(GraphicsBackend* graphics);
-    GraphicsBackend* graphics() const;
-
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();
 
@@ -722,7 +715,6 @@ public:
     static void reset_for_testing();
 
     // Configuration
-    void set_graphics(GraphicsBackend* graphics);
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();
 
@@ -1035,16 +1027,6 @@ public:
 bool tc_opengl_init(void);
 bool tc_opengl_is_initialized(void);
 void tc_opengl_shutdown(void);
-void* tc_opengl_get_graphics(void);
-
-// Helper to cast void* to GraphicsBackend*
-%inline %{
-namespace termin {
-    GraphicsBackend* get_opengl_graphics() {
-        return static_cast<GraphicsBackend*>(tc_opengl_get_graphics());
-    }
-}
-%}
 
 // ============================================================================
 // Scene Serialization (via TcSceneRef C++ wrapper)
@@ -1091,3 +1073,213 @@ namespace termin {
     }
 }
 %}
+
+// ============================================================================
+// tcplot — 2D/3D plotting library
+// ============================================================================
+
+%include "arrays_csharp.i"
+
+%{
+#include "tcplot/styles.hpp"
+#include "tcplot/orbit_camera.hpp"
+#include "tcplot/plot_view2d.hpp"
+#include "tcplot/plot_view2d_multi.hpp"
+#include "tcplot/plot_view3d.hpp"
+%}
+
+// --- double[] array typemaps for the plot_view data entry points ---
+//
+// SWIG's default typemap for `const double*` exposes a raw IntPtr to
+// C# which is unsafe for array data. arrays_csharp.i gives us a
+// `double INPUT[]` / `double OUTPUT[]` family that marshals a C#
+// double[] into a pinned native pointer + length. We apply it
+// selectively to each PlotView* data-entry parameter by name so only
+// the genuinely array-shaped parameters get the typemap; a lone
+// `double*` out-param (see pick()) stays as a pointer for `ref`/out.
+%apply double INPUT[] {
+    const double* x, const double* y, const double* z,
+    const double* X, const double* Y, const double* Z
+}
+
+// pick() out-params: expose as C# `out double`. SWIG's CSHARP_ARRAYS
+// doesn't help here — use the plain double* → out mapping.
+%typemap(cstype, out = "out double") double* OUTPUT "out double"
+%typemap(csin)   double* OUTPUT "out $csinput"
+%typemap(imtype) double* OUTPUT "out double"
+%typemap(ctype)  double* OUTPUT "double*"
+%typemap(in)     double* OUTPUT "$1 = $input;"
+%apply double* OUTPUT {
+    double* out_x, double* out_y, double* out_z,
+    double* out_screen_dist_px
+}
+
+namespace tcplot {
+
+struct Color4 {
+    float r, g, b, a;
+
+    Color4();
+    Color4(float r, float g, float b, float a = 1.0f);
+};
+
+class OrbitCamera {
+public:
+    float distance;
+    float azimuth;
+    float elevation;
+    float fov_y;
+    float near;
+    float far;
+    float min_distance;
+    float max_distance;
+    float min_elevation;
+    float max_elevation;
+
+    OrbitCamera();
+
+    void orbit(float d_azimuth, float d_elevation);
+    void zoom(float factor);
+    void pan(float dx, float dy);
+};
+
+class PlotView3D {
+public:
+    PlotView3D(const std::string& ttf_path);
+    ~PlotView3D();
+
+    void plot(const double* x, const double* y, const double* z,
+              size_t n,
+              float cr, float cg, float cb, float ca,
+              double thickness = 1.5,
+              const char* label = "");
+
+    void scatter(const double* x, const double* y, const double* z,
+                 size_t n,
+                 float cr, float cg, float cb, float ca,
+                 double size = 4.0,
+                 const char* label = "");
+
+    void surface(const double* X, const double* Y, const double* Z,
+                 unsigned int rows, unsigned int cols,
+                 float cr, float cg, float cb, float ca,
+                 bool wireframe = false,
+                 const char* label = "");
+
+    void clear();
+    void toggle_wireframe();
+    void toggle_marker_mode();
+    void set_z_scale(float s);
+    float get_z_scale() const;
+
+    OrbitCamera& camera();
+    void fit_camera();
+
+    bool on_mouse_down(float x, float y, int button);
+    void on_mouse_move(float x, float y);
+    void on_mouse_up(float x, float y, int button);
+    bool on_mouse_wheel(float x, float y, float dy);
+
+    bool pick(float mx, float my,
+              double* out_x, double* out_y, double* out_z,
+              double* out_screen_dist_px);
+
+    void set_msaa_samples(int samples);
+    int  msaa_samples() const;
+
+    void render(int width, int height, unsigned int dst_gl_fbo);
+    void release_gpu();
+};
+
+class PlotView2D {
+public:
+    PlotView2D(const std::string& ttf_path);
+    ~PlotView2D();
+
+    void plot(const double* x, const double* y, size_t n,
+              float cr, float cg, float cb, float ca,
+              double thickness = 1.5,
+              const char* label = "");
+
+    void scatter(const double* x, const double* y, size_t n,
+                 float cr, float cg, float cb, float ca,
+                 double size = 4.0,
+                 const char* label = "");
+
+    void clear();
+    void fit();
+    void set_view(double x_min, double x_max, double y_min, double y_max);
+
+    void set_title(const char* title);
+    void set_x_label(const char* label);
+    void set_y_label(const char* label);
+
+    bool on_mouse_down(float x, float y, int button);
+    void on_mouse_move(float x, float y);
+    void on_mouse_up(float x, float y, int button);
+    bool on_mouse_wheel(float x, float y, float dy);
+
+    void set_msaa_samples(int samples);
+    int  msaa_samples() const;
+
+    void render(int width, int height, unsigned int dst_gl_fbo);
+    void release_gpu();
+};
+
+// ----------------------------------------------------------------------------
+// PlotView2DMulti — stacked panels with shared X + real-time append.
+// ----------------------------------------------------------------------------
+
+%apply double INPUT[] { const double* x, const double* y }
+
+class PlotView2DMulti {
+public:
+    PlotView2DMulti(const std::string& ttf_path, int panel_count);
+    ~PlotView2DMulti();
+
+    int panel_count() const;
+
+    int add_line(int panel_idx,
+                 const double* x, const double* y, size_t n,
+                 float cr, float cg, float cb, float ca,
+                 double thickness = 1.5,
+                 const char* label = "");
+
+    void append_to_line(int panel_idx, int series_idx,
+                        const double* x, const double* y, size_t n);
+
+    void clear();
+
+    void set_panel_title(int panel_idx, const char* title);
+    void set_panel_y_label(int panel_idx, const char* label);
+    void set_x_label(const char* label);
+
+    void set_msaa_samples(int samples);
+
+    void set_autoscroll(bool on, double window_size);
+    void set_shared_view_x(double x_min, double x_max);
+    void set_panel_view_y(int panel_idx, double y_min, double y_max);
+
+    void set_panel_height(float h);
+    void set_scroll_offset(float offset);
+    float total_virtual_height() const;
+
+    void set_bg_color       (float r, float g, float b, float a);
+    void set_plot_bg_color  (float r, float g, float b, float a);
+    void set_grid_color     (float r, float g, float b, float a);
+    void set_axis_color     (float r, float g, float b, float a);
+    void set_label_color    (float r, float g, float b, float a);
+    void set_font_size      (float label_px, float title_px);
+    void set_panel_margins  (int left, int right, int top, int bottom);
+
+    void render(int width, int height, unsigned int dst_gl_fbo);
+    void release_gpu();
+
+    bool on_mouse_down(float x, float y, int button);
+    void on_mouse_move(float x, float y);
+    void on_mouse_up(float x, float y, int button);
+    bool on_mouse_wheel(float x, float y, float dy);
+    bool on_mouse_wheel_x(float x, float y, float dy);
+};
+
+} // namespace tcplot

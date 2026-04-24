@@ -5,7 +5,7 @@
 #include "tgfx2/i_command_list.hpp"
 #include "tgfx2/opengl/opengl_render_device.hpp"
 
-namespace tgfx2 {
+namespace tgfx {
 
 class TGFX2_API OpenGLCommandList : public ICommandList {
 public:
@@ -20,6 +20,7 @@ public:
 
     void bind_pipeline(PipelineHandle pipeline) override;
     void bind_resource_set(ResourceSetHandle set) override;
+    void set_push_constants(const void* data, uint32_t size) override;
 
     void bind_vertex_buffer(uint32_t slot, BufferHandle buffer, uint64_t offset = 0) override;
     void bind_index_buffer(BufferHandle buffer, IndexType type, uint64_t offset = 0) override;
@@ -45,8 +46,26 @@ private:
     uint64_t current_index_offset_ = 0;
     bool in_render_pass_ = false;
 
+    // Pending push constants range (offset/size within the device's
+    // ring buffer). Consumed by draw / draw_indexed via glBindBufferRange
+    // at TGFX2_PUSH_CONSTANTS_BINDING. Size == 0 means no pending push
+    // constants — the binding slot is left alone.
+    GLintptr   pending_push_offset_ = 0;
+    GLsizeiptr pending_push_size_ = 0;
+
+    // Cached viewport height — set in set_viewport, consumed by
+    // set_scissor to flip the caller's top-left-origin rect into the
+    // bottom-left-origin rect glScissor expects. tcgui / host editors
+    // always set the viewport to cover the whole framebuffer, so
+    // viewport height == fb height here. If a future caller uses a
+    // smaller viewport with scissor, this fails quietly; we'll
+    // revisit the API then.
+    int cached_viewport_height_ = 0;
+
+    void apply_pending_push_constants();
+
     void setup_vao_for_pipeline(GLPipeline* pipeline);
     void rebind_vertex_attribs(const VertexBufferLayout& layout, uint64_t base_offset);
 };
 
-} // namespace tgfx2
+} // namespace tgfx

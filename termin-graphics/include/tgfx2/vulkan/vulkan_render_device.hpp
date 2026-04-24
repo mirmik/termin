@@ -9,6 +9,7 @@ VK_DEFINE_HANDLE(VmaAllocator)
 VK_DEFINE_HANDLE(VmaAllocation)
 
 #include <map>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <functional>
@@ -16,7 +17,9 @@ VK_DEFINE_HANDLE(VmaAllocation)
 #include "tgfx2/tgfx2_api.h"
 #include "tgfx2/i_render_device.hpp"
 
-namespace tgfx2 {
+namespace tgfx {
+
+class VulkanSwapchain;
 
 // Internal Vulkan resource types
 
@@ -79,10 +82,29 @@ private:
 
 // Initialization params
 struct VulkanDeviceCreateInfo {
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
     bool enable_validation = true;
-    // Required instance extensions (e.g. from GLFW)
+
+    // Required instance extensions. The typical SDL / GLFW flow fills
+    // this from SDL_Vulkan_GetInstanceExtensions / glfwGetRequiredInstanceExtensions.
     std::vector<const char*> instance_extensions;
+
+    // Pre-existing VkSurfaceKHR (rare — mostly for embedded hosts that
+    // create their own VkInstance). Usually left null; use `surface_factory`
+    // instead.
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+
+    // Called AFTER the device creates its VkInstance, to produce a
+    // surface bound to the host window. SDL clients set this to a
+    // lambda wrapping SDL_Vulkan_CreateSurface(win, inst, &surf).
+    // If null (and `surface` is also null), the device stays
+    // offscreen-only — no swapchain.
+    std::function<VkSurfaceKHR(VkInstance)> surface_factory;
+
+    // Initial swapchain extent in physical pixels. Only used when a
+    // surface is present. Ignored otherwise. The swapchain may clamp
+    // this to the surface's min/max caps.
+    uint32_t swapchain_width = 0;
+    uint32_t swapchain_height = 0;
 };
 
 class TGFX2_API VulkanRenderDevice : public IRenderDevice {
@@ -95,6 +117,7 @@ public:
 
     BufferHandle create_buffer(const BufferDesc& desc) override;
     TextureHandle create_texture(const TextureDesc& desc) override;
+    TextureDesc texture_desc(TextureHandle handle) const override;
     SamplerHandle create_sampler(const SamplerDesc& desc) override;
     ShaderHandle create_shader(const ShaderDesc& desc) override;
     PipelineHandle create_pipeline(const PipelineDesc& desc) override;
@@ -109,11 +132,32 @@ public:
 
     void upload_buffer(BufferHandle dst, std::span<const uint8_t> data, uint64_t offset = 0) override;
     void upload_texture(TextureHandle dst, std::span<const uint8_t> data, uint32_t mip = 0) override;
+    void upload_texture_region(TextureHandle dst,
+                               uint32_t x, uint32_t y,
+                               uint32_t w, uint32_t h,
+                               std::span<const uint8_t> data,
+                               uint32_t mip = 0) override;
     void read_buffer(BufferHandle src, std::span<uint8_t> data, uint64_t offset = 0) override;
 
     std::unique_ptr<ICommandList> create_command_list(QueueType queue = QueueType::Graphics) override;
     void submit(ICommandList& cmd) override;
     void present() override;
+
+    // Backend-neutral replacements for blit_to_external_target /
+    // clear_external_target. The destination is a tgfx2 TextureHandle,
+    // letting render surfaces own their composite target as a texture
+    // instead of a raw GL FBO id (which has no Vulkan analogue).
+    void blit_to_texture(
+        TextureHandle dst,
+        TextureHandle src,
+        int src_x, int src_y, int src_w, int src_h,
+        int dst_x, int dst_y, int dst_w, int dst_h) override;
+
+    void clear_texture(
+        TextureHandle dst,
+        float r, float g, float b, float a,
+        int viewport_x, int viewport_y,
+        int viewport_w, int viewport_h) override;
 
     // Internal access for command list
     VkDevice device() const { return device_; }
@@ -124,7 +168,12 @@ public:
     VkPipelineResource* get_pipeline(PipelineHandle h) { return pipelines_.get(h.id); }
     VkResourceSetResource* get_resource_set(ResourceSetHandle h) { return resource_sets_.get(h.id); }
 
+    VkInstance instance() const { return instance_; }
+    VkPhysicalDevice physical_device() const { return physical_device_; }
     VkQueue graphics_queue() const { return graphics_queue_; }
+    VkQueue present_queue() const { return present_queue_; }
+    uint32_t graphics_queue_family() const { return graphics_family_; }
+    uint32_t present_queue_family() const { return present_family_; }
     VkCommandPool command_pool() const { return command_pool_; }
     VmaAllocator allocator() const { return allocator_; }
 
@@ -153,6 +202,19 @@ public:
     VkDescriptorSetLayout descriptor_set_layout() const { return descriptor_set_layout_; }
     VkPipelineLayout shared_pipeline_layout() const { return shared_pipeline_layout_; }
 
+    // Lazy-create a default linear/clamp sampler used when a caller
+    // binds a SampledTexture without an explicit sampler. One per
+    // device; destroyed with the device. Returned as raw VkSampler so
+    // the descriptor write path can drop it into VkDescriptorImageInfo
+    // without translating through SamplerHandle.
+    VkSampler ensure_default_sampler();
+
+    // Non-null when the device was created with a surface (via
+    // `info.surface` or `info.surface_factory`). Hosts drive on-screen
+    // frames through this — acquire() at start of frame, present() at
+    // end. Offscreen-only devices return nullptr.
+    VulkanSwapchain* swapchain() const { return swapchain_.get(); }
+
 private:
     void init_instance(const VulkanDeviceCreateInfo& info);
     void pick_physical_device();
@@ -180,6 +242,9 @@ private:
     VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;
     VkPipelineLayout shared_pipeline_layout_ = VK_NULL_HANDLE;
 
+    // Lazy-created default sampler (see ensure_default_sampler()).
+    VkSampler default_sampler_ = VK_NULL_HANDLE;
+
     BackendCapabilities caps_;
 
     VkHandlePool<VkBufferResource> buffers_;
@@ -189,6 +254,8 @@ private:
     VkHandlePool<VkPipelineResource> pipelines_;
     VkHandlePool<VkResourceSetResource> resource_sets_;
 
+    std::unique_ptr<VulkanSwapchain> swapchain_;
+
     // RenderPass cache (key: format config hash)
     std::map<std::vector<VkFormat>, VkRenderPass> render_pass_cache_;
     // Framebuffer cache
@@ -197,6 +264,6 @@ private:
     bool validation_enabled_ = false;
 };
 
-} // namespace tgfx2
+} // namespace tgfx
 
 #endif // TGFX2_HAS_VULKAN

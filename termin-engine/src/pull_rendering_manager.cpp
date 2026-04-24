@@ -4,6 +4,10 @@
 #include "termin/render/render_camera.hpp"
 #include <cstring>
 
+#include <tgfx2/opengl/opengl_render_device.hpp>
+#include <tgfx2/i_render_device.hpp>
+#include "tgfx/handles.hpp"
+
 extern "C" {
 #include <tcbase/tc_log.h>
 #include "core/tc_camera_capability.h"
@@ -44,10 +48,6 @@ PullRenderingManager::~PullRenderingManager() {
 }
 
 // Configuration
-void PullRenderingManager::set_graphics(GraphicsBackend* graphics) {
-    graphics_ = graphics;
-}
-
 void PullRenderingManager::set_render_engine(RenderEngine* engine) {
     render_engine_ = engine;
     owned_render_engine_.reset();
@@ -55,11 +55,7 @@ void PullRenderingManager::set_render_engine(RenderEngine* engine) {
 
 RenderEngine* PullRenderingManager::render_engine() {
     if (!render_engine_) {
-        if (!graphics_) {
-            tc_log(TC_LOG_ERROR, "[PullRenderingManager] Cannot create RenderEngine: graphics not set");
-            return nullptr;
-        }
-        owned_render_engine_ = std::make_unique<RenderEngine>(graphics_);
+        owned_render_engine_ = std::make_unique<RenderEngine>();
         render_engine_ = owned_render_engine_.get();
     }
     return render_engine_;
@@ -135,7 +131,7 @@ void PullRenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
 
 // Pull-rendering: render and present single display
 void PullRenderingManager::render_display(tc_display* display) {
-    if (!display || !graphics_) return;
+    if (!display) return;
 
     const char* dname = tc_display_get_name(display);
 
@@ -165,11 +161,35 @@ void PullRenderingManager::render_display(tc_display* display) {
     if (width <= 0 || height <= 0) return;
 
     uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
+    // Backend-neutral composite target: when the surface exposes a
+    // tgfx2 TextureHandle we route through blit_to_texture/clear_texture
+    // (works on both OpenGL and Vulkan). Zero = legacy FBO path (GL
+    // only; the surface still hands over a raw FBO id).
+    tgfx::TextureHandle display_color_tex{
+        tc_render_surface_get_tgfx_color_tex_id(surface)
+    };
 
-    // Clear display
-    graphics_->bind_framebuffer_id(display_fbo);
-    graphics_->set_viewport(0, 0, width, height);
-    graphics_->clear_color_depth({0.1f, 0.1f, 0.1f, 1.0f});
+    RenderEngine* engine = render_engine();
+    if (engine) engine->ensure_tgfx2();
+    tgfx::IRenderDevice* dev = engine ? engine->tgfx2_device() : nullptr;
+    if (!dev) {
+        tc_log(TC_LOG_WARN, "[PullRM] present_display: tgfx2 device not available");
+        return;
+    }
+    if (display_color_tex) {
+        dev->clear_texture(
+            display_color_tex,
+            0.1f, 0.1f, 0.1f, 1.0f,
+            0, 0, width, height
+        );
+    } else {
+        dev->clear_external_target(
+            static_cast<uintptr_t>(display_fbo),
+            0.1f, 0.1f, 0.1f, 1.0f,
+            1.0f,
+            0, 0, width, height
+        );
+    }
 
     // Collect viewports sorted by depth
     std::vector<tc_viewport_handle> viewports;
@@ -198,8 +218,8 @@ void PullRenderingManager::render_display(tc_display* display) {
 
         // Blit to display
         ViewportRenderState* state = get_viewport_state(viewport);
-        if (!state || !state->has_output_fbo()) {
-            tc_log(TC_LOG_WARN, "[PullRM] viewport has no output_fbo after render");
+        if (!state || !state->has_output()) {
+            tc_log(TC_LOG_WARN, "[PullRM] viewport has no output texture after render");
             continue;
         }
 
@@ -209,17 +229,24 @@ void PullRenderingManager::render_display(tc_display* display) {
         int src_w = state->output_width;
         int src_h = state->output_height;
 
-        graphics_->blit_framebuffer_to_id(
-            *state->output_fbo,
-            display_fbo,
-            {0, 0, src_w, src_h},
-            {px, py, px + pw, py + ph}
-        );
+        if (display_color_tex) {
+            dev->blit_to_texture(
+                display_color_tex, state->output_color_tex,
+                0, 0, src_w, src_h,
+                px, py, pw, ph
+            );
+        } else {
+            dev->blit_to_external_target(
+                static_cast<uintptr_t>(display_fbo), state->output_color_tex,
+                0, 0, src_w, src_h,
+                px, py, pw, ph
+            );
+        }
     }
 }
 
 void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
-    if (!tc_viewport_handle_valid(viewport) || !graphics_) return;
+    if (!tc_viewport_handle_valid(viewport)) return;
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_viewport_get_camera(viewport);
@@ -252,23 +279,32 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     }
 
     ViewportRenderState* state = get_or_create_viewport_state(viewport);
-    FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
+    RenderEngine* engine = render_engine();
+    if (engine) engine->ensure_tgfx2();
+    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    if (!device) {
+        tc_log(TC_LOG_WARN, "[PullRM] render_viewport_offscreen: tgfx2 device unavailable");
+        return;
+    }
+    state->ensure_output_textures(*device, pw, ph);
 
     std::vector<Light> lights = collect_lights(scene);
     const char* vp_name = tc_viewport_get_name(viewport);
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
+    std::string name = vp_name ? vp_name : "";
 
-    RenderEngine* engine = render_engine();
-    engine->render_view_to_fbo(
-        render_pipeline,
-        output_fbo,
-        pw, ph,
-        scene,
-        render_camera,
-        vp_name ? vp_name : "",
-        internal_entities,
-        lights,
-        tc_viewport_get_layer_mask(viewport)
+    std::unordered_map<std::string, ViewportContext> contexts;
+    ViewportContext ctx;
+    ctx.name = name;
+    ctx.camera = render_camera;
+    ctx.rect = {0, 0, pw, ph};
+    ctx.internal_entities = internal_entities;
+    ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
+    ctx.output_color_tex = state->output_color_tex;
+    ctx.output_depth_tex = state->output_depth_tex;
+    contexts[name] = std::move(ctx);
+    engine->render_scene_pipeline_offscreen(
+        render_pipeline, scene, contexts, lights, name
     );
 }
 
@@ -281,7 +317,6 @@ void PullRenderingManager::shutdown() {
     displays_.clear();
     owned_render_engine_.reset();
     render_engine_ = nullptr;
-    graphics_ = nullptr;
 }
 
 // Helpers

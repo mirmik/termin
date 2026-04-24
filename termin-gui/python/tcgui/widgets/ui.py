@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from tcbase import Key, MouseButton, Mods
-from tgfx import GraphicsBackend
-from tcgui.font import FontTextureAtlas
+from tgfx.font import FontTextureAtlas
+from tgfx import Tgfx2Context
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
 from tcgui.widgets.renderer import UIRenderer
@@ -33,9 +33,23 @@ class UI:
     and provides an overlay stack for popups / tooltips / menus.
     """
 
-    def __init__(self, graphics: GraphicsBackend, font: FontTextureAtlas | None = None):
-        self._graphics = graphics
-        self._renderer = UIRenderer(graphics, font)
+    def __init__(self, font: FontTextureAtlas | None = None,
+                 holder: Tgfx2Context | None = None):
+        """
+        Parameters
+        ----------
+        font : FontTextureAtlas or None
+            Default font atlas. None → process default.
+        holder : Tgfx2Context or None
+            Externally-owned tgfx2 context to draw through. When a host
+            manages a process-global IRenderDevice (BackendWindow-based
+            editor, tcplot hosted inside one), it passes a borrowed
+            Tgfx2Context here so all rendering lands on the same device
+            — required for cross-widget TextureHandle sharing (Viewport3D
+            consuming FBOSurface.color_tex, etc.) and for Vulkan parity.
+            None → the renderer creates its own owning context.
+        """
+        self._renderer = UIRenderer(font, holder=holder)
         self._loader = UILoader()
 
         self._root: Widget | None = None
@@ -221,10 +235,55 @@ class UI:
 
             self._root.layout(x, y, w, h, viewport_w, viewport_h)
 
-    def render(self, viewport_w: int, viewport_h: int):
-        """Render the UI and all overlays."""
+    def render(
+        self,
+        viewport_w: int,
+        viewport_h: int,
+        background_color: tuple[float, float, float, float] | None = None,
+    ):
+        """Render the UI and publish the result to the default GL FBO.
+
+        Legacy path used by GL-only hosts (raw SDL / GLFW examples)
+        that issue their own SwapWindow after this call returns.
+        BackendWindow-hosted hosts call ``render_compose`` instead — it
+        returns the composite texture so ``win.present(tex)`` can
+        publish it on both OpenGL and Vulkan without touching the
+        default FBO.
+
+        ``background_color`` — if given, the UI's offscreen target is
+        cleared to this colour so transparent areas show it after the
+        final composite. ``None`` leaves those areas transparent
+        (useful when the UI is overlaid on top of other rendering).
+        """
+        self._compose(viewport_w, viewport_h, background_color)
+        self._renderer.end()
+
+    def render_compose(
+        self,
+        viewport_w: int,
+        viewport_h: int,
+        background_color: tuple[float, float, float, float] | None = None,
+    ):
+        """Render the UI and return the composite TextureHandle.
+
+        Preferred over ``render()`` in BackendWindow-hosted editors
+        and tools — the returned handle goes straight into
+        ``BackendWindow.present()``, which picks the right backend
+        path (GL: blit to FBO 0 + SwapWindow, Vulkan: acquire +
+        compose-and-present on the swapchain image).
+        """
+        if not self._compose(viewport_w, viewport_h, background_color):
+            return None
+        return self._renderer.end_compose()
+
+    def _compose(
+        self,
+        viewport_w: int,
+        viewport_h: int,
+        background_color: tuple[float, float, float, float] | None,
+    ) -> bool:
         if not self._root and not self._overlays:
-            return
+            return False
 
         # Re-layout if viewport changed or layout invalidated
         if (viewport_w != self._viewport_w or viewport_h != self._viewport_h
@@ -235,7 +294,7 @@ class UI:
         # Check tooltip timer
         self._update_tooltip()
 
-        self._renderer.begin(viewport_w, viewport_h)
+        self._renderer.begin(viewport_w, viewport_h, background_color)
         if self._root:
             self._root.render(self._renderer)
 
@@ -249,8 +308,7 @@ class UI:
                 self._renderer.draw_rect(0, 0, viewport_w, viewport_h,
                                          (0, 0, 0, 0.3))
             entry.widget.render(self._renderer)
-
-        self._renderer.end()
+        return True
 
     # ------------------------------------------------------------------
     # Overlay management

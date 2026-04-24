@@ -12,7 +12,6 @@
 
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_pass.hpp>
-#include <tgfx/graphics_backend.hpp>
 #include <tgfx/handles.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 
@@ -51,9 +50,6 @@ public:
     std::set<const char*> compute_reads() const override;
     std::set<const char*> compute_writes() const override;
     void destroy() override;
-
-private:
-    void draw_fullscreen_quad(GraphicsBackend* graphics);
 };
 
 } // namespace termin
