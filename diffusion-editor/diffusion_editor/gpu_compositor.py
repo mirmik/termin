@@ -113,19 +113,23 @@ class GPUCompositor:
     """
 
     def __init__(self, layer_stack: LayerStack,
-                 ctx: Tgfx2Context | None = None):
+                 graphics: Tgfx2Context):
         """
         Parameters
         ----------
         layer_stack : LayerStack
             Model to composite.
-        ctx : Tgfx2Context or None
-            Borrowed context from the host (BackendWindow). When given,
-            the compositor renders through the same IRenderDevice as
-            every other renderer — mandatory on Vulkan because cross-
-            device TextureHandles don't resolve. ``None`` keeps the
-            old owning-mode behaviour for legacy hosts.
+        graphics : Tgfx2Context
+            The process-wide tgfx2 context (device + RenderContext2).
+            Required — GPUCompositor never spawns its own Tgfx2Context,
+            because that would create a second IRenderDevice and break
+            cross-renderer TextureHandle sharing. Obtain from the host
+            via ``Tgfx2Context.from_window(...)``.
         """
+        if graphics is None:
+            raise ValueError(
+                "GPUCompositor requires a graphics= Tgfx2Context. Get one "
+                "from the host (Tgfx2Context.from_window).")
         self._stack = layer_stack
 
         # Per-layer GPU textures, keyed by ``id(layer)`` — Tgfx2TextureHandle.
@@ -143,11 +147,9 @@ class GPUCompositor:
         self._temp_texs: list[Tgfx2TextureHandle] = []
         self._temp_texs_in_use: int = 0
 
-        # tgfx2 context + compiled shaders (lazy). In borrow mode the
-        # holder is set up front so `_ensure_context` skips its owning-
-        # mode branch.
-        self._holder: Tgfx2Context | None = ctx
-        self._owns_holder: bool = ctx is None
+        # tgfx2 context + compiled shaders (shaders compiled lazily on
+        # first composite).
+        self._graphics: Tgfx2Context = graphics
         self._ctx = None
         self._composite_vs = None
         self._composite_fs = None
@@ -224,9 +226,9 @@ class GPUCompositor:
         a device with the UIRenderer (the ``ctx=`` constructor arg).
         Prefer ``display_tex`` which works on both OpenGL and Vulkan.
         """
-        if self._display_tex is None or self._holder is None:
+        if self._display_tex is None or self._graphics is None:
             return 0
-        return int(self._holder.get_gl_id(self._display_tex))
+        return int(self._graphics.get_gl_id(self._display_tex))
 
     @property
     def display_tex(self):
@@ -262,20 +264,17 @@ class GPUCompositor:
 
     def readback(self) -> np.ndarray:
         """GPU -> CPU: read the display texture into a numpy uint8 RGBA array."""
-        if self._display_tex is None or self._holder is None:
+        if self._display_tex is None or self._graphics is None:
             w, h = self._stack.width, self._stack.height
             if w == 0 or h == 0:
                 return np.zeros((1, 1, 4), dtype=np.uint8)
             return np.zeros((h, w, 4), dtype=np.uint8)
 
-        from termin._native.render import RenderingManager
-        render_engine = RenderingManager.instance().render_engine
-        if render_engine is None:
-            log.error("GPUCompositor.readback: no render engine")
-            h, w = self._fbo_h, self._fbo_w
-            return np.zeros((h, w, 4), dtype=np.uint8)
-        render_engine.ensure_tgfx2()
-        device = render_engine.tgfx2_device
+        # Use the Tgfx2Context's own device — diffusion-editor is a thin
+        # tcgui app and doesn't link the full termin._native render engine.
+        # Reaching into RenderingManager here would pull in the entire
+        # editor runtime and break the standalone venv.
+        device = self._graphics.device
         if device is None:
             log.error("GPUCompositor.readback: tgfx2 device unavailable")
             h, w = self._fbo_h, self._fbo_w
@@ -296,7 +295,7 @@ class GPUCompositor:
 
     def dispose(self):
         """Release all GPU resources."""
-        if self._holder is None:
+        if self._graphics is None:
             # Nothing was ever created.
             self._layer_textures.clear()
             self._layer_tex_size.clear()
@@ -305,21 +304,21 @@ class GPUCompositor:
             return
 
         for tex in self._layer_textures.values():
-            self._holder.destroy_texture(tex)
+            self._graphics.destroy_texture(tex)
         self._layer_textures.clear()
         self._layer_tex_size.clear()
         self._dirty_layers.clear()
 
         for tex in self._temp_texs:
-            self._holder.destroy_texture(tex)
+            self._graphics.destroy_texture(tex)
         self._temp_texs.clear()
         self._temp_texs_in_use = 0
 
         if self._main_tex is not None:
-            self._holder.destroy_texture(self._main_tex)
+            self._graphics.destroy_texture(self._main_tex)
             self._main_tex = None
         if self._display_tex is not None:
-            self._holder.destroy_texture(self._display_tex)
+            self._graphics.destroy_texture(self._display_tex)
             self._display_tex = None
 
     # ------------------------------------------------------------------
@@ -327,16 +326,13 @@ class GPUCompositor:
     # ------------------------------------------------------------------
 
     def _ensure_context(self):
-        if self._holder is None:
-            self._holder = Tgfx2Context()
-            self._owns_holder = True
         if self._ctx is None:
-            self._ctx = self._holder.context
+            self._ctx = self._graphics.context
         if self._composite_vs is None:
             # Compile directly on the tgfx2 device — same path UIRenderer
             # uses. No TcShader bridge, no legacy tc_gpu_slot: the route
             # works on both OpenGL and Vulkan.
-            dev = self._holder.device
+            dev = self._graphics.device
             self._composite_vs = dev.create_shader(Tgfx2ShaderStage.Vertex, _VERT_SRC)
             self._composite_fs = dev.create_shader(Tgfx2ShaderStage.Fragment,
                                                     _COMPOSITE_FRAG_SRC)
@@ -354,16 +350,16 @@ class GPUCompositor:
 
         # Destroy old and recreate — the sizes change rarely (canvas resize).
         if self._main_tex is not None:
-            self._holder.destroy_texture(self._main_tex)
+            self._graphics.destroy_texture(self._main_tex)
         if self._display_tex is not None:
-            self._holder.destroy_texture(self._display_tex)
+            self._graphics.destroy_texture(self._display_tex)
         for tex in self._temp_texs:
-            self._holder.destroy_texture(tex)
+            self._graphics.destroy_texture(tex)
         self._temp_texs.clear()
         self._temp_texs_in_use = 0
 
-        self._main_tex = self._holder.create_color_attachment(w, h)
-        self._display_tex = self._holder.create_color_attachment(w, h)
+        self._main_tex = self._graphics.create_color_attachment(w, h)
+        self._display_tex = self._graphics.create_color_attachment(w, h)
         self._fbo_w = w
         self._fbo_h = h
 
@@ -377,18 +373,18 @@ class GPUCompositor:
             lid = id(layer)
             img = np.ascontiguousarray(layer.image).reshape(-1)
             if lid not in self._layer_textures:
-                tex = self._holder.create_texture_rgba8(w, h, img)
+                tex = self._graphics.create_texture_rgba8(w, h, img)
                 self._layer_textures[lid] = tex
                 self._layer_tex_size[lid] = (w, h)
                 self._dirty_layers.discard(lid)
             elif lid in self._dirty_layers:
                 prev_w, prev_h = self._layer_tex_size.get(lid, (0, 0))
                 if prev_w == w and prev_h == h:
-                    self._holder.upload_texture(self._layer_textures[lid], img)
+                    self._graphics.upload_texture(self._layer_textures[lid], img)
                 else:
                     # Size changed — reallocate.
-                    self._holder.destroy_texture(self._layer_textures[lid])
-                    tex = self._holder.create_texture_rgba8(w, h, img)
+                    self._graphics.destroy_texture(self._layer_textures[lid])
+                    tex = self._graphics.create_texture_rgba8(w, h, img)
                     self._layer_textures[lid] = tex
                     self._layer_tex_size[lid] = (w, h)
                 self._dirty_layers.discard(lid)
@@ -399,8 +395,8 @@ class GPUCompositor:
         if not stale:
             return
         for lid in stale:
-            if self._holder is not None:
-                self._holder.destroy_texture(self._layer_textures[lid])
+            if self._graphics is not None:
+                self._graphics.destroy_texture(self._layer_textures[lid])
             del self._layer_textures[lid]
             self._layer_tex_size.pop(lid, None)
             self._dirty_layers.discard(lid)
@@ -494,7 +490,7 @@ class GPUCompositor:
         if self._temp_texs_in_use < len(self._temp_texs):
             tex = self._temp_texs[self._temp_texs_in_use]
         else:
-            tex = self._holder.create_color_attachment(self._fbo_w, self._fbo_h)
+            tex = self._graphics.create_color_attachment(self._fbo_w, self._fbo_h)
             self._temp_texs.append(tex)
         self._temp_texs_in_use += 1
         return tex

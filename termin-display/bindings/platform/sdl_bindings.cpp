@@ -160,6 +160,12 @@ void bind_sdl(nb::module_& m) {
     nb::class_<BackendWindow>(m, "BackendWindow")
         .def(nb::init<const std::string&, int, int>(),
              nb::arg("title"), nb::arg("width"), nb::arg("height"))
+        .def(nb::init<const std::string&, int, int, BackendWindow&>(),
+             nb::arg("title"), nb::arg("width"), nb::arg("height"),
+             nb::arg("share_with"),
+             "Secondary-window ctor: reuses `share_with`'s IRenderDevice "
+             "and RenderContext2. Creates its own SDL window + GL context "
+             "(OpenGL) or Vulkan surface + swapchain.")
         .def("device", &BackendWindow::device, nb::rv_policy::reference_internal,
              "tgfx::IRenderDevice bound to this window. Outlives the window.")
         .def("context", &BackendWindow::context, nb::rv_policy::reference_internal,
@@ -182,6 +188,15 @@ void bind_sdl(nb::module_& m) {
             "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
         .def("should_close", &BackendWindow::should_close)
         .def("set_should_close", &BackendWindow::set_should_close, nb::arg("value"))
+        .def("close", &BackendWindow::close,
+             "Release OS-level resources (SDL window, GL context, "
+             "Vulkan surface+swapchain). Idempotent.")
+        .def("window_id", [](BackendWindow& self) -> uint32_t {
+                SDL_Window* w = self.sdl_window();
+                return w ? SDL_GetWindowID(w) : 0;
+            },
+            "SDL_GetWindowID of the underlying SDL_Window. Used to "
+            "route incoming SDL events to the right UI.")
         .def("poll_events", &BackendWindow::poll_events,
              "Drain SDL events, flip should_close on SDL_QUIT / window-close "
              "/ ESC. For finer control use the SDL module directly.")

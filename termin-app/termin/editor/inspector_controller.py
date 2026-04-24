@@ -1,16 +1,17 @@
-"""
-Controller for managing inspector panels in the editor.
+"""Inspector controller for the Qt editor.
 
-Handles switching between EntityInspector, MaterialInspector,
-DisplayInspector, and ViewportInspector.
-Synchronizes inspector state with selection.
+State (which inspector kind is active, what the target is) lives in
+:class:`termin.editor_core.inspector_model.InspectorModel`. This controller
+owns the widgets and reacts to model changes by switching the stack and
+calling the appropriate panel loader.
 """
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, List, Optional
 
 from PyQt6.QtWidgets import QStackedWidget, QVBoxLayout
+
+from termin.editor_core.inspector_model import InspectorKind, InspectorModel
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QWidget
@@ -31,27 +32,20 @@ if TYPE_CHECKING:
     from termin.editor.render_target_inspector import RenderTargetInspector
 
 
+_KIND_INDEX = {
+    InspectorKind.ENTITY: 0,
+    InspectorKind.MATERIAL: 1,
+    InspectorKind.DISPLAY: 2,
+    InspectorKind.VIEWPORT: 3,
+    InspectorKind.PIPELINE: 4,
+    InspectorKind.TEXTURE: 5,
+    InspectorKind.MESH: 6,
+    InspectorKind.GLB: 7,
+    InspectorKind.RENDER_TARGET: 8,
+}
+
+
 class InspectorController:
-    """
-    Manages inspector panels and their switching.
-
-    Handles:
-    - Switching between EntityInspector, MaterialInspector,
-      DisplayInspector, and ViewportInspector
-    - Loading entities/materials/displays/viewports into inspectors
-    - Syncing inspector with selection state
-    """
-
-    ENTITY_INSPECTOR_INDEX = 0
-    MATERIAL_INSPECTOR_INDEX = 1
-    DISPLAY_INSPECTOR_INDEX = 2
-    VIEWPORT_INSPECTOR_INDEX = 3
-    PIPELINE_INSPECTOR_INDEX = 4
-    TEXTURE_INSPECTOR_INDEX = 5
-    MESH_INSPECTOR_INDEX = 6
-    GLB_INSPECTOR_INDEX = 7
-    RENDER_TARGET_INSPECTOR_INDEX = 8
-
     def __init__(
         self,
         container: "QWidget",
@@ -64,6 +58,7 @@ class InspectorController:
         on_viewport_changed: Optional[Callable] = None,
         on_pipeline_changed: Optional[Callable] = None,
         window_backend: Optional["SDLEmbeddedWindowBackend"] = None,
+        dialog_service=None,
     ):
         self._resource_manager = resource_manager
         self._push_undo_command = push_undo_command
@@ -71,81 +66,63 @@ class InspectorController:
         self._on_viewport_changed = on_viewport_changed
         self._on_pipeline_changed = on_pipeline_changed
         self._window_backend = window_backend
+        self._dialog_service = dialog_service
 
-        # Create stack widget
+        self._model = InspectorModel(resource_manager)
+
         self._stack = QStackedWidget()
 
-        # Create EntityInspector
         from termin.editor.editor_inspector import EntityInspector
-
         self._entity_inspector = EntityInspector(resource_manager)
         self._entity_inspector.transform_changed.connect(on_transform_changed)
         self._entity_inspector.component_changed.connect(on_component_changed)
         self._entity_inspector.set_undo_command_handler(push_undo_command)
         self._stack.addWidget(self._entity_inspector)
 
-        # Create MaterialInspector
         from termin.editor.material_inspector import MaterialInspector
-
         self._material_inspector = MaterialInspector()
         self._material_inspector.material_changed.connect(on_material_changed)
         self._stack.addWidget(self._material_inspector)
 
-        # Create DisplayInspector
         from termin.editor.display_inspector import DisplayInspector
-
         self._display_inspector = DisplayInspector()
         if on_display_changed is not None:
             self._display_inspector.display_changed.connect(on_display_changed)
         self._stack.addWidget(self._display_inspector)
 
-        # Create ViewportInspector
         from termin.editor.viewport_inspector import ViewportInspector
-
         self._viewport_inspector = ViewportInspector()
         if on_viewport_changed is not None:
             self._viewport_inspector.viewport_changed.connect(on_viewport_changed)
         self._stack.addWidget(self._viewport_inspector)
 
-        # Create PipelineInspector
         from termin.editor.pipeline_inspector import PipelineInspector
-
-        self._pipeline_inspector = PipelineInspector()
+        self._pipeline_inspector = PipelineInspector(dialog_service=dialog_service)
         if on_pipeline_changed is not None:
             self._pipeline_inspector.pipeline_changed.connect(on_pipeline_changed)
         self._stack.addWidget(self._pipeline_inspector)
 
-        # Create TextureInspector
         from termin.editor.texture_inspector import TextureInspector
-
         self._texture_inspector = TextureInspector()
         self._stack.addWidget(self._texture_inspector)
 
-        # Create MeshInspector
         from termin.editor.mesh_inspector import MeshInspector
-
-        self._mesh_inspector = MeshInspector(
-            window_backend=self._window_backend,
-        )
+        self._mesh_inspector = MeshInspector(window_backend=self._window_backend)
         self._stack.addWidget(self._mesh_inspector)
 
-        # Create GLBInspector
         from termin.editor.glb_inspector import GLBInspector
-
         self._glb_inspector = GLBInspector()
         self._stack.addWidget(self._glb_inspector)
 
-        # Create RenderTargetInspector
         from termin.editor.render_target_inspector import RenderTargetInspector
-
         self._render_target_inspector = RenderTargetInspector()
         self._stack.addWidget(self._render_target_inspector)
 
-        # Add to container
         self._init_in_container(container)
 
+        self._model.changed.connect(self._on_model_changed)
+
     def _init_in_container(self, container: "QWidget") -> None:
-        """Initialize inspector stack in the container widget."""
         layout = container.layout()
         if layout is None:
             layout = QVBoxLayout(container)
@@ -153,44 +130,40 @@ class InspectorController:
             container.setLayout(layout)
         layout.addWidget(self._stack)
 
+    # ------------------------------------------------------------------
+    # Public widget accessors (unchanged for external callers)
+    # ------------------------------------------------------------------
+
     @property
     def entity_inspector(self) -> "EntityInspector":
-        """Access to EntityInspector widget."""
         return self._entity_inspector
 
     @property
     def material_inspector(self) -> "MaterialInspector":
-        """Access to MaterialInspector widget."""
         return self._material_inspector
 
     @property
     def display_inspector(self) -> "DisplayInspector":
-        """Access to DisplayInspector widget."""
         return self._display_inspector
 
     @property
     def viewport_inspector(self) -> "ViewportInspector":
-        """Access to ViewportInspector widget."""
         return self._viewport_inspector
 
     @property
     def pipeline_inspector(self) -> "PipelineInspector":
-        """Access to PipelineInspector widget."""
         return self._pipeline_inspector
 
     @property
     def texture_inspector(self) -> "TextureInspector":
-        """Access to TextureInspector widget."""
         return self._texture_inspector
 
     @property
     def mesh_inspector(self) -> "MeshInspector":
-        """Access to MeshInspector widget."""
         return self._mesh_inspector
 
     @property
     def glb_inspector(self) -> "GLBInspector":
-        """Access to GLBInspector widget."""
         return self._glb_inspector
 
     @property
@@ -199,44 +172,35 @@ class InspectorController:
 
     @property
     def stack(self) -> QStackedWidget:
-        """Access to the stack widget."""
         return self._stack
 
+    @property
+    def model(self) -> InspectorModel:
+        return self._model
+
+    # ------------------------------------------------------------------
+    # External API — thin wrappers around InspectorModel
+    # ------------------------------------------------------------------
+
     def set_scene(self, scene: "Scene | None") -> None:
-        """Set the scene for layer/flag names in entity inspector."""
+        self._model.set_scene(scene)
         self._entity_inspector.set_scene(scene)
 
     def show_entity_inspector(self, entity: "Entity | None" = None) -> None:
-        """Show EntityInspector and optionally set target entity."""
-        self._stack.setCurrentIndex(self.ENTITY_INSPECTOR_INDEX)
-        if entity is not None:
-            self._entity_inspector.set_target(entity)
+        self._model.show_entity(entity)
 
     def show_material_inspector(self, material_name: str | None = None) -> None:
-        """Show MaterialInspector and load material by name."""
-        self._stack.setCurrentIndex(self.MATERIAL_INSPECTOR_INDEX)
-        if material_name is not None:
-            mat = self._resource_manager.get_material(material_name)
-            if mat is not None:
-                self._material_inspector.set_material(mat)
-                shader = self._resource_manager.get_shader(mat.shader_name)
-                if shader is not None:
-                    self._material_inspector._shader_program = shader
-                    self._material_inspector._rebuild_ui()
+        self._model.show_material(material_name)
 
     def show_material_inspector_for_file(self, file_path: str) -> None:
-        """Show MaterialInspector and load material from file."""
-        self._stack.setCurrentIndex(self.MATERIAL_INSPECTOR_INDEX)
-        self._material_inspector.load_material_file(file_path)
+        self._model.show_material_for_file(file_path)
 
     def show_display_inspector(
         self,
         display: "Display | None" = None,
-        name: str = ""
+        name: str = "",
     ) -> None:
-        """Show DisplayInspector and set target display."""
-        self._stack.setCurrentIndex(self.DISPLAY_INSPECTOR_INDEX)
-        self._display_inspector.set_display(display, name)
+        self._model.show_display(display, name)
 
     def show_viewport_inspector(
         self,
@@ -246,97 +210,114 @@ class InspectorController:
         scene: "Scene | None" = None,
         current_display: "Display | None" = None,
     ) -> None:
-        """
-        Show ViewportInspector and set target viewport.
-
-        Args:
-            viewport: Viewport to inspect.
-            displays: Available displays for selection.
-            display_names: Optional display names mapping.
-            scene: Scene to find cameras from.
-            current_display: Display that contains this viewport.
-        """
-        self._stack.setCurrentIndex(self.VIEWPORT_INSPECTOR_INDEX)
-        if displays is not None:
-            self._viewport_inspector.set_displays(displays, display_names)
-        if scene is not None:
-            self._viewport_inspector.set_scene(scene)
-        self._viewport_inspector.set_viewport(viewport, current_display)
+        if scene is not None and scene is not self._model.scene:
+            self._model.set_scene(scene)
+        self._model.show_viewport(
+            viewport,
+            displays=displays,
+            display_names=display_names,
+            current_display=current_display,
+        )
 
     def show_render_target_inspector(
         self,
         render_target=None,
         scene: "Scene | None" = None,
     ) -> None:
-        """Show RenderTargetInspector and set target."""
-        self._stack.setCurrentIndex(self.RENDER_TARGET_INSPECTOR_INDEX)
-        self._render_target_inspector.set_render_target(render_target, scene)
+        if scene is not None and scene is not self._model.scene:
+            self._model.set_scene(scene)
+        self._model.show_render_target(render_target)
 
     def show_pipeline_inspector_for_file(self, file_path: str) -> None:
-        """Show PipelineInspector and load pipeline from file."""
-        self._stack.setCurrentIndex(self.PIPELINE_INSPECTOR_INDEX)
-        self._pipeline_inspector.load_pipeline_file(file_path)
+        self._model.show_pipeline_for_file(file_path)
 
     def show_texture_inspector(self, texture_name: str | None = None) -> None:
-        """Show TextureInspector and load texture by name."""
-        self._stack.setCurrentIndex(self.TEXTURE_INSPECTOR_INDEX)
-        if texture_name is not None:
-            texture = self._resource_manager.get_texture(texture_name)
-            if texture is not None:
-                self._texture_inspector.set_texture(texture, texture_name)
+        self._model.show_texture(texture_name)
 
     def show_texture_inspector_for_file(self, file_path: str) -> None:
-        """Show TextureInspector and load texture from file."""
-        self._stack.setCurrentIndex(self.TEXTURE_INSPECTOR_INDEX)
-        self._texture_inspector.set_texture_by_path(file_path)
+        self._model.show_texture_for_file(file_path)
 
     def show_mesh_inspector(self, mesh_name: str | None = None) -> None:
-        """Show MeshInspector and load mesh by name."""
-        self._stack.setCurrentIndex(self.MESH_INSPECTOR_INDEX)
-        if mesh_name is not None:
-            mesh_asset = self._resource_manager.get_mesh_asset(mesh_name)
-            if mesh_asset is not None:
-                self._mesh_inspector.set_mesh(mesh_asset, mesh_name)
+        self._model.show_mesh(mesh_name)
 
     def show_mesh_inspector_for_file(self, file_path: str) -> None:
-        """Show MeshInspector and load mesh from file."""
-        self._stack.setCurrentIndex(self.MESH_INSPECTOR_INDEX)
-        self._mesh_inspector.set_mesh_by_path(file_path)
+        self._model.show_mesh_for_file(file_path)
 
     def show_glb_inspector_for_file(self, file_path: str) -> None:
-        """Show GLBInspector and load GLB from file."""
-        self._stack.setCurrentIndex(self.GLB_INSPECTOR_INDEX)
-        self._glb_inspector.set_glb_by_path(file_path)
+        self._model.show_glb_for_file(file_path)
 
     def set_entity_target(self, target) -> None:
-        """Set target for EntityInspector (can be Entity or other object)."""
-        self._entity_inspector.set_target(target)
+        """Deprecated shortcut: show entity inspector with any object as target."""
+        self._model.request(InspectorKind.ENTITY, target=target, label="")
 
     def clear(self) -> None:
-        """Clear inspector state."""
-        self._entity_inspector.set_target(None)
-        self._stack.setCurrentIndex(self.ENTITY_INSPECTOR_INDEX)
+        self._model.clear()
 
     def resync_from_tree_selection(self, tree_view, scene) -> None:
-        """
-        Resync inspector based on current tree selection.
-
-        Args:
-            tree_view: QTreeView with scene tree
-            scene: Current scene
-        """
-        from termin.visualization.core.entity import Entity
-
+        """Resync inspector based on current tree selection."""
         index = tree_view.currentIndex()
-        if not index.isValid():
-            self.show_entity_inspector(None)
-            return
+        obj = None
+        if index.isValid():
+            node = index.internalPointer()
+            obj = node.obj if node is not None else None
+        self._model.resync_from_selection(obj)
 
-        node = index.internalPointer()
-        obj = node.obj if node is not None else None
+    # ------------------------------------------------------------------
+    # Model → view
+    # ------------------------------------------------------------------
 
-        if isinstance(obj, Entity):
-            self.show_entity_inspector(obj)
-        else:
-            self._entity_inspector.set_target(obj)
-            self._stack.setCurrentIndex(self.ENTITY_INSPECTOR_INDEX)
+    def _on_model_changed(self, model: InspectorModel) -> None:
+        kind = model.kind
+        self._stack.setCurrentIndex(_KIND_INDEX[kind])
+
+        file_path = model.extras.get("file_path")
+
+        if kind is InspectorKind.ENTITY:
+            self._entity_inspector.set_target(model.target)
+
+        elif kind is InspectorKind.MATERIAL:
+            if file_path is not None:
+                self._material_inspector.load_material_file(file_path)
+            elif model.target is not None:
+                self._material_inspector.set_material(model.target)
+                shader = self._resource_manager.get_shader(model.target.shader_name)
+                if shader is not None:
+                    self._material_inspector._shader_program = shader
+                    self._material_inspector._rebuild_ui()
+
+        elif kind is InspectorKind.DISPLAY:
+            self._display_inspector.set_display(model.target, model.label)
+
+        elif kind is InspectorKind.VIEWPORT:
+            displays = model.extras.get("displays")
+            display_names = model.extras.get("display_names")
+            if displays is not None:
+                self._viewport_inspector.set_displays(displays, display_names)
+            if model.scene is not None:
+                self._viewport_inspector.set_scene(model.scene)
+            self._viewport_inspector.set_viewport(
+                model.target, model.extras.get("current_display")
+            )
+
+        elif kind is InspectorKind.PIPELINE:
+            if file_path is not None:
+                self._pipeline_inspector.load_pipeline_file(file_path)
+
+        elif kind is InspectorKind.TEXTURE:
+            if file_path is not None:
+                self._texture_inspector.set_texture_by_path(file_path)
+            elif model.target is not None:
+                self._texture_inspector.set_texture(model.target, model.label)
+
+        elif kind is InspectorKind.MESH:
+            if file_path is not None:
+                self._mesh_inspector.set_mesh_by_path(file_path)
+            elif model.target is not None:
+                self._mesh_inspector.set_mesh(model.target, model.label)
+
+        elif kind is InspectorKind.GLB:
+            if file_path is not None:
+                self._glb_inspector.set_glb_by_path(file_path)
+
+        elif kind is InspectorKind.RENDER_TARGET:
+            self._render_target_inspector.set_render_target(model.target, model.scene)

@@ -11,35 +11,35 @@
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
+#include "tgfx2/tc_shader_bridge.hpp"
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 #include <span>
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
 
-// tgfx2 path — parameters live in a std140 UBO bound at slot 0. `u_input`
-// uses an explicit `layout(binding = 0)` (via GL_ARB_shading_language_420pack)
-// so the sampler unit is pinned rather than relying on GL's default
-// uninitialized-sampler = unit 0 behaviour. That default can read from a
-// previously-bound texture unit when multiple tgfx2 pipelines run in
-// sequence (e.g. BloomPass's composite feeding into Tonemap in the editor
-// pipeline). Varying name `vUV` matches the built-in FSQ vertex shader
-// from RenderContext2 — mismatch silently drops the connection and
-// produces a solid-color result.
+// Backend-neutral: `#version 450 core` compiles directly on GL 4.3+ and
+// via shaderc for Vulkan. UBO at binding 0, sampler at binding 4 — matches
+// the shared descriptor set layout (UBO 0-3, COMBINED_IMAGE_SAMPLER 4-7).
+// Varying name `vUV` matches the built-in FSQ vertex shader from
+// RenderContext2 — mismatch silently drops the connection and produces
+// a solid-color result.
 static const char* TONEMAP_FRAG_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
+#version 450 core
+layout(location=0) in vec2 vUV;
 
-in vec2 vUV;
-
-layout(std140) uniform TonemapParams {
+layout(std140, binding = 0) uniform TonemapParams {
     float u_exposure;
     int u_method;
 };
 
-layout(binding = 0) uniform sampler2D u_input;
+layout(binding = 4) uniform sampler2D u_input;
 
-out vec4 FragColor;
+layout(location=0) out vec4 FragColor;
 
 vec3 aces_tonemap(vec3 x) {
     const float a = 2.51;
@@ -126,14 +126,12 @@ void TonemapPass::execute(ExecuteContext& ctx) {
     const int h = static_cast<int>(out_desc.height);
     if (w <= 0 || h <= 0) return;
 
-    if (!fs2_) {
-        device2_ = &ctx.ctx2->device();
-
-        tgfx::ShaderDesc fs_desc;
-        fs_desc.stage = tgfx::ShaderStage::Fragment;
-        fs_desc.source = TONEMAP_FRAG_UBO;
-        fs2_ = device2_->create_shader(fs_desc);
-
+    device2_ = &ctx.ctx2->device();
+    if (tc_shader_handle_is_invalid(shader_handle_)) {
+        shader_handle_ = tc_shader_register_static(
+            /*vertex=*/nullptr, TONEMAP_FRAG_UBO, nullptr, "TonemapEngineFS");
+    }
+    if (!params_ubo_) {
         tgfx::BufferDesc ubo_desc;
         ubo_desc.size = sizeof(TonemapParamsStd140);
         ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
@@ -161,8 +159,16 @@ void TonemapPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::None);
 
-    ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs2_);
-    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
+    tgfx::ShaderHandle tm_fs;
+    {
+        tc_shader* raw = tc_shader_get(shader_handle_);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, device2_, nullptr, &tm_fs)) {
+            tc::Log::error("TonemapPass: tc_shader_ensure_tgfx2 failed");
+            ctx.ctx2->end_pass();
+            return;
+        }
+    }
+    ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), tm_fs);
 
     tgfx::VertexBufferLayout fsq_layout;
     fsq_layout.stride = 4 * sizeof(float);
@@ -173,7 +179,7 @@ void TonemapPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_vertex_layout(fsq_layout);
 
     ctx.ctx2->bind_uniform_buffer(0, params_ubo_);
-    ctx.ctx2->bind_sampled_texture(0, input_tex2);
+    ctx.ctx2->bind_sampled_texture(4, input_tex2);
 
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
@@ -181,10 +187,7 @@ void TonemapPass::execute(ExecuteContext& ctx) {
 
 void TonemapPass::destroy() {
     if (device2_) {
-        if (fs2_) {
-            device2_->destroy(fs2_);
-            fs2_ = {};
-        }
+        // Shader lives on the tc_shader registry (`shader_handle_`) — not owned.
         if (params_ubo_) {
             device2_->destroy(params_ubo_);
             params_ubo_ = {};

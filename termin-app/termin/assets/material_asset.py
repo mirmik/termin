@@ -416,11 +416,6 @@ def _parse_material_content(
         # @property entries — see shader_parser.cpp:synthesize_material_ubo_glsl.
         layout = shader_phase.material_ubo_layout
         if layout is not None and layout.block_size > 0:
-            log.error(
-                f"[Stage 5.H bridge] material_asset pushing layout to {shader_name} "
-                f"phase={phase_mark} block_size={layout.block_size} "
-                f"entries={len(layout.entries)}"
-            )
             entries = [
                 (e.name, e.property_type, e.offset, e.size)
                 for e in layout.entries

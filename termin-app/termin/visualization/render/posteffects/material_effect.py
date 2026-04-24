@@ -2,18 +2,38 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Optional, Set
+from typing import Set
 
 from termin.visualization.render.postprocess import PostEffect
 from termin._native.render import TcMaterial
 from termin.editor.inspect_field import InspectField
 from tcbase import log
+from tgfx._tgfx_native import Tgfx2ShaderStage
 
-if TYPE_CHECKING:
-    from tgfx import TcShader
 
-# Callback type: (shader) -> None
-BeforeDrawCallback = Callable[["TcShader"], None]
+# Passthrough FSQ shader for the fallback path — backend-neutral pattern
+# with explicit location qualifiers (Vulkan shaderc requires them) and
+# sampler at binding 4 (matches tgfx2's shared descriptor layout).
+_PASSTHROUGH_VERT = """#version 450 core
+layout(location=0) in vec2 a_pos;
+layout(location=1) in vec2 a_uv;
+layout(location=0) out vec2 v_uv;
+
+void main() {
+    v_uv = a_uv;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+"""
+
+_PASSTHROUGH_FRAG = """#version 450 core
+layout(location=0) in vec2 v_uv;
+layout(binding=4) uniform sampler2D u_tex;
+layout(location=0) out vec4 FragColor;
+
+void main() {
+    FragColor = texture(u_tex, v_uv);
+}
+"""
 
 
 class MaterialPostEffect(PostEffect):
@@ -29,7 +49,8 @@ class MaterialPostEffect(PostEffect):
     - u_resolution: vec2 with (width, height)
     - Extra resources specified via add_resource() as their uniform names
 
-    Additional textures and uniforms come from the material itself.
+    Per-frame parameters come from the material itself — callers update
+    them via TcMaterial.set_uniform_* (Unity-style Material.SetFloat).
     """
 
     name = "material"
@@ -52,6 +73,10 @@ class MaterialPostEffect(PostEffect):
         ),
     }
 
+    # Shared passthrough shader handles (compiled lazily once per device).
+    _passthrough_vs = None
+    _passthrough_fs = None
+
     def __init__(
         self,
         material_path: str = "",
@@ -66,7 +91,6 @@ class MaterialPostEffect(PostEffect):
         if material_path:
             self._material = TcMaterial.from_name(material_path)
         self._required_depth = required_depth
-        self._before_draw: Optional[BeforeDrawCallback] = None
         # Map: resource_name -> uniform_name
         self._extra_resources: dict[str, str] = {}
 
@@ -91,22 +115,6 @@ class MaterialPostEffect(PostEffect):
                 uni = uni.strip()
                 if res and uni:
                     self._extra_resources[res] = uni
-
-    def set_before_draw(self, callback: Optional[BeforeDrawCallback]) -> None:
-        """
-        Set callback to be called before drawing.
-
-        The callback receives the shader program and can set additional uniforms.
-        Called after the shader is bound but before drawing the quad.
-
-        Args:
-            callback: Callable[[TcShader], None] or None to clear.
-        """
-        self._before_draw = callback
-
-    def clear_callbacks(self) -> None:
-        """Clear before_draw callback."""
-        self._before_draw = None
 
     def add_resource(self, resource_name: str, uniform_name: str) -> "MaterialPostEffect":
         """
@@ -164,7 +172,13 @@ class MaterialPostEffect(PostEffect):
             self._draw_passthrough(ctx2, color_tex2, target_tex2, size)
             return
 
-        pair = tc_shader_ensure_tgfx2(ctx2, shader)
+        try:
+            pair = tc_shader_ensure_tgfx2(ctx2, shader)
+        except RuntimeError as e:
+            log.error(f"MaterialPostEffect: shader compile failed ({e}); falling back to passthrough")
+            self._draw_passthrough(ctx2, color_tex2, target_tex2, size)
+            return
+
         if not pair.vs or not pair.fs:
             self._draw_passthrough(ctx2, color_tex2, target_tex2, size)
             return
@@ -195,9 +209,6 @@ class MaterialPostEffect(PostEffect):
             for uniform_name, uniform_value in phase.uniforms.items():
                 self._set_uniform(ctx2, uniform_name, uniform_value)
 
-            if self._before_draw is not None:
-                self._before_draw(shader)
-
             ctx2.draw_fullscreen_quad()
 
         PostEffect._simple_draw(ctx2, target_tex2, size, setup)
@@ -226,20 +237,26 @@ class MaterialPostEffect(PostEffect):
             arr = np.array(value, dtype=np.float32)
             self._set_uniform(ctx2, name, arr)
 
-    def _draw_passthrough(self, ctx2, color_tex2, target_tex2, size) -> None:
-        """Fallback: pass through color unchanged via a minimal blit shader."""
-        from tgfx._tgfx_native import tc_shader_ensure_tgfx2
-        from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
+    @classmethod
+    def _ensure_passthrough_shaders(cls, ctx2):
+        if cls._passthrough_vs is None:
+            cls._passthrough_vs = ctx2.device.create_shader(
+                Tgfx2ShaderStage.Vertex, _PASSTHROUGH_VERT)
+        if cls._passthrough_fs is None:
+            cls._passthrough_fs = ctx2.device.create_shader(
+                Tgfx2ShaderStage.Fragment, _PASSTHROUGH_FRAG)
 
-        shader = PresentToScreenPass._get_shader()
-        pair = tc_shader_ensure_tgfx2(ctx2, shader)
-        if not pair.vs or not pair.fs:
+    def _draw_passthrough(self, ctx2, color_tex2, target_tex2, size) -> None:
+        """Fallback: pass color through unchanged via a backend-neutral
+        FSQ blit shader. Used when the material is missing, invalid, or
+        fails to compile (e.g. legacy `#version 330` shader on Vulkan)."""
+        self._ensure_passthrough_shaders(ctx2)
+        if not self._passthrough_vs or not self._passthrough_fs:
             return
 
         def setup(ctx2):
-            ctx2.bind_shader(pair.vs, pair.fs)
-            ctx2.bind_sampled_texture(0, color_tex2)
-            ctx2.set_uniform_int("u_tex", 0)
+            ctx2.bind_shader(self._passthrough_vs, self._passthrough_fs)
+            ctx2.bind_sampled_texture(4, color_tex2)
             ctx2.draw_fullscreen_quad()
 
         PostEffect._simple_draw(ctx2, target_tex2, size, setup)

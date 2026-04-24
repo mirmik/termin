@@ -6,6 +6,13 @@
 #include <cstring>
 #include <regex>
 
+// Use tgfx2's shared include-resolution hook so the parser's strip /
+// inject passes see the full expanded source — including content
+// pulled in from lighting.glsl / shadows.glsl. Without this, plain
+// `uniform mat4 u_view;` decls hiding inside included .glsl files
+// slip past the engine-uniforms strip and break Vulkan compilation.
+#include "tgfx2/internal/shader_preprocess.hpp"
+
 namespace termin {
 
 namespace {
@@ -226,8 +233,15 @@ std::string synthesize_material_ubo_glsl(const MaterialUboLayout& layout) {
         return nullptr;
     };
 
+    // Binding 1 matches MATERIAL_UBO_BINDING in ColorPass's C++ side —
+    // apply_material_phase_ubo calls bind_uniform_buffer(1, ubo). On
+    // Vulkan the binding is prescribed here and baked into SPIR-V, since
+    // set_block_binding is a GL-only escape hatch that no-ops on Vulkan.
+    // GL 4.3+ accepts the qualifier via core GL_ARB_shading_language_420pack
+    // and glBindBufferBase(GL_UNIFORM_BUFFER, 1, ...) lands on the same
+    // slot without needing glUniformBlockBinding.
     std::ostringstream out;
-    out << "layout(std140) uniform MaterialParams {\n";
+    out << "layout(std140, binding = 1) uniform MaterialParams {\n";
     for (const auto& e : layout.entries) {
         const char* t = glsl_type(e.property_type);
         if (!t) continue;
@@ -235,6 +249,103 @@ std::string synthesize_material_ubo_glsl(const MaterialUboLayout& layout) {
     }
     out << "};\n";
     return out.str();
+}
+
+// ============================================================================
+// Engine uniforms auto-substitution
+// ============================================================================
+//
+// Legacy shaders declare the engine-provided per-frame / per-draw data
+// as plain `uniform mat4 u_view;` etc. — fine on GL 3.3, but SPIR-V
+// disallows non-opaque uniforms outside a block. Transform the stage
+// source so that:
+//
+//   - `uniform <type> <name>;` decls for known engine names are stripped
+//   - a PerFrame UBO (binding 2, matches ColorPass's per_frame_ubo_) is
+//     injected with view / projection / view_projection / camera_position
+//   - a push_constant block with `u_model` is injected (on Vulkan; on GL
+//     it's a std140 emulation UBO at TGFX2_PUSH_CONSTANTS_BINDING = 14)
+//   - `#define u_model pc.u_model` so stage bodies keep writing
+//     `u_model * vec4(pos, 1.0)` without manual rewrite
+//
+// This is the minimal substitution needed to get stdlib materials
+// (TestMaterialUbo, BlinnPhong, CookTorrancePBR, …) to compile for
+// Vulkan without touching their .shader files. The list of recognised
+// names is deliberately closed — shader-specific uniforms that aren't
+// wired into the engine remain the shader author's responsibility.
+const char* const ENGINE_PLAIN_UNIFORM_NAMES[] = {
+    "u_model",
+    "u_view",
+    "u_projection",
+    "u_view_projection",
+    "u_camera_position",
+};
+
+std::string strip_engine_uniform_decls(const std::string& source) {
+    std::vector<std::regex> res;
+    for (const char* name : ENGINE_PLAIN_UNIFORM_NAMES) {
+        std::string pattern =
+            std::string("[ \\t]*uniform[ \\t]+[A-Za-z_][A-Za-z0-9_]*[ \\t]+") +
+            name + "[ \\t]*;[ \\t]*";
+        res.emplace_back(pattern);
+    }
+
+    std::string result;
+    result.reserve(source.size());
+    size_t i = 0;
+    while (i < source.size()) {
+        size_t eol = source.find('\n', i);
+        size_t line_end = (eol == std::string::npos) ? source.size() : eol;
+        std::string line = source.substr(i, line_end - i);
+        bool drop = false;
+        for (const auto& re : res) {
+            if (std::regex_match(line, re)) { drop = true; break; }
+        }
+        if (!drop) {
+            result.append(line);
+            if (eol != std::string::npos) result.push_back('\n');
+        }
+        if (eol == std::string::npos) break;
+        i = eol + 1;
+    }
+    return result;
+}
+
+// Engine-supplied per-frame + per-draw block. `u_model` is aliased via
+// `#define` so existing stage bodies keep using the plain identifier
+// and don't need to know about the push_constant indirection.
+const char* ENGINE_UNIFORMS_BLOCK = R"(
+layout(std140, binding = 2) uniform PerFrame {
+    mat4 u_view;
+    mat4 u_projection;
+    mat4 u_view_projection;
+    vec4 u_camera_position;
+};
+
+struct ColorPushData {
+    mat4 _u_model;
+};
+#ifdef VULKAN
+layout(push_constant) uniform ColorPushBlock { ColorPushData pc; };
+#else
+layout(std140, binding = 14) uniform ColorPushBlock { ColorPushData pc; };
+#endif
+#define u_model pc._u_model
+)";
+
+// True if the stage contains at least one engine-plain-uniform reference
+// (read-side) — used to avoid injecting the engine UBO/push into stages
+// that don't need it, which would waste a descriptor slot and break
+// unrelated UBO bindings some stages rely on (e.g. TextureAtlas-only
+// fragments that never touch view/proj/model).
+bool stage_uses_engine_uniform(const std::string& source) {
+    for (const char* name : ENGINE_PLAIN_UNIFORM_NAMES) {
+        // Word-boundary regex — don't match `u_modelview` when looking
+        // for `u_model`, etc.
+        std::regex re(std::string("\\b") + name + "\\b");
+        if (std::regex_search(source, re)) return true;
+    }
+    return false;
 }
 
 std::string strip_uniform_decls(const std::string& source,
@@ -275,9 +386,20 @@ std::string strip_uniform_decls(const std::string& source,
 }
 
 std::string inject_after_version(const std::string& source, const std::string& block) {
-    if (block.empty()) return source;
+    // Always runs — even with an empty block — so that every stage's
+    // `#version 330 core` gets upgraded to `#version 450 core` for
+    // shaderc. Without the upgrade shaderc emits a "forced to 450 while
+    // source declares 330" warning and treats legacy (attribute/
+    // varying) syntax inconsistently; with it every stage is uniform.
 
-    // Find the first `#version ...` line and insert block right after it.
+    // The synthesised block uses `layout(std140, binding = 1)` which is
+    // a GL 4.2+ / GL_ARB_shading_language_420pack feature and also the
+    // baseline for Vulkan GLSL via shaderc. User-authored `.shader`
+    // stages often start with `#version 330 core` — safe to upgrade in
+    // place since everything we inject is forward-compatible and the
+    // stage body rarely uses anything 330-specific. Find the first
+    // `#version` line, replace it with `#version 450 core`, then insert
+    // the generated block right after.
     std::regex version_re(R"([ \t]*#version[^\n]*)");
     size_t i = 0;
     while (i < source.size()) {
@@ -285,14 +407,17 @@ std::string inject_after_version(const std::string& source, const std::string& b
         size_t line_end = (eol == std::string::npos) ? source.size() : eol;
         std::string line = source.substr(i, line_end - i);
         if (std::regex_match(line, version_re)) {
-            size_t insert_at = (eol == std::string::npos) ? line_end : eol + 1;
-            return source.substr(0, insert_at) + block + source.substr(insert_at);
+            size_t line_start = i;
+            std::string before = source.substr(0, line_start);
+            std::string after = (eol == std::string::npos) ? std::string()
+                                                           : source.substr(eol + 1);
+            return before + "#version 450 core\n" + block + after;
         }
         if (eol == std::string::npos) break;
         i = eol + 1;
     }
-    // No #version — prepend.
-    return block + source;
+    // No #version — prepend both the version line and the block.
+    return std::string("#version 450 core\n") + block + source;
 }
 
 // ========== std140 value packer ==========
@@ -864,23 +989,84 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
     // same "two code paths converge into one" cleanup.
     for (auto& phase : result.phases) {
         MaterialUboLayout layout = compute_std140_layout(phase.uniforms);
-        if (layout.empty()) continue;
-
-        std::string block_glsl = synthesize_material_ubo_glsl(layout);
-
+        std::string block_glsl;
         std::vector<std::string> ubo_names;
-        ubo_names.reserve(layout.entries.size());
-        for (const auto& e : layout.entries) {
-            ubo_names.push_back(e.name);
+        if (!layout.empty()) {
+            block_glsl = synthesize_material_ubo_glsl(layout);
+            ubo_names.reserve(layout.entries.size());
+            for (const auto& e : layout.entries) {
+                ubo_names.push_back(e.name);
+            }
         }
 
         for (auto& kv : phase.stages) {
             std::string& src = kv.second.source;
-            src = strip_uniform_decls(src, ubo_names);
-            src = inject_after_version(src, block_glsl);
+
+            // Expand #include directives first so the strip passes
+            // below see the full merged source — including plain
+            // `uniform ...;` decls hiding inside shadows.glsl /
+            // lighting.glsl. Without this the strip only covers the
+            // stage's own text and uniforms from includes leak into
+            // the output, violating Vulkan's "non-opaque uniforms
+            // outside a block" rule.
+            src = tgfx::internal::preprocess_shader_source(
+                src, kv.first.c_str());
+
+            // Material UBO: strip @property plain-uniform decls and
+            // inject the synthesised std140 block. Only for phases with
+            // non-empty layout — phases without @property entries skip
+            // this step but still go through the engine uniforms pass
+            // below so their u_view/u_projection/u_model references
+            // still resolve.
+            if (!layout.empty()) {
+                src = strip_uniform_decls(src, ubo_names);
+            }
+
+            // Engine uniforms: strip plain decls of u_view / u_projection /
+            // u_model / u_view_projection / u_camera_position, inject the
+            // PerFrame UBO + push_constant block if the stage actually
+            // references any of them.
+            //
+            // Skip the engine injection entirely when any of the engine
+            // names collide with a MaterialParams @property entry — this
+            // happens in shaders that hand the view/proj matrices down
+            // through the material system rather than asking the engine
+            // to supply them (e.g. the Skybox program). Injecting would
+            // redeclare `u_view` in PerFrame and collide with the same
+            // name already promoted from MaterialParams into the global
+            // scope ("nameless block contains a member that already has
+            // a name at global scope").
+            bool collision_with_material = false;
+            for (const char* engine_name : ENGINE_PLAIN_UNIFORM_NAMES) {
+                for (const auto& ubo_name : ubo_names) {
+                    if (ubo_name == engine_name) {
+                        collision_with_material = true;
+                        break;
+                    }
+                }
+                if (collision_with_material) break;
+            }
+            bool needs_engine_block =
+                !collision_with_material && stage_uses_engine_uniform(src);
+            if (needs_engine_block) {
+                src = strip_engine_uniform_decls(src);
+            }
+
+            // Combine material block + engine block into a single
+            // after-version injection so both land above the stage body
+            // and get the same `#version 450 core` upgrade treatment.
+            // Always called so the stage's #version line is upgraded to
+            // 450 regardless of whether there's anything to inject.
+            std::string inject = block_glsl;
+            if (needs_engine_block) {
+                inject += ENGINE_UNIFORMS_BLOCK;
+            }
+            src = inject_after_version(src, inject);
         }
 
-        phase.material_ubo_layout = std::move(layout);
+        if (!layout.empty()) {
+            phase.material_ubo_layout = std::move(layout);
+        }
     }
 
     return result;

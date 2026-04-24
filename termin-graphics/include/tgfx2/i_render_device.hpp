@@ -17,8 +17,20 @@ class IRenderDevice {
 public:
     virtual ~IRenderDevice() = default;
 
+    // Backend identity — lets callers branch on GL-only vs Vulkan-only
+    // host integration (FBO invalidation, legacy gpu_ops interop, …)
+    // without a dynamic_cast to the concrete device class.
+    virtual BackendType backend_type() const = 0;
+
     virtual BackendCapabilities capabilities() const = 0;
     virtual void wait_idle() = 0;
+
+    // Drop any cached backend-side render target objects (OpenGL FBOs,
+    // Vulkan VkFramebuffers) keyed on texture identity. Called after
+    // host code destroys + re-creates textures whose gl_id / VkImage may
+    // be reused for attachments of a different size or format. Default
+    // is a no-op for backends that don't cache render targets.
+    virtual void invalidate_render_target_cache() {}
 
     // --- Resource creation ---
     virtual BufferHandle create_buffer(const BufferDesc& desc) = 0;
@@ -82,6 +94,28 @@ public:
         uintptr_t native_handle, const BufferDesc& desc) {
         (void)native_handle; (void)desc;
         throw std::runtime_error("register_external_buffer: not supported on this backend");
+    }
+
+    // --- Transient vertex ring (optional) ---
+    // A persistent vertex buffer the backend can sub-upload small draw
+    // streams into (immediate-mode rects, debug lines). Lets
+    // RenderContext2::draw_immediate_* skip per-draw create_buffer /
+    // upload_buffer / destroy, which is ~free on Vulkan but costs
+    // glGenBuffers + glBufferData + glBufferSubData + glDeleteBuffers
+    // on OpenGL (the delete happens later via deferred_destroy_buffers_,
+    // but the GL-driver still pays the per-alloc hit).
+    //
+    // Returns UINT64_MAX → caller falls back to create_buffer +
+    // upload_buffer (Vulkan keeps doing that; it's fast there).
+    // Non-max offset → use `transient_vertex_buffer()` with that
+    // offset.  Ring wraps with an orphaning glBufferData() so there's
+    // no stall on overflow.
+    virtual BufferHandle transient_vertex_buffer() { return {}; }
+
+    virtual uint64_t transient_vertex_write(
+        const void* data, uint32_t size) {
+        (void)data; (void)size;
+        return UINT64_MAX;
     }
 
     // Return the backend-native object id backing a tgfx2 handle.
@@ -176,6 +210,25 @@ public:
         (void)tex; (void)out;
         return false;
     }
+
+    // --- Dynamic-offset ring UBO ------------------------------------
+    //
+    // A backend-managed host-visible ring buffer used by the
+    // `RenderContext2::bind_uniform_buffer_ring()` API. Pass code writes
+    // per-draw UBO data into the ring via `ring_ubo_write(data, size)`
+    // which returns an aligned byte offset; the offset is then attached
+    // to a normal UniformBuffer binding on `ring_ubo_handle()`, letting
+    // one shared backing store replace a per-draw `vkCreateBuffer` +
+    // `vkUpdateDescriptorSets` pair.
+    //
+    // Default returns on backends without a ring implementation are safe
+    // ({}/0) — callers should treat `ring_ubo_handle().id == 0` as "no
+    // ring, fall back to the classic per-draw UBO path".
+    virtual BufferHandle ring_ubo_handle() const { return {}; }
+    virtual uint32_t ring_ubo_write(const void* /*data*/, uint32_t /*size*/) {
+        return 0;
+    }
+    virtual uint32_t ubo_alignment() const { return 1; }
 
     // --- Legacy state / sync helpers ---
     // Restore the canonical render-state baseline between frame-graph

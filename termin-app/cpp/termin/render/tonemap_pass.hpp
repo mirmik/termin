@@ -4,6 +4,9 @@
 #include "termin/render/frame_pass.hpp"
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace tgfx { class IRenderDevice; }
 
@@ -30,10 +33,11 @@ public:
     int method = 0;  // TonemapMethod::ACES
 
 private:
-    // tgfx2 resources. Created lazily on first execute. Destroyed in
-    // destroy() via device2_ if captured.
+    // tgfx2 resources. Created lazily on first execute. Shader lives on
+    // the tc_shader registry (FS-only, NULL VS — see grayscale_pass for
+    // the matching pattern).
     tgfx::IRenderDevice* device2_ = nullptr;
-    tgfx::ShaderHandle fs2_;
+    tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
     tgfx::BufferHandle params_ubo_;
     float uploaded_exposure_ = -1.0f;
     int uploaded_method_ = -1;

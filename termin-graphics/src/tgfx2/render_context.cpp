@@ -5,6 +5,10 @@
 #include "tgfx2/i_command_list.hpp"
 #include "tgfx2/opengl/opengl_render_device.hpp"
 
+extern "C" {
+#include "tc_profiler.h"
+}
+
 #include <glad/glad.h>
 #include <cstring>
 
@@ -14,11 +18,13 @@ namespace tgfx {
 // Fullscreen quad shader (built-in, minimal)
 // ============================================================================
 
-static const char* FSQ_VERT_SRC = R"(
-#version 330 core
+// Built-in FSQ vertex shader. `#version 450 core` + explicit location
+// qualifiers on varyings — both required for Vulkan shaderc (SPIR-V).
+// GL 4.3+ accepts the same source via core GL_ARB_shading_language_420pack.
+static const char* FSQ_VERT_SRC = R"(#version 450 core
 layout(location = 0) in vec2 aPos;
 layout(location = 1) in vec2 aUV;
-out vec2 vUV;
+layout(location = 0) out vec2 vUV;
 void main() {
     gl_Position = vec4(aPos, 0.0, 1.0);
     vUV = aUV;
@@ -147,8 +153,31 @@ void RenderContext2::begin_pass(
         pipeline_dirty_ = true;
     }
 
+    // Sync the pipeline's multisample state with the attachment's actual
+    // sample count. FBOPool may allocate MSAA textures (e.g. scene color
+    // at 4x) while the pipeline cache key defaults to sample_count=1 —
+    // Vulkan then refuses vkCreateFramebuffer with SAMPLE_COUNT_4 vs
+    // SAMPLE_COUNT_1 mismatch. Pick the attachment that's present; if
+    // both are, trust the color (depth should match by construction).
+    uint32_t new_samples = 1;
+    if (color) {
+        new_samples = device_.texture_desc(color).sample_count;
+    } else if (depth) {
+        new_samples = device_.texture_desc(depth).sample_count;
+    }
+    if (new_samples == 0) new_samples = 1;
+    if (sample_count_ != new_samples) {
+        sample_count_ = new_samples;
+        pipeline_dirty_ = true;
+    }
+
     cmd_->begin_render_pass(pass);
     in_pass_ = true;
+    // Vulkan's cmd-buffer-level binds don't survive a render pass
+    // boundary — reset cached state so draw() re-binds on first use.
+    last_bound_vbo_ = {};
+    last_bound_ibo_ = {};
+    last_bound_pipeline_ = {};
     pipeline_dirty_ = true;
 }
 
@@ -237,6 +266,20 @@ void RenderContext2::bind_shader(ShaderHandle vs, ShaderHandle fs, ShaderHandle 
 
 void RenderContext2::set_vertex_layout(const VertexBufferLayout& layout) {
     vertex_layout_ = layout;
+    // Cache the layout's hash once here so flush_pipeline's cache lookup
+    // doesn't have to iterate the attributes vector on every draw.
+    size_t h = 0;
+    auto mix = [&h](size_t v) {
+        h ^= v + 0x9e3779b9 + (h << 6) + (h >> 2);
+    };
+    mix(std::hash<uint32_t>{}(layout.stride));
+    mix(std::hash<size_t>{}(layout.attributes.size()));
+    for (const auto& a : layout.attributes) {
+        mix(std::hash<uint32_t>{}(a.location));
+        mix(std::hash<int>{}(static_cast<int>(a.format)));
+        mix(std::hash<uint32_t>{}(a.offset));
+    }
+    vertex_layout_hash_ = h;
     pipeline_dirty_ = true;
 }
 
@@ -283,6 +326,31 @@ void RenderContext2::bind_uniform_buffer(uint32_t binding, BufferHandle buffer,
     bindings_dirty_ = true;
 }
 
+void RenderContext2::bind_uniform_buffer_ring(uint32_t binding,
+                                                const void* data, uint32_t size) {
+    if (!data || size == 0) return;
+    // Write into the device ring; the returned offset is aligned to
+    // minUniformBufferOffsetAlignment. An invalid ring (handle.id == 0)
+    // means the backend hasn't implemented the ring path — fall back to
+    // a transient UBO via the classic API so behaviour stays correct.
+    BufferHandle ring = device_.ring_ubo_handle();
+    if (ring.id == 0) {
+        // Transient UBO fallback — creates garbage at the callrate of
+        // whoever used this API before the backend grew a real ring.
+        BufferDesc bd;
+        bd.size = size;
+        bd.usage = BufferUsage::Uniform;
+        bd.cpu_visible = true;
+        BufferHandle tmp = device_.create_buffer(bd);
+        device_.upload_buffer(tmp, {reinterpret_cast<const uint8_t*>(data), size});
+        defer_destroy(tmp);
+        bind_uniform_buffer(binding, tmp, 0, size);
+        return;
+    }
+    uint32_t offset = device_.ring_ubo_write(data, size);
+    bind_uniform_buffer(binding, ring, offset, size);
+}
+
 void RenderContext2::bind_sampled_texture(uint32_t binding, TextureHandle tex,
                                            SamplerHandle sampler) {
     ResourceBinding* existing =
@@ -312,19 +380,22 @@ void RenderContext2::clear_resource_bindings() {
 
 void RenderContext2::set_push_constants(const void* data, uint32_t size) {
     if (!cmd_) return;
-    // vkCmdPushConstants requires a bound pipeline. Callers typically
-    // do bind_shader → set_push_constants → draw; at this point the
-    // vertex layout is still unset, so flushing now would build an
-    // invalid pipeline. Queue the data and re-emit it after each
-    // flush_pipeline — that way push-constants always land on a valid
-    // layout that matches the upcoming draw.
+    // Stash the bytes and mark dirty — the actual vkCmdPushConstants
+    // happens inside flush_pipeline() right before the draw, which also
+    // handles the re-emit-on-new-layout case after a pipeline change.
+    // The old path emitted immediately when pipeline_dirty_ was false,
+    // which produced a double emit every time callers did
+    // set_push_constants() → set_blend(...) → draw() — ~20% of draws,
+    // visible as pushC ≈ 1.4 per draw in the hot-path summary.
     if (data == nullptr || size == 0) {
         pending_push_constants_.clear();
+        push_constants_dirty_ = false;
         return;
     }
     pending_push_constants_.assign(
         reinterpret_cast<const uint8_t*>(data),
         reinterpret_cast<const uint8_t*>(data) + size);
+    push_constants_dirty_ = true;
 }
 
 void RenderContext2::defer_destroy(TextureHandle handle) {
@@ -336,9 +407,30 @@ void RenderContext2::defer_destroy(BufferHandle handle) {
 }
 
 // --- Transitional legacy-uniform setters ---
+//
+// These exist only for shaders that still declare plain `uniform sampler2D
+// u_foo;` / `uniform mat4 u_view;` style legacy uniforms on the GL path.
+// On Vulkan the whole mechanism is a dead end: SPIR-V has no name-based
+// uniform lookup, samplers and matrices live in descriptor sets + UBOs
+// that are wired by explicit `layout(binding = N)`. So every one of these
+// helpers short-circuits when the process has no GL loader — we detect
+// that through glad's function-pointer table being zeroed out.
+
+namespace {
+// True only when glad loaded a real OpenGL function. If the process
+// picked the Vulkan backend, `gladLoadGLLoader` was never called and
+// `glad_glGetIntegerv` (the macro behind `glGetIntegerv`) is still
+// nullptr. Calling through it crashes — this guard turns all the
+// helpers below into silent no-ops on Vulkan, which matches the
+// semantic they already have on a Vulkan shader (no legacy plain
+// uniforms to bind).
+inline bool gl_loader_ready() {
+    return glad_glGetIntegerv != nullptr;
+}
+} // namespace
 
 void RenderContext2::set_uniform_int(const char* name, int value) {
-    if (!name) return;
+    if (!name || !gl_loader_ready()) return;
     flush_pipeline();
     GLint prog = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
@@ -348,7 +440,7 @@ void RenderContext2::set_uniform_int(const char* name, int value) {
 }
 
 void RenderContext2::set_uniform_float(const char* name, float value) {
-    if (!name) return;
+    if (!name || !gl_loader_ready()) return;
     flush_pipeline();
     GLint prog = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
@@ -359,7 +451,7 @@ void RenderContext2::set_uniform_float(const char* name, float value) {
 
 void RenderContext2::set_uniform_mat4(const char* name, const float* data,
                                       bool transpose) {
-    if (!name || !data) return;
+    if (!name || !data || !gl_loader_ready()) return;
     flush_pipeline();
     GLint prog = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
@@ -373,7 +465,7 @@ void RenderContext2::set_uniform_mat4(const char* name, const float* data,
 }
 
 void RenderContext2::set_uniform_vec2(const char* name, float x, float y) {
-    if (!name) return;
+    if (!name || !gl_loader_ready()) return;
     flush_pipeline();
     GLint prog = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
@@ -383,7 +475,7 @@ void RenderContext2::set_uniform_vec2(const char* name, float x, float y) {
 }
 
 void RenderContext2::set_uniform_vec3(const char* name, float x, float y, float z) {
-    if (!name) return;
+    if (!name || !gl_loader_ready()) return;
     flush_pipeline();
     GLint prog = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
@@ -393,7 +485,7 @@ void RenderContext2::set_uniform_vec3(const char* name, float x, float y, float 
 }
 
 void RenderContext2::set_uniform_vec4(const char* name, float x, float y, float z, float w) {
-    if (!name) return;
+    if (!name || !gl_loader_ready()) return;
     flush_pipeline();
     GLint prog = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
@@ -404,7 +496,7 @@ void RenderContext2::set_uniform_vec4(const char* name, float x, float y, float 
 
 void RenderContext2::set_uniform_mat4_array(const char* name, const float* data,
                                              int count, bool transpose) {
-    if (!name || !data || count <= 0) return;
+    if (!name || !data || count <= 0 || !gl_loader_ready()) return;
     flush_pipeline();
     GLint prog = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
@@ -418,7 +510,7 @@ void RenderContext2::set_uniform_mat4_array(const char* name, const float* data,
 }
 
 void RenderContext2::set_block_binding(const char* block_name, uint32_t binding_slot) {
-    if (!block_name) return;
+    if (!block_name || !gl_loader_ready()) return;
     flush_pipeline();
     GLint prog = 0;
     glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
@@ -426,27 +518,6 @@ void RenderContext2::set_block_binding(const char* block_name, uint32_t binding_
     GLuint idx = glGetUniformBlockIndex(static_cast<GLuint>(prog), block_name);
     if (idx == GL_INVALID_INDEX) return;
     glUniformBlockBinding(static_cast<GLuint>(prog), idx, binding_slot);
-}
-
-void RenderContext2::set_color_format(PixelFormat fmt) {
-    if (color_format_ != fmt) {
-        color_format_ = fmt;
-        pipeline_dirty_ = true;
-    }
-}
-
-void RenderContext2::set_depth_format(PixelFormat fmt) {
-    if (depth_format_ != fmt) {
-        depth_format_ = fmt;
-        pipeline_dirty_ = true;
-    }
-}
-
-void RenderContext2::set_sample_count(uint32_t samples) {
-    if (sample_count_ != samples) {
-        sample_count_ = samples;
-        pipeline_dirty_ = true;
-    }
 }
 
 // ============================================================================
@@ -472,13 +543,25 @@ void RenderContext2::clear_scissor() {
 // ============================================================================
 
 void RenderContext2::flush_pipeline() {
-    if (!pipeline_dirty_) return;
+    if (!pipeline_dirty_) {
+        // Pipeline wasn't touched, but push-constants might still be
+        // pending from a set_push_constants() call that came after the
+        // previous draw. Emit them here so the next draw sees fresh
+        // bytes without paying the pipeline-cache lookup.
+        if (push_constants_dirty_ && !pending_push_constants_.empty()) {
+            cmd_->set_push_constants(pending_push_constants_.data(),
+                                     static_cast<uint32_t>(pending_push_constants_.size()));
+            push_constants_dirty_ = false;
+        }
+        return;
+    }
 
     PipelineCacheKey key;
     key.vertex_shader = bound_vs_;
     key.fragment_shader = bound_fs_;
     key.geometry_shader = bound_gs_;
     key.vertex_layout = vertex_layout_;
+    key.vertex_layout_hash = vertex_layout_hash_;
     key.topology = topology_;
     key.raster = raster_;
     key.depth_stencil = depth_stencil_;
@@ -489,17 +572,28 @@ void RenderContext2::flush_pipeline() {
     key.sample_count = sample_count_;
 
     auto pipeline = cache_.get(key);
-    cmd_->bind_pipeline(pipeline);
+    // Redundant-bind culling at the pipeline level. Pass code often
+    // calls set_depth_test/set_blend/set_cull/bind_shader per draw, which
+    // flips pipeline_dirty_ even when the final pipeline ends up
+    // identical (same state combo hashes into the same VkPipeline).
+    // Skipping the vkCmdBindPipeline when the handle didn't actually
+    // change drops the cmd-recording cost in half on scenes with many
+    // draws sharing one material.
+    bool pipeline_changed = (pipeline.id != last_bound_pipeline_.id);
+    if (pipeline_changed) {
+        cmd_->bind_pipeline(pipeline);
+        last_bound_pipeline_ = pipeline;
+        // A new VkPipeline brings a (possibly new) VkPipelineLayout — the
+        // previous push-constant bytes are no longer guaranteed to be
+        // visible to the next draw. Force a re-emit.
+        push_constants_dirty_ = true;
+    }
     pipeline_dirty_ = false;
 
-    // Re-apply any pending push-constants now that the new pipeline is
-    // bound — vkCmdPushConstants needs a current pipeline layout, and
-    // the VkPipelineLayout we just bound may differ from the one the
-    // previous push-constant write targeted. On OpenGL the ring UBO
-    // binding is independent of pipeline, so the re-apply is cheap.
-    if (!pending_push_constants_.empty()) {
+    if (push_constants_dirty_ && !pending_push_constants_.empty()) {
         cmd_->set_push_constants(pending_push_constants_.data(),
                                  static_cast<uint32_t>(pending_push_constants_.size()));
+        push_constants_dirty_ = false;
     }
 }
 
@@ -520,7 +614,28 @@ void RenderContext2::flush_resource_set() {
         ResourceSetDesc desc;
         desc.bindings = pending_bindings_;
         current_resource_set_ = device_.create_resource_set(desc);
-        cmd_->bind_resource_set(current_resource_set_);
+
+        // Dynamic UBO offsets: Vulkan's shared layout declares five
+        // UNIFORM_BUFFER_DYNAMIC slots — bindings 0, 1, 2, 3, 16 (lighting,
+        // material, per-frame, shadow, bone block) — and expects their
+        // offsets in that ascending order at bind time. Pick them out of
+        // pending_bindings_ by matching binding numbers; slots left unset
+        // default to 0 (the descriptor write already points them at the
+        // ring buffer with range=WHOLE, so offset=0 is always in bounds).
+        // OpenGL ignores the offsets array and reads offset straight from
+        // the ResourceBinding — same source of truth, no duplication.
+        static constexpr uint32_t DYN_BINDINGS[5] = {0, 1, 2, 3, 16};
+        uint32_t offsets[5] = {0, 0, 0, 0, 0};
+        for (const auto& b : pending_bindings_) {
+            if (b.kind != ResourceBinding::Kind::UniformBuffer) continue;
+            for (uint32_t i = 0; i < 5; ++i) {
+                if (DYN_BINDINGS[i] == b.binding) {
+                    offsets[i] = static_cast<uint32_t>(b.offset);
+                    break;
+                }
+            }
+        }
+        cmd_->bind_resource_set(current_resource_set_, offsets, 5);
     }
 
     bindings_dirty_ = false;
@@ -576,6 +691,12 @@ void RenderContext2::draw_fullscreen_quad() {
         {1, VertexFormat::Float2, 2 * sizeof(float)},    // aUV
     };
     set_vertex_layout(fsq_layout);
+    // Explicit topology — previous draws (ImmediateRenderer line/point
+    // batches) may leave topology_ pointing at LineList, which makes
+    // the FSQ index list `{0,1,2, 0,2,3}` render as three line segments
+    // instead of two triangles. Was showing up as a diagonal sliver in
+    // PostFX output.
+    set_topology(PrimitiveTopology::TriangleList);
 
     // If no vertex shader bound, use built-in FSQ vertex shader
     ShaderHandle vs = bound_vs_ ? bound_vs_ : fsq_vs_;
@@ -597,63 +718,70 @@ void RenderContext2::draw(
 ) {
     flush_pipeline();
     flush_resource_set();
-    cmd_->bind_vertex_buffer(0, vbo);
-    cmd_->bind_index_buffer(ibo, idx_type);
+    // Redundant-bind culling: a pipeline-compatible sequence of draws
+    // over the same mesh (think: several chronosquad enemies rendered
+    // from the same instanced VBO) hits this path hundreds of times.
+    // vkCmdBindVertexBuffers / vkCmdBindIndexBuffer each cost a cmd-buffer
+    // word + driver trampoline — redundant ones add up to a measurable
+    // slice of cmd-recording time.
+    if (vbo != last_bound_vbo_) {
+        cmd_->bind_vertex_buffer(0, vbo);
+        last_bound_vbo_ = vbo;
+    }
+    if (ibo != last_bound_ibo_) {
+        cmd_->bind_index_buffer(ibo, idx_type);
+        last_bound_ibo_ = ibo;
+    }
     cmd_->draw_indexed(index_count);
 }
 
 void RenderContext2::draw_arrays(BufferHandle vbo, uint32_t vertex_count) {
     flush_pipeline();
     flush_resource_set();
-    cmd_->bind_vertex_buffer(0, vbo);
+    if (vbo != last_bound_vbo_) {
+        cmd_->bind_vertex_buffer(0, vbo);
+        last_bound_vbo_ = vbo;
+    }
     cmd_->draw(vertex_count);
 }
 
-void RenderContext2::draw_immediate_lines(const float* data, uint32_t vertex_count) {
+// Immediate vertex draw scaffold shared by draw_immediate_lines/_triangles.
+// Tries the device's transient vertex ring (persistent VBO with sub-upload)
+// first; falls back to create_buffer + upload_buffer + deferred destroy if
+// the backend doesn't provide a ring. OpenGL pays glGenBuffers+glBufferData+
+// glDeleteBuffers per draw otherwise, which dominates CPU time for small
+// UI-style streams. Vulkan keeps using the fallback — command submission is
+// async so the per-draw alloc cost is hidden.
+void RenderContext2::draw_immediate_generic(const float* data,
+                                            uint32_t vertex_count,
+                                            PrimitiveTopology topo) {
     if (vertex_count == 0) return;
 
-    // 7 floats per vertex: x,y,z, r,g,b,a
-    size_t byte_size = vertex_count * 7 * sizeof(float);
+    const size_t byte_size = vertex_count * 7 * sizeof(float);
+    const bool profile = tc_profiler_enabled();
 
-    BufferDesc desc;
-    desc.size = byte_size;
-    desc.usage = BufferUsage::Vertex;
-    auto buf = device_.create_buffer(desc);
-    device_.upload_buffer(buf, {reinterpret_cast<const uint8_t*>(data), byte_size});
+    BufferHandle buf;
+    uint64_t vb_offset = 0;
+    bool used_ring = false;
 
-    VertexBufferLayout layout;
-    layout.stride = 7 * sizeof(float);
-    layout.attributes = {
-        {0, VertexFormat::Float3, 0},                    // position
-        {1, VertexFormat::Float4, 3 * sizeof(float)},    // color
-    };
-    set_vertex_layout(layout);
-    set_topology(PrimitiveTopology::LineList);
+    if (profile) tc_profiler_begin_section("immediate.upload");
+    const uint64_t ring_offset = device_.transient_vertex_write(
+        data, static_cast<uint32_t>(byte_size));
+    if (ring_offset != UINT64_MAX) {
+        buf = device_.transient_vertex_buffer();
+        vb_offset = ring_offset;
+        used_ring = true;
+    } else {
+        BufferDesc desc;
+        desc.size = byte_size;
+        desc.usage = BufferUsage::Vertex;
+        buf = device_.create_buffer(desc);
+        device_.upload_buffer(buf,
+            {reinterpret_cast<const uint8_t*>(data), byte_size});
+    }
+    if (profile) tc_profiler_end_section();
 
-    flush_pipeline();
-    flush_resource_set();
-    cmd_->bind_vertex_buffer(0, buf);
-    cmd_->draw(vertex_count);
-
-    // Defer destroy — on Vulkan the command buffer runs asynchronously
-    // after vkQueueSubmit, so the VkBuffer must outlive end_frame().
-    // The deferred list is drained in end_frame() after device_.submit
-    // has waited on the frame fence. OpenGL is equally happy either way
-    // (glBufferData copies host memory immediately).
-    deferred_destroy_buffers_.push_back(buf);
-}
-
-void RenderContext2::draw_immediate_triangles(const float* data, uint32_t vertex_count) {
-    if (vertex_count == 0) return;
-
-    size_t byte_size = vertex_count * 7 * sizeof(float);
-
-    BufferDesc desc;
-    desc.size = byte_size;
-    desc.usage = BufferUsage::Vertex;
-    auto buf = device_.create_buffer(desc);
-    device_.upload_buffer(buf, {reinterpret_cast<const uint8_t*>(data), byte_size});
-
+    if (profile) tc_profiler_begin_section("immediate.pipeline");
     VertexBufferLayout layout;
     layout.stride = 7 * sizeof(float);
     layout.attributes = {
@@ -661,15 +789,31 @@ void RenderContext2::draw_immediate_triangles(const float* data, uint32_t vertex
         {1, VertexFormat::Float4, 3 * sizeof(float)},
     };
     set_vertex_layout(layout);
-    set_topology(PrimitiveTopology::TriangleList);
+    set_topology(topo);
 
     flush_pipeline();
     flush_resource_set();
-    cmd_->bind_vertex_buffer(0, buf);
-    cmd_->draw(vertex_count);
+    if (profile) tc_profiler_end_section();
 
-    // Defer destroy — see draw_immediate_lines for the lifetime story.
-    deferred_destroy_buffers_.push_back(buf);
+    if (profile) tc_profiler_begin_section("immediate.draw");
+    cmd_->bind_vertex_buffer(0, buf, vb_offset);
+    cmd_->draw(vertex_count);
+    if (profile) tc_profiler_end_section();
+
+    // Ring buffers are process-lifetime; only the fallback path queues
+    // the buffer for destruction after the current frame's submit
+    // (Vulkan needs the VkBuffer alive until the queue drains).
+    if (!used_ring) {
+        deferred_destroy_buffers_.push_back(buf);
+    }
+}
+
+void RenderContext2::draw_immediate_lines(const float* data, uint32_t vertex_count) {
+    draw_immediate_generic(data, vertex_count, PrimitiveTopology::LineList);
+}
+
+void RenderContext2::draw_immediate_triangles(const float* data, uint32_t vertex_count) {
+    draw_immediate_generic(data, vertex_count, PrimitiveTopology::TriangleList);
 }
 
 void RenderContext2::blit(TextureHandle src, TextureHandle dst) {

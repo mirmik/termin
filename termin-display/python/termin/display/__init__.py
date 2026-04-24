@@ -2,6 +2,12 @@ from termin_nanobind.runtime import preload_sdk_libs
 
 preload_sdk_libs("termin_display")
 
+from termin.display._platform_native import BackendWindow
+from termin.display.window_manager import (
+    BackendWindowEntry,
+    BackendWindowManager,
+)
+
 from termin.display._display_native import Display
 from termin.display._display_native import DisplayInputRouter
 from termin.display._display_native import _display_get_surface_ptr
@@ -28,6 +34,9 @@ from termin.display._display_native import _viewport_input_manager_free
 from termin.display._display_native import _viewport_input_manager_new
 
 __all__ = [
+    "BackendWindow",
+    "BackendWindowEntry",
+    "BackendWindowManager",
     "Display",
     "DisplayInputRouter",
     "_display_get_surface_ptr",

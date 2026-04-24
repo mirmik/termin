@@ -10,7 +10,6 @@
 #include "termin/lighting/lighting_upload.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
-#include "tgfx2/opengl/opengl_render_device.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 #include <termin/render/frame_graph_debugger_core.hpp>
 extern "C" {
@@ -27,6 +26,7 @@ extern "C" {
 
 #include <cmath>
 #include <cstring>
+#include <span>
 #include <algorithm>
 #include <numeric>
 #include <chrono>
@@ -363,11 +363,6 @@ void ColorPass::execute_with_data(
         return;
     }
 
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx2->device());
-    if (!gl_dev) {
-        tc::Log::error("[ColorPass/tgfx2] tgfx2 device is not OpenGLRenderDevice");
-        return;
-    }
     auto& device = ctx2->device();
 
     // Resolve output textures from ctx.tex2_* — persistent FBOPool
@@ -384,11 +379,88 @@ void ColorPass::execute_with_data(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
+    // --- Per-frame UBO (binding 2) ------------------------------------
+    // Carries view / projection / view_projection / camera_position —
+    // the matrices shaders used to read from plain `uniform mat4` decls.
+    // Lazy-create once per device, refresh every frame. Uploaded BEFORE
+    // begin_pass because upload_buffer on Vulkan routes through a
+    // staging copy that must run outside any render pass.
+    struct PerFrameStd140 {
+        float u_view[16];
+        float u_projection[16];
+        float u_view_projection[16];
+        float u_camera_position[4];  // vec3 + pad to vec4
+    };
+    static_assert(sizeof(PerFrameStd140) == 208,
+                  "PerFrameStd140 must be exactly 3*mat4 + vec4");
+
+    PerFrameStd140 pf{};
+    std::memcpy(pf.u_view, view.data, sizeof(pf.u_view));
+    std::memcpy(pf.u_projection, projection.data, sizeof(pf.u_projection));
+    Mat44f vp = projection * view;
+    std::memcpy(pf.u_view_projection, vp.data, sizeof(pf.u_view_projection));
+    pf.u_camera_position[0] = static_cast<float>(camera_position.x);
+    pf.u_camera_position[1] = static_cast<float>(camera_position.y);
+    pf.u_camera_position[2] = static_cast<float>(camera_position.z);
+    pf.u_camera_position[3] = 1.0f;
+
+    // --- Shadow metadata UBO (binding 3) ------------------------------
+    // Packs the plain shadow uniforms shadows.glsl used to read through
+    // glUniform* (u_shadow_map_count, u_light_space_matrix[N], ...) into
+    // a std140 block so Vulkan's "no non-opaque uniforms outside a
+    // block" rule is satisfied. The same layout also works on GL —
+    // shadows.glsl is rewritten to read from this block on both paths.
+    //
+    // std140 pads each scalar-in-array to 16 bytes and each mat4 to 64.
+    // MAX_SHADOW_MAPS = 16 (from lighting_upload.hpp) — hardcoded here
+    // so the struct layout can be static_asserted at compile time.
+    constexpr size_t SHADOW_UBO_MAX = MAX_SHADOW_MAPS;
+    struct ShadowBlockStd140 {
+        int   u_shadow_map_count;       // 4
+        int   _pad0[3];                 // 12
+        // mat4[16] = 64 * 16 = 1024
+        float u_light_space_matrix[SHADOW_UBO_MAX][16];
+        // int[16] with std140 vec4 alignment (4 bytes + 12 pad per element)
+        int   u_shadow_light_index[SHADOW_UBO_MAX][4];
+        int   u_shadow_cascade_index[SHADOW_UBO_MAX][4];
+        float u_shadow_split_near[SHADOW_UBO_MAX][4];
+        float u_shadow_split_far[SHADOW_UBO_MAX][4];
+    };
+    static_assert(sizeof(ShadowBlockStd140) ==
+                  16 + 1024 + 256 + 256 + 256 + 256,
+                  "ShadowBlockStd140 must match std140 layout (2064 B)");
+
+    ShadowBlockStd140 sb{};
+    {
+        int sm_count = static_cast<int>(
+            std::min(shadow_maps.size(), static_cast<size_t>(SHADOW_UBO_MAX)));
+        sb.u_shadow_map_count = sm_count;
+        for (int i = 0; i < sm_count; ++i) {
+            const ShadowMapArrayEntry& e = shadow_maps[i];
+            std::memcpy(sb.u_light_space_matrix[i],
+                        e.light_space_matrix.data,
+                        sizeof(sb.u_light_space_matrix[i]));
+            sb.u_shadow_light_index[i][0]   = e.light_index;
+            sb.u_shadow_cascade_index[i][0] = e.cascade_index;
+            sb.u_shadow_split_near[i][0]    = e.cascade_split_near;
+            sb.u_shadow_split_far[i][0]     = e.cascade_split_far;
+        }
+    }
+
     ctx2->begin_pass(color_tex2, depth_tex2,
                      /*clear_color=*/nullptr,
                      /*clear_depth=*/1.0f,
                      /*clear_depth_enabled=*/clear_depth);
     ctx2->set_viewport(0, 0, rect.width, rect.height);
+
+    // Bind per-frame / shadow-block UBOs after the pass is open —
+    // ResourceSet bindings are attached to the next pipeline flush
+    // anyway. These stay bound for the whole pass; per-draw bindings
+    // (material UBO, lighting UBO, shadow samplers) are set below.
+    constexpr uint32_t PER_FRAME_UBO_BINDING = 2;
+    constexpr uint32_t SHADOW_UBO_BINDING    = 3;
+    ctx2->bind_uniform_buffer_ring(PER_FRAME_UBO_BINDING, &pf, sizeof(pf));
+    ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING,    &sb, sizeof(sb));
 
     // Collect + sort draw calls. Reuses the legacy helpers —
     // gathering logic is backend-agnostic.
@@ -446,7 +518,14 @@ void ColorPass::execute_with_data(
     // declare `uniform sampler2D u_shadow_map_N` at binding N keep
     // reading from the right slot.
     constexpr uint32_t SHADOW_SLOT_BASE = 8;
-    constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 0;
+    // Vulkan descriptor set layout reserves bindings 0..3 for UBOs
+    // (lighting, material, per-frame, shadow-block) and 4..7 for
+    // material samplers — see VulkanRenderDevice's shared layout. The
+    // same numbering is used on GL: ctx.bind_sampled_texture(slot, tex)
+    // binds GL texture unit = slot, and set_uniform_int below tells the
+    // shader which unit to sample each named sampler from, so the
+    // non-zero base is backend-neutral.
+    constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
 
     tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
 
@@ -480,7 +559,7 @@ void ColorPass::execute_with_data(
         // Wrap the mesh's per-context VBO/EBO as tgfx2 buffers for
         // the duration of this draw. Destroyed right after draw —
         // wrap_mesh is cheap and avoids growing the HandlePool.
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
         if (bind.index_count == 0) continue;
 
         // Compile the shader through the tc_shader_ensure_tgfx2 bridge.
@@ -489,16 +568,14 @@ void ColorPass::execute_with_data(
         // program id which is now unused for this pass.
         tc_shader* raw_shader = tc_shader_get(dc.final_shader);
         if (!raw_shader) {
-            gl_dev->destroy(bind.vertex_buffer);
-            gl_dev->destroy(bind.index_buffer);
+            release_mesh_binding(device, bind);
             continue;
         }
         tgfx::ShaderHandle vs2, fs2;
         if (!tc_shader_ensure_tgfx2(raw_shader, &device, &vs2, &fs2)) {
             tc::Log::error("[ColorPass/tgfx2] tc_shader_ensure_tgfx2 failed for shader '%s'",
                            raw_shader->name ? raw_shader->name : raw_shader->uuid);
-            gl_dev->destroy(bind.vertex_buffer);
-            gl_dev->destroy(bind.index_buffer);
+            release_mesh_binding(device, bind);
             continue;
         }
 
@@ -513,12 +590,6 @@ void ColorPass::execute_with_data(
         ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
                                ? tgfx::PolygonMode::Line
                                : tgfx::PolygonMode::Fill);
-
-        // Pipeline cache key — needs to match the FBO formats. This is
-        // approximate because the wrapped textures retain their GL
-        // internal format; the cache key just needs to be stable.
-        ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
-        ctx2->set_depth_format(tgfx::PixelFormat::D24_UNorm_S8_UInt);
 
         ctx2->bind_shader(vs2, fs2);
         ctx2->set_vertex_layout(bind.layout);
@@ -559,24 +630,56 @@ void ColorPass::execute_with_data(
                                   static_cast<int>(MATERIAL_TEX_SLOT_BASE + i));
         }
 
-        // Shadow maps as sampled textures at SHADOW_SLOT_BASE..
+        // Shadow maps as sampled textures at SHADOW_SLOT_BASE.. paired
+        // with the depth-compare sampler (sampler2DShadow needs
+        // compareEnable=true on Vulkan; GL sets compare mode on the
+        // texture itself and ignores the sampler, so the shared
+        // sampler is backend-safe). Created lazily once per device.
+        if (!shadow_sampler_) {
+            tgfx::SamplerDesc sd;
+            sd.min_filter = tgfx::FilterMode::Linear;
+            sd.mag_filter = tgfx::FilterMode::Linear;
+            sd.mip_filter = tgfx::FilterMode::Nearest;
+            // ClampToEdge + clear-depth 1.0 gives the same "outside
+            // frustum = not in shadow" behaviour as GL's ClampToBorder
+            // + white border: sampling beyond the shadow map returns a
+            // texel cleared to the far plane, and LessOrEqual below
+            // passes the compare.
+            sd.address_u = tgfx::AddressMode::ClampToEdge;
+            sd.address_v = tgfx::AddressMode::ClampToEdge;
+            sd.address_w = tgfx::AddressMode::ClampToEdge;
+            sd.compare_enable = true;
+            // Match GL_TEXTURE_COMPARE_FUNC=GL_LEQUAL set by
+            // ShadowPass::create_shadow_depth_texture on the GL path.
+            sd.compare_op = tgfx::CompareOp::LessEqual;
+            shadow_sampler_ = device.create_sampler(sd);
+        }
         for (size_t i = 0; i < shadow_tex2s.size() && i < MAX_SHADOW_MAPS; i++) {
             if (!shadow_tex2s[i]) continue;
             ctx2->bind_sampled_texture(SHADOW_SLOT_BASE + static_cast<uint32_t>(i),
-                                       shadow_tex2s[i]);
+                                       shadow_tex2s[i],
+                                       shadow_sampler_);
         }
 
-        // --- Plain-uniform setters through the transitional escape hatch ---
-        // These run after flush_pipeline() inside each setter, so the
-        // tgfx2-compiled program is active before glUniform* is called.
+        // --- Per-draw data ---
+        //
+        // u_model goes through push_constants — tgfx2 maps this to
+        // `layout(push_constant)` on Vulkan and to the emulation UBO at
+        // binding TGFX2_PUSH_CONSTANTS_BINDING=14 on GL. shader_parser
+        // injects a `ColorPushBlock { mat4 _u_model; }` + `#define
+        // u_model pc._u_model` into any stage that references u_model,
+        // so stage bodies keep writing `u_model * vec4(...)`.
+        //
+        // u_view / u_projection / u_view_projection / u_camera_position
+        // come from the PerFrame UBO (binding 2) bound once per pass.
+        struct ColorPushData {
+            float u_model[16];
+        };
+        ColorPushData push{};
+        std::memcpy(push.u_model, model.data, sizeof(push.u_model));
+        ctx2->set_push_constants(&push, sizeof(push));
 
-        // Per-draw matrices.
-        ctx2->set_uniform_mat4("u_model",      model.data,      /*transpose=*/false);
-        ctx2->set_uniform_mat4("u_view",       view.data,       /*transpose=*/false);
-        ctx2->set_uniform_mat4("u_projection", projection.data, /*transpose=*/false);
-
-        // Shader changes → link UBO block bindings and shadow sampler
-        // uniforms once per shader in this batch.
+        // Shader changes → link UBO block bindings once per shader.
         bool shader_changed =
             !tc_shader_handle_eq(dc.final_shader, last_shader_handle);
         if (shader_changed) {
@@ -584,36 +687,8 @@ void ColorPass::execute_with_data(
             if (tc_shader_has_feature(raw_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
                 ctx2->set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
             }
-
-            // Shadow sampler uniforms and cascade metadata. Legacy path
-            // uses upload_shadow_maps_to_shader / init_shadow_map_samplers
-            // which hit the LEGACY program — we need to set on the
-            // currently-bound ctx2 program instead.
-            int sm_count = static_cast<int>(
-                std::min(shadow_maps.size(), static_cast<size_t>(MAX_SHADOW_MAPS)));
-            ctx2->set_uniform_int("u_shadow_map_count", sm_count);
-
-            for (int i = 0; i < sm_count; ++i) {
-                const ShadowMapArrayEntry& e = shadow_maps[i];
-                ctx2->set_uniform_int(detail::shadow_map_names[i],
-                                      SHADOW_SLOT_BASE + i);
-                ctx2->set_uniform_mat4(detail::light_space_matrix_names[i],
-                                       e.light_space_matrix.data, false);
-                ctx2->set_uniform_int(detail::shadow_light_index_names[i],
-                                      e.light_index);
-                ctx2->set_uniform_int(detail::shadow_cascade_index_names[i],
-                                      e.cascade_index);
-                ctx2->set_uniform_float(detail::shadow_split_near_names[i],
-                                        e.cascade_split_near);
-                ctx2->set_uniform_float(detail::shadow_split_far_names[i],
-                                        e.cascade_split_far);
-            }
-            // Remaining shadow samplers must still be set to their unit
-            // (AMD requires no two sampler types share a unit).
-            for (int i = sm_count; i < MAX_SHADOW_MAPS; ++i) {
-                ctx2->set_uniform_int(detail::shadow_map_names[i],
-                                      SHADOW_SLOT_BASE + i);
-            }
+            ctx2->set_block_binding("PerFrame",   PER_FRAME_UBO_BINDING);
+            ctx2->set_block_binding("ShadowBlock", SHADOW_UBO_BINDING);
 
             last_shader_handle = dc.final_shader;
         }
@@ -628,8 +703,7 @@ void ColorPass::execute_with_data(
         ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                    bind.index_count, bind.index_type);
 
-        gl_dev->destroy(bind.vertex_buffer);
-        gl_dev->destroy(bind.index_buffer);
+        release_mesh_binding(device, bind);
     }
 
     ctx2->end_pass();

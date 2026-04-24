@@ -209,7 +209,7 @@ void CameraComponent::on_scene_inactive() {
 std::pair<Vec3, Vec3> CameraComponent::screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const {
     double vp_aspect = static_cast<double>(vp_w) / std::max(1, vp_h);
     double nx = ((x - vp_x) / vp_w) * 2.0 - 1.0;
-    double ny = ((y - vp_y) / vp_h) * -2.0 + 1.0;
+    double ny = ((y - vp_y) / vp_h) * 2.0 - 1.0;
     Mat44 proj_matrix = compute_projection_matrix(vp_aspect);
     Mat44 pv = proj_matrix * get_view_matrix();
     Mat44 inv_pv = pv.inverse();

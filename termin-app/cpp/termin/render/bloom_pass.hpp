@@ -7,6 +7,9 @@
 #include "termin/render/frame_pass.hpp"
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 #include <vector>
 #include <memory>
@@ -30,12 +33,16 @@ public:
 
 private:
     // tgfx2 resources — persistent across frames, rebuilt on resize.
+    // FS shaders live on the tc_shader registry (FS-only, NULL VS; VS
+    // comes from ctx2->fsq_vertex_shader()) so hash-based dedup keeps
+    // compiled modules across pass re-creations — see GrayscalePass for
+    // the simpler single-FS variant.
     tgfx::IRenderDevice* device2_ = nullptr;
     std::vector<tgfx::TextureHandle> mip_textures_;
-    tgfx::ShaderHandle bright_fs2_;
-    tgfx::ShaderHandle downsample_fs2_;
-    tgfx::ShaderHandle upsample_fs2_;
-    tgfx::ShaderHandle composite_fs2_;
+    tc_shader_handle bright_shader_handle_     = tc_shader_handle_invalid();
+    tc_shader_handle downsample_shader_handle_ = tc_shader_handle_invalid();
+    tc_shader_handle upsample_shader_handle_   = tc_shader_handle_invalid();
+    tc_shader_handle composite_shader_handle_  = tc_shader_handle_invalid();
     tgfx::BufferHandle bright_ubo_;
     tgfx::BufferHandle downsample_ubo_;
     tgfx::BufferHandle upsample_ubo_;

@@ -107,15 +107,10 @@ class Viewport3D(Widget):
         """Composite the 3D engine's offscreen tgfx2 texture into the
         UI pass via ``UIRenderer.draw_texture``.
 
-        The surface's color texture and the renderer's Tgfx2Context
-        live on the same IRenderDevice by construction (the host binds
-        a process-global context in ``run_editor_tcgui``), so the
-        handle is directly consumable — no GL-id wrap needed. Works on
-        both OpenGL and Vulkan.
-
-        ``flip_v=True`` because tgfx2 color attachments follow the GL
-        origin convention (texel (0, 0) at the bottom-left), while the
-        UI ortho projection samples top-left.
+        Sampling is `v=0 = visual top` on both backends — OpenGL
+        achieves parity via a Y-flip on upload and a `texture()` macro
+        wrapper in `OpenGLRenderDevice` (see coord_system.md §4). No
+        backend branch needed here.
         """
         handle = self._surface.color_tex
         tex_w, tex_h = self._surface.framebuffer_size()
@@ -127,7 +122,6 @@ class Viewport3D(Widget):
             handle=handle,
             tex_w=tex_w,
             tex_h=tex_h,
-            flip_v=True,
         )
 
     # ------------------------------------------------------------------
@@ -144,6 +138,7 @@ class Viewport3D(Widget):
             self._dispatch_mouse_button(event.button, 0, event.mods)
 
     def on_mouse_move(self, event: MouseEvent) -> None:
+        from tcbase import log
         if self._input_manager_ptr:
             try:
                 from termin._native.render import _input_manager_on_mouse_move
@@ -151,10 +146,11 @@ class Viewport3D(Widget):
                     self._input_manager_ptr,
                     float(event.x - self.x), float(event.y - self.y),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log.error(f"Viewport3D.on_mouse_move: {e}")
 
     def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
+        from tcbase import log
         if self._input_manager_ptr:
             try:
                 from termin._native.render import _input_manager_on_scroll
@@ -162,12 +158,12 @@ class Viewport3D(Widget):
                     self._input_manager_ptr,
                     float(event.dx), float(event.dy), 0,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log.error(f"Viewport3D.on_mouse_wheel: {e}")
         return True
 
     def _dispatch_mouse_button(self, button, action: int, mods: int) -> None:
-        from tcbase import MouseButton
+        from tcbase import MouseButton, log
         btn_map = {
             MouseButton.LEFT: 0,
             MouseButton.RIGHT: 1,
@@ -177,8 +173,8 @@ class Viewport3D(Widget):
         try:
             from termin._native.render import _input_manager_on_mouse_button
             _input_manager_on_mouse_button(self._input_manager_ptr, btn_id, action, mods)
-        except Exception:
-            pass
+        except Exception as e:
+            log.error(f"Viewport3D._dispatch_mouse_button: {e}")
 
     # ------------------------------------------------------------------
     # Key events → input manager
@@ -195,11 +191,12 @@ class Viewport3D(Widget):
         return True
 
     def _dispatch_key(self, event: KeyEvent, action: int) -> None:
+        from tcbase import log
         try:
             from termin._native.render import _input_manager_on_key
             _input_manager_on_key(
                 self._input_manager_ptr,
                 event.key.value, 0, action, event.mods,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            log.error(f"Viewport3D._dispatch_key: {e}")

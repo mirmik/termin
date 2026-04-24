@@ -7,7 +7,6 @@
 // built-in fullscreen quad. No legacy GraphicsBackend draw calls.
 
 #include <tcbase/tc_log.hpp>
-#include <tgfx/tgfx_shader_handle.hpp>
 
 #include <termin/render/material_pass.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
@@ -49,10 +48,6 @@ void MaterialPass::add_resource(const std::string& resource_name, const std::str
 
 void MaterialPass::remove_resource(const std::string& resource_name) {
     extra_resources.erase(resource_name);
-}
-
-void MaterialPass::set_before_draw(BeforeDrawCallback callback) {
-    before_draw_callback_ = std::move(callback);
 }
 
 std::set<const char*> MaterialPass::compute_reads() const {
@@ -141,7 +136,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     ctx2->set_depth_write(false);
     ctx2->set_blend(false);
     ctx2->set_cull(tgfx::CullMode::None);
-    ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
 
     ctx2->bind_shader(vs2, fs2);
 
@@ -190,8 +184,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     // and phase->textures[] into the shared std140 UBO and binds it at
     // TC_MATERIAL_UBO_BINDING_SLOT via glBindBufferRange. The call is
     // program-agnostic (glBindBufferRange is global state), so it works
-    // whether the legacy TcShader or the tgfx2 variant is currently
-    // bound — here it's the tgfx2 one.
+    // whatever shader program is currently bound — here it's the tgfx2 one.
     if (shader->material_ubo_block_size > 0) {
         if (tc_material_phase_apply_ubo_gl(
                 phase, shader, TC_MATERIAL_UBO_BINDING_SLOT, gl_dev)) {
@@ -239,11 +232,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    if (before_draw_callback_) {
-        TcShader shader_wrapper(phase->shader);
-        before_draw_callback_(&shader_wrapper);
-    }
-
     // Built-in fullscreen quad VBO with layout (vec2 pos, vec2 uv) at
     // locations 0 and 1 — matches the canonical post-process VS.
     ctx2->draw_fullscreen_quad();
@@ -252,7 +240,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
 }
 
 void MaterialPass::destroy() {
-    before_draw_callback_ = nullptr;
     material = TcMaterial();
     texture_resources.clear();
     extra_resources.clear();

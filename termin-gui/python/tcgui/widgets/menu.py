@@ -13,7 +13,10 @@ from tcgui.widgets.theme import current_theme as _t
 class MenuItem:
     """Single menu item descriptor."""
 
-    __slots__ = ("label", "icon", "shortcut", "enabled", "separator", "on_click")
+    __slots__ = (
+        "label", "icon", "shortcut", "enabled", "separator",
+        "on_click", "is_checkable", "checked",
+    )
 
     def __init__(
         self,
@@ -24,6 +27,8 @@ class MenuItem:
         enabled: bool = True,
         separator: bool = False,
         on_click: Callable[[], None] | None = None,
+        is_checkable: bool = False,
+        checked: bool = False,
     ):
         self.label = label
         self.icon = icon
@@ -31,6 +36,8 @@ class MenuItem:
         self.enabled = enabled
         self.separator = separator
         self.on_click = on_click
+        self.is_checkable = is_checkable
+        self.checked = checked
 
     @staticmethod
     def sep() -> MenuItem:
@@ -93,7 +100,6 @@ class Menu(Widget):
         """Compute required width and height for current items."""
         max_label_w = 0.0
         max_shortcut_w = 0.0
-        has_icons = any(it.icon for it in self.items if not it.separator)
 
         for it in self.items:
             if it.separator:
@@ -107,8 +113,10 @@ class Menu(Widget):
                     max_shortcut_w = sc_w
 
         content_w = self.padding_x * 2 + max_label_w
-        if has_icons:
+        if self._has_icons():
             content_w += self.icon_width
+        if self._has_checkable():
+            content_w += self.font_size  # width for "✓" glyph
         if max_shortcut_w > 0:
             content_w += self.shortcut_gap + max_shortcut_w
 
@@ -178,6 +186,10 @@ class Menu(Widget):
     def _has_icons(self) -> bool:
         return any(it.icon for it in self.items if not it.separator)
 
+    def _has_checkable(self) -> bool:
+        """Any item declared as checkable — reserves space for the checkmark."""
+        return any(it.is_checkable for it in self.items if not it.separator)
+
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
@@ -188,7 +200,10 @@ class Menu(Widget):
                            self.background_color, self.border_radius)
 
         has_icons = self._has_icons()
+        has_checkable = self._has_checkable()
         text_x_offset = self.padding_x + (self.icon_width if has_icons else 0)
+        if has_checkable:
+            text_x_offset += self.font_size  # space for checkmark
 
         y = self.y + self.padding_y
         for i, it in enumerate(self.items):
@@ -211,21 +226,33 @@ class Menu(Widget):
                 )
 
             tc = self.text_color if it.enabled else self.text_disabled_color
+            text_y = y + self.item_height / 2 + self.font_size * 0.35
 
             # Icon
             if has_icons and it.icon:
                 renderer.draw_text(
                     self.x + self.padding_x,
-                    y + self.item_height / 2 + self.font_size * 0.35,
+                    text_y,
                     it.icon,
                     self.icon_color if it.enabled else self.text_disabled_color,
+                    self.font_size,
+                )
+
+            # Checkmark (only if item is declared checkable and currently checked)
+            if it.is_checkable and it.checked:
+                check_x = self.padding_x + (self.icon_width if has_icons else 0)
+                renderer.draw_text(
+                    self.x + check_x,
+                    text_y,
+                    "\u2713",
+                    tc,
                     self.font_size,
                 )
 
             # Label
             renderer.draw_text(
                 self.x + text_x_offset,
-                y + self.item_height / 2 + self.font_size * 0.35,
+                text_y,
                 it.label, tc, self.font_size,
             )
 

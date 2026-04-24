@@ -240,6 +240,10 @@ class EditorWindow(QMainWindow):
 
         EditorUIBuilder.fix_splitters(self.topSplitter, self.verticalSplitter)
 
+        # --- dialog service (shared between controllers) ---
+        from termin.editor.qt_dialog_service import QtDialogService
+        self._dialog_service = QtDialogService(parent=self)
+
         # --- InspectorController ---
         self._inspector_controller = InspectorController(
             container=self.inspectorContainer,
@@ -249,6 +253,7 @@ class EditorWindow(QMainWindow):
             on_component_changed=self._on_inspector_component_changed,
             on_material_changed=self._on_material_inspector_changed,
             window_backend=self._sdl_backend,
+            dialog_service=self._dialog_service,
         )
 
         # Для обратной совместимости
@@ -296,6 +301,7 @@ class EditorWindow(QMainWindow):
             tree_view=self.sceneTree,
             scene=self.scene,
             undo_handler=self.push_undo_command,
+            dialog_service=self._dialog_service,
             on_object_selected=self._on_tree_object_selected,
             request_viewport_update=self._request_viewport_update,
         )
@@ -313,6 +319,7 @@ class EditorWindow(QMainWindow):
             on_project_reset=self.scene_manager.close_all_scenes,
             on_load_scene=self._load_scene_from_file,
             on_open_prefab=self._open_prefab,
+            dialog_service=self._dialog_service,
         )
 
         # --- UI: menu bar and project browser ---
@@ -373,6 +380,9 @@ class EditorWindow(QMainWindow):
         # Sync backward-compatible references from attachment
         # (also recreates EditorViewportInputManagers for the new viewport)
         self._sync_attachment_refs()
+
+        # Wire mode controller's model with fully-initialized deps.
+        self._mode_controller.bind_late()
 
         # --- C++ SelectionManager callbacks ---
         self._interaction_system.selection.on_selection_changed = self._on_selection_changed
@@ -465,12 +475,17 @@ class EditorWindow(QMainWindow):
             on_redo=self.redo,
             on_settings=self._show_settings_dialog,
             on_project_settings=self._show_project_settings_dialog,
+            on_toggle_fullscreen=self._mode_controller.toggle_fullscreen,
+            on_show_spacemouse_settings=self._show_spacemouse_settings_dialog,
             on_scene_properties=self._show_scene_properties,
             on_layers_settings=self._show_layers_dialog,
             on_shadow_settings=self._show_shadow_settings_dialog,
             on_pipeline_editor=self._show_pipeline_editor,
+            on_show_agent_types=self._show_agent_types_dialog,
             on_toggle_game_mode=self._mode_controller.toggle_game_mode,
             on_run_standalone=self._run_standalone,
+            on_toggle_profiler=self._toggle_profiler,
+            on_toggle_modules=self._toggle_modules_panel,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
@@ -479,11 +494,6 @@ class EditorWindow(QMainWindow):
             on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
             on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
-            on_toggle_profiler=self._toggle_profiler,
-            on_toggle_modules=self._toggle_modules_panel,
-            on_toggle_fullscreen=self._mode_controller.toggle_fullscreen,
-            on_show_agent_types=self._show_agent_types_dialog,
-            on_show_spacemouse_settings=self._show_spacemouse_settings_dialog,
             on_import_rfmeas=self._import_rfmeas,
             on_export_rfmeas=self._export_rfmeas,
             can_undo=lambda: self.undo_stack.can_undo,
@@ -850,17 +860,6 @@ class EditorWindow(QMainWindow):
             return None
         return self._project_controller.get_project_path()
 
-    def _get_window_backend(self):
-        """Get WindowBackend from world."""
-        if self.world is not None:
-            return self._sdl_backend
-        return None
-
-    def _get_render_engine(self):
-        """Get RenderEngine from RenderingController."""
-        if self._rendering_controller is not None:
-            return self._rendering_controller._render_engine
-        return None
 
     def _log_to_console(self, message: str) -> None:
         """Log message to console output (native logs already print to stderr)."""
@@ -995,7 +994,6 @@ class EditorWindow(QMainWindow):
             inspector_controller=self._inspector_controller,
             center_tab_widget=self._center_tab_widget,
             get_scene=lambda: self.scene,
-            get_window_backend=self._get_window_backend,
             get_sdl_backend=lambda: self._sdl_backend,
             on_entity_selected=self.show_entity_inspector,
             on_request_update=self._request_viewport_update,
@@ -1290,7 +1288,7 @@ class EditorWindow(QMainWindow):
 
         # Нормализованные координаты в пределах viewport
         nx = (x / w) * 2.0 - 1.0
-        ny = (y / h) * -2.0 + 1.0  # Y инвертирован
+        ny = (y / h) * 2.0 - 1.0
 
         # Глубина в NDC (OpenGL: 0..1 -> -1..1)
         z_ndc = depth * 2.0 - 1.0

@@ -191,7 +191,6 @@ class PostEffect:
         ctx2.set_depth_write(False)
         ctx2.set_blend(False)
         ctx2.set_cull(CULL_NONE)
-        ctx2.set_color_format(PIXEL_RGBA8)
         setup_fn(ctx2)
         ctx2.end_pass()
 

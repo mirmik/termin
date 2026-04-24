@@ -195,10 +195,6 @@ void ColliderGizmoPass::execute(ExecuteContext& ctx) {
 
     ctx.ctx2->begin_pass(color_tex2, depth_tex2, nullptr, 1.0f, false);
     ctx.ctx2->set_viewport(0, 0, w, h);
-    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
-    if (depth_test) {
-        ctx.ctx2->set_depth_format(tgfx::PixelFormat::D32F);
-    }
 
     // Collider gizmo always goes into line_vertices (no-depth) unless
     // depth_test is enabled — in that case we accumulate into the

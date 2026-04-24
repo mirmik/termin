@@ -10,6 +10,11 @@
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
+#include "tgfx2/tc_shader_bridge.hpp"
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 #include <core/tc_scene_render_state.h>
 #include <core/tc_scene_skybox.h>
@@ -52,13 +57,13 @@ static const char* SKYBOX_SHADER_TEXT = R"(
 @property Color u_skybox_bottom_color = Color(0.1, 0.1, 0.3, 1.0)
 
 @stage vertex
-#version 330 core
+#version 450 core
 layout(location = 0) in vec3 a_position;
 
 uniform mat4 u_view;
 uniform mat4 u_projection;
 
-out vec3 v_dir;
+layout(location = 0) out vec3 v_dir;
 
 void main() {
     mat4 view_no_translation = mat4(mat3(u_view));
@@ -68,10 +73,10 @@ void main() {
 @endstage
 
 @stage fragment
-#version 330 core
+#version 450 core
 
-in vec3 v_dir;
-out vec4 FragColor;
+layout(location = 0) in vec3 v_dir;
+layout(location = 0) out vec4 FragColor;
 
 uniform int  u_skybox_type;
 uniform vec4 u_skybox_color;
@@ -157,7 +162,7 @@ std::vector<ResourceSpec> SkyBoxPass::get_resource_specs() const {
 // ============================================================================
 
 void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
-    if (vs_) return;
+    if (!tc_shader_handle_is_invalid(skybox_shader_handle_) && cube_vbo_) return;
     if (!ctx.ctx2) return;
 
     device2_ = &ctx.ctx2->device();
@@ -185,15 +190,11 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
         return;
     }
 
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.source = vs_it->second.source;
-    vs_ = device2_->create_shader(vs_desc);
-
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.source = fs_it->second.source;
-    fs_ = device2_->create_shader(fs_desc);
+    // Process-lifetime engine shader — hash-dedup keeps one handle
+    // across pass re-creations, compiled VkShaderModule stays cached.
+    skybox_shader_handle_ = tc_shader_register_static(
+        vs_it->second.source.c_str(), fs_it->second.source.c_str(),
+        nullptr, "SkyboxEngineVSFS");
 
     tgfx::BufferDesc vbo_desc;
     vbo_desc.size = sizeof(CUBE_VERTICES);
@@ -300,8 +301,16 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::None);
 
-    ctx.ctx2->bind_shader(vs_, fs_);
-    ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
+    tgfx::ShaderHandle sky_vs, sky_fs;
+    {
+        tc_shader* raw = tc_shader_get(skybox_shader_handle_);
+        if (!raw || !tc_shader_ensure_tgfx2(raw, device2_, &sky_vs, &sky_fs)) {
+            tc::Log::error("SkyBoxPass: tc_shader_ensure_tgfx2 failed for engine skybox shader");
+            ctx.ctx2->end_pass();
+            return;
+        }
+    }
+    ctx.ctx2->bind_shader(sky_vs, sky_fs);
 
     tgfx::VertexBufferLayout cube_layout;
     cube_layout.stride = 3 * sizeof(float);
@@ -310,7 +319,14 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     };
     ctx.ctx2->set_vertex_layout(cube_layout);
 
-    bind_material_ubo(skybox_layout_, values, {}, params_ubo_, 0, *device2_, *ctx.ctx2);
+    // MaterialParams lands on MATERIAL_UBO_BINDING = 1 — the parser bakes
+    // that explicit `layout(std140, binding = 1)` into the synthesized
+    // block. Binding 0 belongs to LightingBlock; passing 0 here used to
+    // work back when the block was declared without an explicit binding
+    // and GL reassigned it at link time, but since the move to fixed
+    // bindings the slot has to match MATERIAL_UBO_BINDING.
+    bind_material_ubo(skybox_layout_, values, {}, params_ubo_,
+                      MATERIAL_UBO_BINDING, *device2_, *ctx.ctx2);
 
     ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx::IndexType::Uint32);
     ctx.ctx2->end_pass();
@@ -318,8 +334,7 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
 
 void SkyBoxPass::destroy() {
     if (device2_) {
-        if (vs_)         { device2_->destroy(vs_);         vs_ = {}; }
-        if (fs_)         { device2_->destroy(fs_);         fs_ = {}; }
+        // skybox_shader_handle_ is static engine shader — not released.
         if (cube_vbo_)   { device2_->destroy(cube_vbo_);   cube_vbo_ = {}; }
         if (cube_ibo_)   { device2_->destroy(cube_ibo_);   cube_ibo_ = {}; }
         if (params_ubo_) { device2_->destroy(params_ubo_); params_ubo_ = {}; }

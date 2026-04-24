@@ -7,6 +7,7 @@
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
+#include "tgfx2/i_render_device.hpp"
 #include "tgfx2/opengl/opengl_render_device.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 
@@ -48,10 +49,11 @@ struct ShadowPushStd140 {
 static_assert(sizeof(ShadowPushStd140) == 64,
               "ShadowPushStd140 must be exactly one mat4");
 
-constexpr const char* SHADOW_VS_UBO = R"(
-#version 330 core
-#extension GL_ARB_shading_language_420pack : require
-
+// Per-frame view+proj on binding 0 (UBO set from ctx2 per cascade).
+// Per-object model matrix rides push_constants on Vulkan / std140 UBO at
+// slot 14 on GL (tgfx2's emulation ring). Same `ShadowPushData` struct
+// on both sides, so the CPU packer doesn't need to fork.
+constexpr const char* SHADOW_VS_UBO = R"(#version 450 core
 layout(location = 0) in vec3 a_position;
 
 layout(std140, binding = 0) uniform PerFrame {
@@ -59,17 +61,21 @@ layout(std140, binding = 0) uniform PerFrame {
     mat4 u_projection;
 };
 
-layout(std140, binding = 14) uniform PushConstants {
+struct ShadowPushData {
     mat4 u_model;
 };
+#ifdef VULKAN
+layout(push_constant) uniform ShadowPushBlock { ShadowPushData pc; };
+#else
+layout(std140, binding = 14) uniform ShadowPushBlock { ShadowPushData pc; };
+#endif
 
 void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+    gl_Position = u_projection * u_view * pc.u_model * vec4(a_position, 1.0);
 }
 )";
 
-constexpr const char* SHADOW_FS_UBO = R"(
-#version 330 core
+constexpr const char* SHADOW_FS_UBO = R"(#version 450 core
 void main() {
     // Depth-only pass: fragment shader output is irrelevant because
     // the FBO has no color attachment.
@@ -103,37 +109,38 @@ void ShadowPass::destroy() {
 }
 
 void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
-    if (device2_ == &device && shadow_vs2_ && shadow_fs2_ && per_frame_ubo_) {
-        return;
-    }
-    if (device2_ && device2_ != &device) {
-        // Device changed under us — tear down old handles. This should
-        // never happen in production, but makes pass hot-reload safe.
-        release_tgfx2_resources();
-    }
     device2_ = &device;
 
-    tgfx::ShaderDesc vs_desc;
-    vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.source = SHADOW_VS_UBO;
-    shadow_vs2_ = device.create_shader(vs_desc);
-
-    tgfx::ShaderDesc fs_desc;
-    fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.source = SHADOW_FS_UBO;
-    shadow_fs2_ = device.create_shader(fs_desc);
-
-    tgfx::BufferDesc ubo_desc;
-    ubo_desc.size = sizeof(ShadowPerFrameStd140);
-    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-    per_frame_ubo_ = device.create_buffer(ubo_desc);
+    // Register the engine's shadow VS/FS sources as a TcShader so the
+    // global hash-based registry dedups them across pass re-creations.
+    // When the editor toggles Play/Stop and the frame-graph rebuilds its
+    // ShadowPass, `tc_shader_from_sources` returns the existing handle
+    // (same source -> same hash -> same slot), and `tc_shader_ensure_tgfx2`
+    // below finds cached VkShaderModules on the slot — no shaderc recompile.
+    // Used to live as direct `device.create_shader()` calls owned by this
+    // pass; every ShadowPass destruction destroyed the shader modules,
+    // every construction re-ran shaderc (~35 ms × 19 engine shaders on
+    // Play/Stop = ~700 ms lag).
+    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+        // Process-lifetime engine shader: never destroyed (transient
+        // TcShader wrappers from material phases / Python bindings
+        // can't bounce ref_count through zero and take it down).
+        shadow_shader_handle_ = tc_shader_register_static(
+            SHADOW_VS_UBO, SHADOW_FS_UBO,
+            /*geometry=*/nullptr,
+            /*name=*/"ShadowEngineVSFS");
+    }
 }
 
 void ShadowPass::release_tgfx2_resources() {
     if (!device2_) return;
-    if (shadow_vs2_) { device2_->destroy(shadow_vs2_); shadow_vs2_ = {}; }
-    if (shadow_fs2_) { device2_->destroy(shadow_fs2_); shadow_fs2_ = {}; }
-    if (per_frame_ubo_) { device2_->destroy(per_frame_ubo_); per_frame_ubo_ = {}; }
+    // shadow_shader_handle_ intentionally NOT released here. The +1 ref
+    // we took in ensure_tgfx2_resources is an intentional process-
+    // lifetime hold: engine shaders need to survive ShadowPass teardown
+    // on Play/Stop (frame-graph rebuild) so the compiled VkShaderModule
+    // stays cached on the tc_gpu_slot — dropping the ref would evict
+    // the shader from the registry and force shaderc to recompile on
+    // the next pass creation, reintroducing the ~700 ms Play/Stop lag.
     device2_ = nullptr;
 }
 
@@ -186,10 +193,17 @@ tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
     tgfx::TextureDesc desc;
     desc.width = static_cast<uint32_t>(resolution);
     desc.height = static_cast<uint32_t>(resolution);
-    desc.format = tgfx::PixelFormat::D24_UNorm;
+    // D32F is universally supported as a depth attachment across GL/Vulkan
+    // drivers. D24_UNorm maps to VK_FORMAT_X8_D24_UNORM_PACK32 on Vulkan,
+    // which is an *optional* format — unsupported on AMD and some Intel
+    // parts, and produces a silently broken VkImage on affected hardware
+    // (no validation error, just garbage depth values in the shadow map).
+    desc.format = tgfx::PixelFormat::D32F;
     desc.sample_count = 1;
     desc.usage = tgfx::TextureUsage::Sampled |
-                 tgfx::TextureUsage::DepthStencilAttachment;
+                 tgfx::TextureUsage::DepthStencilAttachment |
+                 tgfx::TextureUsage::CopySrc;   // needed for Frame Debugger blit
+
     tgfx::TextureHandle tex = device.create_texture(desc);
     if (!tex) {
         tc::Log::error("ShadowPass: failed to create depth texture (res=%d)",
@@ -267,7 +281,12 @@ void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_ma
 
     CollectShadowDrawCallsData data;
     data.draw_calls = &cached_draw_calls_;
-    data.base_shader = shadow_shader ? shadow_shader->handle : tc_shader_handle_invalid();
+    // Use the UBO-based shadow shader as the base. Skinned variants are
+    // generated off of this source (via shader_skinning.cpp inject), which
+    // keeps push_constant / PerFrame UBO layout intact — so the skinning
+    // path below can reuse the same per-frame UBO + push_constants that
+    // the non-skinned fast path already sets up.
+    data.base_shader = shadow_shader_handle_;
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE
@@ -332,18 +351,15 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         tc::Log::error("ShadowPass/tgfx2: ctx2 is null");
         return results;
     }
-    if (!shadow_shader) {
-        tc::Log::error("ShadowPass/tgfx2: shadow_shader not set");
+
+    auto& device = ctx.ctx2->device();
+
+    ensure_tgfx2_resources(device);
+
+    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+        tc::Log::error("ShadowPass/tgfx2: shadow_shader_handle_ not registered");
         return results;
     }
-
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx.ctx2->device());
-    if (!gl_dev) {
-        tc::Log::error("ShadowPass/tgfx2: device is not OpenGLRenderDevice");
-        return results;
-    }
-
-    ensure_tgfx2_resources(ctx.ctx2->device());
 
     // Find directional lights that cast shadows.
     std::vector<std::pair<int, const Light*>> shadow_lights;
@@ -424,22 +440,38 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ctx.ctx2->set_depth_write(true);
             ctx.ctx2->set_blend(false);
             ctx.ctx2->set_cull(tgfx::CullMode::Back);
-            ctx.ctx2->set_color_format(tgfx::PixelFormat::RGBA8_UNorm);
-            ctx.ctx2->set_depth_format(tgfx::PixelFormat::D32F);
-            ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
 
-            // PerFrame UBO (view + projection) — upload ONCE per
-            // cascade, bound at slot 0. Never re-uploaded inside the
-            // draw loop.
+            // Fetch cached VkShaderModule handles from the tc_shader slot.
+            // First call on a fresh device compiles via shaderc; every
+            // subsequent ShadowPass lifetime hits the slot cache.
+            tgfx::ShaderHandle shadow_vs2, shadow_fs2;
+            {
+                tc_shader* raw = tc_shader_get(shadow_shader_handle_);
+                if (!raw) {
+                    tc::Log::error("ShadowPass: shadow_shader_handle_ stale (index=%u gen=%u)",
+                                   shadow_shader_handle_.index,
+                                   shadow_shader_handle_.generation);
+                    ctx.ctx2->end_pass();
+                    continue;
+                }
+                if (!tc_shader_ensure_tgfx2(raw, &device, &shadow_vs2, &shadow_fs2)) {
+                    tc::Log::error("ShadowPass: tc_shader_ensure_tgfx2 failed for '%s'",
+                                   raw->name ? raw->name : raw->uuid);
+                    ctx.ctx2->end_pass();
+                    continue;
+                }
+            }
+            ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
+
+            // PerFrame UBO through the ring: a fresh offset per cascade,
+            // so the per-cascade matrices survive into draw-execute time
+            // without a slot-per-cascade pool (the shared ring buffer and
+            // dynamic descriptor offsets do what per_frame_ubo_pool_ used
+            // to do on the per-UBO path).
             ShadowPerFrameStd140 per_frame{};
             std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
             std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
-            ctx.ctx2->device().upload_buffer(
-                per_frame_ubo_,
-                std::span<const uint8_t>(
-                    reinterpret_cast<const uint8_t*>(&per_frame),
-                    sizeof(per_frame)));
-            ctx.ctx2->bind_uniform_buffer(0, per_frame_ubo_);
+            ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
 
             if (cached_draw_calls_.empty()) {
                 ctx.ctx2->end_pass();
@@ -465,49 +497,50 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                 Mat44f model = drawable->get_model_matrix(dc.entity);
 
-                bool override_is_base = tc_shader_handle_eq(
-                    dc.final_shader,
-                    shadow_shader ? shadow_shader->handle : tc_shader_handle_invalid());
+                bool override_is_base =
+                    tc_shader_handle_eq(dc.final_shader, shadow_shader_handle_);
 
-                Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+                Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
                 if (bind.index_count == 0) continue;
 
-                if (override_is_base) {
-                    // Fast path: push constants for u_model.
-                    ShadowPushStd140 push{};
-                    std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-                    ctx.ctx2->set_push_constants(&push, sizeof(push));
+                // Both paths share the same push_constants + PerFrame UBO
+                // layout (the skinned variant is just SHADOW_VS_UBO with
+                // injected BoneBlock). Push u_model once up-front.
+                ShadowPushStd140 push{};
+                std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+                ctx.ctx2->set_push_constants(&push, sizeof(push));
 
-                    ctx.ctx2->set_vertex_layout(bind.layout);
+                if (override_is_base) {
+                    // Non-skinned fast path. Shadow VS only reads
+                    // a_position — filter unused attrs so Vulkan doesn't
+                    // complain about loc 1/2/3 per pipeline creation.
+                    ctx.ctx2->set_vertex_layout(
+                        filter_vertex_layout_to_locations(bind.layout, {0}));
                     ctx.ctx2->set_topology(bind.topology);
                     ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                                    bind.index_count, bind.index_type);
                 } else {
-                    // Skinning variant (override shader): compile via
-                    // bridge, bind, upload bone matrices + legacy
-                    // u_model/u_view/u_projection via ctx2's
-                    // transitional plain-uniform helpers, draw.
+                    // Skinning variant: compile via bridge, bind, upload
+                    // BoneBlock UBO (SkinnedMeshRenderer takes care of
+                    // that in upload_per_draw_uniforms_tgfx2), draw.
                     tc_shader* raw = tc_shader_get(dc.final_shader);
                     if (!raw) {
-                        gl_dev->destroy(bind.vertex_buffer);
-                        gl_dev->destroy(bind.index_buffer);
+                        release_mesh_binding(device, bind);
                         continue;
                     }
                     tgfx::ShaderHandle vs2, fs2;
-                    if (!tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &vs2, &fs2)) {
-                        gl_dev->destroy(bind.vertex_buffer);
-                        gl_dev->destroy(bind.index_buffer);
+                    if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
+                        release_mesh_binding(device, bind);
                         continue;
                     }
                     ctx.ctx2->bind_shader(vs2, fs2);
-                    ctx.ctx2->set_vertex_layout(bind.layout);
+                    // Skinning VS reads a_position (0) + a_joints (3) +
+                    // a_weights (4). Filter to those three — Normal/UV
+                    // locations stay unused by the injected shadow VS.
+                    ctx.ctx2->set_vertex_layout(
+                        filter_vertex_layout_to_locations(bind.layout, {0, 6, 7}));
                     ctx.ctx2->set_topology(bind.topology);
 
-                    ctx.ctx2->set_uniform_mat4("u_model",      model.data,        false);
-                    ctx.ctx2->set_uniform_mat4("u_view",       view_matrix.data,  false);
-                    ctx.ctx2->set_uniform_mat4("u_projection", proj_matrix.data,  false);
-
-                    // Per-draw uniforms (bone matrices for SkinnedMeshRenderer).
                     drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
                     ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
@@ -516,11 +549,10 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // Next mesh-backed draw must re-bind the base shadow
                     // shader; skinning variant left its own program bound.
                     last_shader = dc.final_shader;
-                    ctx.ctx2->bind_shader(shadow_vs2_, shadow_fs2_);
+                    ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
                 }
 
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+                release_mesh_binding(device, bind);
             }
             (void)last_shader;
 
@@ -551,43 +583,6 @@ void ShadowPass::execute(ExecuteContext& ctx) {
 
     if (ctx.lights.empty()) {
         if (profile) tc_profiler_end_section();
-        return;
-    }
-
-    // Get shadow shader from registry if not set
-    if (!shadow_shader) {
-        tc_shader_handle h = tc_shader_find_by_name("system:shadow");
-        if (!tc_shader_is_valid(h)) {
-            // Create shadow shader if it doesn't exist
-            static const char* shadow_vert = R"(
-#version 330 core
-layout(location = 0) in vec3 a_position;
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-)";
-            static const char* shadow_frag = R"(
-#version 330 core
-void main() {
-    // Depth-only pass
-}
-)";
-            h = tc_shader_from_sources(shadow_vert, shadow_frag, nullptr, "system:shadow", nullptr, nullptr);
-        }
-        if (tc_shader_is_valid(h)) {
-            static TcShader cached_shader;
-            cached_shader = TcShader(h);
-            // tgfx2 path compiles lazily via tc_shader_ensure_tgfx2 in
-            // the inner draw loop — no legacy GL compile needed here.
-            shadow_shader = &cached_shader;
-        }
-    }
-
-    if (!shadow_shader) {
-        tc::Log::error("ShadowPass: failed to create shadow shader");
         return;
     }
 

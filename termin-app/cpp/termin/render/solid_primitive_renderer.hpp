@@ -5,7 +5,6 @@
 
 #include <termin/geom/mat44.hpp>
 #include "tgfx/types.hpp"
-#include <tgfx/tgfx_shader_handle.hpp>
 #include "tgfx2/handles.hpp"
 
 namespace tgfx {
@@ -41,11 +40,14 @@ public:
     MeshRes _quad;
 
     bool _initialized = false;
-    TcShader _shader;                  // Source of GLSL; compiled to
-                                       // tgfx2 ShaderHandle pair via
-                                       // tc_shader_ensure_tgfx2.
+    tgfx::ShaderHandle _vs;
+    tgfx::ShaderHandle _fs;
     tgfx::IRenderDevice* _device = nullptr;
     tgfx::RenderContext2* _ctx2 = nullptr;
+    // View-projection cached per begin() — premultiplied with per-draw
+    // model so push_constants only carries mvp + color (80 bytes, fits
+    // the 128-byte Vulkan guarantee).
+    Mat44f _vp = Mat44f::identity();
 
 public:
     SolidPrimitiveRenderer() = default;
@@ -104,6 +106,7 @@ public:
 
 private:
     void _ensure_initialized(tgfx::IRenderDevice* device);
+    void _push_and_draw(const Mat44f& model, const Color4& color, const MeshRes& mesh);
 };
 
 } // namespace termin

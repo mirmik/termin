@@ -3,7 +3,20 @@
 #include "tgfx2/vulkan/vulkan_command_list.hpp"
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+
 namespace tgfx {
+
+extern std::atomic<uint64_t> g_draw_count;
+extern std::atomic<uint64_t> g_bind_pipeline_count;
+extern std::atomic<uint64_t> g_bind_rset_count;
+extern std::atomic<uint64_t> g_bind_vbo_count;
+extern std::atomic<uint64_t> g_bind_ibo_count;
+extern std::atomic<uint64_t> g_push_constants_count;
+extern std::atomic<uint64_t> g_record_us;
 
 VulkanCommandList::VulkanCommandList(VulkanRenderDevice& device)
     : device_(device)
@@ -18,8 +31,13 @@ VulkanCommandList::VulkanCommandList(VulkanRenderDevice& device)
 }
 
 VulkanCommandList::~VulkanCommandList() {
+    // Don't free immediately — the command buffer may still be in-flight
+    // on the graphics queue. Hand it off to the device's pending-destroy
+    // queue; it'll be released after the next fence signals in
+    // `VulkanRenderDevice::submit()`.
     if (cmd_) {
-        vkFreeCommandBuffers(device_.device(), device_.command_pool(), 1, &cmd_);
+        device_.defer_cmd_buffer_free(cmd_);
+        cmd_ = VK_NULL_HANDLE;
     }
 }
 
@@ -31,10 +49,15 @@ void VulkanCommandList::begin() {
     bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(cmd_, &bi);
+    record_start_ = std::chrono::steady_clock::now();
 }
 
 void VulkanCommandList::end() {
     vkEndCommandBuffer(cmd_);
+    auto dt = std::chrono::steady_clock::now() - record_start_;
+    g_record_us.fetch_add(
+        std::chrono::duration_cast<std::chrono::microseconds>(dt).count(),
+        std::memory_order_relaxed);
 }
 
 // --- Render pass ---
@@ -48,34 +71,39 @@ void VulkanCommandList::begin_render_pass(const RenderPassDesc& pass) {
     uint32_t width = 0, height = 0;
 
     LoadOp color_load = LoadOp::Clear;
+    uint32_t sample_count = 1;
     current_pass_color_attachments_.clear();
+    // Collect real color attachments. Entries with a null texture or a
+    // missing device-side record are dropped — pushing a placeholder
+    // format for them made the render-pass cache build a 1-color RP
+    // that then mismatched a framebuffer carrying zero color views
+    // (depth-only passes like ShadowPass/DepthPass). The pass description
+    // `colors` list is authoritative for the attachment count.
     for (const auto& c : pass.colors) {
-        color_load = c.load;
-        if (c.texture) {
-            auto* tex = device_.get_texture(c.texture);
-            if (tex) {
-                color_fmts.push_back(tex->desc.format);
-                views.push_back(tex->view);
-                width = tex->desc.width;
-                height = tex->desc.height;
+        if (!c.texture) continue;
+        auto* tex = device_.get_texture(c.texture);
+        if (!tex) continue;
 
-                // Transition to color attachment if needed
-                if (tex->current_layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
-                    device_.transition_image_layout(cmd_, tex->image,
-                        tex->current_layout, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                        VK_IMAGE_ASPECT_COLOR_BIT);
-                    tex->current_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                }
-                current_pass_color_attachments_.push_back(c.texture);
-            }
-        } else {
-            color_fmts.push_back(PixelFormat::RGBA8_UNorm);
+        color_load = c.load;
+        color_fmts.push_back(tex->desc.format);
+        views.push_back(tex->view);
+        width = tex->desc.width;
+        height = tex->desc.height;
+        sample_count = tex->desc.sample_count;
+
+        // Transition to color attachment if needed
+        if (tex->current_layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+            device_.transition_image_layout(cmd_, tex->image,
+                tex->current_layout, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+            tex->current_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         }
+        current_pass_color_attachments_.push_back(c.texture);
     }
-    if (color_fmts.empty()) color_fmts.push_back(PixelFormat::RGBA8_UNorm);
 
     PixelFormat depth_fmt = PixelFormat::D24_UNorm_S8_UInt;
     LoadOp depth_load = LoadOp::Clear;
+    current_pass_depth_attachment_ = {};
     if (pass.has_depth && pass.depth.texture) {
         auto* tex = device_.get_texture(pass.depth.texture);
         if (tex) {
@@ -83,21 +111,52 @@ void VulkanCommandList::begin_render_pass(const RenderPassDesc& pass) {
             depth_load = pass.depth.load;
             views.push_back(tex->view);
             if (width == 0) { width = tex->desc.width; height = tex->desc.height; }
+            // Depth attachment must match the color sample count. If we
+            // have no color, take it from here.
+            if (sample_count == 1 && tex->desc.sample_count > 1) {
+                sample_count = tex->desc.sample_count;
+            }
+            // Transition depth to DEPTH_STENCIL_ATTACHMENT_OPTIMAL before
+            // the pass starts. Without this, a shadow-depth texture left
+            // in SHADER_READ_ONLY_OPTIMAL by a previous sampler use
+            // survives into the next shadow pass's render-pass load op.
+            VkImageAspectFlags dep_aspect = vk::format_aspect_flags(tex->desc.format);
+            if (tex->current_layout != VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+                device_.transition_image_layout(cmd_, tex->image,
+                    tex->current_layout,
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    dep_aspect);
+                tex->current_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            }
+            current_pass_depth_attachment_ = pass.depth.texture;
         }
     }
+    if (sample_count == 0) sample_count = 1;
 
     auto rp = device_.get_or_create_render_pass(color_fmts, depth_fmt, pass.has_depth,
-                                                  1, color_load, depth_load);
+                                                  sample_count, color_load, depth_load);
     auto fb = device_.get_or_create_framebuffer(rp, views, width, height);
 
-    // Clear values
+    // Clear values: one per attachment in the same order as the render
+    // pass was built. Colors first (only those actually attached —
+    // entries dropped above must not push a clear), then the optional
+    // depth slot.
     std::vector<VkClearValue> clears;
-    for (const auto& c : pass.colors) {
-        VkClearValue cv{};
-        cv.color = {{c.clear_color[0], c.clear_color[1], c.clear_color[2], c.clear_color[3]}};
-        clears.push_back(cv);
+    {
+        size_t color_idx = 0;
+        for (const auto& c : pass.colors) {
+            if (!c.texture) continue;
+            if (!device_.get_texture(c.texture)) continue;
+            if (color_idx >= color_fmts.size()) break;
+            VkClearValue cv{};
+            cv.color = {{c.clear_color[0], c.clear_color[1],
+                         c.clear_color[2], c.clear_color[3]}};
+            clears.push_back(cv);
+            ++color_idx;
+        }
     }
-    if (pass.has_depth) {
+    if (pass.has_depth && pass.depth.texture &&
+        device_.get_texture(pass.depth.texture)) {
         VkClearValue cv{};
         cv.depthStencil = {pass.depth.clear_depth, pass.depth.clear_stencil};
         clears.push_back(cv);
@@ -113,12 +172,20 @@ void VulkanCommandList::begin_render_pass(const RenderPassDesc& pass) {
 
     vkCmdBeginRenderPass(cmd_, &rp_bi, VK_SUBPASS_CONTENTS_INLINE);
 
-    // Auto-set viewport (with Y-flip for Vulkan)
+    // Auto-set viewport. No Y-flip trick here: it makes the render-pass
+    // output memory read-compatible with OpenGL conventions for on-screen
+    // presentation, but it breaks inter-pass sampling (shader writes to
+    // pixel Y=h-1 when it thinks it's writing to Y=0, then a later pass
+    // samples with UV.y=0 and reads the actual top texel — producing e.g.
+    // shadow-map lookups that always land outside the rendered frustum).
+    // Instead, every render-target memory is in native Vulkan top-left
+    // layout, and the final display composite (Viewport3D) skips its
+    // flip_v on Vulkan to keep the presented image upright.
     VkViewport vp{};
     vp.x = 0;
-    vp.y = static_cast<float>(height);
+    vp.y = 0;
     vp.width = static_cast<float>(width);
-    vp.height = -static_cast<float>(height); // Y-flip
+    vp.height = static_cast<float>(height);
     vp.minDepth = 0.0f;
     vp.maxDepth = 1.0f;
     vkCmdSetViewport(cmd_, 0, 1, &vp);
@@ -150,6 +217,22 @@ void VulkanCommandList::end_render_pass() {
         tex->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
     current_pass_color_attachments_.clear();
+
+    // Do the same for the depth attachment so shadow-depth textures are
+    // directly samplable afterwards (ShadowPass → any pass that binds the
+    // shadow map as a SampledTexture).
+    if (current_pass_depth_attachment_) {
+        auto* tex = device_.get_texture(current_pass_depth_attachment_);
+        if (tex && tex->image != VK_NULL_HANDLE &&
+            tex->current_layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+            device_.transition_image_layout(cmd_, tex->image,
+                tex->current_layout,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                vk::format_aspect_flags(tex->desc.format));
+            tex->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+        current_pass_depth_attachment_ = {};
+    }
 }
 
 // --- Pipeline ---
@@ -160,32 +243,45 @@ void VulkanCommandList::bind_pipeline(PipelineHandle pipeline) {
 
     vkCmdBindPipeline(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS, p->pipeline);
     current_layout_ = p->layout;
+    g_bind_pipeline_count.fetch_add(1, std::memory_order_relaxed);
 }
 
-void VulkanCommandList::bind_resource_set(ResourceSetHandle set) {
+void VulkanCommandList::bind_resource_set(ResourceSetHandle set,
+                                           const uint32_t* dynamic_offsets,
+                                           uint32_t dynamic_offset_count) {
     auto* rs = device_.get_resource_set(set);
     if (!rs || !current_layout_) return;
 
-    // Walk the set's SampledTexture bindings and transition each image
-    // to SHADER_READ_ONLY_OPTIMAL. Textures that were just rendered into
-    // (and so are sitting in COLOR_ATTACHMENT_OPTIMAL) fail validation
-    // otherwise, because the descriptor write baked in SHADER_READ_ONLY_
-    // OPTIMAL as the "expected" layout. This is the compositor case:
-    // render into `_main_tex`, then sample from it in the unpremul
-    // pass. Caller doesn't need to emit explicit barriers.
-    for (const auto& b : rs->desc.bindings) {
-        if (b.kind != ResourceBinding::Kind::SampledTexture) continue;
-        auto* tex = device_.get_texture(b.texture);
-        if (!tex || tex->image == VK_NULL_HANDLE) continue;
-        if (tex->current_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) continue;
-        device_.transition_image_layout(cmd_, tex->image,
-            tex->current_layout, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_IMAGE_ASPECT_COLOR_BIT);
-        tex->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    // Sampled textures are required to already be in
+    // SHADER_READ_ONLY_OPTIMAL here. Producers handle it:
+    //   - upload_texture / copy_texture / blit_to_texture leave dst in
+    //     SHADER_READ_ONLY_OPTIMAL.
+    //   - end_render_pass transitions color and depth attachments.
+    // vkCmdPipelineBarrier from inside a render pass is forbidden for
+    // non-attachment images and cannot change layout regardless, so
+    // there is no correct fix-up we could apply here — a mismatch is a
+    // caller/producer bug upstream.
+
+    // The shared pipeline layout declares DYNAMIC_UBO_COUNT dynamic-UBO
+    // bindings. Vulkan requires the exact same count passed to
+    // vkCmdBindDescriptorSets: short payloads would leave descriptors
+    // "bound to invalid offsets" and trip validation, while over-long
+    // payloads trip a count-mismatch VUID. Fall back to the per-set
+    // offsets stashed at create_resource_set() time when the caller
+    // doesn't supply any.
+    constexpr uint32_t EXPECTED = VkResourceSetResource::DYNAMIC_UBO_COUNT;
+    uint32_t offsets_tmp[EXPECTED] = {0, 0, 0, 0, 0};
+    const uint32_t* offsets_ptr = offsets_tmp;
+    if (dynamic_offsets && dynamic_offset_count == EXPECTED) {
+        offsets_ptr = dynamic_offsets;
+    } else {
+        for (uint32_t i = 0; i < EXPECTED; ++i) offsets_tmp[i] = rs->dynamic_offsets[i];
     }
 
     vkCmdBindDescriptorSets(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                             current_layout_, 0, 1, &rs->descriptor_set, 0, nullptr);
+                             current_layout_, 0, 1, &rs->descriptor_set,
+                             EXPECTED, offsets_ptr);
+    g_bind_rset_count.fetch_add(1, std::memory_order_relaxed);
 }
 
 void VulkanCommandList::set_push_constants(const void* data, uint32_t size) {
@@ -196,6 +292,7 @@ void VulkanCommandList::set_push_constants(const void* data, uint32_t size) {
     // (TBD — Vulkan backend has no push constants wiring yet).
     vkCmdPushConstants(cmd_, current_layout_,
                        VK_SHADER_STAGE_ALL_GRAPHICS, 0, size, data);
+    g_push_constants_count.fetch_add(1, std::memory_order_relaxed);
 }
 
 // --- Vertex / index ---
@@ -206,6 +303,7 @@ void VulkanCommandList::bind_vertex_buffer(uint32_t slot, BufferHandle buffer, u
 
     VkDeviceSize vk_offset = offset;
     vkCmdBindVertexBuffers(cmd_, slot, 1, &buf->buffer, &vk_offset);
+    g_bind_vbo_count.fetch_add(1, std::memory_order_relaxed);
 }
 
 void VulkanCommandList::bind_index_buffer(BufferHandle buffer, IndexType type, uint64_t offset) {
@@ -213,16 +311,21 @@ void VulkanCommandList::bind_index_buffer(BufferHandle buffer, IndexType type, u
     if (!buf) return;
 
     vkCmdBindIndexBuffer(cmd_, buf->buffer, offset, vk::to_vk_index_type(type));
+    g_bind_ibo_count.fetch_add(1, std::memory_order_relaxed);
 }
 
 // --- Draw ---
 
+extern std::atomic<uint64_t> g_draw_count;
+
 void VulkanCommandList::draw(uint32_t vertex_count, uint32_t first_vertex) {
     vkCmdDraw(cmd_, vertex_count, 1, first_vertex, 0);
+    g_draw_count.fetch_add(1, std::memory_order_relaxed);
 }
 
 void VulkanCommandList::draw_indexed(uint32_t index_count, uint32_t first_index, int32_t vertex_offset) {
     vkCmdDrawIndexed(cmd_, index_count, 1, first_index, vertex_offset, 0);
+    g_draw_count.fetch_add(1, std::memory_order_relaxed);
 }
 
 void VulkanCommandList::dispatch(uint32_t group_x, uint32_t group_y, uint32_t group_z) {
@@ -249,29 +352,135 @@ void VulkanCommandList::copy_texture(TextureHandle src, TextureHandle dst) {
     auto* d = device_.get_texture(dst);
     if (!s || !d) return;
 
-    VkImageCopy region{};
-    region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.extent = {s->desc.width, s->desc.height, 1};
+    // Self-blit is a caller-side logic bug — Vulkan disallows
+    // vkCmdBlitImage/CopyImage where src and dst are the same image with
+    // overlapping regions, and there's no meaningful work to do. Skip
+    // quietly instead of emitting conflicting TRANSFER_SRC/DST barriers.
+    if (s == d) return;
 
-    vkCmdCopyImage(cmd_, s->image, s->current_layout,
-                    d->image, d->current_layout, 1, &region);
+    // Transfer commands must be recorded outside of a render pass. Callers
+    // using ctx2.blit() between begin_frame/end_frame are fine as long as
+    // no begin_render_pass is active.
+    if (in_render_pass_) {
+        fprintf(stderr, "[Vulkan] copy_texture called inside an active "
+                        "render pass — skipping (call blit outside begin/end_pass)\n");
+        return;
+    }
+
+    VkImageAspectFlags src_aspect = vk::format_aspect_flags(s->desc.format);
+    VkImageAspectFlags dst_aspect = vk::format_aspect_flags(d->desc.format);
+
+    VkImageLayout prev_src = s->current_layout;
+    VkImageLayout prev_dst = d->current_layout;
+
+    device_.transition_image_layout(cmd_, s->image,
+        prev_src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, src_aspect);
+    device_.transition_image_layout(cmd_, d->image,
+        prev_dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dst_aspect);
+
+    uint32_t w = std::min(s->desc.width, d->desc.width);
+    uint32_t h = std::min(s->desc.height, d->desc.height);
+
+    // Pick the right transfer op:
+    //   MSAA src + single dst, same format  → vkCmdResolveImage
+    //   Same extent + same fmt + same samp  → vkCmdCopyImage (fastest)
+    //   Different extent or format          → vkCmdBlitImage (scales)
+    //   MSAA src + format conversion        → not supported by Vulkan in one step.
+    //
+    // The OpenGL counterpart uses glBlitFramebuffer, which *always*
+    // rescales source to destination. A capture texture sized to the
+    // viewport vs. a shadow map sized to shadow-map resolution is a
+    // common case for Frame Debugger: vkCmdCopyImage would only copy
+    // the overlapping rectangle and leave the rest garbage, while
+    // vkCmdBlitImage stretches — matching the GL path.
+    bool same_format = s->desc.format == d->desc.format;
+    bool same_samples = s->desc.sample_count == d->desc.sample_count;
+    bool same_extent = s->desc.width == d->desc.width &&
+                       s->desc.height == d->desc.height;
+    bool msaa_to_single = s->desc.sample_count > 1 && d->desc.sample_count == 1;
+
+    if (msaa_to_single && same_format) {
+        VkImageResolve resolve{};
+        resolve.srcSubresource = {src_aspect, 0, 0, 1};
+        resolve.dstSubresource = {dst_aspect, 0, 0, 1};
+        resolve.extent = {w, h, 1};
+        vkCmdResolveImage(cmd_,
+            s->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            d->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &resolve);
+    } else if (same_samples && same_format && same_extent) {
+        VkImageCopy region{};
+        region.srcSubresource = {src_aspect, 0, 0, 1};
+        region.dstSubresource = {dst_aspect, 0, 0, 1};
+        region.extent = {w, h, 1};
+        vkCmdCopyImage(cmd_,
+            s->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            d->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &region);
+    } else if (same_samples) {
+        VkImageBlit blit{};
+        blit.srcSubresource = {src_aspect, 0, 0, 1};
+        blit.srcOffsets[0] = {0, 0, 0};
+        blit.srcOffsets[1] = {int32_t(s->desc.width), int32_t(s->desc.height), 1};
+        blit.dstSubresource = {dst_aspect, 0, 0, 1};
+        blit.dstOffsets[0] = {0, 0, 0};
+        blit.dstOffsets[1] = {int32_t(d->desc.width), int32_t(d->desc.height), 1};
+        // Linear for color (LDR/HDR filtering ok), nearest for depth — depth
+        // formats forbid linear filtering in blit.
+        VkFilter filter = (src_aspect & VK_IMAGE_ASPECT_DEPTH_BIT)
+                          ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+        vkCmdBlitImage(cmd_,
+            s->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            d->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit, filter);
+    } else {
+        fprintf(stderr, "[Vulkan] copy_texture cannot MSAA-resolve with "
+                        "format conversion in one step (src samples=%u fmt=%d, "
+                        "dst samples=%u fmt=%d) — skipping\n",
+                s->desc.sample_count, (int)s->desc.format,
+                d->desc.sample_count, (int)d->desc.format);
+        return;
+    }
+
+    // Leave both images in SHADER_READ_ONLY_OPTIMAL. Downstream
+    // bind_resource_set requires sampled textures to be in this layout
+    // already (it cannot transition inside a render pass), and most
+    // callers of copy_texture intend to sample the dst next.
+    device_.transition_image_layout(cmd_, s->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, src_aspect);
+    device_.transition_image_layout(cmd_, d->image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, dst_aspect);
+
+    s->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    d->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 }
 
 // --- Dynamic state ---
 
 void VulkanCommandList::set_viewport(int x, int y, int width, int height) {
+    // Vulkan-native viewport — no Y-flip here. Projection matrices
+    // (termin-base/geom/mat44.hpp) target clip-space Y-down already,
+    // so clip_y=-1 maps to the top row of framebuffer memory. OpenGL
+    // reaches the same convention via glClipControl(GL_UPPER_LEFT).
     VkViewport vp{};
     vp.x = static_cast<float>(x);
-    vp.y = static_cast<float>(y + height); // Y-flip
+    vp.y = static_cast<float>(y);
     vp.width = static_cast<float>(width);
-    vp.height = -static_cast<float>(height); // Y-flip
+    vp.height = static_cast<float>(height);
     vp.minDepth = 0.0f;
     vp.maxDepth = 1.0f;
     vkCmdSetViewport(cmd_, 0, 1, &vp);
 }
 
 void VulkanCommandList::set_scissor(int x, int y, int width, int height) {
+    // Negative width/height crossed into `uint32_t` becomes a huge value
+    // that trips `offset + extent > INT32_MAX` in validation. Clamp here
+    // so caller bugs (e.g. a widget with negative size after layout)
+    // produce an empty-clip no-op rather than a Vulkan error.
+    if (width < 0) width = 0;
+    if (height < 0) height = 0;
     VkRect2D scissor{};
     scissor.offset = {x, y};
     scissor.extent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};

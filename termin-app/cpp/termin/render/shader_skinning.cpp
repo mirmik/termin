@@ -8,15 +8,39 @@
 
 namespace termin {
 
-// Skinning inputs to inject after existing layout declarations
+// Skinning inputs to inject after existing layout declarations.
+//
+// Bone data rides a dedicated std140 UBO at binding=5. Plain `uniform mat4[]`
+// at global scope is a GL-only dialect and shaderc rejects it on Vulkan
+// ("non-opaque uniforms outside a block"). std140 + explicit binding works
+// on both: GL 4.2+ honours layout(binding=N), Vulkan maps it straight to
+// descriptor set 0. CPU side (SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2)
+// matches the byte layout exactly.
+//
+// Slot map (see also material_pipeline_vulkan memory and
+// VulkanRenderDevice::create_shared_layouts):
+//   0     = Lighting, 1 = MaterialParams, 2 = PerFrame, 3 = ShadowBlock,
+//   4-7   = material sampler base range (up to 4 PBR textures),
+//   8     = shadow sampler array `u_shadow_map[MAX_SHADOW_MAPS=16]`
+//           (single array descriptor on Vulkan; `layout(binding=8)` on a
+//           sampler2DShadow[16] GLSL 4.20 array),
+//   9-15  = extra FS samplers,
+//   14    = push-constants emulation UBO on GL (doesn't clash — GL has a
+//           separate UBO binding space from samplers),
+//   16    = BoneBlock (this) — added to the shared layout explicitly.
 static const char* SKINNING_INPUTS = R"(
 // === Skinning inputs (injected) ===
-layout(location = 3) in vec4 a_joints;
-layout(location = 4) in vec4 a_weights;
+// Locations 6/7 match tgfx_vertex_layout_skinned's joints/weights offsets.
+// Locations 3-5 intentionally left free so the same VS source can accept
+// meshes that also declare `tangent` (loc 3) or `color` (loc 5).
+layout(location = 6) in vec4 a_joints;
+layout(location = 7) in vec4 a_weights;
 
 const int MAX_BONES = 128;
-uniform mat4 u_bone_matrices[MAX_BONES];
-uniform int u_bone_count;
+layout(std140, binding = 16) uniform BoneBlock {
+    mat4 u_bone_matrices[MAX_BONES];
+    int u_bone_count;
+};
 )";
 
 // Skinning function - full version with normals
@@ -145,7 +169,6 @@ std::string inject_skinning_into_vertex_shader(const std::string& vertex_source)
     bool has_normal = vertex_source.find("a_normal") != std::string::npos;
 
     // Find insertion points
-    int last_layout = find_last_layout_line(lines);
     auto [main_decl, main_brace] = find_main_function(lines);
 
     if (main_decl < 0) {
@@ -153,20 +176,14 @@ std::string inject_skinning_into_vertex_shader(const std::string& vertex_source)
         return vertex_source;
     }
 
-    // Determine where to insert inputs
-    int insert_inputs_at;
-    if (last_layout >= 0) {
-        insert_inputs_at = last_layout + 1;
-    } else {
-        // Find #version line
-        insert_inputs_at = 0;
-        for (size_t i = 0; i < lines.size(); ++i) {
-            if (lines[i].find("#version") != std::string::npos) {
-                insert_inputs_at = static_cast<int>(i) + 1;
-                break;
-            }
-        }
-    }
+    // Inputs go right before `void main()`. This sidesteps nested
+    // preprocessor blocks: the engine VS sources have `#ifdef VULKAN …
+    // #else layout(push_constant emulation) … #endif` near the top, and
+    // the old "after last layout()" heuristic would land skinning
+    // declarations INSIDE the #else branch, leaving them undeclared on
+    // the Vulkan path. `main()` is always at file scope, outside any
+    // #ifdef — safe anchor for every engine and user-authored VS.
+    int insert_inputs_at = main_decl;
 
     // Choose skinning code based on whether shader uses normals
     const char* skinning_func = has_normal ? SKINNING_FUNCTION : SKINNING_FUNCTION_POS_ONLY;
@@ -289,6 +306,23 @@ TcShader get_skinned_shader(TcShader original_shader) {
 
     // Copy features from original
     skinned.set_features(original_shader.features());
+
+    // Copy material UBO layout from the original. The shader parser populates
+    // this on `.shader` load (shader_asset.py / material_asset.py), but the
+    // skinned variant is created here at runtime without going through the
+    // parser — so the layout has to be transported manually. Without this,
+    // apply_material_phase_ubo bails out on `material_ubo_block_size == 0`
+    // and skinned meshes render with zeroed material parameters (black /
+    // camera-dependent trash colour).
+    tc_shader* orig_raw = original_shader.get();
+    tc_shader* skinned_raw = skinned.get();
+    if (orig_raw && skinned_raw) {
+        tc_shader_set_material_ubo_layout(
+            skinned_raw,
+            orig_raw->material_ubo_entries,
+            orig_raw->material_ubo_entry_count,
+            orig_raw->material_ubo_block_size);
+    }
 
     // Mark as variant
     skinned.set_variant_info(original_shader, TC_SHADER_VARIANT_SKINNING);

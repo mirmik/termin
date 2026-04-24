@@ -3,6 +3,9 @@
 #include <termin/render/geometry_pass_base.hpp>
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace termin {
 
@@ -11,12 +14,11 @@ extern ENTITY_API const char* NORMAL_PASS_FRAG;
 
 class NormalPass : public GeometryPassBase {
 private:
-    // Lazy tgfx2 resources used by execute_with_data_tgfx2. Lifetime
-    // tied to device2_; released in destroy()/dtor.
+    // Lazy tgfx2 resources used by execute_with_data_tgfx2. Shader lives
+    // on the tc_shader registry (hash-based dedup) so Play/Stop doesn't
+    // re-run shaderc — see ShadowPass for the pattern + rationale.
     tgfx::IRenderDevice* device2_ = nullptr;
-    tgfx::ShaderHandle normal_vs2_;
-    tgfx::ShaderHandle normal_fs2_;
-    tgfx::BufferHandle per_frame_ubo_;
+    tc_shader_handle normal_shader_handle_ = tc_shader_handle_invalid();
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();

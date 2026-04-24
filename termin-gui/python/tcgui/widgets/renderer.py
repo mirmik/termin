@@ -32,6 +32,9 @@ from tgfx._tgfx_native import (
     CULL_NONE,
     PIXEL_RGBA8,
 )
+from tcbase.profiler import Profiler
+
+_prof = Profiler.instance()
 
 
 # UI shader: solid colour (mode 0) and RGBA-image sampling (mode 2).
@@ -99,14 +102,20 @@ _UI_PUSH_SIZE = _struct.calcsize(_UI_PUSH_FMT)
 
 
 def _build_ortho_pixel_to_ndc(w: float, h: float) -> np.ndarray:
-    """Ortho projection: pixel coords (y+ down) → NDC (y+ up)."""
+    """Ortho projection: pixel coords (y+ down) → clip-space (y+ down).
+
+    Matches the unified Vulkan-native NDC convention used in tgfx:
+    pixel_y=0 (top of the window) maps to clip_y=-1, pixel_y=h maps
+    to clip_y=+1. On OpenGL this is enforced by a one-time
+    glClipControl(GL_UPPER_LEFT) in OpenGLRenderDevice.
+    """
     if w <= 0 or h <= 0:
         return np.eye(4, dtype=np.float32)
     return np.array(
         [
             [2.0 / w,  0.0,     0.0, -1.0],
-            [0.0,    -2.0 / h,  0.0,  1.0],
-            [0.0,     0.0,     -1.0,  0.0],
+            [0.0,     2.0 / h,  0.0, -1.0],
+            [0.0,     0.0,      1.0,  0.0],
             [0.0,     0.0,      0.0,  1.0],
         ],
         dtype=np.float32,
@@ -116,25 +125,29 @@ def _build_ortho_pixel_to_ndc(w: float, h: float) -> np.ndarray:
 class UIRenderer:
     """UI widget renderer backed by tgfx2."""
 
-    def __init__(self, font: FontTextureAtlas | None = None,
-                 holder: Tgfx2Context | None = None):
+    def __init__(self, graphics: Tgfx2Context,
+                 font: FontTextureAtlas | None = None):
         """UIRenderer backed by tgfx2.
 
         Parameters
         ----------
+        graphics : Tgfx2Context
+            The process-wide tgfx2 context (device + RenderContext2) to
+            draw through. Obtained from the application host:
+            ``Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())``
+            at the top level, or ``Tgfx2Context.from_context(ctx2)``
+            inside framegraph passes. Required — UIRenderer never
+            creates a Tgfx2Context on its own, because that would mint
+            a second IRenderDevice and break cross-widget TextureHandle
+            sharing.
         font : FontTextureAtlas or None
             Default font; falls back to the process-default atlas.
-        holder : Tgfx2Context or None
-            Externally-owned tgfx2 context to draw through. When a host
-            (BackendWindow-based editor) wants every renderer in the
-            process to share a single IRenderDevice — mandatory on
-            Vulkan, strongly recommended on GL to avoid GL_SHARE_WITH_
-            CURRENT_CONTEXT gymnastics — it passes a borrowed Tgfx2Context
-            built via ``Tgfx2Context.borrow(device_ptr, context_ptr)``.
-            If None, UIRenderer creates its own owning context on first
-            ``begin()`` (historical behaviour, kept for standalone tcgui
-            demos and tests).
         """
+        if graphics is None:
+            raise ValueError(
+                "UIRenderer requires a graphics= Tgfx2Context. Get one "
+                "from the host (Tgfx2Context.from_window) or from an "
+                "active RenderContext2 (Tgfx2Context.from_context).")
         self._font = font
 
         # Viewport dimensions in pixels. Updated each begin().
@@ -146,18 +159,15 @@ class UIRenderer:
         self._clip_stack: list[tuple[int, int, int, int]] = []
 
         # --- tgfx2 resources ---
-        # `_holder` may come from outside (borrow mode); if so we do not
-        # recreate it on begin(). `_owns_holder` tells end-of-life
-        # cleanup whether to destroy it.
-        self._holder: Tgfx2Context | None = holder
-        self._owns_holder: bool = holder is None
-        # Do NOT pre-fetch `holder.context` here: the returned wrapper
+        self._graphics: Tgfx2Context = graphics
+        # Do NOT pre-fetch `graphics.context` here: the returned wrapper
         # uses nanobind's `reference_internal` which creates a Python-
-        # level cycle (wrapper keeps holder alive, holder object keeps
-        # a pointer to itself through nanobind's type registry). The
-        # cycle collector then tries to break it at shutdown and hits
-        # undefined order, segfaulting when it calls free on an object
-        # whose backing C++ already died. Fetch lazily on first begin().
+        # level cycle (wrapper keeps graphics alive, graphics object
+        # keeps a pointer to itself through nanobind's type registry).
+        # The cycle collector then tries to break it at shutdown and
+        # hits undefined order, segfaulting when it calls free on an
+        # object whose backing C++ already died. Fetch lazily on first
+        # begin().
         self._ctx = None
         self._text2d: Text2DRenderer | None = None
 
@@ -175,6 +185,29 @@ class UIRenderer:
         # solid-colour draw (see _ensure_init for the rationale).
         self._placeholder_tex: Tgfx2TextureHandle | None = None
 
+        # Set in begin() if we were the ones to open the frame on the
+        # lender's RenderContext2. end_compose() uses it to decide
+        # whether to close symmetrically.
+        self._opened_frame: bool = False
+
+        # Color attachment the current begin()/end_compose() is drawing
+        # into — either _offscreen_color_tex (standalone) or the host's
+        # target_color (in-scene).
+        self._current_target: Tgfx2TextureHandle | None = None
+
+        # Batched solid/textured quads. Each draw_rect/draw_line/etc.
+        # appends into _batch_verts; _flush_batch emits one
+        # draw_immediate_triangles covering every quad with the current
+        # (color, texture_mode, texture_handle) state. Anything that
+        # would change those — different color, switch to textured,
+        # scissor change, Text2D draw, end_pass — calls _flush_batch
+        # first. Turns N tiny draws into 1 big one on OpenGL where
+        # immediate draws are CPU-synchronous in the driver.
+        self._batch_verts: list[float] = []
+        self._batch_color: tuple[float, float, float, float] | None = None
+        self._batch_mode: int = 0  # 0 = solid, 2 = textured
+        self._batch_texture = None  # Tgfx2TextureHandle for mode == 2
+
     # ------------------------------------------------------------------
     # Font property
     # ------------------------------------------------------------------
@@ -190,55 +223,60 @@ class UIRenderer:
         self._font = value
 
     @property
-    def holder(self) -> Tgfx2Context | None:
+    def graphics(self) -> Tgfx2Context:
         """The Tgfx2Context the renderer draws through.
 
         Publicly exposed for embedded sub-renderers (tcplot Plot3D,
         custom widgets) that want to issue their own tgfx2 draw calls
-        into the same render pass. Valid only between ``begin()`` and
-        ``end()`` — before ``begin()`` the context does not exist yet.
+        into the same render pass.
         """
-        return self._holder
+        return self._graphics
 
     # ------------------------------------------------------------------
     # Lazy tgfx2 init
     # ------------------------------------------------------------------
 
-    def _ensure_init(self, w: int, h: int) -> None:
-        """Create Tgfx2Context (only when not already borrowed), compile
-        UI shader, allocate offscreen FBO. Called on the first begin()
-        and whenever the viewport size changes."""
-        if self._holder is None:
-            self._holder = Tgfx2Context()
-            self._owns_holder = True
+    def _ensure_init(self, w: int, h: int, need_offscreen: bool = True) -> None:
+        """Compile the UI shader and (if needed) allocate the offscreen
+        FBO. Called on the first begin() and whenever the viewport size
+        changes. The Tgfx2Context is already set up by __init__.
+
+        ``need_offscreen`` is False on the framegraph in-scene path: the
+        host hands us its own target_color, so we skip allocating the
+        renderer's own offscreen color/depth pair.
+        """
         if self._ctx is None:
             # Fetched lazily — see __init__ comment on cycle collection.
-            self._ctx = self._holder.context
+            self._ctx = self._graphics.context
         if self._text2d is None:
             self._text2d = Text2DRenderer(font=self._font)
 
         if self._ui_vs is None:
-            # Compile the UI shader directly on the tgfx2 device. The old
-            # TcShader + tc_shader_ensure_tgfx2 path is GL-only (it routes
-            # through the legacy tc_gpu_slot cache); the direct call works
-            # on both OpenGL and Vulkan and is what Vulkan hosts need.
-            dev = self._holder.device
-            self._ui_vs = dev.create_shader(Tgfx2ShaderStage.Vertex,
-                                            UI_VERTEX_SHADER)
-            self._ui_fs = dev.create_shader(Tgfx2ShaderStage.Fragment,
-                                            UI_FRAGMENT_SHADER)
+            # Register the UI shader with the tc_shader registry — hash-
+            # based dedup keeps compiled VkShaderModules / GL programs
+            # alive across UIRenderer instances (each new RenderContext2
+            # on Play/Stop otherwise re-runs shaderc). Callers must ensure
+            # a tc_gpu_context is active before the first render; the
+            # editor's WindowManager and the launcher both do this.
+            if self._ui_tc_shader is None:
+                self._ui_tc_shader = TcShader.from_sources(
+                    UI_VERTEX_SHADER, UI_FRAGMENT_SHADER,
+                    geometry="", name="UIEngineVSFS")
+            pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
+            self._ui_vs = pair.vs
+            self._ui_fs = pair.fs
             if not self._ui_vs or not self._ui_fs:
                 raise RuntimeError("UIRenderer: UI shader compile failed")
 
-        if self._offscreen_size != (w, h):
+        if need_offscreen and self._offscreen_size != (w, h):
             if self._offscreen_color_tex is not None:
-                self._holder.destroy_texture(self._offscreen_color_tex)
+                self._graphics.destroy_texture(self._offscreen_color_tex)
                 self._offscreen_color_tex = None
             if self._offscreen_depth_tex is not None:
-                self._holder.destroy_texture(self._offscreen_depth_tex)
+                self._graphics.destroy_texture(self._offscreen_depth_tex)
                 self._offscreen_depth_tex = None
-            self._offscreen_color_tex = self._holder.create_color_attachment(w, h)
-            self._offscreen_depth_tex = self._holder.create_depth_attachment(w, h)
+            self._offscreen_color_tex = self._graphics.create_color_attachment(w, h)
+            self._offscreen_depth_tex = self._graphics.create_depth_attachment(w, h)
             self._offscreen_size = (w, h)
 
         if self._placeholder_tex is None:
@@ -250,7 +288,7 @@ class UIRenderer:
             # care, but the same placeholder on both sides keeps the
             # bind sequence identical and cheap.
             white = np.array([[[255, 255, 255, 255]]], dtype=np.uint8)
-            self._placeholder_tex = self._holder.create_texture_rgba8(
+            self._placeholder_tex = self._graphics.create_texture_rgba8(
                 1, 1, white.reshape(-1))
 
     # ------------------------------------------------------------------
@@ -262,40 +300,76 @@ class UIRenderer:
         viewport_w: int,
         viewport_h: int,
         background_color: tuple[float, float, float, float] | None = None,
+        target_color=None,
     ) -> None:
         """Begin UI rendering pass.
 
-        ``background_color`` — if given, the default framebuffer (fbo 0)
-        is cleared to this colour after the UI composite, so the host
-        window receives a solid background behind any transparent UI
-        pixels. ``None`` leaves the default framebuffer unchanged.
+        Parameters
+        ----------
+        target_color : Tgfx2TextureHandle or None
+            Externally-provided color attachment to draw into. When set
+            (framegraph in-scene path), the pass opens with LoadOp::Load
+            and the widgets composite on top of whatever the previous
+            pass rendered — no offscreen, no final blit. When ``None``
+            (standalone hosts: the project-picker launcher, tcgui demos,
+            legacy ``render()``), the renderer draws into its own
+            offscreen color+depth pair, which ``end_compose`` then hands
+            back to the host to present.
+        background_color : (r, g, b, a) or None
+            Only meaningful in standalone mode (target_color is None) —
+            the colour the offscreen is cleared to before widgets draw.
+            Ignored when target_color is set (otherwise we'd wipe the
+            host's previous content every frame).
         """
         self._viewport_w = int(viewport_w)
         self._viewport_h = int(viewport_h)
 
-        self._ensure_init(self._viewport_w, self._viewport_h)
+        using_external_target = target_color is not None
+
+        self._ensure_init(self._viewport_w, self._viewport_h,
+                          need_offscreen=not using_external_target)
 
         ctx = self._ctx
 
-        ctx.begin_frame()
-        # Offscreen clear colour determines what fills UI-transparent
-        # regions — the final blit copies pixels directly (no blending)
-        # so the host background shows up only if we fill those regions
-        # here. Depth is cleared to 1.0 so 3D embedded renderers
-        # (tcplot Plot3D, Viewport3D) get a fresh depth buffer each
-        # frame.
-        if background_color is not None:
-            bg_r, bg_g, bg_b, bg_a = background_color
+        # Open a frame if the lender hasn't. Standalone hosts (the
+        # project-picker launcher, tcgui demos) just call render_compose
+        # and expect the renderer to manage the frame itself; framegraph
+        # passes enter with a frame already live from the engine's tick.
+        # Track who opened it so end_compose can close symmetrically.
+        self._opened_frame = not ctx.in_frame
+        if self._opened_frame:
+            ctx.begin_frame()
+
+        if using_external_target:
+            # In-scene path: draw straight into the host's target with
+            # LoadOp::Load so the previous pass' content stays visible
+            # under UI-transparent regions. No depth attached — UI
+            # draws with depth_test=False anyway.
+            ctx.begin_pass(
+                color=target_color,
+                clear_color_enabled=False,
+                clear_depth_enabled=False,
+            )
+            self._current_target = target_color
         else:
-            bg_r = bg_g = bg_b = bg_a = 0.0
-        ctx.begin_pass(
-            color=self._offscreen_color_tex,
-            depth=self._offscreen_depth_tex,
-            clear_color_enabled=True,
-            r=bg_r, g=bg_g, b=bg_b, a=bg_a,
-            clear_depth=1.0,
-            clear_depth_enabled=True,
-        )
+            # Standalone path: own offscreen cleared to background_color
+            # (transparent by default). The clear colour leaks through
+            # any UI-transparent pixels once the host presents/blits.
+            # Depth is cleared to 1.0 so 3D embedded renderers (tcplot
+            # Plot3D, Viewport3D) get a fresh depth buffer each frame.
+            if background_color is not None:
+                bg_r, bg_g, bg_b, bg_a = background_color
+            else:
+                bg_r = bg_g = bg_b = bg_a = 0.0
+            ctx.begin_pass(
+                color=self._offscreen_color_tex,
+                depth=self._offscreen_depth_tex,
+                clear_color_enabled=True,
+                r=bg_r, g=bg_g, b=bg_b, a=bg_a,
+                clear_depth=1.0,
+                clear_depth_enabled=True,
+            )
+            self._current_target = self._offscreen_color_tex
         ctx.set_viewport(0, 0, self._viewport_w, self._viewport_h)
         ctx.set_cull(CULL_NONE)
         ctx.set_depth_test(False)
@@ -350,7 +424,12 @@ class UIRenderer:
 
         self._text2d.end()
         self._ctx.end_pass()
-        self._ctx.end_frame()
+        # Match the begin_frame decision from begin(): close only the
+        # frame we opened. Command list ownership belongs to whoever
+        # started it.
+        if self._opened_frame:
+            self._ctx.end_frame()
+            self._opened_frame = False
 
         self._clip_stack.clear()
 
@@ -359,13 +438,13 @@ class UIRenderer:
     def close(self) -> None:
         """Release owned offscreen textures. Call before the GL
         context the holder lives on gets destroyed."""
-        if self._holder is None:
+        if self._graphics is None:
             return
         if self._offscreen_color_tex is not None:
-            self._holder.destroy_texture(self._offscreen_color_tex)
+            self._graphics.destroy_texture(self._offscreen_color_tex)
             self._offscreen_color_tex = None
         if self._offscreen_depth_tex is not None:
-            self._holder.destroy_texture(self._offscreen_depth_tex)
+            self._graphics.destroy_texture(self._offscreen_depth_tex)
             self._offscreen_depth_tex = None
         self._offscreen_size = (0, 0)
 
@@ -493,9 +572,12 @@ class UIRenderer:
         ignored (the legacy implementation also ignored it)."""
         if w <= 0 or h <= 0:
             return
-        self._bind_ui_shader_solid(color)
-        verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
-        self._ctx.draw_immediate_triangles(verts, 6)
+        with _prof.section("draw_rect.push"):
+            self._bind_ui_shader_solid(color)
+        with _prof.section("draw_rect.emit"):
+            verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
+        with _prof.section("draw_rect.draw"):
+            self._ctx.draw_immediate_triangles(verts, 6)
 
     def draw_rect_outline(
         self, x: float, y: float, w: float, h: float,
@@ -561,17 +643,20 @@ class UIRenderer:
         if not font or not text or self._text2d is None:
             return
 
-        scale = font_size / font.size
-        ascent = font.ascent if hasattr(font, "ascent") else font.size
+        # `ascent_at` returns the ascent already in display pixels at
+        # this font_size — the atlas bakes per (codepoint, integer px)
+        # so no caller-side scale multiplication is needed.
+        ascent = font.ascent_at(font_size)
 
         # Translate baseline → top-of-glyph for Text2DRenderer, which
         # uses top-left anchoring.
-        top_y = y - ascent * scale
+        top_y = y - ascent
 
-        self._text2d.draw(
-            text, x, top_y,
-            color=color, size=float(font_size), anchor="left",
-        )
+        with _prof.section("text2d.draw"):
+            self._text2d.draw(
+                text, x, top_y,
+                color=color, size=float(font_size), anchor="left",
+            )
 
     def draw_text_centered(
         self, cx: float, cy: float, text: str,
@@ -583,8 +668,12 @@ class UIRenderer:
         if not font or not text or self._text2d is None:
             return
 
-        # Legacy semantics: convert to a draw_text call at the baseline.
-        text_width, _ = font.measure_text(text, font_size)
+        with _prof.section("draw_text_centered.measure"):
+            # Route through self.measure_text so glyphs get baked at
+            # this size before the width query — otherwise the first
+            # draw at a new size would centre on a zero width (atlas
+            # has per-size caches; unbaked size means missing entries).
+            text_width, _ = self.measure_text(text, font_size)
         x = cx - text_width / 2
         y = cy + font_size / 2  # baseline offset (legacy)
         self.draw_text(x, y, text, color, font_size)
@@ -597,7 +686,10 @@ class UIRenderer:
         if not font or not text:
             return (0.0, 0.0)
 
-        font.ensure_glyphs(text)
+        # Bake glyphs at this size so the measurement is accurate for
+        # strings we haven't drawn yet. CPU-only — GPU re-upload is
+        # deferred to the next draw call (which passes a ctx).
+        font.ensure_glyphs(text, font_size)
         return font.measure_text(text, font_size)
 
     # ------------------------------------------------------------------
@@ -626,7 +718,7 @@ class UIRenderer:
         wrapped = None
         if isinstance(texture_handle, GPUTextureHandle):
             wrapped = wrap_gl_texture_as_tgfx2(
-                self._holder,
+                self._graphics,
                 texture_handle.get_id(),
                 int(texture_handle.get_width()),
                 int(texture_handle.get_height()),
@@ -643,7 +735,7 @@ class UIRenderer:
         ctx.draw_immediate_triangles(verts, 6)
 
         if wrapped is not None:
-            self._holder.destroy_texture(wrapped)
+            self._graphics.destroy_texture(wrapped)
 
     def upload_texture(self, data: np.ndarray) -> Tgfx2TextureHandle:
         """Upload a numpy RGBA array as a new GPU texture.
@@ -653,14 +745,14 @@ class UIRenderer:
         data : np.ndarray
             Shape (H, W, 4) uint8 RGBA.
         """
-        if self._holder is None:
+        if self._graphics is None:
             raise RuntimeError(
                 "UIRenderer.upload_texture called before first begin() — "
                 "the Tgfx2Context is not initialised yet"
             )
         h, w = data.shape[0], data.shape[1]
         flat = np.ascontiguousarray(data).reshape(-1)
-        return self._holder.create_texture_rgba8(w, h, flat)
+        return self._graphics.create_texture_rgba8(w, h, flat)
 
     def update_texture(
         self, handle: Tgfx2TextureHandle, data: np.ndarray,
@@ -670,12 +762,12 @@ class UIRenderer:
         ``data`` must match the texture's original (width, height,
         RGBA) dimensions.
         """
-        if self._holder is None:
+        if self._graphics is None:
             raise RuntimeError(
                 "UIRenderer.update_texture called before first begin()"
             )
         flat = np.ascontiguousarray(data).reshape(-1)
-        self._holder.upload_texture(handle, flat)
+        self._graphics.upload_texture(handle, flat)
 
     def update_texture_region(
         self, handle: Tgfx2TextureHandle,
@@ -689,20 +781,20 @@ class UIRenderer:
         in pixel space, same convention as the rest of the UIRenderer.
         Used by Canvas for incremental overlay updates during painting.
         """
-        if self._holder is None:
+        if self._graphics is None:
             raise RuntimeError(
                 "UIRenderer.update_texture_region called before first begin()"
             )
         flat = np.ascontiguousarray(data).reshape(-1)
-        self._holder.upload_texture_region(
+        self._graphics.upload_texture_region(
             handle, int(x), int(y), int(w), int(h), flat,
         )
 
     def destroy_texture(self, handle: Tgfx2TextureHandle) -> None:
         """Release a GPU texture previously returned by ``upload_texture``."""
-        if self._holder is None or handle is None:
+        if self._graphics is None or handle is None:
             return
-        self._holder.destroy_texture(handle)
+        self._graphics.destroy_texture(handle)
 
     def draw_texture(
         self, x: float, y: float, w: float, h: float,
@@ -761,7 +853,7 @@ class UIRenderer:
             return
 
         tex2 = wrap_gl_texture_as_tgfx2(
-            self._holder, int(gl_tex_id),
+            self._graphics, int(gl_tex_id),
             int(tex_w), int(tex_h), PIXEL_RGBA8,
         )
         try:
@@ -777,7 +869,7 @@ class UIRenderer:
         finally:
             # Non-owning wrapper: release the HandlePool entry but
             # leave the underlying GL texture alone.
-            self._holder.destroy_texture(tex2)
+            self._graphics.destroy_texture(tex2)
 
     def load_image(self, path: str) -> Tgfx2TextureHandle:
         """Load an image file and upload it as a GPU texture."""

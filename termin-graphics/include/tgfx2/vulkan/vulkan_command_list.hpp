@@ -2,6 +2,7 @@
 
 #ifdef TGFX2_HAS_VULKAN
 
+#include <chrono>
 #include <vector>
 #include <vulkan/vulkan.h>
 #include "tgfx2/tgfx2_api.h"
@@ -22,7 +23,9 @@ public:
     void end_render_pass() override;
 
     void bind_pipeline(PipelineHandle pipeline) override;
-    void bind_resource_set(ResourceSetHandle set) override;
+    void bind_resource_set(ResourceSetHandle set,
+                           const uint32_t* dynamic_offsets = nullptr,
+                           uint32_t dynamic_offset_count = 0) override;
     void set_push_constants(const void* data, uint32_t size) override;
 
     void bind_vertex_buffer(uint32_t slot, BufferHandle buffer, uint64_t offset = 0) override;
@@ -54,6 +57,11 @@ private:
     // mismatch validation error. Cheap even when the texture is not
     // sampled next — one barrier per attachment.
     std::vector<TextureHandle> current_pass_color_attachments_;
+    TextureHandle current_pass_depth_attachment_{};
+
+    // Timestamp of the most recent begin(); subtracted in end() to feed
+    // the cumulative cmd-recording counter in the Vulkan hot-path summary.
+    std::chrono::steady_clock::time_point record_start_{};
 };
 
 } // namespace tgfx

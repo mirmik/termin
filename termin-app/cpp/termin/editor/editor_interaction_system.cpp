@@ -250,27 +250,27 @@ void EditorInteractionSystem::_handle_double_click(
 Entity EditorInteractionSystem::pick_entity_at(
     float x, float y, tc_viewport_handle viewport, tc_display* display)
 {
-    if (!tc_viewport_handle_valid(viewport)) return Entity();
+    if (!tc_viewport_handle_valid(viewport)) {
+        tc_log(TC_LOG_INFO, "[DBG pick] viewport invalid"); return Entity();
+    }
 
     tc_pipeline_handle pipeline_h = tc_viewport_get_pipeline(viewport);
-    if (!tc_pipeline_pool_alive(pipeline_h)) return Entity();
+    if (!tc_pipeline_pool_alive(pipeline_h)) {
+        tc_log(TC_LOG_INFO, "[DBG pick] pipeline not alive"); return Entity();
+    }
     RenderPipeline pipeline(pipeline_h);
 
     tgfx::TextureHandle id_tex = pipeline.get_color_tex2("id");
     if (!id_tex) return Entity();
 
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(pipeline.tex2_device());
-    if (!gl_dev) return Entity();
+    auto* dev = pipeline.tex2_device();
+    if (!dev) return Entity();
 
     int fx, fy;
-    if (!_window_to_fbo_coords(x, y, viewport, display, fx, fy)) {
-        return Entity();
-    }
+    if (!_window_to_fbo_coords(x, y, viewport, display, fx, fy)) return Entity();
 
     float color[4] = {0, 0, 0, 0};
-    if (!gl_dev->read_pixel_rgba8(id_tex, fx, fy, color)) {
-        return Entity();
-    }
+    if (!dev->read_pixel_rgba8(id_tex, fx, fy, color)) return Entity();
 
     int r = (int)std::round(color[0] * 255.0f);
     int g = (int)std::round(color[1] * 255.0f);
@@ -320,8 +320,11 @@ bool EditorInteractionSystem::_window_to_fbo_coords(
 
     if (vx < 0 || vy < 0 || vx >= vp_w || vy >= vp_h) return false;
 
+    // Top-down pixel coordinates: same convention as mouse/window input,
+    // and the one IRenderDevice::read_pixel_rgba8 expects. Each backend
+    // flips internally if its readback API wants bottom-up (GL does).
     fx = (int)vx;
-    fy = (int)(vp_h - vy - 1); // Flip Y for OpenGL
+    fy = (int)vy;
     return true;
 }
 
