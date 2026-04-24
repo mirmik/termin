@@ -17,6 +17,8 @@ for arg in "$@"; do
         --debug|-d)    BUILD_TYPE="Debug" ;;
         --clean|-c)    CLEAN=1 ;;
         --no-parallel) NO_PARALLEL=1 ;;
+        --no-vulkan|--vulkan) ;;
+        --no-sdl|--sdl) ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -24,6 +26,10 @@ for arg in "$@"; do
             echo "  --debug, -d       Debug build"
             echo "  --clean, -c       Clean build directories first"
             echo "  --no-parallel     Disable parallel compilation (equivalent to -j1)"
+            echo "  --no-vulkan       Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --vulkan          Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --no-sdl          Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --sdl             Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --help, -h        Show this help"
             exit 0
             ;;
