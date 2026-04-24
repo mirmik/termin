@@ -7,7 +7,6 @@
 
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/render_pipeline.hpp"
-#include "tgfx/graphics_backend.hpp"
 #include "termin/render/viewport_render_state.hpp"
 #include "termin/render/tc_display_handle.hpp"
 #include "termin/viewport/tc_viewport_handle.hpp"
@@ -87,14 +86,17 @@ static tc_viewport_handle get_viewport_handle(nb::object viewport_py) {
 }
 
 void bind_rendering_manager(nb::module_& m) {
-    // ViewportRenderState - per-viewport GPU resource state
+    // ViewportRenderState - per-viewport GPU resource state (native tgfx2).
     nb::class_<ViewportRenderState>(m, "ViewportRenderState")
         .def_prop_ro("output_width", [](ViewportRenderState& self) { return self.output_width; })
         .def_prop_ro("output_height", [](ViewportRenderState& self) { return self.output_height; })
-        .def("has_output_fbo", &ViewportRenderState::has_output_fbo)
+        .def("has_output", &ViewportRenderState::has_output)
         .def("clear_all", &ViewportRenderState::clear_all)
-        .def_prop_ro("output_fbo_id", [](ViewportRenderState& self) -> uint32_t {
-            return self.output_fbo ? self.output_fbo->get_fbo_id() : 0;
+        .def_prop_ro("output_color_tex", [](ViewportRenderState& self) {
+            return self.output_color_tex;
+        })
+        .def_prop_ro("output_depth_tex", [](ViewportRenderState& self) {
+            return self.output_depth_tex;
         })
     ;
 
@@ -106,10 +108,9 @@ void bind_rendering_manager(nb::module_& m) {
         // Configuration
         // ================================================================
 
-        .def("set_graphics", [](RenderingManager& self, GraphicsBackend* graphics) {
-            self.set_graphics(graphics);
-        }, nb::arg("graphics").none(),
-           "Set graphics backend for rendering")
+        .def_prop_ro("render_engine", &RenderingManager::render_engine,
+                     nb::rv_policy::reference,
+                     "Access the engine's RenderEngine (tgfx2_ctx lives on it)")
 
         .def("set_make_current_callback", [](RenderingManager& self, nb::callable callback) {
             if (callback.is_none()) {

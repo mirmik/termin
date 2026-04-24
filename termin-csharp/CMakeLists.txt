@@ -32,6 +32,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
     find_package(termin_components_collision REQUIRED)
     find_package(termin_components_kinematic REQUIRED)
     find_package(termin_render REQUIRED)
+    find_package(tcplot REQUIRED)
 
     set(CMAKE_SWIG_OUTDIR "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Generated")
 
@@ -50,13 +51,23 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             ${CMAKE_CURRENT_SOURCE_DIR}/termin.i
             ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_component_csharp.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_inspect_csharp.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/../termin/cpp/termin/render/tc_opengl.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../termin-app/cpp/termin/render/tc_opengl.cpp
     )
 
     set_target_properties(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PROPERTIES
         OUTPUT_NAME "termin"
-        LIBRARY_OUTPUT_DIRECTORY "${TERMIN_CSHARP_RUNTIME_DIR}"
-        RUNTIME_OUTPUT_DIRECTORY "${TERMIN_CSHARP_RUNTIME_DIR}"
+        # Per-config overrides bypass Visual Studio's default
+        # "$(Configuration)" subfolder append. Without these the DLL
+        # lands in runtimes/win-x64/native/Release/termin.dll — and
+        # .NET's RID resolver expects it at runtimes/win-x64/native/,
+        # so the process fails to load termin.dll at startup with
+        # DllNotFoundException. Flatten the output path explicitly.
+        LIBRARY_OUTPUT_DIRECTORY         "${TERMIN_CSHARP_RUNTIME_DIR}"
+        LIBRARY_OUTPUT_DIRECTORY_DEBUG   "${TERMIN_CSHARP_RUNTIME_DIR}"
+        LIBRARY_OUTPUT_DIRECTORY_RELEASE "${TERMIN_CSHARP_RUNTIME_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY         "${TERMIN_CSHARP_RUNTIME_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${TERMIN_CSHARP_RUNTIME_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TERMIN_CSHARP_RUNTIME_DIR}"
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib"
     )
 
@@ -75,6 +86,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         termin_components_collision::termin_components_collision
         termin_components_kinematic::termin_components_kinematic
         termin_render::termin_render
+        tcplot::tcplot
     )
 
     set(_termin_csharp_runtime_targets
@@ -90,7 +102,10 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         termin_components_kinematic::termin_components_kinematic
         termin_render::termin_render
         tgfx::termin_graphics
+        tgfx::termin_graphics2
         termin_modules::termin_modules
+        tmesh::termin_mesh
+        tcplot::tcplot
     )
 
     foreach(_dep IN LISTS _termin_csharp_runtime_targets)

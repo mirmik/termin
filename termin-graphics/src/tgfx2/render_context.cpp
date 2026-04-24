@@ -3,10 +3,12 @@
 #include "tgfx2/pipeline_cache.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/i_command_list.hpp"
+#include "tgfx2/opengl/opengl_render_device.hpp"
 
+#include <glad/glad.h>
 #include <cstring>
 
-namespace tgfx2 {
+namespace tgfx {
 
 // ============================================================================
 // Fullscreen quad shader (built-in, minimal)
@@ -42,6 +44,7 @@ RenderContext2::RenderContext2(IRenderDevice& device, PipelineCache& cache)
     : device_(device), cache_(cache) {}
 
 RenderContext2::~RenderContext2() {
+    if (current_resource_set_) device_.destroy(current_resource_set_);
     if (fsq_vbo_) device_.destroy(fsq_vbo_);
     if (fsq_ibo_) device_.destroy(fsq_ibo_);
     if (fsq_vs_) device_.destroy(fsq_vs_);
@@ -63,6 +66,25 @@ void RenderContext2::end_frame() {
     cmd_->end();
     device_.submit(*cmd_);
     cmd_.reset();
+
+    if (current_resource_set_) {
+        device_.destroy(current_resource_set_);
+        current_resource_set_ = {};
+    }
+    pending_bindings_.clear();
+    bindings_dirty_ = true;
+
+    // Drain deferred-destroy lists. Pass code accumulated non-owning
+    // external wrappers during the frame (e.g. material textures,
+    // temporary mesh buffers); now that the command list is submitted
+    // and the GL bindings have been copied out, the wrapper HandlePool
+    // entries can be safely released. Underlying GL objects survive.
+    for (auto h : deferred_destroy_textures_) device_.destroy(h);
+    for (auto h : deferred_destroy_buffers_)  device_.destroy(h);
+    for (auto h : deferred_destroy_resource_sets_) device_.destroy(h);
+    deferred_destroy_textures_.clear();
+    deferred_destroy_buffers_.clear();
+    deferred_destroy_resource_sets_.clear();
 }
 
 // ============================================================================
@@ -71,7 +93,8 @@ void RenderContext2::end_frame() {
 
 void RenderContext2::begin_pass(
     TextureHandle color, TextureHandle depth,
-    const float* clear_color, float clear_depth
+    const float* clear_color, float clear_depth,
+    bool clear_depth_enabled
 ) {
     if (in_pass_) {
         end_pass();
@@ -79,23 +102,49 @@ void RenderContext2::begin_pass(
 
     RenderPassDesc pass;
 
-    ColorAttachmentDesc color_att;
-    color_att.texture = color;
-    if (clear_color) {
-        color_att.load = LoadOp::Clear;
-        memcpy(color_att.clear_color, clear_color, sizeof(float) * 4);
-    } else {
-        color_att.load = LoadOp::Load;
+    // Only push the color attachment when caller supplied a valid
+    // texture handle — a default-constructed TextureHandle (id == 0)
+    // means "depth-only pass", and pushing a placeholder entry would
+    // try to attach a nonexistent texture in get_or_create_fbo().
+    if (color) {
+        ColorAttachmentDesc color_att;
+        color_att.texture = color;
+        if (clear_color) {
+            color_att.load = LoadOp::Clear;
+            memcpy(color_att.clear_color, clear_color, sizeof(float) * 4);
+        } else {
+            color_att.load = LoadOp::Load;
+        }
+        pass.colors.push_back(color_att);
     }
-    pass.colors.push_back(color_att);
 
     if (depth) {
         DepthAttachmentDesc depth_att;
         depth_att.texture = depth;
-        depth_att.load = clear_color ? LoadOp::Clear : LoadOp::Load;
+        depth_att.load = clear_depth_enabled ? LoadOp::Clear : LoadOp::Load;
         depth_att.clear_depth = clear_depth;
         pass.depth = depth_att;
         pass.has_depth = true;
+    }
+
+    // Sync the pipeline-key formats with what the pass actually carries.
+    // Without this the cache keeps whatever format was set earlier (or
+    // the D32F default for depth) and builds a VkRenderPass that doesn't
+    // match begin_render_pass — Vulkan then fails with
+    //   vkCmdDraw: RenderPasses incompatible (attachment count mismatch).
+    PixelFormat new_color = color
+        ? device_.texture_desc(color).format
+        : PixelFormat::Undefined;
+    PixelFormat new_depth = depth
+        ? device_.texture_desc(depth).format
+        : PixelFormat::Undefined;
+    if (color_format_ != new_color) {
+        color_format_ = new_color;
+        pipeline_dirty_ = true;
+    }
+    if (depth_format_ != new_depth) {
+        depth_format_ = new_depth;
+        pipeline_dirty_ = true;
     }
 
     cmd_->begin_render_pass(pass);
@@ -198,10 +247,185 @@ void RenderContext2::set_topology(PrimitiveTopology topo) {
     }
 }
 
-void RenderContext2::bind_texture(uint32_t /*unit*/, TextureHandle /*tex*/) {
-    // In the OpenGL path, textures are still bound via glActiveTexture/glBindTexture
-    // by the legacy code. This is a placeholder for future resource set integration.
-    // For now, render passes bind textures directly through the GL interop.
+// ============================================================================
+// Resource bindings (UBOs, textures, samplers)
+// ============================================================================
+
+static ResourceBinding* find_binding(std::vector<ResourceBinding>& bindings,
+                                     uint32_t binding, ResourceBinding::Kind kind) {
+    for (auto& b : bindings) {
+        if (b.binding == binding && b.kind == kind) return &b;
+    }
+    return nullptr;
+}
+
+void RenderContext2::bind_uniform_buffer(uint32_t binding, BufferHandle buffer,
+                                          uint64_t offset, uint64_t range) {
+    ResourceBinding* existing =
+        find_binding(pending_bindings_, binding, ResourceBinding::Kind::UniformBuffer);
+    if (existing) {
+        if (existing->buffer == buffer && existing->offset == offset &&
+            existing->range == range) {
+            return;
+        }
+        existing->buffer = buffer;
+        existing->offset = offset;
+        existing->range = range;
+    } else {
+        ResourceBinding b;
+        b.kind = ResourceBinding::Kind::UniformBuffer;
+        b.binding = binding;
+        b.buffer = buffer;
+        b.offset = offset;
+        b.range = range;
+        pending_bindings_.push_back(b);
+    }
+    bindings_dirty_ = true;
+}
+
+void RenderContext2::bind_sampled_texture(uint32_t binding, TextureHandle tex,
+                                           SamplerHandle sampler) {
+    ResourceBinding* existing =
+        find_binding(pending_bindings_, binding, ResourceBinding::Kind::SampledTexture);
+    if (existing) {
+        if (existing->texture == tex && existing->sampler == sampler) {
+            return;
+        }
+        existing->texture = tex;
+        existing->sampler = sampler;
+    } else {
+        ResourceBinding b;
+        b.kind = ResourceBinding::Kind::SampledTexture;
+        b.binding = binding;
+        b.texture = tex;
+        b.sampler = sampler;
+        pending_bindings_.push_back(b);
+    }
+    bindings_dirty_ = true;
+}
+
+void RenderContext2::clear_resource_bindings() {
+    if (pending_bindings_.empty()) return;
+    pending_bindings_.clear();
+    bindings_dirty_ = true;
+}
+
+void RenderContext2::set_push_constants(const void* data, uint32_t size) {
+    if (!cmd_) return;
+    // vkCmdPushConstants requires a bound pipeline. Callers typically
+    // do bind_shader → set_push_constants → draw; at this point the
+    // vertex layout is still unset, so flushing now would build an
+    // invalid pipeline. Queue the data and re-emit it after each
+    // flush_pipeline — that way push-constants always land on a valid
+    // layout that matches the upcoming draw.
+    if (data == nullptr || size == 0) {
+        pending_push_constants_.clear();
+        return;
+    }
+    pending_push_constants_.assign(
+        reinterpret_cast<const uint8_t*>(data),
+        reinterpret_cast<const uint8_t*>(data) + size);
+}
+
+void RenderContext2::defer_destroy(TextureHandle handle) {
+    if (handle) deferred_destroy_textures_.push_back(handle);
+}
+
+void RenderContext2::defer_destroy(BufferHandle handle) {
+    if (handle) deferred_destroy_buffers_.push_back(handle);
+}
+
+// --- Transitional legacy-uniform setters ---
+
+void RenderContext2::set_uniform_int(const char* name, int value) {
+    if (!name) return;
+    flush_pipeline();
+    GLint prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    if (prog == 0) return;
+    GLint loc = glGetUniformLocation(static_cast<GLuint>(prog), name);
+    if (loc >= 0) glUniform1i(loc, value);
+}
+
+void RenderContext2::set_uniform_float(const char* name, float value) {
+    if (!name) return;
+    flush_pipeline();
+    GLint prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    if (prog == 0) return;
+    GLint loc = glGetUniformLocation(static_cast<GLuint>(prog), name);
+    if (loc >= 0) glUniform1f(loc, value);
+}
+
+void RenderContext2::set_uniform_mat4(const char* name, const float* data,
+                                      bool transpose) {
+    if (!name || !data) return;
+    flush_pipeline();
+    GLint prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    if (prog == 0) return;
+    GLint loc = glGetUniformLocation(static_cast<GLuint>(prog), name);
+    if (loc >= 0) {
+        glUniformMatrix4fv(loc, 1,
+                           transpose ? GL_TRUE : GL_FALSE,
+                           data);
+    }
+}
+
+void RenderContext2::set_uniform_vec2(const char* name, float x, float y) {
+    if (!name) return;
+    flush_pipeline();
+    GLint prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    if (prog == 0) return;
+    GLint loc = glGetUniformLocation(static_cast<GLuint>(prog), name);
+    if (loc >= 0) glUniform2f(loc, x, y);
+}
+
+void RenderContext2::set_uniform_vec3(const char* name, float x, float y, float z) {
+    if (!name) return;
+    flush_pipeline();
+    GLint prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    if (prog == 0) return;
+    GLint loc = glGetUniformLocation(static_cast<GLuint>(prog), name);
+    if (loc >= 0) glUniform3f(loc, x, y, z);
+}
+
+void RenderContext2::set_uniform_vec4(const char* name, float x, float y, float z, float w) {
+    if (!name) return;
+    flush_pipeline();
+    GLint prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    if (prog == 0) return;
+    GLint loc = glGetUniformLocation(static_cast<GLuint>(prog), name);
+    if (loc >= 0) glUniform4f(loc, x, y, z, w);
+}
+
+void RenderContext2::set_uniform_mat4_array(const char* name, const float* data,
+                                             int count, bool transpose) {
+    if (!name || !data || count <= 0) return;
+    flush_pipeline();
+    GLint prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    if (prog == 0) return;
+    GLint loc = glGetUniformLocation(static_cast<GLuint>(prog), name);
+    if (loc >= 0) {
+        glUniformMatrix4fv(loc, count,
+                           transpose ? GL_TRUE : GL_FALSE,
+                           data);
+    }
+}
+
+void RenderContext2::set_block_binding(const char* block_name, uint32_t binding_slot) {
+    if (!block_name) return;
+    flush_pipeline();
+    GLint prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    if (prog == 0) return;
+    GLuint idx = glGetUniformBlockIndex(static_cast<GLuint>(prog), block_name);
+    if (idx == GL_INVALID_INDEX) return;
+    glUniformBlockBinding(static_cast<GLuint>(prog), idx, binding_slot);
 }
 
 void RenderContext2::set_color_format(PixelFormat fmt) {
@@ -267,6 +491,39 @@ void RenderContext2::flush_pipeline() {
     auto pipeline = cache_.get(key);
     cmd_->bind_pipeline(pipeline);
     pipeline_dirty_ = false;
+
+    // Re-apply any pending push-constants now that the new pipeline is
+    // bound — vkCmdPushConstants needs a current pipeline layout, and
+    // the VkPipelineLayout we just bound may differ from the one the
+    // previous push-constant write targeted. On OpenGL the ring UBO
+    // binding is independent of pipeline, so the re-apply is cheap.
+    if (!pending_push_constants_.empty()) {
+        cmd_->set_push_constants(pending_push_constants_.data(),
+                                 static_cast<uint32_t>(pending_push_constants_.size()));
+    }
+}
+
+void RenderContext2::flush_resource_set() {
+    if (!bindings_dirty_) return;
+
+    // Defer-destroy the previous set: the command buffer we're still
+    // recording into may reference it, and Vulkan forbids mutating
+    // bindings that a live cmd buf holds. Drained in end_frame() after
+    // submit + fence wait. On OpenGL `destroy(ResourceSetHandle)` is
+    // cheap and this deferment is harmless.
+    if (current_resource_set_) {
+        deferred_destroy_resource_sets_.push_back(current_resource_set_);
+        current_resource_set_ = {};
+    }
+
+    if (!pending_bindings_.empty()) {
+        ResourceSetDesc desc;
+        desc.bindings = pending_bindings_;
+        current_resource_set_ = device_.create_resource_set(desc);
+        cmd_->bind_resource_set(current_resource_set_);
+    }
+
+    bindings_dirty_ = false;
 }
 
 // ============================================================================
@@ -303,6 +560,11 @@ void RenderContext2::ensure_fsq_resources() {
     fsq_vs_ = device_.create_shader(vs_desc);
 }
 
+ShaderHandle RenderContext2::fsq_vertex_shader() {
+    ensure_fsq_resources();
+    return fsq_vs_;
+}
+
 void RenderContext2::draw_fullscreen_quad() {
     ensure_fsq_resources();
 
@@ -322,6 +584,7 @@ void RenderContext2::draw_fullscreen_quad() {
     }
 
     flush_pipeline();
+    flush_resource_set();
 
     cmd_->bind_vertex_buffer(0, fsq_vbo_);
     cmd_->bind_index_buffer(fsq_ibo_, IndexType::Uint32);
@@ -333,6 +596,7 @@ void RenderContext2::draw(
     uint32_t index_count, IndexType idx_type
 ) {
     flush_pipeline();
+    flush_resource_set();
     cmd_->bind_vertex_buffer(0, vbo);
     cmd_->bind_index_buffer(ibo, idx_type);
     cmd_->draw_indexed(index_count);
@@ -340,6 +604,7 @@ void RenderContext2::draw(
 
 void RenderContext2::draw_arrays(BufferHandle vbo, uint32_t vertex_count) {
     flush_pipeline();
+    flush_resource_set();
     cmd_->bind_vertex_buffer(0, vbo);
     cmd_->draw(vertex_count);
 }
@@ -366,11 +631,16 @@ void RenderContext2::draw_immediate_lines(const float* data, uint32_t vertex_cou
     set_topology(PrimitiveTopology::LineList);
 
     flush_pipeline();
+    flush_resource_set();
     cmd_->bind_vertex_buffer(0, buf);
     cmd_->draw(vertex_count);
 
-    // Cleanup temp buffer
-    device_.destroy(buf);
+    // Defer destroy — on Vulkan the command buffer runs asynchronously
+    // after vkQueueSubmit, so the VkBuffer must outlive end_frame().
+    // The deferred list is drained in end_frame() after device_.submit
+    // has waited on the frame fence. OpenGL is equally happy either way
+    // (glBufferData copies host memory immediately).
+    deferred_destroy_buffers_.push_back(buf);
 }
 
 void RenderContext2::draw_immediate_triangles(const float* data, uint32_t vertex_count) {
@@ -394,14 +664,23 @@ void RenderContext2::draw_immediate_triangles(const float* data, uint32_t vertex
     set_topology(PrimitiveTopology::TriangleList);
 
     flush_pipeline();
+    flush_resource_set();
     cmd_->bind_vertex_buffer(0, buf);
     cmd_->draw(vertex_count);
 
-    device_.destroy(buf);
+    // Defer destroy — see draw_immediate_lines for the lifetime story.
+    deferred_destroy_buffers_.push_back(buf);
 }
 
 void RenderContext2::blit(TextureHandle src, TextureHandle dst) {
     cmd_->copy_texture(src, dst);
 }
 
-} // namespace tgfx2
+uint32_t RenderContext2::last_gl_error() {
+    // glad lives in this translation unit's module, so glGetError
+    // is always a valid function pointer here even when the caller
+    // is in another DLL (e.g. the Python binding module).
+    return static_cast<uint32_t>(glGetError());
+}
+
+} // namespace tgfx

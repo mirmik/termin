@@ -5,6 +5,10 @@
 #include <termin/entity/entity.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
 
+#include <tgfx2/opengl/opengl_render_device.hpp>
+#include <tgfx2/i_render_device.hpp>
+#include "tgfx/handles.hpp"
+
 extern "C" {
 #include <tcbase/tc_log.h>
 #include "core/tc_light_capability.h"
@@ -107,10 +111,6 @@ RenderingManager::~RenderingManager() {
 // Configuration
 // ============================================================================
 
-void RenderingManager::set_graphics(GraphicsBackend* graphics) {
-    graphics_ = graphics;
-}
-
 void RenderingManager::set_render_engine(RenderEngine* engine) {
     render_engine_ = engine;
     owned_render_engine_.reset(); // Release owned engine if any
@@ -118,11 +118,7 @@ void RenderingManager::set_render_engine(RenderEngine* engine) {
 
 RenderEngine* RenderingManager::render_engine() {
     if (!render_engine_) {
-        if (!graphics_) {
-            tc_log(TC_LOG_ERROR, "[RenderingManager] Cannot create RenderEngine: graphics not set");
-            return nullptr;
-        }
-        owned_render_engine_ = std::make_unique<RenderEngine>(graphics_);
+        owned_render_engine_ = std::make_unique<RenderEngine>();
         render_engine_ = owned_render_engine_.get();
     }
     return render_engine_;
@@ -686,10 +682,6 @@ void RenderingManager::render_all(bool present) {
 }
 
 void RenderingManager::render_all_offscreen() {
-    if (!graphics_) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_all_offscreen: graphics not set");
-        return;
-    }
 
     // Activate GL context via callback
     if (make_current_callback_) {
@@ -775,7 +767,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
     const std::string& pipeline_name,
     tc_pipeline_handle pipeline
 ) {
-    if (!tc_scene_handle_valid(scene) || !tc_pipeline_handle_valid(pipeline) || !graphics_) {
+    if (!tc_scene_handle_valid(scene) || !tc_pipeline_handle_valid(pipeline)) {
         return;
     }
 
@@ -830,7 +822,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
             continue;
         }
 
-        // Ensure output FBO (stored on render target state)
+        // Ensure output textures (native) stored on the render-target state
         tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
         ViewportRenderState* state = nullptr;
         if (tc_render_target_handle_valid(rt)) {
@@ -838,7 +830,16 @@ void RenderingManager::render_scene_pipeline_offscreen(
         } else {
             state = get_or_create_viewport_state(viewport);
         }
-        FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
+
+        RenderEngine* vp_engine = render_engine();
+        if (vp_engine) vp_engine->ensure_tgfx2();
+        tgfx::IRenderDevice* vp_device = vp_engine ? vp_engine->tgfx2_device() : nullptr;
+        if (!vp_device) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] tgfx2 device unavailable for viewport '%s'",
+                   vp_name.c_str());
+            continue;
+        }
+        state->ensure_output_textures(*vp_device, pw, ph);
 
         // Create viewport context
         ViewportContext ctx;
@@ -847,7 +848,8 @@ void RenderingManager::render_scene_pipeline_offscreen(
         ctx.rect = {0, 0, pw, ph};  // Full FBO, offset at blit time
         ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
         ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
-        ctx.output_fbo = output_fbo;
+        ctx.output_color_tex = state->output_color_tex;
+        ctx.output_depth_tex = state->output_depth_tex;
         contexts[vp_name] = std::move(ctx);
     }
 
@@ -873,8 +875,8 @@ void RenderingManager::render_scene_pipeline_offscreen(
 void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     const char* vp_name = tc_viewport_get_name(viewport);
 
-    if (!tc_viewport_handle_valid(viewport) || !graphics_) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): invalid viewport or no graphics",
+    if (!tc_viewport_handle_valid(viewport)) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): invalid viewport",
                vp_name ? vp_name : "(null)");
         return;
     }
@@ -918,26 +920,35 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         return;
     }
 
-    // Ensure output FBO (stored on render target state)
+    // Ensure output textures (native tgfx2)
     ViewportRenderState* state = get_or_create_render_target_state(rt);
-    FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, pw, ph);
+    RenderEngine* engine = render_engine();
+    if (engine) engine->ensure_tgfx2();
+    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    if (!device) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): tgfx2 device unavailable",
+               vp_name ? vp_name : "(null)");
+        return;
+    }
+    state->ensure_output_textures(*device, pw, ph);
 
     // Collect lights
     std::vector<Light> lights = collect_lights(scene);
 
-    // Render to output FBO
-    RenderEngine* engine = render_engine();
+    // Build a single-viewport context and run scene pipeline
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
-    engine->render_view_to_fbo(
-        render_pipeline,
-        output_fbo,
-        pw, ph,
-        scene,
-        render_camera,
-        vp_name ? vp_name : "",
-        internal_entities,
-        lights,
-        tc_viewport_get_layer_mask(viewport)
+    std::unordered_map<std::string, ViewportContext> contexts;
+    ViewportContext ctx;
+    ctx.name = vp_name ? vp_name : "";
+    ctx.camera = render_camera;
+    ctx.rect = {0, 0, pw, ph};
+    ctx.internal_entities = internal_entities;
+    ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
+    ctx.output_color_tex = state->output_color_tex;
+    ctx.output_depth_tex = state->output_depth_tex;
+    contexts[ctx.name] = std::move(ctx);
+    engine->render_scene_pipeline_offscreen(
+        render_pipeline, scene, contexts, lights, vp_name ? vp_name : ""
     );
 }
 
@@ -964,7 +975,7 @@ void RenderingManager::sync_viewport_resolutions() {
 }
 
 void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt) {
-    if (!tc_render_target_handle_valid(rt) || !graphics_) return;
+    if (!tc_render_target_handle_valid(rt)) return;
     if (!tc_render_target_get_enabled(rt)) return;
 
     const char* rt_name = tc_render_target_get_name(rt);
@@ -1004,21 +1015,31 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     RenderPipeline render_pipeline(pipeline);
 
     ViewportRenderState* state = get_or_create_render_target_state(rt);
-    FramebufferHandle* output_fbo = state->ensure_output_fbo(graphics_, w, h);
+    RenderEngine* engine = render_engine();
+    if (engine) engine->ensure_tgfx2();
+    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    if (!device) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable",
+               rt_name ? rt_name : "?");
+        return;
+    }
+    state->ensure_output_textures(*device, w, h);
 
     std::vector<Light> lights = collect_lights(scene);
 
-    RenderEngine* engine = render_engine();
-    engine->render_view_to_fbo(
-        render_pipeline,
-        output_fbo,
-        w, h,
-        scene,
-        render_camera,
-        rt_name ? rt_name : "",
-        TC_ENTITY_HANDLE_INVALID,
-        lights,
-        tc_render_target_get_layer_mask(rt)
+    std::string name = rt_name ? rt_name : "";
+    std::unordered_map<std::string, ViewportContext> contexts;
+    ViewportContext ctx;
+    ctx.name = name;
+    ctx.camera = render_camera;
+    ctx.rect = {0, 0, w, h};
+    ctx.internal_entities = TC_ENTITY_HANDLE_INVALID;
+    ctx.layer_mask = tc_render_target_get_layer_mask(rt);
+    ctx.output_color_tex = state->output_color_tex;
+    ctx.output_depth_tex = state->output_depth_tex;
+    contexts[name] = std::move(ctx);
+    engine->render_scene_pipeline_offscreen(
+        render_pipeline, scene, contexts, lights, name
     );
 }
 
@@ -1031,7 +1052,7 @@ void RenderingManager::present_all() {
 }
 
 void RenderingManager::present_display(tc_display* display) {
-    if (!display || !graphics_) return;
+    if (!display) return;
 
     tc_render_surface* surface = tc_display_get_surface(display);
     if (!surface) {
@@ -1060,11 +1081,37 @@ void RenderingManager::present_display(tc_display* display) {
     if (width <= 0 || height <= 0) return;
 
     uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
+    // Backend-neutral composite target: when the surface exposes a
+    // tgfx2 TextureHandle we route through blit_to_texture / clear_texture
+    // (works on both OpenGL and Vulkan). Zero = legacy FBO path (GL only).
+    tgfx::TextureHandle display_color_tex{
+        tc_render_surface_get_tgfx_color_tex_id(surface)
+    };
 
-    // Clear display
-    graphics_->bind_framebuffer_id(display_fbo);
-    graphics_->set_viewport(0, 0, width, height);
-    graphics_->clear_color_depth({0.1f, 0.1f, 0.1f, 1.0f});
+    RenderEngine* engine = render_engine();
+    if (engine) {
+        engine->ensure_tgfx2();
+    }
+    tgfx::IRenderDevice* dev = engine ? engine->tgfx2_device() : nullptr;
+    if (!dev) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] present_display: tgfx2 device not available");
+        return;
+    }
+
+    if (display_color_tex) {
+        dev->clear_texture(
+            display_color_tex,
+            0.1f, 0.1f, 0.1f, 1.0f,
+            0, 0, width, height
+        );
+    } else {
+        dev->clear_external_target(
+            static_cast<uintptr_t>(display_fbo),
+            0.1f, 0.1f, 0.1f, 1.0f,
+            1.0f,
+            0, 0, width, height
+        );
+    }
 
     // Collect viewports sorted by depth
     std::vector<tc_viewport_handle> viewports;
@@ -1091,7 +1138,7 @@ void RenderingManager::present_display(tc_display* display) {
         if (!state) {
             state = get_viewport_state(viewport);
         }
-        if (!state || !state->has_output_fbo()) {
+        if (!state || !state->has_output()) {
             continue;
         }
 
@@ -1099,17 +1146,23 @@ void RenderingManager::present_display(tc_display* display) {
         int px, py, pw, ph;
         tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
 
-        // Get output FBO size
         int src_w = state->output_width;
         int src_h = state->output_height;
 
-        // Blit output_fbo → display_fbo
-        graphics_->blit_framebuffer_to_id(
-            *state->output_fbo,
-            display_fbo,
-            {0, 0, src_w, src_h},
-            {px, py, px + pw, py + ph}
-        );
+        // Blit the viewport's native color texture to display target.
+        if (display_color_tex) {
+            dev->blit_to_texture(
+                display_color_tex, state->output_color_tex,
+                0, 0, src_w, src_h,
+                px, py, pw, ph
+            );
+        } else {
+            dev->blit_to_external_target(
+                static_cast<uintptr_t>(display_fbo), state->output_color_tex,
+                0, 0, src_w, src_h,
+                px, py, pw, ph
+            );
+        }
     }
 
     // Swap buffers
@@ -1305,8 +1358,6 @@ void RenderingManager::shutdown() {
     // Release owned render engine
     owned_render_engine_.reset();
     render_engine_ = nullptr;
-
-    graphics_ = nullptr;
 }
 
 // ============================================================================

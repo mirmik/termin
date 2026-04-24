@@ -44,6 +44,7 @@ set(TERMIN_RENDER_SOURCES
     src/graph_data.cpp
     src/render_pipeline.cpp
     src/render_engine.cpp
+    src/tgfx2_bridge.cpp
     src/scene_pipeline_template.cpp
     src/shadow.cpp
     src/tc_project_settings.c
@@ -120,7 +121,13 @@ target_include_directories(termin_render
 
 target_compile_features(termin_render PUBLIC cxx_std_20)
 
-target_link_libraries(termin_render PUBLIC tcbase::termin_base tgfx::termin_graphics termin_scene::termin_scene termin_inspect::termin_inspect)
+target_link_libraries(termin_render PUBLIC
+    tcbase::termin_base
+    tgfx::termin_graphics
+    tgfx::termin_graphics2
+    termin_scene::termin_scene
+    termin_inspect::termin_inspect
+)
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(termin_render PRIVATE m)

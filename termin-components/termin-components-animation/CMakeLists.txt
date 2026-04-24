@@ -70,7 +70,7 @@ if(TERMIN_BUILD_PYTHON)
     find_package(nanobind CONFIG REQUIRED)
 
     nanobind_add_module(_components_animation_native NB_SHARED
-        ${CMAKE_CURRENT_LIST_DIR}/../../termin/cpp/termin/bindings/animation/animation_component_module.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/cpp/termin/bindings/animation/animation_component_module.cpp
     )
     target_include_directories(_components_animation_native PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -83,9 +83,9 @@ if(TERMIN_BUILD_PYTHON)
     )
     termin_set_rpath_python(_components_animation_native)
 
-    set(_py_dest lib/python/termin/visualization/animation)
+    set(_py_dest lib/python/termin/animation)
     if(TERMIN_COMPONENTS_ANIMATION_PYTHON_PREFIX)
-        set(_py_dest ${TERMIN_COMPONENTS_ANIMATION_PYTHON_PREFIX}/visualization/animation)
+        set(_py_dest ${TERMIN_COMPONENTS_ANIMATION_PYTHON_PREFIX}/animation)
     endif()
     install(TARGETS _components_animation_native DESTINATION ${_py_dest})
 endif()

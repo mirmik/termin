@@ -39,9 +39,6 @@ set(TGFX_C_SOURCES
 )
 
 set(TGFX_CXX_SOURCES
-    src/opengl/opengl_backend.cpp
-    src/opengl/opengl_backend_singleton.cpp
-    src/opengl/opengl_framebuffer.cpp
     src/tgfx_texture_handle.cpp
 )
 
@@ -74,16 +71,32 @@ termin_set_rpath_lib(termin_graphics)
 # --- termin_graphics2 (new backend-neutral API) ---
 set(TGFX2_SOURCES
     src/tgfx2/device_factory.cpp
+    src/tgfx2/font_atlas.cpp
+    src/tgfx2/text2d_renderer.cpp
+    src/tgfx2/text3d_renderer.cpp
     src/tgfx2/opengl/opengl_render_device.cpp
     src/tgfx2/opengl/opengl_command_list.cpp
     src/tgfx2/opengl/opengl_type_conversions.cpp
     src/tgfx2/pipeline_cache.cpp
     src/tgfx2/render_context.cpp
+    src/tgfx2/tc_shader_bridge.cpp
     src/tgfx2_gpu_ops.cpp
 )
 
 # --- Optional Vulkan backend ---
-option(TGFX2_ENABLE_VULKAN "Enable Vulkan backend for tgfx2" OFF)
+# Auto-enabled when the Vulkan SDK is available on the host. Downstream
+# packages (termin-display, termin-app) also auto-detect Vulkan and
+# expect termin_graphics2 to carry the Vulkan backend code — if this
+# option silently defaults to OFF on a Vulkan-capable host, libtermin_
+# graphics2.so ships without VulkanRenderDevice symbols and any
+# downstream link fails with "undefined reference to VulkanRenderDevice".
+find_package(Vulkan QUIET)
+if(Vulkan_FOUND)
+    set(_TGFX2_VULKAN_DEFAULT ON)
+else()
+    set(_TGFX2_VULKAN_DEFAULT OFF)
+endif()
+option(TGFX2_ENABLE_VULKAN "Enable Vulkan backend for tgfx2" ${_TGFX2_VULKAN_DEFAULT})
 
 if(TGFX2_ENABLE_VULKAN)
     find_package(Vulkan REQUIRED)
@@ -117,8 +130,13 @@ add_library(termin_graphics2 SHARED ${TGFX2_SOURCES})
 target_compile_definitions(termin_graphics2 PRIVATE TGFX2_EXPORTS)
 
 if(TGFX2_ENABLE_VULKAN)
-    target_compile_definitions(termin_graphics2 PUBLIC TGFX2_HAS_VULKAN)
-    target_link_libraries(termin_graphics2 PUBLIC Vulkan::Vulkan)
+    # PRIVATE on purpose: downstream consumers (termin-render,
+    # termin-engine, termin-app) only touch tgfx2 through IRenderDevice
+    # and never include tgfx2/vulkan/* headers. Keeping the Vulkan
+    # target and TGFX2_HAS_VULKAN internal stops the SDK install from
+    # requiring every consumer to `find_package(Vulkan)` themselves.
+    target_compile_definitions(termin_graphics2 PRIVATE TGFX2_HAS_VULKAN)
+    target_link_libraries(termin_graphics2 PRIVATE Vulkan::Vulkan)
     target_link_libraries(termin_graphics2 PRIVATE ${SHADERC_LIB})
     # VMA is header-only; link PRIVATE to avoid export issues
     target_include_directories(termin_graphics2 PRIVATE ${vma_SOURCE_DIR}/include)
@@ -131,6 +149,13 @@ endif()
 target_include_directories(termin_graphics2 PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+)
+
+# stb_truetype (vendored) — PRIVATE: only the font_atlas.cpp
+# implementation needs it; the public header keeps stb out of its
+# include surface by pimpl-wrapping stbtt_fontinfo.
+target_include_directories(termin_graphics2 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/third/stb
 )
 
 target_link_libraries(termin_graphics2 PUBLIC
@@ -216,8 +241,32 @@ if(BUILD_TGFX2_TESTS)
     # Vulkan smoke test (no GLFW needed — offscreen)
     if(TGFX2_ENABLE_VULKAN)
         add_executable(tgfx2_vulkan_smoke tests/test_tgfx2_vulkan_smoke.cpp)
-        target_link_libraries(tgfx2_vulkan_smoke PRIVATE termin_graphics2)
+        target_link_libraries(tgfx2_vulkan_smoke PRIVATE termin_graphics2 Vulkan::Vulkan)
         add_test(NAME tgfx2_vulkan_smoke COMMAND tgfx2_vulkan_smoke)
+
+        # On-screen Vulkan smoke test. SDL2 lookup: Ubuntu's SDL2
+        # ships `sdl2-config.cmake` (lowercase, non-standard) so we
+        # skip find_package and go straight to find_path/find_library.
+        set(SDL2_SMOKE_FOUND FALSE)
+        find_path(SDL2_SMOKE_INCLUDE_DIR SDL.h PATH_SUFFIXES SDL2)
+        find_library(SDL2_SMOKE_LIBRARY SDL2)
+        if(SDL2_SMOKE_INCLUDE_DIR AND SDL2_SMOKE_LIBRARY)
+            set(SDL2_SMOKE_FOUND TRUE)
+            message(STATUS "tgfx2 Vulkan window smoke: SDL2 at ${SDL2_SMOKE_LIBRARY}")
+        else()
+            message(STATUS "tgfx2 Vulkan window smoke: SDL2 not found; skipping")
+        endif()
+        if(SDL2_SMOKE_FOUND)
+            add_executable(tgfx2_vulkan_window tests/test_tgfx2_vulkan_window.cpp)
+            target_include_directories(tgfx2_vulkan_window PRIVATE ${SDL2_SMOKE_INCLUDE_DIR})
+            # TGFX2_HAS_VULKAN is PRIVATE on the lib (we don't want it
+            # leaking into downstream SDK consumers); re-add it here
+            # explicitly for the test translation unit.
+            target_compile_definitions(tgfx2_vulkan_window PRIVATE TGFX2_HAS_VULKAN)
+            target_link_libraries(tgfx2_vulkan_window
+                PRIVATE termin_graphics2 Vulkan::Vulkan ${SDL2_SMOKE_LIBRARY})
+            # Interactive; don't wire into ctest automatically.
+        endif()
     endif()
 endif()
 

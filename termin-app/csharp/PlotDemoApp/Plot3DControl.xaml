@@ -1,0 +1,8 @@
+<UserControl x:Class="PlotDemoApp.Plot3DControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:glWpf="clr-namespace:OpenTK.Wpf;assembly=GLWpfControl">
+    <Grid Background="Black">
+        <glWpf:GLWpfControl x:Name="GlControl"/>
+    </Grid>
+</UserControl>

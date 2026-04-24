@@ -49,6 +49,7 @@ static bool ensure_capacity(
         tc_gpu_slot* slots = (tc_gpu_slot*)new_array;
         for (uint32_t i = *capacity; i < new_cap; i++) {
             slots[i].version = -1;
+            slots[i].tgfx2_shader_version = -1;
         }
     } else if (item_size == sizeof(tc_gpu_mesh_data_slot)) {
         tc_gpu_mesh_data_slot* slots = (tc_gpu_mesh_data_slot*)new_array;
@@ -114,12 +115,6 @@ void tc_gpu_share_group_unref(tc_gpu_share_group* group) {
         for (uint32_t i = 0; i < group->texture_capacity; i++) {
             if (group->textures[i].gl_id != 0 && ops->texture_delete) {
                 ops->texture_delete(group->textures[i].gl_id);
-            }
-        }
-        // Delete shaders
-        for (uint32_t i = 0; i < group->shader_capacity; i++) {
-            if (group->shaders[i].gl_id != 0 && ops->shader_delete) {
-                ops->shader_delete(group->shaders[i].gl_id);
             }
         }
         // Delete mesh VBO/EBO

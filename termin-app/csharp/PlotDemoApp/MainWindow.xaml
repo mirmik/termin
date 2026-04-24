@@ -1,0 +1,35 @@
+<Window x:Class="PlotDemoApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="tcplot demos"
+        Width="520" Height="340"
+        Background="#181820"
+        Foreground="White"
+        WindowStartupLocation="CenterScreen">
+    <StackPanel Margin="24" VerticalAlignment="Center">
+        <TextBlock Text="tcplot WPF demos"
+                   FontSize="22"
+                   FontWeight="SemiBold"
+                   Foreground="White"
+                   Margin="0,0,0,16"/>
+        <Button x:Name="Btn3D"
+                Content="Open 3D demo (helix + scatter + surface)"
+                Padding="12,8"
+                Margin="0,0,0,8"
+                Click="OnOpen3D"/>
+        <Button x:Name="Btn2D"
+                Content="Open 2D demo (sine + scatter)"
+                Padding="12,8"
+                Margin="0,0,0,8"
+                Click="OnOpen2D"/>
+        <Button x:Name="BtnMulti2D"
+                Content="Open multi-panel 2D time-series demo"
+                Padding="12,8"
+                Margin="0,0,0,8"
+                Click="OnOpenMulti2D"/>
+        <Button x:Name="BtnScrollMulti2D"
+                Content="Open 20-panel scrollable 2D demo"
+                Padding="12,8"
+                Click="OnOpenScrollMulti2D"/>
+    </StackPanel>
+</Window>

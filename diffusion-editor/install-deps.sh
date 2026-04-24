@@ -41,6 +41,30 @@ echo "=== Installing termin-gui (tcgui) ==="
 $PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-gui"
 
 echo ""
+echo "=== Installing termin-inspect (transitive via termin-scene) ==="
+# termin.scene.__init__ pulls in termin.scene.python_component which
+# in turn needs termin.inspect.InspectField. The chain is forced by
+# the nanobind cross-module registration below.
+$PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-inspect"
+
+echo ""
+echo "=== Installing termin-scene (tc_scene_handle types) ==="
+# `termin.display._display_native` hard-imports `termin.scene._scene_native`
+# at nanobind init to resolve cross-module type references (tc_scene_handle
+# in viewport bindings). Without it `termin.display.__init__` fails
+# before `_platform_native` is reachable — we need termin-scene even
+# though diffusion-editor only uses BackendWindow.
+$PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-scene"
+
+echo ""
+echo "=== Installing termin-display (BackendWindow) ==="
+# BackendWindow replaces the old SDL+GL bootstrap in main.py; under
+# TERMIN_BACKEND=vulkan it acquires a VkSurfaceKHR and drives the
+# swapchain. Must be installed alongside tgfx so the process shares
+# a single IRenderDevice.
+$PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-display"
+
+echo ""
 echo "=== Installing diffusion-editor requirements ==="
 $PIP install --no-cache-dir --no-build-isolation -r requirements.txt
 

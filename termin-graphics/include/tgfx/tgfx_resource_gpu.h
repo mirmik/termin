@@ -25,6 +25,13 @@ typedef char* (*tgfx_shader_preprocess_fn)(const char* source, const char* sourc
 // Set shader preprocessor callback
 TGFX_API void tgfx_gpu_set_shader_preprocess(tgfx_shader_preprocess_fn fn);
 
+// Read the currently-set shader preprocessor callback (NULL if none).
+// Exposed so the tgfx2 OpenGL backend can reuse the same preprocessor
+// that the legacy path uses — that's where #include "lighting.glsl"
+// and friends get resolved. Without this, tgfx2-compiled shaders
+// would fail on any .shader that relies on includes.
+TGFX_API tgfx_shader_preprocess_fn tgfx_gpu_get_shader_preprocess(void);
+
 // ============================================================================
 // Texture GPU operations
 // ============================================================================
@@ -40,30 +47,6 @@ TGFX_API void tc_texture_delete_gpu(tc_texture* tex);
 
 // Check if texture needs GPU upload (version mismatch)
 TGFX_API bool tc_texture_needs_upload(const tc_texture* tex);
-
-// ============================================================================
-// Shader GPU operations
-// ============================================================================
-
-// Compile shader if not already compiled
-// Returns GPU program ID (0 on failure)
-TGFX_API uint32_t tc_shader_compile_gpu(tc_shader* shader);
-
-// Use shader program
-TGFX_API void tc_shader_use_gpu(tc_shader* shader);
-
-// Delete shader from GPU
-TGFX_API void tc_shader_delete_gpu(tc_shader* shader);
-
-// Uniform setters (shader must be in use)
-TGFX_API void tc_shader_set_int(tc_shader* shader, const char* name, int value);
-TGFX_API void tc_shader_set_float(tc_shader* shader, const char* name, float value);
-TGFX_API void tc_shader_set_vec2(tc_shader* shader, const char* name, float x, float y);
-TGFX_API void tc_shader_set_vec3(tc_shader* shader, const char* name, float x, float y, float z);
-TGFX_API void tc_shader_set_vec4(tc_shader* shader, const char* name, float x, float y, float z, float w);
-TGFX_API void tc_shader_set_mat4(tc_shader* shader, const char* name, const float* data, bool transpose);
-TGFX_API void tc_shader_set_mat4_array(tc_shader* shader, const char* name, const float* data, int count, bool transpose);
-TGFX_API void tc_shader_set_block_binding(tc_shader* shader, const char* block_name, int binding_point);
 
 // ============================================================================
 // Mesh GPU operations (OpenGL implementation)

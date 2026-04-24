@@ -10,7 +10,7 @@ from typing import Iterable, List, Optional, Set, TYPE_CHECKING
 import numpy as np
 
 from termin.mesh import TcMesh
-from tgfx import TcVertexLayout, TcAttribType, TcDrawMode
+from tmesh import TcVertexLayout, TcAttribType, TcDrawMode
 from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.render.render_context import RenderContext
 from termin._native.render import TcMaterial, TcRenderState
@@ -313,9 +313,6 @@ class LineRenderer(PythonComponent):
         mesh = self._get_mesh()
         if mesh is None or not mesh.is_valid:
             return
-
-        if not self._raw_lines and context.current_shader is not None:
-            context.current_shader.set_uniform_float("u_line_width", self._width)
 
         mesh.draw_gpu()
 

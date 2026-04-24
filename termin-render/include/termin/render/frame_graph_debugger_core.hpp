@@ -4,11 +4,15 @@
 #include <string>
 #include <vector>
 
-#include "tgfx/graphics_backend.hpp"
-#include "tgfx/handles.hpp"
 #include <tcbase/tc_log.hpp>
-#include <tgfx/tgfx_shader_handle.hpp>
+#include "tgfx2/enums.hpp"
+#include "tgfx2/handles.hpp"
 #include <termin/render/render_export.hpp>
+
+namespace tgfx {
+class RenderContext2;
+class IRenderDevice;
+}
 
 namespace termin {
 
@@ -30,32 +34,35 @@ struct HDRStats {
     float max_value = 0;
 };
 
-struct FBOInfo {
-    std::string type_name;
+// Lightweight descriptor shown in the debugger UI for a captured
+// tgfx2 texture. Fields match what the old FBOInfo exposed minus
+// anything that was FBO-specific (gl fbo id, filter state).
+struct TextureInfo {
     int width = 0;
     int height = 0;
     int samples = 0;
     bool is_msaa = false;
-    std::string format;
-    uint32_t fbo_id = 0;
-    std::string gl_format;
-    int gl_width = 0;
-    int gl_height = 0;
-    int gl_samples = 0;
-    std::string filter;
-    std::string gl_filter;
+    tgfx::PixelFormat format = tgfx::PixelFormat::RGBA8_UNorm;
+    std::string format_name;
 };
 
+// Owned tgfx2 color texture the debugger captures each frame; the
+// presenter samples it for its channel/HDR-highlight overlay and for
+// read_pixels-based stats. Created lazily through the same device
+// the host RenderContext2 draws with.
 class RENDER_API FrameGraphCapture {
 private:
-    FramebufferHandlePtr capture_fbo_;
-    int fbo_w_ = 0;
-    int fbo_h_ = 0;
-    std::string fbo_format_;
+    tgfx::IRenderDevice* device_ = nullptr;
+    tgfx::TextureHandle capture_tex_;
+    int width_ = 0;
+    int height_ = 0;
+    tgfx::PixelFormat format_ = tgfx::PixelFormat::RGBA8_UNorm;
     bool captured_ = false;
     CxxFramePass* target_pass_ = nullptr;
 
 public:
+    ~FrameGraphCapture();
+
     void set_target(CxxFramePass* pass) { target_pass_ = pass; }
     void clear_target() { target_pass_ = nullptr; }
     CxxFramePass* target() const { return target_pass_; }
@@ -64,46 +71,78 @@ public:
         return caller && caller == target_pass_;
     }
 
-    void capture(CxxFramePass* caller, FramebufferHandle* src, GraphicsBackend* graphics);
-    void capture_direct(FramebufferHandle* src, GraphicsBackend* graphics);
+    // Capture `src_tex` into an internal owned tgfx2 texture sized
+    // `width x height`. Reallocates on size / format mismatch, re-uses
+    // the texture otherwise. `ctx2->blit` performs the copy.
+    void capture_direct_via_ctx2(
+        tgfx::RenderContext2* ctx2,
+        tgfx::TextureHandle src_tex,
+        int width,
+        int height,
+        tgfx::PixelFormat format = tgfx::PixelFormat::RGBA8_UNorm
+    );
 
-    FramebufferHandle* capture_fbo() const { return capture_fbo_.get(); }
+    tgfx::TextureHandle capture_tex() const { return capture_tex_; }
+    int width() const { return width_; }
+    int height() const { return height_; }
+    tgfx::PixelFormat format() const { return format_; }
     bool has_capture() const { return captured_; }
     void reset_capture() { captured_ = false; }
 
 private:
-    void ensure_capture_fbo(FramebufferHandle* src, GraphicsBackend* graphics);
-    void do_blit(FramebufferHandle* src, GraphicsBackend* graphics);
+    void release();
+    void ensure_capture_tex(
+        tgfx::IRenderDevice& device,
+        int w, int h, tgfx::PixelFormat fmt
+    );
 };
 
+// Draws a captured tgfx2 texture into a target texture with a
+// channel-picker / HDR-highlight fragment shader. Target is a
+// tgfx::TextureHandle — either a native pool entry or an external
+// wrap of the debug window's default framebuffer.
 class RENDER_API FrameGraphPresenter {
 private:
-    TcShader shader_;
-    bool shader_ready_ = false;
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tgfx::ShaderHandle fs2_;
 
 public:
+    ~FrameGraphPresenter();
+
     void render(
-        GraphicsBackend* graphics,
-        FramebufferHandle* capture_fbo,
+        tgfx::RenderContext2* ctx2,
+        tgfx::TextureHandle capture_tex,
+        tgfx::TextureHandle target_tex,
+        int dst_x,
+        int dst_y,
         int dst_w,
         int dst_h,
         int channel_mode,
         bool highlight_hdr
     );
 
-    HDRStats compute_hdr_stats(GraphicsBackend* graphics, FramebufferHandle* fbo);
+    // HDR / depth readback helpers take a native tgfx2 texture and
+    // pull pixels through the device's read_texture_* primitives.
+    HDRStats compute_hdr_stats(
+        tgfx::IRenderDevice* device,
+        tgfx::TextureHandle tex
+    );
 
     std::vector<uint8_t> read_depth_normalized(
-        GraphicsBackend* graphics,
-        FramebufferHandle* fbo,
+        tgfx::IRenderDevice* device,
+        tgfx::TextureHandle tex,
         int* out_w,
         int* out_h
     );
 
-    static FBOInfo get_fbo_info(FramebufferHandle* fbo);
+    static TextureInfo get_texture_info(
+        tgfx::IRenderDevice* device,
+        tgfx::TextureHandle tex
+    );
 
 private:
-    void ensure_shader();
+    void ensure_fs(tgfx::IRenderDevice& device);
+    void release_tgfx2_resources();
 };
 
 class RENDER_API FrameGraphDebuggerCore {
@@ -111,7 +150,7 @@ public:
     FrameGraphCapture capture;
     FrameGraphPresenter presenter;
 
-    FramebufferHandle* capture_fbo() const { return capture.capture_fbo(); }
+    tgfx::TextureHandle capture_tex() const { return capture.capture_tex(); }
 };
 
 } // namespace termin

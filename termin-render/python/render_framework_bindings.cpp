@@ -12,6 +12,7 @@
 #include <termin/entity/entity.hpp>
 #include <termin/render/render_camera.hpp>
 #include <termin/render/frame_graph_debugger_core.hpp>
+#include <tgfx2/i_render_device.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/render_context.hpp>
 #include <termin/render/resource_spec.hpp>
@@ -19,7 +20,7 @@
 #include <termin/render/execute_context.hpp>
 #include <core/tc_component.h>
 
-#include <tgfx/graphics_backend.hpp>
+#include <tgfx2/render_context.hpp>
 
 #include <termin/tc_scene.hpp>
 
@@ -38,6 +39,21 @@ void bind_tc_render_target(nb::module_& m);
 namespace termin {
 
 void bind_render_framework(nb::module_& m) {
+    // Force-import _tgfx_native so that its nb::class_<tgfx::RenderContext2>
+    // and other tgfx2 handle registrations are live before we start
+    // binding properties that return those types. Without this, the
+    // first access of ctx.ctx2 from Python crashes with "Unable to
+    // convert function return value to a Python type!" — the global
+    // nanobind type map for RenderContext2 is still empty because
+    // _tgfx_native hasn't been loaded yet at that moment.
+    try {
+        nb::module_::import_("tgfx._tgfx_native");
+    } catch (const std::exception& e) {
+        // If tgfx isn't available (minimal builds), ctx2 property will
+        // degrade but everything else still works.
+        (void)e;
+    }
+
     nb::enum_<TextureFilter>(m, "TextureFilter")
         .value("LINEAR", TextureFilter::LINEAR)
         .value("NEAREST", TextureFilter::NEAREST);
@@ -222,38 +238,10 @@ void bind_render_framework(nb::module_& m) {
     nb::class_<FrameGraphResource>(m, "FrameGraphResource")
         .def("resource_type", &FrameGraphResource::resource_type);
 
-    auto dict_to_resource_map = [](nb::dict py_dict) -> ResourceMap {
-        ResourceMap result;
-        for (auto item : py_dict) {
-            std::string key = nb::cast<std::string>(nb::str(item.first));
-            nb::object val = nb::borrow<nb::object>(item.second);
-            if (!val.is_none()) {
-                try {
-                    result[key] = nb::cast<FramebufferHandle*>(val);
-                    continue;
-                } catch (const nb::cast_error&) {
-                }
-            }
-        }
-        return result;
-    };
-
     nb::class_<ExecuteContext>(m, "ExecuteContext")
         .def(nb::init<>())
-        .def("__init__", [dict_to_resource_map](ExecuteContext* self, nb::kwargs kwargs) {
+        .def("__init__", [](ExecuteContext* self, nb::kwargs kwargs) {
             new (self) ExecuteContext();
-            if (kwargs.contains("graphics")) {
-                nb::object g = nb::borrow<nb::object>(kwargs["graphics"]);
-                if (!g.is_none()) {
-                    self->graphics = nb::cast<GraphicsBackend*>(g);
-                }
-            }
-            if (kwargs.contains("reads_fbos")) {
-                self->reads_fbos = dict_to_resource_map(nb::cast<nb::dict>(kwargs["reads_fbos"]));
-            }
-            if (kwargs.contains("writes_fbos")) {
-                self->writes_fbos = dict_to_resource_map(nb::cast<nb::dict>(kwargs["writes_fbos"]));
-            }
             if (kwargs.contains("rect")) {
                 nb::tuple t = nb::cast<nb::tuple>(kwargs["rect"]);
                 self->rect.x = nb::cast<int>(t[0]);
@@ -290,36 +278,6 @@ void bind_render_framework(nb::module_& m) {
                 self->layer_mask = nb::cast<uint64_t>(kwargs["layer_mask"]);
             }
         })
-        .def_prop_rw("graphics",
-            [](const ExecuteContext& ctx) { return ctx.graphics; },
-            [](ExecuteContext& ctx, GraphicsBackend* g) { ctx.graphics = g; },
-            nb::rv_policy::reference)
-        .def_prop_rw("reads_fbos",
-            [](const ExecuteContext& ctx) -> nb::dict {
-                nb::dict result;
-                for (const auto& [key, val] : ctx.reads_fbos) {
-                    if (auto* fbo = dynamic_cast<FramebufferHandle*>(val)) {
-                        result[nb::str(key.c_str())] = nb::cast(fbo, nb::rv_policy::reference);
-                    }
-                }
-                return result;
-            },
-            [dict_to_resource_map](ExecuteContext& ctx, nb::dict py_dict) {
-                ctx.reads_fbos = dict_to_resource_map(py_dict);
-            })
-        .def_prop_rw("writes_fbos",
-            [](const ExecuteContext& ctx) -> nb::dict {
-                nb::dict result;
-                for (const auto& [key, val] : ctx.writes_fbos) {
-                    if (auto* fbo = dynamic_cast<FramebufferHandle*>(val)) {
-                        result[nb::str(key.c_str())] = nb::cast(fbo, nb::rv_policy::reference);
-                    }
-                }
-                return result;
-            },
-            [dict_to_resource_map](ExecuteContext& ctx, nb::dict py_dict) {
-                ctx.writes_fbos = dict_to_resource_map(py_dict);
-            })
         .def_prop_rw("camera",
             [](const ExecuteContext& ctx) -> RenderCamera* { return ctx.camera; },
             [](ExecuteContext& ctx, RenderCamera* camera) { ctx.camera = camera; },
@@ -342,7 +300,52 @@ void bind_render_framework(nb::module_& m) {
         .def_rw("rect", &ExecuteContext::rect)
         .def_rw("scene", &ExecuteContext::scene)
         .def_rw("lights", &ExecuteContext::lights)
-        .def_rw("layer_mask", &ExecuteContext::layer_mask);
+        .def_rw("layer_mask", &ExecuteContext::layer_mask)
+        // Stage 7: expose the tgfx2 RenderContext2 pointer so Python
+        // passes can open a ctx2 render pass, bind shaders/textures,
+        // and dispatch draws without going through the legacy
+        // GraphicsBackend. None if the frame was set up without tgfx2
+        // (e.g., TERMIN_DISABLE_TGFX2=1 escape hatch).
+        .def_prop_ro("ctx2",
+            [](const ExecuteContext& ctx) -> tgfx::RenderContext2* {
+                return ctx.ctx2;
+            },
+            nb::rv_policy::reference)
+        // Stage 8.3: tgfx2 texture maps for render pass inputs/outputs,
+        // parallel to reads_fbos/writes_fbos. New Python passes read from
+        // these directly and call ctx2 methods; no FBO wrapping.
+        .def_prop_ro("tex2_reads",
+            [](const ExecuteContext& ctx) -> nb::dict {
+                nb::dict result;
+                for (const auto& [key, val] : ctx.tex2_reads) {
+                    result[nb::str(key.c_str())] = nb::cast(val);
+                }
+                return result;
+            })
+        .def_prop_ro("tex2_writes",
+            [](const ExecuteContext& ctx) -> nb::dict {
+                nb::dict result;
+                for (const auto& [key, val] : ctx.tex2_writes) {
+                    result[nb::str(key.c_str())] = nb::cast(val);
+                }
+                return result;
+            })
+        .def_prop_ro("tex2_depth_reads",
+            [](const ExecuteContext& ctx) -> nb::dict {
+                nb::dict result;
+                for (const auto& [key, val] : ctx.tex2_depth_reads) {
+                    result[nb::str(key.c_str())] = nb::cast(val);
+                }
+                return result;
+            })
+        .def_prop_ro("tex2_depth_writes",
+            [](const ExecuteContext& ctx) -> nb::dict {
+                nb::dict result;
+                for (const auto& [key, val] : ctx.tex2_depth_writes) {
+                    result[nb::str(key.c_str())] = nb::cast(val);
+                }
+                return result;
+            });
 
     nb::class_<CxxFramePass>(m, "FramePass")
         .def_prop_rw("pass_name",
@@ -414,12 +417,6 @@ void bind_render_framework(nb::module_& m) {
             if (kwargs.contains("layer_mask")) {
                 self->layer_mask = nb::cast<uint64_t>(kwargs["layer_mask"]);
             }
-            if (kwargs.contains("graphics")) {
-                nb::object g_obj = nb::borrow<nb::object>(kwargs["graphics"]);
-                if (!g_obj.is_none()) {
-                    self->graphics = nb::cast<GraphicsBackend*>(g_obj);
-                }
-            }
             if (kwargs.contains("view")) {
                 nb::object v = nb::borrow<nb::object>(kwargs["view"]);
                 if (nb::isinstance<Mat44>(v)) {
@@ -469,10 +466,6 @@ void bind_render_framework(nb::module_& m) {
         .def_rw("phase", &RenderContext::phase)
         .def_rw("scene", &RenderContext::scene)
         .def_rw("layer_mask", &RenderContext::layer_mask)
-        .def_prop_rw("graphics",
-            [](const RenderContext& self) -> GraphicsBackend* { return self.graphics; },
-            [](RenderContext& self, GraphicsBackend* g) { self.graphics = g; },
-            nb::rv_policy::reference)
         .def_rw("view", &RenderContext::view)
         .def_rw("projection", &RenderContext::projection)
         .def_rw("model", &RenderContext::model)
@@ -498,21 +491,14 @@ void bind_render_framework(nb::module_& m) {
         .def_ro("hdr_percent", &HDRStats::hdr_percent)
         .def_ro("max_value", &HDRStats::max_value);
 
-    nb::class_<FBOInfo>(m, "FBOInfo")
+    nb::class_<TextureInfo>(m, "TextureInfo")
         .def(nb::init<>())
-        .def_ro("type_name", &FBOInfo::type_name)
-        .def_ro("width", &FBOInfo::width)
-        .def_ro("height", &FBOInfo::height)
-        .def_ro("samples", &FBOInfo::samples)
-        .def_ro("is_msaa", &FBOInfo::is_msaa)
-        .def_ro("format", &FBOInfo::format)
-        .def_ro("fbo_id", &FBOInfo::fbo_id)
-        .def_ro("gl_format", &FBOInfo::gl_format)
-        .def_ro("gl_width", &FBOInfo::gl_width)
-        .def_ro("gl_height", &FBOInfo::gl_height)
-        .def_ro("gl_samples", &FBOInfo::gl_samples)
-        .def_ro("filter", &FBOInfo::filter)
-        .def_ro("gl_filter", &FBOInfo::gl_filter);
+        .def_ro("width", &TextureInfo::width)
+        .def_ro("height", &TextureInfo::height)
+        .def_ro("samples", &TextureInfo::samples)
+        .def_ro("is_msaa", &TextureInfo::is_msaa)
+        .def_ro("format", &TextureInfo::format)
+        .def_ro("format_name", &TextureInfo::format_name);
 
     nb::class_<FrameGraphCapture>(m, "FrameGraphCapture")
         .def(nb::init<>())
@@ -520,30 +506,48 @@ void bind_render_framework(nb::module_& m) {
             self.set_target(pass);
         }, nb::arg("pass"), nb::rv_policy::reference)
         .def("clear_target", &FrameGraphCapture::clear_target)
-        .def("capture", &FrameGraphCapture::capture,
-             nb::arg("caller"), nb::arg("src"), nb::arg("graphics"))
-        .def("capture_direct", &FrameGraphCapture::capture_direct,
-             nb::arg("src"), nb::arg("graphics"))
+        .def("capture_direct_via_ctx2",
+             &FrameGraphCapture::capture_direct_via_ctx2,
+             nb::arg("ctx2"), nb::arg("src_tex"),
+             nb::arg("width"), nb::arg("height"),
+             nb::arg("format") = tgfx::PixelFormat::RGBA8_UNorm)
         .def("has_capture", &FrameGraphCapture::has_capture)
         .def("reset_capture", &FrameGraphCapture::reset_capture)
-        .def_prop_ro("capture_fbo", &FrameGraphCapture::capture_fbo,
-                     nb::rv_policy::reference);
+        .def_prop_ro("capture_tex", &FrameGraphCapture::capture_tex)
+        .def_prop_ro("width", &FrameGraphCapture::width)
+        .def_prop_ro("height", &FrameGraphCapture::height)
+        .def_prop_ro("format", &FrameGraphCapture::format);
 
     nb::class_<FrameGraphPresenter>(m, "FrameGraphPresenter")
         .def(nb::init<>())
         .def("render", &FrameGraphPresenter::render,
-             nb::arg("graphics"), nb::arg("capture_fbo"),
+             nb::arg("ctx2"), nb::arg("capture_tex"), nb::arg("target_tex"),
+             nb::arg("dst_x"), nb::arg("dst_y"),
              nb::arg("dst_w"), nb::arg("dst_h"),
              nb::arg("channel_mode"), nb::arg("highlight_hdr"))
         .def("compute_hdr_stats", &FrameGraphPresenter::compute_hdr_stats,
-             nb::arg("graphics"), nb::arg("fbo"))
-        .def_static("get_fbo_info", &FrameGraphPresenter::get_fbo_info,
-                     nb::arg("fbo"));
+             nb::arg("device"), nb::arg("tex"))
+        .def("read_depth_normalized",
+             [](FrameGraphPresenter& self, tgfx::IRenderDevice* device,
+                tgfx::TextureHandle tex) -> nb::object {
+                 int w = 0, h = 0;
+                 auto data = self.read_depth_normalized(device, tex, &w, &h);
+                 if (data.empty()) {
+                     return nb::none();
+                 }
+                 nb::bytes bytes_obj(
+                     reinterpret_cast<const char*>(data.data()),
+                     data.size());
+                 return nb::make_tuple(bytes_obj, w, h);
+             },
+             nb::arg("device"), nb::arg("tex"))
+        .def_static("get_texture_info",
+             &FrameGraphPresenter::get_texture_info,
+             nb::arg("device"), nb::arg("tex"));
 
     nb::class_<FrameGraphDebuggerCore>(m, "FrameGraphDebuggerCore")
         .def(nb::init<>())
-        .def_prop_ro("capture_fbo", &FrameGraphDebuggerCore::capture_fbo,
-                     nb::rv_policy::reference)
+        .def_prop_ro("capture_tex", &FrameGraphDebuggerCore::capture_tex)
         .def_prop_ro("capture", [](FrameGraphDebuggerCore& self) -> FrameGraphCapture& {
             return self.capture;
         }, nb::rv_policy::reference_internal)
@@ -561,7 +565,7 @@ NB_MODULE(_render_framework_native, m) {
     m.doc() = "Native render framework bindings";
 
     nb::module_::import_("tgfx._tgfx_native");
-    nb::module_::import_("termin.geombase._geom_native");
+    nb::module_::import_("tcbase._geom_native");
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.entity._entity_native");
     nb::module_::import_("termin.lighting._lighting_native");

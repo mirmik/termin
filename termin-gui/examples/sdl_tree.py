@@ -11,7 +11,6 @@ import ctypes
 import sdl2
 from sdl2 import video
 
-from tgfx import OpenGLGraphicsBackend
 from tcbase import Key, MouseButton, Mods
 
 from tcgui.widgets.ui import UI
@@ -351,7 +350,7 @@ def build_ui(graphics):
     layout.add_child(tree)
     root.add_child(layout)
 
-    ui = UI(graphics)
+    ui = UI()
     ui.root = root
     return ui
 
@@ -361,8 +360,6 @@ def build_ui(graphics):
 def main():
     window, gl_ctx = create_window("tcgui — Tree Demo", 700, 520)
 
-    graphics = OpenGLGraphicsBackend.get_instance()
-    graphics.ensure_ready()
 
     ui = build_ui(graphics)
 
@@ -405,11 +402,8 @@ def main():
             break
 
         vw, vh = get_drawable_size(window)
-        graphics.bind_framebuffer(None)
-        graphics.set_viewport(0, 0, vw, vh)
-        graphics.clear_color_depth(0.12, 0.12, 0.14, 1.0)
 
-        ui.render(vw, vh)
+        ui.render(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
 
         video.SDL_GL_SwapWindow(window)
 

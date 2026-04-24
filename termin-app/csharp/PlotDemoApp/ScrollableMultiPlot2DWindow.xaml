@@ -1,0 +1,33 @@
+<Window x:Class="PlotDemoApp.ScrollableMultiPlot2DWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:PlotDemoApp"
+        Title="tcplot — 20 virtualised panels, WPF scrollbar"
+        Width="1100" Height="700"
+        Background="#181820"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <local:MultiPlot2DControl x:Name="Plot"
+                                  Grid.Column="0"
+                                  PanelCount="20"
+                                  PanelHeight="160"
+                                  MsaaSamples="4"
+                                  FontPath="C:\Windows\Fonts\segoeui.ttf"/>
+
+        <ScrollBar x:Name="Scroll"
+                   Grid.Column="1"
+                   Orientation="Vertical"
+                   Width="16"
+                   Minimum="0"
+                   Maximum="{Binding ElementName=Plot, Path=MaxScroll, Mode=OneWay}"
+                   ViewportSize="{Binding ElementName=Plot, Path=ActualHeight, Mode=OneWay}"
+                   Value="{Binding ElementName=Plot, Path=ScrollOffset, Mode=TwoWay}"
+                   SmallChange="40"
+                   LargeChange="160"/>
+    </Grid>
+</Window>

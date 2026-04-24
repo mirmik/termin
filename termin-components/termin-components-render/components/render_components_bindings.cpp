@@ -57,23 +57,6 @@ nb::object init_pass_from_deserialize(T* pass, const char* type_name) {
     return wrapper;
 }
 
-static FBOMap dict_to_fbo_map(nb::dict src) {
-    FBOMap result;
-    for (auto item : src) {
-        std::string key = nb::cast<std::string>(nb::str(item.first));
-        nb::object val = nb::borrow<nb::object>(item.second);
-        if (val.is_none()) {
-            continue;
-        }
-        try {
-            result[key] = nb::cast<FramebufferHandle*>(val);
-        } catch (const nb::cast_error&) {
-            tc::Log::error("[render_components] Expected FBO for key '%s'", key.c_str());
-        }
-    }
-    return result;
-}
-
 static Rect4i tuple_to_rect(nb::tuple rect_py) {
     Rect4i rect;
     rect.x = nb::cast<int>(rect_py[0]);
@@ -225,9 +208,10 @@ NB_MODULE(_components_render_native, m) {
             int vp_w = std::get<2>(rect);
             int vp_h = std::get<3>(rect);
             auto [origin, direction] = c.screen_point_to_ray(x, y, vp_x, vp_y, vp_w, vp_h);
-            nb::module_ geombase = nb::module_::import_("termin.geombase");
-            nb::object Ray3 = geombase.attr("Ray3");
-            nb::object Vec3 = geombase.attr("Vec3");
+            nb::module_ geom = nb::module_::import_("tcbase._geom_native");
+            nb::module_ colliders = nb::module_::import_("termin.colliders._colliders_native");
+            nb::object Vec3 = geom.attr("Vec3");
+            nb::object Ray3 = colliders.attr("Ray3");
             nb::object py_origin = Vec3(origin.x, origin.y, origin.z);
             nb::object py_direction = Vec3(direction.x, direction.y, direction.z);
             return Ray3(py_origin, py_direction);
@@ -419,9 +403,6 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("output_res", &DepthPass::output_res)
         .def_rw("camera_name", &DepthPass::camera_name)
         .def("get_internal_symbols", &DepthPass::get_internal_symbols)
-        .def("execute_with_data", [](DepthPass& self, GraphicsBackend* graphics, nb::dict reads_fbos_py, nb::dict writes_fbos_py, nb::tuple rect_py, nb::object scene_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py, float near_plane, float far_plane, uint64_t layer_mask) {
-            self.execute_with_data(graphics, dict_to_fbo_map(reads_fbos_py), dict_to_fbo_map(writes_fbos_py), tuple_to_rect(rect_py), object_to_scene_handle(scene_py), ndarray_to_mat44f(view_py), ndarray_to_mat44f(projection_py), near_plane, far_plane, layer_mask);
-        }, nb::arg("graphics"), nb::arg("reads_fbos"), nb::arg("writes_fbos"), nb::arg("rect"), nb::arg("scene"), nb::arg("view"), nb::arg("projection"), nb::arg("near_plane"), nb::arg("far_plane"), nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "Depth";
@@ -465,9 +446,6 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("camera_name", &NormalPass::camera_name)
         .def("get_resource_specs", &NormalPass::get_resource_specs)
         .def("get_internal_symbols", &NormalPass::get_internal_symbols)
-        .def("execute_with_data", [](NormalPass& self, GraphicsBackend* graphics, nb::dict reads_fbos_py, nb::dict writes_fbos_py, nb::tuple rect_py, nb::object scene_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> view_py, nb::ndarray<nb::numpy, float, nb::shape<4, 4>> projection_py, uint64_t layer_mask) {
-            self.execute_with_data(graphics, dict_to_fbo_map(reads_fbos_py), dict_to_fbo_map(writes_fbos_py), tuple_to_rect(rect_py), object_to_scene_handle(scene_py), ndarray_to_mat44f(view_py), ndarray_to_mat44f(projection_py), layer_mask);
-        }, nb::arg("graphics"), nb::arg("reads_fbos"), nb::arg("writes_fbos"), nb::arg("rect"), nb::arg("scene"), nb::arg("view"), nb::arg("projection"), nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "Normal";
@@ -548,14 +526,11 @@ NB_MODULE(_components_render_native, m) {
         .def("remove_resource", &MaterialPass::remove_resource,
             nb::arg("resource_name"))
         .def("get_internal_symbols", &MaterialPass::get_internal_symbols)
-        .def("execute_with_data", [](MaterialPass& self, GraphicsBackend* graphics, nb::dict reads_fbos_py, nb::dict writes_fbos_py, nb::tuple rect_py) {
+        .def("execute_with_data", [](MaterialPass& self, nb::tuple rect_py) {
             ExecuteContext ctx;
-            ctx.graphics = graphics;
-            ctx.reads_fbos = dict_to_fbo_map(reads_fbos_py);
-            ctx.writes_fbos = dict_to_fbo_map(writes_fbos_py);
             ctx.rect = tuple_to_rect(rect_py);
             self.execute(ctx);
-        }, nb::arg("graphics"), nb::arg("reads_fbos"), nb::arg("writes_fbos"), nb::arg("rect"))
+        }, nb::arg("rect"))
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "MaterialPass";

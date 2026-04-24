@@ -8,22 +8,15 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    module_names = ["_colliders_native", "_collision_native"]
-    upstream_packages = {
-        "tcbase": "libtermin_base",
-        "termin_nanobind": "libnanobind",
-        "termin.inspect": "libtermin_inspect",
-        "termin.scene": "libtermin_scene",
-    }
-    bundle_includes = True
+    module_names = ["_colliders_native", "_collision_native", "_components_collision_native"]
     source_dir = _DIR
 
 
 setup(
     name="termin-collision",
-    version="0.1.0",
+    version=BuildExt.compute_local_version("0.1.0"),
     license="MIT",
-    description="Collision and collider system with Python bindings",
+    description="Collision and collider Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.8",
@@ -32,20 +25,10 @@ setup(
         "termin.colliders": "python/termin/colliders",
         "termin.collision": "python/termin/collision",
     },
-    install_requires=["tcbase", "termin-inspect", "termin-scene", "termin-nanobind"],
-    package_data={
-        "termin.colliders": [
-            "include/**/*.h",
-            "include/**/*.hpp",
-            "lib/*.so*",
-            "lib/cmake/**/*",
-            "*.dll",
-            "lib/*.dll",
-            "lib/*.lib",
-        ],
-    },
+    install_requires=["termin-nanobind"],
     ext_modules=[
         Extension("termin.colliders._colliders_native", sources=[]),
+        Extension("termin.colliders._components_collision_native", sources=[]),
         Extension("termin.collision._collision_native", sources=[]),
     ],
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},

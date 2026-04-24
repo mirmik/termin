@@ -2,7 +2,7 @@
 #include "tgfx2/opengl/opengl_render_device.hpp"
 #include "tgfx2/opengl/opengl_type_conversions.hpp"
 
-namespace tgfx2 {
+namespace tgfx {
 
 OpenGLCommandList::OpenGLCommandList(OpenGLRenderDevice& device)
     : device_(device) {}
@@ -14,7 +14,12 @@ OpenGLCommandList::~OpenGLCommandList() {
 }
 
 void OpenGLCommandList::begin() {
-    // Nothing to do for immediate mode
+    // Reset the device's push constants ring buffer offset. This is
+    // conceptually "start of a new command recording" — we own the
+    // ring for the duration of this command list's execution.
+    device_.push_constants_reset_frame();
+    pending_push_offset_ = 0;
+    pending_push_size_ = 0;
 }
 
 void OpenGLCommandList::end() {
@@ -144,32 +149,46 @@ void OpenGLCommandList::setup_vao_for_pipeline(GLPipeline* pipeline) {
     glGenVertexArrays(1, &current_vao_);
     glBindVertexArray(current_vao_);
 
-    // Configure vertex attributes from layout (buffers bound later via bind_vertex_buffer)
+    // Enable the attribute slots that the pipeline expects. We must NOT
+    // call glVertexAttribPointer here: in the OpenGL core profile calling
+    // that function without a bound GL_ARRAY_BUFFER raises
+    // GL_INVALID_OPERATION and has no effect. bind_vertex_buffer() runs
+    // after this with the VBO already bound and performs the actual
+    // attribute-pointer configuration.
     for (const auto& layout : pipeline->desc.vertex_layouts) {
         for (const auto& attr : layout.attributes) {
             glEnableVertexAttribArray(attr.location);
-
-            auto gl_type = gl::vertex_format_gl_type(attr.format);
-            auto count = gl::vertex_format_component_count(attr.format);
-
-            if (gl::vertex_format_is_integer(attr.format)) {
-                glVertexAttribIPointer(
-                    attr.location, count, gl_type,
-                    layout.stride,
-                    reinterpret_cast<const void*>(static_cast<uintptr_t>(attr.offset)));
-            } else {
-                glVertexAttribPointer(
-                    attr.location, count, gl_type,
-                    gl::vertex_format_is_normalized(attr.format) ? GL_TRUE : GL_FALSE,
-                    layout.stride,
-                    reinterpret_cast<const void*>(static_cast<uintptr_t>(attr.offset)));
-            }
-
             if (layout.per_instance) {
                 glVertexAttribDivisor(attr.location, 1);
             }
         }
     }
+}
+
+// --- Push constants ---
+
+void OpenGLCommandList::set_push_constants(const void* data, uint32_t size) {
+    if (!data || size == 0) {
+        pending_push_size_ = 0;
+        return;
+    }
+    GLintptr offset = device_.push_constants_write(data, size);
+    if (offset < 0) {
+        // write failed or payload too large — skip binding, draw will
+        // use whatever was previously bound (or nothing).
+        pending_push_size_ = 0;
+        return;
+    }
+    pending_push_offset_ = offset;
+    pending_push_size_ = static_cast<GLsizeiptr>(size);
+}
+
+void OpenGLCommandList::apply_pending_push_constants() {
+    if (pending_push_size_ == 0) return;
+    GLuint ubo = device_.push_constants_ring_buffer();
+    if (ubo == 0) return;
+    glBindBufferRange(GL_UNIFORM_BUFFER, TGFX2_PUSH_CONSTANTS_BINDING, ubo,
+                      pending_push_offset_, pending_push_size_);
 }
 
 // --- Resource binding ---
@@ -274,11 +293,13 @@ void OpenGLCommandList::bind_index_buffer(BufferHandle buffer, IndexType type, u
 
 void OpenGLCommandList::draw(uint32_t vertex_count, uint32_t first_vertex) {
     if (current_vao_) glBindVertexArray(current_vao_);
+    apply_pending_push_constants();
     glDrawArrays(current_topology_, first_vertex, vertex_count);
 }
 
 void OpenGLCommandList::draw_indexed(uint32_t index_count, uint32_t first_index, int32_t vertex_offset) {
     if (current_vao_) glBindVertexArray(current_vao_);
+    apply_pending_push_constants();
 
     auto index_size = (current_index_type_ == GL_UNSIGNED_SHORT) ? 2u : 4u;
     auto byte_offset = current_index_offset_ + first_index * index_size;
@@ -343,15 +364,23 @@ void OpenGLCommandList::copy_texture(TextureHandle src, TextureHandle dst) {
 
 void OpenGLCommandList::set_viewport(int x, int y, int width, int height) {
     glViewport(x, y, width, height);
+    cached_viewport_height_ = height;
 }
 
 void OpenGLCommandList::set_scissor(int x, int y, int width, int height) {
     if (width == 0 && height == 0) {
         glDisable(GL_SCISSOR_TEST);
     } else {
+        // Backend-neutral contract: caller passes top-left-origin
+        // coords (matching Vulkan framebuffer space). glScissor wants
+        // bottom-left-origin — flip using the cached viewport height.
+        // Without this flip a TextInput clip rect near the top of the
+        // widget gets applied near the bottom of the framebuffer on
+        // Vulkan vs. OpenGL — text never shows, edges crop wrong.
+        int y_flipped = cached_viewport_height_ - (y + height);
         glEnable(GL_SCISSOR_TEST);
-        glScissor(x, y, width, height);
+        glScissor(x, y_flipped, width, height);
     }
 }
 
-} // namespace tgfx2
+} // namespace tgfx

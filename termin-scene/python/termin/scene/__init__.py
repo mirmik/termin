@@ -1,7 +1,7 @@
 # termin.scene - core scene types
-from termin import _dll_setup  # noqa: F401
+from termin_nanobind.runtime import preload_sdk_libs
 
-_dll_setup.extend_package_path(__path__, "scene")
+preload_sdk_libs("termin_scene")
 
 from termin.scene._scene_native import (
     Entity,

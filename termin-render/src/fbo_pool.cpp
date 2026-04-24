@@ -1,108 +1,136 @@
 // fbo_pool.cpp - FBO pool implementation
 #include "termin/render/fbo_pool.hpp"
 
+#include "tgfx2/descriptors.hpp"
+#include "tgfx2/i_render_device.hpp"
+#include "tgfx2/opengl/opengl_render_device.hpp"
+
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
 
-FramebufferHandle* FBOPool::ensure(
-    GraphicsBackend* graphics,
+namespace {
+
+// Destroy the owned tgfx2 textures attached to an entry.
+void release_tgfx2_wrappers(FBOPoolEntry& entry) {
+    if (entry.native_device) {
+        if (entry.color_tgfx2) {
+            entry.native_device->destroy(entry.color_tgfx2);
+        }
+        if (entry.depth_tgfx2) {
+            entry.native_device->destroy(entry.depth_tgfx2);
+        }
+    }
+    entry.color_tgfx2 = {};
+    entry.depth_tgfx2 = {};
+    entry.native_device = nullptr;
+}
+
+} // anonymous namespace
+
+bool FBOPool::ensure_native(
+    tgfx::IRenderDevice& device,
     const std::string& key,
     int width,
     int height,
-    int samples,
-    const std::string& format,
-    TextureFilter filter
+    tgfx::PixelFormat color_format,
+    bool has_depth,
+    tgfx::PixelFormat depth_format,
+    int samples
 ) {
-    for (auto& entry : entries) {
-        if (entry.key == key) {
-            bool needs_recreate = (entry.samples != samples) ||
-                                  (entry.format != format) ||
-                                  (entry.filter != filter);
-
-            if (needs_recreate && entry.fbo && !entry.external) {
-                auto new_fbo = graphics->create_framebuffer(width, height, samples, format, filter);
-                if (new_fbo) {
-                    entry.fbo = std::move(new_fbo);
-                    entry.width = width;
-                    entry.height = height;
-                    entry.samples = samples;
-                    entry.format = format;
-                    entry.filter = filter;
-                }
-                return entry.fbo.get();
-            }
-
-            if (entry.fbo && (entry.width != width || entry.height != height)) {
-                entry.fbo->resize(width, height);
-                entry.width = width;
-                entry.height = height;
-            }
-            return entry.fbo.get();
+    auto alloc_textures = [&](FBOPoolEntry& entry) {
+        tgfx::TextureDesc cdesc;
+        cdesc.width = static_cast<uint32_t>(width);
+        cdesc.height = static_cast<uint32_t>(height);
+        cdesc.format = color_format;
+        cdesc.sample_count = static_cast<uint32_t>(samples);
+        cdesc.usage = tgfx::TextureUsage::Sampled |
+                      tgfx::TextureUsage::ColorAttachment;
+        entry.color_tgfx2 = device.create_texture(cdesc);
+        if (has_depth) {
+            tgfx::TextureDesc ddesc;
+            ddesc.width = static_cast<uint32_t>(width);
+            ddesc.height = static_cast<uint32_t>(height);
+            ddesc.format = depth_format;
+            ddesc.sample_count = static_cast<uint32_t>(samples);
+            ddesc.usage = tgfx::TextureUsage::Sampled |
+                          tgfx::TextureUsage::DepthStencilAttachment;
+            entry.depth_tgfx2 = device.create_texture(ddesc);
         }
-    }
+    };
 
-    if (!graphics) {
-        tc::Log::error("FBOPool::ensure: graphics is null");
-        return nullptr;
-    }
+    for (auto& entry : entries) {
+        if (entry.key != key) continue;
 
-    auto fbo = graphics->create_framebuffer(width, height, samples, format, filter);
-    if (!fbo) {
-        tc::Log::error("FBOPool::ensure: failed to create framebuffer '%s'", key.c_str());
-        return nullptr;
+        bool needs_recreate = entry.native_device != &device ||
+                              entry.width != width ||
+                              entry.height != height ||
+                              entry.samples != samples ||
+                              entry.color_format != color_format ||
+                              entry.has_depth != has_depth ||
+                              (has_depth && entry.depth_format != depth_format);
+        if (!needs_recreate) {
+            return true;
+        }
+        release_tgfx2_wrappers(entry);
+        // The GL textures we just destroyed may have their gl_ids
+        // immediately reused by create_texture below. Any FBO the
+        // device cached keyed on the old gl_id would then point at
+        // fresh attachments whose size/format may differ — silent
+        // black-screen territory. Dump the whole cache here so
+        // begin_pass rebuilds FBOs against the new textures.
+        if (auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device)) {
+            gl_dev->invalidate_fbo_cache();
+        }
+        entry.native_device = &device;
+        entry.width = width;
+        entry.height = height;
+        entry.samples = samples;
+        entry.color_format = color_format;
+        entry.depth_format = depth_format;
+        entry.has_depth = has_depth;
+        alloc_textures(entry);
+        return true;
     }
-
-    FramebufferHandle* ptr = fbo.get();
 
     FBOPoolEntry entry;
     entry.key = key;
-    entry.fbo = std::move(fbo);
+    entry.native_device = &device;
     entry.width = width;
     entry.height = height;
     entry.samples = samples;
-    entry.format = format;
-    entry.filter = filter;
-    entry.external = false;
+    entry.color_format = color_format;
+    entry.depth_format = depth_format;
+    entry.has_depth = has_depth;
+    alloc_textures(entry);
     entries.push_back(std::move(entry));
-
-    return ptr;
+    return true;
 }
 
-FramebufferHandle* FBOPool::get(const std::string& key) {
-    for (auto& entry : entries) {
-        if (entry.key == key) {
-            return entry.fbo.get();
-        }
+tgfx::TextureHandle FBOPool::get_color_tgfx2(const std::string& key) const {
+    for (const auto& entry : entries) {
+        if (entry.key == key) return entry.color_tgfx2;
     }
-
     auto alias_it = alias_to_canonical.find(key);
     if (alias_it != alias_to_canonical.end()) {
-        for (auto& entry : entries) {
-            if (entry.key == alias_it->second) {
-                return entry.fbo.get();
-            }
+        for (const auto& entry : entries) {
+            if (entry.key == alias_it->second) return entry.color_tgfx2;
         }
     }
-    return nullptr;
+    return {};
 }
 
-void FBOPool::set(const std::string& key, FramebufferHandle* fbo) {
-    (void) fbo;
-
-    for (auto& entry : entries) {
-        if (entry.key == key) {
-            entry.fbo.reset();
-            entry.external = true;
-            return;
+tgfx::TextureHandle FBOPool::get_depth_tgfx2(const std::string& key) const {
+    for (const auto& entry : entries) {
+        if (entry.key == key) return entry.depth_tgfx2;
+    }
+    auto alias_it = alias_to_canonical.find(key);
+    if (alias_it != alias_to_canonical.end()) {
+        for (const auto& entry : entries) {
+            if (entry.key == alias_it->second) return entry.depth_tgfx2;
         }
     }
-
-    FBOPoolEntry entry;
-    entry.key = key;
-    entry.fbo.reset();
-    entry.external = true;
-    entries.push_back(std::move(entry));
+    return {};
 }
 
 void FBOPool::add_alias(const std::string& alias, const std::string& canonical) {
@@ -113,6 +141,9 @@ void FBOPool::add_alias(const std::string& alias, const std::string& canonical) 
 }
 
 void FBOPool::clear() {
+    for (auto& entry : entries) {
+        release_tgfx2_wrappers(entry);
+    }
     entries.clear();
     alias_to_canonical.clear();
 }

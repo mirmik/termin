@@ -21,9 +21,10 @@ public static class TerminCore
     /// <summary>
     /// Full initialization: core registries + inspect system + kind handlers.
     /// Call this instead of Init() to enable serialization/deserialization and SetField.
-    /// Exported from entity_lib.dll.
+    /// Exported from termin_inspect.dll (moved from entity_lib during
+    /// the inspect-lib split).
     /// </summary>
-    [DllImport("entity_lib", EntryPoint = "tc_init_full")]
+    [DllImport("termin_inspect", EntryPoint = "tc_init_full")]
     public static extern void InitFull();
 
     [DllImport(DLL, EntryPoint = "tc_shutdown")]
@@ -370,27 +371,6 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_shader_get")]
     public static extern IntPtr ShaderGet(TcShaderHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_shader_compile_gpu")]
-    public static extern uint ShaderCompileGpu(IntPtr shader);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_use_gpu")]
-    public static extern void ShaderUseGpu(IntPtr shader);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_int")]
-    public static extern void ShaderSetInt(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, int value);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_float")]
-    public static extern void ShaderSetFloat(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float value);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_vec3")]
-    public static extern void ShaderSetVec3(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float x, float y, float z);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_vec4")]
-    public static extern void ShaderSetVec4(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float x, float y, float z, float w);
-
-    [DllImport(DLL, EntryPoint = "tc_shader_set_mat4")]
-    public static extern void ShaderSetMat4(IntPtr shader, [MarshalAs(UnmanagedType.LPStr)] string name, float[] data, [MarshalAs(UnmanagedType.U1)] bool transpose);
-
     // ========================================================================
     // Material Registry
     // ========================================================================
@@ -419,9 +399,11 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_material_phase_make_transparent")]
     public static extern void MaterialPhaseMakeTransparent(IntPtr phase);
 
-    [DllImport(DLL, EntryPoint = "tc_material_phase_apply_gpu")]
-    [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool MaterialPhaseApplyGpu(IntPtr phase);
+    // Stage 8.2: tc_material_phase_apply_gpu removed — legacy glUniform
+    // dispatch path. Materials now go through the std140 UBO path
+    // (apply_material_phase_ubo_gl C-API callback) at pass execution
+    // time. If C# callers ever need this, add a tgfx2-native entry
+    // point that opens a ctx2 pass; don't revive the old one.
 
     // ========================================================================
     // Component Registry
