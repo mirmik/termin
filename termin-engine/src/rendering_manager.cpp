@@ -26,10 +26,15 @@ extern "C" {
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_render_target.h"
-#include "termin/render/tgfx2_bridge.hpp"
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_inspect_pass_adapter.h"
 }
+
+// C++ header — must NOT be inside the extern "C" block above; otherwise
+// `termin::wrap_tc_texture_as_tgfx2` would be declared as a C symbol on
+// the call-site, and the C++-mangled definition in libtermin_render
+// wouldn't match at link time.
+#include "termin/render/tgfx2_bridge.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -690,10 +695,27 @@ void RenderingManager::render_all_offscreen() {
         make_current_callback_();
     }
 
-    // Set offscreen GPU context (lazy-create)
-    if (!offscreen_gpu_context_) {
-        offscreen_gpu_context_ = tc_gpu_context_new(0, NULL);
+    // Set offscreen GPU context (lazy-create). OpenGL tc_texture wrapping
+    // uses legacy share-group slots; render and present must therefore
+    // use the same share-group key or present will wrap a fresh, blank
+    // texture instead of the one rendered offscreen.
+    uintptr_t share_group_key = 0;
+    for (tc_display* display : displays_) {
+        tc_render_surface* surface = tc_display_get_surface(display);
+        if (surface) {
+            share_group_key = tc_render_surface_share_group_key(surface);
+            break;
+        }
+    }
+    if (!offscreen_gpu_context_ || offscreen_share_group_key_ != share_group_key) {
+        if (offscreen_gpu_context_) {
+            tc_gpu_context_free(offscreen_gpu_context_);
+        }
+        tc_gpu_share_group* group = tc_gpu_share_group_get_or_create(share_group_key);
+        offscreen_gpu_context_ = tc_gpu_context_new(0, group);
+        tc_gpu_share_group_unref(group);
         tc_gpu_context_set_name(offscreen_gpu_context_, "offscreen");
+        offscreen_share_group_key_ = share_group_key;
     }
     tc_gpu_set_context(offscreen_gpu_context_);
 
@@ -1154,17 +1176,32 @@ void RenderingManager::present_display(tc_display* display) {
 
     // Blit viewports
     for (tc_viewport_handle viewport : viewports) {
-        // Get render state from viewport's render target
         tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
-        ViewportRenderState* state = nullptr;
+
+        tgfx::TextureHandle src_color{};
+        int src_w = 0, src_h = 0;
+
         if (tc_render_target_handle_valid(rt)) {
-            state = get_render_target_state(rt);
+            // RT-owned tc_texture (Phase 4). The render path has already
+            // ensure_textures'd these and rendered into them; here we
+            // just wrap them into a tgfx2 handle for the blit.
+            src_color = wrap_tc_texture_as_tgfx2(
+                *dev, tc_render_target_get_color_texture(rt));
+            src_w = tc_render_target_get_width(rt);
+            src_h = tc_render_target_get_height(rt);
+        } else {
+            // Legacy non-RT viewport: ViewportRenderState still owns
+            // its tgfx2 textures.
+            ViewportRenderState* state = get_viewport_state(viewport);
+            if (!state || !state->has_output()) {
+                continue;
+            }
+            src_color = state->output_color_tex;
+            src_w = state->output_width;
+            src_h = state->output_height;
         }
-        // Fallback to viewport state (for legacy/transition)
-        if (!state) {
-            state = get_viewport_state(viewport);
-        }
-        if (!state || !state->has_output()) {
+
+        if (!src_color || src_w == 0 || src_h == 0) {
             continue;
         }
 
@@ -1172,19 +1209,16 @@ void RenderingManager::present_display(tc_display* display) {
         int px, py, pw, ph;
         tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
 
-        int src_w = state->output_width;
-        int src_h = state->output_height;
-
         // Blit the viewport's native color texture to display target.
         if (display_color_tex) {
             dev->blit_to_texture(
-                display_color_tex, state->output_color_tex,
+                display_color_tex, src_color,
                 0, 0, src_w, src_h,
                 px, py, pw, ph
             );
         } else {
             dev->blit_to_external_target(
-                static_cast<uintptr_t>(display_fbo), state->output_color_tex,
+                static_cast<uintptr_t>(display_fbo), src_color,
                 0, 0, src_w, src_h,
                 px, py, pw, ph
             );
