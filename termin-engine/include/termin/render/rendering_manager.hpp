@@ -290,6 +290,7 @@ private:
 
     // GPU context for offscreen rendering (push model)
     tc_gpu_context* offscreen_gpu_context_ = nullptr;
+    uintptr_t offscreen_share_group_key_ = 0;
 
     // Factory for creating displays on demand
     DisplayFactory display_factory_;
