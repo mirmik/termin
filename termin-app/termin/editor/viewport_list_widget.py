@@ -62,6 +62,10 @@ class RenderTargetItem(QStandardItem):
         super().__init__(name)
         self.render_target = render_target
         self.setEditable(False)
+        # Drag-source: dropped onto a material texture slot, this binds the
+        # RT's color channel as the slot's source. See drag_drop.py and
+        # MaterialInspector._on_render_target_dropped.
+        self.setFlags(self.flags() | Qt.ItemFlag.ItemIsDragEnabled)
 
 
 class RenderTargetGroupItem(QStandardItem):
@@ -70,6 +74,37 @@ class RenderTargetGroupItem(QStandardItem):
     def __init__(self):
         super().__init__("Render Targets")
         self.setEditable(False)
+
+
+class _ViewportListModel(QStandardItemModel):
+    """Standard model with RT-ref drag payload for RenderTargetItem rows.
+
+    Default QStandardItemModel.mimeData encodes its own internal format,
+    which the material inspector can't consume. Override to emit
+    RENDER_TARGET_REF when a RenderTargetItem is dragged.
+    """
+
+    def mimeTypes(self):
+        from termin.editor.drag_drop import EditorMimeTypes
+        types = list(super().mimeTypes())
+        if EditorMimeTypes.RENDER_TARGET_REF not in types:
+            types.append(EditorMimeTypes.RENDER_TARGET_REF)
+        return types
+
+    def mimeData(self, indexes):
+        from termin.editor.drag_drop import (
+            create_render_target_ref_mime_data,
+        )
+        for idx in indexes:
+            if not idx.isValid():
+                continue
+            item = self.itemFromIndex(idx)
+            if isinstance(item, RenderTargetItem):
+                rt = item.render_target
+                rt_name = getattr(rt, "name", None) or item.text() or ""
+                if rt_name:
+                    return create_render_target_ref_mime_data(rt_name, "color")
+        return super().mimeData(indexes)
 
 
 class ViewportListWidget(QWidget):
@@ -143,10 +178,13 @@ class ViewportListWidget(QWidget):
         self._tree.setHeaderHidden(True)
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tree.customContextMenuRequested.connect(self._on_context_menu)
+        # Drag-source for RT items — see _ViewportListModel.mimeData.
+        self._tree.setDragEnabled(True)
+        self._tree.setDragDropMode(QTreeView.DragDropMode.DragOnly)
         layout.addWidget(self._tree)
 
         # Model
-        self._model = QStandardItemModel()
+        self._model = _ViewportListModel()
         self._tree.setModel(self._model)
 
         # Selection handling

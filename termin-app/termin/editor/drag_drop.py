@@ -30,6 +30,10 @@ class EditorMimeTypes:
     MESH_REF = "application/x-termin-mesh-ref"
     MATERIAL_REF = "application/x-termin-material-ref"
     TEXTURE_REF = "application/x-termin-texture-ref"
+    # Render-target channel reference: payload {target, channel}.
+    # Dropped onto a material texture slot, this binds the RT's color or
+    # depth tc_texture as the slot's source.
+    RENDER_TARGET_REF = "application/x-termin-render-target-ref"
 
 
 def create_entity_mime_data(entity: "Entity") -> QMimeData:
@@ -145,4 +149,45 @@ def parse_resource_ref_mime_data(
         return data.get("name")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         log.debug(f"[DragDrop] Failed to parse {resource_type} ref MIME data: {e}")
+        return None
+
+
+def create_render_target_ref_mime_data(
+    target_name: str,
+    channel: str = "color",
+) -> QMimeData:
+    """
+    Create QMimeData for dragging a render-target channel reference.
+
+    Args:
+        target_name: render target name (the same one used for serialization
+            persistence in `texture_refs`).
+        channel: "color" or "depth".
+    """
+    mime = QMimeData()
+    data = {"target": target_name, "channel": channel}
+    mime.setData(
+        EditorMimeTypes.RENDER_TARGET_REF,
+        json.dumps(data).encode("utf-8"),
+    )
+    return mime
+
+
+def parse_render_target_ref_mime_data(mime: QMimeData) -> dict | None:
+    """
+    Parse render-target channel reference from QMimeData.
+
+    Returns dict with 'target' and 'channel' or None if not valid.
+    """
+    if not mime.hasFormat(EditorMimeTypes.RENDER_TARGET_REF):
+        return None
+    try:
+        raw = mime.data(EditorMimeTypes.RENDER_TARGET_REF).data()
+        data = json.loads(raw.decode("utf-8"))
+        return {
+            "target": data.get("target", ""),
+            "channel": data.get("channel", "color"),
+        }
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        log.debug(f"[DragDrop] Failed to parse RT ref MIME data: {e}")
         return None

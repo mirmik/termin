@@ -272,6 +272,9 @@ class TextureSelector(QWidget):
     """
 
     texture_changed = pyqtSignal(str)  # Имя текстуры или пустая строка для None
+    # Emitted when a render-target is dropped on this slot.
+    # (target_name, channel) — channel is "color" or "depth".
+    render_target_dropped = pyqtSignal(str, str)
     editing_finished = pyqtSignal()
 
     PREVIEW_SIZE = 48
@@ -279,6 +282,12 @@ class TextureSelector(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._current_texture_name: str = ""
+        # Tracks RT-channel binding when the slot is sourced from a render
+        # target rather than a TextureAsset. None when normal texture.
+        self._current_rt_ref: tuple[str, str] | None = None
+
+        # Accept drops of RENDER_TARGET_REF (and ignore everything else).
+        self.setAcceptDrops(True)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -393,6 +402,55 @@ class TextureSelector(QWidget):
             "background-color: #333; border: 1px solid #555; "
             "border-radius: 2px; color: #666; font-size: 10px;"
         )
+
+    # --- Render-target drag-drop -------------------------------------------
+
+    def dragEnterEvent(self, event):
+        """Accept render-target refs only; pass on everything else."""
+        from termin.editor.drag_drop import EditorMimeTypes
+
+        if event.mimeData().hasFormat(EditorMimeTypes.RENDER_TARGET_REF):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        from termin.editor.drag_drop import EditorMimeTypes
+
+        if event.mimeData().hasFormat(EditorMimeTypes.RENDER_TARGET_REF):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        from termin.editor.drag_drop import (
+            EditorMimeTypes, parse_render_target_ref_mime_data,
+        )
+
+        ref = parse_render_target_ref_mime_data(event.mimeData())
+        if ref is None or not ref.get("target"):
+            event.ignore()
+            return
+        target = ref["target"]
+        channel = ref.get("channel", "color")
+
+        # Push state and notify the inspector so it can rebind the slot.
+        self._current_rt_ref = (target, channel)
+        self._current_texture_name = ""  # No TextureAsset name applies.
+        self._preview.clear()
+        self._preview.setText(f"RT\n{channel[:1].upper()}")
+        self._preview.setStyleSheet(
+            "background-color: #224; border: 1px solid #88f; "
+            "border-radius: 2px; color: #aaf; font-size: 10px;"
+        )
+        # Force combo to show "(None)" — RT-bindings aren't asset-listed.
+        self._combo.blockSignals(True)
+        self._combo.setCurrentIndex(0)
+        self._combo.blockSignals(False)
+
+        self.render_target_dropped.emit(target, channel)
+        self.editing_finished.emit()
+        event.acceptProposedAction()
 
 
 class MaterialInspector(QWidget):
@@ -870,6 +928,10 @@ class MaterialInspector(QWidget):
         editor.texture_changed.connect(
             lambda name, uniform_name=prop.name: self._on_texture_changed(uniform_name, name)
         )
+        editor.render_target_dropped.connect(
+            lambda target, channel, uniform_name=prop.name:
+                self._on_render_target_dropped(uniform_name, target, channel)
+        )
         editor.editing_finished.connect(self._on_editing_finished)
 
         return editor
@@ -976,6 +1038,55 @@ class MaterialInspector(QWidget):
                 log.info(f"[MaterialInspector] phase[{i}].textures AFTER: {dict(phase.textures)}")
         else:
             log.warning(f"[MaterialInspector] _on_texture_changed: texture_handle is None for '{texture_name}'")
+
+        self.material_changed.emit()
+        self.save_material_file()
+
+    def _on_render_target_dropped(
+        self, uniform_name: str, target: str, channel: str
+    ) -> None:
+        """Bind a render-target channel as the source of `uniform_name`.
+
+        Resolves `target` against the live render-target pool, ensures its
+        textures exist, then sets the chosen channel as the slot's texture
+        on every phase of the current material. The .material file picks
+        this up via the texture_refs serializer (Phase 8).
+        """
+        from tcbase import log
+
+        if self._material is None:
+            log.warning("[MaterialInspector] _on_render_target_dropped: material is None")
+            return
+        try:
+            from termin.render_framework import render_target_pool_list
+        except ImportError:
+            log.warning("[MaterialInspector] render_framework module not available")
+            return
+
+        rt_handle = None
+        for h in render_target_pool_list():
+            if h.alive and h.name == target:
+                rt_handle = h
+                break
+        if rt_handle is None:
+            log.warning(
+                f"[MaterialInspector] Render target '{target}' not found in pool"
+            )
+            return
+
+        rt_handle.ensure_textures()
+        if channel == "depth":
+            tc_tex = rt_handle.depth_texture
+        else:
+            tc_tex = rt_handle.color_texture
+        if tc_tex is None or not tc_tex.is_valid:
+            log.warning(
+                f"[MaterialInspector] RT '{target}' channel '{channel}' is invalid"
+            )
+            return
+
+        for phase in self._material.phases:
+            phase.set_texture(uniform_name, tc_tex)
 
         self.material_changed.emit()
         self.save_material_file()
