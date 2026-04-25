@@ -581,7 +581,11 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
 def _iter_render_targets():
     """Yield (handle, name) for every alive render target in the pool."""
     try:
-        from termin.render_framework import render_target_pool_list
+        # Native module — `termin.render_framework.__init__` does not
+        # re-export render_target_pool_list in the app package layout.
+        from termin.render_framework._render_framework_native import (
+            render_target_pool_list,
+        )
     except ImportError:
         return
     for h in render_target_pool_list():

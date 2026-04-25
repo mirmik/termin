@@ -360,6 +360,24 @@ class TextureSelector(QWidget):
         """Получить имя текущей текстуры или пустую строку."""
         return self._current_texture_name
 
+    def set_render_target_ref(self, target: str, channel: str) -> None:
+        """Display the slot as bound to a render-target channel.
+
+        Used when a material is loaded with a pre-existing texture_refs
+        binding so the inspector reflects it instead of showing (None).
+        """
+        self._current_rt_ref = (target, channel)
+        self._current_texture_name = ""
+        self._combo.blockSignals(True)
+        self._combo.setCurrentIndex(0)
+        self._combo.blockSignals(False)
+        self._preview.clear()
+        self._preview.setText(f"RT\n{channel[:1].upper()}")
+        self._preview.setStyleSheet(
+            "background-color: #224; border: 1px solid #88f; "
+            "border-radius: 2px; color: #aaf; font-size: 10px;"
+        )
+
     def _on_combo_changed(self, text: str) -> None:
         """Обработчик изменения выбора в комбобоксе."""
         if text == "(None)":
@@ -913,18 +931,27 @@ class MaterialInspector(QWidget):
         editor = TextureSelector()
         editor.refresh_texture_list()
 
-        # Определяем текущее имя текстуры
+        # Определяем текущее источник текстуры. Сначала пытаемся
+        # найти соответствующий TextureAsset; если его нет, проверяем
+        # является ли текстура одним из каналов render-target-а.
         texture_name = ""
+        rt_ref: tuple[str, str] | None = None
         if self._material is not None:
             texture = self._material.textures.get(prop.name)
-            if texture is not None:
+            if texture is not None and texture.is_valid:
                 rm = ResourceManager.instance()
                 texture_name = rm.find_texture_name(texture) or ""
                 # Пропускаем белую текстуру - показываем как None
                 if texture_name == "__white_1x1__":
                     texture_name = ""
+                # Asset-less texture? Maybe it's an RT channel binding.
+                if not texture_name:
+                    rt_ref = _classify_texture_as_rt_ref(texture)
 
-        editor.set_texture_name(texture_name)
+        if rt_ref is not None:
+            editor.set_render_target_ref(rt_ref[0], rt_ref[1])
+        else:
+            editor.set_texture_name(texture_name)
         editor.texture_changed.connect(
             lambda name, uniform_name=prop.name: self._on_texture_changed(uniform_name, name)
         )
@@ -1058,7 +1085,9 @@ class MaterialInspector(QWidget):
             log.warning("[MaterialInspector] _on_render_target_dropped: material is None")
             return
         try:
-            from termin.render_framework import render_target_pool_list
+            from termin.render_framework._render_framework_native import (
+                render_target_pool_list,
+            )
         except ImportError:
             log.warning("[MaterialInspector] render_framework module not available")
             return
@@ -1099,3 +1128,33 @@ class MaterialInspector(QWidget):
     def material(self) -> Material | None:
         """Текущий материал."""
         return self._material
+
+
+def _classify_texture_as_rt_ref(tc_tex) -> tuple[str, str] | None:
+    """Walk the live render-target pool; if `tc_tex.uuid` matches a
+    render target's color or depth channel, return (target_name, channel).
+
+    Mirrors `material_asset._classify_render_target_texture` but kept
+    local because the inspector only needs the (target, channel) tuple,
+    not the serialized dict.
+    """
+    if tc_tex is None or not tc_tex.is_valid:
+        return None
+    try:
+        from termin.render_framework._render_framework_native import (
+            render_target_pool_list,
+        )
+    except ImportError:
+        return None
+
+    target_uuid = tc_tex.uuid
+    for h in render_target_pool_list():
+        if not h.alive or not h.name:
+            continue
+        c = h.color_texture
+        if c is not None and c.is_valid and c.uuid == target_uuid:
+            return (h.name, "color")
+        d = h.depth_texture
+        if d is not None and d.is_valid and d.uuid == target_uuid:
+            return (h.name, "depth")
+    return None
