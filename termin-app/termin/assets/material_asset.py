@@ -349,6 +349,16 @@ def _parse_material_content(
         else:
             log.warning(f"[MaterialAsset] Texture asset not found by UUID: {tex_asset_uuid}")
 
+    # Load non-asset texture references (Phase 8): render-target color/depth
+    # bindings serialized as `texture_refs: {uniform: {kind, target, channel}}`.
+    # Resolved by render-target name; ensure_textures() is called on the
+    # target so its color/depth handles exist before we bind them.
+    texture_refs = data.get("texture_refs", {})
+    for uniform_name, ref in texture_refs.items():
+        tc_tex = _resolve_texture_ref(ref)
+        if tc_tex is not None:
+            textures[uniform_name] = tc_tex
+
     # Create TcMaterial
     mat = TcMaterial.create(name or "material", file_uuid or "")
     mat.shader_name = shader_name
@@ -523,27 +533,109 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
         if uniforms_data:
             result["uniforms"] = uniforms_data
 
-        # Save textures from default phase (by asset UUID)
+        # Save textures from default phase. Two destinations:
+        #   - `textures`: uniform → asset UUID (regular TextureAsset).
+        #   - `texture_refs`: uniform → {kind, target, channel} for non-asset
+        #     handles (currently render-target color/depth — Phase 8).
         textures_data: Dict[str, str] = {}
+        texture_refs_data: Dict[str, Dict[str, str]] = {}
         if default_phase is not None:
             phase_textures = default_phase.textures
             for name, tex in phase_textures.items():
-                if tex is not None and tex.is_valid:
-                    tex_name = tex.name
-                    # Skip default placeholder textures (by name)
-                    if tex_name in ("__white_1x1__", "__normal_1x1__"):
-                        continue
-                    # Find TextureAsset UUID via ResourceManager
-                    asset_uuid = None
-                    for asset_name, asset in rm._texture_registry.assets.items():
-                        if asset.uuid and asset.texture_data is not None:
-                            if asset.texture_data.uuid == tex.uuid:
-                                asset_uuid = asset.uuid
-                                break
-                    if asset_uuid:
-                        textures_data[name] = asset_uuid
+                if tex is None or not tex.is_valid:
+                    continue
+                tex_name = tex.name
+                # Skip default placeholder textures (by name)
+                if tex_name in ("__white_1x1__", "__normal_1x1__"):
+                    continue
+                # First try regular TextureAsset lookup.
+                asset_uuid = None
+                for asset_name, asset in rm._texture_registry.assets.items():
+                    if asset.uuid and asset.texture_data is not None:
+                        if asset.texture_data.uuid == tex.uuid:
+                            asset_uuid = asset.uuid
+                            break
+                if asset_uuid:
+                    textures_data[name] = asset_uuid
+                    continue
+                # Fallback: maybe it's an RT-owned texture. Walk live RTs
+                # and match on tc_texture uuid.
+                ref = _classify_render_target_texture(tex)
+                if ref is not None:
+                    texture_refs_data[name] = ref
         if textures_data:
             result["textures"] = textures_data
+        if texture_refs_data:
+            result["texture_refs"] = texture_refs_data
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
+
+
+# --- Render-target texture references (Phase 8) ---------------------------
+#
+# Materials can sample render-target color/depth as textures. RT-owned
+# tc_textures don't have a TextureAsset behind them, so they're persisted
+# in a separate `texture_refs` section keyed by render-target name.
+
+def _iter_render_targets():
+    """Yield (handle, name) for every alive render target in the pool."""
+    try:
+        from termin.render_framework import render_target_pool_list
+    except ImportError:
+        return
+    for h in render_target_pool_list():
+        if not h.alive:
+            continue
+        yield h, h.name
+
+
+def _classify_render_target_texture(tc_tex) -> Dict[str, str] | None:
+    """If `tc_tex` is the color or depth channel of a live render target,
+    return a serializable ref dict. Otherwise None.
+    """
+    if tc_tex is None or not tc_tex.is_valid:
+        return None
+    target_uuid = tc_tex.uuid
+    for h, name in _iter_render_targets():
+        if not name:
+            continue
+        color_tex = h.color_texture
+        if color_tex is not None and color_tex.is_valid \
+                and color_tex.uuid == target_uuid:
+            return {"kind": "render_target", "target": name, "channel": "color"}
+        depth_tex = h.depth_texture
+        if depth_tex is not None and depth_tex.is_valid \
+                and depth_tex.uuid == target_uuid:
+            return {"kind": "render_target", "target": name, "channel": "depth"}
+    return None
+
+
+def _resolve_texture_ref(ref: Dict[str, Any]):
+    """Resolve a `texture_refs` entry into a TcTexture instance.
+
+    Returns the TcTexture or None if the target isn't currently in the pool.
+    `ensure_textures()` is called so the channel handles exist before bind.
+    """
+    if not isinstance(ref, dict):
+        return None
+    kind = ref.get("kind")
+    if kind != "render_target":
+        log.warning(f"[MaterialAsset] Unknown texture_ref kind: {kind}")
+        return None
+    target_name = ref.get("target", "")
+    channel = ref.get("channel", "color")
+    if not target_name:
+        return None
+    for h, name in _iter_render_targets():
+        if name != target_name:
+            continue
+        h.ensure_textures()
+        if channel == "color":
+            return h.color_texture
+        if channel == "depth":
+            return h.depth_texture
+        log.warning(f"[MaterialAsset] Unknown channel '{channel}' for RT '{target_name}'")
+        return None
+    log.warning(f"[MaterialAsset] Render target '{target_name}' not found in pool")
+    return None
