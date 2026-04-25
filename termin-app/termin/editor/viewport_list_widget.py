@@ -100,8 +100,9 @@ class _ViewportListModel(QStandardItemModel):
                 continue
             item = self.itemFromIndex(idx)
             if isinstance(item, RenderTargetItem):
-                rt = item.render_target
-                rt_name = getattr(rt, "name", None) or item.text() or ""
+                # `render_target` here is the C-handle binding object
+                # (RenderTargetHandle) which always exposes `name`.
+                rt_name = item.render_target.name or item.text() or ""
                 if rt_name:
                     return create_render_target_ref_mime_data(rt_name, "color")
         return super().mimeData(indexes)

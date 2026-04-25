@@ -728,7 +728,42 @@ void RenderingManager::render_all_offscreen() {
     // 0. Sync viewport override_resolution → render target width/height
     sync_viewport_resolutions();
 
-    // 1. Execute scene pipelines (can span multiple displays)
+    // Collect viewport-attached render targets up front. They get rendered
+    // through their owning viewport / scene pipeline below; the standalone
+    // RT pass must skip them to avoid double-rendering the same texture.
+    std::unordered_set<uint64_t> viewport_rt_keys;
+    for (tc_display* display : displays_) {
+        tc_viewport_handle vp = tc_display_get_first_viewport(display);
+        while (tc_viewport_handle_valid(vp)) {
+            tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+            if (tc_render_target_handle_valid(rt)) {
+                viewport_rt_keys.insert(render_target_key(rt));
+            }
+            vp = tc_viewport_get_display_next(vp);
+        }
+    }
+
+    // 1. (Phase 9 MVP scheduling) Render standalone render targets first.
+    // Anything a scene material may sample as `rt.color_texture` lives
+    // here (mirror RTs, post-effect intermediates, ...). Rendering them
+    // before the consumer viewports guarantees current-frame data instead
+    // of last-frame stale pixels. A future DAG/topological version can
+    // narrow this to only the targets the scene materials actually read.
+    struct RenderTargetIterCtx {
+        RenderingManager* mgr;
+        std::unordered_set<uint64_t>* skip;
+    };
+    RenderTargetIterCtx rt_ctx = { this, &viewport_rt_keys };
+    tc_render_target_pool_foreach([](tc_render_target_handle rt, void* ud) -> bool {
+        auto* ctx = static_cast<RenderTargetIterCtx*>(ud);
+        uint64_t key = RenderingManager::render_target_key(rt);
+        if (ctx->skip->count(key) == 0) {
+            ctx->mgr->render_render_target_offscreen(rt);
+        }
+        return true;
+    }, &rt_ctx);
+
+    // 2. Execute scene pipelines (can span multiple displays)
     for (tc_scene_handle scene : attached_scenes_) {
         if (!tc_scene_handle_valid(scene)) continue;
 
@@ -741,7 +776,7 @@ void RenderingManager::render_all_offscreen() {
         }
     }
 
-    // 2. Render unmanaged viewports
+    // 3. Render unmanaged viewports
     for (tc_display* display : displays_) {
         if (!tc_display_get_enabled(display)) continue;
 
@@ -757,33 +792,6 @@ void RenderingManager::render_all_offscreen() {
             vp = tc_viewport_get_display_next(vp);
         }
     }
-
-    // 3. Render standalone render targets (skip those already rendered via viewports)
-    std::unordered_set<uint64_t> viewport_rt_keys;
-    for (tc_display* display : displays_) {
-        tc_viewport_handle vp = tc_display_get_first_viewport(display);
-        while (tc_viewport_handle_valid(vp)) {
-            tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-            if (tc_render_target_handle_valid(rt)) {
-                viewport_rt_keys.insert(render_target_key(rt));
-            }
-            vp = tc_viewport_get_display_next(vp);
-        }
-    }
-
-    struct RenderTargetIterCtx {
-        RenderingManager* mgr;
-        std::unordered_set<uint64_t>* skip;
-    };
-    RenderTargetIterCtx rt_ctx = { this, &viewport_rt_keys };
-    tc_render_target_pool_foreach([](tc_render_target_handle rt, void* ud) -> bool {
-        auto* ctx = static_cast<RenderTargetIterCtx*>(ud);
-        uint64_t key = RenderingManager::render_target_key(rt);
-        if (ctx->skip->count(key) == 0) {
-            ctx->mgr->render_render_target_offscreen(rt);
-        }
-        return true;
-    }, &rt_ctx);
 }
 
 void RenderingManager::render_scene_pipeline_offscreen(
