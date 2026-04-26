@@ -82,6 +82,25 @@ def show_settings_dialog(ui) -> None:
         8.0, 24.0, 1.0, 0)
     content.add_child(font_small_row)
 
+    # Apply button — applies font changes without closing the dialog
+    apply_row = HStack()
+    apply_row.spacing = 8
+    apply_row.alignment = "right"
+    apply_btn = Button()
+    apply_btn.text = "Apply"
+    apply_btn.padding = 8
+    apply_row.add_child(apply_btn)
+    content.add_child(apply_row)
+
+    def _apply():
+        _t.font_size = font_spin.value
+        _t.font_size_small = font_small_spin.value
+        if ui.root is not None:
+            _t.apply_to(ui.root)
+            ui.request_layout()
+
+    apply_btn.on_click = _apply
+
     dlg = Dialog()
     dlg.title = "Settings"
     dlg.content = content
