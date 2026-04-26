@@ -922,6 +922,8 @@ class EditorWindowTcgui:
             scene=self.scene,
             current_display=current_display,
         )
+        all_scenes = [self.scene_manager.get_scene(name) for name in self.scene_manager.scene_names()]
+        self._inspector_controller._viewport_inspector.set_scenes(all_scenes)
 
     def _on_render_entity_selected(self, entity) -> None:
         if self._inspector_controller is None or entity is None:

@@ -1113,6 +1113,7 @@ class EditorWindow(QMainWindow):
             inspector_controller=self._inspector_controller,
             center_tab_widget=self._center_tab_widget,
             get_scene=lambda: self.scene,
+            get_scenes=lambda: [self.scene_manager.get_scene(name) for name in self.scene_manager.scene_names()],
             get_sdl_backend=lambda: self._sdl_backend,
             on_entity_selected=self.show_entity_inspector,
             on_request_update=self._request_viewport_update,

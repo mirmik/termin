@@ -189,6 +189,9 @@ void bind_tc_scene_core(nb::module_& m) {
         .def("scene_handle", [](TcSceneRef& self) -> tc_scene_handle {
             return self._h;
         }, "Get scene handle")
+        .def("equal", [](TcSceneRef& self, const TcSceneRef& other) -> bool {
+            return tc_scene_handle_eq(self._h, other._h);
+        }, nb::arg("other"), "True if both scenes reference the same scene")
 
         // Entity creation in pool
         .def("create_entity", &TcSceneRef::create_entity, nb::arg("name") = "",

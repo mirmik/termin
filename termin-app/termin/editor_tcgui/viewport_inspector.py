@@ -31,6 +31,7 @@ class ViewportInspectorTcgui(VStack):
         self._rm = resource_manager
         self._viewport = None
         self._scene = None
+        self._scenes: list = []
         self._displays = []
         self._current_display = None
         self._render_target_list: list = []
@@ -70,20 +71,26 @@ class ViewportInspectorTcgui(VStack):
         self._render_target_combo.on_changed = self._on_render_target_changed
         grid.add(self._render_target_combo, 2, 1)
 
+        scene_lbl = Label(); scene_lbl.text = "Scene:"; scene_lbl.preferred_width = px(96)
+        grid.add(scene_lbl, 3, 0)
+        self._scene_combo = ComboBox()
+        self._scene_combo.on_changed = self._on_scene_changed
+        grid.add(self._scene_combo, 3, 1)
+
         input_mode_lbl = Label(); input_mode_lbl.text = "Input Mode:"; input_mode_lbl.preferred_width = px(96)
-        grid.add(input_mode_lbl, 3, 0)
+        grid.add(input_mode_lbl, 4, 0)
         self._input_mode_combo = ComboBox()
         self._input_mode_combo.add_item("none")
         self._input_mode_combo.add_item("simple")
         self._input_mode_combo.add_item("editor")
         self._input_mode_combo.on_changed = self._on_input_mode_changed
-        grid.add(self._input_mode_combo, 3, 1)
+        grid.add(self._input_mode_combo, 4, 1)
 
         block_lbl = Label(); block_lbl.text = "Block in Editor:"; block_lbl.preferred_width = px(96)
-        grid.add(block_lbl, 4, 0)
+        grid.add(block_lbl, 5, 0)
         self._block_input = Checkbox()
         self._block_input.on_changed = self._on_block_input_changed
-        grid.add(self._block_input, 4, 1)
+        grid.add(self._block_input, 5, 1)
 
         rect_title = Label()
         rect_title.text = "Rect (0..1)"
@@ -120,6 +127,7 @@ class ViewportInspectorTcgui(VStack):
             self._enabled,
             self._display_combo,
             self._render_target_combo,
+            self._scene_combo,
             self._input_mode_combo,
             self._block_input,
             self._x,
@@ -148,6 +156,11 @@ class ViewportInspectorTcgui(VStack):
     def set_scene(self, scene) -> None:
         self._scene = scene
 
+    def set_scenes(self, scenes: list) -> None:
+        self._scenes = list(scenes)
+        self._refresh_scene_combo()
+        self._select_current_scene()
+
     def set_viewport(self, viewport=None, current_display=None) -> None:
         self._viewport = viewport
         self._current_display = current_display
@@ -170,6 +183,9 @@ class ViewportInspectorTcgui(VStack):
 
             self._refresh_render_target_combo()
             self._select_current_render_target()
+
+            self._refresh_scene_combo()
+            self._select_current_scene()
 
             mode = viewport.input_mode or "none"
             for i in range(self._input_mode_combo.item_count):
@@ -272,6 +288,35 @@ class ViewportInspectorTcgui(VStack):
         rt_idx = index - 1
         if 0 <= rt_idx < len(self._render_target_list):
             self._viewport.render_target = self._render_target_list[rt_idx]
+            self._emit_changed()
+
+    def _refresh_scene_combo(self) -> None:
+        old = self._scene_combo.on_changed
+        self._scene_combo.on_changed = None
+        self._scene_combo.clear()
+        for scene in self._scenes:
+            self._scene_combo.add_item(scene.name or "(unnamed)")
+        self._scene_combo.on_changed = old
+
+    def _select_current_scene(self) -> None:
+        if self._viewport is None:
+            self._scene_combo.selected_index = -1
+            return
+        vp_scene = self._viewport.scene
+        if vp_scene is None:
+            self._scene_combo.selected_index = -1
+            return
+        for i, scene in enumerate(self._scenes):
+            if scene.equal(vp_scene):
+                self._scene_combo.selected_index = i
+                return
+        self._scene_combo.selected_index = -1
+
+    def _on_scene_changed(self, index: int, _text: str) -> None:
+        if self._updating or self._viewport is None:
+            return
+        if 0 <= index < len(self._scenes):
+            self._viewport.scene = self._scenes[index]
             self._emit_changed()
 
     def _on_input_mode_changed(self, _index: int, text: str) -> None:

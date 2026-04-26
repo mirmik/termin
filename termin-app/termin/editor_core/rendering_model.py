@@ -204,6 +204,7 @@ class RenderingModel:
                     state.clear_all()
                 self._manager.remove_viewport_state(vp)
                 display.remove_viewport(vp)
+                vp.destroy()
 
     # ------------------------------------------------------------------
     # Scene attach / detach
