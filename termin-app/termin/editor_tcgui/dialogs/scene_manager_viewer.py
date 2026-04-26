@@ -19,6 +19,10 @@ if TYPE_CHECKING:
     from termin.editor.scene_manager import SceneManager
 
 
+def _format_scene_handle(handle) -> str:
+    return f"{handle.index}:{handle.generation}"
+
+
 def show_scene_manager_viewer(
     ui,
     scene_manager: "SceneManager",
@@ -185,7 +189,7 @@ def show_scene_manager_viewer(
                 display = f"{name} (unsaved)"
 
             mode_str = mode.name if mode else "?"
-            handle_str = f"{handle[0]}:{handle[1]}"
+            handle_str = _format_scene_handle(handle)
             rows.append([display, mode_str, str(entity_count), handle_str])
             data.append(name)
 
@@ -234,7 +238,7 @@ def show_scene_manager_viewer(
 
         lines = [
             f"Name: {name}",
-            f"Handle: {handle[0]}:{handle[1]} (index:generation)",
+            f"Handle: {_format_scene_handle(handle)} (index:generation)",
             f"Mode: {mode.name if mode else '?'}",
             f"Path: {path or '(unsaved)'}",
             f"Editing: {'YES' if is_editing else 'no'}",

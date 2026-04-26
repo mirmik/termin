@@ -118,6 +118,9 @@ class GameModeModel:
         if self._editor_attachment is not None:
             self._editor_attachment.attach(game_scene, transfer_camera_state=True)
 
+        if self._rendering_controller is not None:
+            self._rendering_controller.attach_scene(game_scene)
+
         self._scene_manager.set_mode(editor_scene_name, SceneMode.INACTIVE)
         self._scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
 
@@ -151,6 +154,9 @@ class GameModeModel:
 
         if editor_scene is not None and self._editor_attachment is not None:
             self._editor_attachment.attach(editor_scene, restore_state=True)
+
+        if editor_scene is not None and self._rendering_controller is not None:
+            self._rendering_controller.attach_scene(editor_scene)
 
         self.state_changed.emit(self)
         self.mode_entered.emit(False, editor_scene, self._saved_tree_expanded_uuids)

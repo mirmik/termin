@@ -31,6 +31,10 @@ if TYPE_CHECKING:
     from termin.editor.scene_manager import SceneManager
 
 
+def _format_scene_handle(handle) -> str:
+    return f"{handle.index}:{handle.generation}"
+
+
 class SceneManagerViewer(QWidget):
     """
     Window for viewing SceneManager state.
@@ -448,7 +452,7 @@ class SceneManagerViewer(QWidget):
 
         lines = [
             f"Name: {scene_name}",
-            f"Handle: {handle[0]}:{handle[1]} (index:generation)",
+            f"Handle: {_format_scene_handle(handle)} (index:generation)",
             f"Mode: {mode.name}",
             f"Path: {path or '(unsaved)'}",
             f"Editing: {'YES' if is_editing else 'no'}",
@@ -518,7 +522,7 @@ class SceneManagerViewer(QWidget):
             mode = info["mode"]
             entity_count = info["entity_count"]
             path = info.get("path")
-            handle = info.get("handle", (0, 0))
+            handle = info["handle"]
 
             # Show file name if available, otherwise slot name
             if path:
@@ -529,7 +533,7 @@ class SceneManagerViewer(QWidget):
                 display_name = f"{name} (unsaved)"
 
             # Format handle as "index:gen"
-            handle_str = f"{handle[0]}:{handle[1]}"
+            handle_str = _format_scene_handle(handle)
 
             item = QTreeWidgetItem([
                 display_name,
@@ -580,4 +584,3 @@ class SceneManagerViewer(QWidget):
             f"Playing: {play_scenes}"
             f"{editing_str}"
         )
-
