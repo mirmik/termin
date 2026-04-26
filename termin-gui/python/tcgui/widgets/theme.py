@@ -92,7 +92,7 @@ class Theme:
             widget.font_size = self.font_size
 
         elif cls_name == "Checkbox":
-            widget.box_color = self.bg_surface
+            widget.box_color = self.bg_button
             widget.check_color = self.accent_success
             widget.hover_color = self.hover
             widget.text_color = self.text_primary

@@ -17,7 +17,7 @@ class Checkbox(Widget):
         self.checked: bool = False
 
         # Colors
-        self.box_color: tuple[float, float, float, float] = _t.bg_surface
+        self.box_color: tuple[float, float, float, float] = _t.bg_button
         self.check_color: tuple[float, float, float, float] = _t.accent_success
         self.hover_color: tuple[float, float, float, float] = _t.hover
         self.text_color: tuple[float, float, float, float] = _t.text_primary
