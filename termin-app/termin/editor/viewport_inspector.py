@@ -49,6 +49,7 @@ class ViewportInspector(QWidget):
 
     viewport_changed = pyqtSignal()
     display_changed = pyqtSignal(object)  # new Display
+    scene_changed = pyqtSignal(object)  # new Scene
     camera_changed = pyqtSignal(object)  # new CameraComponent
     rect_changed = pyqtSignal(tuple)  # new rect (x, y, w, h)
     depth_changed = pyqtSignal(int)  # new depth value
@@ -62,6 +63,7 @@ class ViewportInspector(QWidget):
         self._current_display: Optional["Display"] = None
         self._displays: List["Display"] = []
         self._display_names: dict[int, str] = {}  # tc_display_ptr -> name
+        self._scenes: List["Scene"] = []
         self._cameras: List[Tuple["CameraComponent", str]] = []  # (camera, name)
         self._scene: Optional["Scene"] = None
         self._pipelines: List[Tuple[str, Optional["RenderPipeline"]]] = []  # (name, pipeline or None)
@@ -103,6 +105,11 @@ class ViewportInspector(QWidget):
         self._render_target_combo = QComboBox()
         self._render_target_combo.currentIndexChanged.connect(self._on_render_target_changed)
         form.addRow("Render Target:", self._render_target_combo)
+
+        # Scene selection
+        self._scene_combo = QComboBox()
+        self._scene_combo.currentIndexChanged.connect(self._on_scene_changed)
+        form.addRow("Scene:", self._scene_combo)
 
         # Rect section
         rect_label = QLabel("Rect (normalized 0..1):")
@@ -219,6 +226,12 @@ class ViewportInspector(QWidget):
         """Set the scene (kept for API compat, camera/pipeline now on render_target)."""
         self._scene = scene
 
+    def set_scenes(self, scenes: List["Scene"]) -> None:
+        """Set available scenes for the scene dropdown."""
+        self._scenes = list(scenes)
+        self._refresh_scene_combo()
+        self._select_current_scene()
+
     def set_viewport(self, viewport: Optional["Viewport"], current_display: Optional["Display"] = None) -> None:
         """
         Set the viewport to inspect.
@@ -250,6 +263,10 @@ class ViewportInspector(QWidget):
             # Update render target combo
             self._update_render_target_combo()
             self._select_current_render_target()
+
+            # Update scene combo
+            self._refresh_scene_combo()
+            self._select_current_scene()
 
             # Update rect
             x, y, w, h = viewport.rect
@@ -351,6 +368,7 @@ class ViewportInspector(QWidget):
             self._enabled_checkbox.setChecked(True)
             self._display_combo.setCurrentIndex(-1)
             self._render_target_combo.setCurrentIndex(0)
+            self._scene_combo.setCurrentIndex(-1)
             self._x_spin.setValue(0.0)
             self._y_spin.setValue(0.0)
             self._w_spin.setValue(1.0)
@@ -500,6 +518,38 @@ class ViewportInspector(QWidget):
         idx = index - 1
         if 0 <= idx < len(rt_list):
             self._viewport.render_target = rt_list[idx]
+            self.viewport_changed.emit()
+
+    def _refresh_scene_combo(self) -> None:
+        """Populate scene combo with available scenes."""
+        self._scene_combo.blockSignals(True)
+        self._scene_combo.clear()
+        for scene in self._scenes:
+            self._scene_combo.addItem(scene.name or "(unnamed)")
+        self._scene_combo.blockSignals(False)
+
+    def _select_current_scene(self) -> None:
+        """Select current viewport's scene in combo."""
+        if self._viewport is None:
+            self._scene_combo.setCurrentIndex(-1)
+            return
+        vp_scene = self._viewport.scene
+        if vp_scene is None:
+            self._scene_combo.setCurrentIndex(-1)
+            return
+        for i, scene in enumerate(self._scenes):
+            if scene.equal(vp_scene):
+                self._scene_combo.setCurrentIndex(i)
+                return
+        self._scene_combo.setCurrentIndex(-1)
+
+    def _on_scene_changed(self, index: int) -> None:
+        """Handle scene selection change."""
+        if self._updating or self._viewport is None:
+            return
+        if 0 <= index < len(self._scenes):
+            new_scene = self._scenes[index]
+            self.scene_changed.emit(new_scene)
             self.viewport_changed.emit()
 
     def _on_input_mode_changed(self, text: str) -> None:

@@ -58,6 +58,7 @@ class RenderingController:
         inspector_controller: "InspectorController",
         center_tab_widget: Optional[QTabWidget] = None,
         get_scene: Optional[Callable[[], "Scene"]] = None,
+        get_scenes: Optional[Callable[[], list]] = None,
         get_sdl_backend: Optional[Callable[[], "SDLEmbeddedWindowBackend"]] = None,
         on_display_selected: Optional[Callable[["Display"], None]] = None,
         on_viewport_selected: Optional[Callable[["Viewport"], None]] = None,
@@ -93,6 +94,7 @@ class RenderingController:
         self._inspector = inspector_controller
         self._center_tabs = center_tab_widget
         self._get_scene = get_scene
+        self._get_scenes = get_scenes
         self._get_sdl_backend = get_sdl_backend
         self._on_display_selected = on_display_selected
         self._on_viewport_selected = on_viewport_selected
@@ -172,6 +174,7 @@ class RenderingController:
         # Connect inspector signals
         self._inspector.display_inspector.name_changed.connect(self._on_display_name_changed)
         self._inspector.viewport_inspector.display_changed.connect(self._on_viewport_display_changed)
+        self._inspector.viewport_inspector.scene_changed.connect(self._on_viewport_scene_changed)
         self._inspector.viewport_inspector.rect_changed.connect(self._on_viewport_rect_changed)
         self._inspector.pipeline_inspector.pipeline_changed.connect(self._on_pipeline_inspector_changed)
 
@@ -652,6 +655,7 @@ class RenderingController:
             self._selected_display = self._manager.get_display_for_viewport(viewport)
 
             scene = self._get_scene() if self._get_scene is not None else None
+            all_scenes = self._get_all_scenes()
             # Build display_names dict for inspector (keyed by tc_display_ptr)
             display_names = {d.tc_display_ptr: self._manager.get_display_name(d) for d in self._manager.displays}
             self._inspector.show_viewport_inspector(
@@ -661,6 +665,7 @@ class RenderingController:
                 scene=scene,
                 current_display=self._selected_display,
             )
+            self._inspector.viewport_inspector.set_scenes(all_scenes)
 
             if self._on_viewport_selected is not None:
                 self._on_viewport_selected(viewport)
@@ -671,7 +676,9 @@ class RenderingController:
             self._on_entity_selected(entity)
 
     def _get_all_scenes(self) -> list:
-        """Return list of available scenes."""
+        """Return list of all available scenes."""
+        if self._get_scenes is not None:
+            return self._get_scenes()
         result = []
         if self._get_scene is not None:
             scene = self._get_scene()
@@ -824,6 +831,13 @@ class RenderingController:
         """Handle display name change from inspector."""
         if self._selected_display is not None:
             self.set_display_name(self._selected_display, new_name)
+
+    def _on_viewport_scene_changed(self, scene: "Scene") -> None:
+        """Handle viewport scene change from inspector."""
+        if self._selected_viewport is None:
+            return
+        self._selected_viewport.scene = scene
+        self._request_update()
 
     def _on_viewport_display_changed(self, new_display: "Display") -> None:
         """Handle viewport display change from inspector."""
