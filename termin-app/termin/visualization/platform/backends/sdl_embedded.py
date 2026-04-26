@@ -444,6 +444,14 @@ class SDLEmbeddedWindowHandle(BackendWindow):
     def should_close(self) -> bool:
         return self._should_close or self._window is None
 
+    def share_group_key(self) -> int:
+        """Single-device invariant: all SDL windows share the same GL context.
+
+        Returns 1 so the tgfx share-group cache collapses to a single group,
+        matching FBOSurface and keeping RT textures accessible across displays.
+        """
+        return 1
+
     def make_current(self) -> None:
         if self._window is not None and self._gl_context is not None:
             video.SDL_GL_MakeCurrent(self._window, self._gl_context)

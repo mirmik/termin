@@ -207,6 +207,14 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     wm = BackendWindowManager()
     wm.register_main(main_window, ui)
 
+    # Apply font size settings before widget tree is built.
+    # Widgets read from current_theme in __init__, so this must happen before build().
+    from termin.editor.settings import EditorSettings
+    from tcgui.widgets.theme import current_theme
+    settings = EditorSettings.instance()
+    current_theme.font_size = settings.get_font_size()
+    current_theme.font_size_small = settings.get_font_size_small()
+
     # Create editor window and build UI
     from termin.editor_tcgui.editor_window import EditorWindowTcgui
     win = EditorWindowTcgui(
