@@ -23,9 +23,12 @@ class Theme:
 
         # --- Interactive states ---
         self.hover: tuple = (0.4, 0.4, 0.4, 1.0)
-        self.pressed: tuple = (0.2, 0.2, 0.2, 1.0)
+        self.pressed: tuple = (0.15, 0.15, 0.17, 1.0)
         self.selected: tuple = (0.2, 0.35, 0.6, 0.9)
         self.hover_subtle: tuple = (0.22, 0.22, 0.28, 0.9)
+
+        # --- Buttons ---
+        self.bg_button: tuple = (0.24, 0.24, 0.27, 1.0)
 
         # --- Accent ---
         self.accent: tuple = (0.3, 0.6, 0.9, 1.0)
@@ -81,7 +84,7 @@ class Theme:
             widget.font_size = self.font_size
 
         elif cls_name == "Button":
-            widget.background_color = self.bg_surface
+            widget.background_color = self.bg_button
             widget.hover_color = self.hover
             widget.pressed_color = self.pressed
             widget.text_color = self.text_primary
