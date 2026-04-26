@@ -30,7 +30,7 @@ class EditorModeController:
         rendering_controller / scene_tree_controller are all initialized."""
         self._model = GameModeModel(
             scene_manager=self._window.scene_manager,
-            editor_attachment=self._window._editor_attachment,
+            editor_connector=self._window,
             rendering_controller=self._window._rendering_controller,
             get_editor_scene_name=lambda: self._window._editor_scene_name,
             scene_tree_controller=self._window.scene_tree_controller,

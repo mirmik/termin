@@ -180,11 +180,17 @@ class SceneManagerViewer(QWidget):
         editor_label.setStyleSheet("color: gray;")
         actions_layout.addWidget(editor_label)
 
-        self._edit_btn = QPushButton("Edit")
-        self._edit_btn.setToolTip("Attach editor to this scene (EditorSceneAttachment)")
-        self._edit_btn.clicked.connect(self._on_edit_scene)
-        self._edit_btn.setEnabled(False)
-        actions_layout.addWidget(self._edit_btn)
+        self._editor_attach_btn = QPushButton("Attach")
+        self._editor_attach_btn.setToolTip("Attach editor tools to this scene and restore editor state")
+        self._editor_attach_btn.clicked.connect(self._on_editor_attach_scene)
+        self._editor_attach_btn.setEnabled(False)
+        actions_layout.addWidget(self._editor_attach_btn)
+
+        self._editor_detach_btn = QPushButton("Detach")
+        self._editor_detach_btn.setToolTip("Detach editor tools from the current scene and save editor state")
+        self._editor_detach_btn.clicked.connect(self._on_editor_detach_scene)
+        self._editor_detach_btn.setEnabled(False)
+        actions_layout.addWidget(self._editor_detach_btn)
 
         actions_layout.addStretch()
         layout.addLayout(actions_layout)
@@ -224,7 +230,8 @@ class SceneManagerViewer(QWidget):
         self._play_btn.setEnabled(has_selection)
         self._attach_btn.setEnabled(has_selection)
         self._detach_btn.setEnabled(has_selection)
-        self._edit_btn.setEnabled(has_selection)
+        self._editor_attach_btn.setEnabled(has_selection)
+        self._editor_detach_btn.setEnabled(has_selection)
 
     def _on_load_scene(self) -> None:
         """Load a scene from file."""
@@ -363,8 +370,8 @@ class SceneManagerViewer(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Detach Error", f"Failed to detach scene:\n{e}")
 
-    def _on_edit_scene(self) -> None:
-        """Attach editor to selected scene via EditorSceneAttachment."""
+    def _on_editor_attach_scene(self) -> None:
+        """Attach editor to selected scene via EditorWindow API."""
         if self._selected_scene_name is None:
             return
 
@@ -375,55 +382,44 @@ class SceneManagerViewer(QWidget):
             QMessageBox.warning(self, "No Editor", "EditorWindow not available")
             return
 
-        attachment = editor._editor_attachment
-        if attachment is None:
-            QMessageBox.warning(self, "No Attachment", "EditorSceneAttachment not available")
-            return
-
         scene = self._scene_manager.get_scene(self._selected_scene_name)
         if scene is None:
             return
 
-        # Check if already attached to this scene
-        if attachment.scene is scene:
+        if editor._editor_attachment is not None and editor._editor_attachment.scene is scene:
             QMessageBox.information(self, "Already Editing", f"Editor is already attached to '{self._selected_scene_name}'")
             return
 
         try:
-            # Attach editor to new scene (transfers camera state)
-            attachment.attach(scene, transfer_camera_state=True)
-            editor._sync_attachment_refs()
-
-            # Update editor scene name (used by game mode to know which scene to copy)
-            editor._editor_scene_name = self._selected_scene_name
-
-            # Set scene mode to STOP (editor mode)
-            self._scene_manager.set_mode(self._selected_scene_name, SceneMode.STOP)
-
-            # Clear selection in C++ interaction system
-            if editor._interaction_system is not None:
-                editor._interaction_system.selection.clear()
-
-            # Update scene tree
-            if editor.scene_tree_controller is not None:
-                editor.scene_tree_controller.set_scene(scene)
-                editor.scene_tree_controller.rebuild()
-
-            # Clear selection and gizmo
-            if editor._interaction_system is not None:
-                editor._interaction_system.selection.clear()
-                editor._interaction_system.set_gizmo_target(None)
-
-            # Update window title
-            editor._update_window_title()
-
-            editor._request_viewport_update()
+            editor.attach_editor_to_scene(
+                self._selected_scene_name,
+                restore_state=True,
+                transfer_camera_state=False,
+            )
             self.refresh()
             QMessageBox.information(self, "Editing", f"Editor attached to '{self._selected_scene_name}'")
         except Exception as e:
             import traceback
             traceback.print_exc()
             QMessageBox.critical(self, "Edit Error", f"Failed to attach editor:\n{e}")
+
+    def _on_editor_detach_scene(self) -> None:
+        """Detach editor from current scene via EditorWindow API."""
+        from termin.editor.editor_window import EditorWindow
+
+        editor = EditorWindow.instance()
+        if editor is None:
+            QMessageBox.warning(self, "No Editor", "EditorWindow not available")
+            return
+
+        try:
+            editor.detach_editor_from_scene(save_state=True)
+            self.refresh()
+            QMessageBox.information(self, "Editor Detached", "Editor detached and state saved")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "Editor Detach Error", f"Failed to detach editor:\n{e}")
 
     def _update_details(self, scene_name: str) -> None:
         """Update details panel for selected scene."""

@@ -260,6 +260,9 @@ class RenderingModel:
         from the first matching ViewportConfig. View creates the
         appropriate DisplayInputRouter (or whatever backend wants).
         """
+        if self.is_scene_attached(scene):
+            return []
+
         viewports = self._manager.attach_scene(scene)
 
         by_display: dict[int, list] = {}

@@ -28,7 +28,8 @@ def show_scene_manager_viewer(
     scene_manager: "SceneManager",
     get_rendering_controller=None,
     get_editor_attachment=None,
-    on_scene_edited=None,
+    on_editor_attach=None,
+    on_editor_detach=None,
 ) -> None:
     """Show scene manager viewer dialog.
 
@@ -38,7 +39,8 @@ def show_scene_manager_viewer(
     scene_manager : SceneManager
     get_rendering_controller : callable returning RenderingControllerTcgui or None
     get_editor_attachment : callable returning EditorSceneAttachment or None
-    on_scene_edited : callable(scene_name) called after editor is attached to a new scene
+    on_editor_attach : callable(scene_name) attaches editor tools to a scene
+    on_editor_detach : callable() detaches editor tools from the current scene
     """
     from tcbase import log
 
@@ -117,7 +119,8 @@ def show_scene_manager_viewer(
     play_btn = _make_action_btn("Play")
     attach_btn = _make_action_btn("Attach")
     detach_btn = _make_action_btn("Detach")
-    edit_btn = _make_action_btn("Edit")
+    editor_attach_btn = _make_action_btn("Editor Attach")
+    editor_detach_btn = _make_action_btn("Editor Detach")
 
     actions_row.add_child(unload_btn)
     actions_row.add_child(duplicate_btn)
@@ -141,7 +144,8 @@ def show_scene_manager_viewer(
     sep3.text = "|"
     actions_row.add_child(sep3)
 
-    actions_row.add_child(edit_btn)
+    actions_row.add_child(editor_attach_btn)
+    actions_row.add_child(editor_detach_btn)
 
     content.add_child(actions_row)
 
@@ -165,7 +169,8 @@ def show_scene_manager_viewer(
         play_btn.enabled = has_sel
         attach_btn.enabled = has_sel
         detach_btn.enabled = has_sel
-        edit_btn.enabled = has_sel
+        editor_attach_btn.enabled = has_sel
+        editor_detach_btn.enabled = has_sel
 
     def _refresh():
         scene_list.set_rows([], [])
@@ -380,7 +385,7 @@ def show_scene_manager_viewer(
 
     detach_btn.on_click = _on_detach
 
-    def _on_edit():
+    def _on_editor_attach():
         if selected_name[0] is None:
             return
         attachment = get_editor_attachment() if get_editor_attachment else None
@@ -393,15 +398,26 @@ def show_scene_manager_viewer(
         if attachment.scene is scene:
             return
         try:
-            attachment.attach(scene, transfer_camera_state=True)
-            scene_manager.set_mode(selected_name[0], SceneMode.STOP)
-            if on_scene_edited is not None:
-                on_scene_edited(selected_name[0])
+            if on_editor_attach is None:
+                log.error("Editor attach callback not available")
+                return
+            on_editor_attach(selected_name[0])
             _refresh()
         except Exception as e:
             log.error(f"Failed to attach editor: {e}")
 
-    edit_btn.on_click = _on_edit
+    def _on_editor_detach():
+        try:
+            if on_editor_detach is None:
+                log.error("Editor detach callback not available")
+                return
+            on_editor_detach()
+            _refresh()
+        except Exception as e:
+            log.error(f"Failed to detach editor: {e}")
+
+    editor_attach_btn.on_click = _on_editor_attach
+    editor_detach_btn.on_click = _on_editor_detach
     refresh_btn.on_click = _refresh
 
     _refresh()

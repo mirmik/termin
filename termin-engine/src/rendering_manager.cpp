@@ -497,6 +497,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
                        rt_name.c_str(), vp_name.c_str());
             }
         }
+        tc_viewport_set_scene(viewport, scene);
 
         tc_display_add_viewport(display, viewport);
         viewports.push_back(viewport);

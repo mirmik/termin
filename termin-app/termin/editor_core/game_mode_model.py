@@ -17,13 +17,13 @@ class GameModeModel:
     def __init__(
         self,
         scene_manager,
-        editor_attachment,
+        editor_connector,
         rendering_controller,
         get_editor_scene_name: Callable[[], str | None],
         scene_tree_controller=None,
     ):
         self._scene_manager = scene_manager
-        self._editor_attachment = editor_attachment
+        self._editor_connector = editor_connector
         self._rendering_controller = rendering_controller
         self._get_editor_scene_name = get_editor_scene_name
         self._scene_tree_controller = scene_tree_controller
@@ -105,9 +105,7 @@ class GameModeModel:
 
         if self._rendering_controller is not None:
             self._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
-
-        if self._editor_attachment is not None:
-            self._editor_attachment.save_state()
+            self._rendering_controller.sync_render_target_configs_to_scene(editor_scene)
 
         self._game_scene_name = f"{editor_scene_name}(game)"
         game_scene = self._scene_manager.copy_scene(editor_scene_name, self._game_scene_name)
@@ -115,8 +113,12 @@ class GameModeModel:
         if self._rendering_controller is not None:
             self._rendering_controller.detach_scene(editor_scene)
 
-        if self._editor_attachment is not None:
-            self._editor_attachment.attach(game_scene, transfer_camera_state=True)
+        self._editor_connector.attach_editor_to_scene(
+            self._game_scene_name,
+            restore_state=False,
+            transfer_camera_state=True,
+            update_editor_scene_name=False,
+        )
 
         if self._rendering_controller is not None:
             self._rendering_controller.attach_scene(game_scene)
@@ -133,8 +135,10 @@ class GameModeModel:
 
         from termin.editor.scene_manager import SceneMode
 
-        if self._editor_attachment is not None:
-            self._editor_attachment.detach(save_state=False)
+        self._editor_connector.detach_editor_from_scene(
+            save_state=True,
+            clear_editor_scene_name=False,
+        )
 
         game_scene_name = self._game_scene_name
         game_scene = self._scene_manager.get_scene(game_scene_name) if game_scene_name else None
@@ -152,8 +156,13 @@ class GameModeModel:
         else:
             editor_scene = None
 
-        if editor_scene is not None and self._editor_attachment is not None:
-            self._editor_attachment.attach(editor_scene, restore_state=True)
+        if editor_scene is not None and editor_scene_name is not None:
+            self._editor_connector.attach_editor_to_scene(
+                editor_scene_name,
+                restore_state=True,
+                transfer_camera_state=False,
+                update_editor_scene_name=True,
+            )
 
         if editor_scene is not None and self._rendering_controller is not None:
             self._rendering_controller.attach_scene(editor_scene)

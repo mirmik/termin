@@ -348,9 +348,8 @@ class RenderingControllerTcgui:
     def set_displays_data(self, data: list | None) -> None:
         """Refresh viewport list after scene load.
 
-        Viewport creation happens in ``EditorSceneAttachment.attach`` which
-        calls ``attach_scene`` — no need to re-attach here. Matches the
-        Qt editor's ``_set_displays_data`` behavior.
+        Scene-owned viewport creation happens when the editor explicitly
+        attaches the scene to rendering after load/switch.
         """
         self.sync_viewport_list_from_manager()
 

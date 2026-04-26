@@ -457,15 +457,14 @@ class EditorWindowTcgui:
                 rendering_controller=self._rendering_controller,
                 make_editor_pipeline=make_editor_pipeline,
             )
-            self._editor_attachment.attach(self.scene, restore_state=False)
-            self._setup_editor_viewport_input_managers(self._editor_display)
-            self._attach_editor_input_router(self._editor_display)
+            self.attach_editor_to_scene(self._editor_scene_name, restore_state=False)
+            self._rendering_controller.attach_scene(self.scene)
 
             # GameModeModel owns Play/Stop/Pause state + transitions.
             from termin.editor_core.game_mode_model import GameModeModel
             self._game_mode_model = GameModeModel(
                 scene_manager=self.scene_manager,
-                editor_attachment=self._editor_attachment,
+                editor_connector=self,
                 rendering_controller=self._rendering_controller,
                 get_editor_scene_name=lambda: self._editor_scene_name,
                 scene_tree_controller=self.scene_tree_controller,
@@ -548,6 +547,94 @@ class EditorWindowTcgui:
         # refresh it now so the widget dispatches into the new router.
         if self._viewport_widget is not None:
             self._viewport_widget._connect_input(display)
+
+    def _sync_attachment_refs(self) -> None:
+        if self._editor_attachment is None:
+            self.camera = None
+            self.editor_entities = None
+            self.viewport = None
+            return
+        self.camera = self._editor_attachment.camera
+        self.editor_entities = self._editor_attachment.editor_entities
+        self.viewport = self._editor_attachment.viewport
+        if self._editor_attachment._display is not None:
+            self._setup_editor_viewport_input_managers(self._editor_attachment._display)
+            self._attach_editor_input_router(self._editor_attachment._display)
+
+    def attach_editor_to_scene(
+        self,
+        scene_name: str,
+        restore_state: bool = True,
+        transfer_camera_state: bool = False,
+        update_editor_scene_name: bool = True,
+    ) -> bool:
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is None:
+            log.error(f"Cannot attach editor to scene '{scene_name}': not found")
+            return False
+        if self._editor_attachment is None:
+            log.error("Cannot attach editor: EditorSceneAttachment not available")
+            return False
+
+        if self._editor_attachment.scene is not scene:
+            self._editor_attachment.attach(
+                scene,
+                restore_state=restore_state,
+                transfer_camera_state=transfer_camera_state,
+            )
+
+        if update_editor_scene_name:
+            self._editor_scene_name = scene_name
+        self.scene_manager.set_mode(scene_name, SceneMode.STOP)
+        self._sync_attachment_refs()
+
+        if self._interaction_system is not None:
+            self._interaction_system.selection.clear()
+            self._interaction_system.set_gizmo_target(None)
+
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.set_scene(scene)
+            self.scene_tree_controller.rebuild()
+
+        if self._inspector_controller is not None:
+            self._inspector_controller.set_scene(scene)
+            self._inspector_controller.clear()
+
+        self._update_window_title()
+        self._request_viewport_update()
+        return True
+
+    def detach_editor_from_scene(
+        self,
+        save_state: bool = True,
+        clear_editor_scene_name: bool = True,
+    ) -> bool:
+        if self._editor_attachment is None:
+            log.error("Cannot detach editor: EditorSceneAttachment not available")
+            return False
+        if self._editor_attachment.scene is None:
+            return True
+
+        self._editor_attachment.detach(save_state=save_state)
+        self._sync_attachment_refs()
+        if clear_editor_scene_name:
+            self._editor_scene_name = None
+
+        if self._interaction_system is not None:
+            self._interaction_system.selection.clear()
+            self._interaction_system.set_gizmo_target(None)
+
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.set_scene(None)
+            self.scene_tree_controller.rebuild()
+
+        if self._inspector_controller is not None:
+            self._inspector_controller.set_scene(None)
+            self._inspector_controller.clear()
+
+        self._update_window_title()
+        self._request_viewport_update()
+        return True
 
     def _setup_viewport(self) -> None:
         """Create FBO surface, editor display, and connect to Viewport3D."""
@@ -928,10 +1015,9 @@ class EditorWindowTcgui:
             editor_data = EditorStateIO.extract_from_file(path)
 
             if self._editor_attachment is not None:
-                self._editor_attachment.attach(self.scene, restore_state=False)
-                if self._editor_display is not None:
-                    self._setup_editor_viewport_input_managers(self._editor_display)
-                    self._attach_editor_input_router(self._editor_display)
+                self.attach_editor_to_scene(scene_name, restore_state=False)
+                if self._rendering_controller is not None:
+                    self._rendering_controller.attach_scene(self.scene)
 
             # Apply editor state (camera, selection, etc.)
             if self._editor_state_io is not None:
@@ -1240,26 +1326,17 @@ class EditorWindowTcgui:
             return
         from termin.editor_tcgui.dialogs.scene_manager_viewer import show_scene_manager_viewer
 
-        def _on_scene_edited(scene_name: str):
-            self._editor_scene_name = scene_name
-            self._sync_attachment_refs()
-            if self._interaction_system is not None:
-                self._interaction_system.selection.clear()
-                self._interaction_system.set_gizmo_target(None)
-            if self.scene_tree_controller is not None:
-                scene = self.scene_manager.get_scene(scene_name)
-                if scene is not None:
-                    self.scene_tree_controller.set_scene(scene)
-                    self.scene_tree_controller.rebuild()
-            self._update_window_title()
-            self._request_viewport_update()
-
         show_scene_manager_viewer(
             self._ui,
             self.scene_manager,
             get_rendering_controller=lambda: self._rendering_controller,
             get_editor_attachment=lambda: self._editor_attachment,
-            on_scene_edited=_on_scene_edited,
+            on_editor_attach=lambda name: self.attach_editor_to_scene(
+                name,
+                restore_state=True,
+                transfer_camera_state=False,
+            ),
+            on_editor_detach=lambda: self.detach_editor_from_scene(save_state=True),
         )
 
     def _show_pipeline_editor(self) -> None:
@@ -1590,6 +1667,8 @@ class EditorWindowTcgui:
     def switch_to_scene(self, scene_name: str) -> None:
         self._editor_scene_name = scene_name
         scene = self.scene_manager.get_scene(scene_name)
+        if scene is not None and self._rendering_controller is not None:
+            self._rendering_controller.attach_scene(scene)
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(scene)
             self.scene_tree_controller.rebuild()
