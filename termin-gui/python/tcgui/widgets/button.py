@@ -17,7 +17,7 @@ class Button(Widget):
         self.icon: str | None = None
 
         # Colors
-        self.background_color: tuple[float, float, float, float] = _t.bg_surface
+        self.background_color: tuple[float, float, float, float] = _t.bg_button
         self.hover_color: tuple[float, float, float, float] = _t.hover
         self.pressed_color: tuple[float, float, float, float] = _t.pressed
         self.text_color: tuple[float, float, float, float] = _t.text_primary
