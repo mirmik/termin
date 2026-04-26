@@ -5,7 +5,13 @@
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/vector.h>
 
+#include <memory>
+#include <vector>
+
 #include "termin/render/tc_display_handle.hpp"
+#include "termin/platform/offscreen_render_surface.hpp"
+#include "../platform/offscreen_render_surface_bindings.hpp"
+#include "termin/input/display_input_router.hpp"
 #include "termin/viewport/tc_viewport_handle.hpp"
 
 extern "C" {
@@ -18,6 +24,73 @@ extern "C" {
 namespace nb = nanobind;
 
 namespace termin {
+
+namespace {
+
+struct NativeDisplayRegistryEntry {
+    tc_display* display = nullptr;
+    OffscreenRenderSurfaceHandle offscreen_surface{};
+    std::unique_ptr<DisplayInputRouter> input_router;
+};
+
+std::vector<NativeDisplayRegistryEntry>& native_display_registry() {
+    static auto* registry = new std::vector<NativeDisplayRegistryEntry>();
+    return *registry;
+}
+
+tc_display* create_native_registry_display(tc_render_surface* surface, const std::string& name) {
+    tc_display* display = tc_display_new(name.c_str(), surface);
+    if (display) {
+        NativeDisplayRegistryEntry entry;
+        entry.display = display;
+        OffscreenRenderSurfaceHandle offscreen = offscreen_render_surface_find(surface);
+        if (offscreen_render_surface_handle_valid(offscreen)) {
+            offscreen_render_surface_retain(offscreen);
+            entry.offscreen_surface = offscreen;
+        }
+        native_display_registry().push_back(std::move(entry));
+    }
+    return display;
+}
+
+bool destroy_native_display(tc_display* display) {
+    if (!display) {
+        return false;
+    }
+
+    auto& registry = native_display_registry();
+    for (auto& entry : registry) {
+        if (entry.display == display) {
+            if (offscreen_render_surface_handle_valid(entry.offscreen_surface)) {
+                offscreen_render_surface_release(entry.offscreen_surface);
+            }
+            entry.input_router.reset();
+            tc_display_free(entry.display);
+            entry.display = nullptr;
+            entry.offscreen_surface = {};
+            return true;
+        }
+    }
+
+    tc_display_free(display);
+    return true;
+}
+
+void connect_native_display_input(tc_display* display) {
+    if (!display) {
+        return;
+    }
+
+    auto& registry = native_display_registry();
+    for (auto& entry : registry) {
+        if (entry.display == display) {
+            entry.input_router = std::make_unique<DisplayInputRouter>(display);
+            return;
+        }
+    }
+}
+
+} // namespace
 
 // Helper to convert viewport handle
 static std::tuple<uint32_t, uint32_t> vh_to_tuple(tc_viewport_handle h) {
@@ -41,7 +114,7 @@ void bind_tc_display(nb::module_& m) {
         .def("__init__", [](TcDisplay* self, uintptr_t surface_ptr, const std::string& name,
                             bool editor_only, const std::string& uuid) {
             tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(surface_ptr);
-            new (self) TcDisplay(surface, name);
+            new (self) TcDisplay(create_native_registry_display(surface, name), false);
             if (!uuid.empty()) {
                 self->set_uuid(uuid);
             }
@@ -49,7 +122,29 @@ void bind_tc_display(nb::module_& m) {
         }, nb::arg("surface_ptr"), nb::arg("name") = "Display",
            nb::arg("editor_only") = false, nb::arg("uuid") = "")
 
+        .def("__init__", [](TcDisplay* self, FBOSurfaceRef& surface, const std::string& name,
+                            bool editor_only, const std::string& uuid) {
+            tc_render_surface* tc_surface = reinterpret_cast<tc_render_surface*>(surface.tc_surface_ptr());
+            new (self) TcDisplay(create_native_registry_display(tc_surface, name), false);
+            if (!uuid.empty()) {
+                self->set_uuid(uuid);
+            }
+            self->set_editor_only(editor_only);
+        }, nb::arg("surface"), nb::arg("name") = "Display",
+           nb::arg("editor_only") = false, nb::arg("uuid") = "")
+
         .def("is_valid", &TcDisplay::is_valid)
+
+        .def("destroy", [](TcDisplay& self) {
+            if (destroy_native_display(self.ptr_)) {
+                self.ptr_ = nullptr;
+                self.owned_ = false;
+            }
+        }, "Explicitly destroy the native display. Python GC does not call this.")
+
+        .def("connect_input", [](TcDisplay& self) {
+            connect_native_display_input(self.ptr());
+        }, "Create and retain a native DisplayInputRouter for this display")
 
         .def_prop_ro("tc_display_ptr", [](TcDisplay& self) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(self.ptr());
@@ -89,6 +184,15 @@ void bind_tc_display(nb::module_& m) {
         .def_prop_ro("surface_ptr", [](TcDisplay& self) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(self.surface());
         }, "Raw pointer to tc_render_surface")
+
+        .def_prop_ro("surface", [](TcDisplay& self) -> nb::object {
+            tc_render_surface* surface = self.surface();
+            OffscreenRenderSurfaceHandle handle = offscreen_render_surface_find(surface);
+            if (offscreen_render_surface_handle_valid(handle)) {
+                return nb::cast(FBOSurfaceRef(handle));
+            }
+            return nb::none();
+        }, "Native render surface facade when the display uses a known native surface")
 
         // Size
         .def("get_size", [](TcDisplay& self) {
@@ -222,7 +326,7 @@ void bind_tc_display(nb::module_& m) {
 
     m.def("_display_free", [](uintptr_t ptr) {
         tc_display* d = reinterpret_cast<tc_display*>(ptr);
-        if (d) tc_display_free(d);
+        destroy_native_display(d);
     }, nb::arg("ptr"));
 
     m.def("_display_get_name", [](uintptr_t ptr) -> std::string {

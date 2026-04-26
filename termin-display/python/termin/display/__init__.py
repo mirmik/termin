@@ -10,6 +10,7 @@ from termin.display.window_manager import (
 
 from termin.display._display_native import Display
 from termin.display._display_native import DisplayInputRouter
+from termin.display._display_native import FBOSurface
 from termin.display._display_native import _display_get_surface_ptr
 from termin.display._display_native import _display_input_router_base
 from termin.display._display_native import _display_input_router_free
@@ -39,6 +40,7 @@ __all__ = [
     "BackendWindowManager",
     "Display",
     "DisplayInputRouter",
+    "FBOSurface",
     "_display_get_surface_ptr",
     "_display_input_router_base",
     "_display_input_router_free",

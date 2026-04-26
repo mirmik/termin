@@ -76,6 +76,7 @@ set(TERMIN_DISPLAY_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_display_input_router.c
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_viewport_input_manager.c
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_render_surface.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/platform/offscreen_render_surface.cpp
 )
 
 if(TERMIN_DISPLAY_HAS_SDL)
@@ -177,6 +178,7 @@ if(TERMIN_BUILD_PYTHON)
         bindings/render/tc_input_manager_bindings.cpp
         bindings/render/tc_render_surface_bindings.cpp
         bindings/input/display_input_router_bindings.cpp
+        bindings/platform/offscreen_render_surface_bindings.cpp
     )
     target_link_libraries(_display_native PRIVATE termin_display)
     target_include_directories(_display_native PRIVATE
@@ -256,6 +258,11 @@ install(FILES
 install(FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/display_input_router.hpp
     DESTINATION include/termin/input
+)
+
+install(FILES
+    ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/offscreen_render_surface.hpp
+    DESTINATION include/termin/platform
 )
 
 if(TERMIN_DISPLAY_HAS_SDL)

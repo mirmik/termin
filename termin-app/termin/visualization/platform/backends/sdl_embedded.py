@@ -407,6 +407,10 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         return _TcSurfaceWrapper(self._tc_surface_ptr)
 
     @property
+    def tc_surface_ptr(self) -> int:
+        return self._tc_surface_ptr
+
+    @property
     def _input_manager_ptr(self) -> int:
         """Read input_manager pointer directly from C surface."""
         from termin._native.render import _render_surface_get_input_manager

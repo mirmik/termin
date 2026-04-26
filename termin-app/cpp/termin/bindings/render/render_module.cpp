@@ -55,6 +55,7 @@ void bind_render(nb::module_& m) {
     m.attr("FrameGraphDebuggerCore") = framework.attr("FrameGraphDebuggerCore");
 
     m.attr("Display") = display_native.attr("Display");
+    m.attr("FBOSurface") = display_native.attr("FBOSurface");
     m.attr("DisplayInputRouter") = display_native.attr("DisplayInputRouter");
     m.attr("_render_surface_new_from_python") = display_native.attr("_render_surface_new_from_python");
     m.attr("_render_surface_free_external") = display_native.attr("_render_surface_free_external");
