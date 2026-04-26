@@ -215,7 +215,7 @@ class RenderingControllerTcgui:
         if self._offscreen_context is not None:
             self._offscreen_context.make_current()
 
-        fbo = FBOSurface(800, 600, ctx=self._ctx)
+        fbo = FBOSurface(self._ctx.device, 800, 600)
         display = Display(surface=fbo, name=name)
         display.auto_remove_when_empty = True
 

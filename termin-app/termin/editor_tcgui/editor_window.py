@@ -687,7 +687,7 @@ class EditorWindowTcgui:
         # for parity with tests that still supply one.
         if self._offscreen_context is not None:
             self._offscreen_context.make_current()
-        self._fbo_surface = FBOSurface(800, 600, ctx=self._ctx)
+        self._fbo_surface = FBOSurface(self._ctx.device, 800, 600)
 
         try:
             from termin.visualization.core.display import Display
@@ -699,8 +699,6 @@ class EditorWindowTcgui:
                 self._viewport_widget.set_surface(self._fbo_surface, display)
                 self._viewport_widget.on_before_resize = self._on_before_viewport_resize
 
-            # Setup FBO on_resize to recreate viewport/display connection
-            self._fbo_surface.on_resize = self._on_fbo_resized
         except Exception as e:
             log.error(f"EditorWindowTcgui: failed to create editor display: {e}")
 
