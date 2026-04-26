@@ -27,6 +27,12 @@ class EditorSettings:
     KEY_LAST_PROJECT_PATH = "ProjectBrowser/lastProjectPath"
     KEY_LAST_SCENE_PATH = "Editor/lastScenePath"
     KEY_TEXT_EDITOR = "Editor/textEditor"
+    KEY_FONT_SIZE = "Editor/fontSize"
+    KEY_FONT_SIZE_SMALL = "Editor/fontSizeSmall"
+
+    # Значения по умолчанию
+    DEFAULT_FONT_SIZE: float = 14.0
+    DEFAULT_FONT_SIZE_SMALL: float = 11.0
 
     def __init__(self):
         self._settings = Settings("TerminEditor")
@@ -143,3 +149,19 @@ class EditorSettings:
     def set_text_editor(self, editor_path: str | None) -> None:
         """Сохранить путь к текстовому редактору."""
         self.set(self.KEY_TEXT_EDITOR, editor_path or "")
+
+    def get_font_size(self) -> float:
+        """Получить базовый размер шрифта."""
+        return self.get(self.KEY_FONT_SIZE, self.DEFAULT_FONT_SIZE)
+
+    def set_font_size(self, size: float) -> None:
+        """Сохранить базовый размер шрифта."""
+        self.set(self.KEY_FONT_SIZE, size)
+
+    def get_font_size_small(self) -> float:
+        """Получить малый размер шрифта."""
+        return self.get(self.KEY_FONT_SIZE_SMALL, self.DEFAULT_FONT_SIZE_SMALL)
+
+    def set_font_size_small(self, size: float) -> None:
+        """Сохранить малый размер шрифта."""
+        self.set(self.KEY_FONT_SIZE_SMALL, size)
