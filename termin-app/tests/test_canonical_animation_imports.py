@@ -11,9 +11,9 @@ def test_animation_native_via_canonical_path():
 
 
 def test_components_animation_native_via_canonical_path():
-    """_components_animation_native should be findable via termin.animation_components."""
+    """_components_animation_native is shipped in the termin.animation namespace."""
     try:
-        mod = importlib.import_module("termin.animation_components._components_animation_native")
+        mod = importlib.import_module("termin.animation._components_animation_native")
         assert hasattr(mod, "AnimationPlayer")
     except ImportError as e:
         if "libtermin_skeleton" in str(e) or "initializing the extension" in str(e):
@@ -88,7 +88,7 @@ def test_no_legacy_imports_in_canonical_modules():
 
     source = inspect.getsource(clip)
     assert "termin.visualization.animation._animation_native" not in source
-    assert "termin.animation._animation_native" in source
+    assert "._animation_native" in source
 
 
 def test_animation_facade_modules_removed():

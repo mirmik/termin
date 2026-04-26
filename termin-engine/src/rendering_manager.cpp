@@ -765,7 +765,7 @@ void RenderingManager::render_all_offscreen() {
 
     // 2. Execute scene pipelines (can span multiple displays)
     for (tc_scene_handle scene : attached_scenes_) {
-        if (!tc_scene_handle_valid(scene)) continue;
+        if (!tc_scene_alive(scene)) continue;
 
         std::vector<std::string> pipeline_names = get_pipeline_names(scene);
         for (const std::string& pipeline_name : pipeline_names) {
@@ -1287,6 +1287,12 @@ void RenderingManager::detach_scene(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
     tc_scene_notify_render_detach(scene);
     clear_scene_pipelines(scene);
+
+    auto it = std::find_if(attached_scenes_.begin(), attached_scenes_.end(),
+        [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
+    if (it != attached_scenes_.end()) {
+        attached_scenes_.erase(it);
+    }
 }
 
 tc_pipeline_handle RenderingManager::get_scene_pipeline(tc_scene_handle scene, const std::string& name) const {
