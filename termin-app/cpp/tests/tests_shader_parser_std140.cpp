@@ -171,7 +171,7 @@ TEST_CASE("synthesize: emits GLSL block with correct types and order")
     MaterialUboLayout layout = compute_std140_layout(props);
     std::string glsl = synthesize_material_ubo_glsl(layout);
 
-    CHECK(glsl.find("layout(std140) uniform MaterialParams") != std::string::npos);
+    CHECK(glsl.find("layout(std140, binding = 1) uniform MaterialParams") != std::string::npos);
     CHECK(glsl.find("float u_strength;") != std::string::npos);
     CHECK(glsl.find("vec4 u_tint;") != std::string::npos);
     // u_strength declared before u_tint (order preserved).
@@ -226,7 +226,8 @@ TEST_CASE("inject_after_version: prepends when there is no version line")
 {
     std::string src = "void main() { }\n";
     std::string out = inject_after_version(src, "INJECTED\n");
-    CHECK_EQ(out.substr(0, 9), std::string("INJECTED\n"));
+    CHECK_EQ(out.substr(0, 18), std::string("#version 450 core\n"));
+    CHECK_EQ(out.substr(18, 9), std::string("INJECTED\n"));
 }
 
 TEST_CASE("parse_shader_text: material_ubo feature rewrites stage sources")
@@ -265,20 +266,20 @@ TEST_CASE("parse_shader_text: material_ubo feature rewrites stage sources")
     // Fragment source must have the generated block and no raw decls for
     // u_strength / u_tint, but sampler2D u_albedo survives.
     const auto& frag = phase.stages.at("fragment").source;
-    CHECK(frag.find("layout(std140) uniform MaterialParams") != std::string::npos);
+    CHECK(frag.find("layout(std140, binding = 1) uniform MaterialParams") != std::string::npos);
     CHECK(frag.find("uniform float u_strength;") == std::string::npos);
     CHECK(frag.find("uniform vec4 u_tint;") == std::string::npos);
     CHECK(frag.find("sampler2D u_albedo;") != std::string::npos);
 
     // The generated block must come after #version.
     size_t ver_pos = frag.find("#version");
-    size_t block_pos = frag.find("layout(std140)");
+    size_t block_pos = frag.find("layout(std140, binding = 1)");
     CHECK(ver_pos != std::string::npos);
     CHECK(block_pos != std::string::npos);
     CHECK(ver_pos < block_pos);
 }
 
-TEST_CASE("parse_shader_text: no material_ubo feature leaves sources untouched")
+TEST_CASE("parse_shader_text: scalar properties synthesize material UBO without feature flag")
 {
     const std::string shader_text =
         "@program LegacyShader\n"
@@ -293,11 +294,34 @@ TEST_CASE("parse_shader_text: no material_ubo feature leaves sources untouched")
 
     ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
     CHECK(!prog.has_feature("material_ubo"));
+    CHECK_EQ(prog.phases[0].material_ubo_layout.entries.size(), 1u);
+    CHECK_EQ(prog.phases[0].material_ubo_layout.entries[0].name, "u_strength");
+
+    const auto& frag = prog.phases[0].stages.at("fragment").source;
+    CHECK(frag.find("uniform float u_strength;") == std::string::npos);
+    CHECK(frag.find("layout(std140, binding = 1) uniform MaterialParams") != std::string::npos);
+}
+
+TEST_CASE("parse_shader_text: phases without UBO properties leave stage body untouched except version")
+{
+    const std::string shader_text =
+        "@program TextureOnlyShader\n"
+        "@phase opaque\n"
+        "@property Texture2D u_albedo = \"white\"\n"
+        "@stage fragment\n"
+        "#version 330 core\n"
+        "uniform sampler2D u_albedo;\n"
+        "void main() { }\n"
+        "@endstage\n"
+        "@endphase\n";
+
+    ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
+    CHECK(!prog.has_feature("material_ubo"));
     CHECK(prog.phases[0].material_ubo_layout.empty());
 
     const auto& frag = prog.phases[0].stages.at("fragment").source;
-    // Legacy path: the raw uniform decl must still be present.
-    CHECK(frag.find("uniform float u_strength;") != std::string::npos);
+    CHECK(frag.find("#version 450 core") != std::string::npos);
+    CHECK(frag.find("uniform sampler2D u_albedo;") != std::string::npos);
     CHECK(frag.find("MaterialParams") == std::string::npos);
 }
 

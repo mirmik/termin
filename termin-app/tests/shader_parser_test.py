@@ -38,7 +38,7 @@ def test_parse_render_state_directives():
     assert phase.gl_depth_test is True
     assert phase.gl_blend is True
     assert phase.gl_cull is False
-    assert phase.stages["vertex"].source == "void main() {}\n"
+    assert phase.stages["vertex"].source == "#version 450 core\nvoid main() {}\n"
 
 
 def test_render_state_directives_require_phase():
@@ -96,8 +96,8 @@ def test_parse_multiple_phases_and_stages():
     assert geometry.gl_depth_mask is None
     assert geometry.gl_blend is None
     assert geometry.gl_cull is None
-    assert geometry.stages["vertex"].source == "// vertex stage\nvoid main() {}\n"
-    assert geometry.stages["fragment"].source == "// fragment stage\nvoid main() {\n  gl_FragColor = vec4(1.0);\n}\n"
+    assert geometry.stages["vertex"].source == "#version 450 core\n// vertex stage\nvoid main() {}\n"
+    assert geometry.stages["fragment"].source == "#version 450 core\n// fragment stage\nvoid main() {\n  gl_FragColor = vec4(1.0);\n}\n"
 
     overlay = parsed.phases[1]
     assert overlay.phase_mark == "overlay"
@@ -106,7 +106,7 @@ def test_parse_multiple_phases_and_stages():
     assert overlay.gl_depth_test is False
     assert overlay.gl_blend is True
     assert overlay.gl_cull is None
-    assert overlay.stages["vertex"].source == "// overlay vertex\n"
+    assert overlay.stages["vertex"].source == "#version 450 core\n// overlay vertex\n"
 
 
 def test_tree_builders_have_uniform_signature():
@@ -133,7 +133,7 @@ def test_tree_builders_have_uniform_signature():
     assert depth_phase.gl_depth_test is True
     assert depth_phase.gl_blend is None
     assert depth_phase.gl_depth_mask is None
-    assert depth_phase.stages["vertex"].source == "void main() {}\n"
+    assert depth_phase.stages["vertex"].source == "#version 450 core\nvoid main() {}\n"
     assert isinstance(depth_phase.stages["vertex"], ShasderStage)
 
 
