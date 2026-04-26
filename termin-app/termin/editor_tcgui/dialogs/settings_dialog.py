@@ -70,6 +70,8 @@ def show_settings_dialog(ui) -> None:
     content.add_child(row)
 
     # Font sizes
+    from tcgui.widgets.theme import current_theme as _t
+
     font_row, font_spin = _make_spin_row(
         "Font Size:", settings.get_font_size(),
         8.0, 32.0, 1.0, 0)
@@ -79,13 +81,6 @@ def show_settings_dialog(ui) -> None:
         "Font Size (small):", settings.get_font_size_small(),
         8.0, 24.0, 1.0, 0)
     content.add_child(font_small_row)
-
-    note = Label()
-    note.text = "Font changes take effect after restart."
-    note.font_size = 11.0
-    from tcgui.widgets.theme import current_theme as _t
-    note.color = _t.text_muted
-    content.add_child(note)
 
     dlg = Dialog()
     dlg.title = "Settings"
@@ -102,6 +97,13 @@ def show_settings_dialog(ui) -> None:
             settings.set_font_size(font_spin.value)
             settings.set_font_size_small(font_small_spin.value)
             settings.sync()
+
+            # Apply font changes to the live widget tree immediately.
+            _t.font_size = font_spin.value
+            _t.font_size_small = font_small_spin.value
+            if ui.root is not None:
+                _t.apply_to(ui.root)
+                ui.request_layout()
 
     dlg.on_result = _on_result
     dlg.show(ui, windowed=True)
