@@ -21,12 +21,14 @@ class GameModeModel:
         rendering_controller,
         get_editor_scene_name: Callable[[], str | None],
         scene_tree_controller=None,
+        render_connector=None,
     ):
         self._scene_manager = scene_manager
         self._editor_connector = editor_connector
         self._rendering_controller = rendering_controller
         self._get_editor_scene_name = get_editor_scene_name
         self._scene_tree_controller = scene_tree_controller
+        self._render_connector = render_connector
 
         self._game_scene_name: str | None = None
         self._saved_tree_expanded_uuids: list[str] | None = None
@@ -103,15 +105,17 @@ class GameModeModel:
 
         self._save_editor_viewport_camera_to_scene(editor_scene)
 
-        if self._rendering_controller is not None:
-            self._rendering_controller.sync_viewport_configs_to_scene(editor_scene)
-            self._rendering_controller.sync_render_target_configs_to_scene(editor_scene)
+        if self._render_connector is not None:
+            self._render_connector.sync_scene_render_state(editor_scene_name)
 
         self._game_scene_name = f"{editor_scene_name}(game)"
         game_scene = self._scene_manager.copy_scene(editor_scene_name, self._game_scene_name)
 
-        if self._rendering_controller is not None:
-            self._rendering_controller.detach_scene(editor_scene)
+        if self._render_connector is not None:
+            self._render_connector.detach_scene_from_render(
+                editor_scene_name,
+                save_state=False,
+            )
 
         self._editor_connector.attach_editor_to_scene(
             self._game_scene_name,
@@ -120,8 +124,8 @@ class GameModeModel:
             update_editor_scene_name=False,
         )
 
-        if self._rendering_controller is not None:
-            self._rendering_controller.attach_scene(game_scene)
+        if self._render_connector is not None:
+            self._render_connector.attach_scene_to_render(self._game_scene_name)
 
         self._scene_manager.set_mode(editor_scene_name, SceneMode.INACTIVE)
         self._scene_manager.set_mode(self._game_scene_name, SceneMode.PLAY)
@@ -142,8 +146,11 @@ class GameModeModel:
 
         game_scene_name = self._game_scene_name
         game_scene = self._scene_manager.get_scene(game_scene_name) if game_scene_name else None
-        if game_scene is not None and self._rendering_controller is not None:
-            self._rendering_controller.detach_scene(game_scene)
+        if game_scene is not None and game_scene_name is not None and self._render_connector is not None:
+            self._render_connector.detach_scene_from_render(
+                game_scene_name,
+                save_state=False,
+            )
 
         if game_scene_name is not None:
             self._scene_manager.close_scene(game_scene_name)
@@ -164,8 +171,8 @@ class GameModeModel:
                 update_editor_scene_name=True,
             )
 
-        if editor_scene is not None and self._rendering_controller is not None:
-            self._rendering_controller.attach_scene(editor_scene)
+        if editor_scene is not None and editor_scene_name is not None and self._render_connector is not None:
+            self._render_connector.attach_scene_to_render(editor_scene_name)
 
         self.state_changed.emit(self)
         self.mode_entered.emit(False, editor_scene, self._saved_tree_expanded_uuids)

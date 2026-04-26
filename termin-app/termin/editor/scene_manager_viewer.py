@@ -325,15 +325,15 @@ class SceneManagerViewer(QWidget):
             QMessageBox.critical(self, "Mode Error", f"Failed to set mode:\n{e}")
 
     def _on_attach_scene(self) -> None:
-        """Attach selected scene to RenderingController."""
+        """Attach selected scene to render through EditorWindow API."""
         if self._selected_scene_name is None:
             return
 
-        from termin.editor.rendering_controller import RenderingController
+        from termin.editor.editor_window import EditorWindow
 
-        rc = RenderingController.instance()
-        if rc is None:
-            QMessageBox.warning(self, "No Controller", "RenderingController not available")
+        editor = EditorWindow.instance()
+        if editor is None:
+            QMessageBox.warning(self, "No Editor", "EditorWindow not available")
             return
 
         scene = self._scene_manager.get_scene(self._selected_scene_name)
@@ -341,22 +341,22 @@ class SceneManagerViewer(QWidget):
             return
 
         try:
-            rc.attach_scene(scene)
+            editor.attach_scene_to_render(self._selected_scene_name)
             self.refresh()
             QMessageBox.information(self, "Attached", f"Scene '{self._selected_scene_name}' attached")
         except Exception as e:
             QMessageBox.critical(self, "Attach Error", f"Failed to attach scene:\n{e}")
 
     def _on_detach_scene(self) -> None:
-        """Detach selected scene from RenderingController."""
+        """Detach selected scene from render through EditorWindow API."""
         if self._selected_scene_name is None:
             return
 
-        from termin.editor.rendering_controller import RenderingController
+        from termin.editor.editor_window import EditorWindow
 
-        rc = RenderingController.instance()
-        if rc is None:
-            QMessageBox.warning(self, "No Controller", "RenderingController not available")
+        editor = EditorWindow.instance()
+        if editor is None:
+            QMessageBox.warning(self, "No Editor", "EditorWindow not available")
             return
 
         scene = self._scene_manager.get_scene(self._selected_scene_name)
@@ -364,7 +364,7 @@ class SceneManagerViewer(QWidget):
             return
 
         try:
-            rc.detach_scene(scene)
+            editor.detach_scene_from_render(self._selected_scene_name, save_state=True)
             self.refresh()
             QMessageBox.information(self, "Detached", f"Scene '{self._selected_scene_name}' detached")
         except Exception as e:

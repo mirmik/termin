@@ -124,6 +124,29 @@ class _EditorConnector:
         return True
 
 
+class _RenderConnector:
+    events: list[tuple]
+
+    def __init__(self):
+        self.events = []
+
+    def sync_scene_render_state(self, scene_name: str) -> bool:
+        self.events.append(("sync_scene_render_state", scene_name))
+        return True
+
+    def attach_scene_to_render(self, scene_name: str) -> bool:
+        self.events.append(("attach_scene_to_render", scene_name))
+        return True
+
+    def detach_scene_from_render(
+        self,
+        scene_name: str,
+        save_state: bool = True,
+    ) -> bool:
+        self.events.append(("detach_scene_from_render", scene_name, save_state))
+        return True
+
+
 class _SceneTreeController:
     expanded_uuids: list[str]
 
@@ -266,6 +289,7 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
 
     rendering = _RenderingController()
     connector = _EditorConnector()
+    render_connector = _RenderConnector()
     tree = _SceneTreeController()
 
     model = GameModeModel(
@@ -274,6 +298,7 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
         rendering_controller=rendering,
         get_editor_scene_name=lambda: "Editor",
         scene_tree_controller=tree,
+        render_connector=render_connector,
     )
 
     state_events = []
@@ -297,10 +322,15 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
         assert scene_manager.get_mode("Editor") == SceneMode.INACTIVE
         assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
         assert scene_manager.has_play_scenes() is True
-        assert rendering.sync_calls == ["Editor"]
-        assert rendering.sync_render_target_calls == ["Editor"]
-        assert rendering.detach_calls == ["Editor"]
-        assert rendering.attach_calls == ["Editor(game)"]
+        assert rendering.sync_calls == []
+        assert rendering.sync_render_target_calls == []
+        assert rendering.detach_calls == []
+        assert rendering.attach_calls == []
+        assert render_connector.events == [
+            ("sync_scene_render_state", "Editor"),
+            ("detach_scene_from_render", "Editor", False),
+            ("attach_scene_to_render", "Editor(game)"),
+        ]
         assert connector.events == [
             (
                 "attach_editor_to_scene",
@@ -333,8 +363,15 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
         assert scene_manager.has_scene("Editor(game)") is False
         assert scene_manager.get_mode("Editor") == SceneMode.STOP
         assert scene_manager.has_play_scenes() is False
-        assert rendering.detach_calls == ["Editor", "Editor(game)"]
-        assert rendering.attach_calls == ["Editor(game)", "Editor"]
+        assert rendering.detach_calls == []
+        assert rendering.attach_calls == []
+        assert render_connector.events == [
+            ("sync_scene_render_state", "Editor"),
+            ("detach_scene_from_render", "Editor", False),
+            ("attach_scene_to_render", "Editor(game)"),
+            ("detach_scene_from_render", "Editor(game)", False),
+            ("attach_scene_to_render", "Editor"),
+        ]
         assert connector.events == [
             (
                 "attach_editor_to_scene",

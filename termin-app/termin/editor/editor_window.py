@@ -376,7 +376,7 @@ class EditorWindow(QMainWindow):
 
         # Attach to initial scene (creates EditorEntities and viewport)
         self.attach_editor_to_scene(self._editor_scene_name, restore_state=False)
-        self._rendering_controller.attach_scene(self.scene)
+        self.attach_scene_to_render(self._editor_scene_name)
 
         # Wire mode controller's model with fully-initialized deps.
         self._mode_controller.bind_late()
@@ -793,6 +793,49 @@ class EditorWindow(QMainWindow):
         self._request_viewport_update()
         return True
 
+    def sync_scene_render_state(self, scene_name: str) -> bool:
+        """Persist live scene-owned viewport/render target state into the scene."""
+        if self._rendering_controller is None:
+            log.error("Cannot sync render state: RenderingController not available")
+            return False
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is None:
+            log.error(f"Cannot sync render state for scene '{scene_name}': not found")
+            return False
+        self._rendering_controller.sync_viewport_configs_to_scene(scene)
+        self._rendering_controller.sync_render_target_configs_to_scene(scene)
+        return True
+
+    def attach_scene_to_render(self, scene_name: str) -> bool:
+        """Attach a scene to the render engine using scene-owned configs."""
+        if self._rendering_controller is None:
+            log.error("Cannot attach scene to render: RenderingController not available")
+            return False
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is None:
+            log.error(f"Cannot attach scene '{scene_name}' to render: not found")
+            return False
+        self._rendering_controller.attach_scene(scene)
+        return True
+
+    def detach_scene_from_render(
+        self,
+        scene_name: str,
+        save_state: bool = True,
+    ) -> bool:
+        """Detach a scene from the render engine, optionally saving live configs."""
+        if self._rendering_controller is None:
+            log.error("Cannot detach scene from render: RenderingController not available")
+            return False
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is None:
+            log.error(f"Cannot detach scene '{scene_name}' from render: not found")
+            return False
+        if save_state:
+            self.sync_scene_render_state(scene_name)
+        self._rendering_controller.detach_scene(scene)
+        return True
+
     def _get_editor_camera_data(self) -> dict | None:
         """Get editor camera data for serialization."""
         if self._editor_attachment is None:
@@ -1199,9 +1242,7 @@ class EditorWindow(QMainWindow):
 
     def _on_before_scene_close(self, scene_name: str) -> None:
         """Called before a scene is destroyed. Removes viewports referencing this scene."""
-        scene = self.scene_manager.get_scene(scene_name)
-        if scene is not None and self._rendering_controller is not None:
-            self._rendering_controller.remove_viewports_for_scene(scene)
+        self.detach_scene_from_render(scene_name, save_state=False)
 
     def _on_before_close_editor_scene(self, scene_name: str) -> None:
         """Called before editor scene is closed. Unbinds UI and sets INACTIVE."""
@@ -1210,9 +1251,7 @@ class EditorWindow(QMainWindow):
             self.scene_tree_controller.set_scene(None)
 
         # Remove viewports for this scene
-        scene = self.scene_manager.get_scene(scene_name)
-        if scene is not None and self._rendering_controller is not None:
-            self._rendering_controller.remove_viewports_for_scene(scene)
+        self.detach_scene_from_render(scene_name, save_state=False)
 
         # Set INACTIVE mode
         if self.scene_manager.has_scene(scene_name):
@@ -1641,8 +1680,7 @@ class EditorWindow(QMainWindow):
             return
 
         self.attach_editor_to_scene(name, transfer_camera_state=True)
-        if self._rendering_controller is not None:
-            self._rendering_controller.attach_scene(new_scene)
+        self.attach_scene_to_render(name)
 
         # Clear undo stack
         self.undo_stack.clear()

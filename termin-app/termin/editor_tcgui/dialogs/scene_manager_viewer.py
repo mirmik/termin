@@ -26,8 +26,9 @@ def _format_scene_handle(handle) -> str:
 def show_scene_manager_viewer(
     ui,
     scene_manager: "SceneManager",
-    get_rendering_controller=None,
     get_editor_attachment=None,
+    on_render_attach=None,
+    on_render_detach=None,
     on_editor_attach=None,
     on_editor_detach=None,
 ) -> None:
@@ -37,8 +38,9 @@ def show_scene_manager_viewer(
     ----------
     ui : UI
     scene_manager : SceneManager
-    get_rendering_controller : callable returning RenderingControllerTcgui or None
     get_editor_attachment : callable returning EditorSceneAttachment or None
+    on_render_attach : callable(scene_name) attaches scene-owned viewports
+    on_render_detach : callable(scene_name) detaches scene-owned viewports
     on_editor_attach : callable(scene_name) attaches editor tools to a scene
     on_editor_detach : callable() detaches editor tools from the current scene
     """
@@ -352,15 +354,14 @@ def show_scene_manager_viewer(
     def _on_attach():
         if selected_name[0] is None:
             return
-        rc = get_rendering_controller() if get_rendering_controller else None
-        if rc is None:
-            log.error("RenderingController not available")
+        if on_render_attach is None:
+            log.error("Render attach callback not available")
             return
         scene = scene_manager.get_scene(selected_name[0])
         if scene is None:
             return
         try:
-            rc.attach_scene(scene)
+            on_render_attach(selected_name[0])
             _refresh()
         except Exception as e:
             log.error(f"Failed to attach scene: {e}")
@@ -370,15 +371,14 @@ def show_scene_manager_viewer(
     def _on_detach():
         if selected_name[0] is None:
             return
-        rc = get_rendering_controller() if get_rendering_controller else None
-        if rc is None:
-            log.error("RenderingController not available")
+        if on_render_detach is None:
+            log.error("Render detach callback not available")
             return
         scene = scene_manager.get_scene(selected_name[0])
         if scene is None:
             return
         try:
-            rc.detach_scene(scene)
+            on_render_detach(selected_name[0])
             _refresh()
         except Exception as e:
             log.error(f"Failed to detach scene: {e}")
