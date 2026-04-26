@@ -458,7 +458,7 @@ class EditorWindowTcgui:
                 make_editor_pipeline=make_editor_pipeline,
             )
             self.attach_editor_to_scene(self._editor_scene_name, restore_state=False)
-            self._rendering_controller.attach_scene(self.scene)
+            self.attach_scene_to_render(self._editor_scene_name)
 
             # GameModeModel owns Play/Stop/Pause state + transitions.
             from termin.editor_core.game_mode_model import GameModeModel
@@ -468,6 +468,7 @@ class EditorWindowTcgui:
                 rendering_controller=self._rendering_controller,
                 get_editor_scene_name=lambda: self._editor_scene_name,
                 scene_tree_controller=self.scene_tree_controller,
+                render_connector=self,
             )
             self._game_mode_model.mode_entered.connect(self._on_game_mode_entered)
 
@@ -634,6 +635,46 @@ class EditorWindowTcgui:
 
         self._update_window_title()
         self._request_viewport_update()
+        return True
+
+    def sync_scene_render_state(self, scene_name: str) -> bool:
+        if self._rendering_controller is None:
+            log.error("Cannot sync render state: RenderingController not available")
+            return False
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is None:
+            log.error(f"Cannot sync render state for scene '{scene_name}': not found")
+            return False
+        self._rendering_controller.sync_viewport_configs_to_scene(scene)
+        self._rendering_controller.sync_render_target_configs_to_scene(scene)
+        return True
+
+    def attach_scene_to_render(self, scene_name: str) -> bool:
+        if self._rendering_controller is None:
+            log.error("Cannot attach scene to render: RenderingController not available")
+            return False
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is None:
+            log.error(f"Cannot attach scene '{scene_name}' to render: not found")
+            return False
+        self._rendering_controller.attach_scene(scene)
+        return True
+
+    def detach_scene_from_render(
+        self,
+        scene_name: str,
+        save_state: bool = True,
+    ) -> bool:
+        if self._rendering_controller is None:
+            log.error("Cannot detach scene from render: RenderingController not available")
+            return False
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is None:
+            log.error(f"Cannot detach scene '{scene_name}' from render: not found")
+            return False
+        if save_state:
+            self.sync_scene_render_state(scene_name)
+        self._rendering_controller.detach_scene(scene)
         return True
 
     def _setup_viewport(self) -> None:
@@ -1016,8 +1057,7 @@ class EditorWindowTcgui:
 
             if self._editor_attachment is not None:
                 self.attach_editor_to_scene(scene_name, restore_state=False)
-                if self._rendering_controller is not None:
-                    self._rendering_controller.attach_scene(self.scene)
+                self.attach_scene_to_render(scene_name)
 
             # Apply editor state (camera, selection, etc.)
             if self._editor_state_io is not None:
@@ -1329,8 +1369,9 @@ class EditorWindowTcgui:
         show_scene_manager_viewer(
             self._ui,
             self.scene_manager,
-            get_rendering_controller=lambda: self._rendering_controller,
             get_editor_attachment=lambda: self._editor_attachment,
+            on_render_attach=lambda name: self.attach_scene_to_render(name),
+            on_render_detach=lambda name: self.detach_scene_from_render(name, save_state=True),
             on_editor_attach=lambda name: self.attach_editor_to_scene(
                 name,
                 restore_state=True,
@@ -1660,15 +1701,12 @@ class EditorWindowTcgui:
     # ------------------------------------------------------------------
 
     def _on_before_scene_close(self, scene_name: str) -> None:
-        scene = self.scene_manager.get_scene(scene_name)
-        if scene is not None and self._rendering_controller is not None:
-            self._rendering_controller.remove_viewports_for_scene(scene)
+        self.detach_scene_from_render(scene_name, save_state=False)
 
     def switch_to_scene(self, scene_name: str) -> None:
         self._editor_scene_name = scene_name
         scene = self.scene_manager.get_scene(scene_name)
-        if scene is not None and self._rendering_controller is not None:
-            self._rendering_controller.attach_scene(scene)
+        self.attach_scene_to_render(scene_name)
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(scene)
             self.scene_tree_controller.rebuild()

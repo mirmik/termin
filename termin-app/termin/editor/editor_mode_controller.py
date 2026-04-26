@@ -34,6 +34,7 @@ class EditorModeController:
             rendering_controller=self._window._rendering_controller,
             get_editor_scene_name=lambda: self._window._editor_scene_name,
             scene_tree_controller=self._window.scene_tree_controller,
+            render_connector=self._window,
         )
         self._model.state_changed.connect(self._on_state_changed)
         self._model.mode_entered.connect(self._on_mode_entered)
