@@ -176,7 +176,8 @@ class RenderingModel:
         """True if this scene already has at least one non-editor viewport."""
         for display in self._non_editor_displays():
             for vp in display.viewports:
-                if vp.scene is scene:
+                vp_scene = vp.scene
+                if vp_scene is not None and vp_scene.equal(scene):
                     return True
         return False
 
@@ -195,7 +196,10 @@ class RenderingModel:
             self._offscreen_context.make_current()
 
         for display in self._non_editor_displays():
-            viewports_to_remove = [vp for vp in display.viewports if vp.scene is scene]
+            viewports_to_remove = [
+                vp for vp in display.viewports
+                if vp.scene is not None and vp.scene.equal(scene)
+            ]
             for vp in viewports_to_remove:
                 if vp.pipeline is not None:
                     vp.pipeline.destroy()
@@ -341,7 +345,8 @@ class RenderingModel:
 
         for display in self._non_editor_displays():
             for viewport in display.viewports:
-                if viewport.scene is not scene:
+                vp_scene = viewport.scene
+                if vp_scene is None or not vp_scene.equal(scene):
                     continue
 
                 rt = viewport.render_target
