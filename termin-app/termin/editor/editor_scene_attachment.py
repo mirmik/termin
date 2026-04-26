@@ -64,6 +64,7 @@ class EditorSceneAttachment:
         self._camera_manager: "EditorCameraManager | None" = None
         self._viewport: "Viewport | None" = None
         self._pipeline: "RenderPipeline | None" = None
+        self._render_target = None
 
     # --- Properties ---
 
@@ -145,14 +146,12 @@ class EditorSceneAttachment:
         # Remove any existing viewports from this display
         self._remove_display_viewports()
 
-        # Create render target for editor viewport
-        from termin.render_framework._render_framework_native import render_target_new
-        self._pipeline = self._make_editor_pipeline()
-        rt = render_target_new("(Editor)")
+        # The editor render target is stable for the lifetime of this
+        # attachment. Scene switches only rebind scene/camera/pipeline.
+        rt = self._ensure_render_target()
         rt.scene = scene
         rt.camera = self._camera_manager.camera
-        if self._pipeline is not None:
-            rt.pipeline = self._pipeline
+        rt.pipeline = self._pipeline
         rt.locked = True
 
         # Create editor viewport and assign render target
@@ -174,9 +173,10 @@ class EditorSceneAttachment:
         # Notify components that scene is active
         scene.notify_scene_active()
 
-        # Attach scene to rendering (creates viewports from configs, notifies on_render_attach)
+        # Editor attachment is separate from scene render attachment: it only
+        # creates the editor viewport/tools. Scene-owned viewports are mounted
+        # by explicit render orchestration such as Attach UI or GameModeModel.
         if self._rendering_controller is not None:
-            self._rendering_controller.attach_scene(scene)
             self._rendering_controller._viewport_list.refresh()
             self._rendering_controller._refresh_render_targets()
 
@@ -223,17 +223,14 @@ class EditorSceneAttachment:
                     state.clear_all()
                     self._rendering_controller._manager.remove_viewport_state(self._viewport)
 
-            # Destroy pipeline AFTER (C++ ShadowPass::fbo_pool_ is deleted here)
-            if self._pipeline is not None:
-                self._pipeline.destroy()
-                self._pipeline = None
-
-            # Free editor render target
-            rt = self._viewport.render_target
+            # Keep the editor render target/pipeline alive across scene
+            # switches. Only remove the viewport binding.
             self._display.remove_viewport(self._viewport)
             self._viewport = None
-            if rt is not None:
-                rt.free()
+
+        if self._render_target is not None:
+            self._render_target.scene = None
+            self._render_target.camera = None
 
         # Remove EditorEntities from scene
         if self._camera_manager is not None:
@@ -287,6 +284,15 @@ class EditorSceneAttachment:
         for child_tf in entity.transform.children:
             if child_tf.entity is not None:
                 self._start_entity_hierarchy(child_tf.entity)
+
+    def _ensure_render_target(self):
+        if self._pipeline is None:
+            self._pipeline = self._make_editor_pipeline()
+        if self._render_target is None:
+            from termin.render_framework._render_framework_native import render_target_new
+            self._render_target = render_target_new("(Editor)")
+            self._render_target.locked = True
+        return self._render_target
 
     def _remove_display_viewports(self) -> None:
         """Remove all viewports from this display."""
