@@ -35,16 +35,21 @@ class _RenderingController:
     editor_display = None
 
     sync_calls: list[str]
+    sync_render_target_calls: list[str]
     attach_calls: list[str]
     detach_calls: list[str]
 
     def __init__(self):
         self.sync_calls = []
+        self.sync_render_target_calls = []
         self.attach_calls = []
         self.detach_calls = []
 
     def sync_viewport_configs_to_scene(self, scene) -> None:
         self.sync_calls.append(scene.name)
+
+    def sync_render_target_configs_to_scene(self, scene) -> None:
+        self.sync_render_target_calls.append(scene.name)
 
     def attach_scene(self, scene) -> None:
         self.attach_calls.append(scene.name)
@@ -78,6 +83,45 @@ class _EditorAttachment:
     def detach(self, save_state: bool = True) -> None:
         self.events.append(("detach", save_state))
         self.attached_scene_name = None
+
+
+class _EditorConnector:
+    events: list[tuple]
+    attached_scene_name: str | None
+
+    def __init__(self):
+        self.events = []
+        self.attached_scene_name = None
+
+    def attach_editor_to_scene(
+        self,
+        scene_name: str,
+        restore_state: bool = True,
+        transfer_camera_state: bool = False,
+        update_editor_scene_name: bool = True,
+    ) -> bool:
+        self.attached_scene_name = scene_name
+        self.events.append(
+            (
+                "attach_editor_to_scene",
+                scene_name,
+                restore_state,
+                transfer_camera_state,
+                update_editor_scene_name,
+            )
+        )
+        return True
+
+    def detach_editor_from_scene(
+        self,
+        save_state: bool = True,
+        clear_editor_scene_name: bool = True,
+    ) -> bool:
+        self.events.append(
+            ("detach_editor_from_scene", save_state, clear_editor_scene_name)
+        )
+        self.attached_scene_name = None
+        return True
 
 
 class _SceneTreeController:
@@ -221,12 +265,12 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
     scene_manager.set_mode("Editor", SceneMode.STOP)
 
     rendering = _RenderingController()
-    attachment = _EditorAttachment()
+    connector = _EditorConnector()
     tree = _SceneTreeController()
 
     model = GameModeModel(
         scene_manager=scene_manager,
-        editor_attachment=attachment,
+        editor_connector=connector,
         rendering_controller=rendering,
         get_editor_scene_name=lambda: "Editor",
         scene_tree_controller=tree,
@@ -254,13 +298,19 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
         assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
         assert scene_manager.has_play_scenes() is True
         assert rendering.sync_calls == ["Editor"]
+        assert rendering.sync_render_target_calls == ["Editor"]
         assert rendering.detach_calls == ["Editor"]
         assert rendering.attach_calls == ["Editor(game)"]
-        assert attachment.events == [
-            ("save_state",),
-            ("attach", "Editor(game)", True, False),
+        assert connector.events == [
+            (
+                "attach_editor_to_scene",
+                "Editor(game)",
+                False,
+                True,
+                False,
+            ),
         ]
-        assert attachment.attached_scene_name == "Editor(game)"
+        assert connector.attached_scene_name == "Editor(game)"
         assert state_events == [(True, False)]
         assert mode_events == [(True, "Editor(game)", ["entity-a", "entity-b"])]
 
@@ -285,13 +335,24 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
         assert scene_manager.has_play_scenes() is False
         assert rendering.detach_calls == ["Editor", "Editor(game)"]
         assert rendering.attach_calls == ["Editor(game)", "Editor"]
-        assert attachment.events == [
-            ("save_state",),
-            ("attach", "Editor(game)", True, False),
-            ("detach", False),
-            ("attach", "Editor", False, True),
+        assert connector.events == [
+            (
+                "attach_editor_to_scene",
+                "Editor(game)",
+                False,
+                True,
+                False,
+            ),
+            ("detach_editor_from_scene", True, False),
+            (
+                "attach_editor_to_scene",
+                "Editor",
+                True,
+                False,
+                True,
+            ),
         ]
-        assert attachment.attached_scene_name == "Editor"
+        assert connector.attached_scene_name == "Editor"
         assert state_events == [
             (True, False),
             (True, True),

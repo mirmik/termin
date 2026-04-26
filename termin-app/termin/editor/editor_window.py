@@ -375,11 +375,8 @@ class EditorWindow(QMainWindow):
         )
 
         # Attach to initial scene (creates EditorEntities and viewport)
-        self._editor_attachment.attach(self.scene, restore_state=False)
-
-        # Sync backward-compatible references from attachment
-        # (also recreates EditorViewportInputManagers for the new viewport)
-        self._sync_attachment_refs()
+        self.attach_editor_to_scene(self._editor_scene_name, restore_state=False)
+        self._rendering_controller.attach_scene(self.scene)
 
         # Wire mode controller's model with fully-initialized deps.
         self._mode_controller.bind_late()
@@ -717,6 +714,85 @@ class EditorWindow(QMainWindow):
             display = self._editor_attachment._display
             self._setup_editor_viewport_input_managers(display)
 
+    def attach_editor_to_scene(
+        self,
+        scene_name: str,
+        restore_state: bool = True,
+        transfer_camera_state: bool = False,
+        update_editor_scene_name: bool = True,
+    ) -> bool:
+        """Attach editor tools/view to a scene and refresh editor UI."""
+        scene = self.scene_manager.get_scene(scene_name)
+        if scene is None:
+            log.error(f"Cannot attach editor to scene '{scene_name}': not found")
+            return False
+        if self._editor_attachment is None:
+            log.error("Cannot attach editor: EditorSceneAttachment not available")
+            return False
+
+        if self._editor_attachment.scene is not scene:
+            self._editor_attachment.attach(
+                scene,
+                restore_state=restore_state,
+                transfer_camera_state=transfer_camera_state,
+            )
+
+        if update_editor_scene_name:
+            self._editor_scene_name = scene_name
+        self.scene_manager.set_mode(scene_name, SceneMode.STOP)
+        self._sync_attachment_refs()
+
+        if self._interaction_system is not None:
+            self._interaction_system.selection.clear()
+            self._interaction_system.set_gizmo_target(None)
+
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.set_scene(scene)
+            self.scene_tree_controller.rebuild()
+
+        if self._inspector_controller is not None:
+            self._inspector_controller.set_scene(scene)
+        if self.inspector is not None:
+            self.inspector.set_target(None)
+
+        self._update_window_title()
+        self._request_viewport_update()
+        return True
+
+    def detach_editor_from_scene(
+        self,
+        save_state: bool = True,
+        clear_editor_scene_name: bool = True,
+    ) -> bool:
+        """Detach editor tools/view from the current scene."""
+        if self._editor_attachment is None:
+            log.error("Cannot detach editor: EditorSceneAttachment not available")
+            return False
+        if self._editor_attachment.scene is None:
+            return True
+
+        self._editor_attachment.detach(save_state=save_state)
+        self._sync_attachment_refs()
+        if clear_editor_scene_name:
+            self._editor_scene_name = None
+
+        if self._interaction_system is not None:
+            self._interaction_system.selection.clear()
+            self._interaction_system.set_gizmo_target(None)
+
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.set_scene(None)
+            self.scene_tree_controller.rebuild()
+
+        if self._inspector_controller is not None:
+            self._inspector_controller.set_scene(None)
+        if self.inspector is not None:
+            self.inspector.set_target(None)
+
+        self._update_window_title()
+        self._request_viewport_update()
+        return True
+
     def _get_editor_camera_data(self) -> dict | None:
         """Get editor camera data for serialization."""
         if self._editor_attachment is None:
@@ -785,8 +861,8 @@ class EditorWindow(QMainWindow):
     def _set_displays_data(self, data: list | None) -> None:
         """Refresh viewport list after scene load.
 
-        Viewport creation happens in EditorSceneAttachment.attach() via
-        RenderingManager.attach_scene_full(), which reads viewport_configs.
+        Scene-owned viewport creation happens when the editor explicitly
+        attaches the scene to rendering in switch_to_scene().
         """
         if self._rendering_controller is None:
             return
@@ -1564,37 +1640,14 @@ class EditorWindow(QMainWindow):
             log.error(f"Cannot switch to scene '{name}': not found")
             return
 
-        # Update editor scene name and mode
-        self._editor_scene_name = name
-        self.scene_manager.set_mode(name, SceneMode.STOP)
-
-        # Attach to new scene (transfers camera state from previous scene)
-        self._editor_attachment.attach(new_scene, transfer_camera_state=True)
-
-        # Update backward-compatible references
-        # (also recreates EditorViewportInputManagers for the new viewport)
-        self._sync_attachment_refs()
+        self.attach_editor_to_scene(name, transfer_camera_state=True)
+        if self._rendering_controller is not None:
+            self._rendering_controller.attach_scene(new_scene)
 
         # Clear undo stack
         self.undo_stack.clear()
         self._update_undo_redo_actions()
         self.undo_stack_changed.emit()
-
-        # Clear selection
-        if self._interaction_system is not None:
-            self._interaction_system.selection.clear()
-            self._interaction_system.set_gizmo_target(None)
-
-        # Update scene tree
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.set_scene(new_scene)
-            self.scene_tree_controller.rebuild()
-
-        # Clear inspector and update scene for layer/flag names
-        if self._inspector_controller is not None:
-            self._inspector_controller.set_scene(new_scene)
-        if self.inspector is not None:
-            self.inspector.set_target(None)
 
         # Apply stored editor data (camera position, selection, displays, etc.) from loaded scene
         # Must be after all viewport/scene setup is complete
@@ -1650,10 +1703,10 @@ class EditorWindow(QMainWindow):
         """Close current scene (enter no-scene mode)."""
         if self._editor_scene_name and self.scene_manager.has_scene(self._editor_scene_name):
             # Detach from scene before closing
-            self._editor_attachment.detach(save_state=False)
-            self._sync_attachment_refs()
+            scene_name = self._editor_scene_name
+            self.detach_editor_from_scene(save_state=True)
 
-            self.scene_manager.close_scene(self._editor_scene_name)
+            self.scene_manager.close_scene(scene_name)
             self._editor_scene_name = None
 
             # Clear selection
@@ -1677,6 +1730,11 @@ class EditorWindow(QMainWindow):
         if project_path is None:
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "No Project", "Please open a project first.")
+            return
+
+        if self._editor_scene_name is None:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "No Scene", "Please attach an editor scene first.")
             return
 
         scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
@@ -1804,12 +1862,15 @@ class EditorWindow(QMainWindow):
             parts.append(f"[Prefab: {prefab_name}]")
         elif self.scene_manager is not None:
             # Добавляем имя сцены
-            scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
-            if scene_path is not None:
-                scene_name = Path(scene_path).stem
-                parts.append(f"[{scene_name}]")
+            if self._editor_scene_name is None:
+                parts.append("[No Scene]")
             else:
-                parts.append("[Untitled]")
+                scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
+                if scene_path is not None:
+                    scene_name = Path(scene_path).stem
+                    parts.append(f"[{scene_name}]")
+                else:
+                    parts.append("[Untitled]")
 
         # Добавляем режим игры
         is_playing = self.is_game_mode
