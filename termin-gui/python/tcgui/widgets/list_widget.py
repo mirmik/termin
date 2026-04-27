@@ -25,8 +25,8 @@ class ListWidget(Widget):
         self.item_padding: float = 10
 
         # Colors
-        _bif = _t.bg_input_focus
-        self.item_background: tuple[float, float, float, float] = (_bif[0], _bif[1], _bif[2], 0.6)
+        self.background_color: tuple[float, float, float, float] = _t.bg_input
+        self.item_background: tuple[float, float, float, float] = _t.bg_input
         self.selected_background: tuple[float, float, float, float] = _t.selected
         self.hover_background: tuple[float, float, float, float] = _t.hover_subtle
         self.text_color: tuple[float, float, float, float] = _t.text_primary
@@ -94,6 +94,12 @@ class ListWidget(Widget):
         return (w, h)
 
     def render(self, renderer: 'UIRenderer'):
+        # Full-widget background
+        renderer.draw_rect(
+            self.x, self.y, self.width, self.height,
+            self.background_color, self.border_radius,
+        )
+
         if not self._items:
             renderer.draw_text(
                 self.x + self.item_padding,
