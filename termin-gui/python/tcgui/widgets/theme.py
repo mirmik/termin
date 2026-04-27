@@ -52,6 +52,7 @@ class Theme:
         self.font_size_small: float = 10.0
         self.border_radius: float = 3.0
         self.spacing: float = 5.0
+        self.content_padding: float = 8.0
 
     @classmethod
     def dark(cls) -> Theme:
@@ -180,6 +181,9 @@ class Theme:
             widget.selected_text_color = self.text_primary
             widget.indicator_color = self.accent
             widget.border_radius = self.border_radius + 1
+
+        elif cls_name == "TabView":
+            widget.content_padding = self.content_padding
 
         elif cls_name == "SpinBox":
             widget.background_color = self.bg_input
