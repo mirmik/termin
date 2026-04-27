@@ -203,7 +203,7 @@ def show_scene_manager_viewer(
         scene_list.set_rows(rows, data)
 
         # Update status
-        total = len(items)
+        total = len(data)
         total_entities = 0
         play_count = 0
         for name in scene_manager.scene_names():
