@@ -122,7 +122,8 @@ class Theme:
             widget.border_radius = self.border_radius
 
         elif cls_name == "ListWidget":
-            widget.item_background = self._with_alpha(self.bg_input_focus, 0.6)
+            widget.background_color = self.bg_input
+            widget.item_background = self.bg_input
             widget.selected_background = self.selected
             widget.hover_background = self.hover_subtle
             widget.text_color = self.text_primary
