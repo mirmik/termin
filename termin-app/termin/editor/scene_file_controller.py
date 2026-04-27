@@ -277,7 +277,8 @@ class SceneFileController:
                 raise RuntimeError("SceneManager not initialized")
 
             # Get scene name from file path
-            new_scene_name = os.path.splitext(os.path.basename(file_path))[0]
+            from termin.editor_core import scene_name_from_file_path
+            new_scene_name = scene_name_from_file_path(file_path)
 
             # Close existing editor scene if any
             old_scene_name = None
@@ -349,7 +350,8 @@ class SceneFileController:
                 return False
 
             # Get scene name from file path
-            new_scene_name = os.path.splitext(os.path.basename(str(last_scene_path)))[0]
+            from termin.editor_core import scene_name_from_file_path
+            new_scene_name = scene_name_from_file_path(str(last_scene_path))
 
             # Close existing editor scene if any
             old_scene_name = None
