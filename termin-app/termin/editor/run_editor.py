@@ -56,7 +56,7 @@ def _parse_editor_args():
     """Parse command-line arguments for the editor.
 
     Returns (project, debug_resource, ui_backend) or exits.
-    ui_backend is one of: 'qt' (default), 'tcgui'
+    ui_backend is one of: 'tcgui' (default), 'qt'
     """
     args = sys.argv[1:]
 
@@ -69,13 +69,13 @@ def _parse_editor_args():
         print("  PROJECT              Path to .terminproj file or project directory")
         print()
         print("Options:")
-        print("  --ui=qt|tcgui        UI backend (default: qt)")
+        print("  --ui=qt|tcgui        UI backend (default: tcgui)")
         print("  --debug-resource RES Open framegraph debugger with this resource")
         print("  -h, --help           Show this help message and exit")
-        return "__help__", None, "qt"
+        return "__help__", None, "tcgui"
 
     debug_resource = None
-    ui_backend = "qt"
+    ui_backend = "tcgui"
     positional = []
     i = 0
     while i < len(args):
