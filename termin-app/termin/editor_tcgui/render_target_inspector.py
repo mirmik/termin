@@ -25,9 +25,11 @@ class RenderTargetInspectorTcgui(VStack):
         self._rm = resource_manager
         self._render_target = None
         self._scene = None
+        self._scenes = []
         self._cameras = []
         self._updating = False
         self.on_changed: Optional[Callable[[], None]] = None
+        self._scene_getter: Optional[Callable[[], list]] = None
 
         title = Label()
         title.text = "Render Target Inspector"
@@ -50,17 +52,23 @@ class RenderTargetInspectorTcgui(VStack):
         grid.add(enabled_lbl, 0, 0)
         grid.add(self._enabled, 0, 1)
 
+        scene_lbl = Label(); scene_lbl.text = "Scene:"; scene_lbl.preferred_width = px(96)
+        self._scene_combo = ComboBox()
+        self._scene_combo.on_changed = self._on_scene_changed
+        grid.add(scene_lbl, 1, 0)
+        grid.add(self._scene_combo, 1, 1)
+
         cam_lbl = Label(); cam_lbl.text = "Camera:"; cam_lbl.preferred_width = px(96)
         self._camera_combo = ComboBox()
         self._camera_combo.on_changed = self._on_camera_changed
-        grid.add(cam_lbl, 1, 0)
-        grid.add(self._camera_combo, 1, 1)
+        grid.add(cam_lbl, 2, 0)
+        grid.add(self._camera_combo, 2, 1)
 
         pipe_lbl = Label(); pipe_lbl.text = "Pipeline:"; pipe_lbl.preferred_width = px(96)
         self._pipeline_combo = ComboBox()
         self._pipeline_combo.on_changed = self._on_pipeline_changed
-        grid.add(pipe_lbl, 2, 0)
-        grid.add(self._pipeline_combo, 2, 1)
+        grid.add(pipe_lbl, 3, 0)
+        grid.add(self._pipeline_combo, 3, 1)
 
         width_lbl = Label(); width_lbl.text = "Width:"; width_lbl.preferred_width = px(96)
         self._width = SpinBox()
@@ -70,8 +78,8 @@ class RenderTargetInspectorTcgui(VStack):
         self._width.max_value = 8192
         self._width.value = 512
         self._width.on_changed = self._on_size_changed
-        grid.add(width_lbl, 3, 0)
-        grid.add(self._width, 3, 1)
+        grid.add(width_lbl, 4, 0)
+        grid.add(self._width, 4, 1)
 
         height_lbl = Label(); height_lbl.text = "Height:"; height_lbl.preferred_width = px(96)
         self._height = SpinBox()
@@ -81,8 +89,8 @@ class RenderTargetInspectorTcgui(VStack):
         self._height.max_value = 8192
         self._height.value = 512
         self._height.on_changed = self._on_size_changed
-        grid.add(height_lbl, 4, 0)
-        grid.add(self._height, 4, 1)
+        grid.add(height_lbl, 5, 0)
+        grid.add(self._height, 5, 1)
 
         self._empty = Label()
         self._empty.text = "No render target selected."
@@ -91,12 +99,17 @@ class RenderTargetInspectorTcgui(VStack):
 
         self._set_visible_state(False)
 
+    def set_scene_getter(self, getter: Callable[[], list]) -> None:
+        self._scene_getter = getter
+
     def set_scene(self, scene) -> None:
         self._scene = scene
         self._refresh_camera_combo()
 
-    def set_render_target(self, render_target=None) -> None:
+    def set_render_target(self, render_target=None, scene=None) -> None:
         self._render_target = render_target
+        if scene is not None:
+            self._scene = scene
 
         self._updating = True
         try:
@@ -110,6 +123,8 @@ class RenderTargetInspectorTcgui(VStack):
 
             self._enabled.checked = bool(render_target.enabled)
 
+            self._refresh_scene_combo()
+            self._select_current_scene()
             self._refresh_camera_combo()
             self._select_current_camera()
             self._refresh_pipeline_combo()
@@ -124,11 +139,56 @@ class RenderTargetInspectorTcgui(VStack):
 
     def _set_visible_state(self, has_target: bool) -> None:
         self._enabled.visible = has_target
+        self._scene_combo.visible = has_target
         self._camera_combo.visible = has_target
         self._pipeline_combo.visible = has_target
         self._width.visible = has_target
         self._height.visible = has_target
         self._empty.visible = not has_target
+
+    def _refresh_scene_combo(self) -> None:
+        old = self._scene_combo.on_changed
+        self._scene_combo.on_changed = None
+        self._scene_combo.clear()
+        self._scenes.clear()
+
+        self._scene_combo.add_item("(none)")
+        if self._scene_getter is not None:
+            try:
+                for scene in self._scene_getter():
+                    name = scene.name or scene.uuid or "Scene"
+                    self._scenes.append(scene)
+                    self._scene_combo.add_item(name)
+            except Exception as e:
+                log.error(f"[RenderTargetInspector] scene scan failed: {e}")
+
+        self._scene_combo.on_changed = old
+
+    def _select_current_scene(self) -> None:
+        if self._render_target is None or self._render_target.scene is None:
+            self._scene_combo.selected_index = 0
+            return
+        rt_scene = self._render_target.scene
+        for i, scene in enumerate(self._scenes):
+            if scene.scene_handle().index == rt_scene.scene_handle().index:
+                self._scene_combo.selected_index = i + 1
+                return
+        self._scene_combo.selected_index = 0
+
+    def _on_scene_changed(self, index: int, _text: str) -> None:
+        if self._updating or self._render_target is None:
+            return
+        if index <= 0:
+            self._render_target.scene = None
+            self._scene = None
+            self._refresh_camera_combo()
+            self._emit_changed()
+            return
+        if index < len(self._scenes) + 1:
+            self._render_target.scene = self._scenes[index - 1]
+            self._scene = self._scenes[index - 1]
+            self._refresh_camera_combo()
+            self._emit_changed()
 
     def _refresh_camera_combo(self) -> None:
         old = self._camera_combo.on_changed

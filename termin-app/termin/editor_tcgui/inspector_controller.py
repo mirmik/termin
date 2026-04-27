@@ -106,6 +106,10 @@ class InspectorControllerTcgui:
         return self._entity_inspector
 
     @property
+    def render_target_inspector(self) -> RenderTargetInspectorTcgui:
+        return self._render_target_inspector
+
+    @property
     def model(self) -> InspectorModel:
         return self._model
 
@@ -117,6 +121,10 @@ class InspectorControllerTcgui:
         self._model.set_scene(scene)
         self._entity_inspector.set_scene(scene)
         self._viewport_inspector.set_scene(scene)
+        self._render_target_inspector.set_scene(scene)
+
+    def set_render_target_scene_getter(self, getter: Callable[[], list]) -> None:
+        self._render_target_inspector.set_scene_getter(getter)
 
     def show_entity_inspector(self, entity=None) -> None:
         self._model.show_entity(entity)
@@ -249,7 +257,7 @@ class InspectorControllerTcgui:
                 self._glb_inspector.set_glb_by_path(file_path)
 
         elif kind is InspectorKind.RENDER_TARGET:
-            self._render_target_inspector.set_render_target(model.target)
+            self._render_target_inspector.set_render_target(model.target, model.scene)
 
         self._show_panel(panel)
 

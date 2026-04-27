@@ -413,6 +413,13 @@ class EditorWindowTcgui:
             dialog_service=self._dialog_service,
         )
         self._inspector_controller.set_scene(self.scene)
+        self._inspector_controller.set_render_target_scene_getter(
+            lambda: [
+                self.scene_manager.get_scene(name)
+                for name in self.scene_manager.scene_names()
+                if self.scene_manager.get_scene(name) is not None
+            ]
+        )
 
         # Setup project browser
         self._project_browser = ProjectBrowserTcgui(
@@ -1030,11 +1037,15 @@ class EditorWindowTcgui:
         if not path:
             return
         try:
-            scene_name = self._editor_scene_name
+            from termin.editor_core import scene_name_from_file_path
+            old_scene_name = self._editor_scene_name
+            scene_name = scene_name_from_file_path(path)
 
             # Close existing scene
-            if self.scene_manager.has_scene(scene_name):
-                self.scene_manager.close_scene(scene_name)
+            if old_scene_name and self.scene_manager.has_scene(old_scene_name):
+                self.scene_manager.close_scene(old_scene_name)
+
+            self._editor_scene_name = scene_name
 
             self.scene_manager.load_scene(scene_name, path)
             from termin.modules import upgrade_scene_unknown_components
