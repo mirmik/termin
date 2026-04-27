@@ -299,7 +299,7 @@ class RenderingController:
         # Create Display
         from termin.visualization.core.display import Display
 
-        display = Display(surface, name=name)
+        display = Display(surface.tc_surface_ptr, name=name)
         display.auto_remove_when_empty = True
 
         # Store mapping (include qwindow to prevent GC)
@@ -546,7 +546,7 @@ class RenderingController:
         layout.addWidget(gl_widget)
 
         # Create display (editor_only=True by default)
-        display = Display(surface, name="Editor", editor_only=True)
+        display = Display(surface.tc_surface_ptr, name="Editor", editor_only=True)
 
         # Store mapping
         display_id = display.tc_display_ptr
@@ -760,7 +760,7 @@ class RenderingController:
         # Create Display
         from termin.visualization.core.display import Display
 
-        display = Display(surface)
+        display = Display(surface.tc_surface_ptr)
 
         # Store mapping (include qwindow to prevent GC)
         display_id = display.tc_display_ptr
