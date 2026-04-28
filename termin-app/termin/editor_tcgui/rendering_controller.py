@@ -162,6 +162,8 @@ class RenderingControllerTcgui:
 
     def set_center_tabs(self, tabs) -> None:
         self._center_tabs = tabs
+        if self._center_tabs is not None:
+            self._center_tabs.on_changed = self._on_center_tab_changed
 
     def add_display(self, display: "Display", name: str | None = None) -> None:
         """Register an externally-created display with the manager and viewport list."""
@@ -480,3 +482,6 @@ class RenderingControllerTcgui:
     def _notify_rendering_changed(self) -> None:
         if self._on_rendering_changed is not None:
             self._on_rendering_changed()
+
+    def _on_center_tab_changed(self, _index: int) -> None:
+        self._request_update()
