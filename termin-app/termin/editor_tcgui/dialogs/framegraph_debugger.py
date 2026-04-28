@@ -17,6 +17,7 @@ from tcgui.widgets.button import Button
 from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.text_area import TextArea
+from tcgui.widgets.rich_text_view import RichTextView
 from tcgui.widgets.units import px, pct
 
 from termin.editor_core.framegraph_debugger_model import FramegraphDebuggerModel
@@ -85,7 +86,7 @@ class _FramegraphDebuggerHandle:
         self._hdr_stats_label: Label | None = None
         self._status_label: Label | None = None
 
-        self._pipeline_text: TextArea | None = None
+        self._pipeline_text: RichTextView | None = None
         self._pass_json: TextArea | None = None
 
         self._preview: CapturePreviewWidget | None = None
@@ -159,7 +160,7 @@ class _FramegraphDebuggerHandle:
         if self._writer_pass_label is not None:
             self._writer_pass_label.text = self.model.format_writer_pass()
         if self._pipeline_text is not None:
-            self._pipeline_text.text = self.model.format_pipeline_info()
+            self._pipeline_text.set_html(self.model.format_pipeline_info())
         if self._pass_json is not None:
             self._pass_json.text = self.model.format_pass_json()
         if self._timing_label is not None:
@@ -449,8 +450,7 @@ def show_framegraph_debugger(
     pipeline_panel.stretch = True
     sched_title = Label(); sched_title.text = "Pipeline Schedule"
     pipeline_panel.add_child(sched_title)
-    pipeline_text = TextArea()
-    pipeline_text.read_only = True
+    pipeline_text = RichTextView()
     pipeline_text.word_wrap = False
     pipeline_text.stretch = True
     pipeline_text.placeholder = "No pipeline"
