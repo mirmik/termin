@@ -264,6 +264,15 @@ void bind_tc_viewport_class(nb::module_& m) {
             [](TcViewport& self) { return self.layer_mask(); },
             [](TcViewport& self, uint64_t m) { self.set_layer_mask(m); })
 
+        // Override render target resolution from viewport pixel rect
+        .def_prop_rw("override_resolution",
+            [](TcViewport& self) {
+                return self.is_valid() ? tc_viewport_get_override_resolution(self.handle_) : false;
+            },
+            [](TcViewport& self, bool value) {
+                if (self.is_valid()) tc_viewport_set_override_resolution(self.handle_, value);
+            })
+
         // Enabled
         .def_prop_rw("enabled",
             [](TcViewport& self) { return self.enabled(); },
