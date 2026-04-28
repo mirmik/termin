@@ -200,11 +200,23 @@ for entry in "${PYTHON_MODULES[@]}"; do
     if [[ "$project_name" == termin-components-* ]]; then
         build_dir="$ENV_DIR/termin-components/$project_name/build"
     fi
-    SO_FILE=$(find_artifact_in_build "$build_dir" "$so_pattern")
+    SO_FILE=""
+    if [[ -n "$so_pattern" ]]; then
+        SO_FILE=$(find_artifact_in_build "$build_dir" "$so_pattern")
+    fi
     if [[ -n "$SO_FILE" ]]; then
         cp "$SO_FILE" "$PYTHON_DEST/$py_subdir/"
         echo "  Copied $(basename "$SO_FILE") → $py_subdir/"
-    else
+    elif [[ -n "$so_pattern" && -d "$SDK_DIR/lib/python/$py_subdir" ]]; then
+        # Fallback: copy .so from SDK when subproject wasn't built from source
+        SDK_SO=$(find "$SDK_DIR/lib/python/$py_subdir" -maxdepth 1 -name "$so_pattern" | head -1)
+        if [[ -n "$SDK_SO" ]]; then
+            cp "$SDK_SO" "$PYTHON_DEST/$py_subdir/"
+            echo "  Copied $(basename "$SDK_SO") → $py_subdir/ (from SDK)"
+        else
+            echo "  WARNING: $so_pattern not found in $build_dir or $SDK_DIR/lib/python/$py_subdir"
+        fi
+    elif [[ -n "$so_pattern" ]]; then
         echo "  WARNING: $so_pattern not found in $build_dir"
     fi
 done
