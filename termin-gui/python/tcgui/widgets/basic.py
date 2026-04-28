@@ -14,11 +14,13 @@ from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.slider_edit import SliderEdit
 from tcgui.widgets.text_area import TextArea
+from tcgui.widgets.rich_text_view import RichTextSegment, RichTextStyle, RichTextView
 from tcgui.widgets.frame_time_graph import FrameTimeGraph
 
 __all__ = [
     "Label", "Button", "Checkbox", "IconButton", "Separator",
     "ImageWidget", "TextInput", "ListWidget", "ProgressBar",
     "Slider", "ComboBox", "SpinBox", "SliderEdit", "TextArea",
+    "RichTextSegment", "RichTextStyle", "RichTextView",
     "FrameTimeGraph",
 ]

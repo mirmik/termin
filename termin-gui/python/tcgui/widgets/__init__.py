@@ -23,6 +23,7 @@ from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.slider_edit import SliderEdit
 from tcgui.widgets.text_area import TextArea
+from tcgui.widgets.rich_text_view import RichTextSegment, RichTextStyle, RichTextView
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.tabs import TabBar, TabView
 from tcgui.widgets.menu import MenuItem, Menu
@@ -56,6 +57,7 @@ __all__ = [
     "Label", "Button", "Checkbox", "IconButton", "Separator", "ImageWidget", "TextInput", "ListWidget",
     "TableColumn", "TableWidget",
     "ProgressBar", "Slider", "ComboBox", "SpinBox", "SliderEdit", "TextArea",
+    "RichTextSegment", "RichTextStyle", "RichTextView",
     "TreeNode", "TreeWidget",
     "TabBar", "TabView",
     "MenuItem", "Menu",

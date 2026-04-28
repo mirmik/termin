@@ -7,7 +7,7 @@ import yaml
 
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.containers import HStack, VStack, Panel, ScrollArea, GroupBox
-from tcgui.widgets.basic import Label, Button, Checkbox, IconButton, Separator, ImageWidget, TextInput, ProgressBar, Slider, ComboBox, SpinBox, SliderEdit, TextArea
+from tcgui.widgets.basic import Label, Button, Checkbox, IconButton, Separator, ImageWidget, TextInput, ProgressBar, Slider, ComboBox, SpinBox, SliderEdit, TextArea, RichTextView
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.tabs import TabBar, TabView
 from tcgui.widgets.menu import MenuItem, Menu
@@ -53,6 +53,7 @@ class UILoader:
         "SpinBox": SpinBox,
         "SliderEdit": SliderEdit,
         "TextArea": TextArea,
+        "RichTextView": RichTextView,
         "GroupBox": GroupBox,
         "Canvas": Canvas,
         "ColorDialog": ColorDialog,
@@ -554,6 +555,31 @@ class UILoader:
                 widget.max_lines = int(data["max_lines"])
             if "read_only" in data:
                 widget.read_only = bool(data["read_only"])
+            if "line_height" in data:
+                widget.line_height = float(data["line_height"])
+            if "font_size" in data:
+                widget.font_size = float(data["font_size"])
+            if "padding" in data:
+                widget.padding = float(data["padding"])
+            if "border_radius" in data:
+                widget.border_radius = float(data["border_radius"])
+            if "border_width" in data:
+                widget.border_width = float(data["border_width"])
+            if "show_scrollbar" in data:
+                widget.show_scrollbar = bool(data["show_scrollbar"])
+            if "scrollbar_width" in data:
+                widget.scrollbar_width = float(data["scrollbar_width"])
+
+        # RichTextView attributes
+        if isinstance(widget, RichTextView):
+            if "text" in data:
+                widget.text = str(data["text"])
+            if "html" in data:
+                widget.set_html(str(data["html"]))
+            if "placeholder" in data:
+                widget.placeholder = str(data["placeholder"])
+            if "word_wrap" in data:
+                widget.word_wrap = bool(data["word_wrap"])
             if "line_height" in data:
                 widget.line_height = float(data["line_height"])
             if "font_size" in data:
