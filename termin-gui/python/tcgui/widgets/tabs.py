@@ -121,6 +121,7 @@ class TabView(Widget):
         self.tab_position: str = "top"  # top | bottom
         self.content_padding: float = _t.content_padding
         self.pages: list[Widget] = []
+        self.on_changed: Callable[[int], None] | None = None
 
         # Keep tab_bar in children so parent/_ui propagation works.
         self.add_child(self.tab_bar)
@@ -136,8 +137,9 @@ class TabView(Widget):
 
     @selected_index.setter
     def selected_index(self, value: int):
-        if 0 <= value < len(self.pages):
+        if 0 <= value < len(self.pages) and value != self.tab_bar.selected_index:
             self.tab_bar.selected_index = value
+            self._on_tab_change(value)
 
     def add_tab(self, title: str, content: Widget):
         """Add a tab with title and content widget."""
@@ -243,3 +245,5 @@ class TabView(Widget):
                     self.x + p, content_y + p, self.width - p * 2, content_h - p * 2,
                     self._viewport_w, self._viewport_h,
                 )
+        if self.on_changed is not None:
+            self.on_changed(index)
