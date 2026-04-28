@@ -125,6 +125,7 @@ class InspectorControllerTcgui:
 
     def set_render_target_scene_getter(self, getter: Callable[[], list]) -> None:
         self._render_target_inspector.set_scene_getter(getter)
+        self._viewport_inspector.set_scene_getter(getter)
 
     def show_entity_inspector(self, entity=None) -> None:
         self._model.show_entity(entity)
