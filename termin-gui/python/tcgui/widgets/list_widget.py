@@ -69,6 +69,12 @@ class ListWidget(Widget):
             return self._items[self.selected_index]
         return None
 
+    def _content_height(self) -> float:
+        n = len(self._items)
+        if n == 0:
+            return self.item_height
+        return n * self.item_height + max(0, n - 1) * self.item_spacing
+
     def _index_at(self, y: float) -> int:
         rel_y = y - self.y + self._scroll_offset
         stride = self.item_height + self.item_spacing
@@ -87,8 +93,7 @@ class ListWidget(Widget):
                 self.preferred_height.to_pixels(viewport_h),
             )
         w = self.preferred_width.to_pixels(viewport_w) if self.preferred_width else 400
-        n = len(self._items)
-        h = n * self.item_height + max(0, n - 1) * self.item_spacing if n else self.item_height
+        h = self._content_height()
         if self.preferred_height:
             h = self.preferred_height.to_pixels(viewport_h)
         return (w, h)
@@ -179,8 +184,7 @@ class ListWidget(Widget):
         n = len(self._items)
         if n == 0:
             return False
-        stride = self.item_height + self.item_spacing
-        total_content = n * stride
+        total_content = self._content_height()
         max_scroll = max(0.0, total_content - self.height)
         if max_scroll <= 0:
             return False
