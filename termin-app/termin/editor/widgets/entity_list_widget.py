@@ -13,20 +13,29 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QListWidget,
     QListWidgetItem,
     QPushButton,
     QLabel,
     QAbstractItemView,
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, QMimeData
 
 from tcbase import log
 from termin.editor.drag_drop import EditorMimeTypes, parse_entity_mime_data
+from termin.editor.widgets.generic_list_widget import _DropListWidget
 from termin.entity import Entity
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
+
+
+def _accept_entity_drop(mime_data: QMimeData) -> Optional[dict]:
+    if not mime_data.hasFormat(EditorMimeTypes.ENTITY):
+        return None
+    data = parse_entity_mime_data(mime_data)
+    if data is not None and data.get("entity_uuid"):
+        return data
+    return None
 
 
 class EntityListWidget(QWidget):
@@ -74,7 +83,7 @@ class EntityListWidget(QWidget):
         layout.addLayout(header_layout)
 
         # List widget
-        self._list = _DropListWidget(self._on_entity_dropped)
+        self._list = _DropListWidget(self._on_entity_dropped, _accept_entity_drop)
         self._list.setMaximumHeight(150)
         self._list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._list.currentRowChanged.connect(self._on_selection_changed)
@@ -191,9 +200,13 @@ class EntityListWidget(QWidget):
         """Handle selection change."""
         self._update_buttons()
 
-    def _on_entity_dropped(self, entity_uuid: str, entity_name: str) -> None:
+    def _on_entity_dropped(self, data: dict) -> None:
         """Handle entity dropped from SceneTree."""
         if self._read_only:
+            return
+
+        entity_uuid = data.get("entity_uuid")
+        if not entity_uuid:
             return
 
         # Avoid duplicates by UUID
@@ -255,35 +268,3 @@ class EntityListWidget(QWidget):
         self._list.setCurrentRow(row + 1)
         self._update_buttons()
         self.value_changed.emit()
-
-
-class _DropListWidget(QListWidget):
-    """QListWidget subclass that accepts entity drops."""
-
-    def __init__(self, on_drop_callback: Callable[[str, str], None], parent=None):
-        super().__init__(parent)
-        self._on_drop = on_drop_callback
-        self.setAcceptDrops(True)
-
-    def dragEnterEvent(self, event) -> None:
-        if event.mimeData().hasFormat(EditorMimeTypes.ENTITY):
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
-    def dragMoveEvent(self, event) -> None:
-        if event.mimeData().hasFormat(EditorMimeTypes.ENTITY):
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
-    def dropEvent(self, event) -> None:
-        data = parse_entity_mime_data(event.mimeData())
-        if data is not None:
-            entity_uuid = data.get("entity_uuid")
-            entity_name = data.get("entity_name", "")
-            if entity_uuid:
-                self._on_drop(entity_uuid, entity_name)
-                event.acceptProposedAction()
-                return
-        event.ignore()
