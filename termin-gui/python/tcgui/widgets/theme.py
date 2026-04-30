@@ -133,6 +133,17 @@ class Theme:
             widget.font_size = self.font_size
             widget.border_radius = self.border_radius + 1
 
+        elif cls_name == "FileGridWidget":
+            widget.background_color = self.bg_input
+            widget.tile_background = self._with_alpha(self.bg_input, 0.0)
+            widget.selected_background = self.selected
+            widget.hover_background = self.hover_subtle
+            widget.text_color = self.text_primary
+            widget.subtitle_color = self.text_muted
+            widget.selected_text_color = self.text_primary
+            widget.font_size = self.font_size
+            widget.border_radius = self.border_radius + 1
+
         elif cls_name == "TableWidget":
             widget.header_background = self.bg_surface
             widget.header_text_color = self.text_muted

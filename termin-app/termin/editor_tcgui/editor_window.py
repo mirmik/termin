@@ -336,8 +336,9 @@ class EditorWindowTcgui:
         root.add_child(self._bottom_splitter)
 
         from tcgui.widgets.hstack import HStack as HStackInner
+        from tcgui.widgets.vstack import VStack as VStackInner
         from tcgui.widgets.tree import TreeWidget as TreeWidgetInner
-        from tcgui.widgets.list_widget import ListWidget
+        from tcgui.widgets.file_grid_widget import FileGridWidget
         from tcgui.widgets.units import px as pxu
 
         project_tab_content = HStackInner()
@@ -355,18 +356,24 @@ class EditorWindowTcgui:
         dir_tree_scroll.preferred_width = pxu(200)
         dir_tree_scroll.add_child(project_dir_tree)
 
-        project_file_list = ListWidget()
+        project_file_list = FileGridWidget()
         project_file_list.stretch = True
-        project_file_list.item_height = 28
         project_file_list.empty_text = "Select a directory"
 
-        file_list_scroll = ScrollAreaInner()
-        file_list_scroll.stretch = True
-        file_list_scroll.add_child(project_file_list)
+        project_file_column = VStackInner()
+        project_file_column.stretch = True
+        project_file_column.spacing = 4
+
+        project_breadcrumb = HStackInner()
+        project_breadcrumb.preferred_height = pxu(24)
+        project_breadcrumb.spacing = 2
+
+        project_file_column.add_child(project_breadcrumb)
+        project_file_column.add_child(project_file_list)
 
         project_tab_content.add_child(dir_tree_scroll)
         project_tab_content.add_child(SplitterInner(target=dir_tree_scroll, side="right"))
-        project_tab_content.add_child(file_list_scroll)
+        project_tab_content.add_child(project_file_column)
 
         bottom_tabs.add_tab("Project", project_tab_content)
 
@@ -425,6 +432,7 @@ class EditorWindowTcgui:
         self._project_browser = ProjectBrowserTcgui(
             dir_tree=project_dir_tree,
             file_list=project_file_list,
+            breadcrumb=project_breadcrumb,
             dialog_service=self._dialog_service,
             on_file_activated=self._on_project_file_activated,
             on_file_selected=self._on_project_file_selected,

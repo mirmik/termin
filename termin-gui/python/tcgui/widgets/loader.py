@@ -8,6 +8,7 @@ import yaml
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.containers import HStack, VStack, Panel, ScrollArea, GroupBox
 from tcgui.widgets.basic import Label, Button, Checkbox, IconButton, Separator, ImageWidget, TextInput, ProgressBar, Slider, ComboBox, SpinBox, SliderEdit, TextArea, RichTextView
+from tcgui.widgets.file_grid_widget import FileGridWidget
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.tabs import TabBar, TabView
 from tcgui.widgets.menu import MenuItem, Menu
@@ -37,6 +38,7 @@ class UILoader:
         "Separator": Separator,
         "Image": ImageWidget,
         "TextInput": TextInput,
+        "FileGridWidget": FileGridWidget,
         "ProgressBar": ProgressBar,
         "Slider": Slider,
         "ComboBox": ComboBox,
