@@ -56,9 +56,21 @@ class PipelineInspectorTcgui(VStack):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
+        header = HStack()
+        header.spacing = 6
+
         title = Label()
         title.text = "Pipeline Inspector"
-        self.add_child(title)
+        title.stretch = True
+        header.add_child(title)
+
+        self._save_button = Button()
+        self._save_button.text = "Save"
+        self._save_button.preferred_width = px(64)
+        self._save_button.on_click = self._on_save_clicked
+        header.add_child(self._save_button)
+
+        self.add_child(header)
 
         self._subtitle = Label()
         self._subtitle.color = (0.62, 0.66, 0.74, 1.0)
@@ -346,6 +358,9 @@ class PipelineInspectorTcgui(VStack):
             return False
         return self._ops.save_to_file(target)
 
+    def _on_save_clicked(self) -> None:
+        self.save_pipeline_file()
+
     # ------------------------------------------------------------------
     # Rebuild
     # ------------------------------------------------------------------
@@ -374,6 +389,7 @@ class PipelineInspectorTcgui(VStack):
         self._spec_add.visible = has_pipeline
         self._spec_remove.visible = has_pipeline
         self._spec_editor.visible = has_pipeline and self._selected_spec_index >= 0
+        self._save_button.visible = has_pipeline
 
         self._empty.visible = not has_pipeline
 
@@ -943,6 +959,7 @@ class PipelineInspectorTcgui(VStack):
         self._pass_remove.enabled = has_pipeline and pass_idx >= 0
         self._pass_up.enabled = has_pipeline and pass_idx > 0
         self._pass_down.enabled = has_pipeline and 0 <= pass_idx < pass_count - 1
+        self._save_button.enabled = has_pipeline and self._source_path is not None
 
         eff_idx = self._current_effect_index()
         eff_count = len(self._selected_postprocess.effects) if self._selected_postprocess is not None else 0
