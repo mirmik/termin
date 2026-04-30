@@ -19,20 +19,6 @@ install(TARGETS termin_components_physics
     EXPORT termin_components_physicsTargets
 )
 
-if(TERMIN_BUILD_PYTHON)
-    if(TERMIN_COMPONENTS_PHYSICS_PYTHON_PREFIX)
-        set(_py_dest ${TERMIN_COMPONENTS_PHYSICS_PYTHON_PREFIX}/physics)
-    else()
-        set(_py_dest lib/python/termin/physics)
-    endif()
-
-    install(FILES
-        python/termin/physics/physics_world_component.py
-        python/termin/physics/rigid_body_component.py
-        DESTINATION ${_py_dest}
-    )
-endif()
-
 install(EXPORT termin_components_physicsTargets
     FILE termin_components_physicsTargets.cmake
     NAMESPACE termin_components_physics::
