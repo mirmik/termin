@@ -45,7 +45,7 @@ class PipelineOperations:
         if index < 0 or index >= len(self._pipeline.passes):
             self._pipeline.add_pass(pass_obj)
         else:
-            self._pipeline.insert_pass(index, pass_obj)
+            self._pipeline.insert_pass_before(pass_obj, self._pipeline.passes[index])
         self.pipeline_changed.emit()
 
     def remove_pass(self, pass_obj) -> None:
@@ -69,7 +69,11 @@ class PipelineOperations:
             return
         p = passes[from_idx]
         self._pipeline.remove_pass(p)
-        self._pipeline.insert_pass(to_idx, p)
+        updated_passes = self._pipeline.passes
+        if to_idx >= len(updated_passes):
+            self._pipeline.add_pass(p)
+        else:
+            self._pipeline.insert_pass_before(p, updated_passes[to_idx])
         self.pipeline_changed.emit()
 
     def set_pass_enabled(self, pass_obj, enabled: bool) -> None:
