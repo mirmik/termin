@@ -331,7 +331,7 @@ class EditorWindowTcgui:
         # --- Bottom: TabView [Project | Console] ---
         bottom_tabs = TabView()
         self._bottom_tabs = bottom_tabs
-        bottom_tabs.preferred_height = px(200)
+        bottom_tabs.preferred_height = px(380)
         self._bottom_splitter = Splitter(target=bottom_tabs, side="top")
         root.add_child(self._bottom_splitter)
 
