@@ -11,6 +11,7 @@ import subprocess
 import platform
 
 from tcbase import log
+from tcgui.widgets.icon_theme import FileIconProvider
 from tcgui.widgets.menu import Menu, MenuItem
 
 from termin.editor_core.project_operations import ProjectOperations, sync_stdlib
@@ -70,21 +71,26 @@ class ProjectBrowserTcgui:
         self,
         dir_tree,
         file_list,
+        breadcrumb,
         dialog_service,
         on_file_activated: Callable[[str], None] | None = None,
         on_file_selected: Callable[[str], None] | None = None,
     ) -> None:
         from tcgui.widgets.tree import TreeWidget, TreeNode
-        from tcgui.widgets.list_widget import ListWidget
+        from tcgui.widgets.file_grid_widget import FileGridWidget
+        from tcgui.widgets.hstack import HStack
 
         self._dir_tree: TreeWidget = dir_tree
-        self._file_list: ListWidget = file_list
+        self._file_list: FileGridWidget = file_list
+        self._breadcrumb: HStack = breadcrumb
         self.on_file_activated: Callable[[str], None] | None = on_file_activated
         self.on_file_selected: Callable[[str], None] | None = on_file_selected
 
         self._root_path: Path | None = None
         self._selected_dir: Path | None = None
         self._ops = ProjectOperations(dialog_service)
+        self._icons = FileIconProvider(size=40)
+        self._file_list.icon_provider = self._icons
 
         # Wire up callbacks
         self._dir_tree.on_select = self._on_dir_selected
@@ -199,10 +205,11 @@ class ProjectBrowserTcgui:
 
     def _show_files(self, directory: Path) -> None:
         self._selected_dir = directory
+        self._rebuild_breadcrumb()
         try:
             entries = sorted(
-                (e for e in directory.iterdir() if e.is_file() and not e.name.startswith(".")),
-                key=lambda e: e.name.lower(),
+                (e for e in directory.iterdir() if not e.name.startswith(".")),
+                key=lambda e: (not e.is_dir(), e.name.lower()),
             )
         except PermissionError:
             self._file_list.set_items([])
@@ -210,13 +217,67 @@ class ProjectBrowserTcgui:
 
         items = []
         for entry in entries:
+            if entry.is_dir():
+                items.append({
+                    "text": entry.name,
+                    "subtitle": "Folder",
+                    "icon_type": self._icons.icon_type_for_directory(),
+                    "data": entry,
+                })
+                continue
+            if not entry.is_file():
+                continue
             items.append({
                 "text": entry.name,
                 "subtitle": _get_file_subtitle(entry),
+                "icon_type": self._icons.icon_type_for_file(entry.name),
                 "data": entry,
             })
 
         self._file_list.set_items(items)
+        if self._file_list._ui is not None:
+            self._file_list._ui.request_layout()
+
+    def _rebuild_breadcrumb(self) -> None:
+        from tcgui.widgets.button import Button
+        from tcgui.widgets.label import Label
+        from tcgui.widgets.theme import current_theme as t
+
+        for child in self._breadcrumb.children[:]:
+            self._breadcrumb.remove_child(child)
+        if self._root_path is None or self._selected_dir is None:
+            return
+
+        paths: list[tuple[str, Path]] = [(self._root_path.name or str(self._root_path), self._root_path)]
+        try:
+            rel = self._selected_dir.relative_to(self._root_path)
+            for part in rel.parts:
+                paths.append((part, paths[-1][1] / part))
+        except ValueError:
+            paths = [(self._selected_dir.name or str(self._selected_dir), self._selected_dir)]
+
+        for idx, (label, path) in enumerate(paths):
+            if idx > 0:
+                sep = Label()
+                sep.text = ">"
+                sep.font_size = 12
+                sep.color = t.text_muted
+                self._breadcrumb.add_child(sep)
+
+            btn = Button()
+            btn.text = label
+            btn.font_size = 12
+            btn.padding = 4
+            btn.border_radius = 3
+            btn.background_color = (0.0, 0.0, 0.0, 0.0)
+            btn.hover_color = t.hover_subtle
+            btn.pressed_color = t.pressed
+            btn.text_color = t.text_secondary if idx < len(paths) - 1 else t.text_primary
+            btn.on_click = lambda p=path: self._show_files(p)
+            self._breadcrumb.add_child(btn)
+
+        if self._breadcrumb._ui is not None:
+            self._breadcrumb._ui.request_layout()
 
     # ------------------------------------------------------------------
     # Callbacks
@@ -230,7 +291,7 @@ class ProjectBrowserTcgui:
 
     def _on_file_selected(self, index: int, item: dict) -> None:
         path: Path | None = item.get("data")
-        if path is None:
+        if path is None or path.is_dir():
             return
         if self.on_file_selected is not None:
             self.on_file_selected(str(path))
@@ -238,6 +299,9 @@ class ProjectBrowserTcgui:
     def _on_file_activated(self, index: int, item: dict) -> None:
         path: Path | None = item.get("data")
         if path is None:
+            return
+        if path.is_dir():
+            self._show_files(path)
             return
         if self.on_file_activated is not None:
             self.on_file_activated(str(path))
@@ -250,7 +314,8 @@ class ProjectBrowserTcgui:
             return
 
         path: Path | None = item.get("data")
-        has_file = path is not None
+        has_file = path is not None and path.is_file()
+        has_dir = path is not None and path.is_dir()
 
         menu = Menu()
         items: list[MenuItem] = []
@@ -266,6 +331,12 @@ class ProjectBrowserTcgui:
                 items.append(MenuItem("Extract FBX...", on_click=lambda p=path: self._extract_fbx(p)))
             if path.suffix.lower() == ".glb":
                 items.append(MenuItem("Extract GLB...", on_click=lambda p=path: self._extract_glb(p)))
+            items.append(MenuItem.sep())
+            items.append(MenuItem("Show in Explorer", on_click=lambda p=path: self._reveal_in_explorer(p)))
+            items.append(MenuItem("Delete", on_click=lambda p=path: self._delete_item(p)))
+            items.append(MenuItem.sep())
+        elif has_dir and path is not None:
+            items.append(MenuItem("Open", on_click=lambda p=path: self._show_files(p)))
             items.append(MenuItem.sep())
             items.append(MenuItem("Show in Explorer", on_click=lambda p=path: self._reveal_in_explorer(p)))
             items.append(MenuItem("Delete", on_click=lambda p=path: self._delete_item(p)))

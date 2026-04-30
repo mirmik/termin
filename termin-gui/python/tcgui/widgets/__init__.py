@@ -16,6 +16,7 @@ from tcgui.widgets.separator import Separator
 from tcgui.widgets.image_widget import ImageWidget
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.list_widget import ListWidget
+from tcgui.widgets.file_grid_widget import FileGridWidget
 from tcgui.widgets.table_widget import TableColumn, TableWidget
 from tcgui.widgets.progress_bar import ProgressBar
 from tcgui.widgets.slider import Slider
@@ -55,6 +56,7 @@ __all__ = [
     "Widget",
     "HStack", "VStack", "GridLayout", "Panel", "ScrollArea", "GroupBox",
     "Label", "Button", "Checkbox", "IconButton", "Separator", "ImageWidget", "TextInput", "ListWidget",
+    "FileGridWidget",
     "TableColumn", "TableWidget",
     "ProgressBar", "Slider", "ComboBox", "SpinBox", "SliderEdit", "TextArea",
     "RichTextSegment", "RichTextStyle", "RichTextView",
