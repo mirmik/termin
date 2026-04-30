@@ -314,10 +314,21 @@ class PipelineInspectorTcgui(VStack):
 
     def load_pipeline_file(self, file_path: str) -> None:
         path = Path(file_path)
+        if not path.exists():
+            return
+
         name = path.stem
-        asset = self._rm.get_pipeline_asset(name)
-        pipeline = asset.data if asset is not None else None
+        pipeline = self._rm.get_pipeline(name)
+
+        if pipeline is None and self._ops is not None:
+            pipeline = self._ops.load_from_file(str(path))
+
+        if pipeline is None:
+            self.set_pipeline(None, f"File: {file_path}", file_path)
+            return
+
         self.set_pipeline(pipeline, f"File: {file_path}", file_path)
+        self._emit_changed()
 
     def save_pipeline_file(self, file_path: str | None = None) -> bool:
         """Save the currently-edited pipeline to ``file_path``; falls back to

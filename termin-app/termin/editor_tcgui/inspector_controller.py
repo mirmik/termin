@@ -233,7 +233,10 @@ class InspectorControllerTcgui:
             )
 
         elif kind is InspectorKind.PIPELINE:
-            self._pipeline_inspector.set_pipeline(model.target, f"File: {file_path or ''}")
+            if file_path is not None:
+                self._pipeline_inspector.load_pipeline_file(file_path)
+            else:
+                self._pipeline_inspector.set_pipeline(model.target, f"Pipeline: {model.label}")
 
         elif kind is InspectorKind.TEXTURE:
             if file_path is not None:
