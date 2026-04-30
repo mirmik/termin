@@ -241,6 +241,12 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height,
     }
 }
 
+void BackendWindow::maximize() {
+    if (window_) {
+        SDL_MaximizeWindow(window_);
+    }
+}
+
 void BackendWindow::close() {
     // Idempotent teardown — callers (both the dtor and Python
     // `window.close()`) can invoke this without checking state first.
