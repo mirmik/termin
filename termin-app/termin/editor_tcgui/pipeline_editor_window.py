@@ -76,9 +76,18 @@ def _load_graph_from_pipeline_dict(data: dict):
 
     for i, node_data in enumerate(data.get("nodes", [])):
         node_type = node_data.get("node_type", "pass")
-        graph_type = node_data.get("type", "Node")
+        raw_type = node_data.get("type", "Node")
         instance_name = node_data.get("name", "")
-        title = _node_title(node_type, graph_type, instance_name)
+
+        # Normalize to real class name for pass/effect nodes.
+        if node_type in ("pass", "effect"):
+            graph_type = _pass_class_name(raw_type)
+            display = _graph_title_from_pass_class(graph_type)
+        else:
+            graph_type = raw_type
+            display = graph_type
+
+        title = _node_title(node_type, display, instance_name)
 
         node = controller.create_node(
             node_type,
@@ -173,6 +182,10 @@ def _save_graph_to_pipeline_dict(graph) -> dict:
         node_type = str(node.data.get("node_type", node.kind))
         instance_name = str(node.data.get("instance_name", ""))
 
+        # Map UI display names back to real class names for pass/effect nodes.
+        if node_type in ("pass", "effect"):
+            graph_type = _pass_class_name(graph_type)
+
         node_entry = {
             "type": graph_type,
             "x": node.x,
@@ -246,23 +259,23 @@ def _legacy_pipeline_to_graph(data: dict):
     for i, pass_data in enumerate(passes):
         pass_type = pass_data.get("type", "Unknown")
         pass_name = pass_data.get("pass_name", pass_type)
-        title = _graph_title_from_pass_class(pass_type)
+        real_class = _pass_class_name(pass_type)
+        display_title = _graph_title_from_pass_class(real_class)
 
         node = controller.create_node(
             "pass",
-            title=f"{pass_name} ({title})",
+            title=f"{pass_name} ({display_title})",
             x=200.0,
             y=80.0 + i * 140.0,
             node_id=f"node_{i}",
         )
-        node.data["graph_type"] = title
+        node.data["graph_type"] = real_class
         node.data["instance_name"] = pass_name
         node.data["node_type"] = "pass"
         node.data["dynamic_inputs"] = []
         node.data["explicit_size"] = False
 
-        pass_class = _pass_class_name(title)
-        inputs, outputs, inplace_pairs = _extract_pass_socket_info(pass_class)
+        inputs, outputs, inplace_pairs = _extract_pass_socket_info(real_class)
         inplace_outputs = {out_name for _, out_name in inplace_pairs}
 
         for socket_name, socket_type in inputs:
@@ -285,6 +298,7 @@ def _reload_pipeline_asset(file_path: str) -> None:
         rm = ResourceManager.instance()
         asset = rm.get_pipeline_asset(name)
         if asset is not None and asset.is_loaded:
+            asset.unload()
             asset.reload()
             asset.mark_just_saved()
     except Exception as e:
@@ -413,9 +427,9 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         graph_view.refresh()
 
     def _create_pass_node(pass_class_name: str, node_type: str, wx: float, wy: float) -> None:
-        title = _graph_title_from_pass_class(pass_class_name)
-        node = graph_view.controller.create_node(node_type, title=title, x=wx, y=wy)
-        node.data["graph_type"] = title
+        display_title = _graph_title_from_pass_class(pass_class_name)
+        node = graph_view.controller.create_node(node_type, title=display_title, x=wx, y=wy)
+        node.data["graph_type"] = pass_class_name
         node.data["instance_name"] = ""
         node.data["node_type"] = node_type
         node.data["dynamic_inputs"] = []
