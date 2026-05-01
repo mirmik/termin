@@ -26,7 +26,7 @@ from termin.editor_tcgui.inspect_field_panel import InspectFieldPanel
 class PipelineInspectorTcgui(VStack):
     """Specialized tcgui inspector for RenderPipeline."""
 
-    def __init__(self, resource_manager, dialog_service=None) -> None:
+    def __init__(self, resource_manager, dialog_service=None, on_edit_callback: Callable[[str], None] | None = None) -> None:
         super().__init__()
         self.spacing = 4
 
@@ -38,6 +38,8 @@ class PipelineInspectorTcgui(VStack):
         self._selected_spec_index = -1
         self._updating = False
         self._updating_spec = False
+        self._is_graph_format = False
+        self._on_edit_callback = on_edit_callback
 
         self.on_changed: Optional[Callable[[], None]] = None
 
@@ -63,6 +65,12 @@ class PipelineInspectorTcgui(VStack):
         title.text = "Pipeline Inspector"
         title.stretch = True
         header.add_child(title)
+
+        self._edit_button = Button()
+        self._edit_button.text = "Edit"
+        self._edit_button.preferred_width = px(56)
+        self._edit_button.on_click = self._on_edit_clicked
+        header.add_child(self._edit_button)
 
         self._save_button = Button()
         self._save_button.text = "Save"
@@ -316,10 +324,11 @@ class PipelineInspectorTcgui(VStack):
     # Public API
     # ------------------------------------------------------------------
 
-    def set_pipeline(self, pipeline, subtitle: str = "", source_path: str | None = None) -> None:
+    def set_pipeline(self, pipeline, subtitle: str = "", source_path: str | None = None, is_graph_format: bool = False) -> None:
         self._pipeline = pipeline
         self._subtitle.text = subtitle
         self._source_path = source_path
+        self._is_graph_format = is_graph_format
         if self._ops is not None:
             self._ops.set_pipeline(pipeline)
         self._rebuild_all()
@@ -330,8 +339,15 @@ class PipelineInspectorTcgui(VStack):
             return
 
         name = path.stem
-        pipeline = self._rm.get_pipeline(name)
 
+        # Check if underlying asset is graph format
+        is_graph = False
+        asset = self._rm.get_pipeline_asset(name)
+        if asset is not None:
+            asset.ensure_loaded()
+            is_graph = asset.is_graph_format
+
+        pipeline = self._rm.get_pipeline(name)
         if pipeline is None and self._ops is not None:
             pipeline = self._ops.load_from_file(str(path))
 
@@ -339,7 +355,7 @@ class PipelineInspectorTcgui(VStack):
             self.set_pipeline(None, f"File: {file_path}", file_path)
             return
 
-        self.set_pipeline(pipeline, f"File: {file_path}", file_path)
+        self.set_pipeline(pipeline, f"File: {file_path}", file_path, is_graph_format=is_graph)
         self._emit_changed()
 
     def save_pipeline_file(self, file_path: str | None = None) -> bool:
@@ -361,35 +377,50 @@ class PipelineInspectorTcgui(VStack):
     def _on_save_clicked(self) -> None:
         self.save_pipeline_file()
 
+    def _on_edit_clicked(self) -> None:
+        if self._source_path is None or self._ui is None:
+            return
+        if self._on_edit_callback is not None:
+            self._on_edit_callback(self._source_path)
+
     # ------------------------------------------------------------------
     # Rebuild
     # ------------------------------------------------------------------
 
     def _set_visible_state(self, has_pipeline: bool) -> None:
+        is_readonly = has_pipeline and self._is_graph_format
+
         self._passes_list.visible = has_pipeline
-        self._pass_add.visible = has_pipeline
-        self._pass_remove.visible = has_pipeline
-        self._pass_up.visible = has_pipeline
-        self._pass_down.visible = has_pipeline
+        self._pass_add.visible = has_pipeline and not is_readonly
+        self._pass_remove.visible = has_pipeline and not is_readonly
+        self._pass_up.visible = has_pipeline and not is_readonly
+        self._pass_down.visible = has_pipeline and not is_readonly
         self._pass_name.visible = has_pipeline
+        self._pass_name.enabled = not is_readonly
         self._pass_enabled.visible = has_pipeline
+        self._pass_enabled.enabled = not is_readonly
         self._pass_fields.visible = has_pipeline
+        self._pass_fields.enabled = not is_readonly
 
         effects_visible = has_pipeline and self._selected_postprocess is not None
         self._effects_title.visible = effects_visible
         self._effects_list.visible = effects_visible
-        self._effect_add.visible = effects_visible
-        self._effect_remove.visible = effects_visible
-        self._effect_up.visible = effects_visible
-        self._effect_down.visible = effects_visible
+        self._effect_add.visible = effects_visible and not is_readonly
+        self._effect_remove.visible = effects_visible and not is_readonly
+        self._effect_up.visible = effects_visible and not is_readonly
+        self._effect_down.visible = effects_visible and not is_readonly
         self._effect_name.visible = effects_visible
+        self._effect_name.enabled = not is_readonly
         self._effect_fields.visible = effects_visible
+        self._effect_fields.enabled = not is_readonly
 
         self._specs_list.visible = has_pipeline
-        self._spec_add.visible = has_pipeline
-        self._spec_remove.visible = has_pipeline
+        self._spec_add.visible = has_pipeline and not is_readonly
+        self._spec_remove.visible = has_pipeline and not is_readonly
         self._spec_editor.visible = has_pipeline and self._selected_spec_index >= 0
-        self._save_button.visible = has_pipeline
+        self._spec_editor.enabled = not is_readonly
+        self._edit_button.visible = has_pipeline
+        self._save_button.visible = has_pipeline and not is_readonly
 
         self._empty.visible = not has_pipeline
 

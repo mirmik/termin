@@ -14,6 +14,7 @@ from tcgui.widgets.ui import UI
 from tcgui.widgets.units import pct, px
 from tcgui.widgets.vstack import VStack
 from tcgui.widgets.file_dialog_overlay import show_open_file_dialog, show_save_file_dialog
+from tcgui.widgets.input_dialog import show_input_dialog
 
 
 _TITLE_TO_PASS_CLASS = {
@@ -104,6 +105,9 @@ def _load_graph_from_pipeline_dict(data: dict):
                 controller.add_output_socket(node.id, "shadow", "shadow")
             else:
                 controller.add_output_socket(node.id, "fbo", "fbo")
+        elif node_type == "output":
+            controller.add_input_socket(node.id, "color", "fbo")
+            controller.add_input_socket(node.id, "depth", "fbo")
         elif node_type in ("pass", "effect"):
             pass_class = _pass_class_name(graph_type)
             inputs, outputs, inplace_pairs = _extract_pass_socket_info(pass_class)
@@ -225,8 +229,76 @@ def _save_graph_to_pipeline_dict(graph) -> dict:
     }
 
 
-def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None) -> None:
-    """Open Pipeline Editor in a separate tcgui window."""
+def _legacy_pipeline_to_graph(data: dict):
+    """Convert legacy pipeline format (passes) to a node graph.
+
+    Creates nodes for each pass, positioned vertically. Connections are not
+    reconstructed since the legacy format doesn't store them explicitly.
+    """
+    from tcnodegraph import Graph, GraphController
+
+    graph = Graph()
+    controller = GraphController(graph)
+
+    passes = data.get("passes", [])
+    node_ids: list[str] = []
+
+    for i, pass_data in enumerate(passes):
+        pass_type = pass_data.get("type", "Unknown")
+        pass_name = pass_data.get("pass_name", pass_type)
+        title = _graph_title_from_pass_class(pass_type)
+
+        node = controller.create_node(
+            "pass",
+            title=f"{pass_name} ({title})",
+            x=200.0,
+            y=80.0 + i * 140.0,
+            node_id=f"node_{i}",
+        )
+        node.data["graph_type"] = title
+        node.data["instance_name"] = pass_name
+        node.data["node_type"] = "pass"
+        node.data["dynamic_inputs"] = []
+        node.data["explicit_size"] = False
+
+        pass_class = _pass_class_name(title)
+        inputs, outputs, inplace_pairs = _extract_pass_socket_info(pass_class)
+        inplace_outputs = {out_name for _, out_name in inplace_pairs}
+
+        for socket_name, socket_type in inputs:
+            controller.add_input_socket(node.id, socket_name, socket_type)
+        for socket_name, socket_type in outputs:
+            controller.add_output_socket(node.id, socket_name, socket_type)
+            if socket_name not in inplace_outputs:
+                controller.add_input_socket(node.id, f"{socket_name}_target", socket_type)
+
+        node_ids.append(node.id)
+
+    return graph
+
+
+def _reload_pipeline_asset(file_path: str) -> None:
+    """Reload the PipelineAsset for the given file so the inspector refreshes."""
+    try:
+        name = Path(file_path).stem
+        from termin.visualization.core.resources import ResourceManager
+        rm = ResourceManager.instance()
+        asset = rm.get_pipeline_asset(name)
+        if asset is not None and asset.is_loaded:
+            asset.reload()
+            asset.mark_just_saved()
+    except Exception as e:
+        log.warn(f"[PipelineEditor] Failed to reload pipeline asset: {e}")
+
+
+def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, initial_file: str | None = None) -> None:
+    """Open Pipeline Editor in a separate tcgui window.
+
+    Args:
+        parent_ui: Parent UI for window creation.
+        directory: Directory for file dialogs.
+        initial_file: Optional path to .pipeline/.scene_pipeline file to load immediately.
+    """
     if parent_ui.create_window is None:
         log.error("[PipelineEditor] ui.create_window is not available")
         return
@@ -239,6 +311,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None) -> 
     from tcnodegraph import Graph, NodeGraphView
 
     current_file: str | None = None
+    current_file_uuid: str | None = None
     current_graph = Graph()
     graph_view = NodeGraphView(current_graph)
     graph_view.preferred_width = pct(100)
@@ -284,14 +357,23 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None) -> 
     def _load_path(path: str) -> None:
         if not path:
             return
-        nonlocal current_graph
+        nonlocal current_graph, current_file_uuid
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            current_graph = _load_graph_from_pipeline_dict(data)
+            current_file_uuid = data.get("uuid")
+
+            # Legacy format: convert passes to graph nodes
+            if "passes" in data and "nodes" not in data:
+                current_graph = _legacy_pipeline_to_graph(data)
+                _set_file(path)
+                _set_status(f"Loaded (legacy, converted): {path}")
+            else:
+                current_graph = _load_graph_from_pipeline_dict(data)
+                _set_file(path)
+                _set_status(f"Loaded: {path}")
+
             graph_view.set_graph(current_graph)
-            _set_file(path)
-            _set_status(f"Loaded: {path}")
         except Exception as e:
             log.error(f"[PipelineEditor] load failed: {e}")
             _set_status(f"Load failed: {e}")
@@ -299,11 +381,18 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None) -> 
     def _save_to(path: str) -> None:
         if not path:
             return
+        nonlocal current_file_uuid
         try:
             graph_view.adapter.apply_item_positions_to_model()
             data = _save_graph_to_pipeline_dict(graph_view.adapter.graph)
+            if current_file_uuid:
+                data["uuid"] = current_file_uuid
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
+
+            # Reload the corresponding PipelineAsset so inspector picks up changes.
+            _reload_pipeline_asset(path)
+
             _set_file(path)
             _set_status(f"Saved: {path}")
         except Exception as e:
@@ -341,8 +430,57 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None) -> 
                 graph_view.controller.add_input_socket(node.id, f"{socket_name}_target", socket_type)
         graph_view.refresh()
 
+    def _create_output_node(wx: float, wy: float) -> None:
+        node = graph_view.controller.create_node("output", title="Render Target", x=wx, y=wy)
+        node.data["graph_type"] = "RenderTarget"
+        node.data["instance_name"] = ""
+        node.data["node_type"] = "output"
+        node.data["dynamic_inputs"] = []
+        node.data["explicit_size"] = False
+        graph_view.controller.add_input_socket(node.id, "color", "fbo")
+        graph_view.controller.add_input_socket(node.id, "depth", "fbo")
+        graph_view.refresh()
+
+    def _build_context_menu(wx: float, wy: float) -> list[MenuItem]:
+        from tcnodegraph.view import NodeItem, EdgeItem
+
+        hit = graph_view.scene.hit_test(wx, wy)
+
+        # Right-click on a node → node-specific actions
+        if isinstance(hit, NodeItem):
+            node_id = hit.node_id
+            items: list[MenuItem] = [
+                MenuItem("Delete Node", on_click=lambda: (_delete_node(node_id))),
+                MenuItem("Rename", on_click=lambda: _rename_node(node_id)),
+                MenuItem.sep(),
+                MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
+                MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),
+                MenuItem("Add Render Target", on_click=lambda: _create_output_node(wx, wy)),
+            ]
+            return items
+
+        # Right-click on an edge → edge-specific actions
+        if isinstance(hit, EdgeItem):
+            edge_id = hit.data.get("edge_id")
+            if edge_id:
+                return [MenuItem("Delete Connection", on_click=lambda: _delete_edge(edge_id))]
+            return []
+
+        # Empty space → create menu
+        return _build_create_menu_items(wx, wy)
+
+    def _delete_node(node_id: str) -> None:
+        graph_view.controller.remove_node(node_id)
+        graph_view.refresh()
+
+    def _delete_edge(edge_id: str) -> None:
+        graph_view.controller.remove_edge(edge_id)
+        graph_view.refresh()
+
     def _build_create_menu_items(wx: float, wy: float) -> list[MenuItem]:
         items: list[MenuItem] = [
+            MenuItem("Add Render Target", on_click=lambda: _create_output_node(wx, wy)),
+            MenuItem.sep(),
             MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
             MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),
             MenuItem.sep(),
@@ -366,6 +504,30 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None) -> 
         except Exception as e:
             log.warn(f"[PipelineEditor] Cannot build pass menu: {e}")
         return items
+
+    def _rename_node(node_id: str) -> None:
+        node = graph_view.adapter.graph.nodes.get(node_id)
+        if node is None or graph_view._ui is None:
+            return
+        current = str(node.data.get("instance_name", node.title))
+
+        def _apply(result: str | None) -> None:
+            if result is None:
+                return
+            new_name = result.strip()
+            if not new_name:
+                return
+            node.title = new_name
+            node.data["instance_name"] = new_name
+            graph_view.refresh()
+
+        show_input_dialog(
+            graph_view._ui,
+            title="Rename Node",
+            message="Node name:",
+            default=current,
+            on_result=_apply,
+        )
 
     def _on_open_click() -> None:
         start_dir = directory or str(Path.home())
@@ -392,9 +554,9 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None) -> 
             start_dir = str(Path(current_file).parent)
         show_save_file_dialog(
             child,
-            title="Save Scene Pipeline",
+            title="Save Pipeline",
             directory=start_dir,
-            filter_str="Scene Pipeline (*.scene_pipeline);;All Files (*)",
+            filter_str="Pipeline (*.pipeline);;Scene Pipeline (*.scene_pipeline);;All Files (*)",
             on_result=lambda p: _save_to(p) if p else None,
             windowed=True,
         )
@@ -402,7 +564,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None) -> 
     btn_open.on_click = _on_open_click
     btn_save.on_click = _on_save_click
     btn_save_as.on_click = _on_save_as_click
-    graph_view.menu_items_provider = _build_create_menu_items
+    graph_view.menu_items_provider = _build_context_menu
 
     toolbar.add_child(btn_open)
     toolbar.add_child(btn_save)
@@ -414,13 +576,15 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None) -> 
     root.add_child(status_label)
     child.root = root
 
-    # Auto-load first .scene_pipeline from project directory if present.
-    if directory:
+    # Auto-load file: explicit initial_file takes priority, then search project dir.
+    if initial_file:
+        _load_path(initial_file)
+    elif directory:
         try:
             pdir = Path(directory)
-            candidates = sorted(pdir.glob("*.scene_pipeline"))
+            candidates = sorted(pdir.glob("*.pipeline")) + sorted(pdir.glob("*.scene_pipeline"))
             if not candidates:
-                candidates = sorted(pdir.rglob("*.scene_pipeline"))
+                candidates = sorted(pdir.rglob("*.pipeline")) + sorted(pdir.rglob("*.scene_pipeline"))
             if candidates:
                 _load_path(str(candidates[0]))
         except Exception as e:

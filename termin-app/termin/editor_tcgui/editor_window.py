@@ -417,6 +417,7 @@ class EditorWindowTcgui:
             on_display_changed=self._request_viewport_update,
             on_viewport_changed=self._request_viewport_update,
             on_pipeline_changed=self._request_viewport_update,
+            on_edit_pipeline=self._open_pipeline_file_for_edit,
             dialog_service=self._dialog_service,
         )
         self._inspector_controller.set_scene(self.scene)
@@ -1424,6 +1425,20 @@ class EditorWindowTcgui:
             )
         except Exception as e:
             log.error(f"[EditorWindowTcgui] Failed to open Pipeline Editor: {e}")
+            self._log_to_console(f"Pipeline Editor error: {e}")
+
+    def _open_pipeline_file_for_edit(self, file_path: str) -> None:
+        if self._ui is None:
+            return
+        try:
+            from termin.editor_tcgui.pipeline_editor_window import open_pipeline_editor_window
+            open_pipeline_editor_window(
+                self._ui,
+                directory=str(Path(file_path).parent),
+                initial_file=file_path,
+            )
+        except Exception as e:
+            log.error(f"[EditorWindowTcgui] Failed to open Pipeline Editor for {file_path}: {e}")
             self._log_to_console(f"Pipeline Editor error: {e}")
 
     @property
