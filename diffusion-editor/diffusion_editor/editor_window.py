@@ -24,9 +24,11 @@ from tcgui.widgets.message_box import MessageBox, Buttons
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.text_input import TextInput
+from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.units import px, pct
 from tcgui.widgets.splitter import Splitter
 
+from .agent_chat import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPanel
 from .layer_stack import LayerStack
 from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
 from .editor_canvas import EditorCanvas
@@ -182,6 +184,12 @@ class EditorWindow:
         main_area.add_child(self._layer_panel)
 
         root.add_child(main_area)
+
+        # Experimental bottom agent chat panel. It starts as plain chat; tool
+        # access can be layered in once the command contract is explicit.
+        self._agent_chat_panel = AgentChatPanel(self._settings)
+        root.add_child(Splitter(target=self._agent_chat_panel, side="top"))
+        root.add_child(self._agent_chat_panel)
 
         # Status bar
         self._statusbar = StatusBar()
@@ -443,6 +451,106 @@ class EditorWindow:
         note.text = "Older history entries are removed when the limit is exceeded."
         content.add_child(note)
 
+        agent_title = Label()
+        agent_title.text = "Agent Chat API"
+        content.add_child(agent_title)
+
+        agent_base_url_label = Label()
+        agent_base_url_label.text = "Base URL"
+        agent_base_url_label.font_size = 12
+        content.add_child(agent_base_url_label)
+
+        agent_base_url_input = TextInput()
+        agent_base_url_input.text = str(
+            self._settings.get("agent_api_base_url", DEFAULT_AGENT_BASE_URL)
+        )
+        agent_base_url_input.placeholder = DEFAULT_AGENT_BASE_URL
+        agent_base_url_input.preferred_width = px(420)
+        content.add_child(agent_base_url_input)
+
+        agent_key_label = Label()
+        agent_key_label.text = "API key"
+        agent_key_label.font_size = 12
+        content.add_child(agent_key_label)
+
+        agent_key_input = TextInput()
+        agent_key_input.text = str(self._settings.get("agent_api_key", ""))
+        agent_key_input.placeholder = "API key"
+        agent_key_input.preferred_width = px(420)
+        content.add_child(agent_key_input)
+
+        agent_model_label = Label()
+        agent_model_label.text = "Model"
+        agent_model_label.font_size = 12
+        content.add_child(agent_model_label)
+
+        agent_model_input = TextInput()
+        agent_model_input.text = str(self._settings.get("agent_model", DEFAULT_AGENT_MODEL))
+        agent_model_input.placeholder = DEFAULT_AGENT_MODEL
+        agent_model_input.preferred_width = px(260)
+        content.add_child(agent_model_input)
+
+        agent_params_row = HStack()
+        agent_params_row.spacing = 8
+
+        temperature_box = VStack()
+        temperature_box.spacing = 3
+        temperature_label = Label()
+        temperature_label.text = "Temperature"
+        temperature_label.font_size = 12
+        temperature_box.add_child(temperature_label)
+
+        agent_temperature_input = SpinBox()
+        agent_temperature_input.decimals = 2
+        agent_temperature_input.step = 0.05
+        agent_temperature_input.min_value = 0.0
+        agent_temperature_input.max_value = 2.0
+        agent_temperature_input.value = float(self._settings.get("agent_temperature", 0.7))
+        agent_temperature_input.preferred_width = px(120)
+        temperature_box.add_child(agent_temperature_input)
+        agent_params_row.add_child(temperature_box)
+
+        max_tokens_box = VStack()
+        max_tokens_box.spacing = 3
+        max_tokens_label = Label()
+        max_tokens_label.text = "Max tokens"
+        max_tokens_label.font_size = 12
+        max_tokens_box.add_child(max_tokens_label)
+
+        agent_max_tokens_input = SpinBox()
+        agent_max_tokens_input.decimals = 0
+        agent_max_tokens_input.step = 128
+        agent_max_tokens_input.min_value = 0
+        agent_max_tokens_input.max_value = 131072
+        agent_max_tokens_input.value = float(self._settings.get("agent_max_tokens", 1024))
+        agent_max_tokens_input.preferred_width = px(140)
+        max_tokens_box.add_child(agent_max_tokens_input)
+        agent_params_row.add_child(max_tokens_box)
+
+        timeout_box = VStack()
+        timeout_box.spacing = 3
+        timeout_label = Label()
+        timeout_label.text = "Timeout sec"
+        timeout_label.font_size = 12
+        timeout_box.add_child(timeout_label)
+
+        agent_timeout_input = SpinBox()
+        agent_timeout_input.decimals = 0
+        agent_timeout_input.step = 5
+        agent_timeout_input.min_value = 5
+        agent_timeout_input.max_value = 600
+        agent_timeout_input.value = float(self._settings.get("agent_timeout_seconds", 60))
+        agent_timeout_input.preferred_width = px(120)
+        timeout_box.add_child(agent_timeout_input)
+        agent_params_row.add_child(timeout_box)
+
+        content.add_child(agent_params_row)
+
+        agent_stream_input = Checkbox()
+        agent_stream_input.text = "Stream responses"
+        agent_stream_input.checked = bool(self._settings.get("agent_stream", True))
+        content.add_child(agent_stream_input)
+
         dlg.content = content
 
         def _apply(result: str):
@@ -451,8 +559,15 @@ class EditorWindow:
             self._set_models_dir(models_dir_input.text)
             limit_bytes = int(limit_input.value * _BYTES_PER_GIB)
             self._set_history_memory_limit_bytes(limit_bytes)
+            self._settings.set("agent_api_base_url", agent_base_url_input.text.strip())
+            self._settings.set("agent_api_key", agent_key_input.text.strip())
+            self._settings.set("agent_model", agent_model_input.text.strip())
+            self._settings.set("agent_temperature", float(agent_temperature_input.value))
+            self._settings.set("agent_max_tokens", int(agent_max_tokens_input.value))
+            self._settings.set("agent_timeout_seconds", float(agent_timeout_input.value))
+            self._settings.set("agent_stream", bool(agent_stream_input.checked))
             self._statusbar.text = (
-                f"Saved settings: models dir, history limit {limit_input.value:.2f} GiB"
+                f"Saved settings: models dir, history limit {limit_input.value:.2f} GiB, agent API"
             )
 
         dlg.on_result = _apply
@@ -1220,6 +1335,7 @@ class EditorWindow:
     # ------------------------------------------------------------------
 
     def poll(self):
+        self._agent_chat_panel.poll()
         self._poll_segmentation()
         self._poll_lama()
         self._poll_instruct()
@@ -1365,6 +1481,8 @@ class EditorWindow:
         self._running = False
         if hasattr(self, "_canvas") and self._canvas is not None:
             self._canvas.dispose()
+        if hasattr(self, "_agent_chat_panel") and self._agent_chat_panel is not None:
+            self._agent_chat_panel.shutdown()
         self._engine.shutdown()
         self._instruct_engine.shutdown()
         self._lama_engine.shutdown()
