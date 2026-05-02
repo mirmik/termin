@@ -96,9 +96,9 @@ void DebugTrianglePass::execute(ExecuteContext& ctx) {
     }
 
     static const float vertices[] = {
-         0.0f,  0.7f, 0.0f,  1.0f, 0.15f, 0.10f, 1.0f,
-         0.7f, -0.6f, 0.0f,  0.10f, 0.35f, 1.0f, 1.0f,
-        -0.7f, -0.6f, 0.0f,  0.10f, 0.75f, 0.20f, 1.0f,
+         0.0f, -0.7f, 0.0f,  1.0f, 0.15f, 0.10f, 1.0f,
+        -0.7f,  0.6f, 0.0f,  0.10f, 0.75f, 0.20f, 1.0f,
+         0.7f,  0.6f, 0.0f,  0.10f, 0.35f, 1.0f, 1.0f,
     };
 
     const float clear_color[4] = {0.08f, 0.09f, 0.11f, 1.0f};
