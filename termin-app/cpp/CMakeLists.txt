@@ -223,6 +223,7 @@ set(RENDER_LIB_SOURCES
     termin/render/color_pass.cpp
     termin/render/id_pass.cpp
     termin/render/collider_gizmo_pass.cpp
+    termin/render/debug_triangle_pass.cpp
     termin/render/ground_grid_pass.cpp
     termin/render/present_pass.cpp
     termin/render/shadow_pass.cpp

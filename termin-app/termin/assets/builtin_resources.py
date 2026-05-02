@@ -250,9 +250,27 @@ def register_default_pipeline(rm: "ResourceManager") -> None:
     rm.register_pipeline("Default", pipeline, uuid=BUILTIN_UUIDS.get("DefaultPipeline"))
 
 
+def register_triangle_pipeline(rm: "ResourceManager") -> None:
+    """Register built-in diagnostic triangle render pipeline."""
+    if rm.get_pipeline("Triangle") is not None:
+        return
+
+    from termin.visualization.render.framegraph import RenderPipeline
+    from termin.visualization.render.framegraph.passes.debug_triangle import DebugTrianglePass
+
+    pipeline = RenderPipeline(
+        name="Triangle",
+        _init_passes=[
+            DebugTrianglePass(output_res="OUTPUT", pass_name="DebugTriangle"),
+        ],
+    )
+    rm.register_pipeline("Triangle", pipeline, uuid=BUILTIN_UUIDS.get("TrianglePipeline"))
+
+
 def register_all_builtins(rm: "ResourceManager") -> None:
     """Register all built-in resources (shaders, materials, meshes, pipelines)."""
     register_builtin_shaders(rm)
     register_builtin_materials(rm)
     register_builtin_meshes(rm)
     register_default_pipeline(rm)
+    register_triangle_pipeline(rm)
