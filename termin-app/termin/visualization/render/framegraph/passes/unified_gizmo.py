@@ -23,7 +23,8 @@ class UnifiedGizmoPass(RenderFramePass):
     """
     Framegraph pass that renders all gizmos via GizmoManager.
 
-    Gizmos are rendered on top of the scene (depth is cleared before rendering).
+    Gizmos are rendered on top of the scene: the pass clears its depth
+    attachment before rendering, then uses it for depth between gizmo elements.
     This replaces both the old entity-based GizmoPass and ImmediateGizmoPass.
     """
 
@@ -87,15 +88,21 @@ class UnifiedGizmoPass(RenderFramePass):
                 from tcbase import log
                 log.warn(f"[UnifiedGizmoPass] tex2 write '{self.output_res}' missing, skipping")
                 return
+            target_depth_tex2 = ctx.tex2_depth_writes.get(self.output_res)
+            if not target_depth_tex2:
+                from tcbase import log
+                log.error(f"[UnifiedGizmoPass] depth tex2 write '{self.output_res}' missing, skipping")
+                return
 
             ctx2 = ctx.ctx2
 
             with profiler.section("Setup"):
                 # Open one ctx2 pass and clear depth — gizmos render on
-                # top of scene. GizmoManager/ImmediateRenderer render
-                # into this pass via their ctx2 entry points.
+                # top of scene, while gizmo elements still depth-test
+                # against each other inside this cleared attachment.
                 ctx2.begin_pass(
                     target_tex2,
+                    target_depth_tex2,
                     clear_depth_enabled=True,
                     clear_depth=1.0,
                 )
