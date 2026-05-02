@@ -13,6 +13,7 @@ extern "C" {
 #include "termin/render/color_pass.hpp"
 #include "termin/render/id_pass.hpp"
 #include "termin/render/collider_gizmo_pass.hpp"
+#include "termin/render/debug_triangle_pass.hpp"
 #include "termin/render/shadow_pass.hpp"
 #include "termin/render/present_pass.hpp"
 #include "termin/render/bloom_pass.hpp"
@@ -291,6 +292,34 @@ void bind_frame_pass(nb::module_& m) {
         );
         m.attr("ColliderGizmoPass").attr("node_inplace_pairs") = nb::make_tuple(
             nb::make_tuple("input_res", "output_res")
+        );
+    }
+
+    nb::class_<DebugTrianglePass, CxxFramePass>(m, "DebugTrianglePass")
+        .def("__init__", [](DebugTrianglePass* self,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) DebugTrianglePass(output_res, pass_name);
+            init_pass_from_python(self, "DebugTrianglePass");
+        },
+             nb::arg("output_res") = "OUTPUT",
+             nb::arg("pass_name") = "DebugTriangle")
+        .def_rw("output_res", &DebugTrianglePass::output_res)
+        .def("compute_reads", &DebugTrianglePass::compute_reads)
+        .def("compute_writes", &DebugTrianglePass::compute_writes)
+        .def("get_inplace_aliases", &DebugTrianglePass::get_inplace_aliases)
+        .def_prop_ro("reads", &DebugTrianglePass::compute_reads)
+        .def_prop_ro("writes", &DebugTrianglePass::compute_writes)
+        .def("destroy", &DebugTrianglePass::destroy)
+        .def("__repr__", [](const DebugTrianglePass& p) {
+            return "<DebugTrianglePass '" + p.get_pass_name() + "'>";
+        });
+
+    {
+        m.attr("DebugTrianglePass").attr("category") = "Debug";
+        m.attr("DebugTrianglePass").attr("node_inputs") = nb::make_tuple();
+        m.attr("DebugTrianglePass").attr("node_outputs") = nb::make_tuple(
+            nb::make_tuple("output_res", "fbo")
         );
     }
 

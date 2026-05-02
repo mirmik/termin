@@ -23,6 +23,7 @@ from termin.visualization.render.framegraph.passes.present import BlitPass, Pres
 from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
 from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
 from termin.visualization.render.framegraph.passes.grayscale import GrayscalePass
+from termin.visualization.render.framegraph.passes.debug_triangle import DebugTrianglePass
 from termin.visualization.render.framegraph.passes.material_pass import MaterialPass
 from termin.visualization.render.framegraph.passes.bloom_pass import BloomPass
 from termin.visualization.render.framegraph.passes.tonemap import TonemapPass
@@ -44,6 +45,7 @@ __all__ = [
     "ColorPass",
     "ColliderGizmoPass",
     "DepthPass",
+    "DebugTrianglePass",
     "GizmoPass",
     "IdPass",
     "NormalPass",

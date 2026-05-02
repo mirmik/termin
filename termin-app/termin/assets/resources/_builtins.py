@@ -77,6 +77,7 @@ BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
     ("termin.visualization.render.framegraph.passes.tonemap", "TonemapPass"),
     # Debug
     ("termin.visualization.render.framegraph.passes.frame_debugger", "FrameDebuggerPass"),
+    ("termin.visualization.render.framegraph.passes.debug_triangle", "DebugTrianglePass"),
 ]
 
 # Список встроенных PostEffect'ов для предрегистрации.
