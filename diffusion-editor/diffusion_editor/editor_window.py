@@ -30,6 +30,7 @@ from tcgui.widgets.splitter import Splitter
 
 from .agent_chat import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPanel
 from .agent_tools import create_editor_tool_registry
+from .grounding_dialog import GroundingDialog
 from .layer_stack import LayerStack
 from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
 from .editor_canvas import EditorCanvas
@@ -95,6 +96,7 @@ class EditorWindow:
         self._pending_request = None
         self._pending_lama_layer = None
         self._pending_instruct_layer = None
+        self._pending_grounding_result = None
         self._history_replaying = False
         self._external_edit_ctx: ExternalEditContext | None = None
 
@@ -244,6 +246,8 @@ class EditorWindow:
         layer_menu.add_item(MenuItem("Remove Layer", on_click=self._remove_layer))
         layer_menu.add_item(MenuItem(separator=True))
         layer_menu.add_item(MenuItem("Flatten", on_click=self._flatten_layers))
+        layer_menu.add_item(MenuItem(separator=True))
+        layer_menu.add_item(MenuItem("Detect Objects...", on_click=self._show_grounding_dialog))
         self._menu_bar.add_menu("Layer", layer_menu)
 
     # ------------------------------------------------------------------
@@ -1349,6 +1353,7 @@ class EditorWindow:
         self._poll_lama()
         self._poll_instruct()
         self._poll_diffusion()
+        self._poll_grounding()
 
     def _poll_segmentation(self):
         seg_mask, seg_error = self._seg_engine.poll()
@@ -1457,6 +1462,37 @@ class EditorWindow:
                 self._document.execute(command)
             self._statusbar.text = status
             self._pending_request = None
+
+    def _show_grounding_dialog(self) -> None:
+        GroundingDialog(self).show()
+
+    def _poll_grounding(self) -> None:
+        if self._pending_grounding_result is None:
+            return
+        boxes, layer = self._pending_grounding_result
+        self._pending_grounding_result = None
+
+        from .commands import DrawRectCommand
+
+        colors = [
+            (255, 0, 0, 255),
+            (0, 255, 0, 255),
+            (0, 0, 255, 255),
+            (255, 255, 0, 255),
+            (255, 0, 255, 255),
+            (0, 255, 255, 255),
+        ]
+        for i, (label, x0, y0, x1, y1, score) in enumerate(boxes):
+            color = colors[i % len(colors)]
+            cmd = DrawRectCommand(
+                layer=layer,
+                x=x0, y=y0,
+                width=x1 - x0, height=y1 - y0,
+                color=color,
+                thickness=2,
+                label=f"Detect: {label} ({score:.0%})",
+            )
+            self._document.execute(cmd)
 
     # ------------------------------------------------------------------
     # Public: rendering
