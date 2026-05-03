@@ -6,6 +6,7 @@ from nemor.core.tool_registry import ToolRegistry
 
 from .commands import (
     AddLayerCommand,
+    DrawGridCommand,
     DrawRectCommand,
     RemoveLayerCommand,
     SetLayerVisibilityCommand,
@@ -33,6 +34,62 @@ def _on_main(config, func):
     if run is None:
         return func()
     return run(func)
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _ndc_to_pixels(ndc_x, ndc_y, ndc_w, ndc_h, cw, ch):
+    """Convert NDC rect (0–1) to pixel rect."""
+    px = int(ndc_x * cw)
+    py = int(ndc_y * ch)
+    pw = int(ndc_w * cw)
+    ph = int(ndc_h * ch)
+    return px, py, pw, ph
+
+
+def _save_image_for_llm(img, config):
+    import hashlib
+    import io
+    import os
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    png_data = buf.getvalue()
+
+    try:
+        from nemor.images import IMAGE_EXT_BY_MIME, prepare_image_for_llm
+        data, mime = prepare_image_for_llm(png_data, "image/png")
+        ext = IMAGE_EXT_BY_MIME[mime]
+    except Exception:
+        data, mime = png_data, "image/png"
+        ext = ".png"
+
+    nemor_dir = config.get("nemor_dir") or os.path.expanduser("~/.nemor")
+    media_dir = os.path.join(nemor_dir, "media")
+    os.makedirs(media_dir, exist_ok=True)
+
+    file_hash = hashlib.sha1(data).hexdigest()[:12]
+    dest_name = f"canvas_{file_hash}{ext}"
+    dest_path = os.path.join(media_dir, dest_name)
+    with open(dest_path, "wb") as f:
+        f.write(data)
+
+    w, h = img.size
+    size = len(data)
+    size_str = f"{size / 1024:.0f}KB" if size >= 1024 else f"{size}B"
+    filename = f"canvas_{w}x{h}{ext}"
+    text = f"Canvas: {w}x{h} ({size_str})"
+    return {
+        "text": text,
+        "images": [{
+            "path": dest_path,
+            "url": f"/media/{dest_name}",
+            "filename": filename,
+            "mime": mime,
+            "size": size,
+        }],
+    }
 
 
 # ── Tool implementations ────────────────────────────────────────────────────
@@ -141,27 +198,67 @@ def _tool_draw_rect(args, config):
         if active is None:
             return "No active layer. Select or create a layer first."
 
+        ndc_x = float(args["x"])
+        ndc_y = float(args["y"])
+        ndc_w = float(args["width"])
+        ndc_h = float(args["height"])
+        px, py, pw, ph = _ndc_to_pixels(
+            ndc_x, ndc_y, ndc_w, ndc_h,
+            layer_stack.width, layer_stack.height,
+        )
+
         r = int(args.get("r", 255))
         g = int(args.get("g", 0))
         b = int(args.get("b", 0))
         a = int(args.get("a", 255))
         color = (r, g, b, a)
-
         thickness = int(args.get("thickness", 2))
 
         cmd = DrawRectCommand(
             layer=active,
-            x=int(args["x"]),
-            y=int(args["y"]),
-            width=int(args["width"]),
-            height=int(args["height"]),
+            x=px, y=py, width=pw, height=ph,
             color=color,
             thickness=thickness,
         )
         document.execute(cmd)
         return (
             f"Rectangle drawn on '{active.name}': "
-            f"({cmd.x}, {cmd.y}) {cmd.width}x{cmd.height}, "
+            f"ndc=({ndc_x:.3f}, {ndc_y:.3f}) {ndc_w:.3f}x{ndc_h:.3f} "
+            f"-> px=({px}, {py}) {pw}x{ph}, "
+            f"color=rgba({r},{g},{b},{a}), thickness={thickness}"
+        )
+
+    return _on_main(config, op)
+
+
+def _tool_draw_grid(args, config):
+    def op():
+        document = _get_document(config)
+        layer_stack = _get_layer_stack(config)
+        active = layer_stack.active_layer
+        if active is None:
+            return "No active layer. Select or create a layer first."
+
+        sx = int(args["sections_x"])
+        sy = int(args["sections_y"])
+        r = int(args.get("r", 255))
+        g = int(args.get("g", 0))
+        b = int(args.get("b", 0))
+        a = int(args.get("a", 128))
+        color = (r, g, b, a)
+        thickness = int(args.get("thickness", 1))
+
+        cmd = DrawGridCommand(
+            layer=active,
+            sections_x=sx,
+            sections_y=sy,
+            color=color,
+            thickness=thickness,
+        )
+        document.execute(cmd)
+        return (
+            f"Grid drawn on '{active.name}': "
+            f"{sx}x{sy} sections ({sx + 1}×{sy + 1} lines), "
             f"color=rgba({r},{g},{b},{a}), thickness={thickness}"
         )
 
@@ -169,59 +266,50 @@ def _tool_draw_rect(args, config):
 
 
 def _tool_view_canvas(args, config):
-    import hashlib
-    import io
-    import os
-
     def op():
         from PIL import Image
 
         layer_stack = _get_layer_stack(config)
         arr = layer_stack.composite()
-
         img = Image.fromarray(arr, "RGBA")
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        png_data = buf.getvalue()
-
-        try:
-            from nemor.images import (
-                IMAGE_EXT_BY_MIME,
-                prepare_image_for_llm,
-            )
-            data, mime = prepare_image_for_llm(png_data, "image/png")
-            ext = IMAGE_EXT_BY_MIME[mime]
-        except Exception:
-            data, mime = png_data, "image/png"
-            ext = ".png"
-
-        nemor_dir = config.get("nemor_dir") or os.path.expanduser("~/.nemor")
-        media_dir = os.path.join(nemor_dir, "media")
-        os.makedirs(media_dir, exist_ok=True)
-
-        file_hash = hashlib.sha1(data).hexdigest()[:12]
-        dest_name = f"canvas_{file_hash}{ext}"
-        dest_path = os.path.join(media_dir, dest_name)
-        with open(dest_path, "wb") as f:
-            f.write(data)
-
-        w, h = img.size
-        size = len(data)
-        size_str = f"{size / 1024:.0f}KB" if size >= 1024 else f"{size}B"
+        result = _save_image_for_llm(img, config)
         layer_count = len(layer_stack._all_layers_flat())
+        result["text"] = f"Canvas: {img.size[0]}x{img.size[1]}, {layer_count} layers"
+        return result
 
-        filename = f"canvas_{w}x{h}{ext}"
-        text = f"Canvas: {w}x{h}, {layer_count} layers ({size_str})"
-        return {
-            "text": text,
-            "images": [{
-                "path": dest_path,
-                "url": f"/media/{dest_name}",
-                "filename": filename,
-                "mime": mime,
-                "size": size,
-            }],
-        }
+    return _on_main(config, op)
+
+
+def _tool_view_canvas_region(args, config):
+    def op():
+        from PIL import Image
+
+        layer_stack = _get_layer_stack(config)
+        arr = layer_stack.composite()
+        full_img = Image.fromarray(arr, "RGBA")
+        cw, ch = full_img.size
+
+        ndc_x = float(args["x"])
+        ndc_y = float(args["y"])
+        ndc_w = float(args["width"])
+        ndc_h = float(args["height"])
+        px, py, pw, ph = _ndc_to_pixels(ndc_x, ndc_y, ndc_w, ndc_h, cw, ch)
+
+        # Clamp to image bounds
+        x0 = max(0, px)
+        y0 = max(0, py)
+        x1 = min(cw, px + pw)
+        y1 = min(ch, py + ph)
+        if x0 >= x1 or y0 >= y1:
+            return "Region is outside the canvas."
+
+        crop = full_img.crop((x0, y0, x1, y1))
+        result = _save_image_for_llm(crop, config)
+        result["text"] = (
+            f"Region: ndc=({ndc_x:.3f}, {ndc_y:.3f}) {ndc_w:.3f}x{ndc_h:.3f} "
+            f"-> px=({x0}, {y0}) {x1 - x0}x{y1 - y0}"
+        )
+        return result
 
     return _on_main(config, op)
 
@@ -316,8 +404,26 @@ def create_editor_tool_registry() -> ToolRegistry:
         "type": "function",
         "function": {
             "name": "view_canvas",
-            "description": "Capture the current canvas as an image so you can see the composite result of all visible layers. Use this to inspect what the user sees, verify your changes, or decide what to do next.",
+            "description": "Capture the full canvas as an image so you can see the composite result of all visible layers.",
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    })
+
+    registry.register("view_canvas_region", _tool_view_canvas_region, {
+        "type": "function",
+        "function": {
+            "name": "view_canvas_region",
+            "description": "Capture a rectangular region of the canvas in NDC coordinates (0,0 = top-left, 1,1 = bottom-right). Use this to zoom in on details or inspect specific areas at full resolution.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "number", "description": "Left edge X in NDC (0.0 to 1.0)"},
+                    "y": {"type": "number", "description": "Top edge Y in NDC (0.0 to 1.0)"},
+                    "width": {"type": "number", "description": "Width in NDC (0.0 to 1.0)"},
+                    "height": {"type": "number", "description": "Height in NDC (0.0 to 1.0)"},
+                },
+                "required": ["x", "y", "width", "height"],
+            },
         },
     })
 
@@ -325,14 +431,14 @@ def create_editor_tool_registry() -> ToolRegistry:
         "type": "function",
         "function": {
             "name": "draw_rect",
-            "description": "Draw a rectangle outline on the active layer. Use this to highlight objects, mark regions of interest, or annotate the canvas.",
+            "description": "Draw a rectangle outline on the active layer using NDC (normalized device coordinates) where (0,0) is top-left and (1,1) is bottom-right. Use view_canvas first to see the image, then specify the rectangle in NDC space.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "x": {"type": "integer", "description": "Left edge X coordinate in pixels"},
-                    "y": {"type": "integer", "description": "Top edge Y coordinate in pixels"},
-                    "width": {"type": "integer", "description": "Rectangle width in pixels"},
-                    "height": {"type": "integer", "description": "Rectangle height in pixels"},
+                    "x": {"type": "number", "description": "Left edge X in NDC (0.0 to 1.0)"},
+                    "y": {"type": "number", "description": "Top edge Y in NDC (0.0 to 1.0)"},
+                    "width": {"type": "number", "description": "Width in NDC (0.0 to 1.0)"},
+                    "height": {"type": "number", "description": "Height in NDC (0.0 to 1.0)"},
                     "r": {"type": "integer", "description": "Red channel (0-255). Default 255."},
                     "g": {"type": "integer", "description": "Green channel (0-255). Default 0."},
                     "b": {"type": "integer", "description": "Blue channel (0-255). Default 0."},
@@ -340,6 +446,27 @@ def create_editor_tool_registry() -> ToolRegistry:
                     "thickness": {"type": "integer", "description": "Line thickness in pixels. Default 2."},
                 },
                 "required": ["x", "y", "width", "height"],
+            },
+        },
+    })
+
+    registry.register("draw_grid", _tool_draw_grid, {
+        "type": "function",
+        "function": {
+            "name": "draw_grid",
+            "description": "Draw a grid overlay on the active layer to help with spatial orientation. Divides the canvas into equal sections, making it easier to estimate NDC coordinates for objects.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sections_x": {"type": "integer", "description": "Number of vertical divisions (columns)."},
+                    "sections_y": {"type": "integer", "description": "Number of horizontal divisions (rows)."},
+                    "r": {"type": "integer", "description": "Red channel (0-255). Default 255."},
+                    "g": {"type": "integer", "description": "Green channel (0-255). Default 0."},
+                    "b": {"type": "integer", "description": "Blue channel (0-255). Default 0."},
+                    "a": {"type": "integer", "description": "Alpha channel (0-255). Default 128 (semi-transparent)."},
+                    "thickness": {"type": "integer", "description": "Line thickness in pixels. Default 1."},
+                },
+                "required": ["sections_x", "sections_y"],
             },
         },
     })

@@ -182,12 +182,10 @@ class EditorWindow:
         self._brush_panel._brush = self._canvas.brush
         main_area.add_child(self._canvas)
 
-        # Right panel: layer panel
+        # Right panels: layer panel | agent chat
         self._layer_panel = LayerPanel(self._layer_stack)
         main_area.add_child(Splitter(target=self._layer_panel, side="left"))
         main_area.add_child(self._layer_panel)
-
-        root.add_child(main_area)
 
         self._agent_chat_panel = AgentChatPanel(
             self._settings,
@@ -195,8 +193,12 @@ class EditorWindow:
             layer_stack=self._layer_stack,
             document_service=self._document,
         )
-        root.add_child(Splitter(target=self._agent_chat_panel, side="top"))
-        root.add_child(self._agent_chat_panel)
+        self._agent_chat_panel.preferred_width = px(320)
+        self._agent_chat_panel.preferred_height = pct(100)
+        main_area.add_child(Splitter(target=self._agent_chat_panel, side="left"))
+        main_area.add_child(self._agent_chat_panel)
+
+        root.add_child(main_area)
 
         # Status bar
         self._statusbar = StatusBar()
