@@ -6,6 +6,7 @@ from nemor.core.tool_registry import ToolRegistry
 
 from .commands import (
     AddLayerCommand,
+    DrawRectCommand,
     RemoveLayerCommand,
     SetLayerVisibilityCommand,
     SetLayerOpacityCommand,
@@ -127,6 +128,41 @@ def _tool_get_canvas_info(args, config):
             f"Canvas: {w}x{h}\n"
             f"Active layer: {active_name}\n"
             f"Layer count: {len(layers)}"
+        )
+
+    return _on_main(config, op)
+
+
+def _tool_draw_rect(args, config):
+    def op():
+        document = _get_document(config)
+        layer_stack = _get_layer_stack(config)
+        active = layer_stack.active_layer
+        if active is None:
+            return "No active layer. Select or create a layer first."
+
+        r = int(args.get("r", 255))
+        g = int(args.get("g", 0))
+        b = int(args.get("b", 0))
+        a = int(args.get("a", 255))
+        color = (r, g, b, a)
+
+        thickness = int(args.get("thickness", 2))
+
+        cmd = DrawRectCommand(
+            layer=active,
+            x=int(args["x"]),
+            y=int(args["y"]),
+            width=int(args["width"]),
+            height=int(args["height"]),
+            color=color,
+            thickness=thickness,
+        )
+        document.execute(cmd)
+        return (
+            f"Rectangle drawn on '{active.name}': "
+            f"({cmd.x}, {cmd.y}) {cmd.width}x{cmd.height}, "
+            f"color=rgba({r},{g},{b},{a}), thickness={thickness}"
         )
 
     return _on_main(config, op)
@@ -282,6 +318,29 @@ def create_editor_tool_registry() -> ToolRegistry:
             "name": "view_canvas",
             "description": "Capture the current canvas as an image so you can see the composite result of all visible layers. Use this to inspect what the user sees, verify your changes, or decide what to do next.",
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    })
+
+    registry.register("draw_rect", _tool_draw_rect, {
+        "type": "function",
+        "function": {
+            "name": "draw_rect",
+            "description": "Draw a rectangle outline on the active layer. Use this to highlight objects, mark regions of interest, or annotate the canvas.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer", "description": "Left edge X coordinate in pixels"},
+                    "y": {"type": "integer", "description": "Top edge Y coordinate in pixels"},
+                    "width": {"type": "integer", "description": "Rectangle width in pixels"},
+                    "height": {"type": "integer", "description": "Rectangle height in pixels"},
+                    "r": {"type": "integer", "description": "Red channel (0-255). Default 255."},
+                    "g": {"type": "integer", "description": "Green channel (0-255). Default 0."},
+                    "b": {"type": "integer", "description": "Blue channel (0-255). Default 0."},
+                    "a": {"type": "integer", "description": "Alpha channel (0-255). Default 255."},
+                    "thickness": {"type": "integer", "description": "Line thickness in pixels. Default 2."},
+                },
+                "required": ["x", "y", "width", "height"],
+            },
         },
     })
 

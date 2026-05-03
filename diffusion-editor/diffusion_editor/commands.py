@@ -103,6 +103,46 @@ class SnapshotCallbackCommand:
 
 
 @dataclass(frozen=True)
+class DrawRectCommand:
+    layer: Layer
+    x: int
+    y: int
+    width: int
+    height: int
+    color: tuple[int, int, int, int] = (255, 0, 0, 255)
+    thickness: int = 2
+    label: str = "Draw Rectangle"
+
+    def apply(self, layer_stack: LayerStack) -> None:
+        x0 = max(0, self.x)
+        y0 = max(0, self.y)
+        x1 = min(self.layer.width, self.x + self.width)
+        y1 = min(self.layer.height, self.y + self.height)
+        if x0 >= x1 or y0 >= y1:
+            return
+        t = max(1, self.thickness)
+        image = self.layer.image
+        color = np.array(self.color, dtype=np.uint8)
+
+        # Top edge
+        te_bottom = min(y0 + t, y1)
+        image[y0:te_bottom, x0:x1] = color
+        # Bottom edge
+        be_top = max(y1 - t, y0)
+        image[be_top:y1, x0:x1] = color
+        # Left edge (between top and bottom strips already drawn)
+        le_right = min(x0 + t, x1)
+        image[y0:y1, x0:le_right] = color
+        # Right edge
+        re_left = max(x1 - t, x0)
+        image[y0:y1, re_left:x1] = color
+
+        layer_stack.mark_layer_dirty(self.layer)
+        if layer_stack.on_changed:
+            layer_stack.on_changed()
+
+
+@dataclass(frozen=True)
 class ClearLayerMaskCommand:
     layer: DiffusionLayer | LamaLayer | InstructLayer
     label: str
