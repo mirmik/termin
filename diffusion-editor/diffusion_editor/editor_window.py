@@ -29,6 +29,7 @@ from tcgui.widgets.units import px, pct
 from tcgui.widgets.splitter import Splitter
 
 from .agent_chat import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPanel
+from .agent_tools import create_editor_tool_registry
 from .layer_stack import LayerStack
 from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
 from .editor_canvas import EditorCanvas
@@ -115,6 +116,9 @@ class EditorWindow:
             self._apply_snapshot,
         )
 
+        # Agent tool registry (created once, reused across chat clear/reset)
+        self._agent_tool_registry = create_editor_tool_registry()
+
         # Build UI
         self._build_ui()
 
@@ -185,9 +189,12 @@ class EditorWindow:
 
         root.add_child(main_area)
 
-        # Experimental bottom agent chat panel. It starts as plain chat; tool
-        # access can be layered in once the command contract is explicit.
-        self._agent_chat_panel = AgentChatPanel(self._settings)
+        self._agent_chat_panel = AgentChatPanel(
+            self._settings,
+            tool_registry=self._agent_tool_registry,
+            layer_stack=self._layer_stack,
+            document_service=self._document,
+        )
         root.add_child(Splitter(target=self._agent_chat_panel, side="top"))
         root.add_child(self._agent_chat_panel)
 
