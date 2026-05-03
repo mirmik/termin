@@ -143,6 +143,42 @@ class DrawRectCommand:
 
 
 @dataclass(frozen=True)
+class DrawGridCommand:
+    layer: Layer
+    sections_x: int
+    sections_y: int
+    color: tuple[int, int, int, int] = (255, 0, 0, 128)
+    thickness: int = 1
+    label: str = "Draw Grid"
+
+    def apply(self, layer_stack: LayerStack) -> None:
+        t = max(1, self.thickness)
+        image = self.layer.image
+        w, h = self.layer.width, self.layer.height
+        color = np.array(self.color, dtype=np.uint8)
+
+        # Vertical lines
+        for i in range(self.sections_x + 1):
+            x = int(i * w / self.sections_x)
+            x0 = max(0, min(x - t // 2, w))
+            x1 = max(0, min(x + t // 2 + (t % 2), w))
+            if x0 < x1:
+                image[0:h, x0:x1] = color
+
+        # Horizontal lines
+        for i in range(self.sections_y + 1):
+            y = int(i * h / self.sections_y)
+            y0 = max(0, min(y - t // 2, h))
+            y1 = max(0, min(y + t // 2 + (t % 2), h))
+            if y0 < y1:
+                image[y0:y1, 0:w] = color
+
+        layer_stack.mark_layer_dirty(self.layer)
+        if layer_stack.on_changed:
+            layer_stack.on_changed()
+
+
+@dataclass(frozen=True)
 class ClearLayerMaskCommand:
     layer: DiffusionLayer | LamaLayer | InstructLayer
     label: str

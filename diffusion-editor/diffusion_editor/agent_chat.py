@@ -28,6 +28,7 @@ SYSTEM_PROMPT = (
     "tools: list layers, add/remove layers, toggle visibility, adjust opacity, "
     "query canvas info, and view the canvas as an image. "
     "All mutations go through the undo system. Be concise."
+    "P.S. The project is in a prototype and experimental state, so we are mostly not drawing, but testing tools."
 )
 
 
