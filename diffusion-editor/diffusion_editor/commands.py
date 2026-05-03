@@ -179,6 +179,49 @@ class DrawGridCommand:
 
 
 @dataclass(frozen=True)
+class FillMaskCommand:
+    """Fill a binary mask region on a layer with semi-transparent color
+    and draw a visible boundary outline."""
+
+    layer: Layer
+    mask: np.ndarray  # bool HxW, True = fill
+    color: tuple[int, int, int, int] = (255, 0, 0, 128)
+    outline_color: tuple[int, int, int, int] | None = None
+    label: str = "Fill Mask"
+
+    def apply(self, layer_stack: LayerStack) -> None:
+        image = self.layer.image
+        m = self.mask[: image.shape[0], : image.shape[1]]
+        if not m.any():
+            return
+
+        color = np.array(self.color, dtype=np.uint8)
+        alpha = self.color[3] / 255.0
+        blended = image[m].astype(np.float32) * (1 - alpha) + color.astype(np.float32) * alpha
+        image[m] = blended.astype(np.uint8)
+
+        if self.outline_color is not None and m.shape[0] > 2 and m.shape[1] > 2:
+            # 8-connected morphological boundary: dilated & ~mask
+            d = np.zeros_like(m)
+            d[:-1] |= m[1:]
+            d[1:] |= m[:-1]
+            d[:, :-1] |= m[:, 1:]
+            d[:, 1:] |= m[:, :-1]
+            d[:-1, :-1] |= m[1:, 1:]
+            d[:-1, 1:] |= m[1:, :-1]
+            d[1:, :-1] |= m[:-1, 1:]
+            d[1:, 1:] |= m[:-1, :-1]
+            boundary = d & ~m
+            if boundary.any():
+                oc = np.array(self.outline_color, dtype=np.uint8)
+                image[boundary] = oc
+
+        layer_stack.mark_layer_dirty(self.layer)
+        if layer_stack.on_changed:
+            layer_stack.on_changed()
+
+
+@dataclass(frozen=True)
 class ClearLayerMaskCommand:
     layer: DiffusionLayer | LamaLayer | InstructLayer
     label: str

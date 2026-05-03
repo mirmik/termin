@@ -1469,30 +1469,54 @@ class EditorWindow:
     def _poll_grounding(self) -> None:
         if self._pending_grounding_result is None:
             return
-        boxes, layer = self._pending_grounding_result
+        results, layer = self._pending_grounding_result
         self._pending_grounding_result = None
 
-        from .commands import DrawRectCommand
+        from .commands import DrawRectCommand, FillMaskCommand
 
-        colors = [
-            (255, 0, 0, 255),
-            (0, 255, 0, 255),
-            (0, 0, 255, 255),
-            (255, 255, 0, 255),
-            (255, 0, 255, 255),
-            (0, 255, 255, 255),
+        rect_colors = [
+            (255, 80, 80, 255),
+            (80, 255, 80, 255),
+            (80, 80, 255, 255),
+            (255, 255, 80, 255),
+            (255, 80, 255, 255),
+            (80, 255, 255, 255),
         ]
-        for i, (label, x0, y0, x1, y1, score) in enumerate(boxes):
-            color = colors[i % len(colors)]
+        fill_colors = [
+            (255, 80, 80, 100),
+            (80, 255, 80, 100),
+            (80, 80, 255, 100),
+            (255, 255, 80, 100),
+            (255, 80, 255, 100),
+            (80, 255, 255, 100),
+        ]
+        for i, item in enumerate(results):
+            if len(item) == 7:
+                label, x0, y0, x1, y1, score, mask = item
+            else:
+                label, x0, y0, x1, y1, score = item
+                mask = None
+
+            rect_color = rect_colors[i % len(rect_colors)]
             cmd = DrawRectCommand(
                 layer=layer,
                 x=x0, y=y0,
                 width=x1 - x0, height=y1 - y0,
-                color=color,
-                thickness=2,
+                color=rect_color,
+                thickness=1,
                 label=f"Detect: {label} ({score:.0%})",
             )
             self._document.execute(cmd)
+
+            if mask is not None and mask.any():
+                mask_cmd = FillMaskCommand(
+                    layer=layer,
+                    mask=mask,
+                    color=fill_colors[i % len(fill_colors)],
+                    outline_color=rect_colors[i % len(rect_colors)],
+                    label=f"Segment: {label}",
+                )
+                self._document.execute(mask_cmd)
 
     # ------------------------------------------------------------------
     # Public: rendering
