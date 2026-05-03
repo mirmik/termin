@@ -132,6 +132,64 @@ def _tool_get_canvas_info(args, config):
     return _on_main(config, op)
 
 
+def _tool_view_canvas(args, config):
+    import hashlib
+    import io
+    import os
+
+    def op():
+        from PIL import Image
+
+        layer_stack = _get_layer_stack(config)
+        arr = layer_stack.composite()
+
+        img = Image.fromarray(arr, "RGBA")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        png_data = buf.getvalue()
+
+        try:
+            from nemor.images import (
+                IMAGE_EXT_BY_MIME,
+                prepare_image_for_llm,
+            )
+            data, mime = prepare_image_for_llm(png_data, "image/png")
+            ext = IMAGE_EXT_BY_MIME[mime]
+        except Exception:
+            data, mime = png_data, "image/png"
+            ext = ".png"
+
+        nemor_dir = config.get("nemor_dir") or os.path.expanduser("~/.nemor")
+        media_dir = os.path.join(nemor_dir, "media")
+        os.makedirs(media_dir, exist_ok=True)
+
+        file_hash = hashlib.sha1(data).hexdigest()[:12]
+        dest_name = f"canvas_{file_hash}{ext}"
+        dest_path = os.path.join(media_dir, dest_name)
+        with open(dest_path, "wb") as f:
+            f.write(data)
+
+        w, h = img.size
+        size = len(data)
+        size_str = f"{size / 1024:.0f}KB" if size >= 1024 else f"{size}B"
+        layer_count = len(layer_stack._all_layers_flat())
+
+        filename = f"canvas_{w}x{h}{ext}"
+        text = f"Canvas: {w}x{h}, {layer_count} layers ({size_str})"
+        return {
+            "text": text,
+            "images": [{
+                "path": dest_path,
+                "url": f"/media/{dest_name}",
+                "filename": filename,
+                "mime": mime,
+                "size": size,
+            }],
+        }
+
+    return _on_main(config, op)
+
+
 # ── Registry factory ────────────────────────────────────────────────────────
 
 
@@ -214,6 +272,15 @@ def create_editor_tool_registry() -> ToolRegistry:
         "function": {
             "name": "get_canvas_info",
             "description": "Get canvas dimensions, active layer name, and total layer count.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    })
+
+    registry.register("view_canvas", _tool_view_canvas, {
+        "type": "function",
+        "function": {
+            "name": "view_canvas",
+            "description": "Capture the current canvas as an image so you can see the composite result of all visible layers. Use this to inspect what the user sees, verify your changes, or decide what to do next.",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     })

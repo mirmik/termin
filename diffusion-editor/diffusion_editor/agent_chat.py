@@ -25,8 +25,9 @@ DEFAULT_AGENT_MODEL = "default"
 SYSTEM_PROMPT = (
     "You are a built-in agent of Diffusion Editor — a layer-based image and texture "
     "generation tool. You can inspect and manipulate the document using the available "
-    "tools: list layers, add/remove layers, toggle visibility, adjust opacity, and "
-    "query canvas info. All mutations go through the undo system. Be concise."
+    "tools: list layers, add/remove layers, toggle visibility, adjust opacity, "
+    "query canvas info, and view the canvas as an image. "
+    "All mutations go through the undo system. Be concise."
 )
 
 
