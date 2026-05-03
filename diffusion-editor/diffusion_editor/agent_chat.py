@@ -1,13 +1,9 @@
-"""Experimental agent chat panel for OpenAI-compatible APIs."""
+"""Agent chat panel powered by nemor-core agent loop with tool use."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import json
-from queue import Empty, Queue
 import threading
 from typing import Any
-from urllib import error, request
 
 from tcgui.widgets.button import Button
 from tcgui.widgets.hstack import HStack
@@ -18,163 +14,38 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.units import pct, px
 from tcgui.widgets.vstack import VStack
 
+from nemor.core.session import Session
+from .agent_runner import AgentRunner
 from .settings import Settings
 
 
-DEFAULT_AGENT_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_AGENT_MODEL = "gpt-4o-mini"
+DEFAULT_AGENT_BASE_URL = "http://localhost:8080"
+DEFAULT_AGENT_MODEL = "default"
 
 SYSTEM_PROMPT = (
-    "You are a built-in agent of Diffusion Editor — a node-based image and texture "
-    "generation tool. You are currently in early prototype / test mode, so your "
-    "capabilities are very limited: you cannot access the editor canvas, layers, "
-    "nodes, or any project data. Be upfront about this when asked to do anything "
-    "beyond general conversation."
+    "You are a built-in agent of Diffusion Editor — a layer-based image and texture "
+    "generation tool. You can inspect and manipulate the document using the available "
+    "tools: list layers, add/remove layers, toggle visibility, adjust opacity, and "
+    "query canvas info. All mutations go through the undo system. Be concise."
 )
 
 
-@dataclass
-class AgentChatConfig:
-    base_url: str = DEFAULT_AGENT_BASE_URL
-    api_key: str = ""
-    model: str = DEFAULT_AGENT_MODEL
-    temperature: float = 0.7
-    max_tokens: int = 1024
-    timeout_seconds: float = 60.0
-    stream: bool = True
-
-
-class OpenAICompatibleChatClient:
-    """Small async chat-completions client.
-
-    The UI thread calls ``submit()`` and then drains events through ``poll()``.
-    """
-
-    def __init__(self):
-        self._events: Queue[tuple[str, Any]] = Queue()
-        self._thread: threading.Thread | None = None
-        self._cancel = threading.Event()
-
-    @property
-    def is_busy(self) -> bool:
-        return self._thread is not None and self._thread.is_alive()
-
-    def submit(self, config: AgentChatConfig, messages: list[dict[str, str]]) -> None:
-        if self.is_busy:
-            return
-        self._cancel.clear()
-        self._thread = threading.Thread(
-            target=self._run,
-            args=(config, messages),
-            daemon=True,
-        )
-        self._thread.start()
-
-    def cancel(self) -> None:
-        self._cancel.set()
-
-    def poll(self) -> list[tuple[str, Any]]:
-        events: list[tuple[str, Any]] = []
-        while True:
-            try:
-                events.append(self._events.get_nowait())
-            except Empty:
-                break
-        return events
-
-    def shutdown(self, timeout: float = 0.25) -> None:
-        self.cancel()
-        thread = self._thread
-        if thread is not None and thread.is_alive():
-            thread.join(timeout=timeout)
-
-    def _run(self, config: AgentChatConfig, messages: list[dict[str, str]]) -> None:
-        try:
-            if not config.base_url.strip():
-                raise ValueError("Agent API base URL is empty")
-            if not config.model.strip():
-                raise ValueError("Agent model is empty")
-
-            payload: dict[str, Any] = {
-                "model": config.model.strip(),
-                "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages,
-                "temperature": float(config.temperature),
-                "stream": bool(config.stream),
-            }
-            if config.max_tokens > 0:
-                payload["max_tokens"] = int(config.max_tokens)
-
-            url = config.base_url.rstrip("/") + "/chat/completions"
-            headers = {"Content-Type": "application/json"}
-            if config.api_key:
-                headers["Authorization"] = f"Bearer {config.api_key}"
-            req = request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers=headers,
-                method="POST",
-            )
-
-            with request.urlopen(req, timeout=config.timeout_seconds) as response:
-                if config.stream:
-                    self._read_stream(response)
-                else:
-                    raw = response.read().decode("utf-8")
-                    if self._cancel.is_set():
-                        self._events.put(("cancelled", None))
-                        return
-                    data = json.loads(raw)
-                    content = (
-                        data.get("choices", [{}])[0]
-                        .get("message", {})
-                        .get("content", "")
-                    )
-                    self._events.put(("message", content))
-            if self._cancel.is_set():
-                self._events.put(("cancelled", None))
-            else:
-                self._events.put(("done", None))
-        except error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            self._events.put(("error", f"HTTP {exc.code}: {body[:500]}"))
-        except Exception as exc:
-            self._events.put(("error", str(exc)))
-
-    def _read_stream(self, response) -> None:
-        for raw_line in response:
-            if self._cancel.is_set():
-                return
-            line = raw_line.decode("utf-8", errors="replace").strip()
-            if not line or line.startswith(":"):
-                continue
-            if line.startswith("data:"):
-                line = line[5:].strip()
-            if line == "[DONE]":
-                return
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            choices = data.get("choices") or []
-            if not choices:
-                continue
-            delta = choices[0].get("delta") or {}
-            content = delta.get("content") or ""
-            if content:
-                self._events.put(("delta", content))
-
-
 class AgentChatPanel(Panel):
-    """Bottom chat panel. Tool access will be layered on top later."""
+    """Bottom chat panel with nemor-powered agent loop and tool use."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, tool_registry,
+                 layer_stack, document_service):
         super().__init__()
         self.preferred_width = pct(100)
         self.preferred_height = px(220)
         self.padding = 8
         self._settings = settings
-        self._client = OpenAICompatibleChatClient()
-        self._messages: list[dict[str, str]] = []
+        self._tool_registry = tool_registry
+        self._layer_stack = layer_stack
+        self._document_service = document_service
+
+        self._session = Session("editor", system_prompt=SYSTEM_PROMPT)
+        self._runner: AgentRunner | None = None
         self._assistant_buffer = ""
         self._assistant_active = False
 
@@ -253,47 +124,63 @@ class AgentChatPanel(Panel):
 
     def submit(self) -> None:
         text = self._input.text.strip()
-        if not text or self._client.is_busy:
+        if not text or (self._runner is not None and self._runner.is_busy):
             return
 
-        config = self._load_config()
-        if not config.api_key:
-            self._status.text = "Missing API key"
-            return
+        config = self._build_config()
 
         self._input.text = ""
         self._input.cursor_pos = 0
-        self._messages.append({"role": "user", "content": text})
         self._assistant_buffer = ""
         self._assistant_active = True
         self._sync_transcript()
         self._set_busy(True, "Waiting for agent...")
-        self._client.submit(config, list(self._messages))
+
+        self._runner = AgentRunner(
+            self._tool_registry, self._session, config,
+        )
+        self._runner.submit(text)
 
     def cancel(self) -> None:
-        if not self._client.is_busy:
+        if self._runner is None or not self._runner.is_busy:
             return
-        self._client.cancel()
+        self._runner.cancel()
         self._status.text = "Stopping..."
 
     def clear(self) -> None:
-        if self._client.is_busy:
+        if self._runner is not None and self._runner.is_busy:
             return
-        self._messages.clear()
+        self._session = Session("editor", system_prompt=SYSTEM_PROMPT)
         self._assistant_buffer = ""
         self._assistant_active = False
         self._transcript.text = ""
         self._status.text = "Cleared"
 
     def poll(self) -> None:
-        for kind, value in self._client.poll():
+        if self._runner is None:
+            return
+        for kind, value in self._runner.poll():
             if kind == "delta":
                 self._assistant_buffer += value
-                self._status.text = "Receiving..."
+                self._status.text = "Generating..."
                 self._sync_transcript()
-            elif kind == "message":
-                self._assistant_buffer = value or ""
+            elif kind == "tool":
+                tool_line = (
+                    f"[Tool: {value['name']}("
+                    f"{value['args'][:80]})"
+                )
+                if value["result"]:
+                    result_preview = str(value["result"])[:120]
+                    tool_line += f" -> {result_preview}"
+                tool_line += "]"
+                self._assistant_buffer += f"\n{tool_line}\n"
                 self._sync_transcript()
+            elif kind == "thinking":
+                pass
+            elif kind == "result":
+                if value and value.startswith("[Stopped"):
+                    self._assistant_buffer = f"(stopped: {value})"
+                    self._sync_transcript()
             elif kind == "done":
                 self._finish_assistant()
             elif kind == "cancelled":
@@ -307,12 +194,10 @@ class AgentChatPanel(Panel):
                 self._set_busy(False)
 
     def shutdown(self) -> None:
-        self._client.shutdown()
+        if self._runner is not None:
+            self._runner.shutdown()
 
     def _finish_assistant(self) -> None:
-        content = self._assistant_buffer.strip()
-        if content:
-            self._messages.append({"role": "assistant", "content": content})
         self._assistant_buffer = ""
         self._assistant_active = False
         self._set_busy(False, "Ready")
@@ -327,24 +212,41 @@ class AgentChatPanel(Panel):
 
     def _sync_transcript(self) -> None:
         lines: list[str] = []
-        for msg in self._messages:
-            role = "You" if msg["role"] == "user" else "Agent"
-            lines.append(f"{role}: {msg['content']}")
+        for msg in self._session.messages:
+            if msg.role == "system":
+                continue
+            if msg.role == "user":
+                lines.append(f"You: {msg.content}")
+            elif msg.role == "assistant" and msg.content:
+                lines.append(f"Agent: {msg.content}")
+            elif msg.role == "tool":
+                lines.append(f"  [tool result: {msg.content[:150]}]")
         if self._assistant_active:
             lines.append(f"Agent: {self._assistant_buffer}")
         self._transcript.text = "\n\n".join(lines)
-        self._transcript.cursor_line = max(0, len(self._transcript._lines) - 1)
-        self._transcript.cursor_col = len(self._transcript._lines[-1])
-        if self._transcript.height > 0:
-            self._transcript._ensure_cursor_visible()
+        if self._transcript._lines:
+            self._transcript.cursor_line = max(0, len(self._transcript._lines) - 1)
+            if self._transcript._lines[-1]:
+                self._transcript.cursor_col = len(self._transcript._lines[-1])
+            if self._transcript.height > 0:
+                self._transcript._ensure_cursor_visible()
 
-    def _load_config(self) -> AgentChatConfig:
-        return AgentChatConfig(
-            base_url=str(self._settings.get("agent_api_base_url", DEFAULT_AGENT_BASE_URL)),
-            api_key=str(self._settings.get("agent_api_key", "")),
-            model=str(self._settings.get("agent_model", DEFAULT_AGENT_MODEL)),
-            temperature=float(self._settings.get("agent_temperature", 0.7)),
-            max_tokens=int(self._settings.get("agent_max_tokens", 1024)),
-            timeout_seconds=float(self._settings.get("agent_timeout_seconds", 60.0)),
-            stream=bool(self._settings.get("agent_stream", True)),
-        )
+    def _build_config(self) -> dict:
+        return {
+            "server": str(self._settings.get(
+                "agent_api_base_url", DEFAULT_AGENT_BASE_URL)),
+            "model": str(self._settings.get(
+                "agent_model", DEFAULT_AGENT_MODEL)),
+            "auth_token": str(self._settings.get("agent_api_key", "")),
+            "max_tokens": int(self._settings.get("agent_max_tokens", 4096)),
+            "max_iterations": 15,
+            "system_prompt": SYSTEM_PROMPT,
+            "tools_enabled": True,
+            "tools": {},
+            "sampling": {
+                "temperature": float(self._settings.get(
+                    "agent_temperature", 0.7)),
+            },
+            "_layer_stack": self._layer_stack,
+            "_document_service": self._document_service,
+        }
