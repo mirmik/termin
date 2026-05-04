@@ -32,6 +32,7 @@ from .agent_chat import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPa
 from .agent_tools import create_editor_tool_registry
 from .grounding_dialog import GroundingDialog
 from .layer_stack import LayerStack
+from .mask import coerce_mask_data
 from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
 from .editor_canvas import EditorCanvas
 from .layer_panel import LayerPanel
@@ -644,7 +645,7 @@ class EditorWindow:
         if not layer_path:
             return
         if target == "mask":
-            before_arr = layer.mask.copy()
+            before_arr = layer.mask.data.copy()
         else:
             before_arr = layer.image.copy()
         self._external_edit_ctx = ExternalEditContext(
@@ -661,8 +662,8 @@ class EditorWindow:
         x0, y0, x1, y1 = rect
         if x1 <= x0 or y1 <= y0:
             return
-        if target == "mask" and isinstance(layer, (DiffusionLayer, LamaLayer, InstructLayer)):
-            layer.mask[y0:y1, x0:x1] = patch
+        if target == "mask":
+            layer.mask.data[y0:y1, x0:x1] = coerce_mask_data(patch)
             if self._layer_stack.on_changed:
                 self._layer_stack.on_changed()
             return
@@ -691,8 +692,8 @@ class EditorWindow:
         if x1 <= x0 or y1 <= y0:
             return
         before_arr = ctx.before_arr
-        if target == "mask" and isinstance(layer, (DiffusionLayer, LamaLayer, InstructLayer)):
-            after_arr = layer.mask
+        if target == "mask":
+            after_arr = layer.mask.data
         else:
             after_arr = layer.image
         before_patch = before_arr[y0:y1, x0:x1].copy()
@@ -1020,7 +1021,7 @@ class EditorWindow:
                 self._statusbar.text = "Inpaint requires a mask"
                 return
             mask_image = extract_mask_patch(
-                layer.mask, layer.patch_x, layer.patch_y,
+                layer.mask.data, layer.patch_x, layer.patch_y,
                 layer.patch_w, layer.patch_h)
 
         ip_adapter_image = None
@@ -1172,7 +1173,7 @@ class EditorWindow:
         layer.patch_x, layer.patch_y = ppx, ppy
         layer.patch_w, layer.patch_h = pw, ph
 
-        mask_pil = extract_mask_patch(layer.mask, ppx, ppy, pw, ph)
+        mask_pil = extract_mask_patch(layer.mask.data, ppx, ppy, pw, ph)
         self._lama_engine.submit(patch_pil, mask_pil)
         self._pending_lama_layer = layer
         self._statusbar.text = "Removing objects (LaMa)..."
@@ -1472,7 +1473,7 @@ class EditorWindow:
         results, layer = self._pending_grounding_result
         self._pending_grounding_result = None
 
-        from .commands import DrawRectCommand, FillMaskCommand
+        from .commands import DrawRectCommand, FillMaskCommand, SetLayerSelectionCommand
 
         rect_colors = [
             (255, 80, 80, 255),
@@ -1490,6 +1491,9 @@ class EditorWindow:
             (255, 80, 255, 100),
             (80, 255, 255, 100),
         ]
+        # Combine all detection masks into a single selection (union)
+        h, w = layer.height, layer.width
+        combined_selection = np.zeros((h, w), dtype=np.float32)
         for i, item in enumerate(results):
             if len(item) == 7:
                 label, x0, y0, x1, y1, score, mask = item
@@ -1509,6 +1513,7 @@ class EditorWindow:
             self._document.execute(cmd)
 
             if mask is not None and mask.any():
+                # Visual fill on the layer image
                 mask_cmd = FillMaskCommand(
                     layer=layer,
                     mask=mask,
@@ -1517,6 +1522,19 @@ class EditorWindow:
                     label=f"Segment: {label}",
                 )
                 self._document.execute(mask_cmd)
+                # Contribute to combined selection
+                combined_selection = np.maximum(
+                    combined_selection,
+                    mask.astype(np.float32)[:h, :w],
+                )
+
+        # Set the combined selection on the layer stack
+        if combined_selection.any():
+            sel_cmd = SetLayerSelectionCommand(
+                mask=combined_selection,
+                label="Set Selection from Detection",
+            )
+            self._document.execute(sel_cmd)
 
     # ------------------------------------------------------------------
     # Public: rendering

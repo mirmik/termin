@@ -69,11 +69,12 @@ def test_map_segmentation_result_for_supported_layer():
     assert status == "Background mask applied"
 
 
-def test_map_segmentation_result_for_unsupported_layer():
+def test_map_segmentation_result_for_any_layer():
+    """Any layer type (including plain Layer) accepts segmentation results."""
     layer = Layer("Paint", 8, 8)
     mask = np.zeros((8, 8), dtype=np.uint8)
     cmd, status = map_segmentation_result(layer, mask)
-    assert cmd is None
+    assert isinstance(cmd, ReplaceLayerMaskCommand)
     assert status == "Background mask applied"
 
 
