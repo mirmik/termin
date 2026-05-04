@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 
 from .tiles import DenseTileGrid
+from .mask import Mask
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class Layer:
         self.content = DenseTileGrid.from_array(arr, tile_size=tile_size)
         # Keep .image for compatibility with existing tools (dense view)
         self.image = self.content.array
+        self.mask = Mask.zeros(height, width)
 
     def add_child(self, child: 'Layer', index: int | None = None):
         if child.parent is not None:
@@ -90,6 +92,18 @@ class Layer:
     def height(self):
         return self.content.height
 
+    def clear_mask(self):
+        self.mask.clear()
+
+    def has_mask(self) -> bool:
+        return not self.mask.is_empty
+
+    def mask_bbox(self) -> tuple[int, int, int, int] | None:
+        return self.mask.bbox()
+
+    def mask_center(self) -> tuple[int, int] | None:
+        return self.mask.center()
+
     def to_dict(self, path: str) -> dict:
         file_key = path.replace("/", "_")
         d = {
@@ -101,6 +115,8 @@ class Layer:
             "image_file": f"layers/{file_key}_image.npy",
             "children": [],
         }
+        if not self.mask.is_empty:
+            d["mask_file"] = f"layers/{file_key}_mask.npy"
         for i, child in enumerate(self.children):
             d["children"].append(child.to_dict(f"{path}/{i}"))
         return d
@@ -108,11 +124,16 @@ class Layer:
     def save_images_to_zip(self, zf: zipfile.ZipFile, path: str):
         file_key = path.replace("/", "_")
         _save_array_to_zip(zf, f"layers/{file_key}_image.npy", self.image)
+        if not self.mask.is_empty:
+            _save_array_to_zip(zf, f"layers/{file_key}_mask.npy",
+                               self.mask.data.astype(np.float32))
         for i, child in enumerate(self.children):
             child.save_images_to_zip(zf, f"{path}/{i}")
 
     @classmethod
-    def from_dict(cls, d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> "Layer":
+    def _from_dict_base(cls, d: dict, zf: zipfile.ZipFile,
+                        tile_size: int = 256) -> 'Layer':
+        """Shared base deserialization for all layer types."""
         arr = _load_array_from_zip(zf, d["image_file"], mode="RGBA")
         layer = cls.__new__(cls)
         layer.name = d["name"]
@@ -122,11 +143,26 @@ class Layer:
         layer.image = layer.content.array
         layer.children = []
         layer.parent = None
+
+        mask_file = d.get("mask_file")
+        if mask_file and mask_file in zf.namelist():
+            mask_arr = _load_array_from_zip(zf, mask_file, mode="L")
+            if mask_arr.dtype == np.uint8:
+                layer.mask = Mask.from_uint8(mask_arr)
+            else:
+                layer.mask = Mask(mask_arr)
+        else:
+            layer.mask = Mask.zeros(layer.height, layer.width)
+
         for child_dict in d.get("children", []):
             child = _layer_from_dict(child_dict, zf, tile_size=tile_size)
             child.parent = layer
             layer.children.append(child)
         return layer
+
+    @classmethod
+    def from_dict(cls, d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> "Layer":
+        return cls._from_dict_base(d, zf, tile_size=tile_size)
 
 
 class DiffusionLayer(Layer):
@@ -154,42 +190,17 @@ class DiffusionLayer(Layer):
         self.seed = seed
         self.model_path = model_path
         self.prediction_type = prediction_type
-        self.mask = np.zeros((height, width), dtype=np.uint8)
         self.ip_adapter_rect = None   # (x0, y0, x1, y1) or None
         self.ip_adapter_scale = 0.6
         self.masked_content = "original"  # original, fill, latent_noise, latent_nothing
         self.manual_patch_rect = None  # (x0, y0, x1, y1) or None — explicit patch area
         self.resize_to_model_resolution = False
 
-    def clear_mask(self):
-        self.mask[:] = 0
-
-    def has_mask(self) -> bool:
-        return np.any(self.mask > 0)
-
-    def mask_bbox(self) -> tuple[int, int, int, int] | None:
-        """Return (x0, y0, x1, y1) bounding box of non-zero mask pixels."""
-        rows = np.any(self.mask > 0, axis=1)
-        cols = np.any(self.mask > 0, axis=0)
-        if not np.any(rows):
-            return None
-        y0, y1 = np.where(rows)[0][[0, -1]]
-        x0, x1 = np.where(cols)[0][[0, -1]]
-        return int(x0), int(y0), int(x1) + 1, int(y1) + 1
-
-    def mask_center(self) -> tuple[int, int] | None:
-        bbox = self.mask_bbox()
-        if bbox is None:
-            return None
-        x0, y0, x1, y1 = bbox
-        return (x0 + x1) // 2, (y0 + y1) // 2
-
     def to_dict(self, path: str) -> dict:
         d = super().to_dict(path)
         file_key = path.replace("/", "_")
         d["type"] = "diffusion"
         d["mode"] = self.mode
-        d["mask_file"] = f"layers/{file_key}_mask.npy"
         d["source_file"] = f"layers/{file_key}_source.npy" if self.source_patch is not None else None
         d["patch_x"] = self.patch_x
         d["patch_y"] = self.patch_y
@@ -213,31 +224,18 @@ class DiffusionLayer(Layer):
     def save_images_to_zip(self, zf: zipfile.ZipFile, path: str):
         super().save_images_to_zip(zf, path)
         file_key = path.replace("/", "_")
-        _save_array_to_zip(zf, f"layers/{file_key}_mask.npy", self.mask)
         if self.source_patch is not None:
             _save_array_to_zip(zf, f"layers/{file_key}_source.npy",
                                np.array(self.source_patch))
 
     @classmethod
     def from_dict(cls, d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> "DiffusionLayer":
-        arr = _load_array_from_zip(zf, d["image_file"], mode="RGBA")
-        h, w = arr.shape[:2]
-
-        mask_arr = _load_array_from_zip(zf, d["mask_file"], mode="L")
+        layer = cls._from_dict_base(d, zf, tile_size=tile_size)
 
         source_patch = None
         if d.get("source_file") and d["source_file"] in zf.namelist():
             source_patch = _load_pil_from_zip(zf, d["source_file"], mode="RGB")
 
-        layer = cls.__new__(cls)
-        layer.name = d["name"]
-        layer.visible = d["visible"]
-        layer.opacity = d["opacity"]
-        layer.content = DenseTileGrid.from_array(arr, tile_size=tile_size)
-        layer.image = layer.content.array
-        layer.children = []
-        layer.parent = None
-        layer.mask = np.ascontiguousarray(mask_arr)
         layer.source_patch = source_patch
         layer.patch_x = d["patch_x"]
         layer.patch_y = d["patch_y"]
@@ -259,10 +257,6 @@ class DiffusionLayer(Layer):
         mpr = d.get("manual_patch_rect")
         layer.manual_patch_rect = tuple(mpr) if mpr else None
         layer.resize_to_model_resolution = d.get("resize_to_model_resolution", False)
-        for child_dict in d.get("children", []):
-            child = _layer_from_dict(child_dict, zf, tile_size=tile_size)
-            child.parent = layer
-            layer.children.append(child)
         return layer
 
 
@@ -277,35 +271,11 @@ class LamaLayer(Layer):
         self.patch_y = patch_y
         self.patch_w = patch_w
         self.patch_h = patch_h
-        self.mask = np.zeros((height, width), dtype=np.uint8)
-
-    def clear_mask(self):
-        self.mask[:] = 0
-
-    def has_mask(self) -> bool:
-        return np.any(self.mask > 0)
-
-    def mask_bbox(self) -> tuple[int, int, int, int] | None:
-        rows = np.any(self.mask > 0, axis=1)
-        cols = np.any(self.mask > 0, axis=0)
-        if not np.any(rows):
-            return None
-        y0, y1 = np.where(rows)[0][[0, -1]]
-        x0, x1 = np.where(cols)[0][[0, -1]]
-        return int(x0), int(y0), int(x1) + 1, int(y1) + 1
-
-    def mask_center(self) -> tuple[int, int] | None:
-        bbox = self.mask_bbox()
-        if bbox is None:
-            return None
-        x0, y0, x1, y1 = bbox
-        return (x0 + x1) // 2, (y0 + y1) // 2
 
     def to_dict(self, path: str) -> dict:
         d = super().to_dict(path)
         file_key = path.replace("/", "_")
         d["type"] = "lama"
-        d["mask_file"] = f"layers/{file_key}_mask.npy"
         d["source_file"] = f"layers/{file_key}_source.npy" if self.source_patch is not None else None
         d["patch_x"] = self.patch_x
         d["patch_y"] = self.patch_y
@@ -316,40 +286,23 @@ class LamaLayer(Layer):
     def save_images_to_zip(self, zf: zipfile.ZipFile, path: str):
         super().save_images_to_zip(zf, path)
         file_key = path.replace("/", "_")
-        _save_array_to_zip(zf, f"layers/{file_key}_mask.npy", self.mask)
         if self.source_patch is not None:
             _save_array_to_zip(zf, f"layers/{file_key}_source.npy",
                                np.array(self.source_patch))
 
     @classmethod
     def from_dict(cls, d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> "LamaLayer":
-        arr = _load_array_from_zip(zf, d["image_file"], mode="RGBA")
-        h, w = arr.shape[:2]
-
-        mask_arr = _load_array_from_zip(zf, d["mask_file"], mode="L")
+        layer = cls._from_dict_base(d, zf, tile_size=tile_size)
 
         source_patch = None
         if d.get("source_file") and d["source_file"] in zf.namelist():
             source_patch = _load_pil_from_zip(zf, d["source_file"], mode="RGB")
 
-        layer = cls.__new__(cls)
-        layer.name = d["name"]
-        layer.visible = d["visible"]
-        layer.opacity = d["opacity"]
-        layer.content = DenseTileGrid.from_array(arr, tile_size=tile_size)
-        layer.image = layer.content.array
-        layer.children = []
-        layer.parent = None
-        layer.mask = np.ascontiguousarray(mask_arr)
         layer.source_patch = source_patch
         layer.patch_x = d["patch_x"]
         layer.patch_y = d["patch_y"]
         layer.patch_w = d["patch_w"]
         layer.patch_h = d["patch_h"]
-        for child_dict in d.get("children", []):
-            child = _layer_from_dict(child_dict, zf, tile_size=tile_size)
-            child.parent = layer
-            layer.children.append(child)
         return layer
 
 
@@ -374,36 +327,12 @@ class InstructLayer(Layer):
         self.guidance_scale = guidance_scale
         self.steps = steps
         self.seed = seed
-        self.mask = np.zeros((height, width), dtype=np.uint8)
         self.manual_patch_rect = None  # (x0, y0, x1, y1) or None
-
-    def clear_mask(self):
-        self.mask[:] = 0
-
-    def has_mask(self) -> bool:
-        return np.any(self.mask > 0)
-
-    def mask_bbox(self) -> tuple[int, int, int, int] | None:
-        rows = np.any(self.mask > 0, axis=1)
-        cols = np.any(self.mask > 0, axis=0)
-        if not np.any(rows):
-            return None
-        y0, y1 = np.where(rows)[0][[0, -1]]
-        x0, x1 = np.where(cols)[0][[0, -1]]
-        return int(x0), int(y0), int(x1) + 1, int(y1) + 1
-
-    def mask_center(self) -> tuple[int, int] | None:
-        bbox = self.mask_bbox()
-        if bbox is None:
-            return None
-        x0, y0, x1, y1 = bbox
-        return (x0 + x1) // 2, (y0 + y1) // 2
 
     def to_dict(self, path: str) -> dict:
         d = super().to_dict(path)
         file_key = path.replace("/", "_")
         d["type"] = "instruct"
-        d["mask_file"] = f"layers/{file_key}_mask.npy"
         d["source_file"] = f"layers/{file_key}_source.npy" if self.source_patch is not None else None
         d["patch_x"] = self.patch_x
         d["patch_y"] = self.patch_y
@@ -420,33 +349,18 @@ class InstructLayer(Layer):
     def save_images_to_zip(self, zf: zipfile.ZipFile, path: str):
         super().save_images_to_zip(zf, path)
         file_key = path.replace("/", "_")
-        _save_array_to_zip(zf, f"layers/{file_key}_mask.npy", self.mask)
         if self.source_patch is not None:
             _save_array_to_zip(zf, f"layers/{file_key}_source.npy",
                                np.array(self.source_patch))
 
     @classmethod
     def from_dict(cls, d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> "InstructLayer":
-        arr = _load_array_from_zip(zf, d["image_file"], mode="RGBA")
-        h, w = arr.shape[:2]
-
-        mask_arr = np.zeros((h, w), dtype=np.uint8)
-        if d.get("mask_file") and d["mask_file"] in zf.namelist():
-            mask_arr = _load_array_from_zip(zf, d["mask_file"], mode="L")
+        layer = cls._from_dict_base(d, zf, tile_size=tile_size)
 
         source_patch = None
         if d.get("source_file") and d["source_file"] in zf.namelist():
             source_patch = _load_pil_from_zip(zf, d["source_file"], mode="RGB")
 
-        layer = cls.__new__(cls)
-        layer.name = d["name"]
-        layer.visible = d["visible"]
-        layer.opacity = d["opacity"]
-        layer.content = DenseTileGrid.from_array(arr, tile_size=tile_size)
-        layer.image = layer.content.array
-        layer.children = []
-        layer.parent = None
-        layer.mask = np.ascontiguousarray(mask_arr)
         layer.source_patch = source_patch
         layer.patch_x = d["patch_x"]
         layer.patch_y = d["patch_y"]
@@ -459,10 +373,6 @@ class InstructLayer(Layer):
         layer.seed = d.get("seed", -1)
         mpr = d.get("manual_patch_rect")
         layer.manual_patch_rect = tuple(mpr) if mpr else None
-        for child_dict in d.get("children", []):
-            child = _layer_from_dict(child_dict, zf, tile_size=tile_size)
-            child.parent = layer
-            layer.children.append(child)
         return layer
 
 
@@ -475,4 +385,3 @@ def _layer_from_dict(d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> Laye
     if d.get("type") == "instruct":
         return InstructLayer.from_dict(d, zf, tile_size=tile_size)
     return Layer.from_dict(d, zf, tile_size=tile_size)
-

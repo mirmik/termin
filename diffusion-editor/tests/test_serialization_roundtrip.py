@@ -37,7 +37,7 @@ def _build_stack() -> tuple[LayerStack, DiffusionLayer]:
         steps=20,
         seed=123,
     )
-    diff.mask[3:6, 4:8] = 255
+    diff.mask.data[3:6, 4:8] = 1.0
     diff.manual_patch_rect = (2, 3, 12, 10)
     top = stack.layers[0]
     top.add_child(diff)
@@ -81,3 +81,16 @@ def test_project_file_roundtrip(tmp_path):
     assert isinstance(restored.layers[0], Layer)
     assert isinstance(restored.layers[0].children[0], DiffusionLayer)
     assert restored.get_layer_path(restored.active_layer) == "0/0"
+
+
+def test_selection_roundtrip():
+    stack, _ = _build_stack()
+    stack.selection.data[7:10, 11:15] = 0.5
+    snapshot = stack.serialize_state()
+
+    restored = LayerStack()
+    restored.on_changed = lambda: None
+    restored.load_state(snapshot)
+
+    assert restored.selection.data.shape == (24, 32)
+    np.testing.assert_array_equal(restored.selection.data, stack.selection.data)

@@ -10,7 +10,7 @@ from diffusion_editor.commands import (
     AddLayerCommand, SetLayerOpacityCommand, FlattenLayersCommand,
     SnapshotCallbackCommand, ClearLayerMaskCommand, SetManualPatchRectCommand,
     ClearManualPatchRectCommand, ReplaceLayerMaskCommand,
-    ApplyGeneratedResultCommand,
+    ApplyGeneratedResultCommand, SetLayerSelectionCommand,
 )
 from diffusion_editor.layer import DiffusionLayer
 from diffusion_editor.history import HistoryManager
@@ -159,7 +159,7 @@ def test_document_service_clear_layer_mask_command():
         steps=20,
         seed=1,
     )
-    layer.mask[2:4, 2:4] = 255
+    layer.mask.data[2:4, 2:4] = 1.0
     stack.insert_layer(layer)
     history = HistoryManager(stack.load_state)
     service = DocumentService(stack, history, stack.load_state)
@@ -241,8 +241,43 @@ def test_document_service_replace_layer_mask_command():
 
     service.execute(ReplaceLayerMaskCommand(layer=layer, mask=mask))
 
-    assert np.array_equal(layer.mask, mask)
+    assert np.array_equal(layer.mask.data, mask.astype(np.float32) / 255.0)
     assert service.undo() == "Apply Segmentation Mask"
+
+
+def test_document_service_replace_layer_mask_command_accepts_bool_mask():
+    stack = LayerStack()
+    stack.on_changed = lambda: None
+    stack.init_from_image(np.full((8, 8, 4), 255, dtype=np.uint8))
+    layer = stack.active_layer
+    history = HistoryManager(stack.load_state)
+    service = DocumentService(stack, history, stack.load_state)
+    mask = np.zeros((8, 8), dtype=bool)
+    mask[1:3, 2:5] = True
+
+    service.execute(ReplaceLayerMaskCommand(layer=layer, mask=mask))
+
+    assert layer.mask.data.dtype == np.float32
+    assert np.all(layer.mask.data[1:3, 2:5] == 1.0)
+    assert np.max(layer.mask.data) == 1.0
+
+
+def test_document_service_set_layer_selection_command_initializes_canvas_shape():
+    stack = LayerStack()
+    stack.on_changed = lambda: None
+    stack.init_from_image(np.full((8, 10, 4), 255, dtype=np.uint8))
+    history = HistoryManager(stack.load_state)
+    service = DocumentService(stack, history, stack.load_state)
+    selection = np.zeros((8, 10), dtype=np.uint8)
+    selection[2:5, 3:7] = 255
+
+    service.execute(SetLayerSelectionCommand(mask=selection))
+
+    assert stack.selection.data.shape == (8, 10)
+    assert stack.selection.data.dtype == np.float32
+    assert np.all(stack.selection.data[2:5, 3:7] == 1.0)
+    assert service.undo() == "Set Selection"
+    assert stack.selection.is_empty
 
 
 def test_document_service_apply_generated_result_command():
