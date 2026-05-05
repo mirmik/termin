@@ -32,6 +32,7 @@ class InstructPanel(ScrollArea):
         self.on_show_mask_toggled: callable = None  # (bool)
         self.on_draw_patch_toggled: callable = None  # (bool)
         self.on_clear_patch: callable = None
+        self.on_show_patch_toggled: callable = None  # (bool)
 
         content = VStack()
         content.spacing = 8
@@ -207,6 +208,13 @@ class InstructPanel(ScrollArea):
         self._draw_patch_cb.on_changed = lambda v: (
             self.on_draw_patch_toggled and self.on_draw_patch_toggled(v))
         patch_row.add_child(self._draw_patch_cb)
+
+        self._show_patch_cb = Checkbox()
+        self._show_patch_cb.text = "Show"
+        self._show_patch_cb.checked = True
+        self._show_patch_cb.on_changed = lambda v: (
+            self.on_show_patch_toggled and self.on_show_patch_toggled(v))
+        patch_row.add_child(self._show_patch_cb)
 
         clear_patch_btn = Button()
         clear_patch_btn.text = "Clear Patch"

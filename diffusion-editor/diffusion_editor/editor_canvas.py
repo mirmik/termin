@@ -1165,7 +1165,7 @@ class EditorCanvas(Canvas):
                 renderer.draw_rect_outline(wx0, wy0, wx1 - wx0, wy1 - wy0,
                                            (0.0, 0.8, 1.0, 0.7), 2.0)
 
-        # Manual patch rectangle (green)
+        # Manual patch rectangle (green outline)
         if (self._show_patch_rect and layer is not None
                 and layer.tool is not None
                 and hasattr(layer.tool, 'manual_patch_rect')):
@@ -1179,8 +1179,6 @@ class EditorCanvas(Canvas):
                 ix0, iy0, ix1, iy1 = rect
                 wx0, wy0 = canvas.image_to_widget(ix0, iy0)
                 wx1, wy1 = canvas.image_to_widget(ix1, iy1)
-                renderer.draw_rect(wx0, wy0, wx1 - wx0, wy1 - wy0,
-                                   (0.2, 0.78, 0.31, 0.15))
                 renderer.draw_rect_outline(wx0, wy0, wx1 - wx0, wy1 - wy0,
                                            (0.2, 0.78, 0.31, 0.8), 2.0)
 
