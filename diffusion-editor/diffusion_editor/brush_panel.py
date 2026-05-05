@@ -67,6 +67,7 @@ class BrushPanel(GroupBox):
         # Size slider
         self._size_slider = SliderEdit()
         self._size_slider.label = "Size"
+        self._size_slider.tooltip = "Brush diameter in pixels"
         self._size_slider.min_value = 1
         self._size_slider.max_value = 500
         self._size_slider.value = brush.size
@@ -77,6 +78,7 @@ class BrushPanel(GroupBox):
         # Hardness slider
         self._hard_slider = SliderEdit()
         self._hard_slider.label = "Hardness"
+        self._hard_slider.tooltip = "Brush edge softness (0 = soft, 1 = hard)"
         self._hard_slider.min_value = 0.0
         self._hard_slider.max_value = 1.0
         self._hard_slider.value = brush.hardness
@@ -87,6 +89,7 @@ class BrushPanel(GroupBox):
         # Flow slider
         self._flow_slider = SliderEdit()
         self._flow_slider.label = "Flow"
+        self._flow_slider.tooltip = "Paint opacity per stroke (0 = transparent, 1 = opaque)"
         self._flow_slider.min_value = 0.0
         self._flow_slider.max_value = 1.0
         self._flow_slider.value = brush.flow

@@ -80,6 +80,7 @@ class LayerPanel(VStack):
         # Opacity slider
         self._opacity_slider = SliderEdit()
         self._opacity_slider.label = "Opacity"
+        self._opacity_slider.tooltip = "Layer opacity (0 = fully transparent, 1 = fully opaque)"
         self._opacity_slider.min_value = 0.0
         self._opacity_slider.max_value = 1.0
         self._opacity_slider.value = 1.0

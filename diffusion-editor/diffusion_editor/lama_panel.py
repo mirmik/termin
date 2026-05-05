@@ -36,6 +36,7 @@ class LamaPanel(ScrollArea):
 
         self._mask_size_slider = SliderEdit()
         self._mask_size_slider.label = "Size"
+        self._mask_size_slider.tooltip = "Mask brush diameter in pixels"
         self._mask_size_slider.min_value = 1
         self._mask_size_slider.max_value = 500
         self._mask_size_slider.value = 50
@@ -45,6 +46,7 @@ class LamaPanel(ScrollArea):
 
         self._mask_hardness_slider = SliderEdit()
         self._mask_hardness_slider.label = "Hardness"
+        self._mask_hardness_slider.tooltip = "Mask brush edge softness (0 = soft, 1 = hard)"
         self._mask_hardness_slider.min_value = 0.0
         self._mask_hardness_slider.max_value = 1.0
         self._mask_hardness_slider.value = 0.40
@@ -54,6 +56,7 @@ class LamaPanel(ScrollArea):
 
         self._mask_flow_slider = SliderEdit()
         self._mask_flow_slider.label = "Flow"
+        self._mask_flow_slider.tooltip = "Mask opacity per stroke (0 = transparent, 1 = opaque)"
         self._mask_flow_slider.min_value = 0.0
         self._mask_flow_slider.max_value = 1.0
         self._mask_flow_slider.value = 1.0

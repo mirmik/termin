@@ -75,6 +75,7 @@ class InstructPanel(ScrollArea):
 
         self._img_guidance_slider = SliderEdit()
         self._img_guidance_slider.label = "Image Guidance"
+        self._img_guidance_slider.tooltip = "How closely to follow the input image (1.0 = strict, 3.0 = loose)"
         self._img_guidance_slider.min_value = 1.0
         self._img_guidance_slider.max_value = 3.0
         self._img_guidance_slider.value = 1.5
@@ -83,6 +84,7 @@ class InstructPanel(ScrollArea):
 
         self._cfg_slider = SliderEdit()
         self._cfg_slider.label = "CFG Scale"
+        self._cfg_slider.tooltip = "Prompt adherence (higher = more literal, lower = more creative)"
         self._cfg_slider.min_value = 1.0
         self._cfg_slider.max_value = 20.0
         self._cfg_slider.value = 7.0
@@ -91,6 +93,7 @@ class InstructPanel(ScrollArea):
 
         self._steps_slider = SliderEdit()
         self._steps_slider.label = "Steps"
+        self._steps_slider.tooltip = "Number of denoising steps (more = higher quality, slower)"
         self._steps_slider.min_value = 1
         self._steps_slider.max_value = 50
         self._steps_slider.value = 20
@@ -122,6 +125,7 @@ class InstructPanel(ScrollArea):
 
         self._mask_size_slider = SliderEdit()
         self._mask_size_slider.label = "Size"
+        self._mask_size_slider.tooltip = "Mask brush diameter in pixels"
         self._mask_size_slider.min_value = 1
         self._mask_size_slider.max_value = 500
         self._mask_size_slider.value = 50
@@ -131,6 +135,7 @@ class InstructPanel(ScrollArea):
 
         self._mask_hardness_slider = SliderEdit()
         self._mask_hardness_slider.label = "Hardness"
+        self._mask_hardness_slider.tooltip = "Mask brush edge softness (0 = soft, 1 = hard)"
         self._mask_hardness_slider.min_value = 0.0
         self._mask_hardness_slider.max_value = 1.0
         self._mask_hardness_slider.value = 0.40
@@ -140,6 +145,7 @@ class InstructPanel(ScrollArea):
 
         self._mask_flow_slider = SliderEdit()
         self._mask_flow_slider.label = "Flow"
+        self._mask_flow_slider.tooltip = "Mask opacity per stroke (0 = transparent, 1 = opaque)"
         self._mask_flow_slider.min_value = 0.0
         self._mask_flow_slider.max_value = 1.0
         self._mask_flow_slider.value = 1.0

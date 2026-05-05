@@ -142,6 +142,7 @@ class DiffusionPanel(ScrollArea):
         # Strength
         self._strength_slider = SliderEdit()
         self._strength_slider.label = "Strength"
+        self._strength_slider.tooltip = "How much to alter the image (0 = no change, 1 = full regeneration)"
         self._strength_slider.min_value = 0.0
         self._strength_slider.max_value = 1.0
         self._strength_slider.value = 0.30
@@ -151,6 +152,7 @@ class DiffusionPanel(ScrollArea):
         # Steps
         self._steps_slider = SliderEdit()
         self._steps_slider.label = "Steps"
+        self._steps_slider.tooltip = "Number of denoising steps (more = higher quality, slower)"
         self._steps_slider.min_value = 1
         self._steps_slider.max_value = 50
         self._steps_slider.value = 20
@@ -160,6 +162,7 @@ class DiffusionPanel(ScrollArea):
         # CFG Scale
         self._cfg_slider = SliderEdit()
         self._cfg_slider.label = "CFG Scale"
+        self._cfg_slider.tooltip = "Prompt adherence (higher = more literal, lower = more creative)"
         self._cfg_slider.min_value = 1.0
         self._cfg_slider.max_value = 20.0
         self._cfg_slider.value = 7.0
@@ -201,6 +204,7 @@ class DiffusionPanel(ScrollArea):
 
         self._mask_size_slider = SliderEdit()
         self._mask_size_slider.label = "Size"
+        self._mask_size_slider.tooltip = "Mask brush diameter in pixels"
         self._mask_size_slider.min_value = 1
         self._mask_size_slider.max_value = 500
         self._mask_size_slider.value = 50
@@ -210,6 +214,7 @@ class DiffusionPanel(ScrollArea):
 
         self._mask_hardness_slider = SliderEdit()
         self._mask_hardness_slider.label = "Hardness"
+        self._mask_hardness_slider.tooltip = "Mask brush edge softness (0 = soft, 1 = hard)"
         self._mask_hardness_slider.min_value = 0.0
         self._mask_hardness_slider.max_value = 1.0
         self._mask_hardness_slider.value = 0.40
@@ -219,6 +224,7 @@ class DiffusionPanel(ScrollArea):
 
         self._mask_flow_slider = SliderEdit()
         self._mask_flow_slider.label = "Flow"
+        self._mask_flow_slider.tooltip = "Mask opacity per stroke (0 = transparent, 1 = opaque)"
         self._mask_flow_slider.min_value = 0.0
         self._mask_flow_slider.max_value = 1.0
         self._mask_flow_slider.value = 1.0
@@ -272,6 +278,7 @@ class DiffusionPanel(ScrollArea):
 
         self._ip_scale_slider = SliderEdit()
         self._ip_scale_slider.label = "Scale"
+        self._ip_scale_slider.tooltip = "IP-Adapter influence strength (0 = off, 1 = full)"
         self._ip_scale_slider.min_value = 0.0
         self._ip_scale_slider.max_value = 1.0
         self._ip_scale_slider.value = 0.60

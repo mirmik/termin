@@ -43,6 +43,7 @@ class SelectionPanel(GroupBox):
         # Size slider
         self._size_slider = SliderEdit()
         self._size_slider.label = "Size"
+        self._size_slider.tooltip = "Selection brush diameter in pixels"
         self._size_slider.min_value = 1
         self._size_slider.max_value = 500
         self._size_slider.value = 50
@@ -53,6 +54,7 @@ class SelectionPanel(GroupBox):
         # Hardness slider
         self._hard_slider = SliderEdit()
         self._hard_slider.label = "Hardness"
+        self._hard_slider.tooltip = "Selection brush edge softness (0 = soft, 1 = hard)"
         self._hard_slider.min_value = 0.0
         self._hard_slider.max_value = 1.0
         self._hard_slider.value = 0.4
