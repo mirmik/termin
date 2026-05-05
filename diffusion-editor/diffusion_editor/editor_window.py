@@ -319,6 +319,7 @@ class EditorWindow:
         self._diffusion_panel.on_clear_rect = self._on_clear_ref_rect
         self._diffusion_panel.on_select_background = self._on_select_background
         self._diffusion_panel.on_draw_patch_toggled = self._canvas.set_patch_rect_mode
+        self._diffusion_panel.on_show_patch_toggled = self._canvas.set_show_patch_rect
         self._diffusion_panel.on_clear_patch = self._on_clear_patch_rect
         self._canvas.on_ref_rect_drawn = self._on_ref_rect_drawn
         self._canvas.on_patch_rect_drawn = self._on_patch_rect_drawn
@@ -351,6 +352,7 @@ class EditorWindow:
         self._instruct_panel.on_mask_eraser_toggled = self._canvas.set_mask_eraser
         self._instruct_panel.on_show_mask_toggled = self._canvas.set_show_mask
         self._instruct_panel.on_draw_patch_toggled = self._canvas.set_patch_rect_mode
+        self._instruct_panel.on_show_patch_toggled = self._canvas.set_show_patch_rect
         self._instruct_panel.on_clear_patch = self._on_instruct_clear_patch_rect
 
     # ------------------------------------------------------------------
