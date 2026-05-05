@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 from .layer import Layer
-from .tool import DiffusionTool
+from .tool import Tool, DiffusionTool
 from .layer_stack import LayerStack
 from .diffusion_brush import paste_result
 from .mask import Selection, coerce_mask_data
@@ -83,6 +83,29 @@ class SetLayerOpacityCommand:
 
     def apply(self, layer_stack: LayerStack) -> None:
         layer_stack.set_opacity(self.layer, self.opacity)
+
+
+@dataclass(frozen=True)
+class AttachLayerToolCommand:
+    layer: Layer
+    tool: Tool
+    label: str = "Attach Tool"
+
+    def apply(self, layer_stack: LayerStack) -> None:
+        self.layer.tool = self.tool
+        if layer_stack.on_changed:
+            layer_stack.on_changed()
+
+
+@dataclass(frozen=True)
+class DetachLayerToolCommand:
+    layer: Layer
+    label: str = "Remove Tool"
+
+    def apply(self, layer_stack: LayerStack) -> None:
+        self.layer.tool = None
+        if layer_stack.on_changed:
+            layer_stack.on_changed()
 
 
 @dataclass(frozen=True)

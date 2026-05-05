@@ -11,6 +11,7 @@ from diffusion_editor.commands import (
     SnapshotCallbackCommand, ClearLayerMaskCommand, SetManualPatchRectCommand,
     ClearManualPatchRectCommand, ReplaceLayerMaskCommand,
     ApplyGeneratedResultCommand, SetLayerSelectionCommand,
+    AttachLayerToolCommand, DetachLayerToolCommand,
 )
 from diffusion_editor.layer import Layer
 from diffusion_editor.tool import DiffusionTool
@@ -211,6 +212,35 @@ def test_document_service_replace_layer_mask_command():
 
     assert np.array_equal(layer.mask.data, mask.astype(np.float32) / 255.0)
     assert service.undo() == "Apply Segmentation Mask"
+
+
+def test_document_service_attach_detach_layer_tool_commands():
+    stack = LayerStack()
+    stack.on_changed = lambda: None
+    stack.init_from_image(np.full((8, 8, 4), 255, dtype=np.uint8))
+    layer = stack.active_layer
+    history = HistoryManager(stack.load_state)
+    service = DocumentService(stack, history, stack.load_state)
+    tool = DiffusionTool(
+        source_patch=None,
+        patch_x=0, patch_y=0, patch_w=8, patch_h=8,
+        prompt="p", negative_prompt="",
+        strength=0.5, guidance_scale=7.0, steps=20, seed=1,
+    )
+
+    service.execute(AttachLayerToolCommand(layer=layer, tool=tool))
+
+    assert isinstance(layer.tool, DiffusionTool)
+    assert service.undo() == "Attach Tool"
+    assert stack.active_layer.tool is None
+    assert service.redo() == "Attach Tool"
+    assert isinstance(stack.active_layer.tool, DiffusionTool)
+
+    service.execute(DetachLayerToolCommand(layer=stack.active_layer))
+
+    assert stack.active_layer.tool is None
+    assert service.undo() == "Remove Tool"
+    assert isinstance(stack.active_layer.tool, DiffusionTool)
 
 
 def test_document_service_replace_layer_mask_command_accepts_bool_mask():
