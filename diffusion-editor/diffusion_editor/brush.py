@@ -1,4 +1,14 @@
+from enum import Enum
+
 import numpy as np
+
+
+class BrushToolMode(str, Enum):
+    PAINT = "paint"
+    ERASER = "eraser"
+    SMUDGE = "smudge"
+    MASK = "mask"
+    MASK_ERASER = "mask_eraser"
 
 
 class Brush:

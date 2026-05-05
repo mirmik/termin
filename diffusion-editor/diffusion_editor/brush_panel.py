@@ -1,16 +1,15 @@
-"""BrushPanel — tcgui panel for brush settings (color, size, hardness, eraser)."""
+"""BrushPanel — tcgui panel for brush settings and stroke tools."""
 
 from __future__ import annotations
 
 from tcgui.widgets.group_box import GroupBox
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.button import Button
-from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.slider_edit import SliderEdit
 from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import px
 
-from .brush import Brush
+from .brush import Brush, BrushToolMode
 
 
 class BrushPanel(GroupBox):
@@ -21,10 +20,37 @@ class BrushPanel(GroupBox):
 
         self._brush = brush
 
+        self._tool_mode = BrushToolMode.PAINT
+
         # Callbacks
         self.on_eraser_toggled: callable = None
+        self.on_tool_changed: callable = None
 
-        # Color + eraser row
+        # Raster tool row
+        raster_row = HStack()
+        raster_row.spacing = 4
+
+        self._paint_btn = self._make_tool_button("Paint", BrushToolMode.PAINT)
+        self._eraser_btn = self._make_tool_button("Erase", BrushToolMode.ERASER)
+        self._smudge_btn = self._make_tool_button("Smudge", BrushToolMode.SMUDGE)
+        raster_row.add_child(self._paint_btn)
+        raster_row.add_child(self._eraser_btn)
+        raster_row.add_child(self._smudge_btn)
+        self.add_child(raster_row)
+
+        # Mask tool row
+        mask_row = HStack()
+        mask_row.spacing = 4
+        self._mask_btn = self._make_tool_button("Mask", BrushToolMode.MASK)
+        self._mask_eraser_btn = self._make_tool_button(
+            "Unmask", BrushToolMode.MASK_ERASER)
+        self._mask_btn.preferred_width = px(106)
+        self._mask_eraser_btn.preferred_width = px(106)
+        mask_row.add_child(self._mask_btn)
+        mask_row.add_child(self._mask_eraser_btn)
+        self.add_child(mask_row)
+
+        # Color row
         row = HStack()
         row.spacing = 8
 
@@ -35,12 +61,8 @@ class BrushPanel(GroupBox):
         self._update_color_btn()
         row.add_child(self._color_btn)
 
-        self._eraser_cb = Checkbox()
-        self._eraser_cb.text = "Eraser"
-        self._eraser_cb.on_changed = self._on_eraser_changed
-        row.add_child(self._eraser_cb)
-
         self.add_child(row)
+        self._sync_tool_buttons()
 
         # Size slider
         self._size_slider = SliderEdit()
@@ -88,9 +110,34 @@ class BrushPanel(GroupBox):
             self._brush.set_color(r, g, b, a)
             self._update_color_btn()
 
-    def _on_eraser_changed(self, checked: bool):
-        if self.on_eraser_toggled:
-            self.on_eraser_toggled(checked)
+    def _make_tool_button(self, text: str, mode: BrushToolMode) -> Button:
+        btn = Button()
+        btn.text = text
+        btn.checkable = True
+        btn.preferred_width = px(70)
+        btn.on_click = lambda: self._set_tool_mode(mode)
+        return btn
+
+    def _sync_tool_buttons(self):
+        self._paint_btn.checked = self._tool_mode == BrushToolMode.PAINT
+        self._eraser_btn.checked = self._tool_mode == BrushToolMode.ERASER
+        self._smudge_btn.checked = self._tool_mode == BrushToolMode.SMUDGE
+        self._mask_btn.checked = self._tool_mode == BrushToolMode.MASK
+        self._mask_eraser_btn.checked = self._tool_mode == BrushToolMode.MASK_ERASER
+
+    def _set_tool_mode(self, mode: BrushToolMode):
+        self._tool_mode = mode
+        self._sync_tool_buttons()
+        if self.on_tool_changed:
+            self.on_tool_changed(mode)
+        elif self.on_eraser_toggled:
+            self.on_eraser_toggled(mode == BrushToolMode.ERASER)
+
+    def set_tool_mode(self, mode: BrushToolMode | str, *, emit: bool = False):
+        self._tool_mode = BrushToolMode(mode)
+        self._sync_tool_buttons()
+        if emit and self.on_tool_changed:
+            self.on_tool_changed(self._tool_mode)
 
     def _on_size_changed(self, value: float):
         self._brush.set_size(int(value))

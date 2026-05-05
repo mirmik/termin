@@ -35,6 +35,7 @@ from .layer_stack import LayerStack
 from .mask import coerce_mask_data
 from .layer import Layer
 from .tool import DiffusionTool, LamaTool, InstructTool
+from .brush import BrushToolMode
 from .editor_canvas import EditorCanvas
 from .layer_panel import LayerPanel
 from .brush_panel import BrushPanel
@@ -296,6 +297,7 @@ class EditorWindow:
         self._canvas.on_edit_end = self._end_external_edit
 
         # Brush panel
+        self._brush_panel.on_tool_changed = self._set_canvas_tool
         self._brush_panel.on_eraser_toggled = self._canvas.set_brush_eraser
 
         # Selection panel
@@ -310,8 +312,8 @@ class EditorWindow:
         self._diffusion_panel.on_regenerate = self._on_regenerate
         self._diffusion_panel.on_new_seed = self._on_new_seed
         self._diffusion_panel.on_clear_mask = self._on_clear_mask
-        self._diffusion_panel.on_mask_brush_changed = self._canvas.set_mask_brush
-        self._diffusion_panel.on_mask_eraser_toggled = self._canvas.set_mask_eraser
+        self._diffusion_panel.on_mask_brush_changed = self._set_mask_brush
+        self._diffusion_panel.on_mask_eraser_toggled = self._set_mask_eraser
         self._diffusion_panel.on_show_mask_toggled = self._canvas.set_show_mask
         self._diffusion_panel.on_load_ip_adapter = self._on_load_ip_adapter
         self._diffusion_panel.on_draw_rect_toggled = self._canvas.set_ref_rect_mode
@@ -338,8 +340,8 @@ class EditorWindow:
         # LaMa panel
         self._lama_panel.on_remove = self._on_lama_remove
         self._lama_panel.on_clear_mask = self._on_lama_clear_mask
-        self._lama_panel.on_mask_brush_changed = self._canvas.set_mask_brush
-        self._lama_panel.on_mask_eraser_toggled = self._canvas.set_mask_eraser
+        self._lama_panel.on_mask_brush_changed = self._set_mask_brush
+        self._lama_panel.on_mask_eraser_toggled = self._set_mask_eraser
         self._lama_panel.on_show_mask_toggled = self._canvas.set_show_mask
         self._lama_panel.on_select_background = self._on_lama_select_background
 
@@ -348,12 +350,24 @@ class EditorWindow:
         self._instruct_panel.on_apply = self._on_instruct_apply
         self._instruct_panel.on_new_seed = self._on_instruct_new_seed
         self._instruct_panel.on_clear_mask = self._on_instruct_clear_mask
-        self._instruct_panel.on_mask_brush_changed = self._canvas.set_mask_brush
-        self._instruct_panel.on_mask_eraser_toggled = self._canvas.set_mask_eraser
+        self._instruct_panel.on_mask_brush_changed = self._set_mask_brush
+        self._instruct_panel.on_mask_eraser_toggled = self._set_mask_eraser
         self._instruct_panel.on_show_mask_toggled = self._canvas.set_show_mask
         self._instruct_panel.on_draw_patch_toggled = self._canvas.set_patch_rect_mode
         self._instruct_panel.on_show_patch_toggled = self._canvas.set_show_patch_rect
         self._instruct_panel.on_clear_patch = self._on_instruct_clear_patch_rect
+
+    def _set_canvas_tool(self, mode: BrushToolMode | str):
+        self._canvas.set_brush_tool(mode)
+        self._brush_panel.set_tool_mode(self._canvas.brush_tool_mode)
+
+    def _set_mask_brush(self, size: int, hardness: float, flow: float = 1.0):
+        self._canvas.set_mask_brush(size, hardness, flow)
+        self._brush_panel.set_tool_mode(self._canvas.brush_tool_mode)
+
+    def _set_mask_eraser(self, eraser: bool):
+        self._canvas.set_mask_eraser(eraser)
+        self._brush_panel.set_tool_mode(self._canvas.brush_tool_mode)
 
     # ------------------------------------------------------------------
     # Panel switching
@@ -629,11 +643,12 @@ class EditorWindow:
         layer = self._layer_stack.active_layer
         name = layer.name if layer else "-"
         bs = self._canvas.brush.size
+        tool = self._canvas.brush_tool_mode.value
         mem = self._memory_status()
         if 0 <= x < w and 0 <= y < h:
-            self._statusbar.text = f"{w}x{h} | ({x},{y}) | {name} | Brush:{bs}px | {mem}"
+            self._statusbar.text = f"{w}x{h} | ({x},{y}) | {name} | {tool}:{bs}px | {mem}"
         else:
-            self._statusbar.text = f"{w}x{h} | {name} | Brush:{bs}px | {mem}"
+            self._statusbar.text = f"{w}x{h} | {name} | {tool}:{bs}px | {mem}"
 
     def _on_color_picked(self, r, g, b, a):
         self._canvas.brush.set_color(r, g, b, a)
