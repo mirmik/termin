@@ -99,6 +99,7 @@ class GroundingDialog:
         content.add_child(box_threshold_label)
 
         self._box_threshold_slider = SliderEdit()
+        self._box_threshold_slider.tooltip = "Minimum confidence for object detection boxes"
         self._box_threshold_slider.min_value = 0.05
         self._box_threshold_slider.max_value = 1.0
         self._box_threshold_slider.value = 0.40
@@ -112,6 +113,7 @@ class GroundingDialog:
         content.add_child(text_threshold_label)
 
         self._text_threshold_slider = SliderEdit()
+        self._text_threshold_slider.tooltip = "Minimum confidence for text-to-box matching"
         self._text_threshold_slider.min_value = 0.05
         self._text_threshold_slider.max_value = 1.0
         self._text_threshold_slider.value = 0.30
@@ -153,6 +155,7 @@ class GroundingDialog:
         content.add_child(mask_thresh_label)
 
         self._mask_threshold_slider = SliderEdit()
+        self._mask_threshold_slider.tooltip = "Higher values produce tighter masks around object edges"
         self._mask_threshold_slider.min_value = 0.0
         self._mask_threshold_slider.max_value = 1.0
         self._mask_threshold_slider.value = 0.0
@@ -166,6 +169,7 @@ class GroundingDialog:
         content.add_child(max_hole_label)
 
         self._max_hole_slider = SliderEdit()
+        self._max_hole_slider.tooltip = "Fill holes smaller than this area in pixels (0 = disabled)"
         self._max_hole_slider.min_value = 0
         self._max_hole_slider.max_value = 10000
         self._max_hole_slider.value = 0
@@ -179,6 +183,7 @@ class GroundingDialog:
         content.add_child(max_sprinkle_label)
 
         self._max_sprinkle_slider = SliderEdit()
+        self._max_sprinkle_slider.tooltip = "Remove isolated pixels smaller than this area (0 = disabled)"
         self._max_sprinkle_slider.min_value = 0
         self._max_sprinkle_slider.max_value = 10000
         self._max_sprinkle_slider.value = 0
