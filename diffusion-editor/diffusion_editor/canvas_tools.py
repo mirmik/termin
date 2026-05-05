@@ -88,13 +88,14 @@ class SmudgeTool(CanvasStrokeTool):
 
     def begin(self, canvas, layer, x: int, y: int):
         self._dirty_rect = None
+        canvas._begin_smudge(layer, x, y)
         return None
 
     def move(self, canvas, layer, last_pos, x: int, y: int):
         if not last_pos:
             return None
         lx, ly = last_pos
-        dirty = canvas._smudge_dab_from_to(layer, lx, ly, x, y)
+        dirty = canvas._smudge_stroke_line(layer, lx, ly, x, y)
         self._dirty_rect = canvas._union_rect(self._dirty_rect, dirty)
         return dirty
 
@@ -102,6 +103,7 @@ class SmudgeTool(CanvasStrokeTool):
         if layer is not None and self._dirty_rect is not None:
             canvas._layer_stack.mark_layer_dirty(layer, self._dirty_rect)
         self._dirty_rect = None
+        canvas._end_smudge()
 
 
 class MaskPaintTool(CanvasStrokeTool):

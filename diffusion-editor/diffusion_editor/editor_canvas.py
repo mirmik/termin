@@ -94,6 +94,7 @@ class EditorCanvas(Canvas):
         self._mask_overlay: np.ndarray | None = None
         self._mask_erase_stroke: np.ndarray | None = None
         self._mask_erase_dirty: tuple[int, int, int, int] | None = None
+        self._smudge_buffer: np.ndarray | None = None
         self._stroke_dirty_rect: tuple[int, int, int, int] | None = None
         self._edit_label: str | None = None
         self._edit_target: str | None = None  # "image" | "mask"
@@ -242,7 +243,7 @@ class EditorCanvas(Canvas):
         self._refresh_modified_layer_rect(layer, dirty)
 
     def _update_mask_overlay_region(self, layer, dirty):
-        """Partial overlay update for mask painting — only recompute dirty region alpha."""
+        """Update mask overlay after mask painting."""
         if dirty is None:
             return
         x0, y0, x1, y1 = dirty
@@ -254,11 +255,11 @@ class EditorCanvas(Canvas):
             self._mask_overlay[:, :, 2] = 50
             self._mask_overlay[:, :, 3] = (
                 layer.mask.data * 255.0 * 0.4).astype(np.uint8)
-            self.set_overlay_ref(self._mask_overlay)
+            self.set_overlay(self._mask_overlay)
             return
         self._mask_overlay[y0:y1, x0:x1, 3] = (
             layer.mask.data[y0:y1, x0:x1] * 255.0 * 0.4).astype(np.uint8)
-        self.mark_overlay_dirty(x0, y0, x1, y1)
+        self.set_overlay(self._mask_overlay)
 
     def _update_mask_overlay_region_preview(self, layer, dirty, preview_mask):
         """Update overlay alpha from a provided mask preview region."""
@@ -273,10 +274,9 @@ class EditorCanvas(Canvas):
             self._mask_overlay[:, :, 2] = 50
             self._mask_overlay[:, :, 3] = (
                 layer.mask.data * 255.0 * 0.4).astype(np.uint8)
-            self.set_overlay_ref(self._mask_overlay)
         self._mask_overlay[y0:y1, x0:x1, 3] = (
             preview_mask * 255.0 * 0.4).astype(np.uint8)
-        self.mark_overlay_dirty(x0, y0, x1, y1)
+        self.set_overlay(self._mask_overlay)
 
     def _preview_mask_erase_region(self, layer, dirty):
         """Preview erase on composite without modifying layer.image."""
@@ -810,6 +810,39 @@ class EditorCanvas(Canvas):
     # Smudge
     # ------------------------------------------------------------------
 
+    def _brush_rect_slices(self, layer, cx: int, cy: int):
+        stamp = self.brush._alpha_stamp
+        sh, sw = stamp.shape[:2]
+        ih, iw = layer.image.shape[:2]
+
+        x0 = cx - sw // 2
+        y0 = cy - sh // 2
+        sx0 = max(0, -x0)
+        sy0 = max(0, -y0)
+        sx1 = min(sw, iw - x0)
+        sy1 = min(sh, ih - y0)
+        dx0 = max(0, x0)
+        dy0 = max(0, y0)
+        dx1 = dx0 + (sx1 - sx0)
+        dy1 = dy0 + (sy1 - sy0)
+        if dx0 >= dx1 or dy0 >= dy1:
+            return None
+        return sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1
+
+    def _begin_smudge(self, layer, x: int, y: int):
+        stamp = self.brush._alpha_stamp
+        sh, sw = stamp.shape[:2]
+        self._smudge_buffer = np.zeros((sh, sw, 4), dtype=np.float32)
+        slices = self._brush_rect_slices(layer, x, y)
+        if slices is None:
+            return
+        sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1 = slices
+        self._smudge_buffer[sy0:sy1, sx0:sx1] = (
+            layer.image[dy0:dy1, dx0:dx1].astype(np.float32))
+
+    def _end_smudge(self):
+        self._smudge_buffer = None
+
     def _refresh_modified_layer_rect(self, layer, rect):
         if rect is None:
             return
@@ -837,52 +870,57 @@ class EditorCanvas(Canvas):
             out_a * 255.0, 0, 255).astype(np.uint8)
         self.set_image(self._composite)
 
-    def _smudge_dab_from_to(self, layer, src_cx: int, src_cy: int,
-                            dst_cx: int, dst_cy: int):
-        stamp = self.brush._alpha_stamp
-        sh, sw = stamp.shape[:2]
-        ih, iw = layer.image.shape[:2]
-
-        src_x0 = src_cx - sw // 2
-        src_y0 = src_cy - sh // 2
-        dst_x0 = dst_cx - sw // 2
-        dst_y0 = dst_cy - sh // 2
-
-        sx0 = max(0, -src_x0, -dst_x0)
-        sy0 = max(0, -src_y0, -dst_y0)
-        sx1 = min(sw, iw - src_x0, iw - dst_x0)
-        sy1 = min(sh, ih - src_y0, ih - dst_y0)
-        if sx0 >= sx1 or sy0 >= sy1:
+    def _smudge_dab(self, layer, cx: int, cy: int):
+        if self._smudge_buffer is None:
+            self._begin_smudge(layer, cx, cy)
+        if self._smudge_buffer is None:
             return None
-
-        src_rect = (
-            src_x0 + sx0, src_y0 + sy0,
-            src_x0 + sx1, src_y0 + sy1,
-        )
-        dst_rect = (
-            dst_x0 + sx0, dst_y0 + sy0,
-            dst_x0 + sx1, dst_y0 + sy1,
-        )
-        dx0, dy0, dx1, dy1 = dst_rect
-        sx0i, sy0i, sx1i, sy1i = src_rect
+        slices = self._brush_rect_slices(layer, cx, cy)
+        if slices is None:
+            return None
+        sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1 = slices
 
         amount = (
-            stamp[sy0:sy1, sx0:sx1, None]
+            self.brush._alpha_stamp[sy0:sy1, sx0:sx1, None]
             * self.brush.flow
             * (self.brush.color[3] / 255.0)
         ).astype(np.float32)
         if not np.any(amount > 0.0):
             return None
 
-        src = layer.image[sy0i:sy1i, sx0i:sx1i].astype(np.float32).copy()
-        dst = layer.image[dy0:dy1, dx0:dx1].astype(np.float32)
+        carry = self._smudge_buffer[sy0:sy1, sx0:sx1]
+        dst = layer.image[dy0:dy1, dx0:dx1].astype(np.float32).copy()
         layer.image[dy0:dy1, dx0:dx1] = np.clip(
-            dst * (1.0 - amount) + src * amount,
+            dst * (1.0 - amount) + carry * amount,
             0, 255,
         ).astype(np.uint8)
+        self._smudge_buffer[sy0:sy1, sx0:sx1] = (
+            carry * amount + dst * (1.0 - amount))
 
         dirty = (dx0, dy0, dx1, dy1)
         self._refresh_modified_layer_rect(layer, dirty)
+        return dirty
+
+    def _smudge_stroke_line(self, layer, x0: int, y0: int, x1: int, y1: int):
+        dx = float(x1 - x0)
+        dy = float(y1 - y0)
+        dist = float(np.hypot(dx, dy))
+        if dist < 0.5:
+            return self._smudge_dab(layer, x1, y1)
+
+        spacing = max(1.0, self.brush.size * 0.25)
+        steps = max(1, int(np.ceil(dist / spacing)))
+        dirty = None
+        prev_x, prev_y = x0, y0
+        for i in range(1, steps + 1):
+            t = i / steps
+            cx = int(round(x0 + dx * t))
+            cy = int(round(y0 + dy * t))
+            if cx == prev_x and cy == prev_y:
+                continue
+            dab_dirty = self._smudge_dab(layer, cx, cy)
+            dirty = self._union_rect(dirty, dab_dirty)
+            prev_x, prev_y = cx, cy
         return dirty
 
     # ------------------------------------------------------------------
