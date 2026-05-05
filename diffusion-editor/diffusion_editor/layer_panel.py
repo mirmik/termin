@@ -16,7 +16,8 @@ from tcgui.widgets.message_box import MessageBox, Buttons
 from tcgui.widgets.units import px, pct
 
 from .layer_stack import LayerStack
-from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
+from .layer import Layer
+from .tool import DiffusionTool, LamaTool, InstructTool
 
 
 class LayerPanel(VStack):
@@ -136,11 +137,11 @@ class LayerPanel(VStack):
         self._updating = False
 
     def _create_node(self, layer: Layer) -> TreeNode:
-        if isinstance(layer, DiffusionLayer):
+        if isinstance(layer.tool, DiffusionTool):
             prefix = "[D] "
-        elif isinstance(layer, LamaLayer):
+        elif isinstance(layer.tool, LamaTool):
             prefix = "[L] "
-        elif isinstance(layer, InstructLayer):
+        elif isinstance(layer.tool, InstructTool):
             prefix = "[I] "
         else:
             prefix = ""

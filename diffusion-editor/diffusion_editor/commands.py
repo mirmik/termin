@@ -8,7 +8,8 @@ from typing import Callable, Protocol
 import numpy as np
 from PIL import Image, ImageFilter
 
-from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
+from .layer import Layer
+from .tool import DiffusionTool
 from .layer_stack import LayerStack
 from .diffusion_brush import paste_result
 
@@ -104,69 +105,79 @@ class SnapshotCallbackCommand:
 
 @dataclass(frozen=True)
 class ClearLayerMaskCommand:
-    layer: DiffusionLayer | LamaLayer | InstructLayer
+    layer: Layer
     label: str
 
     def apply(self, layer_stack: LayerStack) -> None:
-        self.layer.clear_mask()
+        if self.layer.tool is not None:
+            self.layer.tool.clear_mask()
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
 
 @dataclass(frozen=True)
-class SetDiffusionIpAdapterRectCommand:
-    layer: DiffusionLayer
+class SetIpAdapterRectCommand:
+    layer: Layer
     rect: tuple[int, int, int, int]
     label: str = "Set IP-Adapter Rect"
 
     def apply(self, layer_stack: LayerStack) -> None:
-        self.layer.ip_adapter_rect = self.rect
+        tool = self.layer.tool
+        if isinstance(tool, DiffusionTool):
+            tool.ip_adapter_rect = self.rect
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
 
 @dataclass(frozen=True)
-class ClearDiffusionIpAdapterRectCommand:
-    layer: DiffusionLayer
+class ClearIpAdapterRectCommand:
+    layer: Layer
     label: str = "Clear IP-Adapter Rect"
 
     def apply(self, layer_stack: LayerStack) -> None:
-        self.layer.ip_adapter_rect = None
+        tool = self.layer.tool
+        if isinstance(tool, DiffusionTool):
+            tool.ip_adapter_rect = None
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
 
 @dataclass(frozen=True)
 class SetManualPatchRectCommand:
-    layer: DiffusionLayer | InstructLayer
+    layer: Layer
     rect: tuple[int, int, int, int]
     label: str
 
     def apply(self, layer_stack: LayerStack) -> None:
-        self.layer.manual_patch_rect = self.rect
+        tool = self.layer.tool
+        if tool is not None and hasattr(tool, 'manual_patch_rect'):
+            tool.manual_patch_rect = self.rect
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
 
 @dataclass(frozen=True)
 class ClearManualPatchRectCommand:
-    layer: DiffusionLayer | InstructLayer
+    layer: Layer
     label: str
 
     def apply(self, layer_stack: LayerStack) -> None:
-        self.layer.manual_patch_rect = None
+        tool = self.layer.tool
+        if tool is not None and hasattr(tool, 'manual_patch_rect'):
+            tool.manual_patch_rect = None
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
 
 @dataclass(frozen=True)
 class ReplaceLayerMaskCommand:
-    layer: DiffusionLayer | LamaLayer | InstructLayer
+    layer: Layer
     mask: np.ndarray
     label: str = "Apply Segmentation Mask"
 
     def apply(self, layer_stack: LayerStack) -> None:
-        self.layer.mask = self.mask.copy()
+        if self.layer.tool is not None:
+            self.layer.tool.mask = self.mask.copy()
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
@@ -175,15 +186,18 @@ class ReplaceLayerMaskCommand:
 class ApplyGeneratedResultCommand:
     """Apply a generated patch result into a layer image and invalidate caches."""
 
-    layer: DiffusionLayer | LamaLayer | InstructLayer
+    layer: Layer
     result_image: Image.Image
     label: str
 
     def apply(self, layer_stack: LayerStack) -> None:
         layer = self.layer
+        tool = layer.tool
+        if tool is None:
+            return
         layer.image[:] = 0
-        if layer.has_mask():
-            mask_pil = Image.fromarray(layer.mask, "L")
+        if tool.has_mask():
+            mask_pil = Image.fromarray(tool.mask, "L")
             mask_pil = mask_pil.filter(ImageFilter.MaxFilter(7))
             mask_pil = mask_pil.filter(ImageFilter.GaussianBlur(radius=4))
             mask_arg = np.array(mask_pil, dtype=np.uint8)
@@ -192,10 +206,10 @@ class ApplyGeneratedResultCommand:
         paste_result(
             layer.image,
             self.result_image,
-            layer.patch_x,
-            layer.patch_y,
-            layer.patch_w,
-            layer.patch_h,
+            tool.patch_x,
+            tool.patch_y,
+            tool.patch_w,
+            tool.patch_h,
             mask=mask_arg,
         )
         layer_stack.mark_layer_dirty(layer)

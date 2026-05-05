@@ -7,14 +7,15 @@ from typing import Tuple
 import numpy as np
 from PIL import Image
 
-from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
+from .layer import Layer
+from .tool import DiffusionTool, LamaTool, InstructTool
 from .commands import ReplaceLayerMaskCommand, ApplyGeneratedResultCommand
 
 
 def map_segmentation_result(layer: Layer | None, seg_mask: np.ndarray
                             ) -> Tuple[ReplaceLayerMaskCommand | None, str]:
     """Build command/status for segmentation output."""
-    if isinstance(layer, (DiffusionLayer, LamaLayer)):
+    if layer is not None and isinstance(layer.tool, (DiffusionTool, LamaTool)):
         return ReplaceLayerMaskCommand(layer=layer, mask=seg_mask), "Background mask applied"
     return None, "Background mask applied"
 
@@ -22,7 +23,7 @@ def map_segmentation_result(layer: Layer | None, seg_mask: np.ndarray
 def map_lama_result(layer: Layer | None, result_image: Image.Image
                     ) -> Tuple[ApplyGeneratedResultCommand | None, str]:
     """Build command/status for LaMa output."""
-    if isinstance(layer, LamaLayer):
+    if layer is not None and isinstance(layer.tool, LamaTool):
         return (
             ApplyGeneratedResultCommand(
                 layer=layer,
@@ -37,7 +38,7 @@ def map_lama_result(layer: Layer | None, result_image: Image.Image
 def map_instruct_result(layer: Layer | None, result_image: Image.Image, used_seed: int
                         ) -> Tuple[ApplyGeneratedResultCommand | None, str]:
     """Build command/status for InstructPix2Pix output."""
-    if isinstance(layer, InstructLayer):
+    if layer is not None and isinstance(layer.tool, InstructTool):
         return (
             ApplyGeneratedResultCommand(
                 layer=layer,
@@ -52,7 +53,7 @@ def map_instruct_result(layer: Layer | None, result_image: Image.Image, used_see
 def map_diffusion_result(layer: Layer | None, result_image: Image.Image, used_seed: int
                          ) -> Tuple[ApplyGeneratedResultCommand | None, str]:
     """Build command/status for diffusion output."""
-    if isinstance(layer, DiffusionLayer):
+    if layer is not None and isinstance(layer.tool, DiffusionTool):
         return (
             ApplyGeneratedResultCommand(
                 layer=layer,
@@ -62,4 +63,3 @@ def map_diffusion_result(layer: Layer | None, result_image: Image.Image, used_se
             f"Regenerated (seed={used_seed})",
         )
     return None, f"Regenerated (seed={used_seed})"
-

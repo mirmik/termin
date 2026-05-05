@@ -276,23 +276,24 @@ class InstructPanel(ScrollArea):
         self._draw_patch_cb.checked = value
 
     def show_instruct_layer(self, layer):
+        tool = layer.tool
         self._layer_group.visible = True
-        self._instruction.text = layer.instruction
-        self._img_guidance_slider.value = layer.image_guidance_scale
-        self._cfg_slider.value = layer.guidance_scale
-        self._steps_slider.value = layer.steps
-        self._seed_edit.text = str(layer.seed)
+        self._instruction.text = tool.instruction
+        self._img_guidance_slider.value = tool.image_guidance_scale
+        self._cfg_slider.value = tool.guidance_scale
+        self._steps_slider.value = tool.steps
+        self._seed_edit.text = str(tool.seed)
 
-        mask_status = "has mask" if layer.has_mask() else "no mask"
-        if layer.manual_patch_rect:
-            r = layer.manual_patch_rect
+        mask_status = "has mask" if tool.has_mask() else "no mask"
+        if tool.manual_patch_rect:
+            r = tool.manual_patch_rect
             pw, ph = r[2] - r[0], r[3] - r[1]
             patch_info = f"manual {pw}x{ph}"
         else:
-            patch_info = f"auto {layer.patch_w}x{layer.patch_h}"
+            patch_info = f"auto {tool.patch_w}x{tool.patch_h}"
 
         self._layer_info.text = (
-            f"instruction: {layer.instruction[:60]}\n"
+            f"instruction: {tool.instruction[:60]}\n"
             f"patch: {patch_info}  mask: {mask_status}"
         )
 

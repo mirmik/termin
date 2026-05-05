@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from diffusion_editor.layer import DiffusionLayer, Layer
+from diffusion_editor.layer import Layer
+from diffusion_editor.tool import DiffusionTool
 from diffusion_editor.layer_stack import LayerStack
 
 
@@ -14,31 +15,24 @@ def _solid_rgba(w: int, h: int, rgba: tuple[int, int, int, int]) -> np.ndarray:
     return arr
 
 
-def _build_stack() -> tuple[LayerStack, DiffusionLayer]:
+def _build_stack() -> tuple[LayerStack, Layer]:
     stack = LayerStack(tile_size=64)
     stack.on_changed = lambda: None
     stack.init_from_image(_solid_rgba(32, 24, (255, 0, 0, 255)))
     stack.add_layer("Paint", _solid_rgba(32, 24, (0, 255, 0, 128)))
 
     # Make a nested diffusion layer to verify typed layer fields and path restore.
-    diff = DiffusionLayer(
-        name="Diff",
-        width=32,
-        height=24,
+    tool = DiffusionTool(
+        height=24, width=32,
         source_patch=None,
-        patch_x=1,
-        patch_y=2,
-        patch_w=16,
-        patch_h=12,
-        prompt="p",
-        negative_prompt="np",
-        strength=0.55,
-        guidance_scale=8.0,
-        steps=20,
-        seed=123,
+        patch_x=1, patch_y=2, patch_w=16, patch_h=12,
+        prompt="p", negative_prompt="np",
+        strength=0.55, guidance_scale=8.0, steps=20, seed=123,
     )
-    diff.mask[3:6, 4:8] = 255
-    diff.manual_patch_rect = (2, 3, 12, 10)
+    tool.mask[3:6, 4:8] = 255
+    tool.manual_patch_rect = (2, 3, 12, 10)
+    diff = Layer("Diff", 32, 24)
+    diff.tool = tool
     top = stack.layers[0]
     top.add_child(diff)
     stack.mark_layer_dirty(top)
@@ -63,9 +57,9 @@ def test_snapshot_roundtrip_restores_active_layer_and_content():
     np.testing.assert_array_equal(restored.composite(), before)
 
     active = restored.active_layer
-    assert isinstance(active, DiffusionLayer)
-    assert active.manual_patch_rect == (2, 3, 12, 10)
-    assert active.has_mask()
+    assert isinstance(active.tool, DiffusionTool)
+    assert active.tool.manual_patch_rect == (2, 3, 12, 10)
+    assert active.tool.has_mask()
 
 
 def test_project_file_roundtrip(tmp_path):
@@ -79,5 +73,5 @@ def test_project_file_roundtrip(tmp_path):
 
     assert len(restored.layers) == 2
     assert isinstance(restored.layers[0], Layer)
-    assert isinstance(restored.layers[0].children[0], DiffusionLayer)
+    assert isinstance(restored.layers[0].children[0].tool, DiffusionTool)
     assert restored.get_layer_path(restored.active_layer) == "0/0"

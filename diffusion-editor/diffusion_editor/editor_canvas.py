@@ -13,7 +13,8 @@ from tcgui.widgets.events import KeyEvent
 from tgfx._tgfx_native import wrap_gl_texture_as_tgfx2, PIXEL_RGBA8
 
 from .layer_stack import LayerStack
-from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
+from .layer import Layer
+from .tool import DiffusionTool, LamaTool, InstructTool
 from .brush import Brush, composite_stroke
 from .gpu_compositor import GPUCompositor
 
@@ -133,7 +134,7 @@ class EditorCanvas(Canvas):
 
         has_stroke = self._stroke_mask is not None and self._stroke_overlay is not None
         has_mask = (self._show_mask
-                    and isinstance(layer, (DiffusionLayer, LamaLayer, InstructLayer))
+                    and isinstance(layer.tool, (DiffusionTool, LamaTool, InstructTool))
                     and layer.has_mask())
 
         if not has_stroke and not has_mask:
@@ -346,8 +347,8 @@ class EditorCanvas(Canvas):
     # ------------------------------------------------------------------
 
     def _is_mask_layer_active(self) -> bool:
-        return isinstance(self._layer_stack.active_layer,
-                          (DiffusionLayer, LamaLayer, InstructLayer))
+        active = self._layer_stack.active_layer
+        return active is not None and isinstance(active.tool, (DiffusionTool, LamaTool, InstructTool))
 
     def _dab_mask(self, mask: np.ndarray, cx: int, cy: int, *, erase: bool | None = None):
         """Returns (dirty_rect, stamp_u8) or (None, None)."""
@@ -636,8 +637,9 @@ class EditorCanvas(Canvas):
                 return
 
             # Patch rect mode
-            if self._patch_rect_mode and isinstance(
-                    layer, (DiffusionLayer, InstructLayer)):
+            if (self._patch_rect_mode and layer is not None
+                    and layer.tool is not None
+                    and hasattr(layer.tool, 'manual_patch_rect')):
                 self._patch_rect_dragging = True
                 self._patch_rect_start = (ix, iy)
                 self._patch_rect_end = (ix, iy)
@@ -908,13 +910,13 @@ class EditorCanvas(Canvas):
         layer = self._layer_stack.active_layer
 
         # IP-Adapter reference rectangle (blue)
-        if self._show_ref_rect and isinstance(layer, DiffusionLayer):
+        if self._show_ref_rect and isinstance(layer.tool, DiffusionTool):
             rect = None
             if (self._ref_rect_dragging
                     and self._ref_rect_start and self._ref_rect_end):
                 rect = self._ref_rect_start + self._ref_rect_end
-            elif layer.ip_adapter_rect:
-                rect = layer.ip_adapter_rect
+            elif layer.tool.ip_adapter_rect:
+                rect = layer.tool.ip_adapter_rect
             if rect:
                 ix0, iy0, ix1, iy1 = rect
                 wx0, wy0 = canvas.image_to_widget(ix0, iy0)
@@ -925,14 +927,15 @@ class EditorCanvas(Canvas):
                                            (0.2, 0.47, 1.0, 0.8), 2.0)
 
         # Manual patch rectangle (green)
-        if self._show_patch_rect and isinstance(
-                layer, (DiffusionLayer, InstructLayer)):
+        if (self._show_patch_rect and layer is not None
+                and layer.tool is not None
+                and hasattr(layer.tool, 'manual_patch_rect')):
             rect = None
             if (self._patch_rect_dragging
                     and self._patch_rect_start and self._patch_rect_end):
                 rect = self._patch_rect_start + self._patch_rect_end
-            elif layer.manual_patch_rect:
-                rect = layer.manual_patch_rect
+            elif layer.tool.manual_patch_rect:
+                rect = layer.tool.manual_patch_rect
             if rect:
                 ix0, iy0, ix1, iy1 = rect
                 wx0, wy0 = canvas.image_to_widget(ix0, iy0)
