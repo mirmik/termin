@@ -184,6 +184,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     # BackendWindow inits SDL and creates its own window + tgfx2 device
     # based on TERMIN_BACKEND. No manual SDL_Init / SDL_GL_CreateContext.
     main_window = BackendWindow("Termin Editor", 1280, 720)
+    main_window.maximize()
 
     # Process-global tgfx2 context owned by the window. Every renderer
     # (UIRenderer, FBOSurface, RenderEngine) wraps the same device+ctx

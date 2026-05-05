@@ -52,6 +52,7 @@ class Theme:
         self.font_size_small: float = 10.0
         self.border_radius: float = 3.0
         self.spacing: float = 5.0
+        self.content_padding: float = 8.0
 
     @classmethod
     def dark(cls) -> Theme:
@@ -122,7 +123,19 @@ class Theme:
             widget.border_radius = self.border_radius
 
         elif cls_name == "ListWidget":
-            widget.item_background = self._with_alpha(self.bg_input_focus, 0.6)
+            widget.background_color = self.bg_input
+            widget.item_background = self.bg_input
+            widget.selected_background = self.selected
+            widget.hover_background = self.hover_subtle
+            widget.text_color = self.text_primary
+            widget.subtitle_color = self.text_muted
+            widget.selected_text_color = self.text_primary
+            widget.font_size = self.font_size
+            widget.border_radius = self.border_radius + 1
+
+        elif cls_name == "FileGridWidget":
+            widget.background_color = self.bg_input
+            widget.tile_background = self._with_alpha(self.bg_input, 0.0)
             widget.selected_background = self.selected
             widget.hover_background = self.hover_subtle
             widget.text_color = self.text_primary
@@ -179,6 +192,9 @@ class Theme:
             widget.selected_text_color = self.text_primary
             widget.indicator_color = self.accent
             widget.border_radius = self.border_radius + 1
+
+        elif cls_name == "TabView":
+            widget.content_padding = self.content_padding
 
         elif cls_name == "SpinBox":
             widget.background_color = self.bg_input

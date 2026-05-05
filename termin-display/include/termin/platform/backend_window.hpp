@@ -75,6 +75,9 @@ public:
     bool should_close() const { return should_close_; }
     void set_should_close(bool v) { should_close_ = v; }
 
+    // Maximize the OS window (equivalent to SDL_MaximizeWindow).
+    void maximize();
+
     // Release OS-level resources (SDL window, GL context, Vulkan
     // surface + swapchain). Idempotent — safe to call more than once.
     // After close(), the instance is "zombie": present() / device() /

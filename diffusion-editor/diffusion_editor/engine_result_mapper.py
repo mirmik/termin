@@ -15,7 +15,7 @@ from .commands import ReplaceLayerMaskCommand, ApplyGeneratedResultCommand
 def map_segmentation_result(layer: Layer | None, seg_mask: np.ndarray
                             ) -> Tuple[ReplaceLayerMaskCommand | None, str]:
     """Build command/status for segmentation output."""
-    if layer is not None and isinstance(layer.tool, (DiffusionTool, LamaTool)):
+    if layer is not None:
         return ReplaceLayerMaskCommand(layer=layer, mask=seg_mask), "Background mask applied"
     return None, "Background mask applied"
 

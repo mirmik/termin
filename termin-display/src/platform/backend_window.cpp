@@ -26,6 +26,16 @@ extern "C" {
 
 namespace termin {
 
+namespace {
+
+void configure_sdl_window_hints() {
+#ifdef SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH
+    SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
+#endif
+}
+
+} // namespace
+
 // ---------------------------------------------------------------------------
 // Impl — private backend state. Kept out of the header so apps don't
 // need to know about SDL_GLContext / VkInstance / etc.
@@ -73,6 +83,7 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height)
     if (SDL_WasInit(SDL_INIT_VIDEO) == 0 && SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
         throw std::runtime_error(std::string("SDL_InitSubSystem failed: ") + SDL_GetError());
     }
+    configure_sdl_window_hints();
 
     impl_->backend = tgfx::default_backend_from_env();
 
@@ -181,6 +192,7 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height,
     impl_->backend = share_with.impl_->backend;
     impl_->device_ref = share_with.impl_->device_ref;
     impl_->shared_ctx_owner = &share_with;
+    configure_sdl_window_hints();
 
     if (impl_->backend == tgfx::BackendType::OpenGL) {
         // Secondary GL windows don't get their own GL context — they
@@ -238,6 +250,12 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height,
     else {
         SDL_DestroyWindow(window_);
         throw std::runtime_error("BackendWindow(secondary): unsupported backend");
+    }
+}
+
+void BackendWindow::maximize() {
+    if (window_) {
+        SDL_MaximizeWindow(window_);
     }
 }
 

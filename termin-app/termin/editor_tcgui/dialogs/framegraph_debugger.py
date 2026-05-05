@@ -17,6 +17,7 @@ from tcgui.widgets.button import Button
 from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.text_area import TextArea
+from tcgui.widgets.rich_text_view import RichTextView
 from tcgui.widgets.units import px, pct
 
 from termin.editor_core.framegraph_debugger_model import FramegraphDebuggerModel
@@ -65,7 +66,9 @@ class _FramegraphDebuggerHandle:
     def __init__(self, model: FramegraphDebuggerModel) -> None:
         self.model = model
         self.window_ui = None
+        self._native_close = None
         self.visible: bool = False
+        self._closed: bool = False
 
         self._updating: bool = False
 
@@ -85,7 +88,7 @@ class _FramegraphDebuggerHandle:
         self._hdr_stats_label: Label | None = None
         self._status_label: Label | None = None
 
-        self._pipeline_text: TextArea | None = None
+        self._pipeline_text: RichTextView | None = None
         self._pass_json: TextArea | None = None
 
         self._preview: CapturePreviewWidget | None = None
@@ -105,6 +108,14 @@ class _FramegraphDebuggerHandle:
         self.model.capture_updated.connect(self._on_capture_updated)
         self.model.preview_params_changed.connect(self._on_preview_params_changed)
         self.model.hdr_stats_changed.connect(self._on_hdr_stats_changed)
+
+    def unbind_signals(self) -> None:
+        self.model.lists_changed.disconnect(self._on_lists_changed)
+        self.model.selection_changed.disconnect(self._on_selection_changed)
+        self.model.info_changed.disconnect(self._on_info_changed)
+        self.model.capture_updated.disconnect(self._on_capture_updated)
+        self.model.preview_params_changed.disconnect(self._on_preview_params_changed)
+        self.model.hdr_stats_changed.disconnect(self._on_hdr_stats_changed)
 
     # ------------------------------------------------------------------
     # Model → widget updates
@@ -159,7 +170,7 @@ class _FramegraphDebuggerHandle:
         if self._writer_pass_label is not None:
             self._writer_pass_label.text = self.model.format_writer_pass()
         if self._pipeline_text is not None:
-            self._pipeline_text.text = self.model.format_pipeline_info()
+            self._pipeline_text.set_html(self.model.format_pipeline_info())
         if self._pass_json is not None:
             self._pass_json.text = self.model.format_pass_json()
         if self._timing_label is not None:
@@ -263,8 +274,29 @@ class _FramegraphDebuggerHandle:
         self.model.notify_frame_rendered()
 
     def close(self) -> None:
+        self._teardown(close_native=True)
+
+    def _on_window_destroyed(self) -> None:
+        self._teardown(close_native=False)
+
+    def _teardown(self, close_native: bool) -> None:
+        if self._closed:
+            return
+        self._closed = True
         self.model.disconnect()
+        self.unbind_signals()
         self.visible = False
+        window_ui = self.window_ui
+        native_close = self._native_close
+        self.window_ui = None
+        self._native_close = None
+        if window_ui is not None:
+            window_ui.on_empty = None
+            window_ui.close_window = native_close
+            window_ui.on_destroy = None
+            window_ui.root = None
+        if close_native and native_close is not None:
+            native_close()
 
 
 def show_framegraph_debugger(
@@ -449,8 +481,7 @@ def show_framegraph_debugger(
     pipeline_panel.stretch = True
     sched_title = Label(); sched_title.text = "Pipeline Schedule"
     pipeline_panel.add_child(sched_title)
-    pipeline_text = TextArea()
-    pipeline_text.read_only = True
+    pipeline_text = RichTextView()
     pipeline_text.word_wrap = False
     pipeline_text.stretch = True
     pipeline_text.placeholder = "No pipeline"
@@ -593,19 +624,14 @@ def show_framegraph_debugger(
         return None
 
     handle.window_ui = window_ui
+    handle._native_close = window_ui.close_window
     handle.visible = True
     window_ui.root = content
 
-    native_close = window_ui.close_window
-
-    def _on_close():
-        handle.close()
-        if native_close is not None:
-            native_close()
-
-    window_ui.close_window = _on_close
-    window_ui.on_empty = _on_close
-    close_btn.on_click = _on_close
+    window_ui.close_window = handle.close
+    window_ui.on_empty = handle.close
+    window_ui.on_destroy = handle._on_window_destroyed
+    close_btn.on_click = handle.close
 
     # Subscribe handle to model and do initial population.
     handle.bind_signals()

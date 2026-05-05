@@ -1,4 +1,11 @@
-"""PipelineAsset - Asset for render pipelines."""
+"""PipelineAsset - Asset for render pipelines.
+
+Stores pipeline graph source (nodes, connections) via TcScenePipelineTemplate (C).
+Compilation to RenderPipeline happens on demand via compile().
+File extension: .pipeline
+
+Supports both legacy format (passes) and graph format (nodes).
+"""
 
 from __future__ import annotations
 
@@ -6,7 +13,9 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from tcbase import log
 from termin.assets.data_asset import DataAsset
+from termin.render_framework import TcScenePipelineTemplate
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph import RenderPipeline
@@ -44,23 +53,111 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
         """
         super().__init__(data=data, name=name, source_path=source_path, uuid=uuid)
 
+        self._template: TcScenePipelineTemplate | None = None
+        self._graph_data: dict | None = None
+
     @property
     def pipeline(self) -> "RenderPipeline | None":
         """Get the render pipeline (lazy-loaded)."""
         return self.data
 
+    @property
+    def graph_data(self) -> dict | None:
+        """Raw graph data (nodes, connections) for graph-format pipelines."""
+        if not self._loaded:
+            self._load()
+        return self._graph_data
+
+    @property
+    def is_graph_format(self) -> bool:
+        """True if this pipeline uses the graph format (nodes, connections)."""
+        if not self._loaded:
+            self._load()
+        return self._graph_data is not None
+
     def _parse_content(self, content: str) -> "RenderPipeline | None":
-        """Parse JSON content into RenderPipeline."""
+        """Parse JSON content into RenderPipeline. Detects graph vs legacy format."""
+        data = json.loads(content)
+
+        if "nodes" in data and "passes" not in data:
+            return self._parse_graph(data)
+        else:
+            return self._parse_legacy(data)
+
+    def _parse_graph(self, data: dict) -> "RenderPipeline | None":
+        """Parse graph-format data and compile to RenderPipeline."""
+        self._graph_data = data
+
+        if "uuid" in data:
+            self._uuid = data["uuid"]
+            existing = TcScenePipelineTemplate.find_by_uuid(self._uuid)
+            if existing.is_valid:
+                self._template = existing
+            else:
+                self._template = TcScenePipelineTemplate.declare(self._uuid, self._name)
+
+        if self._template is None:
+            self._template = TcScenePipelineTemplate.declare(self.uuid, self._name)
+
+        self._template.set_graph_data(data)
+        self._template.name = self._name
+
+        try:
+            pipeline = self._template.compile()
+            if pipeline is not None:
+                pipeline.name = self._name
+            return pipeline
+        except Exception as e:
+            log.error(f"[PipelineAsset] Failed to compile graph: {e}")
+            return None
+
+    def _parse_legacy(self, data: dict) -> "RenderPipeline | None":
+        """Parse legacy pipeline format (passes list) directly."""
         from termin.assets.resources import ResourceManager
         from termin.visualization.render.framegraph.pipeline import RenderPipeline
 
-        data = json.loads(content)
+        self._graph_data = None
+        self._template = None
+
         rm = ResourceManager.instance()
         pipeline = RenderPipeline.deserialize(data, rm)
-        # Sync pipeline name with asset name (file name takes priority)
         if pipeline is not None:
             pipeline.name = self._name
         return pipeline
+
+    def save_graph_to_file(self, path: Path | str | None = None) -> bool:
+        """Save graph data to .pipeline file.
+
+        Args:
+            path: Target path. If None, uses source_path.
+
+        Returns:
+            True on success, False on failure.
+        """
+        target = Path(path) if path else self._source_path
+        if target is None:
+            log.error("[PipelineAsset] No path specified for save")
+            return False
+
+        if self._graph_data is None:
+            log.error("[PipelineAsset] No graph data to save")
+            return False
+
+        try:
+            save_data = dict(self._graph_data)
+            save_data["uuid"] = self.uuid
+
+            with open(target, "w", encoding="utf-8") as f:
+                json.dump(save_data, f, indent=2, ensure_ascii=False)
+
+            self._source_path = target
+            self.mark_just_saved()
+
+            return True
+
+        except Exception as e:
+            log.error(f"[PipelineAsset] Failed to save: {e}")
+            return False
 
     @classmethod
     def from_pipeline(

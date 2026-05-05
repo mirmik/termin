@@ -526,7 +526,7 @@ class DiffusionPanel(ScrollArea):
         self._resize_cb.checked = tool.resize_to_model_resolution
 
         model_name = os.path.basename(tool.model_path) if tool.model_path else "?"
-        mask_status = "has mask" if tool.has_mask() else "no mask"
+        mask_status = "has mask" if layer.has_mask() else "no mask"
         if tool.ip_adapter_rect:
             r = tool.ip_adapter_rect
             ip_info = f"rect ({r[0]},{r[1]})-({r[2]},{r[3]})"

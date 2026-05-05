@@ -52,10 +52,9 @@ class BackendWindowManager(_BaseManager):
         window_ui = UI(graphics=self._graphics)
 
         def _on_destroy(entry: BackendWindowEntry) -> None:
-            # No UI teardown needed — UI has no native resources
-            # beyond the shared Tgfx2Context. The BackendWindow dtor
-            # runs after this, and that releases the OS handles.
-            pass
+            callback = getattr(window_ui, "on_destroy", None)
+            if callback is not None:
+                callback()
 
         entry = super().create_window(
             title, width, height,

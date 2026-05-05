@@ -43,6 +43,7 @@ class InspectorControllerTcgui:
         on_display_changed: Optional[Callable] = None,
         on_viewport_changed: Optional[Callable] = None,
         on_pipeline_changed: Optional[Callable] = None,
+        on_edit_pipeline: Optional[Callable[[str], None]] = None,
         dialog_service=None,
     ) -> None:
         self._resource_manager = resource_manager
@@ -64,7 +65,7 @@ class InspectorControllerTcgui:
         self._material_inspector = MaterialInspectorTcgui(resource_manager)
         self._display_inspector = DisplayInspectorTcgui()
         self._viewport_inspector = ViewportInspectorTcgui(resource_manager)
-        self._pipeline_inspector = PipelineInspectorTcgui(resource_manager, dialog_service=dialog_service)
+        self._pipeline_inspector = PipelineInspectorTcgui(resource_manager, dialog_service=dialog_service, on_edit_callback=on_edit_pipeline)
         self._texture_inspector = TextureInspectorTcgui(resource_manager)
         self._mesh_inspector = MeshInspectorTcgui(resource_manager)
         self._glb_inspector = GLBInspectorTcgui(resource_manager)
@@ -106,6 +107,10 @@ class InspectorControllerTcgui:
         return self._entity_inspector
 
     @property
+    def render_target_inspector(self) -> RenderTargetInspectorTcgui:
+        return self._render_target_inspector
+
+    @property
     def model(self) -> InspectorModel:
         return self._model
 
@@ -117,6 +122,11 @@ class InspectorControllerTcgui:
         self._model.set_scene(scene)
         self._entity_inspector.set_scene(scene)
         self._viewport_inspector.set_scene(scene)
+        self._render_target_inspector.set_scene(scene)
+
+    def set_render_target_scene_getter(self, getter: Callable[[], list]) -> None:
+        self._render_target_inspector.set_scene_getter(getter)
+        self._viewport_inspector.set_scene_getter(getter)
 
     def show_entity_inspector(self, entity=None) -> None:
         self._model.show_entity(entity)
@@ -224,7 +234,10 @@ class InspectorControllerTcgui:
             )
 
         elif kind is InspectorKind.PIPELINE:
-            self._pipeline_inspector.set_pipeline(model.target, f"File: {file_path or ''}")
+            if file_path is not None:
+                self._pipeline_inspector.load_pipeline_file(file_path)
+            else:
+                self._pipeline_inspector.set_pipeline(model.target, f"Pipeline: {model.label}")
 
         elif kind is InspectorKind.TEXTURE:
             if file_path is not None:
@@ -249,7 +262,7 @@ class InspectorControllerTcgui:
                 self._glb_inspector.set_glb_by_path(file_path)
 
         elif kind is InspectorKind.RENDER_TARGET:
-            self._render_target_inspector.set_render_target(model.target)
+            self._render_target_inspector.set_render_target(model.target, model.scene)
 
         self._show_panel(panel)
 

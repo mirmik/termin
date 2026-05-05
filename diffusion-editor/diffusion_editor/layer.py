@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 
 from .tiles import DenseTileGrid
+from .mask import Mask
 from .tool import (
     Tool, DiffusionTool, LamaTool, InstructTool, tool_from_dict,
     _save_array_to_zip, _load_array_from_zip,
@@ -29,6 +30,7 @@ class Layer:
             arr = np.zeros((height, width, 4), dtype=np.uint8)
         self.content = DenseTileGrid.from_array(arr, tile_size=tile_size)
         self.image = self.content.array
+        self.mask = Mask.zeros(height, width)
         self.tool: Tool | None = None
 
     def add_child(self, child: 'Layer', index: int | None = None):
@@ -60,6 +62,18 @@ class Layer:
     def height(self):
         return self.content.height
 
+    def clear_mask(self):
+        self.mask.clear()
+
+    def has_mask(self) -> bool:
+        return not self.mask.is_empty
+
+    def mask_bbox(self) -> tuple[int, int, int, int] | None:
+        return self.mask.bbox()
+
+    def mask_center(self) -> tuple[int, int] | None:
+        return self.mask.center()
+
     def to_dict(self, path: str) -> dict:
         file_key = path.replace("/", "_")
         d = {
@@ -71,6 +85,8 @@ class Layer:
             "image_file": f"layers/{file_key}_image.npy",
             "children": [],
         }
+        if not self.mask.is_empty:
+            d["mask_file"] = f"layers/{file_key}_mask.npy"
         if self.tool is not None:
             d["tool"] = self.tool.to_dict(path, file_key)
         for i, child in enumerate(self.children):
@@ -80,13 +96,18 @@ class Layer:
     def save_images_to_zip(self, zf: zipfile.ZipFile, path: str):
         file_key = path.replace("/", "_")
         _save_array_to_zip(zf, f"layers/{file_key}_image.npy", self.image)
+        if not self.mask.is_empty:
+            _save_array_to_zip(zf, f"layers/{file_key}_mask.npy",
+                               self.mask.data.astype(np.float32))
         if self.tool is not None:
             self.tool.save_assets_to_zip(zf, file_key)
         for i, child in enumerate(self.children):
             child.save_images_to_zip(zf, f"{path}/{i}")
 
     @classmethod
-    def from_dict(cls, d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> "Layer":
+    def _from_dict_base(cls, d: dict, zf: zipfile.ZipFile,
+                        tile_size: int = 256) -> 'Layer':
+        """Shared base deserialization for all layer types."""
         arr = _load_array_from_zip(zf, d["image_file"], mode="RGBA")
         layer = cls.__new__(cls)
         layer.name = d["name"]
@@ -96,14 +117,34 @@ class Layer:
         layer.image = layer.content.array
         layer.children = []
         layer.parent = None
+
+        mask_file = d.get("mask_file")
+        if mask_file is None and isinstance(d.get("tool"), dict):
+            # Projects saved by the first tool-based format kept mask_file
+            # inside the tool dict. Migrate it to the layer-owned mask model.
+            mask_file = d["tool"].get("mask_file")
+        if mask_file and mask_file in zf.namelist():
+            mask_arr = _load_array_from_zip(zf, mask_file, mode="L")
+            if mask_arr.dtype == np.uint8:
+                layer.mask = Mask.from_uint8(mask_arr)
+            else:
+                layer.mask = Mask(mask_arr)
+        else:
+            layer.mask = Mask.zeros(layer.height, layer.width)
+
         layer.tool = None
         if "tool" in d:
             layer.tool = tool_from_dict(d["tool"], zf)
+
         for child_dict in d.get("children", []):
             child = _layer_from_dict(child_dict, zf, tile_size=tile_size)
             child.parent = layer
             layer.children.append(child)
         return layer
+
+    @classmethod
+    def from_dict(cls, d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> "Layer":
+        return cls._from_dict_base(d, zf, tile_size=tile_size)
 
 
 def _layer_from_dict(d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> Layer:
@@ -117,8 +158,8 @@ def _layer_from_dict(d: dict, zf: zipfile.ZipFile, tile_size: int = 256) -> Laye
     if layer_type in ("diffusion", "lama", "instruct"):
         # Legacy format: tool data is inline in the layer dict.
         # Load as a plain Layer, then attach the tool from the same dict.
-        layer = Layer.from_dict(d, zf, tile_size=tile_size)
+        layer = Layer._from_dict_base(d, zf, tile_size=tile_size)
         layer.tool = tool_from_dict(d, zf)
         return layer
 
-    return Layer.from_dict(d, zf, tile_size=tile_size)
+    return Layer._from_dict_base(d, zf, tile_size=tile_size)

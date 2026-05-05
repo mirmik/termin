@@ -284,7 +284,7 @@ class InstructPanel(ScrollArea):
         self._steps_slider.value = tool.steps
         self._seed_edit.text = str(tool.seed)
 
-        mask_status = "has mask" if tool.has_mask() else "no mask"
+        mask_status = "has mask" if layer.has_mask() else "no mask"
         if tool.manual_patch_rect:
             r = tool.manual_patch_rect
             pw, ph = r[2] - r[0], r[3] - r[1]

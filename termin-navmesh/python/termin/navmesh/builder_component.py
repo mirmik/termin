@@ -9,7 +9,6 @@ Uses SceneCache for persistent storage and NavMeshRegistry for runtime access.
 
 from __future__ import annotations
 
-from enum import IntEnum
 from typing import TYPE_CHECKING, Optional, List, Set
 
 import numpy as np
@@ -19,6 +18,7 @@ from termin.visualization.core.material import Material
 from termin.mesh import TcMesh
 from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
+from termin.voxels import VoxelizeSource
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.editor.inspect_field import InspectField
 from termin.navmesh.settings import NavigationSettingsManager
@@ -30,12 +30,6 @@ if TYPE_CHECKING:
     from termin.voxels.grid import VoxelGrid
     from termin.navmesh.types import NavMesh
     from termin.navmesh.polygon_builder import PolygonBuilder
-
-
-class VoxelizeSource(IntEnum):
-    """Source meshes for voxelization."""
-    CURRENT_MESH = 0      # Only current entity mesh
-    ALL_DESCENDANTS = 1   # All descendant meshes (including current entity)
 
 
 def _build_navmesh_action(component: "NavMeshBuilderComponent") -> None:

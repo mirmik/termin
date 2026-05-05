@@ -37,8 +37,13 @@ def extract_patch(composite: np.ndarray, center_x: int, center_y: int,
 
 def extract_mask_patch(mask: np.ndarray, patch_x: int, patch_y: int,
                        patch_w: int, patch_h: int) -> Image.Image:
-    """Extract the mask region corresponding to a patch. Returns PIL Image 'L'."""
+    """Extract the mask region corresponding to a patch. Returns PIL Image 'L'.
+
+    Accepts float32 [0..1] or uint8 [0..255].
+    """
     mask_crop = mask[patch_y:patch_y + patch_h, patch_x:patch_x + patch_w]
+    if mask_crop.dtype == np.float32 or mask_crop.dtype == np.float64:
+        mask_crop = (mask_crop * 255).astype(np.uint8)
     return Image.fromarray(mask_crop, "L")
 
 
@@ -71,6 +76,8 @@ def paste_result(layer_image: np.ndarray, result_pil: Image.Image,
 
     if mask is not None:
         mask_slice = mask[paste_y:ey, paste_x:ex]
+        if mask_slice.dtype == np.float32 or mask_slice.dtype == np.float64:
+            mask_slice = (mask_slice * 255).astype(np.uint8)
         result_slice[:, :, 3] = mask_slice
     else:
         result_slice[:, :, 3] = 255

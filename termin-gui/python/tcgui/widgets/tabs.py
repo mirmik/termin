@@ -119,7 +119,9 @@ class TabView(Widget):
         super().__init__()
         self.tab_bar: TabBar = TabBar()
         self.tab_position: str = "top"  # top | bottom
+        self.content_padding: float = _t.content_padding
         self.pages: list[Widget] = []
+        self.on_changed: Callable[[int], None] | None = None
 
         # Keep tab_bar in children so parent/_ui propagation works.
         self.add_child(self.tab_bar)
@@ -135,8 +137,9 @@ class TabView(Widget):
 
     @selected_index.setter
     def selected_index(self, value: int):
-        if 0 <= value < len(self.pages):
+        if 0 <= value < len(self.pages) and value != self.tab_bar.selected_index:
             self.tab_bar.selected_index = value
+            self._on_tab_change(value)
 
     def add_tab(self, title: str, content: Widget):
         """Add a tab with title and content widget."""
@@ -185,11 +188,13 @@ class TabView(Widget):
         self.tab_bar.layout(x, bar_y, width, bar_h, viewport_w, viewport_h)
 
         # Layout all pages but only the active one will be rendered
+        p = self.content_padding
         for i, page in enumerate(self.pages):
             page.visible = (i == self.tab_bar.selected_index)
             if page.visible:
                 cw, ch = page.compute_size(viewport_w, viewport_h)
-                page.layout(x, content_y, width, content_h, viewport_w, viewport_h)
+                page.layout(x + p, content_y + p, width - p * 2, content_h - p * 2,
+                            viewport_w, viewport_h)
 
     def render(self, renderer: 'UIRenderer'):
         from tcgui.widgets.theme import current_theme as _t
@@ -224,6 +229,7 @@ class TabView(Widget):
 
     def _on_tab_change(self, index: int):
         """Internal callback when tab changes — re-layout pages."""
+        p = self.content_padding
         for i, page in enumerate(self.pages):
             page.visible = (i == index)
             if page.visible:
@@ -236,6 +242,8 @@ class TabView(Widget):
                     content_h = self.height - bar_h
                 cw, ch = page.compute_size(self._viewport_w, self._viewport_h)
                 page.layout(
-                    self.x, content_y, self.width, content_h,
+                    self.x + p, content_y + p, self.width - p * 2, content_h - p * 2,
                     self._viewport_w, self._viewport_h,
                 )
+        if self.on_changed is not None:
+            self.on_changed(index)

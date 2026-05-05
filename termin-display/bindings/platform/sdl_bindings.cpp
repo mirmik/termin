@@ -188,6 +188,8 @@ void bind_sdl(nb::module_& m) {
             "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
         .def("should_close", &BackendWindow::should_close)
         .def("set_should_close", &BackendWindow::set_should_close, nb::arg("value"))
+        .def("maximize", &BackendWindow::maximize,
+             "Maximize the OS window via SDL_MaximizeWindow.")
         .def("close", &BackendWindow::close,
              "Release OS-level resources (SDL window, GL context, "
              "Vulkan surface+swapchain). Idempotent.")
