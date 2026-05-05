@@ -1096,9 +1096,9 @@ class EditorCanvas(Canvas):
         self._last_paint_pos = None
 
     def _pick_color(self, ix: int, iy: int):
-        composite = self.get_composite()
-        if composite is None:
+        if self._layer_stack.width == 0 or self._layer_stack.height == 0:
             return
+        composite = self._layer_stack.composite()
         h, w = composite.shape[:2]
         if 0 <= ix < w and 0 <= iy < h:
             r, g, b, a = composite[iy, ix]

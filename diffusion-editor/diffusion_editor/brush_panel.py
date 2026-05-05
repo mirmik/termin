@@ -50,19 +50,26 @@ class BrushPanel(GroupBox):
         mask_row.add_child(self._mask_eraser_btn)
         self.add_child(mask_row)
 
+        # Move tool row
+        move_row = HStack()
+        move_row.spacing = 4
+        self._move_btn = self._make_tool_button("Move", BrushToolMode.MOVE)
+        self._move_btn.preferred_width = px(218)
+        move_row.add_child(self._move_btn)
+        self.add_child(move_row)
+
         # Color row
-        row = HStack()
-        row.spacing = 8
+        self._color_row = HStack()
+        self._color_row.spacing = 8
 
         self._color_btn = Button()
         self._color_btn.text = "Color"
         self._color_btn.preferred_width = px(60)
         self._color_btn.on_click = self._pick_color
         self._update_color_btn()
-        row.add_child(self._color_btn)
+        self._color_row.add_child(self._color_btn)
 
-        self.add_child(row)
-        self._sync_tool_buttons()
+        self.add_child(self._color_row)
 
         # Size slider
         self._size_slider = SliderEdit()
@@ -97,6 +104,8 @@ class BrushPanel(GroupBox):
         self._flow_slider.on_changed = self._on_flow_changed
         self.add_child(self._flow_slider)
 
+        self._sync_tool_buttons()
+
     def _update_color_btn(self):
         r, g, b, _ = self._brush.color
         self._color_btn.background_color = (r / 255, g / 255, b / 255, 1.0)
@@ -127,6 +136,14 @@ class BrushPanel(GroupBox):
         self._smudge_btn.checked = self._tool_mode == BrushToolMode.SMUDGE
         self._mask_btn.checked = self._tool_mode == BrushToolMode.MASK
         self._mask_eraser_btn.checked = self._tool_mode == BrushToolMode.MASK_ERASER
+        self._move_btn.checked = self._tool_mode == BrushToolMode.MOVE
+        # Hide brush-only controls when in Move mode
+        is_move = self._tool_mode == BrushToolMode.MOVE
+        self._size_slider.visible = not is_move
+        self._hard_slider.visible = not is_move
+        self._flow_slider.visible = not is_move
+        self._color_row.visible = not is_move
+        self.title = "Move" if is_move else "Brush"
 
     def _set_tool_mode(self, mode: BrushToolMode):
         self._tool_mode = mode

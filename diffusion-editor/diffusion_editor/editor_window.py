@@ -71,6 +71,7 @@ _BYTES_PER_GIB = 1024 * 1024 * 1024
 _DEFAULT_HISTORY_MEMORY_LIMIT_BYTES = 5 * _BYTES_PER_GIB
 _MIN_HISTORY_MEMORY_LIMIT_GIB = 0.25
 _MAX_HISTORY_MEMORY_LIMIT_GIB = 256.0
+_EXPORT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 
 
 @dataclass
@@ -998,24 +999,52 @@ class EditorWindow:
             title="Save Project", directory=self._last_dir,
             filter_str="Diffusion Editor Project | *.deproj")
 
+    def _normalize_export_image_path(self, path: str) -> tuple[str | None, str | None]:
+        _root, ext = os.path.splitext(path)
+        if not ext:
+            return path + ".png", None
+        ext = ext.lower()
+        if ext not in _EXPORT_IMAGE_EXTENSIONS:
+            known = ", ".join(sorted(_EXPORT_IMAGE_EXTENSIONS))
+            return None, f"Unknown export extension '{ext}'. Use {known}."
+        return path, None
+
+    def export_image_path(self, path: str) -> bool:
+        normalized, error = self._normalize_export_image_path(path)
+        if error is not None:
+            self._statusbar.text = f"Export error: {error}"
+            return False
+
+        path = normalized
+        arr = np.ascontiguousarray(self._layer_stack.composite())
+        if arr is None or arr.size == 0:
+            self._statusbar.text = "Export error: nothing to export"
+            return False
+
+        img = Image.fromarray(arr, "RGBA")
+        if path.lower().endswith((".jpg", ".jpeg")):
+            img = img.convert("RGB")
+        try:
+            img.save(path)
+            self._statusbar.text = f"Exported: {os.path.basename(path)}"
+            return True
+        except Exception as e:
+            log.exception(f"Export image failed: {path}")
+            self._statusbar.text = f"Export error: {e}"
+            return False
+
     def export_image(self):
         def _on_result(path):
             if not path:
                 return
+            normalized, error = self._normalize_export_image_path(path)
+            if error is not None:
+                self._statusbar.text = f"Export error: {error}"
+                return
+            path = normalized
             self._last_dir = os.path.dirname(path)
             self._settings.set("last_dir", self._last_dir)
-            arr = self._canvas.get_composite()
-            if arr is None:
-                return
-            img = Image.fromarray(arr, "RGBA")
-            if path.lower().endswith((".jpg", ".jpeg")):
-                img = img.convert("RGB")
-            try:
-                img.save(path)
-                self._statusbar.text = f"Exported: {os.path.basename(path)}"
-            except Exception as e:
-                log.exception(f"Export image failed: {path}")
-                self._statusbar.text = f"Export error: {e}"
+            self.export_image_path(path)
         save_file_dialog(
             self.ui, _on_result,
             title="Export Image", directory=self._last_dir,

@@ -181,6 +181,54 @@ class MaskEraserTool(CanvasStrokeTool):
         canvas._preview_mask_erase_region(layer, dirty)
 
 
+class MoveTool(CanvasStrokeTool):
+    mode = BrushToolMode.MOVE
+    label = "Move Layer"
+    target = "image"
+
+    def begin(self, canvas, layer, x: int, y: int):
+        if layer is None:
+            return None
+        self._start_x = x
+        self._start_y = y
+        self._original_image = layer.image.copy()
+        self._ch, self._cw = layer.image.shape[:2]
+        return (0, 0, self._cw, self._ch)
+
+    def move(self, canvas, layer, last_pos, x: int, y: int):
+        if layer is None:
+            return None
+        dx = x - self._start_x
+        dy = y - self._start_y
+        oh, ow = self._original_image.shape[:2]
+        ch, cw = self._ch, self._cw
+        layer.image[:] = 0
+        src_x0 = max(0, -dx)
+        src_y0 = max(0, -dy)
+        src_x1 = min(ow, cw - dx)
+        src_y1 = min(oh, ch - dy)
+        dst_x0 = max(0, dx)
+        dst_y0 = max(0, dy)
+        dst_x1 = dst_x0 + (src_x1 - src_x0)
+        dst_y1 = dst_y0 + (src_y1 - src_y0)
+        if src_x0 < src_x1 and src_y0 < src_y1:
+            layer.image[dst_y0:dst_y1, dst_x0:dst_x1] = \
+                self._original_image[src_y0:src_y1, src_x0:src_x1]
+        canvas._layer_stack.mark_layer_dirty(layer)
+        if canvas._gpu_compositing and canvas._gpu_compositor:
+            canvas._gpu_compositor.mark_dirty(layer)
+            canvas._gpu_compositor.composite()
+            canvas._composite_stale = True
+        else:
+            canvas._composite = np.ascontiguousarray(
+                canvas._layer_stack.composite())
+            canvas.set_image(canvas._composite)
+        return (0, 0, cw, ch)
+
+    def end(self, canvas, layer):
+        pass
+
+
 def create_canvas_tools() -> dict[BrushToolMode, CanvasStrokeTool]:
     return {
         BrushToolMode.PAINT: PaintTool(),
@@ -188,4 +236,5 @@ def create_canvas_tools() -> dict[BrushToolMode, CanvasStrokeTool]:
         BrushToolMode.SMUDGE: SmudgeTool(),
         BrushToolMode.MASK: MaskPaintTool(),
         BrushToolMode.MASK_ERASER: MaskEraserTool(),
+        BrushToolMode.MOVE: MoveTool(),
     }

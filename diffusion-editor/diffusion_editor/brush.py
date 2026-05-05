@@ -9,6 +9,7 @@ class BrushToolMode(str, Enum):
     SMUDGE = "smudge"
     MASK = "mask"
     MASK_ERASER = "mask_eraser"
+    MOVE = "move"
 
 
 class Brush:
