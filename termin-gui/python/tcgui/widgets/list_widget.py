@@ -25,8 +25,8 @@ class ListWidget(Widget):
         self.item_padding: float = 10
 
         # Colors
-        _bif = _t.bg_input_focus
-        self.item_background: tuple[float, float, float, float] = (_bif[0], _bif[1], _bif[2], 0.6)
+        self.background_color: tuple[float, float, float, float] = _t.bg_input
+        self.item_background: tuple[float, float, float, float] = _t.bg_input
         self.selected_background: tuple[float, float, float, float] = _t.selected
         self.hover_background: tuple[float, float, float, float] = _t.hover_subtle
         self.text_color: tuple[float, float, float, float] = _t.text_primary
@@ -69,6 +69,12 @@ class ListWidget(Widget):
             return self._items[self.selected_index]
         return None
 
+    def _content_height(self) -> float:
+        n = len(self._items)
+        if n == 0:
+            return self.item_height
+        return n * self.item_height + max(0, n - 1) * self.item_spacing
+
     def _index_at(self, y: float) -> int:
         rel_y = y - self.y + self._scroll_offset
         stride = self.item_height + self.item_spacing
@@ -87,13 +93,18 @@ class ListWidget(Widget):
                 self.preferred_height.to_pixels(viewport_h),
             )
         w = self.preferred_width.to_pixels(viewport_w) if self.preferred_width else 400
-        n = len(self._items)
-        h = n * self.item_height + max(0, n - 1) * self.item_spacing if n else self.item_height
+        h = self._content_height()
         if self.preferred_height:
             h = self.preferred_height.to_pixels(viewport_h)
         return (w, h)
 
     def render(self, renderer: 'UIRenderer'):
+        # Full-widget background
+        renderer.draw_rect(
+            self.x, self.y, self.width, self.height,
+            self.background_color, self.border_radius,
+        )
+
         if not self._items:
             renderer.draw_text(
                 self.x + self.item_padding,
@@ -173,8 +184,7 @@ class ListWidget(Widget):
         n = len(self._items)
         if n == 0:
             return False
-        stride = self.item_height + self.item_spacing
-        total_content = n * stride
+        total_content = self._content_height()
         max_scroll = max(0.0, total_content - self.height)
         if max_scroll <= 0:
             return False

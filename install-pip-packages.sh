@@ -114,17 +114,18 @@ fi
 # _colliders_native and _components_collision_native). Those are merged
 # into the parent pip package rather than shipped separately to avoid
 # filesystem overlap at install time.
-# Main termin is installed BEFORE subpackages so that its uninstall step
-# does not remove __init__.py files that subpackages later provide.
+# Packages are ordered by dependency: each package is listed after its
+# install_requires. termin-app owns the termin namespace root and comes
+# near the end, after all subpackages that extend termin.*.
 PACKAGES=(
     termin-build-tools
     termin-nanobind-sdk
-    termin-app
     termin-base
     termin-mesh
     termin-graphics
     termin-modules
     termin-inspect
+    termin-components/termin-components-kinematic
     termin-scene
     termin-input
     termin-collision
@@ -139,9 +140,9 @@ PACKAGES=(
     termin-animation
     termin-components/termin-components-render
     termin-components/termin-components-mesh
-    termin-components/termin-components-kinematic
     termin-gui
     termin-nodegraph
+    termin-app
     tcplot
 )
 

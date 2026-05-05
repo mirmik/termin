@@ -117,6 +117,7 @@ jobs:
 
       - name: Run Python tests
         env:
+          TERMIN_SDK: ${{ github.workspace }}/sdk
           LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
         run: |
           python -c "import termin_modules; env = termin_modules.ModuleEnvironment(); runtime = termin_modules.ModuleRuntime(); runtime.set_environment(env); runtime.register_cpp_backend(termin_modules.CppModuleBackend()); runtime.register_python_backend(termin_modules.PythonModuleBackend())"
@@ -158,15 +159,16 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
         run: |
-          cd termin
+          cd termin-app
           SDK_PREFIX=${{ github.workspace }}/sdk CMAKE_PREFIX_PATH=${{ github.workspace }}/sdk ./build.sh
 
       - name: Run tests
         env:
+          TERMIN_SDK: ${{ github.workspace }}/sdk
           LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
-          PYTHONPATH: ${{ github.workspace }}/sdk/lib/python:${{ github.workspace }}/termin/install/lib/python
+          PYTHONPATH: ${{ github.workspace }}/sdk/lib/python:${{ github.workspace }}/termin-app/install/lib/python
         run: |
-          pytest termin/tests/ -v
+          pytest termin-app/tests/ -v
 
   # ── 6. Build termin-csharp ──────────────────────────────────────
   test-csharp:
@@ -206,7 +208,7 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
         run: |
-          cd termin
+          cd termin-app
           SDK_PREFIX=${{ github.workspace }}/sdk CMAKE_PREFIX_PATH=${{ github.workspace }}/sdk ./build.sh
 
       - name: Build termin-csharp
@@ -248,6 +250,7 @@ jobs:
 
       - name: Run tests
         env:
+          TERMIN_SDK: ${{ github.workspace }}/sdk
           LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
         run: |
           PYTHONPATH=$GITHUB_WORKSPACE/diffusion-editor pytest diffusion-editor/tests/ -v

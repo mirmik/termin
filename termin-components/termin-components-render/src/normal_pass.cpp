@@ -7,7 +7,6 @@
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
-#include <tgfx2/opengl/opengl_render_device.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
 
 #include <tgfx/resources/tc_shader_registry.h>
@@ -162,13 +161,8 @@ void NormalPass::execute_with_data_tgfx2(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&ctx.ctx2->device());
-    if (!gl_dev) {
-        tc::Log::error("NormalPass/tgfx2: device is not OpenGLRenderDevice");
-        return;
-    }
-
-    ensure_tgfx2_resources(ctx.ctx2->device());
+    auto& device = ctx.ctx2->device();
+    ensure_tgfx2_resources(device);
 
     // Use the UBO-based engine shader as base_shader for skinning override
     // (see DepthPass / ShadowPass for rationale).
@@ -191,7 +185,7 @@ void NormalPass::execute_with_data_tgfx2(
     tgfx::ShaderHandle normal_vs2, normal_fs2;
     {
         tc_shader* raw = tc_shader_get(normal_shader_handle_);
-        if (!raw || !tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &normal_vs2, &normal_fs2)) {
+        if (!raw || !tc_shader_ensure_tgfx2(raw, &device, &normal_vs2, &normal_fs2)) {
             tc::Log::error("NormalPass: tc_shader_ensure_tgfx2 failed for engine normal shader");
             return;
         }
@@ -225,7 +219,7 @@ void NormalPass::execute_with_data_tgfx2(
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, normal_shader_handle_);
 
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(*gl_dev, mesh);
+        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
         if (bind.index_count == 0) continue;
 
         NormalPushStd140 push{};
@@ -233,7 +227,8 @@ void NormalPass::execute_with_data_tgfx2(
         ctx.ctx2->set_push_constants(&push, sizeof(push));
 
         if (override_is_base) {
-            ctx.ctx2->set_vertex_layout(bind.layout);
+            ctx.ctx2->set_vertex_layout(
+                filter_vertex_layout_to_locations(bind.layout, {0, 1}));
             ctx.ctx2->set_topology(bind.topology);
             ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
                            bind.index_count, bind.index_type);
@@ -242,18 +237,17 @@ void NormalPass::execute_with_data_tgfx2(
             // SkinnedMeshRenderer to upload BoneBlock UBO.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+                release_mesh_binding(device, bind);
                 continue;
             }
             tgfx::ShaderHandle vs2, fs2;
-            if (!tc_shader_ensure_tgfx2(raw, &ctx.ctx2->device(), &vs2, &fs2)) {
-                gl_dev->destroy(bind.vertex_buffer);
-                gl_dev->destroy(bind.index_buffer);
+            if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
+                release_mesh_binding(device, bind);
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
-            ctx.ctx2->set_vertex_layout(bind.layout);
+            ctx.ctx2->set_vertex_layout(
+                filter_vertex_layout_to_locations(bind.layout, {0, 1, 6, 7}));
             ctx.ctx2->set_topology(bind.topology);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
@@ -264,8 +258,7 @@ void NormalPass::execute_with_data_tgfx2(
             ctx.ctx2->bind_shader(normal_vs2, normal_fs2);
         }
 
-        gl_dev->destroy(bind.vertex_buffer);
-        gl_dev->destroy(bind.index_buffer);
+        release_mesh_binding(device, bind);
     }
 
     ctx.ctx2->end_pass();

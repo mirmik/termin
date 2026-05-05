@@ -26,7 +26,7 @@ from termin.editor_tcgui.inspect_field_panel import InspectFieldPanel
 class PipelineInspectorTcgui(VStack):
     """Specialized tcgui inspector for RenderPipeline."""
 
-    def __init__(self, resource_manager, dialog_service=None) -> None:
+    def __init__(self, resource_manager, dialog_service=None, on_edit_callback: Callable[[str], None] | None = None) -> None:
         super().__init__()
         self.spacing = 4
 
@@ -38,6 +38,7 @@ class PipelineInspectorTcgui(VStack):
         self._selected_spec_index = -1
         self._updating = False
         self._updating_spec = False
+        self._on_edit_callback = on_edit_callback
 
         self.on_changed: Optional[Callable[[], None]] = None
 
@@ -56,9 +57,27 @@ class PipelineInspectorTcgui(VStack):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
+        header = HStack()
+        header.spacing = 6
+
         title = Label()
         title.text = "Pipeline Inspector"
-        self.add_child(title)
+        title.stretch = True
+        header.add_child(title)
+
+        self._edit_button = Button()
+        self._edit_button.text = "Edit"
+        self._edit_button.preferred_width = px(56)
+        self._edit_button.on_click = self._on_edit_clicked
+        header.add_child(self._edit_button)
+
+        self._save_button = Button()
+        self._save_button.text = "Save"
+        self._save_button.preferred_width = px(64)
+        self._save_button.on_click = self._on_save_clicked
+        header.add_child(self._save_button)
+
+        self.add_child(header)
 
         self._subtitle = Label()
         self._subtitle.color = (0.62, 0.66, 0.74, 1.0)
@@ -314,10 +333,24 @@ class PipelineInspectorTcgui(VStack):
 
     def load_pipeline_file(self, file_path: str) -> None:
         path = Path(file_path)
+        if not path.exists():
+            return
+
         name = path.stem
-        asset = self._rm.get_pipeline_asset(name)
-        pipeline = asset.data if asset is not None else None
+        pipeline = self._rm.get_pipeline(name)
+
+        if pipeline is None:
+            from termin.assets.pipeline_asset import PipelineAsset
+
+            asset = PipelineAsset(name=name, source_path=path)
+            pipeline = asset.pipeline
+
+        if pipeline is None:
+            self.set_pipeline(None, f"File: {file_path}", file_path)
+            return
+
         self.set_pipeline(pipeline, f"File: {file_path}", file_path)
+        self._emit_changed()
 
     def save_pipeline_file(self, file_path: str | None = None) -> bool:
         """Save the currently-edited pipeline to ``file_path``; falls back to
@@ -335,34 +368,54 @@ class PipelineInspectorTcgui(VStack):
             return False
         return self._ops.save_to_file(target)
 
+    def _on_save_clicked(self) -> None:
+        self.save_pipeline_file()
+
+    def _on_edit_clicked(self) -> None:
+        if self._source_path is None or self._ui is None:
+            return
+        if self._on_edit_callback is not None:
+            self._on_edit_callback(self._source_path)
+
     # ------------------------------------------------------------------
     # Rebuild
     # ------------------------------------------------------------------
 
     def _set_visible_state(self, has_pipeline: bool) -> None:
+        # Read-only when a file is loaded (editing goes through graph editor).
+        is_file = has_pipeline and self._source_path is not None
+
         self._passes_list.visible = has_pipeline
-        self._pass_add.visible = has_pipeline
-        self._pass_remove.visible = has_pipeline
-        self._pass_up.visible = has_pipeline
-        self._pass_down.visible = has_pipeline
+        self._pass_add.visible = has_pipeline and not is_file
+        self._pass_remove.visible = has_pipeline and not is_file
+        self._pass_up.visible = has_pipeline and not is_file
+        self._pass_down.visible = has_pipeline and not is_file
         self._pass_name.visible = has_pipeline
+        self._pass_name.enabled = not is_file
         self._pass_enabled.visible = has_pipeline
+        self._pass_enabled.enabled = not is_file
         self._pass_fields.visible = has_pipeline
+        self._pass_fields.enabled = not is_file
 
         effects_visible = has_pipeline and self._selected_postprocess is not None
         self._effects_title.visible = effects_visible
         self._effects_list.visible = effects_visible
-        self._effect_add.visible = effects_visible
-        self._effect_remove.visible = effects_visible
-        self._effect_up.visible = effects_visible
-        self._effect_down.visible = effects_visible
+        self._effect_add.visible = effects_visible and not is_file
+        self._effect_remove.visible = effects_visible and not is_file
+        self._effect_up.visible = effects_visible and not is_file
+        self._effect_down.visible = effects_visible and not is_file
         self._effect_name.visible = effects_visible
+        self._effect_name.enabled = not is_file
         self._effect_fields.visible = effects_visible
+        self._effect_fields.enabled = not is_file
 
         self._specs_list.visible = has_pipeline
-        self._spec_add.visible = has_pipeline
-        self._spec_remove.visible = has_pipeline
+        self._spec_add.visible = has_pipeline and not is_file
+        self._spec_remove.visible = has_pipeline and not is_file
         self._spec_editor.visible = has_pipeline and self._selected_spec_index >= 0
+        self._spec_editor.enabled = not is_file
+        self._edit_button.visible = is_file
+        self._save_button.visible = has_pipeline and not is_file
 
         self._empty.visible = not has_pipeline
 
@@ -932,6 +985,7 @@ class PipelineInspectorTcgui(VStack):
         self._pass_remove.enabled = has_pipeline and pass_idx >= 0
         self._pass_up.enabled = has_pipeline and pass_idx > 0
         self._pass_down.enabled = has_pipeline and 0 <= pass_idx < pass_count - 1
+        self._save_button.enabled = has_pipeline and self._source_path is not None
 
         eff_idx = self._current_effect_index()
         eff_count = len(self._selected_postprocess.effects) if self._selected_postprocess is not None else 0

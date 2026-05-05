@@ -24,10 +24,15 @@ from tcgui.widgets.message_box import MessageBox, Buttons
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.text_input import TextInput
+from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.units import px, pct
 from tcgui.widgets.splitter import Splitter
 
+from .agent_chat import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPanel
+from .agent_tools import create_editor_tool_registry
+from .grounding_dialog import GroundingDialog
 from .layer_stack import LayerStack
+from .mask import coerce_mask_data
 from .layer import Layer
 from .tool import DiffusionTool, LamaTool, InstructTool
 from .editor_canvas import EditorCanvas
@@ -93,6 +98,7 @@ class EditorWindow:
         self._pending_request = None
         self._pending_lama_layer = None
         self._pending_instruct_layer = None
+        self._pending_grounding_result = None
         self._history_replaying = False
         self._external_edit_ctx: ExternalEditContext | None = None
 
@@ -113,6 +119,9 @@ class EditorWindow:
             self._history,
             self._apply_snapshot,
         )
+
+        # Agent tool registry (created once, reused across chat clear/reset)
+        self._agent_tool_registry = create_editor_tool_registry()
 
         # Build UI
         self._build_ui()
@@ -177,10 +186,21 @@ class EditorWindow:
         self._brush_panel._brush = self._canvas.brush
         main_area.add_child(self._canvas)
 
-        # Right panel: layer panel
+        # Right panels: layer panel | agent chat
         self._layer_panel = LayerPanel(self._layer_stack)
         main_area.add_child(Splitter(target=self._layer_panel, side="left"))
         main_area.add_child(self._layer_panel)
+
+        self._agent_chat_panel = AgentChatPanel(
+            self._settings,
+            tool_registry=self._agent_tool_registry,
+            layer_stack=self._layer_stack,
+            document_service=self._document,
+        )
+        self._agent_chat_panel.preferred_width = px(320)
+        self._agent_chat_panel.preferred_height = pct(100)
+        main_area.add_child(Splitter(target=self._agent_chat_panel, side="left"))
+        main_area.add_child(self._agent_chat_panel)
 
         root.add_child(main_area)
 
@@ -228,6 +248,8 @@ class EditorWindow:
         layer_menu.add_item(MenuItem("Remove Layer", on_click=self._remove_layer))
         layer_menu.add_item(MenuItem(separator=True))
         layer_menu.add_item(MenuItem("Flatten", on_click=self._flatten_layers))
+        layer_menu.add_item(MenuItem(separator=True))
+        layer_menu.add_item(MenuItem("Detect Objects...", on_click=self._show_grounding_dialog))
         self._menu_bar.add_menu("Layer", layer_menu)
 
     # ------------------------------------------------------------------
@@ -444,6 +466,106 @@ class EditorWindow:
         note.text = "Older history entries are removed when the limit is exceeded."
         content.add_child(note)
 
+        agent_title = Label()
+        agent_title.text = "Agent Chat API"
+        content.add_child(agent_title)
+
+        agent_base_url_label = Label()
+        agent_base_url_label.text = "Base URL"
+        agent_base_url_label.font_size = 12
+        content.add_child(agent_base_url_label)
+
+        agent_base_url_input = TextInput()
+        agent_base_url_input.text = str(
+            self._settings.get("agent_api_base_url", DEFAULT_AGENT_BASE_URL)
+        )
+        agent_base_url_input.placeholder = DEFAULT_AGENT_BASE_URL
+        agent_base_url_input.preferred_width = px(420)
+        content.add_child(agent_base_url_input)
+
+        agent_key_label = Label()
+        agent_key_label.text = "API key"
+        agent_key_label.font_size = 12
+        content.add_child(agent_key_label)
+
+        agent_key_input = TextInput()
+        agent_key_input.text = str(self._settings.get("agent_api_key", ""))
+        agent_key_input.placeholder = "API key"
+        agent_key_input.preferred_width = px(420)
+        content.add_child(agent_key_input)
+
+        agent_model_label = Label()
+        agent_model_label.text = "Model"
+        agent_model_label.font_size = 12
+        content.add_child(agent_model_label)
+
+        agent_model_input = TextInput()
+        agent_model_input.text = str(self._settings.get("agent_model", DEFAULT_AGENT_MODEL))
+        agent_model_input.placeholder = DEFAULT_AGENT_MODEL
+        agent_model_input.preferred_width = px(260)
+        content.add_child(agent_model_input)
+
+        agent_params_row = HStack()
+        agent_params_row.spacing = 8
+
+        temperature_box = VStack()
+        temperature_box.spacing = 3
+        temperature_label = Label()
+        temperature_label.text = "Temperature"
+        temperature_label.font_size = 12
+        temperature_box.add_child(temperature_label)
+
+        agent_temperature_input = SpinBox()
+        agent_temperature_input.decimals = 2
+        agent_temperature_input.step = 0.05
+        agent_temperature_input.min_value = 0.0
+        agent_temperature_input.max_value = 2.0
+        agent_temperature_input.value = float(self._settings.get("agent_temperature", 0.7))
+        agent_temperature_input.preferred_width = px(120)
+        temperature_box.add_child(agent_temperature_input)
+        agent_params_row.add_child(temperature_box)
+
+        max_tokens_box = VStack()
+        max_tokens_box.spacing = 3
+        max_tokens_label = Label()
+        max_tokens_label.text = "Max tokens"
+        max_tokens_label.font_size = 12
+        max_tokens_box.add_child(max_tokens_label)
+
+        agent_max_tokens_input = SpinBox()
+        agent_max_tokens_input.decimals = 0
+        agent_max_tokens_input.step = 128
+        agent_max_tokens_input.min_value = 0
+        agent_max_tokens_input.max_value = 131072
+        agent_max_tokens_input.value = float(self._settings.get("agent_max_tokens", 1024))
+        agent_max_tokens_input.preferred_width = px(140)
+        max_tokens_box.add_child(agent_max_tokens_input)
+        agent_params_row.add_child(max_tokens_box)
+
+        timeout_box = VStack()
+        timeout_box.spacing = 3
+        timeout_label = Label()
+        timeout_label.text = "Timeout sec"
+        timeout_label.font_size = 12
+        timeout_box.add_child(timeout_label)
+
+        agent_timeout_input = SpinBox()
+        agent_timeout_input.decimals = 0
+        agent_timeout_input.step = 5
+        agent_timeout_input.min_value = 5
+        agent_timeout_input.max_value = 600
+        agent_timeout_input.value = float(self._settings.get("agent_timeout_seconds", 60))
+        agent_timeout_input.preferred_width = px(120)
+        timeout_box.add_child(agent_timeout_input)
+        agent_params_row.add_child(timeout_box)
+
+        content.add_child(agent_params_row)
+
+        agent_stream_input = Checkbox()
+        agent_stream_input.text = "Stream responses"
+        agent_stream_input.checked = bool(self._settings.get("agent_stream", True))
+        content.add_child(agent_stream_input)
+
         dlg.content = content
 
         def _apply(result: str):
@@ -452,8 +574,15 @@ class EditorWindow:
             self._set_models_dir(models_dir_input.text)
             limit_bytes = int(limit_input.value * _BYTES_PER_GIB)
             self._set_history_memory_limit_bytes(limit_bytes)
+            self._settings.set("agent_api_base_url", agent_base_url_input.text.strip())
+            self._settings.set("agent_api_key", agent_key_input.text.strip())
+            self._settings.set("agent_model", agent_model_input.text.strip())
+            self._settings.set("agent_temperature", float(agent_temperature_input.value))
+            self._settings.set("agent_max_tokens", int(agent_max_tokens_input.value))
+            self._settings.set("agent_timeout_seconds", float(agent_timeout_input.value))
+            self._settings.set("agent_stream", bool(agent_stream_input.checked))
             self._statusbar.text = (
-                f"Saved settings: models dir, history limit {limit_input.value:.2f} GiB"
+                f"Saved settings: models dir, history limit {limit_input.value:.2f} GiB, agent API"
             )
 
         dlg.on_result = _apply
@@ -517,7 +646,7 @@ class EditorWindow:
         if not layer_path:
             return
         if target == "mask":
-            before_arr = layer.mask.copy()
+            before_arr = layer.mask.data.copy()
         else:
             before_arr = layer.image.copy()
         self._external_edit_ctx = ExternalEditContext(
@@ -534,8 +663,8 @@ class EditorWindow:
         x0, y0, x1, y1 = rect
         if x1 <= x0 or y1 <= y0:
             return
-        if target == "mask" and isinstance(layer.tool, (DiffusionTool, LamaTool, InstructTool)):
-            layer.tool.mask[y0:y1, x0:x1] = patch
+        if target == "mask":
+            layer.mask.data[y0:y1, x0:x1] = coerce_mask_data(patch)
             if self._layer_stack.on_changed:
                 self._layer_stack.on_changed()
             return
@@ -564,8 +693,8 @@ class EditorWindow:
         if x1 <= x0 or y1 <= y0:
             return
         before_arr = ctx.before_arr
-        if target == "mask" and isinstance(layer.tool, (DiffusionTool, LamaTool, InstructTool)):
-            after_arr = layer.tool.mask
+        if target == "mask":
+            after_arr = layer.mask.data
         else:
             after_arr = layer.image
         before_patch = before_arr[y0:y1, x0:x1].copy()
@@ -790,8 +919,6 @@ class EditorWindow:
             self._diffusion_panel.set_seed(seed)
 
         tool = DiffusionTool(
-            height=self._layer_stack.height,
-            width=self._layer_stack.width,
             source_patch=patch_pil,
             patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
             prompt=self._diffusion_panel.prompt,
@@ -863,9 +990,9 @@ class EditorWindow:
                 tool.source_patch = patch_pil
                 tool.patch_x, tool.patch_y = x0, y0
                 tool.patch_w, tool.patch_h = x1 - x0, y1 - y0
-            elif tool.has_mask():
-                bbox = tool.mask_bbox()
-                center = tool.mask_center()
+            elif layer.has_mask():
+                bbox = layer.mask_bbox()
+                center = layer.mask_center()
                 if bbox is not None and center is not None:
                     bx0, by0, bx1, by1 = bbox
                     ps = max(bx1 - bx0, by1 - by0)
@@ -896,11 +1023,11 @@ class EditorWindow:
         self._pending_request = layer
         mask_image = None
         if tool.mode == "inpaint":
-            if not tool.has_mask():
+            if not layer.has_mask():
                 self._statusbar.text = "Inpaint requires a mask"
                 return
             mask_image = extract_mask_patch(
-                tool.mask, tool.patch_x, tool.patch_y,
+                layer.mask.data, tool.patch_x, tool.patch_y,
                 tool.patch_w, tool.patch_h)
 
         ip_adapter_image = None
@@ -1016,8 +1143,6 @@ class EditorWindow:
         cx, cy = self._canvas.view_center_image()
         patch_pil, ppx, ppy, pw, ph = extract_patch(composite, cx, cy)
         tool = LamaTool(
-            height=self._layer_stack.height,
-            width=self._layer_stack.width,
             source_patch=patch_pil,
             patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
         )
@@ -1038,11 +1163,11 @@ class EditorWindow:
         if not isinstance(layer.tool, LamaTool):
             return
         tool = layer.tool
-        if self._lama_engine.is_busy or not tool.has_mask():
+        if self._lama_engine.is_busy or not layer.has_mask():
             return
 
-        bbox = tool.mask_bbox()
-        center = tool.mask_center()
+        bbox = layer.mask_bbox()
+        center = layer.mask_center()
         if bbox is None or center is None:
             return
         composite = self._canvas.get_composite_below(layer)
@@ -1058,7 +1183,7 @@ class EditorWindow:
         tool.patch_x, tool.patch_y = ppx, ppy
         tool.patch_w, tool.patch_h = pw, ph
 
-        mask_pil = extract_mask_patch(tool.mask, ppx, ppy, pw, ph)
+        mask_pil = extract_mask_patch(layer.mask.data, ppx, ppy, pw, ph)
         self._lama_engine.submit(patch_pil, mask_pil)
         self._pending_lama_layer = layer
         self._statusbar.text = "Removing objects (LaMa)..."
@@ -1098,8 +1223,6 @@ class EditorWindow:
             seed = random.randint(0, 2**32 - 1)
             self._instruct_panel.set_seed(seed)
         tool = InstructTool(
-            height=self._layer_stack.height,
-            width=self._layer_stack.width,
             source_patch=patch_pil,
             patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
             instruction=self._instruct_panel.instruction,
@@ -1161,9 +1284,9 @@ class EditorWindow:
             tool.source_patch = patch_pil
             tool.patch_x, tool.patch_y = x0, y0
             tool.patch_w, tool.patch_h = x1 - x0, y1 - y0
-        elif tool.has_mask():
-            bbox = tool.mask_bbox()
-            center = tool.mask_center()
+        elif layer.has_mask():
+            bbox = layer.mask_bbox()
+            center = layer.mask_center()
             if bbox is not None and center is not None:
                 bx0, by0, bx1, by1 = bbox
                 ps = max(bx1 - bx0, by1 - by0)
@@ -1240,10 +1363,12 @@ class EditorWindow:
     # ------------------------------------------------------------------
 
     def poll(self):
+        self._agent_chat_panel.poll()
         self._poll_segmentation()
         self._poll_lama()
         self._poll_instruct()
         self._poll_diffusion()
+        self._poll_grounding()
 
     def _poll_segmentation(self):
         seg_mask, seg_error = self._seg_engine.poll()
@@ -1353,6 +1478,78 @@ class EditorWindow:
             self._statusbar.text = status
             self._pending_request = None
 
+    def _show_grounding_dialog(self) -> None:
+        GroundingDialog(self).show()
+
+    def _poll_grounding(self) -> None:
+        if self._pending_grounding_result is None:
+            return
+        results, layer = self._pending_grounding_result
+        self._pending_grounding_result = None
+
+        from .commands import DrawRectCommand, FillMaskCommand, SetLayerSelectionCommand
+
+        rect_colors = [
+            (255, 80, 80, 255),
+            (80, 255, 80, 255),
+            (80, 80, 255, 255),
+            (255, 255, 80, 255),
+            (255, 80, 255, 255),
+            (80, 255, 255, 255),
+        ]
+        fill_colors = [
+            (255, 80, 80, 100),
+            (80, 255, 80, 100),
+            (80, 80, 255, 100),
+            (255, 255, 80, 100),
+            (255, 80, 255, 100),
+            (80, 255, 255, 100),
+        ]
+        # Combine all detection masks into a single selection (union)
+        h, w = layer.height, layer.width
+        combined_selection = np.zeros((h, w), dtype=np.float32)
+        for i, item in enumerate(results):
+            if len(item) == 7:
+                label, x0, y0, x1, y1, score, mask = item
+            else:
+                label, x0, y0, x1, y1, score = item
+                mask = None
+
+            rect_color = rect_colors[i % len(rect_colors)]
+            cmd = DrawRectCommand(
+                layer=layer,
+                x=x0, y=y0,
+                width=x1 - x0, height=y1 - y0,
+                color=rect_color,
+                thickness=1,
+                label=f"Detect: {label} ({score:.0%})",
+            )
+            self._document.execute(cmd)
+
+            if mask is not None and mask.any():
+                # Visual fill on the layer image
+                mask_cmd = FillMaskCommand(
+                    layer=layer,
+                    mask=mask,
+                    color=fill_colors[i % len(fill_colors)],
+                    outline_color=rect_colors[i % len(rect_colors)],
+                    label=f"Segment: {label}",
+                )
+                self._document.execute(mask_cmd)
+                # Contribute to combined selection
+                combined_selection = np.maximum(
+                    combined_selection,
+                    mask.astype(np.float32)[:h, :w],
+                )
+
+        # Set the combined selection on the layer stack
+        if combined_selection.any():
+            sel_cmd = SetLayerSelectionCommand(
+                mask=combined_selection,
+                label="Set Selection from Detection",
+            )
+            self._document.execute(sel_cmd)
+
     # ------------------------------------------------------------------
     # Public: rendering
     # ------------------------------------------------------------------
@@ -1385,6 +1582,8 @@ class EditorWindow:
         self._running = False
         if hasattr(self, "_canvas") and self._canvas is not None:
             self._canvas.dispose()
+        if hasattr(self, "_agent_chat_panel") and self._agent_chat_panel is not None:
+            self._agent_chat_panel.shutdown()
         self._engine.shutdown()
         self._instruct_engine.shutdown()
         self._lama_engine.shutdown()

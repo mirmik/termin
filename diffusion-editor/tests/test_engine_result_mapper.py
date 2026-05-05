@@ -14,7 +14,6 @@ from diffusion_editor.tool import DiffusionTool, LamaTool, InstructTool
 
 def _diff_layer() -> Layer:
     tool = DiffusionTool(
-        height=8, width=8,
         source_patch=None,
         patch_x=0, patch_y=0, patch_w=8, patch_h=8,
         prompt="", negative_prompt="",
@@ -27,7 +26,6 @@ def _diff_layer() -> Layer:
 
 def _lama_layer() -> Layer:
     tool = LamaTool(
-        height=8, width=8,
         source_patch=None,
         patch_x=0, patch_y=0, patch_w=8, patch_h=8,
     )
@@ -38,7 +36,6 @@ def _lama_layer() -> Layer:
 
 def _instruct_layer() -> Layer:
     tool = InstructTool(
-        height=8, width=8,
         source_patch=None,
         patch_x=0, patch_y=0, patch_w=8, patch_h=8,
         instruction="",
@@ -57,11 +54,12 @@ def test_map_segmentation_result_for_supported_layer():
     assert status == "Background mask applied"
 
 
-def test_map_segmentation_result_for_unsupported_layer():
+def test_map_segmentation_result_for_any_layer():
+    """Any layer type (including plain Layer) accepts segmentation results."""
     layer = Layer("Paint", 8, 8)
     mask = np.zeros((8, 8), dtype=np.uint8)
     cmd, status = map_segmentation_result(layer, mask)
-    assert cmd is None
+    assert isinstance(cmd, ReplaceLayerMaskCommand)
     assert status == "Background mask applied"
 
 

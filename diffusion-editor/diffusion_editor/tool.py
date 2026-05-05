@@ -1,4 +1,8 @@
-"""Tool — attached auto-drawer with persistent settings for a Layer."""
+"""Tool — attached auto-drawer with persistent settings for a Layer.
+
+Tools hold AI-generation config (prompt, steps, seed, etc.).
+Mask is owned by Layer, not by Tool — tools access it via the layer reference.
+"""
 
 from __future__ import annotations
 
@@ -55,39 +59,10 @@ class Tool(ABC):
         ...
 
 
-class MaskedTool(Tool):
-    """Base for tools that carry a mask for inpainting."""
-
-    def __init__(self, height: int, width: int):
-        self.mask = np.zeros((height, width), dtype=np.uint8)
-
-    def clear_mask(self):
-        self.mask[:] = 0
-
-    def has_mask(self) -> bool:
-        return bool(np.any(self.mask > 0))
-
-    def mask_bbox(self) -> tuple[int, int, int, int] | None:
-        rows = np.any(self.mask > 0, axis=1)
-        cols = np.any(self.mask > 0, axis=0)
-        if not np.any(rows):
-            return None
-        y0, y1 = np.where(rows)[0][[0, -1]]
-        x0, x1 = np.where(cols)[0][[0, -1]]
-        return int(x0), int(y0), int(x1) + 1, int(y1) + 1
-
-    def mask_center(self) -> tuple[int, int] | None:
-        bbox = self.mask_bbox()
-        if bbox is None:
-            return None
-        x0, y0, x1, y1 = bbox
-        return (x0 + x1) // 2, (y0 + y1) // 2
-
-
-class DiffusionTool(MaskedTool):
+class DiffusionTool(Tool):
     tool_type = "diffusion"
 
-    def __init__(self, height: int, width: int,
+    def __init__(self,
                  source_patch: Image.Image | None,
                  patch_x: int, patch_y: int, patch_w: int, patch_h: int,
                  prompt: str, negative_prompt: str,
@@ -95,7 +70,6 @@ class DiffusionTool(MaskedTool):
                  seed: int,
                  model_path: str = "", prediction_type: str = "",
                  mode: str = "inpaint"):
-        super().__init__(height, width)
         self.mode = mode
         self.source_patch = source_patch
         self.patch_x = patch_x
@@ -117,10 +91,9 @@ class DiffusionTool(MaskedTool):
         self.resize_to_model_resolution: bool = False
 
     def to_dict(self, path: str, file_key: str) -> dict:
-        d = {
+        return {
             "tool_type": self.tool_type,
             "mode": self.mode,
-            "mask_file": f"layers/{file_key}_mask.npy",
             "source_file": f"layers/{file_key}_source.npy" if self.source_patch is not None else None,
             "patch_x": self.patch_x,
             "patch_y": self.patch_y,
@@ -140,25 +113,19 @@ class DiffusionTool(MaskedTool):
             "manual_patch_rect": list(self.manual_patch_rect) if self.manual_patch_rect else None,
             "resize_to_model_resolution": self.resize_to_model_resolution,
         }
-        return d
 
     def save_assets_to_zip(self, zf: zipfile.ZipFile, file_key: str):
-        _save_array_to_zip(zf, f"layers/{file_key}_mask.npy", self.mask)
         if self.source_patch is not None:
             _save_array_to_zip(zf, f"layers/{file_key}_source.npy",
                                np.array(self.source_patch))
 
     @classmethod
     def from_dict(cls, d: dict, zf: zipfile.ZipFile) -> "DiffusionTool":
-        mask_arr = _load_array_from_zip(zf, d["mask_file"], mode="L")
-        h, w = mask_arr.shape
-
         source_patch = None
         if d.get("source_file") and d["source_file"] in zf.namelist():
             source_patch = _load_pil_from_zip(zf, d["source_file"], mode="RGB")
 
         tool = cls.__new__(cls)
-        tool.mask = np.ascontiguousarray(mask_arr)
         tool.source_patch = source_patch
         tool.patch_x = d["patch_x"]
         tool.patch_y = d["patch_y"]
@@ -183,13 +150,12 @@ class DiffusionTool(MaskedTool):
         return tool
 
 
-class LamaTool(MaskedTool):
+class LamaTool(Tool):
     tool_type = "lama"
 
-    def __init__(self, height: int, width: int,
+    def __init__(self,
                  source_patch: Image.Image | None,
                  patch_x: int, patch_y: int, patch_w: int, patch_h: int):
-        super().__init__(height, width)
         self.source_patch = source_patch
         self.patch_x = patch_x
         self.patch_y = patch_y
@@ -199,7 +165,6 @@ class LamaTool(MaskedTool):
     def to_dict(self, path: str, file_key: str) -> dict:
         return {
             "tool_type": self.tool_type,
-            "mask_file": f"layers/{file_key}_mask.npy",
             "source_file": f"layers/{file_key}_source.npy" if self.source_patch is not None else None,
             "patch_x": self.patch_x,
             "patch_y": self.patch_y,
@@ -208,21 +173,17 @@ class LamaTool(MaskedTool):
         }
 
     def save_assets_to_zip(self, zf: zipfile.ZipFile, file_key: str):
-        _save_array_to_zip(zf, f"layers/{file_key}_mask.npy", self.mask)
         if self.source_patch is not None:
             _save_array_to_zip(zf, f"layers/{file_key}_source.npy",
                                np.array(self.source_patch))
 
     @classmethod
     def from_dict(cls, d: dict, zf: zipfile.ZipFile) -> "LamaTool":
-        mask_arr = _load_array_from_zip(zf, d["mask_file"], mode="L")
-
         source_patch = None
         if d.get("source_file") and d["source_file"] in zf.namelist():
             source_patch = _load_pil_from_zip(zf, d["source_file"], mode="RGB")
 
         tool = cls.__new__(cls)
-        tool.mask = np.ascontiguousarray(mask_arr)
         tool.source_patch = source_patch
         tool.patch_x = d["patch_x"]
         tool.patch_y = d["patch_y"]
@@ -231,10 +192,10 @@ class LamaTool(MaskedTool):
         return tool
 
 
-class InstructTool(MaskedTool):
+class InstructTool(Tool):
     tool_type = "instruct"
 
-    def __init__(self, height: int, width: int,
+    def __init__(self,
                  source_patch: Image.Image | None,
                  patch_x: int, patch_y: int, patch_w: int, patch_h: int,
                  instruction: str = "",
@@ -242,7 +203,6 @@ class InstructTool(MaskedTool):
                  guidance_scale: float = 7.0,
                  steps: int = 20,
                  seed: int = -1):
-        super().__init__(height, width)
         self.source_patch = source_patch
         self.patch_x = patch_x
         self.patch_y = patch_y
@@ -258,7 +218,6 @@ class InstructTool(MaskedTool):
     def to_dict(self, path: str, file_key: str) -> dict:
         return {
             "tool_type": self.tool_type,
-            "mask_file": f"layers/{file_key}_mask.npy",
             "source_file": f"layers/{file_key}_source.npy" if self.source_patch is not None else None,
             "patch_x": self.patch_x,
             "patch_y": self.patch_y,
@@ -273,28 +232,17 @@ class InstructTool(MaskedTool):
         }
 
     def save_assets_to_zip(self, zf: zipfile.ZipFile, file_key: str):
-        _save_array_to_zip(zf, f"layers/{file_key}_mask.npy", self.mask)
         if self.source_patch is not None:
             _save_array_to_zip(zf, f"layers/{file_key}_source.npy",
                                np.array(self.source_patch))
 
     @classmethod
     def from_dict(cls, d: dict, zf: zipfile.ZipFile) -> "InstructTool":
-        # Mask may be absent for instruct layers saved without one
-        mask_arr = None
-        if d.get("mask_file") and d["mask_file"] in zf.namelist():
-            mask_arr = _load_array_from_zip(zf, d["mask_file"], mode="L")
-
         source_patch = None
         if d.get("source_file") and d["source_file"] in zf.namelist():
             source_patch = _load_pil_from_zip(zf, d["source_file"], mode="RGB")
 
         tool = cls.__new__(cls)
-        if mask_arr is not None:
-            tool.mask = np.ascontiguousarray(mask_arr)
-        else:
-            # approximate size from source or leave zero — caller should set properly
-            tool.mask = np.zeros((1, 1), dtype=np.uint8)
         tool.source_patch = source_patch
         tool.patch_x = d["patch_x"]
         tool.patch_y = d["patch_y"]
@@ -319,8 +267,14 @@ _TOOL_REGISTRY: dict[str, type[Tool]] = {
 
 
 def tool_from_dict(d: dict, zf: zipfile.ZipFile) -> Tool | None:
-    """Deserialize a tool from its dict representation."""
-    tool_type = d.get("tool_type")
+    """Deserialize a tool from its dict representation.
+
+    Supports both new format (tool_type field) and legacy format
+    (type field = diffusion/lama/instruct).
+    """
+    tool_type = d.get("tool_type") or d.get("type")
     if not tool_type or tool_type not in _TOOL_REGISTRY:
+        return None
+    if tool_type == "layer":
         return None
     return _TOOL_REGISTRY[tool_type].from_dict(d, zf)

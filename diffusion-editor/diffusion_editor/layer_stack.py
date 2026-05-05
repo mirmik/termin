@@ -5,8 +5,9 @@ import zipfile
 
 import numpy as np
 
-from .layer import Layer, _layer_from_dict
+from .layer import Layer, _layer_from_dict, _save_array_to_zip, _load_array_from_zip
 from .layer_renderer import LayerRenderer
+from .mask import Selection
 
 
 class LayerStack:
@@ -18,6 +19,7 @@ class LayerStack:
         self._tile_size = tile_size
         self.on_changed: callable = None
         self._renderer = LayerRenderer(self)
+        self.selection = Selection()
 
     # --- Tree traversal ---
 
@@ -93,6 +95,7 @@ class LayerStack:
         h, w = image.shape[:2]
         self._width = w
         self._height = h
+        self.selection = Selection(height=h, width=w)
         layer = Layer("Background", w, h, image, tile_size=self._tile_size)
         self._layers.append(layer)
         self._active_layer = layer
@@ -339,7 +342,7 @@ class LayerStack:
 
     # --- Serialization ---
 
-    FORMAT_VERSION = 5
+    FORMAT_VERSION = 6
 
     def _serialize_manifest_and_layers(self, zf: zipfile.ZipFile):
         manifest = {
@@ -348,12 +351,15 @@ class LayerStack:
             "canvas_height": self._height,
             "tile_size": self._tile_size,
             "active_layer_path": self._find_layer_path(self._active_layer),
+            "selection_file": "selection.npy" if not self.selection.is_empty else None,
             "layers": [],
         }
         for i, layer in enumerate(self._layers):
             layer_path = str(i)
             manifest["layers"].append(layer.to_dict(layer_path))
             layer.save_images_to_zip(zf, layer_path)
+        if not self.selection.is_empty:
+            _save_array_to_zip(zf, "selection.npy", self.selection.data)
         zf.writestr("manifest.json",
                     json.dumps(manifest, indent=2, ensure_ascii=False))
 
@@ -377,6 +383,16 @@ class LayerStack:
             self._apply_tile_size(layer)
         self._width = manifest["canvas_width"]
         self._height = manifest["canvas_height"]
+
+        # Restore selection (v6+) or initialize empty
+        selection_file = manifest.get("selection_file")
+        if selection_file and selection_file in zf.namelist():
+            sel_arr = _load_array_from_zip(zf, selection_file)
+            if sel_arr.dtype == np.uint8:
+                sel_arr = sel_arr.astype(np.float32) / 255.0
+            self.selection = Selection(sel_arr)
+        else:
+            self.selection = Selection(height=self._height, width=self._width)
 
         # Restore active layer (v2: by path, v1: by index)
         active_path = manifest.get("active_layer_path")

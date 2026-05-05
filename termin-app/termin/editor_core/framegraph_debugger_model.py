@@ -461,11 +461,10 @@ class FramegraphDebuggerModel:
         self._disconnect()
 
     def _disconnect(self) -> None:
-        pipeline = self._connected_pipeline or self.get_current_pipeline()
-        if pipeline is not None:
+        for pipeline in self._known_pipelines():
             pipeline.remove_passes_by_name("FrameDebugger")
         self._frame_debugger_pass = None
-        if pipeline is not None:
+        for pipeline in self._known_pipelines():
             for p in pipeline.passes:
                 try:
                     p.set_debug_internal_point("")
@@ -474,6 +473,28 @@ class FramegraphDebuggerModel:
                     pass
         self._connected_pipeline = None
         self._core.capture.reset_capture()
+
+    def _known_pipelines(self) -> list:
+        result = []
+
+        def add(pipeline) -> None:
+            if pipeline is None:
+                return
+            for existing in result:
+                if existing is pipeline:
+                    return
+            result.append(pipeline)
+
+        add(self._connected_pipeline)
+        add(self.get_current_pipeline())
+        for viewport, _label in self._viewports_list:
+            managed_by = viewport.managed_by_scene_pipeline
+            if managed_by and viewport.scene is not None:
+                from termin.visualization.core.scene import scene_render_mount
+                add(scene_render_mount(viewport.scene).get_pipeline(managed_by))
+            else:
+                add(viewport.pipeline)
+        return result
 
     def _connect(self) -> None:
         pipeline = self.get_current_pipeline()

@@ -16,6 +16,7 @@ from tcgui.widgets.separator import Separator
 from tcgui.widgets.image_widget import ImageWidget
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.list_widget import ListWidget
+from tcgui.widgets.file_grid_widget import FileGridWidget
 from tcgui.widgets.table_widget import TableColumn, TableWidget
 from tcgui.widgets.progress_bar import ProgressBar
 from tcgui.widgets.slider import Slider
@@ -23,6 +24,7 @@ from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.slider_edit import SliderEdit
 from tcgui.widgets.text_area import TextArea
+from tcgui.widgets.rich_text_view import RichTextSegment, RichTextStyle, RichTextView
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.tabs import TabBar, TabView
 from tcgui.widgets.menu import MenuItem, Menu
@@ -54,8 +56,10 @@ __all__ = [
     "Widget",
     "HStack", "VStack", "GridLayout", "Panel", "ScrollArea", "GroupBox",
     "Label", "Button", "Checkbox", "IconButton", "Separator", "ImageWidget", "TextInput", "ListWidget",
+    "FileGridWidget",
     "TableColumn", "TableWidget",
     "ProgressBar", "Slider", "ComboBox", "SpinBox", "SliderEdit", "TextArea",
+    "RichTextSegment", "RichTextStyle", "RichTextView",
     "TreeNode", "TreeWidget",
     "TabBar", "TabView",
     "MenuItem", "Menu",

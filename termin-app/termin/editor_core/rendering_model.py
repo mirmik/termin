@@ -181,6 +181,59 @@ class RenderingModel:
                     return True
         return False
 
+    def ensure_viewport_render_target(
+        self,
+        viewport: "Viewport",
+        scene: "Scene | None" = None,
+        camera=None,
+    ):
+        """Ensure ``viewport`` has its own render target.
+
+        Viewports render through render targets in the offscreen-first
+        pipeline. The UI model treats that target as private viewport
+        state, so new or legacy viewports without a target get one here.
+        """
+        rt = viewport.render_target
+        if rt is None:
+            from termin.render_framework._render_framework_native import render_target_new
+
+            rt = render_target_new(self._make_viewport_render_target_name(viewport))
+            viewport.render_target = rt
+
+        if scene is None:
+            scene = viewport.scene
+        if scene is not None:
+            viewport.scene = scene
+            rt.scene = scene
+
+        if camera is None:
+            camera = viewport.camera
+        if camera is not None:
+            viewport.camera = camera
+            rt.camera = camera
+
+        if rt.pipeline is None:
+            rt.pipeline = self._manager.create_pipeline("Default")
+
+        return rt
+
+    def _make_viewport_render_target_name(self, viewport: "Viewport") -> str:
+        base = viewport.name or "Viewport"
+        index, generation = viewport._viewport_handle()
+        return f"{base}.RT.{index}.{generation}"
+
+    def _find_camera_for_viewport_config(self, scene: "Scene", config):
+        if config is None or not config.camera_uuid:
+            return None
+
+        from termin.visualization.core.camera import CameraComponent
+
+        for entity in scene.entities:
+            if entity.uuid != config.camera_uuid:
+                continue
+            return entity.get_component(CameraComponent)
+        return None
+
     # ------------------------------------------------------------------
     # Viewport cleanup
     # ------------------------------------------------------------------
@@ -276,6 +329,8 @@ class RenderingModel:
             if display is None:
                 continue
             config = self.find_viewport_config(scene, viewport, display)
+            camera = self._find_camera_for_viewport_config(scene, config)
+            self.ensure_viewport_render_target(viewport, scene=scene, camera=camera)
             if config is None:
                 continue
             by_display.setdefault(display.tc_display_ptr, []).append(

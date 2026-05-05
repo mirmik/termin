@@ -162,6 +162,8 @@ class RenderingControllerTcgui:
 
     def set_center_tabs(self, tabs) -> None:
         self._center_tabs = tabs
+        if self._center_tabs is not None:
+            self._center_tabs.on_changed = self._on_center_tab_changed
 
     def add_display(self, display: "Display", name: str | None = None) -> None:
         """Register an externally-created display with the manager and viewport list."""
@@ -179,12 +181,37 @@ class RenderingControllerTcgui:
     def _refresh_render_targets(self) -> None:
         """Refresh render target list in the viewport list widget."""
         from termin.render_framework._render_framework_native import render_target_pool_list
-        self._viewport_list.set_render_targets(render_target_pool_list())
+        self._viewport_list.set_render_targets(
+            self._standalone_render_targets(render_target_pool_list())
+        )
 
     def sync_viewport_list_from_manager(self) -> None:
         """Push current manager state (displays + render targets) into the widget."""
         self._viewport_list.set_displays(self._manager.displays)
         self._refresh_render_targets()
+
+    def ensure_viewport_render_target(self, viewport, scene=None, camera=None):
+        rt = self._model.ensure_viewport_render_target(
+            viewport,
+            scene=scene,
+            camera=camera,
+        )
+        self._refresh_render_targets()
+        return rt
+
+    def _standalone_render_targets(self, render_targets) -> list:
+        owned_keys = set()
+        for display in self._manager.displays:
+            for viewport in display.viewports:
+                rt = viewport.render_target
+                if rt is not None:
+                    owned_keys.add((rt.index, rt.generation))
+
+        result = []
+        for rt in render_targets:
+            if (rt.index, rt.generation) not in owned_keys:
+                result.append(rt)
+        return result
 
     # ------------------------------------------------------------------
     # Factories
@@ -443,7 +470,8 @@ class RenderingControllerTcgui:
             log.warn("No camera in scene — cannot create viewport")
             return
 
-        display.create_viewport(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
+        viewport = display.create_viewport(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
+        self.ensure_viewport_render_target(viewport, scene=scene, camera=camera)
         self._viewport_list.refresh()
         self._request_update()
         self._notify_rendering_changed()
@@ -455,12 +483,16 @@ class RenderingControllerTcgui:
         self._request_update()
 
     def _on_remove_viewport_requested(self, viewport: "Viewport") -> None:
+        rt = viewport.render_target
         display = self._manager.get_display_for_viewport(viewport)
         if display is not None:
             display.remove_viewport(viewport)
         if self._selected_viewport is viewport:
             self._selected_viewport = None
+        if rt is not None and not rt.locked:
+            rt.free()
         self._viewport_list.refresh()
+        self._refresh_render_targets()
         self._request_update()
         self._notify_rendering_changed()
 
@@ -480,3 +512,6 @@ class RenderingControllerTcgui:
     def _notify_rendering_changed(self) -> None:
         if self._on_rendering_changed is not None:
             self._on_rendering_changed()
+
+    def _on_center_tab_changed(self, _index: int) -> None:
+        self._request_update()

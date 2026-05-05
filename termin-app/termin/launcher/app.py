@@ -129,7 +129,7 @@ class LauncherApp:
     _BTN_NORMAL_PRESSED = (0.18, 0.18, 0.22, 1.0)
     _BTN_DISABLED = (0.18, 0.18, 0.2, 0.6)
 
-    def __init__(self, graphics, ui_backend: str = "qt"):
+    def __init__(self, graphics, ui_backend: str = "tcgui"):
         self.ui = UI(graphics=graphics)
         self.recent = RecentProjects()
         self._ui_backend = ui_backend
@@ -547,7 +547,7 @@ def run():
     if project == "__error__":
         return
 
-    ui_backend = cli_ui_backend if cli_ui_backend is not None else "qt"
+    ui_backend = cli_ui_backend if cli_ui_backend is not None else "tcgui"
 
     if project is not None:
         # Direct launch: skip UI, open editor with given project

@@ -122,7 +122,7 @@ class LamaPanel(ScrollArea):
 
     def show_lama_layer(self, layer):
         tool = layer.tool
-        mask_status = "has mask" if tool.has_mask() else "no mask"
+        mask_status = "has mask" if layer.has_mask() else "no mask"
         self._layer_info.text = (
             f"patch: ({tool.patch_x},{tool.patch_y}) "
             f"{tool.patch_w}x{tool.patch_h}\n"
