@@ -47,9 +47,9 @@ class Brush:
             self._alpha_stamp = (dist <= radius).astype(np.float32)
         else:
             inner = radius * self.hardness
-            self._alpha_stamp = np.clip(
-                (radius - dist) / max(radius - inner, 0.001), 0, 1
-            ).astype(np.float32)
+            t = np.clip(
+                (radius - dist) / max(radius - inner, 0.001), 0.0, 1.0)
+            self._alpha_stamp = (t * t * (3.0 - 2.0 * t)).astype(np.float32)
 
     def dab_to_mask(self, mask: np.ndarray, cx: int, cy: int):
         """Apply brush dab to 2D uint8 mask using MAX blending (no buildup).
@@ -124,8 +124,9 @@ class Brush:
             alpha = (dist <= radius).astype(np.float32)
         else:
             inner = radius * self.hardness
-            alpha = np.clip(
+            t = np.clip(
                 (radius - dist) / max(radius - inner, 0.001), 0.0, 1.0)
+            alpha = t * t * (3.0 - 2.0 * t)
 
         stamp_u8 = (alpha * self.color[3] * self.flow).astype(np.uint8)
         mask[by0:by1, bx0:bx1] = np.maximum(

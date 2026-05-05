@@ -104,6 +104,7 @@ class EditorWindow:
         self._pending_lama_layer = None
         self._pending_instruct_layer = None
         self._pending_grounding_result = None
+        self._clipboard: np.ndarray | None = None  # RGBA uint8 patch
         self._history_replaying = False
         self._external_edit_ctx: ExternalEditContext | None = None
 
@@ -253,6 +254,9 @@ class EditorWindow:
         edit_menu.add_item(MenuItem("Undo", shortcut="Ctrl+Z", on_click=self.undo))
         edit_menu.add_item(MenuItem("Redo", shortcut="Ctrl+Shift+Z", on_click=self.redo))
         edit_menu.add_item(MenuItem("Redo", shortcut="Ctrl+Y", on_click=self.redo))
+        edit_menu.add_item(MenuItem("Copy", shortcut="Ctrl+C", on_click=self._copy))
+        edit_menu.add_item(MenuItem("Copy Visible", shortcut="Ctrl+Shift+C", on_click=self._copy_visible))
+        edit_menu.add_item(MenuItem("Paste", shortcut="Ctrl+V", on_click=self._paste))
         edit_menu.add_item(MenuItem(separator=True))
         edit_menu.add_item(MenuItem("Settings...", on_click=self._show_settings_dialog))
         self._menu_bar.add_menu("Edit", edit_menu)
@@ -896,6 +900,53 @@ class EditorWindow:
 
     def _invert_selection(self):
         self._document.execute(InvertSelectionCommand())
+
+    def _copy(self):
+        """Copy selected pixels from the active layer to clipboard."""
+        layer = self._layer_stack.active_layer
+        bbox = self._layer_stack.selection.bbox()
+        if layer is None or bbox is None:
+            self._statusbar.text = "Copy: nothing selected"
+            return
+        x0, y0, x1, y1 = bbox
+        patch = layer.image[y0:y1, x0:x1].copy()
+        mask = self._layer_stack.selection.data[y0:y1, x0:x1]
+        patch[:, :, 3] = (patch[:, :, 3].astype(np.float32) * mask).astype(np.uint8)
+        self._clipboard = patch
+        self._statusbar.text = f"Copied {x1 - x0}x{y1 - y0}"
+
+    def _copy_visible(self):
+        """Copy selected pixels from the composite of all visible layers to clipboard."""
+        bbox = self._layer_stack.selection.bbox()
+        if bbox is None:
+            self._statusbar.text = "Copy Visible: nothing selected"
+            return
+        x0, y0, x1, y1 = bbox
+        composite = self._layer_stack.composite()
+        patch = composite[y0:y1, x0:x1].copy()
+        mask = self._layer_stack.selection.data[y0:y1, x0:x1]
+        patch[:, :, 3] = (patch[:, :, 3].astype(np.float32) * mask).astype(np.uint8)
+        self._clipboard = patch
+        self._statusbar.text = f"Copied {x1 - x0}x{y1 - y0} (visible)"
+
+    def _paste(self):
+        """Paste clipboard as a new floating layer."""
+        if self._clipboard is None:
+            self._statusbar.text = "Paste: clipboard is empty"
+            return
+        ph, pw = self._clipboard.shape[:2]
+        ch, cw = self._layer_stack.height, self._layer_stack.width
+        full = np.zeros((ch, cw, 4), dtype=np.uint8)
+        # Center on canvas
+        px = (cw - pw) // 2
+        py = (ch - ph) // 2
+        full[py:py + ph, px:px + pw] = self._clipboard
+        self._document.execute(AddLayerCommand(
+            name="Floating Selection",
+            image=full,
+            label="Paste",
+        ))
+        self._statusbar.text = f"Pasted {pw}x{ph}"
 
     def _move_layer(self, layer: Layer, new_parent: Layer | None, index: int):
         self._document.execute(MoveLayerCommand(
@@ -1614,66 +1665,34 @@ class EditorWindow:
         results, layer = self._pending_grounding_result
         self._pending_grounding_result = None
 
-        from .commands import DrawRectCommand, FillMaskCommand, SetLayerSelectionCommand
+        from .commands import SetLayerSelectionCommand
 
-        rect_colors = [
-            (255, 80, 80, 255),
-            (80, 255, 80, 255),
-            (80, 80, 255, 255),
-            (255, 255, 80, 255),
-            (255, 80, 255, 255),
-            (80, 255, 255, 255),
-        ]
-        fill_colors = [
-            (255, 80, 80, 100),
-            (80, 255, 80, 100),
-            (80, 80, 255, 100),
-            (255, 255, 80, 100),
-            (255, 80, 255, 100),
-            (80, 255, 255, 100),
-        ]
-        # Combine all detection masks into a single selection (union)
         h, w = layer.height, layer.width
         combined_selection = np.zeros((h, w), dtype=np.float32)
-        for i, item in enumerate(results):
+        for _i, item in enumerate(results):
             if len(item) == 7:
-                label, x0, y0, x1, y1, score, mask = item
+                _label, x0, y0, x1, y1, _score, mask = item
             else:
-                label, x0, y0, x1, y1, score = item
+                _label, x0, y0, x1, y1, _score = item
                 mask = None
 
-            rect_color = rect_colors[i % len(rect_colors)]
-            cmd = DrawRectCommand(
-                layer=layer,
-                x=x0, y=y0,
-                width=x1 - x0, height=y1 - y0,
-                color=rect_color,
-                thickness=1,
-                label=f"Detect: {label} ({score:.0%})",
-            )
-            self._document.execute(cmd)
-
             if mask is not None and mask.any():
-                # Visual fill on the layer image
-                mask_cmd = FillMaskCommand(
-                    layer=layer,
-                    mask=mask,
-                    color=fill_colors[i % len(fill_colors)],
-                    outline_color=rect_colors[i % len(rect_colors)],
-                    label=f"Segment: {label}",
-                )
-                self._document.execute(mask_cmd)
-                # Contribute to combined selection
                 combined_selection = np.maximum(
                     combined_selection,
                     mask.astype(np.float32)[:h, :w],
                 )
+            else:
+                x0_c = max(0, x0)
+                y0_c = max(0, y0)
+                x1_c = min(w, x1)
+                y1_c = min(h, y1)
+                if x0_c < x1_c and y0_c < y1_c:
+                    combined_selection[y0_c:y1_c, x0_c:x1_c] = 1.0
 
-        # Set the combined selection on the layer stack
         if combined_selection.any():
             sel_cmd = SetLayerSelectionCommand(
                 mask=combined_selection,
-                label="Set Selection from Detection",
+                label="Detect Objects",
             )
             self._document.execute(sel_cmd)
 
