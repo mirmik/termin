@@ -51,9 +51,10 @@ from .settings import Settings
 from .history import HistoryManager
 from .document_service import DocumentService
 from .commands import (
-    AddLayerCommand, InsertLayerCommand, RemoveLayerCommand,
+    AddLayerCommand, RemoveLayerCommand,
     MoveLayerCommand, SetLayerVisibilityCommand, SetLayerOpacityCommand,
     FlattenLayersCommand, ClearLayerMaskCommand,
+    AttachLayerToolCommand, DetachLayerToolCommand,
     SetIpAdapterRectCommand, ClearIpAdapterRectCommand,
     SetManualPatchRectCommand, ClearManualPatchRectCommand,
 )
@@ -163,15 +164,18 @@ class EditorWindow:
         self._left_container.preferred_width = px(260)
         self._left_container.clip = True
 
-        # Create all panels (only one visible at a time, stretch to fill)
+        # Brush is always available; the selected layer's attached tool panel
+        # appears below it when a tool is present.
         self._brush_panel = BrushPanel(self._canvas_placeholder_brush())
         self._diffusion_panel = DiffusionPanel()
         self._diffusion_panel.set_models_dir(self._models_dir)
         self._lama_panel = LamaPanel()
         self._instruct_panel = InstructPanel()
 
-        for p in (self._brush_panel, self._diffusion_panel,
-                  self._lama_panel, self._instruct_panel):
+        self._left_container.spacing = 6
+        self._brush_panel.visible = True
+        self._left_container.add_child(self._brush_panel)
+        for p in (self._diffusion_panel, self._lama_panel, self._instruct_panel):
             p.visible = False
             p.stretch = True
             self._left_container.add_child(p)
@@ -295,9 +299,8 @@ class EditorWindow:
         self._canvas.on_patch_rect_drawn = self._on_patch_rect_drawn
 
         # Layer panel
-        self._layer_panel.on_create_diffusion = self._on_create_diffusion
-        self._layer_panel.on_create_lama = self._on_create_lama
-        self._layer_panel.on_create_instruct = self._on_create_instruct
+        self._layer_panel.on_attach_tool = self._attach_tool_to_layer
+        self._layer_panel.on_detach_tool = self._detach_tool_from_layer
         self._layer_panel.on_add_layer = self._new_layer
         self._layer_panel.on_remove_layer = self._remove_layer
         self._layer_panel.on_flatten_layers = self._flatten_layers
@@ -330,7 +333,7 @@ class EditorWindow:
 
     def _on_layer_changed(self):
         layer = self._layer_stack.active_layer
-        self._brush_panel.visible = False
+        self._brush_panel.visible = True
         self._diffusion_panel.visible = False
         self._lama_panel.visible = False
         self._instruct_panel.visible = False
@@ -346,9 +349,6 @@ class EditorWindow:
         elif isinstance(layer.tool, InstructTool):
             self._instruct_panel.show_instruct_layer(layer)
             self._instruct_panel.visible = True
-        else:
-            self._brush_panel.visible = True
-
         self.ui.request_layout()
 
         # Debug: print visible panel coords after next layout
@@ -888,6 +888,51 @@ class EditorWindow:
         self._running = False
 
     # ------------------------------------------------------------------
+    # Layer tools
+    # ------------------------------------------------------------------
+
+    def _attach_tool_to_layer(self, layer: Layer, tool_type: str):
+        if layer is None or layer.tool is not None:
+            return
+        maker = {
+            "diffusion": self._make_diffusion_tool,
+            "lama": self._make_lama_tool,
+            "instruct": self._make_instruct_tool,
+        }.get(tool_type)
+        if maker is None:
+            return
+        tool = maker(layer)
+        if tool is None:
+            return
+        labels = {
+            "diffusion": "Attach Diffusion Tool",
+            "lama": "Attach LaMa Tool",
+            "instruct": "Attach Instruct Tool",
+        }
+        self._document.execute(AttachLayerToolCommand(
+            layer=layer,
+            tool=tool,
+            label=labels[tool_type],
+        ))
+
+    def _detach_tool_from_layer(self, layer: Layer):
+        if layer is None or layer.tool is None:
+            return
+        if self._pending_request is layer:
+            self._pending_request = None
+        if self._pending_lama_layer is layer:
+            self._pending_lama_layer = None
+        if self._pending_instruct_layer is layer:
+            self._pending_instruct_layer = None
+        self._document.execute(DetachLayerToolCommand(layer=layer))
+
+    def _tool_source_composite(self, layer: Layer) -> np.ndarray | None:
+        composite = self._canvas.get_composite_below(layer)
+        if composite is None:
+            composite = self._canvas.get_composite()
+        return composite
+
+    # ------------------------------------------------------------------
     # Diffusion
     # ------------------------------------------------------------------
 
@@ -897,10 +942,7 @@ class EditorWindow:
         pred = prediction_type if prediction_type else None
         self._engine.submit_load(path, pred)
 
-    def _on_create_diffusion(self):
-        composite = self._canvas.get_composite()
-        if composite is None:
-            return
+    def _make_diffusion_tool(self, layer: Layer) -> DiffusionTool | None:
         mode = self._diffusion_panel.mode
         center_x, center_y = self._canvas.view_center_image()
 
@@ -910,6 +952,9 @@ class EditorWindow:
             pw = self._layer_stack.width
             ph = self._layer_stack.height
         else:
+            composite = self._tool_source_composite(layer)
+            if composite is None:
+                return None
             patch_pil, ppx, ppy, pw, ph = extract_patch(
                 composite, center_x, center_y)
 
@@ -918,7 +963,7 @@ class EditorWindow:
             seed = random.randint(0, 2**32 - 1)
             self._diffusion_panel.set_seed(seed)
 
-        tool = DiffusionTool(
+        return DiffusionTool(
             source_patch=patch_pil,
             patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
             prompt=self._diffusion_panel.prompt,
@@ -931,17 +976,6 @@ class EditorWindow:
             prediction_type=self._diffusion_panel.prediction_type,
             mode=mode,
         )
-        layer = Layer(
-            name=self._layer_stack.next_name("Diffusion"),
-            width=self._layer_stack.width,
-            height=self._layer_stack.height,
-            tile_size=self._layer_stack.tile_size,
-        )
-        layer.tool = tool
-        self._document.execute(InsertLayerCommand(
-            layer=layer,
-            label="Create Diffusion Layer",
-        ))
 
     def _on_clear_mask(self):
         layer = self._layer_stack.active_layer
@@ -1136,27 +1170,16 @@ class EditorWindow:
     # LaMa
     # ------------------------------------------------------------------
 
-    def _on_create_lama(self):
-        composite = self._canvas.get_composite()
+    def _make_lama_tool(self, layer: Layer) -> LamaTool | None:
+        composite = self._tool_source_composite(layer)
         if composite is None:
-            return
+            return None
         cx, cy = self._canvas.view_center_image()
         patch_pil, ppx, ppy, pw, ph = extract_patch(composite, cx, cy)
-        tool = LamaTool(
+        return LamaTool(
             source_patch=patch_pil,
             patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
         )
-        layer = Layer(
-            name=self._layer_stack.next_name("LaMa"),
-            width=self._layer_stack.width,
-            height=self._layer_stack.height,
-            tile_size=self._layer_stack.tile_size,
-        )
-        layer.tool = tool
-        self._document.execute(InsertLayerCommand(
-            layer=layer,
-            label="Create LaMa Layer",
-        ))
 
     def _on_lama_remove(self):
         layer = self._layer_stack.active_layer
@@ -1212,17 +1235,17 @@ class EditorWindow:
     # InstructPix2Pix
     # ------------------------------------------------------------------
 
-    def _on_create_instruct(self):
-        composite = self._canvas.get_composite()
+    def _make_instruct_tool(self, layer: Layer) -> InstructTool | None:
+        composite = self._tool_source_composite(layer)
         if composite is None:
-            return
+            return None
         cx, cy = self._canvas.view_center_image()
         patch_pil, ppx, ppy, pw, ph = extract_patch(composite, cx, cy)
         seed = self._instruct_panel.seed
         if seed < 0:
             seed = random.randint(0, 2**32 - 1)
             self._instruct_panel.set_seed(seed)
-        tool = InstructTool(
+        return InstructTool(
             source_patch=patch_pil,
             patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
             instruction=self._instruct_panel.instruction,
@@ -1231,17 +1254,6 @@ class EditorWindow:
             steps=self._instruct_panel.steps,
             seed=seed,
         )
-        layer = Layer(
-            name=self._layer_stack.next_name("Instruct"),
-            width=self._layer_stack.width,
-            height=self._layer_stack.height,
-            tile_size=self._layer_stack.tile_size,
-        )
-        layer.tool = tool
-        self._document.execute(InsertLayerCommand(
-            layer=layer,
-            label="Create Instruct Layer",
-        ))
 
     def _on_instruct_load_model(self):
         if self._instruct_engine.is_busy:
