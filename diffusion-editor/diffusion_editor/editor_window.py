@@ -1563,8 +1563,9 @@ class EditorWindow:
                 self._pending_request = None
             else:
                 self._diffusion_panel.on_model_loaded(result, self._engine.model_info)
-                if isinstance(self._pending_request.tool, DiffusionTool):
-                    self._submit_regenerate(self._pending_request)
+                pending = self._pending_request
+                if pending is not None and isinstance(pending.tool, DiffusionTool):
+                    self._submit_regenerate(pending)
                     return
                 self._statusbar.text = "Model loaded"
 
@@ -1576,8 +1577,9 @@ class EditorWindow:
                 self._pending_request = None
             else:
                 self._diffusion_panel.on_ip_adapter_loaded()
-                if isinstance(self._pending_request.tool, DiffusionTool):
-                    self._submit_regenerate(self._pending_request)
+                pending = self._pending_request
+                if pending is not None and isinstance(pending.tool, DiffusionTool):
+                    self._submit_regenerate(pending)
                     return
                 self._statusbar.text = "IP-Adapter loaded"
 
@@ -1588,12 +1590,16 @@ class EditorWindow:
                 self._pending_request = None
                 return
 
+            pending = self._pending_request
+            if pending is None:
+                self._statusbar.text = "Diffusion result ignored: no pending layer"
+                return
             result_image, used_seed = result
             log.debug(
-                f"[_poll_diffusion] inference OK, seed={used_seed}, pending={type(self._pending_request).__name__}"
+                f"[_poll_diffusion] inference OK, seed={used_seed}, pending={type(pending).__name__}"
             )
             command, status = map_diffusion_result(
-                self._pending_request, result_image, used_seed)
+                pending, result_image, used_seed)
             if command is not None:
                 self._document.execute(command)
             self._statusbar.text = status
