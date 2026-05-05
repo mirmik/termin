@@ -59,6 +59,12 @@ class EditorCanvas(Canvas):
         self._sel_brush_flow = 1.0
         self._selection_eraser = False
 
+        # Selection rectangle mode
+        self._selection_rect_mode = False
+        self._selection_rect_dragging = False
+        self._selection_rect_start: tuple[int, int] | None = None
+        self._selection_rect_end: tuple[int, int] | None = None
+
         # Rectangle modes
         self._ref_rect_mode = False
         self._ref_rect_dragging = False
@@ -93,6 +99,7 @@ class EditorCanvas(Canvas):
         self.on_color_picked: callable = None
         self.on_ref_rect_drawn: callable = None
         self.on_patch_rect_drawn: callable = None
+        self.on_selection_rect_drawn: callable = None
         self.on_edit_begin: callable = None  # (label: str, layer: Layer, target: str)
         self.on_edit_end: callable = None  # (layer: Layer, target: str, dirty_rect)
 
@@ -363,6 +370,12 @@ class EditorCanvas(Canvas):
 
     def set_selection_eraser(self, eraser: bool):
         self._selection_eraser = eraser
+
+    def set_selection_rect_mode(self, on: bool):
+        self._selection_rect_mode = on
+        self.cursor = "cross" if on else ""
+        if not on:
+            self._selection_rect_dragging = False
 
     def set_show_mask(self, show: bool):
         self._show_mask = show
@@ -792,6 +805,13 @@ class EditorCanvas(Canvas):
             if layer is None:
                 return
 
+            # Selection rect mode
+            if self._selection_rect_mode:
+                self._selection_rect_dragging = True
+                self._selection_rect_start = (ix, iy)
+                self._selection_rect_end = (ix, iy)
+                return
+
             # Patch rect mode
             if (self._patch_rect_mode and layer is not None
                     and layer.tool is not None
@@ -878,6 +898,10 @@ class EditorCanvas(Canvas):
     def _handle_mouse_move(self, ix: float, iy: float):
         ixi, iyi = int(ix), int(iy)
 
+        if self._selection_rect_dragging:
+            self._selection_rect_end = (ixi, iyi)
+            return
+
         if self._patch_rect_dragging:
             self._patch_rect_end = (ixi, iyi)
             return
@@ -956,6 +980,19 @@ class EditorCanvas(Canvas):
 
     def _handle_mouse_up(self, ix: float, iy: float):
         ixi, iyi = int(ix), int(iy)
+
+        if self._selection_rect_dragging:
+            sx, sy = self._selection_rect_start
+            x0, y0 = min(sx, ixi), min(sy, iyi)
+            x1, y1 = max(sx, ixi) + 1, max(sy, iyi) + 1
+            self._selection_rect_dragging = False
+            self._selection_rect_start = None
+            self._selection_rect_end = None
+            self._selection_rect_mode = False
+            self.cursor = ""
+            if x1 - x0 > 1 and y1 - y0 > 1 and self.on_selection_rect_drawn:
+                self.on_selection_rect_drawn(x0, y0, x1, y1)
+            return
 
         if self._patch_rect_dragging:
             sx, sy = self._patch_rect_start
@@ -1115,6 +1152,18 @@ class EditorCanvas(Canvas):
                                    (0.2, 0.47, 1.0, 0.15))
                 renderer.draw_rect_outline(wx0, wy0, wx1 - wx0, wy1 - wy0,
                                            (0.2, 0.47, 1.0, 0.8), 2.0)
+
+        # Selection rectangle (cyan)
+        if self._selection_rect_dragging and self._selection_rect_start and self._selection_rect_end:
+            rect = self._selection_rect_start + self._selection_rect_end
+            if rect:
+                ix0, iy0, ix1, iy1 = rect
+                wx0, wy0 = canvas.image_to_widget(ix0, iy0)
+                wx1, wy1 = canvas.image_to_widget(ix1, iy1)
+                renderer.draw_rect(wx0, wy0, wx1 - wx0, wy1 - wy0,
+                                   (0.0, 0.8, 1.0, 0.12))
+                renderer.draw_rect_outline(wx0, wy0, wx1 - wx0, wy1 - wy0,
+                                           (0.0, 0.8, 1.0, 0.7), 2.0)
 
         # Manual patch rectangle (green)
         if (self._show_patch_rect and layer is not None

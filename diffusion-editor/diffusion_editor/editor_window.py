@@ -59,6 +59,7 @@ from .commands import (
     SetIpAdapterRectCommand, ClearIpAdapterRectCommand,
     SetManualPatchRectCommand, ClearManualPatchRectCommand,
     ClearSelectionCommand, InvertSelectionCommand, SelectAllCommand,
+    SetLayerSelectionCommand,
 )
 from .engine_result_mapper import (
     map_segmentation_result, map_lama_result,
@@ -299,6 +300,7 @@ class EditorWindow:
 
         # Selection panel
         self._selection_panel.on_edit_mode_toggled = self._canvas.set_selection_mode
+        self._selection_panel.on_rect_mode_toggled = self._canvas.set_selection_rect_mode
         self._selection_panel.on_brush_changed = self._canvas.set_selection_brush
         self._selection_panel.on_eraser_toggled = self._canvas.set_selection_eraser
         self._selection_panel.on_show_selection_toggled = self._canvas.set_show_selection
@@ -320,6 +322,7 @@ class EditorWindow:
         self._diffusion_panel.on_clear_patch = self._on_clear_patch_rect
         self._canvas.on_ref_rect_drawn = self._on_ref_rect_drawn
         self._canvas.on_patch_rect_drawn = self._on_patch_rect_drawn
+        self._canvas.on_selection_rect_drawn = self._on_selection_rect_drawn
 
         # Layer panel
         self._layer_panel.on_attach_tool = self._attach_tool_to_layer
@@ -1234,6 +1237,26 @@ class EditorWindow:
                 layer=layer,
                 label="Clear Diffusion Patch Rect",
             ))
+
+    def _on_selection_rect_drawn(self, x0: int, y0: int, x1: int, y1: int):
+        """Create a rectangular selection from the dragged rect."""
+        h, w = self._layer_stack.height, self._layer_stack.width
+        if h == 0 or w == 0:
+            return
+        x0 = max(0, x0)
+        y0 = max(0, y0)
+        x1 = min(w, x1)
+        y1 = min(h, y1)
+        if x1 <= x0 or y1 <= y0:
+            return
+        mask = np.zeros((h, w), dtype=np.float32)
+        mask[y0:y1, x0:x1] = 1.0
+        self._document.execute(SetLayerSelectionCommand(
+            mask=mask,
+            label="Rect Selection",
+        ))
+        # Uncheck the rect button in the panel
+        self._selection_panel._rect_mode_cb.checked = False
 
     # ------------------------------------------------------------------
     # LaMa
