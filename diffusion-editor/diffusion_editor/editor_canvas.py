@@ -15,7 +15,7 @@ from tgfx._tgfx_native import wrap_gl_texture_as_tgfx2, PIXEL_RGBA8
 from .layer_stack import LayerStack
 from .layer import Layer
 from .tool import DiffusionTool, LamaTool, InstructTool
-from .brush import Brush, BrushToolMode, composite_stroke
+from .brush import Brush, BrushToolMode
 from .canvas_tools import create_canvas_tools
 from .gpu_compositor import GPUCompositor
 
@@ -85,7 +85,8 @@ class EditorCanvas(Canvas):
         # Stroke buffer (MAX blending during one stroke)
         self._stroke_mask: np.ndarray | None = None
         self._stroke_color: tuple | None = None
-        self._stroke_overlay: np.ndarray | None = None
+        self._stroke_base_image: np.ndarray | None = None
+        self._stroke_live_dirty_rect: tuple[int, int, int, int] | None = None
         self._stroke_is_eraser = False
 
         self._painting = False
@@ -144,21 +145,20 @@ class EditorCanvas(Canvas):
         self._update_overlay()
 
     def _update_overlay(self):
-        """Rebuild overlay combining selection + mask + stroke preview."""
+        """Rebuild overlay combining selection + mask."""
         layer = self._layer_stack.active_layer
         h, w = (self._layer_stack.height, self._layer_stack.width)
         if h == 0 or w == 0:
             self.set_overlay(None)
             return
 
-        has_stroke = self._stroke_mask is not None and self._stroke_overlay is not None
         has_mask = (layer is not None
                     and self._show_mask
                     and layer.has_mask())
         has_sel = (self._show_selection
                    and not self._layer_stack.selection.is_empty)
 
-        if not has_stroke and not has_mask and not has_sel:
+        if not has_mask and not has_sel:
             self.set_overlay(None)
             return
 
@@ -203,30 +203,43 @@ class EditorCanvas(Canvas):
                 overlay[:, :, 3] = mask_alpha.astype(np.uint8)
             has_base = True
 
-        # Stroke on top
-        if has_stroke:
-            self._stroke_overlay[:, :, 3] = self._stroke_mask
-            sa = self._stroke_overlay[:, :, 3:4].astype(np.float32) / 255.0
-            inv = 1.0 - sa
-            overlay[:, :, :3] = (
-                self._stroke_overlay[:, :, :3].astype(np.float32) * sa
-                + overlay[:, :, :3].astype(np.float32) * inv
-            ).astype(np.uint8)
-            overlay[:, :, 3] = np.clip(
-                self._stroke_overlay[:, :, 3].astype(np.float32)
-                + overlay[:, :, 3].astype(np.float32) * (1.0 - sa[:, :, 0]),
-                0, 255,
-            ).astype(np.uint8)
-
         self.set_overlay(overlay)
 
-    def _update_stroke_region(self, dirty):
-        """Partial overlay update for brush stroke — only copy dirty region alpha."""
-        if dirty is None or self._stroke_overlay is None or self._stroke_mask is None:
+    def _update_stroke_region(self, layer, dirty):
+        """Apply current paint stroke preview into the layer dirty region."""
+        if (dirty is None
+                or layer is None
+                or self._stroke_base_image is None
+                or self._stroke_mask is None
+                or self._stroke_color is None):
             return
         x0, y0, x1, y1 = dirty
-        self._stroke_overlay[y0:y1, x0:x1, 3] = self._stroke_mask[y0:y1, x0:x1]
-        self.mark_overlay_dirty(x0, y0, x1, y1)
+        if x1 <= x0 or y1 <= y0:
+            return
+
+        base = self._stroke_base_image[y0:y1, x0:x1]
+        mask = self._stroke_mask[y0:y1, x0:x1]
+        out = base.copy()
+        where = mask > 0
+        if np.any(where):
+            r, g, b, _a = self._stroke_color
+            sa = mask[where].astype(np.float32) / 255.0
+            da = base[where, 3].astype(np.float32) / 255.0
+            out_a = sa + da * (1.0 - sa)
+            safe_a = np.maximum(out_a, 1.0 / 255.0)
+            inv_sa = 1.0 - sa
+            for c, src_val in enumerate((r, g, b)):
+                dst_c = base[where, c].astype(np.float32)
+                out[where, c] = np.clip(
+                    (src_val * sa + dst_c * da * inv_sa) / safe_a,
+                    0, 255,
+                ).astype(np.uint8)
+            out[where, 3] = np.clip(out_a * 255.0, 0, 255).astype(np.uint8)
+
+        layer.image[y0:y1, x0:x1] = out
+        self._stroke_live_dirty_rect = self._union_rect(
+            self._stroke_live_dirty_rect, dirty)
+        self._refresh_modified_layer_rect(layer, dirty)
 
     def _update_mask_overlay_region(self, layer, dirty):
         """Partial overlay update for mask painting — only recompute dirty region alpha."""
@@ -657,32 +670,24 @@ class EditorCanvas(Canvas):
         self._stroke_color = tuple(self.brush.color)
         if self._stroke_is_eraser:
             self._stroke_mask = None
-            self._stroke_overlay = None
+            self._stroke_base_image = None
+            self._stroke_live_dirty_rect = None
         else:
+            layer = self._layer_stack.active_layer
+            if layer is None:
+                return
             self._stroke_mask = np.zeros((h, w), dtype=np.uint8)
-            self._stroke_overlay = np.zeros((h, w, 4), dtype=np.uint8)
-            r, g, b, _a = self._stroke_color
-            self._stroke_overlay[:, :, 0] = r
-            self._stroke_overlay[:, :, 1] = g
-            self._stroke_overlay[:, :, 2] = b
-            self.set_overlay_ref(self._stroke_overlay)
+            self._stroke_base_image = layer.image.copy()
+            self._stroke_live_dirty_rect = None
 
     def _end_stroke(self):
         layer = self._layer_stack.active_layer
-        if layer is not None and self._stroke_mask is not None:
-            composite_stroke(layer.image, self._stroke_mask, self._stroke_color)
-            self._layer_stack.mark_layer_dirty(layer)
-            if self._gpu_compositing and self._gpu_compositor:
-                self._gpu_compositor.mark_dirty(layer)
-                self._gpu_compositor.composite()
-                self._composite_stale = True
-            else:
-                self._composite = np.ascontiguousarray(
-                    self._layer_stack.composite())
-                self.set_image(self._composite)
+        if layer is not None and self._stroke_live_dirty_rect is not None:
+            self._layer_stack.mark_layer_dirty(layer, self._stroke_live_dirty_rect)
         self._stroke_mask = None
         self._stroke_color = None
-        self._stroke_overlay = None
+        self._stroke_base_image = None
+        self._stroke_live_dirty_rect = None
         self._mask_overlay = None
         self._update_overlay()
 

@@ -32,7 +32,7 @@ class PaintTool(CanvasStrokeTool):
         if canvas._stroke_mask is None:
             return None
         dirty = canvas.brush.dab_to_mask(canvas._stroke_mask, x, y)
-        canvas._update_stroke_region(dirty)
+        canvas._update_stroke_region(layer, dirty)
         return dirty
 
     def move(self, canvas, layer, last_pos, x: int, y: int):
@@ -43,7 +43,7 @@ class PaintTool(CanvasStrokeTool):
             dirty = canvas.brush.stroke_to_mask(canvas._stroke_mask, lx, ly, x, y)
         else:
             dirty = canvas.brush.dab_to_mask(canvas._stroke_mask, x, y)
-        canvas._update_stroke_region(dirty)
+        canvas._update_stroke_region(layer, dirty)
         return dirty
 
     def end(self, canvas, layer):
