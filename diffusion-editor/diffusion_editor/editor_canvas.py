@@ -50,6 +50,14 @@ class EditorCanvas(Canvas):
         self._mask_brush_flow = 1.0
         self._mask_eraser = False
         self._show_mask = True
+        self._show_selection = True
+
+        # Selection painting mode
+        self._selection_mode = False
+        self._sel_brush_size = 50
+        self._sel_brush_hardness = 0.4
+        self._sel_brush_flow = 1.0
+        self._selection_eraser = False
 
         # Rectangle modes
         self._ref_rect_mode = False
@@ -125,7 +133,7 @@ class EditorCanvas(Canvas):
         self._update_overlay()
 
     def _update_overlay(self):
-        """Rebuild overlay combining stroke preview + mask."""
+        """Rebuild overlay combining selection + mask + stroke preview."""
         layer = self._layer_stack.active_layer
         h, w = (self._layer_stack.height, self._layer_stack.width)
         if h == 0 or w == 0:
@@ -135,46 +143,68 @@ class EditorCanvas(Canvas):
         has_stroke = self._stroke_mask is not None and self._stroke_overlay is not None
         has_mask = (self._show_mask
                     and layer.has_mask())
+        has_sel = (self._show_selection
+                   and not self._layer_stack.selection.is_empty)
 
-        if not has_stroke and not has_mask:
+        if not has_stroke and not has_mask and not has_sel:
             self.set_overlay(None)
             return
 
-        if has_stroke and not has_mask:
-            # Fast path: stroke only — just copy RGB + alpha, no compositing
+        overlay = np.zeros((h, w, 4), dtype=np.uint8)
+
+        # Base: selection (blue) then mask (red) composited over it
+        has_base = False
+        if has_sel:
+            sel_alpha = (
+                self._layer_stack.selection.data * 255.0 * 0.3
+            ).astype(np.float32)
+            sa = sel_alpha / 255.0
+            inv = 1.0 - sa
+            overlay[:, :, 0] = (50.0 * sa).astype(np.uint8)
+            overlay[:, :, 1] = (50.0 * sa).astype(np.uint8)
+            overlay[:, :, 2] = (255.0 * sa).astype(np.uint8)
+            overlay[:, :, 3] = sel_alpha.astype(np.uint8)
+            has_base = True
+
+        if has_mask:
+            mask_alpha = (layer.mask.data * 255.0 * 0.4).astype(np.float32)
+            ma = mask_alpha / 255.0
+            inv = 1.0 - ma
+            if has_base:
+                overlay[:, :, 0] = (
+                    255.0 * ma + overlay[:, :, 0].astype(np.float32) * inv
+                ).astype(np.uint8)
+                overlay[:, :, 1] = (
+                    50.0 * ma + overlay[:, :, 1].astype(np.float32) * inv
+                ).astype(np.uint8)
+                overlay[:, :, 2] = (
+                    50.0 * ma + overlay[:, :, 2].astype(np.float32) * inv
+                ).astype(np.uint8)
+                overlay[:, :, 3] = np.clip(
+                    mask_alpha + overlay[:, :, 3].astype(np.float32) * inv,
+                    0, 255,
+                ).astype(np.uint8)
+            else:
+                overlay[:, :, 0] = 255
+                overlay[:, :, 1] = 50
+                overlay[:, :, 2] = 50
+                overlay[:, :, 3] = mask_alpha.astype(np.uint8)
+            has_base = True
+
+        # Stroke on top
+        if has_stroke:
             self._stroke_overlay[:, :, 3] = self._stroke_mask
-            self.set_overlay(self._stroke_overlay.copy())
-            return
-
-        if has_mask and not has_stroke:
-            # Fast path: mask only
-            overlay = np.empty((h, w, 4), dtype=np.uint8)
-            overlay[:, :, 0] = 255
-            overlay[:, :, 1] = 50
-            overlay[:, :, 2] = 50
-            overlay[:, :, 3] = (layer.mask.data * 255.0 * 0.4).astype(np.uint8)
-            self.set_overlay(overlay)
-            return
-
-        # Both mask and stroke: composite stroke over mask
-        overlay = np.empty((h, w, 4), dtype=np.uint8)
-        overlay[:, :, 0] = 255
-        overlay[:, :, 1] = 50
-        overlay[:, :, 2] = 50
-        overlay[:, :, 3] = (layer.mask.data * 255.0 * 0.4).astype(np.uint8)
-
-        self._stroke_overlay[:, :, 3] = self._stroke_mask
-        sa = self._stroke_overlay[:, :, 3:4].astype(np.float32) / 255.0
-        inv = 1.0 - sa
-        overlay[:, :, :3] = (
-            self._stroke_overlay[:, :, :3].astype(np.float32) * sa
-            + overlay[:, :, :3].astype(np.float32) * inv
-        ).astype(np.uint8)
-        overlay[:, :, 3] = np.clip(
-            self._stroke_overlay[:, :, 3].astype(np.float32)
-            + overlay[:, :, 3].astype(np.float32) * (1.0 - sa[:, :, 0]),
-            0, 255
-        ).astype(np.uint8)
+            sa = self._stroke_overlay[:, :, 3:4].astype(np.float32) / 255.0
+            inv = 1.0 - sa
+            overlay[:, :, :3] = (
+                self._stroke_overlay[:, :, :3].astype(np.float32) * sa
+                + overlay[:, :, :3].astype(np.float32) * inv
+            ).astype(np.uint8)
+            overlay[:, :, 3] = np.clip(
+                self._stroke_overlay[:, :, 3].astype(np.float32)
+                + overlay[:, :, 3].astype(np.float32) * (1.0 - sa[:, :, 0]),
+                0, 255,
+            ).astype(np.uint8)
 
         self.set_overlay(overlay)
 
@@ -322,9 +352,25 @@ class EditorCanvas(Canvas):
     def set_brush_eraser(self, eraser: bool):
         self._brush_eraser = eraser
 
+    def set_selection_mode(self, on: bool):
+        self._selection_mode = on
+        self.cursor = "cross" if on else ""
+
+    def set_selection_brush(self, size: int, hardness: float, flow: float = 1.0):
+        self._sel_brush_size = size
+        self._sel_brush_hardness = hardness
+        self._sel_brush_flow = max(0.0, min(flow, 1.0))
+
+    def set_selection_eraser(self, eraser: bool):
+        self._selection_eraser = eraser
+
     def set_show_mask(self, show: bool):
         self._show_mask = show
         self._mask_overlay = None
+        self._update_overlay()
+
+    def set_show_selection(self, show: bool):
+        self._show_selection = show
         self._update_overlay()
 
     def set_ref_rect_mode(self, on: bool):
@@ -461,6 +507,107 @@ class EditorCanvas(Canvas):
         ax0, ay0, ax1, ay1 = a
         bx0, by0, bx1, by1 = b
         return (min(ax0, bx0), min(ay0, by0), max(ax1, bx1), max(ay1, by1))
+
+    # ------------------------------------------------------------------
+    # Selection painting
+    # ------------------------------------------------------------------
+
+    def _dab_selection(self, cx: int, cy: int):
+        """Paint a selection dab at image coordinates. Returns (dirty_rect, stamp)."""
+        d = self._sel_brush_size
+        if d < 1:
+            return None, None
+        sel = self._layer_stack.selection.data
+        if sel.size == 0:
+            return None, None
+        y, x = np.ogrid[-d / 2:d / 2, -d / 2:d / 2]
+        dist = np.sqrt(x * x + y * y)
+        radius = d / 2
+
+        if self._sel_brush_hardness >= 1.0:
+            alpha_mask = (dist <= radius).astype(np.float32)
+        else:
+            inner = radius * self._sel_brush_hardness
+            alpha_mask = np.clip(
+                (radius - dist) / max(radius - inner, 0.001), 0, 1)
+
+        sh, sw = alpha_mask.shape
+        ih, iw = sel.shape
+        x0 = cx - sw // 2
+        y0 = cy - sh // 2
+        sx0 = max(0, -x0)
+        sy0 = max(0, -y0)
+        sx1 = min(sw, iw - x0)
+        sy1 = min(sh, ih - y0)
+        dx0 = max(0, x0)
+        dy0b = max(0, y0)
+        dx1 = dx0 + (sx1 - sx0)
+        dy1 = dy0b + (sy1 - sy0)
+        if dx0 >= dx1 or dy0b >= dy1:
+            return None, None
+        stamp_slice = alpha_mask[sy0:sy1, sx0:sx1] * self._sel_brush_flow
+        if self._selection_eraser:
+            sel[dy0b:dy1, dx0:dx1] = np.minimum(
+                sel[dy0b:dy1, dx0:dx1], 1.0 - stamp_slice)
+        else:
+            sel[dy0b:dy1, dx0:dx1] = np.maximum(
+                sel[dy0b:dy1, dx0:dx1], stamp_slice)
+        return (dx0, dy0b, dx1, dy1), stamp_slice
+
+    def _stroke_selection_line(self, x0: int, y0: int, x1: int, y1: int):
+        """Paint a selection stroke segment. Returns (dirty_rect, stamp) or (None, None)."""
+        sel = self._layer_stack.selection.data
+        if sel.size == 0:
+            return None, None
+        ih, iw = sel.shape
+        d = self._sel_brush_size
+        if d < 1:
+            return None, None
+        radius = d / 2.0
+
+        bx0 = max(0, int(min(x0, x1) - radius))
+        by0 = max(0, int(min(y0, y1) - radius))
+        bx1 = min(iw, int(max(x0, x1) + radius) + 1)
+        by1 = min(ih, int(max(y0, y1) + radius) + 1)
+        if bx0 >= bx1 or by0 >= by1:
+            return None, None
+
+        sdx = float(x1 - x0)
+        sdy = float(y1 - y0)
+        seg_len_sq = sdx * sdx + sdy * sdy
+
+        if seg_len_sq < 0.5:
+            return self._dab_selection(x0, y0)
+
+        yy, xx = np.mgrid[by0:by1, bx0:bx1]
+        xx = xx.astype(np.float32)
+        yy = yy.astype(np.float32)
+
+        t = ((xx - x0) * sdx + (yy - y0) * sdy) / seg_len_sq
+        np.clip(t, 0.0, 1.0, out=t)
+        cx = x0 + t * sdx
+        cy = y0 + t * sdy
+        dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+
+        if self._sel_brush_hardness >= 1.0:
+            alpha = (dist <= radius).astype(np.float32)
+        else:
+            inner = radius * self._sel_brush_hardness
+            alpha = np.clip(
+                (radius - dist) / max(radius - inner, 0.001), 0, 1)
+
+        stamp = alpha * self._sel_brush_flow
+        if self._selection_eraser:
+            sel[by0:by1, bx0:bx1] = np.minimum(
+                sel[by0:by1, bx0:bx1], 1.0 - stamp)
+        else:
+            sel[by0:by1, bx0:bx1] = np.maximum(
+                sel[by0:by1, bx0:bx1], stamp)
+        return (bx0, by0, bx1, by1), stamp
+
+    # ------------------------------------------------------------------
+    # Mask erase (preview)
+    # ------------------------------------------------------------------
 
     def _begin_mask_erase(self):
         h, w = self._layer_stack.height, self._layer_stack.width
@@ -661,6 +808,21 @@ class EditorCanvas(Canvas):
                 self._ref_rect_end = (ix, iy)
                 return
 
+            # Selection painting
+            if self._selection_mode:
+                self._painting = True
+                self._stroke_dirty_rect = None
+                self._edit_layer = None
+                self._edit_label = "Selection Stroke"
+                self._edit_target = "selection"
+                if self.on_edit_begin:
+                    self.on_edit_begin(self._edit_label, None, self._edit_target)
+                dirty, _stamp = self._dab_selection(ix, iy)
+                self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
+                self._update_overlay()
+                self._last_paint_pos = (ix, iy)
+                return
+
             # Painting
             self._painting = True
             self._stroke_dirty_rect = None
@@ -725,6 +887,16 @@ class EditorCanvas(Canvas):
             return
 
         if self._painting:
+            if self._edit_target == "selection":
+                if self._last_paint_pos:
+                    lx, ly = self._last_paint_pos
+                    dirty, _stamp = self._stroke_selection_line(lx, ly, ixi, iyi)
+                else:
+                    dirty, _stamp = self._dab_selection(ixi, iyi)
+                self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
+                self._update_overlay()
+                self._last_paint_pos = (ixi, iyi)
+                return
             layer = self._layer_stack.active_layer
             if layer is None:
                 return
@@ -812,7 +984,15 @@ class EditorCanvas(Canvas):
             return
 
         if self._painting:
-            if self._mask_eraser and self._mask_erase_stroke is not None:
+            if self._edit_target == "selection":
+                self._update_overlay()
+                if self.on_edit_end:
+                    self.on_edit_end(None, "selection", self._stroke_dirty_rect)
+                self._stroke_dirty_rect = None
+                self._edit_label = None
+                self._edit_target = None
+                self._edit_layer = None
+            elif self._mask_eraser and self._mask_erase_stroke is not None:
                 layer = self._layer_stack.active_layer
                 dirty = self._mask_erase_dirty
                 if layer is not None and dirty is not None:

@@ -41,6 +41,7 @@ from .brush_panel import BrushPanel
 from .diffusion_panel import DiffusionPanel
 from .lama_panel import LamaPanel
 from .instruct_panel import InstructPanel
+from .selection_panel import SelectionPanel
 from .diffusion_engine import DiffusionEngine
 from .lama_engine import LamaEngine
 from .instruct_engine import InstructEngine
@@ -57,6 +58,7 @@ from .commands import (
     AttachLayerToolCommand, DetachLayerToolCommand,
     SetIpAdapterRectCommand, ClearIpAdapterRectCommand,
     SetManualPatchRectCommand, ClearManualPatchRectCommand,
+    ClearSelectionCommand, InvertSelectionCommand, SelectAllCommand,
 )
 from .engine_result_mapper import (
     map_segmentation_result, map_lama_result,
@@ -152,6 +154,10 @@ class EditorWindow:
         self._toolbar.add_action(text="Save", on_click=self.save_file)
         self._toolbar.add_separator()
         self._toolbar.add_action(text="Fit", on_click=self._fit)
+        self._toolbar.add_separator()
+        self._toolbar.add_action(text="Sel All", on_click=self._select_all)
+        self._toolbar.add_action(text="Sel Clear", on_click=self._clear_selection)
+        self._toolbar.add_action(text="Sel Inv", on_click=self._invert_selection)
         root.add_child(self._toolbar)
 
         # Main content area: left panel | canvas | right panel
@@ -171,10 +177,13 @@ class EditorWindow:
         self._diffusion_panel.set_models_dir(self._models_dir)
         self._lama_panel = LamaPanel()
         self._instruct_panel = InstructPanel()
+        self._selection_panel = SelectionPanel()
+        self._selection_panel.visible = True
 
         self._left_container.spacing = 6
         self._brush_panel.visible = True
         self._left_container.add_child(self._brush_panel)
+        self._left_container.add_child(self._selection_panel)
         for p in (self._diffusion_panel, self._lama_panel, self._instruct_panel):
             p.visible = False
             p.stretch = True
@@ -246,6 +255,14 @@ class EditorWindow:
         edit_menu.add_item(MenuItem("Settings...", on_click=self._show_settings_dialog))
         self._menu_bar.add_menu("Edit", edit_menu)
 
+        # Select menu
+        select_menu = Menu()
+        select_menu.add_item(MenuItem("Select All", shortcut="Ctrl+A", on_click=self._select_all))
+        select_menu.add_item(MenuItem("Clear Selection", shortcut="Ctrl+D", on_click=self._clear_selection))
+        select_menu.add_item(MenuItem(separator=True))
+        select_menu.add_item(MenuItem("Invert Selection", shortcut="Ctrl+Shift+I", on_click=self._invert_selection))
+        self._menu_bar.add_menu("Select", select_menu)
+
         # Layer menu
         layer_menu = Menu()
         layer_menu.add_item(MenuItem("New Layer", shortcut="Ctrl+Shift+N", on_click=self._new_layer))
@@ -279,6 +296,12 @@ class EditorWindow:
 
         # Brush panel
         self._brush_panel.on_eraser_toggled = self._canvas.set_brush_eraser
+
+        # Selection panel
+        self._selection_panel.on_edit_mode_toggled = self._canvas.set_selection_mode
+        self._selection_panel.on_brush_changed = self._canvas.set_selection_brush
+        self._selection_panel.on_eraser_toggled = self._canvas.set_selection_eraser
+        self._selection_panel.on_show_selection_toggled = self._canvas.set_show_selection
 
         # Diffusion panel
         self._diffusion_panel.on_load_model = self._on_load_model
@@ -642,6 +665,15 @@ class EditorWindow:
             return
         if self._external_edit_ctx is not None:
             return
+        if target == "selection":
+            before_arr = self._layer_stack.selection.data.copy()
+            self._external_edit_ctx = ExternalEditContext(
+                label=label,
+                layer_path="",
+                target=target,
+                before_arr=before_arr,
+            )
+            return
         layer_path = self._layer_stack.get_layer_path(layer)
         if not layer_path:
             return
@@ -657,6 +689,14 @@ class EditorWindow:
         )
 
     def _apply_layer_patch(self, layer_path: str, target: str, rect, patch: np.ndarray):
+        if target == "selection":
+            x0, y0, x1, y1 = rect
+            if x1 <= x0 or y1 <= y0:
+                return
+            self._layer_stack.selection.data[y0:y1, x0:x1] = coerce_mask_data(patch)
+            if self._layer_stack.on_changed:
+                self._layer_stack.on_changed()
+            return
         layer = self._layer_stack.get_layer_by_path(layer_path)
         if layer is None:
             return
@@ -679,11 +719,31 @@ class EditorWindow:
             return
         if self._external_edit_ctx is None:
             return
-        if layer is None:
-            self._external_edit_ctx = None
-            return
         ctx = self._external_edit_ctx
         self._external_edit_ctx = None
+        if target == "selection":
+            if dirty_rect is None:
+                return
+            x0, y0, x1, y1 = dirty_rect
+            if x1 <= x0 or y1 <= y0:
+                return
+            before_arr = ctx.before_arr
+            after_arr = self._layer_stack.selection.data
+            before_patch = before_arr[y0:y1, x0:x1].copy()
+            after_patch = after_arr[y0:y1, x0:x1].copy()
+            if np.array_equal(before_patch, after_patch):
+                return
+            rect = (x0, y0, x1, y1)
+            label = ctx.label
+            self._document.push_callbacks(
+                label=label,
+                undo_fn=lambda: self._apply_layer_patch("", target, rect, before_patch),
+                redo_fn=lambda: self._apply_layer_patch("", target, rect, after_patch),
+                size_bytes=before_patch.nbytes + after_patch.nbytes,
+            )
+            return
+        if layer is None:
+            return
         layer_path = self._layer_stack.get_layer_path(layer)
         if layer_path != ctx.layer_path or target != ctx.target:
             return
@@ -807,6 +867,15 @@ class EditorWindow:
 
     def _flatten_layers(self):
         self._document.execute(FlattenLayersCommand())
+
+    def _select_all(self):
+        self._document.execute(SelectAllCommand())
+
+    def _clear_selection(self):
+        self._document.execute(ClearSelectionCommand())
+
+    def _invert_selection(self):
+        self._document.execute(InvertSelectionCommand())
 
     def _move_layer(self, layer: Layer, new_parent: Layer | None, index: int):
         self._document.execute(MoveLayerCommand(

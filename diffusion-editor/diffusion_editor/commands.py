@@ -351,6 +351,47 @@ class SetLayerSelectionCommand:
 
 
 @dataclass(frozen=True)
+class ClearSelectionCommand:
+    """Clear the document-level selection."""
+
+    label: str = "Clear Selection"
+
+    def apply(self, layer_stack: LayerStack) -> None:
+        layer_stack.selection.clear()
+        if layer_stack.on_changed:
+            layer_stack.on_changed()
+
+
+@dataclass(frozen=True)
+class InvertSelectionCommand:
+    """Invert the document-level selection."""
+
+    label: str = "Invert Selection"
+
+    def apply(self, layer_stack: LayerStack) -> None:
+        layer_stack.selection.data[:] = 1.0 - layer_stack.selection.data
+        if layer_stack.on_changed:
+            layer_stack.on_changed()
+
+
+@dataclass(frozen=True)
+class SelectAllCommand:
+    """Select the entire canvas."""
+
+    label: str = "Select All"
+
+    def apply(self, layer_stack: LayerStack) -> None:
+        h, w = layer_stack.height, layer_stack.width
+        if h == 0 or w == 0:
+            return
+        if layer_stack.selection.data.shape != (h, w):
+            layer_stack.selection = Selection(height=h, width=w)
+        layer_stack.selection.data[:] = 1.0
+        if layer_stack.on_changed:
+            layer_stack.on_changed()
+
+
+@dataclass(frozen=True)
 class ApplyGeneratedResultCommand:
     """Apply a generated patch result into a layer image and invalidate caches."""
 
