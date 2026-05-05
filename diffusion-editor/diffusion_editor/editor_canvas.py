@@ -13,7 +13,8 @@ from tcgui.widgets.events import KeyEvent
 from tgfx._tgfx_native import wrap_gl_texture_as_tgfx2, PIXEL_RGBA8
 
 from .layer_stack import LayerStack
-from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
+from .layer import Layer
+from .tool import DiffusionTool, LamaTool, InstructTool
 from .brush import Brush, composite_stroke
 from .gpu_compositor import GPUCompositor
 
@@ -133,7 +134,6 @@ class EditorCanvas(Canvas):
 
         has_stroke = self._stroke_mask is not None and self._stroke_overlay is not None
         has_mask = (self._show_mask
-                    and isinstance(layer, (DiffusionLayer, LamaLayer, InstructLayer))
                     and layer.has_mask())
 
         if not has_stroke and not has_mask:
@@ -152,7 +152,7 @@ class EditorCanvas(Canvas):
             overlay[:, :, 0] = 255
             overlay[:, :, 1] = 50
             overlay[:, :, 2] = 50
-            overlay[:, :, 3] = (layer.mask.astype(np.float32) * 0.4).astype(np.uint8)
+            overlay[:, :, 3] = (layer.mask.data * 255.0 * 0.4).astype(np.uint8)
             self.set_overlay(overlay)
             return
 
@@ -161,7 +161,7 @@ class EditorCanvas(Canvas):
         overlay[:, :, 0] = 255
         overlay[:, :, 1] = 50
         overlay[:, :, 2] = 50
-        overlay[:, :, 3] = (layer.mask.astype(np.float32) * 0.4).astype(np.uint8)
+        overlay[:, :, 3] = (layer.mask.data * 255.0 * 0.4).astype(np.uint8)
 
         self._stroke_overlay[:, :, 3] = self._stroke_mask
         sa = self._stroke_overlay[:, :, 3:4].astype(np.float32) / 255.0
@@ -198,11 +198,11 @@ class EditorCanvas(Canvas):
             self._mask_overlay[:, :, 1] = 50
             self._mask_overlay[:, :, 2] = 50
             self._mask_overlay[:, :, 3] = (
-                layer.mask.astype(np.float32) * 0.4).astype(np.uint8)
+                layer.mask.data * 255.0 * 0.4).astype(np.uint8)
             self.set_overlay_ref(self._mask_overlay)
             return
         self._mask_overlay[y0:y1, x0:x1, 3] = (
-            layer.mask[y0:y1, x0:x1].astype(np.float32) * 0.4).astype(np.uint8)
+            layer.mask.data[y0:y1, x0:x1] * 255.0 * 0.4).astype(np.uint8)
         self.mark_overlay_dirty(x0, y0, x1, y1)
 
     def _update_mask_overlay_region_preview(self, layer, dirty, preview_mask):
@@ -217,10 +217,10 @@ class EditorCanvas(Canvas):
             self._mask_overlay[:, :, 1] = 50
             self._mask_overlay[:, :, 2] = 50
             self._mask_overlay[:, :, 3] = (
-                layer.mask.astype(np.float32) * 0.4).astype(np.uint8)
+                layer.mask.data * 255.0 * 0.4).astype(np.uint8)
             self.set_overlay_ref(self._mask_overlay)
         self._mask_overlay[y0:y1, x0:x1, 3] = (
-            preview_mask.astype(np.float32) * 0.4).astype(np.uint8)
+            preview_mask * 255.0 * 0.4).astype(np.uint8)
         self.mark_overlay_dirty(x0, y0, x1, y1)
 
     def _preview_mask_erase_region(self, layer, dirty):
@@ -238,7 +238,7 @@ class EditorCanvas(Canvas):
             return
         below = self._composite_rect_below(layer, y0, y1, x0, x1)
         above = layer.image[y0:y1, x0:x1].astype(np.float32)
-        erase = self._mask_erase_stroke[y0:y1, x0:x1].astype(np.float32) / 255.0
+        erase = self._mask_erase_stroke[y0:y1, x0:x1]
         # Reduce alpha for preview only
         above[:, :, 3] = np.clip(above[:, :, 3] * (1.0 - erase), 0, 255)
         sa = above[:, :, 3:4] / 255.0
@@ -253,14 +253,18 @@ class EditorCanvas(Canvas):
             out_a * 255.0, 0, 255).astype(np.uint8)
         self.set_image(self._composite)
 
-    def _erase_layer_rect(self, layer, rect, erase_u8):
-        """Erase layer.image alpha by erase_u8 mask within rect, update composite."""
-        if rect is None or erase_u8 is None:
+    def _erase_layer_rect(self, layer, rect, erase):
+        """Erase layer.image alpha by erase mask within rect, update composite.
+
+        erase can be float32 [0..1] or uint8 [0..255].
+        """
+        if rect is None or erase is None:
             return
         x0, y0, x1, y1 = rect
         if x1 <= x0 or y1 <= y0:
             return
-        erase = erase_u8.astype(np.float32) / 255.0
+        if erase.dtype == np.uint8:
+            erase = erase.astype(np.float32) / 255.0
         la = layer.image[y0:y1, x0:x1, 3].astype(np.float32)
         layer.image[y0:y1, x0:x1, 3] = np.clip(
             la * (1.0 - erase), 0, 255).astype(np.uint8)
@@ -346,11 +350,14 @@ class EditorCanvas(Canvas):
     # ------------------------------------------------------------------
 
     def _is_mask_layer_active(self) -> bool:
-        return isinstance(self._layer_stack.active_layer,
-                          (DiffusionLayer, LamaLayer, InstructLayer))
+        active = self._layer_stack.active_layer
+        return active is not None
 
     def _dab_mask(self, mask: np.ndarray, cx: int, cy: int, *, erase: bool | None = None):
-        """Returns (dirty_rect, stamp_u8) or (None, None)."""
+        """Returns (dirty_rect, stamp) or (None, None).
+
+        mask is float32 [0..1], same for returned stamp.
+        """
         d = self._mask_brush_size
         if d < 1:
             return None, None
@@ -359,11 +366,11 @@ class EditorCanvas(Canvas):
         radius = d / 2
 
         if self._mask_brush_hardness >= 1.0:
-            alpha_mask = (dist <= radius).astype(np.float32) * 255
+            alpha_mask = (dist <= radius).astype(np.float32)
         else:
             inner = radius * self._mask_brush_hardness
             alpha_mask = np.clip(
-                (radius - dist) / max(radius - inner, 0.001), 0, 1) * 255
+                (radius - dist) / max(radius - inner, 0.001), 0, 1)
 
         sh, sw = alpha_mask.shape
         ih, iw = mask.shape
@@ -379,12 +386,12 @@ class EditorCanvas(Canvas):
         dy1 = dy0b + (sy1 - sy0)
         if dx0 >= dx1 or dy0b >= dy1:
             return None, None
-        stamp_slice = (alpha_mask[sy0:sy1, sx0:sx1] * self._mask_brush_flow).astype(np.uint8)
+        stamp_slice = alpha_mask[sy0:sy1, sx0:sx1] * self._mask_brush_flow
         if erase is None:
             erase = self._mask_eraser
         if erase:
             mask[dy0b:dy1, dx0:dx1] = np.minimum(
-                mask[dy0b:dy1, dx0:dx1], 255 - stamp_slice)
+                mask[dy0b:dy1, dx0:dx1], 1.0 - stamp_slice)
         else:
             mask[dy0b:dy1, dx0:dx1] = np.maximum(
                 mask[dy0b:dy1, dx0:dx1], stamp_slice)
@@ -393,7 +400,10 @@ class EditorCanvas(Canvas):
     def _stroke_mask_line(self, mask: np.ndarray,
                           x0: int, y0: int, x1: int, y1: int,
                           *, erase: bool | None = None):
-        """Draw smooth mask stroke segment. Returns (dirty_rect, stamp_u8) or (None, None)."""
+        """Draw smooth mask stroke segment. Returns (dirty_rect, stamp) or (None, None).
+
+        mask is float32 [0..1], same for returned stamp.
+        """
         ih, iw = mask.shape
         d = self._mask_brush_size
         if d < 1:
@@ -425,22 +435,22 @@ class EditorCanvas(Canvas):
         dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
 
         if self._mask_brush_hardness >= 1.0:
-            alpha = (dist <= radius).astype(np.float32) * 255
+            alpha = (dist <= radius).astype(np.float32)
         else:
             inner = radius * self._mask_brush_hardness
             alpha = np.clip(
-                (radius - dist) / max(radius - inner, 0.001), 0, 1) * 255
+                (radius - dist) / max(radius - inner, 0.001), 0, 1)
 
-        stamp_u8 = (alpha * self._mask_brush_flow).astype(np.uint8)
+        stamp = alpha * self._mask_brush_flow
         if erase is None:
             erase = self._mask_eraser
         if erase:
             mask[by0:by1, bx0:bx1] = np.minimum(
-                mask[by0:by1, bx0:bx1], 255 - stamp_u8)
+                mask[by0:by1, bx0:bx1], 1.0 - stamp)
         else:
             mask[by0:by1, bx0:bx1] = np.maximum(
-                mask[by0:by1, bx0:bx1], stamp_u8)
-        return (bx0, by0, bx1, by1), stamp_u8
+                mask[by0:by1, bx0:bx1], stamp)
+        return (bx0, by0, bx1, by1), stamp
 
     @staticmethod
     def _union_rect(a, b):
@@ -456,7 +466,7 @@ class EditorCanvas(Canvas):
         h, w = self._layer_stack.height, self._layer_stack.width
         if h == 0 or w == 0:
             return
-        self._mask_erase_stroke = np.zeros((h, w), dtype=np.uint8)
+        self._mask_erase_stroke = np.zeros((h, w), dtype=np.float32)
         self._mask_erase_dirty = None
 
     # ------------------------------------------------------------------
@@ -636,8 +646,9 @@ class EditorCanvas(Canvas):
                 return
 
             # Patch rect mode
-            if self._patch_rect_mode and isinstance(
-                    layer, (DiffusionLayer, InstructLayer)):
+            if (self._patch_rect_mode and layer is not None
+                    and layer.tool is not None
+                    and hasattr(layer.tool, 'manual_patch_rect')):
                 self._patch_rect_dragging = True
                 self._patch_rect_start = (ix, iy)
                 self._patch_rect_end = (ix, iy)
@@ -681,12 +692,12 @@ class EditorCanvas(Canvas):
                         if self._show_mask:
                             x0, y0, x1, y1 = dirty
                             preview = np.minimum(
-                                layer.mask[y0:y1, x0:x1],
-                                255 - self._mask_erase_stroke[y0:y1, x0:x1])
+                                layer.mask.data[y0:y1, x0:x1],
+                                1.0 - self._mask_erase_stroke[y0:y1, x0:x1])
                             self._update_mask_overlay_region_preview(layer, dirty, preview)
                         self._preview_mask_erase_region(layer, dirty)
                 else:
-                    dirty, _stamp = self._dab_mask(layer.mask, ix, iy)
+                    dirty, _stamp = self._dab_mask(layer.mask.data, ix, iy)
                     self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
                     self._update_mask_overlay_region(layer, dirty)
             else:
@@ -729,20 +740,21 @@ class EditorCanvas(Canvas):
                         dirty, _stamp = self._dab_mask(
                             self._mask_erase_stroke, ixi, iyi, erase=False)
                     self._mask_erase_dirty = self._union_rect(self._mask_erase_dirty, dirty)
+                    self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
                     if dirty is not None:
                         if self._show_mask:
                             x0, y0, x1, y1 = dirty
                             preview = np.minimum(
-                                layer.mask[y0:y1, x0:x1],
-                                255 - self._mask_erase_stroke[y0:y1, x0:x1])
+                                layer.mask.data[y0:y1, x0:x1],
+                                1.0 - self._mask_erase_stroke[y0:y1, x0:x1])
                             self._update_mask_overlay_region_preview(layer, dirty, preview)
                         self._preview_mask_erase_region(layer, dirty)
                 else:
                     if self._last_paint_pos:
                         lx, ly = self._last_paint_pos
-                        dirty, _stamp = self._stroke_mask_line(layer.mask, lx, ly, ixi, iyi)
+                        dirty, _stamp = self._stroke_mask_line(layer.mask.data, lx, ly, ixi, iyi)
                     else:
-                        dirty, _stamp = self._dab_mask(layer.mask, ixi, iyi)
+                        dirty, _stamp = self._dab_mask(layer.mask.data, ixi, iyi)
                     self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
                     self._update_mask_overlay_region(layer, dirty)
             else:
@@ -805,9 +817,9 @@ class EditorCanvas(Canvas):
                 dirty = self._mask_erase_dirty
                 if layer is not None and dirty is not None:
                     x0, y0, x1, y1 = dirty
-                    layer.mask[y0:y1, x0:x1] = np.minimum(
-                        layer.mask[y0:y1, x0:x1],
-                        255 - self._mask_erase_stroke[y0:y1, x0:x1])
+                    layer.mask.data[y0:y1, x0:x1] = np.minimum(
+                        layer.mask.data[y0:y1, x0:x1],
+                        1.0 - self._mask_erase_stroke[y0:y1, x0:x1])
                     self._erase_layer_rect(
                         layer, dirty, self._mask_erase_stroke[y0:y1, x0:x1])
                     self._update_mask_overlay_region(layer, dirty)
@@ -908,13 +920,13 @@ class EditorCanvas(Canvas):
         layer = self._layer_stack.active_layer
 
         # IP-Adapter reference rectangle (blue)
-        if self._show_ref_rect and isinstance(layer, DiffusionLayer):
+        if self._show_ref_rect and isinstance(layer.tool, DiffusionTool):
             rect = None
             if (self._ref_rect_dragging
                     and self._ref_rect_start and self._ref_rect_end):
                 rect = self._ref_rect_start + self._ref_rect_end
-            elif layer.ip_adapter_rect:
-                rect = layer.ip_adapter_rect
+            elif layer.tool.ip_adapter_rect:
+                rect = layer.tool.ip_adapter_rect
             if rect:
                 ix0, iy0, ix1, iy1 = rect
                 wx0, wy0 = canvas.image_to_widget(ix0, iy0)
@@ -925,14 +937,15 @@ class EditorCanvas(Canvas):
                                            (0.2, 0.47, 1.0, 0.8), 2.0)
 
         # Manual patch rectangle (green)
-        if self._show_patch_rect and isinstance(
-                layer, (DiffusionLayer, InstructLayer)):
+        if (self._show_patch_rect and layer is not None
+                and layer.tool is not None
+                and hasattr(layer.tool, 'manual_patch_rect')):
             rect = None
             if (self._patch_rect_dragging
                     and self._patch_rect_start and self._patch_rect_end):
                 rect = self._patch_rect_start + self._patch_rect_end
-            elif layer.manual_patch_rect:
-                rect = layer.manual_patch_rect
+            elif layer.tool.manual_patch_rect:
+                rect = layer.tool.manual_patch_rect
             if rect:
                 ix0, iy0, ix1, iy1 = rect
                 wx0, wy0 = canvas.image_to_widget(ix0, iy0)

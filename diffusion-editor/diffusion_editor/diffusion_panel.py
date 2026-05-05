@@ -505,41 +505,42 @@ class DiffusionPanel(ScrollArea):
         self._draw_patch_cb.checked = value
 
     def show_diffusion_layer(self, layer):
+        tool = layer.tool
         self._layer_group.visible = True
-        self._prompt.text = layer.prompt
-        self._negative_prompt.text = layer.negative_prompt
-        self._strength_slider.value = layer.strength
-        self._steps_slider.value = layer.steps
-        self._cfg_slider.value = layer.guidance_scale
-        self._seed_edit.text = str(layer.seed)
+        self._prompt.text = tool.prompt
+        self._negative_prompt.text = tool.negative_prompt
+        self._strength_slider.value = tool.strength
+        self._steps_slider.value = tool.steps
+        self._cfg_slider.value = tool.guidance_scale
+        self._seed_edit.text = str(tool.seed)
 
         modes = ["txt2img", "img2img", "inpaint"]
-        if layer.mode in modes:
-            self._mode_combo.selected_index = modes.index(layer.mode)
+        if tool.mode in modes:
+            self._mode_combo.selected_index = modes.index(tool.mode)
 
         mc_items = ["original", "fill", "latent_noise", "latent_nothing"]
-        if layer.masked_content in mc_items:
-            self._masked_content_combo.selected_index = mc_items.index(layer.masked_content)
+        if tool.masked_content in mc_items:
+            self._masked_content_combo.selected_index = mc_items.index(tool.masked_content)
 
-        self._ip_scale_slider.value = layer.ip_adapter_scale
-        self._resize_cb.checked = layer.resize_to_model_resolution
+        self._ip_scale_slider.value = tool.ip_adapter_scale
+        self._resize_cb.checked = tool.resize_to_model_resolution
 
-        model_name = os.path.basename(layer.model_path) if layer.model_path else "?"
+        model_name = os.path.basename(tool.model_path) if tool.model_path else "?"
         mask_status = "has mask" if layer.has_mask() else "no mask"
-        if layer.ip_adapter_rect:
-            r = layer.ip_adapter_rect
+        if tool.ip_adapter_rect:
+            r = tool.ip_adapter_rect
             ip_info = f"rect ({r[0]},{r[1]})-({r[2]},{r[3]})"
         else:
             ip_info = "none"
-        if layer.manual_patch_rect:
-            r = layer.manual_patch_rect
+        if tool.manual_patch_rect:
+            r = tool.manual_patch_rect
             pw, ph = r[2] - r[0], r[3] - r[1]
             patch_info = f"manual {pw}x{ph}"
         else:
-            patch_info = f"auto {layer.patch_w}x{layer.patch_h}"
+            patch_info = f"auto {tool.patch_w}x{tool.patch_h}"
 
         self._layer_info.text = (
-            f"model: {model_name}  mode: {layer.mode}\n"
+            f"model: {model_name}  mode: {tool.mode}\n"
             f"patch: {patch_info}  mask: {mask_status}\n"
             f"ip_adapter: {ip_info}"
         )

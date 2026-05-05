@@ -16,7 +16,8 @@ from tcgui.widgets.message_box import MessageBox, Buttons
 from tcgui.widgets.units import px, pct
 
 from .layer_stack import LayerStack
-from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
+from .layer import Layer
+from .tool import DiffusionTool, LamaTool, InstructTool
 
 
 class LayerPanel(VStack):
@@ -31,9 +32,8 @@ class LayerPanel(VStack):
         self.preferred_width = px(220)
 
         # Callbacks
-        self.on_create_diffusion: callable = None
-        self.on_create_lama: callable = None
-        self.on_create_instruct: callable = None
+        self.on_attach_tool: callable = None  # (layer, tool_type)
+        self.on_detach_tool: callable = None  # (layer)
         self.on_add_layer: callable = None
         self.on_remove_layer: callable = None
         self.on_flatten_layers: callable = None
@@ -88,25 +88,6 @@ class LayerPanel(VStack):
         self._opacity_slider.on_changed = self._on_opacity_changed
         self.add_child(self._opacity_slider)
 
-        # Create special layers
-        diff_btn = Button()
-        diff_btn.text = "Diffusion"
-        diff_btn.preferred_width = pct(100)
-        diff_btn.on_click = lambda: (self.on_create_diffusion and self.on_create_diffusion())
-        self.add_child(diff_btn)
-
-        lama_btn = Button()
-        lama_btn.text = "LaMa"
-        lama_btn.preferred_width = pct(100)
-        lama_btn.on_click = lambda: (self.on_create_lama and self.on_create_lama())
-        self.add_child(lama_btn)
-
-        instruct_btn = Button()
-        instruct_btn.text = "Instruct"
-        instruct_btn.preferred_width = pct(100)
-        instruct_btn.on_click = lambda: (self.on_create_instruct and self.on_create_instruct())
-        self.add_child(instruct_btn)
-
     # ------------------------------------------------------------------
     # Sync from stack
     # ------------------------------------------------------------------
@@ -136,14 +117,14 @@ class LayerPanel(VStack):
         self._updating = False
 
     def _create_node(self, layer: Layer) -> TreeNode:
-        if isinstance(layer, DiffusionLayer):
-            prefix = "[D] "
-        elif isinstance(layer, LamaLayer):
-            prefix = "[L] "
-        elif isinstance(layer, InstructLayer):
-            prefix = "[I] "
+        if isinstance(layer.tool, DiffusionTool):
+            tool_suffix = "  [Diffusion]"
+        elif isinstance(layer.tool, LamaTool):
+            tool_suffix = "  [LaMa]"
+        elif isinstance(layer.tool, InstructTool):
+            tool_suffix = "  [Instruct]"
         else:
-            prefix = ""
+            tool_suffix = ""
 
         # HStack with visibility checkbox + name label
         row = HStack()
@@ -166,7 +147,7 @@ class LayerPanel(VStack):
         row.add_child(vis_cb)
 
         name_lbl = Label()
-        name_lbl.text = prefix + layer.name
+        name_lbl.text = layer.name + tool_suffix
         name_lbl.font_size = 13
         name_lbl.color = (0.9, 0.9, 0.9, 1.0)
         row.add_child(name_lbl)
@@ -197,13 +178,38 @@ class LayerPanel(VStack):
                 if node is not None:
                     tree._select_node(node)
                     panel._on_tree_select(node)
+                layer = panel._layer_stack.active_layer
+                has_layer = layer is not None
+                has_tool = has_layer and layer.tool is not None
+                menu.items = [
+                    MenuItem("Rename", enabled=has_layer, on_click=panel._on_rename),
+                    MenuItem.sep(),
+                    MenuItem(
+                        "Attach Diffusion Tool",
+                        enabled=has_layer and not has_tool,
+                        on_click=lambda: panel._on_attach_tool("diffusion"),
+                    ),
+                    MenuItem(
+                        "Attach LaMa Tool",
+                        enabled=has_layer and not has_tool,
+                        on_click=lambda: panel._on_attach_tool("lama"),
+                    ),
+                    MenuItem(
+                        "Attach Instruct Tool",
+                        enabled=has_layer and not has_tool,
+                        on_click=lambda: panel._on_attach_tool("instruct"),
+                    ),
+                    MenuItem(
+                        "Remove Tool",
+                        enabled=has_tool,
+                        on_click=panel._on_detach_tool,
+                    ),
+                    MenuItem.sep(),
+                    MenuItem("Delete Layer", enabled=has_layer, on_click=panel._on_remove),
+                ]
                 super().show(ui, x, y)
 
         menu = _LayerContextMenu()
-        menu.items = [
-            MenuItem("Rename", on_click=self._on_rename),
-            MenuItem("Delete", on_click=self._on_remove),
-        ]
         return menu
 
     # ------------------------------------------------------------------
@@ -316,6 +322,20 @@ class LayerPanel(VStack):
         if layer is None:
             return
         self._show_rename_dialog(layer)
+
+    def _on_attach_tool(self, tool_type: str):
+        layer = self._layer_stack.active_layer
+        if layer is None or layer.tool is not None:
+            return
+        if self.on_attach_tool:
+            self.on_attach_tool(layer, tool_type)
+
+    def _on_detach_tool(self):
+        layer = self._layer_stack.active_layer
+        if layer is None or layer.tool is None:
+            return
+        if self.on_detach_tool:
+            self.on_detach_tool(layer)
 
     def _show_rename_dialog(self, layer: Layer):
         if self._ui is None:

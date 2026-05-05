@@ -32,7 +32,9 @@ from .agent_chat import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPa
 from .agent_tools import create_editor_tool_registry
 from .grounding_dialog import GroundingDialog
 from .layer_stack import LayerStack
-from .layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
+from .mask import coerce_mask_data
+from .layer import Layer
+from .tool import DiffusionTool, LamaTool, InstructTool
 from .editor_canvas import EditorCanvas
 from .layer_panel import LayerPanel
 from .brush_panel import BrushPanel
@@ -49,10 +51,11 @@ from .settings import Settings
 from .history import HistoryManager
 from .document_service import DocumentService
 from .commands import (
-    AddLayerCommand, InsertLayerCommand, RemoveLayerCommand,
+    AddLayerCommand, RemoveLayerCommand,
     MoveLayerCommand, SetLayerVisibilityCommand, SetLayerOpacityCommand,
     FlattenLayersCommand, ClearLayerMaskCommand,
-    SetDiffusionIpAdapterRectCommand, ClearDiffusionIpAdapterRectCommand,
+    AttachLayerToolCommand, DetachLayerToolCommand,
+    SetIpAdapterRectCommand, ClearIpAdapterRectCommand,
     SetManualPatchRectCommand, ClearManualPatchRectCommand,
 )
 from .engine_result_mapper import (
@@ -161,15 +164,18 @@ class EditorWindow:
         self._left_container.preferred_width = px(260)
         self._left_container.clip = True
 
-        # Create all panels (only one visible at a time, stretch to fill)
+        # Brush is always available; the selected layer's attached tool panel
+        # appears below it when a tool is present.
         self._brush_panel = BrushPanel(self._canvas_placeholder_brush())
         self._diffusion_panel = DiffusionPanel()
         self._diffusion_panel.set_models_dir(self._models_dir)
         self._lama_panel = LamaPanel()
         self._instruct_panel = InstructPanel()
 
-        for p in (self._brush_panel, self._diffusion_panel,
-                  self._lama_panel, self._instruct_panel):
+        self._left_container.spacing = 6
+        self._brush_panel.visible = True
+        self._left_container.add_child(self._brush_panel)
+        for p in (self._diffusion_panel, self._lama_panel, self._instruct_panel):
             p.visible = False
             p.stretch = True
             self._left_container.add_child(p)
@@ -293,9 +299,8 @@ class EditorWindow:
         self._canvas.on_patch_rect_drawn = self._on_patch_rect_drawn
 
         # Layer panel
-        self._layer_panel.on_create_diffusion = self._on_create_diffusion
-        self._layer_panel.on_create_lama = self._on_create_lama
-        self._layer_panel.on_create_instruct = self._on_create_instruct
+        self._layer_panel.on_attach_tool = self._attach_tool_to_layer
+        self._layer_panel.on_detach_tool = self._detach_tool_from_layer
         self._layer_panel.on_add_layer = self._new_layer
         self._layer_panel.on_remove_layer = self._remove_layer
         self._layer_panel.on_flatten_layers = self._flatten_layers
@@ -328,25 +333,22 @@ class EditorWindow:
 
     def _on_layer_changed(self):
         layer = self._layer_stack.active_layer
-        self._brush_panel.visible = False
+        self._brush_panel.visible = True
         self._diffusion_panel.visible = False
         self._lama_panel.visible = False
         self._instruct_panel.visible = False
 
         if layer is None:
             pass
-        elif isinstance(layer, DiffusionLayer):
+        elif isinstance(layer.tool, DiffusionTool):
             self._diffusion_panel.show_diffusion_layer(layer)
             self._diffusion_panel.visible = True
-        elif isinstance(layer, LamaLayer):
+        elif isinstance(layer.tool, LamaTool):
             self._lama_panel.show_lama_layer(layer)
             self._lama_panel.visible = True
-        elif isinstance(layer, InstructLayer):
+        elif isinstance(layer.tool, InstructTool):
             self._instruct_panel.show_instruct_layer(layer)
             self._instruct_panel.visible = True
-        else:
-            self._brush_panel.visible = True
-
         self.ui.request_layout()
 
         # Debug: print visible panel coords after next layout
@@ -644,7 +646,7 @@ class EditorWindow:
         if not layer_path:
             return
         if target == "mask":
-            before_arr = layer.mask.copy()
+            before_arr = layer.mask.data.copy()
         else:
             before_arr = layer.image.copy()
         self._external_edit_ctx = ExternalEditContext(
@@ -661,8 +663,8 @@ class EditorWindow:
         x0, y0, x1, y1 = rect
         if x1 <= x0 or y1 <= y0:
             return
-        if target == "mask" and isinstance(layer, (DiffusionLayer, LamaLayer, InstructLayer)):
-            layer.mask[y0:y1, x0:x1] = patch
+        if target == "mask":
+            layer.mask.data[y0:y1, x0:x1] = coerce_mask_data(patch)
             if self._layer_stack.on_changed:
                 self._layer_stack.on_changed()
             return
@@ -691,8 +693,8 @@ class EditorWindow:
         if x1 <= x0 or y1 <= y0:
             return
         before_arr = ctx.before_arr
-        if target == "mask" and isinstance(layer, (DiffusionLayer, LamaLayer, InstructLayer)):
-            after_arr = layer.mask
+        if target == "mask":
+            after_arr = layer.mask.data
         else:
             after_arr = layer.image
         before_patch = before_arr[y0:y1, x0:x1].copy()
@@ -886,6 +888,51 @@ class EditorWindow:
         self._running = False
 
     # ------------------------------------------------------------------
+    # Layer tools
+    # ------------------------------------------------------------------
+
+    def _attach_tool_to_layer(self, layer: Layer, tool_type: str):
+        if layer is None or layer.tool is not None:
+            return
+        maker = {
+            "diffusion": self._make_diffusion_tool,
+            "lama": self._make_lama_tool,
+            "instruct": self._make_instruct_tool,
+        }.get(tool_type)
+        if maker is None:
+            return
+        tool = maker(layer)
+        if tool is None:
+            return
+        labels = {
+            "diffusion": "Attach Diffusion Tool",
+            "lama": "Attach LaMa Tool",
+            "instruct": "Attach Instruct Tool",
+        }
+        self._document.execute(AttachLayerToolCommand(
+            layer=layer,
+            tool=tool,
+            label=labels[tool_type],
+        ))
+
+    def _detach_tool_from_layer(self, layer: Layer):
+        if layer is None or layer.tool is None:
+            return
+        if self._pending_request is layer:
+            self._pending_request = None
+        if self._pending_lama_layer is layer:
+            self._pending_lama_layer = None
+        if self._pending_instruct_layer is layer:
+            self._pending_instruct_layer = None
+        self._document.execute(DetachLayerToolCommand(layer=layer))
+
+    def _tool_source_composite(self, layer: Layer) -> np.ndarray | None:
+        composite = self._canvas.get_composite_below(layer)
+        if composite is None:
+            composite = self._canvas.get_composite()
+        return composite
+
+    # ------------------------------------------------------------------
     # Diffusion
     # ------------------------------------------------------------------
 
@@ -895,10 +942,7 @@ class EditorWindow:
         pred = prediction_type if prediction_type else None
         self._engine.submit_load(path, pred)
 
-    def _on_create_diffusion(self):
-        composite = self._canvas.get_composite()
-        if composite is None:
-            return
+    def _make_diffusion_tool(self, layer: Layer) -> DiffusionTool | None:
         mode = self._diffusion_panel.mode
         center_x, center_y = self._canvas.view_center_image()
 
@@ -908,6 +952,9 @@ class EditorWindow:
             pw = self._layer_stack.width
             ph = self._layer_stack.height
         else:
+            composite = self._tool_source_composite(layer)
+            if composite is None:
+                return None
             patch_pil, ppx, ppy, pw, ph = extract_patch(
                 composite, center_x, center_y)
 
@@ -916,10 +963,7 @@ class EditorWindow:
             seed = random.randint(0, 2**32 - 1)
             self._diffusion_panel.set_seed(seed)
 
-        dl = DiffusionLayer(
-            name=self._layer_stack.next_name("Diffusion"),
-            width=self._layer_stack.width,
-            height=self._layer_stack.height,
+        return DiffusionTool(
             source_patch=patch_pil,
             patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
             prompt=self._diffusion_panel.prompt,
@@ -931,59 +975,55 @@ class EditorWindow:
             model_path=self._engine.model_path or "",
             prediction_type=self._diffusion_panel.prediction_type,
             mode=mode,
-            tile_size=self._layer_stack.tile_size,
         )
-        self._document.execute(InsertLayerCommand(
-            layer=dl,
-            label="Create Diffusion Layer",
-        ))
 
     def _on_clear_mask(self):
         layer = self._layer_stack.active_layer
-        if isinstance(layer, DiffusionLayer):
+        if isinstance(layer.tool, DiffusionTool):
             self._document.execute(ClearLayerMaskCommand(
                 layer=layer,
                 label="Clear Diffusion Mask",
             ))
 
-    def _sync_panel_to_layer(self, layer: DiffusionLayer):
-        layer.prompt = self._diffusion_panel.prompt
-        layer.negative_prompt = self._diffusion_panel.negative_prompt
-        layer.strength = self._diffusion_panel.strength
-        layer.guidance_scale = self._diffusion_panel.guidance_scale
-        layer.steps = self._diffusion_panel.steps
-        layer.seed = self._diffusion_panel.seed
-        layer.mode = self._diffusion_panel.mode
-        layer.masked_content = self._diffusion_panel.masked_content
-        layer.ip_adapter_scale = self._diffusion_panel.ip_adapter_scale
-        layer.resize_to_model_resolution = self._diffusion_panel.resize_to_model_resolution
+    def _sync_panel_to_layer(self, tool: DiffusionTool):
+        tool.prompt = self._diffusion_panel.prompt
+        tool.negative_prompt = self._diffusion_panel.negative_prompt
+        tool.strength = self._diffusion_panel.strength
+        tool.guidance_scale = self._diffusion_panel.guidance_scale
+        tool.steps = self._diffusion_panel.steps
+        tool.seed = self._diffusion_panel.seed
+        tool.mode = self._diffusion_panel.mode
+        tool.masked_content = self._diffusion_panel.masked_content
+        tool.ip_adapter_scale = self._diffusion_panel.ip_adapter_scale
+        tool.resize_to_model_resolution = self._diffusion_panel.resize_to_model_resolution
         if self._engine.model_path:
-            layer.model_path = self._engine.model_path
-        layer.prediction_type = self._diffusion_panel.prediction_type
+            tool.model_path = self._engine.model_path
+        tool.prediction_type = self._diffusion_panel.prediction_type
 
     def _on_regenerate(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer, DiffusionLayer):
+        if not isinstance(layer.tool, DiffusionTool):
             return
         if self._engine.is_busy:
             return
-        self._sync_panel_to_layer(layer)
+        tool = layer.tool
+        self._sync_panel_to_layer(tool)
 
-        if layer.mode != "txt2img":
+        if tool.mode != "txt2img":
             composite = self._canvas.get_composite_below(layer)
             if composite is None:
                 return
-            if layer.manual_patch_rect is not None:
-                x0, y0, x1, y1 = layer.manual_patch_rect
+            if tool.manual_patch_rect is not None:
+                x0, y0, x1, y1 = tool.manual_patch_rect
                 h, w = composite.shape[:2]
                 x0, y0 = max(0, x0), max(0, y0)
                 x1, y1 = min(w, x1), min(h, y1)
                 if x1 - x0 < 1 or y1 - y0 < 1:
                     return
                 patch_pil = Image.fromarray(composite[y0:y1, x0:x1]).convert("RGB")
-                layer.source_patch = patch_pil
-                layer.patch_x, layer.patch_y = x0, y0
-                layer.patch_w, layer.patch_h = x1 - x0, y1 - y0
+                tool.source_patch = patch_pil
+                tool.patch_x, tool.patch_y = x0, y0
+                tool.patch_w, tool.patch_h = x1 - x0, y1 - y0
             elif layer.has_mask():
                 bbox = layer.mask_bbox()
                 center = layer.mask_center()
@@ -994,17 +1034,17 @@ class EditorWindow:
                     cx, cy = center
                     patch_pil, ppx, ppy, pw, ph = extract_patch(
                         composite, cx, cy, patch_size=ps)
-                    layer.source_patch = patch_pil
-                    layer.patch_x, layer.patch_y = ppx, ppy
-                    layer.patch_w, layer.patch_h = pw, ph
+                    tool.source_patch = patch_pil
+                    tool.patch_x, tool.patch_y = ppx, ppy
+                    tool.patch_w, tool.patch_h = pw, ph
 
-            if layer.source_patch is None:
+            if tool.source_patch is None:
                 return
 
-        if layer.model_path and layer.model_path != self._engine.model_path:
+        if tool.model_path and tool.model_path != self._engine.model_path:
             self._pending_request = layer
-            pred = layer.prediction_type if layer.prediction_type else None
-            self._engine.submit_load(layer.model_path, pred)
+            pred = tool.prediction_type if tool.prediction_type else None
+            self._engine.submit_load(tool.model_path, pred)
             self._statusbar.text = "Loading model for regeneration..."
             return
 
@@ -1012,19 +1052,20 @@ class EditorWindow:
             return
         self._submit_regenerate(layer)
 
-    def _submit_regenerate(self, layer: DiffusionLayer):
+    def _submit_regenerate(self, layer: Layer):
+        tool = layer.tool
         self._pending_request = layer
         mask_image = None
-        if layer.mode == "inpaint":
+        if tool.mode == "inpaint":
             if not layer.has_mask():
                 self._statusbar.text = "Inpaint requires a mask"
                 return
             mask_image = extract_mask_patch(
-                layer.mask, layer.patch_x, layer.patch_y,
-                layer.patch_w, layer.patch_h)
+                layer.mask.data, tool.patch_x, tool.patch_y,
+                tool.patch_w, tool.patch_h)
 
         ip_adapter_image = None
-        if layer.ip_adapter_rect is not None:
+        if tool.ip_adapter_rect is not None:
             if not self._engine.ip_adapter_loaded:
                 self._pending_request = layer
                 self._engine.submit_load_ip_adapter()
@@ -1032,7 +1073,7 @@ class EditorWindow:
                 return
             composite = self._canvas.get_composite_below(layer)
             if composite is not None:
-                x0, y0, x1, y1 = layer.ip_adapter_rect
+                x0, y0, x1, y1 = tool.ip_adapter_rect
                 h, w = composite.shape[:2]
                 x0, x1 = max(0, min(x0, w)), max(0, min(x1, w))
                 y0, y1 = max(0, min(y0, h)), max(0, min(y1, h))
@@ -1040,33 +1081,33 @@ class EditorWindow:
                     crop = composite[y0:y1, x0:x1, :3]
                     ip_adapter_image = Image.fromarray(crop, "RGB")
 
-        submit_image = layer.source_patch
+        submit_image = tool.source_patch
         submit_mask = mask_image
-        submit_w, submit_h = layer.patch_w, layer.patch_h
+        submit_w, submit_h = tool.patch_w, tool.patch_h
         MODEL_RES = 1024
-        if layer.resize_to_model_resolution and submit_image is not None:
+        if tool.resize_to_model_resolution and submit_image is not None:
             longest = max(submit_w, submit_h)
             if longest != MODEL_RES:
                 scale = MODEL_RES / longest
-                submit_w = max(8, round(layer.patch_w * scale / 8) * 8)
-                submit_h = max(8, round(layer.patch_h * scale / 8) * 8)
+                submit_w = max(8, round(tool.patch_w * scale / 8) * 8)
+                submit_h = max(8, round(tool.patch_h * scale / 8) * 8)
                 submit_image = submit_image.resize((submit_w, submit_h), Image.LANCZOS)
                 if submit_mask is not None:
                     submit_mask = submit_mask.resize((submit_w, submit_h), Image.NEAREST)
 
         self._engine.submit(
             image=submit_image,
-            prompt=layer.prompt,
-            negative_prompt=layer.negative_prompt,
-            strength=layer.strength,
-            steps=layer.steps,
-            guidance_scale=layer.guidance_scale,
-            seed=layer.seed,
-            mode=layer.mode,
+            prompt=tool.prompt,
+            negative_prompt=tool.negative_prompt,
+            strength=tool.strength,
+            steps=tool.steps,
+            guidance_scale=tool.guidance_scale,
+            seed=tool.seed,
+            mode=tool.mode,
             mask_image=submit_mask,
-            masked_content=layer.masked_content,
+            masked_content=tool.masked_content,
             ip_adapter_image=ip_adapter_image,
-            ip_adapter_scale=layer.ip_adapter_scale,
+            ip_adapter_scale=tool.ip_adapter_scale,
             width=submit_w,
             height=submit_h,
         )
@@ -1074,10 +1115,10 @@ class EditorWindow:
 
     def _on_new_seed(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer, DiffusionLayer):
+        if not isinstance(layer.tool, DiffusionTool):
             return
         new_seed = random.randint(0, 2**32 - 1)
-        layer.seed = new_seed
+        layer.tool.seed = new_seed
         self._diffusion_panel.set_seed(new_seed)
         self._on_regenerate()
 
@@ -1089,27 +1130,27 @@ class EditorWindow:
 
     def _on_ref_rect_drawn(self, x0, y0, x1, y1):
         layer = self._layer_stack.active_layer
-        if isinstance(layer, DiffusionLayer):
-            self._document.execute(SetDiffusionIpAdapterRectCommand(
+        if isinstance(layer.tool, DiffusionTool):
+            self._document.execute(SetIpAdapterRectCommand(
                 layer=layer,
                 rect=(x0, y0, x1, y1),
             ))
 
     def _on_clear_ref_rect(self):
         layer = self._layer_stack.active_layer
-        if isinstance(layer, DiffusionLayer):
-            self._document.execute(ClearDiffusionIpAdapterRectCommand(layer=layer))
+        if isinstance(layer.tool, DiffusionTool):
+            self._document.execute(ClearIpAdapterRectCommand(layer=layer))
 
     def _on_patch_rect_drawn(self, x0, y0, x1, y1):
         layer = self._layer_stack.active_layer
-        if isinstance(layer, DiffusionLayer):
+        if isinstance(layer.tool, DiffusionTool):
             self._diffusion_panel.set_draw_patch_checked(False)
             self._document.execute(SetManualPatchRectCommand(
                 layer=layer,
                 rect=(x0, y0, x1, y1),
                 label="Set Diffusion Patch Rect",
             ))
-        elif isinstance(layer, InstructLayer):
+        elif isinstance(layer.tool, InstructTool):
             self._instruct_panel.set_draw_patch_checked(False)
             self._document.execute(SetManualPatchRectCommand(
                 layer=layer,
@@ -1119,7 +1160,7 @@ class EditorWindow:
 
     def _on_clear_patch_rect(self):
         layer = self._layer_stack.active_layer
-        if isinstance(layer, DiffusionLayer):
+        if isinstance(layer.tool, DiffusionTool):
             self._document.execute(ClearManualPatchRectCommand(
                 layer=layer,
                 label="Clear Diffusion Patch Rect",
@@ -1129,29 +1170,22 @@ class EditorWindow:
     # LaMa
     # ------------------------------------------------------------------
 
-    def _on_create_lama(self):
-        composite = self._canvas.get_composite()
+    def _make_lama_tool(self, layer: Layer) -> LamaTool | None:
+        composite = self._tool_source_composite(layer)
         if composite is None:
-            return
+            return None
         cx, cy = self._canvas.view_center_image()
         patch_pil, ppx, ppy, pw, ph = extract_patch(composite, cx, cy)
-        ll = LamaLayer(
-            name=self._layer_stack.next_name("LaMa"),
-            width=self._layer_stack.width,
-            height=self._layer_stack.height,
+        return LamaTool(
             source_patch=patch_pil,
             patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
-            tile_size=self._layer_stack.tile_size,
         )
-        self._document.execute(InsertLayerCommand(
-            layer=ll,
-            label="Create LaMa Layer",
-        ))
 
     def _on_lama_remove(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer, LamaLayer):
+        if not isinstance(layer.tool, LamaTool):
             return
+        tool = layer.tool
         if self._lama_engine.is_busy or not layer.has_mask():
             return
 
@@ -1168,18 +1202,18 @@ class EditorWindow:
         ps = max(int(ps * 1.25), 512)
         cx, cy = center
         patch_pil, ppx, ppy, pw, ph = extract_patch(composite, cx, cy, patch_size=ps)
-        layer.source_patch = patch_pil
-        layer.patch_x, layer.patch_y = ppx, ppy
-        layer.patch_w, layer.patch_h = pw, ph
+        tool.source_patch = patch_pil
+        tool.patch_x, tool.patch_y = ppx, ppy
+        tool.patch_w, tool.patch_h = pw, ph
 
-        mask_pil = extract_mask_patch(layer.mask, ppx, ppy, pw, ph)
+        mask_pil = extract_mask_patch(layer.mask.data, ppx, ppy, pw, ph)
         self._lama_engine.submit(patch_pil, mask_pil)
         self._pending_lama_layer = layer
         self._statusbar.text = "Removing objects (LaMa)..."
 
     def _on_lama_clear_mask(self):
         layer = self._layer_stack.active_layer
-        if isinstance(layer, LamaLayer):
+        if isinstance(layer.tool, LamaTool):
             self._document.execute(ClearLayerMaskCommand(
                 layer=layer,
                 label="Clear LaMa Mask",
@@ -1187,7 +1221,7 @@ class EditorWindow:
 
     def _on_lama_select_background(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer, LamaLayer):
+        if not isinstance(layer.tool, LamaTool):
             return
         if self._seg_engine.is_busy:
             return
@@ -1201,20 +1235,17 @@ class EditorWindow:
     # InstructPix2Pix
     # ------------------------------------------------------------------
 
-    def _on_create_instruct(self):
-        composite = self._canvas.get_composite()
+    def _make_instruct_tool(self, layer: Layer) -> InstructTool | None:
+        composite = self._tool_source_composite(layer)
         if composite is None:
-            return
+            return None
         cx, cy = self._canvas.view_center_image()
         patch_pil, ppx, ppy, pw, ph = extract_patch(composite, cx, cy)
         seed = self._instruct_panel.seed
         if seed < 0:
             seed = random.randint(0, 2**32 - 1)
             self._instruct_panel.set_seed(seed)
-        il = InstructLayer(
-            name=self._layer_stack.next_name("Instruct"),
-            width=self._layer_stack.width,
-            height=self._layer_stack.height,
+        return InstructTool(
             source_patch=patch_pil,
             patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
             instruction=self._instruct_panel.instruction,
@@ -1222,12 +1253,7 @@ class EditorWindow:
             guidance_scale=self._instruct_panel.guidance_scale,
             steps=self._instruct_panel.steps,
             seed=seed,
-            tile_size=self._layer_stack.tile_size,
         )
-        self._document.execute(InsertLayerCommand(
-            layer=il,
-            label="Create Instruct Layer",
-        ))
 
     def _on_instruct_load_model(self):
         if self._instruct_engine.is_busy:
@@ -1238,16 +1264,17 @@ class EditorWindow:
 
     def _on_instruct_apply(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer, InstructLayer):
+        if not isinstance(layer.tool, InstructTool):
             return
         if self._instruct_engine.is_busy:
             return
+        tool = layer.tool
 
-        layer.instruction = self._instruct_panel.instruction
-        layer.image_guidance_scale = self._instruct_panel.image_guidance_scale
-        layer.guidance_scale = self._instruct_panel.guidance_scale
-        layer.steps = self._instruct_panel.steps
-        layer.seed = self._instruct_panel.seed
+        tool.instruction = self._instruct_panel.instruction
+        tool.image_guidance_scale = self._instruct_panel.image_guidance_scale
+        tool.guidance_scale = self._instruct_panel.guidance_scale
+        tool.steps = self._instruct_panel.steps
+        tool.seed = self._instruct_panel.seed
 
         if not self._instruct_engine.is_loaded:
             self._pending_instruct_layer = layer
@@ -1258,17 +1285,17 @@ class EditorWindow:
         if composite is None:
             return
 
-        if layer.manual_patch_rect is not None:
-            x0, y0, x1, y1 = layer.manual_patch_rect
+        if tool.manual_patch_rect is not None:
+            x0, y0, x1, y1 = tool.manual_patch_rect
             h, w = composite.shape[:2]
             x0, y0 = max(0, x0), max(0, y0)
             x1, y1 = min(w, x1), min(h, y1)
             if x1 - x0 < 1 or y1 - y0 < 1:
                 return
             patch_pil = Image.fromarray(composite[y0:y1, x0:x1]).convert("RGB")
-            layer.source_patch = patch_pil
-            layer.patch_x, layer.patch_y = x0, y0
-            layer.patch_w, layer.patch_h = x1 - x0, y1 - y0
+            tool.source_patch = patch_pil
+            tool.patch_x, tool.patch_y = x0, y0
+            tool.patch_w, tool.patch_h = x1 - x0, y1 - y0
         elif layer.has_mask():
             bbox = layer.mask_bbox()
             center = layer.mask_center()
@@ -1279,41 +1306,41 @@ class EditorWindow:
                 cx, cy = center
                 patch_pil, ppx, ppy, pw, ph = extract_patch(
                     composite, cx, cy, patch_size=ps)
-                layer.source_patch = patch_pil
-                layer.patch_x, layer.patch_y = ppx, ppy
-                layer.patch_w, layer.patch_h = pw, ph
+                tool.source_patch = patch_pil
+                tool.patch_x, tool.patch_y = ppx, ppy
+                tool.patch_w, tool.patch_h = pw, ph
         else:
-            cx = layer.patch_x + layer.patch_w // 2
-            cy = layer.patch_y + layer.patch_h // 2
+            cx = tool.patch_x + tool.patch_w // 2
+            cy = tool.patch_y + tool.patch_h // 2
             patch_pil, ppx, ppy, pw, ph = extract_patch(
-                composite, cx, cy, patch_size=max(layer.patch_w, layer.patch_h))
-            layer.source_patch = patch_pil
-            layer.patch_x, layer.patch_y = ppx, ppy
-            layer.patch_w, layer.patch_h = pw, ph
+                composite, cx, cy, patch_size=max(tool.patch_w, tool.patch_h))
+            tool.source_patch = patch_pil
+            tool.patch_x, tool.patch_y = ppx, ppy
+            tool.patch_w, tool.patch_h = pw, ph
 
         self._instruct_engine.submit(
-            image=layer.source_patch,
-            instruction=layer.instruction,
-            guidance_scale=layer.guidance_scale,
-            image_guidance_scale=layer.image_guidance_scale,
-            steps=layer.steps,
-            seed=layer.seed,
+            image=tool.source_patch,
+            instruction=tool.instruction,
+            guidance_scale=tool.guidance_scale,
+            image_guidance_scale=tool.image_guidance_scale,
+            steps=tool.steps,
+            seed=tool.seed,
         )
         self._pending_instruct_layer = layer
         self._statusbar.text = "Applying instruction..."
 
     def _on_instruct_new_seed(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer, InstructLayer):
+        if not isinstance(layer.tool, InstructTool):
             return
         new_seed = random.randint(0, 2**32 - 1)
-        layer.seed = new_seed
+        layer.tool.seed = new_seed
         self._instruct_panel.set_seed(new_seed)
         self._on_instruct_apply()
 
     def _on_instruct_clear_mask(self):
         layer = self._layer_stack.active_layer
-        if isinstance(layer, InstructLayer):
+        if isinstance(layer.tool, InstructTool):
             self._document.execute(ClearLayerMaskCommand(
                 layer=layer,
                 label="Clear Instruct Mask",
@@ -1321,7 +1348,7 @@ class EditorWindow:
 
     def _on_instruct_clear_patch_rect(self):
         layer = self._layer_stack.active_layer
-        if isinstance(layer, InstructLayer):
+        if isinstance(layer.tool, InstructTool):
             self._document.execute(ClearManualPatchRectCommand(
                 layer=layer,
                 label="Clear Instruct Patch Rect",
@@ -1333,7 +1360,7 @@ class EditorWindow:
 
     def _on_select_background(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer, DiffusionLayer):
+        if not isinstance(layer.tool, DiffusionTool):
             return
         if self._seg_engine.is_busy:
             return
@@ -1394,7 +1421,7 @@ class EditorWindow:
             else:
                 self._instruct_panel.on_model_loaded()
                 self._statusbar.text = "InstructPix2Pix model loaded"
-                if isinstance(self._pending_instruct_layer, InstructLayer):
+                if isinstance(self._pending_instruct_layer.tool, InstructTool):
                     self._on_instruct_apply()
         elif task_type == "inference":
             if error:
@@ -1427,7 +1454,7 @@ class EditorWindow:
                 self._pending_request = None
             else:
                 self._diffusion_panel.on_model_loaded(result, self._engine.model_info)
-                if isinstance(self._pending_request, DiffusionLayer):
+                if isinstance(self._pending_request.tool, DiffusionTool):
                     self._submit_regenerate(self._pending_request)
                     return
                 self._statusbar.text = "Model loaded"
@@ -1440,7 +1467,7 @@ class EditorWindow:
                 self._pending_request = None
             else:
                 self._diffusion_panel.on_ip_adapter_loaded()
-                if isinstance(self._pending_request, DiffusionLayer):
+                if isinstance(self._pending_request.tool, DiffusionTool):
                     self._submit_regenerate(self._pending_request)
                     return
                 self._statusbar.text = "IP-Adapter loaded"
@@ -1472,7 +1499,7 @@ class EditorWindow:
         results, layer = self._pending_grounding_result
         self._pending_grounding_result = None
 
-        from .commands import DrawRectCommand, FillMaskCommand
+        from .commands import DrawRectCommand, FillMaskCommand, SetLayerSelectionCommand
 
         rect_colors = [
             (255, 80, 80, 255),
@@ -1490,6 +1517,9 @@ class EditorWindow:
             (255, 80, 255, 100),
             (80, 255, 255, 100),
         ]
+        # Combine all detection masks into a single selection (union)
+        h, w = layer.height, layer.width
+        combined_selection = np.zeros((h, w), dtype=np.float32)
         for i, item in enumerate(results):
             if len(item) == 7:
                 label, x0, y0, x1, y1, score, mask = item
@@ -1509,6 +1539,7 @@ class EditorWindow:
             self._document.execute(cmd)
 
             if mask is not None and mask.any():
+                # Visual fill on the layer image
                 mask_cmd = FillMaskCommand(
                     layer=layer,
                     mask=mask,
@@ -1517,6 +1548,19 @@ class EditorWindow:
                     label=f"Segment: {label}",
                 )
                 self._document.execute(mask_cmd)
+                # Contribute to combined selection
+                combined_selection = np.maximum(
+                    combined_selection,
+                    mask.astype(np.float32)[:h, :w],
+                )
+
+        # Set the combined selection on the layer stack
+        if combined_selection.any():
+            sel_cmd = SetLayerSelectionCommand(
+                mask=combined_selection,
+                label="Set Selection from Detection",
+            )
+            self._document.execute(sel_cmd)
 
     # ------------------------------------------------------------------
     # Public: rendering
