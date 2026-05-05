@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from nemor.core.tool_registry import ToolRegistry
+try:
+    from nemor.core.tool_registry import ToolRegistry
+except ImportError:  # pragma: no cover - depends on optional local install
+    ToolRegistry = None
 
 from .commands import (
     AddLayerCommand,
@@ -317,7 +320,10 @@ def _tool_view_canvas_region(args, config):
 # ── Registry factory ────────────────────────────────────────────────────────
 
 
-def create_editor_tool_registry() -> ToolRegistry:
+def create_editor_tool_registry() -> ToolRegistry | None:
+    if ToolRegistry is None:
+        return None
+
     registry = ToolRegistry()
 
     registry.register("list_layers", _tool_list_layers, {

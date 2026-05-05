@@ -55,6 +55,11 @@ class GroundingDialog:
         self._sam2_combo: ComboBox | None = None
         self._sam2_checkbox: Checkbox | None = None
         self._sam2_mask_combo: ComboBox | None = None
+        self._mask_threshold_slider: SliderEdit | None = None
+        self._max_hole_slider: SliderEdit | None = None
+        self._max_sprinkle_slider: SliderEdit | None = None
+        self._multimask_checkbox: Checkbox | None = None
+        self._non_overlap_checkbox: Checkbox | None = None
 
     def show(self) -> None:
         dlg = Dialog()
@@ -141,6 +146,57 @@ class GroundingDialog:
         self._sam2_mask_combo.selected_index = 0
         content.add_child(self._sam2_mask_combo)
 
+        # ── SAM 2.1 options ─────────────────────────────────────────────
+
+        mask_thresh_label = Label()
+        mask_thresh_label.text = "Mask threshold (higher = tighter)"
+        content.add_child(mask_thresh_label)
+
+        self._mask_threshold_slider = SliderEdit()
+        self._mask_threshold_slider.min_value = 0.0
+        self._mask_threshold_slider.max_value = 1.0
+        self._mask_threshold_slider.value = 0.0
+        self._mask_threshold_slider.step = 0.05
+        self._mask_threshold_slider.decimals = 2
+        self._mask_threshold_slider.preferred_width = px(400)
+        content.add_child(self._mask_threshold_slider)
+
+        max_hole_label = Label()
+        max_hole_label.text = "Max hole area (0 = off, px)"
+        content.add_child(max_hole_label)
+
+        self._max_hole_slider = SliderEdit()
+        self._max_hole_slider.min_value = 0
+        self._max_hole_slider.max_value = 10000
+        self._max_hole_slider.value = 0
+        self._max_hole_slider.step = 100
+        self._max_hole_slider.decimals = 0
+        self._max_hole_slider.preferred_width = px(400)
+        content.add_child(self._max_hole_slider)
+
+        max_sprinkle_label = Label()
+        max_sprinkle_label.text = "Max sprinkle area (0 = off, px)"
+        content.add_child(max_sprinkle_label)
+
+        self._max_sprinkle_slider = SliderEdit()
+        self._max_sprinkle_slider.min_value = 0
+        self._max_sprinkle_slider.max_value = 10000
+        self._max_sprinkle_slider.value = 0
+        self._max_sprinkle_slider.step = 100
+        self._max_sprinkle_slider.decimals = 0
+        self._max_sprinkle_slider.preferred_width = px(400)
+        content.add_child(self._max_sprinkle_slider)
+
+        self._multimask_checkbox = Checkbox()
+        self._multimask_checkbox.text = "Multimask output (3 candidates per box)"
+        self._multimask_checkbox.checked = True
+        content.add_child(self._multimask_checkbox)
+
+        self._non_overlap_checkbox = Checkbox()
+        self._non_overlap_checkbox.text = "Non-overlapping masks"
+        self._non_overlap_checkbox.checked = False
+        content.add_child(self._non_overlap_checkbox)
+
         # ── GPU ─────────────────────────────────────────────────────────
 
         self._gpu_checkbox = Checkbox()
@@ -179,6 +235,22 @@ class GroundingDialog:
             self._sam2_mask_combo.selected_index if self._sam2_mask_combo else 0
         )
 
+        mask_threshold = (
+            self._mask_threshold_slider.value if self._mask_threshold_slider else 0.0
+        )
+        max_hole_area = (
+            int(self._max_hole_slider.value) if self._max_hole_slider else 0
+        )
+        max_sprinkle_area = (
+            int(self._max_sprinkle_slider.value) if self._max_sprinkle_slider else 0
+        )
+        multimask = (
+            self._multimask_checkbox.checked if self._multimask_checkbox else True
+        )
+        non_overlap = (
+            self._non_overlap_checkbox.checked if self._non_overlap_checkbox else False
+        )
+
         use_gpu = self._gpu_checkbox.checked
 
         editor = self._editor
@@ -200,6 +272,9 @@ class GroundingDialog:
             f"box_threshold={box_threshold:.2f}, "
             f"text_threshold={text_threshold:.2f}, "
             f"sam2={sam2_id}, mask_channel={sam2_mask_channel}, gpu={use_gpu}, "
+            f"mask_threshold={mask_threshold:.2f}, max_hole={max_hole_area}, "
+            f"max_sprinkle={max_sprinkle_area}, multimask={multimask}, "
+            f"non_overlap={non_overlap}, "
             f"image={arr.shape[1]}x{arr.shape[0]}",
         )
 
@@ -216,6 +291,11 @@ class GroundingDialog:
                 use_gpu,
                 sam2_id,
                 sam2_mask_channel,
+                mask_threshold,
+                max_hole_area,
+                max_sprinkle_area,
+                multimask,
+                non_overlap,
                 editor,
             ),
             daemon=True,
@@ -232,6 +312,11 @@ def _run_grounding_thread(
     use_gpu,
     sam2_id,
     sam2_mask_channel,
+    mask_threshold,
+    max_hole_area,
+    max_sprinkle_area,
+    multimask,
+    non_overlap,
     editor,
 ):
     """Run DINO then SAM; post result to editor."""
@@ -269,7 +354,11 @@ def _run_grounding_thread(
             status("SAM 2.1: segmenting...")
             sam_model, sam_proc = _get_sam2_model(sam2_id, use_gpu, status_fn=status)
             t_sam0 = time.time()
-            masks = _run_sam2(sam_proc, sam_model, arr, boxes, sam2_mask_channel, use_gpu)
+            masks = _run_sam2(
+                sam_proc, sam_model, arr, boxes, sam2_mask_channel,
+                mask_threshold, max_hole_area, max_sprinkle_area,
+                multimask, non_overlap, use_gpu,
+            )
             t_sam1 = time.time()
             log.info(f"SAM 2.1: {sum(1 for m in masks if m is not None)} masks "
                      f"in {t_sam1 - t_sam0:.1f}s")
@@ -453,7 +542,11 @@ def _get_sam2_model(model_id: str, use_gpu: bool, status_fn=None):
     return _sam2_model, _sam2_proc
 
 
-def _run_sam2(processor, model, image_array, boxes, mask_channel, use_gpu):
+def _run_sam2(
+    processor, model, image_array, boxes, mask_channel,
+    mask_threshold, max_hole_area, max_sprinkle_area,
+    multimask, non_overlap, use_gpu,
+):
     """Run SAM 2.1 for each box; return list of mask arrays (or None)."""
     from PIL import Image
 
@@ -482,13 +575,17 @@ def _run_sam2(processor, model, image_array, boxes, mask_channel, use_gpu):
 
     t_infer = time.time()
     with torch.no_grad():
-        outputs = model(**inputs)
+        outputs = model(**inputs, multimask_output=multimask)
     log.info(f"SAM 2.1: forward pass in {time.time() - t_infer:.1f}s")
 
     # Post-process masks back to original image size
     masks_tensor = processor.post_process_masks(
         outputs.pred_masks,
         original_sizes=[(h, w)],
+        mask_threshold=mask_threshold,
+        max_hole_area=max_hole_area,
+        max_sprinkle_area=max_sprinkle_area,
+        apply_non_overlapping_constraints=non_overlap,
         binarize=True,
     )
     # post_process_masks returns list[Tensor], one per image
@@ -496,7 +593,7 @@ def _run_sam2(processor, model, image_array, boxes, mask_channel, use_gpu):
 
     for i in range(len(boxes)):
         m = masks_tensor[i]
-        if m.dim() > 2:
+        if multimask and m.dim() > 2:
             m = m[mask_channel]  # multimask channel: 0=whole, 1=part, 2=subpart
         mask = m.cpu().numpy().astype(bool)
         masks.append(mask)

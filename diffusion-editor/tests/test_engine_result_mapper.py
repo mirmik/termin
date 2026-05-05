@@ -8,57 +8,42 @@ from diffusion_editor.engine_result_mapper import (
     map_segmentation_result, map_lama_result,
     map_instruct_result, map_diffusion_result,
 )
-from diffusion_editor.layer import Layer, DiffusionLayer, LamaLayer, InstructLayer
+from diffusion_editor.layer import Layer
+from diffusion_editor.tool import DiffusionTool, LamaTool, InstructTool
 
 
-def _diff_layer() -> DiffusionLayer:
-    return DiffusionLayer(
-        name="Diff",
-        width=8,
-        height=8,
+def _diff_layer() -> Layer:
+    tool = DiffusionTool(
         source_patch=None,
-        patch_x=0,
-        patch_y=0,
-        patch_w=8,
-        patch_h=8,
-        prompt="",
-        negative_prompt="",
-        strength=0.5,
-        guidance_scale=7.0,
-        steps=20,
-        seed=1,
+        patch_x=0, patch_y=0, patch_w=8, patch_h=8,
+        prompt="", negative_prompt="",
+        strength=0.5, guidance_scale=7.0, steps=20, seed=1,
     )
+    layer = Layer("Diff", 8, 8)
+    layer.tool = tool
+    return layer
 
 
-def _lama_layer() -> LamaLayer:
-    return LamaLayer(
-        name="LaMa",
-        width=8,
-        height=8,
+def _lama_layer() -> Layer:
+    tool = LamaTool(
         source_patch=None,
-        patch_x=0,
-        patch_y=0,
-        patch_w=8,
-        patch_h=8,
+        patch_x=0, patch_y=0, patch_w=8, patch_h=8,
     )
+    layer = Layer("LaMa", 8, 8)
+    layer.tool = tool
+    return layer
 
 
-def _instruct_layer() -> InstructLayer:
-    return InstructLayer(
-        name="Instruct",
-        width=8,
-        height=8,
+def _instruct_layer() -> Layer:
+    tool = InstructTool(
         source_patch=None,
-        patch_x=0,
-        patch_y=0,
-        patch_w=8,
-        patch_h=8,
+        patch_x=0, patch_y=0, patch_w=8, patch_h=8,
         instruction="",
-        image_guidance_scale=1.5,
-        guidance_scale=7.0,
-        steps=20,
-        seed=1,
+        image_guidance_scale=1.5, guidance_scale=7.0, steps=20, seed=1,
     )
+    layer = Layer("Instruct", 8, 8)
+    layer.tool = tool
+    return layer
 
 
 def test_map_segmentation_result_for_supported_layer():
@@ -69,11 +54,12 @@ def test_map_segmentation_result_for_supported_layer():
     assert status == "Background mask applied"
 
 
-def test_map_segmentation_result_for_unsupported_layer():
+def test_map_segmentation_result_for_any_layer():
+    """Any layer type (including plain Layer) accepts segmentation results."""
     layer = Layer("Paint", 8, 8)
     mask = np.zeros((8, 8), dtype=np.uint8)
     cmd, status = map_segmentation_result(layer, mask)
-    assert cmd is None
+    assert isinstance(cmd, ReplaceLayerMaskCommand)
     assert status == "Background mask applied"
 
 

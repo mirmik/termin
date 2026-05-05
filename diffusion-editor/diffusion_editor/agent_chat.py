@@ -14,9 +14,14 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.units import pct, px
 from tcgui.widgets.vstack import VStack
 
-from nemor.core.session import Session
-from .agent_runner import AgentRunner
 from .settings import Settings
+
+try:
+    from nemor.core.session import Session
+    from .agent_runner import AgentRunner
+except ImportError:  # pragma: no cover - depends on optional local install
+    Session = None
+    AgentRunner = None
 
 
 DEFAULT_AGENT_BASE_URL = "http://localhost:8080"
@@ -46,7 +51,8 @@ class AgentChatPanel(Panel):
         self._layer_stack = layer_stack
         self._document_service = document_service
 
-        self._session = Session("editor", system_prompt=SYSTEM_PROMPT)
+        self._session = (Session("editor", system_prompt=SYSTEM_PROMPT)
+                         if Session is not None else None)
         self._runner: AgentRunner | None = None
         self._assistant_buffer = ""
         self._assistant_active = False
@@ -109,6 +115,12 @@ class AgentChatPanel(Panel):
         root.add_child(input_row)
 
         self.add_child(root)
+        if self._session is None:
+            self._transcript.text = "Agent Chat is unavailable: nemor is not installed."
+            self._input.enabled = False
+            self._send_btn.enabled = False
+            self._clear_btn.enabled = False
+            self._status.text = "Unavailable"
 
     def layout(self, x: float, y: float, width: float, height: float,
                viewport_w: float, viewport_h: float):
@@ -125,6 +137,9 @@ class AgentChatPanel(Panel):
             child.layout(inner_x, inner_y, inner_w, inner_h, viewport_w, viewport_h)
 
     def submit(self) -> None:
+        if self._session is None or AgentRunner is None:
+            self._status.text = "Unavailable: nemor is not installed"
+            return
         text = self._input.text.strip()
         if not text or (self._runner is not None and self._runner.is_busy):
             return
@@ -150,6 +165,8 @@ class AgentChatPanel(Panel):
         self._status.text = "Stopping..."
 
     def clear(self) -> None:
+        if Session is None:
+            return
         if self._runner is not None and self._runner.is_busy:
             return
         self._session = Session("editor", system_prompt=SYSTEM_PROMPT)
@@ -214,6 +231,9 @@ class AgentChatPanel(Panel):
 
     def _sync_transcript(self) -> None:
         lines: list[str] = []
+        if self._session is None:
+            self._transcript.text = "Agent Chat is unavailable: nemor is not installed."
+            return
         for msg in self._session.messages:
             if msg.role == "system":
                 continue
