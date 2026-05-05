@@ -17,6 +17,7 @@ class SelectionPanel(GroupBox):
 
         # Callbacks
         self.on_edit_mode_toggled: callable = None  # (active: bool)
+        self.on_rect_mode_toggled: callable = None  # (active: bool)
         self.on_brush_changed: callable = None  # (size, hardness)
         self.on_eraser_toggled: callable = None  # (eraser: bool)
         self.on_show_selection_toggled: callable = None  # (show: bool)
@@ -26,6 +27,12 @@ class SelectionPanel(GroupBox):
         self._edit_mode_cb.text = "Edit Selection"
         self._edit_mode_cb.on_changed = self._on_edit_mode_changed
         self.add_child(self._edit_mode_cb)
+
+        # Rect mode toggle
+        self._rect_mode_cb = Checkbox()
+        self._rect_mode_cb.text = "Rect"
+        self._rect_mode_cb.on_changed = self._on_rect_mode_changed
+        self.add_child(self._rect_mode_cb)
 
         # Eraser toggle
         self._eraser_cb = Checkbox()
@@ -63,6 +70,10 @@ class SelectionPanel(GroupBox):
     def _on_edit_mode_changed(self, checked: bool):
         if self.on_edit_mode_toggled:
             self.on_edit_mode_toggled(checked)
+
+    def _on_rect_mode_changed(self, checked: bool):
+        if self.on_rect_mode_toggled:
+            self.on_rect_mode_toggled(checked)
 
     def _on_eraser_changed(self, checked: bool):
         if self.on_eraser_toggled:
