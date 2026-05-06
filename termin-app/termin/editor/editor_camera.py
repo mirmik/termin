@@ -61,6 +61,7 @@ class EditorCameraManager:
         self._scene = scene
         self._ensure_editor_entities_root()
         self._ensure_editor_camera()
+        print(f"[DEBUG] EditorCameraManager.attach_to_scene: camera={self.camera}, camera.entity={self.camera.entity if self.camera else None}", flush=True)
 
     def detach_from_scene(self) -> None:
         """
@@ -93,6 +94,7 @@ class EditorCameraManager:
                     camera = child.entity.get_component(PerspectiveCameraComponent)
                     if camera is not None:
                         self.camera = camera
+                        print(f"[DEBUG] _ensure_editor_camera: FOUND existing camera={camera}", flush=True)
                         return
 
         # Create camera in standalone pool (not in scene)
@@ -104,6 +106,7 @@ class EditorCameraManager:
         camera_entity.add_component_by_name("CameraComponent")
         camera_entity.add_component_by_name("OrbitCameraController")
         camera = camera_entity.get_component(CameraComponent)
+        print(f"[DEBUG] _ensure_editor_camera: CREATED new camera={camera}, entity={camera_entity}", flush=True)
 
         # Add ViewportHintComponent for pipeline and layer mask control
         #hint = ViewportHintComponent()

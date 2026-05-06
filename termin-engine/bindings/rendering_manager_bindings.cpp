@@ -16,7 +16,6 @@ extern "C" {
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 #include "render/tc_render_target.h"
-#include "render/tc_render_target_pool.h"
 }
 
 namespace termin {
@@ -286,6 +285,27 @@ void bind_rendering_manager(nb::module_& m) {
             }
         }, nb::arg("scene"), nb::arg("display"),
            "Unmount scene from display (removes all viewports showing this scene)")
+
+        // ================================================================
+        // Standalone Render Target Management
+        // ================================================================
+
+        .def("register_standalone_render_target", [](RenderingManager& self, nb::object rt_py) {
+            auto h = nb::cast<tc_render_target_handle>(rt_py);
+            self.register_standalone_render_target(h);
+        }, nb::arg("render_target"),
+           "Register a standalone render target for management")
+
+        .def("unregister_standalone_render_target", [](RenderingManager& self, nb::object rt_py) {
+            auto h = nb::cast<tc_render_target_handle>(rt_py);
+            self.unregister_standalone_render_target(h);
+        }, nb::arg("render_target"),
+           "Unregister a standalone render target from management")
+
+        .def_prop_ro("standalone_render_targets", [](RenderingManager& self)
+                -> std::vector<tc_render_target_handle> {
+            return self.standalone_render_targets();
+        }, "List of managed standalone render targets")
 
         // ================================================================
         // Scene Pipeline Management

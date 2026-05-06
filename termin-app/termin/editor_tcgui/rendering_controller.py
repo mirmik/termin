@@ -180,9 +180,8 @@ class RenderingControllerTcgui:
 
     def _refresh_render_targets(self) -> None:
         """Refresh render target list in the viewport list widget."""
-        from termin.render_framework._render_framework_native import render_target_pool_list
         self._viewport_list.set_render_targets(
-            self._model.standalone_render_targets(render_target_pool_list())
+            list(self._manager.standalone_render_targets)
         )
 
     def sync_viewport_list_from_manager(self) -> None:
@@ -497,6 +496,7 @@ class RenderingControllerTcgui:
         scene = self._get_scene() if self._get_scene is not None else None
         if scene is not None:
             render_target.scene = scene
+        self._manager.register_standalone_render_target(render_target)
         self._refresh_render_targets()
         self._notify_rendering_changed()
 

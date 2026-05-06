@@ -699,6 +699,7 @@ class RenderingController:
         scene = self._get_scene() if self._get_scene is not None else None
         if scene is not None:
             render_target.scene = scene
+        self._manager.register_standalone_render_target(render_target)
         self._refresh_render_targets()
         log.info("[RenderingController] Created render target")
 
@@ -710,10 +711,9 @@ class RenderingController:
         log.info("[RenderingController] Removed render target")
 
     def _refresh_render_targets(self) -> None:
-        """Refresh render target list from pool."""
-        from termin.render_framework._render_framework_native import render_target_pool_list
+        """Refresh render target list from managed standalone list."""
         self._viewport_list.set_render_targets(
-            self._model.standalone_render_targets(render_target_pool_list())
+            list(self._manager.standalone_render_targets)
         )
 
     # --- Add/Remove requests ---

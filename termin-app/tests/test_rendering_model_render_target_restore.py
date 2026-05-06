@@ -128,6 +128,9 @@ class _Manager:
         self.attached = []
         self.detached = []
         self.display_for_viewport = None
+        self.standalone_render_targets = []
+        self.registered = []
+        self.unregistered = []
 
     def create_pipeline(self, name):
         self.created.append(name)
@@ -142,6 +145,16 @@ class _Manager:
 
     def get_display_for_viewport(self, viewport):
         return self.display_for_viewport
+
+    def register_standalone_render_target(self, rt):
+        self.registered.append(rt)
+        if rt not in self.standalone_render_targets:
+            self.standalone_render_targets.append(rt)
+
+    def unregister_standalone_render_target(self, rt):
+        self.unregistered.append(rt)
+        if rt in self.standalone_render_targets:
+            self.standalone_render_targets.remove(rt)
 
 
 def _install_native_stubs(monkeypatch, pool):
@@ -260,11 +273,13 @@ def test_remove_render_target_removes_live_target_and_scene_config(monkeypatch):
     model = RenderingModel(manager)
     render_target = _RenderTarget("Custom", pool)
     pool.append(render_target)
+    manager.standalone_render_targets.append(render_target)
 
     model.remove_render_target(render_target, scene=scene)
 
     assert pool == []
     assert scene._mount.render_target_configs == []
+    assert manager.unregistered == [render_target]
 
 
 def test_sync_render_target_configs_writes_only_targets_from_scene(monkeypatch):
@@ -282,41 +297,43 @@ def test_sync_render_target_configs_writes_only_targets_from_scene(monkeypatch):
     owned.width = 100
     owned.height = 50
     owned.pipeline = None
-    pool.append(owned)
+    manager.standalone_render_targets.append(owned)
 
     foreign = _RenderTarget("Foreign", pool)
     foreign.scene = other_scene
-    pool.append(foreign)
+    manager.standalone_render_targets.append(foreign)
 
     detached = _RenderTarget("Detached", pool)
-    pool.append(detached)
+    manager.standalone_render_targets.append(detached)
 
     model.sync_render_target_configs_to_scene(scene)
 
     assert [config.name for config in scene._mount.render_target_configs] == ["Owned"]
 
 
-def test_sync_render_target_configs_skips_viewport_owned_targets(monkeypatch):
+def test_sync_render_target_configs_only_includes_standalone_targets(monkeypatch):
+    """Standalone targets from the scene are written; viewport-owned targets
+    are not in standalone_render_targets to begin with."""
     pool = []
     _install_native_stubs(monkeypatch, pool)
 
     scene = _Scene(_Mount([]))
     manager = _Manager()
-    manager.displays = []
     model = RenderingModel(manager)
 
-    render_target = _RenderTarget("MainGameRT", pool)
-    render_target.scene = scene
-    pool.append(render_target)
+    standalone = _RenderTarget("StandaloneRT", pool)
+    standalone.scene = scene
+    manager.standalone_render_targets.append(standalone)
 
     viewport = _Viewport()
-    viewport.render_target = render_target
+    viewport.render_target = _RenderTarget("ViewportRT", pool)
+    viewport.render_target.scene = scene
     display = types.SimpleNamespace(viewports=[viewport])
     manager.displays = [display]
 
     model.sync_render_target_configs_to_scene(scene)
 
-    assert scene._mount.render_target_configs == []
+    assert [config.name for config in scene._mount.render_target_configs] == ["StandaloneRT"]
 
 
 def test_standalone_render_targets_filters_viewport_owned_targets(monkeypatch):
