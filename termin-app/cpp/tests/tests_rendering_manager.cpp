@@ -56,7 +56,6 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     tc_viewport_config_init(&config);
     config.name = "MainViewport";
     config.display_name = "Display0";
-    config.render_target_name = "SceneRT";
     config.region[0] = 0.0f;
     config.region[1] = 0.0f;
     config.region[2] = 1.0f;
