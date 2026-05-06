@@ -308,7 +308,7 @@ void bind_tc_display(nb::module_& m) {
         }, nb::arg("scene").none(), nb::arg("camera").none(),
            nb::arg("rect") = std::make_tuple(0.0f, 0.0f, 1.0f, 1.0f),
            nb::arg("name") = "main",
-           "Create and add new viewport (set pipeline separately via viewport.pipeline)")
+           "Create and add new viewport")
 
         // Static factory
         .def_static("_from_ptr", [](uintptr_t ptr, bool owned) {

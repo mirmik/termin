@@ -598,8 +598,8 @@ class RenderingController:
 
         for vp in list(display.viewports):
             # Destroy pipeline
-            if vp.pipeline is not None:
-                vp.pipeline.destroy()
+            if vp.render_target is not None and vp.render_target.pipeline is not None:
+                vp.render_target.pipeline.destroy()
             # Clear viewport state (output_fbo)
             state = self._manager.get_viewport_state(vp)
             if state is not None:
@@ -695,20 +695,26 @@ class RenderingController:
     def _on_add_render_target_requested(self) -> None:
         """Handle request to add new render target."""
         from termin.render_framework._render_framework_native import render_target_new
-        render_target_new("RenderTarget")
+        render_target = render_target_new("RenderTarget")
+        scene = self._get_scene() if self._get_scene is not None else None
+        if scene is not None:
+            render_target.scene = scene
         self._refresh_render_targets()
         log.info("[RenderingController] Created render target")
 
     def _on_remove_render_target_requested(self, render_target) -> None:
         """Handle request to remove a render target."""
-        render_target.free()
+        scene = self._get_scene() if self._get_scene is not None else None
+        self._model.remove_render_target(render_target, scene=scene)
         self._refresh_render_targets()
         log.info("[RenderingController] Removed render target")
 
     def _refresh_render_targets(self) -> None:
         """Refresh render target list from pool."""
         from termin.render_framework._render_framework_native import render_target_pool_list
-        self._viewport_list.set_render_targets(render_target_pool_list())
+        self._viewport_list.set_render_targets(
+            self._model.standalone_render_targets(render_target_pool_list())
+        )
 
     # --- Add/Remove requests ---
 
@@ -900,8 +906,11 @@ class RenderingController:
             viewport: Viewport to set pipeline for.
             pipeline: Pipeline to use, or None to disable rendering.
         """
-        old_pipeline = viewport.pipeline
-        viewport.pipeline = pipeline
+        render_target = viewport.render_target
+        if render_target is None:
+            render_target = self._model.ensure_viewport_render_target(viewport)
+        old_pipeline = render_target.pipeline
+        render_target.pipeline = pipeline
 
         # Destroy old pipeline when pipeline changes (FBOs are owned by pipeline)
         if old_pipeline is not pipeline:
@@ -977,6 +986,10 @@ class RenderingController:
             result.append((viewport, label))
 
         return result
+
+    def get_framegraph_debug_targets_info(self) -> list:
+        """Get render targets/pipelines available to Framegraph Debugger."""
+        return self._model.get_framegraph_debug_targets_info()
 
     def _update_center_tabs(self) -> None:
         """Update center tab widget with current displays."""

@@ -189,7 +189,8 @@ class GameModeModel:
         if editor_display is None or not editor_display.viewports:
             return
         viewport = editor_display.viewports[0]
+        render_target = viewport.render_target
         camera_name = None
-        if viewport.camera is not None and viewport.camera.entity is not None:
-            camera_name = viewport.camera.entity.name
+        if render_target is not None and render_target.camera is not None and render_target.camera.entity is not None:
+            camera_name = render_target.camera.entity.name
         scene.set_metadata_value("termin.editor.viewport_camera_name", camera_name)

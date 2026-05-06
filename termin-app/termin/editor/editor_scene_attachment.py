@@ -201,7 +201,6 @@ class EditorSceneAttachment:
         if self._viewport is not None:
             # Clear viewport references to scene entities BEFORE removing
             # (prevents crash when viewport_list.refresh() accesses stale pointers)
-            self._viewport.camera = None
             self._viewport.internal_entities = None
 
             # Remove from camera
@@ -308,8 +307,8 @@ class EditorSceneAttachment:
             if vp.camera is not None:
                 vp.camera.remove_viewport(vp)
             # Destroy pipeline
-            if vp.pipeline is not None:
-                vp.pipeline.destroy()
+            if vp.render_target is not None and vp.render_target.pipeline is not None:
+                vp.render_target.pipeline.destroy()
             if self._rendering_controller is not None:
                 state = self._rendering_controller.get_viewport_state(vp)
                 if state is not None:

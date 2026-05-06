@@ -427,7 +427,8 @@ void bind_rendering_manager(nb::module_& m) {
                     if (!tc_viewport_handle_valid(vp)) continue;
                     const char* managed = tc_viewport_get_managed_by(vp);
                     if (!managed || managed[0] == '\0') {
-                        tc_pipeline_handle ph = tc_viewport_get_pipeline(vp);
+                        tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+                        tc_pipeline_handle ph = tc_render_target_get_pipeline(rt);
                         tc_scene_handle sh = tc_viewport_get_scene(vp);
                         if (tc_pipeline_handle_valid(ph) && tc_scene_handle_valid(sh)) {
                             unmanaged++;

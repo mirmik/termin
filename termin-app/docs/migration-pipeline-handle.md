@@ -13,11 +13,11 @@ It uses `cpp_owner` pointer in tc_pipeline to find itself from handle,
 and `py_wrapper` to cache Python object reference.
 
 This causes problems:
-- C++ creates pipeline, sets it on viewport via handle — Python can't see it
+- C++ creates pipeline, sets it on render target via handle — Python can't see it
   (py_wrapper not set)
 - Two ownership models (C++ unique_ptr in RenderingManager + Python wrapper)
   conflict
-- `viewport.pipeline` returns None when pipeline was assigned from C++
+- render target pipeline wrappers were not consistently reconstructed from C++ handles
 
 ## Target
 
@@ -102,10 +102,10 @@ Same changes as Phase 3 where applicable.
 **Files:** `rendering_controller.py`, `editor_scene_attachment.py`,
 `viewport_inspector.py`
 
-1. `EditorSceneAttachment`: pipeline created via factory, assigned to viewport
+1. `EditorSceneAttachment`: pipeline created via factory, assigned to render target
    — should work as before (Python sets pipeline, py setter stores handle)
 2. `rendering_controller.sync_viewport_configs_to_scene()`:
-   `viewport.pipeline.name` now works because getter creates wrapper from
+   `render_target.pipeline.name` now works because getter creates wrapper from
    handle
 3. `viewport_inspector._select_viewport_pipeline()`: same — works via getter
 4. Remove workaround code (re-assign pipeline after attach)

@@ -776,7 +776,7 @@ public static class TerminCore
     // ========================================================================
 
     [DllImport(DLL, EntryPoint = "tc_viewport_new", CharSet = CharSet.Ansi)]
-    public static extern TcViewportHandle ViewportNew(string? name, TcSceneHandle scene, IntPtr camera);
+    public static extern TcViewportHandle ViewportNew(string? name, TcSceneHandle scene);
 
     [DllImport(DLL, EntryPoint = "tc_viewport_free")]
     public static extern void ViewportFree(TcViewportHandle viewport);
@@ -791,20 +791,8 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_viewport_get_scene")]
     public static extern TcSceneHandle ViewportGetScene(TcViewportHandle viewport);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_set_camera")]
-    public static extern void ViewportSetCamera(TcViewportHandle viewport, IntPtr camera);
-
-    [DllImport(DLL, EntryPoint = "tc_viewport_get_camera")]
-    public static extern IntPtr ViewportGetCamera(TcViewportHandle viewport);
-
     [DllImport(DLL, EntryPoint = "tc_viewport_set_rect")]
     public static extern void ViewportSetRect(TcViewportHandle viewport, float x, float y, float w, float h);
-
-    [DllImport(DLL, EntryPoint = "tc_viewport_set_pipeline")]
-    public static extern void ViewportSetPipeline(TcViewportHandle viewport, TcPipelineHandle pipeline);
-
-    [DllImport(DLL, EntryPoint = "tc_viewport_get_pipeline")]
-    public static extern TcPipelineHandle ViewportGetPipeline(TcViewportHandle viewport);
 
     [DllImport(DLL, EntryPoint = "tc_viewport_set_enabled")]
     public static extern void ViewportSetEnabled(TcViewportHandle viewport, [MarshalAs(UnmanagedType.U1)] bool enabled);

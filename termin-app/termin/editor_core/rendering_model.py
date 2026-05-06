@@ -186,6 +186,7 @@ class RenderingModel:
         viewport: "Viewport",
         scene: "Scene | None" = None,
         camera=None,
+        render_target_name: str = "",
     ):
         """Ensure ``viewport`` has its own render target.
 
@@ -197,7 +198,8 @@ class RenderingModel:
         if rt is None:
             from termin.render_framework._render_framework_native import render_target_new
 
-            rt = render_target_new(self._make_viewport_render_target_name(viewport))
+            rt_name = render_target_name or self._make_viewport_render_target_name(viewport)
+            rt = render_target_new(rt_name)
             viewport.render_target = rt
 
         if scene is None:
@@ -206,16 +208,87 @@ class RenderingModel:
             viewport.scene = scene
             rt.scene = scene
 
-        if camera is None:
-            camera = viewport.camera
+        if camera is None and rt.camera is not None:
+            camera = rt.camera
         if camera is not None:
-            viewport.camera = camera
             rt.camera = camera
 
+        pipeline = rt.pipeline
+        if pipeline is None:
+            pipeline = self._manager.create_pipeline("Default")
         if rt.pipeline is None:
-            rt.pipeline = self._manager.create_pipeline("Default")
+            rt.pipeline = pipeline
 
         return rt
+
+    def get_framegraph_debug_targets_info(self) -> list:
+        """Return render targets that can be inspected by Framegraph Debugger.
+
+        The debugger operates on pipelines, not viewport ownership. Viewport-
+        owned render targets and standalone offscreen render targets are
+        therefore exposed through the same target descriptor.
+        """
+        from termin.editor_core.framegraph_debugger_model import FramegraphDebugTarget
+        from termin.render_framework._render_framework_native import render_target_pool_list
+
+        result: list[FramegraphDebugTarget] = []
+        owned_keys: set[tuple[int, int]] = set()
+
+        for display in self._manager.displays:
+            display_name = self._manager.get_display_name(display)
+            for i, viewport in enumerate(display.viewports):
+                viewport_name = viewport.name or f"Viewport {i}"
+                render_target = viewport.render_target
+                if render_target is None:
+                    label = f"{display_name} / {viewport_name}"
+                    result.append(FramegraphDebugTarget(
+                        source=viewport,
+                        label=label,
+                        get_pipeline=lambda viewport=viewport: self._pipeline_for_viewport(viewport),
+                    ))
+                    continue
+
+                owned_keys.add((render_target.index, render_target.generation))
+                rt_name = render_target.name or "RenderTarget"
+                if viewport.managed_by_scene_pipeline:
+                    label = f"[{viewport.managed_by_scene_pipeline}] {viewport_name} / {rt_name}"
+                else:
+                    label = f"{display_name} / {viewport_name} / {rt_name}"
+                result.append(FramegraphDebugTarget(
+                    source=render_target,
+                    label=label,
+                    get_pipeline=lambda viewport=viewport, render_target=render_target:
+                        self._pipeline_for_viewport_render_target(viewport, render_target),
+                ))
+
+        for render_target in render_target_pool_list():
+            if (render_target.index, render_target.generation) in owned_keys:
+                continue
+            rt_name = render_target.name or "RenderTarget"
+            result.append(FramegraphDebugTarget(
+                source=render_target,
+                label=f"RenderTarget / {rt_name}",
+                get_pipeline=lambda render_target=render_target: render_target.pipeline,
+            ))
+
+        return result
+
+    def _pipeline_for_viewport(self, viewport: "Viewport"):
+        managed_by = viewport.managed_by_scene_pipeline
+        if managed_by and viewport.scene is not None:
+            from termin.visualization.core.scene import scene_render_mount
+            return scene_render_mount(viewport.scene).get_pipeline(managed_by)
+        render_target = viewport.render_target
+        if render_target is not None:
+            return render_target.pipeline
+        return None
+
+    def _pipeline_for_viewport_render_target(self, viewport: "Viewport", render_target):
+        managed_by = viewport.managed_by_scene_pipeline
+        if managed_by and viewport.scene is not None:
+            from termin.visualization.core.scene import scene_render_mount
+            return scene_render_mount(viewport.scene).get_pipeline(managed_by)
+        return render_target.pipeline
 
     def _make_viewport_render_target_name(self, viewport: "Viewport") -> str:
         base = viewport.name or "Viewport"
@@ -225,14 +298,54 @@ class RenderingModel:
     def _find_camera_for_viewport_config(self, scene: "Scene", config):
         if config is None or not config.camera_uuid:
             return None
+        return self._find_camera_by_uuid(scene, config.camera_uuid)
+
+    def _find_camera_by_uuid(self, scene: "Scene", camera_uuid: str):
+        if not camera_uuid:
+            return None
 
         from termin.visualization.core.camera import CameraComponent
 
         for entity in scene.entities:
-            if entity.uuid != config.camera_uuid:
+            if entity.uuid != camera_uuid:
                 continue
             return entity.get_component(CameraComponent)
         return None
+
+    def remove_render_target(self, render_target, scene: "Scene | None" = None) -> None:
+        """Remove a live render target and its scene config entry."""
+        if scene is not None:
+            name = render_target.name or ""
+            if name:
+                self._remove_render_target_config_by_name(scene, name)
+        render_target.free()
+
+    def _remove_render_target_config_by_name(self, scene: "Scene", name: str) -> None:
+        from termin.visualization.core.scene import scene_render_mount
+
+        rm = scene_render_mount(scene)
+        for index in range(rm.render_target_config_count() - 1, -1, -1):
+            config = rm.render_target_config_at(index)
+            if config is not None and config.name == name:
+                rm.remove_render_target_config(index)
+
+    def _live_viewport_render_target_keys(self) -> set[tuple[int, int]]:
+        keys: set[tuple[int, int]] = set()
+        for display in self._manager.displays:
+            for viewport in display.viewports:
+                render_target = viewport.render_target
+                if render_target is not None:
+                    keys.add((render_target.index, render_target.generation))
+        return keys
+
+    def standalone_render_targets(self, render_targets) -> list:
+        """Return render targets that are not owned by a live viewport."""
+        owned_keys = self._live_viewport_render_target_keys()
+        result = []
+        for render_target in render_targets:
+            if (render_target.index, render_target.generation) not in owned_keys:
+                result.append(render_target)
+        return result
 
     # ------------------------------------------------------------------
     # Viewport cleanup
@@ -254,8 +367,8 @@ class RenderingModel:
                 if vp.scene is not None and vp.scene.equal(scene)
             ]
             for vp in viewports_to_remove:
-                if vp.pipeline is not None:
-                    vp.pipeline.destroy()
+                if vp.render_target is not None and vp.render_target.pipeline is not None:
+                    vp.render_target.pipeline.destroy()
                 state = self._manager.get_viewport_state(vp)
                 if state is not None:
                     state.clear_all()
@@ -289,8 +402,9 @@ class RenderingModel:
         display_name = display.name or ""
 
         camera_uuid = ""
-        if viewport.camera is not None and viewport.camera.entity is not None:
-            camera_uuid = viewport.camera.entity.uuid
+        render_target = viewport.render_target
+        if render_target is not None and render_target.camera is not None and render_target.camera.entity is not None:
+            camera_uuid = render_target.camera.entity.uuid
 
         vp_name = viewport.name or ""
         configs = scene_render_mount(scene).viewport_configs
@@ -330,7 +444,15 @@ class RenderingModel:
                 continue
             config = self.find_viewport_config(scene, viewport, display)
             camera = self._find_camera_for_viewport_config(scene, config)
-            self.ensure_viewport_render_target(viewport, scene=scene, camera=camera)
+            render_target_name = ""
+            if config is not None:
+                render_target_name = config.render_target_name
+            self.ensure_viewport_render_target(
+                viewport,
+                scene=scene,
+                camera=camera,
+                render_target_name=render_target_name,
+            )
             if config is None:
                 continue
             by_display.setdefault(display.tc_display_ptr, []).append(
@@ -361,18 +483,7 @@ class RenderingModel:
             if display.viewports:
                 displays_to_check.add(display.tc_display_ptr)
 
-        self.remove_viewports_for_scene(scene)
-
-        from termin.render_framework._render_framework_native import render_target_pool_list
-        scene_h = scene.scene_handle()
-        for rt in render_target_pool_list():
-            if rt.locked:
-                continue
-            rt_scene = rt.scene
-            if rt_scene is not None and rt_scene.scene_handle().index == scene_h.index:
-                rt.free()
-
-        self._manager.detach_scene(scene)
+        self._manager.detach_scene_full(scene)
 
         emptied: set[int] = set()
         for display_ptr in displays_to_check:
@@ -408,8 +519,8 @@ class RenderingModel:
                 rt_name = rt.name if rt is not None else ""
 
                 camera_uuid = ""
-                if viewport.camera is not None and viewport.camera.entity is not None:
-                    camera_uuid = viewport.camera.entity.uuid
+                if rt is not None and rt.camera is not None and rt.camera.entity is not None:
+                    camera_uuid = rt.camera.entity.uuid
 
                 rect = viewport.rect
                 config = ViewportConfig()
@@ -435,9 +546,15 @@ class RenderingModel:
 
         rm = scene_render_mount(scene)
         rm.clear_render_target_configs()
+        viewport_rt_keys = self._live_viewport_render_target_keys()
 
         for rt in render_target_pool_list():
             if rt.locked:
+                continue
+            if (rt.index, rt.generation) in viewport_rt_keys:
+                continue
+            rt_scene = rt.scene
+            if rt_scene is None or not rt_scene.equal(scene):
                 continue
 
             camera_uuid = ""

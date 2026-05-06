@@ -1503,7 +1503,8 @@ class EditorWindow(QMainWindow):
         viewport = self.viewport
         if viewport is None:
             return
-        camera = viewport.camera
+        render_target = viewport.render_target
+        camera = render_target.camera if render_target is not None else None
         if camera is None or camera.entity is None:
             return
         import numpy as np

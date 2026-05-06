@@ -4,6 +4,7 @@
 #include "termin/editor/editor_interaction_system.hpp"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
+#include "render/tc_render_target.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_input_entity_pool.h"
 #include "core/tc_input_scene.h"
@@ -162,7 +163,8 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
 // ============================================================================
 
 static void _dispatch_camera_components(tc_viewport_handle vp, auto dispatch_fn) {
-    tc_entity_handle cam_ent = tc_viewport_get_camera_entity(vp);
+    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+    tc_entity_handle cam_ent = tc_render_target_get_camera_entity(rt);
     if (!tc_entity_handle_valid(cam_ent)) return;
 
     tc_entity_foreach_input_handler_subtree(cam_ent,

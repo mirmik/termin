@@ -31,14 +31,32 @@ if TYPE_CHECKING:
     from termin.visualization.render.framegraph import RenderPipeline
 
 
+class FramegraphDebugTarget:
+    """A renderable target the framegraph debugger can inspect."""
+
+    source: object
+    label: str
+    get_pipeline: Callable[[], object | None]
+
+    def __init__(
+        self,
+        source: object,
+        label: str,
+        get_pipeline: Callable[[], object | None],
+    ) -> None:
+        self.source = source
+        self.label = label
+        self.get_pipeline = get_pipeline
+
+
 class FramegraphDebuggerModel:
     def __init__(self, rendering_controller, core, on_request_update: Callable[[], None] | None = None):
         self._rendering_controller = rendering_controller
         self._core = core
         self._on_request_update = on_request_update
 
-        self._current_viewport = None
-        self._viewports_list: list[tuple[object, str]] = []
+        self._current_target: FramegraphDebugTarget | None = None
+        self._targets_list: list[FramegraphDebugTarget] = []
 
         self._mode: str = "inside"
         self._selected_pass: str | None = None
@@ -68,11 +86,17 @@ class FramegraphDebuggerModel:
 
     @property
     def current_viewport(self):
-        return self._current_viewport
+        if self._current_target is None:
+            return None
+        return self._current_target.source
 
     @property
     def viewports(self) -> list[tuple[object, str]]:
-        return list(self._viewports_list)
+        return [(target.source, target.label) for target in self._targets_list]
+
+    @property
+    def targets(self) -> list[FramegraphDebugTarget]:
+        return list(self._targets_list)
 
     @property
     def mode(self) -> str:
@@ -107,13 +131,9 @@ class FramegraphDebuggerModel:
     # ------------------------------------------------------------------
 
     def get_current_pipeline(self) -> "RenderPipeline | None":
-        if self._current_viewport is None:
+        if self._current_target is None:
             return None
-        managed_by = self._current_viewport.managed_by_scene_pipeline
-        if managed_by and self._current_viewport.scene is not None:
-            from termin.visualization.core.scene import scene_render_mount
-            return scene_render_mount(self._current_viewport.scene).get_pipeline(managed_by)
-        return self._current_viewport.pipeline
+        return self._current_target.get_pipeline()
 
     def get_fbos(self) -> dict:
         pipeline = self.get_current_pipeline()
@@ -131,12 +151,19 @@ class FramegraphDebuggerModel:
     # ------------------------------------------------------------------
 
     def refresh_viewports(self) -> None:
+        current_source = self._current_target.source if self._current_target is not None else None
         if self._rendering_controller is None:
-            self._viewports_list = []
+            self._targets_list = []
         else:
-            self._viewports_list = list(self._rendering_controller.get_all_viewports_info())
-        if self._viewports_list and self._current_viewport is None:
-            self._current_viewport = self._viewports_list[0][0]
+            self._targets_list = list(self._rendering_controller.get_framegraph_debug_targets_info())
+        self._current_target = None
+        if current_source is not None:
+            for target in self._targets_list:
+                if target.source is current_source:
+                    self._current_target = target
+                    break
+        if self._targets_list and self._current_target is None:
+            self._current_target = self._targets_list[0]
         self.lists_changed.emit(self)
 
     def get_resources(self) -> list[str]:
@@ -336,10 +363,10 @@ class FramegraphDebuggerModel:
     # ------------------------------------------------------------------
 
     def set_viewport_by_index(self, index: int) -> None:
-        if index < 0 or index >= len(self._viewports_list):
-            self._current_viewport = None
+        if index < 0 or index >= len(self._targets_list):
+            self._current_target = None
         else:
-            self._current_viewport = self._viewports_list[index][0]
+            self._current_target = self._targets_list[index]
         self.lists_changed.emit(self)
         self._reconnect()
         self.info_changed.emit(self)
@@ -487,13 +514,8 @@ class FramegraphDebuggerModel:
 
         add(self._connected_pipeline)
         add(self.get_current_pipeline())
-        for viewport, _label in self._viewports_list:
-            managed_by = viewport.managed_by_scene_pipeline
-            if managed_by and viewport.scene is not None:
-                from termin.visualization.core.scene import scene_render_mount
-                add(scene_render_mount(viewport.scene).get_pipeline(managed_by))
-            else:
-                add(viewport.pipeline)
+        for target in self._targets_list:
+            add(target.get_pipeline())
         return result
 
     def _connect(self) -> None:

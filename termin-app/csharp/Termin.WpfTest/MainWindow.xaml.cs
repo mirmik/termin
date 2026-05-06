@@ -471,14 +471,13 @@ public partial class MainWindow : Window
         Console.WriteLine("[Init] Display added to RenderingManager");
 
         // Create viewport with scene and camera
-        _viewportHandle = TerminCore.ViewportNew("Main", _scene.Handle, _cameraComponent.tc_component_ptr());
+        _viewportHandle = TerminCore.ViewportNew("Main", _scene.Handle);
         if (_viewportHandle.IsValid)
         {
             // Full screen viewport
             TerminCore.ViewportSetRect(_viewportHandle, 0.0f, 0.0f, 1.0f, 1.0f);
 
             // Set pipeline on viewport (for RenderingManager)
-            TerminCore.ViewportSetPipeline(_viewportHandle, _renderPipeline.handle());
 
             // Set internal entities (camera lives here)
             var internalEntityHandle = new TcEntityHandle
@@ -512,14 +511,13 @@ public partial class MainWindow : Window
         Console.WriteLine("[Init] Display2 added to RenderingManager");
 
         // Create viewport with scene and second camera
-        _viewportHandle2 = TerminCore.ViewportNew("Secondary", _scene.Handle, _cameraComponent2.tc_component_ptr());
+        _viewportHandle2 = TerminCore.ViewportNew("Secondary", _scene.Handle);
         if (_viewportHandle2.IsValid)
         {
             // Full screen viewport
             TerminCore.ViewportSetRect(_viewportHandle2, 0.0f, 0.0f, 1.0f, 1.0f);
 
             // Set pipeline on viewport
-            TerminCore.ViewportSetPipeline(_viewportHandle2, _renderPipeline2.handle());
 
             // Set internal entities (camera lives here)
             var internalEntityHandle2 = new TcEntityHandle

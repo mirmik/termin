@@ -262,7 +262,7 @@ class _Display:
     def create_viewport(self, scene, camera, rect):
         viewport = _Viewport()
         viewport.scene = scene
-        viewport.camera = camera
+        viewport.render_target = type("_RenderTarget", (), {"camera": camera})()
         viewport.rect = rect
         self.viewports.append(viewport)
         return viewport
