@@ -38,7 +38,6 @@ extern "C" {
 
 #include <algorithm>
 #include <cstring>
-#include <unordered_set>
 
 namespace termin {
 
@@ -371,13 +370,17 @@ tc_viewport_handle RenderingManager::mount_scene(
 void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display) {
     if (!display) return;
 
-    // Collect viewports showing this scene
+    // Collect viewports showing this scene (skip locked-RT viewports —
+    // they are managed externally, e.g. EditorSceneAttachment).
     std::vector<tc_viewport_handle> to_remove;
     tc_viewport_handle vp = tc_display_get_first_viewport(display);
     while (tc_viewport_handle_valid(vp)) {
         tc_scene_handle vp_scene = tc_viewport_get_scene(vp);
         if (tc_scene_handle_eq(vp_scene, scene)) {
-            to_remove.push_back(vp);
+            tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+            if (!tc_render_target_handle_valid(rt) || !tc_render_target_get_locked(rt)) {
+                to_remove.push_back(vp);
+            }
         }
         vp = tc_viewport_get_display_next(vp);
     }
@@ -460,6 +463,8 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         if (tc_pipeline_handle_valid(pipeline)) {
             tc_render_target_set_pipeline(rt, pipeline);
         }
+
+        register_standalone_render_target(rt);
     }
 
     // 2. Create viewports from viewport_configs
@@ -539,18 +544,18 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene) {
         unmount_scene(scene, display);
     }
 
-    // Free render targets belonging to this scene (not locked)
-    struct FreeCtx { tc_scene_handle scene; RenderingManager* mgr; std::vector<tc_render_target_handle> to_free; };
-    FreeCtx free_ctx = { scene, this, {} };
-    tc_render_target_pool_foreach([](tc_render_target_handle rt, void* ud) -> bool {
-        auto* ctx = static_cast<FreeCtx*>(ud);
+    // Free standalone render targets belonging to this scene.
+    // Iterate the managed list — never scan the global pool.
+    std::vector<tc_render_target_handle> to_free;
+    for (tc_render_target_handle rt : standalone_render_targets_) {
+        if (!tc_render_target_handle_valid(rt)) continue;
         tc_scene_handle rt_scene = tc_render_target_get_scene(rt);
-        if (tc_scene_handle_eq(rt_scene, ctx->scene) && !tc_render_target_get_locked(rt)) {
-            ctx->to_free.push_back(rt);
+        if (tc_scene_handle_eq(rt_scene, scene)) {
+            to_free.push_back(rt);
         }
-        return true;
-    }, &free_ctx);
-    for (tc_render_target_handle rt : free_ctx.to_free) {
+    }
+    for (tc_render_target_handle rt : to_free) {
+        unregister_standalone_render_target(rt);
         uint64_t rt_key = render_target_key(rt);
         auto rt_it = render_target_states_.find(rt_key);
         if (rt_it != render_target_states_.end()) {
@@ -696,6 +701,24 @@ ViewportRenderState* RenderingManager::get_or_create_render_target_state(tc_rend
 }
 
 // ============================================================================
+// Standalone Render Target Management
+// ============================================================================
+
+void RenderingManager::register_standalone_render_target(tc_render_target_handle rt) {
+    if (!tc_render_target_handle_valid(rt)) return;
+    auto it = std::find(standalone_render_targets_.begin(), standalone_render_targets_.end(), rt);
+    if (it != standalone_render_targets_.end()) return;
+    standalone_render_targets_.push_back(rt);
+}
+
+void RenderingManager::unregister_standalone_render_target(tc_render_target_handle rt) {
+    auto it = std::find(standalone_render_targets_.begin(), standalone_render_targets_.end(), rt);
+    if (it != standalone_render_targets_.end()) {
+        standalone_render_targets_.erase(it);
+    }
+}
+
+// ============================================================================
 // Rendering - Offscreen-First Model
 // ============================================================================
 
@@ -746,40 +769,12 @@ void RenderingManager::render_all_offscreen() {
     // 0. Sync viewport override_resolution → render target width/height
     sync_viewport_resolutions();
 
-    // Collect viewport-attached render targets up front. They get rendered
-    // through their owning viewport / scene pipeline below; the standalone
-    // RT pass must skip them to avoid double-rendering the same texture.
-    std::unordered_set<uint64_t> viewport_rt_keys;
-    for (tc_display* display : displays_) {
-        tc_viewport_handle vp = tc_display_get_first_viewport(display);
-        while (tc_viewport_handle_valid(vp)) {
-            tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-            if (tc_render_target_handle_valid(rt)) {
-                viewport_rt_keys.insert(render_target_key(rt));
-            }
-            vp = tc_viewport_get_display_next(vp);
+    // 1. Render standalone render targets first (managed list, not pool scan).
+    for (tc_render_target_handle rt : standalone_render_targets_) {
+        if (tc_render_target_handle_valid(rt)) {
+            render_render_target_offscreen(rt);
         }
     }
-
-    // 1. (Phase 9 MVP scheduling) Render standalone render targets first.
-    // Anything a scene material may sample as `rt.color_texture` lives
-    // here (mirror RTs, post-effect intermediates, ...). Rendering them
-    // before the consumer viewports guarantees current-frame data instead
-    // of last-frame stale pixels. A future DAG/topological version can
-    // narrow this to only the targets the scene materials actually read.
-    struct RenderTargetIterCtx {
-        RenderingManager* mgr;
-        std::unordered_set<uint64_t>* skip;
-    };
-    RenderTargetIterCtx rt_ctx = { this, &viewport_rt_keys };
-    tc_render_target_pool_foreach([](tc_render_target_handle rt, void* ud) -> bool {
-        auto* ctx = static_cast<RenderTargetIterCtx*>(ud);
-        uint64_t key = RenderingManager::render_target_key(rt);
-        if (ctx->skip->count(key) == 0) {
-            ctx->mgr->render_render_target_offscreen(rt);
-        }
-        return true;
-    }, &rt_ctx);
 
     // 2. Execute scene pipelines (can span multiple displays)
     for (tc_scene_handle scene : attached_scenes_) {
@@ -1421,6 +1416,9 @@ void RenderingManager::shutdown() {
         pair.second->clear_all();
     }
     viewport_states_.clear();
+
+    // Clear standalone render targets list (don't free — we don't own them)
+    standalone_render_targets_.clear();
 
     // Clear attached scenes
     attached_scenes_.clear();

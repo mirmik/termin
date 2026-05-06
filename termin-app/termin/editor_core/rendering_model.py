@@ -228,7 +228,6 @@ class RenderingModel:
         therefore exposed through the same target descriptor.
         """
         from termin.editor_core.framegraph_debugger_model import FramegraphDebugTarget
-        from termin.render_framework._render_framework_native import render_target_pool_list
 
         result: list[FramegraphDebugTarget] = []
         owned_keys: set[tuple[int, int]] = set()
@@ -260,9 +259,7 @@ class RenderingModel:
                         self._pipeline_for_viewport_render_target(viewport, render_target),
                 ))
 
-        for render_target in render_target_pool_list():
-            if (render_target.index, render_target.generation) in owned_keys:
-                continue
+        for render_target in self._manager.standalone_render_targets:
             rt_name = render_target.name or "RenderTarget"
             result.append(FramegraphDebugTarget(
                 source=render_target,
@@ -317,6 +314,7 @@ class RenderingModel:
             name = render_target.name or ""
             if name:
                 self._remove_render_target_config_by_name(scene, name)
+        self._manager.unregister_standalone_render_target(render_target)
         render_target.free()
 
     def _remove_render_target_config_by_name(self, scene: "Scene", name: str) -> None:
@@ -541,20 +539,14 @@ class RenderingModel:
                 rm.add_viewport_config(config)
 
     def sync_render_target_configs_to_scene(self, scene: "Scene") -> None:
-        """Snapshot the render target pool into ``scene.render_target_configs``."""
-        from termin.render_framework._render_framework_native import render_target_pool_list
+        """Snapshot managed standalone render targets into ``scene.render_target_configs``."""
         from termin.visualization.core.render_target_config import RenderTargetConfig
         from termin.visualization.core.scene import scene_render_mount
 
         rm = scene_render_mount(scene)
         rm.clear_render_target_configs()
-        viewport_rt_keys = self._live_viewport_render_target_keys()
 
-        for rt in render_target_pool_list():
-            if rt.locked:
-                continue
-            if (rt.index, rt.generation) in viewport_rt_keys:
-                continue
+        for rt in self._manager.standalone_render_targets:
             rt_scene = rt.scene
             if rt_scene is None or not rt_scene.equal(scene):
                 continue
