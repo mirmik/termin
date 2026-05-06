@@ -180,7 +180,13 @@ class EditorCanvas(Canvas):
             has_base = True
 
         if has_mask:
-            mask_alpha = (layer.mask.data * 255.0 * 0.4).astype(np.float32)
+            mask_alpha = np.zeros((h, w), dtype=np.float32)
+            lx0, ly0, lx1, ly1 = self._visible_layer_rect(layer)
+            if lx1 > lx0 and ly1 > ly0:
+                dx0, dy0 = layer.x + lx0, layer.y + ly0
+                dx1, dy1 = layer.x + lx1, layer.y + ly1
+                mask_alpha[dy0:dy1, dx0:dx1] = (
+                    layer.mask.data[ly0:ly1, lx0:lx1] * 255.0 * 0.4)
             ma = mask_alpha / 255.0
             inv = 1.0 - ma
             if has_base:
@@ -247,18 +253,31 @@ class EditorCanvas(Canvas):
         if dirty is None:
             return
         x0, y0, x1, y1 = dirty
+        canvas_rect = layer.local_rect_to_canvas(dirty)
+        cx0, cy0, cx1, cy1 = self._clip_canvas_rect(canvas_rect)
+        if cx1 <= cx0 or cy1 <= cy0:
+            return
         if self._mask_overlay is None:
             h, w = self._layer_stack.height, self._layer_stack.width
-            self._mask_overlay = np.empty((h, w, 4), dtype=np.uint8)
+            self._mask_overlay = np.zeros((h, w, 4), dtype=np.uint8)
             self._mask_overlay[:, :, 0] = 255
             self._mask_overlay[:, :, 1] = 50
             self._mask_overlay[:, :, 2] = 50
-            self._mask_overlay[:, :, 3] = (
-                layer.mask.data * 255.0 * 0.4).astype(np.uint8)
+            lx0, ly0, lx1, ly1 = self._visible_layer_rect(layer)
+            if lx1 > lx0 and ly1 > ly0:
+                dx0, dy0 = layer.x + lx0, layer.y + ly0
+                dx1, dy1 = layer.x + lx1, layer.y + ly1
+                self._mask_overlay[dy0:dy1, dx0:dx1, 3] = (
+                    layer.mask.data[ly0:ly1, lx0:lx1] * 255.0 * 0.4
+                ).astype(np.uint8)
             self.set_overlay(self._mask_overlay)
             return
-        self._mask_overlay[y0:y1, x0:x1, 3] = (
-            layer.mask.data[y0:y1, x0:x1] * 255.0 * 0.4).astype(np.uint8)
+        lx0 = cx0 - layer.x
+        ly0 = cy0 - layer.y
+        lx1 = lx0 + (cx1 - cx0)
+        ly1 = ly0 + (cy1 - cy0)
+        self._mask_overlay[cy0:cy1, cx0:cx1, 3] = (
+            layer.mask.data[ly0:ly1, lx0:lx1] * 255.0 * 0.4).astype(np.uint8)
         self.set_overlay(self._mask_overlay)
 
     def _update_mask_overlay_region_preview(self, layer, dirty, preview_mask):
@@ -266,16 +285,26 @@ class EditorCanvas(Canvas):
         if dirty is None or preview_mask is None:
             return
         x0, y0, x1, y1 = dirty
+        canvas_rect = layer.local_rect_to_canvas(dirty)
+        cx0, cy0, cx1, cy1 = self._clip_canvas_rect(canvas_rect)
+        if cx1 <= cx0 or cy1 <= cy0:
+            return
         if self._mask_overlay is None:
             h, w = self._layer_stack.height, self._layer_stack.width
-            self._mask_overlay = np.empty((h, w, 4), dtype=np.uint8)
+            self._mask_overlay = np.zeros((h, w, 4), dtype=np.uint8)
             self._mask_overlay[:, :, 0] = 255
             self._mask_overlay[:, :, 1] = 50
             self._mask_overlay[:, :, 2] = 50
-            self._mask_overlay[:, :, 3] = (
-                layer.mask.data * 255.0 * 0.4).astype(np.uint8)
-        self._mask_overlay[y0:y1, x0:x1, 3] = (
-            preview_mask * 255.0 * 0.4).astype(np.uint8)
+        lx0 = cx0 - layer.x
+        ly0 = cy0 - layer.y
+        lx1 = lx0 + (cx1 - cx0)
+        ly1 = ly0 + (cy1 - cy0)
+        px0 = lx0 - x0
+        py0 = ly0 - y0
+        px1 = px0 + (lx1 - lx0)
+        py1 = py0 + (ly1 - ly0)
+        self._mask_overlay[cy0:cy1, cx0:cx1, 3] = (
+            preview_mask[py0:py1, px0:px1] * 255.0 * 0.4).astype(np.uint8)
         self.set_overlay(self._mask_overlay)
 
     def _preview_mask_erase_region(self, layer, dirty):
@@ -288,10 +317,12 @@ class EditorCanvas(Canvas):
             self._composite_stale = False
         if self._composite is None:
             return
-        x0, y0, x1, y1 = dirty
-        if x1 <= x0 or y1 <= y0:
+        local_rect, canvas_rect = self._clip_layer_local_rect(layer, dirty)
+        if local_rect is None:
             return
-        below = self._composite_rect_below(layer, y0, y1, x0, x1)
+        x0, y0, x1, y1 = local_rect
+        cx0, cy0, cx1, cy1 = canvas_rect
+        below = self._composite_rect_below(layer, cy0, cy1, cx0, cx1)
         above = layer.image[y0:y1, x0:x1].astype(np.float32)
         erase = self._mask_erase_stroke[y0:y1, x0:x1]
         # Reduce alpha for preview only
@@ -302,9 +333,9 @@ class EditorCanvas(Canvas):
         out_a = sa + da * inv_sa
         safe_a = np.maximum(out_a, 1.0 / 255.0)
         out_rgb = (above[:, :, :3] * sa + below[:, :, :3] * da * inv_sa) / safe_a
-        self._composite[y0:y1, x0:x1, :3] = np.clip(
+        self._composite[cy0:cy1, cx0:cx1, :3] = np.clip(
             out_rgb, 0, 255).astype(np.uint8)
-        self._composite[y0:y1, x0:x1, 3:4] = np.clip(
+        self._composite[cy0:cy1, cx0:cx1, 3:4] = np.clip(
             out_a * 255.0, 0, 255).astype(np.uint8)
         self.set_image(self._composite)
 
@@ -315,9 +346,11 @@ class EditorCanvas(Canvas):
         """
         if rect is None or erase is None:
             return
-        x0, y0, x1, y1 = rect
-        if x1 <= x0 or y1 <= y0:
+        local_rect, canvas_rect = self._clip_layer_local_rect(layer, rect)
+        if local_rect is None:
             return
+        x0, y0, x1, y1 = local_rect
+        cx0, cy0, cx1, cy1 = canvas_rect
         if erase.dtype == np.uint8:
             erase = erase.astype(np.float32) / 255.0
         la = layer.image[y0:y1, x0:x1, 3].astype(np.float32)
@@ -329,7 +362,7 @@ class EditorCanvas(Canvas):
             self._gpu_compositor.composite()
             self._composite_stale = True
         elif self._composite is not None:
-            below = self._composite_rect_below(layer, y0, y1, x0, x1)
+            below = self._composite_rect_below(layer, cy0, cy1, cx0, cx1)
             above = layer.image[y0:y1, x0:x1].astype(np.float32)
             sa = above[:, :, 3:4] / 255.0
             inv_sa = 1.0 - sa
@@ -337,13 +370,13 @@ class EditorCanvas(Canvas):
             out_a = sa + da * inv_sa
             safe_a = np.maximum(out_a, 1.0 / 255.0)
             out_rgb = (above[:, :, :3] * sa + below[:, :, :3] * da * inv_sa) / safe_a
-            self._composite[y0:y1, x0:x1, :3] = np.clip(
+            self._composite[cy0:cy1, cx0:cx1, :3] = np.clip(
                 out_rgb, 0, 255).astype(np.uint8)
-            self._composite[y0:y1, x0:x1, 3:4] = np.clip(
+            self._composite[cy0:cy1, cx0:cx1, 3:4] = np.clip(
                 out_a * 255.0, 0, 255).astype(np.uint8)
             self.set_image(self._composite)
 
-        self._layer_stack.mark_layer_dirty(layer, rect)
+        self._layer_stack.mark_layer_dirty(layer, canvas_rect)
 
     def get_composite(self) -> np.ndarray | None:
         if self._gpu_compositing and self._composite_stale:
@@ -549,6 +582,45 @@ class EditorCanvas(Canvas):
         bx0, by0, bx1, by1 = b
         return (min(ax0, bx0), min(ay0, by0), max(ax1, bx1), max(ay1, by1))
 
+    def _canvas_to_layer_point(self, layer, x: int, y: int) -> tuple[int, int]:
+        return int(x - layer.x), int(y - layer.y)
+
+    def _clip_canvas_rect(self, rect):
+        x0, y0, x1, y1 = rect
+        return (
+            max(0, x0),
+            max(0, y0),
+            min(self._layer_stack.width, x1),
+            min(self._layer_stack.height, y1),
+        )
+
+    def _visible_layer_rect(self, layer):
+        cx0, cy0, cx1, cy1 = self._clip_canvas_rect(layer.bounds)
+        if cx1 <= cx0 or cy1 <= cy0:
+            return (0, 0, 0, 0)
+        return (cx0 - layer.x, cy0 - layer.y,
+                cx1 - layer.x, cy1 - layer.y)
+
+    def _clip_layer_local_rect(self, layer, rect):
+        if rect is None:
+            return None, None
+        x0, y0, x1, y1 = rect
+        x0 = max(0, x0)
+        y0 = max(0, y0)
+        x1 = min(layer.width, x1)
+        y1 = min(layer.height, y1)
+        if x1 <= x0 or y1 <= y0:
+            return None, None
+        canvas_rect = layer.local_rect_to_canvas((x0, y0, x1, y1))
+        cx0, cy0, cx1, cy1 = self._clip_canvas_rect(canvas_rect)
+        if cx1 <= cx0 or cy1 <= cy0:
+            return None, None
+        lx0 = cx0 - layer.x
+        ly0 = cy0 - layer.y
+        lx1 = lx0 + (cx1 - cx0)
+        ly1 = ly0 + (cy1 - cy0)
+        return (lx0, ly0, lx1, ly1), (cx0, cy0, cx1, cy1)
+
     # ------------------------------------------------------------------
     # Selection painting
     # ------------------------------------------------------------------
@@ -650,8 +722,10 @@ class EditorCanvas(Canvas):
     # Mask erase (preview)
     # ------------------------------------------------------------------
 
-    def _begin_mask_erase(self):
-        h, w = self._layer_stack.height, self._layer_stack.width
+    def _begin_mask_erase(self, layer):
+        if layer is None:
+            return
+        h, w = layer.height, layer.width
         if h == 0 or w == 0:
             return
         self._mask_erase_stroke = np.zeros((h, w), dtype=np.float32)
@@ -661,9 +735,13 @@ class EditorCanvas(Canvas):
     # Stroke buffer for brush painting
     # ------------------------------------------------------------------
 
-    def _begin_stroke(self):
-        h = self._layer_stack.height
-        w = self._layer_stack.width
+    def _begin_stroke(self, layer=None):
+        if layer is None:
+            layer = self._layer_stack.active_layer
+        if layer is None:
+            return
+        h = layer.height
+        w = layer.width
         if h == 0 or w == 0:
             return
         self._stroke_is_eraser = self._brush_eraser
@@ -673,9 +751,6 @@ class EditorCanvas(Canvas):
             self._stroke_base_image = None
             self._stroke_live_dirty_rect = None
         else:
-            layer = self._layer_stack.active_layer
-            if layer is None:
-                return
             self._stroke_mask = np.zeros((h, w), dtype=np.uint8)
             self._stroke_base_image = layer.image.copy()
             self._stroke_live_dirty_rect = None
@@ -683,7 +758,8 @@ class EditorCanvas(Canvas):
     def _end_stroke(self):
         layer = self._layer_stack.active_layer
         if layer is not None and self._stroke_live_dirty_rect is not None:
-            self._layer_stack.mark_layer_dirty(layer, self._stroke_live_dirty_rect)
+            self._layer_stack.mark_layer_dirty(
+                layer, layer.local_rect_to_canvas(self._stroke_live_dirty_rect))
         self._stroke_mask = None
         self._stroke_color = None
         self._stroke_base_image = None
@@ -721,25 +797,9 @@ class EditorCanvas(Canvas):
         layer.image[dy0b:dy1, dx0:dx1, 3] = np.clip(
             la * (1.0 - erase), 0, 255).astype(np.uint8)
 
-        if self._gpu_compositing and self._gpu_compositor:
-            # GPU path: mark dirty, recomposite on GPU
-            self._gpu_compositor.mark_dirty(layer)
-            self._gpu_compositor.composite()
-            self._composite_stale = True
-        elif self._composite is not None:
-            below = self._composite_rect_below(layer, dy0b, dy1, dx0, dx1)
-            above = layer.image[dy0b:dy1, dx0:dx1].astype(np.float32)
-            sa = above[:, :, 3:4] / 255.0
-            inv_sa = 1.0 - sa
-            da = below[:, :, 3:4] / 255.0
-            out_a = sa + da * inv_sa
-            safe_a = np.maximum(out_a, 1.0 / 255.0)
-            out_rgb = (above[:, :, :3] * sa + below[:, :, :3] * da * inv_sa) / safe_a
-            self._composite[dy0b:dy1, dx0:dx1, :3] = np.clip(
-                out_rgb, 0, 255).astype(np.uint8)
-            self._composite[dy0b:dy1, dx0:dx1, 3:4] = np.clip(
-                out_a * 255.0, 0, 255).astype(np.uint8)
-        return (dx0, dy0b, dx1, dy1)
+        dirty = (dx0, dy0b, dx1, dy1)
+        self._refresh_modified_layer_rect(layer, dirty)
+        return dirty
 
     def _erase_stroke_line(self, layer, x0: int, y0: int, x1: int, y1: int):
         ih, iw = layer.image.shape[:2]
@@ -785,26 +845,9 @@ class EditorCanvas(Canvas):
         layer.image[by0:by1, bx0:bx1, 3] = np.clip(
             la * (1.0 - erase), 0, 255).astype(np.uint8)
 
-        if self._gpu_compositing and self._gpu_compositor:
-            self._gpu_compositor.mark_dirty(layer)
-            self._gpu_compositor.composite()
-            self._composite_stale = True
-        elif self._composite is not None:
-            below = self._composite_rect_below(layer, by0, by1, bx0, bx1)
-            above = layer.image[by0:by1, bx0:bx1].astype(np.float32)
-            sa = above[:, :, 3:4] / 255.0
-            inv_sa = 1.0 - sa
-            da = below[:, :, 3:4] / 255.0
-            out_a = sa + da * inv_sa
-            safe_a = np.maximum(out_a, 1.0 / 255.0)
-            out_rgb = (above[:, :, :3] * sa + below[:, :, :3] * da * inv_sa) / safe_a
-            self._composite[by0:by1, bx0:bx1, :3] = np.clip(
-                out_rgb, 0, 255).astype(np.uint8)
-            self._composite[by0:by1, bx0:bx1, 3:4] = np.clip(
-                out_a * 255.0, 0, 255).astype(np.uint8)
-            self.set_image(self._composite)
-
-        return (bx0, by0, bx1, by1)
+        dirty = (bx0, by0, bx1, by1)
+        self._refresh_modified_layer_rect(layer, dirty)
+        return dirty
 
     # ------------------------------------------------------------------
     # Smudge
@@ -844,11 +887,11 @@ class EditorCanvas(Canvas):
         self._smudge_buffer = None
 
     def _refresh_modified_layer_rect(self, layer, rect):
-        if rect is None:
+        local_rect, canvas_rect = self._clip_layer_local_rect(layer, rect)
+        if local_rect is None:
             return
-        x0, y0, x1, y1 = rect
-        if x1 <= x0 or y1 <= y0:
-            return
+        x0, y0, x1, y1 = local_rect
+        cx0, cy0, cx1, cy1 = canvas_rect
         if self._gpu_compositing and self._gpu_compositor:
             self._gpu_compositor.mark_dirty(layer)
             self._gpu_compositor.composite()
@@ -856,7 +899,7 @@ class EditorCanvas(Canvas):
             return
         if self._composite is None:
             return
-        below = self._composite_rect_below(layer, y0, y1, x0, x1)
+        below = self._composite_rect_below(layer, cy0, cy1, cx0, cx1)
         above = layer.image[y0:y1, x0:x1].astype(np.float32)
         sa = above[:, :, 3:4] / 255.0
         inv_sa = 1.0 - sa
@@ -864,9 +907,9 @@ class EditorCanvas(Canvas):
         out_a = sa + da * inv_sa
         safe_a = np.maximum(out_a, 1.0 / 255.0)
         out_rgb = (above[:, :, :3] * sa + below[:, :, :3] * da * inv_sa) / safe_a
-        self._composite[y0:y1, x0:x1, :3] = np.clip(
+        self._composite[cy0:cy1, cx0:cx1, :3] = np.clip(
             out_rgb, 0, 255).astype(np.uint8)
-        self._composite[y0:y1, x0:x1, 3:4] = np.clip(
+        self._composite[cy0:cy1, cx0:cx1, 3:4] = np.clip(
             out_a * 255.0, 0, 255).astype(np.uint8)
         self.set_image(self._composite)
 
@@ -1167,6 +1210,20 @@ class EditorCanvas(Canvas):
 
     def _render_overlay(self, canvas, renderer):
         layer = self._layer_stack.active_layer
+
+        # Active layer bounds. Drawn in canvas coordinates, so local-sized
+        # layers and moved layers remain visually discoverable.
+        if layer is not None and layer.width > 0 and layer.height > 0:
+            ix0, iy0, ix1, iy1 = layer.bounds
+            wx0, wy0 = canvas.image_to_widget(ix0, iy0)
+            wx1, wy1 = canvas.image_to_widget(ix1, iy1)
+            w = wx1 - wx0
+            h = wy1 - wy0
+            if w != 0 and h != 0:
+                renderer.draw_rect_outline(wx0, wy0, w, h,
+                                           (0.0, 0.0, 0.0, 0.85), 3.0)
+                renderer.draw_rect_outline(wx0, wy0, w, h,
+                                           (1.0, 1.0, 1.0, 0.95), 1.0)
 
         # IP-Adapter reference rectangle (blue)
         if self._show_ref_rect and layer is not None and isinstance(layer.tool, DiffusionTool):

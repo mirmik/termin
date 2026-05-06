@@ -107,6 +107,31 @@ def test_document_service_add_layer_command_undo_redo():
     assert len(stack.layers) == 2
 
 
+def test_add_layer_command_can_insert_offset_image_layer():
+    stack = LayerStack()
+    stack.on_changed = lambda: None
+    stack.init_from_image(np.zeros((8, 8, 4), dtype=np.uint8))
+    history = HistoryManager(stack.load_state)
+    service = DocumentService(stack, history, stack.load_state)
+    image = np.zeros((3, 4, 4), dtype=np.uint8)
+    image[:, :, 3] = 255
+
+    service.execute(AddLayerCommand(
+        name="Patch",
+        image=image,
+        x=2,
+        y=3,
+        label="Paste",
+    ))
+
+    layer = stack.active_layer
+    assert layer.width == 4
+    assert layer.height == 3
+    assert layer.x == 2
+    assert layer.y == 3
+    assert stack.composite()[3, 2, 3] == 255
+
+
 def test_document_service_set_opacity_command():
     stack = LayerStack()
     stack.on_changed = lambda: None

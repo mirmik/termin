@@ -79,7 +79,8 @@ class ExternalEditContext:
     label: str
     layer_path: str
     target: str
-    before_arr: np.ndarray
+    before_arr: np.ndarray | None = None
+    before_offset: tuple[int, int] | None = None
 
 
 class EditorWindow:
@@ -106,6 +107,7 @@ class EditorWindow:
         self._pending_instruct_layer = None
         self._pending_grounding_result = None
         self._clipboard: np.ndarray | None = None  # RGBA uint8 patch
+        self._clipboard_pos: tuple[int, int] | None = None
         self._history_replaying = False
         self._external_edit_ctx: ExternalEditContext | None = None
 
@@ -702,6 +704,14 @@ class EditorWindow:
         layer_path = self._layer_stack.get_layer_path(layer)
         if not layer_path:
             return
+        if target == "transform":
+            self._external_edit_ctx = ExternalEditContext(
+                label=label,
+                layer_path=layer_path,
+                target=target,
+                before_offset=(layer.x, layer.y),
+            )
+            return
         if target == "mask":
             before_arr = layer.mask.data.copy()
         else:
@@ -734,7 +744,8 @@ class EditorWindow:
                 self._layer_stack.on_changed()
             return
         layer.image[y0:y1, x0:x1] = patch
-        self._layer_stack.mark_layer_dirty(layer, rect=rect)
+        self._layer_stack.mark_layer_dirty(
+            layer, rect=layer.local_rect_to_canvas(rect))
         if self._layer_stack.on_changed:
             self._layer_stack.on_changed()
 
@@ -771,6 +782,33 @@ class EditorWindow:
             return
         layer_path = self._layer_stack.get_layer_path(layer)
         if layer_path != ctx.layer_path or target != ctx.target:
+            return
+        if target == "transform":
+            if ctx.before_offset is None:
+                return
+            before = ctx.before_offset
+            after = (layer.x, layer.y)
+            if before == after:
+                return
+            label = ctx.label
+
+            def _apply_offset(offset):
+                target_layer = self._layer_stack.get_layer_by_path(layer_path)
+                if target_layer is None:
+                    return
+                old_bounds = target_layer.bounds
+                target_layer.x, target_layer.y = offset
+                dirty = self._layer_stack._union_rect(old_bounds, target_layer.bounds)
+                self._layer_stack.mark_layer_dirty(target_layer, dirty)
+                if self._layer_stack.on_changed:
+                    self._layer_stack.on_changed()
+
+            self._document.push_callbacks(
+                label=label,
+                undo_fn=lambda: _apply_offset(before),
+                redo_fn=lambda: _apply_offset(after),
+                size_bytes=16,
+            )
             return
         if dirty_rect is None:
             return
@@ -910,10 +948,26 @@ class EditorWindow:
             self._statusbar.text = "Copy: nothing selected"
             return
         x0, y0, x1, y1 = bbox
-        patch = layer.image[y0:y1, x0:x1].copy()
+        patch = np.zeros((y1 - y0, x1 - x0, 4), dtype=np.uint8)
+        ix0 = max(x0, layer.x)
+        iy0 = max(y0, layer.y)
+        ix1 = min(x1, layer.x + layer.width)
+        iy1 = min(y1, layer.y + layer.height)
+        if ix1 > ix0 and iy1 > iy0:
+            src_x0 = ix0 - layer.x
+            src_y0 = iy0 - layer.y
+            src_x1 = src_x0 + (ix1 - ix0)
+            src_y1 = src_y0 + (iy1 - iy0)
+            dst_x0 = ix0 - x0
+            dst_y0 = iy0 - y0
+            dst_x1 = dst_x0 + (ix1 - ix0)
+            dst_y1 = dst_y0 + (iy1 - iy0)
+            patch[dst_y0:dst_y1, dst_x0:dst_x1] = (
+                layer.image[src_y0:src_y1, src_x0:src_x1])
         mask = self._layer_stack.selection.data[y0:y1, x0:x1]
         patch[:, :, 3] = (patch[:, :, 3].astype(np.float32) * mask).astype(np.uint8)
         self._clipboard = patch
+        self._clipboard_pos = (x0, y0)
         self._statusbar.text = f"Copied {x1 - x0}x{y1 - y0}"
 
     def _copy_visible(self):
@@ -928,6 +982,7 @@ class EditorWindow:
         mask = self._layer_stack.selection.data[y0:y1, x0:x1]
         patch[:, :, 3] = (patch[:, :, 3].astype(np.float32) * mask).astype(np.uint8)
         self._clipboard = patch
+        self._clipboard_pos = (x0, y0)
         self._statusbar.text = f"Copied {x1 - x0}x{y1 - y0} (visible)"
 
     def _paste(self):
@@ -936,15 +991,17 @@ class EditorWindow:
             self._statusbar.text = "Paste: clipboard is empty"
             return
         ph, pw = self._clipboard.shape[:2]
-        ch, cw = self._layer_stack.height, self._layer_stack.width
-        full = np.zeros((ch, cw, 4), dtype=np.uint8)
-        # Center on canvas
-        px = (cw - pw) // 2
-        py = (ch - ph) // 2
-        full[py:py + ph, px:px + pw] = self._clipboard
+        if self._clipboard_pos is None:
+            ch, cw = self._layer_stack.height, self._layer_stack.width
+            px = (cw - pw) // 2
+            py = (ch - ph) // 2
+        else:
+            px, py = self._clipboard_pos
         self._document.execute(AddLayerCommand(
             name="Floating Selection",
-            image=full,
+            image=self._clipboard.copy(),
+            x=px,
+            y=py,
             label="Paste",
         ))
         self._statusbar.text = f"Pasted {pw}x{ph}"

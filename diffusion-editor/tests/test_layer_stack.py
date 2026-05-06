@@ -5,6 +5,7 @@ import pytest
 
 from diffusion_editor.layer import Layer
 from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.canvas_tools import MoveTool
 
 
 def _solid_image(w, h, r, g, b, a):
@@ -59,6 +60,34 @@ class TestCompositeCorrectness:
         a = stack.composite()
         b = stack.composite()
         np.testing.assert_array_equal(a, b)
+
+    def test_offset_layer_composites_at_canvas_position(self):
+        stack = LayerStack(tile_size=8)
+        stack.on_changed = lambda: None
+        stack.init_from_image(_solid_image(16, 16, 0, 0, 0, 0))
+        patch = _solid_image(4, 3, 255, 0, 0, 255)
+        layer = Layer("patch", 4, 3, patch, x=5, y=6)
+        stack.insert_layer(layer)
+
+        result = stack.composite()
+        assert result[6, 5, 0] == 255
+        assert result[8, 8, 0] == 255
+        assert result[5, 5, 3] == 0
+        assert result[6, 4, 3] == 0
+
+    def test_offset_layer_clips_at_canvas_edge(self):
+        stack = LayerStack(tile_size=8)
+        stack.on_changed = lambda: None
+        stack.init_from_image(_solid_image(8, 8, 0, 0, 0, 0))
+        patch = _solid_image(4, 4, 0, 255, 0, 255)
+        layer = Layer("patch", 4, 4, patch, x=6, y=6)
+        stack.insert_layer(layer)
+
+        result = stack.composite()
+        assert result[6, 6, 1] == 255
+        assert result[7, 7, 1] == 255
+        assert result[:6, :, 3].sum() == 0
+        assert result[:, :6, 3].sum() == 0
 
 
 # ---------- prefix cache behaviour ----------
@@ -230,6 +259,41 @@ class TestStructuralOps:
         result = stack.composite()
         assert result.shape == (32, 32, 4)
         assert result[0, 0, 2] == 255
+
+    def test_move_tool_changes_offset_not_pixels(self):
+        class FakeCanvas:
+            _gpu_compositing = False
+            _gpu_compositor = None
+
+            def __init__(self, stack):
+                self._layer_stack = stack
+                self._composite = None
+                self.image_set = False
+
+            @staticmethod
+            def _union_rect(a, b):
+                return LayerStack._union_rect(a, b)
+
+            def set_image(self, image):
+                self.image_set = True
+
+        stack = LayerStack(tile_size=8)
+        stack.on_changed = lambda: None
+        stack.init_from_image(_solid_image(16, 16, 0, 0, 0, 0))
+        image = _solid_image(4, 4, 255, 0, 0, 255)
+        layer = Layer("patch", 4, 4, image, x=2, y=3)
+        stack.insert_layer(layer)
+        before = layer.image.copy()
+        canvas = FakeCanvas(stack)
+        tool = MoveTool()
+
+        dirty0 = tool.begin(canvas, layer, 10, 10)
+        dirty1 = tool.move(canvas, layer, (10, 10), 13, 8)
+
+        assert dirty0 == (2, 3, 6, 7)
+        assert dirty1 == (2, 1, 9, 7)
+        assert (layer.x, layer.y) == (5, 1)
+        np.testing.assert_array_equal(layer.image, before)
 
 
 # ---------- mark_layer_dirty edge cases ----------

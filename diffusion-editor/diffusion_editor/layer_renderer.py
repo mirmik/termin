@@ -181,9 +181,7 @@ class LayerRenderer:
             return result
 
         prefix = self._prefix_of(layer, tx, ty)
-        own = layer.content.get_tile(tx, ty)
-        if own is not None and own.ndim == 2:
-            own = own[:, :, None]
+        own = self._layer_canvas_tile(layer, tx, ty)
         if layer.opacity >= 1.0:
             if prefix is None and (own is None or not np.any(own[:, :, 3])):
                 self._composite_cache[key] = None
@@ -224,6 +222,40 @@ class LayerRenderer:
         out = np.clip(result, 0, 255).astype(np.uint8)
         self._composite_cache[key] = out
         return out
+
+    def _layer_canvas_tile(self, layer: Layer, tx: int, ty: int) -> np.ndarray | None:
+        """Return layer pixels positioned in a canvas tile.
+
+        Layer image coordinates are local to the layer; renderer coordinates
+        are canvas-global. The returned tile always has the canvas tile shape,
+        with transparent pixels outside the layer bounds.
+        """
+        bx0, by0, bx1, by1 = self._stack.tile_bounds(tx, ty)
+        lx0, ly0, lx1, ly1 = layer.bounds
+        ox0 = max(bx0, lx0)
+        oy0 = max(by0, ly0)
+        ox1 = min(bx1, lx1)
+        oy1 = min(by1, ly1)
+        if ox1 <= ox0 or oy1 <= oy0:
+            return None
+
+        src_x0 = ox0 - layer.x
+        src_y0 = oy0 - layer.y
+        src_x1 = src_x0 + (ox1 - ox0)
+        src_y1 = src_y0 + (oy1 - oy0)
+        src = layer.image[src_y0:src_y1, src_x0:src_x1]
+        if src.ndim == 2:
+            src = src[:, :, None]
+        if src.shape[2] < 4 or not np.any(src[:, :, 3]):
+            return None
+
+        tile = np.zeros((*self._stack.tile_shape(tx, ty), 4), dtype=np.uint8)
+        dst_x0 = ox0 - bx0
+        dst_y0 = oy0 - by0
+        dst_x1 = dst_x0 + (ox1 - ox0)
+        dst_y1 = dst_y0 + (oy1 - oy0)
+        tile[dst_y0:dst_y1, dst_x0:dst_x1] = src
+        return tile
 
     def _external_context(self, layer: Layer, tx: int, ty: int) -> np.ndarray | None:
         if layer.parent is None:
