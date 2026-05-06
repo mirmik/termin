@@ -222,7 +222,7 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
 
     g_pool->alive[idx] = true;
     g_pool->names[idx] = tc_strdup_local(name);
-    g_pool->render_targets[idx] = TC_RENDER_TARGET_HANDLE_INVALID;
+    g_pool->render_targets[idx] = tc_render_target_new(name);
     g_pool->scenes[idx] = TC_SCENE_HANDLE_INVALID;
     g_pool->override_resolution[idx] = true;
     g_pool->rects[idx * 4 + 0] = 0.0f;
@@ -255,6 +255,11 @@ void tc_viewport_pool_free(tc_viewport_handle h) {
     free(g_pool->names[idx]);
     free(g_pool->input_modes[idx]);
     free(g_pool->managed_by[idx]);
+
+    tc_render_target_handle rt = g_pool->render_targets[idx];
+    if (tc_render_target_handle_valid(rt)) {
+        tc_render_target_free(rt);
+    }
 
     g_pool->alive[idx] = false;
     g_pool->generations[idx]++;
@@ -380,6 +385,10 @@ tc_scene_handle tc_viewport_get_scene(tc_viewport_handle h) {
 
 void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle rt) {
     if (!handle_alive(h)) return;
+    tc_render_target_handle old_rt = g_pool->render_targets[h.index];
+    if (tc_render_target_handle_valid(old_rt)) {
+        tc_render_target_free(old_rt);
+    }
     g_pool->render_targets[h.index] = rt;
     // Sync viewport's authoritative scene to the new render target
     if (tc_render_target_handle_valid(rt)) {

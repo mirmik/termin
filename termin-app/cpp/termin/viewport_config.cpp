@@ -14,8 +14,9 @@ tc_viewport_config ViewportConfig::to_c() const {
 
     c.name = name.empty() ? nullptr : tgfx_intern_string(name.c_str());
     c.display_name = display_name.empty() ? nullptr : tgfx_intern_string(display_name.c_str());
-    c.render_target_name = render_target_name.empty() ? nullptr : tgfx_intern_string(render_target_name.c_str());
     c.camera_uuid = camera_uuid.empty() ? nullptr : tgfx_intern_string(camera_uuid.c_str());
+    c.pipeline_uuid = pipeline_uuid.empty() ? nullptr : tgfx_intern_string(pipeline_uuid.c_str());
+    c.pipeline_name = pipeline_name.empty() ? nullptr : tgfx_intern_string(pipeline_name.c_str());
     c.region[0] = region_x;
     c.region[1] = region_y;
     c.region[2] = region_w;
@@ -34,8 +35,9 @@ ViewportConfig ViewportConfig::from_c(const tc_viewport_config* c) {
 
     cfg.name = c->name ? c->name : "";
     cfg.display_name = c->display_name ? c->display_name : "Main";
-    cfg.render_target_name = c->render_target_name ? c->render_target_name : "";
     cfg.camera_uuid = c->camera_uuid ? c->camera_uuid : "";
+    cfg.pipeline_uuid = c->pipeline_uuid ? c->pipeline_uuid : "";
+    cfg.pipeline_name = c->pipeline_name ? c->pipeline_name : "";
     cfg.region_x = c->region[0];
     cfg.region_y = c->region[1];
     cfg.region_w = c->region[2];

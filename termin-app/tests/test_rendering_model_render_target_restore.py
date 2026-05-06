@@ -82,8 +82,7 @@ class _RenderTargetConfig:
 
 
 class _ViewportConfig:
-    def __init__(self, render_target_name):
-        self.render_target_name = render_target_name
+    def __init__(self):
         self.camera_uuid = ""
         self.display_name = "Display"
         self.name = "Viewport"
@@ -190,7 +189,6 @@ def test_viewport_uses_restored_render_target_by_config_name(monkeypatch):
     render_target = model.ensure_viewport_render_target(
         viewport,
         scene=scene,
-        render_target_name="Custom",
     )
 
     assert len(pool) == 1

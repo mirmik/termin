@@ -353,11 +353,10 @@ tc_viewport_handle RenderingManager::mount_scene(
         return TC_VIEWPORT_HANDLE_INVALID;
     }
 
-    tc_render_target_handle rt = tc_render_target_new((name + ".RT").c_str());
+    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
     tc_render_target_set_scene(rt, scene);
     tc_render_target_set_camera(rt, camera);
     tc_render_target_set_pipeline(rt, pipeline);
-    tc_viewport_set_render_target(viewport, rt);
     tc_viewport_set_scene(viewport, scene);
 
     // Set rect
@@ -425,8 +424,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
     tc_entity_pool* pool = tc_scene_entity_pool(scene);
     tc_entity_pool_handle pool_handle = pool ? tc_entity_pool_registry_find(pool) : TC_ENTITY_POOL_HANDLE_INVALID;
 
-    // 1. Create render targets from render_target_configs
-    std::unordered_map<std::string, tc_render_target_handle> rt_by_name;
+    // 1. Restore standalone render targets from render_target_configs
     size_t rt_count = mount ? mount->render_target_config_count : 0;
     for (size_t i = 0; i < rt_count; i++) {
         tc_render_target_config* rtc = &mount->render_target_configs[i];
@@ -440,7 +438,6 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         tc_render_target_set_layer_mask(rt, rtc->layer_mask);
         tc_render_target_set_enabled(rt, rtc->enabled);
 
-        // Find camera by UUID
         if (rtc->camera_uuid && rtc->camera_uuid[0] != '\0' && pool) {
             tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, rtc->camera_uuid);
             if (tc_entity_id_valid(eid)) {
@@ -453,7 +450,6 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
             }
         }
 
-        // Get pipeline
         tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
         if (rtc->pipeline_uuid && rtc->pipeline_uuid[0] != '\0' && pipeline_factory_) {
             pipeline = pipeline_factory_(rtc->pipeline_uuid);
@@ -464,11 +460,9 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         if (tc_pipeline_handle_valid(pipeline)) {
             tc_render_target_set_pipeline(rt, pipeline);
         }
-
-        rt_by_name[rt_name] = rt;
     }
 
-    // 2. Create viewports from viewport_configs, link to render targets by name
+    // 2. Create viewports from viewport_configs
     size_t vp_count = mount ? mount->viewport_config_count : 0;
     for (size_t i = 0; i < vp_count; i++) {
         tc_viewport_config* config = &mount->viewport_configs[i];
@@ -492,18 +486,35 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         }
         tc_viewport_set_block_input_in_editor(viewport, config->block_input_in_editor);
 
-        // Link to render target by name
-        std::string rt_name = config->render_target_name ? config->render_target_name : "";
-        if (!rt_name.empty()) {
-            auto it = rt_by_name.find(rt_name);
-            if (it != rt_by_name.end()) {
-                tc_viewport_set_render_target(viewport, it->second);
-            } else {
-                tc_log(TC_LOG_WARN, "[RenderingManager] Render target '%s' not found for viewport '%s'",
-                       rt_name.c_str(), vp_name.c_str());
+        tc_viewport_set_scene(viewport, scene);
+
+        // Apply render target settings from viewport config
+        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+        if (tc_render_target_handle_valid(rt)) {
+            // Camera
+            if (config->camera_uuid && config->camera_uuid[0] != '\0' && pool) {
+                tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, config->camera_uuid);
+                if (tc_entity_id_valid(eid)) {
+                    tc_entity_handle eh = tc_entity_handle_make(pool_handle, eid);
+                    Entity entity(eh);
+                    tc_component* camera = entity.get_component_by_type_name("CameraComponent");
+                    if (camera) {
+                        tc_render_target_set_camera(rt, camera);
+                    }
+                }
+            }
+            // Pipeline
+            tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
+            if (config->pipeline_uuid && config->pipeline_uuid[0] != '\0' && pipeline_factory_) {
+                pipeline = pipeline_factory_(config->pipeline_uuid);
+            }
+            if (!tc_pipeline_handle_valid(pipeline) && config->pipeline_name && config->pipeline_name[0] != '\0' && pipeline_factory_) {
+                pipeline = pipeline_factory_(config->pipeline_name);
+            }
+            if (tc_pipeline_handle_valid(pipeline)) {
+                tc_render_target_set_pipeline(rt, pipeline);
             }
         }
-        tc_viewport_set_scene(viewport, scene);
 
         tc_display_add_viewport(display, viewport);
         viewports.push_back(viewport);

@@ -18,10 +18,15 @@ def serialize_viewport_config(config: ViewportConfig) -> dict:
         "input_mode": config.input_mode,
         "block_input_in_editor": config.block_input_in_editor,
     }
-    if config.render_target_name:
-        result["render_target_name"] = config.render_target_name
+    rt = {}
     if config.camera_uuid:
-        result["camera_uuid"] = config.camera_uuid
+        rt["camera_uuid"] = config.camera_uuid
+    if config.pipeline_uuid:
+        rt["pipeline_uuid"] = config.pipeline_uuid
+    if config.pipeline_name:
+        rt["pipeline_name"] = config.pipeline_name
+    if rt:
+        result["render_target"] = rt
     if not config.enabled:
         result["enabled"] = config.enabled
     return result
@@ -34,8 +39,13 @@ def deserialize_viewport_config(data: dict) -> ViewportConfig:
     config = ViewportConfig()
     config.name = data.get("name", "")
     config.display_name = data.get("display_name", "Main")
-    config.render_target_name = data.get("render_target_name", "")
-    config.camera_uuid = data.get("camera_uuid", "")
+    rt = data.get("render_target", None)
+    if isinstance(rt, dict):
+        config.camera_uuid = rt.get("camera_uuid", "")
+        config.pipeline_uuid = rt.get("pipeline_uuid", "")
+        config.pipeline_name = rt.get("pipeline_name", "")
+    else:
+        config.camera_uuid = data.get("camera_uuid", "")
     config.region_x = float(region[0])
     config.region_y = float(region[1])
     config.region_w = float(region[2])

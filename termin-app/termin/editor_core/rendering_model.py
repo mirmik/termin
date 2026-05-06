@@ -186,7 +186,6 @@ class RenderingModel:
         viewport: "Viewport",
         scene: "Scene | None" = None,
         camera=None,
-        render_target_name: str = "",
     ):
         """Ensure ``viewport`` has its own render target.
 
@@ -198,7 +197,7 @@ class RenderingModel:
         if rt is None:
             from termin.render_framework._render_framework_native import render_target_new
 
-            rt_name = render_target_name or self._make_viewport_render_target_name(viewport)
+            rt_name = self._make_viewport_render_target_name(viewport)
             rt = render_target_new(rt_name)
             viewport.render_target = rt
 
@@ -444,14 +443,10 @@ class RenderingModel:
                 continue
             config = self.find_viewport_config(scene, viewport, display)
             camera = self._find_camera_for_viewport_config(scene, config)
-            render_target_name = ""
-            if config is not None:
-                render_target_name = config.render_target_name
             self.ensure_viewport_render_target(
                 viewport,
                 scene=scene,
                 camera=camera,
-                render_target_name=render_target_name,
             )
             if config is None:
                 continue
@@ -516,18 +511,25 @@ class RenderingModel:
                     continue
 
                 rt = viewport.render_target
-                rt_name = rt.name if rt is not None else ""
 
                 camera_uuid = ""
-                if rt is not None and rt.camera is not None and rt.camera.entity is not None:
-                    camera_uuid = rt.camera.entity.uuid
+                pipeline_uuid = ""
+                pipeline_name = ""
+                if rt is not None:
+                    if rt.camera is not None and rt.camera.entity is not None:
+                        camera_uuid = rt.camera.entity.uuid
+                    if rt.pipeline is not None:
+                        pipeline_uuid = self._resolve_pipeline_uuid(rt.pipeline) or ""
+                        if rt.pipeline.name:
+                            pipeline_name = rt.pipeline.name
 
                 rect = viewport.rect
                 config = ViewportConfig()
                 config.name = viewport.name or ""
                 config.display_name = display.name
-                config.render_target_name = rt_name
                 config.camera_uuid = camera_uuid
+                config.pipeline_uuid = pipeline_uuid
+                config.pipeline_name = pipeline_name
                 config.region_x = rect[0]
                 config.region_y = rect[1]
                 config.region_w = rect[2]
