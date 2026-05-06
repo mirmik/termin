@@ -901,7 +901,8 @@ class EditorWindowTcgui:
         if display is None or not display.viewports:
             return
         viewport = display.viewports[0]
-        camera = viewport.camera if viewport is not None else None
+        render_target = viewport.render_target if viewport is not None else None
+        camera = render_target.camera if render_target is not None else None
         if camera is None or camera.entity is None:
             return
         import numpy as np
@@ -933,7 +934,8 @@ class EditorWindowTcgui:
             from termin._native.render import RenderingManager
             current_display = RenderingManager.instance().get_display_for_viewport(viewport)
             scene = viewport.scene or self.scene
-            camera = viewport.camera
+            render_target = viewport.render_target
+            camera = render_target.camera if render_target is not None else None
             if camera is None and scene is not None:
                 from termin.visualization.core.camera import CameraComponent
                 for entity in scene.entities:

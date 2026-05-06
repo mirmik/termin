@@ -8,7 +8,7 @@ EditorCameraUIController - контроллер для UI редакторско
 
 Использование:
     Контроллер должен быть на entity-потомке камеры (или на самой камере).
-    Он найдёт CameraComponent и через него получит viewport.pipeline.
+    Он найдёт CameraComponent и через него получит render target pipeline.
 """
 
 from __future__ import annotations
@@ -160,9 +160,9 @@ class EditorCameraUIController(PythonComponent):
     def _find_pass_by_name(self, pass_name: str):
         """Ищет пасс по имени в pipeline."""
         vp = self.viewport
-        if vp is None or vp.pipeline is None:
+        if vp is None or vp.render_target is None or vp.render_target.pipeline is None:
             return None
-        for p in vp.pipeline.passes:
+        for p in vp.render_target.pipeline.passes:
             if p.pass_name == pass_name:
                 return p
         return None

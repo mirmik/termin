@@ -343,7 +343,9 @@ class ViewportInspectorTcgui(VStack):
             return
         if 0 <= index < len(self._scenes):
             self._viewport.scene = self._scenes[index]
-            self._viewport.camera = None
+            rt = self._viewport.render_target
+            if rt is not None:
+                rt.camera = None
             self._refresh_camera_combo()
             self._camera_combo.selected_index = 0
             self._emit_changed()
@@ -372,11 +374,13 @@ class ViewportInspectorTcgui(VStack):
         self._camera_combo.on_changed = old
 
     def _select_current_camera(self) -> None:
-        if self._viewport is None or self._viewport.camera is None:
+        rt = self._viewport.render_target if self._viewport is not None else None
+        camera = rt.camera if rt is not None else None
+        if camera is None:
             self._camera_combo.selected_index = 0
             return
         for i, cam in enumerate(self._cameras):
-            if cam is self._viewport.camera:
+            if cam is camera:
                 self._camera_combo.selected_index = i + 1
                 return
         self._camera_combo.selected_index = 0
@@ -392,10 +396,12 @@ class ViewportInspectorTcgui(VStack):
         self._pipeline_combo.on_changed = old
 
     def _select_current_pipeline(self) -> None:
-        if self._viewport is None or self._viewport.pipeline is None:
+        rt = self._viewport.render_target if self._viewport is not None else None
+        pipeline = rt.pipeline if rt is not None else None
+        if pipeline is None:
             self._pipeline_combo.selected_index = 0
             return
-        current = self._viewport.pipeline.name or ""
+        current = pipeline.name or ""
         for i in range(self._pipeline_combo.item_count):
             if self._pipeline_combo.item_text(i) == current:
                 self._pipeline_combo.selected_index = i
@@ -405,26 +411,32 @@ class ViewportInspectorTcgui(VStack):
     def _on_camera_changed(self, index: int, _text: str) -> None:
         if self._updating or self._viewport is None:
             return
+        rt = self._viewport.render_target
+        if rt is None:
+            return
         if index <= 0:
-            self._viewport.camera = None
+            rt.camera = None
             self._emit_changed()
             return
         idx = index - 1
         if 0 <= idx < len(self._cameras):
-            self._viewport.camera = self._cameras[idx]
+            rt.camera = self._cameras[idx]
             self._emit_changed()
 
     def _on_pipeline_changed(self, index: int, text: str) -> None:
         if self._updating or self._viewport is None:
             return
+        rt = self._viewport.render_target
+        if rt is None:
+            return
         if index == 0:
-            self._viewport.pipeline = None
+            rt.pipeline = None
             self._emit_changed()
             return
         if text == "(Default)":
             try:
                 from termin.visualization.core.viewport import make_default_pipeline
-                self._viewport.pipeline = make_default_pipeline()
+                rt.pipeline = make_default_pipeline()
                 self._emit_changed()
             except Exception as e:
                 log.error(f"[ViewportInspectorTcgui] make_default_pipeline failed: {e}")
@@ -433,7 +445,7 @@ class ViewportInspectorTcgui(VStack):
         if pipeline is None:
             log.error(f"[ViewportInspectorTcgui] pipeline not found: {text}")
             return
-        self._viewport.pipeline = pipeline
+        rt.pipeline = pipeline
         self._emit_changed()
 
     def _on_use_view_size_changed(self, checked: bool) -> None:

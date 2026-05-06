@@ -297,12 +297,14 @@ class ViewportInspector(QWidget):
 
     def _select_viewport_pipeline(self, viewport: "Viewport") -> None:
         """Select pipeline in combo based on viewport's current pipeline."""
-        if viewport.pipeline is None:
+        render_target = viewport.render_target
+        pipeline = render_target.pipeline if render_target is not None else None
+        if pipeline is None:
             self._pipeline_combo.setCurrentIndex(0)
             self._current_pipeline_name = None
             return
 
-        pipeline_name = viewport.pipeline.name
+        pipeline_name = pipeline.name
 
         # Find matching pipeline in list
         for i, (name, _) in enumerate(self._pipelines):
@@ -317,8 +319,10 @@ class ViewportInspector(QWidget):
 
     def _update_hint_state(self, viewport: "Viewport") -> None:
         """Update hint label visibility based on ViewportHintComponent."""
-        if viewport.camera is not None:
-            self._update_hint_state_for_camera(viewport.camera)
+        render_target = viewport.render_target
+        camera = render_target.camera if render_target is not None else None
+        if camera is not None:
+            self._update_hint_state_for_camera(camera)
         else:
             self._hint_label.hide()
             self._pipeline_combo.setEnabled(True)
@@ -407,7 +411,9 @@ class ViewportInspector(QWidget):
         try:
             current_camera = None
             if self._viewport is not None:
-                current_camera = self._viewport.camera
+                render_target = self._viewport.render_target
+                if render_target is not None:
+                    current_camera = render_target.camera
 
             self._cameras.clear()
             self._camera_combo.clear()
@@ -450,9 +456,6 @@ class ViewportInspector(QWidget):
             new_camera, _name = self._cameras[index]
             self.camera_changed.emit(new_camera)
             self.viewport_changed.emit()
-            # Update hint state for the new camera
-            # Note: viewport.camera is updated by rendering_controller after this signal
-            # So we need to check the new camera directly
             self._update_hint_state_for_camera(new_camera)
 
     def _on_rect_changed(self) -> None:

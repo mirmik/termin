@@ -11,15 +11,11 @@
 #include <termin/entity/component.hpp>
 #include "core/tc_component.h"
 #include "core/tc_scene.h"
-#include "render/tc_pipeline.h"
+#include "render/tc_render_target.h"
 
 namespace nb = nanobind;
 
 namespace termin {
-
-static tc_pipeline_handle object_to_pipeline_handle(nb::object pipeline_obj) {
-    return nb::cast<tc_pipeline_handle>(pipeline_obj.attr("_pipeline_handle"));
-}
 
 static nb::object camera_component_from_tc(tc_component* c) {
     if (!c) {
@@ -65,15 +61,11 @@ void bind_tc_viewport_class(nb::module_& m) {
                 tc_s = nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
             }
 
-            // Get tc_component* from CameraComponent
-            tc_component* tc_c = nullptr;
-            if (!camera.is_none()) {
-                uintptr_t ptr = nb::cast<uintptr_t>(camera.attr("c_component_ptr")());
-                tc_c = reinterpret_cast<tc_component*>(ptr);
-            }
+            (void)camera;
+            (void)pipeline;
 
             // Create viewport via pool
-            tc_viewport_handle vh = tc_viewport_new(name.c_str(), tc_s, tc_c);
+            tc_viewport_handle vh = tc_viewport_new(name.c_str(), tc_s);
 
             // Set rect
             tc_viewport_set_rect(vh, std::get<0>(rect), std::get<1>(rect),
@@ -89,12 +81,6 @@ void bind_tc_viewport_class(nb::module_& m) {
             tc_viewport_set_block_input_in_editor(vh, block_input_in_editor);
             if (!managed_by_scene_pipeline.empty()) {
                 tc_viewport_set_managed_by(vh, managed_by_scene_pipeline.c_str());
-            }
-
-            // Pipeline
-            if (!pipeline.is_none()) {
-                tc_pipeline_handle ph = object_to_pipeline_handle(pipeline);
-                tc_viewport_set_pipeline(vh, ph);
             }
 
             // Internal entities
@@ -155,23 +141,6 @@ void bind_tc_viewport_class(nb::module_& m) {
                 }
             })
 
-        // Camera - returns Python wrapper for CameraComponent
-        .def_prop_rw("camera",
-            [](TcViewport& self) -> nb::object {
-                tc_component* c = self.camera();
-                return camera_component_from_tc(c);
-            },
-            [](TcViewport& self, nb::object camera_obj) {
-                if (!self.is_valid()) return;
-                if (camera_obj.is_none()) {
-                    tc_viewport_set_camera(self.handle_, nullptr);
-                } else {
-                    uintptr_t ptr = nb::cast<uintptr_t>(camera_obj.attr("c_component_ptr")());
-                    tc_viewport_set_camera(self.handle_, reinterpret_cast<tc_component*>(ptr));
-                }
-            },
-            nb::arg().none())
-
         // Rect (normalized 0-1)
         .def_prop_rw("rect",
             [](TcViewport& self) {
@@ -227,37 +196,6 @@ void bind_tc_viewport_class(nb::module_& m) {
                 }
             },
             nb::arg().none())
-
-        // Pipeline — creates wrapper from handle, no py_wrapper
-        .def_prop_rw("pipeline",
-            [](TcViewport& self) -> nb::object {
-                tc_pipeline_handle ph = self.pipeline();
-                if (!tc_pipeline_handle_valid(ph)) return nb::none();
-                nb::module_ render_module = nb::module_::import_("termin._native.render");
-                nb::object cls = render_module.attr("RenderPipeline");
-                return cls.attr("from_handle")(ph.index, ph.generation);
-            },
-            [](TcViewport& self, nb::object pipeline_obj) {
-                if (!self.is_valid()) {
-                    tc::Log::error("viewport.pipeline setter: viewport is not valid");
-                    return;
-                }
-                if (pipeline_obj.is_none()) {
-                    tc_viewport_set_pipeline(self.handle_, TC_PIPELINE_HANDLE_INVALID);
-                } else {
-                    try {
-                        tc_pipeline_handle ph = object_to_pipeline_handle(pipeline_obj);
-                        tc::Log::info("viewport.pipeline setter: handle=(%u,%u)", ph.index, ph.generation);
-                        tc_viewport_set_pipeline(self.handle_, ph);
-                        // verify
-                        tc_pipeline_handle check = tc_viewport_get_pipeline(self.handle_);
-                        tc::Log::info("viewport.pipeline verify: handle=(%u,%u) valid=%d",
-                            check.index, check.generation, tc_pipeline_handle_valid(check));
-                    } catch (const std::exception& e) {
-                        tc::Log::error("viewport.pipeline setter: %s", e.what());
-                    }
-                }
-            }, nb::arg("value").none())
 
         // Layer mask
         .def_prop_rw("layer_mask",
@@ -336,9 +274,10 @@ void bind_tc_viewport_class(nb::module_& m) {
             },
             nb::arg().none())
 
-        // Effective layer mask (checks ViewportHintComponent on camera)
+        // Effective layer mask (checks ViewportHintComponent on render target camera)
         .def_prop_ro("effective_layer_mask", [](TcViewport& self) -> uint64_t {
-            tc_component* cam = self.camera();
+            tc_render_target_handle rt = tc_viewport_get_render_target(self.handle_);
+            tc_component* cam = tc_render_target_get_camera(rt);
             nb::object camera_obj = camera_component_from_tc(cam);
             if (!camera_obj.is_none()) {
                 try {
@@ -360,7 +299,8 @@ void bind_tc_viewport_class(nb::module_& m) {
 
         // Screen point to ray
         .def("screen_point_to_ray", [](TcViewport& self, float x, float y) -> nb::object {
-            tc_component* cam = self.camera();
+            tc_render_target_handle rt = tc_viewport_get_render_target(self.handle_);
+            tc_component* cam = tc_render_target_get_camera(rt);
             nb::object camera_obj = camera_component_from_tc(cam);
             if (camera_obj.is_none()) {
                 return nb::none();
@@ -386,8 +326,9 @@ void bind_tc_viewport_class(nb::module_& m) {
 
             result["name"] = self.name();
 
-            // Camera entity name
-            tc_component* cam = self.camera();
+            // Render target camera entity name
+            tc_render_target_handle rt = tc_viewport_get_render_target(self.handle_);
+            tc_component* cam = tc_render_target_get_camera(rt);
             nb::object camera_obj = camera_component_from_tc(cam);
             if (!camera_obj.is_none()) {
                 try {
@@ -404,15 +345,6 @@ void bind_tc_viewport_class(nb::module_& m) {
             self.get_rect(rx, ry, rw, rh);
             result["rect"] = nb::make_tuple(rx, ry, rw, rh);
             result["depth"] = self.depth();
-
-            // Pipeline name
-            tc_pipeline_handle ph = self.pipeline();
-            if (tc_pipeline_handle_valid(ph)) {
-                const char* pname = tc_pipeline_get_name(ph);
-                if (pname && pname[0]) {
-                    result["pipeline"] = nb::str(pname);
-                }
-            }
 
             if (self.is_valid()) {
                 const char* im = tc_viewport_get_input_mode(self.handle_);

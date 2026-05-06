@@ -182,7 +182,7 @@ class RenderingControllerTcgui:
         """Refresh render target list in the viewport list widget."""
         from termin.render_framework._render_framework_native import render_target_pool_list
         self._viewport_list.set_render_targets(
-            self._standalone_render_targets(render_target_pool_list())
+            self._model.standalone_render_targets(render_target_pool_list())
         )
 
     def sync_viewport_list_from_manager(self) -> None:
@@ -199,20 +199,6 @@ class RenderingControllerTcgui:
         self._refresh_render_targets()
         return rt
 
-    def _standalone_render_targets(self, render_targets) -> list:
-        owned_keys = set()
-        for display in self._manager.displays:
-            for viewport in display.viewports:
-                rt = viewport.render_target
-                if rt is not None:
-                    owned_keys.add((rt.index, rt.generation))
-
-        result = []
-        for rt in render_targets:
-            if (rt.index, rt.generation) not in owned_keys:
-                result.append(rt)
-        return result
-
     # ------------------------------------------------------------------
     # Factories
     # ------------------------------------------------------------------
@@ -225,6 +211,11 @@ class RenderingControllerTcgui:
 
         from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
+
+        if name and "-" in name:
+            pipeline = rm.get_pipeline_by_uuid(name)
+            if pipeline is not None:
+                return pipeline
 
         lookup_name = "Default" if (not name or name == "(Default)") else name
         pipeline = rm.get_pipeline(lookup_name)
@@ -359,6 +350,10 @@ class RenderingControllerTcgui:
             result.append((viewport, label))
 
         return result
+
+    def get_framegraph_debug_targets_info(self) -> list:
+        """Get render targets/pipelines available to Framegraph Debugger."""
+        return self._model.get_framegraph_debug_targets_info()
 
     # ------------------------------------------------------------------
     # EditorStateIO callbacks
@@ -498,12 +493,19 @@ class RenderingControllerTcgui:
 
     def _on_add_render_target_requested(self) -> None:
         from termin.render_framework._render_framework_native import render_target_new
-        render_target_new("RenderTarget")
+        render_target = render_target_new("RenderTarget")
+        scene = self._get_scene() if self._get_scene is not None else None
+        if scene is not None:
+            render_target.scene = scene
         self._refresh_render_targets()
+        self._notify_rendering_changed()
 
     def _on_remove_render_target_requested(self, render_target) -> None:
-        render_target.free()
+        scene = self._get_scene() if self._get_scene is not None else None
+        self._model.remove_render_target(render_target, scene=scene)
         self._refresh_render_targets()
+        self._request_update()
+        self._notify_rendering_changed()
 
     def _request_update(self) -> None:
         if self._on_request_update is not None:

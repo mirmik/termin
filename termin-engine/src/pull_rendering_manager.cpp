@@ -13,6 +13,7 @@ extern "C" {
 #include "core/tc_camera_capability.h"
 #include <tgfx/tc_gpu.h>
 #include "render/tc_viewport_pool.h"
+#include "render/tc_render_target.h"
 }
 
 #include <algorithm>
@@ -248,9 +249,10 @@ void PullRenderingManager::render_display(tc_display* display) {
 void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     if (!tc_viewport_handle_valid(viewport)) return;
 
+    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
-    tc_component* camera_comp = tc_viewport_get_camera(viewport);
-    tc_pipeline_handle pipeline = tc_viewport_get_pipeline(viewport);
+    tc_component* camera_comp = tc_render_target_get_camera(rt);
+    tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
 
     if (!tc_scene_handle_valid(scene) || !camera_comp || !tc_pipeline_handle_valid(pipeline)) {
         tc_log(TC_LOG_WARN, "[PullRM] viewport missing scene/camera/pipeline");

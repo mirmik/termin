@@ -162,7 +162,8 @@ class ViewportListWidgetTcgui(VStack):
             for i, viewport in enumerate(display.viewports):
                 vp_name = viewport.name or f"Viewport {i}"
                 camera_name = "No Camera"
-                camera = viewport.camera
+                render_target = viewport.render_target
+                camera = render_target.camera if render_target is not None else None
                 if camera is not None:
                     entity = camera.entity
                     if entity is not None:

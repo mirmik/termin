@@ -215,7 +215,7 @@ namespace Termin.WpfTest.Controls
             }
 
             // Create viewport (scene can be null initially)
-            _viewportHandle = TerminCore.ViewportNew("Main", _scene?.Handle ?? TcSceneHandle.Invalid, _camera.tc_component_ptr());
+            _viewportHandle = TerminCore.ViewportNew("Main", _scene?.Handle ?? TcSceneHandle.Invalid);
 
             if (!_viewportHandle.IsValid)
             {
@@ -226,7 +226,6 @@ namespace Termin.WpfTest.Controls
             TerminCore.ViewportSetRect(_viewportHandle, 0.0f, 0.0f, 1.0f, 1.0f);
 
             // Set pipeline
-            TerminCore.ViewportSetPipeline(_viewportHandle, _pipeline.handle());
 
             // Set internal entities
             var internalEntityHandle = new TcEntityHandle

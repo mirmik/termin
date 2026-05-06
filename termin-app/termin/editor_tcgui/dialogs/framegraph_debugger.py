@@ -336,10 +336,10 @@ def show_framegraph_debugger(
     settings.spacing = 4
     settings.stretch = True
 
-    # Viewport row
+    # Target row
     vp_row = HStack()
     vp_row.spacing = 4
-    vp_label = Label(); vp_label.text = "Viewport:"
+    vp_label = Label(); vp_label.text = "Target:"
     vp_row.add_child(vp_label)
     viewport_combo = ComboBox()
     viewport_combo.stretch = True

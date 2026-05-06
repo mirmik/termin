@@ -278,13 +278,12 @@ size_t tc_viewport_pool_count(void) {
     return g_pool ? g_pool->count : 0;
 }
 
-tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene, tc_component* camera) {
+tc_viewport_handle tc_viewport_new(const char* name, tc_scene_handle scene) {
     tc_viewport_handle h = tc_viewport_pool_alloc(name);
     if (!tc_viewport_handle_valid(h)) {
         return TC_VIEWPORT_HANDLE_INVALID;
     }
     tc_viewport_set_scene(h, scene);
-    tc_viewport_set_camera(h, camera);
     return h;
 }
 
@@ -344,16 +343,6 @@ int tc_viewport_get_depth(tc_viewport_handle h) {
     return g_pool->depths[h.index];
 }
 
-void tc_viewport_set_pipeline(tc_viewport_handle h, tc_pipeline_handle pipeline) {
-    if (!handle_alive(h)) return;
-    tc_render_target_set_pipeline(g_pool->render_targets[h.index], pipeline);
-}
-
-tc_pipeline_handle tc_viewport_get_pipeline(tc_viewport_handle h) {
-    if (!handle_alive(h)) return TC_PIPELINE_HANDLE_INVALID;
-    return tc_render_target_get_pipeline(g_pool->render_targets[h.index]);
-}
-
 void tc_viewport_set_layer_mask(tc_viewport_handle h, uint64_t mask) {
     if (!handle_alive(h)) return;
     tc_render_target_set_layer_mask(g_pool->render_targets[h.index], mask);
@@ -387,21 +376,6 @@ void tc_viewport_set_scene(tc_viewport_handle h, tc_scene_handle scene) {
 tc_scene_handle tc_viewport_get_scene(tc_viewport_handle h) {
     if (!handle_alive(h)) return TC_SCENE_HANDLE_INVALID;
     return g_pool->scenes[h.index];
-}
-
-void tc_viewport_set_camera(tc_viewport_handle h, tc_component* camera) {
-    if (!handle_alive(h)) return;
-    tc_render_target_set_camera(g_pool->render_targets[h.index], camera);
-}
-
-tc_component* tc_viewport_get_camera(tc_viewport_handle h) {
-    if (!handle_alive(h)) return NULL;
-    return tc_render_target_get_camera(g_pool->render_targets[h.index]);
-}
-
-tc_entity_handle tc_viewport_get_camera_entity(tc_viewport_handle h) {
-    if (!handle_alive(h)) return TC_ENTITY_HANDLE_INVALID;
-    return tc_render_target_get_camera_entity(g_pool->render_targets[h.index]);
 }
 
 void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle rt) {

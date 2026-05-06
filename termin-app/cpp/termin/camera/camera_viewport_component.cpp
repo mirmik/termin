@@ -7,6 +7,7 @@
 extern "C" {
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
+#include "render/tc_render_target.h"
 #include "render/tc_viewport_input_manager.h"
 }
 
@@ -67,9 +68,10 @@ void CameraViewportComponent::on_render_detach() {
         viewport_input_manager_ = nullptr;
     }
 
-    // Clear camera on viewport so renderer skips it until next attach
+    // Clear camera on render target so renderer skips it until next attach
     if (viewport_.is_valid()) {
-        tc_viewport_set_camera(viewport_.handle_, nullptr);
+        tc_render_target_handle rt = tc_viewport_get_render_target(viewport_.handle_);
+        tc_render_target_set_camera(rt, nullptr);
     }
     // Release reference without destroying — viewport persists on display
     // for reuse on next on_render_attach (e.g. editor→game mode transition)
@@ -142,8 +144,9 @@ void CameraViewportComponent::setup_viewport() {
         const char* name = tc_viewport_get_name(vh);
         if (name && vp_name == name) {
             viewport_ = TcViewport(vh);
-            // Update camera and scene to point to current instances
-            tc_viewport_set_camera(vh, camera->tc_component_ptr());
+            // Update render target camera and scene to point to current instances
+            tc_render_target_handle rt = tc_viewport_get_render_target(vh);
+            tc_render_target_set_camera(rt, camera->tc_component_ptr());
             tc_viewport_set_scene(vh, scene);
             apply_settings();
             // Attach input manager if not already set

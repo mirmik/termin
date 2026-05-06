@@ -8,6 +8,7 @@
 #include "editor/tc_editor_interaction.h"
 #include "render/tc_viewport.h"
 #include "render/tc_display.h"
+#include "render/tc_render_target.h"
 #include "render/tc_render_surface.h"
 #include "tc_picking.h"
 #include "tgfx2/opengl/opengl_render_device.hpp"
@@ -231,7 +232,8 @@ void EditorInteractionSystem::_handle_double_click(
     ent.get_global_position(pos);
 
     // Find camera controller and center on entity
-    tc_component* cam_comp = tc_viewport_get_camera(vp);
+    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+    tc_component* cam_comp = tc_render_target_get_camera(rt);
     if (!cam_comp) return;
 
     CxxComponent* cxx = CxxComponent::from_tc(cam_comp);
@@ -254,7 +256,8 @@ Entity EditorInteractionSystem::pick_entity_at(
         tc_log(TC_LOG_INFO, "[DBG pick] viewport invalid"); return Entity();
     }
 
-    tc_pipeline_handle pipeline_h = tc_viewport_get_pipeline(viewport);
+    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+    tc_pipeline_handle pipeline_h = tc_render_target_get_pipeline(rt);
     if (!tc_pipeline_pool_alive(pipeline_h)) {
         tc_log(TC_LOG_INFO, "[DBG pick] pipeline not alive"); return Entity();
     }
@@ -338,7 +341,8 @@ bool EditorInteractionSystem::_screen_to_ray(
 {
     (void)display;
 
-    tc_component* cam_comp = tc_viewport_get_camera(vp);
+    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+    tc_component* cam_comp = tc_render_target_get_camera(rt);
     if (!cam_comp) return false;
 
     CxxComponent* cxx = CxxComponent::from_tc(cam_comp);

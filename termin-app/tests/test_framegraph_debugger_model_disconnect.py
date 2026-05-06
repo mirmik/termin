@@ -12,6 +12,7 @@ _SPEC = importlib.util.spec_from_file_location("framegraph_debugger_model_source
 _MODULE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
 FramegraphDebuggerModel = _MODULE.FramegraphDebuggerModel
+FramegraphDebugTarget = _MODULE.FramegraphDebugTarget
 
 
 class _Pipeline:
@@ -52,6 +53,14 @@ class _Viewport:
         self.pipeline = pipeline
 
 
+class _Controller:
+    def __init__(self, targets):
+        self.targets = targets
+
+    def get_framegraph_debug_targets_info(self):
+        return self.targets
+
+
 def test_disconnect_removes_debugger_from_all_known_pipelines():
     connected = _Pipeline("connected")
     current = _Pipeline("current")
@@ -60,8 +69,13 @@ def test_disconnect_removes_debugger_from_all_known_pipelines():
 
     model = FramegraphDebuggerModel(None, _Core())
     model._connected_pipeline = connected
-    model._current_viewport = _Viewport(current)
-    model._viewports_list = [(model._current_viewport, "Viewport")]
+    viewport = _Viewport(current)
+    model._current_target = FramegraphDebugTarget(
+        source=viewport,
+        label="Viewport",
+        get_pipeline=lambda: current,
+    )
+    model._targets_list = [model._current_target]
 
     model.disconnect()
 
@@ -70,3 +84,19 @@ def test_disconnect_removes_debugger_from_all_known_pipelines():
     assert connected.removed == ["FrameDebugger"]
     assert current.removed == ["FrameDebugger"]
     assert model.core.capture.reset is True
+
+
+def test_refresh_uses_debug_targets_not_viewport_list():
+    pipeline = _Pipeline("offscreen")
+    target = FramegraphDebugTarget(
+        source=object(),
+        label="RenderTarget / offscreen",
+        get_pipeline=lambda: pipeline,
+    )
+
+    model = FramegraphDebuggerModel(_Controller([target]), _Core())
+    model.refresh_viewports()
+
+    assert model.viewports == [(target.source, "RenderTarget / offscreen")]
+    assert model.targets == [target]
+    assert model.get_current_pipeline() is pipeline

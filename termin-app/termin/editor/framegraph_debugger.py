@@ -162,9 +162,9 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
         settings_layout = QtWidgets.QVBoxLayout(settings_widget)
         settings_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Viewport selection
+        # Render target selection
         viewport_row = QtWidgets.QHBoxLayout()
-        viewport_label = QtWidgets.QLabel("Viewport:")
+        viewport_label = QtWidgets.QLabel("Target:")
         self._viewport_combo = QtWidgets.QComboBox()
         self._viewport_combo.currentIndexChanged.connect(self._on_viewport_selected)
         viewport_row.addWidget(viewport_label)

@@ -347,12 +347,18 @@ tc_viewport_handle RenderingManager::mount_scene(
         return TC_VIEWPORT_HANDLE_INVALID;
     }
 
-    // Create viewport (render target must be assigned by caller)
     tc_viewport_handle viewport = tc_viewport_pool_alloc(name.c_str());
     if (!tc_viewport_handle_valid(viewport)) {
         tc_log(TC_LOG_ERROR, "[RenderingManager] Failed to create viewport '%s'", name.c_str());
         return TC_VIEWPORT_HANDLE_INVALID;
     }
+
+    tc_render_target_handle rt = tc_render_target_new((name + ".RT").c_str());
+    tc_render_target_set_scene(rt, scene);
+    tc_render_target_set_camera(rt, camera);
+    tc_render_target_set_pipeline(rt, pipeline);
+    tc_viewport_set_render_target(viewport, rt);
+    tc_viewport_set_scene(viewport, scene);
 
     // Set rect
     tc_viewport_set_rect(viewport, region_x, region_y, region_w, region_h);
@@ -829,7 +835,8 @@ void RenderingManager::render_scene_pipeline_offscreen(
             continue;
         }
 
-        tc_component* camera_comp = tc_viewport_get_camera(viewport);
+        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+        tc_component* camera_comp = tc_render_target_get_camera(rt);
         if (!camera_comp) {
             tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has no camera", vp_name.c_str());
             continue;
@@ -862,8 +869,6 @@ void RenderingManager::render_scene_pipeline_offscreen(
         //   - Plain viewport (no RT): legacy ViewportRenderState owns
         //     the tgfx2 textures directly. Stays as-is until the
         //     non-RT path is also migrated.
-        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
-
         RenderEngine* vp_engine = render_engine();
         if (vp_engine) vp_engine->ensure_tgfx2();
         tgfx::IRenderDevice* vp_device = vp_engine ? vp_engine->tgfx2_device() : nullptr;
@@ -935,8 +940,8 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     }
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
-    tc_component* camera_comp = tc_viewport_get_camera(viewport);
-    tc_pipeline_handle pipeline = tc_viewport_get_pipeline(viewport);
+    tc_component* camera_comp = tc_render_target_get_camera(rt);
+    tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
 
     if (!tc_scene_handle_valid(scene)) {
         return;
