@@ -4,6 +4,7 @@ from __future__ import annotations
 import time
 from typing import Callable
 
+from tcbase import Key, MouseButton
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
 from tcgui.widgets.theme import current_theme as _t
@@ -40,6 +41,7 @@ class TextArea(Widget):
         self.text_color: tuple[float, float, float, float] = _t.text_primary
         self.placeholder_color: tuple[float, float, float, float] = _t.text_muted
         self.cursor_color: tuple[float, float, float, float] = _t.text_primary
+        self.selection_color: tuple[float, float, float, float] = _t.selected
 
         # Scrollbar
         self.show_scrollbar: bool = True
@@ -50,6 +52,8 @@ class TextArea(Widget):
         # State
         self.focused: bool = False
         self.hovered: bool = False
+        self.selection_anchor: tuple[int, int] | None = None
+        self._selecting: bool = False
         self._scroll_y: float = 0.0
         self._scroll_x: float = 0.0
         self._cursor_blink_time: float = 0.0
@@ -231,6 +235,154 @@ class TextArea(Widget):
             x_acc += char_w
         return line, col
 
+    # --- Selection helpers ---
+
+    def _cursor_pos(self) -> tuple[int, int]:
+        return (self.cursor_line, self.cursor_col)
+
+    def _clamp_pos(self, pos: tuple[int, int]) -> tuple[int, int]:
+        line, col = pos
+        line = max(0, min(line, len(self._lines) - 1))
+        col = max(0, min(col, len(self._lines[line])))
+        return (line, col)
+
+    @staticmethod
+    def _pos_key(pos: tuple[int, int]) -> tuple[int, int]:
+        return pos
+
+    @property
+    def has_selection(self) -> bool:
+        return self.selection_anchor is not None and self.selection_anchor != self._cursor_pos()
+
+    def _selection_range(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        cursor = self._cursor_pos()
+        if self.selection_anchor is None:
+            return (cursor, cursor)
+        start, end = sorted((self.selection_anchor, cursor), key=self._pos_key)
+        return (self._clamp_pos(start), self._clamp_pos(end))
+
+    def clear_selection(self) -> None:
+        self.selection_anchor = None
+
+    def select_all(self) -> None:
+        self.selection_anchor = (0, 0)
+        self.cursor_line = len(self._lines) - 1
+        self.cursor_col = len(self._lines[self.cursor_line])
+
+    def selected_text(self) -> str:
+        if not self.has_selection:
+            return ""
+        (sl, sc), (el, ec) = self._selection_range()
+        if sl == el:
+            return self._lines[sl][sc:ec]
+        parts = [self._lines[sl][sc:]]
+        parts.extend(self._lines[sl + 1:el])
+        parts.append(self._lines[el][:ec])
+        return "\n".join(parts)
+
+    def _delete_selection(self) -> bool:
+        if not self.has_selection:
+            return False
+        (sl, sc), (el, ec) = self._selection_range()
+        if sl == el:
+            line = self._lines[sl]
+            self._lines[sl] = line[:sc] + line[ec:]
+        else:
+            self._lines[sl] = self._lines[sl][:sc] + self._lines[el][ec:]
+            del self._lines[sl + 1:el + 1]
+        self.cursor_line, self.cursor_col = sl, sc
+        self.clear_selection()
+        self._invalidate_vlines()
+        self._refresh_vlines_if_possible()
+        return True
+
+    def _insert_text_at_cursor(self, text: str) -> None:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        line = self._lines[self.cursor_line]
+        before = line[:self.cursor_col]
+        after = line[self.cursor_col:]
+        parts = text.split("\n")
+        if len(parts) == 1:
+            self._lines[self.cursor_line] = before + parts[0] + after
+            self.cursor_col += len(parts[0])
+            return
+
+        new_lines = [before + parts[0]]
+        new_lines.extend(parts[1:-1])
+        new_lines.append(parts[-1] + after)
+        self._lines[self.cursor_line:self.cursor_line + 1] = new_lines
+        self.cursor_line += len(new_lines) - 1
+        self.cursor_col = len(parts[-1])
+
+        if self.max_lines > 0 and len(self._lines) > self.max_lines:
+            del self._lines[self.max_lines:]
+            self.cursor_line = min(self.cursor_line, len(self._lines) - 1)
+            self.cursor_col = min(self.cursor_col, len(self._lines[self.cursor_line]))
+
+    def _replace_selection(self, text: str) -> None:
+        self._delete_selection()
+        self._insert_text_at_cursor(text)
+        self.clear_selection()
+        self._invalidate_vlines()
+        self._refresh_vlines_if_possible()
+
+    def _clipboard_text(self) -> str:
+        getter = getattr(self._ui, "get_clipboard_text", None)
+        if getter is None:
+            return ""
+        return getter() or ""
+
+    def _set_clipboard_text(self, text: str) -> None:
+        setter = getattr(self._ui, "set_clipboard_text", None)
+        if setter is not None:
+            setter(text)
+
+    def _begin_cursor_move(self, extend_selection: bool) -> None:
+        if extend_selection:
+            if self.selection_anchor is None:
+                self.selection_anchor = self._cursor_pos()
+        else:
+            self.clear_selection()
+
+    def _finish_cursor_move(self, extend_selection: bool) -> None:
+        if not extend_selection:
+            self.clear_selection()
+
+    def _draw_selection_for_line(
+        self,
+        renderer,
+        content_x: float,
+        row_y: float,
+        line_idx: int,
+        start_col: int,
+        end_col: int,
+    ) -> None:
+        if not self.has_selection:
+            return
+        (sl, sc), (el, ec) = self._selection_range()
+        if line_idx < sl or line_idx > el:
+            return
+        line_text = self._lines[line_idx]
+        sel_start = start_col
+        sel_end = end_col
+        if line_idx == sl:
+            sel_start = max(sel_start, sc)
+        if line_idx == el:
+            sel_end = min(sel_end, ec)
+        if line_idx < el:
+            sel_end = end_col
+        if sel_end <= sel_start:
+            return
+        x0 = self._measure_text_width(renderer, line_text[start_col:sel_start])
+        x1 = self._measure_text_width(renderer, line_text[start_col:sel_end])
+        renderer.draw_rect(
+            content_x + x0,
+            row_y,
+            x1 - x0,
+            self._effective_line_height(),
+            self.selection_color,
+        )
+
     # --- Cursor blink ---
 
     def _update_cursor_blink(self):
@@ -309,7 +461,9 @@ class TextArea(Widget):
             last_row = min(len(self._vlines), int((self._scroll_y + content_h) / lh) + 1)
             for vi in range(first_row, last_row):
                 li, sc, ec = self._vlines[vi]
-                row_y = content_y + vi * lh - self._scroll_y + self.font_size
+                row_top = content_y + vi * lh - self._scroll_y
+                row_y = row_top + self.font_size
+                self._draw_selection_for_line(renderer, content_x, row_top, li, sc, ec)
                 renderer.draw_text(
                     content_x, row_y,
                     self._lines[li][sc:ec], self.text_color, self.font_size
@@ -319,7 +473,16 @@ class TextArea(Widget):
             first_line = max(0, int(self._scroll_y / lh))
             last_line = min(len(self._lines), int((self._scroll_y + content_h) / lh) + 1)
             for i in range(first_line, last_line):
-                line_y = content_y + i * lh - self._scroll_y + self.font_size
+                line_top = content_y + i * lh - self._scroll_y
+                line_y = line_top + self.font_size
+                self._draw_selection_for_line(
+                    renderer,
+                    content_x - self._scroll_x,
+                    line_top,
+                    i,
+                    0,
+                    len(self._lines[i]),
+                )
                 renderer.draw_text(
                     content_x - self._scroll_x, line_y,
                     self._lines[i], self.text_color, self.font_size
@@ -367,6 +530,8 @@ class TextArea(Widget):
         self._scrollbar_hovered = False
 
     def on_mouse_down(self, event: MouseEvent) -> bool:
+        if event.button != MouseButton.LEFT:
+            return False
         bw = self.border_width
         # Check scrollbar
         if self.show_scrollbar and self._content_height() > self._visible_height():
@@ -379,7 +544,15 @@ class TextArea(Widget):
 
         # Position cursor
         if self._renderer is not None:
-            self.cursor_line, self.cursor_col = self._cursor_pos_from_xy(self._renderer, event.x, event.y)
+            pos = self._cursor_pos_from_xy(self._renderer, event.x, event.y)
+            if event.shift:
+                if self.selection_anchor is None:
+                    self.selection_anchor = self._cursor_pos()
+                self.cursor_line, self.cursor_col = pos
+            else:
+                self.cursor_line, self.cursor_col = pos
+                self.selection_anchor = pos
+            self._selecting = True
         self._reset_cursor_blink()
         return True
 
@@ -394,6 +567,11 @@ class TextArea(Widget):
             if track_h > 0:
                 self._scroll_y = self._drag_start_scroll + delta_y * (max_sy / track_h)
                 self._scroll_y = max(0.0, min(self._scroll_y, max_sy))
+        elif self._selecting and self._renderer is not None:
+            self.cursor_line, self.cursor_col = self._cursor_pos_from_xy(
+                self._renderer, event.x, event.y)
+            self._reset_cursor_blink()
+            self._ensure_cursor_visible()
         else:
             # Track scrollbar hover
             bw = self.border_width
@@ -405,6 +583,9 @@ class TextArea(Widget):
 
     def on_mouse_up(self, event: MouseEvent):
         self._dragging_scrollbar = False
+        self._selecting = False
+        if self.selection_anchor == self._cursor_pos():
+            self.clear_selection()
 
     def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
         max_sy = self._max_scroll_y()
@@ -426,32 +607,70 @@ class TextArea(Widget):
     # --- Keyboard events ---
 
     def on_key_down(self, event: KeyEvent) -> bool:
-        if self.read_only:
-            return False
-        from tcbase import Key
-
         key = event.key
+        key_value = int(key)
+
+        if event.ctrl and key_value in (Key.A.value, ord('a')):
+            self.select_all()
+            self._reset_cursor_blink()
+            self._ensure_cursor_visible()
+            return True
+
+        if event.ctrl and key_value in (Key.C.value, ord('c')):
+            if self.has_selection:
+                self._set_clipboard_text(self.selected_text())
+            return True
+
+        if event.ctrl and key_value in (Key.X.value, ord('x')):
+            if self.has_selection:
+                self._set_clipboard_text(self.selected_text())
+                if not self.read_only:
+                    self._delete_selection()
+                    self._fire_on_change()
+                    self._ensure_cursor_visible()
+            return True
+
+        if event.ctrl and key_value in (Key.V.value, ord('v')):
+            if self.read_only:
+                return True
+            text = self._clipboard_text()
+            if text:
+                self._replace_selection(text)
+                self._fire_on_change()
+            self._reset_cursor_blink()
+            self._ensure_cursor_visible()
+            return True
+
+        if self.read_only:
+            if key not in (Key.LEFT, Key.RIGHT, Key.UP, Key.DOWN, Key.HOME, Key.END):
+                return False
+
         if key == Key.LEFT:
+            self._begin_cursor_move(event.shift)
             if self.cursor_col > 0:
                 self.cursor_col -= 1
             elif self.cursor_line > 0:
                 self.cursor_line -= 1
                 self.cursor_col = len(self._lines[self.cursor_line])
+            self._finish_cursor_move(event.shift)
             self._reset_cursor_blink()
             self._ensure_cursor_visible()
             return True
 
         if key == Key.RIGHT:
+            self._begin_cursor_move(event.shift)
             if self.cursor_col < len(self._lines[self.cursor_line]):
                 self.cursor_col += 1
             elif self.cursor_line < len(self._lines) - 1:
                 self.cursor_line += 1
                 self.cursor_col = 0
+            self._finish_cursor_move(event.shift)
             self._reset_cursor_blink()
             self._ensure_cursor_visible()
             return True
 
         if key == Key.UP:
+            self._begin_cursor_move(event.shift)
             if self.word_wrap and self._vlines:
                 vrow = self._cursor_visual_row()
                 if vrow > 0:
@@ -463,11 +682,13 @@ class TextArea(Widget):
             elif self.cursor_line > 0:
                 self.cursor_line -= 1
                 self.cursor_col = min(self.cursor_col, len(self._lines[self.cursor_line]))
+            self._finish_cursor_move(event.shift)
             self._reset_cursor_blink()
             self._ensure_cursor_visible()
             return True
 
         if key == Key.DOWN:
+            self._begin_cursor_move(event.shift)
             if self.word_wrap and self._vlines:
                 vrow = self._cursor_visual_row()
                 if vrow < len(self._vlines) - 1:
@@ -479,28 +700,33 @@ class TextArea(Widget):
             elif self.cursor_line < len(self._lines) - 1:
                 self.cursor_line += 1
                 self.cursor_col = min(self.cursor_col, len(self._lines[self.cursor_line]))
+            self._finish_cursor_move(event.shift)
             self._reset_cursor_blink()
             self._ensure_cursor_visible()
             return True
 
         if key == Key.HOME:
+            self._begin_cursor_move(event.shift)
             if self.word_wrap and self._vlines:
                 vrow = self._cursor_visual_row()
                 _li, sc, _ec = self._vlines[vrow]
                 self.cursor_col = sc
             else:
                 self.cursor_col = 0
+            self._finish_cursor_move(event.shift)
             self._reset_cursor_blink()
             self._ensure_cursor_visible()
             return True
 
         if key == Key.END:
+            self._begin_cursor_move(event.shift)
             if self.word_wrap and self._vlines:
                 vrow = self._cursor_visual_row()
                 _li, _sc, ec = self._vlines[vrow]
                 self.cursor_col = ec
             else:
                 self.cursor_col = len(self._lines[self.cursor_line])
+            self._finish_cursor_move(event.shift)
             self._reset_cursor_blink()
             self._ensure_cursor_visible()
             return True
@@ -508,6 +734,8 @@ class TextArea(Widget):
         if key == Key.ENTER:
             if self.max_lines > 0 and len(self._lines) >= self.max_lines:
                 return True
+            if self._delete_selection():
+                self._fire_on_change()
             line = self._lines[self.cursor_line]
             self._lines[self.cursor_line] = line[:self.cursor_col]
             self._lines.insert(self.cursor_line + 1, line[self.cursor_col:])
@@ -521,7 +749,9 @@ class TextArea(Widget):
             return True
 
         if key == Key.BACKSPACE:
-            if self.cursor_col > 0:
+            if self._delete_selection():
+                self._fire_on_change()
+            elif self.cursor_col > 0:
                 line = self._lines[self.cursor_line]
                 self._lines[self.cursor_line] = line[:self.cursor_col - 1] + line[self.cursor_col:]
                 self.cursor_col -= 1
@@ -544,7 +774,9 @@ class TextArea(Widget):
 
         if key == Key.DELETE:
             line = self._lines[self.cursor_line]
-            if self.cursor_col < len(line):
+            if self._delete_selection():
+                self._fire_on_change()
+            elif self.cursor_col < len(line):
                 self._lines[self.cursor_line] = line[:self.cursor_col] + line[self.cursor_col + 1:]
                 self._invalidate_vlines()
                 self._refresh_vlines_if_possible()
@@ -565,11 +797,7 @@ class TextArea(Widget):
     def on_text_input(self, event: TextEvent) -> bool:
         if self.read_only:
             return False
-        line = self._lines[self.cursor_line]
-        self._lines[self.cursor_line] = line[:self.cursor_col] + event.text + line[self.cursor_col:]
-        self.cursor_col += len(event.text)
-        self._invalidate_vlines()
-        self._refresh_vlines_if_possible()
+        self._replace_selection(event.text)
         self._fire_on_change()
         self._reset_cursor_blink()
         self._ensure_cursor_visible()

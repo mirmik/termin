@@ -18,6 +18,19 @@ namespace nb = nanobind;
 namespace termin {
 
 void bind_sdl(nb::module_& m) {
+    m.def("get_clipboard_text", []() -> std::string {
+        char* raw = SDL_GetClipboardText();
+        if (!raw) {
+            return "";
+        }
+        std::string text(raw);
+        SDL_free(raw);
+        return text;
+    });
+    m.def("set_clipboard_text", [](const std::string& text) {
+        SDL_SetClipboardText(text.c_str());
+    }, nb::arg("text"));
+
     // SDLWindow
     nb::class_<SDLWindow>(m, "SDLWindow")
         .def(nb::init<int, int, const std::string&, SDLWindow*>(),
@@ -188,6 +201,14 @@ void bind_sdl(nb::module_& m) {
             "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
         .def("should_close", &BackendWindow::should_close)
         .def("set_should_close", &BackendWindow::set_should_close, nb::arg("value"))
+        .def("set_title", [](BackendWindow& self, const std::string& title) {
+                SDL_Window* w = self.sdl_window();
+                if (w) {
+                    SDL_SetWindowTitle(w, title.c_str());
+                }
+            },
+            nb::arg("title"),
+            "Set the OS window title.")
         .def("maximize", &BackendWindow::maximize,
              "Maximize the OS window via SDL_MaximizeWindow.")
         .def("close", &BackendWindow::close,

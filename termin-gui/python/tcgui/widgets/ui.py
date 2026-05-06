@@ -81,6 +81,12 @@ class UI:
         # Global keyboard shortcuts
         self._shortcuts = ShortcutRegistry()
 
+        # Clipboard hooks. Hosts can replace these with platform clipboard
+        # accessors; tests and headless users get an in-process fallback.
+        self._clipboard_text: str = ""
+        self.get_clipboard_text: Callable[[], str] = self._default_get_clipboard_text
+        self.set_clipboard_text: Callable[[str], None] = self._default_set_clipboard_text
+
         # Deferred actions (run after event dispatch completes)
         self._deferred_actions: list[Callable[[], None]] = []
 
@@ -92,6 +98,24 @@ class UI:
         self.create_window: Callable[[str, int, int], UI | None] | None = None
         self.close_window: Callable[[], None] | None = None
         self.on_empty: Callable[[], None] | None = None
+
+    def _set_memory_clipboard_text(self, text: str) -> None:
+        self._clipboard_text = text
+
+    def _default_get_clipboard_text(self) -> str:
+        try:
+            from termin.display import _platform_native
+            return _platform_native.get_clipboard_text() or ""
+        except Exception:
+            return self._clipboard_text
+
+    def _default_set_clipboard_text(self, text: str) -> None:
+        self._clipboard_text = text
+        try:
+            from termin.display import _platform_native
+            _platform_native.set_clipboard_text(text)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Properties
@@ -464,7 +488,7 @@ class UI:
     # Mouse events
     # ------------------------------------------------------------------
 
-    def mouse_move(self, x: float, y: float) -> bool:
+    def mouse_move(self, x: float, y: float, mods: int = 0) -> bool:
         """Handle mouse move event."""
         if not self._root and not self._overlays:
             return False
@@ -472,7 +496,7 @@ class UI:
         self._last_mouse_x = x
         self._last_mouse_y = y
 
-        event = MouseEvent(x, y)
+        event = MouseEvent(x, y, mods=mods)
 
         # If we're dragging, send move to pressed widget
         if self._pressed_widget:

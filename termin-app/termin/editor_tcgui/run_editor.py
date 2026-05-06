@@ -45,6 +45,8 @@ def _translate_sdl_key(scancode: int) -> Key:
     if scancode in _MAP:
         return _MAP[scancode]
     keycode = sdl2.SDL_GetKeyFromScancode(scancode)
+    if ord('a') <= keycode <= ord('z'):
+        keycode -= 32
     if 0 <= keycode < 128:
         try:
             return Key(keycode)
@@ -224,6 +226,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         scene_manager=engine.scene_manager,
         offscreen_context=None,
         ctx=tgfx2_ctx,
+        main_window=main_window,
     )
     win.build(ui)
 

@@ -73,6 +73,7 @@ class EditorWindowTcgui:
         scene_manager: SceneManager,
         offscreen_context=None,
         ctx=None,
+        main_window=None,
     ) -> None:
         self._world = world
         self._offscreen_context = offscreen_context
@@ -81,6 +82,7 @@ class EditorWindowTcgui:
         # Supplied by run_editor_tcgui; under M4 it will come from
         # BackendWindow (replacing offscreen_context entirely).
         self._ctx = ctx
+        self._main_window = main_window
         self._should_close = False
         self._ui: UI | None = None
 
@@ -991,11 +993,10 @@ class EditorWindowTcgui:
         self._update_window_title()
 
     def _save_scene(self) -> None:
-        from termin.editor.settings import EditorSettings
-        settings = EditorSettings.instance()
-        last_file = settings.get("last_scene_file")
-        if last_file:
-            self._save_scene_to_file(last_file)
+        scene_name = self._editor_scene_name
+        scene_path = self.scene_manager.get_scene_path(scene_name) if scene_name else None
+        if scene_path is not None:
+            self._save_scene_to_file(scene_path)
         else:
             self._save_scene_as()
 
@@ -1052,6 +1053,7 @@ class EditorWindowTcgui:
             from termin.project.settings import ProjectSettingsManager
             ProjectSettingsManager.instance().set_last_scene(path)
             self._log_to_console(f"Saved: {path}")
+            self._update_window_title()
         except Exception as e:
             log.error(f"Failed to save scene: {e}")
             self._log_to_console(f"Error saving: {e}")
@@ -1098,6 +1100,7 @@ class EditorWindowTcgui:
                 self._editor_state_io.apply(editor_data)
             self._on_rendering_changed()
             self._request_viewport_update()
+            self._update_window_title()
         except Exception as e:
             log.error(f"Failed to load scene: {e}")
             self._log_to_console(f"Error loading: {e}")
@@ -1683,12 +1686,27 @@ class EditorWindowTcgui:
         self._should_close = True
 
     def _update_window_title(self) -> None:
-        if self._status_bar is None:
-            return
-        scene_name = self._editor_scene_name or "No Scene"
+        scene_label = "No Scene"
+        if self._editor_scene_name is not None:
+            scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
+            if scene_path is not None:
+                scene_label = Path(scene_path).stem
+            else:
+                scene_label = "Untitled"
+
         project_name = self._project_name or "No Project"
         mode = "Play" if self._game_scene_name is not None else "Edit"
-        self._status_bar.text = f"{project_name} | {scene_name} | {mode}"
+        if self._status_bar is not None:
+            self._status_bar.text = f"{project_name} | {scene_label} | {mode}"
+
+        parts = ["Termin Editor"]
+        if self._project_name is not None:
+            parts.append(f"- {self._project_name}")
+        parts.append(f"[{scene_label}]")
+        if self._game_scene_name is not None:
+            parts.append("- PLAYING")
+        if self._main_window is not None:
+            self._main_window.set_title(" ".join(parts))
 
     # ------------------------------------------------------------------
     # Logging
