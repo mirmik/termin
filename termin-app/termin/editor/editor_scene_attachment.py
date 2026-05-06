@@ -304,8 +304,8 @@ class EditorSceneAttachment:
 
         for vp in list(self._display.viewports):
             # Remove from camera
-            if vp.camera is not None:
-                vp.camera.remove_viewport(vp)
+            if vp.render_target is not None and vp.render_target.camera is not None:
+                vp.render_target.camera.remove_viewport(vp)
             # Destroy pipeline
             if vp.render_target is not None and vp.render_target.pipeline is not None:
                 vp.render_target.pipeline.destroy()

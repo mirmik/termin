@@ -223,6 +223,7 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     g_pool->alive[idx] = true;
     g_pool->names[idx] = tc_strdup_local(name);
     g_pool->render_targets[idx] = tc_render_target_new(name);
+    tc_render_target_set_locked(g_pool->render_targets[idx], true);
     g_pool->scenes[idx] = TC_SCENE_HANDLE_INVALID;
     g_pool->override_resolution[idx] = true;
     g_pool->rects[idx * 4 + 0] = 0.0f;
@@ -258,6 +259,7 @@ void tc_viewport_pool_free(tc_viewport_handle h) {
 
     tc_render_target_handle rt = g_pool->render_targets[idx];
     if (tc_render_target_handle_valid(rt)) {
+        tc_render_target_set_locked(rt, false);
         tc_render_target_free(rt);
     }
 
@@ -387,11 +389,13 @@ void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle
     if (!handle_alive(h)) return;
     tc_render_target_handle old_rt = g_pool->render_targets[h.index];
     if (tc_render_target_handle_valid(old_rt)) {
+        tc_render_target_set_locked(old_rt, false);
         tc_render_target_free(old_rt);
     }
     g_pool->render_targets[h.index] = rt;
     // Sync viewport's authoritative scene to the new render target
     if (tc_render_target_handle_valid(rt)) {
+        tc_render_target_set_locked(rt, true);
         tc_scene_handle vp_scene = g_pool->scenes[h.index];
         if (tc_scene_handle_valid(vp_scene)) {
             tc_render_target_set_scene(rt, vp_scene);
@@ -402,6 +406,18 @@ void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle
 tc_render_target_handle tc_viewport_get_render_target(tc_viewport_handle h) {
     if (!handle_alive(h)) return TC_RENDER_TARGET_HANDLE_INVALID;
     return g_pool->render_targets[h.index];
+}
+
+tc_component* tc_viewport_get_camera(tc_viewport_handle h) {
+    tc_render_target_handle rt = tc_viewport_get_render_target(h);
+    if (!tc_render_target_handle_valid(rt)) return NULL;
+    return tc_render_target_get_camera(rt);
+}
+
+tc_pipeline_handle tc_viewport_get_pipeline(tc_viewport_handle h) {
+    tc_render_target_handle rt = tc_viewport_get_render_target(h);
+    if (!tc_render_target_handle_valid(rt)) return TC_PIPELINE_HANDLE_INVALID;
+    return tc_render_target_get_pipeline(rt);
 }
 
 void tc_viewport_set_override_resolution(tc_viewport_handle h, bool override_resolution) {
