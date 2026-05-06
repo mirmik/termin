@@ -103,6 +103,22 @@ def _full_screen_quad_verts() -> np.ndarray:
     ], dtype=np.float32)
 
 
+def _canvas_quad_verts(x0: int, y0: int, x1: int, y1: int,
+                       canvas_w: int, canvas_h: int) -> np.ndarray:
+    left = (float(x0) / canvas_w) * 2.0 - 1.0
+    right = (float(x1) / canvas_w) * 2.0 - 1.0
+    bottom = (float(y0) / canvas_h) * 2.0 - 1.0
+    top = (float(y1) / canvas_h) * 2.0 - 1.0
+    return np.array([
+        left,  bottom, 0.0,  0.0, 0.0, 0.0, 0.0,
+        right, bottom, 0.0,  1.0, 0.0, 0.0, 0.0,
+        right, top,    0.0,  1.0, 1.0, 0.0, 0.0,
+        left,  bottom, 0.0,  0.0, 0.0, 0.0, 0.0,
+        right, top,    0.0,  1.0, 1.0, 0.0, 0.0,
+        left,  top,    0.0,  0.0, 1.0, 0.0, 0.0,
+    ], dtype=np.float32)
+
+
 class GPUCompositor:
     """Composites a LayerStack on the GPU using tgfx2 native textures.
 
@@ -368,10 +384,10 @@ class GPUCompositor:
     # ------------------------------------------------------------------
 
     def _sync_dirty_textures(self):
-        w, h = self._stack.width, self._stack.height
         for layer in self._stack._all_layers_flat():
             lid = id(layer)
             img = np.ascontiguousarray(layer.image).reshape(-1)
+            w, h = layer.width, layer.height
             if lid not in self._layer_textures:
                 tex = self._graphics.create_texture_rgba8(w, h, img)
                 self._layer_textures[lid] = tex
@@ -470,9 +486,14 @@ class GPUCompositor:
         tex = self._layer_textures.get(lid)
         if tex is None:
             return
-        self._draw_texture_quad(tex, opacity)
+        x0, y0, x1, y1 = layer.bounds
+        if x1 <= 0 or y1 <= 0 or x0 >= self._fbo_w or y0 >= self._fbo_h:
+            return
+        verts = _canvas_quad_verts(x0, y0, x1, y1, self._fbo_w, self._fbo_h)
+        self._draw_texture_quad(tex, opacity, verts)
 
-    def _draw_texture_quad(self, texture: Tgfx2TextureHandle, opacity: float):
+    def _draw_texture_quad(self, texture: Tgfx2TextureHandle, opacity: float,
+                           verts: np.ndarray | None = None):
         ctx = self._ctx
         # Sampler slot 4 matches `layout(binding = 4)` in the fragment
         # shader (combined image+sampler — the shared descriptor set's
@@ -480,7 +501,7 @@ class GPUCompositor:
         ctx.bind_sampled_texture(4, texture)
         data = struct.pack(_COMPOSITE_PUSH_FMT, float(opacity))
         ctx.set_push_constants(np.asarray(bytearray(data), dtype=np.uint8))
-        ctx.draw_immediate_triangles(self._quad_verts, 6)
+        ctx.draw_immediate_triangles(self._quad_verts if verts is None else verts, 6)
 
     # ------------------------------------------------------------------
     # Temp texture pool

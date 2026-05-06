@@ -18,10 +18,13 @@ logger = logging.getLogger(__name__)
 
 class Layer:
     def __init__(self, name: str, width: int, height: int,
-                 image: np.ndarray = None, tile_size: int = 256):
+                 image: np.ndarray = None, tile_size: int = 256,
+                 x: int = 0, y: int = 0):
         self.name = name
         self.visible = True
         self.opacity = 1.0
+        self.x = int(x)
+        self.y = int(y)
         self.children: list['Layer'] = []
         self.parent: 'Layer | None' = None
         if image is not None:
@@ -62,6 +65,15 @@ class Layer:
     def height(self):
         return self.content.height
 
+    @property
+    def bounds(self) -> tuple[int, int, int, int]:
+        return (self.x, self.y, self.x + self.width, self.y + self.height)
+
+    def local_rect_to_canvas(self, rect: tuple[int, int, int, int]
+                             ) -> tuple[int, int, int, int]:
+        x0, y0, x1, y1 = rect
+        return (x0 + self.x, y0 + self.y, x1 + self.x, y1 + self.y)
+
     def clear_mask(self):
         self.mask.clear()
 
@@ -69,10 +81,16 @@ class Layer:
         return not self.mask.is_empty
 
     def mask_bbox(self) -> tuple[int, int, int, int] | None:
-        return self.mask.bbox()
+        bbox = self.mask.bbox()
+        if bbox is None:
+            return None
+        return self.local_rect_to_canvas(bbox)
 
     def mask_center(self) -> tuple[int, int] | None:
-        return self.mask.center()
+        center = self.mask.center()
+        if center is None:
+            return None
+        return (center[0] + self.x, center[1] + self.y)
 
     def to_dict(self, path: str) -> dict:
         file_key = path.replace("/", "_")
@@ -82,6 +100,8 @@ class Layer:
             "name": self.name,
             "visible": self.visible,
             "opacity": self.opacity,
+            "x": self.x,
+            "y": self.y,
             "image_file": f"layers/{file_key}_image.npy",
             "children": [],
         }
@@ -113,6 +133,8 @@ class Layer:
         layer.name = d["name"]
         layer.visible = d["visible"]
         layer.opacity = d["opacity"]
+        layer.x = int(d.get("x", 0))
+        layer.y = int(d.get("y", 0))
         layer.content = DenseTileGrid.from_array(arr, tile_size=tile_size)
         layer.image = layer.content.array
         layer.children = []

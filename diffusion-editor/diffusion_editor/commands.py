@@ -30,10 +30,15 @@ class SnapshotCommand(Protocol):
 class AddLayerCommand:
     name: str
     image: np.ndarray | None = None
+    x: int = 0
+    y: int = 0
     label: str = "New Layer"
 
     def apply(self, layer_stack: LayerStack) -> None:
-        layer_stack.add_layer(self.name, self.image)
+        if self.image is None:
+            layer_stack.add_layer(self.name)
+        else:
+            layer_stack.insert_image_layer(self.name, self.image, self.x, self.y)
 
 
 @dataclass(frozen=True)
@@ -139,10 +144,12 @@ class DrawRectCommand:
     label: str = "Draw Rectangle"
 
     def apply(self, layer_stack: LayerStack) -> None:
-        x0 = max(0, self.x)
-        y0 = max(0, self.y)
-        x1 = min(self.layer.width, self.x + self.width)
-        y1 = min(self.layer.height, self.y + self.height)
+        lx = self.x - self.layer.x
+        ly = self.y - self.layer.y
+        x0 = max(0, lx)
+        y0 = max(0, ly)
+        x1 = min(self.layer.width, lx + self.width)
+        y1 = min(self.layer.height, ly + self.height)
         if x0 >= x1 or y0 >= y1:
             return
         t = max(1, self.thickness)
@@ -162,7 +169,8 @@ class DrawRectCommand:
         re_left = max(x1 - t, x0)
         image[y0:y1, re_left:x1] = color
 
-        layer_stack.mark_layer_dirty(self.layer)
+        layer_stack.mark_layer_dirty(
+            self.layer, self.layer.local_rect_to_canvas((x0, y0, x1, y1)))
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
@@ -216,7 +224,22 @@ class FillMaskCommand:
 
     def apply(self, layer_stack: LayerStack) -> None:
         image = self.layer.image
-        m = self.mask[: image.shape[0], : image.shape[1]]
+        if self.mask.shape == image.shape[:2]:
+            m = self.mask
+            dst_x0 = 0
+            dst_y0 = 0
+        else:
+            cx0 = max(0, self.layer.x)
+            cy0 = max(0, self.layer.y)
+            cx1 = min(self.mask.shape[1], self.layer.x + self.layer.width)
+            cy1 = min(self.mask.shape[0], self.layer.y + self.layer.height)
+            if cx1 <= cx0 or cy1 <= cy0:
+                return
+            dst_x0 = cx0 - self.layer.x
+            dst_y0 = cy0 - self.layer.y
+            m = self.mask[cy0:cy1, cx0:cx1]
+            image = image[dst_y0:dst_y0 + m.shape[0],
+                          dst_x0:dst_x0 + m.shape[1]]
         if not m.any():
             return
 
@@ -241,7 +264,9 @@ class FillMaskCommand:
                 oc = np.array(self.outline_color, dtype=np.uint8)
                 image[boundary] = oc
 
-        layer_stack.mark_layer_dirty(self.layer)
+        dirty = (dst_x0, dst_y0, dst_x0 + m.shape[1], dst_y0 + m.shape[0])
+        layer_stack.mark_layer_dirty(
+            self.layer, self.layer.local_rect_to_canvas(dirty))
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
@@ -319,11 +344,24 @@ class ReplaceLayerMaskCommand:
 
     def apply(self, layer_stack: LayerStack) -> None:
         data = coerce_mask_data(self.mask)
-        if data.shape != self.layer.mask.data.shape:
+        if data.shape == self.layer.mask.data.shape:
+            self.layer.mask.data[:] = data
+        elif data.shape == (layer_stack.height, layer_stack.width):
+            self.layer.mask.clear()
+            cx0 = max(0, self.layer.x)
+            cy0 = max(0, self.layer.y)
+            cx1 = min(layer_stack.width, self.layer.x + self.layer.width)
+            cy1 = min(layer_stack.height, self.layer.y + self.layer.height)
+            if cx1 > cx0 and cy1 > cy0:
+                lx0 = cx0 - self.layer.x
+                ly0 = cy0 - self.layer.y
+                lx1 = lx0 + (cx1 - cx0)
+                ly1 = ly0 + (cy1 - cy0)
+                self.layer.mask.data[ly0:ly1, lx0:lx1] = data[cy0:cy1, cx0:cx1]
+        else:
             raise ValueError(
                 f"mask shape {data.shape} does not match layer mask "
                 f"shape {self.layer.mask.data.shape}")
-        self.layer.mask.data[:] = data
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
@@ -415,8 +453,8 @@ class ApplyGeneratedResultCommand:
         paste_result(
             layer.image,
             self.result_image,
-            tool.patch_x,
-            tool.patch_y,
+            tool.patch_x - layer.x,
+            tool.patch_y - layer.y,
             tool.patch_w,
             tool.patch_h,
             mask=mask_arg,

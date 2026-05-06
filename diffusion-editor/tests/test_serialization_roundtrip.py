@@ -34,6 +34,8 @@ def _build_stack() -> tuple[LayerStack, Layer]:
     )
     tool.manual_patch_rect = (2, 3, 12, 10)
     diff = Layer("Diff", 32, 24)
+    diff.x = 3
+    diff.y = 4
     diff.tool = tool
     diff.mask.data[3:6, 4:8] = 1.0
     top = stack.layers[0]
@@ -61,6 +63,8 @@ def test_snapshot_roundtrip_restores_active_layer_and_content():
 
     active = restored.active_layer
     assert isinstance(active.tool, DiffusionTool)
+    assert active.x == 3
+    assert active.y == 4
     assert active.tool.manual_patch_rect == (2, 3, 12, 10)
     assert active.has_mask()
 

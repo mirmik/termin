@@ -125,7 +125,23 @@ class LayerStack:
     def add_layer(self, name: str, image: np.ndarray = None):
         if self._width == 0 or self._height == 0:
             return
-        layer = Layer(name, self._width, self._height, image, tile_size=self._tile_size)
+        if image is not None:
+            h, w = image.shape[:2]
+            layer = Layer(name, w, h, image, tile_size=self._tile_size)
+        else:
+            layer = Layer(name, self._width, self._height,
+                          tile_size=self._tile_size)
+        self._insert_near_active(layer)
+        self._rebuild_caches()
+        if self.on_changed:
+            self.on_changed()
+
+    def insert_image_layer(self, name: str, image: np.ndarray,
+                           x: int = 0, y: int = 0):
+        if self._width == 0 or self._height == 0:
+            return
+        h, w = image.shape[:2]
+        layer = Layer(name, w, h, image, tile_size=self._tile_size, x=x, y=y)
         self._insert_near_active(layer)
         self._rebuild_caches()
         if self.on_changed:
@@ -192,6 +208,18 @@ class LayerStack:
         if self.on_changed:
             self.on_changed()
 
+    def set_layer_offset(self, layer: Layer, x: int, y: int,
+                         old_bounds: tuple[int, int, int, int] | None = None):
+        if old_bounds is None:
+            old_bounds = layer.bounds
+        layer.x = int(x)
+        layer.y = int(y)
+        new_bounds = layer.bounds
+        dirty = self._union_rect(old_bounds, new_bounds)
+        self.mark_layer_dirty(layer, dirty)
+        if self.on_changed:
+            self.on_changed()
+
     def flatten(self):
         result = self.composite()
         self._layers.clear()
@@ -234,6 +262,17 @@ class LayerStack:
             return
         tiles = self._tiles_for_rect(rect)
         self._renderer.invalidate_tiles(affected, tiles)
+
+    @staticmethod
+    def _union_rect(a: tuple[int, int, int, int] | None,
+                    b: tuple[int, int, int, int] | None
+                    ) -> tuple[int, int, int, int] | None:
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return (min(a[0], b[0]), min(a[1], b[1]),
+                max(a[2], b[2]), max(a[3], b[3]))
 
     def _tiles_for_rect(self, rect: tuple[int, int, int, int] | None
                         ) -> set[tuple[int, int]] | None:
@@ -342,7 +381,7 @@ class LayerStack:
 
     # --- Serialization ---
 
-    FORMAT_VERSION = 6
+    FORMAT_VERSION = 7
 
     def _serialize_manifest_and_layers(self, zf: zipfile.ZipFile):
         manifest = {
