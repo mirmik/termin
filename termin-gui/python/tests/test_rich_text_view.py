@@ -1,4 +1,6 @@
 from tcgui.widgets.rich_text_view import RichTextView
+from tcgui.widgets.events import KeyEvent
+from tcbase import Key, Mods
 
 
 def test_set_html_preserves_lines_and_plain_text():
@@ -28,3 +30,22 @@ def test_set_text_replaces_rich_lines():
 
     assert view.text == "plain\ntext"
     assert view.lines[0][0].style.bold is False
+
+
+class DummyUI:
+    def __init__(self):
+        self.clipboard = ""
+
+    def set_clipboard_text(self, text):
+        self.clipboard = text
+
+
+def test_rich_text_view_select_all_and_copy_plain_text():
+    view = RichTextView()
+    view._ui = DummyUI()
+    view.text = "plain\ntext"
+
+    assert view.on_key_down(KeyEvent(Key.A, Mods.CTRL.value))
+    assert view.selected_text() == "plain\ntext"
+    assert view.on_key_down(KeyEvent(Key.C, Mods.CTRL.value))
+    assert view._ui.clipboard == "plain\ntext"

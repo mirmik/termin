@@ -80,6 +80,8 @@ def translate_key(scancode: int) -> int:
     if scancode in _KEY_MAP:
         return _KEY_MAP[scancode]
     keycode = sdl2.SDL_GetKeyFromScancode(scancode)
+    if ord('a') <= keycode <= ord('z'):
+        keycode -= 32
     if 0 <= keycode < 128:
         try:
             return Key(keycode)

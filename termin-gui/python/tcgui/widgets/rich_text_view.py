@@ -6,7 +6,8 @@ from dataclasses import dataclass, replace
 from html.parser import HTMLParser
 from typing import Iterable
 
-from tcgui.widgets.events import MouseEvent, MouseWheelEvent
+from tcbase import Key, MouseButton
+from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent
 from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.widget import Widget
 
@@ -137,7 +138,7 @@ class RichTextView(Widget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.focusable = False
+        self.focusable = True
 
         self.lines: list[RichTextLine] = [[]]
         self.placeholder: str = ""
@@ -153,6 +154,7 @@ class RichTextView(Widget):
         self.border_color: Color = _t.border
         self.text_color: Color = _t.text_primary
         self.placeholder_color: Color = _t.text_muted
+        self.selection_color: Color = _t.selected
 
         self.show_scrollbar: bool = True
         self.scrollbar_width: float = 8.0
@@ -164,8 +166,12 @@ class RichTextView(Widget):
         self._scrollbar_hovered: bool = False
         self._drag_start_y: float = 0.0
         self._drag_start_scroll: float = 0.0
+        self._selecting: bool = False
+        self.selection_anchor: tuple[int, int] | None = None
+        self.selection_cursor: tuple[int, int] = (0, 0)
         self._visual_lines: list[RichTextLine] = []
         self._visual_content_w: float = -1.0
+        self._renderer = None
 
     @property
     def text(self) -> str:
@@ -195,6 +201,7 @@ class RichTextView(Widget):
     def _invalidate_layout(self) -> None:
         self._visual_content_w = -1.0
         self._scroll_y = min(self._scroll_y, self._max_scroll_y())
+        self.clear_selection()
 
     def _effective_line_height(self) -> float:
         return self.line_height if self.line_height > 0 else self.font_size * 1.4
@@ -309,6 +316,104 @@ class RichTextView(Widget):
     def _style_color(self, style: RichTextStyle) -> Color:
         return style.color if style.color is not None else self.text_color
 
+    def _visual_line_text(self, row: int) -> str:
+        lines = self._visual_lines or self.lines
+        if row < 0 or row >= len(lines):
+            return ""
+        return "".join(seg.text for seg in lines[row])
+
+    def _clamp_pos(self, pos: tuple[int, int]) -> tuple[int, int]:
+        lines = self._visual_lines or self.lines
+        if not lines:
+            return (0, 0)
+        row, col = pos
+        row = max(0, min(row, len(lines) - 1))
+        col = max(0, min(col, len(self._visual_line_text(row))))
+        return (row, col)
+
+    @property
+    def has_selection(self) -> bool:
+        return self.selection_anchor is not None and self.selection_anchor != self.selection_cursor
+
+    def clear_selection(self) -> None:
+        self.selection_anchor = None
+        self.selection_cursor = self._clamp_pos(self.selection_cursor)
+
+    def select_all(self) -> None:
+        self.selection_anchor = (0, 0)
+        lines = self._visual_lines or self.lines
+        last_row = max(0, len(lines) - 1)
+        self.selection_cursor = (last_row, len(self._visual_line_text(last_row)))
+
+    def _selection_range(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        cursor = self._clamp_pos(self.selection_cursor)
+        if self.selection_anchor is None:
+            return (cursor, cursor)
+        start, end = sorted((self._clamp_pos(self.selection_anchor), cursor))
+        return start, end
+
+    def selected_text(self) -> str:
+        if not self.has_selection:
+            return ""
+        (sr, sc), (er, ec) = self._selection_range()
+        if sr == er:
+            return self._visual_line_text(sr)[sc:ec]
+        parts = [self._visual_line_text(sr)[sc:]]
+        for row in range(sr + 1, er):
+            parts.append(self._visual_line_text(row))
+        parts.append(self._visual_line_text(er)[:ec])
+        return "\n".join(parts)
+
+    def _set_clipboard_text(self, text: str) -> None:
+        setter = getattr(self._ui, "set_clipboard_text", None)
+        if setter is not None:
+            setter(text)
+
+    def _pos_from_xy(self, renderer, x: float, y: float) -> tuple[int, int]:
+        bw = self.border_width
+        content_x = self.x + self.padding + bw
+        content_y = self.y + self.padding + bw
+        row = int((y - content_y + self._scroll_y) / self._effective_line_height())
+        row = max(0, min(row, len(self._visual_lines) - 1))
+        rel_x = x - content_x
+        text = self._visual_line_text(row)
+        col = len(text)
+        x_acc = 0.0
+        for i, ch in enumerate(text):
+            ch_w = self._segment_width(renderer, ch)
+            if rel_x < x_acc + ch_w / 2:
+                col = i
+                break
+            x_acc += ch_w
+        return (row, col)
+
+    def _draw_selection_for_visual_line(
+        self,
+        renderer,
+        content_x: float,
+        row_top: float,
+        row: int,
+    ) -> None:
+        if not self.has_selection:
+            return
+        (sr, sc), (er, ec) = self._selection_range()
+        if row < sr or row > er:
+            return
+        text = self._visual_line_text(row)
+        start = sc if row == sr else 0
+        end = ec if row == er else len(text)
+        if end <= start:
+            return
+        x0 = self._segment_width(renderer, text[:start])
+        x1 = self._segment_width(renderer, text[:end])
+        renderer.draw_rect(
+            content_x + x0,
+            row_top,
+            x1 - x0,
+            self._effective_line_height(),
+            self.selection_color,
+        )
+
     def _draw_segment(self, renderer, x: float, y: float, seg: RichTextSegment) -> None:
         color = self._style_color(seg.style)
         draw_x = x + (self.font_size * 0.12 if seg.style.italic else 0.0)
@@ -317,6 +422,7 @@ class RichTextView(Widget):
             renderer.draw_text(draw_x + 0.7, y, seg.text, color, self.font_size)
 
     def render(self, renderer) -> None:
+        self._renderer = renderer
         bw = self.border_width
         renderer.draw_rect(self.x, self.y, self.width, self.height, self.border_color, self.border_radius)
         renderer.draw_rect(
@@ -356,7 +462,9 @@ class RichTextView(Widget):
             last_line = min(len(self._visual_lines), int((self._scroll_y + content_h) / lh) + 1)
             for i in range(first_line, last_line):
                 draw_x = content_x
-                baseline_y = content_y + i * lh - self._scroll_y + self.font_size
+                row_top = content_y + i * lh - self._scroll_y
+                baseline_y = row_top + self.font_size
+                self._draw_selection_for_visual_line(renderer, content_x, row_top, i)
                 for seg in self._visual_lines[i]:
                     self._draw_segment(renderer, draw_x, baseline_y, seg)
                     draw_x += self._segment_width(renderer, seg.text)
@@ -381,6 +489,8 @@ class RichTextView(Widget):
         self._scrollbar_hovered = False
 
     def on_mouse_down(self, event: MouseEvent) -> bool:
+        if event.button != MouseButton.LEFT:
+            return False
         if self.show_scrollbar and self._content_height() > self._visible_height():
             sb_x = self.x + self.width - self.scrollbar_width - self.border_width
             if event.x >= sb_x:
@@ -388,6 +498,16 @@ class RichTextView(Widget):
                 self._drag_start_y = event.y
                 self._drag_start_scroll = self._scroll_y
                 return True
+        if self._renderer is not None and self._visual_lines:
+            pos = self._pos_from_xy(self._renderer, event.x, event.y)
+            if event.shift:
+                if self.selection_anchor is None:
+                    self.selection_anchor = self.selection_cursor
+                self.selection_cursor = pos
+            else:
+                self.selection_anchor = pos
+                self.selection_cursor = pos
+            self._selecting = True
         return True
 
     def on_mouse_move(self, event: MouseEvent) -> None:
@@ -403,6 +523,10 @@ class RichTextView(Widget):
                 self._scroll_y = max(0.0, min(self._scroll_y, max_sy))
             return
 
+        if self._selecting and self._renderer is not None and self._visual_lines:
+            self.selection_cursor = self._pos_from_xy(self._renderer, event.x, event.y)
+            return
+
         if self.show_scrollbar and self._content_height() > self._visible_height():
             sb_x = self.x + self.width - self.scrollbar_width - self.border_width
             self._scrollbar_hovered = event.x >= sb_x
@@ -411,6 +535,20 @@ class RichTextView(Widget):
 
     def on_mouse_up(self, event: MouseEvent) -> None:
         self._dragging_scrollbar = False
+        self._selecting = False
+        if self.selection_anchor == self.selection_cursor:
+            self.clear_selection()
+
+    def on_key_down(self, event: KeyEvent) -> bool:
+        key_value = int(event.key)
+        if event.ctrl and key_value in (Key.A.value, ord('a')):
+            self.select_all()
+            return True
+        if event.ctrl and key_value in (Key.C.value, ord('c')):
+            if self.has_selection:
+                self._set_clipboard_text(self.selected_text())
+            return True
+        return False
 
     def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
         max_sy = self._max_scroll_y()
