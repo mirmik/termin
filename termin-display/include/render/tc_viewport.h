@@ -44,6 +44,9 @@ TERMIN_DISPLAY_API tc_scene_handle tc_viewport_get_scene(tc_viewport_handle h);
 TERMIN_DISPLAY_API void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle rt);
 TERMIN_DISPLAY_API tc_render_target_handle tc_viewport_get_render_target(tc_viewport_handle h);
 
+TERMIN_DISPLAY_API struct tc_component* tc_viewport_get_camera(tc_viewport_handle h);
+TERMIN_DISPLAY_API tc_pipeline_handle tc_viewport_get_pipeline(tc_viewport_handle h);
+
 TERMIN_DISPLAY_API void tc_viewport_set_override_resolution(tc_viewport_handle h, bool override_resolution);
 TERMIN_DISPLAY_API bool tc_viewport_get_override_resolution(tc_viewport_handle h);
 
