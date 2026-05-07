@@ -277,7 +277,7 @@ public:
 
 private:
 
-    // Sync override_resolution viewports: update render target width/height from pixel_rect
+    // Sync dynamic-resolution render targets: update width/height from attached viewport pixel_rect
     void sync_viewport_resolutions();
 
     // Render scene pipeline to viewport output FBOs

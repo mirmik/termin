@@ -160,18 +160,18 @@ display/viewport/render-target перестает существовать во 
 
 ## Этапы Миграции
 
-1. Перенести `override_resolution` из `Viewport` в `RenderTarget` как
+1. [x] Перенести `override_resolution` из `Viewport` в `RenderTarget` как
    `dynamic_resolution`.
-2. Изменить `tc_viewport_set_render_target()` так, чтобы он только менял
+2. [x] Изменить `tc_viewport_set_render_target()` так, чтобы он только менял
    ссылку. Он не должен free-ить старый render target и не должен lock/free-ить
    новый.
-3. Прекратить выделять render target внутри `tc_viewport_pool_alloc()`.
-4. Научить `RenderingManager` явно создавать/регистрировать render target-ы до
+3. [x] Прекратить выделять render target внутри `tc_viewport_pool_alloc()`.
+4. [x] Научить `RenderingManager` явно создавать/регистрировать render target-ы до
    создания viewport-ов.
-5. Расширить `ViewportConfig` ссылкой на render target и перенести inline
+5. [x] Расширить `ViewportConfig` ссылкой на render target и перенести inline
    camera/pipeline fields в `RenderTargetConfig`.
-6. Обновить render paths так, чтобы render target resize выполнялся только при
+6. [x] Обновить render paths так, чтобы render target resize выполнялся только при
    включенном `dynamic_resolution`.
-7. Вынести общую attach/detach логику для editor и scene display scopes.
-8. Добавить C++ headless tests на native manager counts и Python headless tests
+7. [ ] Вынести общую attach/detach логику для editor и scene display scopes.
+8. [ ] Добавить C++ headless tests на native manager counts и Python headless tests
    на game-mode orchestration.

@@ -224,7 +224,7 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     g_pool->names[idx] = tc_strdup_local(name);
     g_pool->render_targets[idx] = TC_RENDER_TARGET_HANDLE_INVALID;
     g_pool->scenes[idx] = TC_SCENE_HANDLE_INVALID;
-    g_pool->override_resolution[idx] = true;
+    g_pool->override_resolution[idx] = false;
     g_pool->rects[idx * 4 + 0] = 0.0f;
     g_pool->rects[idx * 4 + 1] = 0.0f;
     g_pool->rects[idx * 4 + 2] = 1.0f;
@@ -389,6 +389,9 @@ void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle
         if (tc_scene_handle_valid(vp_scene)) {
             tc_render_target_set_scene(rt, vp_scene);
         }
+        if (g_pool->override_resolution[h.index]) {
+            tc_render_target_set_dynamic_resolution(rt, true);
+        }
     }
 }
 
@@ -412,10 +415,18 @@ tc_pipeline_handle tc_viewport_get_pipeline(tc_viewport_handle h) {
 void tc_viewport_set_override_resolution(tc_viewport_handle h, bool override_resolution) {
     if (!handle_alive(h)) return;
     g_pool->override_resolution[h.index] = override_resolution;
+    tc_render_target_handle rt = g_pool->render_targets[h.index];
+    if (tc_render_target_handle_valid(rt)) {
+        tc_render_target_set_dynamic_resolution(rt, override_resolution);
+    }
 }
 
 bool tc_viewport_get_override_resolution(tc_viewport_handle h) {
     if (!handle_alive(h)) return false;
+    tc_render_target_handle rt = g_pool->render_targets[h.index];
+    if (tc_render_target_handle_valid(rt)) {
+        return tc_render_target_get_dynamic_resolution(rt);
+    }
     return g_pool->override_resolution[h.index];
 }
 

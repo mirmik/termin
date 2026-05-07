@@ -70,7 +70,15 @@ class RenderTargetInspectorTcgui(VStack):
         grid.add(pipe_lbl, 3, 0)
         grid.add(self._pipeline_combo, 3, 1)
 
+        dynamic_lbl = Label(); dynamic_lbl.text = "Use View Size:"; dynamic_lbl.preferred_width = px(96)
+        self._dynamic_lbl = dynamic_lbl
+        self._dynamic_resolution = Checkbox()
+        self._dynamic_resolution.on_changed = self._on_dynamic_resolution_changed
+        grid.add(self._dynamic_lbl, 4, 0)
+        grid.add(self._dynamic_resolution, 4, 1)
+
         width_lbl = Label(); width_lbl.text = "Width:"; width_lbl.preferred_width = px(96)
+        self._width_lbl = width_lbl
         self._width = SpinBox()
         self._width.decimals = 0
         self._width.step = 64
@@ -78,10 +86,11 @@ class RenderTargetInspectorTcgui(VStack):
         self._width.max_value = 8192
         self._width.value = 512
         self._width.on_changed = self._on_size_changed
-        grid.add(width_lbl, 4, 0)
-        grid.add(self._width, 4, 1)
+        grid.add(self._width_lbl, 5, 0)
+        grid.add(self._width, 5, 1)
 
         height_lbl = Label(); height_lbl.text = "Height:"; height_lbl.preferred_width = px(96)
+        self._height_lbl = height_lbl
         self._height = SpinBox()
         self._height.decimals = 0
         self._height.step = 64
@@ -89,8 +98,8 @@ class RenderTargetInspectorTcgui(VStack):
         self._height.max_value = 8192
         self._height.value = 512
         self._height.on_changed = self._on_size_changed
-        grid.add(height_lbl, 5, 0)
-        grid.add(self._height, 5, 1)
+        grid.add(self._height_lbl, 6, 0)
+        grid.add(self._height, 6, 1)
 
         self._empty = Label()
         self._empty.text = "No render target selected."
@@ -130,8 +139,10 @@ class RenderTargetInspectorTcgui(VStack):
             self._refresh_pipeline_combo()
             self._select_current_pipeline()
 
+            self._dynamic_resolution.checked = bool(getattr(render_target, "dynamic_resolution", False))
             self._width.value = render_target.width
             self._height.value = render_target.height
+            self._update_size_visibility()
         finally:
             self._updating = False
             if self._ui is not None:
@@ -142,8 +153,9 @@ class RenderTargetInspectorTcgui(VStack):
         self._scene_combo.visible = has_target
         self._camera_combo.visible = has_target
         self._pipeline_combo.visible = has_target
-        self._width.visible = has_target
-        self._height.visible = has_target
+        self._dynamic_lbl.visible = has_target
+        self._dynamic_resolution.visible = has_target
+        self._update_size_visibility()
         self._empty.visible = not has_target
 
     def _refresh_scene_combo(self) -> None:
@@ -285,12 +297,26 @@ class RenderTargetInspectorTcgui(VStack):
         self._render_target.pipeline = pipeline
         self._emit_changed()
 
+    def _on_dynamic_resolution_changed(self, checked: bool) -> None:
+        if self._updating or self._render_target is None:
+            return
+        self._render_target.dynamic_resolution = bool(checked)
+        self._update_size_visibility()
+        self._emit_changed()
+
     def _on_size_changed(self, _value: float) -> None:
         if self._updating or self._render_target is None:
             return
         self._render_target.width = int(self._width.value)
         self._render_target.height = int(self._height.value)
         self._emit_changed()
+
+    def _update_size_visibility(self) -> None:
+        manual = self._render_target is not None and not bool(self._dynamic_resolution.checked)
+        self._width_lbl.visible = manual
+        self._width.visible = manual
+        self._height_lbl.visible = manual
+        self._height.visible = manual
 
     def _emit_changed(self) -> None:
         if self.on_changed is not None:

@@ -16,6 +16,7 @@ public:
     std::string camera_uuid;
     int width = 512;
     int height = 512;
+    bool dynamic_resolution = false;
     std::string pipeline_uuid;
     std::string pipeline_name;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;

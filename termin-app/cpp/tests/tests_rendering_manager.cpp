@@ -1,6 +1,8 @@
 #include "guard/guard.h"
 #include "termin/render/rendering_manager.hpp"
 
+#include <string>
+
 extern "C" {
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
@@ -61,6 +63,7 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     config.region[2] = 1.0f;
     config.region[3] = 1.0f;
     config.enabled = true;
+    config.render_target_name = "SceneRT";
     tc_scene_add_viewport_config(scene, &config);
 
     auto viewports = manager.attach_scene_full(scene);
@@ -73,6 +76,9 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     tc_viewport_handle viewport = tc_display_get_first_viewport(display);
     REQUIRE(tc_viewport_handle_valid(viewport));
     CHECK(tc_scene_handle_eq(tc_viewport_get_scene(viewport), scene));
+    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+    REQUIRE(tc_render_target_handle_valid(rt));
+    CHECK(std::string(tc_render_target_get_name(rt)) == "SceneRT");
 
     manager.detach_scene_full(scene);
     tc_scene_free(scene);
@@ -80,7 +86,7 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
 
 TEST_CASE("Viewport references render target without owning it")
 {
-    tc_viewport_handle viewport = tc_viewport_new("flat-viewport", TC_SCENE_HANDLE_INVALID, nullptr);
+    tc_viewport_handle viewport = tc_viewport_new("flat-viewport", TC_SCENE_HANDLE_INVALID);
     REQUIRE(tc_viewport_handle_valid(viewport));
 
     CHECK(!tc_render_target_handle_valid(tc_viewport_get_render_target(viewport)));
@@ -89,9 +95,17 @@ TEST_CASE("Viewport references render target without owning it")
     tc_render_target_handle second = tc_render_target_new("second-target");
     REQUIRE(tc_render_target_handle_valid(first));
     REQUIRE(tc_render_target_handle_valid(second));
+    CHECK(!tc_render_target_get_dynamic_resolution(first));
+
+    tc_render_target_set_dynamic_resolution(first, true);
+    CHECK(tc_render_target_get_dynamic_resolution(first));
 
     tc_viewport_set_render_target(viewport, first);
     CHECK(tc_render_target_handle_eq(tc_viewport_get_render_target(viewport), first));
+    CHECK(tc_viewport_get_override_resolution(viewport));
+
+    tc_viewport_set_override_resolution(viewport, false);
+    CHECK(!tc_render_target_get_dynamic_resolution(first));
 
     tc_viewport_set_render_target(viewport, second);
     CHECK(tc_render_target_alive(first));
