@@ -83,9 +83,9 @@ class _RenderTargetConfig:
 
 class _ViewportConfig:
     def __init__(self):
-        self.camera_uuid = ""
         self.display_name = "Display"
         self.name = "Viewport"
+        self.render_target_name = ""
         self.input_mode = "simple"
 
 

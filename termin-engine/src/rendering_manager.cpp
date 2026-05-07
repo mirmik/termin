@@ -601,20 +601,6 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
             tc_render_target_set_scene(rt, scene);
             tc_render_target_set_dynamic_resolution(rt, true);
             register_standalone_render_target(rt);
-
-            // Legacy viewport configs can still carry camera_uuid without a
-            // separate RenderTargetConfig. Keep that path as an implicit target.
-            if (config->camera_uuid && config->camera_uuid[0] != '\0' && pool) {
-                tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, config->camera_uuid);
-                if (tc_entity_id_valid(eid)) {
-                    tc_entity_handle eh = tc_entity_handle_make(pool_handle, eid);
-                    Entity entity(eh);
-                    tc_component* camera = entity.get_component_by_type_name("CameraComponent");
-                    if (camera) {
-                        tc_render_target_set_camera(rt, camera);
-                    }
-                }
-            }
         }
 
         if (tc_render_target_handle_valid(rt)) {

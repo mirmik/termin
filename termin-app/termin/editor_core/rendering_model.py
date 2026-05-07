@@ -246,23 +246,6 @@ class RenderingModel:
             return scene_render_mount(viewport.scene).get_pipeline(managed_by)
         return render_target.pipeline
 
-    def _find_camera_for_viewport_config(self, scene: "Scene", config):
-        if config is None or not config.camera_uuid:
-            return None
-        return self._find_camera_by_uuid(scene, config.camera_uuid)
-
-    def _find_camera_by_uuid(self, scene: "Scene", camera_uuid: str):
-        if not camera_uuid:
-            return None
-
-        from termin.visualization.core.camera import CameraComponent
-
-        for entity in scene.entities:
-            if entity.uuid != camera_uuid:
-                continue
-            return entity.get_component(CameraComponent)
-        return None
-
     def remove_render_target(self, render_target, scene: "Scene | None" = None) -> None:
         """Remove a live render target and its scene config entry."""
         for display in self._manager.displays:
@@ -345,9 +328,8 @@ class RenderingModel:
     ):
         """Find the ViewportConfig inside scene that matches this viewport.
 
-        Matches on (display_name, camera_uuid) when the viewport has a
-        camera+entity — camera_uuid is stable across renames. Falls back
-        to (display_name, viewport.name) for viewports without a camera.
+        Matches on (display_name, render_target_name) when the viewport
+        has a render target. Falls back to (display_name, viewport.name).
         """
         from termin.visualization.core.scene import scene_render_mount
 
@@ -358,17 +340,15 @@ class RenderingModel:
 
         display_name = display.name or ""
 
-        camera_uuid = ""
         render_target = viewport.render_target
-        if render_target is not None and render_target.camera is not None and render_target.camera.entity is not None:
-            camera_uuid = render_target.camera.entity.uuid
+        render_target_name = render_target.name if render_target is not None else ""
 
         vp_name = viewport.name or ""
         configs = scene_render_mount(scene).viewport_configs
 
-        if camera_uuid:
+        if render_target_name:
             for config in configs:
-                if config.display_name == display_name and config.camera_uuid == camera_uuid:
+                if config.display_name == display_name and config.render_target_name == render_target_name:
                     return config
 
         for config in configs:
@@ -400,13 +380,10 @@ class RenderingModel:
             if display is None:
                 continue
             config = self.find_viewport_config(scene, viewport, display)
-            camera = self._find_camera_for_viewport_config(scene, config)
             render_target = viewport.render_target
             if render_target is not None:
                 viewport.scene = scene
                 render_target.scene = scene
-                if camera is not None:
-                    render_target.camera = camera
             if config is None:
                 continue
             by_display.setdefault(display.tc_display_ptr, []).append(
@@ -471,19 +448,15 @@ class RenderingModel:
 
                 rt = viewport.render_target
 
-                camera_uuid = ""
                 render_target_name = ""
                 if rt is not None:
                     render_target_name = rt.name or ""
-                    if rt.camera is not None and rt.camera.entity is not None:
-                        camera_uuid = rt.camera.entity.uuid
 
                 rect = viewport.rect
                 config = ViewportConfig()
                 config.name = viewport.name or ""
                 config.display_name = display.name
                 config.render_target_name = render_target_name
-                config.camera_uuid = camera_uuid
                 config.region_x = rect[0]
                 config.region_y = rect[1]
                 config.region_w = rect[2]
