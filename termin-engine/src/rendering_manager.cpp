@@ -394,10 +394,12 @@ tc_viewport_handle RenderingManager::mount_scene(
         return TC_VIEWPORT_HANDLE_INVALID;
     }
 
-    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+    tc_render_target_handle rt = tc_render_target_new(name.c_str());
     tc_render_target_set_scene(rt, scene);
     tc_render_target_set_camera(rt, camera);
     tc_render_target_set_pipeline(rt, pipeline);
+    register_standalone_render_target(rt);
+    tc_viewport_set_render_target(viewport, rt);
     tc_viewport_set_scene(viewport, scene);
 
     // Set rect
@@ -425,6 +427,8 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
 
     // Remove them
     for (tc_viewport_handle viewport : to_remove) {
+        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+
         // Remove viewport state
         remove_viewport_state(viewport);
 
@@ -433,6 +437,42 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
 
         // Free viewport
         tc_viewport_free(viewport);
+
+        bool registered_standalone = std::find_if(
+            standalone_render_targets_.begin(),
+            standalone_render_targets_.end(),
+            [rt](tc_render_target_handle candidate) {
+                return tc_render_target_handle_eq(candidate, rt);
+            }
+        ) != standalone_render_targets_.end();
+
+        bool still_referenced = false;
+        auto scan_display_list = [&still_referenced, rt](const std::vector<tc_display*>& displays) {
+            for (tc_display* d : displays) {
+                tc_viewport_handle scan = tc_display_get_first_viewport(d);
+                while (tc_viewport_handle_valid(scan)) {
+                    if (tc_render_target_handle_eq(tc_viewport_get_render_target(scan), rt)) {
+                        still_referenced = true;
+                        return;
+                    }
+                    scan = tc_viewport_get_display_next(scan);
+                }
+            }
+        };
+        scan_display_list(displays_);
+        if (!still_referenced) {
+            scan_display_list(editor_displays_);
+        }
+
+        if (tc_render_target_handle_valid(rt) && !registered_standalone && !still_referenced) {
+            uint64_t rt_key = render_target_key(rt);
+            auto rt_it = render_target_states_.find(rt_key);
+            if (rt_it != render_target_states_.end()) {
+                rt_it->second->clear_all();
+                render_target_states_.erase(rt_it);
+            }
+            tc_render_target_free(rt);
+        }
     }
 }
 
@@ -531,10 +571,29 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
 
         tc_viewport_set_scene(viewport, scene);
 
-        // Apply render target settings from viewport config
-        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
-        if (tc_render_target_handle_valid(rt)) {
-            // Camera
+        tc_render_target_handle rt = TC_RENDER_TARGET_HANDLE_INVALID;
+        std::string rt_name = config->render_target_name ? config->render_target_name : "";
+        if (!rt_name.empty()) {
+            for (tc_render_target_handle candidate : standalone_render_targets_) {
+                if (!tc_render_target_handle_valid(candidate)) continue;
+                const char* candidate_name = tc_render_target_get_name(candidate);
+                if (candidate_name && rt_name == candidate_name) {
+                    tc_scene_handle candidate_scene = tc_render_target_get_scene(candidate);
+                    if (tc_scene_handle_eq(candidate_scene, scene)) {
+                        rt = candidate;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!tc_render_target_handle_valid(rt)) {
+            rt = tc_render_target_new(rt_name.empty() ? vp_name.c_str() : rt_name.c_str());
+            tc_render_target_set_scene(rt, scene);
+            register_standalone_render_target(rt);
+
+            // Legacy viewport configs can still carry camera_uuid without a
+            // separate RenderTargetConfig. Keep that path as an implicit target.
             if (config->camera_uuid && config->camera_uuid[0] != '\0' && pool) {
                 tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, config->camera_uuid);
                 if (tc_entity_id_valid(eid)) {
@@ -546,17 +605,10 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
                     }
                 }
             }
-            // Pipeline
-            tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
-            if (config->pipeline_uuid && config->pipeline_uuid[0] != '\0' && pipeline_factory_) {
-                pipeline = pipeline_factory_(config->pipeline_uuid);
-            }
-            if (!tc_pipeline_handle_valid(pipeline) && config->pipeline_name && config->pipeline_name[0] != '\0' && pipeline_factory_) {
-                pipeline = pipeline_factory_(config->pipeline_name);
-            }
-            if (tc_pipeline_handle_valid(pipeline)) {
-                tc_render_target_set_pipeline(rt, pipeline);
-            }
+        }
+
+        if (tc_render_target_handle_valid(rt)) {
+            tc_viewport_set_render_target(viewport, rt);
         }
 
         tc_display_add_viewport(display, viewport);
@@ -752,13 +804,25 @@ ViewportRenderState* RenderingManager::get_or_create_render_target_state(tc_rend
 
 void RenderingManager::register_standalone_render_target(tc_render_target_handle rt) {
     if (!tc_render_target_handle_valid(rt)) return;
-    auto it = std::find(standalone_render_targets_.begin(), standalone_render_targets_.end(), rt);
+    auto it = std::find_if(
+        standalone_render_targets_.begin(),
+        standalone_render_targets_.end(),
+        [rt](tc_render_target_handle candidate) {
+            return tc_render_target_handle_eq(candidate, rt);
+        }
+    );
     if (it != standalone_render_targets_.end()) return;
     standalone_render_targets_.push_back(rt);
 }
 
 void RenderingManager::unregister_standalone_render_target(tc_render_target_handle rt) {
-    auto it = std::find(standalone_render_targets_.begin(), standalone_render_targets_.end(), rt);
+    auto it = std::find_if(
+        standalone_render_targets_.begin(),
+        standalone_render_targets_.end(),
+        [rt](tc_render_target_handle candidate) {
+            return tc_render_target_handle_eq(candidate, rt);
+        }
+    );
     if (it != standalone_render_targets_.end()) {
         standalone_render_targets_.erase(it);
     }

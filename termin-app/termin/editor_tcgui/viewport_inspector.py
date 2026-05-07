@@ -19,9 +19,7 @@ from tcgui.widgets.units import px
 class ViewportInspectorTcgui(VStack):
     """Inspector panel for Viewport properties.
 
-    Viewport-owned RenderTarget properties are shown in a separate
-    section so users don't have to pick an unrelated target from the
-    global pool.
+    Viewport references a RenderTarget selected from the render target pool.
     """
 
     def __init__(self, resource_manager) -> None:
@@ -34,6 +32,7 @@ class ViewportInspectorTcgui(VStack):
         self._scenes: list = []
         self._cameras: list = []
         self._displays = []
+        self._render_targets = []
         self._current_display = None
         self._updating = False
         self.on_changed: Optional[Callable[[], None]] = None
@@ -131,23 +130,29 @@ class ViewportInspectorTcgui(VStack):
         self._rt_grid = rt_grid
         self.add_child(self._rt_grid)
 
+        target_lbl = Label(); target_lbl.text = "Target:"; target_lbl.preferred_width = px(96)
+        self._render_target_combo = ComboBox()
+        self._render_target_combo.on_changed = self._on_render_target_changed
+        rt_grid.add(target_lbl, 0, 0)
+        rt_grid.add(self._render_target_combo, 0, 1)
+
         cam_lbl = Label(); cam_lbl.text = "Camera:"; cam_lbl.preferred_width = px(96)
         self._camera_combo = ComboBox()
         self._camera_combo.on_changed = self._on_camera_changed
-        rt_grid.add(cam_lbl, 0, 0)
-        rt_grid.add(self._camera_combo, 0, 1)
+        rt_grid.add(cam_lbl, 1, 0)
+        rt_grid.add(self._camera_combo, 1, 1)
 
         pipe_lbl = Label(); pipe_lbl.text = "Pipeline:"; pipe_lbl.preferred_width = px(96)
         self._pipeline_combo = ComboBox()
         self._pipeline_combo.on_changed = self._on_pipeline_changed
-        rt_grid.add(pipe_lbl, 1, 0)
-        rt_grid.add(self._pipeline_combo, 1, 1)
+        rt_grid.add(pipe_lbl, 2, 0)
+        rt_grid.add(self._pipeline_combo, 2, 1)
 
         use_view_lbl = Label(); use_view_lbl.text = "Use View Size:"; use_view_lbl.preferred_width = px(96)
         self._use_view_size = Checkbox()
         self._use_view_size.on_changed = self._on_use_view_size_changed
-        rt_grid.add(use_view_lbl, 2, 0)
-        rt_grid.add(self._use_view_size, 2, 1)
+        rt_grid.add(use_view_lbl, 3, 0)
+        rt_grid.add(self._use_view_size, 3, 1)
 
         width_lbl = Label(); width_lbl.text = "Width:"; width_lbl.preferred_width = px(96)
         self._width_lbl = width_lbl
@@ -157,8 +162,8 @@ class ViewportInspectorTcgui(VStack):
         self._width.min_value = 1
         self._width.max_value = 8192
         self._width.on_changed = self._on_size_changed
-        rt_grid.add(self._width_lbl, 3, 0)
-        rt_grid.add(self._width, 3, 1)
+        rt_grid.add(self._width_lbl, 4, 0)
+        rt_grid.add(self._width, 4, 1)
 
         height_lbl = Label(); height_lbl.text = "Height:"; height_lbl.preferred_width = px(96)
         self._height_lbl = height_lbl
@@ -168,8 +173,8 @@ class ViewportInspectorTcgui(VStack):
         self._height.min_value = 1
         self._height.max_value = 8192
         self._height.on_changed = self._on_size_changed
-        rt_grid.add(self._height_lbl, 4, 0)
-        rt_grid.add(self._height, 4, 1)
+        rt_grid.add(self._height_lbl, 5, 0)
+        rt_grid.add(self._height, 5, 1)
 
         self._empty = Label()
         self._empty.text = "No viewport selected."
@@ -236,6 +241,8 @@ class ViewportInspectorTcgui(VStack):
 
             self._refresh_scene_combo()
             self._select_current_scene()
+            self._refresh_render_target_combo()
+            self._select_current_render_target()
             self._refresh_camera_combo()
             self._select_current_camera()
             self._refresh_pipeline_combo()
@@ -260,6 +267,9 @@ class ViewportInspectorTcgui(VStack):
             if rt is not None:
                 self._width.value = int(rt.width)
                 self._height.value = int(rt.height)
+            else:
+                self._width.value = 512
+                self._height.value = 512
             self._update_size_visibility()
         finally:
             self._updating = False
@@ -348,6 +358,62 @@ class ViewportInspectorTcgui(VStack):
                 rt.camera = None
             self._refresh_camera_combo()
             self._camera_combo.selected_index = 0
+            self._emit_changed()
+
+    def _refresh_render_target_combo(self) -> None:
+        old = self._render_target_combo.on_changed
+        self._render_target_combo.on_changed = None
+        self._render_target_combo.clear()
+        self._render_targets = []
+
+        self._render_target_combo.add_item("(none)")
+        try:
+            from termin.render_framework._render_framework_native import render_target_pool_list
+            self._render_targets = list(render_target_pool_list())
+            for rt in self._render_targets:
+                label = rt.name or f"RenderTarget {rt.index}:{rt.generation}"
+                self._render_target_combo.add_item(label)
+        except Exception as e:
+            log.error(f"[ViewportInspectorTcgui] render target scan failed: {e}")
+            self._render_targets = []
+
+        self._render_target_combo.on_changed = old
+
+    def _select_current_render_target(self) -> None:
+        rt = self._viewport.render_target if self._viewport is not None else None
+        if rt is None:
+            self._render_target_combo.selected_index = 0
+            return
+        for i, candidate in enumerate(self._render_targets):
+            if candidate.index == rt.index and candidate.generation == rt.generation:
+                self._render_target_combo.selected_index = i + 1
+                return
+        self._render_target_combo.selected_index = 0
+
+    def _on_render_target_changed(self, index: int, _text: str) -> None:
+        if self._updating or self._viewport is None:
+            return
+        if index <= 0:
+            self._viewport.render_target = None
+            self._refresh_camera_combo()
+            self._select_current_camera()
+            self._refresh_pipeline_combo()
+            self._select_current_pipeline()
+            self._update_size_visibility()
+            self._emit_changed()
+            return
+        target_index = index - 1
+        if 0 <= target_index < len(self._render_targets):
+            self._viewport.render_target = self._render_targets[target_index]
+            self._refresh_camera_combo()
+            self._select_current_camera()
+            self._refresh_pipeline_combo()
+            self._select_current_pipeline()
+            rt = self._viewport.render_target
+            if rt is not None:
+                self._width.value = int(rt.width)
+                self._height.value = int(rt.height)
+            self._update_size_visibility()
             self._emit_changed()
 
     def _refresh_camera_combo(self) -> None:
@@ -466,7 +532,11 @@ class ViewportInspectorTcgui(VStack):
         self._emit_changed()
 
     def _update_size_visibility(self) -> None:
-        manual = not bool(self._use_view_size.checked)
+        has_target = self._viewport is not None and self._viewport.render_target is not None
+        self._camera_combo.enabled = has_target
+        self._pipeline_combo.enabled = has_target
+        self._use_view_size.enabled = has_target
+        manual = has_target and not bool(self._use_view_size.checked)
         self._width_lbl.visible = manual
         self._width.visible = manual
         self._height_lbl.visible = manual

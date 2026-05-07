@@ -472,7 +472,6 @@ class RenderingControllerTcgui:
             return
 
         viewport = display.create_viewport(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
-        self.ensure_viewport_render_target(viewport, scene=scene, camera=camera)
         self._viewport_list.refresh()
         self._request_update()
         self._notify_rendering_changed()
@@ -484,14 +483,11 @@ class RenderingControllerTcgui:
         self._request_update()
 
     def _on_remove_viewport_requested(self, viewport: "Viewport") -> None:
-        rt = viewport.render_target
         display = self._manager.get_display_for_viewport(viewport)
         if display is not None:
             display.remove_viewport(viewport)
         if self._selected_viewport is viewport:
             self._selected_viewport = None
-        if rt is not None and not rt.locked:
-            rt.free()
         self._viewport_list.refresh()
         self._refresh_render_targets()
         self._request_update()

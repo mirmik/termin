@@ -77,3 +77,29 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     manager.detach_scene_full(scene);
     tc_scene_free(scene);
 }
+
+TEST_CASE("Viewport references render target without owning it")
+{
+    tc_viewport_handle viewport = tc_viewport_new("flat-viewport", TC_SCENE_HANDLE_INVALID, nullptr);
+    REQUIRE(tc_viewport_handle_valid(viewport));
+
+    CHECK(!tc_render_target_handle_valid(tc_viewport_get_render_target(viewport)));
+
+    tc_render_target_handle first = tc_render_target_new("first-target");
+    tc_render_target_handle second = tc_render_target_new("second-target");
+    REQUIRE(tc_render_target_handle_valid(first));
+    REQUIRE(tc_render_target_handle_valid(second));
+
+    tc_viewport_set_render_target(viewport, first);
+    CHECK(tc_render_target_handle_eq(tc_viewport_get_render_target(viewport), first));
+
+    tc_viewport_set_render_target(viewport, second);
+    CHECK(tc_render_target_alive(first));
+    CHECK(tc_render_target_handle_eq(tc_viewport_get_render_target(viewport), second));
+
+    tc_viewport_free(viewport);
+    CHECK(tc_render_target_alive(second));
+
+    tc_render_target_free(first);
+    tc_render_target_free(second);
+}
