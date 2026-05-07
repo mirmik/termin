@@ -107,7 +107,9 @@ class RenderTargetInspector(QWidget):
 
     def set_render_target(self, render_target, scene: "Scene | None" = None) -> None:
         self._render_target = render_target
-        if scene is not None:
+        if render_target is not None and render_target.scene is not None:
+            self._scene = render_target.scene
+        elif scene is not None:
             self._scene = scene
 
         self._updating = True
@@ -190,10 +192,11 @@ class RenderTargetInspector(QWidget):
         self._cameras.clear()
         self._camera_combo.addItem("(none)")
 
-        if self._scene is not None:
+        scene = self._camera_source_scene()
+        if scene is not None:
             try:
                 from termin.visualization.core.camera import CameraComponent
-                for ent in self._scene.entities:
+                for ent in scene.entities:
                     cam = ent.get_component(CameraComponent)
                     if cam is None:
                         continue
@@ -204,6 +207,11 @@ class RenderTargetInspector(QWidget):
                 log.error(f"[RenderTargetInspector] camera scan failed: {e}")
 
         self._camera_combo.blockSignals(False)
+
+    def _camera_source_scene(self):
+        if self._render_target is not None and self._render_target.scene is not None:
+            return self._render_target.scene
+        return self._scene
 
     def _select_current_camera(self) -> None:
         if self._render_target is None or self._render_target.camera is None:

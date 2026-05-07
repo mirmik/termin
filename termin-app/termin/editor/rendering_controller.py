@@ -692,6 +692,8 @@ class RenderingController:
         """Handle render target selection from list."""
         if render_target is not None:
             scene = self._get_scene() if self._get_scene is not None else None
+            if render_target.scene is not None:
+                scene = render_target.scene
             self._inspector.show_render_target_inspector(render_target, scene)
 
     def _on_add_render_target_requested(self) -> None:

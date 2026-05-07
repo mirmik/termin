@@ -940,7 +940,8 @@ class EditorWindowTcgui:
     def _on_render_target_selected(self, render_target) -> None:
         if self._inspector_controller is None or render_target is None:
             return
-        self._inspector_controller.show_render_target_inspector(render_target, self.scene)
+        scene = render_target.scene if render_target.scene is not None else self.scene
+        self._inspector_controller.show_render_target_inspector(render_target, scene)
 
     def _on_rendering_changed(self) -> None:
         if self._rendering_controller is not None:
