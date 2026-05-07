@@ -173,8 +173,15 @@ class RenderingControllerTcgui:
         self._manager.add_display(display, display_name)
         self._viewport_list.add_display(display, self._manager.get_display_name(display))
 
+    def add_editor_display(self, display: "Display", name: str | None = None) -> None:
+        """Register an editor display (skipped by detach_scene_full)."""
+        if display in self._manager.editor_displays:
+            return
+        self._manager.add_editor_display(display)
+        self._viewport_list.add_display(display, name or display.name or "")
+
     def remove_display(self, display: "Display") -> None:
-        if display not in self._manager.displays:
+        if display not in self._manager.displays and display not in self._manager.editor_displays:
             return
         self._manager.remove_display(display)
 

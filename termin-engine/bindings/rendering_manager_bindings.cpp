@@ -194,6 +194,28 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("display"),
            "Remove display from management")
 
+        .def("add_editor_display", [](RenderingManager& self, TcDisplay& display) {
+            if (display.ptr()) {
+                self.add_editor_display(display.ptr());
+            }
+        }, nb::arg("display"),
+           "Add editor display (skipped by detach_scene_full)")
+
+        .def("remove_editor_display", [](RenderingManager& self, TcDisplay& display) {
+            if (display.ptr()) {
+                self.remove_editor_display(display.ptr());
+            }
+        }, nb::arg("display"),
+           "Remove editor display from management")
+
+        .def_prop_ro("editor_displays", [](RenderingManager& self) -> std::vector<TcDisplay> {
+            std::vector<TcDisplay> result;
+            for (tc_display* d : self.editor_displays()) {
+                result.push_back(TcDisplay::from_ptr(d, false));
+            }
+            return result;
+        }, "List of editor displays")
+
         .def("get_display_by_name", [](RenderingManager& self, const std::string& name) -> uintptr_t {
             tc_display* display = self.get_display_by_name(name);
             return reinterpret_cast<uintptr_t>(display);
@@ -207,25 +229,38 @@ void bind_rendering_manager(nb::module_& m) {
            "Get existing display or create via factory")
 
         .def_prop_ro("display_count", [](RenderingManager& self) {
-            return self.displays().size();
-        }, "Number of managed displays")
+            return self.displays().size() + self.editor_displays().size();
+        }, "Number of all managed displays")
 
         .def_prop_ro("displays", [](RenderingManager& self) -> std::vector<TcDisplay> {
             std::vector<TcDisplay> result;
             for (tc_display* d : self.displays()) {
-                // Non-owning wrapper - RenderingManager owns the displays
+                result.push_back(TcDisplay::from_ptr(d, false));
+            }
+            for (tc_display* d : self.editor_displays()) {
                 result.push_back(TcDisplay::from_ptr(d, false));
             }
             return result;
-        }, "List of managed displays")
+        }, "List of all managed displays (scene + editor)")
 
         .def_prop_ro("display_ptrs", [](RenderingManager& self) -> std::vector<uintptr_t> {
             std::vector<uintptr_t> result;
             for (tc_display* d : self.displays()) {
                 result.push_back(reinterpret_cast<uintptr_t>(d));
             }
+            for (tc_display* d : self.editor_displays()) {
+                result.push_back(reinterpret_cast<uintptr_t>(d));
+            }
             return result;
-        }, "List of display pointers (as int) - for backwards compatibility")
+        }, "List of display pointers (as int) - all displays")
+
+        .def_prop_ro("scene_displays", [](RenderingManager& self) -> std::vector<TcDisplay> {
+            std::vector<TcDisplay> result;
+            for (tc_display* d : self.displays()) {
+                result.push_back(TcDisplay::from_ptr(d, false));
+            }
+            return result;
+        }, "List of scene displays only (cleaned up by detach_scene_full)")
 
         .def("get_display_for_viewport", [](RenderingManager& self, nb::object viewport_py) -> nb::object {
             tc_viewport_handle vh = get_viewport_handle(viewport_py);
@@ -420,6 +455,7 @@ void bind_rendering_manager(nb::module_& m) {
             nb::dict stats;
             stats["attached_scenes"] = self.attached_scenes().size();
             stats["display_count"] = self.displays().size();
+            stats["editor_display_count"] = self.editor_displays().size();
 
             // Count scene pipelines
             int pipeline_count = 0;
@@ -438,25 +474,28 @@ void bind_rendering_manager(nb::module_& m) {
             stats["scene_names"] = scene_names;
             stats["pipeline_names"] = pipeline_names;
 
-            // Count unmanaged viewports
-            int unmanaged = 0;
-            for (tc_display* display : self.displays()) {
-                size_t count = tc_display_get_viewport_count(display);
-                for (size_t i = 0; i < count; ++i) {
-                    tc_viewport_handle vp = tc_display_get_viewport_at_index(display, i);
-                    if (!tc_viewport_handle_valid(vp)) continue;
-                    const char* managed = tc_viewport_get_managed_by(vp);
-                    if (!managed || managed[0] == '\0') {
-                        tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-                        tc_pipeline_handle ph = tc_render_target_get_pipeline(rt);
-                        tc_scene_handle sh = tc_viewport_get_scene(vp);
-                        if (tc_pipeline_handle_valid(ph) && tc_scene_handle_valid(sh)) {
-                            unmanaged++;
+            // Count unmanaged viewports across all displays
+            auto count_unmanaged = [](const std::vector<tc_display*>& disp_list) -> int {
+                int unmanaged = 0;
+                for (tc_display* display : disp_list) {
+                    size_t count = tc_display_get_viewport_count(display);
+                    for (size_t i = 0; i < count; ++i) {
+                        tc_viewport_handle vp = tc_display_get_viewport_at_index(display, i);
+                        if (!tc_viewport_handle_valid(vp)) continue;
+                        const char* managed = tc_viewport_get_managed_by(vp);
+                        if (!managed || managed[0] == '\0') {
+                            tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+                            tc_pipeline_handle ph = tc_render_target_get_pipeline(rt);
+                            tc_scene_handle sh = tc_viewport_get_scene(vp);
+                            if (tc_pipeline_handle_valid(ph) && tc_scene_handle_valid(sh)) {
+                                unmanaged++;
+                            }
                         }
                     }
                 }
-            }
-            stats["unmanaged_viewports"] = unmanaged;
+                return unmanaged;
+            };
+            stats["unmanaged_viewports"] = count_unmanaged(self.displays()) + count_unmanaged(self.editor_displays());
 
             return stats;
         }, "Get render statistics for debugging")

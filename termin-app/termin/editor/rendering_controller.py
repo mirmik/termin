@@ -553,8 +553,9 @@ class RenderingController:
         self._display_tabs[display_id] = (container, surface, qwindow)
         self._editor_display_ptr = display_id
 
-        # Add to displays list
-        self.add_display(display, "Editor")
+        # Add to editor displays list
+        self._manager.add_editor_display(display)
+        self._viewport_list.add_display(display, "Editor")
 
         return display, surface
 
