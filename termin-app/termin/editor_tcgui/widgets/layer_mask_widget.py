@@ -25,7 +25,7 @@ def _show_layer_mask_dialog(
     scene_getter: Optional[Callable[[], Any]],
     on_result: Callable[[Optional[int]], None],
 ) -> None:
-    """Open a dialog with checkboxes for each layer."""
+    """Open a dialog with checkboxes for each of the 64 layers."""
 
     layer_names: dict[int, str] = {}
     if scene_getter is not None:
@@ -36,42 +36,27 @@ def _show_layer_mask_dialog(
         except Exception:
             pass
 
-    layers_to_show: set[int] = set(range(8))
-    layers_to_show.update(layer_names.keys())
-
     checkboxes: dict[int, Checkbox] = {}
 
-    # Build checkbox grid
-    grid = VStack()
-    grid.spacing = 2
+    # Build vertical list of 64 checkboxes
+    lst = VStack()
+    lst.spacing = 1
 
-    row: Optional[HStack] = None
-    count_in_row = 0
-
-    for layer_idx in sorted(layers_to_show):
-        if count_in_row == 0:
-            row = HStack()
-            row.spacing = 8
-            grid.add_child(row)
-            count_in_row = 0
-
+    for layer_idx in range(64):
         if layer_idx in layer_names:
             name = f"{layer_idx}: {layer_names[layer_idx]}"
         else:
-            name = str(layer_idx)
+            name = f"Layer {layer_idx}"
 
         cb = Checkbox()
         cb.text = name
         cb.checked = bool(current_mask & (1 << layer_idx))
         checkboxes[layer_idx] = cb
-        row.add_child(cb)
-        count_in_row += 1
-        if count_in_row >= 4:
-            count_in_row = 0
+        lst.add_child(cb)
 
     scroll = ScrollArea()
-    scroll.preferred_height = px(300)
-    scroll.add_child(grid)
+    scroll.preferred_height = px(360)
+    scroll.add_child(lst)
 
     content = VStack()
     content.spacing = 8
@@ -107,7 +92,7 @@ def _show_layer_mask_dialog(
     dlg.buttons = ["OK", "Cancel"]
     dlg.default_button = "OK"
     dlg.cancel_button = "Cancel"
-    dlg.min_width = 350
+    dlg.min_width = 300
 
     def _on_dlg_result(btn: str) -> None:
         if btn == "OK":
@@ -169,8 +154,8 @@ class LayerMaskFieldWidget(FieldWidget):
             self._label.text = self._format_mask(new_value)
             self._emit()
 
-    def get_value(self) -> int:
-        return self._value
+    def get_value(self) -> str:
+        return self._format_mask(self._value)
 
     def set_value(self, value: Any) -> None:
         if isinstance(value, str):
