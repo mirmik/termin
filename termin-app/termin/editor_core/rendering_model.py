@@ -309,6 +309,11 @@ class RenderingModel:
 
     def remove_render_target(self, render_target, scene: "Scene | None" = None) -> None:
         """Remove a live render target and its scene config entry."""
+        for display in self._manager.displays:
+            for viewport in display.viewports:
+                rt = viewport.render_target
+                if rt is not None and rt.index == render_target.index and rt.generation == render_target.generation:
+                    viewport.render_target = None
         if scene is not None:
             name = render_target.name or ""
             if name:
@@ -510,23 +515,18 @@ class RenderingModel:
                 rt = viewport.render_target
 
                 camera_uuid = ""
-                pipeline_uuid = ""
-                pipeline_name = ""
+                render_target_name = ""
                 if rt is not None:
+                    render_target_name = rt.name or ""
                     if rt.camera is not None and rt.camera.entity is not None:
                         camera_uuid = rt.camera.entity.uuid
-                    if rt.pipeline is not None:
-                        pipeline_uuid = self._resolve_pipeline_uuid(rt.pipeline) or ""
-                        if rt.pipeline.name:
-                            pipeline_name = rt.pipeline.name
 
                 rect = viewport.rect
                 config = ViewportConfig()
                 config.name = viewport.name or ""
                 config.display_name = display.name
+                config.render_target_name = render_target_name
                 config.camera_uuid = camera_uuid
-                config.pipeline_uuid = pipeline_uuid
-                config.pipeline_name = pipeline_name
                 config.region_x = rect[0]
                 config.region_y = rect[1]
                 config.region_w = rect[2]

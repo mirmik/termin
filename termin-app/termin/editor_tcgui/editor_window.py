@@ -934,20 +934,6 @@ class EditorWindowTcgui:
             from termin._native.render import RenderingManager
             current_display = RenderingManager.instance().get_display_for_viewport(viewport)
             scene = viewport.scene or self.scene
-            render_target = viewport.render_target
-            camera = render_target.camera if render_target is not None else None
-            if camera is None and scene is not None:
-                from termin.visualization.core.camera import CameraComponent
-                for entity in scene.entities:
-                    cam = entity.get_component(CameraComponent)
-                    if cam is not None:
-                        camera = cam
-                        break
-            self._rendering_controller.ensure_viewport_render_target(
-                viewport,
-                scene=scene,
-                camera=camera,
-            )
         self._inspector_controller.show_viewport_inspector(
             viewport=viewport,
             displays=displays,

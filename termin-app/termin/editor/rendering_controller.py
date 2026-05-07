@@ -909,7 +909,8 @@ class RenderingController:
         """
         render_target = viewport.render_target
         if render_target is None:
-            render_target = self._model.ensure_viewport_render_target(viewport)
+            log.warn("[RenderingController] Cannot set viewport pipeline: viewport has no render target")
+            return
         old_pipeline = render_target.pipeline
         render_target.pipeline = pipeline
 
