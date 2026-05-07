@@ -263,7 +263,7 @@ class ViewportInspectorTcgui(VStack):
             self._depth.value = int(viewport.depth)
 
             rt = viewport.render_target
-            self._use_view_size.checked = bool(getattr(rt, "dynamic_resolution", False)) if rt is not None else False
+            self._use_view_size.checked = bool(rt.dynamic_resolution) if rt is not None else False
             if rt is not None:
                 self._width.value = int(rt.width)
                 self._height.value = int(rt.height)
@@ -411,7 +411,7 @@ class ViewportInspectorTcgui(VStack):
             self._select_current_pipeline()
             rt = self._viewport.render_target
             if rt is not None:
-                self._use_view_size.checked = bool(getattr(rt, "dynamic_resolution", False))
+                self._use_view_size.checked = bool(rt.dynamic_resolution)
                 self._width.value = int(rt.width)
                 self._height.value = int(rt.height)
             self._update_size_visibility()

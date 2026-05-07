@@ -139,7 +139,7 @@ class RenderTargetInspectorTcgui(VStack):
             self._refresh_pipeline_combo()
             self._select_current_pipeline()
 
-            self._dynamic_resolution.checked = bool(getattr(render_target, "dynamic_resolution", False))
+            self._dynamic_resolution.checked = bool(render_target.dynamic_resolution)
             self._width.value = render_target.width
             self._height.value = render_target.height
             self._update_size_visibility()

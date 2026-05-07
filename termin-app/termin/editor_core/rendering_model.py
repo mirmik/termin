@@ -568,7 +568,7 @@ class RenderingModel:
             config.camera_uuid = camera_uuid
             config.width = rt.width
             config.height = rt.height
-            config.dynamic_resolution = bool(getattr(rt, "dynamic_resolution", False))
+            config.dynamic_resolution = bool(rt.dynamic_resolution)
             config.pipeline_uuid = pipeline_uuid
             config.pipeline_name = pipeline_name
             config.layer_mask = rt.layer_mask

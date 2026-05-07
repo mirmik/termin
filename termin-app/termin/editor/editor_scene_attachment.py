@@ -150,23 +150,8 @@ class EditorSceneAttachment:
         # attachment. Scene switches only rebind scene/camera/pipeline.
         rt = self._ensure_render_target()
         rt.scene = scene
-        print(f"[DEBUG] EditorSceneAttachment.attach: camera_mgr.camera={self._camera_manager.camera}, camera_mgr.camera.entity={self._camera_manager.camera.entity if self._camera_manager.camera else None}", flush=True)
         cam = self._camera_manager.camera
-        if cam is not None:
-            try:
-                ptr = cam.c_component_ptr()
-                print(f"[DEBUG] EditorSceneAttachment.attach: c_component_ptr()={ptr:#x}", flush=True)
-            except Exception as e:
-                print(f"[DEBUG] EditorSceneAttachment.attach: c_component_ptr() FAILED: {e}", flush=True)
-        print(f"[DEBUG] EditorSceneAttachment.attach: rt={rt}, rt.index={rt.index}, rt.generation={rt.generation}, rt.alive={rt.alive}", flush=True)
-        print(f"[DEBUG] EditorSceneAttachment.attach: rt.camera before set: {rt.camera}", flush=True)
-        try:
-            rt.camera = cam
-        except Exception as e:
-            import traceback
-            print(f"[DEBUG] EditorSceneAttachment.attach: rt.camera = cam FAILED: {e}", flush=True)
-            traceback.print_exc()
-        print(f"[DEBUG] EditorSceneAttachment.attach: rt.camera after set: {rt.camera}", flush=True)
+        rt.camera = cam
         rt.pipeline = self._pipeline
         rt.locked = True
 
@@ -312,10 +297,8 @@ class EditorSceneAttachment:
     def _remove_display_viewports(self) -> None:
         """Remove all viewports from this display."""
         if not self._display.viewports:
-            print(f"[DEBUG] _remove_display_viewports: no viewports on display, skipping", flush=True)
             return
 
-        print(f"[DEBUG] _remove_display_viewports: removing {len(self._display.viewports)} viewports", flush=True)
         if self._rendering_controller is not None:
             if self._rendering_controller.offscreen_context is not None:
                 self._rendering_controller.offscreen_context.make_current()

@@ -185,7 +185,7 @@ class GameModeModel:
     def _save_editor_viewport_camera_to_scene(self, scene) -> None:
         if self._rendering_controller is None:
             return
-        editor_display = getattr(self._rendering_controller, "editor_display", None)
+        editor_display = self._rendering_controller.editor_display
         if editor_display is None or not editor_display.viewports:
             return
         viewport = editor_display.viewports[0]
@@ -193,4 +193,4 @@ class GameModeModel:
         camera_name = None
         if render_target is not None and render_target.camera is not None and render_target.camera.entity is not None:
             camera_name = render_target.camera.entity.name
-        scene.set_metadata_value("termin.editor.viewport_camera_name", camera_name)
+        scene.set_metadata_value("termin.editor.viewport_camera_name", camera_name or "")

@@ -3,24 +3,6 @@ import sys
 import types
 from pathlib import Path
 
-
-_SIGNAL_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "termin"
-    / "editor_core"
-    / "signal.py"
-)
-_SIGNAL_SPEC = importlib.util.spec_from_file_location("termin.editor_core.signal", _SIGNAL_PATH)
-_SIGNAL_MODULE = importlib.util.module_from_spec(_SIGNAL_SPEC)
-_SIGNAL_SPEC.loader.exec_module(_SIGNAL_MODULE)
-sys.modules.setdefault("termin", types.ModuleType("termin"))
-editor_core_module = sys.modules.setdefault(
-    "termin.editor_core",
-    types.ModuleType("termin.editor_core"),
-)
-sys.modules["termin.editor_core.signal"] = _SIGNAL_MODULE
-setattr(editor_core_module, "signal", _SIGNAL_MODULE)
-
 _MODEL_PATH = (
     Path(__file__).resolve().parents[1]
     / "termin"
@@ -139,11 +121,15 @@ class _Viewport:
         self.index = 0
         self.generation = 0
 
+    def _viewport_handle(self):
+        return self.index, self.generation
+
 
 class _Manager:
     def __init__(self):
         self.created = []
         self.displays = []
+        self.scene_displays = self.displays
         self.attached = []
         self.detached = []
         self.display_for_viewport = None

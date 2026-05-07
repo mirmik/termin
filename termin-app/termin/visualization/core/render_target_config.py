@@ -13,7 +13,7 @@ def serialize_render_target_config(config: RenderTargetConfig) -> dict:
         "name": config.name,
         "camera_uuid": config.camera_uuid,
     }
-    if getattr(config, "dynamic_resolution", False):
+    if config.dynamic_resolution:
         result["dynamic_resolution"] = True
     else:
         result["width"] = config.width

@@ -117,7 +117,7 @@ class RenderTargetInspector(QWidget):
                 self.setEnabled(False)
                 return
 
-            is_locked = getattr(render_target, 'locked', False)
+            is_locked = render_target.locked
             self.setEnabled(not is_locked)
             label = render_target.name or '<unnamed>'
             if is_locked:
@@ -133,7 +133,7 @@ class RenderTargetInspector(QWidget):
             self._refresh_pipeline_combo()
             self._select_current_pipeline()
 
-            self._dynamic_check.setChecked(bool(getattr(render_target, "dynamic_resolution", False)))
+            self._dynamic_check.setChecked(bool(render_target.dynamic_resolution))
             self._width_spin.setValue(render_target.width)
             self._height_spin.setValue(render_target.height)
             self._update_size_enabled()
