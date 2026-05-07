@@ -1,8 +1,9 @@
 // render_target_config.hpp - C++ RenderTargetConfig class
 #pragma once
 
-#include <string>
 #include <cstdint>
+#include <map>
+#include <string>
 
 extern "C" {
 #include "tc_render_target_config.h"
@@ -21,6 +22,7 @@ public:
     std::string pipeline_name;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
     bool enabled = true;
+    std::map<std::string, std::string> pipeline_params;
 
     RenderTargetConfig() = default;
 

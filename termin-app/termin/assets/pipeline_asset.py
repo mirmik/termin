@@ -75,6 +75,21 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
             self._load()
         return self._graph_data is not None
 
+    @property
+    def external_params(self) -> list[str]:
+        """List of external RT slot names defined in the pipeline graph."""
+        if not self._loaded:
+            self._load()
+        if self._graph_data is None:
+            return []
+        result: list[str] = []
+        for node in self._graph_data.get("nodes", []):
+            if node.get("node_type") == "external_rt":
+                slot = node.get("params", {}).get("slot", "")
+                name = node.get("name", "")
+                result.append(slot or name or "unnamed")
+        return result
+
     def _parse_content(self, content: str) -> "RenderPipeline | None":
         """Parse JSON content into RenderPipeline. Detects graph vs legacy format."""
         data = json.loads(content)
