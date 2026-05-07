@@ -180,45 +180,6 @@ class RenderingModel:
                     return True
         return False
 
-    def ensure_viewport_render_target(
-        self,
-        viewport: "Viewport",
-        scene: "Scene | None" = None,
-        camera=None,
-    ):
-        """Ensure ``viewport`` has its own render target.
-
-        Viewports render through render targets in the offscreen-first
-        pipeline. The UI model treats that target as private viewport
-        state, so new or legacy viewports without a target get one here.
-        """
-        rt = viewport.render_target
-        if rt is None:
-            from termin.render_framework._render_framework_native import render_target_new
-
-            rt_name = self._make_viewport_render_target_name(viewport)
-            rt = render_target_new(rt_name)
-            viewport.render_target = rt
-
-        if scene is None:
-            scene = viewport.scene
-        if scene is not None:
-            viewport.scene = scene
-            rt.scene = scene
-
-        if camera is None and rt.camera is not None:
-            camera = rt.camera
-        if camera is not None:
-            rt.camera = camera
-
-        pipeline = rt.pipeline
-        if pipeline is None:
-            pipeline = self._manager.create_pipeline("Default")
-        if rt.pipeline is None:
-            rt.pipeline = pipeline
-
-        return rt
-
     def get_framegraph_debug_targets_info(self) -> list:
         """Return render targets that can be inspected by Framegraph Debugger.
 
@@ -284,11 +245,6 @@ class RenderingModel:
             from termin.visualization.core.scene import scene_render_mount
             return scene_render_mount(viewport.scene).get_pipeline(managed_by)
         return render_target.pipeline
-
-    def _make_viewport_render_target_name(self, viewport: "Viewport") -> str:
-        base = viewport.name or "Viewport"
-        index, generation = viewport._viewport_handle()
-        return f"{base}.RT.{index}.{generation}"
 
     def _find_camera_for_viewport_config(self, scene: "Scene", config):
         if config is None or not config.camera_uuid:

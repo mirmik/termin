@@ -195,49 +195,6 @@ def _install_native_stubs(monkeypatch, pool):
     monkeypatch.setitem(sys.modules, "termin.visualization.core.render_target_config", rt_config_module)
 
 
-def test_viewport_uses_restored_render_target_by_config_name(monkeypatch):
-    pool = []
-    _install_native_stubs(monkeypatch, pool)
-
-    config = _RenderTargetConfig()
-    scene = _Scene(_Mount([config]))
-    manager = _Manager()
-    model = RenderingModel(manager)
-    viewport = _Viewport()
-    render_target = model.ensure_viewport_render_target(
-        viewport,
-        scene=scene,
-    )
-
-    assert len(pool) == 1
-    assert render_target is pool[0]
-    assert viewport.render_target is render_target
-    assert render_target.pipeline.name == "Default"
-    assert manager.created == ["Default"]
-
-
-def test_viewport_does_not_copy_camera_or_pipeline_from_render_target(monkeypatch):
-    pool = []
-    _install_native_stubs(monkeypatch, pool)
-
-    scene = _Scene(_Mount([]))
-    manager = _Manager()
-    model = RenderingModel(manager)
-    viewport = _Viewport()
-    render_target = _RenderTarget("NativeRT", pool)
-    camera = object()
-    pipeline = _Pipeline("Triangle")
-    render_target.camera = camera
-    render_target.pipeline = pipeline
-    viewport.render_target = render_target
-
-    result = model.ensure_viewport_render_target(viewport, scene=scene)
-
-    assert result is render_target
-    assert "camera" not in vars(viewport)
-    assert manager.created == []
-
-
 def test_attach_scene_does_not_restore_render_target_configs_in_python(monkeypatch):
     pool = []
     _install_native_stubs(monkeypatch, pool)

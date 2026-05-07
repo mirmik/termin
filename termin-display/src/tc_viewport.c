@@ -15,7 +15,6 @@ typedef struct {
     bool* alive;
     char** names;
     tc_render_target_handle* render_targets;
-    bool* override_resolution;
     float* rects;
     int* pixel_rects;
     int* depths;
@@ -69,7 +68,6 @@ void tc_viewport_pool_init(void) {
     g_pool->alive = (bool*)calloc(cap, sizeof(bool));
     g_pool->names = (char**)calloc(cap, sizeof(char*));
     g_pool->render_targets = (tc_render_target_handle*)calloc(cap, sizeof(tc_render_target_handle));
-    g_pool->override_resolution = (bool*)calloc(cap, sizeof(bool));
     g_pool->rects = (float*)calloc(cap * 4, sizeof(float));
     g_pool->pixel_rects = (int*)calloc(cap * 4, sizeof(int));
     g_pool->depths = (int*)calloc(cap, sizeof(int));
@@ -115,7 +113,6 @@ void tc_viewport_pool_shutdown(void) {
     free(g_pool->alive);
     free(g_pool->names);
     free(g_pool->render_targets);
-    free(g_pool->override_resolution);
     free(g_pool->rects);
     free(g_pool->pixel_rects);
     free(g_pool->depths);
@@ -146,7 +143,6 @@ static void pool_grow(void) {
     g_pool->alive = realloc(g_pool->alive, new_cap * sizeof(bool));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(char*));
     g_pool->render_targets = realloc(g_pool->render_targets, new_cap * sizeof(tc_render_target_handle));
-    g_pool->override_resolution = realloc(g_pool->override_resolution, new_cap * sizeof(bool));
     g_pool->rects = realloc(g_pool->rects, new_cap * 4 * sizeof(float));
     g_pool->pixel_rects = realloc(g_pool->pixel_rects, new_cap * 4 * sizeof(int));
     g_pool->depths = realloc(g_pool->depths, new_cap * sizeof(int));
@@ -164,7 +160,6 @@ static void pool_grow(void) {
     memset(g_pool->generations + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
     memset(g_pool->alive + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
-    memset(g_pool->override_resolution + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(g_pool->rects + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(float));
     memset(g_pool->pixel_rects + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(int));
     memset(g_pool->depths + old_cap, 0, (new_cap - old_cap) * sizeof(int));
@@ -224,7 +219,6 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     g_pool->names[idx] = tc_strdup_local(name);
     g_pool->render_targets[idx] = TC_RENDER_TARGET_HANDLE_INVALID;
     g_pool->scenes[idx] = TC_SCENE_HANDLE_INVALID;
-    g_pool->override_resolution[idx] = false;
     g_pool->rects[idx * 4 + 0] = 0.0f;
     g_pool->rects[idx * 4 + 1] = 0.0f;
     g_pool->rects[idx * 4 + 2] = 1.0f;
@@ -389,9 +383,6 @@ void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle
         if (tc_scene_handle_valid(vp_scene)) {
             tc_render_target_set_scene(rt, vp_scene);
         }
-        if (g_pool->override_resolution[h.index]) {
-            tc_render_target_set_dynamic_resolution(rt, true);
-        }
     }
 }
 
@@ -414,7 +405,6 @@ tc_pipeline_handle tc_viewport_get_pipeline(tc_viewport_handle h) {
 
 void tc_viewport_set_override_resolution(tc_viewport_handle h, bool override_resolution) {
     if (!handle_alive(h)) return;
-    g_pool->override_resolution[h.index] = override_resolution;
     tc_render_target_handle rt = g_pool->render_targets[h.index];
     if (tc_render_target_handle_valid(rt)) {
         tc_render_target_set_dynamic_resolution(rt, override_resolution);
@@ -427,7 +417,7 @@ bool tc_viewport_get_override_resolution(tc_viewport_handle h) {
     if (tc_render_target_handle_valid(rt)) {
         return tc_render_target_get_dynamic_resolution(rt);
     }
-    return g_pool->override_resolution[h.index];
+    return false;
 }
 
 void tc_viewport_set_input_mode(tc_viewport_handle h, const char* mode) {

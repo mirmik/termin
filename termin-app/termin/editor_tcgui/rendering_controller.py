@@ -196,15 +196,6 @@ class RenderingControllerTcgui:
         self._viewport_list.set_displays(self._manager.displays)
         self._refresh_render_targets()
 
-    def ensure_viewport_render_target(self, viewport, scene=None, camera=None):
-        rt = self._model.ensure_viewport_render_target(
-            viewport,
-            scene=scene,
-            camera=camera,
-        )
-        self._refresh_render_targets()
-        return rt
-
     # ------------------------------------------------------------------
     # Factories
     # ------------------------------------------------------------------
