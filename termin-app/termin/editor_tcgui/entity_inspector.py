@@ -203,6 +203,7 @@ class EntityInspector(VStack):
 
     def set_scene(self, scene) -> None:
         self._scene = scene
+        self._field_panel.set_scene_getter(lambda: self._scene)
         self._update_layer_combo()
         self._refresh_entity_props()
 
