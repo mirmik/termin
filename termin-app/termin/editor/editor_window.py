@@ -795,28 +795,21 @@ class EditorWindow(QMainWindow):
 
     def sync_scene_render_state(self, scene_name: str) -> bool:
         """Persist live scene-owned viewport/render target state into the scene."""
-        if self._rendering_controller is None:
-            log.error("Cannot sync render state: RenderingController not available")
-            return False
-        scene = self.scene_manager.get_scene(scene_name)
-        if scene is None:
-            log.error(f"Cannot sync render state for scene '{scene_name}': not found")
-            return False
-        self._rendering_controller.sync_viewport_configs_to_scene(scene)
-        self._rendering_controller.sync_render_target_configs_to_scene(scene)
-        return True
+        from termin.editor_core.render_scene_attachment import RenderSceneAttachment
+        return RenderSceneAttachment(
+            self.scene_manager,
+            self._rendering_controller,
+            log.error,
+        ).sync_scene_render_state(scene_name)
 
     def attach_scene_to_render(self, scene_name: str) -> bool:
         """Attach a scene to the render engine using scene-owned configs."""
-        if self._rendering_controller is None:
-            log.error("Cannot attach scene to render: RenderingController not available")
-            return False
-        scene = self.scene_manager.get_scene(scene_name)
-        if scene is None:
-            log.error(f"Cannot attach scene '{scene_name}' to render: not found")
-            return False
-        self._rendering_controller.attach_scene(scene)
-        return True
+        from termin.editor_core.render_scene_attachment import RenderSceneAttachment
+        return RenderSceneAttachment(
+            self.scene_manager,
+            self._rendering_controller,
+            log.error,
+        ).attach_scene_to_render(scene_name)
 
     def detach_scene_from_render(
         self,
@@ -824,17 +817,12 @@ class EditorWindow(QMainWindow):
         save_state: bool = True,
     ) -> bool:
         """Detach a scene from the render engine, optionally saving live configs."""
-        if self._rendering_controller is None:
-            log.error("Cannot detach scene from render: RenderingController not available")
-            return False
-        scene = self.scene_manager.get_scene(scene_name)
-        if scene is None:
-            log.error(f"Cannot detach scene '{scene_name}' from render: not found")
-            return False
-        if save_state:
-            self.sync_scene_render_state(scene_name)
-        self._rendering_controller.detach_scene(scene)
-        return True
+        from termin.editor_core.render_scene_attachment import RenderSceneAttachment
+        return RenderSceneAttachment(
+            self.scene_manager,
+            self._rendering_controller,
+            log.error,
+        ).detach_scene_from_render(scene_name, save_state=save_state)
 
     def _get_editor_camera_data(self) -> dict | None:
         """Get editor camera data for serialization."""

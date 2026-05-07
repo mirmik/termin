@@ -7,7 +7,12 @@ extern "C" {
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
 #include "render/tc_display.h"
+#include "render/tc_pipeline.h"
+#include "render/tc_pipeline_pool.h"
+#include "render/tc_render_target.h"
+#include "render/tc_render_target_pool.h"
 #include "render/tc_viewport.h"
+#include "render/tc_viewport_pool.h"
 }
 
 using termin::RenderingManager;
@@ -116,4 +121,91 @@ TEST_CASE("Viewport references render target without owning it")
 
     tc_render_target_free(first);
     tc_render_target_free(second);
+}
+
+TEST_CASE("RenderingManager attach detach restores editor render counts")
+{
+    RenderingManager manager;
+    tc_scene_render_mount_extension_init();
+
+    tc_scene_handle editor_scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(editor_scene));
+    tc_scene_set_name(editor_scene, "editor-counts-scene");
+
+    tc_display* editor_display = tc_display_new("Editor", nullptr);
+    REQUIRE(editor_display != nullptr);
+    tc_render_target_handle editor_rt = tc_render_target_new("(Editor)");
+    REQUIRE(tc_render_target_handle_valid(editor_rt));
+    tc_render_target_set_scene(editor_rt, editor_scene);
+    tc_pipeline_handle editor_pipeline = tc_pipeline_create("(Editor)");
+    REQUIRE(tc_pipeline_handle_valid(editor_pipeline));
+    tc_render_target_set_pipeline(editor_rt, editor_pipeline);
+    tc_viewport_handle editor_viewport = tc_viewport_new("(Editor)", editor_scene);
+    REQUIRE(tc_viewport_handle_valid(editor_viewport));
+    tc_viewport_set_render_target(editor_viewport, editor_rt);
+    tc_display_add_viewport(editor_display, editor_viewport);
+    manager.add_editor_display(editor_display);
+
+    const size_t baseline_viewports = tc_viewport_pool_count();
+    const size_t baseline_targets = tc_render_target_pool_count();
+    const size_t baseline_pipelines = tc_pipeline_pool_count();
+
+    manager.set_display_factory([](const std::string& name) {
+        tc_display* display = tc_display_new(name.c_str(), nullptr);
+        tc_display_set_auto_remove_when_empty(display, true);
+        return display;
+    });
+    manager.set_pipeline_factory([](const std::string& name) {
+        return tc_pipeline_create(name.c_str());
+    });
+
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+    tc_scene_set_name(scene, "game-counts-scene");
+
+    tc_render_target_config rt_config;
+    tc_render_target_config_init(&rt_config);
+    rt_config.name = "GameRT";
+    rt_config.pipeline_name = "Default";
+    rt_config.dynamic_resolution = true;
+    tc_scene_add_render_target_config(scene, &rt_config);
+
+    tc_viewport_config vp_config;
+    tc_viewport_config_init(&vp_config);
+    vp_config.name = "GameViewport";
+    vp_config.display_name = "GameDisplay";
+    vp_config.render_target_name = "GameRT";
+    vp_config.region[0] = 0.0f;
+    vp_config.region[1] = 0.0f;
+    vp_config.region[2] = 1.0f;
+    vp_config.region[3] = 1.0f;
+    vp_config.enabled = true;
+    tc_scene_add_viewport_config(scene, &vp_config);
+
+    auto viewports = manager.attach_scene_full(scene);
+    REQUIRE_EQ(viewports.size(), 1u);
+    CHECK_EQ(tc_display_get_viewport_count(editor_display), 1u);
+    CHECK_EQ(tc_viewport_pool_count(), baseline_viewports + 1);
+    CHECK_EQ(tc_render_target_pool_count(), baseline_targets + 1);
+    CHECK_EQ(tc_pipeline_pool_count(), baseline_pipelines + 1);
+    REQUIRE_EQ(manager.standalone_render_targets().size(), 1u);
+    CHECK(tc_render_target_get_dynamic_resolution(manager.standalone_render_targets()[0]));
+
+    manager.detach_scene_full(scene);
+
+    CHECK_EQ(tc_display_get_viewport_count(editor_display), 1u);
+    CHECK(tc_render_target_alive(editor_rt));
+    CHECK(tc_pipeline_pool_alive(editor_pipeline));
+    CHECK_EQ(manager.standalone_render_targets().size(), 0u);
+    CHECK_EQ(tc_viewport_pool_count(), baseline_viewports);
+    CHECK_EQ(tc_render_target_pool_count(), baseline_targets);
+    CHECK_EQ(tc_pipeline_pool_count(), baseline_pipelines);
+
+    tc_display_remove_viewport(editor_display, editor_viewport);
+    tc_viewport_free(editor_viewport);
+    tc_pipeline_destroy(editor_pipeline);
+    tc_render_target_free(editor_rt);
+    tc_display_free(editor_display);
+    tc_scene_free(scene);
+    tc_scene_free(editor_scene);
 }
