@@ -19,7 +19,7 @@ from tcbase import Key, MouseButton, log
 from tcgui.widgets.ui import UI
 
 from tgfx import Tgfx2Context
-from termin.display._platform_native import BackendWindow
+from termin.display._platform_native import SDLBackendWindow
 from termin.editor_tcgui.backend_window_manager import BackendWindowManager
 
 
@@ -185,7 +185,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     # BackendWindow inits SDL and creates its own window + tgfx2 device
     # based on TERMIN_BACKEND. No manual SDL_Init / SDL_GL_CreateContext.
-    main_window = BackendWindow("Termin Editor", 1280, 720)
+    main_window = SDLBackendWindow("Termin Editor", 1280, 720)
     main_window.maximize()
 
     # Process-global tgfx2 context owned by the window. Every renderer

@@ -1,7 +1,9 @@
 #include "guard/guard.h"
 #include "termin/render/rendering_manager.hpp"
+#include "termin/render/graph_compiler.hpp"
 
 #include <string>
+#include <trent/json.h>
 
 extern "C" {
 #include "core/tc_scene.h"
@@ -16,6 +18,33 @@ extern "C" {
 }
 
 using termin::RenderingManager;
+
+TEST_CASE("Graph compiler maps RenderTarget output node to viewport OUTPUT")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "SkyBoxPass", "x": -40.0, "y": -37.0 },
+    { "type": "FBO", "x": -377.0, "y": -26.0, "node_type": "resource" },
+    { "type": "RenderTarget", "x": 281.0, "y": -34.0, "node_type": "output" }
+  ],
+  "connections": [
+    { "from_node": 1, "from_socket": "fbo", "to_node": 0, "to_socket": "input_res" },
+    { "from_node": 0, "from_socket": "output_res", "to_node": 2, "to_socket": "color" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    REQUIRE(naming.socket_names.count("0") == 1u);
+    REQUIRE(naming.socket_names["0"].count("output_res") == 1u);
+    CHECK(naming.socket_names["0"]["output_res"] == "OUTPUT");
+}
 
 TEST_CASE("RenderingManager detach_scene removes attached scene")
 {

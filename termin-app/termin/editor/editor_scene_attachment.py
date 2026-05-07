@@ -291,6 +291,7 @@ class EditorSceneAttachment:
         if self._render_target is None:
             from termin.render_framework._render_framework_native import render_target_new
             self._render_target = render_target_new("(Editor)")
+            self._render_target.dynamic_resolution = True
             self._render_target.locked = True
         return self._render_target
 

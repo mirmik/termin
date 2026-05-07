@@ -43,6 +43,7 @@ class InspectorControllerTcgui:
         on_display_changed: Optional[Callable] = None,
         on_viewport_changed: Optional[Callable] = None,
         on_pipeline_changed: Optional[Callable] = None,
+        on_render_target_changed: Optional[Callable] = None,
         on_edit_pipeline: Optional[Callable[[str], None]] = None,
         dialog_service=None,
     ) -> None:
@@ -53,6 +54,7 @@ class InspectorControllerTcgui:
         self._on_display_changed = on_display_changed
         self._on_viewport_changed = on_viewport_changed
         self._on_pipeline_changed = on_pipeline_changed
+        self._on_render_target_changed = on_render_target_changed
 
         self._model = InspectorModel(resource_manager)
 
@@ -75,6 +77,7 @@ class InspectorControllerTcgui:
         self._display_inspector.on_changed = self._emit_display_changed
         self._viewport_inspector.on_changed = self._emit_viewport_changed
         self._pipeline_inspector.on_changed = self._emit_pipeline_changed
+        self._render_target_inspector.on_changed = self._emit_render_target_changed
 
         self._panel_by_kind: dict[InspectorKind, Widget] = {
             InspectorKind.ENTITY: self._entity_inspector,
@@ -285,3 +288,7 @@ class InspectorControllerTcgui:
     def _emit_pipeline_changed(self) -> None:
         if self._on_pipeline_changed is not None:
             self._on_pipeline_changed()
+
+    def _emit_render_target_changed(self) -> None:
+        if self._on_render_target_changed is not None:
+            self._on_render_target_changed()

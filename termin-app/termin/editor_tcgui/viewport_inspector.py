@@ -26,11 +26,9 @@ class ViewportInspectorTcgui(VStack):
         super().__init__()
         self.spacing = 4
 
-        self._rm = resource_manager
         self._viewport = None
         self._scene = None
         self._scenes: list = []
-        self._cameras: list = []
         self._displays = []
         self._render_targets = []
         self._current_display = None
@@ -136,46 +134,6 @@ class ViewportInspectorTcgui(VStack):
         rt_grid.add(target_lbl, 0, 0)
         rt_grid.add(self._render_target_combo, 0, 1)
 
-        cam_lbl = Label(); cam_lbl.text = "Camera:"; cam_lbl.preferred_width = px(96)
-        self._camera_combo = ComboBox()
-        self._camera_combo.on_changed = self._on_camera_changed
-        rt_grid.add(cam_lbl, 1, 0)
-        rt_grid.add(self._camera_combo, 1, 1)
-
-        pipe_lbl = Label(); pipe_lbl.text = "Pipeline:"; pipe_lbl.preferred_width = px(96)
-        self._pipeline_combo = ComboBox()
-        self._pipeline_combo.on_changed = self._on_pipeline_changed
-        rt_grid.add(pipe_lbl, 2, 0)
-        rt_grid.add(self._pipeline_combo, 2, 1)
-
-        use_view_lbl = Label(); use_view_lbl.text = "Use View Size:"; use_view_lbl.preferred_width = px(96)
-        self._use_view_size = Checkbox()
-        self._use_view_size.on_changed = self._on_use_view_size_changed
-        rt_grid.add(use_view_lbl, 3, 0)
-        rt_grid.add(self._use_view_size, 3, 1)
-
-        width_lbl = Label(); width_lbl.text = "Width:"; width_lbl.preferred_width = px(96)
-        self._width_lbl = width_lbl
-        self._width = SpinBox()
-        self._width.decimals = 0
-        self._width.step = 64
-        self._width.min_value = 1
-        self._width.max_value = 8192
-        self._width.on_changed = self._on_size_changed
-        rt_grid.add(self._width_lbl, 4, 0)
-        rt_grid.add(self._width, 4, 1)
-
-        height_lbl = Label(); height_lbl.text = "Height:"; height_lbl.preferred_width = px(96)
-        self._height_lbl = height_lbl
-        self._height = SpinBox()
-        self._height.decimals = 0
-        self._height.step = 64
-        self._height.min_value = 1
-        self._height.max_value = 8192
-        self._height.on_changed = self._on_size_changed
-        rt_grid.add(self._height_lbl, 5, 0)
-        rt_grid.add(self._height, 5, 1)
-
         self._empty = Label()
         self._empty.text = "No viewport selected."
         self._empty.color = (0.52, 0.56, 0.62, 1.0)
@@ -209,7 +167,6 @@ class ViewportInspectorTcgui(VStack):
 
     def set_scene(self, scene) -> None:
         self._scene = scene
-        self._refresh_camera_combo()
 
     def set_scenes(self, scenes: list) -> None:
         self._scenes = list(scenes)
@@ -243,10 +200,6 @@ class ViewportInspectorTcgui(VStack):
             self._select_current_scene()
             self._refresh_render_target_combo()
             self._select_current_render_target()
-            self._refresh_camera_combo()
-            self._select_current_camera()
-            self._refresh_pipeline_combo()
-            self._select_current_pipeline()
 
             mode = viewport.input_mode or "none"
             for i in range(self._input_mode_combo.item_count):
@@ -262,15 +215,6 @@ class ViewportInspectorTcgui(VStack):
             self._h.value = float(h)
             self._depth.value = int(viewport.depth)
 
-            rt = viewport.render_target
-            self._use_view_size.checked = bool(rt.dynamic_resolution) if rt is not None else False
-            if rt is not None:
-                self._width.value = int(rt.width)
-                self._height.value = int(rt.height)
-            else:
-                self._width.value = 512
-                self._height.value = 512
-            self._update_size_visibility()
         finally:
             self._updating = False
             if self._ui is not None:
@@ -353,11 +297,6 @@ class ViewportInspectorTcgui(VStack):
             return
         if 0 <= index < len(self._scenes):
             self._viewport.scene = self._scenes[index]
-            rt = self._viewport.render_target
-            if rt is not None:
-                rt.camera = None
-            self._refresh_camera_combo()
-            self._camera_combo.selected_index = 0
             self._emit_changed()
 
     def _refresh_render_target_combo(self) -> None:
@@ -395,155 +334,12 @@ class ViewportInspectorTcgui(VStack):
             return
         if index <= 0:
             self._viewport.render_target = None
-            self._refresh_camera_combo()
-            self._select_current_camera()
-            self._refresh_pipeline_combo()
-            self._select_current_pipeline()
-            self._update_size_visibility()
             self._emit_changed()
             return
         target_index = index - 1
         if 0 <= target_index < len(self._render_targets):
             self._viewport.render_target = self._render_targets[target_index]
-            self._refresh_camera_combo()
-            self._select_current_camera()
-            self._refresh_pipeline_combo()
-            self._select_current_pipeline()
-            rt = self._viewport.render_target
-            if rt is not None:
-                self._use_view_size.checked = bool(rt.dynamic_resolution)
-                self._width.value = int(rt.width)
-                self._height.value = int(rt.height)
-            self._update_size_visibility()
             self._emit_changed()
-
-    def _refresh_camera_combo(self) -> None:
-        old = self._camera_combo.on_changed
-        self._camera_combo.on_changed = None
-        self._camera_combo.clear()
-        self._cameras.clear()
-
-        self._camera_combo.add_item("(none)")
-        scene = self._viewport.scene if self._viewport is not None else self._scene
-        if scene is not None:
-            try:
-                from termin.visualization.core.camera import CameraComponent
-                for ent in scene.entities:
-                    cam = ent.get_component(CameraComponent)
-                    if cam is None:
-                        continue
-                    label = ent.name or ent.uuid or "Camera"
-                    self._cameras.append(cam)
-                    self._camera_combo.add_item(label)
-            except Exception as e:
-                log.error(f"[ViewportInspectorTcgui] camera scan failed: {e}")
-
-        self._camera_combo.on_changed = old
-
-    def _select_current_camera(self) -> None:
-        rt = self._viewport.render_target if self._viewport is not None else None
-        camera = rt.camera if rt is not None else None
-        if camera is None:
-            self._camera_combo.selected_index = 0
-            return
-        for i, cam in enumerate(self._cameras):
-            if cam is camera:
-                self._camera_combo.selected_index = i + 1
-                return
-        self._camera_combo.selected_index = 0
-
-    def _refresh_pipeline_combo(self) -> None:
-        old = self._pipeline_combo.on_changed
-        self._pipeline_combo.on_changed = None
-        self._pipeline_combo.clear()
-        self._pipeline_combo.add_item("(none)")
-        self._pipeline_combo.add_item("(Default)")
-        for name in self._rm.list_pipeline_names():
-            self._pipeline_combo.add_item(name)
-        self._pipeline_combo.on_changed = old
-
-    def _select_current_pipeline(self) -> None:
-        rt = self._viewport.render_target if self._viewport is not None else None
-        pipeline = rt.pipeline if rt is not None else None
-        if pipeline is None:
-            self._pipeline_combo.selected_index = 0
-            return
-        current = pipeline.name or ""
-        for i in range(self._pipeline_combo.item_count):
-            if self._pipeline_combo.item_text(i) == current:
-                self._pipeline_combo.selected_index = i
-                return
-        self._pipeline_combo.selected_index = 1 if current == "Default" else 0
-
-    def _on_camera_changed(self, index: int, _text: str) -> None:
-        if self._updating or self._viewport is None:
-            return
-        rt = self._viewport.render_target
-        if rt is None:
-            return
-        if index <= 0:
-            rt.camera = None
-            self._emit_changed()
-            return
-        idx = index - 1
-        if 0 <= idx < len(self._cameras):
-            rt.camera = self._cameras[idx]
-            self._emit_changed()
-
-    def _on_pipeline_changed(self, index: int, text: str) -> None:
-        if self._updating or self._viewport is None:
-            return
-        rt = self._viewport.render_target
-        if rt is None:
-            return
-        if index == 0:
-            rt.pipeline = None
-            self._emit_changed()
-            return
-        if text == "(Default)":
-            try:
-                from termin.visualization.core.viewport import make_default_pipeline
-                rt.pipeline = make_default_pipeline()
-                self._emit_changed()
-            except Exception as e:
-                log.error(f"[ViewportInspectorTcgui] make_default_pipeline failed: {e}")
-            return
-        pipeline = self._rm.get_pipeline(text)
-        if pipeline is None:
-            log.error(f"[ViewportInspectorTcgui] pipeline not found: {text}")
-            return
-        rt.pipeline = pipeline
-        self._emit_changed()
-
-    def _on_use_view_size_changed(self, checked: bool) -> None:
-        if self._updating or self._viewport is None:
-            return
-        rt = self._viewport.render_target
-        if rt is not None:
-            rt.dynamic_resolution = bool(checked)
-        self._update_size_visibility()
-        self._emit_changed()
-
-    def _on_size_changed(self, _value: float) -> None:
-        if self._updating or self._viewport is None:
-            return
-        rt = self._viewport.render_target
-        if rt is None:
-            return
-        rt.width = int(self._width.value)
-        rt.height = int(self._height.value)
-        self._emit_changed()
-
-    def _update_size_visibility(self) -> None:
-        has_target = self._viewport is not None and self._viewport.render_target is not None
-        self._camera_combo.enabled = has_target
-        self._pipeline_combo.enabled = has_target
-        self._use_view_size.enabled = has_target
-        manual = has_target and not bool(self._use_view_size.checked)
-        self._width_lbl.visible = manual
-        self._width.visible = manual
-        self._height_lbl.visible = manual
-        self._height.visible = manual
 
     def _on_input_mode_changed(self, _index: int, text: str) -> None:
         if self._updating or self._viewport is None:
