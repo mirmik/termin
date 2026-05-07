@@ -1,0 +1,53 @@
+// sdl_backend_window.hpp - SDL-backed BackendWindow implementation.
+#pragma once
+
+#include <memory>
+#include <string>
+#include <utility>
+
+#include <SDL2/SDL.h>
+
+#include "termin/platform/backend_window.hpp"
+
+namespace termin {
+
+class TERMIN_DISPLAY_API SDLBackendWindow : public BackendWindow {
+public:
+    // Create a window + backend device. Throws std::runtime_error on
+    // SDL / device failure. The selected render backend is TERMIN_BACKEND
+    // (defaults to OpenGL).
+    SDLBackendWindow(const std::string& title, int width, int height);
+
+    // Secondary-window constructor. Uses the IRenderDevice owned by
+    // `share_with`; no new device is created.
+    SDLBackendWindow(const std::string& title, int width, int height,
+                     SDLBackendWindow& share_with);
+
+    ~SDLBackendWindow() override;
+
+    SDLBackendWindow(const SDLBackendWindow&) = delete;
+    SDLBackendWindow& operator=(const SDLBackendWindow&) = delete;
+
+    tgfx::IRenderDevice* device() override;
+    tgfx::RenderContext2* context() override;
+
+    SDL_Window* sdl_window() const { return window_; }
+
+    bool should_close() const override { return should_close_; }
+    void set_should_close(bool v) override { should_close_ = v; }
+
+    void maximize() override;
+    void close() override;
+    void poll_events() override;
+    bool poll_event(SDL_Event& out_event);
+    std::pair<int, int> framebuffer_size() const override;
+    void present(tgfx::TextureHandle color_tex) override;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+    SDL_Window* window_ = nullptr;
+    bool should_close_ = false;
+};
+
+} // namespace termin

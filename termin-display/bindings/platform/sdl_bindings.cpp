@@ -7,7 +7,7 @@
 
 #include "termin/platform/sdl_window.hpp"
 #include "termin/platform/sdl_render_surface.hpp"
-#include "termin/platform/backend_window.hpp"
+#include "termin/platform/sdl_backend_window.hpp"
 
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -170,18 +170,18 @@ void bind_sdl(nb::module_& m) {
     //       win.poll_events()
     //       # render into my_color_tex via dev
     //       win.present(my_color_tex)
-    nb::class_<BackendWindow>(m, "BackendWindow")
+    nb::class_<SDLBackendWindow, BackendWindow>(m, "SDLBackendWindow")
         .def(nb::init<const std::string&, int, int>(),
              nb::arg("title"), nb::arg("width"), nb::arg("height"))
-        .def(nb::init<const std::string&, int, int, BackendWindow&>(),
+        .def(nb::init<const std::string&, int, int, SDLBackendWindow&>(),
              nb::arg("title"), nb::arg("width"), nb::arg("height"),
              nb::arg("share_with"),
              "Secondary-window ctor: reuses `share_with`'s IRenderDevice "
              "and RenderContext2. Creates its own SDL window + GL context "
              "(OpenGL) or Vulkan surface + swapchain.")
-        .def("device", &BackendWindow::device, nb::rv_policy::reference_internal,
+        .def("device", &SDLBackendWindow::device, nb::rv_policy::reference_internal,
              "tgfx::IRenderDevice bound to this window. Outlives the window.")
-        .def("context", &BackendWindow::context, nb::rv_policy::reference_internal,
+        .def("context", &SDLBackendWindow::context, nb::rv_policy::reference_internal,
              "tgfx::RenderContext2 bound to this window's device. Lazy-built.")
         // Opaque pointers for cross-module (nanobind) handshakes. Python
         // code in tgfx._tgfx_native calls `Tgfx2Context.borrow(dev_ptr,
@@ -189,19 +189,19 @@ void bind_sdl(nb::module_& m) {
         // return the C++ objects directly because IRenderDevice /
         // RenderContext2 are registered in another .so's nanobind type
         // table.
-        .def("device_ptr", [](BackendWindow& self) -> uintptr_t {
+        .def("device_ptr", [](SDLBackendWindow& self) -> uintptr_t {
                 return reinterpret_cast<uintptr_t>(self.device());
             },
             "uintptr_t to the bound IRenderDevice. Pass to "
             "tgfx._tgfx_native.Tgfx2Context.borrow.")
-        .def("context_ptr", [](BackendWindow& self) -> uintptr_t {
+        .def("context_ptr", [](SDLBackendWindow& self) -> uintptr_t {
                 return reinterpret_cast<uintptr_t>(self.context());
             },
             "uintptr_t to the bound RenderContext2 (lazy-built on first "
             "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
-        .def("should_close", &BackendWindow::should_close)
-        .def("set_should_close", &BackendWindow::set_should_close, nb::arg("value"))
-        .def("set_title", [](BackendWindow& self, const std::string& title) {
+        .def("should_close", &SDLBackendWindow::should_close)
+        .def("set_should_close", &SDLBackendWindow::set_should_close, nb::arg("value"))
+        .def("set_title", [](SDLBackendWindow& self, const std::string& title) {
                 SDL_Window* w = self.sdl_window();
                 if (w) {
                     SDL_SetWindowTitle(w, title.c_str());
@@ -209,24 +209,24 @@ void bind_sdl(nb::module_& m) {
             },
             nb::arg("title"),
             "Set the OS window title.")
-        .def("maximize", &BackendWindow::maximize,
+        .def("maximize", &SDLBackendWindow::maximize,
              "Maximize the OS window via SDL_MaximizeWindow.")
-        .def("close", &BackendWindow::close,
+        .def("close", &SDLBackendWindow::close,
              "Release OS-level resources (SDL window, GL context, "
              "Vulkan surface+swapchain). Idempotent.")
-        .def("window_id", [](BackendWindow& self) -> uint32_t {
+        .def("window_id", [](SDLBackendWindow& self) -> uint32_t {
                 SDL_Window* w = self.sdl_window();
                 return w ? SDL_GetWindowID(w) : 0;
             },
             "SDL_GetWindowID of the underlying SDL_Window. Used to "
             "route incoming SDL events to the right UI.")
-        .def("poll_events", &BackendWindow::poll_events,
+        .def("poll_events", &SDLBackendWindow::poll_events,
              "Drain SDL events, flip should_close on SDL_QUIT / window-close "
              "/ ESC. For finer control use the SDL module directly.")
-        .def("framebuffer_size", &BackendWindow::framebuffer_size,
+        .def("framebuffer_size", &SDLBackendWindow::framebuffer_size,
              "Drawable size (width, height). Updates after host resize; "
              "the next present() will recreate the Vulkan swapchain.")
-        .def("present", &BackendWindow::present, nb::arg("color_tex"),
+        .def("present", &SDLBackendWindow::present, nb::arg("color_tex"),
              "Publish color_tex to the window surface. GL: blit + SwapWindow. "
              "Vulkan: acquire + compose + present.");
 }

@@ -2,11 +2,19 @@ from termin_nanobind.runtime import preload_sdk_libs
 
 preload_sdk_libs("termin_display")
 
-from termin.display._platform_native import BackendWindow
-from termin.display.window_manager import (
-    BackendWindowEntry,
-    BackendWindowManager,
-)
+try:
+    from termin.display._platform_native import BackendWindow, SDLBackendWindow
+except ImportError:
+    BackendWindow = None
+    SDLBackendWindow = None
+try:
+    from termin.display.window_manager import (
+        BackendWindowEntry,
+        BackendWindowManager,
+    )
+except ImportError:
+    BackendWindowEntry = None
+    BackendWindowManager = None
 
 from termin.display._display_native import Display
 from termin.display._display_native import DisplayInputRouter
@@ -36,6 +44,7 @@ from termin.display._display_native import _viewport_input_manager_new
 
 __all__ = [
     "BackendWindow",
+    "SDLBackendWindow",
     "BackendWindowEntry",
     "BackendWindowManager",
     "Display",

@@ -11,7 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "termin/platform/backend_window.hpp"
+#include "termin/platform/sdl_backend_window.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_command_list.hpp"
@@ -21,7 +21,7 @@ int main() {
     const char* backend_env = std::getenv("TERMIN_BACKEND");
     printf("TERMIN_BACKEND=%s\n", backend_env ? backend_env : "(unset, using opengl)");
 
-    termin::BackendWindow win("BackendWindow triangle smoke", 800, 600);
+    termin::SDLBackendWindow win("BackendWindow triangle smoke", 800, 600);
     tgfx::IRenderDevice* dev = win.device();
     if (!dev) {
         fprintf(stderr, "BackendWindow has no device\n");
@@ -58,7 +58,7 @@ void main() {
     tgfx::ShaderHandle fs = dev->create_shader(fsd);
 
     // Offscreen render target — we draw the triangle into here and
-    // BackendWindow::present() composes it onto the actual surface.
+    // SDLBackendWindow::present() composes it onto the actual surface.
     tgfx::TextureDesc rt_desc;
     rt_desc.width = 800;
     rt_desc.height = 600;

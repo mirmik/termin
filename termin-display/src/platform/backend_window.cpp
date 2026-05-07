@@ -1,9 +1,10 @@
 // backend_window.cpp - SDL window + IRenderDevice wrapper.
-#include "termin/platform/backend_window.hpp"
+#include "termin/platform/sdl_backend_window.hpp"
 
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "tgfx2/device_factory.hpp"
 #include "tgfx2/enums.hpp"
@@ -41,7 +42,7 @@ void configure_sdl_window_hints() {
 // need to know about SDL_GLContext / VkInstance / etc.
 // ---------------------------------------------------------------------------
 
-struct BackendWindow::Impl {
+struct SDLBackendWindow::Impl {
     tgfx::BackendType backend = tgfx::BackendType::OpenGL;
     // Owned IRenderDevice for primary windows; left empty on secondary
     // windows (they point `device_ref` at the primary's device instead).
@@ -58,7 +59,7 @@ struct BackendWindow::Impl {
     // Primary the secondary window borrows its device/context from.
     // nullptr on primaries. Used so context() / device() return the
     // same objects everywhere.
-    BackendWindow* shared_ctx_owner = nullptr;
+    SDLBackendWindow* shared_ctx_owner = nullptr;
 
     // OpenGL state (only used when backend == OpenGL).
     SDL_GLContext gl_context = nullptr;
@@ -77,7 +78,7 @@ struct BackendWindow::Impl {
 // Ctor / dtor
 // ---------------------------------------------------------------------------
 
-BackendWindow::BackendWindow(const std::string& title, int width, int height)
+SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int height)
     : impl_(std::make_unique<Impl>())
 {
     if (SDL_WasInit(SDL_INIT_VIDEO) == 0 && SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
@@ -181,8 +182,8 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height)
 // up their own devices.
 // ---------------------------------------------------------------------------
 
-BackendWindow::BackendWindow(const std::string& title, int width, int height,
-                              BackendWindow& share_with)
+SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int height,
+                              SDLBackendWindow& share_with)
     : impl_(std::make_unique<Impl>())
 {
     if (!share_with.impl_->device_ref) {
@@ -253,13 +254,13 @@ BackendWindow::BackendWindow(const std::string& title, int width, int height,
     }
 }
 
-void BackendWindow::maximize() {
+void SDLBackendWindow::maximize() {
     if (window_) {
         SDL_MaximizeWindow(window_);
     }
 }
 
-void BackendWindow::close() {
+void SDLBackendWindow::close() {
     // Idempotent teardown — callers (both the dtor and Python
     // `window.close()`) can invoke this without checking state first.
     if (!window_ && !impl_->device_ref && !impl_->gl_context) {
@@ -306,7 +307,7 @@ void BackendWindow::close() {
     should_close_ = true;
 }
 
-BackendWindow::~BackendWindow() {
+SDLBackendWindow::~SDLBackendWindow() {
     close();
 }
 
@@ -314,11 +315,11 @@ BackendWindow::~BackendWindow() {
 // Accessors
 // ---------------------------------------------------------------------------
 
-tgfx::IRenderDevice* BackendWindow::device() {
+tgfx::IRenderDevice* SDLBackendWindow::device() {
     return impl_->device_ref;
 }
 
-tgfx::RenderContext2* BackendWindow::context() {
+tgfx::RenderContext2* SDLBackendWindow::context() {
     // Secondary windows never build their own RenderContext2 — that
     // would defeat "one PipelineCache per device" and force redundant
     // pipeline compilations. They forward to the primary instead.
@@ -332,7 +333,7 @@ tgfx::RenderContext2* BackendWindow::context() {
     return impl_->ctx.get();
 }
 
-std::pair<int, int> BackendWindow::framebuffer_size() const {
+std::pair<int, int> SDLBackendWindow::framebuffer_size() const {
     if (!window_) return {0, 0};
     int w = 0, h = 0;
     if (impl_->backend == tgfx::BackendType::OpenGL) {
@@ -353,11 +354,11 @@ std::pair<int, int> BackendWindow::framebuffer_size() const {
 // Events
 // ---------------------------------------------------------------------------
 
-bool BackendWindow::poll_event(SDL_Event& out_event) {
+bool SDLBackendWindow::poll_event(SDL_Event& out_event) {
     return SDL_PollEvent(&out_event) != 0;
 }
 
-void BackendWindow::poll_events() {
+void SDLBackendWindow::poll_events() {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
         if (ev.type == SDL_QUIT) should_close_ = true;
@@ -377,7 +378,7 @@ void BackendWindow::poll_events() {
 // Present
 // ---------------------------------------------------------------------------
 
-void BackendWindow::present(tgfx::TextureHandle color_tex) {
+void SDLBackendWindow::present(tgfx::TextureHandle color_tex) {
     if (!impl_->device_ref || !window_) return;
 
     auto [w, h] = framebuffer_size();
