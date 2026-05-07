@@ -14,6 +14,12 @@ namespace termin {
 
 class CameraComponent;
 
+/// Deprecated: legacy camera-owned viewport authoring component.
+///
+/// New rendering state is owned by scene RenderTargetConfig/ViewportConfig and
+/// CameraComponent. Keep this component only for loading older scenes and for
+/// compatibility with projects that still instantiate it.
+///
 /// CameraViewportComponent — manages viewport creation for a camera.
 ///
 /// Attach to an entity that has a CameraComponent.
@@ -42,7 +48,7 @@ public:
     /// Viewport depth (z-order on display)
     int depth = 0;
 
-    /// Layer mask for rendering
+    /// Deprecated compatibility field. Prefer CameraComponent::layer_mask.
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
 
     /// Input manager type: "simple" (default), "none"

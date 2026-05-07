@@ -457,14 +457,6 @@ class ViewportInspector(QWidget):
         self.enabled_changed.emit(enabled)
         self.viewport_changed.emit()
 
-    def _on_layer_mask_changed(self) -> None:
-        """Handle layer mask value change."""
-        if self._updating or self._viewport is None:
-            return
-
-        self._viewport.layer_mask = self._layer_mask_widget.get_value()
-        self.viewport_changed.emit()
-
     def _update_debug_info(self, viewport: "Viewport") -> None:
         """Update debug info label with native state."""
         try:

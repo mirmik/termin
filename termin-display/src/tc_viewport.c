@@ -341,11 +341,15 @@ int tc_viewport_get_depth(tc_viewport_handle h) {
 
 void tc_viewport_set_layer_mask(tc_viewport_handle h, uint64_t mask) {
     if (!handle_alive(h)) return;
+    // Deprecated compatibility path: old callers wrote viewport.layer_mask,
+    // which historically proxied to the render target. New render code uses
+    // CameraComponent.layer_mask & RenderTarget.layer_mask directly.
     tc_render_target_set_layer_mask(g_pool->render_targets[h.index], mask);
 }
 
 uint64_t tc_viewport_get_layer_mask(tc_viewport_handle h) {
     if (!handle_alive(h)) return 0;
+    // Deprecated compatibility path; see tc_viewport_set_layer_mask.
     return tc_render_target_get_layer_mask(g_pool->render_targets[h.index]);
 }
 

@@ -160,6 +160,7 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("aspect", &CameraComponent::aspect)
         .def("set_aspect", &CameraComponent::set_aspect, nb::arg("aspect"))
         .def_rw("ortho_size", &CameraComponent::ortho_size)
+        .def_rw("layer_mask", &CameraComponent::layer_mask)
         .def("get_view_matrix", &CameraComponent::get_view_matrix)
         .def("get_projection_matrix", &CameraComponent::get_projection_matrix)
         .def("view_matrix", &CameraComponent::get_view_matrix)

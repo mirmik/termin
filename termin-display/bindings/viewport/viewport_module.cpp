@@ -51,7 +51,6 @@ void bind_tc_viewport_class(nb::module_& m) {
                            const std::string& input_mode,
                            bool block_input_in_editor,
                            const std::string& managed_by_scene_pipeline,
-                           uint64_t layer_mask,
                            bool enabled,
                            nb::object internal_entities,
                            std::tuple<int, int, int, int> pixel_rect) {
@@ -75,7 +74,6 @@ void bind_tc_viewport_class(nb::module_& m) {
 
             // Set properties
             tc_viewport_set_depth(vh, depth);
-            tc_viewport_set_layer_mask(vh, layer_mask);
             tc_viewport_set_enabled(vh, enabled);
             tc_viewport_set_input_mode(vh, input_mode.c_str());
             tc_viewport_set_block_input_in_editor(vh, block_input_in_editor);
@@ -101,7 +99,6 @@ void bind_tc_viewport_class(nb::module_& m) {
         nb::arg("input_mode") = "simple",
         nb::arg("block_input_in_editor") = false,
         nb::arg("managed_by_scene_pipeline") = "",
-        nb::arg("layer_mask") = 0xFFFFFFFFFFFFFFFFULL,
         nb::arg("enabled") = true,
         nb::arg("internal_entities") = nb::none(),
         nb::arg("pixel_rect") = std::make_tuple(0, 0, 1, 1))
@@ -197,11 +194,6 @@ void bind_tc_viewport_class(nb::module_& m) {
             },
             nb::arg().none())
 
-        // Layer mask
-        .def_prop_rw("layer_mask",
-            [](TcViewport& self) { return self.layer_mask(); },
-            [](TcViewport& self, uint64_t m) { self.set_layer_mask(m); })
-
         // Override render target resolution from viewport pixel rect
         .def_prop_rw("override_resolution",
             [](TcViewport& self) {
@@ -274,27 +266,23 @@ void bind_tc_viewport_class(nb::module_& m) {
             },
             nb::arg().none())
 
-        // Effective layer mask (checks ViewportHintComponent on render target camera)
+        // Effective layer mask: CameraComponent.layer_mask & RenderTarget.layer_mask.
         .def_prop_ro("effective_layer_mask", [](TcViewport& self) -> uint64_t {
             tc_render_target_handle rt = tc_viewport_get_render_target(self.handle_);
             tc_component* cam = tc_render_target_get_camera(rt);
+            uint64_t camera_mask = 0xFFFFFFFFFFFFFFFFULL;
             nb::object camera_obj = camera_component_from_tc(cam);
             if (!camera_obj.is_none()) {
                 try {
-                    nb::object entity = camera_obj.attr("entity");
-                    if (!entity.is_none()) {
-                        nb::module_ hint_module = nb::module_::import_("termin.visualization.core.viewport_hint");
-                        nb::object hint_class = hint_module.attr("ViewportHintComponent");
-                        nb::object hint = entity.attr("get_component")(hint_class);
-                        if (!hint.is_none()) {
-                            return nb::cast<uint64_t>(hint.attr("layer_mask"));
-                        }
-                    }
+                    camera_mask = nb::cast<uint64_t>(camera_obj.attr("layer_mask"));
                 } catch (const std::exception& e) {
                     tc::Log::error("Viewport.effective_layer_mask failed: %s", e.what());
                 }
             }
-            return self.layer_mask();
+            uint64_t target_mask = tc_render_target_handle_valid(rt)
+                ? tc_render_target_get_layer_mask(rt)
+                : 0xFFFFFFFFFFFFFFFFULL;
+            return camera_mask & target_mask;
         })
 
         // Screen point to ray
@@ -352,13 +340,6 @@ void bind_tc_viewport_class(nb::module_& m) {
                 result["block_input_in_editor"] = tc_viewport_get_block_input_in_editor(self.handle_);
             }
             result["enabled"] = self.enabled();
-
-            uint64_t mask = self.layer_mask();
-            if (mask != 0xFFFFFFFFFFFFFFFFULL) {
-                char buf[32];
-                snprintf(buf, sizeof(buf), "0x%llx", (unsigned long long)mask);
-                result["layer_mask"] = std::string(buf);
-            }
 
             return result;
         })

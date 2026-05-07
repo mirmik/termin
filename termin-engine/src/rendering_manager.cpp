@@ -52,14 +52,24 @@ static RenderCamera render_camera_from_cap(const tc_camera_data& cd) {
     return rc;
 }
 
+static uint64_t effective_layer_mask(uint64_t camera_mask, tc_render_target_handle rt) {
+    uint64_t target_mask = tc_render_target_handle_valid(rt)
+        ? tc_render_target_get_layer_mask(rt)
+        : 0xFFFFFFFFFFFFFFFFULL;
+    return camera_mask & target_mask;
+}
+
 // Get RenderCamera from tc_component* via camera capability.
 // Returns false if component has no camera capability.
-static bool get_render_camera(tc_component* cam_comp, double aspect, RenderCamera* out) {
+static bool get_render_camera(tc_component* cam_comp, double aspect, RenderCamera* out, uint64_t* layer_mask) {
     const tc_camera_capability* cap = tc_camera_capability_get(cam_comp);
     if (!cap || !cap->vtable || !cap->vtable->get_camera_data) return false;
-    tc_camera_data cd;
+    tc_camera_data cd{};
     if (!cap->vtable->get_camera_data(cam_comp, aspect, &cd)) return false;
     *out = render_camera_from_cap(cd);
+    if (layer_mask) {
+        *layer_mask = cd.layer_mask;
+    }
     return true;
 }
 
@@ -986,7 +996,8 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
         double aspect = static_cast<double>(pw) / std::max(1, ph);
         RenderCamera render_cam;
-        if (!get_render_camera(camera_comp, aspect, &render_cam)) {
+        uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+        if (!get_render_camera(camera_comp, aspect, &render_cam, &camera_layer_mask)) {
             tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' camera has no camera capability", vp_name.c_str());
             continue;
         }
@@ -1031,7 +1042,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
         ctx.camera = render_cam;
         ctx.rect = {0, 0, pw, ph};  // Full FBO, offset at blit time
         ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
-        ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
+        ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
         ctx.output_color_tex = out_color;
         ctx.output_depth_tex = out_depth;
         contexts[vp_name] = std::move(ctx);
@@ -1098,7 +1109,8 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
     double aspect = static_cast<double>(pw) / std::max(1, ph);
     RenderCamera render_camera;
-    if (!get_render_camera(camera_comp, aspect, &render_camera)) {
+    uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+    if (!get_render_camera(camera_comp, aspect, &render_camera, &camera_layer_mask)) {
         tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): no camera capability",
                vp_name ? vp_name : "(null)");
         return;
@@ -1134,7 +1146,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     ctx.camera = render_camera;
     ctx.rect = {0, 0, pw, ph};
     ctx.internal_entities = internal_entities;
-    ctx.layer_mask = tc_viewport_get_layer_mask(viewport);
+    ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.output_color_tex = out_color;
     ctx.output_depth_tex = out_depth;
     contexts[ctx.name] = std::move(ctx);
@@ -1201,7 +1213,8 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
 
     double aspect = static_cast<double>(w) / std::max(1, h);
     RenderCamera render_camera;
-    if (!get_render_camera(camera_comp, aspect, &render_camera)) {
+    uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+    if (!get_render_camera(camera_comp, aspect, &render_camera, &camera_layer_mask)) {
         tc_log(TC_LOG_WARN, "[RenderingManager] render_render_target_offscreen('%s'): no camera capability",
                rt_name ? rt_name : "(null)");
         return;
@@ -1233,7 +1246,7 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     ctx.camera = render_camera;
     ctx.rect = {0, 0, w, h};
     ctx.internal_entities = TC_ENTITY_HANDLE_INVALID;
-    ctx.layer_mask = tc_render_target_get_layer_mask(rt);
+    ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.output_color_tex = out_color;
     ctx.output_depth_tex = out_depth;
     contexts[name] = std::move(ctx);

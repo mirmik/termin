@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <tc_inspect_cpp.hpp>
@@ -35,6 +37,7 @@ static bool camera_cap_get_data(tc_component* self, double aspect_override, tc_c
     out->position[2] = pos.z;
     out->near_clip = cam->near_clip;
     out->far_clip = cam->far_clip;
+    out->layer_mask = cam->layer_mask;
     return true;
 }
 
@@ -251,5 +254,30 @@ static struct _FovModeFieldRegistrar {
         tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
     }
 } _fov_mode_registrar;
+
+static struct _CameraLayerMaskFieldRegistrar {
+    _CameraLayerMaskFieldRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "CameraComponent";
+        info.path = "layer_mask";
+        info.label = "Layers";
+        info.kind = "layer_mask";
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<CameraComponent*>(obj);
+            char buf[32];
+            snprintf(buf, sizeof(buf), "0x%llx", (unsigned long long)c->layer_mask);
+            return tc_value_string(buf);
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* c = static_cast<CameraComponent*>(obj);
+            if (value.type == TC_VALUE_STRING && value.data.s) {
+                c->layer_mask = strtoull(value.data.s, nullptr, 0);
+            } else if (value.type == TC_VALUE_INT) {
+                c->layer_mask = static_cast<uint64_t>(value.data.i);
+            }
+        };
+        tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
+    }
+} _camera_layer_mask_registrar;
 
 } // namespace termin
