@@ -203,11 +203,17 @@ else
     # Host-env mode: sequential installs so errors are attributed to a
     # specific package and intermediate state is inspectable.
     EDITABLE_FLAG=()
+    NODEPS_FLAG=()
     if [[ $EDITABLE -eq 1 ]]; then
+        # Editable installs pre-suppose all external dependencies are already
+        # installed in the environment (see setup-test-venv.sh). --no-deps
+        # avoids pip trying to resolve heavy/unavailable packages like PyQt6
+        # or pyassimp during the editable loop.
         EDITABLE_FLAG=(-e)
+        NODEPS_FLAG=(--no-deps)
     fi
     for pkg in "${PACKAGES[@]}"; do
-        local mode=""
+        mode=""
         if [[ $EDITABLE -eq 1 ]]; then
             mode=" (editable)"
         fi
@@ -216,7 +222,7 @@ else
         echo "  Installing $pkg$mode"
         echo "========================================"
         echo ""
-        pip install --no-build-isolation "${FORCE_FLAGS[@]}" "${EDITABLE_FLAG[@]}" "$SCRIPT_DIR/$pkg"
+        pip install --no-build-isolation "${FORCE_FLAGS[@]}" "${NODEPS_FLAG[@]}" "${EDITABLE_FLAG[@]}" "$SCRIPT_DIR/$pkg"
     done
 fi
 
