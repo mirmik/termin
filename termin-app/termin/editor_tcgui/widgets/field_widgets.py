@@ -770,6 +770,10 @@ class FieldWidgetFactory:
                 allow_none=True,
             )
 
+        if kind == "layer_mask":
+            from termin.editor_tcgui.widgets.layer_mask_widget import LayerMaskFieldWidget
+            return LayerMaskFieldWidget(scene_getter=self._scene_getter)
+
         # Fallback: read-only строка
         log.debug(f"[FieldWidgetFactory] Unknown field kind '{kind}', using StringFieldWidget")
         return StringFieldWidget(read_only=True)
