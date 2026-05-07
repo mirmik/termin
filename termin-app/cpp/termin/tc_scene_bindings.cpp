@@ -165,7 +165,8 @@ void bind_tc_scene(nb::module_& m) {
         .def_rw("pipeline_uuid", &RenderTargetConfig::pipeline_uuid)
         .def_rw("pipeline_name", &RenderTargetConfig::pipeline_name)
         .def_rw("layer_mask", &RenderTargetConfig::layer_mask)
-        .def_rw("enabled", &RenderTargetConfig::enabled);
+        .def_rw("enabled", &RenderTargetConfig::enabled)
+        .def_rw("pipeline_params", &RenderTargetConfig::pipeline_params);
 
     // --- SceneRenderState ---
     nb::class_<SceneRenderState>(m, "SceneRenderState")

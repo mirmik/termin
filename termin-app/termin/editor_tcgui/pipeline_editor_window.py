@@ -114,6 +114,8 @@ def _load_graph_from_pipeline_dict(data: dict):
                 controller.add_output_socket(node.id, "shadow", "shadow")
             else:
                 controller.add_output_socket(node.id, "fbo", "fbo")
+        elif node_type == "external_rt":
+            controller.add_output_socket(node.id, "fbo", "fbo")
         elif node_type == "output":
             controller.add_input_socket(node.id, "color", "fbo")
             controller.add_input_socket(node.id, "depth", "fbo")
@@ -455,6 +457,17 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         graph_view.controller.add_input_socket(node.id, "depth", "fbo")
         graph_view.refresh()
 
+    def _create_external_rt_node(wx: float, wy: float) -> None:
+        node = graph_view.controller.create_node("external_rt", title="External RT", x=wx, y=wy)
+        node.data["graph_type"] = "External RT"
+        node.data["instance_name"] = ""
+        node.data["node_type"] = "external_rt"
+        node.data["dynamic_inputs"] = []
+        node.data["explicit_size"] = False
+        node.params["slot"] = ""
+        graph_view.controller.add_output_socket(node.id, "fbo", "fbo")
+        graph_view.refresh()
+
     def _build_context_menu(wx: float, wy: float) -> list[MenuItem]:
         from tcnodegraph.view import NodeItem, EdgeItem
 
@@ -469,6 +482,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
                 MenuItem.sep(),
                 MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
                 MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),
+                MenuItem("Add External RT", on_click=lambda: _create_external_rt_node(wx, wy)),
                 MenuItem("Add Render Target", on_click=lambda: _create_output_node(wx, wy)),
             ]
             return items
@@ -497,6 +511,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
             MenuItem.sep(),
             MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
             MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),
+            MenuItem("Add External RT", on_click=lambda: _create_external_rt_node(wx, wy)),
             MenuItem.sep(),
         ]
         try:

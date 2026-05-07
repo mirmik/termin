@@ -14,6 +14,8 @@ from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.separator import Separator
 from tcgui.widgets.units import px
 
+from termin.editor_tcgui.widgets.layer_mask_widget import LayerMaskFieldWidget
+
 
 class RenderTargetInspectorTcgui(VStack):
     """Inspector panel for RenderTarget properties."""
@@ -101,6 +103,32 @@ class RenderTargetInspectorTcgui(VStack):
         grid.add(self._height_lbl, 6, 0)
         grid.add(self._height, 6, 1)
 
+        mask_lbl = Label(); mask_lbl.text = "Layer Mask:"; mask_lbl.preferred_width = px(96)
+        self._mask_lbl = mask_lbl
+        self._layer_mask_widget = LayerMaskFieldWidget()
+        self._layer_mask_widget.on_value_changed = self._on_layer_mask_changed
+        grid.add(self._mask_lbl, 7, 0)
+        grid.add(self._layer_mask_widget, 7, 1)
+
+        self._pipeline_params_sep = Separator()
+        self._pipeline_params_sep.visible = False
+        self.add_child(self._pipeline_params_sep)
+
+        self._pipeline_params_title = Label()
+        self._pipeline_params_title.text = "Pipeline Parameters"
+        self._pipeline_params_title.visible = False
+        self.add_child(self._pipeline_params_title)
+
+        self._pipeline_params_grid = GridLayout(columns=2)
+        self._pipeline_params_grid.column_spacing = 4
+        self._pipeline_params_grid.row_spacing = 4
+        self._pipeline_params_grid.set_column_stretch(1, 1.0)
+        self._pipeline_params_grid.visible = False
+        self.add_child(self._pipeline_params_grid)
+
+        self._pipeline_params_widgets: list[ComboBox] = []
+        self._pipeline_params_slots: list[str] = []
+
         self._empty = Label()
         self._empty.text = "No render target selected."
         self._empty.color = (0.52, 0.56, 0.62, 1.0)
@@ -113,6 +141,7 @@ class RenderTargetInspectorTcgui(VStack):
 
     def set_scene(self, scene) -> None:
         self._scene = scene
+        self._layer_mask_widget.set_scene_getter(lambda: self._scene)
         self._refresh_camera_combo()
 
     def set_render_target(self, render_target=None, scene=None) -> None:
@@ -144,6 +173,8 @@ class RenderTargetInspectorTcgui(VStack):
             self._dynamic_resolution.checked = bool(render_target.dynamic_resolution)
             self._width.value = render_target.width
             self._height.value = render_target.height
+            self._layer_mask_widget.set_value(render_target.layer_mask)
+            self._refresh_pipeline_params()
             self._update_size_visibility()
         finally:
             self._updating = False
@@ -157,6 +188,8 @@ class RenderTargetInspectorTcgui(VStack):
         self._pipeline_combo.visible = has_target
         self._dynamic_lbl.visible = has_target
         self._dynamic_resolution.visible = has_target
+        self._mask_lbl.visible = has_target
+        self._layer_mask_widget.visible = has_target
         self._update_size_visibility()
         self._empty.visible = not has_target
 
@@ -286,6 +319,7 @@ class RenderTargetInspectorTcgui(VStack):
             return
         if index == 0:
             self._render_target.pipeline = None
+            self._refresh_pipeline_params()
             self._emit_changed()
             return
 
@@ -293,6 +327,7 @@ class RenderTargetInspectorTcgui(VStack):
             try:
                 from termin.visualization.core.viewport import make_default_pipeline
                 self._render_target.pipeline = make_default_pipeline()
+                self._refresh_pipeline_params()
                 self._emit_changed()
             except Exception as e:
                 log.error(f"[RenderTargetInspector] make_default_pipeline failed: {e}")
@@ -303,6 +338,7 @@ class RenderTargetInspectorTcgui(VStack):
             log.error(f"[RenderTargetInspector] pipeline not found: {text}")
             return
         self._render_target.pipeline = pipeline
+        self._refresh_pipeline_params()
         self._emit_changed()
 
     def _on_dynamic_resolution_changed(self, checked: bool) -> None:
@@ -317,6 +353,114 @@ class RenderTargetInspectorTcgui(VStack):
             return
         self._render_target.width = int(self._width.value)
         self._render_target.height = int(self._height.value)
+        self._emit_changed()
+
+    def _on_layer_mask_changed(self) -> None:
+        if self._updating or self._render_target is None:
+            return
+        mask_str = self._layer_mask_widget.get_value()
+        self._render_target.layer_mask = int(mask_str, 0)
+        self._emit_changed()
+
+    def _refresh_pipeline_params(self) -> None:
+        """Rebuild pipeline parameter combos based on current pipeline's external params."""
+        self._pipeline_params_grid.clear()
+        self._pipeline_params_widgets.clear()
+        self._pipeline_params_slots.clear()
+
+        if self._render_target is None:
+            self._pipeline_params_sep.visible = False
+            self._pipeline_params_title.visible = False
+            self._pipeline_params_grid.visible = False
+            return
+
+        pipeline_name = self._render_target.pipeline.name if self._render_target.pipeline else ""
+        if not pipeline_name:
+            self._pipeline_params_sep.visible = False
+            self._pipeline_params_title.visible = False
+            self._pipeline_params_grid.visible = False
+            return
+
+        try:
+            asset = self._rm.get_pipeline_asset(pipeline_name)
+        except Exception:
+            self._pipeline_params_sep.visible = False
+            self._pipeline_params_title.visible = False
+            self._pipeline_params_grid.visible = False
+            return
+
+        if asset is None:
+            self._pipeline_params_sep.visible = False
+            self._pipeline_params_title.visible = False
+            self._pipeline_params_grid.visible = False
+            return
+
+        slots = asset.external_params
+        if not slots:
+            self._pipeline_params_sep.visible = False
+            self._pipeline_params_title.visible = False
+            self._pipeline_params_grid.visible = False
+            return
+
+        self._pipeline_params_sep.visible = True
+        self._pipeline_params_title.visible = True
+        self._pipeline_params_grid.visible = True
+
+        # Collect available render target names
+        rt_names: list[str] = ["(none)"]
+        if self._scene_getter is not None:
+            try:
+                from termin.visualization.core.scene import scene_render_mount
+                for scene in self._scene_getter():
+                    mount = scene_render_mount(scene)
+                    for rt in mount.render_target_configs:
+                        name = rt.name
+                        if name and name not in rt_names:
+                            rt_names.append(name)
+            except Exception:
+                pass
+
+        # Also include the current RT itself (in case it's the only one)
+        if self._render_target.name and self._render_target.name not in rt_names:
+            rt_names.append(self._render_target.name)
+
+        params = self._render_target.pipeline_params
+
+        for row_idx, slot in enumerate(slots):
+            self._pipeline_params_slots.append(slot)
+            lbl = Label()
+            lbl.text = f"{slot}:"
+            lbl.preferred_width = px(96)
+            self._pipeline_params_grid.add(lbl, row_idx, 0)
+
+            combo = ComboBox()
+            for name in rt_names:
+                combo.add_item(name)
+            current = params.get(slot, "")
+            if current:
+                for i in range(combo.item_count):
+                    if combo.item_text(i) == current:
+                        combo.selected_index = i
+                        break
+            else:
+                combo.selected_index = 0
+            combo.on_changed = self._on_pipeline_param_changed
+            self._pipeline_params_grid.add(combo, row_idx, 1)
+            self._pipeline_params_widgets.append(combo)
+
+        if self._ui is not None:
+            self._ui.request_layout()
+
+    def _on_pipeline_param_changed(self, _index: int, _text: str) -> None:
+        if self._updating or self._render_target is None:
+            return
+        params = self._render_target.pipeline_params
+        for slot, combo in zip(self._pipeline_params_slots, self._pipeline_params_widgets):
+            text = combo.selected_text
+            if text == "(none)":
+                params.pop(slot, None)
+            else:
+                params[slot] = text or ""
         self._emit_changed()
 
     def _update_size_visibility(self) -> None:
