@@ -172,6 +172,6 @@ display/viewport/render-target перестает существовать во 
    camera/pipeline fields в `RenderTargetConfig`.
 6. [x] Обновить render paths так, чтобы render target resize выполнялся только при
    включенном `dynamic_resolution`.
-7. [ ] Вынести общую attach/detach логику для editor и scene display scopes.
-8. [ ] Добавить C++ headless tests на native manager counts и Python headless tests
+7. [x] Вынести общую attach/detach логику для editor и scene display scopes.
+8. [x] Добавить C++ headless tests на native manager counts и Python headless tests
    на game-mode orchestration.
