@@ -201,22 +201,32 @@ if(TERMIN_BUILD_PYTHON)
     termin_set_rpath_python(_viewport_native)
     install(TARGETS _viewport_native DESTINATION lib/python/termin/viewport)
 
+    set(TERMIN_DISPLAY_PLATFORM_NATIVE_SOURCES
+        bindings/platform/platform_module.cpp
+    )
     if(TERMIN_DISPLAY_HAS_SDL)
-        nanobind_add_module(_platform_native NB_SHARED
-            bindings/platform/platform_module.cpp
+        list(APPEND TERMIN_DISPLAY_PLATFORM_NATIVE_SOURCES
             bindings/platform/sdl_bindings.cpp
         )
-        target_link_libraries(_platform_native PRIVATE termin_display ${SDL2_LIBRARIES})
-        target_include_directories(_platform_native PRIVATE
-            ${CMAKE_CURRENT_LIST_DIR}/include
-            ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
-            ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
-            ${CMAKE_CURRENT_LIST_DIR}/bindings/platform
-            ${SDL2_INCLUDE_DIRS}
-        )
-        termin_set_rpath_python(_platform_native)
-        install(TARGETS _platform_native DESTINATION lib/python/termin/display)
     endif()
+
+    nanobind_add_module(_platform_native NB_SHARED
+        ${TERMIN_DISPLAY_PLATFORM_NATIVE_SOURCES}
+    )
+    target_link_libraries(_platform_native PRIVATE termin_display)
+    target_include_directories(_platform_native PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
+        ${CMAKE_CURRENT_LIST_DIR}/bindings/platform
+    )
+    if(TERMIN_DISPLAY_HAS_SDL)
+        target_compile_definitions(_platform_native PRIVATE TERMIN_DISPLAY_HAS_SDL)
+        target_include_directories(_platform_native PRIVATE ${SDL2_INCLUDE_DIRS})
+        target_link_libraries(_platform_native PRIVATE ${SDL2_LIBRARIES})
+    endif()
+    termin_set_rpath_python(_platform_native)
+    install(TARGETS _platform_native DESTINATION lib/python/termin/display)
 
     install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/python/termin/display/
             DESTINATION lib/python/termin/display
@@ -261,6 +271,7 @@ install(FILES
 )
 
 install(FILES
+    ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/backend_window.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/offscreen_render_surface.hpp
     DESTINATION include/termin/platform
 )
@@ -269,7 +280,7 @@ if(TERMIN_DISPLAY_HAS_SDL)
     install(FILES
         ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_window.hpp
         ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_render_surface.hpp
-        ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/backend_window.hpp
+        ${CMAKE_CURRENT_LIST_DIR}/include/termin/platform/sdl_backend_window.hpp
         DESTINATION include/termin/platform
     )
     if(WIN32 AND SDL2_DLL)

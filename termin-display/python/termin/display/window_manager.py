@@ -15,7 +15,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from termin.display._platform_native import BackendWindow
+try:
+    from termin.display._platform_native import BackendWindow, SDLBackendWindow
+except ImportError:
+    BackendWindow = None
+    SDLBackendWindow = None
 
 
 @dataclass
@@ -74,7 +78,9 @@ class BackendWindowManager:
             raise RuntimeError(
                 "BackendWindowManager.create_window called before "
                 "register_main: no primary window to share device with.")
-        secondary = BackendWindow(title, width, height, main.window)
+        if SDLBackendWindow is None:
+            raise RuntimeError("SDLBackendWindow is not available in this build.")
+        secondary = SDLBackendWindow(title, width, height, main.window)
         entry = BackendWindowEntry(
             window=secondary, is_main=False,
             host_data=host_data, on_destroy=on_destroy)
