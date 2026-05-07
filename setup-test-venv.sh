@@ -55,7 +55,7 @@ pip install --upgrade pip setuptools wheel nanobind
 # 4. Runtime and test dependencies
 echo ""
 echo "--- installing runtime and test dependencies ---"
-pip install numpy scipy Pillow pytest torch
+pip install numpy scipy Pillow pytest torch PyYAML diffusers
 # PyQt6 must be installed from binary wheels (no source build)
 pip install --only-binary :all: PyQt6
 

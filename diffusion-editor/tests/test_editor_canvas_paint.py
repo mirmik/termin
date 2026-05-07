@@ -84,8 +84,12 @@ def test_move_tool_updates_cpu_composite_before_mouse_up():
     canvas._handle_mouse_down(4, 4, MouseButton.LEFT)
     canvas._handle_mouse_move(7, 5)
 
-    assert stack.active_layer.image[5, 7, 3] == 255
-    assert canvas._composite[5, 7, 3] == 255
+    # Move tool shifts the whole layer (x/y), pixels inside the buffer
+    # stay at their original positions. Check the composite result instead.
+    assert stack.active_layer.x == 3
+    assert stack.active_layer.y == 1
+    assert canvas._composite[4, 4, 3] == 0       # pixel left its old place
+    assert canvas._composite[5, 7, 3] == 255     # pixel arrived at new place
     assert canvas._image_dirty is True
 
 
@@ -114,7 +118,8 @@ def test_move_tool_marks_gpu_compositor_dirty_before_mouse_up():
     canvas._handle_mouse_down(4, 4, MouseButton.LEFT)
     canvas._handle_mouse_move(7, 5)
 
-    assert stack.active_layer.image[5, 7, 3] == 255
+    assert stack.active_layer.x == 3
+    assert stack.active_layer.y == 1
     assert fake.marked_layer is stack.active_layer
     assert fake.composite_calls == 1
     assert canvas._composite_stale is True
