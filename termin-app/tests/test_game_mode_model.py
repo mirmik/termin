@@ -298,6 +298,7 @@ class _RenderTarget:
         self.scene = None
         self.camera = None
         self.pipeline = None
+        self.dynamic_resolution = False
         self.locked = False
         self.free_count = 0
 
@@ -575,6 +576,7 @@ def test_editor_scene_attachment_reuses_editor_render_target(monkeypatch):
         assert first_rt.scene is game_scene
         assert first_rt.camera is attachment.camera
         assert first_rt.pipeline is pipeline
+        assert first_rt.dynamic_resolution is True
         assert first_rt.locked is True
         assert rendering.attach_calls == []
         assert rendering._viewport_list.refresh_count == 3

@@ -419,6 +419,7 @@ class EditorWindowTcgui:
             on_display_changed=self._request_viewport_update,
             on_viewport_changed=self._request_viewport_update,
             on_pipeline_changed=self._request_viewport_update,
+            on_render_target_changed=self._request_viewport_update,
             on_edit_pipeline=self._open_pipeline_file_for_edit,
             dialog_service=self._dialog_service,
         )

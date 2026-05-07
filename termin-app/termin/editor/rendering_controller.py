@@ -181,9 +181,12 @@ class RenderingController:
         # Set scene getter for render target inspector
         self._inspector.render_target_inspector.set_scene_getter(self._get_all_scenes)
 
-        # Set editor pipeline getter for ViewportInspector
-        if self._make_editor_pipeline is not None:
-            self._inspector.viewport_inspector.set_editor_pipeline_getter(self._make_editor_pipeline)
+        # Connect render target inspector signals to trigger re-render
+        self._inspector.render_target_inspector.camera_changed.connect(lambda _: self._request_update())
+        self._inspector.render_target_inspector.pipeline_changed.connect(lambda _: self._request_update())
+        self._inspector.render_target_inspector.size_changed.connect(lambda _w, _h: self._request_update())
+        self._inspector.render_target_inspector.enabled_changed.connect(lambda _: self._request_update())
+        self._inspector.render_target_inspector.dynamic_resolution_changed.connect(lambda _: self._request_update())
 
         # Connect center tabs signal for tab switching
         if self._center_tabs is not None:
@@ -194,8 +197,6 @@ class RenderingController:
     def set_editor_pipeline_maker(self, maker: Callable[[], "RenderPipeline"]) -> None:
         """Set callback for creating editor pipeline."""
         self._make_editor_pipeline = maker
-        # Also update ViewportInspector
-        self._inspector.viewport_inspector.set_editor_pipeline_getter(maker)
 
     # --- Helpers ---
 
@@ -887,38 +888,9 @@ class RenderingController:
         self._selected_viewport.enabled = enabled
         self._request_update()
 
-    def _on_viewport_pipeline_changed(self, pipeline: "RenderPipeline") -> None:
-        """Handle viewport pipeline change from ViewportInspector."""
-        if self._selected_viewport is None:
-            return
-
-        self.set_viewport_pipeline(self._selected_viewport, pipeline)
-
     def _on_pipeline_inspector_changed(self, pipeline: "RenderPipeline") -> None:
         """Handle pipeline change from PipelineInspector (file editor)."""
         # Pipeline is edited in-place, just trigger redraw for all displays
-        self._request_update()
-
-    def set_viewport_pipeline(self, viewport: "Viewport", pipeline: "RenderPipeline | None") -> None:
-        """
-        Set pipeline for a specific viewport.
-
-        Args:
-            viewport: Viewport to set pipeline for.
-            pipeline: Pipeline to use, or None to disable rendering.
-        """
-        render_target = viewport.render_target
-        if render_target is None:
-            log.warn("[RenderingController] Cannot set viewport pipeline: viewport has no render target")
-            return
-        old_pipeline = render_target.pipeline
-        render_target.pipeline = pipeline
-
-        # Destroy old pipeline when pipeline changes (FBOs are owned by pipeline)
-        if old_pipeline is not pipeline:
-            if old_pipeline is not None:
-                old_pipeline.destroy()
-
         self._request_update()
 
     # --- Center tabs management ---

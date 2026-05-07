@@ -572,10 +572,10 @@ def run():
     # raw SDL GL context + SwapWindow path used to work only on GL —
     # on Vulkan UIRenderer.end() routes through blit_to_external_fbo
     # which has no meaningful analogue.
-    from termin.display._platform_native import BackendWindow
+    from termin.display._platform_native import SDLBackendWindow
     from tgfx import Tgfx2Context
 
-    window = BackendWindow("Termin Launcher", 1024, 640)
+    window = SDLBackendWindow("Termin Launcher", 1024, 640)
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
     app = LauncherApp(graphics=graphics, ui_backend=ui_backend)
