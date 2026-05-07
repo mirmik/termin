@@ -12,9 +12,12 @@ def serialize_render_target_config(config: RenderTargetConfig) -> dict:
     result = {
         "name": config.name,
         "camera_uuid": config.camera_uuid,
-        "width": config.width,
-        "height": config.height,
     }
+    if getattr(config, "dynamic_resolution", False):
+        result["dynamic_resolution"] = True
+    else:
+        result["width"] = config.width
+        result["height"] = config.height
     if config.pipeline_uuid:
         result["pipeline_uuid"] = config.pipeline_uuid
     if config.pipeline_name:
@@ -33,6 +36,7 @@ def deserialize_render_target_config(data: dict) -> RenderTargetConfig:
     config.camera_uuid = data.get("camera_uuid", "")
     config.width = data.get("width", 512)
     config.height = data.get("height", 512)
+    config.dynamic_resolution = data.get("dynamic_resolution", False)
     config.pipeline_uuid = data.get("pipeline_uuid", "")
     config.pipeline_name = data.get("pipeline_name", "")
 

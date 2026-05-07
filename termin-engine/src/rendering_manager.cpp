@@ -398,6 +398,7 @@ tc_viewport_handle RenderingManager::mount_scene(
     tc_render_target_set_scene(rt, scene);
     tc_render_target_set_camera(rt, camera);
     tc_render_target_set_pipeline(rt, pipeline);
+    tc_render_target_set_dynamic_resolution(rt, true);
     register_standalone_render_target(rt);
     tc_viewport_set_render_target(viewport, rt);
     tc_viewport_set_scene(viewport, scene);
@@ -514,8 +515,11 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
 
         tc_render_target_handle rt = tc_render_target_new(rt_name.c_str());
         tc_render_target_set_scene(rt, scene);
-        tc_render_target_set_width(rt, rtc->width);
-        tc_render_target_set_height(rt, rtc->height);
+        tc_render_target_set_dynamic_resolution(rt, rtc->dynamic_resolution);
+        if (!rtc->dynamic_resolution) {
+            tc_render_target_set_width(rt, rtc->width);
+            tc_render_target_set_height(rt, rtc->height);
+        }
         tc_render_target_set_layer_mask(rt, rtc->layer_mask);
         tc_render_target_set_enabled(rt, rtc->enabled);
 
@@ -590,6 +594,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         if (!tc_render_target_handle_valid(rt)) {
             rt = tc_render_target_new(rt_name.empty() ? vp_name.c_str() : rt_name.c_str());
             tc_render_target_set_scene(rt, scene);
+            tc_render_target_set_dynamic_resolution(rt, true);
             register_standalone_render_target(rt);
 
             // Legacy viewport configs can still carry camera_uuid without a
@@ -885,7 +890,7 @@ void RenderingManager::render_all_offscreen() {
         return;
     }
 
-    // 0. Sync viewport override_resolution → render target width/height
+    // 0. Sync dynamic-resolution render targets from their attached viewport.
     sync_viewport_resolutions();
 
     // 1. Render standalone render targets first (managed list, not pool scan).
@@ -1008,8 +1013,10 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
         tgfx::TextureHandle out_color{}, out_depth{};
         if (tc_render_target_handle_valid(rt)) {
-            tc_render_target_set_width(rt, pw);
-            tc_render_target_set_height(rt, ph);
+            if (tc_render_target_get_dynamic_resolution(rt)) {
+                tc_render_target_set_width(rt, pw);
+                tc_render_target_set_height(rt, ph);
+            }
             tc_render_target_ensure_textures(rt);
             out_color = wrap_tc_texture_as_tgfx2(*vp_device,
                 tc_render_target_get_color_texture(rt));
@@ -1110,8 +1117,10 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
                vp_name ? vp_name : "(null)");
         return;
     }
-    tc_render_target_set_width(rt, pw);
-    tc_render_target_set_height(rt, ph);
+    if (tc_render_target_get_dynamic_resolution(rt)) {
+        tc_render_target_set_width(rt, pw);
+        tc_render_target_set_height(rt, ph);
+    }
     tc_render_target_ensure_textures(rt);
     tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
         *device, tc_render_target_get_color_texture(rt));
@@ -1145,9 +1154,9 @@ void RenderingManager::sync_viewport_resolutions() {
 
             tc_viewport_handle vp = tc_display_get_first_viewport(display);
             while (tc_viewport_handle_valid(vp)) {
-                if (tc_viewport_get_override_resolution(vp)) {
-                    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-                    if (tc_render_target_handle_valid(rt)) {
+                tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+                if (tc_render_target_handle_valid(rt)) {
+                    if (tc_render_target_get_dynamic_resolution(rt)) {
                         int px, py, pw, ph;
                         tc_viewport_get_pixel_rect(vp, &px, &py, &pw, &ph);
                         if (pw > 0 && ph > 0) {

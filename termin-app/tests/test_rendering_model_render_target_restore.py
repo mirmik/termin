@@ -75,6 +75,7 @@ class _RenderTargetConfig:
         self.camera_uuid = ""
         self.width = 320
         self.height = 200
+        self.dynamic_resolution = False
         self.pipeline_uuid = ""
         self.pipeline_name = "Triangle"
         self.layer_mask = 7
@@ -103,6 +104,7 @@ class _RenderTarget:
         self.camera = None
         self.width = 0
         self.height = 0
+        self.dynamic_resolution = False
         self.pipeline = None
         self.layer_mask = 0
         self.enabled = False

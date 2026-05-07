@@ -37,6 +37,7 @@ class RenderTargetInspector(QWidget):
     pipeline_changed = pyqtSignal(str)
     size_changed = pyqtSignal(int, int)
     enabled_changed = pyqtSignal(bool)
+    dynamic_resolution_changed = pyqtSignal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -73,6 +74,10 @@ class RenderTargetInspector(QWidget):
         self._pipeline_combo = QComboBox()
         self._pipeline_combo.currentIndexChanged.connect(self._on_pipeline_changed)
         form.addRow("Pipeline:", self._pipeline_combo)
+
+        self._dynamic_check = QCheckBox()
+        self._dynamic_check.toggled.connect(self._on_dynamic_toggled)
+        form.addRow("Use View Size:", self._dynamic_check)
 
         self._width_spin = SpinBox()
         self._width_spin.setRange(1, 8192)
@@ -128,8 +133,10 @@ class RenderTargetInspector(QWidget):
             self._refresh_pipeline_combo()
             self._select_current_pipeline()
 
+            self._dynamic_check.setChecked(bool(getattr(render_target, "dynamic_resolution", False)))
             self._width_spin.setValue(render_target.width)
             self._height_spin.setValue(render_target.height)
+            self._update_size_enabled()
         finally:
             self._updating = False
 
@@ -282,6 +289,13 @@ class RenderTargetInspector(QWidget):
 
         self.pipeline_changed.emit(text)
 
+    def _on_dynamic_toggled(self, checked: bool) -> None:
+        if self._updating or self._render_target is None:
+            return
+        self._render_target.dynamic_resolution = checked
+        self._update_size_enabled()
+        self.dynamic_resolution_changed.emit(checked)
+
     def _on_size_changed(self) -> None:
         if self._updating or self._render_target is None:
             return
@@ -290,3 +304,8 @@ class RenderTargetInspector(QWidget):
         self._render_target.width = w
         self._render_target.height = h
         self.size_changed.emit(w, h)
+
+    def _update_size_enabled(self) -> None:
+        manual = self._render_target is not None and not self._dynamic_check.isChecked()
+        self._width_spin.setEnabled(manual)
+        self._height_spin.setEnabled(manual)
