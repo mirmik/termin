@@ -445,11 +445,12 @@ class RenderingModel:
                 continue
             config = self.find_viewport_config(scene, viewport, display)
             camera = self._find_camera_for_viewport_config(scene, config)
-            self.ensure_viewport_render_target(
-                viewport,
-                scene=scene,
-                camera=camera,
-            )
+            render_target = viewport.render_target
+            if render_target is not None:
+                viewport.scene = scene
+                render_target.scene = scene
+                if camera is not None:
+                    render_target.camera = camera
             if config is None:
                 continue
             by_display.setdefault(display.tc_display_ptr, []).append(

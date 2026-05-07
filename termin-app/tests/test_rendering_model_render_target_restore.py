@@ -4,6 +4,23 @@ import types
 from pathlib import Path
 
 
+_SIGNAL_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "termin"
+    / "editor_core"
+    / "signal.py"
+)
+_SIGNAL_SPEC = importlib.util.spec_from_file_location("termin.editor_core.signal", _SIGNAL_PATH)
+_SIGNAL_MODULE = importlib.util.module_from_spec(_SIGNAL_SPEC)
+_SIGNAL_SPEC.loader.exec_module(_SIGNAL_MODULE)
+sys.modules.setdefault("termin", types.ModuleType("termin"))
+editor_core_module = sys.modules.setdefault(
+    "termin.editor_core",
+    types.ModuleType("termin.editor_core"),
+)
+sys.modules["termin.editor_core.signal"] = _SIGNAL_MODULE
+setattr(editor_core_module, "signal", _SIGNAL_MODULE)
+
 _MODEL_PATH = (
     Path(__file__).resolve().parents[1]
     / "termin"
@@ -249,6 +266,31 @@ def test_attach_scene_does_not_restore_render_target_configs_in_python(monkeypat
     assert viewports == []
     assert pool == []
     assert manager.attached == [scene]
+
+
+def test_attach_scene_does_not_create_render_target_for_viewport(monkeypatch):
+    pool = []
+    _install_native_stubs(monkeypatch, pool)
+
+    config = _ViewportConfig()
+    scene = _Scene(_Mount([], [config]))
+    manager = _Manager()
+    model = RenderingModel(manager)
+    viewport = _Viewport()
+    display = types.SimpleNamespace(
+        tc_display_ptr=1,
+        name="Display",
+        viewports=[viewport],
+    )
+    viewport.scene = scene
+    manager.display_for_viewport = display
+    manager.attach_scene = lambda attached_scene: [viewport]
+
+    viewports = model.attach_scene(scene)
+
+    assert viewports == [viewport]
+    assert viewport.render_target is None
+    assert pool == []
 
 
 def test_detach_scene_delegates_to_rendering_manager_full_detach(monkeypatch):

@@ -1,7 +1,8 @@
 import importlib.util
+import sys
+import types
+from enum import Enum
 from pathlib import Path
-
-from termin.editor.scene_manager import SceneManager, SceneMode
 
 
 def _load_source_module(name: str, relative_path: str):
@@ -15,10 +16,98 @@ def _load_source_module(name: str, relative_path: str):
     return module
 
 
+class SceneMode(Enum):
+    STOP = "stop"
+    PLAY = "play"
+    INACTIVE = "inactive"
+
+
+class _Scene:
+    def __init__(self, name):
+        self.name = name
+        self._metadata = {}
+
+    def set_metadata_value(self, key, value):
+        self._metadata[key] = value
+
+    def get_metadata_value(self, key):
+        return self._metadata.get(key)
+
+
+class SceneManager:
+    def __init__(self):
+        self._scenes = {}
+        self._modes = {}
+
+    def create_scene(self, name, _extensions):
+        scene = _Scene(name)
+        self._scenes[name] = scene
+        self._modes[name] = SceneMode.STOP
+        return scene
+
+    def copy_scene(self, src_name, dst_name):
+        src = self._scenes[src_name]
+        scene = _Scene(dst_name)
+        scene._metadata = dict(src._metadata)
+        self._scenes[dst_name] = scene
+        self._modes[dst_name] = SceneMode.STOP
+        return scene
+
+    def get_scene(self, name):
+        return self._scenes.get(name)
+
+    def has_scene(self, name):
+        return name in self._scenes
+
+    def close_scene(self, name):
+        self._scenes.pop(name, None)
+        self._modes.pop(name, None)
+
+    def close_all_scenes(self):
+        self._scenes.clear()
+        self._modes.clear()
+
+    def set_mode(self, name, mode):
+        self._modes[name] = mode
+
+    def get_mode(self, name):
+        return self._modes.get(name)
+
+    def has_play_scenes(self):
+        return any(mode == SceneMode.PLAY for mode in self._modes.values())
+
+
+termin_module = sys.modules.setdefault("termin", types.ModuleType("termin"))
+editor_module = sys.modules.setdefault("termin.editor", types.ModuleType("termin.editor"))
+scene_manager_module = types.ModuleType("termin.editor.scene_manager")
+scene_manager_module.SceneManager = SceneManager
+scene_manager_module.SceneMode = SceneMode
+sys.modules["termin.editor.scene_manager"] = scene_manager_module
+setattr(editor_module, "scene_manager", scene_manager_module)
+editor_camera_module = types.ModuleType("termin.editor.editor_camera")
+editor_camera_module.EditorCameraManager = None
+sys.modules["termin.editor.editor_camera"] = editor_camera_module
+setattr(editor_module, "editor_camera", editor_camera_module)
+modules_module = types.ModuleType("termin.modules")
+modules_module.get_project_modules_runtime = lambda: None
+sys.modules["termin.modules"] = modules_module
+setattr(termin_module, "modules", modules_module)
+render_framework_pkg = types.ModuleType("termin.render_framework")
+render_framework_native_module = types.ModuleType("termin.render_framework._render_framework_native")
+render_framework_native_module.render_target_new = lambda name: None
+sys.modules["termin.render_framework"] = render_framework_pkg
+sys.modules["termin.render_framework._render_framework_native"] = render_framework_native_module
+setattr(termin_module, "render_framework", render_framework_pkg)
+
+
 GameModeModel = _load_source_module(
     "game_mode_model_under_test",
     "termin-app/termin/editor_core/game_mode_model.py",
 ).GameModeModel
+RenderSceneAttachment = _load_source_module(
+    "render_scene_attachment_under_test",
+    "termin-app/termin/editor_core/render_scene_attachment.py",
+).RenderSceneAttachment
 
 
 class _ProjectModulesRuntime:
@@ -56,6 +145,75 @@ class _RenderingController:
 
     def detach_scene(self, scene) -> None:
         self.detach_calls.append(scene.name)
+
+
+class _CountingRenderingController:
+    def __init__(self):
+        self.editor_display = _Display()
+        self.editor_render_target = _RenderTarget("(Editor)")
+        self.editor_pipeline = _Pipeline()
+        editor_viewport = _Viewport()
+        editor_viewport.name = "(Editor)"
+        editor_viewport.render_target = self.editor_render_target
+        self.editor_display.viewports.append(editor_viewport)
+
+        self.scene_displays = []
+        self.render_targets = [self.editor_render_target]
+        self.pipelines = [self.editor_pipeline]
+        self.sync_calls = []
+        self.sync_render_target_calls = []
+        self.attach_calls = []
+        self.detach_calls = []
+
+    @property
+    def counts(self):
+        return {
+            "editor_viewports": len(self.editor_display.viewports),
+            "scene_displays": len(self.scene_displays),
+            "scene_viewports": sum(len(display.viewports) for display in self.scene_displays),
+            "render_targets": len(self.render_targets),
+            "pipelines": len(self.pipelines),
+        }
+
+    def sync_viewport_configs_to_scene(self, scene) -> None:
+        self.sync_calls.append(scene.name)
+
+    def sync_render_target_configs_to_scene(self, scene) -> None:
+        self.sync_render_target_calls.append(scene.name)
+
+    def attach_scene(self, scene) -> None:
+        self.attach_calls.append(scene.name)
+        display = _Display()
+        viewport = _Viewport()
+        viewport.name = scene.name
+        viewport.scene = scene
+        render_target = _RenderTarget(f"{scene.name}.RT")
+        pipeline = _Pipeline()
+        render_target.scene = scene
+        render_target.pipeline = pipeline
+        viewport.render_target = render_target
+        display.viewports.append(viewport)
+        self.scene_displays.append(display)
+        self.render_targets.append(render_target)
+        self.pipelines.append(pipeline)
+
+    def detach_scene(self, scene) -> None:
+        self.detach_calls.append(scene.name)
+        for display in list(self.scene_displays):
+            kept = []
+            for viewport in display.viewports:
+                if viewport.scene is scene:
+                    render_target = viewport.render_target
+                    if render_target in self.render_targets:
+                        self.render_targets.remove(render_target)
+                    pipeline = getattr(render_target, "pipeline", None)
+                    if pipeline in self.pipelines:
+                        self.pipelines.remove(pipeline)
+                else:
+                    kept.append(viewport)
+            display.viewports = kept
+            if not display.viewports:
+                self.scene_displays.remove(display)
 
 
 class _EditorAttachment:
@@ -397,6 +555,59 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
             (False, False),
         ]
         assert mode_events[-1] == (False, "Editor", ["entity-a", "entity-b"])
+    finally:
+        scene_manager.close_all_scenes()
+
+
+def test_game_mode_model_restores_render_counts_with_shared_render_attachment(monkeypatch):
+    import termin.modules
+
+    runtime = _ProjectModulesRuntime()
+    monkeypatch.setattr(
+        termin.modules,
+        "get_project_modules_runtime",
+        lambda: runtime,
+    )
+
+    scene_manager = SceneManager()
+    editor_scene = scene_manager.create_scene("Editor", [])
+    assert editor_scene is not None
+    scene_manager.set_mode("Editor", SceneMode.STOP)
+
+    rendering = _CountingRenderingController()
+    render_attachment = RenderSceneAttachment(scene_manager, rendering)
+    render_attachment.attach_scene_to_render("Editor")
+    baseline = rendering.counts
+
+    connector = _EditorConnector()
+    model = GameModeModel(
+        scene_manager=scene_manager,
+        editor_connector=connector,
+        rendering_controller=rendering,
+        get_editor_scene_name=lambda: "Editor",
+        render_connector=render_attachment,
+    )
+
+    try:
+        model.toggle_game_mode()
+
+        assert rendering.counts == baseline
+        assert rendering.sync_calls == ["Editor"]
+        assert rendering.sync_render_target_calls == ["Editor"]
+        assert rendering.detach_calls == ["Editor"]
+        assert rendering.attach_calls == ["Editor", "Editor(game)"]
+        assert rendering.editor_display.viewports[0].render_target is rendering.editor_render_target
+        assert scene_manager.get_mode("Editor") == SceneMode.INACTIVE
+        assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
+
+        model.toggle_game_mode()
+
+        assert rendering.counts == baseline
+        assert rendering.detach_calls == ["Editor", "Editor(game)"]
+        assert rendering.attach_calls == ["Editor", "Editor(game)", "Editor"]
+        assert rendering.editor_display.viewports[0].render_target is rendering.editor_render_target
+        assert scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert scene_manager.has_scene("Editor(game)") is False
     finally:
         scene_manager.close_all_scenes()
 

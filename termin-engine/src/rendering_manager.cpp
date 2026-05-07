@@ -472,6 +472,11 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
                 rt_it->second->clear_all();
                 render_target_states_.erase(rt_it);
             }
+            tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
+            if (tc_pipeline_handle_valid(pipeline)) {
+                tc_render_target_set_pipeline(rt, TC_PIPELINE_HANDLE_INVALID);
+                tc_pipeline_destroy(pipeline);
+            }
             tc_render_target_free(rt);
         }
     }
@@ -656,6 +661,11 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene) {
         if (rt_it != render_target_states_.end()) {
             rt_it->second->clear_all();
             render_target_states_.erase(rt_it);
+        }
+        tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
+        if (tc_pipeline_handle_valid(pipeline)) {
+            tc_render_target_set_pipeline(rt, TC_PIPELINE_HANDLE_INVALID);
+            tc_pipeline_destroy(pipeline);
         }
         tc_render_target_free(rt);
     }
