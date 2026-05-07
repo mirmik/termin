@@ -202,22 +202,21 @@ if [[ -n "$TARGET_DIR" ]]; then
 else
     # Host-env mode: sequential installs so errors are attributed to a
     # specific package and intermediate state is inspectable.
+    EDITABLE_FLAG=()
+    if [[ $EDITABLE -eq 1 ]]; then
+        EDITABLE_FLAG=(-e)
+    fi
     for pkg in "${PACKAGES[@]}"; do
-        if [[ "$pkg" == "termin-app" && $EDITABLE -eq 1 ]]; then
-            echo ""
-            echo "========================================"
-            echo "  Installing $pkg (editable)"
-            echo "========================================"
-            echo ""
-            pip install --no-build-isolation "${FORCE_FLAGS[@]}" -e "$SCRIPT_DIR/$pkg"
-        else
-            echo ""
-            echo "========================================"
-            echo "  Installing $pkg"
-            echo "========================================"
-            echo ""
-            pip install --no-build-isolation "${FORCE_FLAGS[@]}" "$SCRIPT_DIR/$pkg"
+        local mode=""
+        if [[ $EDITABLE -eq 1 ]]; then
+            mode=" (editable)"
         fi
+        echo ""
+        echo "========================================"
+        echo "  Installing $pkg$mode"
+        echo "========================================"
+        echo ""
+        pip install --no-build-isolation "${FORCE_FLAGS[@]}" "${EDITABLE_FLAG[@]}" "$SCRIPT_DIR/$pkg"
     done
 fi
 
