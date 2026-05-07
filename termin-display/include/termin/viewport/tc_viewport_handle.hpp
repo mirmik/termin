@@ -38,6 +38,8 @@ public:
         return is_valid() ? tc_viewport_get_depth(handle_) : 0;
     }
 
+    // Deprecated compatibility proxy to RenderTarget.layer_mask. New render
+    // code uses CameraComponent.layer_mask & RenderTarget.layer_mask.
     uint64_t layer_mask() const {
         return is_valid() ? tc_viewport_get_layer_mask(handle_) : 0xFFFFFFFFFFFFFFFFULL;
     }
@@ -58,6 +60,7 @@ public:
         }
     }
 
+    // Deprecated compatibility proxy to RenderTarget.layer_mask.
     void set_layer_mask(uint64_t mask) {
         if (is_valid()) {
             tc_viewport_set_layer_mask(handle_, mask);

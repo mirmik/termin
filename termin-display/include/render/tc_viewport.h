@@ -32,6 +32,9 @@ TERMIN_DISPLAY_API void tc_viewport_get_pixel_rect(tc_viewport_handle h, int* px
 TERMIN_DISPLAY_API void tc_viewport_set_depth(tc_viewport_handle h, int depth);
 TERMIN_DISPLAY_API int tc_viewport_get_depth(tc_viewport_handle h);
 
+// Deprecated compatibility API. Layer visibility is now evaluated as
+// CameraComponent.layer_mask & RenderTarget.layer_mask; viewport no longer
+// owns a layer mask.
 TERMIN_DISPLAY_API void tc_viewport_set_layer_mask(tc_viewport_handle h, uint64_t mask);
 TERMIN_DISPLAY_API uint64_t tc_viewport_get_layer_mask(tc_viewport_handle h);
 

@@ -189,7 +189,9 @@ void CameraViewportComponent::apply_settings() {
     tc_viewport_handle vh = viewport_.handle_;
     tc_viewport_set_rect(vh, rect_x, rect_y, rect_w, rect_h);
     tc_viewport_set_depth(vh, depth);
-    tc_viewport_set_layer_mask(vh, layer_mask);
+    if (CameraComponent* camera = find_camera()) {
+        camera->layer_mask = layer_mask;
+    }
 
     // Update pixel rect if display known
     if (display_) {

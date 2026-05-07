@@ -11,6 +11,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <cstdint>
 
 #include <termin/camera/camera.hpp>
 
@@ -36,6 +37,7 @@ public:
     double fov_y = M_PI / 4.0;
     double aspect = 1.0;
     double ortho_size = 5.0;
+    uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
 
 private:
     std::vector<TcViewport> viewports_;
@@ -44,6 +46,7 @@ public:
     INSPECT_FIELD(CameraComponent, near_clip, "Near Clip", "double", 0.001, 10000.0, 0.01)
     INSPECT_FIELD(CameraComponent, far_clip, "Far Clip", "double", 0.01, 100000.0, 1.0)
     INSPECT_FIELD(CameraComponent, ortho_size, "Ortho Size", "double", 0.1, 1000.0, 0.5)
+    // layer_mask is registered manually in camera_component.cpp to use kind="layer_mask".
 
 public:
     CameraComponent();
