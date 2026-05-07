@@ -1,8 +1,7 @@
 import importlib.util
-import sys
-import types
-from enum import Enum
 from pathlib import Path
+
+from termin.editor.scene_manager import SceneManager, SceneMode
 
 
 def _load_source_module(name: str, relative_path: str):
@@ -14,90 +13,6 @@ def _load_source_module(name: str, relative_path: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-class SceneMode(Enum):
-    STOP = "stop"
-    PLAY = "play"
-    INACTIVE = "inactive"
-
-
-class _Scene:
-    def __init__(self, name):
-        self.name = name
-        self._metadata = {}
-
-    def set_metadata_value(self, key, value):
-        self._metadata[key] = value
-
-    def get_metadata_value(self, key):
-        return self._metadata.get(key)
-
-
-class SceneManager:
-    def __init__(self):
-        self._scenes = {}
-        self._modes = {}
-
-    def create_scene(self, name, _extensions):
-        scene = _Scene(name)
-        self._scenes[name] = scene
-        self._modes[name] = SceneMode.STOP
-        return scene
-
-    def copy_scene(self, src_name, dst_name):
-        src = self._scenes[src_name]
-        scene = _Scene(dst_name)
-        scene._metadata = dict(src._metadata)
-        self._scenes[dst_name] = scene
-        self._modes[dst_name] = SceneMode.STOP
-        return scene
-
-    def get_scene(self, name):
-        return self._scenes.get(name)
-
-    def has_scene(self, name):
-        return name in self._scenes
-
-    def close_scene(self, name):
-        self._scenes.pop(name, None)
-        self._modes.pop(name, None)
-
-    def close_all_scenes(self):
-        self._scenes.clear()
-        self._modes.clear()
-
-    def set_mode(self, name, mode):
-        self._modes[name] = mode
-
-    def get_mode(self, name):
-        return self._modes.get(name)
-
-    def has_play_scenes(self):
-        return any(mode == SceneMode.PLAY for mode in self._modes.values())
-
-
-termin_module = sys.modules.setdefault("termin", types.ModuleType("termin"))
-editor_module = sys.modules.setdefault("termin.editor", types.ModuleType("termin.editor"))
-scene_manager_module = types.ModuleType("termin.editor.scene_manager")
-scene_manager_module.SceneManager = SceneManager
-scene_manager_module.SceneMode = SceneMode
-sys.modules["termin.editor.scene_manager"] = scene_manager_module
-setattr(editor_module, "scene_manager", scene_manager_module)
-editor_camera_module = types.ModuleType("termin.editor.editor_camera")
-editor_camera_module.EditorCameraManager = None
-sys.modules["termin.editor.editor_camera"] = editor_camera_module
-setattr(editor_module, "editor_camera", editor_camera_module)
-modules_module = types.ModuleType("termin.modules")
-modules_module.get_project_modules_runtime = lambda: None
-sys.modules["termin.modules"] = modules_module
-setattr(termin_module, "modules", modules_module)
-render_framework_pkg = types.ModuleType("termin.render_framework")
-render_framework_native_module = types.ModuleType("termin.render_framework._render_framework_native")
-render_framework_native_module.render_target_new = lambda name: None
-sys.modules["termin.render_framework"] = render_framework_pkg
-sys.modules["termin.render_framework._render_framework_native"] = render_framework_native_module
-setattr(termin_module, "render_framework", render_framework_pkg)
 
 
 GameModeModel = _load_source_module(
@@ -202,11 +117,11 @@ class _CountingRenderingController:
         for display in list(self.scene_displays):
             kept = []
             for viewport in display.viewports:
-                if viewport.scene is scene:
+                if viewport.scene is scene or viewport.scene.equal(scene):
                     render_target = viewport.render_target
                     if render_target in self.render_targets:
                         self.render_targets.remove(render_target)
-                    pipeline = getattr(render_target, "pipeline", None)
+                    pipeline = render_target.pipeline
                     if pipeline in self.pipelines:
                         self.pipelines.remove(pipeline)
                 else:
