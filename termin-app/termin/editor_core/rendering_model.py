@@ -168,9 +168,8 @@ class RenderingModel:
     # ------------------------------------------------------------------
 
     def _non_editor_displays(self) -> Iterator["Display"]:
-        for display in self._manager.displays:
-            if display.tc_display_ptr != self._editor_display_ptr:
-                yield display
+        # Use scene_displays to skip editor displays
+        return iter(self._manager.scene_displays)
 
     def is_scene_attached(self, scene: "Scene") -> bool:
         """True if this scene already has at least one non-editor viewport."""

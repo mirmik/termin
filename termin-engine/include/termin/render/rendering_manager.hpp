@@ -96,16 +96,25 @@ public:
     // Display Management
     // ========================================================================
 
-    // Add display to management
+    // Add display to management (scene display, cleaned up by detach_scene_full)
     void add_display(tc_display* display);
 
     // Remove display from management
     void remove_display(tc_display* display);
 
-    // Get all managed displays
+    // Get all managed scene displays
     const std::vector<tc_display*>& displays() const { return displays_; }
 
-    // Find display by name
+    // Add editor display (skipped by detach_scene_full/unmount_scene)
+    void add_editor_display(tc_display* display);
+
+    // Remove editor display
+    void remove_editor_display(tc_display* display);
+
+    // Get all editor displays
+    const std::vector<tc_display*>& editor_displays() const { return editor_displays_; }
+
+    // Find display by name (searches both scene and editor displays)
     tc_display* get_display_by_name(const std::string& name) const;
 
     // Get existing display or create via factory
@@ -288,8 +297,11 @@ private:
     std::unordered_map<std::string, tc_viewport_handle> collect_all_viewports() const;
 
 private:
-    // Managed displays
+    // Managed scene displays (cleaned up by detach_scene_full)
     std::vector<tc_display*> displays_;
+
+    // Editor displays (skipped by detach_scene_full)
+    std::vector<tc_display*> editor_displays_;
 
     // Per-display input routers (owned)
     std::unordered_map<tc_display*, std::unique_ptr<DisplayInputRouter>> display_routers_;

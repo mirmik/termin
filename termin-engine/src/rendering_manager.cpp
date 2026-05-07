@@ -257,8 +257,14 @@ void RenderingManager::add_display(tc_display* display) {
 void RenderingManager::remove_display(tc_display* display) {
     if (!display) return;
 
+    // Search in both scene and editor display lists
     auto it = std::find(displays_.begin(), displays_.end(), display);
-    if (it == displays_.end()) return;
+    bool is_editor = false;
+    if (it == displays_.end()) {
+        it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
+        if (it == editor_displays_.end()) return;
+        is_editor = true;
+    }
 
     // Clean up viewport states for viewports on this display
     tc_viewport_handle vp = tc_display_get_first_viewport(display);
@@ -270,12 +276,42 @@ void RenderingManager::remove_display(tc_display* display) {
     // Remove display router if exists
     display_routers_.erase(display);
 
-    displays_.erase(it);
+    if (is_editor) {
+        editor_displays_.erase(it);
+    } else {
+        displays_.erase(it);
+    }
 
     // Notify callback (e.g., editor cleanup of Qt tabs)
     if (display_removed_callback_) {
         display_removed_callback_(display);
     }
+}
+
+void RenderingManager::add_editor_display(tc_display* display) {
+    if (!display) return;
+
+    auto it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
+    if (it != editor_displays_.end()) return;
+
+    editor_displays_.push_back(display);
+}
+
+void RenderingManager::remove_editor_display(tc_display* display) {
+    if (!display) return;
+
+    auto it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
+    if (it == editor_displays_.end()) return;
+
+    // Clean up viewport states for viewports on this display
+    tc_viewport_handle vp = tc_display_get_first_viewport(display);
+    while (tc_viewport_handle_valid(vp)) {
+        remove_viewport_state(vp);
+        vp = tc_viewport_get_display_next(vp);
+    }
+
+    display_routers_.erase(display);
+    editor_displays_.erase(it);
 }
 
 bool RenderingManager::try_auto_remove_display(tc_display* display) {
@@ -303,6 +339,12 @@ tc_input_manager* RenderingManager::ensure_display_router(tc_display* display) {
 
 tc_display* RenderingManager::get_display_by_name(const std::string& name) const {
     for (tc_display* d : displays_) {
+        const char* dname = tc_display_get_name(d);
+        if (dname && name == dname) {
+            return d;
+        }
+    }
+    for (tc_display* d : editor_displays_) {
         const char* dname = tc_display_get_name(d);
         if (dname && name == dname) {
             return d;
@@ -370,17 +412,13 @@ tc_viewport_handle RenderingManager::mount_scene(
 void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display) {
     if (!display) return;
 
-    // Collect viewports showing this scene (skip locked-RT viewports —
-    // they are managed externally, e.g. EditorSceneAttachment).
+    // Collect viewports showing this scene
     std::vector<tc_viewport_handle> to_remove;
     tc_viewport_handle vp = tc_display_get_first_viewport(display);
     while (tc_viewport_handle_valid(vp)) {
         tc_scene_handle vp_scene = tc_viewport_get_scene(vp);
         if (tc_scene_handle_eq(vp_scene, scene)) {
-            tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-            if (!tc_render_target_handle_valid(rt) || !tc_render_target_get_locked(rt)) {
-                to_remove.push_back(vp);
-            }
+            to_remove.push_back(vp);
         }
         vp = tc_viewport_get_display_next(vp);
     }
@@ -589,19 +627,23 @@ void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::v
         }
     }
 
-    // Also check all displays for viewports
-    for (tc_display* display : displays_) {
-        tc_viewport_handle vp = tc_display_get_first_viewport(display);
-        while (tc_viewport_handle_valid(vp)) {
-            const char* name = tc_viewport_get_name(vp);
-            if (name && name[0] != '\0') {
-                if (viewport_by_name.find(name) == viewport_by_name.end()) {
-                    viewport_by_name[name] = vp;
+    // Also check all displays (scene + editor) for viewports
+    auto collect_from = [&viewport_by_name](const std::vector<tc_display*>& disp_list) {
+        for (tc_display* display : disp_list) {
+            tc_viewport_handle vp = tc_display_get_first_viewport(display);
+            while (tc_viewport_handle_valid(vp)) {
+                const char* name = tc_viewport_get_name(vp);
+                if (name && name[0] != '\0') {
+                    if (viewport_by_name.find(name) == viewport_by_name.end()) {
+                        viewport_by_name[name] = vp;
+                    }
                 }
+                vp = tc_viewport_get_display_next(vp);
             }
-            vp = tc_viewport_get_display_next(vp);
         }
-    }
+    };
+    collect_from(displays_);
+    collect_from(editor_displays_);
 
     // Mark viewports as managed by their scene pipeline
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
@@ -630,16 +672,20 @@ void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::v
 
 std::unordered_map<std::string, tc_viewport_handle> RenderingManager::collect_all_viewports() const {
     std::unordered_map<std::string, tc_viewport_handle> result;
-    for (tc_display* display : displays_) {
-        tc_viewport_handle vp = tc_display_get_first_viewport(display);
-        while (tc_viewport_handle_valid(vp)) {
-            const char* name = tc_viewport_get_name(vp);
-            if (name && name[0] != '\0') {
-                result[name] = vp;
+    auto collect_from = [&result](const std::vector<tc_display*>& disp_list) {
+        for (tc_display* display : disp_list) {
+            tc_viewport_handle vp = tc_display_get_first_viewport(display);
+            while (tc_viewport_handle_valid(vp)) {
+                const char* name = tc_viewport_get_name(vp);
+                if (name && name[0] != '\0') {
+                    result[name] = vp;
+                }
+                vp = tc_viewport_get_display_next(vp);
             }
-            vp = tc_viewport_get_display_next(vp);
         }
-    }
+    };
+    collect_from(displays_);
+    collect_from(editor_displays_);
     return result;
 }
 
@@ -748,6 +794,15 @@ void RenderingManager::render_all_offscreen() {
             break;
         }
     }
+    if (share_group_key == 0) {
+        for (tc_display* display : editor_displays_) {
+            tc_render_surface* surface = tc_display_get_surface(display);
+            if (surface) {
+                share_group_key = tc_render_surface_share_group_key(surface);
+                break;
+            }
+        }
+    }
     if (!offscreen_gpu_context_ || offscreen_share_group_key_ != share_group_key) {
         if (offscreen_gpu_context_) {
             tc_gpu_context_free(offscreen_gpu_context_);
@@ -789,22 +844,25 @@ void RenderingManager::render_all_offscreen() {
         }
     }
 
-    // 3. Render unmanaged viewports
-    for (tc_display* display : displays_) {
-        if (!tc_display_get_enabled(display)) continue;
+    // 3. Render unmanaged viewports (scene and editor displays)
+    auto render_unmanaged = [this](const std::vector<tc_display*>& disp_list) {
+        for (tc_display* display : disp_list) {
+            if (!tc_display_get_enabled(display)) continue;
 
-        tc_viewport_handle vp = tc_display_get_first_viewport(display);
-        while (tc_viewport_handle_valid(vp)) {
-            if (tc_viewport_get_enabled(vp)) {
-                const char* managed_by = tc_viewport_get_managed_by(vp);
-                // Skip viewports managed by scene pipeline
-                if (!managed_by || managed_by[0] == '\0') {
-                    render_viewport_offscreen(vp);
+            tc_viewport_handle vp = tc_display_get_first_viewport(display);
+            while (tc_viewport_handle_valid(vp)) {
+                if (tc_viewport_get_enabled(vp)) {
+                    const char* managed_by = tc_viewport_get_managed_by(vp);
+                    if (!managed_by || managed_by[0] == '\0') {
+                        render_viewport_offscreen(vp);
+                    }
                 }
+                vp = tc_viewport_get_display_next(vp);
             }
-            vp = tc_viewport_get_display_next(vp);
         }
-    }
+    };
+    render_unmanaged(displays_);
+    render_unmanaged(editor_displays_);
 }
 
 void RenderingManager::render_scene_pipeline_offscreen(
@@ -1017,25 +1075,29 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 }
 
 void RenderingManager::sync_viewport_resolutions() {
-    for (tc_display* display : displays_) {
-        if (!tc_display_get_enabled(display)) continue;
+    auto sync_list = [this](const std::vector<tc_display*>& disp_list) {
+        for (tc_display* display : disp_list) {
+            if (!tc_display_get_enabled(display)) continue;
 
-        tc_viewport_handle vp = tc_display_get_first_viewport(display);
-        while (tc_viewport_handle_valid(vp)) {
-            if (tc_viewport_get_override_resolution(vp)) {
-                tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-                if (tc_render_target_handle_valid(rt)) {
-                    int px, py, pw, ph;
-                    tc_viewport_get_pixel_rect(vp, &px, &py, &pw, &ph);
-                    if (pw > 0 && ph > 0) {
-                        tc_render_target_set_width(rt, pw);
-                        tc_render_target_set_height(rt, ph);
+            tc_viewport_handle vp = tc_display_get_first_viewport(display);
+            while (tc_viewport_handle_valid(vp)) {
+                if (tc_viewport_get_override_resolution(vp)) {
+                    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+                    if (tc_render_target_handle_valid(rt)) {
+                        int px, py, pw, ph;
+                        tc_viewport_get_pixel_rect(vp, &px, &py, &pw, &ph);
+                        if (pw > 0 && ph > 0) {
+                            tc_render_target_set_width(rt, pw);
+                            tc_render_target_set_height(rt, ph);
+                        }
                     }
                 }
+                vp = tc_viewport_get_display_next(vp);
             }
-            vp = tc_viewport_get_display_next(vp);
         }
-    }
+    };
+    sync_list(displays_);
+    sync_list(editor_displays_);
 }
 
 void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt) {
@@ -1113,6 +1175,11 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
 
 void RenderingManager::present_all() {
     for (tc_display* display : displays_) {
+        if (tc_display_get_enabled(display)) {
+            present_display(display);
+        }
+    }
+    for (tc_display* display : editor_displays_) {
         if (tc_display_get_enabled(display)) {
             present_display(display);
         }
@@ -1431,6 +1498,7 @@ void RenderingManager::shutdown() {
 
     // Clear displays (don't free them - we don't own them)
     displays_.clear();
+    editor_displays_.clear();
 
     // Free offscreen GPU context
     if (offscreen_gpu_context_) {
