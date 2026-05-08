@@ -1,6 +1,7 @@
 #include "guard/guard.h"
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/graph_compiler.hpp"
+#include "termin/render/tc_pass.hpp"
 
 #include <string>
 #include <trent/json.h>
@@ -44,6 +45,48 @@ TEST_CASE("Graph compiler maps RenderTarget output node to viewport OUTPUT")
     REQUIRE(naming.socket_names.count("0") == 1u);
     REQUIRE(naming.socket_names["0"].count("output_res") == 1u);
     CHECK(naming.socket_names["0"]["output_res"] == "OUTPUT");
+}
+
+TEST_CASE("Graph compiler synthesizes blit for External RT to RenderTarget")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTarget", "x": 409.0, "y": 40.0, "node_type": "output" },
+    {
+      "type": "External RT",
+      "x": 49.0,
+      "y": 21.0,
+      "node_type": "external_rt",
+      "params": { "slot": "fov_input" }
+    }
+  ],
+  "connections": [
+    { "from_node": 1, "from_socket": "fbo", "to_node": 0, "to_socket": "color" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    REQUIRE(naming.socket_names.count("1") == 1u);
+    REQUIRE(naming.socket_names["1"].count("fbo") == 1u);
+    CHECK(naming.socket_names["1"]["fbo"] == "fov_input");
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+    REQUIRE(pipeline->pass_count() == 1u);
+
+    termin::TcPassRef pass(pipeline->get_pass_at(0));
+    CHECK(pass.type_name() == "PresentToScreenPass");
+    CHECK(pass.pass_name() == "OutputBlit");
+
+    pipeline->destroy();
+    delete pipeline;
 }
 
 TEST_CASE("RenderingManager detach_scene removes attached scene")

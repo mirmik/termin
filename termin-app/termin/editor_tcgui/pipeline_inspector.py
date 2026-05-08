@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -15,10 +16,11 @@ from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.separator import Separator
+from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.menu import Menu, MenuItem
 from tcgui.widgets.message_box import MessageBox
 from tcgui.widgets.input_dialog import show_input_dialog
-from tcgui.widgets.units import px
+from tcgui.widgets.units import pct, px
 
 from termin.editor_tcgui.inspect_field_panel import InspectFieldPanel
 
@@ -85,10 +87,26 @@ class PipelineInspectorTcgui(VStack):
 
         self.add_child(Separator())
 
+        self._compiled_title = Label()
+        self._compiled_title.text = "Compiled Result"
+        self.add_child(self._compiled_title)
+
+        self._compiled_output = TextArea()
+        self._compiled_output.read_only = True
+        self._compiled_output.focusable = True
+        self._compiled_output.word_wrap = False
+        self._compiled_output.preferred_width = pct(100)
+        self._compiled_output.preferred_height = px(420)
+        self.add_child(self._compiled_output)
+
+        self._details = VStack()
+        self._details.spacing = 4
+        self.add_child(self._details)
+
         # Passes row
         passes_title = Label()
         passes_title.text = "Passes"
-        self.add_child(passes_title)
+        self._details.add_child(passes_title)
 
         passes_row = HStack()
         passes_row.spacing = 4
@@ -129,7 +147,7 @@ class PipelineInspectorTcgui(VStack):
         pass_btns.add_child(self._pass_down)
 
         passes_row.add_child(pass_btns)
-        self.add_child(passes_row)
+        self._details.add_child(passes_row)
 
         pass_name_row = HStack()
         pass_name_row.spacing = 6
@@ -141,7 +159,7 @@ class PipelineInspectorTcgui(VStack):
         self._pass_name.on_submit = self._on_pass_name_submitted
         self._pass_name.stretch = True
         pass_name_row.add_child(self._pass_name)
-        self.add_child(pass_name_row)
+        self._details.add_child(pass_name_row)
 
         pass_enabled_row = HStack()
         pass_enabled_row.spacing = 6
@@ -155,17 +173,17 @@ class PipelineInspectorTcgui(VStack):
         pass_enabled_spacer = Label()
         pass_enabled_spacer.stretch = True
         pass_enabled_row.add_child(pass_enabled_spacer)
-        self.add_child(pass_enabled_row)
+        self._details.add_child(pass_enabled_row)
 
         self._pass_fields = InspectFieldPanel(self._rm)
         self._pass_fields.on_field_changed = self._on_pass_field_changed
-        self.add_child(self._pass_fields)
+        self._details.add_child(self._pass_fields)
 
         # Effects (for PostProcessPass only)
-        self.add_child(Separator())
+        self._details.add_child(Separator())
         self._effects_title = Label()
         self._effects_title.text = "Post Effects"
-        self.add_child(self._effects_title)
+        self._details.add_child(self._effects_title)
 
         effects_row = HStack()
         effects_row.spacing = 4
@@ -206,7 +224,7 @@ class PipelineInspectorTcgui(VStack):
         eff_btns.add_child(self._effect_down)
 
         effects_row.add_child(eff_btns)
-        self.add_child(effects_row)
+        self._details.add_child(effects_row)
 
         eff_name_row = HStack()
         eff_name_row.spacing = 6
@@ -218,17 +236,17 @@ class PipelineInspectorTcgui(VStack):
         self._effect_name.on_submit = self._on_effect_name_submitted
         self._effect_name.stretch = True
         eff_name_row.add_child(self._effect_name)
-        self.add_child(eff_name_row)
+        self._details.add_child(eff_name_row)
 
         self._effect_fields = InspectFieldPanel(self._rm)
         self._effect_fields.on_field_changed = self._on_effect_field_changed
-        self.add_child(self._effect_fields)
+        self._details.add_child(self._effect_fields)
 
         # Resource specs
-        self.add_child(Separator())
+        self._details.add_child(Separator())
         specs_title = Label()
         specs_title.text = "Resource Specs (FBO)"
-        self.add_child(specs_title)
+        self._details.add_child(specs_title)
 
         specs_row = HStack()
         specs_row.spacing = 4
@@ -256,11 +274,11 @@ class PipelineInspectorTcgui(VStack):
         spec_btns.add_child(self._spec_remove)
 
         specs_row.add_child(spec_btns)
-        self.add_child(specs_row)
+        self._details.add_child(specs_row)
 
         self._spec_editor = VStack()
         self._spec_editor.spacing = 4
-        self.add_child(self._spec_editor)
+        self._details.add_child(self._spec_editor)
 
         self._spec_resource = TextInput()
         self._spec_resource.on_submit = self._on_spec_field_changed
@@ -329,28 +347,57 @@ class PipelineInspectorTcgui(VStack):
         self._source_path = source_path
         if self._ops is not None:
             self._ops.set_pipeline(pipeline)
+        self._refresh_compiled_output()
         self._rebuild_all()
 
     def load_pipeline_file(self, file_path: str) -> None:
         path = Path(file_path)
         if not path.exists():
+            log.error(f"[PipelineInspectorTcgui] pipeline file does not exist: {file_path}")
             return
 
         name = path.stem
         pipeline = self._rm.get_pipeline(name)
 
         if pipeline is None:
-            from termin.assets.pipeline_asset import PipelineAsset
+            if path.suffix.lower() == ".scene_pipeline":
+                from termin.assets.scene_pipeline_asset import ScenePipelineAsset
 
-            asset = PipelineAsset(name=name, source_path=path)
-            pipeline = asset.pipeline
+                asset = ScenePipelineAsset(name=name, source_path=path)
+                try:
+                    asset.load_from_content(path.read_text(encoding="utf-8"))
+                    pipeline = asset.compile()
+                except Exception as e:
+                    log.error(f"[PipelineInspectorTcgui] failed to load scene pipeline {file_path}: {e}")
+                    pipeline = None
+            else:
+                from termin.assets.pipeline_asset import PipelineAsset
+
+                asset = PipelineAsset(name=name, source_path=path)
+                pipeline = asset.pipeline
 
         if pipeline is None:
+            log.error(f"[PipelineInspectorTcgui] failed to compile pipeline file: {file_path}")
             self.set_pipeline(None, f"File: {file_path}", file_path)
             return
 
         self.set_pipeline(pipeline, f"File: {file_path}", file_path)
         self._emit_changed()
+
+    def _refresh_compiled_output(self) -> None:
+        if self._pipeline is None:
+            if self._source_path:
+                self._compiled_output.text = "Pipeline compilation failed. See log for details."
+            else:
+                self._compiled_output.text = ""
+            return
+
+        try:
+            data = self._pipeline.serialize()
+            self._compiled_output.text = json.dumps(data, indent=2, ensure_ascii=False, default=str)
+        except Exception as e:
+            log.error(f"[PipelineInspectorTcgui] failed to serialize compiled pipeline: {e}")
+            self._compiled_output.text = f"Failed to serialize compiled pipeline: {e}"
 
     def save_pipeline_file(self, file_path: str | None = None) -> bool:
         """Save the currently-edited pipeline to ``file_path``; falls back to
@@ -384,6 +431,11 @@ class PipelineInspectorTcgui(VStack):
     def _set_visible_state(self, has_pipeline: bool) -> None:
         # Read-only when a file is loaded (editing goes through graph editor).
         is_file = has_pipeline and self._source_path is not None
+        has_file_selection = self._source_path is not None
+
+        self._compiled_title.visible = has_file_selection
+        self._compiled_output.visible = has_file_selection
+        self._details.visible = has_pipeline and not is_file
 
         self._passes_list.visible = has_pipeline
         self._pass_add.visible = has_pipeline and not is_file
@@ -414,10 +466,10 @@ class PipelineInspectorTcgui(VStack):
         self._spec_remove.visible = has_pipeline and not is_file
         self._spec_editor.visible = has_pipeline and self._selected_spec_index >= 0
         self._spec_editor.enabled = not is_file
-        self._edit_button.visible = is_file
+        self._edit_button.visible = has_file_selection
         self._save_button.visible = has_pipeline and not is_file
 
-        self._empty.visible = not has_pipeline
+        self._empty.visible = not has_pipeline and not has_file_selection
 
     def _rebuild_all(self) -> None:
         self._updating = True

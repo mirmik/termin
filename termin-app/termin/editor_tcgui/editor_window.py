@@ -1241,7 +1241,7 @@ class EditorWindowTcgui:
         if ext in (".tc_mat", ".material"):
             self._inspector_controller.show_material_inspector_for_file(path)
             return
-        if ext in (".pipeline", ".tc_pipeline"):
+        if ext in (".pipeline", ".tc_pipeline", ".scene_pipeline"):
             self._inspector_controller.show_pipeline_inspector_for_file(path)
             return
         if ext in (".png", ".jpg", ".jpeg", ".bmp", ".hdr", ".exr"):
