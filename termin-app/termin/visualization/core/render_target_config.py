@@ -26,6 +26,8 @@ def serialize_render_target_config(config: RenderTargetConfig) -> dict:
         result["layer_mask"] = hex(config.layer_mask)
     if not config.enabled:
         result["enabled"] = config.enabled
+    if config.pipeline_params:
+        result["pipeline_params"] = dict(config.pipeline_params)
     return result
 
 
@@ -47,4 +49,11 @@ def deserialize_render_target_config(data: dict) -> RenderTargetConfig:
         config.layer_mask = int(layer_mask_raw)
 
     config.enabled = data.get("enabled", True)
+    pipeline_params = data.get("pipeline_params", {})
+    if isinstance(pipeline_params, dict):
+        config.pipeline_params = {
+            str(slot): str(value)
+            for slot, value in pipeline_params.items()
+            if slot and value
+        }
     return config

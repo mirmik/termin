@@ -502,6 +502,7 @@ class RenderingModel:
             config.pipeline_name = pipeline_name
             config.layer_mask = rt.layer_mask
             config.enabled = rt.enabled
+            config.pipeline_params = dict(rt.pipeline_params)
             rm.add_render_target_config(config)
 
     # ------------------------------------------------------------------

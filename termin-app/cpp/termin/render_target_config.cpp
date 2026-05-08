@@ -17,6 +17,13 @@ tc_render_target_config RenderTargetConfig::to_c() const {
     c.pipeline_name = pipeline_name.empty() ? nullptr : tgfx_intern_string(pipeline_name.c_str());
     c.layer_mask = layer_mask;
     c.enabled = enabled;
+    if (!pipeline_params.empty()) {
+        c.pipeline_params = tc_value_dict_new();
+        for (const auto& [slot, value] : pipeline_params) {
+            if (slot.empty() || value.empty()) continue;
+            tc_value_dict_set(&c.pipeline_params, slot.c_str(), tc_value_string(value.c_str()));
+        }
+    }
 
     return c;
 }
@@ -34,6 +41,16 @@ RenderTargetConfig RenderTargetConfig::from_c(const tc_render_target_config* c) 
     cfg.pipeline_name = c->pipeline_name ? c->pipeline_name : "";
     cfg.layer_mask = c->layer_mask;
     cfg.enabled = c->enabled;
+    if (c->pipeline_params.type == TC_VALUE_DICT) {
+        for (size_t i = 0; i < tc_value_dict_size(&c->pipeline_params); i++) {
+            const char* key = nullptr;
+            tc_value* value = tc_value_dict_get_at(const_cast<tc_value*>(&c->pipeline_params), i, &key);
+            if (!key || !key[0] || !value || value->type != TC_VALUE_STRING || !value->data.s) {
+                continue;
+            }
+            cfg.pipeline_params[key] = value->data.s;
+        }
+    }
 
     return cfg;
 }

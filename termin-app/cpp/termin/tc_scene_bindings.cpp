@@ -5,6 +5,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/tuple.h>
+#include <nanobind/stl/map.h>
 
 #include <termin/tc_scene.hpp>
 #include "termin/tc_scene_render_ext.hpp"
