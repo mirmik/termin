@@ -58,7 +58,11 @@ class Texture:
         """Raw image data (for preview)."""
         td = self._handle.get()
         if td is not None:
-            return td.data
+            data = td.data
+            if data is None:
+                td.sync_to_cpu()
+                data = td.data
+            return data
         return None
 
     def load(self, path: str | Path) -> None:
@@ -111,6 +115,13 @@ class Texture:
         width = texture_data.width
         height = texture_data.height
         data = texture_data.data
+
+        if data is None:
+            texture_data.sync_to_cpu()
+            data = texture_data.data
+
+        if data is None:
+            return None
 
         # Create QImage from RGBA data (no flip needed - data is original orientation)
         if len(data.shape) == 3 and data.shape[2] == 4:
