@@ -1,7 +1,7 @@
 # План: tc_texture_sync_to_cpu() — двусторонняя синхронизация текстур
 
 **Дата:** 2026-05-08  
-**Статус:** Draft
+**Статус:** Implemented
 
 ## Проблема
 
@@ -142,3 +142,15 @@ fallback на `sync_to_cpu()` → создать QPixmap из numpy array.
 
 `GPU_FIRST` текстура после `sync_to_cpu()` остаётся `GPU_FIRST` — флаг не меняется.  
 Повторный вызов делает свежий readback (не кэширует результат между кадрами).
+
+---
+
+## Отклонения от плана при реализации
+
+1. **Callback signature**: вместо `bool (*)(uint32_t pool_index)` используется `bool (*)(tc_texture* tex)` — колбэку нужен доступ к формату, размерам и полю `data` текстуры для аллокации и записи.
+
+2. **Legacy path (шаг 4)**: отдельная реализация в `tgfx_resource_gpu.c` не потребовалась — обе ветки (legacy GL и tgfx2 OpenGL) идут через `tgfx_gpu_ops` vtable, callback реализован в `tgfx2_gpu_ops.cpp`.
+
+3. **Python preview (шаг 7)**: вместо правок в `material_inspector.py`, `sync_to_cpu()` добавлен в свойство `Texture._image_data` и метод `Texture.get_preview_pixmap()` — это прозрачно чинит превью для всех потребителей (tcgui, Qt, texture_inspector).
+
+4. **Формат данных**: для float16 текстур (RGBA16F/RGB16F) данные хранятся как float32 (4 байта на канал), а не packed float16 — для совместимости с Python numpy.
