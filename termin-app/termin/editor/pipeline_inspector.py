@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
+from tcbase import log
 from termin.editor.inspect_field_panel import InspectFieldPanel
 
 if TYPE_CHECKING:
@@ -1038,7 +1039,7 @@ class PipelineInspector(QWidget):
                 a = float(self._spec_clear_a.text())
                 self._ops.update_spec_field(spec, "clear_color", (r, g, b, a))
             except ValueError:
-                pass
+                log.debug(f"[PipelineInspector] Invalid clear color values")
         else:
             self._ops.update_spec_field(spec, "clear_color", None)
 
@@ -1047,7 +1048,7 @@ class PipelineInspector(QWidget):
                 depth = float(self._spec_clear_depth.text())
                 self._ops.update_spec_field(spec, "clear_depth", depth)
             except ValueError:
-                pass
+                log.debug(f"[PipelineInspector] Invalid clear depth value")
         else:
             self._ops.update_spec_field(spec, "clear_depth", None)
 

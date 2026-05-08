@@ -649,6 +649,7 @@ class MaterialInspector(QWidget):
                 self._material.source_path = str(path)
                 return True
             except Exception as e:
+                log.error(f"[MaterialInspector] Failed to save material to {path}: {e}", exc_info=True)
                 QMessageBox.critical(
                     self,
                     "Error Saving Material",
@@ -1145,6 +1146,8 @@ def _classify_texture_as_rt_ref(tc_tex) -> tuple[str, str] | None:
             render_target_pool_list,
         )
     except ImportError:
+        from tcbase import log
+        log.debug("[material_inspector] render_framework module not available in _classify_texture_as_rt_ref")
         return None
 
     target_uuid = tc_tex.uuid

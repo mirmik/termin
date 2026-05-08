@@ -317,7 +317,8 @@ def get_skinned_shader_handle(original_handle):
     # Inject skinning into vertex source
     try:
         skinned_vertex = inject_skinning_into_vertex_shader(vertex_source)
-    except Exception:
+    except Exception as e:
+        log.error(f"[get_skinned_shader_handle] Failed to inject skinning into shader '{shader_name}': {e}")
         return None
 
     # Create or find skinned variant in registry

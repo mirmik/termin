@@ -81,8 +81,8 @@ class RecentProjects:
                 with open(project_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 return data.get("name", os.path.basename(os.path.dirname(project_path)))
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"Failed to read project name from {project_path}: {e}")
         # Fallback: use directory name
         if os.path.isdir(project_path):
             return os.path.basename(project_path)

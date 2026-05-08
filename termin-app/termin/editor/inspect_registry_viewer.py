@@ -6,6 +6,8 @@ Shows all registered types, their fields, backends, and inheritance.
 
 from __future__ import annotations
 
+import logging
+
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -19,6 +21,8 @@ from PyQt6.QtWidgets import (
     QLineEdit,
 )
 from PyQt6.QtCore import Qt
+
+_logger = logging.getLogger(__name__)
 
 
 class InspectRegistryViewer(QDialog):
@@ -108,6 +112,7 @@ class InspectRegistryViewer(QDialog):
             from termin._native.inspect import InspectRegistry
             registry = InspectRegistry.instance()
         except ImportError:
+            _logger.debug("InspectRegistry not available in InspectRegistryViewer")
             self._status_label.setText("InspectRegistry not available")
             return
 
@@ -153,6 +158,7 @@ class InspectRegistryViewer(QDialog):
             from termin._native.inspect import InspectRegistry
             registry = InspectRegistry.instance()
         except ImportError:
+            _logger.debug("InspectRegistry not available in _on_type_clicked")
             return
 
         backend = registry.get_type_backend(type_name)

@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from html.parser import HTMLParser
 from typing import Iterable
 
-from tcbase import Key, MouseButton
+from tcbase import Key, MouseButton, log
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent
 from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.widget import Widget
@@ -45,7 +45,8 @@ def _parse_css_color(value: str) -> Color | None:
                 g = int(hex_value[2:4], 16) / 255.0
                 b = int(hex_value[4:6], 16) / 255.0
                 return (r, g, b, 1.0)
-            except ValueError:
+            except ValueError as exc:
+                log.debug(f"[rich_text_view] Invalid CSS hex color '{value}': {exc}")
                 return None
     return None
 

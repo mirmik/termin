@@ -4,6 +4,7 @@ from __future__ import annotations
 import time
 from typing import Callable
 
+from tcbase import log
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent, KeyEvent, TextEvent
 from tcgui.widgets.theme import current_theme as _t
@@ -88,7 +89,8 @@ class SpinBox(Widget):
         self._editing = False
         try:
             val = float(self._edit_text)
-        except ValueError:
+        except ValueError as exc:
+            log.debug(f"[spin_box] Invalid numeric input '{self._edit_text}': {exc}")
             return
         self._set_value(val)
 

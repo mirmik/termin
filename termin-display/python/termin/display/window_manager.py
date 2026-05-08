@@ -12,12 +12,16 @@ process regardless of how many OS windows the host opens.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+_logger = logging.getLogger(__name__)
+
 try:
     from termin.display._platform_native import BackendWindow, SDLBackendWindow
-except ImportError:
+except ImportError as e:
+    _logger.debug("Platform native module not available (optional): %s", e)
     BackendWindow = None
     SDLBackendWindow = None
 

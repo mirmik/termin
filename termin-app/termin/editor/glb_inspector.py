@@ -7,11 +7,14 @@ Allows editing import settings including normalize scale via .meta files.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
 import numpy as np
+
+_logger = logging.getLogger(__name__)
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -226,6 +229,7 @@ class GLBInspector(QWidget):
             self._update_content_info(scene_data)
             self._load_spec_from_file(file_path)
         except Exception as e:
+            _logger.warning("Failed to load GLB file %s: %s", file_path, e, exc_info=True)
             self._clear_content()
             self._path_label.setText(f"Error: {e}")
 

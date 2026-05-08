@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Optional
 
+from tcbase import log
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage
 from PyQt6.QtWidgets import (
@@ -206,6 +208,7 @@ class TextureInspector(QWidget):
             texture = Texture.from_file(file_path)
             self.set_texture(texture, name)
         except Exception as e:
+            log.warn(f"[TextureInspector] failed to load texture from '{file_path}': {e}")
             self._clear()
             self._name_label.setText(name)
             self._path_label.setText(f"Error: {e}")

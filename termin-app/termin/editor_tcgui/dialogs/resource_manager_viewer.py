@@ -430,8 +430,8 @@ def show_resource_manager_viewer(ui) -> None:
                 lines.append("Backend: C++")
             else:
                 lines.append("Backend: Python")
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"[ResourceManager] Failed to get component registry details for {name}: {e}")
         details.text = "\n".join(lines)
 
     # --- Load asset ---

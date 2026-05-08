@@ -219,6 +219,7 @@ class FilePreLoader(ABC):
         """
         result = self.preload(path)
         if result is None:
+            log.warn(f"[FilePreLoader] preload returned None for changed file: {path}")
             return
 
         name = os.path.splitext(os.path.basename(path))[0]

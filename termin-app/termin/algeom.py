@@ -2,6 +2,8 @@
 import numpy
 import math
 
+from tcbase import log
+
 
 def fit_quadric(points, center=None):
     """Строит квадратичную форму (квадрику) по набору точек методом наименьших квадратов.
@@ -302,6 +304,7 @@ def fit_paraboloid(points):
         vertex = -0.5 * A_inv @ b
     except numpy.linalg.LinAlgError:
         # Вырожденный случай (например, цилиндр)
+        log.debug("[fit_paraboloid] Degenerate quadratic matrix A (e.g., cylinder), vertex set to NaN")
         vertex = numpy.zeros(n_indep)
         vertex[:] = numpy.nan
     

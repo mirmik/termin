@@ -167,8 +167,8 @@ class RenderTargetInspector(QWidget):
                 if scene.scene_handle().index == rt_scene.scene_handle().index:
                     self._scene_combo.setCurrentIndex(i + 1)
                     return
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[RenderTargetInspector] scene handle comparison failed for scene {i}: {e}")
         self._scene_combo.setCurrentIndex(0)
 
     def _on_scene_changed(self, index: int) -> None:

@@ -392,7 +392,8 @@ class SceneFileController:
 
         try:
             data = json.loads(json_str)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            log.debug(f"[SceneFileController] Failed to parse editor data from {file_path}: {e}")
             return {}
 
         editor_data = data.get("editor", {})

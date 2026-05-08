@@ -141,8 +141,8 @@ def show_core_registry_viewer(ui) -> None:
                         vaos = [str(c['vao']) for c in gpu['contexts'] if c['vao'] != 0]
                         if vaos:
                             gpu_str += "/" + ",".join(vaos)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug(f"[CoreRegistry] GPU mesh info failed for pool {pool_index}: {e}")
             rows.append([
                 info["name"],
                 str(info.get("vertex_count", 0)),
@@ -404,8 +404,8 @@ def show_core_registry_viewer(ui) -> None:
                         lines.append("")
                         lines.append("--- Geometry Source ---")
                         lines.append(shader.geometry_source[:500] if shader.geometry_source else "(empty)")
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[CoreRegistry] Failed to get shader source for {uuid}: {e}")
 
         details.text = "\n".join(lines)
 
@@ -427,8 +427,8 @@ def show_core_registry_viewer(ui) -> None:
                     lines.append(f"Active phase: {mat.active_phase_mark or '(none)'}")
                     c = mat.color
                     lines.append(f"Color:        ({c.x:.2f}, {c.y:.2f}, {c.z:.2f}, {c.w:.2f})")
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[CoreRegistry] Failed to get material details for {uuid}: {e}")
 
         details.text = "\n".join(lines)
 
@@ -469,8 +469,8 @@ def show_core_registry_viewer(ui) -> None:
                     for p in pipeline_passes:
                         enabled = "enabled" if p.get("enabled", True) else "disabled"
                         lines.append(f"  {p.get('pass_name', '?')}  type={p.get('type_name', '?')}  [{enabled}]")
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[CoreRegistry] Failed to get pipeline passes for {info.get('name', '?')}: {e}")
 
         details.text = "\n".join(lines)
 
@@ -496,8 +496,8 @@ def show_core_registry_viewer(ui) -> None:
                     lines.append("--- Component Types ---")
                     for ct in comp_types:
                         lines.append(f"  {ct.get('type_name', '?')}  count={ct.get('count', 0)}")
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[CoreRegistry] Failed to get component types for scene {info.get('name', '?')}: {e}")
 
             # Entities
             try:
@@ -511,8 +511,8 @@ def show_core_registry_viewer(ui) -> None:
                         lines.append(f"  {ent.get('name', '?')}  [{enabled}/{visible}]  comp={ent.get('component_count', 0)}")
                     if len(entities) > 50:
                         lines.append(f"  ... and {len(entities) - 50} more")
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[CoreRegistry] Failed to get entities for scene {info.get('name', '?')}: {e}")
 
         details.text = "\n".join(lines)
 

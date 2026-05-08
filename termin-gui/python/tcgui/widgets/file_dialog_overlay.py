@@ -270,7 +270,8 @@ class _OverlayFileDialog:
         def add_place(label: str, path: Path) -> None:
             try:
                 resolved = path.expanduser().resolve()
-            except Exception:
+            except Exception as exc:
+                log.debug(f"[file_dialog_overlay] Failed to resolve path {path}: {exc}")
                 resolved = path
             if resolved.exists() and resolved.is_dir():
                 if all(existing != resolved for _, existing in places):
@@ -292,7 +293,8 @@ class _OverlayFileDialog:
                 for entry in sorted(mount_root.iterdir(), key=lambda p: p.name.lower()):
                     if entry.is_dir():
                         add_place(entry.name, entry)
-            except Exception:
+            except Exception as exc:
+                log.debug(f"[file_dialog_overlay] Cannot list {mount_root}: {exc}")
                 continue
 
         return places
@@ -341,8 +343,8 @@ class _OverlayFileDialog:
     def _navigate_to(self, path: Path, *, push_history: bool, allow_select_file: bool = False) -> None:
         try:
             resolved = path.resolve()
-        except Exception:
-            self._set_error(f"Cannot resolve path: {path}")
+        except Exception as exc:
+            self._set_error(f"Cannot resolve path {path}: {exc}")
             return
 
         if resolved.exists() and resolved.is_dir():
@@ -412,7 +414,8 @@ class _OverlayFileDialog:
             if is_dir:
                 return f"Modified: {stamp}"
             return f"{self._format_size(st.st_size)}  Modified: {stamp}"
-        except Exception:
+        except Exception as exc:
+            log.debug(f"[file_dialog_overlay] Cannot stat {path}: {exc}")
             return ""
 
     def _format_size(self, size: int) -> str:

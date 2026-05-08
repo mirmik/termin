@@ -73,6 +73,7 @@ class ProjectSettings:
         try:
             sync_mode = RenderSyncMode(sync_mode_str)
         except ValueError:
+            log.warning(f"[ProjectSettings] Unknown render_sync_mode '{sync_mode_str}', falling back to NONE")
             sync_mode = RenderSyncMode.NONE
 
         return ProjectSettings(

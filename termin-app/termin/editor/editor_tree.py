@@ -32,7 +32,8 @@ class NodeWrapper:
             return False
         try:
             return self.obj.valid()
-        except Exception:
+        except Exception as e:
+            log.debug(f"[NodeWrapper.is_valid_entity] Exception checking validity: {e}")
             return False
 
     @property
@@ -97,7 +98,8 @@ class SceneTreeModel(QAbstractItemModel):
             return False
         try:
             return scene.is_alive()
-        except Exception:
+        except Exception as e:
+            log.debug(f"[SceneTreeModel._is_scene_valid] Exception checking scene: {e}")
             return False
 
     def _get_node_from_index(self, index: QModelIndex) -> NodeWrapper | None:
@@ -111,7 +113,8 @@ class SceneTreeModel(QAbstractItemModel):
             if not isinstance(ptr, NodeWrapper):
                 return None
             return ptr
-        except Exception:
+        except Exception as e:
+            log.debug(f"[SceneTreeModel._get_node_from_index] Exception: {e}")
             return None
 
     # ------------------------------------------------------
@@ -616,7 +619,8 @@ class SceneTreeModel(QAbstractItemModel):
         # Find the dragged entity by UUID
         try:
             dragged_entity = self.scene.get_entity(entity_uuid)
-        except Exception:
+        except Exception as e:
+            log.debug(f"[SceneTreeModel.canDropMimeData] Failed to get entity {entity_uuid}: {e}")
             return False
         if dragged_entity is None or not dragged_entity.valid():
             return False
@@ -640,7 +644,8 @@ class SceneTreeModel(QAbstractItemModel):
                     if check_entity is not None and check_entity.valid() and check_entity is dragged_entity:
                         return False
                     check = check.parent
-            except Exception:
+            except Exception as e:
+                log.debug(f"[SceneTreeModel.canDropMimeData] Error checking ancestry: {e}")
                 return False
 
         return True
@@ -694,7 +699,8 @@ class SceneTreeModel(QAbstractItemModel):
         # Find the dragged entity by UUID
         try:
             dragged_entity = self.scene.get_entity(entity_uuid)
-        except Exception:
+        except Exception as e:
+            log.debug(f"[SceneTreeModel.dropMimeData] Failed to get entity {entity_uuid}: {e}")
             return False
         if dragged_entity is None or not dragged_entity.valid():
             return False

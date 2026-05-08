@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
+from tcbase import log
+
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.vstack import VStack
 from tcgui.widgets.label import Label
@@ -33,8 +35,8 @@ def _show_layer_mask_dialog(
             scene = scene_getter()
             if scene is not None and hasattr(scene, "layer_names"):
                 layer_names = scene.layer_names
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"[LayerMaskWidget] failed to get layer names from scene: {e}")
 
     checkboxes: dict[int, Checkbox] = {}
 

@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from tcbase import log
+
 if TYPE_CHECKING:
     from termin.loaders.mesh_spec import MeshSpec
 
@@ -45,7 +47,8 @@ def load_stl_file(path, spec: "MeshSpec | None" = None) -> STLSceneData:
         if is_ascii:
             try:
                 mesh = _load_ascii_stl(f, path.stem)
-            except Exception:
+            except Exception as e:
+                log.debug(f"[STL] ASCII parse failed, falling back to binary: {e}")
                 # Fallback to binary
                 f.seek(0)
                 mesh = _load_binary_stl(f, path.stem)

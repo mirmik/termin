@@ -184,7 +184,7 @@ class ProjectBrowserTcgui:
                 if e.is_dir() and not e.name.startswith("."):
                     return True
         except PermissionError:
-            pass
+            log.debug(f"[ProjectBrowserTcgui] permission denied checking subdirs: {directory}")
         return False
 
     def _on_node_expanded(self, node) -> None:

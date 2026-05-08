@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from tcbase import Key, MouseButton, Mods
+from tcbase import Key, MouseButton, Mods, log
 from tgfx.font import FontTextureAtlas
 from tgfx import Tgfx2Context
 from tcgui.widgets.widget import Widget
@@ -106,7 +106,8 @@ class UI:
         try:
             from termin.display import _platform_native
             return _platform_native.get_clipboard_text() or ""
-        except Exception:
+        except Exception as e:
+            log.debug(f"UI._default_get_clipboard_text: native clipboard unavailable: {e}")
             return self._clipboard_text
 
     def _default_set_clipboard_text(self, text: str) -> None:
@@ -114,8 +115,8 @@ class UI:
         try:
             from termin.display import _platform_native
             _platform_native.set_clipboard_text(text)
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"UI._default_set_clipboard_text: native clipboard unavailable: {e}")
 
     # ------------------------------------------------------------------
     # Properties

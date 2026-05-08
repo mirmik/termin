@@ -1,18 +1,25 @@
+import logging
+
 from termin_nanobind.runtime import preload_sdk_libs
 
 preload_sdk_libs("termin_display")
 
+_logger = logging.getLogger(__name__)
+
 try:
     from termin.display._platform_native import BackendWindow, SDLBackendWindow
-except ImportError:
+except ImportError as e:
+    _logger.debug("Platform native module not available (optional): %s", e)
     BackendWindow = None
     SDLBackendWindow = None
+
 try:
     from termin.display.window_manager import (
         BackendWindowEntry,
         BackendWindowManager,
     )
-except ImportError:
+except ImportError as e:
+    _logger.debug("Window manager not available (optional): %s", e)
     BackendWindowEntry = None
     BackendWindowManager = None
 

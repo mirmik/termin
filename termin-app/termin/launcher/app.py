@@ -49,7 +49,7 @@ def _translate_sdl_key(scancode: int) -> int:
         try:
             return Key(keycode)
         except ValueError:
-            pass
+            log.debug(f"Unrecognized SDL keycode {keycode} for scancode {scancode}")
     return Key.UNKNOWN
 
 
@@ -104,6 +104,7 @@ def _find_editor_executable() -> str | None:
     try:
         exe_dir = os.path.dirname(os.readlink("/proc/self/exe"))
     except (OSError, AttributeError):
+        log.debug("Cannot resolve /proc/self/exe — falling back to PATH lookup for termin_editor")
         exe_dir = None
 
     if exe_dir:
