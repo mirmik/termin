@@ -1,5 +1,7 @@
 #include "termin_modules/module_cpp_backend.hpp"
 
+#include <tcbase/tc_log.hpp>
+
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -107,7 +109,11 @@ bool CppModuleBackend::needs_rebuild(
                 return true;
             }
         }
+    } catch (const std::exception& e) {
+        tc::Log::warn(e, "CppModuleBackend::needs_rebuild: filesystem iteration failed, assuming rebuild needed");
+        return true;
     } catch (...) {
+        tc::Log::warn("CppModuleBackend::needs_rebuild: unknown error during filesystem iteration, assuming rebuild needed");
         return true;
     }
 

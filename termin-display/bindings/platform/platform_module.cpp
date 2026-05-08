@@ -1,5 +1,7 @@
 #include <nanobind/nanobind.h>
 
+#include <tcbase/tc_log.hpp>
+
 #include "termin/platform/backend_window.hpp"
 
 #ifdef TERMIN_DISPLAY_HAS_SDL
@@ -31,8 +33,8 @@ NB_MODULE(_platform_native, m) {
     // the rest of the SDL bindings stay usable.
     try {
         nb::module_::import_("tgfx._tgfx_native");
-    } catch (const std::exception&) {
-        // pass
+    } catch (const std::exception& e) {
+        tc::Log::debug("[platform] Failed to import tgfx._tgfx_native: %s (non-fatal, SDL bindings remain usable)", e.what());
     }
 
     termin::bind_sdl(m);

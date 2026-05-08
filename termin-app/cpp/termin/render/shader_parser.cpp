@@ -1,5 +1,7 @@
 #include "shader_parser.hpp"
 
+#include <tcbase/tc_log.hpp>
+
 #include <sstream>
 #include <algorithm>
 #include <cctype>
@@ -572,7 +574,7 @@ MaterialProperty parse_property_directive(const std::string& line) {
             range_min = std::stod(trim(range_match[1].str()));
             range_max = std::stod(trim(range_match[2].str()));
         } catch (...) {
-            // Ignore parse errors for range
+            tc::Log::debug("Failed to parse range() in @property directive: {}", line);
         }
         // Remove range from content
         content = content.substr(0, range_match.position());

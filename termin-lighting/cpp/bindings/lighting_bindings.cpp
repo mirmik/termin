@@ -4,6 +4,8 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/operators.h>
 
+#include <tcbase/tc_log.hpp>
+
 #include <termin/lighting/lighting.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/bindings/entity_helpers.hpp>
@@ -21,7 +23,11 @@ static Vec3 numpy_to_vec3(nb::object obj) {
         auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(obj);
         double* ptr = arr.data();
         return Vec3{ptr[0], ptr[1], ptr[2]};
-    } catch (...) {}
+    } catch (const std::exception& e) {
+        tc::Log::debug(e, "numpy_to_vec3: ndarray cast failed, falling back to sequence");
+    } catch (...) {
+        tc::Log::debug("numpy_to_vec3: unknown exception during ndarray cast, falling back to sequence");
+    }
     nb::sequence seq = nb::cast<nb::sequence>(obj);
     return Vec3{nb::cast<double>(seq[0]), nb::cast<double>(seq[1]), nb::cast<double>(seq[2])};
 }

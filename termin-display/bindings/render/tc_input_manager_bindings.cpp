@@ -2,6 +2,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 
+#include <tcbase/tc_log.hpp>
 #include "render/tc_input_manager.h"
 #include "render/tc_display_input_router.h"
 #include "render/tc_viewport_input_manager.h"
@@ -41,7 +42,7 @@ static void py_on_mouse_button(tc_input_manager* m, int button, int action, int 
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
         vt->on_mouse_button(py_obj, button, action, mods);
     } catch (const std::exception& e) {
-        fprintf(stderr, "[py_on_mouse_button] exception: %s\n", e.what());
+        tc::Log::warn("py_on_mouse_button: Python callback threw: %s", e.what());
     }
 }
 
@@ -55,7 +56,7 @@ static void py_on_mouse_move(tc_input_manager* m, double x, double y) {
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
         vt->on_mouse_move(py_obj, x, y);
     } catch (const std::exception& e) {
-        fprintf(stderr, "[py_on_mouse_move] exception: %s\n", e.what());
+        tc::Log::warn("py_on_mouse_move: Python callback threw: %s", e.what());
     }
 }
 
@@ -69,7 +70,7 @@ static void py_on_scroll(tc_input_manager* m, double x, double y, int mods) {
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
         vt->on_scroll(py_obj, x, y, mods);
     } catch (const std::exception& e) {
-        fprintf(stderr, "[py_on_scroll] exception: %s\n", e.what());
+        tc::Log::warn("py_on_scroll: Python callback threw: %s", e.what());
     }
 }
 
@@ -83,7 +84,7 @@ static void py_on_key(tc_input_manager* m, int key, int scancode, int action, in
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
         vt->on_key(py_obj, key, scancode, action, mods);
     } catch (const std::exception& e) {
-        fprintf(stderr, "[py_on_key] exception: %s\n", e.what());
+        tc::Log::warn("py_on_key: Python callback threw: %s", e.what());
     }
 }
 
@@ -97,7 +98,7 @@ static void py_on_char(tc_input_manager* m, uint32_t codepoint) {
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
         vt->on_char(py_obj, codepoint);
     } catch (const std::exception& e) {
-        fprintf(stderr, "[py_on_char] exception: %s\n", e.what());
+        tc::Log::warn("py_on_char: Python callback threw: %s", e.what());
     }
 }
 
@@ -145,7 +146,7 @@ void bind_tc_input_manager(nb::module_& m) {
     // Create input manager with class vtable
     m.def("_input_manager_new", [](uintptr_t vtable_ptr, nb::object py_manager) -> uintptr_t {
         if (!vtable_ptr) {
-            fprintf(stderr, "[_input_manager_new] vtable_ptr is NULL\n");
+            tc::Log::error("_input_manager_new: vtable_ptr is NULL");
             return 0;
         }
 

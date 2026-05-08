@@ -63,7 +63,9 @@ std::array<double, 3> numpy_to_vec3(nb::object obj) {
         auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(obj);
         double* ptr = arr.data();
         return {ptr[0], ptr[1], ptr[2]};
-    } catch (...) {}
+    } catch (...) {
+        tc::Log::debug("[numpy_to_vec3] ndarray cast failed, falling back to sequence");
+    }
     nb::sequence seq = nb::cast<nb::sequence>(obj);
     return {nb::cast<double>(seq[0]), nb::cast<double>(seq[1]), nb::cast<double>(seq[2])};
 }
@@ -74,7 +76,9 @@ std::array<double, 4> numpy_to_vec4(nb::object obj) {
         auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(obj);
         double* ptr = arr.data();
         return {ptr[0], ptr[1], ptr[2], ptr[3]};
-    } catch (...) {}
+    } catch (...) {
+        tc::Log::debug("[numpy_to_vec4] ndarray cast failed, falling back to sequence");
+    }
     nb::sequence seq = nb::cast<nb::sequence>(obj);
     return {nb::cast<double>(seq[0]), nb::cast<double>(seq[1]),
             nb::cast<double>(seq[2]), nb::cast<double>(seq[3])};

@@ -4,6 +4,7 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
+#include <tcbase/tc_log.hpp>
 #include <cstdint>
 
 #include <termin/entity/component.hpp>
@@ -44,6 +45,7 @@ void bind_inspect(nb::module_& m) {
             void* ptr = static_cast<void*>(nb::cast<Component*>(obj));
             return nb::int_(reinterpret_cast<uintptr_t>(ptr));
         } catch (const nb::cast_error&) {
+            tc_log_debug("inspect: failed to extract Component* pointer from object");
             return nb::none();
         }
     }));
@@ -54,6 +56,7 @@ void bind_inspect(nb::module_& m) {
             TcMaterial mat = nb::cast<TcMaterial>(obj);
             return nb::int_(reinterpret_cast<uintptr_t>(mat.get()));
         } catch (const nb::cast_error&) {
+            tc_log_debug("inspect: failed to extract TcMaterial pointer from object");
             return nb::none();
         }
     }));
@@ -64,6 +67,7 @@ void bind_inspect(nb::module_& m) {
             void* ptr = static_cast<void*>(nb::cast<CxxFramePass*>(obj));
             return nb::int_(reinterpret_cast<uintptr_t>(ptr));
         } catch (const nb::cast_error&) {
+            tc_log_debug("inspect: failed to extract CxxFramePass* pointer from object");
             return nb::none();
         }
     }));

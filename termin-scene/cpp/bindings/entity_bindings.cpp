@@ -83,10 +83,12 @@ void bind_entity_class(nb::module_& m) {
                     GeneralPose3 gpose = nb::cast<GeneralPose3>(pose);
                     self->transform().set_local_pose(gpose);
                 } catch (const nb::cast_error&) {
+                    tc::Log::debug("[Entity::init] Pose is not GeneralPose3, trying Pose3 fallback");
                     try {
                         Pose3 p = nb::cast<Pose3>(pose);
                         self->transform().set_local_pose(GeneralPose3(p.ang, p.lin, Vec3{1, 1, 1}));
                     } catch (const nb::cast_error&) {
+                        tc::Log::debug("[Entity::init] Pose is not Pose3, trying attribute-based fallback");
                         GeneralPose3 gpose;
                         if (nb::hasattr(pose, "lin") && nb::hasattr(pose, "ang")) {
                             try {
@@ -99,6 +101,7 @@ void bind_entity_class(nb::module_& m) {
                                     gpose.scale = numpy_to_vec3(scale);
                                 }
                             } catch (const nb::cast_error&) {
+                                tc::Log::debug("[Entity::init] Pose attributes are not numpy arrays, trying direct Vec3/Quat cast");
                                 gpose.lin = nb::cast<Vec3>(pose.attr("lin"));
                                 gpose.ang = nb::cast<Quat>(pose.attr("ang"));
                                 if (nb::hasattr(pose, "scale")) {

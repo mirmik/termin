@@ -168,7 +168,13 @@ public:
         try {
             return tc::InspectRegistry_get(tc::InspectRegistry::instance(),
                 obj_ptr, tc_component_type_name(_c), field_name);
+        } catch (const std::exception& e) {
+            tc::Log::debug("[TcComponentRef] get_field(%s) on %s failed: %s",
+                field_name.c_str(), tc_component_type_name(_c), e.what());
+            return nb::none();
         } catch (...) {
+            tc::Log::debug("[TcComponentRef] get_field(%s) on %s failed with unknown exception",
+                field_name.c_str(), tc_component_type_name(_c));
             return nb::none();
         }
     }
