@@ -35,6 +35,9 @@ class ComboBox(Widget):
         self.dropdown_item_hover: tuple[float, float, float, float] = _t.hover_subtle
         self.dropdown_max_visible: int = 8
         self.dropdown_item_height: float = 24.0
+        self.dropdown_scrollbar_width: float = 8.0
+        self.dropdown_scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
+        self.dropdown_scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
 
         # State
         self.hovered: bool = False
@@ -176,6 +179,42 @@ class _DropdownList(Widget):
         self._combo = combo
         self._hovered_index: int = -1
         self._scroll_offset: float = 0.0
+        self._scrollbar_hovered: bool = False
+        self._dragging_scrollbar: bool = False
+        self._drag_start_y: float = 0.0
+        self._drag_start_scroll: float = 0.0
+
+    def _content_height(self) -> float:
+        return len(self._combo.items) * self._combo.dropdown_item_height
+
+    def _max_scroll(self) -> float:
+        return max(0.0, self._content_height() - self.height)
+
+    def _has_scrollbar(self) -> bool:
+        return self._max_scroll() > 0.0
+
+    def _scrollbar_track_rect(self) -> tuple[float, float, float, float]:
+        c = self._combo
+        return (
+            self.x + self.width - c.dropdown_scrollbar_width,
+            self.y,
+            c.dropdown_scrollbar_width,
+            self.height,
+        )
+
+    def _scrollbar_thumb_rect(self) -> tuple[float, float, float, float]:
+        c = self._combo
+        track_x, track_y, track_w, track_h = self._scrollbar_track_rect()
+        content_h = self._content_height()
+        thumb_h = max(20.0, track_h * (track_h / content_h))
+        max_scroll = self._max_scroll()
+        thumb_y = track_y
+        if max_scroll > 0:
+            thumb_y += (track_h - thumb_h) * (self._scroll_offset / max_scroll)
+        return (track_x, thumb_y, track_w, thumb_h)
+
+    def _set_scroll_offset(self, value: float) -> None:
+        self._scroll_offset = max(0.0, min(value, self._max_scroll()))
 
     def render(self, renderer: 'UIRenderer'):
         c = self._combo
@@ -183,7 +222,10 @@ class _DropdownList(Widget):
         renderer.draw_rect(self.x, self.y, self.width, self.height,
                            c.dropdown_background, c.border_radius)
 
-        renderer.begin_clip(self.x, self.y, self.width, self.height)
+        has_scrollbar = self._has_scrollbar()
+        text_width = self.width - (c.dropdown_scrollbar_width if has_scrollbar else 0.0)
+
+        renderer.begin_clip(self.x, self.y, text_width, self.height)
 
         item_h = c.dropdown_item_height
         for i, text in enumerate(c.items):
@@ -193,10 +235,10 @@ class _DropdownList(Widget):
 
             # Hover/selected highlight
             if i == self._hovered_index:
-                renderer.draw_rect(self.x, iy, self.width, item_h,
+                renderer.draw_rect(self.x, iy, text_width, item_h,
                                    c.dropdown_item_hover, 0)
             elif i == c.selected_index:
-                renderer.draw_rect(self.x, iy, self.width, item_h,
+                renderer.draw_rect(self.x, iy, text_width, item_h,
                                    (c.dropdown_item_hover[0], c.dropdown_item_hover[1],
                                     c.dropdown_item_hover[2], 0.5), 0)
 
@@ -208,6 +250,24 @@ class _DropdownList(Widget):
 
         renderer.end_clip()
 
+        if has_scrollbar:
+            track_x, track_y, track_w, track_h = self._scrollbar_track_rect()
+            renderer.draw_rect(
+                track_x,
+                track_y,
+                track_w,
+                track_h,
+                (0.0, 0.0, 0.0, 0.16),
+                track_w / 2,
+            )
+            thumb_x, thumb_y, thumb_w, thumb_h = self._scrollbar_thumb_rect()
+            color = (
+                c.dropdown_scrollbar_hover_color
+                if self._scrollbar_hovered or self._dragging_scrollbar
+                else c.dropdown_scrollbar_color
+            )
+            renderer.draw_rect(thumb_x, thumb_y, thumb_w, thumb_h, color, thumb_w / 2)
+
     def _index_at(self, y: float) -> int:
         rel_y = y - self.y + self._scroll_offset
         idx = int(rel_y / self._combo.dropdown_item_height)
@@ -216,27 +276,50 @@ class _DropdownList(Widget):
         return -1
 
     def on_mouse_move(self, event: MouseEvent):
-        self._hovered_index = self._index_at(event.y)
+        if self._dragging_scrollbar:
+            _track_x, _track_y, _track_w, track_h = self._scrollbar_track_rect()
+            _thumb_x, _thumb_y, _thumb_w, thumb_h = self._scrollbar_thumb_rect()
+            available_h = max(1.0, track_h - thumb_h)
+            delta_y = event.y - self._drag_start_y
+            self._set_scroll_offset(
+                self._drag_start_scroll + delta_y * (self._max_scroll() / available_h)
+            )
+            self._hovered_index = -1
+            return
+
+        self._scrollbar_hovered = self._has_scrollbar() and event.x >= self._scrollbar_track_rect()[0]
+        self._hovered_index = -1 if self._scrollbar_hovered else self._index_at(event.y)
 
     def on_mouse_leave(self):
         self._hovered_index = -1
+        if not self._dragging_scrollbar:
+            self._scrollbar_hovered = False
 
     def on_mouse_down(self, event: MouseEvent) -> bool:
         if event.button != MouseButton.LEFT:
             return False
+        if self._has_scrollbar() and event.x >= self._scrollbar_track_rect()[0]:
+            self._dragging_scrollbar = True
+            self._scrollbar_hovered = True
+            self._drag_start_y = event.y
+            self._drag_start_scroll = self._scroll_offset
+            return True
         idx = self._index_at(event.y)
         if idx >= 0:
             self._combo._select_item(idx)
         return True
 
+    def on_mouse_up(self, event: MouseEvent) -> bool:
+        if self._dragging_scrollbar:
+            self._dragging_scrollbar = False
+            self._scrollbar_hovered = self._has_scrollbar() and event.x >= self._scrollbar_track_rect()[0]
+            return True
+        return False
+
     def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
-        c = self._combo
-        total = len(c.items) * c.dropdown_item_height
-        max_scroll = max(0.0, total - self.height)
-        if max_scroll <= 0:
+        if not self._has_scrollbar():
             return False
-        self._scroll_offset -= event.dy * 30
-        self._scroll_offset = max(0.0, min(self._scroll_offset, max_scroll))
+        self._set_scroll_offset(self._scroll_offset - event.dy * 30)
         return True
 
     def hit_test(self, px: float, py: float):

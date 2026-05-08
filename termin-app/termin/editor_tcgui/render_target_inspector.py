@@ -127,7 +127,7 @@ class RenderTargetInspectorTcgui(VStack):
         self._pipeline_params_grid.visible = False
         self.add_child(self._pipeline_params_grid)
 
-        self._pipeline_params_widgets: list[ComboBox] = []
+        self._pipeline_params_widgets: list[TexturePickerWidget] = []
         self._pipeline_params_slots: list[str] = []
 
         self._empty = Label()
@@ -414,7 +414,6 @@ class RenderTargetInspectorTcgui(VStack):
                 self._rm,
                 on_changed=lambda tag, val, s=slot: self._on_pipeline_param_changed(s, tag, val),
                 scene_getter=self._scene_getter,
-                show_preview=False,
             )
 
             current_val = params.get(slot, "")
