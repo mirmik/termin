@@ -358,6 +358,8 @@ class PipelineInspectorTcgui(VStack):
 
         name = path.stem
         pipeline = self._rm.get_pipeline(name)
+        graph_node_count = -1
+        graph_connection_count = -1
 
         if pipeline is None:
             if path.suffix.lower() == ".scene_pipeline":
@@ -365,7 +367,9 @@ class PipelineInspectorTcgui(VStack):
 
                 asset = ScenePipelineAsset(name=name, source_path=path)
                 try:
-                    asset.load_from_content(path.read_text(encoding="utf-8"))
+                    raw = path.read_text(encoding="utf-8")
+                    graph_node_count, graph_connection_count = self._count_graph_items(raw, file_path)
+                    asset.load_from_content(raw)
                     pipeline = asset.compile()
                 except Exception as e:
                     log.error(f"[PipelineInspectorTcgui] failed to load scene pipeline {file_path}: {e}")
@@ -375,14 +379,35 @@ class PipelineInspectorTcgui(VStack):
 
                 asset = PipelineAsset(name=name, source_path=path)
                 pipeline = asset.pipeline
+                graph = asset.graph_data
+                if graph is not None:
+                    graph_node_count = len(graph.get("nodes", []))
+                    graph_connection_count = len(graph.get("connections", []))
 
         if pipeline is None:
             log.error(f"[PipelineInspectorTcgui] failed to compile pipeline file: {file_path}")
             self.set_pipeline(None, f"File: {file_path}", file_path)
             return
 
+        if len(pipeline.passes) == 0 and graph_node_count > 0:
+            log.error(
+                "[PipelineInspectorTcgui] compiled pipeline is empty: "
+                f"file={file_path}, graph_nodes={graph_node_count}, "
+                f"graph_connections={graph_connection_count}"
+            )
+
         self.set_pipeline(pipeline, f"File: {file_path}", file_path)
         self._emit_changed()
+
+    def _count_graph_items(self, raw: str, file_path: str) -> tuple[int, int]:
+        try:
+            data = json.loads(raw)
+        except Exception as e:
+            log.error(f"[PipelineInspectorTcgui] failed to parse pipeline JSON {file_path}: {e}")
+            return -1, -1
+        if "nodes" not in data:
+            return -1, -1
+        return len(data.get("nodes", [])), len(data.get("connections", []))
 
     def _refresh_compiled_output(self) -> None:
         if self._pipeline is None:
