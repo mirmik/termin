@@ -46,6 +46,7 @@ static void pysurface_get_size(tc_render_surface* s, int* width, int* height) {
         if (width) *width = std::get<0>(tup);
         if (height) *height = std::get<1>(tup);
     } catch (const std::exception& e) {
+        tc::Log::debug("pysurface_get_size: Python callback threw: %s (falling back to 0x0)", e.what());
         if (width) *width = 0;
         if (height) *height = 0;
     }
@@ -58,7 +59,7 @@ static void pysurface_make_current(tc_render_surface* s) {
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
         py_obj.attr("make_current")();
     } catch (const std::exception& e) {
-        // Ignore
+        tc::Log::debug("pysurface_make_current: Python callback threw: %s", e.what());
     }
 }
 
@@ -69,7 +70,7 @@ static void pysurface_swap_buffers(tc_render_surface* s) {
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
         py_obj.attr("swap_buffers")();
     } catch (const std::exception& e) {
-        // Ignore
+        tc::Log::debug("pysurface_swap_buffers: Python callback threw: %s", e.what());
     }
 }
 
@@ -96,6 +97,7 @@ static void pysurface_get_window_size(tc_render_surface* s, int* width, int* hei
         if (width) *width = std::get<0>(tup);
         if (height) *height = std::get<1>(tup);
     } catch (const std::exception& e) {
+        tc::Log::debug("pysurface_get_window_size: Python callback threw: %s (falling back to 0x0)", e.what());
         if (width) *width = 0;
         if (height) *height = 0;
     }
@@ -109,6 +111,7 @@ static bool pysurface_should_close(tc_render_surface* s) {
         nb::object result = py_obj.attr("should_close")();
         return nb::cast<bool>(result);
     } catch (const std::exception& e) {
+        tc::Log::debug("pysurface_should_close: Python callback threw: %s (falling back to true)", e.what());
         return true;
     }
 }
@@ -120,7 +123,7 @@ static void pysurface_set_should_close(tc_render_surface* s, bool value) {
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(s->body));
         py_obj.attr("set_should_close")(value);
     } catch (const std::exception& e) {
-        // Ignore
+        tc::Log::debug("pysurface_set_should_close: Python callback threw: %s", e.what());
     }
 }
 
@@ -138,6 +141,7 @@ static void pysurface_get_cursor_pos(tc_render_surface* s, double* x, double* y)
         if (x) *x = std::get<0>(tup);
         if (y) *y = std::get<1>(tup);
     } catch (const std::exception& e) {
+        tc::Log::debug("pysurface_get_cursor_pos: Python callback threw: %s (falling back to 0,0)", e.what());
         if (x) *x = 0.0;
         if (y) *y = 0.0;
     }
@@ -243,7 +247,7 @@ void bind_tc_render_surface(nb::module_& m) {
                         nb::object cb = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(userdata));
                         cb(w, h);
                     } catch (const std::exception& e) {
-                        // Ignore
+                        tc::Log::debug("render_surface resize callback: Python callback threw: %s", e.what());
                     }
                 },
                 cb_ptr

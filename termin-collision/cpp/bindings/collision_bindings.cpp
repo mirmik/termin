@@ -4,6 +4,8 @@
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/string.h>
 
+#include <tcbase/tc_log.hpp>
+
 #include "termin/collision/collision.hpp"
 
 extern "C" {
@@ -167,6 +169,7 @@ NB_MODULE(_collision_native, m) {
     try {
         nb::module_::import_("tcbase._geom_native").attr("AABB");
     } catch (...) {
+        tc::Log::debug("[collision_bindings] AABB not found in tcbase._geom_native, exposing local fallback");
         nb::class_<AABB>(m, "AABB")
             .def(nb::init<>())
             .def(nb::init<const Vec3&, const Vec3&>(),

@@ -5,6 +5,7 @@
 #include <nanobind/stl/pair.h>
 
 #include <termin/geom/geom.hpp>
+#include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
 using namespace termin;
@@ -45,7 +46,7 @@ static Vec3 py_to_vec3(nb::object obj) {
         auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(obj);
         double* ptr = arr.data();
         return Vec3{ptr[0], ptr[1], ptr[2]};
-    } catch (...) {}
+    } catch (...) { tc_log_debug("geom_bindings: failed to cast to ndarray in py_to_vec3, falling back to sequence protocol"); }
     // Try sequence protocol
     nb::sequence seq = nb::cast<nb::sequence>(obj);
     return Vec3{nb::cast<double>(seq[0]), nb::cast<double>(seq[1]), nb::cast<double>(seq[2])};

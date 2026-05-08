@@ -152,59 +152,59 @@
 [x] termin-physics/python/termin/physics/fem_physics_world_component.py | py | исправлен (1 warning лог)
 
 # === C++ (60 файлов) ===
-termin-app/cpp/termin/assets/handles_inline.hpp | cpp
-termin-app/cpp/termin/assets/voxel_grid_handle_inline.hpp | cpp
-termin-app/cpp/termin/bindings/geom/common.hpp | cpp
-termin-app/cpp/termin/bindings/render/render_engine.cpp | cpp
-termin-app/cpp/termin/bindings/render/render_pipeline_bindings.cpp | cpp
-termin-app/cpp/termin/bindings/render/shader_parser.cpp | cpp
-termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp | cpp
-termin-app/cpp/termin/bindings/skeleton/skeleton_module.cpp | cpp
-termin-app/cpp/termin/bindings/tc_value_helpers.hpp | cpp
-termin-app/cpp/termin/editor/gizmo_types.hpp | cpp
-termin-app/cpp/termin/editor/transform_gizmo.cpp | cpp
-termin-app/cpp/termin/entity/entity_registry.hpp | cpp
-termin-app/cpp/termin/geom_bindings.cpp | cpp
-termin-app/cpp/termin/inspect_bindings.cpp | cpp
-termin-app/cpp/termin/mesh_bindings.cpp | cpp
-termin-app/cpp/termin/render/shader_parser.cpp | cpp
-termin-app/cpp/termin/render/shader_parser.hpp | cpp
-termin-app/cpp/termin/tc_component_python_bindings.cpp | cpp
-termin-base/include/tcbase/tc_value.h | cpp
-termin-base/python/bindings/geom/common.hpp | cpp
-termin-base/python/bindings/tcbase_module.cpp | cpp
-termin-collision/cpp/bindings/collision_bindings.cpp | cpp
-termin-components/termin-components-render/components/render_components_bindings.cpp | cpp
-termin-display/bindings/platform/platform_module.cpp | cpp
-termin-display/bindings/render/tc_display_bindings.cpp | cpp
-termin-display/bindings/render/tc_input_manager_bindings.cpp | cpp
-termin-display/bindings/render/tc_render_surface_bindings.cpp | cpp
-termin-display/bindings/viewport/viewport_module.cpp | cpp
-termin-display/src/platform/offscreen_render_surface.cpp | cpp
-termin-graphics/include/tgfx2/vulkan/vulkan_render_device.hpp | cpp
-termin-graphics/include/tgfx/resources/tc_shader.h | cpp
-termin-inspect/include/inspect/tc_kind_python.hpp | cpp
-termin-inspect/include/tc_inspect_cpp.hpp | cpp
-termin-inspect/python/bindings/inspect_module.cpp | cpp
-termin-inspect/src/tc_inspect_python.cpp | cpp
-termin-lighting/cpp/bindings/lighting_bindings.cpp | cpp
-termin-mesh/python/bindings/mesh_bindings.cpp | cpp
-termin-modules/src/module_cpp_backend.cpp | cpp
-termin-modules/src/module_descriptor_parser.cpp | cpp
-termin-render/include/termin/lighting/shadow.hpp | cpp
-termin-render/include/termin/render/fbo_pool.hpp | cpp
-termin-render/python/render_framework_bindings.cpp | cpp
-termin-render/python/render_pipeline_bindings.cpp | cpp
-termin-render/python/scene_pipeline_template_bindings.cpp | cpp
-termin-render/python/tc_pass_bindings.cpp | cpp
-termin-render/python/tc_render_target_bindings.cpp | cpp
-termin-render/src/scene_pipeline_template.cpp | cpp
-termin-scene/cpp/bindings/component_registry_python.cpp | cpp
-termin-scene/cpp/bindings/entity_bindings.cpp | cpp
-termin-scene/cpp/bindings/tc_component_python_bindings.cpp | cpp
-termin-scene/cpp/bindings/tc_component_ref_bindings.cpp | cpp
-termin-scene/cpp/bindings/tc_scene_bindings.cpp | cpp
-termin-scene/cpp/tc_scene.cpp | cpp
-termin-scene/include/tc_type_registry.h | cpp
-termin-scene/include/termin/bindings/tc_value_helpers.hpp | cpp
+[x] termin-app/cpp/termin/assets/handles_inline.hpp | cpp | чисто (все catch используют tc::Log::warn)
+[x] termin-app/cpp/termin/assets/voxel_grid_handle_inline.hpp | cpp | чисто (все catch используют tc::Log::warn)
+[x] termin-app/cpp/termin/bindings/geom/common.hpp | cpp | исправлен (1 debug лог в fallback)
+[x] termin-app/cpp/termin/bindings/render/render_engine.cpp | cpp | чисто (catch логирует + rethrow)
+[x] termin-app/cpp/termin/bindings/render/render_pipeline_bindings.cpp | cpp | чисто (catch логирует + rethrow)
+[x] termin-app/cpp/termin/bindings/render/shader_parser.cpp | cpp | чисто (все catch имеют tc::Log::error)
+[x] termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp | cpp | исправлен (2 debug лога в fallback)
+[x] termin-app/cpp/termin/bindings/skeleton/skeleton_module.cpp | cpp | исправлен (2 debug лога в fallback)
+[x] termin-app/cpp/termin/bindings/tc_value_helpers.hpp | cpp | чисто (catch уже имеет tc_log debug)
+[x] termin-app/cpp/termin/editor/gizmo_types.hpp | cpp | чисто (нет try/catch)
+[x] termin-app/cpp/termin/editor/transform_gizmo.cpp | cpp | чисто (нет try/catch)
+[x] termin-app/cpp/termin/entity/entity_registry.hpp | cpp | чисто (нет try/catch)
+[x] termin-app/cpp/termin/geom_bindings.cpp | cpp | исправлен (1 debug лог в fallback)
+[x] termin-app/cpp/termin/inspect_bindings.cpp | cpp | исправлен (3 debug лога в fallback)
+[x] termin-app/cpp/termin/mesh_bindings.cpp | cpp | чисто (catch уже имеет tc_log_error)
+[x] termin-app/cpp/termin/render/shader_parser.cpp | cpp | исправлен (1 debug лог в fallback)
+[x] termin-app/cpp/termin/render/shader_parser.hpp | cpp | чисто (нет try/catch)
+[x] termin-app/cpp/termin/tc_component_python_bindings.cpp | cpp | чисто (catch имеет tc::Log + PyErr_Print)
+[x] termin-base/include/tcbase/tc_value.h | cpp | чисто (C-хедер, нет try/catch)
+[x] termin-base/python/bindings/geom/common.hpp | cpp | исправлен (1 debug лог в fallback)
+[x] termin-base/python/bindings/tcbase_module.cpp | cpp | чисто (пустой catch - намеренное предотвращение рекурсии)
+[x] termin-collision/cpp/bindings/collision_bindings.cpp | cpp | исправлен (1 debug лог в fallback)
+[x] termin-components/termin-components-render/components/render_components_bindings.cpp | cpp | чисто (catch уже имеет tc::Log::error)
+[x] termin-display/bindings/platform/platform_module.cpp | cpp | исправлен (1 debug лог в fallback)
+[x] termin-display/bindings/render/tc_display_bindings.cpp | cpp | чисто (нет try/catch)
+[x] termin-display/bindings/render/tc_input_manager_bindings.cpp | cpp | исправлен (6 warn/error логов)
+[x] termin-display/bindings/render/tc_render_surface_bindings.cpp | cpp | исправлен (8 debug логов)
+[x] termin-display/bindings/viewport/viewport_module.cpp | cpp | чисто (catch уже имеет tc::Log::error)
+[x] termin-display/src/platform/offscreen_render_surface.cpp | cpp | чисто (нет try/catch)
+[x] termin-graphics/include/tgfx2/vulkan/vulkan_render_device.hpp | cpp | чисто (нет try/catch)
+[x] termin-graphics/include/tgfx/resources/tc_shader.h | cpp | чисто (C-хедер, нет try/catch)
+[x] termin-inspect/include/inspect/tc_kind_python.hpp | cpp | чисто (нет try/catch)
+[x] termin-inspect/include/tc_inspect_cpp.hpp | cpp | чисто (все catch имеют tc_log ERROR)
+[x] termin-inspect/python/bindings/inspect_module.cpp | cpp | исправлен (1 debug лог)
+[x] termin-inspect/src/tc_inspect_python.cpp | cpp | исправлен (cerr → tc::Log::warn)
+[x] termin-lighting/cpp/bindings/lighting_bindings.cpp | cpp | исправлен (2 debug лога)
+[x] termin-mesh/python/bindings/mesh_bindings.cpp | cpp | чисто (catch уже имеет tc_log_error)
+[x] termin-modules/src/module_cpp_backend.cpp | cpp | исправлен (2 warn лога)
+[x] termin-modules/src/module_descriptor_parser.cpp | cpp | чисто (error передан через callback)
+[x] termin-render/include/termin/lighting/shadow.hpp | cpp | чисто (нет try/catch)
+[x] termin-render/include/termin/render/fbo_pool.hpp | cpp | чисто (декларации, нет try/catch)
+[x] termin-render/python/render_framework_bindings.cpp | cpp | исправлен (1 debug лог)
+[x] termin-render/python/render_pipeline_bindings.cpp | cpp | чисто (catch уже имеет tc::Log::error)
+[x] termin-render/python/scene_pipeline_template_bindings.cpp | cpp | исправлен (1 debug лог)
+[x] termin-render/python/tc_pass_bindings.cpp | cpp | чисто (все catch имеют tc_log ERROR)
+[x] termin-render/python/tc_render_target_bindings.cpp | cpp | исправлен (1 debug лог)
+[x] termin-render/src/scene_pipeline_template.cpp | cpp | чисто (все catch имеют tc::Log::error)
+[x] termin-scene/cpp/bindings/component_registry_python.cpp | cpp | чисто (catch уже имеет tc::Log::error)
+[x] termin-scene/cpp/bindings/entity_bindings.cpp | cpp | исправлен (3 debug лога)
+[x] termin-scene/cpp/bindings/tc_component_python_bindings.cpp | cpp | чисто (все catch имеют tc::Log::error)
+[x] termin-scene/cpp/bindings/tc_component_ref_bindings.cpp | cpp | исправлен (2 debug лога)
+[x] termin-scene/cpp/bindings/tc_scene_bindings.cpp | cpp | чисто (catch уже имеет tc::Log::error)
+[x] termin-scene/cpp/tc_scene.cpp | cpp | чисто (все catch имеют tc::Log::error)
+[x] termin-scene/include/tc_type_registry.h | cpp | чисто (C-хедер, нет try/catch)
+[x] termin-scene/include/termin/bindings/tc_value_helpers.hpp | cpp | чисто (catch уже имеет tc_log DEBUG)
 termin-scene/include/termin/entity/component_registry.hpp | cpp

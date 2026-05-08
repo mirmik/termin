@@ -630,6 +630,8 @@ void bind_tc_pass(nb::module_& m) {
                 return tc::InspectRegistry_get(tc::InspectRegistry::instance(),
                     obj_ptr, tc_pass_type_name(p), field_name);
             } catch (...) {
+                tc_log(TC_LOG_DEBUG, "[TcPassRef::get_field] failed for type=%s field=%s",
+                       tc_pass_type_name(p), field_name.c_str());
                 return nb::none();
             }
         }, nb::arg("field_name"), "Get field value by name. Returns None if field not found.")
@@ -649,7 +651,8 @@ void bind_tc_pass(nb::module_& m) {
                 tc::InspectRegistry_set(tc::InspectRegistry::instance(),
                     obj_ptr, tc_pass_type_name(p), field_name, value, nullptr);
             } catch (...) {
-                // Field not found or setter failed - silently ignore
+                tc_log(TC_LOG_DEBUG, "[TcPassRef::set_field] failed for type=%s field=%s",
+                       tc_pass_type_name(p), field_name.c_str());
             }
         }, nb::arg("field_name"), nb::arg("value"), "Set field value by name.")
         .def("set_viewport_name", [](TcPassRef& self, const std::string& name) {
