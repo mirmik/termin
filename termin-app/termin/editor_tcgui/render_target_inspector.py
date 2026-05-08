@@ -15,6 +15,7 @@ from tcgui.widgets.separator import Separator
 from tcgui.widgets.units import px
 
 from termin.editor_tcgui.widgets.layer_mask_widget import LayerMaskFieldWidget
+from termin.editor_tcgui.widgets.texture_picker import TexturePickerWidget
 
 
 class RenderTargetInspectorTcgui(VStack):
@@ -400,24 +401,6 @@ class RenderTargetInspectorTcgui(VStack):
         self._pipeline_params_title.visible = True
         self._pipeline_params_grid.visible = True
 
-        # Collect available render target names
-        rt_names: list[str] = ["(none)"]
-        if self._scene_getter is not None:
-            try:
-                from termin.visualization.core.scene import scene_render_mount
-                for scene in self._scene_getter():
-                    mount = scene_render_mount(scene)
-                    for rt in mount.render_target_configs:
-                        name = rt.name
-                        if name and name not in rt_names:
-                            rt_names.append(name)
-            except Exception:
-                pass
-
-        # Also include the current RT itself (in case it's the only one)
-        if self._render_target.name and self._render_target.name not in rt_names:
-            rt_names.append(self._render_target.name)
-
         params = self._render_target.pipeline_params
 
         for row_idx, slot in enumerate(slots):
@@ -427,20 +410,24 @@ class RenderTargetInspectorTcgui(VStack):
             lbl.preferred_width = px(96)
             self._pipeline_params_grid.add(lbl, row_idx, 0)
 
-            combo = ComboBox()
-            for name in rt_names:
-                combo.add_item(name)
-            current = params.get(slot, "")
-            if current:
-                for i in range(combo.item_count):
-                    if combo.item_text(i) == current:
-                        combo.selected_index = i
-                        break
+            picker = TexturePickerWidget(
+                self._rm,
+                on_changed=lambda tag, val, s=slot: self._on_pipeline_param_changed(s, tag, val),
+                scene_getter=self._scene_getter,
+                show_preview=False,
+            )
+
+            current_val = params.get(slot, "")
+            if current_val:
+                if current_val.startswith("file:"):
+                    picker.set_value(current_val[5:], "file")
+                else:
+                    picker.set_value(current_val, "rt_color")
             else:
-                combo.selected_index = 0
-            combo.on_changed = self._on_pipeline_param_changed
-            self._pipeline_params_grid.add(combo, row_idx, 1)
-            self._pipeline_params_widgets.append(combo)
+                picker.set_value("", "default")
+
+            self._pipeline_params_grid.add(picker, row_idx, 1)
+            self._pipeline_params_widgets.append(picker)
 
         if self._ui is not None:
             self._ui.request_layout()
@@ -450,16 +437,16 @@ class RenderTargetInspectorTcgui(VStack):
         self._pipeline_params_title.visible = False
         self._pipeline_params_grid.visible = False
 
-    def _on_pipeline_param_changed(self, _index: int, _text: str) -> None:
+    def _on_pipeline_param_changed(self, slot: str, tag: str, value: str) -> None:
         if self._updating or self._render_target is None:
             return
         params = self._render_target.pipeline_params
-        for slot, combo in zip(self._pipeline_params_slots, self._pipeline_params_widgets):
-            text = combo.selected_text
-            if text == "(none)":
-                params.pop(slot, None)
-            else:
-                params[slot] = text or ""
+        if tag == "default" or not value:
+            params.pop(slot, None)
+        elif tag == "file":
+            params[slot] = "file:" + value
+        else:
+            params[slot] = value
         self._render_target.pipeline_params = params
         self._emit_changed()
 

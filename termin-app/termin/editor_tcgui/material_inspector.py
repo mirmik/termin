@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Optional, Callable, Any
-import numpy as np
 
 from tcbase import log
 from tcgui.widgets.vstack import VStack
@@ -16,9 +15,9 @@ from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.button import Button
 from tcgui.widgets.color_dialog import ColorDialog
-from tcgui.widgets.widget import Widget
 from tcgui.widgets.separator import Separator
 from tcgui.widgets.units import px
+from termin.editor_tcgui.widgets.texture_picker import TexturePickerWidget, find_rt_texture
 
 
 def _to_vec_list(value: Any, n: int, color_mode: bool = False) -> list[float]:
@@ -151,156 +150,6 @@ class _ColorEditor(HStack):
             self._sync_button()
         finally:
             self._updating = False
-
-
-class _TexturePreview(Widget):
-    """Small texture preview widget (48x48) with placeholder."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.preferred_width = px(48)
-        self.preferred_height = px(48)
-        self._image_data: np.ndarray | None = None
-        self._gpu_texture = None
-        self._dirty = False
-        self._placeholder = "No\nTex"
-
-    def set_image(self, data: Any, placeholder: str = "No\nTex") -> None:
-        self._placeholder = placeholder
-        self._image_data = None
-        self._dirty = True
-
-        if data is None:
-            return
-
-        try:
-            arr = np.asarray(data)
-            if arr.ndim != 3:
-                return
-            if arr.shape[2] == 4:
-                self._image_data = np.ascontiguousarray(arr.astype(np.uint8))
-            elif arr.shape[2] == 3:
-                alpha = np.full((arr.shape[0], arr.shape[1], 1), 255, dtype=np.uint8)
-                rgb = arr.astype(np.uint8)
-                self._image_data = np.ascontiguousarray(np.concatenate([rgb, alpha], axis=2))
-        except Exception:
-            self._image_data = None
-
-    def _sync_texture(self, renderer) -> None:
-        if not self._dirty:
-            return
-        self._dirty = False
-
-        if self._gpu_texture is not None:
-            try:
-                self._gpu_texture.delete()
-            except Exception:
-                pass
-            self._gpu_texture = None
-
-        if self._image_data is not None:
-            try:
-                self._gpu_texture = renderer.upload_texture(self._image_data)
-            except Exception as e:
-                log.error(f"[MaterialInspectorTcgui] failed to upload texture preview: {e}")
-                self._gpu_texture = None
-
-    def render(self, renderer) -> None:
-        self._sync_texture(renderer)
-
-        renderer.draw_rect(self.x, self.y, self.width, self.height, (0.17, 0.18, 0.22, 1.0))
-        renderer.draw_rect_outline(self.x, self.y, self.width, self.height, (0.36, 0.38, 0.44, 1.0), 1.0)
-
-        if self._gpu_texture is not None:
-            renderer.draw_image(self.x + 1, self.y + 1, self.width - 2, self.height - 2, self._gpu_texture)
-        else:
-            renderer.draw_text_centered(
-                self.x + self.width * 0.5,
-                self.y + self.height * 0.5,
-                self._placeholder,
-                (0.56, 0.58, 0.64, 1.0),
-                10.0,
-            )
-
-
-class _TextureEditor(HStack):
-    """Texture selector with preview and combo box."""
-
-    def __init__(
-        self,
-        resource_manager,
-        on_changed: Callable[[str], None],
-        default_texture_kind: str = "white",
-    ) -> None:
-        super().__init__()
-        self.spacing = 8
-        self._rm = resource_manager
-        self._on_changed = on_changed
-        self._default_texture_kind = default_texture_kind
-        self._updating = False
-
-        self._preview = _TexturePreview()
-        self.add_child(self._preview)
-
-        self._combo = ComboBox()
-        self._combo.stretch = True
-        self._combo.on_changed = self._on_combo_changed
-        self.add_child(self._combo)
-
-    def set_value(self, selected_name: str | None) -> None:
-        self._updating = True
-        try:
-            self._combo.clear()
-            self._combo.add_item("(default)")
-            for tname in self._rm.list_texture_names():
-                if tname == "__white_1x1__":
-                    continue
-                self._combo.add_item(tname)
-
-            selected = selected_name or "(default)"
-            if selected != "(default)":
-                exists = False
-                for i in range(self._combo.item_count):
-                    if self._combo.item_text(i) == selected:
-                        exists = True
-                        break
-                if not exists:
-                    self._combo.add_item(selected)
-
-            self._set_combo_selected(selected)
-            self._update_preview(selected)
-        finally:
-            self._updating = False
-
-    def _set_combo_selected(self, text: str) -> None:
-        for i in range(self._combo.item_count):
-            if self._combo.item_text(i) == text:
-                self._combo.selected_index = i
-                return
-        self._combo.selected_index = 0
-
-    def _resolve_preview_image(self, selected_text: str):
-        if selected_text == "(default)":
-            from termin.visualization.render.texture import get_white_texture, get_normal_texture
-
-            tex = get_normal_texture() if self._default_texture_kind == "normal" else get_white_texture()
-            return tex._image_data, "default"
-
-        tex = self._rm.get_texture(selected_text)
-        if tex is None:
-            return None, "No\nTex"
-        return tex._image_data, "No\nTex"
-
-    def _update_preview(self, selected_text: str) -> None:
-        img, placeholder = self._resolve_preview_image(selected_text)
-        self._preview.set_image(img, placeholder=placeholder)
-
-    def _on_combo_changed(self, _index: int, text: str) -> None:
-        self._update_preview(text)
-        if self._updating:
-            return
-        self._on_changed("" if text == "(default)" else text)
-
 
 class MaterialInspectorTcgui(VStack):
     """Inspector for TcMaterial with editable uniforms."""
@@ -458,7 +307,7 @@ class MaterialInspectorTcgui(VStack):
             phase.set_param(uniform_name, value)
         self._emit_changed()
 
-    def _set_texture_all_phases(self, uniform_name: str, texture_name: str, default_tex: str = "white") -> None:
+    def _set_texture_all_phases(self, uniform_name: str, tag: str, texture_name: str, default_tex: str = "white") -> None:
         if self._material is None:
             return
         from termin.visualization.core.texture_handle import (
@@ -466,18 +315,36 @@ class MaterialInspectorTcgui(VStack):
             get_normal_texture_handle,
         )
 
-        if texture_name:
-            handle = self._rm.get_texture_handle(texture_name)
-        else:
+        if tag == "default" or not texture_name:
             handle = get_normal_texture_handle() if default_tex == "normal" else get_white_texture_handle()
-
-        if handle is None:
-            log.error(f"[MaterialInspectorTcgui] texture handle not found: {texture_name}")
+            if handle is not None:
+                for phase in self._material.phases:
+                    phase.set_texture(uniform_name, handle)
+            self._emit_changed()
             return
 
-        for phase in self._material.phases:
-            phase.set_texture(uniform_name, handle)
-        self._emit_changed()
+        if tag == "file":
+            handle = self._rm.get_texture_handle(texture_name)
+            if handle is None:
+                log.error(f"[MaterialInspectorTcgui] texture handle not found: {texture_name}")
+                return
+            for phase in self._material.phases:
+                phase.set_texture(uniform_name, handle)
+            self._emit_changed()
+            return
+
+        if tag in ("rt_color", "rt_depth"):
+            channel = "depth" if tag == "rt_depth" else "color"
+            tc_tex = find_rt_texture(texture_name, channel)
+            if tc_tex is None or not tc_tex.is_valid:
+                log.error(f"[MaterialInspectorTcgui] RT texture not found: {texture_name}/{channel}")
+                return
+            for phase in self._material.phases:
+                phase.set_texture(uniform_name, tc_tex)
+            self._emit_changed()
+            return
+
+        log.error(f"[MaterialInspectorTcgui] Unknown texture tag: {tag}")
 
     def _create_editor(self, prop) -> object:
         ptype = prop.property_type
@@ -523,24 +390,32 @@ class MaterialInspectorTcgui(VStack):
             return editor
 
         if ptype in ("Texture", "Texture2D"):
-            selected = "(default)"
+            selected_name = ""
+            selected_tag = "default"
             if self._material is not None and self._material.phases:
                 tex = self._material.phases[0].textures.get(name)
-                if tex is not None:
+                if tex is not None and tex.is_valid:
                     tname = self._rm.find_texture_name(tex)
-                    if tname:
-                        selected = tname
+                    if tname and tname != "__white_1x1__":
+                        selected_name = tname
+                        selected_tag = "file"
+                    else:
+                        from termin.assets.material_asset import _classify_render_target_texture
+                        ref = _classify_render_target_texture(tex)
+                        if ref is not None:
+                            selected_tag = f"rt_{ref['channel']}"
+                            selected_name = ref["target"]
 
             default_tex = "white"
             if isinstance(default, str) and default in ("white", "normal"):
                 default_tex = default
 
-            editor = _TextureEditor(
+            editor = TexturePickerWidget(
                 self._rm,
-                on_changed=lambda tex_name, n=name, d=default_tex: self._set_texture_all_phases(n, tex_name, d),
+                on_changed=lambda tag, val, n=name, d=default_tex: self._set_texture_all_phases(n, tag, val, d),
                 default_texture_kind=default_tex,
             )
-            editor.set_value(None if selected == "(default)" else selected)
+            editor.set_value(selected_name, selected_tag)
             return editor
 
         unknown = Label()
