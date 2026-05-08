@@ -53,7 +53,7 @@ class _TexturePreview(Widget):
         self._dirty = False
         if self._gpu_texture is not None:
             try:
-                self._gpu_texture.delete()
+                renderer.destroy_texture(self._gpu_texture)
             except Exception as e:
                 log.error(f"[TextureInspectorTcgui] preview texture delete failed: {e}")
             self._gpu_texture = None

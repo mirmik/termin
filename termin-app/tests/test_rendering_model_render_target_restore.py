@@ -14,6 +14,14 @@ _MODULE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
 RenderingModel = _MODULE.RenderingModel
 
+_RT_CONFIG_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "termin"
+    / "visualization"
+    / "core"
+    / "render_target_config.py"
+)
+
 
 class _Pipeline:
     def __init__(self, name):
@@ -79,6 +87,21 @@ class _RenderTargetConfig:
         self.pipeline_name = "Triangle"
         self.layer_mask = 7
         self.enabled = True
+        self.pipeline_params = {}
+
+
+def _load_render_target_config_module(monkeypatch):
+    entity_native = types.ModuleType("termin.entity._entity_native")
+    entity_native.RenderTargetConfig = _RenderTargetConfig
+    monkeypatch.setitem(sys.modules, "termin.entity._entity_native", entity_native)
+
+    spec = importlib.util.spec_from_file_location(
+        "render_target_config_source",
+        _RT_CONFIG_PATH,
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class _ViewportConfig:
@@ -107,6 +130,7 @@ class _RenderTarget:
         self.pipeline = None
         self.layer_mask = 0
         self.enabled = False
+        self.pipeline_params = {}
 
     def free(self):
         if self in self._pool:
@@ -296,6 +320,48 @@ def test_sync_render_target_configs_writes_only_targets_from_scene(monkeypatch):
     model.sync_render_target_configs_to_scene(scene)
 
     assert [config.name for config in scene._mount.render_target_configs] == ["Owned"]
+
+
+def test_sync_render_target_configs_preserves_pipeline_params(monkeypatch):
+    pool = []
+    _install_native_stubs(monkeypatch, pool)
+
+    scene = _Scene(_Mount([]))
+    manager = _Manager()
+    model = RenderingModel(manager)
+
+    render_target = _RenderTarget("PipelineRT", pool)
+    render_target.scene = scene
+    render_target.pipeline_params = {"input_texture": "FovTarget", "mask": "file:Noise"}
+    manager.standalone_render_targets.append(render_target)
+
+    model.sync_render_target_configs_to_scene(scene)
+
+    assert len(scene._mount.render_target_configs) == 1
+    assert scene._mount.render_target_configs[0].pipeline_params == {
+        "input_texture": "FovTarget",
+        "mask": "file:Noise",
+    }
+
+
+def test_render_target_config_dict_serialization_preserves_pipeline_params(monkeypatch):
+    module = _load_render_target_config_module(monkeypatch)
+
+    config = _RenderTargetConfig()
+    config.pipeline_params = {"input_texture": "FovTarget", "mask": "file:Noise"}
+
+    serialized = module.serialize_render_target_config(config)
+
+    assert serialized["pipeline_params"] == {
+        "input_texture": "FovTarget",
+        "mask": "file:Noise",
+    }
+
+    restored = module.deserialize_render_target_config(serialized)
+    assert restored.pipeline_params == {
+        "input_texture": "FovTarget",
+        "mask": "file:Noise",
+    }
 
 
 def test_sync_render_target_configs_only_includes_standalone_targets(monkeypatch):

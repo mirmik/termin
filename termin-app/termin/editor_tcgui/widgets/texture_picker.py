@@ -58,7 +58,7 @@ class TexturePreviewWidget(Widget):
 
         if self._gpu_texture is not None:
             try:
-                self._gpu_texture.delete()
+                renderer.destroy_texture(self._gpu_texture)
             except Exception as e:
                 log.warn(f"[TexturePreviewWidget] failed to delete old texture preview: {e}")
             self._gpu_texture = None
@@ -381,10 +381,6 @@ class TexturePickerWidget(HStack):
         try:
             data = tc_tex.data
             if data is None:
-                tc_tex.sync_to_cpu()
-                data = tc_tex.data
-            if data is None:
-                log.warn(f"[TexturePickerWidget] RT preview has no CPU data after sync: {rt_name}/{channel}")
                 return None, "No\nTex"
 
             arr = np.asarray(data)

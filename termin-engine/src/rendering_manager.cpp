@@ -560,6 +560,10 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         if (tc_pipeline_handle_valid(pipeline)) {
             tc_render_target_set_pipeline(rt, pipeline);
         }
+        if (rtc->pipeline_params.type == TC_VALUE_DICT
+                && tc_value_dict_size(&rtc->pipeline_params) > 0) {
+            tc_render_target_set_pipeline_params(rt, &rtc->pipeline_params);
+        }
 
         register_standalone_render_target(rt);
     }

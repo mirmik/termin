@@ -96,6 +96,7 @@ std::vector<ViewportConfig> scene_viewport_configs(const TcSceneRef& scene) {
 void scene_add_render_target_config(const TcSceneRef& scene, const RenderTargetConfig& config) {
     tc_render_target_config c = config.to_c();
     tc_scene_add_render_target_config(scene._h, &c);
+    tc_render_target_config_free(&c);
 }
 
 void scene_remove_render_target_config(const TcSceneRef& scene, size_t index) {
