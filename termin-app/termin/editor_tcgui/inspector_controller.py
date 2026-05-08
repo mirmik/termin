@@ -128,6 +128,7 @@ class InspectorControllerTcgui:
         self._render_target_inspector.set_scene(scene)
 
     def set_render_target_scene_getter(self, getter: Callable[[], list]) -> None:
+        self._material_inspector.set_scene_getter(getter)
         self._render_target_inspector.set_scene_getter(getter)
         self._viewport_inspector.set_scene_getter(getter)
 

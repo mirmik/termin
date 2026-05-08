@@ -162,6 +162,7 @@ class MaterialInspectorTcgui(VStack):
         self._updating = False
         self.on_changed: Optional[Callable[[], None]] = None
         self._uniform_rows: dict[str, object] = {}
+        self._scene_getter: Optional[Callable[[], list[Any]]] = None
 
         title = Label()
         title.text = "Material Inspector"
@@ -219,6 +220,9 @@ class MaterialInspectorTcgui(VStack):
         self.add_child(self._empty_label)
 
         self._set_visible_state(False)
+
+    def set_scene_getter(self, getter: Callable[[], list[Any]]) -> None:
+        self._scene_getter = getter
 
     def set_target(self, material, subtitle: str = "") -> None:
         self._material = material
@@ -413,6 +417,7 @@ class MaterialInspectorTcgui(VStack):
             editor = TexturePickerWidget(
                 self._rm,
                 on_changed=lambda tag, val, n=name, d=default_tex: self._set_texture_all_phases(n, tag, val, d),
+                scene_getter=self._scene_getter,
                 default_texture_kind=default_tex,
             )
             editor.set_value(selected_name, selected_tag)
