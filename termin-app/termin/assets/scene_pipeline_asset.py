@@ -80,6 +80,20 @@ class ScenePipelineAsset(Asset):
         """List of viewport names this pipeline targets (from ViewportFrames)."""
         return self._template.target_viewports
 
+    @property
+    def external_params(self) -> list[str]:
+        """List of external RT slot names defined in the pipeline graph."""
+        data = self._template.graph_data
+        if data is None:
+            return []
+        result: list[str] = []
+        for node in data.get("nodes", []):
+            if node.get("node_type") == "external_rt":
+                slot = node.get("params", {}).get("slot", "")
+                name = node.get("name", "")
+                result.append(slot or name or "unnamed")
+        return result
+
     # --- Compilation ---
 
     def compile(self) -> "RenderPipeline | None":
