@@ -240,7 +240,8 @@ def show_scene_manager_viewer(
         from termin.visualization.core.scene import scene_ext_attached_names
         try:
             ext_names = scene_ext_attached_names(scene)
-        except Exception:
+        except Exception as e:
+            log.debug(f"Failed to get attached extensions for scene '{name}': {e}")
             ext_names = []
 
         lines = [

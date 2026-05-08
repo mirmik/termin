@@ -7,7 +7,10 @@ including Components and RenderPasses.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, Optional
+
+_logger = logging.getLogger(__name__)
 
 from PyQt6.QtWidgets import QWidget, QFormLayout, QLabel
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -128,7 +131,7 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
                 setter=make_setter(info.path),
             )
     except (ImportError, RuntimeError):
-        pass  # C++ module not available
+        _logger.debug("InspectRegistry C++ module not available, returning empty fields")
 
     return result
 

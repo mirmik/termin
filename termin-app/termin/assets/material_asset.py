@@ -95,7 +95,6 @@ class MaterialAsset(DataAsset["TcMaterial"]):
                     self.save_to_file()
             except Exception:
                 log.warning(f"[MaterialAsset] Failed to re-read material file for UUID check: {self._source_path}")
-                pass
 
     # --- Saving (materials save to their own file, not spec) ---
 
@@ -587,6 +586,7 @@ def _iter_render_targets():
             render_target_pool_list,
         )
     except ImportError:
+        log.debug("[MaterialAsset] render_target_pool_list not available, skipping RT texture resolution")
         return
     for h in render_target_pool_list():
         if not h.alive:

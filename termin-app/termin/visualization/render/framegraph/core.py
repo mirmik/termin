@@ -127,7 +127,9 @@ class FramePass:
 
             if parent_name:
                 registry.set_type_parent(cls.__name__, parent_name)
-        except ImportError:
+        except ImportError as e:
+            from tcbase import log
+            log.debug(f"[FramePass] InspectRegistry not available for '{cls.__name__}': {e}")
             pass
 
     def __repr__(self) -> str:

@@ -25,6 +25,7 @@
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional, Tuple
 
 from PyQt6.QtWidgets import (
@@ -318,6 +319,7 @@ class ColorDialog(QDialog):
     """
 
     color_changed = pyqtSignal()
+    _logger = logging.getLogger(__name__)
 
     def __init__(
         self,
@@ -762,6 +764,7 @@ class ColorDialog(QDialog):
                 g_int = int(text[2:4], 16)
                 b_int = int(text[4:6], 16)
             except ValueError:
+                ColorDialog._logger.warning(f"[ColorDialog] Invalid hex color (6-digit): {text}")
                 return
             self._r = r_int / 255.0
             self._g = g_int / 255.0
@@ -775,6 +778,7 @@ class ColorDialog(QDialog):
                 b_int = int(text[4:6], 16)
                 a_int = int(text[6:8], 16)
             except ValueError:
+                ColorDialog._logger.warning(f"[ColorDialog] Invalid hex color (8-digit): {text}")
                 return
             self._r = r_int / 255.0
             self._g = g_int / 255.0

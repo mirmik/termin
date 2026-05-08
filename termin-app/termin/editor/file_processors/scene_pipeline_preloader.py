@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Set
 
+from tcbase import log
 from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
 
 
@@ -33,6 +34,7 @@ class ScenePipelinePreLoader(FilePreLoader):
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
         except Exception:
+            log.error(f"[ScenePipelinePreLoader] Failed to read {path}", exc_info=True)
             return None
 
         # UUID is stored in .meta file only

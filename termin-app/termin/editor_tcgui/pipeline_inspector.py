@@ -1032,7 +1032,7 @@ class PipelineInspectorTcgui(VStack):
                     float(self._spec_clear_a.text),
                 ))
             except ValueError:
-                pass
+                log.debug(f"[PipelineInspectorTcgui] invalid clear_color value for spec '{spec.resource}'")
         else:
             self._ops.update_spec_field(spec, "clear_color", None)
 
@@ -1040,7 +1040,7 @@ class PipelineInspectorTcgui(VStack):
             try:
                 self._ops.update_spec_field(spec, "clear_depth", float(self._spec_clear_depth.text))
             except ValueError:
-                pass
+                log.debug(f"[PipelineInspectorTcgui] invalid clear_depth value for spec '{spec.resource}'")
         else:
             self._ops.update_spec_field(spec, "clear_depth", None)
 

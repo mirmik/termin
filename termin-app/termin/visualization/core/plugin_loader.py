@@ -72,6 +72,7 @@ def _scan_file(
         try:
             spec = importlib.util.spec_from_file_location(existing_module_name, filepath)
             if spec is None or spec.loader is None:
+                log.debug(f"Cannot create module spec for reload of {filepath}")
                 return []
             spec.loader.exec_module(old_module)
         except Exception as e:
@@ -91,6 +92,7 @@ def _scan_file(
         try:
             spec = importlib.util.spec_from_file_location(module_name, filepath)
             if spec is None or spec.loader is None:
+                log.debug(f"Cannot create module spec for {filepath}")
                 return []
 
             module = importlib.util.module_from_spec(spec)

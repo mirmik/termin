@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
     QLabel,
 )
 
+from tcbase import log
+
 from termin.project.settings import ProjectSettingsManager, RenderSyncMode
 
 
@@ -113,6 +115,7 @@ class ProjectSettingsDialog(QDialog):
         try:
             sync_mode = RenderSyncMode(sync_mode_value)
         except ValueError:
+            log.debug(f"[ProjectSettingsDialog] Invalid sync mode value {sync_mode_value!r}, falling back to NONE")
             sync_mode = RenderSyncMode.NONE
 
         self._manager.set_render_sync_mode(sync_mode)

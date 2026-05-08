@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tcbase import log
 from termin.assets.data_asset import DataAsset
 
 
@@ -81,7 +82,7 @@ class GlslAsset(DataAsset[str]):
             self._registered_in_preprocessor = True
         except ImportError:
             # C++ bindings not available (e.g., during testing)
-            pass
+            log.debug(f"[GlslAsset] C++ glsl_preprocessor not available, skipping registration of '{self._name}'")
 
     @classmethod
     def from_file(cls, path: str | Path, name: str | None = None) -> "GlslAsset":

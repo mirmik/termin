@@ -1,6 +1,9 @@
+import logging
 import numpy as np
 from scipy.linalg import cho_factor, cho_solve
 from typing import Optional, Tuple, List
+
+_logger = logging.getLogger(__name__)
 
 def solve_qp_equalities(H, g, A, b):
     """
@@ -52,8 +55,9 @@ def solve_qp_equalities(H, g, A, b):
         # --- 5) Восстановить x: H x = -g - A^T λ ---
         w = -g - A.T @ λ
         x = cho_solve((L, lower), w)
-    except np.linalg.LinAlgError:
+    except np.linalg.LinAlgError as e:
         # H может быть лишь положительно полуопределённой.
+        _logger.warning("Cholesky failed in solve_qp_equalities (%s), falling back to lstsq", e)
         n = H.shape[0]
         m = A.shape[0]
 

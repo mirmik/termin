@@ -40,7 +40,7 @@ class MaterialPreLoader(FilePreLoader):
                 data = json.loads(content)
                 uuid = data.get("uuid")
             except json.JSONDecodeError:
-                pass
+                log.debug(f"[MaterialPreLoader] Failed to parse JSON for UUID extraction: {path}")
 
             return PreLoadResult(
                 resource_type=self.resource_type,

@@ -6,6 +6,7 @@ Currently displays basic info. Can be extended with more settings later.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -163,7 +164,8 @@ class DisplayInspector(QWidget):
             surface_ptr = _display_get_surface_ptr(display.tc_display_ptr)
             surface_im = _render_surface_get_input_manager(surface_ptr) if surface_ptr else 0
             self._router_label.setText("Active" if surface_im else "None")
-        except Exception:
+        except Exception as e:
+            logging.debug("DisplayInspector: failed to query input router status: %s", e)
             self._router_label.setText("?")
 
         # Debug info
@@ -217,7 +219,8 @@ class DisplayInspector(QWidget):
             for i, vp in enumerate(display.viewports):
                 try:
                     vp_index, vp_generation = vp._viewport_handle()
-                except Exception:
+                except Exception as e:
+                    logging.debug("DisplayInspector: failed to get viewport handle for vp[%d]: %s", i, e)
                     continue
                 vp_im = _viewport_get_input_manager(vp_index, vp_generation)
                 vp_name = vp.name or f"vp[{i}]"

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, List, Optional
 
+from tcbase import log
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -371,7 +373,8 @@ class ViewportInspector(QWidget):
             self._render_target_list = render_target_pool_list()
             for rt in self._render_target_list:
                 self._render_target_combo.addItem(rt.name or "(unnamed)")
-        except Exception:
+        except Exception as e:
+            log.debug(f"[ViewportInspector] Failed to load render targets: {e}")
             self._render_target_list = []
         self._render_target_combo.blockSignals(False)
 

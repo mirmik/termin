@@ -51,7 +51,7 @@ def _translate_sdl_key(scancode: int) -> Key:
         try:
             return Key(keycode)
         except ValueError:
-            pass
+            log.debug(f"[run_editor] unrecognized SDL scancode mapped to keycode={keycode}")
     return Key.UNKNOWN
 
 

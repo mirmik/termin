@@ -26,6 +26,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QBrush
 
 from termin.editor.scene_manager import SceneMode
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.editor.scene_manager import SceneManager
@@ -399,8 +400,7 @@ class SceneManagerViewer(QWidget):
             self.refresh()
             QMessageBox.information(self, "Editing", f"Editor attached to '{self._selected_scene_name}'")
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            log.error(f"[SceneManagerViewer] Failed to attach editor to scene '{self._selected_scene_name}': {e}", exc_info=True)
             QMessageBox.critical(self, "Edit Error", f"Failed to attach editor:\n{e}")
 
     def _on_editor_detach_scene(self) -> None:
@@ -417,8 +417,7 @@ class SceneManagerViewer(QWidget):
             self.refresh()
             QMessageBox.information(self, "Editor Detached", "Editor detached and state saved")
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            log.error(f"[SceneManagerViewer] Failed to detach editor: {e}", exc_info=True)
             QMessageBox.critical(self, "Editor Detach Error", f"Failed to detach editor:\n{e}")
 
     def _update_details(self, scene_name: str) -> None:
@@ -443,7 +442,8 @@ class SceneManagerViewer(QWidget):
         from termin.visualization.core.scene import scene_ext_attached_names
         try:
             ext_names = scene_ext_attached_names(scene)
-        except Exception:
+        except Exception as e:
+            log.debug(f"[SceneManagerViewer] Failed to get attached extensions for scene '{scene_name}': {e}")
             ext_names = []
 
         lines = [

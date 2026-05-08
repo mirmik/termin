@@ -268,7 +268,8 @@ def infer_resource_spec(
             try:
                 spec["samples"] = int(samples)
             except ValueError:
-                pass
+                from tcbase import log
+                log.debug(f"[compiler] FBO '{resource_name}': invalid samples value {samples!r}, skipping")
 
         filter_mode = node.get_param("filter")
         if filter_mode:
@@ -285,7 +286,8 @@ def infer_resource_spec(
                 try:
                     spec["size"] = (int(width), int(height))
                 except ValueError:
-                    pass
+                    from tcbase import log
+                    log.debug(f"[compiler] FBO '{resource_name}': invalid size ({width!r}, {height!r}), skipping")
         else:
             # Viewport mode - use scale
             scale = node.get_param("scale")
@@ -295,7 +297,8 @@ def infer_resource_spec(
                     if scale_value != 1.0:
                         spec["scale"] = scale_value
                 except ValueError:
-                    pass
+                    from tcbase import log
+                    log.debug(f"[compiler] FBO '{resource_name}': invalid scale value {scale!r}, skipping")
 
         # Clear color
         if node.get_param("clear_color"):

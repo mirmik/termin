@@ -433,7 +433,9 @@ class PropertyPath:
             try:
                 value = field.get_value(component)
                 yield name, cls._copy_value(value)
-            except Exception:
+            except Exception as e:
+                from tcbase import log
+                log.debug(f"[PropertyPath] Failed to read property '{name}' of component '{type(component).__name__}': {e}")
                 pass
 
     @classmethod

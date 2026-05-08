@@ -179,7 +179,8 @@ class MeshAsset(DataAsset[TcMesh]):
         if is_ascii:
             try:
                 mesh_data = _load_ascii_stl(f, self._name)
-            except Exception:
+            except Exception as e:
+                log.debug(f"[MeshAsset] ASCII STL load failed for {self._name}, trying binary: {e}")
                 f.seek(0)
                 mesh_data = _load_binary_stl(f, self._name)
         else:

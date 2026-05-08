@@ -117,6 +117,7 @@ class ComponentsPanel(QWidget):
             return self._entity.components[row]
         except RuntimeError:
             # Component has no Python bindings
+            logger.debug("Component at row %d has no Python bindings", row)
             return None
 
     def current_component_ref(self):

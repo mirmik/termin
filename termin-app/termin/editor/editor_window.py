@@ -1411,7 +1411,8 @@ class EditorWindow(QMainWindow):
         # Inverse projection-view matrix
         try:
             inv_pv = np.linalg.inv(pv)
-        except np.linalg.LinAlgError:
+        except np.linalg.LinAlgError as e:
+            log.debug(f"[EditorWindow._unproject_drop_position] Singular projection-view matrix: {e}")
             return fallback_pos
 
         # Unproject
@@ -1781,6 +1782,7 @@ class EditorWindow(QMainWindow):
         try:
             scene_name = str(scene_path_obj.relative_to(project_root))
         except ValueError:
+            log.debug(f"[EditorWindow._run_standalone] Scene {scene_path_obj} is outside project {project_root}, using absolute path")
             # Scene is outside project, use absolute path
             scene_name = str(scene_path_obj)
         cmd = [

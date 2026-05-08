@@ -61,7 +61,8 @@ class FieldWidget(Widget):
                     return False
                 return all(FieldWidget._values_equal(x, y) for x, y in zip(a_seq, b_seq))
             return a == b or str(a) == str(b)
-        except Exception:
+        except Exception as e:
+            log.debug(f"[FieldWidget] _values_equal comparison failed: {e}")
             return False
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:

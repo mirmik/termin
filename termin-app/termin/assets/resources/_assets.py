@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
+from tcbase import log
+
 if TYPE_CHECKING:
     from termin.visualization.core.material import Material
     from termin.assets.material_asset import MaterialAsset
@@ -633,8 +635,8 @@ class AssetsMixin:
                     for name, a in self._texture_registry.assets.items():
                         if a.uuid == asset_uuid:
                             return name
-                except (AttributeError, TypeError):
-                    pass
+                except (AttributeError, TypeError) as e:
+                    log.debug(f"[AssetsMixin] Failed to get asset uuid for texture lookup: {e}")
             # Fallback to registry method
             return self._texture_registry.find_name(texture)
         elif isinstance(texture, TcTexture):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, List
+import logging
 import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
@@ -185,7 +186,7 @@ class FEMPhysicsWorldComponent(PythonComponent):
         try:
             x_ext = np.linalg.solve(A_ext, b_ext)
         except np.linalg.LinAlgError:
-            # Сингулярная матрица — пропускаем шаг
+            logging.getLogger(__name__).warning("Singular matrix in FEM solver — skipping simulation step")
             return
 
         # 4. Разделить на ускорения и множители Лагранжа

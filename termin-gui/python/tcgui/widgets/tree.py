@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
-from tcbase import MouseButton
+from tcbase import MouseButton, log
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent
 from tcgui.widgets.theme import current_theme as _t
@@ -198,6 +198,7 @@ class TreeWidget(Widget):
         try:
             idx = self._visible_nodes.index(node)
         except ValueError:
+            log.debug(f"TreeWidget._node_y: node not in _visible_nodes")
             return 0.0
         stride = self.row_height + self.row_spacing
         return self.y + idx * stride - self._scroll_offset
@@ -217,6 +218,7 @@ class TreeWidget(Widget):
         try:
             idx = self._visible_nodes.index(node)
         except ValueError:
+            log.debug(f"TreeWidget._ensure_visible: node not in _visible_nodes")
             return
         stride = self.row_height + self.row_spacing
         node_top = idx * stride
@@ -332,6 +334,7 @@ class TreeWidget(Widget):
             try:
                 tidx = self._visible_nodes.index(target)
             except ValueError:
+                log.debug(f"TreeWidget.render: drop target not in _visible_nodes")
                 tidx = -1
             if tidx >= 0:
                 t_y = self.y + tidx * stride - self._scroll_offset
@@ -476,6 +479,7 @@ class TreeWidget(Widget):
         try:
             idx = self._visible_nodes.index(node)
         except ValueError:
+            log.debug(f"TreeWidget._update_drop_target: node not in _visible_nodes")
             self._drop_target = None
             self._drop_position = "root"
             return
@@ -556,6 +560,7 @@ class TreeWidget(Widget):
         try:
             idx = self._visible_nodes.index(self.selected_node)
         except ValueError:
+            log.debug(f"TreeWidget._navigate: selected_node not in _visible_nodes")
             return True
 
         new_idx = max(0, min(len(self._visible_nodes) - 1, idx + delta))

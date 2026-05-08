@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tcbase import log
 from tcgui.widgets.button import Button
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.input_dialog import show_input_dialog
@@ -200,7 +201,8 @@ class ViewportListWidgetTcgui(VStack):
         try:
             _ = display.tc_display_ptr
             return True
-        except Exception:
+        except Exception as e:
+            log.debug(f"[ViewportListWidgetTcgui] display validity check failed: {e}")
             return False
 
     def _make_node(self, text: str, kind: str, obj: object | None = None) -> TreeNode:

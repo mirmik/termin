@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from tcbase import Key, Mods
+from tcbase import Key, Mods, log
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,8 +76,12 @@ class ShortcutRegistry:
                 mods |= Mods.ALT.value
 
         key_name = parts[-1]
-        # Single letter: A-Z
-        if len(key_name) == 1 and key_name.isalpha():
+        try:
+            # Single letter: A-Z
+            if len(key_name) == 1 and key_name.isalpha():
+                return Key[key_name.upper()], mods
+            # Named keys
             return Key[key_name.upper()], mods
-        # Named keys
-        return Key[key_name.upper()], mods
+        except KeyError as exc:
+            log.warning(f"[shortcuts] Unknown key name in shortcut '{text}': {exc}")
+            raise

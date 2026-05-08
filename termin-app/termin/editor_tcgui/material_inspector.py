@@ -30,7 +30,8 @@ def _to_vec_list(value: Any, n: int, color_mode: bool = False) -> list[float]:
         try:
             vals = [float(v) for v in value]
             vals = vals[:n]
-        except Exception:
+        except Exception as e:
+            log.debug(f"[MaterialInspectorTcgui] _to_vec_list: iterable conversion failed for {type(value).__name__}: {e}")
             vals = []
 
         # Native Vec3/Vec4 path (nanobind object with x/y/z/w fields)
@@ -40,9 +41,11 @@ def _to_vec_list(value: Any, n: int, color_mode: bool = False) -> list[float]:
                 if n >= 4:
                     try:
                         vals.append(float(value.w))
-                    except Exception:
+                    except Exception as e:
+                        log.debug(f"[MaterialInspectorTcgui] _to_vec_list: Vec4.w access failed for {type(value).__name__}: {e}")
                         vals.append(1.0 if color_mode else 0.0)
-            except Exception:
+            except Exception as e:
+                log.debug(f"[MaterialInspectorTcgui] _to_vec_list: native Vec access failed for {type(value).__name__}: {e}")
                 vals = []
 
     if len(vals) < n:

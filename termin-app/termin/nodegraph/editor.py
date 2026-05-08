@@ -252,6 +252,7 @@ class PipelineGraphEditor(QMainWindow):
             self._status_bar.showMessage(f"Saved: {file_path}")
         except Exception as e:
             self._status_bar.showMessage(f"Save failed: {e}")
+            log.error(f"[PipelineGraphEditor] Save failed: {e}")
 
     def _load_graph(self) -> None:
         """Load a graph from a JSON file."""
@@ -275,3 +276,4 @@ class PipelineGraphEditor(QMainWindow):
             self._status_bar.showMessage(f"Loaded: {file_path}")
         except Exception as e:
             self._status_bar.showMessage(f"Load failed: {e}")
+            log.error(f"[PipelineGraphEditor] Load failed: {e}")

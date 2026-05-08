@@ -213,6 +213,7 @@ class FramegraphDebuggerModel:
                 try:
                     has_syms = bool(p.get_internal_symbols())
                 except AttributeError:
+                    log.debug(f"[FrameDebugger] Pass '{p.pass_name}' has no get_internal_symbols()")
                     has_syms = False
             result.append((p.pass_name, has_syms))
         return result
@@ -227,6 +228,7 @@ class FramegraphDebuggerModel:
             try:
                 return list(p.get_internal_symbols())
             except AttributeError:
+                log.debug(f"[FrameDebugger] Pass '{self._selected_pass}' has no get_internal_symbols()")
                 return []
         return []
 
@@ -332,6 +334,7 @@ class FramegraphDebuggerModel:
             try:
                 timings = p.get_internal_symbols_with_timing()
             except AttributeError:
+                log.debug(f"[FrameDebugger] Pass '{self._selected_pass}' has no get_internal_symbols_with_timing()")
                 return ""
             for t in timings:
                 if t.name == self._selected_symbol:
@@ -497,6 +500,7 @@ class FramegraphDebuggerModel:
                     p.set_debug_internal_point("")
                     p.clear_debug_capture()
                 except AttributeError:
+                    log.debug(f"[FrameDebugger] Pass '{p.pass_name}' has no debug control methods")
                     pass
         self._connected_pipeline = None
         self._core.capture.reset_capture()
