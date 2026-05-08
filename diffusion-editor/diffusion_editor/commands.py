@@ -317,7 +317,7 @@ class SetManualPatchRectCommand:
 
     def apply(self, layer_stack: LayerStack) -> None:
         tool = self.layer.tool
-        if tool is not None and hasattr(tool, 'manual_patch_rect'):
+        if tool is not None:
             tool.manual_patch_rect = self.rect
         if layer_stack.on_changed:
             layer_stack.on_changed()
@@ -330,7 +330,7 @@ class ClearManualPatchRectCommand:
 
     def apply(self, layer_stack: LayerStack) -> None:
         tool = self.layer.tool
-        if tool is not None and hasattr(tool, 'manual_patch_rect'):
+        if tool is not None:
             tool.manual_patch_rect = None
         if layer_stack.on_changed:
             layer_stack.on_changed()

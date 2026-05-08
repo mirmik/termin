@@ -264,11 +264,7 @@ class PrefabInstanceMarker(PythonComponent):
         if isinstance(value, dict):
             return {k: PrefabInstanceMarker._serialize_value(v) for k, v in value.items()}
         # For complex objects (Material, Mesh, etc.) store reference
-        if hasattr(value, "uuid"):
-            return {"__ref__": "uuid", "uuid": value.uuid}
-        if hasattr(value, "name") and hasattr(value, "__class__"):
-            return {"__ref__": "name", "type": value.__class__.__name__, "name": value.name}
-        return value
+        return {"__ref__": "uuid", "uuid": value.uuid}
 
     @staticmethod
     def _deserialize_value(value: Any, context=None) -> Any:

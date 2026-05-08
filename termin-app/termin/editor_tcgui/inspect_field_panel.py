@@ -62,7 +62,7 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
             backend = registry.get_type_backend(type_name)
             if backend == TypeBackend.Python:
                 for klass in reversed(cls.__mro__):
-                    fields = getattr(klass, 'inspect_fields', None)
+                    fields = klass.inspect_fields
                     if fields:
                         for name, field in fields.items():
                             if not field.is_inspectable:

@@ -303,7 +303,7 @@ def show_resource_manager_viewer(ui) -> None:
             prog = asset.program
             if prog.phases:
                 for i, phase in enumerate(prog.phases):
-                    mark = phase.phase_mark if hasattr(phase, 'phase_mark') else ""
+                    mark = phase.phase_mark
                     extra.append(f"Phase {i}: mark={mark}")
         _show_asset_details(name, asset, extra)
 
@@ -366,7 +366,7 @@ def show_resource_manager_viewer(ui) -> None:
         extra = []
         if asset.is_loaded and asset.data:
             skel = asset.data
-            bone_count = skel.get_bone_count() if hasattr(skel, 'get_bone_count') else len(skel.bones)
+            bone_count = skel.get_bone_count()
             extra.append(f"Bone count: {bone_count}")
             extra.append("")
             for bone in skel.bones:
@@ -383,7 +383,7 @@ def show_resource_manager_viewer(ui) -> None:
             pipeline = asset.data
             extra.append(f"Pass count: {len(pipeline.passes)}")
             for i, p in enumerate(pipeline.passes):
-                pname = p.pass_name if hasattr(p, 'pass_name') else str(type(p).__name__)
+                pname = p.pass_name
                 extra.append(f"  Pass {i}: {pname}")
         _show_asset_details(name, asset, extra)
 
@@ -394,7 +394,7 @@ def show_resource_manager_viewer(ui) -> None:
             return
         extra = []
         if asset.is_loaded:
-            graph = asset.graph_data if hasattr(asset, 'graph_data') else asset.data
+            graph = asset.graph_data
             if graph and isinstance(graph, dict):
                 nodes = graph.get("nodes", [])
                 connections = graph.get("connections", [])

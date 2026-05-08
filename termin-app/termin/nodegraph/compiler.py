@@ -396,8 +396,7 @@ def create_pass_instance(
     new_pass_name = node.name if node.name else node.title
     instance.pass_name = new_pass_name
     # Also sync tc_pass name for Python passes
-    if hasattr(instance, "_tc_pass_handle"):
-        instance._tc_pass_handle.pass_name = new_pass_name
+    instance._tc_pass_handle.pass_name = new_pass_name
 
     # Known resource params for standard passes
     known_resource_params = {"input_res", "output_res", "shadow_res"}
@@ -414,8 +413,7 @@ def create_pass_instance(
                 log.warning(f"[compiler] setattr({class_name}, {key}, {value!r}) failed: {e}")
         else:
             # Dynamic input - add as extra texture if supported
-            if hasattr(instance, "add_extra_texture"):
-                instance.add_extra_texture(key, value)
+            instance.add_extra_texture(key, value)
 
     # Set UI parameters from node
     for param in node._params:

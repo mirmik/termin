@@ -72,7 +72,7 @@ class PythonComponent:
             if klass is PythonComponent:
                 parent_name = "PythonComponent"
                 break
-            if hasattr(klass, 'inspect_fields'):
+            if klass.inspect_fields:
                 parent_name = klass.__name__
                 break
 
@@ -82,11 +82,9 @@ class PythonComponent:
         # Register factory in C++ ComponentRegistry
         ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
 
-        # drawable capability registration moved to termin.render.DrawableComponent
-
-        # Mark as input handler if class has is_input_handler = True
-        if cls.is_input_handler and hasattr(ComponentRegistry, 'input_capability_id'):
-            ComponentRegistry.set_capability(cls.__name__, ComponentRegistry.input_capability_id(), True)
+        # capability registration moved to respective subclasses:
+        # - drawable: termin.render.DrawableComponent
+        # - input: termin.input.InputComponent
 
     # =========================================================================
     # Properties (delegate to TcComponent)

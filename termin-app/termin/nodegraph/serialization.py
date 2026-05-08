@@ -225,8 +225,7 @@ def deserialize_graph(data: dict, scene: "NodeGraphScene") -> None:
             node.set_param(name, value)
 
         # Clear the flag after params are set
-        if hasattr(node, "_dynamic_inputs_restored"):
-            del node._dynamic_inputs_restored
+        del node._dynamic_inputs_restored
 
         scene.add_node(node)
         nodes_list.append(node)

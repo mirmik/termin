@@ -284,7 +284,7 @@ class GraphNode(QGraphicsItem):
         # MaterialPass: update sockets when material changes
         # Skip if we just restored sockets from serialization (to avoid overwriting)
         if name == "material" and self.data.get("pass_class") == "MaterialPass":
-            if not getattr(self, "_dynamic_inputs_restored", False):
+            if not self._dynamic_inputs_restored:
                 self._update_material_pass_inputs(value)
 
     def _update_material_pass_inputs(self, material: str) -> None:

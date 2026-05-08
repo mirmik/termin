@@ -38,8 +38,8 @@ def _build_names_tab(names: dict, prefix: str) -> tuple[VStack, list[TextInput]]
 
 def show_layers_dialog(ui, scene) -> None:
     """Show modal layers & flags dialog."""
-    layer_names = scene.layer_names if hasattr(scene, "layer_names") else {}
-    flag_names = scene.flag_names if hasattr(scene, "flag_names") else {}
+    layer_names = scene.layer_names
+    flag_names = scene.flag_names
 
     tabs = TabView()
     tabs.preferred_height = px(400)

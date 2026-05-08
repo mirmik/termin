@@ -346,11 +346,8 @@ def _parse_anim_prop(anim_prop, node_channels):
 
         # element может быть не только нодой, но и материалом и т.п.
         # У них может не быть атрибута name
-        try:
-            node_name = element.name
-            if not node_name:
-                return
-        except AttributeError:
+        node_name = element.name
+        if not node_name:
             return
 
         if node_name not in node_channels:
@@ -550,9 +547,9 @@ def load_fbx_file(path) -> FBXSceneData:
 
                 content = None
                 # Check for embedded content (raw image bytes)
-                if hasattr(tex, 'content') and tex.content:
+                if tex.content:
                     try:
-                        if hasattr(tex, 'content_size') and tex.content_size > 0:
+                        if tex.content_size > 0:
                             content = bytes(tex.content[:tex.content_size])
                     except Exception as e:
                         log.debug(f"[FBX] Failed to extract embedded texture content: {e}")

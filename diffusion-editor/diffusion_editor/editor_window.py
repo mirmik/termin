@@ -1812,9 +1812,9 @@ class EditorWindow:
             return
         self._closed = True
         self._running = False
-        if hasattr(self, "_canvas") and self._canvas is not None:
+        if self._canvas is not None:
             self._canvas.dispose()
-        if hasattr(self, "_agent_chat_panel") and self._agent_chat_panel is not None:
+        if self._agent_chat_panel is not None:
             self._agent_chat_panel.shutdown()
         self._engine.shutdown()
         self._instruct_engine.shutdown()

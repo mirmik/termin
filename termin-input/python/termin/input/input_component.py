@@ -1,5 +1,5 @@
-from termin.scene import PythonComponent
-from termin.input._input_native import install_input_vtable
+from termin.scene import PythonComponent, ComponentRegistry
+from termin.input._input_native import install_input_vtable, input_capability_id
 
 
 class InputComponent(PythonComponent):
@@ -11,6 +11,10 @@ class InputComponent(PythonComponent):
         super().__init__(enabled=enabled)
         self.active_in_editor = active_in_editor
         install_input_vtable(self._tc.c_ptr_int())
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        ComponentRegistry.set_capability(cls.__name__, input_capability_id(), True)
 
     def on_mouse_button(self, event):
         pass

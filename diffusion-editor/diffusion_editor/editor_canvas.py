@@ -994,8 +994,7 @@ class EditorCanvas(Canvas):
 
             # Patch rect mode
             if (self._patch_rect_mode and layer is not None
-                    and layer.tool is not None
-                    and hasattr(layer.tool, 'manual_patch_rect')):
+                    and layer.tool is not None):
                 self._patch_rect_dragging = True
                 self._patch_rect_start = (ix, iy)
                 self._patch_rect_end = (ix, iy)
@@ -1256,8 +1255,7 @@ class EditorCanvas(Canvas):
 
         # Manual patch rectangle (green outline)
         if (self._show_patch_rect and layer is not None
-                and layer.tool is not None
-                and hasattr(layer.tool, 'manual_patch_rect')):
+                and layer.tool is not None):
             rect = None
             if (self._patch_rect_dragging
                     and self._patch_rect_start and self._patch_rect_end):

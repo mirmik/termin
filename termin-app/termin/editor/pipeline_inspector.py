@@ -555,7 +555,7 @@ class PipelineInspector(QWidget):
             return
 
         for eff in self._selected_postprocess.effects:
-            name = eff.name if hasattr(eff, "name") else eff.__class__.__name__
+            name = eff.name
             item = QListWidgetItem(f"{name} ({eff.__class__.__name__})")
             self._effects_list.addItem(item)
 
@@ -583,7 +583,7 @@ class PipelineInspector(QWidget):
         # Update name field
         self._effect_name_edit.setEnabled(True)
         self._effect_name_edit.blockSignals(True)
-        self._effect_name_edit.setText(eff.name if hasattr(eff, "name") else "")
+        self._effect_name_edit.setText(eff.name)
         self._effect_name_edit.blockSignals(False)
 
     def _on_add_effect(self) -> None:
@@ -644,7 +644,7 @@ class PipelineInspector(QWidget):
             return
 
         eff = self._selected_postprocess.effects[row]
-        name = eff.name if hasattr(eff, "name") else eff.__class__.__name__
+        name = eff.name
 
         reply = QMessageBox.question(
             self,

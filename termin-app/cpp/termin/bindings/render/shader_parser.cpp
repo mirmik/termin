@@ -181,6 +181,15 @@ void bind_shader_parser(nb::module_& m) {
     // Alias for typo compatibility
     m.attr("ShasderStage") = m.attr("ShaderStage");
 
+    // --- PhaseRenderSettings ---
+    nb::class_<PhaseRenderSettings>(m, "PhaseRenderSettings")
+        .def(nb::init<>())
+        .def_rw("gl_depth_mask", &PhaseRenderSettings::gl_depth_mask)
+        .def_rw("gl_depth_test", &PhaseRenderSettings::gl_depth_test)
+        .def_rw("gl_blend", &PhaseRenderSettings::gl_blend)
+        .def_rw("gl_cull", &PhaseRenderSettings::gl_cull)
+        .def_rw("priority", &PhaseRenderSettings::priority);
+
     // --- Material UBO layout (std140 block metadata from shader parser) ---
     nb::class_<MaterialUboEntry>(m, "MaterialUboEntry")
         .def(nb::init<>())
@@ -252,6 +261,7 @@ void bind_shader_parser(nb::module_& m) {
         // synthesized a MaterialParams block for the phase). Empty
         // layout on raw shaders or system shaders without properties.
         .def_rw("material_ubo_layout", &ShaderPhase::material_ubo_layout)
+        .def_rw("mark_settings", &ShaderPhase::mark_settings)
         // Backward compatibility: identity transform
         .def_static("from_tree", [](const ShaderPhase& phase) {
             return phase;

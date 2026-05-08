@@ -327,13 +327,13 @@ class TextArea(Widget):
         self._refresh_vlines_if_possible()
 
     def _clipboard_text(self) -> str:
-        getter = getattr(self._ui, "get_clipboard_text", None)
+        getter = self._ui.get_clipboard_text
         if getter is None:
             return ""
         return getter() or ""
 
     def _set_clipboard_text(self, text: str) -> None:
-        setter = getattr(self._ui, "set_clipboard_text", None)
+        setter = self._ui.set_clipboard_text
         if setter is not None:
             setter(text)
 

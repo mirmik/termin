@@ -82,7 +82,7 @@ def show_inspect_registry_viewer(ui) -> None:
 
         for type_name in sorted(type_names):
             backend = registry.get_type_backend(type_name)
-            backend_str = backend.name if hasattr(backend, 'name') else str(backend)
+            backend_str = backend.name
             parent = registry.get_type_parent(type_name) or "-"
             own_fields = registry.fields(type_name)
             all_fields = registry.all_fields(type_name)
@@ -117,7 +117,7 @@ def show_inspect_registry_viewer(ui) -> None:
 
     def _show_type_details(type_name: str):
         backend = registry.get_type_backend(type_name)
-        backend_str = backend.name if hasattr(backend, 'name') else str(backend)
+        backend_str = backend.name
         parent = registry.get_type_parent(type_name) or "(none)"
         own_fields = registry.fields(type_name)
         all_fields = registry.all_fields(type_name)

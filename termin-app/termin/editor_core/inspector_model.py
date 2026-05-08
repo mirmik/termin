@@ -79,7 +79,7 @@ class InspectorModel:
     # ------------------------------------------------------------------
 
     def show_entity(self, entity) -> None:
-        label = getattr(entity, "name", "") or "" if entity is not None else ""
+        label = entity.name if entity is not None else ""
         self.request(InspectorKind.ENTITY, target=entity, label=label)
 
     def show_material(self, name: str | None) -> None:

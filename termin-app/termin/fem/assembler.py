@@ -117,6 +117,14 @@ class Contribution:
         """
         Добавить вклад в матрицы
         """
+        pass
+
+    def contribute(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):
+        """Добавить вклад в основную систему уравнений."""
+        pass
+
+    def contribute_for_constraints_correction(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):
+        """Добавить вклад в систему коррекции ограничений."""
         pass  
     
     def contribute_to_mass(self, A: np.ndarray, index_map: Dict[Variable, List[int]]):
@@ -163,10 +171,14 @@ class Contribution:
     def finish_timestep(self, dt: float):
         """
         Завершить шаг по времени (обновить внутренние состояния, если нужно)
-        
+
         Args:
             dt: Шаг по времени
         """
+        pass
+
+    def finish_correction_step(self):
+        """Завершить шаг коррекции ограничений (обновить внутренние состояния, если нужно)."""
         pass
 
 
@@ -899,7 +911,7 @@ class MatrixAssembler:
         Returns:
             Массив множителей Лагранжа или None, если система решалась без связей
         """
-        return getattr(self, '_lagrange_multipliers', None)
+        return self._lagrange_multipliers
     
     def diagnose_matrix(self) -> Dict[str, any]:
         """

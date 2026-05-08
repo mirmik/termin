@@ -33,7 +33,7 @@ def _show_layer_mask_dialog(
     if scene_getter is not None:
         try:
             scene = scene_getter()
-            if scene is not None and hasattr(scene, "layer_names"):
+            if scene is not None:
                 layer_names = scene.layer_names
         except Exception as e:
             log.debug(f"[LayerMaskWidget] failed to get layer names from scene: {e}")

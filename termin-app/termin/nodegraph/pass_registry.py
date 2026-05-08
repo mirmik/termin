@@ -170,7 +170,7 @@ def create_params_from_pass(class_name: str) -> List[NodeParam]:
     cls = get_pass_class(class_name)
     visibility_conditions = {}
     if cls is not None:
-        visibility_conditions = getattr(cls, "node_param_visibility", {})
+        visibility_conditions = cls.node_param_visibility
 
     # 1. Get fields from C++ InspectRegistry
     try:
@@ -197,7 +197,7 @@ def create_params_from_pass(class_name: str) -> List[NodeParam]:
 
     # 2. Get Python-only inspect_fields from class
     if cls is not None:
-        py_fields = getattr(cls, "inspect_fields", {})
+        py_fields = cls.inspect_fields
         for name, field in py_fields.items():
             if name in seen_names:
                 continue
@@ -310,14 +310,12 @@ def get_pass_sockets(class_name: str) -> tuple[list, list]:
     outputs = []
 
     for klass in reversed(cls.__mro__):
-        if hasattr(klass, 'node_inputs'):
-            class_inputs = getattr(klass, 'node_inputs', None)
-            if class_inputs is not None:
-                inputs = list(class_inputs)
-        if hasattr(klass, 'node_outputs'):
-            class_outputs = getattr(klass, 'node_outputs', None)
-            if class_outputs is not None:
-                outputs = list(class_outputs)
+        class_inputs = klass.node_inputs
+        if class_inputs is not None:
+            inputs = list(class_inputs)
+        class_outputs = klass.node_outputs
+        if class_outputs is not None:
+            outputs = list(class_outputs)
 
     return inputs, outputs
 
@@ -340,7 +338,7 @@ def get_pass_inplace_pairs(class_name: str) -> list:
     pairs = []
 
     for klass in reversed(cls.__mro__):
-        class_pairs = getattr(klass, 'node_inplace_pairs', None)
+        class_pairs = klass.node_inplace_pairs
         if class_pairs is not None:
             pairs = list(class_pairs)
 
@@ -365,7 +363,7 @@ def get_pass_categories() -> Dict[str, List[str]]:
             continue
 
         # Get category from class attribute
-        category = getattr(cls, "category", "Other")
+        category = cls.category
 
         if category not in result:
             result[category] = []

@@ -1,0 +1,75 @@
+# Аудит hasattr/setattr/getattr
+# Сгенерировано 8 мая 2026
+# Правило: можно использовать только в коде, предполагающем рефлексию
+# Фоллбэки на отсутствие поля → заменить на прямой доступ
+
+# === Легитимная рефлексия (НЕ трогать) ===
+termin-app/termin/visualization/core/property_path.py | py | рефлексия (динамический доступ по строковому пути)
+termin-app/termin/visualization/core/plugin_loader.py | py | рефлексия (загрузка классов из модулей)
+termin-inspect/python/termin/inspect/inspect_field.py | py | рефлексия (инспекция по путям)
+termin-app/termin/assets/resources/_components.py | py | рефлексия (загрузка классов по имени)
+termin-app/termin/serialization/kind.py | py | рефлексия (сериализация/десериализация)
+termin-app/termin/visualization/platform/backends/sdl_embedded.py | py | рефлексия (__getattr__ прокси)
+termin-app/termin/assets/resource_handle.py | py | рефлексия (getattr(rm, cls._asset_getter))
+termin-app/termin/visualization/core/scene/_helpers.py | py | рефлексия (getattr(component, event_name))
+termin-app/termin/visualization/render/framegraph/core.py | py | рефлексия (getattr(pass_cls, "_deserialize_instance"))
+termin-app/termin/nodegraph/compiler.py | py | рефлексия (setattr для динамических полей пасса)
+termin-app/termin/editor/entity_inspector.py | py | рефлексия (setattr по _property_name в undo/redo)
+termin-app/termin/editor/scene_inspector.py | py | рефлексия (setattr по _property_name в undo/redo)
+termin-app/termin/editor_tcgui/dialogs/scene_inspector.py | py | рефлексия (setattr по _property_name в undo/redo)
+termin-app/termin/editor_core/pipeline_operations.py | py | рефлексия (setattr по имени поля spec)
+
+# === Кандидаты на исправление (~40 файлов) ===
+
+# Мета-атрибуты классов (getattr(cls, "class_attr", default))
+[x] [x] termin-app/termin/nodegraph/pass_registry.py | py | исправлен (6 getattr/hasattr → прямой доступ)
+[x] [x] termin-app/termin/editor_tcgui/pipeline_editor_window.py | py | исправлен (4 getattr → прямой доступ)
+[x] [x] termin-app/termin/visualization/render/postprocess.py | py | исправлен (1 hasattr → прямой доступ)
+[x] [x] termin-scene/python/termin/scene/python_component.py | py | исправлен (2 hasattr → прямой доступ)
+termin-app/termin/visualization/core/property_path.py | py | мета-атрибуты (inspect_fields)
+[x] [x] termin-app/termin/editor_tcgui/inspect_field_panel.py | py | исправлен (1 getattr → прямой доступ)
+termin-app/termin/editor/inspect_field_panel.py | py | мета-атрибуты (inspect_fields)
+
+# Fallback на отсутствие поля (hasattr(obj, 'attr'))
+termin-graphics/python/tgfx/text3d.py | py | hasattr fallback (holder.context)
+termin-app/termin/editor/pipeline_inspector.py | py | hasattr fallback (eff.name)
+termin-app/termin/editor_tcgui/pipeline_inspector.py | py | hasattr fallback (eff.name)
+termin-app/termin/editor/resource_manager_viewer.py | py | hasattr fallback (version, bones, phase_mark)
+termin-app/termin/editor_tcgui/dialogs/resource_manager_viewer.py | py | hasattr fallback (version, bones)
+termin-app/termin/editor_tcgui/dialogs/inspect_registry_viewer.py | py | hasattr fallback (backend.name)
+termin-app/termin/editor/inspect_registry_viewer.py | py | hasattr fallback (backend.name)
+termin-app/termin/editor_tcgui/dialogs/layers_dialog.py | py | hasattr fallback (layer_names, flag_names)
+termin-app/termin/editor_tcgui/widgets/layer_mask_widget.py | py | hasattr fallback (scene.layer_names)
+termin-app/termin/assets/material_asset.py | py | hasattr fallback (shader_phase.mark_settings)
+termin-app/termin/editor/viewport_inspector.py | py | getattr fallback (_render_target_list)
+termin-app/termin/editor/project_browser.py | py | getattr fallback (_root_path, _current_file_dir)
+termin-app/termin/nodegraph/node.py | py | getattr fallback (_dynamic_inputs_restored)
+termin-app/termin/nodegraph/serialization.py | py | hasattr fallback (_dynamic_inputs_restored)
+termin-app/termin/fem/assembler.py | py | getattr fallback (_lagrange_multipliers)
+termin-app/termin/fem/dynamic_assembler.py | py | hasattr fallback (finish_correction_step)
+termin-app/termin/visualization/core/prefab_instance_marker.py | py | hasattr fallback (uuid, name)
+termin-app/termin/loaders/fbx_loader.py | py | hasattr fallback (tex.content, content_size)
+termin-app/termin/visualization/ui/widgets/component.py | py | getattr fallback (children, name)
+termin-app/termin/editor_core/inspector_model.py | py | getattr fallback (entity.name)
+
+# Опциональные методы (hasattr/getattr для проверки наличия метода)
+termin-gui/python/tcgui/widgets/rich_text_view.py | py | getattr опциональный метод (set_clipboard_text)
+termin-gui/python/tcgui/widgets/text_area.py | py | getattr опциональный метод (get/set clipboard)
+termin-gui/python/tcgui/widgets/text_input.py | py | getattr опциональный метод (get/set clipboard)
+termin-app/termin/editor_tcgui/backend_window_manager.py | py | getattr опциональный метод (on_destroy)
+termin-app/termin/editor_tcgui/dialogs/resource_manager_viewer.py | py | hasattr опциональный метод (get_bone_count)
+termin-app/termin/editor/resource_manager_viewer.py | py | hasattr опциональный метод (get_bone_count, ensure_loaded)
+
+# hasattr для проверки инициализации (self._field может не быть установлен)
+diffusion-editor/diffusion_editor/editor_window.py | py | hasattr check init (_canvas, _agent_chat_panel)
+diffusion-editor/diffusion_editor/diffusion_panel.py | py | hasattr check init (_model_paths)
+diffusion-editor/diffusion_editor/editor_canvas.py | py | hasattr check init (manual_patch_rect)
+diffusion-editor/diffusion_editor/commands.py | py | hasattr check init (manual_patch_rect)
+termin-app/termin/editor/dialog_manager.py | py | hasattr check init (dialog fields)
+
+# setattr в lambda (можно заменить на прямой доступ)
+termin-app/termin/editor/dialog_manager.py | py | setattr в lambda (dialog fields)
+
+# Системные / не трогать
+termin-nanobind-sdk/python/termin_nanobind/runtime.py | py | системный (os.add_dll_directory)
+

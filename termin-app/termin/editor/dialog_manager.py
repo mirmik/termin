@@ -241,7 +241,7 @@ class DialogManager:
         from termin.editor.shadow_settings_dialog import ShadowSettingsDialog
 
         # Reuse existing dialog if open
-        if hasattr(self, '_shadow_settings_dialog') and self._shadow_settings_dialog is not None:
+        if self._shadow_settings_dialog is not None:
             self._shadow_settings_dialog.raise_()
             self._shadow_settings_dialog.activateWindow()
             return
@@ -253,7 +253,7 @@ class DialogManager:
             on_changed=self._request_viewport_update,
         )
         dialog.setModal(False)
-        dialog.finished.connect(lambda: setattr(self, '_shadow_settings_dialog', None))
+        dialog.finished.connect(lambda: self.__dict__.__setitem__('_shadow_settings_dialog', None))
         self._shadow_settings_dialog = dialog
         dialog.show()
 
@@ -262,7 +262,7 @@ class DialogManager:
         from termin.editor.agent_types_dialog import AgentTypesDialog
 
         # Reuse existing dialog if open
-        if hasattr(self, '_agent_types_dialog') and self._agent_types_dialog is not None:
+        if self._agent_types_dialog is not None:
             self._agent_types_dialog.raise_()
             self._agent_types_dialog.activateWindow()
             return
@@ -272,7 +272,7 @@ class DialogManager:
             on_changed=self._request_viewport_update,
         )
         dialog.setModal(False)
-        dialog.finished.connect(lambda: setattr(self, '_agent_types_dialog', None))
+        dialog.finished.connect(lambda: self.__dict__.__setitem__('_agent_types_dialog', None))
         self._agent_types_dialog = dialog
         dialog.show()
 
@@ -291,7 +291,7 @@ class DialogManager:
             on_changed=self._request_viewport_update,
         )
         dialog.setModal(False)
-        dialog.finished.connect(lambda: setattr(self, '_spacemouse_settings_dialog', None))
+        dialog.finished.connect(lambda: self.__dict__.__setitem__('_spacemouse_settings_dialog', None))
         self._spacemouse_settings_dialog = dialog
         dialog.show()
 
@@ -300,7 +300,7 @@ class DialogManager:
         from termin.editor.project_settings_dialog import ProjectSettingsDialog
 
         # Reuse existing dialog if open
-        if hasattr(self, '_project_settings_dialog') and self._project_settings_dialog is not None:
+        if self._project_settings_dialog is not None:
             self._project_settings_dialog.raise_()
             self._project_settings_dialog.activateWindow()
             return
@@ -310,6 +310,6 @@ class DialogManager:
             on_changed=self._request_viewport_update,
         )
         dialog.setModal(False)
-        dialog.finished.connect(lambda: setattr(self, '_project_settings_dialog', None))
+        dialog.finished.connect(lambda: self.__dict__.__setitem__('_project_settings_dialog', None))
         self._project_settings_dialog = dialog
         dialog.show()
