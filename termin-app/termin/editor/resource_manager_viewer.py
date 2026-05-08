@@ -256,7 +256,6 @@ class ResourceManagerViewer(QDialog):
         # Enable/disable load button
         can_load = (
             self._selected_asset is not None
-            and hasattr(self._selected_asset, 'is_loaded')
             and not self._selected_asset.is_loaded
         )
         self._load_btn.setEnabled(can_load)
@@ -305,7 +304,7 @@ class ResourceManagerViewer(QDialog):
         """Показать детали материала."""
         # mat is Material (C++), get version from MaterialAsset if available
         mat_asset = self._resource_manager._material_assets.get(name)
-        version = str(mat_asset.version) if mat_asset and hasattr(mat_asset, 'version') else "-"
+        version = str(mat_asset.version) if mat_asset else "-"
         lines = [
             f"Name: {name}",
             f"Source: {mat.source_path or '(inline)'}",
@@ -345,10 +344,10 @@ class ResourceManagerViewer(QDialog):
                 lines.append(f"Phases: {len(program.phases)}")
 
                 for i, phase_data in enumerate(program.phases):
-                    phase_mark = phase_data.phase_mark if hasattr(phase_data, 'phase_mark') else f"phase_{i}"
+                    phase_mark = phase_data.phase_mark
                     lines.append(f"")
                     lines.append(f"--- Phase: {phase_mark} ---")
-                    if hasattr(phase_data, 'uniforms') and phase_data.uniforms:
+                    if phase_data.uniforms:
                         lines.append(f"Uniforms: {len(phase_data.uniforms)}")
                         for uname in phase_data.uniforms:
                             lines.append(f"  - {uname}")
@@ -416,16 +415,16 @@ class ResourceManagerViewer(QDialog):
             if skeleton is not None:
                 lines.append(f"")
                 lines.append(f"=== Skeleton Data ===")
-                bone_count = skeleton.get_bone_count() if hasattr(skeleton, 'get_bone_count') else len(skeleton.bones)
+                bone_count = skeleton.get_bone_count()
                 lines.append(f"Bone Count: {bone_count}")
 
                 # List bones
-                if hasattr(skeleton, 'bones') and skeleton.bones:
+                if skeleton.bones:
                     lines.append(f"")
                     lines.append(f"=== Bones ===")
                     for i, bone in enumerate(skeleton.bones):
-                        bone_name = bone.name if hasattr(bone, 'name') else str(bone)
-                        parent_idx = bone.parent_index if hasattr(bone, 'parent_index') else -1
+                        bone_name = bone.name
+                        parent_idx = bone.parent_index
                         lines.append(f"  [{i}] {bone_name} (parent: {parent_idx})")
 
         self._details_text.setText("\n".join(lines))
@@ -450,7 +449,7 @@ class ResourceManagerViewer(QDialog):
                 lines.append(f"")
                 lines.append(f"=== Passes ===")
                 for i, pass_obj in enumerate(pipeline.passes):
-                    pass_name = pass_obj.pass_name if hasattr(pass_obj, 'pass_name') else type(pass_obj).__name__
+                    pass_name = pass_obj.pass_name
                     pass_type = type(pass_obj).__name__
                     lines.append(f"  [{i}] {pass_name} ({pass_type})")
 
@@ -495,11 +494,7 @@ class ResourceManagerViewer(QDialog):
         if self._selected_asset is None:
             return
 
-        if hasattr(self._selected_asset, 'ensure_loaded'):
-            self._selected_asset.ensure_loaded()
-        elif hasattr(self._selected_asset, 'data'):
-            # Accessing .data triggers lazy load
-            _ = self._selected_asset.data
+        self._selected_asset.ensure_loaded()
 
         self.refresh()
 
@@ -535,7 +530,7 @@ class ResourceManagerViewer(QDialog):
             phases = f"{len(mat.phases)} phases"
             # Get version from MaterialAsset
             mat_asset = self._resource_manager._material_assets.get(name)
-            version = str(mat_asset.version) if mat_asset and hasattr(mat_asset, 'version') else "-"
+            version = str(mat_asset.version) if mat_asset else "-"
             # Get UUID from MaterialAsset
             uuid_str = ""
             if mat_asset:
@@ -554,7 +549,7 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._shader_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
-            version = str(asset.version) if hasattr(asset, 'version') else "-"
+            version = str(asset.version)
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
             item = QTreeWidgetItem([name, status, version, uuid_str])
@@ -570,7 +565,7 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._mesh_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
-            version = str(asset.version) if hasattr(asset, 'version') else "-"
+            version = str(asset.version)
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
             item = QTreeWidgetItem([name, status, version, uuid_str])
@@ -586,7 +581,7 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._texture_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
-            version = str(asset.version) if hasattr(asset, 'version') else "-"
+            version = str(asset.version)
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
             item = QTreeWidgetItem([name, status, version, uuid_str])
@@ -602,7 +597,7 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._voxel_grid_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
-            version = str(asset.version) if hasattr(asset, 'version') else "-"
+            version = str(asset.version)
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
             item = QTreeWidgetItem([name, status, version, uuid_str])
@@ -618,7 +613,7 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._navmesh_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
-            version = str(asset.version) if hasattr(asset, 'version') else "-"
+            version = str(asset.version)
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
             item = QTreeWidgetItem([name, status, version, uuid_str])
@@ -634,7 +629,7 @@ class ResourceManagerViewer(QDialog):
 
         for name, asset in sorted(self._resource_manager._skeleton_assets.items()):
             status = "loaded" if asset.is_loaded else "not loaded"
-            version = str(asset.version) if hasattr(asset, 'version') else "-"
+            version = str(asset.version)
             uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
             item = QTreeWidgetItem([name, status, version, uuid_str])
@@ -654,7 +649,7 @@ class ResourceManagerViewer(QDialog):
                 pipeline = asset.data if asset.is_loaded else None
                 passes_count = len(pipeline.passes) if pipeline else "?"
                 status = f"{passes_count} passes"
-                version = str(asset.version) if hasattr(asset, 'version') else "-"
+                version = str(asset.version)
                 uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
                 item = QTreeWidgetItem([name, status, version, uuid_str])
@@ -680,7 +675,7 @@ class ResourceManagerViewer(QDialog):
                 else:
                     passes_count = "?"
                 status = f"{passes_count} passes"
-                version = str(asset.version) if hasattr(asset, 'version') else "-"
+                version = str(asset.version)
                 uuid_str = asset.uuid[:16] + "..." if len(asset.uuid) > 16 else asset.uuid
 
                 item = QTreeWidgetItem([name, status, version, uuid_str])
@@ -695,7 +690,7 @@ class ResourceManagerViewer(QDialog):
         self._components_tree.clear()
 
         for name, cls in sorted(self._resource_manager.components.items()):
-            module = cls.__module__ if hasattr(cls, '__module__') else "?"
+            module = cls.__module__
 
             item = QTreeWidgetItem([name, module])
             self._components_tree.addTopLevelItem(item)

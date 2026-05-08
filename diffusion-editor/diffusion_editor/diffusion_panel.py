@@ -391,7 +391,7 @@ class DiffusionPanel(ScrollArea):
     def _scan_models(self):
         prev_path = None
         idx = self._model_combo.selected_index
-        if hasattr(self, "_model_paths") and 0 <= idx < len(self._model_paths):
+        if 0 <= idx < len(self._model_paths):
             prev_path = self._model_paths[idx]
 
         self._model_paths: list[str] = []

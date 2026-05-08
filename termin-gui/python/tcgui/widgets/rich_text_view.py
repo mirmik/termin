@@ -366,7 +366,7 @@ class RichTextView(Widget):
         return "\n".join(parts)
 
     def _set_clipboard_text(self, text: str) -> None:
-        setter = getattr(self._ui, "set_clipboard_text", None)
+        setter = self._ui.set_clipboard_text
         if setter is not None:
             setter(text)
 

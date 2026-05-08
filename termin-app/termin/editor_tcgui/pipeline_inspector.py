@@ -540,7 +540,7 @@ class PipelineInspectorTcgui(VStack):
             return
         items = []
         for eff in self._selected_postprocess.effects:
-            name = eff.name if hasattr(eff, "name") else eff.__class__.__name__
+            name = eff.name
             items.append({"text": name, "subtitle": eff.__class__.__name__})
         self._effects_list.set_items(items)
 
@@ -757,7 +757,7 @@ class PipelineInspectorTcgui(VStack):
             self._effect_name.text = ""
         else:
             self._effect_fields.set_target(eff)
-            self._effect_name.text = eff.name if hasattr(eff, "name") else ""
+            self._effect_name.text = eff.name
         self._update_buttons()
 
     def _on_add_effect(self) -> None:
@@ -803,7 +803,7 @@ class PipelineInspectorTcgui(VStack):
         eff = self._current_effect()
         if eff is None:
             return
-        name = eff.name if hasattr(eff, "name") else eff.__class__.__name__
+        name = eff.name
 
         def _on_result(btn: str) -> None:
             if btn != "Yes":

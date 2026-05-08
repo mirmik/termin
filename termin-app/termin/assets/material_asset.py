@@ -186,7 +186,7 @@ def _build_render_state(shader_phase, phase_mark: str | None = None):
         state = TcRenderState.opaque()
 
     # Check for per-mark settings first
-    if phase_mark and hasattr(shader_phase, 'mark_settings'):
+    if phase_mark:
         mark_settings = shader_phase.mark_settings.get(phase_mark)
         if mark_settings:
             if mark_settings.gl_depth_mask is not None:

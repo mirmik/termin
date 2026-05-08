@@ -596,12 +596,12 @@ class ProjectBrowser:
     @property
     def root_path(self) -> Path | None:
         """Текущая корневая директория."""
-        return getattr(self, "_root_path", None)
+        return self._root_path
 
     @property
     def current_directory(self) -> Path | None:
         """Текущая директория (отображаемая в правой панели)."""
-        return getattr(self, "_current_file_dir", None) or self._root_path
+        return self._current_file_dir or self._root_path
 
     @property
     def selected_file(self) -> Path | None:

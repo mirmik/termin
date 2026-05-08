@@ -210,11 +210,7 @@ class FramegraphDebuggerModel:
             if isinstance(p, ShadowPass):
                 has_syms = False
             else:
-                try:
-                    has_syms = bool(p.get_internal_symbols())
-                except AttributeError:
-                    log.debug(f"[FrameDebugger] Pass '{p.pass_name}' has no get_internal_symbols()")
-                    has_syms = False
+                has_syms = bool(p.get_internal_symbols())
             result.append((p.pass_name, has_syms))
         return result
 
@@ -225,11 +221,7 @@ class FramegraphDebuggerModel:
         for p in pipeline.passes:
             if p.pass_name != self._selected_pass:
                 continue
-            try:
-                return list(p.get_internal_symbols())
-            except AttributeError:
-                log.debug(f"[FrameDebugger] Pass '{self._selected_pass}' has no get_internal_symbols()")
-                return []
+            return list(p.get_internal_symbols())
         return []
 
     # ------------------------------------------------------------------
@@ -331,11 +323,7 @@ class FramegraphDebuggerModel:
         for p in pipeline.passes:
             if p.pass_name != self._selected_pass:
                 continue
-            try:
-                timings = p.get_internal_symbols_with_timing()
-            except AttributeError:
-                log.debug(f"[FrameDebugger] Pass '{self._selected_pass}' has no get_internal_symbols_with_timing()")
-                return ""
+            timings = p.get_internal_symbols_with_timing()
             for t in timings:
                 if t.name == self._selected_symbol:
                     gpu_str = f"{t.gpu_time_ms:.3f}ms" if t.gpu_time_ms >= 0 else "pending..."
@@ -496,12 +484,8 @@ class FramegraphDebuggerModel:
         self._frame_debugger_pass = None
         for pipeline in self._known_pipelines():
             for p in pipeline.passes:
-                try:
-                    p.set_debug_internal_point("")
-                    p.clear_debug_capture()
-                except AttributeError:
-                    log.debug(f"[FrameDebugger] Pass '{p.pass_name}' has no debug control methods")
-                    pass
+                p.set_debug_internal_point("")
+                p.clear_debug_capture()
         self._connected_pipeline = None
         self._core.capture.reset_capture()
 

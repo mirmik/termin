@@ -54,13 +54,13 @@ def _extract_pass_socket_info(pass_class_name: str) -> tuple[list[tuple[str, str
     inplace_pairs: list[tuple[str, str]] = []
 
     for klass in reversed(cls.__mro__):
-        class_inputs = getattr(klass, "node_inputs", None)
+        class_inputs = klass.node_inputs
         if class_inputs is not None:
             inputs = list(class_inputs)
-        class_outputs = getattr(klass, "node_outputs", None)
+        class_outputs = klass.node_outputs
         if class_outputs is not None:
             outputs = list(class_outputs)
-        class_pairs = getattr(klass, "node_inplace_pairs", None)
+        class_pairs = klass.node_inplace_pairs
         if class_pairs is not None:
             inplace_pairs = list(class_pairs)
 
@@ -521,7 +521,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
             effect_classes = {"BloomPass", "GrayscalePass", "MaterialPass", "TonemapPass", "PostProcessPass"}
             for cls_name in pass_names:
                 cls = rm.get_frame_pass(cls_name)
-                category = getattr(cls, "category", "Other") if cls is not None else "Other"
+                category = cls.category if cls is not None else "Other"
                 kind = "effect" if (cls_name in effect_classes or str(category).lower().startswith("effect")) else "pass"
                 label = f"{category}: {_graph_title_from_pass_class(cls_name)}"
                 items.append(

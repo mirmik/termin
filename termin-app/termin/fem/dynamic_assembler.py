@@ -374,8 +374,7 @@ class DynamicMatrixAssembler(MatrixAssembler):
             q = self.coords_project_onto_constraints(q, matrices)
             self.upload_variables("position", q)
             for contribution in self.contributions:
-                if hasattr(contribution, "finish_correction_step"):
-                    contribution.finish_correction_step()
+                contribution.finish_correction_step()
         
         matrices = self.assemble_for_constraints_correction()
         q_dot = self.velocity_project_onto_constraints(q_dot, matrices)   

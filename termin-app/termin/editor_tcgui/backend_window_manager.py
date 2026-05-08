@@ -52,9 +52,7 @@ class BackendWindowManager(_BaseManager):
         window_ui = UI(graphics=self._graphics)
 
         def _on_destroy(entry: BackendWindowEntry) -> None:
-            callback = getattr(window_ui, "on_destroy", None)
-            if callback is not None:
-                callback()
+            window_ui.on_destroy()
 
         entry = super().create_window(
             title, width, height,

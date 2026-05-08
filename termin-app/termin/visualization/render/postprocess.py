@@ -51,7 +51,7 @@ class PostEffect:
                 if klass is PostEffect:
                     parent_name = "PostEffect"
                     break
-                if hasattr(klass, 'inspect_fields'):
+                if klass.inspect_fields:
                     parent_name = klass.__name__
                     break
 

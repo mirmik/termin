@@ -387,7 +387,7 @@ class ViewportInspector(QWidget):
         if rt is None:
             self._render_target_combo.setCurrentIndex(0)
             return
-        for i, pool_rt in enumerate(getattr(self, '_render_target_list', [])):
+        for i, pool_rt in enumerate(self._render_target_list):
             if pool_rt.index == rt.index and pool_rt.generation == rt.generation:
                 self._render_target_combo.setCurrentIndex(i + 1)
                 return
@@ -401,7 +401,7 @@ class ViewportInspector(QWidget):
             self._viewport.render_target = None
             self.viewport_changed.emit()
             return
-        rt_list = getattr(self, '_render_target_list', [])
+        rt_list = self._render_target_list
         idx = index - 1
         if 0 <= idx < len(rt_list):
             self._viewport.render_target = rt_list[idx]

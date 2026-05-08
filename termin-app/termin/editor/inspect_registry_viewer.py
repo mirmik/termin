@@ -120,7 +120,7 @@ class InspectRegistryViewer(QDialog):
 
         for type_name in sorted(type_names):
             backend = registry.get_type_backend(type_name)
-            backend_str = backend.name if hasattr(backend, 'name') else str(backend)
+            backend_str = backend.name
 
             parent = registry.get_type_parent(type_name) or "-"
 
@@ -162,7 +162,7 @@ class InspectRegistryViewer(QDialog):
             return
 
         backend = registry.get_type_backend(type_name)
-        backend_str = backend.name if hasattr(backend, 'name') else str(backend)
+        backend_str = backend.name
         parent = registry.get_type_parent(type_name) or "(none)"
 
         own_fields = registry.fields(type_name)

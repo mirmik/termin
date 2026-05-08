@@ -84,7 +84,7 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
             if backend == TypeBackend.Python:
                 # Collect from MRO (base classes first, then subclasses override)
                 for klass in reversed(cls.__mro__):
-                    fields = getattr(klass, 'inspect_fields', None)
+                    fields = klass.inspect_fields
                     if fields:
                         for name, field in fields.items():
                             # Skip non-inspectable fields

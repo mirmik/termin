@@ -199,7 +199,7 @@ class UIComponent(InputComponent):
         if root is None:
             return
         yield root
-        children = getattr(root, "children", None) or []
+        children = root.children
         for child in children:
             yield from self._walk_tree(child)
 
@@ -209,7 +209,7 @@ class UIComponent(InputComponent):
         if self._ui is not None:
             return self._ui.find(name)
         for w in self._walk_tree(self._pending_root):
-            if getattr(w, "name", None) == name:
+            if w.name == name:
                 return w
         return None
 
@@ -219,7 +219,7 @@ class UIComponent(InputComponent):
         if self._ui is not None:
             return self._ui.find_all(name)
         return [w for w in self._walk_tree(self._pending_root)
-                if getattr(w, "name", None) == name]
+                if w.name == name]
 
     def render(self, viewport_w: int, viewport_h: int,
                ctx2=None, target_tex2=None):
