@@ -369,37 +369,31 @@ class RenderTargetInspectorTcgui(VStack):
         self._pipeline_params_slots.clear()
 
         if self._render_target is None:
-            self._pipeline_params_sep.visible = False
-            self._pipeline_params_title.visible = False
-            self._pipeline_params_grid.visible = False
+            self._hide_pipeline_params()
             return
 
-        pipeline_name = self._render_target.pipeline.name if self._render_target.pipeline else ""
-        if not pipeline_name:
-            self._pipeline_params_sep.visible = False
-            self._pipeline_params_title.visible = False
-            self._pipeline_params_grid.visible = False
+        # Use pipeline name from the combo (the registered name), not from the
+        # pipeline object (which may be a copy with a different/lost name).
+        pipeline_name = self._pipeline_combo.selected_text
+        if not pipeline_name or pipeline_name in ("(none)", "(Default)"):
+            self._hide_pipeline_params()
             return
 
+        asset = None
         try:
             asset = self._rm.get_pipeline_asset(pipeline_name)
-        except Exception:
-            self._pipeline_params_sep.visible = False
-            self._pipeline_params_title.visible = False
-            self._pipeline_params_grid.visible = False
-            return
+            if asset is None:
+                asset = self._rm.get_scene_pipeline_asset(pipeline_name)
+        except Exception as e:
+            log.warn(f"[RenderTargetInspector] Failed to get pipeline asset '{pipeline_name}': {e}")
 
         if asset is None:
-            self._pipeline_params_sep.visible = False
-            self._pipeline_params_title.visible = False
-            self._pipeline_params_grid.visible = False
+            self._hide_pipeline_params()
             return
 
         slots = asset.external_params
         if not slots:
-            self._pipeline_params_sep.visible = False
-            self._pipeline_params_title.visible = False
-            self._pipeline_params_grid.visible = False
+            self._hide_pipeline_params()
             return
 
         self._pipeline_params_sep.visible = True
@@ -451,6 +445,11 @@ class RenderTargetInspectorTcgui(VStack):
         if self._ui is not None:
             self._ui.request_layout()
 
+    def _hide_pipeline_params(self) -> None:
+        self._pipeline_params_sep.visible = False
+        self._pipeline_params_title.visible = False
+        self._pipeline_params_grid.visible = False
+
     def _on_pipeline_param_changed(self, _index: int, _text: str) -> None:
         if self._updating or self._render_target is None:
             return
@@ -461,6 +460,7 @@ class RenderTargetInspectorTcgui(VStack):
                 params.pop(slot, None)
             else:
                 params[slot] = text or ""
+        self._render_target.pipeline_params = params
         self._emit_changed()
 
     def _update_size_visibility(self) -> None:
