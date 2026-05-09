@@ -39,6 +39,7 @@ class PlayerRuntime:
         self.title = title
         self.asset_manifest_path = Path(asset_manifest_path) if asset_manifest_path is not None else None
         self.build_json_path = Path(build_json_path) if build_json_path is not None else None
+        self._scene_file_data = None
 
         self.running = False
         self.scene: Scene | None = None
@@ -131,6 +132,7 @@ class PlayerRuntime:
 
         with open(scene_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        self._scene_file_data = data
 
         # Create new scene and load data
         self.scene = create_scene(name=self.scene_name)
@@ -204,7 +206,6 @@ class PlayerRuntime:
         self._fallback_render_target.pipeline = pipeline
         self._fallback_render_target.dynamic_resolution = True
         self._fallback_render_target.enabled = True
-        manager.register_standalone_render_target(self._fallback_render_target)
 
         self._viewport = self._display.create_viewport(
             scene=self.scene,
@@ -510,6 +511,9 @@ class PlayerRuntime:
         self.camera = CameraComponent()
         camera_entity.add_component(self.camera)
 
+        if self._setup_camera_from_saved_editor(camera_entity):
+            return
+
         # Position camera behind the scene and point it at the default content area.
         from termin.geombase import Quat, Vec3
         camera_position = Vec3(0, -6, 3)
@@ -519,6 +523,99 @@ class PlayerRuntime:
             Quat.look_rotation(camera_target - camera_position, Vec3(0, 0, 1))
         )
         log.info("[PlayerRuntime] Created default camera at (0, -6, 3), looking at (0, 0, 1)")
+
+    def _setup_camera_from_saved_editor(self, camera_entity) -> bool:
+        """Use saved editor camera as a runtime fallback when the scene has no game camera."""
+        from tcbase import log
+        from termin.geombase import Quat, Vec3
+
+        if not isinstance(self._scene_file_data, dict):
+            return False
+
+        editor = self._scene_file_data.get("editor")
+        if not isinstance(editor, dict):
+            return False
+
+        camera = editor.get("camera")
+        if not isinstance(camera, dict):
+            return False
+
+        position = camera.get("position")
+        rotation = camera.get("rotation")
+        if not self._is_vec3_list(position) or not self._is_quat_list(rotation):
+            log.warning("[PlayerRuntime] Saved editor camera is incomplete, using default fallback camera")
+            return False
+
+        camera_entity.transform.set_local_position(Vec3(position[0], position[1], position[2]))
+        camera_entity.transform.set_local_rotation(Quat(rotation[0], rotation[1], rotation[2], rotation[3]))
+
+        camera_components = camera.get("editor_entities")
+        if isinstance(camera_components, dict):
+            self._apply_saved_editor_camera_component(camera_components.get("camera"))
+
+        log.info(
+            "[PlayerRuntime] Created fallback camera from saved editor camera "
+            f"at ({position[0]}, {position[1]}, {position[2]})"
+        )
+        return True
+
+    def _apply_saved_editor_camera_component(self, components) -> None:
+        if not isinstance(components, list):
+            return
+
+        for component in components:
+            if not isinstance(component, dict):
+                continue
+            if component.get("type") != "CameraComponent":
+                continue
+
+            data = component.get("data")
+            if not isinstance(data, dict):
+                return
+
+            self._apply_saved_camera_data(data)
+            return
+
+    def _apply_saved_camera_data(self, data: dict) -> None:
+        near_clip = data.get("near_clip")
+        if isinstance(near_clip, (int, float)):
+            self.camera.near_clip = float(near_clip)
+
+        far_clip = data.get("far_clip")
+        if isinstance(far_clip, (int, float)):
+            self.camera.far_clip = float(far_clip)
+
+        ortho_size = data.get("ortho_size")
+        if isinstance(ortho_size, (int, float)):
+            self.camera.ortho_size = float(ortho_size)
+
+        fov_x_degrees = data.get("fov_x_degrees")
+        if isinstance(fov_x_degrees, (int, float)):
+            self.camera.fov_x_degrees = float(fov_x_degrees)
+
+        fov_y_degrees = data.get("fov_y_degrees")
+        if isinstance(fov_y_degrees, (int, float)):
+            self.camera.fov_y_degrees = float(fov_y_degrees)
+
+        fov_mode = data.get("fov_mode")
+        if isinstance(fov_mode, str) and fov_mode != "":
+            self.camera.fov_mode = fov_mode
+
+        layer_mask = data.get("layer_mask")
+        if isinstance(layer_mask, str) and layer_mask.startswith("0x"):
+            self.camera.layer_mask = int(layer_mask, 16)
+        elif isinstance(layer_mask, int):
+            self.camera.layer_mask = layer_mask
+
+    def _is_vec3_list(self, value) -> bool:
+        if not isinstance(value, list) or len(value) != 3:
+            return False
+        return all(isinstance(item, (int, float)) for item in value)
+
+    def _is_quat_list(self, value) -> bool:
+        if not isinstance(value, list) or len(value) != 4:
+            return False
+        return all(isinstance(item, (int, float)) for item in value)
 
     def _setup_input(self):
         """Set up input handling."""
