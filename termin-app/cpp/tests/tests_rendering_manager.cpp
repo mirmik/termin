@@ -89,6 +89,37 @@ TEST_CASE("Graph compiler synthesizes blit for External RT to RenderTarget")
     delete pipeline;
 }
 
+TEST_CASE("Graph compiler uses unnamed slot for External RT without name")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTarget", "x": 409.0, "y": 40.0, "node_type": "output" },
+    {
+      "type": "External RT",
+      "x": 49.0,
+      "y": 21.0,
+      "node_type": "external_rt",
+      "params": { "slot": "" }
+    }
+  ],
+  "connections": [
+    { "from_node": 1, "from_socket": "fbo", "to_node": 0, "to_socket": "color" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    REQUIRE(naming.socket_names.count("1") == 1u);
+    REQUIRE(naming.socket_names["1"].count("fbo") == 1u);
+    CHECK(naming.socket_names["1"]["fbo"] == "unnamed");
+}
+
 TEST_CASE("RenderingManager detach_scene removes attached scene")
 {
     RenderingManager manager;

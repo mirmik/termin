@@ -419,7 +419,7 @@ class RenderTargetInspectorTcgui(VStack):
             current_val = params.get(slot, "")
             if current_val:
                 if current_val.startswith("file:"):
-                    picker.set_value(current_val[5:], "file")
+                    picker.set_value(self._texture_picker_name_from_file_ref(current_val), "file")
                 else:
                     picker.set_value(current_val, "rt_color")
             else:
@@ -443,11 +443,43 @@ class RenderTargetInspectorTcgui(VStack):
         if tag == "default" or not value:
             params.pop(slot, None)
         elif tag == "file":
-            params[slot] = "file:" + value
+            params[slot] = self._file_ref_from_texture_name(value)
         else:
             params[slot] = value
         self._render_target.pipeline_params = params
         self._emit_changed()
+
+    def _texture_picker_name_from_file_ref(self, ref: str) -> str:
+        """Resolve serialized file texture ref into TexturePicker asset name."""
+        prefix = "file:"
+        if not ref.startswith(prefix):
+            return ref
+
+        payload = ref[len(prefix):]
+        asset = self._rm.get_texture_asset_by_uuid(payload)
+        if asset is not None:
+            return asset.name
+
+        # Legacy scenes stored file refs by asset name, e.g. file:Grenade.
+        asset = self._rm.get_texture_asset(payload)
+        if asset is not None:
+            return payload
+
+        log.warn(f"[RenderTargetInspector] texture file ref not found: {ref}")
+        return payload
+
+    def _file_ref_from_texture_name(self, name: str) -> str:
+        """Serialize TexturePicker asset name as file:<asset uuid>."""
+        asset = self._rm.get_texture_asset(name)
+        if asset is not None:
+            return "file:" + asset.uuid
+
+        asset = self._rm.get_texture_asset_by_uuid(name)
+        if asset is not None:
+            return "file:" + asset.uuid
+
+        log.warn(f"[RenderTargetInspector] texture asset not found for pipeline param: {name}")
+        return "file:" + name
 
     def _update_size_visibility(self) -> None:
         manual = self._render_target is not None and not bool(self._dynamic_resolution.checked)

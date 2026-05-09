@@ -162,18 +162,13 @@ class ViewportListWidgetTcgui(VStack):
 
             for i, viewport in enumerate(display.viewports):
                 vp_name = viewport.name or f"Viewport {i}"
-                camera_name = "No Camera"
                 render_target = viewport.render_target
-                camera = render_target.camera if render_target is not None else None
-                if camera is not None:
-                    entity = camera.entity
-                    if entity is not None:
-                        camera_name = entity.name or f"Camera {i}"
-                    else:
-                        camera_name = f"Camera {i}"
+                render_target_name = "No Render Target"
+                if render_target is not None:
+                    render_target_name = render_target.name or "RenderTarget"
 
                 vp_node = self._make_node(
-                    f"{vp_name} ({camera_name})",
+                    f"{vp_name} ({render_target_name})",
                     _NodeKind.VIEWPORT,
                     viewport,
                 )

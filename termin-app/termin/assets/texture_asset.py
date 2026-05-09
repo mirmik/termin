@@ -119,6 +119,7 @@ class TextureAsset(DataAsset[TcTexture]):
             transpose=self._transpose,
             name=self._name,
             source_path=str(self._source_path) if self._source_path else "",
+            uuid=self.uuid,
         )
 
     # --- Factory methods ---
@@ -135,6 +136,11 @@ class TextureAsset(DataAsset[TcTexture]):
         width, height = image.size
 
         texture_name = name or path.stem
+        asset = cls(
+            texture_data=None,
+            name=texture_name,
+            source_path=path,
+        )
         texture_data = TcTexture.from_data(
             data=data,
             width=width,
@@ -145,12 +151,10 @@ class TextureAsset(DataAsset[TcTexture]):
             transpose=False,
             name=texture_name,
             source_path=str(path),
+            uuid=asset.uuid,
         )
-        return cls(
-            texture_data=texture_data,
-            name=texture_name,
-            source_path=path,
-        )
+        asset.texture_data = texture_data
+        return asset
 
     @classmethod
     def from_data(
@@ -165,6 +169,7 @@ class TextureAsset(DataAsset[TcTexture]):
         height, width = data.shape[:2]
         channels = data.shape[2] if data.ndim == 3 else 1
 
+        asset = cls(texture_data=None, name=name)
         texture_data = TcTexture.from_data(
             data=data,
             width=width,
@@ -174,8 +179,10 @@ class TextureAsset(DataAsset[TcTexture]):
             flip_y=flip_y,
             transpose=transpose,
             name=name,
+            uuid=asset.uuid,
         )
-        return cls(texture_data=texture_data, name=name)
+        asset.texture_data = texture_data
+        return asset
 
     @classmethod
     def white_1x1(cls) -> "TextureAsset":

@@ -253,17 +253,12 @@ class ViewportListWidget(QWidget):
             for i, viewport in enumerate(viewports):
                 vp_name = viewport.name if viewport.name else f"Viewport {i}"
 
-                camera_name = "No Camera"
                 render_target = viewport.render_target
-                camera = render_target.camera if render_target is not None else None
-                if camera is not None:
-                    entity = camera.entity
-                    if entity is not None:
-                        camera_name = entity.name or f"Camera {i}"
-                    else:
-                        camera_name = f"Camera {i}"
+                render_target_name = "No Render Target"
+                if render_target is not None:
+                    render_target_name = render_target.name or "RenderTarget"
 
-                viewport_item = ViewportItem(viewport, f"{vp_name} ({camera_name})")
+                viewport_item = ViewportItem(viewport, f"{vp_name} ({render_target_name})")
 
                 internal_entities = viewport.internal_entities
                 if internal_entities is not None:

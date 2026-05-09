@@ -193,6 +193,7 @@ class RegistrationMixin:
     def _register_texture_file(self, name: str, result: "PreLoadResult") -> None:
         """Register texture from PreLoadResult (lazy loading)."""
         from termin.assets.texture_asset import TextureAsset
+        from termin.texture import tc_texture_declare, tc_texture_set_load_callback
 
         if name in self._texture_assets:
             return
@@ -213,6 +214,16 @@ class RegistrationMixin:
         asset.parse_spec(result.spec_data)
         self._assets_by_uuid[asset.uuid] = asset
         self._texture_assets[name] = asset
+
+        texture = tc_texture_declare(asset.uuid, name)
+
+        def load_texture(_texture) -> bool:
+            if asset.ensure_loaded():
+                return True
+            log.error(f"[ResourceManager] Failed to lazy-load texture: {name} ({asset.uuid})")
+            return False
+
+        tc_texture_set_load_callback(texture, load_texture)
 
     def _reload_texture_file(self, name: str, result: "PreLoadResult") -> None:
         """Reload texture from PreLoadResult."""
