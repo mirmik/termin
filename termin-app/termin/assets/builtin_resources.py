@@ -268,15 +268,8 @@ def register_builtin_meshes(rm: "ResourceManager") -> List[str]:
 
 
 def register_default_pipeline(rm: "ResourceManager") -> None:
-    """Register built-in default render pipeline."""
-    if rm.get_pipeline("Default") is not None:
-        return
-
-    from termin.visualization.core.viewport import make_default_pipeline
-
-    pipeline = make_default_pipeline()
-    pipeline.name = "Default"
-    rm.register_pipeline("Default", pipeline, uuid=BUILTIN_UUIDS.get("DefaultPipeline"))
+    """Default pipeline is created by native RenderingManager on demand."""
+    return
 
 
 def register_triangle_pipeline(rm: "ResourceManager") -> None:

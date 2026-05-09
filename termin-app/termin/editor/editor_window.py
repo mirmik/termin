@@ -1051,8 +1051,6 @@ class EditorWindow(QMainWindow):
 
     def _create_pipeline_by_name(self, pipeline_name: str):
         """Create pipeline by name."""
-        from termin.assets.resources import ResourceManager
-
         if pipeline_name == "(Editor)":
             from termin.editor.editor_pipeline import make_editor_pipeline
             return make_editor_pipeline()
@@ -1060,14 +1058,18 @@ class EditorWindow(QMainWindow):
         if not pipeline_name or pipeline_name == "(Default)":
             pipeline_name = "Default"
 
+        if pipeline_name == "Default":
+            from termin.engine import RenderingManager
+            return RenderingManager.instance().create_pipeline("Default")
+
         # Lookup pipeline from ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         pipeline = rm.get_pipeline(pipeline_name)
         if pipeline is not None:
             return pipeline
 
-        # Fallback to Default
-        return rm.get_pipeline("Default")
+        return None
 
     def show_entity_inspector(self, entity: Entity | None = None):
         """Show EntityInspector and set target."""

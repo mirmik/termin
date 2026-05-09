@@ -222,6 +222,9 @@ class RenderingController:
         Returns:
             Created RenderPipeline or None if unknown.
         """
+        if not name or name in ("Default", "(Default)"):
+            return None
+
         if name == "(Editor)":
             if self._make_editor_pipeline is not None:
                 return self._make_editor_pipeline()
@@ -236,15 +239,10 @@ class RenderingController:
             if pipeline is not None:
                 return pipeline
 
-        # Resolve "(Default)" to "Default"
-        lookup_name = "Default" if (not name or name == "(Default)") else name
-        pipeline = rm.get_pipeline(lookup_name)
+        pipeline = rm.get_pipeline(name)
         if pipeline is not None:
             return pipeline
 
-        # Fallback to Default
-        if lookup_name != "Default":
-            return rm.get_pipeline("Default")
         return None
 
     def _create_display_for_name(self, name: str) -> Optional["Display"]:
