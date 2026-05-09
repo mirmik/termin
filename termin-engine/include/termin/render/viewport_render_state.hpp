@@ -19,6 +19,8 @@ public:
     tgfx::TextureHandle output_depth_tex;
     int output_width = 0;
     int output_height = 0;
+    tgfx::PixelFormat output_color_format = tgfx::PixelFormat::RGBA8_UNorm;
+    tgfx::PixelFormat output_depth_format = tgfx::PixelFormat::D24_UNorm;
 
 private:
     tgfx::IRenderDevice* device_ = nullptr;
@@ -69,18 +71,36 @@ public:
     // Ensure output color+depth textures exist at the given size.
     // Reallocates on size change via the provided tgfx2 device.
     void ensure_output_textures(tgfx::IRenderDevice& device, int width, int height) {
-        if (output_color_tex && output_width == width && output_height == height &&
-            device_ == &device) {
+        ensure_output_textures(
+            device, width, height,
+            tgfx::PixelFormat::RGBA8_UNorm,
+            tgfx::PixelFormat::D24_UNorm
+        );
+    }
+
+    void ensure_output_textures(
+        tgfx::IRenderDevice& device,
+        int width,
+        int height,
+        tgfx::PixelFormat color_format,
+        tgfx::PixelFormat depth_format
+    ) {
+        if (output_color_tex && output_width == width && output_height == height
+            && output_color_format == color_format
+            && output_depth_format == depth_format
+            && device_ == &device) {
             return;
         }
         release_textures();
 
         device_ = &device;
+        output_color_format = color_format;
+        output_depth_format = depth_format;
 
         tgfx::TextureDesc color_desc;
         color_desc.width = static_cast<uint32_t>(width);
         color_desc.height = static_cast<uint32_t>(height);
-        color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        color_desc.format = color_format;
         color_desc.usage = tgfx::TextureUsage::Sampled |
                            tgfx::TextureUsage::ColorAttachment |
                            tgfx::TextureUsage::CopySrc |
@@ -90,7 +110,7 @@ public:
         tgfx::TextureDesc depth_desc;
         depth_desc.width = static_cast<uint32_t>(width);
         depth_desc.height = static_cast<uint32_t>(height);
-        depth_desc.format = tgfx::PixelFormat::D24_UNorm;
+        depth_desc.format = depth_format;
         depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment |
                            tgfx::TextureUsage::Sampled;
         output_depth_tex = device.create_texture(depth_desc);
@@ -124,6 +144,8 @@ private:
         }
         output_width = 0;
         output_height = 0;
+        output_color_format = tgfx::PixelFormat::RGBA8_UNorm;
+        output_depth_format = tgfx::PixelFormat::D24_UNorm;
         device_ = nullptr;
     }
 };
