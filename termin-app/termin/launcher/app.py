@@ -580,6 +580,25 @@ def run():
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
     app = LauncherApp(graphics=graphics, ui_backend=ui_backend)
+    presenting = False
+
+    def present_ui() -> None:
+        nonlocal presenting
+        if presenting:
+            return
+        presenting = True
+        try:
+            vw, vh = _get_drawable_size_from_backend(window)
+            if vw <= 0 or vh <= 0:
+                return
+            tex = app.ui.render_compose(vw, vh, background_color=(0.08, 0.08, 0.10, 1.0))
+            if tex is not None:
+                window.present(tex)
+        finally:
+            presenting = False
+
+    app.ui.on_present_requested = present_ui
+    present_ui()
 
     sdl2.SDL_StartTextInput()
 
@@ -623,10 +642,7 @@ def run():
         if not running:
             break
 
-        vw, vh = _get_drawable_size_from_backend(window)
-        tex = app.ui.render_compose(vw, vh, background_color=(0.08, 0.08, 0.10, 1.0))
-        if tex is not None:
-            window.present(tex)
+        present_ui()
 
     sdl2.SDL_Quit()
 

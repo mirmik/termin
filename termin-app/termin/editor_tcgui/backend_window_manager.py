@@ -35,11 +35,13 @@ class BackendWindowManager(_BaseManager):
         # secondary UI spins up with the same `graphics=` — one
         # IRenderDevice per process invariant.
         self._graphics = None
+        self._presenting_entries: set[int] = set()
 
     def register_main(self, window: BackendWindow, ui: UI) -> BackendWindowEntry:  # type: ignore[override]
         entry = super().register_main(window, host_data=ui)
         self._graphics = ui._renderer.graphics
         ui.create_window = self._ui_create_window
+        ui.on_present_requested = lambda: self.render_entry(entry)
         return entry
 
     def _ui_create_window(self, title: str, width: int, height: int) -> UI | None:
@@ -52,7 +54,10 @@ class BackendWindowManager(_BaseManager):
         window_ui = UI(graphics=self._graphics)
 
         def _on_destroy(entry: BackendWindowEntry) -> None:
-            window_ui.on_destroy()
+            window_ui.on_present_requested = None
+            callback = window_ui.on_destroy
+            if callback is not None:
+                callback()
 
         entry = super().create_window(
             title, width, height,
@@ -67,26 +72,38 @@ class BackendWindowManager(_BaseManager):
         window_ui.close_window = _close
         window_ui.on_empty = _close
         window_ui.create_window = self._ui_create_window
+        window_ui.on_present_requested = lambda: self.render_entry(entry)
         return window_ui
 
     # ------------------------------------------------------------------
     # Per-frame render loop
     # ------------------------------------------------------------------
 
+    def render_entry(self, entry: BackendWindowEntry) -> None:
+        entry_id = id(entry)
+        if entry_id in self._presenting_entries:
+            return
+        self._presenting_entries.add(entry_id)
+        try:
+            self._render_entry(entry)
+        finally:
+            self._presenting_entries.discard(entry_id)
+
+    def _render_entry(self, entry: BackendWindowEntry) -> None:
+        ui: UI = entry.host_data
+        vw, vh = entry.window.framebuffer_size()
+        if vw <= 0 or vh <= 0:
+            return
+        tex = ui.render_compose(vw, vh, background_color=self.WINDOW_BG)
+        ui.process_deferred()
+        if tex is None:
+            return
+        entry.window.present(tex)
+
     def render_all(self) -> None:
         """Render every registered window's UI and present its composite."""
         for entry in list(self.entries):
-            ui: UI = entry.host_data
-            vw, vh = entry.window.framebuffer_size()
-            if vw <= 0 or vh <= 0:
-                continue
-            tex = ui.render_compose(vw, vh, background_color=self.WINDOW_BG)
-            ui.process_deferred()
-            if tex is None:
-                # Empty UI — skip present so the swapchain keeps the
-                # previous frame on screen instead of showing garbage.
-                continue
-            entry.window.present(tex)
+            self.render_entry(entry)
 
     def poll_events(self) -> bool:
         """Drain events on every window. Returns False if the main

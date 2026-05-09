@@ -98,9 +98,15 @@ class UI:
         self.create_window: Callable[[str, int, int], UI | None] | None = None
         self.close_window: Callable[[], None] | None = None
         self.on_empty: Callable[[], None] | None = None
+        self.on_destroy: Callable[[], None] | None = None
+        self.on_present_requested: Callable[[], None] | None = None
 
     def _set_memory_clipboard_text(self, text: str) -> None:
         self._clipboard_text = text
+
+    def _request_present(self) -> None:
+        if self.on_present_requested is not None:
+            self.on_present_requested()
 
     def _default_get_clipboard_text(self) -> str:
         try:
@@ -137,6 +143,7 @@ class UI:
             self._set_ui_recursive(widget)
         else:
             self._check_empty()
+        self._request_present()
 
     @property
     def font(self) -> FontTextureAtlas | None:
@@ -370,6 +377,7 @@ class UI:
         entry = _OverlayEntry(widget, modal, dismiss_on_outside, on_dismiss)
         self._overlays.append(entry)
         self._set_ui_recursive(widget)
+        self._request_present()
 
     def hide_overlay(self, widget: Widget):
         """Remove an overlay by its widget reference."""
@@ -379,6 +387,7 @@ class UI:
                 if entry.on_dismiss:
                     entry.on_dismiss()
                 self._check_empty()
+                self._request_present()
                 return
 
     def _hide_top_overlay(self):
@@ -388,6 +397,7 @@ class UI:
             if entry.on_dismiss:
                 entry.on_dismiss()
             self._check_empty()
+            self._request_present()
 
     def _check_empty(self):
         """If root is None and no overlays remain, fire on_empty callback."""
