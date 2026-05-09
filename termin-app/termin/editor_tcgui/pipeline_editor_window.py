@@ -23,6 +23,171 @@ _TITLE_TO_PASS_CLASS = {
     "Present": "PresentToScreenPass",
 }
 _PASS_CLASS_TO_TITLE = {v: k for k, v in _TITLE_TO_PASS_CLASS.items()}
+_SOCKET_PARAM_NAMES = {
+    "input_res",
+    "output_res",
+    "shadow_res",
+    "depth_res",
+    "id_res",
+    "normal_res",
+}
+
+
+def _default_for_param_kind(kind: str, choices) -> object:
+    if choices:
+        first = choices[0]
+        if isinstance(first, tuple) and first:
+            return first[0]
+        return first
+    if kind == "bool":
+        return False
+    if kind == "int":
+        return 0
+    if kind == "float":
+        return 0.0
+    if kind == "tc_material":
+        return "(None)"
+    return ""
+
+
+def _material_choices() -> list[tuple[str, str]]:
+    from termin.visualization.core.resources import ResourceManager
+
+    rm = ResourceManager.instance()
+    return [("(None)", "(None)")] + [(name, name) for name in rm.list_material_names()]
+
+
+def _normalize_param_spec(kind: str, choices):
+    if kind == "tc_material":
+        return "enum", _material_choices()
+    return kind, choices
+
+
+def _add_node_param(
+    node,
+    name: str,
+    label: str,
+    kind: str,
+    default: object,
+    choices=None,
+    min_value=None,
+    max_value=None,
+    step=None,
+) -> None:
+    if name in _SOCKET_PARAM_NAMES:
+        return
+    kind, choices = _normalize_param_spec(kind, choices)
+    if name not in node.params:
+        node.params[name] = default
+    specs = node.data.get("param_specs")
+    if not isinstance(specs, dict):
+        specs = {}
+        node.data["param_specs"] = specs
+    spec = {
+        "label": label or name,
+        "kind": kind,
+    }
+    if choices:
+        spec["items"] = [str(c[0]) if isinstance(c, tuple) and c else str(c) for c in choices]
+    if min_value is not None:
+        spec["min"] = min_value
+    if max_value is not None:
+        spec["max"] = max_value
+    if step is not None:
+        spec["step"] = step
+    specs[name] = spec
+
+
+def _add_cpp_inspect_params(node, class_name: str, seen: set[str]) -> None:
+    try:
+        from termin._native.inspect import InspectRegistry
+        registry = InspectRegistry.instance()
+        for info in registry.all_fields(class_name):
+            if not info.is_inspectable:
+                continue
+            if info.path in seen:
+                continue
+            if info.path in _SOCKET_PARAM_NAMES:
+                continue
+            choices = [(c.value, c.label) for c in info.choices] if info.choices else None
+            _add_node_param(
+                node,
+                info.path,
+                info.label,
+                info.kind,
+                _default_for_param_kind(info.kind, choices),
+                choices,
+                info.min,
+                info.max,
+                info.step,
+            )
+            seen.add(info.path)
+    except Exception as e:
+        log.warn(f"[PipelineEditor] failed to collect C++ inspect params for {class_name}: {e}")
+
+
+def _add_python_inspect_params(node, pass_class) -> None:
+    for klass in reversed(pass_class.__mro__):
+        if klass is object:
+            continue
+        fields = klass.inspect_fields
+        if not fields:
+            continue
+        for name, field in fields.items():
+            if name in node.params:
+                continue
+            if name in _SOCKET_PARAM_NAMES:
+                continue
+            if not field.is_inspectable:
+                continue
+            _add_node_param(
+                node,
+                name,
+                field.label,
+                field.kind,
+                _default_for_param_kind(field.kind, field.choices),
+                field.choices,
+                field.min,
+                field.max,
+                field.step,
+            )
+
+
+def _populate_pass_node_params(node, pass_class_name: str) -> None:
+    from termin.visualization.core.resources import ResourceManager
+
+    seen = set(node.params.keys())
+    _add_cpp_inspect_params(node, pass_class_name, seen)
+
+    rm = ResourceManager.instance()
+    rm.register_builtin_frame_passes()
+    cls = rm.get_frame_pass(pass_class_name)
+    if cls is None:
+        log.warn(f"[PipelineEditor] pass class not found for node params: {pass_class_name}")
+        return
+    _add_python_inspect_params(node, cls)
+
+
+def _populate_resource_node_params(node, graph_type: str) -> None:
+    if graph_type == "Shadow Maps":
+        return
+    _add_node_param(node, "format", "Format", "enum", "rgba8",
+                    [("rgba8", "RGBA8"), ("rgba16f", "RGBA16F"), ("rgba32f", "RGBA32F"), ("r16f", "R16F"), ("r32f", "R32F")])
+    _add_node_param(node, "samples", "MSAA", "enum", "1", [("1", "1"), ("2", "2"), ("4", "4"), ("8", "8")])
+    _add_node_param(node, "filter", "Filter", "enum", "linear", [("linear", "Linear"), ("nearest", "Nearest")])
+    _add_node_param(node, "size_mode", "Size", "enum", "viewport", [("viewport", "Viewport"), ("fixed", "Fixed")])
+    _add_node_param(node, "scale", "Scale", "enum", "1.0", [("0.25", "0.25"), ("0.5", "0.5"), ("1.0", "1.0"), ("2.0", "2.0")])
+    _add_node_param(node, "width", "Width", "int", 1024)
+    _add_node_param(node, "height", "Height", "int", 1024)
+    _add_node_param(node, "has_color", "Color", "bool", True)
+    _add_node_param(node, "has_depth", "Depth", "bool", True)
+    _add_node_param(node, "clear_color", "Clear Color", "bool", False)
+    _add_node_param(node, "clear_color_r", "R", "float", 0.0)
+    _add_node_param(node, "clear_color_g", "G", "float", 0.0)
+    _add_node_param(node, "clear_color_b", "B", "float", 0.0)
+    _add_node_param(node, "clear_color_a", "A", "float", 1.0)
+    _add_node_param(node, "clear_depth", "Clear Depth", "bool", False)
+    _add_node_param(node, "clear_depth_value", "Depth", "float", 1.0)
 
 
 def _pass_class_name(title: str) -> str:
@@ -45,6 +210,7 @@ def _extract_pass_socket_info(pass_class_name: str) -> tuple[list[tuple[str, str
     from termin.visualization.core.resources import ResourceManager
 
     rm = ResourceManager.instance()
+    rm.register_builtin_frame_passes()
     cls = rm.get_frame_pass(pass_class_name)
     if cls is None:
         return [], [], []
@@ -54,6 +220,8 @@ def _extract_pass_socket_info(pass_class_name: str) -> tuple[list[tuple[str, str
     inplace_pairs: list[tuple[str, str]] = []
 
     for klass in reversed(cls.__mro__):
+        if klass is object:
+            continue
         class_inputs = klass.node_inputs
         if class_inputs is not None:
             inputs = list(class_inputs)
@@ -110,6 +278,7 @@ def _load_graph_from_pipeline_dict(data: dict):
         node.data["explicit_size"] = has_width or has_height
 
         if node_type == "resource":
+            _populate_resource_node_params(node, graph_type)
             if graph_type == "Shadow Maps":
                 controller.add_output_socket(node.id, "shadow", "shadow")
             else:
@@ -121,6 +290,7 @@ def _load_graph_from_pipeline_dict(data: dict):
             controller.add_input_socket(node.id, "depth", "fbo")
         elif node_type in ("pass", "effect"):
             pass_class = _pass_class_name(graph_type)
+            _populate_pass_node_params(node, pass_class)
             inputs, outputs, inplace_pairs = _extract_pass_socket_info(pass_class)
             inplace_outputs = {out_name for _, out_name in inplace_pairs}
 
@@ -276,6 +446,7 @@ def _legacy_pipeline_to_graph(data: dict):
         node.data["node_type"] = "pass"
         node.data["dynamic_inputs"] = []
         node.data["explicit_size"] = False
+        _populate_pass_node_params(node, real_class)
 
         inputs, outputs, inplace_pairs = _extract_pass_socket_info(real_class)
         inplace_outputs = {out_name for _, out_name in inplace_pairs}
@@ -330,6 +501,8 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
     current_file_uuid: str | None = None
     current_graph = Graph()
     graph_view = NodeGraphView(current_graph)
+    graph_view.use_param_widgets = True
+    graph_view.inline_param_editing = False
     graph_view.preferred_width = pct(100)
     graph_view.preferred_height = pct(100)
     graph_view.offset_x = 500
@@ -422,6 +595,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         node.data["node_type"] = "resource"
         node.data["dynamic_inputs"] = []
         node.data["explicit_size"] = False
+        _populate_resource_node_params(node, graph_type)
         if graph_type == "Shadow Maps":
             graph_view.controller.add_output_socket(node.id, "shadow", "shadow")
         else:
@@ -436,6 +610,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         node.data["node_type"] = node_type
         node.data["dynamic_inputs"] = []
         node.data["explicit_size"] = False
+        _populate_pass_node_params(node, pass_class_name)
         inputs, outputs, inplace_pairs = _extract_pass_socket_info(pass_class_name)
         inplace_outputs = {out_name for _, out_name in inplace_pairs}
         for socket_name, socket_type in inputs:
@@ -517,6 +692,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         try:
             from termin.visualization.core.resources import ResourceManager
             rm = ResourceManager.instance()
+            rm.register_builtin_frame_passes()
             pass_names = sorted(rm.frame_passes.keys())
             effect_classes = {"BloomPass", "GrayscalePass", "MaterialPass", "TonemapPass", "PostProcessPass"}
             for cls_name in pass_names:
