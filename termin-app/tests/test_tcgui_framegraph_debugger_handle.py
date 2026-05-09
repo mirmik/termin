@@ -17,6 +17,7 @@ _SPEC = importlib.util.spec_from_file_location("tcgui_framegraph_debugger_source
 _MODULE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)
 _FramegraphDebuggerHandle = _MODULE._FramegraphDebuggerHandle
+CapturePreviewWidget = _MODULE.CapturePreviewWidget
 
 
 class _Signal:
@@ -56,6 +57,27 @@ class _WindowUI:
         self.close_count += 1
 
 
+class _Capture:
+    width = 64
+    height = 32
+
+
+class _Core:
+    capture_tex = object()
+    capture = _Capture()
+
+
+class _Renderer:
+    def __init__(self):
+        self.texture_kwargs = None
+
+    def draw_rect(self, *_args):
+        pass
+
+    def draw_texture(self, *_args, **kwargs):
+        self.texture_kwargs = kwargs
+
+
 def test_window_destroy_tears_down_without_native_close_recursion():
     model = _Model()
     handle = _FramegraphDebuggerHandle(model)
@@ -88,3 +110,18 @@ def test_close_tears_down_and_closes_native_window_once():
     assert model.disconnect_count == 1
     assert window_ui.close_count == 1
     assert handle.visible is False
+
+
+def test_capture_preview_forwards_channel_mode_to_texture_draw():
+    preview = CapturePreviewWidget()
+    preview._core = _Core()
+    preview.has_content = True
+    preview.channel_mode = 4
+    preview.highlight_hdr = True
+    preview.layout(0, 0, 120, 80, 120, 80)
+
+    renderer = _Renderer()
+    preview.render(renderer)
+
+    assert renderer.texture_kwargs["channel_mode"] == 4
+    assert renderer.texture_kwargs["highlight_hdr"] is True

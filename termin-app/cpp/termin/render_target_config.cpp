@@ -13,6 +13,8 @@ tc_render_target_config RenderTargetConfig::to_c() const {
     c.width = width;
     c.height = height;
     c.dynamic_resolution = dynamic_resolution;
+    c.color_format = color_format.empty() ? nullptr : tgfx_intern_string(color_format.c_str());
+    c.depth_format = depth_format.empty() ? nullptr : tgfx_intern_string(depth_format.c_str());
     c.pipeline_uuid = pipeline_uuid.empty() ? nullptr : tgfx_intern_string(pipeline_uuid.c_str());
     c.pipeline_name = pipeline_name.empty() ? nullptr : tgfx_intern_string(pipeline_name.c_str());
     c.layer_mask = layer_mask;
@@ -37,6 +39,8 @@ RenderTargetConfig RenderTargetConfig::from_c(const tc_render_target_config* c) 
     cfg.width = c->width;
     cfg.height = c->height;
     cfg.dynamic_resolution = c->dynamic_resolution;
+    cfg.color_format = c->color_format ? c->color_format : "rgba16f";
+    cfg.depth_format = c->depth_format ? c->depth_format : "depth32f";
     cfg.pipeline_uuid = c->pipeline_uuid ? c->pipeline_uuid : "";
     cfg.pipeline_name = c->pipeline_name ? c->pipeline_name : "";
     cfg.layer_mask = c->layer_mask;

@@ -163,6 +163,8 @@ void bind_tc_scene(nb::module_& m) {
         .def_rw("width", &RenderTargetConfig::width)
         .def_rw("height", &RenderTargetConfig::height)
         .def_rw("dynamic_resolution", &RenderTargetConfig::dynamic_resolution)
+        .def_rw("color_format", &RenderTargetConfig::color_format)
+        .def_rw("depth_format", &RenderTargetConfig::depth_format)
         .def_rw("pipeline_uuid", &RenderTargetConfig::pipeline_uuid)
         .def_rw("pipeline_name", &RenderTargetConfig::pipeline_name)
         .def_rw("layer_mask", &RenderTargetConfig::layer_mask)

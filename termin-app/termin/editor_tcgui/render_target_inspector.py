@@ -18,6 +18,21 @@ from termin.editor_tcgui.widgets.layer_mask_widget import LayerMaskFieldWidget
 from termin.editor_tcgui.widgets.texture_picker import TexturePickerWidget
 
 
+_COLOR_FORMATS = [
+    ("rgba16f", "RGBA16F"),
+    ("rgba8", "RGBA8"),
+    ("rgb8", "RGB8"),
+    ("rg8", "RG8"),
+    ("r8", "R8"),
+    ("rgb16f", "RGB16F"),
+]
+
+_DEPTH_FORMATS = [
+    ("depth32f", "Depth 32F"),
+    ("depth24", "Depth 24"),
+]
+
+
 class RenderTargetInspectorTcgui(VStack):
     """Inspector panel for RenderTarget properties."""
 
@@ -30,6 +45,8 @@ class RenderTargetInspectorTcgui(VStack):
         self._scene = None
         self._scenes = []
         self._cameras = []
+        self._color_format_values = [value for value, _label in _COLOR_FORMATS]
+        self._depth_format_values = [value for value, _label in _DEPTH_FORMATS]
         self._updating = False
         self.on_changed: Optional[Callable[[], None]] = None
         self._scene_getter: Optional[Callable[[], list]] = None
@@ -80,6 +97,22 @@ class RenderTargetInspectorTcgui(VStack):
         grid.add(self._dynamic_lbl, 4, 0)
         grid.add(self._dynamic_resolution, 4, 1)
 
+        color_format_lbl = Label(); color_format_lbl.text = "Color Format:"; color_format_lbl.preferred_width = px(96)
+        self._color_format_lbl = color_format_lbl
+        self._color_format = ComboBox()
+        self._color_format.items = [label for _value, label in _COLOR_FORMATS]
+        self._color_format.on_changed = self._on_color_format_changed
+        grid.add(self._color_format_lbl, 5, 0)
+        grid.add(self._color_format, 5, 1)
+
+        depth_format_lbl = Label(); depth_format_lbl.text = "Depth Format:"; depth_format_lbl.preferred_width = px(96)
+        self._depth_format_lbl = depth_format_lbl
+        self._depth_format = ComboBox()
+        self._depth_format.items = [label for _value, label in _DEPTH_FORMATS]
+        self._depth_format.on_changed = self._on_depth_format_changed
+        grid.add(self._depth_format_lbl, 6, 0)
+        grid.add(self._depth_format, 6, 1)
+
         width_lbl = Label(); width_lbl.text = "Width:"; width_lbl.preferred_width = px(96)
         self._width_lbl = width_lbl
         self._width = SpinBox()
@@ -89,8 +122,8 @@ class RenderTargetInspectorTcgui(VStack):
         self._width.max_value = 8192
         self._width.value = 512
         self._width.on_changed = self._on_size_changed
-        grid.add(self._width_lbl, 5, 0)
-        grid.add(self._width, 5, 1)
+        grid.add(self._width_lbl, 7, 0)
+        grid.add(self._width, 7, 1)
 
         height_lbl = Label(); height_lbl.text = "Height:"; height_lbl.preferred_width = px(96)
         self._height_lbl = height_lbl
@@ -101,15 +134,15 @@ class RenderTargetInspectorTcgui(VStack):
         self._height.max_value = 8192
         self._height.value = 512
         self._height.on_changed = self._on_size_changed
-        grid.add(self._height_lbl, 6, 0)
-        grid.add(self._height, 6, 1)
+        grid.add(self._height_lbl, 8, 0)
+        grid.add(self._height, 8, 1)
 
         mask_lbl = Label(); mask_lbl.text = "Layer Mask:"; mask_lbl.preferred_width = px(96)
         self._mask_lbl = mask_lbl
         self._layer_mask_widget = LayerMaskFieldWidget()
         self._layer_mask_widget.on_value_changed = self._on_layer_mask_changed
-        grid.add(self._mask_lbl, 7, 0)
-        grid.add(self._layer_mask_widget, 7, 1)
+        grid.add(self._mask_lbl, 9, 0)
+        grid.add(self._layer_mask_widget, 9, 1)
 
         self._pipeline_params_sep = Separator()
         self._pipeline_params_sep.visible = False
@@ -172,6 +205,8 @@ class RenderTargetInspectorTcgui(VStack):
             self._select_current_pipeline()
 
             self._dynamic_resolution.checked = bool(render_target.dynamic_resolution)
+            self._select_combo_value(self._color_format, self._color_format_values, render_target.color_format)
+            self._select_combo_value(self._depth_format, self._depth_format_values, render_target.depth_format)
             self._width.value = render_target.width
             self._height.value = render_target.height
             self._layer_mask_widget.set_value(render_target.layer_mask)
@@ -189,6 +224,10 @@ class RenderTargetInspectorTcgui(VStack):
         self._pipeline_combo.visible = has_target
         self._dynamic_lbl.visible = has_target
         self._dynamic_resolution.visible = has_target
+        self._color_format_lbl.visible = has_target
+        self._color_format.visible = has_target
+        self._depth_format_lbl.visible = has_target
+        self._depth_format.visible = has_target
         self._mask_lbl.visible = has_target
         self._layer_mask_widget.visible = has_target
         self._update_size_visibility()
@@ -349,6 +388,24 @@ class RenderTargetInspectorTcgui(VStack):
         self._update_size_visibility()
         self._emit_changed()
 
+    def _on_color_format_changed(self, index: int, _text: str) -> None:
+        if self._updating or self._render_target is None:
+            return
+        if index < 0 or index >= len(self._color_format_values):
+            log.error(f"[RenderTargetInspector] invalid color format index: {index}")
+            return
+        self._render_target.color_format = self._color_format_values[index]
+        self._emit_changed()
+
+    def _on_depth_format_changed(self, index: int, _text: str) -> None:
+        if self._updating or self._render_target is None:
+            return
+        if index < 0 or index >= len(self._depth_format_values):
+            log.error(f"[RenderTargetInspector] invalid depth format index: {index}")
+            return
+        self._render_target.depth_format = self._depth_format_values[index]
+        self._emit_changed()
+
     def _on_size_changed(self, _value: float) -> None:
         if self._updating or self._render_target is None:
             return
@@ -491,3 +548,11 @@ class RenderTargetInspectorTcgui(VStack):
     def _emit_changed(self) -> None:
         if self.on_changed is not None:
             self.on_changed()
+
+    @staticmethod
+    def _select_combo_value(combo: ComboBox, values: list[str], value: str) -> None:
+        if value in values:
+            combo.selected_index = values.index(value)
+            return
+        log.warn(f"[RenderTargetInspector] unknown render target format: {value}")
+        combo.selected_index = 0

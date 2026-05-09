@@ -498,6 +498,8 @@ class RenderingModel:
             config.width = rt.width
             config.height = rt.height
             config.dynamic_resolution = bool(rt.dynamic_resolution)
+            config.color_format = rt.color_format
+            config.depth_format = rt.depth_format
             config.pipeline_uuid = pipeline_uuid
             config.pipeline_name = pipeline_name
             config.layer_mask = rt.layer_mask

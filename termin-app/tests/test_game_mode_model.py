@@ -299,6 +299,8 @@ class _RenderTarget:
         self.camera = None
         self.pipeline = None
         self.dynamic_resolution = False
+        self.color_format = "rgba16f"
+        self.depth_format = "depth32f"
         self.locked = False
         self.free_count = 0
 

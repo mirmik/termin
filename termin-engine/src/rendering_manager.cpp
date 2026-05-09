@@ -626,6 +626,22 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
             tc_render_target_set_width(rt, rtc->width);
             tc_render_target_set_height(rt, rtc->height);
         }
+        if (rtc->color_format && rtc->color_format[0] != '\0') {
+            tc_texture_format format;
+            if (tc_render_target_format_from_string(rtc->color_format, &format)) {
+                tc_render_target_set_color_format(rt, format);
+            } else {
+                tc_log(TC_LOG_WARN, "[RenderingManager] unknown render target color_format '%s'", rtc->color_format);
+            }
+        }
+        if (rtc->depth_format && rtc->depth_format[0] != '\0') {
+            tc_texture_format format;
+            if (tc_render_target_format_from_string(rtc->depth_format, &format)) {
+                tc_render_target_set_depth_format(rt, format);
+            } else {
+                tc_log(TC_LOG_WARN, "[RenderingManager] unknown render target depth_format '%s'", rtc->depth_format);
+            }
+        }
         tc_render_target_set_layer_mask(rt, rtc->layer_mask);
         tc_render_target_set_enabled(rt, rtc->enabled);
 

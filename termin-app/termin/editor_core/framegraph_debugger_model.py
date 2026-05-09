@@ -31,6 +31,33 @@ if TYPE_CHECKING:
     from termin.visualization.render.framegraph import RenderPipeline
 
 
+_PIXEL_FORMAT_NAMES = {
+    0: "r8",
+    1: "rg8",
+    2: "rgb8",
+    3: "rgba8",
+    4: "bgra8",
+    5: "r16f",
+    6: "rg16f",
+    7: "rgba16f",
+    8: "r32f",
+    9: "rg32f",
+    10: "rgba32f",
+    11: "depth24",
+    12: "depth24_stencil8",
+    13: "depth32f",
+    14: "undefined",
+}
+
+
+def _format_pixel_format(value: int) -> str:
+    name = _PIXEL_FORMAT_NAMES.get(value)
+    if name is None:
+        log.warn(f"[FrameDebugger] Unknown tgfx PixelFormat value: {value}")
+        return f"unknown({value})"
+    return name
+
+
 class FramegraphDebugTarget:
     """A renderable target the framegraph debugger can inspect."""
 
@@ -255,9 +282,11 @@ class FramegraphDebuggerModel:
             w = int(resource.get("width", 0))
             h = int(resource.get("height", 0))
             parts.append(f"Размер: {w}×{h}")
-            parts.append(f"fmt={resource.get('color_format', 0)}")
+            color_format = int(resource.get("color_format", 14))
+            parts.append(f"fmt={_format_pixel_format(color_format)}")
             if resource.get("has_depth", False):
-                parts.append(f"depth_fmt={resource.get('depth_format', 0)}")
+                depth_format = int(resource.get("depth_format", 14))
+                parts.append(f"depth_fmt={_format_pixel_format(depth_format)}")
             samples = int(resource.get("samples", 1))
             if samples > 1:
                 parts.append(f"MSAA={samples}x")

@@ -51,6 +51,8 @@ class CapturePreviewWidget(Widget):
             handle=capture_tex,
             tex_w=tex_w,
             tex_h=tex_h,
+            channel_mode=self.channel_mode,
+            highlight_hdr=self.highlight_hdr,
         )
 
 
@@ -466,7 +468,7 @@ def show_framegraph_debugger(
     ch_label = Label(); ch_label.text = "Channel:"
     controls_row.add_child(ch_label)
     channel_combo = ComboBox()
-    channel_combo.items = ["RGB", "R", "G", "B", "A"]
+    channel_combo.items = ["RGBA", "R", "G", "B", "A"]
     channel_combo.selected_index = 0
     channel_combo.preferred_width = px(70)
     handle._channel_combo = channel_combo

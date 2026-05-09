@@ -70,6 +70,8 @@ class _RenderTarget:
         self.dynamic_resolution = True
         self.width = 320
         self.height = 200
+        self.color_format = "rgba16f"
+        self.depth_format = "depth32f"
         self.layer_mask = 0xFFFFFFFF
         self.pipeline_params = {}
 
@@ -162,6 +164,24 @@ def test_render_target_inspector_pipeline_params_use_texture_preview(monkeypatch
 
     assert len(inspector._pipeline_params_widgets) == 1
     assert inspector._pipeline_params_widgets[0]._preview is not None
+
+
+def test_render_target_inspector_edits_attachment_formats():
+    scene = _Scene("Scene", 1, [])
+    render_target = _RenderTarget(scene, None)
+
+    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector.set_scene_getter(lambda: [scene])
+    inspector.set_render_target(render_target, scene)
+
+    assert inspector._color_format.selected_index == 0
+    assert inspector._depth_format.selected_index == 0
+
+    inspector._on_color_format_changed(1, "RGBA8")
+    inspector._on_depth_format_changed(1, "Depth 24")
+
+    assert render_target.color_format == "rgba8"
+    assert render_target.depth_format == "depth24"
 
 
 def test_texture_picker_with_scene_getter_includes_live_render_target_pool(monkeypatch):
