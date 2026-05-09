@@ -88,6 +88,52 @@ class FieldWidget(Widget):
         return None
 
 
+class InlineMaterialFieldWidget(FieldWidget):
+    """Inline TcMaterial editor driven by inspect metadata."""
+
+    def __init__(self, resources: "ResourceManager | None" = None) -> None:
+        super().__init__()
+        from termin.editor_tcgui.material_inspector import MaterialInspectorTcgui
+
+        self._material = None
+        self._inspector = MaterialInspectorTcgui(resources)
+        self._inspector.on_changed = self._on_material_changed
+        self.add_child(self._inspector)
+
+    def set_scene_getter(self, getter: Callable[[], Any] | None) -> None:
+        if getter is not None:
+            self._inspector.set_scene_getter(getter)
+
+    def _material_from_value(self, value: Any):
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            uuid = value.get("uuid")
+            if isinstance(uuid, str) and uuid:
+                from termin._native.render import TcMaterial
+                return TcMaterial.from_uuid(uuid)
+            return None
+        return value
+
+    def _on_material_changed(self) -> None:
+        self._emit()
+
+    def get_value(self) -> Any:
+        return self._material
+
+    def set_value(self, value: Any) -> None:
+        self._material = self._material_from_value(value)
+        self._inspector.set_target(self._material, subtitle="")
+
+    def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
+        return self._inspector.compute_size(viewport_w, viewport_h)
+
+    def layout(self, x: float, y: float, width: float, height: float,
+               viewport_w: float, viewport_h: float) -> None:
+        Widget.layout(self, x, y, width, height, viewport_w, viewport_h)
+        self._inspector.layout(x, y, width, height, viewport_w, viewport_h)
+
+
 # ------------------------------------------------------------------
 # Float / Int
 # ------------------------------------------------------------------
@@ -695,8 +741,15 @@ class FieldWidgetFactory:
     def set_scene_getter(self, getter: Callable[[], Any]) -> None:
         self._scene_getter = getter
 
-    def create(self, field: "InspectField") -> FieldWidget:
+    def create(self, field: "InspectField", metadata: dict[str, Any] | None = None) -> FieldWidget:
         kind = field.kind
+        metadata = metadata or field.metadata or {}
+        widget_kind = metadata.get("widget")
+
+        if widget_kind in ("inline_material", "material_inline") and kind == "tc_material":
+            widget = InlineMaterialFieldWidget(self._resources)
+            widget.set_scene_getter(self._scene_getter)
+            return widget
 
         if field.choices:
             return ComboFieldWidget(choices=field.choices)
