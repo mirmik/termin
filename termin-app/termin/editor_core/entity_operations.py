@@ -160,7 +160,8 @@ class EntityOperations:
         if entity.transform and entity.transform.parent:
             parent_ent = entity.transform.parent.entity
 
-        self._delete_recursive(entity)
+        cmd = DeleteEntityCommand(self._scene, entity)
+        self._undo_handler(cmd, False)
         self._view.remove_entity(entity, select_parent=False)
 
         if parent_ent is not None:
@@ -189,15 +190,6 @@ class EntityOperations:
             self._view.select_object(parent_entity)
 
         self._notify_viewport()
-
-    def _delete_recursive(self, entity: Entity) -> None:
-        if entity.transform:
-            for child_t in list(entity.transform.children):
-                child = child_t.entity
-                if child is not None:
-                    self._delete_recursive(child)
-        cmd = DeleteEntityCommand(self._scene, entity)
-        self._undo_handler(cmd, False)
 
     # ------------------------------------------------------------------
     # Reparent
