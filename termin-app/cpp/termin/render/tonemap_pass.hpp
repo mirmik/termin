@@ -47,6 +47,11 @@ public:
     INSPECT_FIELD(TonemapPass, output_res, "Output", "string")
     INSPECT_FIELD_RANGE(TonemapPass, exposure, "Exposure", "float", 0.1f, 10.0f)
     INSPECT_FIELD_RANGE(TonemapPass, method, "Method", "int", 0, 2)
+    INSPECT_TYPE_METADATA(TonemapPass, graph, make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {{"output_res", "fbo"}},
+        {}
+    ))
 
     TonemapPass(
         const std::string& input = "color",

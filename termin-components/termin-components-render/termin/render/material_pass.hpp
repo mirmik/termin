@@ -26,6 +26,11 @@ public:
 
     INSPECT_FIELD(MaterialPass, material, "Material", "tc_material")
     INSPECT_FIELD(MaterialPass, output_res, "Output Resource", "string")
+    INSPECT_TYPE_METADATA(MaterialPass, graph, make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {{"output_res", "fbo"}},
+        {{"input_res", "output_res"}}
+    ))
 
 private:
     static uint32_t s_quad_vao;

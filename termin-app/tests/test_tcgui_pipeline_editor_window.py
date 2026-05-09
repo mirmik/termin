@@ -1,6 +1,7 @@
 from termin.editor_tcgui.pipeline_editor_window import (
     _legacy_pipeline_to_graph,
     _load_graph_from_pipeline_dict,
+    _save_graph_to_pipeline_dict,
 )
 from tcgui.scene import GraphicsWidgetItem
 from tcnodegraph import NodeGraphView
@@ -64,6 +65,40 @@ def test_pipeline_graph_load_handles_native_pass_metadata_without_python_fields(
     assert node.params["phase_mark"] == ""
     assert node.params["sort_mode"] == "none"
     assert node.params["clear_depth"] is False
+
+
+def test_pipeline_graph_loads_explicit_render_target_nodes():
+    graph = _load_graph_from_pipeline_dict(
+        {
+            "nodes": [
+                {"type": "RenderTargetInput", "node_type": "render_target_input"},
+                {"type": "PipelineOutput", "node_type": "pipeline_output"},
+            ],
+            "connections": [
+                {"from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "color"},
+                {"from_node": 0, "from_socket": "depth", "to_node": 1, "to_socket": "depth"},
+            ],
+        }
+    )
+
+    input_node = graph.nodes["node_0"]
+    output_node = graph.nodes["node_1"]
+
+    assert input_node.title == "RenderTargetInput"
+    assert output_node.title == "PipelineOutput"
+    assert [socket.name for socket in input_node.outputs] == ["color", "depth"]
+    assert [socket.name for socket in output_node.inputs] == ["color", "depth"]
+
+    saved = _save_graph_to_pipeline_dict(graph)
+
+    assert saved["nodes"][0]["node_type"] == "render_target_input"
+    assert saved["nodes"][0]["type"] == "RenderTargetInput"
+    assert saved["nodes"][1]["node_type"] == "pipeline_output"
+    assert saved["nodes"][1]["type"] == "PipelineOutput"
+    assert saved["connections"] == [
+        {"from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "color"},
+        {"from_node": 0, "from_socket": "depth", "to_node": 1, "to_socket": "depth"},
+    ]
 
 
 def test_node_graph_view_mounts_inline_param_widgets_when_enabled():

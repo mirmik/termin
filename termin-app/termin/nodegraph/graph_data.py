@@ -26,7 +26,7 @@ class SocketData:
 class NodeData:
     """Data for a graph node."""
     id: str  # Unique node ID
-    node_type: str  # "pass", "resource", "output"
+    node_type: str  # "pass", "resource", "output", "render_target_input", "pipeline_output"
     pass_class: str  # For pass nodes: class name like "ColorPass"
     name: str  # Instance name (shown in header)
     params: Dict[str, Any] = field(default_factory=dict)
@@ -89,7 +89,7 @@ class GraphData:
         - "type" is the pass class name (e.g., "ColorPass")
         - "node_type" is optional, defaults to "pass"
         - Connections use node indices, not IDs
-        - Sockets are inferred from pass class registry
+        - Pass sockets come from registered pass metadata when available
         """
         from termin.nodegraph.pass_registry import get_pass_sockets
 
@@ -100,26 +100,58 @@ class GraphData:
             # "node_type" is the category: "pass", "resource", "output"
             node_type = node_data.get("node_type", "pass")
 
-            # Get sockets from pass registry or dynamic_inputs in data
+            # GraphData is only data. It knows graph boundary sockets, but pass
+            # socket metadata belongs to pass classes and editor/registry code.
             inputs = []
             outputs = []
+            serialized_inputs = node_data.get("inputs", [])
+            if isinstance(serialized_inputs, list):
+                inputs = [
+                    SocketData(
+                        name=s.get("name", ""),
+                        socket_type=s.get("socket_type", "fbo"),
+                        is_input=True,
+                    )
+                    for s in serialized_inputs
+                    if isinstance(s, dict) and s.get("name", "")
+                ]
+            serialized_outputs = node_data.get("outputs", [])
+            if isinstance(serialized_outputs, list):
+                outputs = [
+                    SocketData(
+                        name=s.get("name", ""),
+                        socket_type=s.get("socket_type", "fbo"),
+                        is_input=False,
+                    )
+                    for s in serialized_outputs
+                    if isinstance(s, dict) and s.get("name", "")
+                ]
             if node_type == "pass" and pass_class:
                 node_inputs, node_outputs = get_pass_sockets(pass_class)
-                inputs = [
-                    SocketData(name=name, socket_type=stype, is_input=True)
-                    for name, stype in node_inputs
-                ]
-                outputs = [
-                    SocketData(name=name, socket_type=stype, is_input=False)
-                    for name, stype in node_outputs
-                ]
-                # Add dynamic inputs from serialized data
+                for name, stype in node_inputs:
+                    if not any(s.name == name for s in inputs):
+                        inputs.append(SocketData(name=name, socket_type=stype, is_input=True))
+                for name, stype in node_outputs:
+                    if not any(s.name == name for s in outputs):
+                        outputs.append(SocketData(name=name, socket_type=stype, is_input=False))
                 for dyn_name, dyn_type in node_data.get("dynamic_inputs", []):
                     if not any(s.name == dyn_name for s in inputs):
                         inputs.append(SocketData(name=dyn_name, socket_type=dyn_type, is_input=True))
             elif node_type == "resource":
                 # Resource nodes have single output named "fbo" (matches serialization format)
                 outputs = [SocketData(name="fbo", socket_type="fbo", is_input=False)]
+            elif node_type == "external_rt":
+                outputs = [SocketData(name="fbo", socket_type="fbo", is_input=False)]
+            elif node_type == "render_target_input":
+                outputs = [
+                    SocketData(name="color", socket_type="fbo", is_input=False),
+                    SocketData(name="depth", socket_type="fbo", is_input=False),
+                ]
+            elif node_type in ("output", "pipeline_output"):
+                inputs = [
+                    SocketData(name="color", socket_type="fbo", is_input=True),
+                    SocketData(name="depth", socket_type="fbo", is_input=True),
+                ]
 
             nodes.append(NodeData(
                 id=str(i),  # Use index as ID since serialization uses indices
@@ -143,6 +175,41 @@ class GraphData:
             )
             for c in data.get("connections", [])
         ]
+
+        node_by_id = {node.id: node for node in nodes}
+        graph_boundary_types = {
+            "resource",
+            "external_rt",
+            "render_target_input",
+            "pipeline_output",
+            "output",
+        }
+        for connection in connections:
+            from_node = node_by_id.get(connection.from_node_id)
+            if (
+                from_node is not None
+                and from_node.node_type not in graph_boundary_types
+                and connection.from_socket
+                and not any(s.name == connection.from_socket for s in from_node.outputs)
+            ):
+                from_node.outputs.append(SocketData(
+                    name=connection.from_socket,
+                    socket_type="fbo",
+                    is_input=False,
+                ))
+
+            to_node = node_by_id.get(connection.to_node_id)
+            if (
+                to_node is not None
+                and to_node.node_type not in graph_boundary_types
+                and connection.to_socket
+                and not any(s.name == connection.to_socket for s in to_node.inputs)
+            ):
+                to_node.inputs.append(SocketData(
+                    name=connection.to_socket,
+                    socket_type="fbo",
+                    is_input=True,
+                ))
 
         viewport_frames = [
             ViewportFrameData(

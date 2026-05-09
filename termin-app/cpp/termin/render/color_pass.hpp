@@ -80,6 +80,11 @@ public:
         {"none", "None"}, {"near_to_far", "Near to Far"}, {"far_to_near", "Far to Near"})
     INSPECT_FIELD(ColorPass, clear_depth, "Clear Depth", "bool")
     INSPECT_FIELD(ColorPass, camera_name, "Camera", "string")
+    INSPECT_TYPE_METADATA(ColorPass, graph, make_pass_graph_metadata(
+        {{"input_res", "fbo"}, {"shadow_res", "shadow"}},
+        {{"output_res", "fbo"}},
+        {{"input_res", "output_res"}}
+    ))
 
     ColorPass(
         const std::string& input_res = "empty",

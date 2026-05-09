@@ -37,6 +37,11 @@ public:
     INSPECT_FIELD(GrayscalePass, input_res, "Input", "string")
     INSPECT_FIELD(GrayscalePass, output_res, "Output", "string")
     INSPECT_FIELD_RANGE(GrayscalePass, strength, "Strength", "float", 0.0f, 1.0f)
+    INSPECT_TYPE_METADATA(GrayscalePass, graph, make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {{"output_res", "fbo"}},
+        {}
+    ))
 
     GrayscalePass(
         const std::string& input = "color",

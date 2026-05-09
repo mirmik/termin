@@ -82,6 +82,11 @@ public:
     // INSPECT_FIELD registrations
     INSPECT_FIELD(ShadowPass, output_res, "Output Resource", "string")
     INSPECT_FIELD(ShadowPass, caster_offset, "Caster Offset", "float", 0.0, 200.0, 5.0)
+    INSPECT_TYPE_METADATA(ShadowPass, graph, make_pass_graph_metadata(
+        {},
+        {{"output_res", "shadow"}},
+        {}
+    ))
 
     ShadowPass(
         const std::string& output_res = "shadow_maps",
