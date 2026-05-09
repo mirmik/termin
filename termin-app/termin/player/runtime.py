@@ -57,6 +57,7 @@ class PlayerRuntime:
         # Display/Input (managed via RenderingManager)
         self._display = None
         self._viewport = None
+        self._fallback_render_target = None
         self._input_manager = None
 
     def initialize(self) -> bool:
@@ -117,7 +118,7 @@ class PlayerRuntime:
         surface_width, surface_height = self._surface_size
         self.surface = FBOSurface(self.window.device(), surface_width, surface_height)
         self._display = Display(surface=self.surface, name="Main")
-        manager.add_display(self._display, "Main")
+        manager.set_display_factory(self._runtime_display_factory)
 
         # Load scene
         scene_path = self.project_path / self.scene_name
@@ -143,8 +144,67 @@ class PlayerRuntime:
 
         log.info(f"[PlayerRuntime] Scene loaded: {self.scene_name}")
 
-        # Find or create camera
+        if not self._attach_scene_rendering(manager, pipeline):
+            return False
+
+        # Set up input handling
+        self._setup_input()
+
+        log.info("[PlayerRuntime] Initialization complete")
+        return True
+
+    def _runtime_display_factory(self, name: str):
+        """Return the player's native display for scene-declared displays."""
+        from tcbase import log
+
+        if self._display is None:
+            log.error(f"[PlayerRuntime] Display factory requested '{name}' before display initialization")
+            return None
+
+        if name != "":
+            self._display.name = name
+        return self._display
+
+    def _attach_scene_rendering(self, manager, pipeline) -> bool:
+        """Attach scene rendering from saved viewport/render-target config."""
+        from tcbase import log
+
+        viewports = manager.attach_scene_full(self.scene)
+        if len(viewports) > 0:
+            self._viewport = viewports[0]
+            self._disable_unrenderable_unused_render_targets(manager, viewports)
+            log.info(f"[PlayerRuntime] Attached scene rendering: {len(viewports)} viewport(s)")
+            return True
+
+        log.warning("[PlayerRuntime] Scene has no attachable viewport config, creating fallback viewport")
         self._setup_camera()
+        return self._create_fallback_viewport(manager, pipeline)
+
+    def _create_fallback_viewport(self, manager, pipeline) -> bool:
+        """Create a minimal runtime viewport for scenes without saved display config."""
+        from tcbase import log
+        from termin.render_framework import render_target_new
+
+        if self._display is None:
+            log.error("[PlayerRuntime] Cannot create fallback viewport without display")
+            return False
+        if self.scene is None:
+            log.error("[PlayerRuntime] Cannot create fallback viewport without scene")
+            return False
+        if self.camera is None:
+            log.error("[PlayerRuntime] Cannot create fallback viewport without camera")
+            return False
+
+        self._display.name = "Main"
+        manager.add_display(self._display, "Main")
+
+        self._fallback_render_target = render_target_new("Main")
+        self._fallback_render_target.scene = self.scene.scene_handle()
+        self._fallback_render_target.camera = self.camera
+        self._fallback_render_target.pipeline = pipeline
+        self._fallback_render_target.dynamic_resolution = True
+        self._fallback_render_target.enabled = True
+        manager.register_standalone_render_target(self._fallback_render_target)
 
         self._viewport = self._display.create_viewport(
             scene=self.scene,
@@ -152,12 +212,32 @@ class PlayerRuntime:
             rect=(0.0, 0.0, 1.0, 1.0),
             name="Main",
         )
-
-        # Set up input handling
-        self._setup_input()
-
-        log.info("[PlayerRuntime] Initialization complete")
+        self._viewport.render_target = self._fallback_render_target
+        log.info("[PlayerRuntime] Created fallback viewport with render target 'Main'")
         return True
+
+    def _disable_unrenderable_unused_render_targets(self, manager, viewports) -> None:
+        """Keep saved helper render targets from being rendered as standalone outputs."""
+        from tcbase import log
+
+        viewport_render_targets = set()
+        for viewport in viewports:
+            render_target = viewport.render_target
+            if render_target is not None:
+                viewport_render_targets.add((render_target.index, render_target.generation))
+
+        for render_target in manager.standalone_render_targets:
+            key = (render_target.index, render_target.generation)
+            if key in viewport_render_targets:
+                continue
+            if render_target.camera is not None and render_target.pipeline is not None:
+                continue
+
+            render_target.enabled = False
+            log.warning(
+                "[PlayerRuntime] Disabled unused render target "
+                f"'{render_target.name}' because it has no camera or pipeline"
+            )
 
     def _configure_backend_default(self) -> None:
         """Use the player backend default that is known to be stable."""
@@ -531,12 +611,19 @@ class PlayerRuntime:
 
         # Remove display from manager
         manager = RenderingManager.instance()
+        manager.set_display_factory(lambda name: None)
+        if self.scene is not None:
+            manager.detach_scene_full(self.scene)
+            self._fallback_render_target = None
+            self._viewport = None
+
         if self._display is not None:
             manager.remove_display(self._display)
             self._display.destroy()
             self._display = None
 
         self.scene = None
+        self._engine = None
 
         if self.surface is not None:
             self.surface.close()
