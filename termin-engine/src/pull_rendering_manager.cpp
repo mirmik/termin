@@ -4,6 +4,7 @@
 #include "termin/render/render_camera.hpp"
 #include <cstring>
 
+#include <tgfx2/enums.hpp>
 #include <tgfx2/opengl/opengl_render_device.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include "tgfx/handles.hpp"
@@ -19,6 +20,20 @@ extern "C" {
 #include <algorithm>
 
 namespace termin {
+
+static tgfx::PixelFormat render_target_format_to_tgfx2(tc_texture_format fmt) {
+    switch (fmt) {
+        case TC_TEXTURE_RGBA8: return tgfx::PixelFormat::RGBA8_UNorm;
+        case TC_TEXTURE_RGB8: return tgfx::PixelFormat::RGB8_UNorm;
+        case TC_TEXTURE_RG8: return tgfx::PixelFormat::RG8_UNorm;
+        case TC_TEXTURE_R8: return tgfx::PixelFormat::R8_UNorm;
+        case TC_TEXTURE_RGBA16F: return tgfx::PixelFormat::RGBA16F;
+        case TC_TEXTURE_RGB16F: return tgfx::PixelFormat::RGBA16F;
+        case TC_TEXTURE_DEPTH24: return tgfx::PixelFormat::D24_UNorm;
+        case TC_TEXTURE_DEPTH32F: return tgfx::PixelFormat::D32F;
+    }
+    return tgfx::PixelFormat::RGBA8_UNorm;
+}
 
 // Helper to make a unique key from viewport handle
 static inline uint64_t viewport_key(tc_viewport_handle h) {
@@ -306,6 +321,10 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     ctx.layer_mask = camera_layer_mask & tc_render_target_get_layer_mask(rt);
     ctx.output_color_tex = state->output_color_tex;
     ctx.output_depth_tex = state->output_depth_tex;
+    ctx.output_color_format = render_target_format_to_tgfx2(
+        tc_render_target_get_color_format(rt));
+    ctx.output_depth_format = render_target_format_to_tgfx2(
+        tc_render_target_get_depth_format(rt));
     contexts[name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
         render_pipeline, scene, contexts, lights, name

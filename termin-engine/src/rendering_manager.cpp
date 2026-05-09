@@ -5,6 +5,7 @@
 #include <termin/entity/entity.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
 
+#include <tgfx2/enums.hpp>
 #include <tgfx2/opengl/opengl_render_device.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include "tgfx/handles.hpp"
@@ -41,6 +42,20 @@ extern "C" {
 #include <cstring>
 
 namespace termin {
+
+static tgfx::PixelFormat render_target_format_to_tgfx2(tc_texture_format fmt) {
+    switch (fmt) {
+        case TC_TEXTURE_RGBA8: return tgfx::PixelFormat::RGBA8_UNorm;
+        case TC_TEXTURE_RGB8: return tgfx::PixelFormat::RGB8_UNorm;
+        case TC_TEXTURE_RG8: return tgfx::PixelFormat::RG8_UNorm;
+        case TC_TEXTURE_R8: return tgfx::PixelFormat::R8_UNorm;
+        case TC_TEXTURE_RGBA16F: return tgfx::PixelFormat::RGBA16F;
+        case TC_TEXTURE_RGB16F: return tgfx::PixelFormat::RGBA16F;
+        case TC_TEXTURE_DEPTH24: return tgfx::PixelFormat::D24_UNorm;
+        case TC_TEXTURE_DEPTH32F: return tgfx::PixelFormat::D32F;
+    }
+    return tgfx::PixelFormat::RGBA8_UNorm;
+}
 
 // Convert tc_camera_data to RenderCamera
 static RenderCamera render_camera_from_cap(const tc_camera_data& cd) {
@@ -1177,7 +1192,17 @@ void RenderingManager::render_scene_pipeline_offscreen(
         ctx.output_color_tex = out_color;
         ctx.output_depth_tex = out_depth;
         if (tc_render_target_handle_valid(rt)) {
+            ctx.output_color_format = render_target_format_to_tgfx2(
+                tc_render_target_get_color_format(rt));
+            ctx.output_depth_format = render_target_format_to_tgfx2(
+                tc_render_target_get_depth_format(rt));
             fill_external_textures_from_render_target(ctx, rt, *vp_device);
+        } else {
+            ViewportRenderState* state = get_viewport_state(viewport);
+            if (state) {
+                ctx.output_color_format = state->output_color_format;
+                ctx.output_depth_format = state->output_depth_format;
+            }
         }
         contexts[vp_name] = std::move(ctx);
     }
@@ -1283,6 +1308,10 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.output_color_tex = out_color;
     ctx.output_depth_tex = out_depth;
+    ctx.output_color_format = render_target_format_to_tgfx2(
+        tc_render_target_get_color_format(rt));
+    ctx.output_depth_format = render_target_format_to_tgfx2(
+        tc_render_target_get_depth_format(rt));
     fill_external_textures_from_render_target(ctx, rt, *device);
     contexts[ctx.name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
@@ -1384,6 +1413,10 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.output_color_tex = out_color;
     ctx.output_depth_tex = out_depth;
+    ctx.output_color_format = render_target_format_to_tgfx2(
+        tc_render_target_get_color_format(rt));
+    ctx.output_depth_format = render_target_format_to_tgfx2(
+        tc_render_target_get_depth_format(rt));
     fill_external_textures_from_render_target(ctx, rt, *device);
     contexts[name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
