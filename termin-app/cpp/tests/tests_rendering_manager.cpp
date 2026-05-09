@@ -303,6 +303,8 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     rt_config.name = "GameRT";
     rt_config.pipeline_name = "Default";
     rt_config.dynamic_resolution = true;
+    rt_config.color_format = "rgba8";
+    rt_config.depth_format = "depth24";
     tc_scene_add_render_target_config(scene, &rt_config);
 
     tc_viewport_config vp_config;
@@ -324,7 +326,10 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     CHECK_EQ(tc_render_target_pool_count(), baseline_targets + 1);
     CHECK_EQ(tc_pipeline_pool_count(), baseline_pipelines + 1);
     REQUIRE_EQ(manager.standalone_render_targets().size(), 1u);
-    CHECK(tc_render_target_get_dynamic_resolution(manager.standalone_render_targets()[0]));
+    tc_render_target_handle restored_rt = manager.standalone_render_targets()[0];
+    CHECK(tc_render_target_get_dynamic_resolution(restored_rt));
+    CHECK(tc_render_target_get_color_format(restored_rt) == TC_TEXTURE_RGBA8);
+    CHECK(tc_render_target_get_depth_format(restored_rt) == TC_TEXTURE_DEPTH24);
 
     manager.detach_scene_full(scene);
 

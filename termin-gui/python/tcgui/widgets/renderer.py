@@ -53,6 +53,8 @@ struct UIPushData {
     mat4 u_projection;
     vec4 u_color;
     int  u_texture_mode;
+    int  u_channel_mode;
+    int  u_highlight_hdr;
 };
 #ifdef VULKAN
 layout(push_constant) uniform UIPushBlock { UIPushData pc; };
@@ -83,7 +85,22 @@ layout(location=0) out vec4 FragColor;
 
 void main() {
     if (pc.u_texture_mode == 2) {
-        FragColor = texture(u_texture, v_uv) * pc.u_color;
+        vec4 c = texture(u_texture, v_uv);
+        vec3 rgb;
+        if (pc.u_channel_mode == 1)      rgb = vec3(c.r);
+        else if (pc.u_channel_mode == 2) rgb = vec3(c.g);
+        else if (pc.u_channel_mode == 3) rgb = vec3(c.b);
+        else if (pc.u_channel_mode == 4) rgb = vec3(c.a);
+        else                             rgb = c.rgb;
+        if (pc.u_highlight_hdr == 1) {
+            float max_val = max(max(c.r, c.g), c.b);
+            if (max_val > 1.0) {
+                float intensity = clamp((max_val - 1.0) / 2.0, 0.0, 1.0);
+                rgb = mix(rgb, vec3(1.0, 0.0, 1.0), 0.5 + intensity * 0.5);
+            }
+        }
+        float alpha = pc.u_channel_mode == 0 ? c.a : 1.0;
+        FragColor = vec4(rgb, alpha) * pc.u_color;
     } else {
         FragColor = pc.u_color;
     }
@@ -97,7 +114,7 @@ void main() {
 # range that VulkanRenderDevice reserves. Encoded little-endian
 # native floats (x86_64 / arm64).
 import struct as _struct
-_UI_PUSH_FMT = "=16f4fI12x"   # projection, color, texture_mode + pad
+_UI_PUSH_FMT = "=16f4f3I4x"   # projection, color, texture_mode/channel/hdr + pad
 _UI_PUSH_SIZE = _struct.calcsize(_UI_PUSH_FMT)
 
 
@@ -498,12 +515,15 @@ class UIRenderer:
         self,
         color: tuple[float, float, float, float],
         texture_mode: int,
+        channel_mode: int = 0,
+        highlight_hdr: bool = False,
     ) -> None:
         """Pack the per-draw UI state into a push-constant block and
         bind it. Single byte layout for both backends — under Vulkan
         vkCmdPushConstants ships it; under OpenGL the tgfx2 ring UBO
         at binding 14 picks it up. Shader source is the same on both
-        sides (`pc.u_projection`, `pc.u_color`, `pc.u_texture_mode`)."""
+        sides (`pc.u_projection`, `pc.u_color`, texture mode and preview
+        channel flags)."""
         ctx = self._ctx
         ctx.bind_shader(self._ui_vs, self._ui_fs)
         # Projection is row-major in Python but GLSL expects column-major
@@ -520,6 +540,8 @@ class UIRenderer:
             float(color[0]), float(color[1]),
             float(color[2]), float(color[3]),
             int(texture_mode),
+            int(channel_mode),
+            1 if highlight_hdr else 0,
         )
         # np.frombuffer would give a read-only view; nanobind needs a
         # C-contiguous writable-ish ndarray, so copy into a fresh array.
@@ -801,6 +823,8 @@ class UIRenderer:
         handle: Tgfx2TextureHandle, tex_w: int, tex_h: int,
         *,
         flip_v: bool = False,
+        channel_mode: int = 0,
+        highlight_hdr: bool = False,
         tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     ) -> None:
         """Draw a tgfx2 TextureHandle as a subregion of the current UI pass.
@@ -821,7 +845,7 @@ class UIRenderer:
             return
 
         ctx = self._ctx
-        self._push_ui_state(tint, 2)
+        self._push_ui_state(tint, 2, channel_mode, highlight_hdr)
         ctx.bind_sampled_texture(4, handle)
 
         if flip_v:

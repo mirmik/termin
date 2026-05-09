@@ -18,6 +18,10 @@ def serialize_render_target_config(config: RenderTargetConfig) -> dict:
     else:
         result["width"] = config.width
         result["height"] = config.height
+    if config.color_format:
+        result["color_format"] = config.color_format
+    if config.depth_format:
+        result["depth_format"] = config.depth_format
     if config.pipeline_uuid:
         result["pipeline_uuid"] = config.pipeline_uuid
     if config.pipeline_name:
@@ -39,6 +43,8 @@ def deserialize_render_target_config(data: dict) -> RenderTargetConfig:
     config.width = data.get("width", 512)
     config.height = data.get("height", 512)
     config.dynamic_resolution = data.get("dynamic_resolution", False)
+    config.color_format = data.get("color_format", "rgba16f")
+    config.depth_format = data.get("depth_format", "depth32f")
     config.pipeline_uuid = data.get("pipeline_uuid", "")
     config.pipeline_name = data.get("pipeline_name", "")
 

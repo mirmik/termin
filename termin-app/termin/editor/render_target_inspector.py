@@ -30,6 +30,21 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
 
 
+_COLOR_FORMATS = [
+    ("rgba16f", "RGBA16F"),
+    ("rgba8", "RGBA8"),
+    ("rgb8", "RGB8"),
+    ("rg8", "RG8"),
+    ("r8", "R8"),
+    ("rgb16f", "RGB16F"),
+]
+
+_DEPTH_FORMATS = [
+    ("depth32f", "Depth 32F"),
+    ("depth24", "Depth 24"),
+]
+
+
 class RenderTargetInspector(QWidget):
     """Inspector for render target properties."""
 
@@ -45,6 +60,8 @@ class RenderTargetInspector(QWidget):
         self._scene: Scene | None = None
         self._scenes: list = []
         self._cameras: list[CameraComponent] = []
+        self._color_format_values = [value for value, _label in _COLOR_FORMATS]
+        self._depth_format_values = [value for value, _label in _DEPTH_FORMATS]
         self._updating = False
         self._pipeline_names: list[str] = []
         self._pipeline_name_getter: Callable[[], list[str]] | None = None
@@ -78,6 +95,16 @@ class RenderTargetInspector(QWidget):
         self._dynamic_check = QCheckBox()
         self._dynamic_check.toggled.connect(self._on_dynamic_toggled)
         form.addRow("Use View Size:", self._dynamic_check)
+
+        self._color_format_combo = QComboBox()
+        self._color_format_combo.addItems([label for _value, label in _COLOR_FORMATS])
+        self._color_format_combo.currentIndexChanged.connect(self._on_color_format_changed)
+        form.addRow("Color Format:", self._color_format_combo)
+
+        self._depth_format_combo = QComboBox()
+        self._depth_format_combo.addItems([label for _value, label in _DEPTH_FORMATS])
+        self._depth_format_combo.currentIndexChanged.connect(self._on_depth_format_changed)
+        form.addRow("Depth Format:", self._depth_format_combo)
 
         self._width_spin = SpinBox()
         self._width_spin.setRange(1, 8192)
@@ -136,6 +163,8 @@ class RenderTargetInspector(QWidget):
             self._select_current_pipeline()
 
             self._dynamic_check.setChecked(bool(render_target.dynamic_resolution))
+            self._select_combo_value(self._color_format_combo, self._color_format_values, render_target.color_format)
+            self._select_combo_value(self._depth_format_combo, self._depth_format_values, render_target.depth_format)
             self._width_spin.setValue(render_target.width)
             self._height_spin.setValue(render_target.height)
             self._update_size_enabled()
@@ -304,6 +333,22 @@ class RenderTargetInspector(QWidget):
         self._update_size_enabled()
         self.dynamic_resolution_changed.emit(checked)
 
+    def _on_color_format_changed(self, index: int) -> None:
+        if self._updating or self._render_target is None:
+            return
+        if index < 0 or index >= len(self._color_format_values):
+            log.error(f"[RenderTargetInspector] invalid color format index: {index}")
+            return
+        self._render_target.color_format = self._color_format_values[index]
+
+    def _on_depth_format_changed(self, index: int) -> None:
+        if self._updating or self._render_target is None:
+            return
+        if index < 0 or index >= len(self._depth_format_values):
+            log.error(f"[RenderTargetInspector] invalid depth format index: {index}")
+            return
+        self._render_target.depth_format = self._depth_format_values[index]
+
     def _on_size_changed(self) -> None:
         if self._updating or self._render_target is None:
             return
@@ -317,3 +362,11 @@ class RenderTargetInspector(QWidget):
         manual = self._render_target is not None and not self._dynamic_check.isChecked()
         self._width_spin.setEnabled(manual)
         self._height_spin.setEnabled(manual)
+
+    @staticmethod
+    def _select_combo_value(combo: QComboBox, values: list[str], value: str) -> None:
+        if value in values:
+            combo.setCurrentIndex(values.index(value))
+            return
+        log.warn(f"[RenderTargetInspector] unknown render target format: {value}")
+        combo.setCurrentIndex(0)

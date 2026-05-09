@@ -83,6 +83,8 @@ class _RenderTargetConfig:
         self.width = 320
         self.height = 200
         self.dynamic_resolution = False
+        self.color_format = "rgba16f"
+        self.depth_format = "depth32f"
         self.pipeline_uuid = ""
         self.pipeline_name = "Triangle"
         self.layer_mask = 7
@@ -127,6 +129,8 @@ class _RenderTarget:
         self.width = 0
         self.height = 0
         self.dynamic_resolution = False
+        self.color_format = "rgba16f"
+        self.depth_format = "depth32f"
         self.pipeline = None
         self.layer_mask = 0
         self.enabled = False
@@ -332,12 +336,16 @@ def test_sync_render_target_configs_preserves_pipeline_params(monkeypatch):
 
     render_target = _RenderTarget("PipelineRT", pool)
     render_target.scene = scene
+    render_target.color_format = "rgba8"
+    render_target.depth_format = "depth24"
     render_target.pipeline_params = {"input_texture": "FovTarget", "mask": "file:Noise"}
     manager.standalone_render_targets.append(render_target)
 
     model.sync_render_target_configs_to_scene(scene)
 
     assert len(scene._mount.render_target_configs) == 1
+    assert scene._mount.render_target_configs[0].color_format == "rgba8"
+    assert scene._mount.render_target_configs[0].depth_format == "depth24"
     assert scene._mount.render_target_configs[0].pipeline_params == {
         "input_texture": "FovTarget",
         "mask": "file:Noise",
@@ -362,6 +370,23 @@ def test_render_target_config_dict_serialization_preserves_pipeline_params(monke
         "input_texture": "FovTarget",
         "mask": "file:Noise",
     }
+
+
+def test_render_target_config_dict_serialization_preserves_formats(monkeypatch):
+    module = _load_render_target_config_module(monkeypatch)
+
+    config = _RenderTargetConfig()
+    config.color_format = "rgba8"
+    config.depth_format = "depth24"
+
+    serialized = module.serialize_render_target_config(config)
+
+    assert serialized["color_format"] == "rgba8"
+    assert serialized["depth_format"] == "depth24"
+
+    restored = module.deserialize_render_target_config(serialized)
+    assert restored.color_format == "rgba8"
+    assert restored.depth_format == "depth24"
 
 
 def test_sync_render_target_configs_only_includes_standalone_targets(monkeypatch):

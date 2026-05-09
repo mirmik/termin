@@ -20,12 +20,19 @@ class _Pipeline:
         self.name = name
         self.passes = []
         self.removed = []
+        self.fbos = {}
 
     def remove_passes_by_name(self, name):
         self.removed.append(name)
         before = len(self.passes)
         self.passes = [p for p in self.passes if p.pass_name != name]
         return before - len(self.passes)
+
+    def get_fbo_keys(self):
+        return list(self.fbos.keys())
+
+    def get_fbo(self, key):
+        return self.fbos[key]
 
 
 class _Pass:
@@ -100,3 +107,31 @@ def test_refresh_uses_debug_targets_not_viewport_list():
     assert model.viewports == [(target.source, "RenderTarget / offscreen")]
     assert model.targets == [target]
     assert model.get_current_pipeline() is pipeline
+
+
+def test_format_fbo_info_prints_pixel_format_names():
+    pipeline = _Pipeline("debug")
+    pipeline.fbos["debug_res"] = {
+        "width": 320,
+        "height": 180,
+        "color_format": 3,
+        "has_depth": True,
+        "depth_format": 13,
+        "samples": 1,
+        "color_native_handle": 42,
+    }
+
+    model = FramegraphDebuggerModel(None, _Core())
+    model._debug_source_res = "debug_res"
+    model._current_target = FramegraphDebugTarget(
+        source=object(),
+        label="Debug",
+        get_pipeline=lambda: pipeline,
+    )
+
+    text = model.format_fbo_info()
+
+    assert "fmt=rgba8" in text
+    assert "depth_fmt=depth32f" in text
+    assert "fmt=3" not in text
+    assert "depth_fmt=13" not in text
