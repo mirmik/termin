@@ -66,6 +66,13 @@ class PlayerRuntime:
         from tcbase import log
 
         self._configure_backend_default()
+
+        # Load the app render bindings before resource preloaders touch
+        # materials/shaders. Importing tgfx-only helpers first leaves some
+        # build materials in a state where the runtime pipeline clears but
+        # draws no scene geometry.
+        from termin.visualization.render import RenderingManager
+
         self._ensure_texture_registry()
 
         if not self._ensure_engine_core():
@@ -92,8 +99,6 @@ class PlayerRuntime:
 
         # Create default pipeline and configure RenderingManager
         from termin.visualization.core.viewport import make_default_pipeline
-        from termin.visualization.render import RenderingManager
-
         pipeline = make_default_pipeline()
         log.info(f"[PlayerRuntime] Created pipeline: {pipeline.name} with {len(pipeline.passes)} passes")
 
