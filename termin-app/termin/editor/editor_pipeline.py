@@ -163,30 +163,62 @@ def make_editor_pipeline() -> RenderPipeline:
     )
 
     msaa_samples = 4
-    hdr_format = "rgba16f"
+    color_fbo_format = "render_target"
     pipeline_specs = [
         ResourceSpec(
             resource="empty",
             samples=msaa_samples,
-            format=hdr_format,
+            format=color_fbo_format,
             clear_color=(0.2, 0.2, 0.2, 1.0),
             clear_depth=1.0,
         ),
         ResourceSpec(
+            resource="skybox",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_scene",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_transparent",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_editor",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_colliders",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_immediate_depth",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
             resource="color_resolved",
-            format=hdr_format,
-        ),
-        ResourceSpec(
-            resource="color_tonemapped",
-            format=hdr_format,
-        ),
-        ResourceSpec(
-            resource="color+widgets",
-            format=hdr_format,
+            format=color_fbo_format,
         ),
         ResourceSpec(
             resource="color_pp",
-            format=hdr_format,
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_bloom",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_tonemapped",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color+widgets",
+            format=color_fbo_format,
         )
     ]
 

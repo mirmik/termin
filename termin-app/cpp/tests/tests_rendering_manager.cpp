@@ -19,6 +19,8 @@ extern "C" {
 }
 
 using termin::RenderingManager;
+using termin::RenderPipeline;
+using termin::ResourceSpec;
 
 TEST_CASE("Graph compiler maps RenderTarget output node to viewport OUTPUT")
 {
@@ -348,4 +350,28 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     tc_display_free(editor_display);
     tc_scene_free(scene);
     tc_scene_free(editor_scene);
+}
+
+TEST_CASE("Default pipeline color FBOs inherit output render target format")
+{
+    RenderingManager manager;
+    tc_pipeline_handle pipeline_handle = manager.make_default_pipeline();
+    REQUIRE(tc_pipeline_handle_valid(pipeline_handle));
+
+    RenderPipeline pipeline(pipeline_handle);
+    REQUIRE(pipeline.spec_count() > 0);
+
+    bool found_color = false;
+    for (size_t i = 0; i < pipeline.spec_count(); i++) {
+        const ResourceSpec* spec = pipeline.get_spec_at(i);
+        REQUIRE(spec != nullptr);
+        if (spec->resource == "color") {
+            found_color = true;
+            REQUIRE(spec->format.has_value());
+            CHECK(*spec->format == "render_target");
+        }
+    }
+
+    CHECK(found_color);
+    pipeline.destroy();
 }

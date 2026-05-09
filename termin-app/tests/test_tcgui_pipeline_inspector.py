@@ -6,6 +6,16 @@ class _ResourceManagerStub:
         return None
 
 
+class _SpecStub:
+    def __init__(self, resource="color", format="render_target"):
+        self.resource = resource
+        self.resource_type = "fbo"
+        self.samples = 1
+        self.format = format
+        self.clear_color = None
+        self.clear_depth = None
+
+
 class _PipelineStub:
     passes = []
     pipeline_specs = []
@@ -55,3 +65,14 @@ def test_pipeline_inspector_compile_failure_keeps_log_visible():
     assert inspector._edit_button.visible is True
     assert inspector._empty.visible is False
     assert "Pipeline compilation failed" in inspector._compiled_output.text
+
+
+def test_pipeline_inspector_resource_spec_defaults_to_output_render_target():
+    inspector = PipelineInspectorTcgui(_ResourceManagerStub())
+    pipeline = _PipelineStub()
+    pipeline.pipeline_specs = [_SpecStub()]
+
+    inspector.set_pipeline(pipeline)
+    inspector._on_spec_selected(0, {})
+
+    assert inspector._spec_format_values[inspector._spec_format.selected_index] == "render_target"

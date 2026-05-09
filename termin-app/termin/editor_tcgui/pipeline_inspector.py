@@ -25,6 +25,17 @@ from tcgui.widgets.units import pct, px
 from termin.editor_tcgui.inspect_field_panel import InspectFieldPanel
 
 
+_FBO_FORMATS = [
+    ("render_target", "As Output RenderTarget"),
+    ("rgba8", "RGBA8"),
+    ("rgba16f", "RGBA16F"),
+    ("rgba32f", "RGBA32F"),
+    ("r8", "R8"),
+    ("r16f", "R16F"),
+    ("r32f", "R32F"),
+]
+
+
 class PipelineInspectorTcgui(VStack):
     """Specialized tcgui inspector for RenderPipeline."""
 
@@ -287,8 +298,9 @@ class PipelineInspectorTcgui(VStack):
             self._spec_samples.add_item(item)
         self._spec_samples.on_changed = self._on_spec_field_changed_combo
         self._spec_format = ComboBox()
-        for item in ("rgba8", "rgba16f", "rgba32f", "r8", "r16f", "r32f"):
-            self._spec_format.add_item(item)
+        self._spec_format_values = [value for value, _label in _FBO_FORMATS]
+        for _value, label in _FBO_FORMATS:
+            self._spec_format.add_item(label)
         self._spec_format.on_changed = self._on_spec_field_changed_combo
 
         self._spec_clear_color = Checkbox()
@@ -550,7 +562,7 @@ class PipelineInspectorTcgui(VStack):
             return
         items = []
         for spec in self._pipeline.pipeline_specs:
-            subtitle = f"samples={spec.samples}, format={spec.format or 'rgba8'}"
+            subtitle = f"samples={spec.samples}, format={spec.format or 'render_target'}"
             items.append({"text": spec.resource, "subtitle": subtitle})
         self._specs_list.set_items(items)
 
@@ -969,10 +981,10 @@ class PipelineInspectorTcgui(VStack):
                 sample_idx = 3
             self._spec_samples.selected_index = sample_idx
 
-            fmt = spec.format or "rgba8"
+            fmt = spec.format or "render_target"
             fmt_idx = 0
-            for i in range(self._spec_format.item_count):
-                if self._spec_format.item_text(i) == fmt:
+            for i, value in enumerate(self._spec_format_values):
+                if value == fmt:
                     fmt_idx = i
                     break
             self._spec_format.selected_index = fmt_idx
@@ -1021,7 +1033,11 @@ class PipelineInspectorTcgui(VStack):
         sidx = self._spec_samples.selected_index
         if 0 <= sidx < len(samples_map):
             self._ops.update_spec_field(spec, "samples", samples_map[sidx])
-        self._ops.update_spec_field(spec, "format", self._spec_format.selected_text)
+        fidx = self._spec_format.selected_index
+        if 0 <= fidx < len(self._spec_format_values):
+            self._ops.update_spec_field(spec, "format", self._spec_format_values[fidx])
+        else:
+            log.error(f"[PipelineInspectorTcgui] invalid resource spec format index: {fidx}")
 
         if self._spec_clear_color.checked:
             try:
