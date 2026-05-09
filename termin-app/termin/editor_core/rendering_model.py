@@ -217,6 +217,8 @@ class RenderingModel:
                     label=label,
                     get_pipeline=lambda viewport=viewport, render_target=render_target:
                         self._pipeline_for_viewport_render_target(viewport, render_target),
+                    get_resource_info=lambda resource_name, render_target=render_target:
+                        self._render_target_output_resource_info(render_target, resource_name),
                 ))
 
         for render_target in self._manager.standalone_render_targets:
@@ -225,6 +227,8 @@ class RenderingModel:
                 source=render_target,
                 label=f"RenderTarget / {rt_name}",
                 get_pipeline=lambda render_target=render_target: render_target.pipeline,
+                get_resource_info=lambda resource_name, render_target=render_target:
+                    self._render_target_output_resource_info(render_target, resource_name),
             ))
 
         return result
@@ -245,6 +249,22 @@ class RenderingModel:
             from termin.visualization.core.scene import scene_render_mount
             return scene_render_mount(viewport.scene).get_pipeline(managed_by)
         return render_target.pipeline
+
+    def _render_target_output_resource_info(self, render_target, resource_name: str) -> dict | None:
+        if resource_name not in ("OUTPUT", "DISPLAY"):
+            return None
+        render_target.ensure_textures()
+        return {
+            "key": resource_name,
+            "width": render_target.width,
+            "height": render_target.height,
+            "samples": 1,
+            "has_depth": True,
+            "color_format_name": render_target.color_format,
+            "depth_format_name": render_target.depth_format,
+            "color_native_handle": 0,
+            "depth_native_handle": 0,
+        }
 
     def remove_render_target(self, render_target, scene: "Scene | None" = None) -> None:
         """Remove a live render target and its scene config entry."""

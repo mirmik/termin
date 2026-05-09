@@ -135,3 +135,30 @@ def test_format_fbo_info_prints_pixel_format_names():
     assert "depth_fmt=depth32f" in text
     assert "fmt=3" not in text
     assert "depth_fmt=13" not in text
+
+
+def test_format_fbo_info_uses_target_output_resource_info():
+    pipeline = _Pipeline("debug")
+
+    model = FramegraphDebuggerModel(None, _Core())
+    model._debug_source_res = "OUTPUT"
+    model._current_target = FramegraphDebugTarget(
+        source=object(),
+        label="RenderTarget",
+        get_pipeline=lambda: pipeline,
+        get_resource_info=lambda resource: {
+            "width": 640,
+            "height": 360,
+            "color_format_name": "rgba16f",
+            "has_depth": True,
+            "depth_format_name": "depth32f",
+            "samples": 1,
+        } if resource == "OUTPUT" else None,
+    )
+
+    text = model.format_fbo_info()
+
+    assert "<b>OUTPUT</b>" in text
+    assert "Размер: 640×360" in text
+    assert "fmt=rgba16f" in text
+    assert "depth_fmt=depth32f" in text

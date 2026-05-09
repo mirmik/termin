@@ -64,16 +64,19 @@ class FramegraphDebugTarget:
     source: object
     label: str
     get_pipeline: Callable[[], object | None]
+    get_resource_info: Callable[[str], dict | None] | None
 
     def __init__(
         self,
         source: object,
         label: str,
         get_pipeline: Callable[[], object | None],
+        get_resource_info: Callable[[str], dict | None] | None = None,
     ) -> None:
         self.source = source
         self.label = label
         self.get_pipeline = get_pipeline
+        self.get_resource_info = get_resource_info
 
 
 class FramegraphDebuggerModel:
@@ -173,6 +176,11 @@ class FramegraphDebuggerModel:
                 result[key] = fbo
         return result
 
+    def get_target_resource_info(self, resource_name: str) -> dict | None:
+        if self._current_target is None or self._current_target.get_resource_info is None:
+            return None
+        return self._current_target.get_resource_info(resource_name)
+
     # ------------------------------------------------------------------
     # Refresh list contents (from rendering_controller / pipeline state)
     # ------------------------------------------------------------------
@@ -268,6 +276,8 @@ class FramegraphDebuggerModel:
         resource_name = self._debug_source_res
         resource = fbos.get(resource_name) if fbos else None
         if resource is None:
+            resource = self.get_target_resource_info(resource_name)
+        if resource is None:
             return f"Ресурс '{resource_name}': не найден"
 
         parts = [f"<b>{resource_name}</b>"]
@@ -282,11 +292,17 @@ class FramegraphDebuggerModel:
             w = int(resource.get("width", 0))
             h = int(resource.get("height", 0))
             parts.append(f"Размер: {w}×{h}")
-            color_format = int(resource.get("color_format", 14))
-            parts.append(f"fmt={_format_pixel_format(color_format)}")
+            color_format_name = resource.get("color_format_name")
+            if color_format_name is None:
+                color_format = int(resource.get("color_format", 14))
+                color_format_name = _format_pixel_format(color_format)
+            parts.append(f"fmt={color_format_name}")
             if resource.get("has_depth", False):
-                depth_format = int(resource.get("depth_format", 14))
-                parts.append(f"depth_fmt={_format_pixel_format(depth_format)}")
+                depth_format_name = resource.get("depth_format_name")
+                if depth_format_name is None:
+                    depth_format = int(resource.get("depth_format", 14))
+                    depth_format_name = _format_pixel_format(depth_format)
+                parts.append(f"depth_fmt={depth_format_name}")
             samples = int(resource.get("samples", 1))
             if samples > 1:
                 parts.append(f"MSAA={samples}x")
