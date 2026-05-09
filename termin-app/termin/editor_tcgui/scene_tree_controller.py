@@ -40,7 +40,7 @@ class SceneTreeControllerTcgui:
         self._on_object_selected = on_object_selected
         self._request_viewport_update = request_viewport_update
 
-        self._entity_to_node: dict[int, TreeNode] = {}
+        self._entity_to_node: dict[str, TreeNode] = {}
 
         self._tree.draggable = True
         self._tree.on_select = self._on_tree_select
@@ -119,7 +119,9 @@ class SceneTreeControllerTcgui:
         lbl.text = entity.name or "(unnamed)"
         node = TreeNode(lbl)
         node.data = entity
-        self._entity_to_node[id(entity)] = node
+        key = self._entity_key(entity)
+        if key is not None:
+            self._entity_to_node[key] = node
         return node
 
     def _rebuild_context_menu(self, entity: Entity | None) -> None:
@@ -141,8 +143,13 @@ class SceneTreeControllerTcgui:
         if entity.transform and entity.transform.parent:
             parent_entity = entity.transform.parent.entity
             if parent_entity:
-                return self._entity_to_node.get(id(parent_entity))
+                return self._entity_to_node.get(self._entity_key(parent_entity))
         return None
+
+    def _entity_key(self, entity: Entity | None) -> str | None:
+        if entity is None:
+            return None
+        return entity.uuid if entity.uuid else None
 
     # ---------- view surface consumed by EntityOperations ----------
 
@@ -176,7 +183,7 @@ class SceneTreeControllerTcgui:
                     self._add_hierarchy_recursive(node, child)
 
     def remove_entity(self, entity: Entity, select_parent: bool = True) -> None:
-        node = self._entity_to_node.get(id(entity))
+        node = self._entity_to_node.get(self._entity_key(entity))
         if node is None:
             return
 
@@ -194,12 +201,12 @@ class SceneTreeControllerTcgui:
 
     def _remove_from_map_recursive(self, node: TreeNode) -> None:
         if node.data is not None:
-            self._entity_to_node.pop(id(node.data), None)
+            self._entity_to_node.pop(self._entity_key(node.data), None)
         for child in node.subnodes:
             self._remove_from_map_recursive(child)
 
     def move_entity(self, entity: Entity, new_parent: Entity | None) -> None:
-        node = self._entity_to_node.get(id(entity))
+        node = self._entity_to_node.get(self._entity_key(entity))
         if node is None:
             return
 
@@ -211,7 +218,7 @@ class SceneTreeControllerTcgui:
             self._tree.remove_root(node)
 
         new_parent_node = (
-            self._entity_to_node.get(id(new_parent))
+            self._entity_to_node.get(self._entity_key(new_parent))
             if new_parent is not None else None
         )
 
@@ -242,7 +249,7 @@ class SceneTreeControllerTcgui:
         return None
 
     def update_entity(self, entity: Entity) -> None:
-        node = self._entity_to_node.get(id(entity))
+        node = self._entity_to_node.get(self._entity_key(entity))
         if node is None:
             return
         if isinstance(node.content, Label):
@@ -252,9 +259,18 @@ class SceneTreeControllerTcgui:
     def select_object(self, obj: object | None) -> None:
         if not isinstance(obj, Entity):
             return
-        node = self._entity_to_node.get(id(obj))
+        node = self._entity_to_node.get(self._entity_key(obj))
         if node is not None:
+            self._expand_ancestors(node)
+            self._tree._rebuild_visible()
             self._tree._select_node(node)
+            self._tree._ensure_visible(node)
+
+    def _expand_ancestors(self, node: TreeNode) -> None:
+        parent = self._get_parent_node_by_traversal(node)
+        while parent is not None:
+            parent.expanded = True
+            parent = self._get_parent_node_by_traversal(parent)
 
     def get_expanded_entity_uuids(self) -> list[str]:
         result: list[str] = []
