@@ -26,6 +26,7 @@ extern "C" {
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_render_target.h"
+#include "tgfx/resources/tc_texture_registry.h"
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_inspect_pass_adapter.h"
 }
@@ -57,6 +58,96 @@ static uint64_t effective_layer_mask(uint64_t camera_mask, tc_render_target_hand
         ? tc_render_target_get_layer_mask(rt)
         : 0xFFFFFFFFFFFFFFFFULL;
     return camera_mask & target_mask;
+}
+
+struct RenderTargetNameLookup {
+    const char* name = nullptr;
+    tc_render_target_handle result = TC_RENDER_TARGET_HANDLE_INVALID;
+};
+
+static bool find_render_target_by_name_cb(tc_render_target_handle h, void* user_data) {
+    auto* lookup = static_cast<RenderTargetNameLookup*>(user_data);
+    const char* candidate = tc_render_target_get_name(h);
+    if (candidate && lookup->name && std::strcmp(candidate, lookup->name) == 0) {
+        lookup->result = h;
+        return false;
+    }
+    return true;
+}
+
+static tc_render_target_handle find_render_target_by_name(const char* name) {
+    if (!name || name[0] == '\0') {
+        return TC_RENDER_TARGET_HANDLE_INVALID;
+    }
+    RenderTargetNameLookup lookup;
+    lookup.name = name;
+    tc_render_target_pool_foreach(find_render_target_by_name_cb, &lookup);
+    return lookup.result;
+}
+
+static tgfx::TextureHandle resolve_pipeline_texture_ref(
+    tgfx::IRenderDevice& device,
+    const char* ref
+) {
+    if (!ref || ref[0] == '\0') {
+        return {};
+    }
+
+    constexpr const char* file_prefix = "file:";
+    const char* texture_name = ref;
+    if (std::strncmp(ref, file_prefix, std::strlen(file_prefix)) == 0) {
+        texture_name = ref + std::strlen(file_prefix);
+        tc_texture_handle tex = tc_texture_find(texture_name);
+        if (tc_texture_handle_is_invalid(tex)) {
+            tex = tc_texture_find_by_name(texture_name);
+        }
+        if (tc_texture_handle_is_invalid(tex)) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] pipeline texture ref '%s' not found", ref);
+            return {};
+        }
+        return wrap_tc_texture_as_tgfx2(device, tex);
+    } else {
+        tc_render_target_handle rt = find_render_target_by_name(ref);
+        if (tc_render_target_handle_valid(rt)) {
+            tc_render_target_ensure_textures(rt);
+            return wrap_tc_texture_as_tgfx2(
+                device, tc_render_target_get_color_texture(rt));
+        }
+    }
+
+    tc_texture_handle tex = tc_texture_find_by_name(texture_name);
+    if (tc_texture_handle_is_invalid(tex)) {
+        tex = tc_texture_find(texture_name);
+    }
+    if (tc_texture_handle_is_invalid(tex)) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] pipeline texture ref '%s' not found", ref);
+        return {};
+    }
+    return wrap_tc_texture_as_tgfx2(device, tex);
+}
+
+static void fill_external_textures_from_render_target(
+    ViewportContext& ctx,
+    tc_render_target_handle rt,
+    tgfx::IRenderDevice& device
+) {
+    const tc_value* params = tc_render_target_get_pipeline_params(rt);
+    if (!params || params->type != TC_VALUE_DICT) {
+        return;
+    }
+
+    for (size_t i = 0; i < params->data.dict.count; i++) {
+        const char* slot = params->data.dict.entries[i].key;
+        tc_value* value = params->data.dict.entries[i].value;
+        if (!slot || slot[0] == '\0' || !value || value->type != TC_VALUE_STRING) {
+            continue;
+        }
+
+        tgfx::TextureHandle tex = resolve_pipeline_texture_ref(device, value->data.s);
+        if (tex) {
+            ctx.external_textures[slot] = tex;
+        }
+    }
 }
 
 // Get RenderCamera from tc_component* via camera capability.
@@ -1049,6 +1140,9 @@ void RenderingManager::render_scene_pipeline_offscreen(
         ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
         ctx.output_color_tex = out_color;
         ctx.output_depth_tex = out_depth;
+        if (tc_render_target_handle_valid(rt)) {
+            fill_external_textures_from_render_target(ctx, rt, *vp_device);
+        }
         contexts[vp_name] = std::move(ctx);
     }
 
@@ -1153,6 +1247,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.output_color_tex = out_color;
     ctx.output_depth_tex = out_depth;
+    fill_external_textures_from_render_target(ctx, rt, *device);
     contexts[ctx.name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
         render_pipeline, scene, contexts, lights, vp_name ? vp_name : ""
@@ -1253,6 +1348,7 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.output_color_tex = out_color;
     ctx.output_depth_tex = out_depth;
+    fill_external_textures_from_render_target(ctx, rt, *device);
     contexts[name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
         render_pipeline, scene, contexts, lights, name

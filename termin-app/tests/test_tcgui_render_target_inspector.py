@@ -12,6 +12,15 @@ class _ResourceManager:
     def list_texture_names(self):
         return []
 
+    def get_texture_asset(self, name):
+        return None
+
+    def get_texture_asset_by_uuid(self, uuid):
+        return None
+
+    def get_texture(self, name):
+        return None
+
     def get_pipeline_asset(self, name):
         return None
 
@@ -75,9 +84,37 @@ class _PipelineAsset:
         self.external_params = external_params
 
 
+class _TextureAsset:
+    def __init__(self, name, uuid):
+        self.name = name
+        self.uuid = uuid
+
+
 class _TextureResourceManager(_ResourceManager):
+    def __init__(self):
+        self._textures = {
+            "Grenade": _TextureAsset("Grenade", "texture-uuid-grenade"),
+        }
+
     def list_pipeline_names(self):
         return ["Pipe"]
+
+    def list_texture_names(self):
+        return list(self._textures.keys())
+
+    def get_texture_asset(self, name):
+        return self._textures.get(name)
+
+    def get_texture_asset_by_uuid(self, uuid):
+        for asset in self._textures.values():
+            if asset.uuid == uuid:
+                return asset
+        return None
+
+    def get_texture(self, name):
+        if name in self._textures:
+            return types.SimpleNamespace(_image_data=None)
+        return None
 
     def get_pipeline_asset(self, name):
         if name == "Pipe":
@@ -173,3 +210,53 @@ def test_texture_picker_lists_render_targets_before_file_textures(monkeypatch):
 
     assert picker._item_tags[:4] == ["default", "rt_color", "rt_depth", "file"]
     assert picker._item_values[1:3] == ["LiveRT", "LiveRT"]
+
+
+def test_render_target_inspector_saves_file_pipeline_param_by_uuid(monkeypatch):
+    texture_module = types.ModuleType("termin.visualization.render.texture")
+    texture_module.get_white_texture = lambda: types.SimpleNamespace(_image_data=None)
+    texture_module.get_normal_texture = lambda: types.SimpleNamespace(_image_data=None)
+    monkeypatch.setitem(sys.modules, "termin.visualization.render.texture", texture_module)
+
+    scene_mount_module = types.ModuleType("termin.visualization.core.scene")
+    scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
+    monkeypatch.setitem(sys.modules, "termin.visualization.core.scene", scene_mount_module)
+
+    scene = _Scene("Scene", 1, [])
+    render_target = _RenderTarget(scene, None)
+    render_target.pipeline = _Pipeline("Pipe")
+
+    inspector = RenderTargetInspectorTcgui(_TextureResourceManager())
+    inspector.set_scene_getter(lambda: [scene])
+    inspector.set_render_target(render_target, scene)
+    inspector._on_pipeline_param_changed("input_texture", "file", "Grenade")
+
+    assert render_target.pipeline_params == {
+        "input_texture": "file:texture-uuid-grenade",
+    }
+
+
+def test_render_target_inspector_reads_uuid_file_pipeline_param(monkeypatch):
+    texture_module = types.ModuleType("termin.visualization.render.texture")
+    texture_module.get_white_texture = lambda: types.SimpleNamespace(_image_data=None)
+    texture_module.get_normal_texture = lambda: types.SimpleNamespace(_image_data=None)
+    monkeypatch.setitem(sys.modules, "termin.visualization.render.texture", texture_module)
+
+    scene_mount_module = types.ModuleType("termin.visualization.core.scene")
+    scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
+    monkeypatch.setitem(sys.modules, "termin.visualization.core.scene", scene_mount_module)
+
+    scene = _Scene("Scene", 1, [])
+    render_target = _RenderTarget(scene, None)
+    render_target.pipeline = _Pipeline("Pipe")
+    render_target.pipeline_params = {
+        "input_texture": "file:texture-uuid-grenade",
+    }
+
+    inspector = RenderTargetInspectorTcgui(_TextureResourceManager())
+    inspector.set_scene_getter(lambda: [scene])
+    inspector.set_render_target(render_target, scene)
+
+    picker = inspector._pipeline_params_widgets[0]
+    assert picker._item_tags[picker._combo.selected_index] == "file"
+    assert picker._item_values[picker._combo.selected_index] == "Grenade"
