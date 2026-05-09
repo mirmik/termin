@@ -803,6 +803,7 @@ class EditorWindowTcgui:
             self.scene_tree_controller.rebuild(select_obj=select_obj)
 
         self._request_viewport_update()
+        self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
 
     def redo(self) -> None:
@@ -819,7 +820,16 @@ class EditorWindowTcgui:
             self.scene_tree_controller.rebuild(select_obj=select_obj)
 
         self._request_viewport_update()
+        self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
+
+    def _resync_inspector_from_selection(self) -> None:
+        if self._interaction_system is None or self._inspector_controller is None:
+            return
+        selected = self._interaction_system.selection.selected
+        if selected is None or not selected.valid():
+            return
+        self._inspector_controller.show_entity_inspector(selected)
 
     def _update_undo_redo_actions(self) -> None:
         if self._menu_bar_controller is not None:

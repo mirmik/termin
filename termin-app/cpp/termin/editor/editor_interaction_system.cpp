@@ -32,6 +32,11 @@ EditorInteractionSystem::EditorInteractionSystem() {
     _transform_gizmo.on_transform_changed = [this]() {
         _request_update();
     };
+    _transform_gizmo.on_drag_end = [this](const GeneralPose3& old_pose, const GeneralPose3& new_pose) {
+        if (on_transform_end) {
+            on_transform_end(old_pose, new_pose);
+        }
+    };
     gizmo_manager.add_gizmo(&_transform_gizmo);
 
     tc_log(TC_LOG_INFO, "[EditorInteractionSystem] Created");

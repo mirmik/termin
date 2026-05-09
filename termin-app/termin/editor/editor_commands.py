@@ -60,6 +60,18 @@ def _transform_entity_uuid(transform: GeneralTransform3 | None) -> str | None:
     return _entity_uuid(_transform_entity(transform))
 
 
+def _component_entity(component: Component | TcComponentRef | None) -> Entity | None:
+    if component is None:
+        return None
+    return component.entity
+
+
+def _component_type_name(component: Component | TcComponentRef) -> str:
+    if isinstance(component, TcComponentRef):
+        return component.type_name
+    return component.type_name()
+
+
 def _snapshot_entity(entity: Entity) -> dict:
     data = entity.serialize()
     if data is None:
@@ -87,6 +99,37 @@ def _resolve_parent_transform(scene, parent_uuid: str | None) -> GeneralTransfor
     if parent is None:
         return None
     return parent.transform
+
+
+def _resolve_command_entity(scene, uuid: str | None, command_text: str) -> Entity:
+    entity = _resolve_scene_entity(scene, uuid)
+    if entity is None:
+        _logger.error("Failed to resolve entity uuid=%s while applying undo command '%s'", uuid, command_text)
+        raise RuntimeError(f"Failed to resolve entity uuid={uuid}")
+    return entity
+
+
+def _resolve_command_transform(scene, uuid: str | None, command_text: str) -> GeneralTransform3:
+    return _resolve_command_entity(scene, uuid, command_text).transform
+
+
+def _resolve_command_component(
+    scene,
+    entity_uuid: str | None,
+    type_name: str,
+    command_text: str,
+) -> TcComponentRef:
+    entity = _resolve_command_entity(scene, entity_uuid, command_text)
+    ref = entity.get_tc_component(type_name)
+    if ref is None or not ref.valid:
+        _logger.error(
+            "Failed to resolve component '%s' on entity uuid=%s while applying undo command '%s'",
+            type_name,
+            entity_uuid,
+            command_text,
+        )
+        raise RuntimeError(f"Failed to resolve component '{type_name}' on entity uuid={entity_uuid}")
+    return ref
 
 
 def _deserialize_entity_snapshot(
@@ -124,15 +167,35 @@ class TransformEditCommand(UndoCommand):
         text: str = "Transform change",
     ) -> None:
         super().__init__(text)
+        entity = _transform_entity(transform)
+        self._scene = entity.scene if entity is not None else None
+        self._entity_uuid = _entity_uuid(entity)
         self._transform = transform
         self._old_pose = _clone_pose(old_pose)
         self._new_pose = _clone_pose(new_pose)
 
+    @property
+    def entity(self) -> Entity | None:
+        if _entity_is_valid(_transform_entity(self._transform)):
+            return _transform_entity(self._transform)
+        if self._scene is None:
+            return None
+        return _resolve_scene_entity(self._scene, self._entity_uuid)
+
+    def _current_transform(self) -> GeneralTransform3:
+        if _entity_is_valid(_transform_entity(self._transform)):
+            return self._transform
+        if self._scene is None:
+            _logger.error("TransformEditCommand has no scene for entity uuid=%s", self._entity_uuid)
+            raise RuntimeError("TransformEditCommand has no scene")
+        self._transform = _resolve_command_transform(self._scene, self._entity_uuid, self.text)
+        return self._transform
+
     def do(self) -> None:
-        self._transform.relocate(self._new_pose)
+        self._current_transform().relocate(self._new_pose)
 
     def undo(self) -> None:
-        self._transform.relocate(self._old_pose)
+        self._current_transform().relocate(self._old_pose)
 
     def merge_with(self, other: UndoCommand) -> bool:
         """
@@ -143,7 +206,7 @@ class TransformEditCommand(UndoCommand):
         """
         if not isinstance(other, TransformEditCommand):
             return False
-        if other._transform is not self._transform:
+        if other._entity_uuid != self._entity_uuid:
             return False
 
         self._new_pose = _clone_pose(other._new_pose)
@@ -167,18 +230,44 @@ class ComponentFieldEditCommand(UndoCommand):
         text: str = "Component field change",
     ) -> None:
         super().__init__(text)
+        entity = _component_entity(component)
+        self._scene = entity.scene if entity is not None else None
+        self._entity_uuid = _entity_uuid(entity)
+        self._component_type_name = _component_type_name(component)
         self._component = component
         self._field = field
         self._old_value = _clone_value(old_value)
         self._new_value = _clone_value(new_value)
 
+    def _current_component(self) -> Component | TcComponentRef:
+        if self._scene is not None:
+            self._component = _resolve_command_component(
+                self._scene,
+                self._entity_uuid,
+                self._component_type_name,
+                self.text,
+            )
+            return self._component
+        if isinstance(self._component, TcComponentRef) and self._component.valid:
+            return self._component
+        if isinstance(self._component, Component) and _entity_is_valid(self._component.entity):
+            return self._component
+        if self._scene is None:
+            _logger.error(
+                "ComponentFieldEditCommand has no scene for entity uuid=%s component=%s",
+                self._entity_uuid,
+                self._component_type_name,
+            )
+            raise RuntimeError("ComponentFieldEditCommand has no scene")
+        raise RuntimeError("ComponentFieldEditCommand has no live component")
+
     def do(self) -> None:
         # При каждом применении берём копию, чтобы не делиться
         # внутренними массивами между командой и объектом.
-        self._field.set_value(self._component, _clone_value(self._new_value))
+        self._field.set_value(self._current_component(), _clone_value(self._new_value))
 
     def undo(self) -> None:
-        self._field.set_value(self._component, _clone_value(self._old_value))
+        self._field.set_value(self._current_component(), _clone_value(self._old_value))
 
     def merge_with(self, other: UndoCommand) -> bool:
         """
@@ -187,7 +276,9 @@ class ComponentFieldEditCommand(UndoCommand):
         """
         if not isinstance(other, ComponentFieldEditCommand):
             return False
-        if other._component is not self._component:
+        if other._entity_uuid != self._entity_uuid:
+            return False
+        if other._component_type_name != self._component_type_name:
             return False
         if other._field is not self._field:
             return False
@@ -213,30 +304,40 @@ class AddComponentCommand(UndoCommand):
     ) -> None:
         super().__init__(text)
         self._entity = entity
+        self._scene = entity.scene
+        self._entity_uuid = _entity_uuid(entity)
         self._type_name = type_name
         self._ref = ref
         self._data: dict | None = None
 
+    def _current_entity(self) -> Entity:
+        if _entity_is_valid(self._entity):
+            return self._entity
+        self._entity = _resolve_command_entity(self._scene, self._entity_uuid, self.text)
+        return self._entity
+
     def do(self) -> None:
+        entity = self._current_entity()
         # Проверяем, есть ли уже компонент этого типа
-        if self._entity.has_tc_component(self._type_name):
+        if entity.has_tc_component(self._type_name):
+            self._ref = entity.get_tc_component(self._type_name)
             return
 
         # Создаём и добавляем компонент
-        self._ref = self._entity.add_component_by_name(self._type_name)
+        self._ref = entity.add_component_by_name(self._type_name)
 
         # Применяем сохранённые данные (при redo)
         if self._data is not None and self._ref.valid:
             self._ref.deserialize_data(self._data)
 
     def undo(self) -> None:
-        if self._ref is None or not self._ref.valid:
-            self._ref = self._entity.get_tc_component(self._type_name)
+        entity = self._current_entity()
+        self._ref = entity.get_tc_component(self._type_name)
 
         if self._ref is not None and self._ref.valid:
             # Сохраняем данные перед удалением (для redo)
             self._data = self._ref.serialize_data()
-            self._entity.remove_component_ref(self._ref)
+            entity.remove_component_ref(self._ref)
             self._ref = None
 
 
@@ -256,23 +357,33 @@ class RemoveComponentCommand(UndoCommand):
     ) -> None:
         super().__init__(text)
         self._entity = entity
+        self._scene = entity.scene
+        self._entity_uuid = _entity_uuid(entity)
         self._type_name = type_name
         self._data: dict | None = None
 
+    def _current_entity(self) -> Entity:
+        if _entity_is_valid(self._entity):
+            return self._entity
+        self._entity = _resolve_command_entity(self._scene, self._entity_uuid, self.text)
+        return self._entity
+
     def do(self) -> None:
-        ref = self._entity.get_tc_component(self._type_name)
+        entity = self._current_entity()
+        ref = entity.get_tc_component(self._type_name)
         if ref is not None and ref.valid:
             # Сохраняем данные перед удалением (для undo)
             self._data = ref.serialize_data()
-            self._entity.remove_component_ref(ref)
+            entity.remove_component_ref(ref)
 
     def undo(self) -> None:
+        entity = self._current_entity()
         # Проверяем, что компонента нет
-        if self._entity.has_tc_component(self._type_name):
+        if entity.has_tc_component(self._type_name):
             return
 
         # Создаём компонент заново
-        ref = self._entity.add_component_by_name(self._type_name)
+        ref = entity.add_component_by_name(self._type_name)
 
         # Восстанавливаем данные
         if self._data is not None and ref.valid:
@@ -412,27 +523,38 @@ class ReparentEntityCommand(UndoCommand):
         super().__init__(text)
         self._scene = entity.scene
         self._entity = entity
+        self._entity_uuid = _entity_uuid(entity)
         self._old_parent_uuid = _transform_entity_uuid(old_parent)
         self._new_parent_uuid = _transform_entity_uuid(new_parent)
         # Сохраняем local pose для undo
         self._old_local_pose = _clone_pose(entity.transform.local_pose())
 
     @property
-    def entity(self) -> Entity:
+    def entity(self) -> Entity | None:
+        if _entity_is_valid(self._entity):
+            return self._entity
+        return _resolve_scene_entity(self._scene, self._entity_uuid)
+
+    def _current_entity(self) -> Entity:
+        if _entity_is_valid(self._entity):
+            return self._entity
+        self._entity = _resolve_command_entity(self._scene, self._entity_uuid, self.text)
         return self._entity
 
     def do(self) -> None:
+        entity = self._current_entity()
         # Сохраняем global pose до смены родителя
-        global_pose = self._entity.transform.global_pose()
+        global_pose = entity.transform.global_pose()
         # Меняем родителя
-        self._entity.transform.set_parent(_resolve_parent_transform(self._scene, self._new_parent_uuid))
+        entity.transform.set_parent(_resolve_parent_transform(self._scene, self._new_parent_uuid))
         # Восстанавливаем global pose (пересчитывает local pose)
-        self._entity.transform.relocate_global(global_pose)
+        entity.transform.relocate_global(global_pose)
 
     def undo(self) -> None:
+        entity = self._current_entity()
         # Возвращаем родителя и восстанавливаем оригинальный local pose
-        self._entity.transform.set_parent(_resolve_parent_transform(self._scene, self._old_parent_uuid))
-        self._entity.transform.relocate(self._old_local_pose)
+        entity.transform.set_parent(_resolve_parent_transform(self._scene, self._old_parent_uuid))
+        entity.transform.relocate(self._old_local_pose)
 
 
 __all__ = [
@@ -466,18 +588,28 @@ class RenameEntityCommand(UndoCommand):
             text = f"Rename entity '{old_name}' to '{new_name}'"
         super().__init__(text)
         self._entity = entity
+        self._scene = entity.scene
+        self._entity_uuid = _entity_uuid(entity)
         self._old_name = old_name
         self._new_name = new_name
 
     @property
-    def entity(self) -> Entity:
+    def entity(self) -> Entity | None:
+        if _entity_is_valid(self._entity):
+            return self._entity
+        return _resolve_scene_entity(self._scene, self._entity_uuid)
+
+    def _current_entity(self) -> Entity:
+        if _entity_is_valid(self._entity):
+            return self._entity
+        self._entity = _resolve_command_entity(self._scene, self._entity_uuid, self.text)
         return self._entity
 
     def do(self) -> None:
-        self._entity.name = self._new_name
+        self._current_entity().name = self._new_name
 
     def undo(self) -> None:
-        self._entity.name = self._old_name
+        self._current_entity().name = self._old_name
 
     def merge_with(self, other: UndoCommand) -> bool:
         """
@@ -485,7 +617,7 @@ class RenameEntityCommand(UndoCommand):
         """
         if not isinstance(other, RenameEntityCommand):
             return False
-        if other._entity is not self._entity:
+        if other._entity_uuid != self._entity_uuid:
             return False
 
         self._new_name = other._new_name
@@ -510,12 +642,12 @@ class DuplicateEntityCommand(UndoCommand):
             text = f"Duplicate '{source_entity.name}'"
         super().__init__(text)
         self._scene = scene
-        self._source_entity = source_entity
-        self._parent_transform = source_entity.transform.parent
+        self._source_name = source_entity.name
+        self._parent_uuid = _transform_entity_uuid(source_entity.transform.parent)
         self._copy: Entity | None = None
 
         # Serialize source for do/redo
-        self._serialized_data = source_entity.serialize()
+        self._serialized_data = _snapshot_entity(source_entity)
         self._remove_uuids_recursive(self._serialized_data)
 
     @property
@@ -535,13 +667,17 @@ class DuplicateEntityCommand(UndoCommand):
     def do(self) -> None:
         # Deserialize directly into scene's pool
         self._copy = Entity.deserialize(
-            self._serialized_data, context=None, scene=self._scene
+            copy.deepcopy(self._serialized_data), context=None, scene=self._scene
         )
-        self._copy.name = f"{self._source_entity.name}_copy"
+        if self._copy is None or not self._copy.valid():
+            _logger.error("Failed to duplicate entity '%s'", self._source_name)
+            raise RuntimeError(f"Failed to duplicate entity '{self._source_name}'")
+        self._copy.name = f"{self._source_name}_copy"
 
         # Set parent
-        if self._parent_transform is not None:
-            self._copy.transform.set_parent(self._parent_transform)
+        parent_transform = _resolve_parent_transform(self._scene, self._parent_uuid)
+        if parent_transform is not None:
+            self._copy.transform.set_parent(parent_transform)
 
     def undo(self) -> None:
         if self._copy is not None:

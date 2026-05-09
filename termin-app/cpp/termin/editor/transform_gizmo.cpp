@@ -364,9 +364,9 @@ void TransformGizmo::on_click(int collider_id, const Vec3f* hit_position) {
     TransformElement element = static_cast<TransformElement>(collider_id);
     _active_element = element;
 
-    // Save start pose for undo
+    // Save start pose for undo. TransformEditCommand expects local pose.
     if (_target.valid()) {
-        _drag_start_pose = _target.transform().global_pose();
+        _drag_start_pose = _target.transform().local_pose();
     }
 
     Vec3f origin = _get_position();
@@ -441,7 +441,7 @@ void TransformGizmo::on_drag(int collider_id, const Vec3f& position, const Vec3f
 void TransformGizmo::on_release(int collider_id) {
     // Call drag end handler for undo support
     if (on_drag_end && _target.valid()) {
-        GeneralPose3 end_pose = _target.transform().global_pose();
+        GeneralPose3 end_pose = _target.transform().local_pose();
         on_drag_end(_drag_start_pose, end_pose);
     }
 
