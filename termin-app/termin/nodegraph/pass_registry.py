@@ -149,6 +149,32 @@ SOCKET_FIELDS = {
 }
 
 
+def _metadata_graph(class_name: str) -> dict:
+    try:
+        from termin._native.inspect import InspectRegistry
+        registry = InspectRegistry.instance()
+        metadata = registry.get_type_metadata(class_name)
+        if isinstance(metadata, dict):
+            graph = metadata.get("graph", {})
+            if isinstance(graph, dict):
+                return graph
+    except Exception as e:
+        from tcbase import log
+        log.warn(f"[pass_registry] get graph metadata for '{class_name}' failed: {e}")
+    return {}
+
+
+def _metadata_pairs(graph: dict, key: str) -> list:
+    values = graph.get(key, [])
+    if not isinstance(values, list):
+        return []
+    result = []
+    for item in values:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            result.append((str(item[0]), str(item[1])))
+    return result
+
+
 def create_params_from_pass(class_name: str) -> List[NodeParam]:
     """
     Create NodeParam list from a pass class's inspect fields.
@@ -301,11 +327,18 @@ def get_pass_sockets(class_name: str) -> tuple[list, list]:
         Tuple of (node_inputs, node_outputs).
         Each is a list of (param_name, socket_type) tuples.
     """
+    graph = _metadata_graph(class_name)
+    metadata_inputs = _metadata_pairs(graph, "node_inputs")
+    metadata_outputs = _metadata_pairs(graph, "node_outputs")
+    if metadata_inputs or metadata_outputs:
+        return metadata_inputs, metadata_outputs
+
     cls = get_pass_class(class_name)
     if cls is None:
         return [], []
 
-    # Collect from MRO (base classes first, subclasses override)
+    # Compatibility fallback for Python-only passes that still expose graph
+    # sockets as class metadata.
     inputs = []
     outputs = []
 
@@ -330,11 +363,17 @@ def get_pass_inplace_pairs(class_name: str) -> list:
     Returns:
         List of (input_name, output_name) tuples for inplace pairs.
     """
+    graph = _metadata_graph(class_name)
+    metadata_pairs = _metadata_pairs(graph, "node_inplace_pairs")
+    if metadata_pairs:
+        return metadata_pairs
+
     cls = get_pass_class(class_name)
     if cls is None:
         return []
 
-    # Collect from MRO (base classes first, subclasses override)
+    # Compatibility fallback for Python-only passes that still expose graph
+    # sockets as class metadata.
     pairs = []
 
     for klass in reversed(cls.__mro__):

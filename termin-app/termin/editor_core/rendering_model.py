@@ -251,20 +251,7 @@ class RenderingModel:
         return render_target.pipeline
 
     def _render_target_output_resource_info(self, render_target, resource_name: str) -> dict | None:
-        if resource_name not in ("OUTPUT", "DISPLAY"):
-            return None
-        render_target.ensure_textures()
-        return {
-            "key": resource_name,
-            "width": render_target.width,
-            "height": render_target.height,
-            "samples": 1,
-            "has_depth": True,
-            "color_format_name": render_target.color_format,
-            "depth_format_name": render_target.depth_format,
-            "color_native_handle": 0,
-            "depth_native_handle": 0,
-        }
+        return render_target.output_resource_info(resource_name)
 
     def remove_render_target(self, render_target, scene: "Scene | None" = None) -> None:
         """Remove a live render target and its scene config entry."""

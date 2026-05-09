@@ -50,6 +50,11 @@ public:
     INSPECT_FIELD(GeometryPassBase, input_res, "Input Resource", "string")
     INSPECT_FIELD(GeometryPassBase, output_res, "Output Resource", "string")
     INSPECT_FIELD(GeometryPassBase, camera_name, "Camera Name", "string")
+    INSPECT_TYPE_METADATA(GeometryPassBase, graph, make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {{"output_res", "fbo"}},
+        {{"input_res", "output_res"}}
+    ))
 
 protected:
     TcShader _shader;

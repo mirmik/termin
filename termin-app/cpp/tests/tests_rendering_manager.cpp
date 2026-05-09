@@ -12,6 +12,7 @@ extern "C" {
 #include "render/tc_display.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_pipeline_pool.h"
+#include "inspect/tc_inspect_pass_adapter.h"
 #include "render/tc_render_target.h"
 #include "render/tc_render_target_pool.h"
 #include "render/tc_viewport.h"
@@ -99,6 +100,130 @@ TEST_CASE("Graph compiler preserves FBO resource params on generated names")
     REQUIRE(fbo_spec->size.has_value());
     CHECK(fbo_spec->size->first == 1024);
     CHECK(fbo_spec->size->second == 1024);
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler treats render target input as external resources")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTargetInput", "node_type": "render_target_input", "x": -420.0, "y": -80.0 },
+    {
+      "type": "FBO",
+      "node_type": "resource",
+      "x": -263.0,
+      "y": -78.0,
+      "params": { "format": "r32f", "size_mode": "fixed", "width": 1024, "height": 1024 }
+    },
+    { "type": "DepthPass", "x": 81.0, "y": -17.0 },
+    { "type": "PipelineOutput", "node_type": "pipeline_output", "x": 409.0, "y": 40.0 }
+  ],
+  "connections": [
+    { "from_node": 1, "from_socket": "fbo", "to_node": 2, "to_socket": "input_res" },
+    { "from_node": 0, "from_socket": "color", "to_node": 2, "to_socket": "output_res_target" },
+    { "from_node": 2, "from_socket": "output_res", "to_node": 3, "to_socket": "color" },
+    { "from_node": 0, "from_socket": "depth", "to_node": 3, "to_socket": "depth" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    REQUIRE(naming.socket_names.count("0") == 1u);
+    CHECK(naming.socket_names["0"]["color"] == "RT_COLOR");
+    CHECK(naming.socket_names["0"]["depth"] == "RT_DEPTH");
+    CHECK(naming.socket_names["2"]["input_res"] == "fbo_1");
+    CHECK(naming.socket_names["2"]["output_res"] == "RT_COLOR");
+    CHECK(naming.socket_names["3"]["color"] == "RT_COLOR");
+    CHECK(naming.socket_names["3"]["depth"] == "RT_DEPTH");
+    CHECK(naming.resource_types["RT_COLOR"] == "external_color");
+    CHECK(naming.resource_types["RT_DEPTH"] == "external_depth");
+    CHECK(naming.external_resources["RT_COLOR"] == "render_target_color");
+    CHECK(naming.external_resources["RT_DEPTH"] == "render_target_depth");
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+    REQUIRE(pipeline->pass_count() == 1u);
+
+    termin::TcPassRef pass(pipeline->get_pass_at(0));
+    CHECK(pass.type_name() == "DepthPass");
+    tc_value input_res = tc_pass_inspect_get(pass.ptr(), "input_res");
+    REQUIRE(input_res.type == TC_VALUE_STRING);
+    CHECK(std::string(input_res.data.s) == "fbo_1");
+    tc_value_free(&input_res);
+    tc_value output_res = tc_pass_inspect_get(pass.ptr(), "output_res");
+    REQUIRE(output_res.type == TC_VALUE_STRING);
+    CHECK(std::string(output_res.data.s) == "RT_COLOR");
+    tc_value_free(&output_res);
+
+    bool found_fbo = false;
+    for (size_t i = 0; i < pipeline->spec_count(); i++) {
+        const ResourceSpec* spec = pipeline->get_spec_at(i);
+        REQUIRE(spec != nullptr);
+        CHECK(spec->resource != "RT_COLOR");
+        CHECK(spec->resource != "RT_DEPTH");
+        if (spec->resource == "fbo_1") {
+            found_fbo = true;
+            REQUIRE(spec->format.has_value());
+            CHECK(*spec->format == "r32f");
+        }
+    }
+    CHECK(found_fbo);
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTargetInput", "node_type": "render_target_input", "x": -204.0, "y": -16.0 },
+    { "type": "DepthPass", "x": 106.0, "y": -122.0 },
+    { "type": "PipelineOutput", "node_type": "pipeline_output", "x": 409.0, "y": 40.0 }
+  ],
+  "connections": [
+    { "from_node": 0, "from_socket": "depth", "to_node": 2, "to_socket": "depth" },
+    { "from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "input_res" },
+    { "from_node": 1, "from_socket": "output_res", "to_node": 2, "to_socket": "color" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    CHECK(naming.socket_names["1"]["input_res"] == "RT_COLOR");
+    CHECK(naming.socket_names["1"]["output_res"] == "RT_COLOR");
+    CHECK(naming.socket_names["2"]["color"] == "RT_COLOR");
+    CHECK(naming.socket_names["2"]["depth"] == "RT_DEPTH");
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+    REQUIRE(pipeline->pass_count() == 1u);
+    CHECK(pipeline->spec_count() == 0u);
+
+    termin::TcPassRef pass(pipeline->get_pass_at(0));
+    CHECK(pass.type_name() == "DepthPass");
+    tc_value input_res = tc_pass_inspect_get(pass.ptr(), "input_res");
+    REQUIRE(input_res.type == TC_VALUE_STRING);
+    CHECK(std::string(input_res.data.s) == "RT_COLOR");
+    tc_value_free(&input_res);
+    tc_value output_res = tc_pass_inspect_get(pass.ptr(), "output_res");
+    REQUIRE(output_res.type == TC_VALUE_STRING);
+    CHECK(std::string(output_res.data.s) == "RT_COLOR");
+    tc_value_free(&output_res);
 
     pipeline->destroy();
     delete pipeline;

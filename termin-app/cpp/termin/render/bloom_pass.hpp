@@ -59,6 +59,11 @@ public:
     INSPECT_FIELD_RANGE(BloomPass, soft_threshold, "Soft Knee", "float", 0.0f, 1.0f)
     INSPECT_FIELD_RANGE(BloomPass, intensity, "Intensity", "float", 0.0f, 5.0f)
     INSPECT_FIELD_RANGE(BloomPass, mip_levels, "Mip Levels", "int", 1, 8)
+    INSPECT_TYPE_METADATA(BloomPass, graph, make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {{"output_res", "fbo"}},
+        {}
+    ))
 
     BloomPass(
         const std::string& input = "color",

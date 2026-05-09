@@ -30,6 +30,11 @@ public:
     INSPECT_FIELD(ColliderGizmoPass, input_res, "Input Resource", "string")
     INSPECT_FIELD(ColliderGizmoPass, output_res, "Output Resource", "string")
     INSPECT_FIELD(ColliderGizmoPass, depth_test, "Depth Test", "bool")
+    INSPECT_TYPE_METADATA(ColliderGizmoPass, graph, make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {{"output_res", "fbo"}},
+        {{"input_res", "output_res"}}
+    ))
 
     ColliderGizmoPass(
         const std::string& input_res = "color",

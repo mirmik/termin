@@ -139,6 +139,14 @@ def test_format_fbo_info_prints_pixel_format_names():
 
 def test_format_fbo_info_uses_target_output_resource_info():
     pipeline = _Pipeline("debug")
+    pipeline.fbos["OUTPUT"] = {
+        "width": 1024,
+        "height": 1024,
+        "color_format": 8,
+        "has_depth": True,
+        "depth_format": 13,
+        "samples": 1,
+    }
 
     model = FramegraphDebuggerModel(None, _Core())
     model._debug_source_res = "OUTPUT"
@@ -162,3 +170,61 @@ def test_format_fbo_info_uses_target_output_resource_info():
     assert "Размер: 640×360" in text
     assert "fmt=rgba16f" in text
     assert "depth_fmt=depth32f" in text
+
+
+def test_format_fbo_info_uses_target_rt_color_resource_info():
+    pipeline = _Pipeline("debug")
+    pipeline.fbos["RT_COLOR"] = {
+        "width": 1024,
+        "height": 1024,
+        "color_format": 8,
+        "has_depth": False,
+        "samples": 1,
+    }
+
+    model = FramegraphDebuggerModel(None, _Core())
+    model._debug_source_res = "RT_COLOR"
+    model._current_target = FramegraphDebugTarget(
+        source=object(),
+        label="RenderTarget",
+        get_pipeline=lambda: pipeline,
+        get_resource_info=lambda resource: {
+            "width": 640,
+            "height": 360,
+            "color_format_name": "rgba16f",
+            "has_depth": True,
+            "depth_format_name": "depth32f",
+            "samples": 1,
+        } if resource == "RT_COLOR" else None,
+    )
+
+    text = model.format_fbo_info()
+
+    assert "<b>RT_COLOR</b>" in text
+    assert "Размер: 640×360" in text
+    assert "fmt=rgba16f" in text
+    assert "depth_fmt=depth32f" in text
+
+
+def test_format_fbo_info_uses_target_rt_depth_resource_info():
+    model = FramegraphDebuggerModel(None, _Core())
+    model._debug_source_res = "RT_DEPTH"
+    model._current_target = FramegraphDebugTarget(
+        source=object(),
+        label="RenderTarget",
+        get_pipeline=lambda: _Pipeline("debug"),
+        get_resource_info=lambda resource: {
+            "width": 640,
+            "height": 360,
+            "color_format_name": "depth32f",
+            "has_depth": False,
+            "samples": 1,
+        } if resource == "RT_DEPTH" else None,
+    )
+
+    text = model.format_fbo_info()
+
+    assert "<b>RT_DEPTH</b>" in text
+    assert "Размер: 640×360" in text
+    assert "fmt=depth32f" in text
+    assert "depth_fmt=" not in text

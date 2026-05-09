@@ -274,7 +274,11 @@ class FramegraphDebuggerModel:
 
         fbos = self.get_fbos()
         resource_name = self._debug_source_res
-        resource = fbos.get(resource_name) if fbos else None
+        resource = None
+        if resource_name in ("OUTPUT", "DISPLAY", "RT_COLOR", "RT_DEPTH"):
+            resource = self.get_target_resource_info(resource_name)
+        if resource is None:
+            resource = fbos.get(resource_name) if fbos else None
         if resource is None:
             resource = self.get_target_resource_info(resource_name)
         if resource is None:

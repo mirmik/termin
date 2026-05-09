@@ -15,6 +15,11 @@ public:
 
     INSPECT_FIELD(PresentToScreenPass, input_res, "Input Resource", "string")
     INSPECT_FIELD(PresentToScreenPass, output_res, "Output Resource", "string")
+    INSPECT_TYPE_METADATA(PresentToScreenPass, graph, make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {},
+        {}
+    ))
 
     PresentToScreenPass(
         const std::string& input = "color",

@@ -22,6 +22,11 @@ private:
 
 public:
     INSPECT_FIELD(DebugTrianglePass, output_res, "Output Resource", "string")
+    INSPECT_TYPE_METADATA(DebugTrianglePass, graph, make_pass_graph_metadata(
+        {},
+        {{"output_res", "fbo"}},
+        {}
+    ))
 
     explicit DebugTrianglePass(
         const std::string& output = "OUTPUT",

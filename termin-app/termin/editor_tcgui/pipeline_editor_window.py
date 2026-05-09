@@ -290,6 +290,12 @@ def _load_graph_from_pipeline_dict(data: dict):
                 controller.add_output_socket(node.id, "fbo", "fbo")
         elif node_type == "external_rt":
             controller.add_output_socket(node.id, "fbo", "fbo")
+        elif node_type == "render_target_input":
+            controller.add_output_socket(node.id, "color", "fbo")
+            controller.add_output_socket(node.id, "depth", "fbo")
+        elif node_type == "pipeline_output":
+            controller.add_input_socket(node.id, "color", "fbo")
+            controller.add_input_socket(node.id, "depth", "fbo")
         elif node_type == "output":
             controller.add_input_socket(node.id, "color", "fbo")
             controller.add_input_socket(node.id, "depth", "fbo")
@@ -637,6 +643,28 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         graph_view.controller.add_input_socket(node.id, "depth", "fbo")
         graph_view.refresh()
 
+    def _create_render_target_input_node(wx: float, wy: float) -> None:
+        node = graph_view.controller.create_node("render_target_input", title="Render Target Input", x=wx, y=wy)
+        node.data["graph_type"] = "RenderTargetInput"
+        node.data["instance_name"] = ""
+        node.data["node_type"] = "render_target_input"
+        node.data["dynamic_inputs"] = []
+        node.data["explicit_size"] = False
+        graph_view.controller.add_output_socket(node.id, "color", "fbo")
+        graph_view.controller.add_output_socket(node.id, "depth", "fbo")
+        graph_view.refresh()
+
+    def _create_pipeline_output_node(wx: float, wy: float) -> None:
+        node = graph_view.controller.create_node("pipeline_output", title="Pipeline Output", x=wx, y=wy)
+        node.data["graph_type"] = "PipelineOutput"
+        node.data["instance_name"] = ""
+        node.data["node_type"] = "pipeline_output"
+        node.data["dynamic_inputs"] = []
+        node.data["explicit_size"] = False
+        graph_view.controller.add_input_socket(node.id, "color", "fbo")
+        graph_view.controller.add_input_socket(node.id, "depth", "fbo")
+        graph_view.refresh()
+
     def _create_external_rt_node(wx: float, wy: float) -> None:
         node = graph_view.controller.create_node("external_rt", title="External RT", x=wx, y=wy)
         node.data["graph_type"] = "External RT"
@@ -662,8 +690,10 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
                 MenuItem.sep(),
                 MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
                 MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),
+                MenuItem("Add Render Target Input", on_click=lambda: _create_render_target_input_node(wx, wy)),
+                MenuItem("Add Pipeline Output", on_click=lambda: _create_pipeline_output_node(wx, wy)),
                 MenuItem("Add External RT", on_click=lambda: _create_external_rt_node(wx, wy)),
-                MenuItem("Add Render Target", on_click=lambda: _create_output_node(wx, wy)),
+                MenuItem("Add Legacy Render Target", on_click=lambda: _create_output_node(wx, wy)),
             ]
             return items
 
@@ -687,7 +717,9 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
 
     def _build_create_menu_items(wx: float, wy: float) -> list[MenuItem]:
         items: list[MenuItem] = [
-            MenuItem("Add Render Target", on_click=lambda: _create_output_node(wx, wy)),
+            MenuItem("Add Render Target Input", on_click=lambda: _create_render_target_input_node(wx, wy)),
+            MenuItem("Add Pipeline Output", on_click=lambda: _create_pipeline_output_node(wx, wy)),
+            MenuItem("Add Legacy Render Target", on_click=lambda: _create_output_node(wx, wy)),
             MenuItem.sep(),
             MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
             MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),

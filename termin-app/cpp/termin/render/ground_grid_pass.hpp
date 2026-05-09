@@ -37,6 +37,12 @@ private:
     tgfx::BufferHandle _params_ubo;
 
 public:
+    INSPECT_TYPE_METADATA(GroundGridPass, graph, make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {{"output_res", "fbo"}},
+        {{"input_res", "output_res"}}
+    ))
+
     GroundGridPass(
         const std::string& input_res = "color",
         const std::string& output_res = "color",
