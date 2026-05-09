@@ -140,6 +140,34 @@ def register_builtin_shaders(rm: "ResourceManager") -> None:
     register_skinned_shader(rm)
 
 
+def register_builtin_textures(rm: "ResourceManager") -> None:
+    """Register built-in placeholder textures."""
+    from termin.assets.texture_asset import TextureAsset
+    from termin.visualization.render.texture import get_normal_texture, get_white_texture
+
+    if "__white_1x1__" not in rm._texture_registry.assets:
+        white_texture = get_white_texture().texture_data
+        if white_texture is not None and white_texture.is_valid:
+            white_asset = TextureAsset(
+                texture_data=white_texture,
+                name="__white_1x1__",
+                source_path="__white_1x1__",
+                uuid=white_texture.uuid,
+            )
+            rm.register_texture_asset("__white_1x1__", white_asset, uuid=white_texture.uuid)
+
+    if "__normal_1x1__" not in rm._texture_registry.assets:
+        normal_texture = get_normal_texture().texture_data
+        if normal_texture is not None and normal_texture.is_valid:
+            normal_asset = TextureAsset(
+                texture_data=normal_texture,
+                name="__normal_1x1__",
+                source_path="__normal_1x1__",
+                uuid=normal_texture.uuid,
+            )
+            rm.register_texture_asset("__normal_1x1__", normal_asset, uuid=normal_texture.uuid)
+
+
 def register_builtin_materials(rm: "ResourceManager") -> None:
     """Register built-in materials."""
     from termin.visualization.core.material import Material
@@ -147,6 +175,7 @@ def register_builtin_materials(rm: "ResourceManager") -> None:
 
     # Ensure shaders are registered
     register_builtin_shaders(rm)
+    register_builtin_textures(rm)
 
     white_tex = get_white_texture_handle()
 
@@ -270,6 +299,7 @@ def register_triangle_pipeline(rm: "ResourceManager") -> None:
 def register_all_builtins(rm: "ResourceManager") -> None:
     """Register all built-in resources (shaders, materials, meshes, pipelines)."""
     register_builtin_shaders(rm)
+    register_builtin_textures(rm)
     register_builtin_materials(rm)
     register_builtin_meshes(rm)
     register_default_pipeline(rm)
