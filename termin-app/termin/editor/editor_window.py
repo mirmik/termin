@@ -481,6 +481,7 @@ class EditorWindow(QMainWindow):
             on_show_agent_types=self._show_agent_types_dialog,
             on_toggle_game_mode=self._mode_controller.toggle_game_mode,
             on_build_project=self._build_project,
+            on_run_build=self._run_build,
             on_run_standalone=self._run_standalone,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_modules=self._toggle_modules_panel,
@@ -1752,6 +1753,23 @@ class EditorWindow(QMainWindow):
 
     def _build_project(self) -> None:
         """Build current project manifest and resource layout."""
+        result = self._build_project_to_default_dist()
+        if result is None:
+            return
+
+        from PyQt6.QtWidgets import QMessageBox
+
+        resource_count = len(result.manifest.resources)
+        diagnostic_count = len(result.manifest.diagnostics)
+        QMessageBox.information(
+            self,
+            "Build Complete",
+            f"Build complete:\n{result.build_json_path}\n\n"
+            f"Resources: {resource_count}\n"
+            f"Diagnostics: {diagnostic_count}",
+        )
+
+    def _build_project_to_default_dist(self):
         from pathlib import Path
 
         from PyQt6.QtWidgets import QMessageBox
@@ -1759,16 +1777,16 @@ class EditorWindow(QMainWindow):
         project_path = self._get_project_path()
         if project_path is None:
             QMessageBox.warning(self, "No Project", "Please open a project first.")
-            return
+            return None
 
         if self._editor_scene_name is None:
             QMessageBox.warning(self, "No Scene", "Please attach an editor scene first.")
-            return
+            return None
 
         scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
         if scene_path is None:
             QMessageBox.warning(self, "No Scene", "Please save the scene first.")
-            return
+            return None
 
         self._save_scene()
 
@@ -1782,7 +1800,7 @@ class EditorWindow(QMainWindow):
                 "Scene Outside Project",
                 "Build entry scene must be inside the current project.",
             )
-            return
+            return None
 
         output_dir = project_root / "dist" / project_root.name
 
@@ -1797,7 +1815,7 @@ class EditorWindow(QMainWindow):
         except Exception as e:
             log.error(f"[EditorWindow._build_project] Build failed: {e}", exc_info=True)
             QMessageBox.critical(self, "Build Failed", f"Build failed:\n{e}")
-            return
+            return None
 
         resource_count = len(result.manifest.resources)
         diagnostic_count = len(result.manifest.diagnostics)
@@ -1806,13 +1824,31 @@ class EditorWindow(QMainWindow):
         for diagnostic in result.manifest.diagnostics:
             self._log_to_console(f"Build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
 
-        QMessageBox.information(
-            self,
-            "Build Complete",
-            f"Build complete:\n{result.build_json_path}\n\n"
-            f"Resources: {resource_count}\n"
-            f"Diagnostics: {diagnostic_count}",
-        )
+        return result
+
+    def _run_build(self) -> None:
+        """Build current project and run the built layout in player build mode."""
+        import subprocess
+        import sys
+
+        result = self._build_project_to_default_dist()
+        if result is None:
+            return
+
+        cmd = [
+            sys.executable,
+            "-m",
+            "termin.player",
+            "--build",
+            str(result.build_json_path),
+        ]
+        self._log_to_console(f"Launching build: {' '.join(cmd)}")
+        try:
+            subprocess.Popen(cmd, cwd=str(result.output_dir))
+        except Exception as e:
+            log.error(f"[EditorWindow._run_build] Failed to launch build: {e}", exc_info=True)
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Run Build Failed", f"Failed to launch build:\n{e}")
 
     def _run_standalone(self) -> None:
         """Run project in standalone player window."""

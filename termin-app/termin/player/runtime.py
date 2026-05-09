@@ -5,6 +5,8 @@ Minimal game runtime for standalone player.
 from __future__ import annotations
 
 import time
+import json
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,12 +29,16 @@ class PlayerRuntime:
         width: int = 1280,
         height: int = 720,
         title: str = "Termin Player",
+        asset_manifest_path: str | Path | None = None,
+        build_json_path: str | Path | None = None,
     ):
         self.project_path = Path(project_path)
         self.scene_name = scene_name
         self.width = width
         self.height = height
         self.title = title
+        self.asset_manifest_path = Path(asset_manifest_path) if asset_manifest_path is not None else None
+        self.build_json_path = Path(build_json_path) if build_json_path is not None else None
 
         self.running = False
         self.scene: Scene | None = None
@@ -40,6 +46,8 @@ class PlayerRuntime:
         self.graphics = None
         self.surface = None
         self.camera = None
+        self._engine = None
+        self._surface_size: tuple[int, int] = (0, 0)
 
         # Timing
         self.target_fps = 60
@@ -55,7 +63,15 @@ class PlayerRuntime:
         """Initialize player systems."""
         from tcbase import log
 
-        log.info(f"[PlayerRuntime] Initializing project: {self.project_path}")
+        self._configure_backend_default()
+
+        if not self._ensure_engine_core():
+            return False
+
+        if self.build_json_path is not None:
+            log.info(f"[PlayerRuntime] Initializing build: {self.build_json_path}")
+        else:
+            log.info(f"[PlayerRuntime] Initializing project: {self.project_path}")
 
         # Register components
         self._register_components()
@@ -63,8 +79,10 @@ class PlayerRuntime:
         # Load C++ modules
         self._load_modules()
 
-        # Scan project assets
-        self._scan_project_assets()
+        if self.asset_manifest_path is not None:
+            self._load_manifest_assets()
+        else:
+            self._scan_project_assets()
 
         # Ensure GLSL fallback loader is set up (import triggers setup)
         import termin.visualization.render.glsl_preprocessor  # noqa: F401
@@ -77,22 +95,27 @@ class PlayerRuntime:
         log.info(f"[PlayerRuntime] Created pipeline: {pipeline.name} with {len(pipeline.passes)} passes")
 
         manager = RenderingManager.instance()
-        manager.set_default_pipeline(pipeline)
+        manager.set_pipeline_factory(lambda name: make_default_pipeline())
 
+        # Create native backend window first. Its constructor publishes the
+        # host tgfx2 device so RenderEngine reuses it instead of creating a
+        # second device with incompatible texture handles.
+        from termin.display._platform_native import SDLBackendWindow
+        from termin.visualization.platform.backends.fbo_backend import FBOSurface
 
-        # Create window
-        from termin.visualization.platform.backends.glfw import GLFWWindowHandle
-        self.window = GLFWWindowHandle(
-            self.width, self.height, self.title,
-            graphics=self.graphics,
-        )
+        try:
+            self.window = SDLBackendWindow(self.title, self.width, self.height)
+        except Exception as e:
+            log.error(f"[PlayerRuntime] Failed to create backend window: {e}")
+            return False
 
-        # Create render surface and display
-        from termin.visualization.render.surface import WindowRenderSurface
+        # Create display
         from termin.visualization.core.display import Display
 
-        self.surface = WindowRenderSurface(self.window)
-        self._display = Display(self.surface)
+        self._surface_size = self.window.framebuffer_size()
+        surface_width, surface_height = self._surface_size
+        self.surface = FBOSurface(self.window.device(), surface_width, surface_height)
+        self._display = Display(surface=self.surface, name="Main")
         manager.add_display(self._display, "Main")
 
         # Load scene
@@ -122,17 +145,54 @@ class PlayerRuntime:
         # Find or create camera
         self._setup_camera()
 
-        # Mount scene to display
-        self._viewport = manager.mount_scene(
+        self._viewport = self._display.create_viewport(
             scene=self.scene,
-            display=self._display,
             camera=self.camera,
+            rect=(0.0, 0.0, 1.0, 1.0),
+            name="Main",
         )
 
         # Set up input handling
         self._setup_input()
 
         log.info("[PlayerRuntime] Initialization complete")
+        return True
+
+    def _configure_backend_default(self) -> None:
+        """Use the player backend default that is known to be stable."""
+        from tcbase import log
+
+        if "TERMIN_BACKEND" in os.environ:
+            log.info(f"[PlayerRuntime] Using TERMIN_BACKEND={os.environ['TERMIN_BACKEND']}")
+            return
+
+        os.environ["TERMIN_BACKEND"] = "opengl"
+        log.info("[PlayerRuntime] TERMIN_BACKEND not set; using opengl for standalone player")
+
+    def _ensure_engine_core(self) -> bool:
+        """Ensure EngineCore exists so RenderingManager has a real backend."""
+        from tcbase import log
+        from termin._native import EngineCore
+
+        engine = EngineCore.instance()
+        if engine is not None:
+            self._engine = engine
+            return True
+
+        try:
+            self._engine = EngineCore()
+        except TypeError as e:
+            log.error(
+                "[PlayerRuntime] EngineCore cannot be created from Python. "
+                "Rebuild termin-engine bindings after enabling EngineCore.__init__."
+            )
+            log.error(f"[PlayerRuntime] EngineCore creation failed: {e}")
+            return False
+        except Exception as e:
+            log.error(f"[PlayerRuntime] EngineCore creation failed: {e}")
+            return False
+
+        log.info("[PlayerRuntime] Created EngineCore from Python")
         return True
 
     def _register_components(self):
@@ -147,6 +207,7 @@ class PlayerRuntime:
 
     def _load_modules(self) -> None:
         """Load all project modules through termin-modules runtime."""
+        from tcbase import log
         from termin_modules import ModuleKind, ModuleState
         from termin.modules import get_project_modules_runtime
 
@@ -179,15 +240,8 @@ class PlayerRuntime:
         log.info(f"[PlayerRuntime] C++ modules: {cpp_loaded} loaded, {cpp_failed} failed")
         log.info(f"[PlayerRuntime] Python modules: {py_loaded} loaded, {py_failed} failed")
 
-    def _scan_project_assets(self):
-        """Scan project directory for assets and register them."""
-        import os
-        from tcbase import log
+    def _create_asset_preloaders(self):
         from termin.assets.resources import ResourceManager
-
-        rm = ResourceManager.instance()
-
-        # Create pre-loaders
         from termin.editor.file_processors import (
             MaterialPreLoader,
             ShaderFileProcessor,
@@ -200,10 +254,16 @@ class PlayerRuntime:
             GlslPreLoader,
             NavMeshProcessor,
             VoxelGridProcessor,
+            PipelinePreLoader,
+            ScenePipelinePreLoader,
+            UIPreLoader,
         )
 
-        preloaders = [
+        rm = ResourceManager.instance()
+        return [
             GlslPreLoader(rm),
+            PipelinePreLoader(rm),
+            ScenePipelinePreLoader(rm),
             ShaderFileProcessor(rm),
             TextureFileProcessor(rm),
             MaterialPreLoader(rm),
@@ -214,13 +274,25 @@ class PlayerRuntime:
             AudioPreLoader(rm),
             NavMeshProcessor(rm),
             VoxelGridProcessor(rm),
+            UIPreLoader(rm),
         ]
 
-        # Build extension -> preloader map
+    def _create_asset_preloader_map(self):
+        preloaders = self._create_asset_preloaders()
         ext_map = {}
         for pl in preloaders:
             for ext in pl.extensions:
                 ext_map[ext] = pl
+        return ext_map
+
+    def _scan_project_assets(self):
+        """Scan project directory for assets and register them."""
+        import os
+        from tcbase import log
+        from termin.assets.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        ext_map = self._create_asset_preloader_map()
 
         # Collect files sorted by priority
         pending = []  # (priority, path, preloader)
@@ -252,6 +324,82 @@ class PlayerRuntime:
 
         log.info(f"[PlayerRuntime] Loaded {loaded_count} project assets")
 
+    def _load_manifest_assets(self) -> None:
+        """Load build resources listed by assets/manifest.json."""
+        import os
+        from tcbase import log
+        from termin.assets.resources import ResourceManager
+
+        if self.asset_manifest_path is None:
+            log.error("[PlayerRuntime] No asset manifest path set")
+            return
+
+        manifest_path = self.asset_manifest_path
+        if not manifest_path.is_absolute():
+            manifest_path = self.project_path / manifest_path
+
+        if not manifest_path.exists():
+            log.error(f"[PlayerRuntime] Asset manifest not found: {manifest_path}")
+            return
+
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest_data = json.load(f)
+        except Exception as e:
+            log.error(f"[PlayerRuntime] Failed to read asset manifest {manifest_path}: {e}")
+            return
+
+        resources = manifest_data.get("resources")
+        if not isinstance(resources, list):
+            log.error(f"[PlayerRuntime] Invalid asset manifest resources: {manifest_path}")
+            return
+
+        for diagnostic in manifest_data.get("diagnostics", []):
+            if not isinstance(diagnostic, dict):
+                continue
+            level = diagnostic.get("level")
+            path = diagnostic.get("path")
+            message = diagnostic.get("message")
+            log.warning(f"[PlayerRuntime] Build diagnostic {level}: {path}: {message}")
+
+        rm = ResourceManager.instance()
+        ext_map = self._create_asset_preloader_map()
+
+        pending = []
+        for resource in resources:
+            if not isinstance(resource, dict):
+                continue
+            if resource.get("kind") != "asset":
+                continue
+            build_path = resource.get("build_path")
+            if not isinstance(build_path, str) or build_path == "":
+                continue
+
+            path = self.project_path / build_path
+            ext = path.suffix.lower()
+            preloader = ext_map.get(ext)
+            if preloader is None:
+                continue
+            pending.append((preloader.priority, str(path), preloader))
+
+        pending.sort(key=lambda x: (x[0], x[1]))
+
+        loaded_count = 0
+        for _priority, path, preloader in pending:
+            if not os.path.exists(path):
+                log.error(f"[PlayerRuntime] Build asset not found: {path}")
+                continue
+            try:
+                result = preloader.preload(path)
+                if result is not None:
+                    log.info(f"[PlayerRuntime] Loading build {result.resource_type}: {os.path.basename(path)}")
+                    rm.register_file(result)
+                    loaded_count += 1
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to load build asset {path}: {e}")
+
+        log.info(f"[PlayerRuntime] Loaded {loaded_count} build assets from manifest")
+
     def _setup_camera(self):
         """Find existing camera or create default one."""
         from tcbase import log
@@ -275,7 +423,8 @@ class PlayerRuntime:
         camera_entity.add_component(self.camera)
 
         # Position camera
-        camera_entity.transform.set_local_position(0, 2, 5)
+        from termin.geombase import Vec3
+        camera_entity.transform.set_local_position(Vec3(0, 2, 5))
         log.info("[PlayerRuntime] Created default camera at (0, 2, 5)")
 
     def _setup_input(self):
@@ -284,6 +433,8 @@ class PlayerRuntime:
 
         # Router auto-attaches to display's surface
         self._input_router = DisplayInputRouter(self._display.tc_display_ptr)
+        if self.surface is not None:
+            self.surface.set_input_manager(self._input_router.tc_input_manager_ptr)
 
     def run(self):
         """Run the game loop."""
@@ -307,15 +458,13 @@ class PlayerRuntime:
 
     def _tick(self):
         """Single frame update."""
-        import glfw
-
-        # Calculate delta time
         current_time = time.perf_counter()
         self.delta_time = current_time - self.last_time
         self.last_time = current_time
 
-        # Process window events
-        glfw.poll_events()
+        if self.window is not None:
+            self.window.poll_events()
+            self._sync_surface_size()
 
         # Update scene
         if self.scene is not None:
@@ -336,11 +485,32 @@ class PlayerRuntime:
         from termin.visualization.render import RenderingManager
 
         manager = RenderingManager.instance()
-        manager.render_display(self._display, present=True)
+        manager.render_all(present=True)
+        if self.window is not None and self.surface is not None:
+            self.window.present(self.surface.color_tex)
+
+    def _sync_surface_size(self) -> None:
+        """Resize the offscreen display surface to match the window."""
+        from tcbase import log
+
+        if self.window is None or self.surface is None or self._display is None:
+            return
+
+        width, height = self.window.framebuffer_size()
+        if width <= 0 or height <= 0:
+            return
+        if (width, height) == self._surface_size:
+            return
+
+        try:
+            self.surface.resize(width, height)
+            self._display.update_all_pixel_rects()
+            self._surface_size = (width, height)
+        except Exception as e:
+            log.error(f"[PlayerRuntime] Failed to resize render surface: {e}")
 
     def shutdown(self):
         """Clean up resources."""
-        import glfw
         from tcbase import log
         from termin.visualization.render import RenderingManager
 
@@ -350,14 +520,19 @@ class PlayerRuntime:
         manager = RenderingManager.instance()
         if self._display is not None:
             manager.remove_display(self._display)
+            self._display.destroy()
+            self._display = None
 
         self.scene = None
+
+        if self.surface is not None:
+            self.surface.close()
+            self.surface = None
 
         if self.window is not None:
             self.window.close()
             self.window = None
 
-        glfw.terminate()
         self.running = False
 
 
@@ -384,5 +559,43 @@ def run_project(
         width=width,
         height=height,
         title=title,
+    )
+    runtime.run()
+
+
+def run_build(
+    build_json_path: str | Path,
+    width: int = 1280,
+    height: int = 720,
+    title: str = "Termin Player",
+):
+    """
+    Run a built project from build.json.
+
+    Args:
+        build_json_path: Path to build.json produced by termin.project_builder
+        width: Window width
+        height: Window height
+        title: Window title
+    """
+    build_path = Path(build_json_path).resolve()
+    with open(build_path, "r", encoding="utf-8") as f:
+        build_data = json.load(f)
+
+    entry_scene = build_data.get("entry_scene")
+    asset_manifest = build_data.get("asset_manifest")
+    if not isinstance(entry_scene, str) or entry_scene == "":
+        raise ValueError(f"build.json has no entry_scene: {build_path}")
+    if not isinstance(asset_manifest, str) or asset_manifest == "":
+        raise ValueError(f"build.json has no asset_manifest: {build_path}")
+
+    runtime = PlayerRuntime(
+        project_path=build_path.parent,
+        scene_name=entry_scene,
+        width=width,
+        height=height,
+        title=title,
+        asset_manifest_path=asset_manifest,
+        build_json_path=build_path,
     )
     runtime.run()
