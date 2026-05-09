@@ -696,8 +696,8 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         if (rtc->pipeline_uuid && rtc->pipeline_uuid[0] != '\0' && pipeline_factory_) {
             pipeline = pipeline_factory_(rtc->pipeline_uuid);
         }
-        if (!tc_pipeline_handle_valid(pipeline) && rtc->pipeline_name && rtc->pipeline_name[0] != '\0' && pipeline_factory_) {
-            pipeline = pipeline_factory_(rtc->pipeline_name);
+        if (!tc_pipeline_handle_valid(pipeline) && rtc->pipeline_name && rtc->pipeline_name[0] != '\0') {
+            pipeline = create_pipeline(rtc->pipeline_name);
         }
         if (tc_pipeline_handle_valid(pipeline)) {
             tc_render_target_set_pipeline(rt, pipeline);

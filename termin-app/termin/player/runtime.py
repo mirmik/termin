@@ -103,7 +103,7 @@ class PlayerRuntime:
         log.info(f"[PlayerRuntime] Created pipeline: {pipeline.name} with {len(pipeline.passes)} passes")
 
         manager = RenderingManager.instance()
-        manager.set_pipeline_factory(lambda name: make_default_pipeline())
+        manager.set_pipeline_factory(self._create_pipeline_for_name)
 
         # Create native backend window first. Its constructor publishes the
         # host tgfx2 device so RenderEngine reuses it instead of creating a
@@ -171,6 +171,27 @@ class PlayerRuntime:
         if name != "":
             self._display.name = name
         return self._display
+
+    def _create_pipeline_for_name(self, name: str):
+        """Resolve non-default pipelines from loaded build resources."""
+        if not name or name in ("Default", "(Default)"):
+            return None
+
+        from termin.assets.resources import ResourceManager
+
+        rm = ResourceManager.instance()
+        if "-" in name:
+            pipeline = rm.get_pipeline_by_uuid(name)
+            if pipeline is not None:
+                return pipeline
+
+        pipeline = rm.get_pipeline(name)
+        if pipeline is not None:
+            return pipeline
+
+        from tcbase import log
+        log.error(f"[PlayerRuntime] Pipeline not found: {name}")
+        return None
 
     def _attach_scene_rendering(self, manager, pipeline) -> bool:
         """Attach scene rendering from saved viewport/render-target config."""

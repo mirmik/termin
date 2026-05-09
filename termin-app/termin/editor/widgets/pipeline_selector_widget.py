@@ -19,7 +19,8 @@ class PipelineSelectorWidget(FieldWidget):
 
     Shows options:
     - "(Editor)" - use editor pipeline (if available)
-    - Named pipelines from ResourceManager (including builtin "Default")
+    - "(Default)" - use the native default pipeline
+    - Named pipelines from ResourceManager
 
     Returns pipeline name as string.
     """
@@ -60,7 +61,9 @@ class PipelineSelectorWidget(FieldWidget):
         if self._include_editor:
             self._combo.addItem("(Editor)", userData="(Editor)")
 
-        # Add named pipelines from ResourceManager (including builtin "Default")
+        self._combo.addItem("(Default)", userData="Default")
+
+        # Add named pipelines from ResourceManager.
         if self._resources is not None:
             pipeline_names = self._resources.list_pipeline_names()
             for name in pipeline_names:

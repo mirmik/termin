@@ -365,12 +365,12 @@ class RenderTargetInspectorTcgui(VStack):
 
         if text == "(Default)":
             try:
-                from termin.visualization.core.viewport import make_default_pipeline
-                self._render_target.pipeline = make_default_pipeline()
+                from termin.engine import RenderingManager
+                self._render_target.pipeline = RenderingManager.instance().create_pipeline("Default")
                 self._refresh_pipeline_params()
                 self._emit_changed()
             except Exception as e:
-                log.error(f"[RenderTargetInspector] make_default_pipeline failed: {e}")
+                log.error(f"[RenderTargetInspector] create Default pipeline failed: {e}")
             return
 
         pipeline = self._rm.get_pipeline(text)

@@ -49,6 +49,61 @@ TEST_CASE("Graph compiler maps RenderTarget output node to viewport OUTPUT")
     CHECK(naming.socket_names["0"]["output_res"] == "OUTPUT");
 }
 
+TEST_CASE("Graph compiler preserves FBO resource params on generated names")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "DepthPass", "x": 81.0, "y": -17.0 },
+    {
+      "type": "FBO",
+      "x": -263.0,
+      "y": -78.0,
+      "node_type": "resource",
+      "params": {
+        "format": "r32f",
+        "samples": 1,
+        "size_mode": "fixed",
+        "width": 1024,
+        "height": 1024
+      }
+    }
+  ],
+  "connections": [
+    { "from_node": 1, "from_socket": "fbo", "to_node": 0, "to_socket": "input_res" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+
+    const ResourceSpec* fbo_spec = nullptr;
+    for (size_t i = 0; i < pipeline->spec_count(); i++) {
+        const ResourceSpec* spec = pipeline->get_spec_at(i);
+        REQUIRE(spec != nullptr);
+        if (spec->resource == "fbo_1") {
+            fbo_spec = spec;
+            break;
+        }
+    }
+
+    REQUIRE(fbo_spec != nullptr);
+    REQUIRE(fbo_spec->format.has_value());
+    CHECK(*fbo_spec->format == "r32f");
+    REQUIRE(fbo_spec->size.has_value());
+    CHECK(fbo_spec->size->first == 1024);
+    CHECK(fbo_spec->size->second == 1024);
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
 TEST_CASE("Graph compiler synthesizes blit for External RT to RenderTarget")
 {
     const char* json = R"JSON(
