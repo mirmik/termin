@@ -703,8 +703,8 @@ class EditorWindowTcgui:
             self._editor_display = display
 
             if self._viewport_widget is not None:
-                self._viewport_widget.set_surface(self._fbo_surface, display)
                 self._viewport_widget.on_before_resize = self._on_before_viewport_resize
+                self._viewport_widget.set_surface(self._fbo_surface, display)
 
         except Exception as e:
             log.error(f"EditorWindowTcgui: failed to create editor display: {e}")

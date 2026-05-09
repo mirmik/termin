@@ -53,6 +53,28 @@ class Viewport3D(Widget):
         self._surface = surface
         if display is not None:
             self._connect_input(display)
+        self._sync_surface_size()
+
+    def _sync_surface_size(self) -> None:
+        """Resize a newly attached surface to the widget's current layout size.
+
+        The tcgui editor can lay out and first-present the widget before
+        FBOSurface exists. In that case later layout passes see unchanged
+        widget dimensions and do not call resize(), leaving the surface at
+        its constructor fallback size until the user manually resizes a panel.
+        """
+        if self._surface is None:
+            return
+        new_w = int(self.width)
+        new_h = int(self.height)
+        if new_w <= 0 or new_h <= 0:
+            return
+        old_w, old_h = self._surface.framebuffer_size()
+        if (new_w, new_h) == (old_w, old_h):
+            return
+        if self.on_before_resize is not None:
+            self.on_before_resize(new_w, new_h)
+        self._surface.resize(new_w, new_h)
 
     def _connect_input(self, display) -> None:
         """Получить input_manager_ptr от Display."""
