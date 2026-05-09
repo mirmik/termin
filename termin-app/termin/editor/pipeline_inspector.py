@@ -39,6 +39,18 @@ if TYPE_CHECKING:
     from termin.visualization.render.postprocess import PostProcessPass, PostEffect
 
 
+_FBO_FORMAT_VALUES = ["render_target", "rgba8", "rgba16f", "rgba32f", "r8", "r16f", "r32f"]
+_FBO_FORMAT_LABELS = [
+    "As Output RenderTarget",
+    "rgba8",
+    "rgba16f (HDR)",
+    "rgba32f (HDR High Precision)",
+    "r8 (Single Channel 8-bit)",
+    "r16f (Single Channel Float)",
+    "r32f (Single Channel High Precision)",
+]
+
+
 class PipelineInspector(QWidget):
     """
     Inspector for RenderPipeline.
@@ -318,14 +330,7 @@ class PipelineInspector(QWidget):
         format_layout = QHBoxLayout()
         format_layout.addWidget(QLabel("Format:"))
         self._spec_format_combo = QComboBox()
-        self._spec_format_combo.addItems([
-            "rgba8 (Default)",
-            "rgba16f (HDR)",
-            "rgba32f (HDR High Precision)",
-            "r8 (Single Channel 8-bit)",
-            "r16f (Single Channel Float)",
-            "r32f (Single Channel High Precision)",
-        ])
+        self._spec_format_combo.addItems(_FBO_FORMAT_LABELS)
         self._spec_format_combo.currentIndexChanged.connect(self._on_spec_field_changed)
         format_layout.addWidget(self._spec_format_combo)
         format_layout.addStretch()
@@ -909,9 +914,10 @@ class PipelineInspector(QWidget):
         self._spec_samples_combo.setCurrentIndex(samples_idx)
 
         # Format
-        format_map = {"": 0, "rgba8": 0, "rgba16f": 1, "rgba32f": 2, "r8": 3, "r16f": 4, "r32f": 5}
-        format_val = spec.format if spec.format else ""
-        format_idx = format_map.get(format_val, 0)
+        format_val = spec.format if spec.format else "render_target"
+        format_idx = 0
+        if format_val in _FBO_FORMAT_VALUES:
+            format_idx = _FBO_FORMAT_VALUES.index(format_val)
         self._spec_format_combo.setCurrentIndex(format_idx)
 
         # Clear color
@@ -1014,10 +1020,11 @@ class PipelineInspector(QWidget):
             spec, "samples", samples_values[self._spec_samples_combo.currentIndex()]
         )
 
-        format_values = ["", "rgba16f", "rgba32f", "r8", "r16f", "r32f"]
-        self._ops.update_spec_field(
-            spec, "format", format_values[self._spec_format_combo.currentIndex()]
-        )
+        format_idx = self._spec_format_combo.currentIndex()
+        if 0 <= format_idx < len(_FBO_FORMAT_VALUES):
+            self._ops.update_spec_field(spec, "format", _FBO_FORMAT_VALUES[format_idx])
+        else:
+            log.error(f"[PipelineInspector] invalid resource spec format index: {format_idx}")
 
         item = self._specs_list.item(row)
         if item:

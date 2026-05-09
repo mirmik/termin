@@ -145,7 +145,7 @@ class PipelineOperations:
             )
             return None
         from termin.visualization.render.framegraph.resource_spec import ResourceSpec
-        spec = ResourceSpec(resource=name, resource_type="fbo")
+        spec = ResourceSpec(resource=name, resource_type="fbo", format="render_target")
         self._pipeline.pipeline_specs.append(spec)
         self.pipeline_changed.emit()
         return spec

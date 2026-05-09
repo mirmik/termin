@@ -31,6 +31,14 @@ _SOCKET_PARAM_NAMES = {
     "id_res",
     "normal_res",
 }
+_FBO_FORMAT_CHOICES = [
+    ("render_target", "As Output RenderTarget"),
+    ("rgba8", "RGBA8"),
+    ("rgba16f", "RGBA16F"),
+    ("rgba32f", "RGBA32F"),
+    ("r16f", "R16F"),
+    ("r32f", "R32F"),
+]
 
 
 def _default_for_param_kind(kind: str, choices) -> object:
@@ -88,7 +96,15 @@ def _add_node_param(
         "kind": kind,
     }
     if choices:
-        spec["items"] = [str(c[0]) if isinstance(c, tuple) and c else str(c) for c in choices]
+        items = []
+        for c in choices:
+            if isinstance(c, tuple) and c:
+                value = str(c[0])
+                label = str(c[1]) if len(c) > 1 else value
+                items.append({"value": value, "label": label})
+            else:
+                items.append(str(c))
+        spec["items"] = items
     if min_value is not None:
         spec["min"] = min_value
     if max_value is not None:
@@ -149,8 +165,7 @@ def _populate_pass_node_params(node, pass_class_name: str) -> None:
 def _populate_resource_node_params(node, graph_type: str) -> None:
     if graph_type == "Shadow Maps":
         return
-    _add_node_param(node, "format", "Format", "enum", "rgba8",
-                    [("rgba8", "RGBA8"), ("rgba16f", "RGBA16F"), ("rgba32f", "RGBA32F"), ("r16f", "R16F"), ("r32f", "R32F")])
+    _add_node_param(node, "format", "Format", "enum", "render_target", _FBO_FORMAT_CHOICES)
     _add_node_param(node, "samples", "MSAA", "enum", "1", [("1", "1"), ("2", "2"), ("4", "4"), ("8", "8")])
     _add_node_param(node, "filter", "Filter", "enum", "linear", [("linear", "Linear"), ("nearest", "Nearest")])
     _add_node_param(node, "size_mode", "Size", "enum", "viewport", [("viewport", "Viewport"), ("fixed", "Fixed")])

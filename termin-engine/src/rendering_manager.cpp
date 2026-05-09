@@ -259,6 +259,10 @@ static tc_pass* create_and_configure_pass(
     const char* pass_name,
     std::initializer_list<std::pair<const char*, const char*>> fields
 ) {
+    if (!tc_pass_registry_has(type_name)) {
+        tc_log(TC_LOG_WARN, "[make_default_pipeline] Pass type is not registered: '%s'", type_name);
+        return nullptr;
+    }
     tc_pass* pass = tc_pass_registry_create(type_name);
     if (!pass) {
         tc_log(TC_LOG_WARN, "[make_default_pipeline] Failed to create pass '%s'", type_name);
@@ -275,6 +279,7 @@ static tc_pass* create_and_configure_pass(
 
 tc_pipeline_handle RenderingManager::make_default_pipeline() {
     tc_pipeline_handle ph = tc_pipeline_create("Default");
+    RenderPipeline pipeline(ph);
 
     // 1. ShadowPass
     if (tc_pass* p = create_and_configure_pass("ShadowPass", "Shadow", {
@@ -332,6 +337,21 @@ tc_pipeline_handle RenderingManager::make_default_pipeline() {
             {"input_res", "color+widgets"}
         })) {
         tc_pipeline_add_pass(ph, p);
+    }
+
+    const char* color_resources[] = {
+        "empty",
+        "skybox",
+        "color_opaque",
+        "color",
+        "color_bloom",
+        "color+widgets",
+    };
+    for (const char* resource : color_resources) {
+        ResourceSpec spec;
+        spec.resource = resource;
+        spec.format = "render_target";
+        pipeline.add_spec(spec);
     }
 
     return ph;

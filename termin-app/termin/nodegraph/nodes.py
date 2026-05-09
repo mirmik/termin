@@ -80,8 +80,8 @@ def _create_fbo_node(title: str = "FBO") -> GraphNode:
         name="format",
         label="Format",
         param_type="choice",
-        default="rgba8",
-        choices=["rgba8", "rgba16f", "rgba32f", "r16f", "r32f"],
+        default="render_target",
+        choices=["render_target", "rgba8", "rgba16f", "rgba32f", "r16f", "r32f"],
     ))
 
     # MSAA samples

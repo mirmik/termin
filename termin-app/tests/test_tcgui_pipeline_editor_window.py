@@ -20,7 +20,7 @@ def test_pipeline_graph_load_populates_node_params_and_sockets():
     resource_node = graph.nodes["node_0"]
     pass_node = graph.nodes["node_1"]
 
-    assert resource_node.params["format"] == "rgba8"
+    assert resource_node.params["format"] == "render_target"
     assert resource_node.params["samples"] == "1"
     assert resource_node.params["has_depth"] is True
     assert [socket.name for socket in resource_node.outputs] == ["fbo"]
