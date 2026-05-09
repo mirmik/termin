@@ -60,6 +60,7 @@ class MenuBarController:
         # Game
         on_toggle_game_mode: Callable,
         on_build_project: Callable,
+        on_run_build: Callable,
         on_run_standalone: Callable,
         # Debug
         on_toggle_profiler: Callable,
@@ -125,6 +126,7 @@ class MenuBarController:
             on_show_agent_types=on_show_agent_types,
             on_toggle_game_mode=on_toggle_game_mode,
             on_build_project=on_build_project,
+            on_run_build=on_run_build,
             on_run_standalone=on_run_standalone,
             on_toggle_profiler=on_toggle_profiler,
             is_profiler_visible=is_profiler_visible,

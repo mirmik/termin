@@ -10,11 +10,13 @@ namespace termin {
 
 void bind_engine_core(nb::module_& m) {
     nb::class_<EngineCore>(m, "EngineCore")
-        // No __init__ - created in C++ only
+        .def(nb::init<>(),
+             "Create EngineCore. Python player uses this when it is not "
+             "started through a C++ entry point.")
 
         // Singleton access
         .def_static("instance", &EngineCore::instance, nb::rv_policy::reference,
-           "Get the EngineCore instance (created in C++)")
+           "Get the EngineCore instance")
 
         // Access to managers
         .def_prop_ro("scene_manager", [](EngineCore& self) -> SceneManager& {
