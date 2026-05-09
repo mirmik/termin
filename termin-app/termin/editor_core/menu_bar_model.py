@@ -48,6 +48,7 @@ def build_editor_menu_spec(
     on_show_agent_types: Callable[[], None],
     # Game
     on_toggle_game_mode: Callable[[], None],
+    on_build_project: Callable[[], None],
     on_run_standalone: Callable[[], None],
     # Debug
     on_toggle_profiler: Callable[[], None],
@@ -155,6 +156,7 @@ def build_editor_menu_spec(
                     "Play", on_toggle_game_mode, shortcut="F5",
                     handle_getter=set_play_handle,
                 ),
+                MenuItemSpec("Build Project...", on_build_project),
                 MenuItemSpec("Run Standalone...", on_run_standalone, shortcut="F6"),
             ],
         ),
