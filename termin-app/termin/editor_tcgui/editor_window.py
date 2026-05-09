@@ -745,6 +745,7 @@ class EditorWindowTcgui:
             on_pipeline_editor=self._show_pipeline_editor,
             on_show_agent_types=self._show_agent_types,
             on_toggle_game_mode=self._toggle_game_mode,
+            on_build_project=self._build_project,
             on_run_standalone=self._run_standalone,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_modules=self._toggle_modules,
@@ -1504,6 +1505,49 @@ class EditorWindowTcgui:
         except Exception as e:
             log.error(f"Failed to launch standalone: {e}")
             self._log_to_console(f"Error: {e}")
+
+    def _build_project(self) -> None:
+        if self._current_project_path is None:
+            self._log_to_console("No project open - cannot build.")
+            return
+
+        self._save_scene()
+
+        scene_name = self._editor_scene_name
+        scene_path = self.scene_manager.get_scene_path(scene_name) if scene_name else None
+        if scene_path is None:
+            self._log_to_console("No saved scene - cannot build.")
+            return
+
+        project_root = Path(self._current_project_path).resolve()
+        scene_path_obj = Path(scene_path).resolve()
+        try:
+            scene_rel_path = scene_path_obj.relative_to(project_root)
+        except ValueError:
+            self._log_to_console("Build entry scene must be inside the current project.")
+            return
+
+        output_dir = project_root / "dist" / project_root.name
+
+        try:
+            from termin.project_builder import build_project
+
+            result = build_project(
+                project_root=project_root,
+                entry_scene=scene_rel_path,
+                output_dir=output_dir,
+            )
+        except Exception as e:
+            log.error(f"Build failed: {e}")
+            self._log_to_console(f"Build failed: {e}")
+            return
+
+        resource_count = len(result.manifest.resources)
+        diagnostic_count = len(result.manifest.diagnostics)
+        self._log_to_console(f"Build complete: {result.build_json_path}")
+        self._log_to_console(f"Build manifest: {resource_count} resource(s), {diagnostic_count} diagnostic(s)")
+        for diagnostic in result.manifest.diagnostics:
+            self._log_to_console(f"Build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
 
     def _show_undo_stack_viewer(self) -> None:
         if self._ui is None:

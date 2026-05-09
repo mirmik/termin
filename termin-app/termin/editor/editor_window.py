@@ -480,6 +480,7 @@ class EditorWindow(QMainWindow):
             on_pipeline_editor=self._show_pipeline_editor,
             on_show_agent_types=self._show_agent_types_dialog,
             on_toggle_game_mode=self._mode_controller.toggle_game_mode,
+            on_build_project=self._build_project,
             on_run_standalone=self._run_standalone,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_modules=self._toggle_modules_panel,
@@ -1748,6 +1749,70 @@ class EditorWindow(QMainWindow):
                 self.scene_tree_controller.rebuild()
 
             self._request_viewport_update()
+
+    def _build_project(self) -> None:
+        """Build current project manifest and resource layout."""
+        from pathlib import Path
+
+        from PyQt6.QtWidgets import QMessageBox
+
+        project_path = self._get_project_path()
+        if project_path is None:
+            QMessageBox.warning(self, "No Project", "Please open a project first.")
+            return
+
+        if self._editor_scene_name is None:
+            QMessageBox.warning(self, "No Scene", "Please attach an editor scene first.")
+            return
+
+        scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
+        if scene_path is None:
+            QMessageBox.warning(self, "No Scene", "Please save the scene first.")
+            return
+
+        self._save_scene()
+
+        project_root = Path(project_path).resolve()
+        scene_path_obj = Path(scene_path).resolve()
+        try:
+            scene_name = scene_path_obj.relative_to(project_root)
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                "Scene Outside Project",
+                "Build entry scene must be inside the current project.",
+            )
+            return
+
+        output_dir = project_root / "dist" / project_root.name
+
+        try:
+            from termin.project_builder import build_project
+
+            result = build_project(
+                project_root=project_root,
+                entry_scene=scene_name,
+                output_dir=output_dir,
+            )
+        except Exception as e:
+            log.error(f"[EditorWindow._build_project] Build failed: {e}", exc_info=True)
+            QMessageBox.critical(self, "Build Failed", f"Build failed:\n{e}")
+            return
+
+        resource_count = len(result.manifest.resources)
+        diagnostic_count = len(result.manifest.diagnostics)
+        self._log_to_console(f"Build complete: {result.build_json_path}")
+        self._log_to_console(f"Build manifest: {resource_count} resource(s), {diagnostic_count} diagnostic(s)")
+        for diagnostic in result.manifest.diagnostics:
+            self._log_to_console(f"Build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
+
+        QMessageBox.information(
+            self,
+            "Build Complete",
+            f"Build complete:\n{result.build_json_path}\n\n"
+            f"Resources: {resource_count}\n"
+            f"Diagnostics: {diagnostic_count}",
+        )
 
     def _run_standalone(self) -> None:
         """Run project in standalone player window."""
