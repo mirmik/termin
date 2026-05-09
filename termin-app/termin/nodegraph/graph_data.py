@@ -145,9 +145,12 @@ class GraphData:
             elif node_type == "render_target_input":
                 outputs = [
                     SocketData(name="color", socket_type="fbo", is_input=False),
-                    SocketData(name="depth", socket_type="fbo", is_input=False),
                 ]
-            elif node_type in ("output", "pipeline_output"):
+            elif node_type == "pipeline_output":
+                inputs = [
+                    SocketData(name="color", socket_type="fbo", is_input=True),
+                ]
+            elif node_type == "output":
                 inputs = [
                     SocketData(name="color", socket_type="fbo", is_input=True),
                     SocketData(name="depth", socket_type="fbo", is_input=True),

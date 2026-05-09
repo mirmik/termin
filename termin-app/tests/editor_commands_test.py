@@ -95,6 +95,40 @@ class TestEditorUndoCommands(unittest.TestCase):
         stack.undo()
         self.assertEqual(child.transform.parent.entity.uuid, parent_uuid)
 
+    def test_delete_entity_command_restores_subtree_in_one_undo(self) -> None:
+        root = self.scene.create_entity("root")
+        child = self.scene.create_entity("child")
+        grandchild = self.scene.create_entity("grandchild")
+        child.transform.set_parent(root.transform)
+        grandchild.transform.set_parent(child.transform)
+
+        root_uuid = root.uuid
+        child_uuid = child.uuid
+        grandchild_uuid = grandchild.uuid
+
+        stack = UndoStack()
+        stack.push(DeleteEntityCommand(self.scene, root))
+
+        self.assertIsNone(self.scene.get_entity(root_uuid))
+        self.assertIsNone(self.scene.get_entity(child_uuid))
+        self.assertIsNone(self.scene.get_entity(grandchild_uuid))
+
+        stack.undo()
+
+        restored_root = self.scene.get_entity(root_uuid)
+        restored_child = self.scene.get_entity(child_uuid)
+        restored_grandchild = self.scene.get_entity(grandchild_uuid)
+        self.assertIsNotNone(restored_root)
+        self.assertIsNotNone(restored_child)
+        self.assertIsNotNone(restored_grandchild)
+        self.assertEqual(restored_child.transform.parent.entity.uuid, root_uuid)
+        self.assertEqual(restored_grandchild.transform.parent.entity.uuid, child_uuid)
+
+        stack.redo()
+        self.assertIsNone(self.scene.get_entity(root_uuid))
+        self.assertIsNone(self.scene.get_entity(child_uuid))
+        self.assertIsNone(self.scene.get_entity(grandchild_uuid))
+
 
 if __name__ == "__main__":
     unittest.main()

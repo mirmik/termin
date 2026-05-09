@@ -292,10 +292,8 @@ def _load_graph_from_pipeline_dict(data: dict):
             controller.add_output_socket(node.id, "fbo", "fbo")
         elif node_type == "render_target_input":
             controller.add_output_socket(node.id, "color", "fbo")
-            controller.add_output_socket(node.id, "depth", "fbo")
         elif node_type == "pipeline_output":
             controller.add_input_socket(node.id, "color", "fbo")
-            controller.add_input_socket(node.id, "depth", "fbo")
         elif node_type == "output":
             controller.add_input_socket(node.id, "color", "fbo")
             controller.add_input_socket(node.id, "depth", "fbo")
@@ -651,7 +649,6 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         node.data["dynamic_inputs"] = []
         node.data["explicit_size"] = False
         graph_view.controller.add_output_socket(node.id, "color", "fbo")
-        graph_view.controller.add_output_socket(node.id, "depth", "fbo")
         graph_view.refresh()
 
     def _create_pipeline_output_node(wx: float, wy: float) -> None:
@@ -662,7 +659,6 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         node.data["dynamic_inputs"] = []
         node.data["explicit_size"] = False
         graph_view.controller.add_input_socket(node.id, "color", "fbo")
-        graph_view.controller.add_input_socket(node.id, "depth", "fbo")
         graph_view.refresh()
 
     def _create_external_rt_node(wx: float, wy: float) -> None:

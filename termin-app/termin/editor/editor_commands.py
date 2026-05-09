@@ -137,8 +137,14 @@ def _deserialize_entity_snapshot(
     data: dict,
     parent_uuid: str | None,
     command_text: str,
+    *,
+    with_children: bool = False,
 ) -> Entity:
-    entity = Entity.deserialize(copy.deepcopy(data), context=None, scene=scene)
+    payload = copy.deepcopy(data)
+    if with_children:
+        entity = Entity.deserialize_with_children(payload, context=None, scene=scene)
+    else:
+        entity = Entity.deserialize(payload, context=None, scene=scene)
     if entity is None or not entity.valid():
         name = data.get("name", "entity")
         _logger.error("Failed to restore entity '%s' while applying undo command '%s'", name, command_text)
@@ -148,6 +154,15 @@ def _deserialize_entity_snapshot(
     if parent_transform is not None:
         entity.transform.set_parent(parent_transform)
     return entity
+
+
+def _remove_entity_tree(scene, entity: Entity) -> None:
+    if entity.transform is not None:
+        for child_transform in list(entity.transform.children):
+            child = child_transform.entity
+            if child is not None:
+                _remove_entity_tree(scene, child)
+    scene.remove(entity)
 
 
 class TransformEditCommand(UndoCommand):
@@ -485,7 +500,7 @@ class DeleteEntityCommand(UndoCommand):
             _logger.warning("DeleteEntityCommand.do: entity uuid=%s is already absent", self._entity_uuid)
             return
         self._serialized_data = _snapshot_entity(entity)
-        self._scene.remove(entity)
+        _remove_entity_tree(self._scene, entity)
         self._entity = None
 
     def undo(self) -> None:
@@ -494,6 +509,7 @@ class DeleteEntityCommand(UndoCommand):
             self._serialized_data,
             self._parent_uuid,
             self.text,
+            with_children=True,
         )
         self._entity_uuid = _entity_uuid(self._entity)
 

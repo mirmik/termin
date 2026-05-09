@@ -125,8 +125,7 @@ TEST_CASE("Graph compiler treats render target input as external resources")
   "connections": [
     { "from_node": 1, "from_socket": "fbo", "to_node": 2, "to_socket": "input_res" },
     { "from_node": 0, "from_socket": "color", "to_node": 2, "to_socket": "output_res_target" },
-    { "from_node": 2, "from_socket": "output_res", "to_node": 3, "to_socket": "color" },
-    { "from_node": 0, "from_socket": "depth", "to_node": 3, "to_socket": "depth" }
+    { "from_node": 2, "from_socket": "output_res", "to_node": 3, "to_socket": "color" }
   ],
   "viewport_frames": []
 }
@@ -138,15 +137,11 @@ TEST_CASE("Graph compiler treats render target input as external resources")
 
     REQUIRE(naming.socket_names.count("0") == 1u);
     CHECK(naming.socket_names["0"]["color"] == "RT_COLOR");
-    CHECK(naming.socket_names["0"]["depth"] == "RT_DEPTH");
     CHECK(naming.socket_names["2"]["input_res"] == "fbo_1");
     CHECK(naming.socket_names["2"]["output_res"] == "RT_COLOR");
     CHECK(naming.socket_names["3"]["color"] == "RT_COLOR");
-    CHECK(naming.socket_names["3"]["depth"] == "RT_DEPTH");
     CHECK(naming.resource_types["RT_COLOR"] == "external_color");
-    CHECK(naming.resource_types["RT_DEPTH"] == "external_depth");
     CHECK(naming.external_resources["RT_COLOR"] == "render_target_color");
-    CHECK(naming.external_resources["RT_DEPTH"] == "render_target_depth");
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
@@ -168,7 +163,6 @@ TEST_CASE("Graph compiler treats render target input as external resources")
         const ResourceSpec* spec = pipeline->get_spec_at(i);
         REQUIRE(spec != nullptr);
         CHECK(spec->resource != "RT_COLOR");
-        CHECK(spec->resource != "RT_DEPTH");
         if (spec->resource == "fbo_1") {
             found_fbo = true;
             REQUIRE(spec->format.has_value());
@@ -192,7 +186,6 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
     { "type": "PipelineOutput", "node_type": "pipeline_output", "x": 409.0, "y": 40.0 }
   ],
   "connections": [
-    { "from_node": 0, "from_socket": "depth", "to_node": 2, "to_socket": "depth" },
     { "from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "input_res" },
     { "from_node": 1, "from_socket": "output_res", "to_node": 2, "to_socket": "color" }
   ],
@@ -207,7 +200,6 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
     CHECK(naming.socket_names["1"]["input_res"] == "RT_COLOR");
     CHECK(naming.socket_names["1"]["output_res"] == "RT_COLOR");
     CHECK(naming.socket_names["2"]["color"] == "RT_COLOR");
-    CHECK(naming.socket_names["2"]["depth"] == "RT_DEPTH");
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
