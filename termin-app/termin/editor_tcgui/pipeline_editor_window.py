@@ -98,7 +98,7 @@ def _add_node_param(
     specs[name] = spec
 
 
-def _add_cpp_inspect_params(node, class_name: str, seen: set[str]) -> None:
+def _add_inspect_params(node, class_name: str, seen: set[str]) -> None:
     try:
         from termin._native.inspect import InspectRegistry
         registry = InspectRegistry.instance()
@@ -123,41 +123,17 @@ def _add_cpp_inspect_params(node, class_name: str, seen: set[str]) -> None:
             )
             seen.add(info.path)
     except Exception as e:
-        log.warn(f"[PipelineEditor] failed to collect C++ inspect params for {class_name}: {e}")
+        log.warn(f"[PipelineEditor] failed to collect inspect params for {class_name}: {e}")
 
 
-def _add_python_inspect_params(node, pass_class) -> None:
-    for klass in reversed(pass_class.__mro__):
-        if klass is object:
-            continue
-        fields = klass.inspect_fields
-        if not fields:
-            continue
-        for name, field in fields.items():
-            if name in node.params:
-                continue
-            if name in _SOCKET_PARAM_NAMES:
-                continue
-            if not field.is_inspectable:
-                continue
-            _add_node_param(
-                node,
-                name,
-                field.label,
-                field.kind,
-                _default_for_param_kind(field.kind, field.choices),
-                field.choices,
-                field.min,
-                field.max,
-                field.step,
-            )
+def _is_python_frame_pass(pass_class) -> bool:
+    from termin.visualization.render.framegraph.core import FramePass
+
+    return issubclass(pass_class, FramePass)
 
 
 def _populate_pass_node_params(node, pass_class_name: str) -> None:
     from termin.visualization.core.resources import ResourceManager
-
-    seen = set(node.params.keys())
-    _add_cpp_inspect_params(node, pass_class_name, seen)
 
     rm = ResourceManager.instance()
     rm.register_builtin_frame_passes()
@@ -165,7 +141,9 @@ def _populate_pass_node_params(node, pass_class_name: str) -> None:
     if cls is None:
         log.warn(f"[PipelineEditor] pass class not found for node params: {pass_class_name}")
         return
-    _add_python_inspect_params(node, cls)
+
+    seen = set(node.params.keys())
+    _add_inspect_params(node, pass_class_name, seen)
 
 
 def _populate_resource_node_params(node, graph_type: str) -> None:
@@ -218,6 +196,18 @@ def _extract_pass_socket_info(pass_class_name: str) -> tuple[list[tuple[str, str
     inputs: list[tuple[str, str]] = []
     outputs: list[tuple[str, str]] = []
     inplace_pairs: list[tuple[str, str]] = []
+
+    if not _is_python_frame_pass(cls):
+        class_inputs = cls.__dict__.get("node_inputs")
+        if class_inputs is not None:
+            inputs = list(class_inputs)
+        class_outputs = cls.__dict__.get("node_outputs")
+        if class_outputs is not None:
+            outputs = list(class_outputs)
+        class_pairs = cls.__dict__.get("node_inplace_pairs")
+        if class_pairs is not None:
+            inplace_pairs = list(class_pairs)
+        return inputs, outputs, inplace_pairs
 
     for klass in reversed(cls.__mro__):
         if klass is object:

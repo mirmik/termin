@@ -47,6 +47,25 @@ def test_legacy_pipeline_to_graph_populates_pass_params():
     assert node.params["include_internal_entities"] is False
 
 
+def test_pipeline_graph_load_handles_native_pass_metadata_without_python_fields():
+    graph = _load_graph_from_pipeline_dict(
+        {
+            "nodes": [
+                {"type": "ColorPass", "node_type": "pass"},
+            ],
+            "connections": [],
+        }
+    )
+
+    node = graph.nodes["node_0"]
+
+    assert [socket.name for socket in node.inputs] == ["input_res", "shadow_res"]
+    assert [socket.name for socket in node.outputs] == ["output_res"]
+    assert node.params["phase_mark"] == ""
+    assert node.params["sort_mode"] == "none"
+    assert node.params["clear_depth"] is False
+
+
 def test_node_graph_view_mounts_inline_param_widgets_when_enabled():
     graph = _load_graph_from_pipeline_dict(
         {

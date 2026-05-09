@@ -332,12 +332,14 @@ class ProjectBrowserTcgui:
             if path.suffix.lower() == ".glb":
                 items.append(MenuItem("Extract GLB...", on_click=lambda p=path: self._extract_glb(p)))
             items.append(MenuItem.sep())
+            items.append(MenuItem("Copy Absolute Path", on_click=lambda p=path: self._copy_absolute_path(p)))
             items.append(MenuItem("Show in Explorer", on_click=lambda p=path: self._reveal_in_explorer(p)))
             items.append(MenuItem("Delete", on_click=lambda p=path: self._delete_item(p)))
             items.append(MenuItem.sep())
         elif has_dir and path is not None:
             items.append(MenuItem("Open", on_click=lambda p=path: self._show_files(p)))
             items.append(MenuItem.sep())
+            items.append(MenuItem("Copy Absolute Path", on_click=lambda p=path: self._copy_absolute_path(p)))
             items.append(MenuItem("Show in Explorer", on_click=lambda p=path: self._reveal_in_explorer(p)))
             items.append(MenuItem("Delete", on_click=lambda p=path: self._delete_item(p)))
             items.append(MenuItem.sep())
@@ -371,6 +373,7 @@ class ProjectBrowserTcgui:
             items.append(MenuItem("Go Up", on_click=self._go_up))
             items.append(MenuItem("Go to Root", on_click=self._go_to_root))
             items.append(MenuItem.sep())
+        items.append(MenuItem("Copy Absolute Path", on_click=lambda p=directory: self._copy_absolute_path(p)))
         items.append(MenuItem("Show in Explorer", on_click=lambda p=directory: self._reveal_in_explorer(p)))
         items.append(MenuItem("Create: Directory...", on_click=lambda d=directory: self._create_directory_in(d)))
         items.append(MenuItem("Refresh", on_click=self.refresh))
@@ -396,6 +399,18 @@ class ProjectBrowserTcgui:
     def _open_file(self, file_path: Path) -> None:
         if self.on_file_activated is not None:
             self.on_file_activated(str(file_path))
+
+    def _copy_absolute_path(self, path: Path) -> None:
+        ui = self._file_list._ui
+        if ui is None:
+            ui = self._dir_tree._ui
+        if ui is None:
+            log.error("[ProjectBrowserTcgui] copy absolute path failed: UI is not available")
+            return
+        try:
+            ui.set_clipboard_text(str(path.resolve(strict=False)))
+        except Exception as e:
+            log.error(f"[ProjectBrowserTcgui] copy absolute path failed: {e}")
 
     def _reveal_in_explorer(self, path: Path) -> None:
         try:
