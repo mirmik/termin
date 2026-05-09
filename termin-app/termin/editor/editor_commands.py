@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import logging
 from typing import Any
 
 import numpy as np
@@ -10,6 +12,9 @@ from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
 from termin.entity import TcComponentRef
 from termin.editor.inspect_field import InspectField
+
+
+_logger = logging.getLogger(__name__)
 
 
 def _clone_pose(pose: GeneralPose3) -> GeneralPose3:
@@ -32,6 +37,74 @@ def _clone_value(value: Any) -> Any:
     if isinstance(value, np.ndarray):
         return value.copy()
     return value
+
+
+def _entity_is_valid(entity: Entity | None) -> bool:
+    return entity is not None and entity.valid()
+
+
+def _entity_uuid(entity: Entity | None) -> str | None:
+    if entity is None:
+        return None
+    uuid = entity.uuid
+    return uuid if uuid else None
+
+
+def _transform_entity(transform: GeneralTransform3 | None) -> Entity | None:
+    if transform is None:
+        return None
+    return transform.entity
+
+
+def _transform_entity_uuid(transform: GeneralTransform3 | None) -> str | None:
+    return _entity_uuid(_transform_entity(transform))
+
+
+def _snapshot_entity(entity: Entity) -> dict:
+    data = entity.serialize()
+    if data is None:
+        _logger.error("Failed to serialize entity '%s' for undo command", entity.name)
+        raise RuntimeError(f"Failed to serialize entity '{entity.name}' for undo command")
+    return copy.deepcopy(data)
+
+
+def _resolve_scene_entity(scene, uuid: str | None) -> Entity | None:
+    if uuid is None:
+        return None
+    try:
+        entity = scene.get_entity(uuid)
+    except Exception:
+        _logger.exception("Failed to resolve entity uuid=%s for undo command", uuid)
+        raise
+    if entity is None:
+        _logger.warning("Entity uuid=%s not found while applying undo command", uuid)
+        return None
+    return entity
+
+
+def _resolve_parent_transform(scene, parent_uuid: str | None) -> GeneralTransform3 | None:
+    parent = _resolve_scene_entity(scene, parent_uuid)
+    if parent is None:
+        return None
+    return parent.transform
+
+
+def _deserialize_entity_snapshot(
+    scene,
+    data: dict,
+    parent_uuid: str | None,
+    command_text: str,
+) -> Entity:
+    entity = Entity.deserialize(copy.deepcopy(data), context=None, scene=scene)
+    if entity is None or not entity.valid():
+        name = data.get("name", "entity")
+        _logger.error("Failed to restore entity '%s' while applying undo command '%s'", name, command_text)
+        raise RuntimeError(f"Failed to restore entity '{name}'")
+
+    parent_transform = _resolve_parent_transform(scene, parent_uuid)
+    if parent_transform is not None:
+        entity.transform.set_parent(parent_transform)
+    return entity
 
 
 class TransformEditCommand(UndoCommand):
@@ -223,28 +296,47 @@ class AddEntityCommand(UndoCommand):
         super().__init__(text)
         self._scene = scene
         self._entity = entity
-        self._parent_transform = parent_transform
+        self._entity_uuid = _entity_uuid(entity)
+        effective_parent_transform = parent_transform
+        if effective_parent_transform is None:
+            effective_parent_transform = entity.transform.parent
+        self._parent_uuid = _transform_entity_uuid(effective_parent_transform)
+        self._serialized_data = _snapshot_entity(entity)
 
     @property
-    def entity(self) -> Entity:
+    def entity(self) -> Entity | None:
         return self._entity
 
     @property
     def parent_entity(self) -> Entity | None:
-        if self._parent_transform is None:
-            return None
-        return self._parent_transform.entity if self._parent_transform is not None else None
+        return _resolve_scene_entity(self._scene, self._parent_uuid)
 
     def do(self) -> None:
-        if self._parent_transform is not None:
-            self._entity.transform.set_parent(self._parent_transform)
-
-        # scene.add() will migrate if needed, or just register components if already in pool
-        self._entity = self._scene.add(self._entity)
+        if _entity_is_valid(self._entity):
+            parent_transform = _resolve_parent_transform(self._scene, self._parent_uuid)
+            if parent_transform is not None:
+                self._entity.transform.set_parent(parent_transform)
+            self._entity = self._scene.add(self._entity)
+        else:
+            self._entity = _deserialize_entity_snapshot(
+                self._scene,
+                self._serialized_data,
+                self._parent_uuid,
+                self.text,
+            )
+        self._entity_uuid = _entity_uuid(self._entity)
 
     def undo(self) -> None:
-        self._scene.remove(self._entity)
-        
+        entity = self._entity
+        if not _entity_is_valid(entity):
+            entity = _resolve_scene_entity(self._scene, self._entity_uuid)
+        if entity is None:
+            _logger.warning("AddEntityCommand.undo: entity uuid=%s is already absent", self._entity_uuid)
+            return
+        self._serialized_data = _snapshot_entity(entity)
+        self._scene.remove(entity)
+        self._entity = None
+
 
 class DeleteEntityCommand(UndoCommand):
     """
@@ -262,26 +354,37 @@ class DeleteEntityCommand(UndoCommand):
         super().__init__(text)
         self._scene = scene
         self._entity = entity
-        self._parent_transform = entity.transform.parent
+        self._entity_uuid = _entity_uuid(entity)
+        self._parent_uuid = _transform_entity_uuid(entity.transform.parent)
+        self._serialized_data = _snapshot_entity(entity)
 
     @property
-    def entity(self) -> Entity:
+    def entity(self) -> Entity | None:
         return self._entity
 
     @property
     def parent_entity(self) -> Entity | None:
-        if self._parent_transform is None:
-            return None
-        return self._parent_transform.entity if self._parent_transform is not None else None
+        return _resolve_scene_entity(self._scene, self._parent_uuid)
 
     def do(self) -> None:
-        self._scene.remove(self._entity)
+        entity = self._entity
+        if not _entity_is_valid(entity):
+            entity = _resolve_scene_entity(self._scene, self._entity_uuid)
+        if entity is None:
+            _logger.warning("DeleteEntityCommand.do: entity uuid=%s is already absent", self._entity_uuid)
+            return
+        self._serialized_data = _snapshot_entity(entity)
+        self._scene.remove(entity)
+        self._entity = None
 
     def undo(self) -> None:
-        if self._parent_transform is not None:
-            self._entity.transform.set_parent(self._parent_transform)
-
-        self._scene.add(self._entity)
+        self._entity = _deserialize_entity_snapshot(
+            self._scene,
+            self._serialized_data,
+            self._parent_uuid,
+            self.text,
+        )
+        self._entity_uuid = _entity_uuid(self._entity)
 
 
 class ReparentEntityCommand(UndoCommand):
@@ -307,9 +410,10 @@ class ReparentEntityCommand(UndoCommand):
             new_name = new_parent.entity.name if new_parent and new_parent.entity else "root"
             text = f"Reparent '{entity.name}' from '{old_name}' to '{new_name}'"
         super().__init__(text)
+        self._scene = entity.scene
         self._entity = entity
-        self._old_parent = old_parent
-        self._new_parent = new_parent
+        self._old_parent_uuid = _transform_entity_uuid(old_parent)
+        self._new_parent_uuid = _transform_entity_uuid(new_parent)
         # Сохраняем local pose для undo
         self._old_local_pose = _clone_pose(entity.transform.local_pose())
 
@@ -321,13 +425,13 @@ class ReparentEntityCommand(UndoCommand):
         # Сохраняем global pose до смены родителя
         global_pose = self._entity.transform.global_pose()
         # Меняем родителя
-        self._entity.transform.set_parent(self._new_parent)
+        self._entity.transform.set_parent(_resolve_parent_transform(self._scene, self._new_parent_uuid))
         # Восстанавливаем global pose (пересчитывает local pose)
         self._entity.transform.relocate_global(global_pose)
 
     def undo(self) -> None:
         # Возвращаем родителя и восстанавливаем оригинальный local pose
-        self._entity.transform.set_parent(self._old_parent)
+        self._entity.transform.set_parent(_resolve_parent_transform(self._scene, self._old_parent_uuid))
         self._entity.transform.relocate(self._old_local_pose)
 
 

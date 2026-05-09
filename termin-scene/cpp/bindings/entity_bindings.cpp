@@ -535,6 +535,10 @@ void bind_entity_class(nb::module_& m) {
                 if (dict_data.contains("name")) {
                     name = nb::cast<std::string>(dict_data["name"]);
                 }
+                std::string uuid_str;
+                if (dict_data.contains("uuid")) {
+                    uuid_str = nb::cast<std::string>(dict_data["uuid"]);
+                }
 
                 tc_entity_pool* pool = nullptr;
                 TcSceneRef c_scene;
@@ -551,7 +555,9 @@ void bind_entity_class(nb::module_& m) {
                     tc::Log::error("Entity::deserialize: pool is null");
                     return nb::none();
                 }
-                Entity ent = Entity::create(pool, name);
+                Entity ent = uuid_str.empty()
+                    ? Entity::create(pool, name)
+                    : Entity::create_with_uuid(pool, name, uuid_str);
                 if (!ent.valid()) {
                     tc::Log::error("Entity::deserialize: failed to create entity '%s'", name.c_str());
                     return nb::none();
