@@ -60,6 +60,17 @@ inline RenderState convert_render_state(const tc_render_state& s) {
     return rs;
 }
 
+inline tgfx::BlendFactor convert_blend_factor_tgfx2(BlendFactor factor) {
+    switch (factor) {
+        case BlendFactor::Zero: return tgfx::BlendFactor::Zero;
+        case BlendFactor::One: return tgfx::BlendFactor::One;
+        case BlendFactor::OneMinusSrcAlpha: return tgfx::BlendFactor::OneMinusSrcAlpha;
+        case BlendFactor::SrcAlpha:
+        default:
+            return tgfx::BlendFactor::SrcAlpha;
+    }
+}
+
 // Get global position from Entity.
 inline Vec3 get_global_position(const Entity& entity) {
     return entity.transform().global_pose().lin;
@@ -586,6 +597,8 @@ void ColorPass::execute_with_data(
         ctx2->set_depth_test(state.depth_test);
         ctx2->set_depth_write(state.depth_write);
         ctx2->set_blend(state.blend);
+        ctx2->set_blend_func(convert_blend_factor_tgfx2(state.blend_src),
+                             convert_blend_factor_tgfx2(state.blend_dst));
         ctx2->set_cull(state.cull ? tgfx::CullMode::Back : tgfx::CullMode::None);
         ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
                                ? tgfx::PolygonMode::Line
