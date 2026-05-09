@@ -64,6 +64,7 @@ class PlayerRuntime:
         from tcbase import log
 
         self._configure_backend_default()
+        self._ensure_texture_registry()
 
         if not self._ensure_engine_core():
             return False
@@ -169,6 +170,12 @@ class PlayerRuntime:
         os.environ["TERMIN_BACKEND"] = "opengl"
         log.info("[PlayerRuntime] TERMIN_BACKEND not set; using opengl for standalone player")
 
+    def _ensure_texture_registry(self) -> None:
+        """Load the tgfx texture registry before app-native modules."""
+        from termin.texture import tc_texture_count
+
+        tc_texture_count()
+
     def _ensure_engine_core(self) -> bool:
         """Ensure EngineCore exists so RenderingManager has a real backend."""
         from tcbase import log
@@ -200,6 +207,7 @@ class PlayerRuntime:
         from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         rm.register_builtin_components()
+        rm.register_builtin_textures()
         rm.register_builtin_materials()
         rm.register_builtin_meshes()
         rm.register_builtin_frame_passes()
@@ -422,10 +430,15 @@ class PlayerRuntime:
         self.camera = CameraComponent()
         camera_entity.add_component(self.camera)
 
-        # Position camera
-        from termin.geombase import Vec3
-        camera_entity.transform.set_local_position(Vec3(0, 2, 5))
-        log.info("[PlayerRuntime] Created default camera at (0, 2, 5)")
+        # Position camera behind the scene and point it at the default content area.
+        from termin.geombase import Quat, Vec3
+        camera_position = Vec3(0, -6, 3)
+        camera_target = Vec3(0, 0, 1)
+        camera_entity.transform.set_local_position(camera_position)
+        camera_entity.transform.set_local_rotation(
+            Quat.look_rotation(camera_target - camera_position, Vec3(0, 0, 1))
+        )
+        log.info("[PlayerRuntime] Created default camera at (0, -6, 3), looking at (0, 0, 1)")
 
     def _setup_input(self):
         """Set up input handling."""

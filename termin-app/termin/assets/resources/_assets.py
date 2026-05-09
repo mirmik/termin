@@ -280,6 +280,11 @@ class AssetsMixin:
         from termin.assets.builtin_resources import register_builtin_materials
         register_builtin_materials(self)
 
+    def register_builtin_textures(self) -> None:
+        """Register builtin placeholder textures."""
+        from termin.assets.builtin_resources import register_builtin_textures
+        register_builtin_textures(self)
+
     def register_builtin_meshes(self) -> List[str]:
         """Register builtin primitive meshes."""
         from termin.assets.builtin_resources import register_builtin_meshes
