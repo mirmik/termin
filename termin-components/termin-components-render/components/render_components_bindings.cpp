@@ -403,6 +403,8 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("input_res", &DepthPass::input_res)
         .def_rw("output_res", &DepthPass::output_res)
         .def_rw("camera_name", &DepthPass::camera_name)
+        .def_rw("depth_encoding", &DepthPass::depth_encoding)
+        .def_rw("clear", &DepthPass::clear)
         .def("get_internal_symbols", &DepthPass::get_internal_symbols)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
@@ -410,15 +412,21 @@ NB_MODULE(_components_render_native, m) {
             std::string camera_name;
             std::string input_res = "empty_depth";
             std::string output_res = "depth";
+            std::string depth_encoding = "linear";
+            bool clear = true;
             if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
             if (data.contains("data")) {
                 nb::dict d = nb::cast<nb::dict>(data["data"]);
                 if (d.contains("camera_name")) camera_name = nb::cast<std::string>(d["camera_name"]);
                 if (d.contains("input_res")) input_res = nb::cast<std::string>(d["input_res"]);
                 if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
+                if (d.contains("depth_encoding")) depth_encoding = nb::cast<std::string>(d["depth_encoding"]);
+                if (d.contains("clear")) clear = nb::cast<bool>(d["clear"]);
             }
             auto* p = new DepthPass(input_res, output_res, pass_name);
             p->camera_name = camera_name;
+            p->depth_encoding = depth_encoding;
+            p->clear = clear;
             return init_pass_from_deserialize(p, "DepthPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &DepthPass::compute_reads)

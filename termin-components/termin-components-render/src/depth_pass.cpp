@@ -31,7 +31,8 @@ namespace {
 //   u_projection mat4   offset 64   (64 B)
 //   u_near       float  offset 128  (4 B)
 //   u_far        float  offset 132  (4 B)
-//   pad                 offset 136  (8 B to 16-byte boundary)
+//   u_depth_encoding    offset 136  (4 B)
+//   pad                 offset 140  (4 B to 16-byte boundary)
 // Total 144 bytes. Rounded up to 144 here; the GPU reads 16-byte
 // aligned chunks so we pad the tail.
 struct DepthPerFrameStd140 {
@@ -39,7 +40,8 @@ struct DepthPerFrameStd140 {
     float u_projection[16];
     float u_near;
     float u_far;
-    float _pad[2];
+    float u_depth_encoding;
+    float _pad;
 };
 static_assert(sizeof(DepthPerFrameStd140) == 144,
               "DepthPerFrameStd140 must be 144 bytes");
@@ -61,6 +63,7 @@ layout(std140, binding = 0) uniform PerFrame {
     mat4  u_projection;
     float u_near;
     float u_far;
+    float u_depth_encoding;
 };
 
 struct DepthPushData {
@@ -73,25 +76,53 @@ layout(std140, binding = 14) uniform DepthPushBlock { DepthPushData pc; };
 #endif
 
 layout(location = 0) out float v_linear_depth;
+layout(location = 1) out float v_perspective_depth;
+layout(location = 2) out float v_log_depth;
 
 void main() {
     vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
     vec4 view_pos  = u_view * world_pos;
 
-    float y = view_pos.y;
-    float depth = (y - u_near) / (u_far - u_near);
+    float view_depth = view_pos.y;
+    float depth = (view_depth - u_near) / (u_far - u_near);
+
+    vec4 clip_pos = u_projection * view_pos;
+    float ndc_depth = clip_pos.z / max(abs(clip_pos.w), 1e-6);
+    float perspective_depth = ndc_depth;
 
     v_linear_depth = depth;
-    gl_Position = u_projection * view_pos;
+    v_perspective_depth = perspective_depth;
+    v_log_depth = log2(max(view_depth, 0.0) + 1.0) / log2(max(u_far, 1e-6) + 1.0);
+    gl_Position = clip_pos;
 }
 )";
 
 constexpr const char* DEPTH_PASS_FRAG_UBO = R"(#version 450 core
 layout(location = 0) in float v_linear_depth;
+layout(location = 1) in float v_perspective_depth;
+layout(location = 2) in float v_log_depth;
 layout(location = 0) out vec4 FragColor;
 
+layout(std140, binding = 0) uniform PerFrame {
+    mat4  u_view;
+    mat4  u_projection;
+    float u_near;
+    float u_far;
+    float u_depth_encoding;
+};
+
 void main() {
-    float d = clamp(v_linear_depth, 0.0, 1.0);
+    int mode = int(u_depth_encoding + 0.5);
+    float d = v_linear_depth;
+    if (mode == 2 || mode == 3) {
+        d = v_perspective_depth;
+    } else if (mode == 4 || mode == 5) {
+        d = v_log_depth;
+    }
+    d = clamp(d, 0.0, 1.0);
+    if (mode == 1 || mode == 3 || mode == 5) {
+        d = 1.0 - d;
+    }
     FragColor = vec4(d, d, d, 1.0);
 }
 )";
@@ -137,8 +168,7 @@ out vec4 FragColor;
 
 void main() {
     float d = texture(u_depth_tex, vUV).r;
-    float visible = pow(clamp(1.0 - d, 0.0, 1.0), 0.25);
-    FragColor = vec4(vec3(visible), 1.0);
+    FragColor = vec4(vec3(d), 1.0);
 }
 )";
 
@@ -152,6 +182,26 @@ void main() {
     gl_FragDepth = clamp(d, 0.0, 1.0);
 }
 )";
+
+float depth_encoding_mode(const std::string& encoding) {
+    if (encoding == "linear") return 0.0f;
+    if (encoding == "linear_inverse") return 1.0f;
+    if (encoding == "perspective") return 2.0f;
+    if (encoding == "perspective_inverse") return 3.0f;
+    if (encoding == "logarithmic") return 4.0f;
+    if (encoding == "logarithmic_inverse") return 5.0f;
+    tc::Log::warn(
+        "DepthPass: unknown depth_encoding '%s', using 'linear'",
+        encoding.c_str()
+    );
+    return 0.0f;
+}
+
+bool depth_encoding_is_inverse(const std::string& encoding) {
+    return encoding == "linear_inverse" ||
+           encoding == "perspective_inverse" ||
+           encoding == "logarithmic_inverse";
+}
 
 } // anonymous namespace
 
@@ -167,19 +217,27 @@ uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform float u_near;
 uniform float u_far;
+uniform float u_depth_encoding;
 
 out float v_linear_depth;
+out float v_perspective_depth;
+out float v_log_depth;
 
 void main()
 {
     vec4 world_pos = u_model * vec4(a_position, 1.0);
     vec4 view_pos  = u_view * world_pos;
 
-    float y = view_pos.y;
-    float depth = (y - u_near) / (u_far - u_near);
+    float view_depth = view_pos.y;
+    float depth = (view_depth - u_near) / (u_far - u_near);
+
+    vec4 clip_pos = u_projection * view_pos;
+    float ndc_depth = clip_pos.z / max(abs(clip_pos.w), 1e-6);
 
     v_linear_depth = depth;
-    gl_Position = u_projection * view_pos;
+    v_perspective_depth = ndc_depth;
+    v_log_depth = log2(max(view_depth, 0.0) + 1.0) / log2(max(u_far, 1e-6) + 1.0);
+    gl_Position = clip_pos;
 }
 )";
 
@@ -187,11 +245,25 @@ const char* DEPTH_PASS_FRAG = R"(
 #version 330 core
 
 in float v_linear_depth;
+in float v_perspective_depth;
+in float v_log_depth;
 out vec4 FragColor;
+
+uniform float u_depth_encoding;
 
 void main()
 {
-    float d = clamp(v_linear_depth, 0.0, 1.0);
+    int mode = int(u_depth_encoding + 0.5);
+    float d = v_linear_depth;
+    if (mode == 2 || mode == 3) {
+        d = v_perspective_depth;
+    } else if (mode == 4 || mode == 5) {
+        d = v_log_depth;
+    }
+    d = clamp(d, 0.0, 1.0);
+    if (mode == 1 || mode == 3 || mode == 5) {
+        d = 1.0 - d;
+    }
     FragColor = vec4(d, d, d, 1.0);
 }
 )";
@@ -203,7 +275,7 @@ void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
         depth_shader_handle_ = tc_shader_register_static(
             DEPTH_PASS_VERT_UBO, DEPTH_PASS_FRAG_UBO,
-            nullptr, "DepthEngineVSFS");
+            nullptr, "DepthEngineVSFS_Encoding");
     }
 
 }
@@ -214,6 +286,11 @@ void DepthPass::release_tgfx2_resources() {
     // pass teardown so the compiled VkShaderModule stays cached on the
     // tc_gpu_slot across Play/Stop. See tc_shader_register_static docs.
     device2_ = nullptr;
+}
+
+std::array<float, 4> DepthPass::clear_color() const {
+    float far = depth_encoding_is_inverse(depth_encoding) ? 0.0f : 1.0f;
+    return {far, far, far, 1.0f};
 }
 
 // ----------------------------------------------------------------------------
@@ -270,7 +347,7 @@ void DepthPass::execute_with_data_tgfx2(
     auto cc = clear_color();
     float clear_rgba[4] = {cc[0], cc[1], cc[2], cc[3]};
 
-    ctx.ctx2->begin_pass(color_tex2, depth_tex2, clear_rgba, 1.0f, true);
+    ctx.ctx2->begin_pass(color_tex2, depth_tex2, clear_rgba, 1.0f, clear);
     ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
     ctx.ctx2->set_depth_test(true);
     ctx.ctx2->set_depth_write(true);
@@ -301,6 +378,7 @@ void DepthPass::execute_with_data_tgfx2(
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     per_frame.u_near = near_plane;
     per_frame.u_far = far_plane;
+    per_frame.u_depth_encoding = depth_encoding_mode(depth_encoding);
     ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
 
     const std::string& debug_symbol = get_debug_internal_point();

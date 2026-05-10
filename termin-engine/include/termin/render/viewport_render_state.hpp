@@ -112,7 +112,9 @@ public:
         depth_desc.height = static_cast<uint32_t>(height);
         depth_desc.format = depth_format;
         depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment |
-                           tgfx::TextureUsage::Sampled;
+                           tgfx::TextureUsage::Sampled |
+                           tgfx::TextureUsage::CopySrc |
+                           tgfx::TextureUsage::CopyDst;
         output_depth_tex = device.create_texture(depth_desc);
 
         output_width = width;

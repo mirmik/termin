@@ -29,18 +29,25 @@ class FrameDebuggerPass(RenderFramePass):
     def __init__(
         self,
         get_source_res: Callable[[], str | None] | None = None,
+        get_source_type: Callable[[], str | None] | None = None,
         pass_name: str = "FrameDebugger",
     ):
         super().__init__(pass_name=pass_name)
         self._get_source_res = get_source_res
+        self._get_source_type = get_source_type
         self._current_src_name: str | None = None
 
         # FrameGraphCapture from debugger core (set via set_capture)
         self._capture = None
+        self._depth_capture = None
 
     def set_capture(self, capture) -> None:
         """Set FrameGraphCapture for blit during render."""
         self._capture = capture
+
+    def set_depth_capture(self, capture) -> None:
+        """Set secondary depth capture for FBO depth preview."""
+        self._depth_capture = capture
 
     def compute_reads(self) -> Set[str]:
         if self._get_source_res is None:
@@ -76,13 +83,45 @@ class FrameDebuggerPass(RenderFramePass):
             log.debug("[FrameDebuggerPass] execute: ctx.ctx2 is None — debugger is tgfx2-only")
             return
 
-        src_tex = ctx.tex2_reads.get(src_name)
+        depth_tex = ctx.tex2_depth_reads.get(src_name)
+        color_tex = ctx.tex2_reads.get(src_name)
+
+        source_type = self._get_source_type() if self._get_source_type is not None else None
+        explicit_depth_resource = (
+            source_type == "depth_texture"
+            or src_name.endswith(".depth")
+            or src_name == "RT_DEPTH"
+        )
+        if explicit_depth_resource:
+            src_tex = depth_tex
+            resource_kind = "depth"
+        else:
+            src_tex = color_tex
+            resource_kind = "color"
+            if not src_tex:
+                src_tex = depth_tex
+                resource_kind = "depth"
         if not src_tex:
-            log.debug(f"[FrameDebuggerPass] execute: resource '{src_name}' not in tex2_reads")
+            log.debug(
+                f"[FrameDebuggerPass] execute: resource '{src_name}' "
+                "not in tex2_reads/tex2_depth_reads"
+            )
             return
 
         px, py, pw, ph = ctx.rect
         self._capture.capture_direct_via_ctx2(
             ctx.ctx2, src_tex, pw, ph
         )
-        log.debug(f"[FrameDebuggerPass] execute: captured '{src_name}' {pw}x{ph}, has={self._capture.has_capture()}")
+        log.debug(
+            f"[FrameDebuggerPass] execute: captured {resource_kind} "
+            f"'{src_name}' {pw}x{ph}, has={self._capture.has_capture()}"
+        )
+
+        if self._depth_capture is None:
+            return
+        if explicit_depth_resource or not depth_tex or depth_tex == src_tex:
+            self._depth_capture.reset_capture()
+            return
+        self._depth_capture.capture_direct_via_ctx2(
+            ctx.ctx2, depth_tex, pw, ph
+        )

@@ -21,6 +21,7 @@ class _Pipeline:
         self.passes = []
         self.removed = []
         self.fbos = {}
+        self.pipeline_specs = []
 
     def remove_passes_by_name(self, name):
         self.removed.append(name)
@@ -42,14 +43,23 @@ class _Pass:
 class _Capture:
     def __init__(self):
         self.reset = False
+        self._has_capture = False
+        self.width = 0
+        self.height = 0
+        self.format = 14
+        self.is_depth = False
 
     def reset_capture(self):
         self.reset = True
+
+    def has_capture(self):
+        return self._has_capture
 
 
 class _Core:
     def __init__(self):
         self.capture = _Capture()
+        self.depth_capture = _Capture()
 
 
 class _Viewport:
@@ -109,122 +119,52 @@ def test_refresh_uses_debug_targets_not_viewport_list():
     assert model.get_current_pipeline() is pipeline
 
 
-def test_format_fbo_info_prints_pixel_format_names():
-    pipeline = _Pipeline("debug")
-    pipeline.fbos["debug_res"] = {
-        "width": 320,
-        "height": 180,
-        "color_format": 3,
-        "has_depth": True,
-        "depth_format": 13,
-        "samples": 1,
-        "color_native_handle": 42,
-    }
+def test_format_fbo_info_uses_color_capture_info_only():
+    core = _Core()
+    core.capture._has_capture = True
+    core.capture.width = 512
+    core.capture.height = 256
+    core.capture.format = 7
 
-    model = FramegraphDebuggerModel(None, _Core())
-    model._debug_source_res = "debug_res"
-    model._current_target = FramegraphDebugTarget(
-        source=object(),
-        label="Debug",
-        get_pipeline=lambda: pipeline,
-    )
-
-    text = model.format_fbo_info()
-
-    assert "fmt=rgba8" in text
-    assert "depth_fmt=depth32f" in text
-    assert "fmt=3" not in text
-    assert "depth_fmt=13" not in text
-
-
-def test_format_fbo_info_uses_target_output_resource_info():
-    pipeline = _Pipeline("debug")
-    pipeline.fbos["OUTPUT"] = {
-        "width": 1024,
-        "height": 1024,
-        "color_format": 8,
-        "has_depth": True,
-        "depth_format": 13,
-        "samples": 1,
-    }
-
-    model = FramegraphDebuggerModel(None, _Core())
-    model._debug_source_res = "OUTPUT"
-    model._current_target = FramegraphDebugTarget(
-        source=object(),
-        label="RenderTarget",
-        get_pipeline=lambda: pipeline,
-        get_resource_info=lambda resource: {
-            "width": 640,
-            "height": 360,
-            "color_format_name": "rgba16f",
-            "has_depth": True,
-            "depth_format_name": "depth32f",
-            "samples": 1,
-        } if resource == "OUTPUT" else None,
-    )
-
-    text = model.format_fbo_info()
-
-    assert "<b>OUTPUT</b>" in text
-    assert "Размер: 640×360" in text
-    assert "fmt=rgba16f" in text
-    assert "depth_fmt=depth32f" in text
-
-
-def test_format_fbo_info_uses_target_rt_color_resource_info():
-    pipeline = _Pipeline("debug")
-    pipeline.fbos["RT_COLOR"] = {
-        "width": 1024,
-        "height": 1024,
-        "color_format": 8,
-        "has_depth": False,
-        "samples": 1,
-    }
-
-    model = FramegraphDebuggerModel(None, _Core())
-    model._debug_source_res = "RT_COLOR"
-    model._current_target = FramegraphDebugTarget(
-        source=object(),
-        label="RenderTarget",
-        get_pipeline=lambda: pipeline,
-        get_resource_info=lambda resource: {
-            "width": 640,
-            "height": 360,
-            "color_format_name": "rgba16f",
-            "has_depth": True,
-            "depth_format_name": "depth32f",
-            "samples": 1,
-        } if resource == "RT_COLOR" else None,
-    )
-
-    text = model.format_fbo_info()
-
-    assert "<b>RT_COLOR</b>" in text
-    assert "Размер: 640×360" in text
-    assert "fmt=rgba16f" in text
-    assert "depth_fmt=depth32f" in text
-
-
-def test_format_fbo_info_uses_target_rt_depth_resource_info():
-    model = FramegraphDebuggerModel(None, _Core())
-    model._debug_source_res = "RT_DEPTH"
+    model = FramegraphDebuggerModel(None, core)
+    model._debug_source_res = "DepthToColorPass_5_output_res"
     model._current_target = FramegraphDebugTarget(
         source=object(),
         label="RenderTarget",
         get_pipeline=lambda: _Pipeline("debug"),
-        get_resource_info=lambda resource: {
-            "width": 640,
-            "height": 360,
-            "color_format_name": "depth32f",
-            "has_depth": False,
-            "samples": 1,
-        } if resource == "RT_DEPTH" else None,
     )
 
     text = model.format_fbo_info()
 
-    assert "<b>RT_DEPTH</b>" in text
-    assert "Размер: 640×360" in text
+    assert "<b>DepthToColorPass_5_output_res</b>" in text
+    assert "Тип: color_texture" in text
+    assert "Размер: 512×256" in text
+    assert "fmt=rgba16f" in text
+
+
+def test_format_fbo_info_marks_depth_capture():
+    core = _Core()
+    core.capture._has_capture = True
+    core.capture.width = 1024
+    core.capture.height = 512
+    core.capture.format = 13
+    core.capture.is_depth = True
+
+    model = FramegraphDebuggerModel(None, core)
+    model._debug_source_res = "RT_COLOR.depth"
+
+    text = model.format_fbo_info()
+
+    assert "<b>RT_COLOR.depth</b>" in text
+    assert "Тип: depth_texture" in text
+    assert "Размер: 1024×512" in text
     assert "fmt=depth32f" in text
-    assert "depth_fmt=" not in text
+
+
+def test_format_fbo_info_reports_missing_capture():
+    model = FramegraphDebuggerModel(None, _Core())
+    model._debug_source_res = "DepthToColorPass_5_output_res"
+
+    text = model.format_fbo_info()
+
+    assert text == "Ресурс 'DepthToColorPass_5_output_res': capture ещё не получен"

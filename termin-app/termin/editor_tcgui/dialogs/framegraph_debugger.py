@@ -29,6 +29,7 @@ class CapturePreviewWidget(Widget):
     def __init__(self) -> None:
         super().__init__()
         self._core = None
+        self._capture = None
         self._fbo_surface = None
         self.channel_mode: int = 0
         self.highlight_hdr: bool = False
@@ -39,20 +40,24 @@ class CapturePreviewWidget(Widget):
                            (0.08, 0.08, 0.08, 1.0))
         if not self.has_content or self._core is None:
             return
-        capture_tex = self._core.capture_tex
+        capture = self._capture
+        if capture is None:
+            return
+        capture_tex = capture.capture_tex
         if not capture_tex:
             return
-        tex_w = int(self._core.capture.width)
-        tex_h = int(self._core.capture.height)
+        tex_w = int(capture.width)
+        tex_h = int(capture.height)
         if tex_w == 0 or tex_h == 0:
             return
+        is_depth = bool(capture.is_depth)
         renderer.draw_texture(
             self.x, self.y, self.width, self.height,
             handle=capture_tex,
             tex_w=tex_w,
             tex_h=tex_h,
-            channel_mode=self.channel_mode,
-            highlight_hdr=self.highlight_hdr,
+            channel_mode=5 if is_depth else self.channel_mode,
+            highlight_hdr=False if is_depth else self.highlight_hdr,
         )
 
 
@@ -94,6 +99,7 @@ class _FramegraphDebuggerHandle:
         self._pass_json: TextArea | None = None
 
         self._preview: CapturePreviewWidget | None = None
+        self._depth_preview: CapturePreviewWidget | None = None
 
         self._inside_panel: VStack | None = None
         self._between_panel: VStack | None = None
@@ -183,11 +189,18 @@ class _FramegraphDebuggerHandle:
     def _on_capture_updated(self, _model) -> None:
         if self._preview is not None:
             self._preview.has_content = True
+        if self._depth_preview is not None:
+            self._depth_preview.has_content = bool(
+                self._depth_preview._capture.has_capture()
+            )
 
     def _on_preview_params_changed(self, _model) -> None:
         if self._preview is not None:
             self._preview.channel_mode = self.model.channel_mode
             self._preview.highlight_hdr = self.model.highlight_hdr
+        if self._depth_preview is not None:
+            self._depth_preview.channel_mode = 5
+            self._depth_preview.highlight_hdr = False
 
     def _on_hdr_stats_changed(self, text: str) -> None:
         if self._hdr_stats_label is not None:
@@ -501,6 +514,7 @@ def show_framegraph_debugger(
     preview = CapturePreviewWidget()
     preview.stretch = True
     preview._core = core
+    preview._capture = core.capture
     preview._fbo_surface = fbo_surface
     handle._preview = preview
     viewer_area.add_child(preview)
@@ -519,6 +533,13 @@ def show_framegraph_debugger(
     status_label = Label(); status_label.text = ""
     handle._status_label = status_label
     depth_panel.add_child(status_label)
+    depth_preview = CapturePreviewWidget()
+    depth_preview.preferred_height = px(180)
+    depth_preview.stretch = True
+    depth_preview._core = core
+    depth_preview._capture = core.depth_capture
+    handle._depth_preview = depth_preview
+    depth_panel.add_child(depth_preview)
     viewer_area.add_child(depth_panel)
     content.add_child(viewer_area)
 
@@ -577,7 +598,7 @@ def show_framegraph_debugger(
         model.analyze_hdr()
 
     def on_refresh_depth():
-        capture_tex = core.capture_tex
+        capture_tex = core.depth_capture.capture_tex
         if not capture_tex:
             status_label.text = "No capture for depth"
             return

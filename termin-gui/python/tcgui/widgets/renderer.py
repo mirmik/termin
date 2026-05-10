@@ -87,7 +87,8 @@ void main() {
     if (pc.u_texture_mode == 2) {
         vec4 c = texture(u_texture, v_uv);
         vec3 rgb;
-        if (pc.u_channel_mode == 1)      rgb = vec3(c.r);
+        if (pc.u_channel_mode == 5)      rgb = vec3(pow(clamp(1.0 - c.r, 0.0, 1.0), 0.25));
+        else if (pc.u_channel_mode == 1) rgb = vec3(c.r);
         else if (pc.u_channel_mode == 2) rgb = vec3(c.g);
         else if (pc.u_channel_mode == 3) rgb = vec3(c.b);
         else if (pc.u_channel_mode == 4) rgb = vec3(c.a);
