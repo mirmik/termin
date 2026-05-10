@@ -208,6 +208,7 @@ class VoxelDisplayComponent(DrawableComponent):
 
             shader = voxel_display_shader()
             self._material = Material(
+                name="VoxelDisplayMaterial",
                 shader=shader,
                 color=self.color_below,
                 phase_mark="transparent",
@@ -428,4 +429,3 @@ class VoxelDisplayComponent(DrawableComponent):
             except Exception as e:
                 log.error(f"[VoxelDisplayComponent.update] error rebuilding mesh: {e}")
             self._needs_rebuild = False
-

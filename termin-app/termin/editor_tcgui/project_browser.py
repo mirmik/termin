@@ -334,6 +334,7 @@ class ProjectBrowserTcgui:
             items.append(MenuItem.sep())
             items.append(MenuItem("Copy Absolute Path", on_click=lambda p=path: self._copy_absolute_path(p)))
             items.append(MenuItem("Show in Explorer", on_click=lambda p=path: self._reveal_in_explorer(p)))
+            items.append(MenuItem("Rename...", on_click=lambda p=path: self._rename_item(p)))
             items.append(MenuItem("Delete", on_click=lambda p=path: self._delete_item(p)))
             items.append(MenuItem.sep())
         elif has_dir and path is not None:
@@ -431,6 +432,9 @@ class ProjectBrowserTcgui:
 
     def _delete_item(self, path: Path) -> None:
         self._ops.delete_item(path, self.refresh)
+
+    def _rename_item(self, path: Path) -> None:
+        self._ops.rename_item(path, self.refresh)
 
     def _extract_fbx(self, fbx_path: Path) -> None:
         self._ops.extract_fbx(fbx_path, self.refresh)

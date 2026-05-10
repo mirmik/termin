@@ -102,6 +102,7 @@ class VoxelVisualizer:
         self._mesh: Optional[TcMesh] = None
         self._renderer: Optional[MeshRenderer] = None
         self._material = Material(
+            name="VoxelVisualizerMaterial",
             color=(0.2, 0.6, 1.0, 0.7),
             phase_mark="editor",
         )
@@ -181,6 +182,10 @@ class VoxelVisualizer:
 
     def set_color(self, color: tuple[float, float, float, float]) -> None:
         """Установить цвет визуализации."""
-        self._material = Material(color=color, phase_mark="editor")
+        self._material = Material(
+            name="VoxelVisualizerMaterial",
+            color=color,
+            phase_mark="editor",
+        )
         if self._renderer is not None:
             self._renderer.material = self._material

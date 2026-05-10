@@ -276,9 +276,8 @@ bool apply_material_phase_ubo(
     // tgfx2 texture and returns the cached handle — it MUST NOT be
     // destroyed (see release_texture_binding / wrap_tc_texture_as_tgfx2
     // contract). Sampler slots start at tex_slot_start and increment in
-    // declaration order; shader authors must keep their fragment sampler
-    // bindings in the same order as the .shader @property Texture
-    // entries.
+    // declaration order; shader_parser emits matching layout(binding=N)
+    // qualifiers for .shader @property Texture entries.
     std::vector<MaterialTextureBinding> textures;
     bool is_gl = device.backend_type() == tgfx::BackendType::OpenGL;
     textures.reserve(phase->texture_count);
