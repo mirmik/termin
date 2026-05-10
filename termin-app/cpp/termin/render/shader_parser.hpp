@@ -130,13 +130,16 @@ struct ShaderPhase {
     // Stages by name (vertex, fragment, geometry)
     std::unordered_map<std::string, ShaderStage> stages;
 
-    // Uniform properties for material inspector
+    // Editable uniform properties for material inspector.
     std::vector<MaterialProperty> uniforms;
 
+    // Plain GLSL material-block uniforms that are controlled by
+    // passes/controllers, not by the material inspector.
+    std::vector<MaterialProperty> material_uniforms;
+
     // std140 layout for the auto-generated material UBO. Empty unless the
-    // program has the `material_ubo` feature; in that case the parser
-    // populates this from the phase's scalar/vector @property entries and
-    // rewrites the stage sources to reference the block.
+    // parser sees scalar/vector @property or plain uniform entries; in that
+    // case it rewrites the stage sources to reference the generated block.
     MaterialUboLayout material_ubo_layout;
 
     ShaderPhase() = default;

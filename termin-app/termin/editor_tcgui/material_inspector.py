@@ -477,5 +477,18 @@ class MaterialInspectorTcgui(VStack):
             log.error(f"[MaterialInspectorTcgui] Failed to apply shader '{shader_name}': {e}")
 
     def _emit_changed(self) -> None:
+        self._save_material_asset()
         if self.on_changed is not None:
             self.on_changed()
+
+    def _save_material_asset(self) -> None:
+        if self._material is None:
+            return
+        material_name = self._rm.find_material_name(self._material)
+        if material_name is None:
+            return
+        asset = self._rm.get_material_asset(material_name)
+        if asset is None:
+            return
+        if not asset.save_to_file():
+            log.error(f"[MaterialInspectorTcgui] Failed to save material asset '{material_name}'")

@@ -98,6 +98,13 @@ public:
         const std::string& asset_uuid
     );
 
+    // Recompile scene pipelines mounted from the given scene-pipeline asset.
+    // Returns the number of attached scenes that were rebuilt.
+    size_t recreate_scene_pipelines_for_asset(
+        const std::string& asset_name,
+        const std::string& asset_uuid
+    );
+
     // Create default render pipeline (Shadow, Skybox, Color, Transparent, PostFX, UIWidgets, Present)
     static tc_pipeline_handle make_default_pipeline();
 

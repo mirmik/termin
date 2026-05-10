@@ -94,6 +94,14 @@ class ScenePipelineAsset(Asset):
                 result.append(slot or name or "unnamed")
         return result
 
+    def uses_material_names(self, material_names: set[str]) -> bool:
+        """True if this scene pipeline graph references any of material_names."""
+        if not self._loaded:
+            return False
+        from termin.assets.pipeline_dependencies import uses_material_names
+
+        return uses_material_names(self._template.graph_data, material_names)
+
     # --- Compilation ---
 
     def compile(self) -> "RenderPipeline | None":
@@ -173,6 +181,49 @@ class ScenePipelineAsset(Asset):
         self._template.name = self._name
         self._loaded = True
         self.mark_just_saved()
+
+    def reload(self) -> bool:
+        """Reload graph data from disk and recompile live scene pipelines."""
+        if self._source_path is None:
+            return False
+
+        try:
+            with open(self._source_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception:
+            log.error(f"[ScenePipelineAsset] Failed to reload {self._source_path}", exc_info=True)
+            return False
+
+        self.load_from_content(content)
+        self._version += 1
+        self._notify_rendering_manager_reloaded()
+        return True
+
+    def _notify_rendering_manager_reloaded(self) -> None:
+        try:
+            from termin.engine import RenderingManager
+        except Exception as e:
+            log.debug(
+                f"[ScenePipelineAsset] RenderingManager is not available; "
+                f"skipping live scene pipeline rebind for '{self._name}': {e}"
+            )
+            return
+
+        try:
+            rebound = RenderingManager.instance().recreate_scene_pipelines_for_asset(
+                self._name,
+                self.uuid,
+            )
+            if rebound:
+                log.info(
+                    f"[ScenePipelineAsset] Recompiled {rebound} scene(s) "
+                    f"after reloading scene pipeline '{self._name}'"
+                )
+        except Exception:
+            log.error(
+                f"[ScenePipelineAsset] Failed to recompile live scene pipelines for '{self._name}'",
+                exc_info=True,
+            )
 
     # --- Saving ---
 

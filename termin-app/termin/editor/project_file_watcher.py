@@ -444,11 +444,14 @@ class ProjectFileWatcher:
         """Process pending file changes. Call from main loop each frame."""
         if self._debounce_timer is not None and self._debounce_timer.is_alive():
             return  # Still debouncing
+
         with self._lock:
             if not self._pending_changes:
                 return
             pending = dict(self._pending_changes)
             self._pending_changes.clear()
+
+        for path, kind in pending.items():
             if kind == "deleted":
                 self._on_file_removed(path)
             elif kind == "created":

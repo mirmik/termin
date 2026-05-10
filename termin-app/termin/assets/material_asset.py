@@ -216,8 +216,10 @@ def _apply_uniform_defaults(phase, shader_phase, uniforms: dict):
     """Apply uniform defaults from shader phase and extra uniforms."""
     from termin.geombase import Vec3, Vec4
 
-    # Apply defaults from shader phase properties
-    for prop in shader_phase.uniforms:
+    shader_uniforms = list(shader_phase.uniforms) + list(shader_phase.material_uniforms)
+
+    # Apply defaults from shader phase properties and non-inspector uniforms
+    for prop in shader_uniforms:
         name = prop.name
         default = prop.default  # Note: binding exposes as 'default', not 'default_value'
 
@@ -254,7 +256,8 @@ def _apply_texture_defaults(phase, shader_phase, rm):
     """Apply default textures from shader phase properties."""
     from termin.assets.texture_handle import get_white_texture_handle, get_normal_texture_handle
 
-    for prop in shader_phase.uniforms:
+    shader_uniforms = list(shader_phase.uniforms) + list(shader_phase.material_uniforms)
+    for prop in shader_uniforms:
         if prop.property_type != "Texture":
             continue
 

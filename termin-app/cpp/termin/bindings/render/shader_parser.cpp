@@ -226,7 +226,8 @@ void bind_shader_parser(nb::module_& m) {
             std::optional<bool> gl_blend,
             std::optional<bool> gl_cull,
             const std::unordered_map<std::string, ShaderStage>& stages,
-            const std::vector<MaterialProperty>& uniforms
+            const std::vector<MaterialProperty>& uniforms,
+            const std::vector<MaterialProperty>& material_uniforms
         ) {
             new (self) ShaderPhase();
             self->phase_mark = phase_mark;
@@ -237,6 +238,7 @@ void bind_shader_parser(nb::module_& m) {
             self->gl_cull = gl_cull;
             self->stages = stages;
             self->uniforms = uniforms;
+            self->material_uniforms = material_uniforms;
         },
             nb::arg("phase_mark"),
             nb::arg("priority") = 0,
@@ -245,7 +247,8 @@ void bind_shader_parser(nb::module_& m) {
             nb::arg("gl_blend") = std::nullopt,
             nb::arg("gl_cull") = std::nullopt,
             nb::arg("stages") = std::unordered_map<std::string, ShaderStage>{},
-            nb::arg("uniforms") = std::vector<MaterialProperty>{}
+            nb::arg("uniforms") = std::vector<MaterialProperty>{},
+            nb::arg("material_uniforms") = std::vector<MaterialProperty>{}
         )
         .def_rw("phase_mark", &ShaderPhase::phase_mark)
         .def_rw("available_marks", &ShaderPhase::available_marks)
@@ -256,6 +259,7 @@ void bind_shader_parser(nb::module_& m) {
         .def_rw("gl_cull", &ShaderPhase::gl_cull)
         .def_rw("stages", &ShaderPhase::stages)
         .def_rw("uniforms", &ShaderPhase::uniforms)
+        .def_rw("material_uniforms", &ShaderPhase::material_uniforms)
         // std140 material UBO layout computed by the parser. Populated
         // when the phase has @property declarations (and the parser
         // synthesized a MaterialParams block for the phase). Empty

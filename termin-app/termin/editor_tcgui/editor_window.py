@@ -1852,7 +1852,7 @@ class EditorWindowTcgui:
 
     def poll_file_watcher(self) -> None:
         """Process pending file system changes and update debug panels. Call from main loop."""
-        # self._project_file_watcher.poll()  # DEBUG: disabled to isolate rendering bug
+        self._project_file_watcher.poll()
 
         now = time.monotonic()
         if self._profiler_visible and self._profiler_panel is not None:
