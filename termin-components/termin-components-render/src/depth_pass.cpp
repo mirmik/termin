@@ -96,8 +96,46 @@ void main() {
 }
 )";
 
-constexpr const char* DEPTH_ONLY_FRAG_UBO = R"(#version 450 core
+constexpr const char* DEPTH_ONLY_VERT_UBO = R"(#version 450 core
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_texcoord;
+
+layout(std140, binding = 0) uniform PerFrame {
+    mat4  u_view;
+    mat4  u_projection;
+    float u_near;
+    float u_far;
+};
+
+struct DepthPushData {
+    mat4 u_model;
+};
+#ifdef VULKAN
+layout(push_constant) uniform DepthPushBlock { DepthPushData pc; };
+#else
+layout(std140, binding = 14) uniform DepthPushBlock { DepthPushData pc; };
+#endif
+
+layout(location = 0) out float v_linear_depth;
+
 void main() {
+    vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
+    vec4 view_pos  = u_view * world_pos;
+
+    float y = view_pos.y;
+    float depth = (y - u_near) / (u_far - u_near);
+
+    v_linear_depth = depth;
+    gl_Position = u_projection * view_pos;
+}
+)";
+
+constexpr const char* DEPTH_ONLY_FRAG_UBO = R"(#version 450 core
+layout(location = 0) in float v_linear_depth;
+
+void main() {
+    gl_FragDepth = clamp(v_linear_depth, 0.0, 1.0);
 }
 )";
 
@@ -416,8 +454,8 @@ void DepthOnlyPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
     if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
         depth_shader_handle_ = tc_shader_register_static(
-            DEPTH_PASS_VERT_UBO, DEPTH_ONLY_FRAG_UBO,
-            nullptr, "DepthEngineVSFS");
+            DEPTH_ONLY_VERT_UBO, DEPTH_ONLY_FRAG_UBO,
+            nullptr, "DepthOnlyEngineVSFS");
     }
 }
 
