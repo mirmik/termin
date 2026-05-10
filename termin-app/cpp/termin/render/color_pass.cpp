@@ -643,11 +643,11 @@ void ColorPass::execute_with_data(
                                   static_cast<int>(MATERIAL_TEX_SLOT_BASE + i));
         }
 
-        // Shadow maps as sampled textures at SHADOW_SLOT_BASE.. paired
-        // with the depth-compare sampler (sampler2DShadow needs
-        // compareEnable=true on Vulkan; GL sets compare mode on the
-        // texture itself and ignores the sampler, so the shared
-        // sampler is backend-safe). Created lazily once per device.
+        // Shadow maps as elements of the sampler array at SHADOW_SLOT_BASE,
+        // paired with the depth-compare sampler (sampler2DShadow needs
+        // compareEnable=true on Vulkan; GL sets compare mode on the texture
+        // itself and ignores the sampler, so the shared sampler is
+        // backend-safe). Created lazily once per device.
         if (!shadow_sampler_) {
             tgfx::SamplerDesc sd;
             sd.min_filter = tgfx::FilterMode::Linear;
@@ -669,9 +669,12 @@ void ColorPass::execute_with_data(
         }
         for (size_t i = 0; i < shadow_tex2s.size() && i < MAX_SHADOW_MAPS; i++) {
             if (!shadow_tex2s[i]) continue;
-            ctx2->bind_sampled_texture(SHADOW_SLOT_BASE + static_cast<uint32_t>(i),
-                                       shadow_tex2s[i],
-                                       shadow_sampler_);
+            ctx2->bind_sampled_texture_array_element(
+                SHADOW_SLOT_BASE,
+                static_cast<uint32_t>(i),
+                shadow_tex2s[i],
+                shadow_sampler_
+            );
         }
 
         // --- Per-draw data ---

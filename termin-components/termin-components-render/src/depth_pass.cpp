@@ -104,7 +104,7 @@ void main() {
 constexpr const char* DEPTH_TO_COLOR_FRAG = R"(
 #version 330 core
 in vec2 vUV;
-layout(binding = 7) uniform sampler2D u_depth_tex;
+layout(binding = 9) uniform sampler2D u_depth_tex;
 out vec4 FragColor;
 
 void main() {
@@ -116,7 +116,7 @@ void main() {
 constexpr const char* COLOR_TO_DEPTH_FRAG = R"(
 #version 330 core
 in vec2 vUV;
-layout(binding = 7) uniform sampler2D u_color_tex;
+layout(binding = 9) uniform sampler2D u_color_tex;
 
 void main() {
     float d = texture(u_color_tex, vUV).r;
@@ -719,8 +719,8 @@ void DepthToColorPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_cull(tgfx::CullMode::None);
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs);
     ctx.ctx2->clear_resource_bindings();
-    ctx.ctx2->bind_sampled_texture(7, depth_tex);
-    ctx.ctx2->set_uniform_int("u_depth_tex", 7);
+    ctx.ctx2->bind_sampled_texture(9, depth_tex);
+    ctx.ctx2->set_uniform_int("u_depth_tex", 9);
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
 }
@@ -789,8 +789,8 @@ void ColorToDepthPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_cull(tgfx::CullMode::None);
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs);
     ctx.ctx2->clear_resource_bindings();
-    ctx.ctx2->bind_sampled_texture(7, color_tex);
-    ctx.ctx2->set_uniform_int("u_color_tex", 7);
+    ctx.ctx2->bind_sampled_texture(9, color_tex);
+    ctx.ctx2->set_uniform_int("u_color_tex", 9);
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
 }
