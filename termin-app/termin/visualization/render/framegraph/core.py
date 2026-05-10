@@ -373,8 +373,6 @@ class FrameGraph:
         writer_for: Dict[str, int] = {}          # ресурс -> индекс писателя
         readers_for: Dict[str, List[int]] = {}   # ресурс -> список индексов читателей
 
-        # для in-place логики
-        modified_inputs: Set[str] = set()        # какие имена уже были входом inplace-пасса
         canonical: Dict[str, str] = {}           # локальная карта канонических имён
 
         n = len(self._passes)
@@ -391,19 +389,12 @@ class FrameGraph:
             if inplace_aliases:
                 # Валидируем каждый алиас
                 for src, dst in inplace_aliases:
-                    if src not in p.reads:
-                        raise FrameGraphError(
-                            f"Inplace alias source {src!r} not in reads of pass {p.pass_name!r}"
-                        )
                     if dst not in p.writes:
                         raise FrameGraphError(
                             f"Inplace alias target {dst!r} not in writes of pass {p.pass_name!r}"
                         )
-                    if src in modified_inputs:
-                        raise FrameGraphError(
-                            f"Resource {src!r} is already modified by another inplace pass"
-                        )
-                    modified_inputs.add(src)
+                    canonical.setdefault(src, src)
+                    canonical.setdefault(dst, dst)
 
             # --- writer-ы ---
             for res in p.writes:
