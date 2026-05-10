@@ -56,9 +56,6 @@ void MaterialPass::remove_resource(const std::string& resource_name) {
 std::set<const char*> MaterialPass::compute_reads() const {
     std::set<const char*> reads;
 
-    if (!input_res.empty()) {
-        reads.insert(input_res.c_str());
-    }
     if (!output_res_target.empty()) {
         reads.insert(output_res_target.c_str());
     }
@@ -89,8 +86,7 @@ bool MaterialPass::set_graph_resource_input(
     if (socket_name.empty() || resource_name.empty()) {
         return false;
     }
-    if (socket_name == "input_res" || socket_name == "output_res" ||
-        socket_name == "output_res_target") {
+    if (socket_name == "output_res" || socket_name == "output_res_target") {
         return false;
     }
 
@@ -222,10 +218,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         }
     }
 
-    if (!input_res.empty()) {
-        bind_graph_texture(input_res, "u_input");
-    }
-
     // extra_resources: pull tgfx2 color textures directly from ctx.tex2_reads.
     for (const auto& [res_name, uniform_name] : extra_resources) {
         bind_graph_texture(res_name, uniform_name);
@@ -288,7 +280,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
 
 void MaterialPass::destroy() {
     material = TcMaterial();
-    input_res = "input";
     texture_resources.clear();
     extra_resources.clear();
 }
