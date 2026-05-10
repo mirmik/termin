@@ -751,6 +751,11 @@ class ProjectBrowser:
             reveal_action.triggered.connect(lambda: self._reveal_in_explorer(file_path))
             menu.addAction(reveal_action)
 
+            if file_path.is_file() and self._ops is not None:
+                rename_action = QAction("Rename...", self._file_list)
+                rename_action.triggered.connect(lambda: self._rename_item(file_path))
+                menu.addAction(rename_action)
+
             # Удалить
             delete_action = QAction("Delete", self._file_list)
             delete_action.triggered.connect(lambda: self._delete_item(file_path))
@@ -840,6 +845,10 @@ class ProjectBrowser:
     def _delete_item(self, path: Path) -> None:
         if self._ops is not None:
             self._ops.delete_item(path, self._refresh)
+
+    def _rename_item(self, path: Path) -> None:
+        if self._ops is not None:
+            self._ops.rename_item(path, self._refresh)
 
     def _extract_fbx(self, fbx_path: Path) -> None:
         """Extract FBX file contents (meshes, textures) to a directory."""

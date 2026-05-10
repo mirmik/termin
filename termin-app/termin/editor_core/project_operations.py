@@ -209,6 +209,61 @@ class ProjectOperations:
             return
         on_refresh()
 
+    def rename_item(self, path: Path, on_refresh: Callable[[], None]) -> None:
+        if not path.exists():
+            self._dialog.show_error("Error", f"Path '{path.name}' does not exist.")
+            return
+        self._dialog.show_input(
+            title="Rename",
+            message="New name:",
+            default=path.name,
+            on_result=lambda name: self._apply_rename(path, name, on_refresh),
+        )
+
+    def _apply_rename(
+        self,
+        path: Path,
+        name: str | None,
+        on_refresh: Callable[[], None],
+    ) -> None:
+        if not name:
+            return
+        clean = name.strip()
+        if not clean or clean == path.name:
+            return
+        if clean != Path(clean).name:
+            self._dialog.show_error("Error", "Name must not contain path separators.")
+            return
+
+        target = path.with_name(clean)
+        if target.exists():
+            self._dialog.show_error("Error", f"Path '{target.name}' already exists.")
+            return
+
+        meta_path = Path(str(path) + ".meta")
+        target_meta = Path(str(target) + ".meta")
+        rename_meta = path.is_file() and meta_path.exists()
+        if rename_meta and target_meta.exists():
+            self._dialog.show_error("Error", f"Meta file '{target_meta.name}' already exists.")
+            return
+
+        moved_path = False
+        try:
+            path.rename(target)
+            moved_path = True
+            if rename_meta:
+                meta_path.rename(target_meta)
+        except OSError as e:
+            if moved_path and target.exists() and not path.exists():
+                try:
+                    target.rename(path)
+                except OSError as rollback_error:
+                    log.error(f"[ProjectOperations] rename rollback failed: {rollback_error}")
+            log.error(f"[ProjectOperations] rename failed: {e}")
+            self._dialog.show_error("Error", f"Failed to rename: {e}")
+            return
+        on_refresh()
+
     # ------------------------------------------------------------------
     # Extractors (FBX / GLB)
     # ------------------------------------------------------------------

@@ -263,13 +263,14 @@ TEST_CASE("parse_shader_text: material_ubo feature rewrites stage sources")
     CHECK_EQ(phase.material_ubo_layout.entries[0].name, "u_strength");
     CHECK_EQ(phase.material_ubo_layout.entries[1].name, "u_tint");
 
-    // Fragment source must have the generated block and no raw decls for
-    // u_strength / u_tint, but sampler2D u_albedo survives.
+    // Fragment source must have the generated block, no raw decls for
+    // u_strength / u_tint, and an explicit material sampler binding.
     const auto& frag = phase.stages.at("fragment").source;
     CHECK(frag.find("layout(std140, binding = 1) uniform MaterialParams") != std::string::npos);
     CHECK(frag.find("uniform float u_strength;") == std::string::npos);
     CHECK(frag.find("uniform vec4 u_tint;") == std::string::npos);
-    CHECK(frag.find("sampler2D u_albedo;") != std::string::npos);
+    CHECK(frag.find("\nuniform sampler2D u_albedo;") == std::string::npos);
+    CHECK(frag.find("layout(binding = 4) uniform sampler2D u_albedo;") != std::string::npos);
 
     // The generated block must come after #version.
     size_t ver_pos = frag.find("#version");
@@ -302,7 +303,7 @@ TEST_CASE("parse_shader_text: scalar properties synthesize material UBO without 
     CHECK(frag.find("layout(std140, binding = 1) uniform MaterialParams") != std::string::npos);
 }
 
-TEST_CASE("parse_shader_text: phases without UBO properties leave stage body untouched except version")
+TEST_CASE("parse_shader_text: phases without UBO properties still bind material samplers")
 {
     const std::string shader_text =
         "@program TextureOnlyShader\n"
@@ -321,8 +322,34 @@ TEST_CASE("parse_shader_text: phases without UBO properties leave stage body unt
 
     const auto& frag = prog.phases[0].stages.at("fragment").source;
     CHECK(frag.find("#version 450 core") != std::string::npos);
-    CHECK(frag.find("uniform sampler2D u_albedo;") != std::string::npos);
+    CHECK(frag.find("\nuniform sampler2D u_albedo;") == std::string::npos);
+    CHECK(frag.find("layout(binding = 4) uniform sampler2D u_albedo;") != std::string::npos);
     CHECK(frag.find("MaterialParams") == std::string::npos);
+}
+
+TEST_CASE("parse_shader_text: texture properties keep declaration order in bindings")
+{
+    const std::string shader_text =
+        "@program TextureSlotsShader\n"
+        "@phase opaque\n"
+        "@property Texture2D u_input = \"white\"\n"
+        "@property Texture2D u_depth = \"white\"\n"
+        "@property Texture2D u_normal = \"normal\"\n"
+        "@stage fragment\n"
+        "#version 330 core\n"
+        "uniform sampler2D u_input;\n"
+        "uniform sampler2D u_depth;\n"
+        "uniform sampler2D u_normal;\n"
+        "out vec4 FragColor;\n"
+        "void main() { FragColor = texture(u_input, vec2(0)) + texture(u_depth, vec2(0)) + texture(u_normal, vec2(0)); }\n"
+        "@endstage\n"
+        "@endphase\n";
+
+    ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
+    const auto& frag = prog.phases[0].stages.at("fragment").source;
+    CHECK(frag.find("layout(binding = 4) uniform sampler2D u_input;") != std::string::npos);
+    CHECK(frag.find("layout(binding = 5) uniform sampler2D u_depth;") != std::string::npos);
+    CHECK(frag.find("layout(binding = 6) uniform sampler2D u_normal;") != std::string::npos);
 }
 
 // ============================================================================

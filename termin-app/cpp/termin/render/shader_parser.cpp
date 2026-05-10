@@ -19,6 +19,8 @@ namespace termin {
 
 namespace {
 
+constexpr uint32_t MATERIAL_TEXTURE_BINDING_BASE = 4;
+
 // Trim whitespace from both ends
 std::string trim(const std::string& s) {
     size_t start = s.find_first_not_of(" \t\r\n");
@@ -250,6 +252,78 @@ std::string synthesize_material_ubo_glsl(const MaterialUboLayout& layout) {
         out << "    " << t << " " << e.name << ";\n";
     }
     out << "};\n";
+    return out.str();
+}
+
+std::vector<std::string> collect_texture_properties(const std::vector<MaterialProperty>& properties) {
+    std::vector<std::string> names;
+    for (const auto& prop : properties) {
+        if (prop.property_type == "Texture" || prop.property_type == "Texture2D") {
+            names.push_back(prop.name);
+        }
+    }
+    return names;
+}
+
+std::string strip_sampler_decls(
+    const std::string& source,
+    const std::vector<std::string>& sampler_names
+) {
+    if (sampler_names.empty()) return source;
+
+    std::vector<std::regex> res;
+    res.reserve(sampler_names.size());
+    for (const auto& name : sampler_names) {
+        std::string pattern =
+            std::string("[ \\t]*(layout[ \\t]*\\([^)]*\\)[ \\t]*)?")
+            + "uniform[ \\t]+sampler[A-Za-z0-9_]*[ \\t]+"
+            + name + "[ \\t]*;[ \\t]*";
+        res.emplace_back(pattern);
+    }
+
+    std::string result;
+    size_t i = 0;
+    while (i < source.size()) {
+        size_t eol = source.find('\n', i);
+        size_t line_end = (eol == std::string::npos) ? source.size() : eol;
+        std::string line = source.substr(i, line_end - i);
+        bool drop = false;
+        for (const auto& re : res) {
+            if (std::regex_match(line, re)) {
+                drop = true;
+                break;
+            }
+        }
+        if (!drop) {
+            result.append(line);
+            if (eol != std::string::npos) result.push_back('\n');
+        }
+        if (eol == std::string::npos) break;
+        i = eol + 1;
+    }
+    return result;
+}
+
+bool source_uses_identifier(const std::string& source, const std::string& name) {
+    std::regex re(std::string("\\b") + name + "\\b");
+    return std::regex_search(source, re);
+}
+
+std::string synthesize_material_sampler_glsl(
+    const std::vector<std::string>& texture_names,
+    const std::string& stage_source
+) {
+    if (texture_names.empty()) return "";
+
+    std::ostringstream out;
+    for (size_t i = 0; i < texture_names.size(); ++i) {
+        const std::string& name = texture_names[i];
+        if (!source_uses_identifier(stage_source, name)) {
+            continue;
+        }
+        out << "layout(binding = " << (MATERIAL_TEXTURE_BINDING_BASE + i)
+            << ") uniform sampler2D " << name << ";\n";
+    }
     return out.str();
 }
 
@@ -980,8 +1054,9 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
     // scalar/vector @property entries gets a std140 MaterialParams block
     // auto-synthesized, injected into the stage sources, and the original
     // `uniform T name;` decls stripped from the raw GLSL. Texture
-    // properties stay as plain samplers outside the block
-    // (compute_std140_layout skips them).
+    // properties are not part of the UBO, but their sampler declarations
+    // still get explicit layout bindings that match ColorPass material
+    // texture slots.
     //
     // Phases without UBO-eligible properties get an empty layout and
     // their sources are left alone.
@@ -991,6 +1066,7 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
     // same "two code paths converge into one" cleanup.
     for (auto& phase : result.phases) {
         MaterialUboLayout layout = compute_std140_layout(phase.uniforms);
+        std::vector<std::string> texture_names = collect_texture_properties(phase.uniforms);
         std::string block_glsl;
         std::vector<std::string> ubo_names;
         if (!layout.empty()) {
@@ -1013,6 +1089,10 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
             // outside a block" rule.
             src = tgfx::internal::preprocess_shader_source(
                 src, kv.first.c_str());
+
+            std::string sampler_glsl =
+                synthesize_material_sampler_glsl(texture_names, src);
+            src = strip_sampler_decls(src, texture_names);
 
             // Material UBO: strip @property plain-uniform decls and
             // inject the synthesised std140 block. Only for phases with
@@ -1059,7 +1139,7 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
             // and get the same `#version 450 core` upgrade treatment.
             // Always called so the stage's #version line is upgraded to
             // 450 regardless of whether there's anything to inject.
-            std::string inject = block_glsl;
+            std::string inject = block_glsl + sampler_glsl;
             if (needs_engine_block) {
                 inject += ENGINE_UNIFORMS_BLOCK;
             }

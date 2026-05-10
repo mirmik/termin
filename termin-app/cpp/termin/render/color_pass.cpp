@@ -531,11 +531,10 @@ void ColorPass::execute_with_data(
     constexpr uint32_t SHADOW_SLOT_BASE = 8;
     // Vulkan descriptor set layout reserves bindings 0..3 for UBOs
     // (lighting, material, per-frame, shadow-block) and 4..7 for
-    // material samplers — see VulkanRenderDevice's shared layout. The
-    // same numbering is used on GL: ctx.bind_sampled_texture(slot, tex)
-    // binds GL texture unit = slot, and set_uniform_int below tells the
-    // shader which unit to sample each named sampler from, so the
-    // non-zero base is backend-neutral.
+    // material samplers — see VulkanRenderDevice's shared layout.
+    // shader_parser writes matching layout(binding=N) qualifiers for
+    // Texture @properties, so the numbered slots stay stable and
+    // backend-neutral.
     constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
 
     tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
@@ -629,14 +628,10 @@ void ColorPass::execute_with_data(
             bind_extra_textures(ctx.tex2_reads, ctx2);
         }
 
-        // Tell the shader which texture unit each material sampler
-        // reads from. Existing shaders declare `uniform sampler2D
-        // u_albedo_texture` etc. without an explicit `layout(binding)`
-        // qualifier, so GL defaults them to unit 0. We need to route
-        // each named sampler to the slot apply_material_phase_ubo
-        // bound it at (MATERIAL_TEX_SLOT_BASE + i in declaration
-        // order). Without this, every sampler in the shader reads
-        // unit 0 and extra material textures show up as black/wrong.
+        // GL compatibility path: explicit layout(binding=N) is the
+        // source of truth, but set the sampler uniforms too for drivers
+        // that still need the legacy uniform route. On Vulkan this is a
+        // no-op; SPIR-V gets the binding from shader_parser.
         for (size_t i = 0; i < dc.phase->texture_count; i++) {
             const tc_material_texture& mt = dc.phase->textures[i];
             ctx2->set_uniform_int(mt.name,

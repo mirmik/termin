@@ -471,6 +471,7 @@ class VoxelizerComponent(DrawableComponent):
 
             shader = voxel_display_shader()
             self._debug_material = Material(
+                name="VoxelizerDebugMaterial",
                 shader=shader,
                 color=(1.0, 0.5, 0.0, 0.8),  # Оранжевый для отладки
                 phase_mark="opaque",
@@ -491,6 +492,7 @@ class VoxelizerComponent(DrawableComponent):
 
             shader = voxel_display_shader()
             self._debug_transparent_material = Material(
+                name="VoxelizerTransparentDebugMaterial",
                 shader=shader,
                 color=(1.0, 0.5, 0.0, 0.5),  # Полупрозрачный
                 phase_mark="transparent",
@@ -548,6 +550,7 @@ void main() {
             )
 
             self._debug_line_material = Material(
+                name="VoxelizerLineMaterial",
                 shader=shader,
                 color=(1.0, 1.0, 0.0, 1.0),
                 phase_mark="opaque",
