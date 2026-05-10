@@ -453,8 +453,11 @@ void bind_tc_pass(nb::module_& m) {
                 const char* pairs[32];
                 size_t count = tc_pass_get_inplace_aliases(p, pairs, 32);
                 // pairs contains [src1, dst1, src2, dst2, ...]
-                for (size_t i = 0; i + 1 < count; i += 2) {
-                    result.emplace_back(pairs[i] ? pairs[i] : "", pairs[i+1] ? pairs[i+1] : "");
+                for (size_t i = 0; i < count; i++) {
+                    result.emplace_back(
+                        pairs[i * 2] ? pairs[i * 2] : "",
+                        pairs[i * 2 + 1] ? pairs[i * 2 + 1] : ""
+                    );
                 }
             }
             return result;

@@ -1042,6 +1042,28 @@ void RenderingManager::render_all_offscreen() {
         return;
     }
 
+    auto update_viewport_rects = [](const std::vector<tc_display*>& disp_list) {
+        for (tc_display* display : disp_list) {
+            if (!tc_display_get_enabled(display)) continue;
+
+            tc_render_surface* surface = tc_display_get_surface(display);
+            if (!surface) continue;
+
+            int width = 0;
+            int height = 0;
+            tc_render_surface_get_size(surface, &width, &height);
+            if (width <= 0 || height <= 0) continue;
+
+            tc_viewport_handle vp = tc_display_get_first_viewport(display);
+            while (tc_viewport_handle_valid(vp)) {
+                tc_viewport_update_pixel_rect(vp, width, height);
+                vp = tc_viewport_get_display_next(vp);
+            }
+        }
+    };
+    update_viewport_rects(displays_);
+    update_viewport_rects(editor_displays_);
+
     // 0. Sync dynamic-resolution render targets from their attached viewport.
     sync_viewport_resolutions();
 
@@ -1514,6 +1536,8 @@ void RenderingManager::present_display(tc_display* display) {
 
     // Blit viewports
     for (tc_viewport_handle viewport : viewports) {
+        tc_viewport_update_pixel_rect(viewport, width, height);
+
         tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
 
         tgfx::TextureHandle src_color{};

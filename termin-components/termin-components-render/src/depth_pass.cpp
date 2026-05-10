@@ -117,25 +117,15 @@ layout(push_constant) uniform DepthPushBlock { DepthPushData pc; };
 layout(std140, binding = 14) uniform DepthPushBlock { DepthPushData pc; };
 #endif
 
-layout(location = 0) out float v_linear_depth;
-
 void main() {
     vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
     vec4 view_pos  = u_view * world_pos;
-
-    float y = view_pos.y;
-    float depth = (y - u_near) / (u_far - u_near);
-
-    v_linear_depth = depth;
     gl_Position = u_projection * view_pos;
 }
 )";
 
 constexpr const char* DEPTH_ONLY_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in float v_linear_depth;
-
 void main() {
-    gl_FragDepth = clamp(v_linear_depth, 0.0, 1.0);
 }
 )";
 
@@ -147,7 +137,8 @@ out vec4 FragColor;
 
 void main() {
     float d = texture(u_depth_tex, vUV).r;
-    FragColor = vec4(vec3(d), 1.0);
+    float visible = pow(clamp(1.0 - d, 0.0, 1.0), 0.25);
+    FragColor = vec4(vec3(visible), 1.0);
 }
 )";
 

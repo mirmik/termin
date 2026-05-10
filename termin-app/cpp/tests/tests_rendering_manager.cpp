@@ -146,9 +146,9 @@ TEST_CASE("Graph compiler treats render target input as external resources")
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
-    REQUIRE(pipeline->pass_count() == 1u);
+    REQUIRE(pipeline->pass_count() == 3u);
 
-    termin::TcPassRef pass(pipeline->get_pass_at(0));
+    termin::TcPassRef pass(pipeline->get_pass_at(1));
     CHECK(pass.type_name() == "DepthPass");
     tc_value input_res = tc_pass_inspect_get(pass.ptr(), "input_res");
     REQUIRE(input_res.type == TC_VALUE_STRING);
@@ -199,15 +199,15 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
     tc::ResourceNaming naming = tc::assign_resource_names(graph);
 
     CHECK(naming.socket_names["1"]["input_res"] == "RT_COLOR");
-    CHECK(naming.socket_names["1"]["output_res"] == "RT_COLOR");
-    CHECK(naming.socket_names["2"]["color"] == "RT_COLOR");
+    CHECK(naming.socket_names["1"]["output_res"] == "OUTPUT");
+    CHECK(naming.socket_names["2"]["color"] == "OUTPUT");
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
-    REQUIRE(pipeline->pass_count() == 1u);
+    REQUIRE(pipeline->pass_count() == 3u);
     CHECK(pipeline->spec_count() == 0u);
 
-    termin::TcPassRef pass(pipeline->get_pass_at(0));
+    termin::TcPassRef pass(pipeline->get_pass_at(1));
     CHECK(pass.type_name() == "DepthPass");
     tc_value input_res = tc_pass_inspect_get(pass.ptr(), "input_res");
     REQUIRE(input_res.type == TC_VALUE_STRING);
@@ -215,7 +215,7 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
     tc_value_free(&input_res);
     tc_value output_res = tc_pass_inspect_get(pass.ptr(), "output_res");
     REQUIRE(output_res.type == TC_VALUE_STRING);
-    CHECK(std::string(output_res.data.s) == "RT_COLOR");
+    CHECK(std::string(output_res.data.s) == "OUTPUT");
     tc_value_free(&output_res);
 
     pipeline->destroy();
@@ -255,7 +255,7 @@ TEST_CASE("Graph compiler creates FBO attachment views for FboSplit")
     CHECK(naming.resource_views["RT_COLOR.depth"].attachment == termin::AttachmentKind::Depth);
 }
 
-TEST_CASE("Graph compiler creates FBO composition for FboJoin without runtime passes")
+TEST_CASE("Graph compiler keeps FboJoin name and aliases it to parent FBO")
 {
     const char* json = R"JSON(
 {
@@ -288,8 +288,15 @@ TEST_CASE("Graph compiler creates FBO composition for FboJoin without runtime pa
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
-    CHECK(pipeline->pass_count() == 0u);
+    CHECK(pipeline->pass_count() == 4u);
     CHECK(pipeline->spec_count() == 0u);
+    termin::TcPassRef join_pass(pipeline->get_pass_at(2));
+    REQUIRE(join_pass.type_name() == "GraphAliasPass");
+    const char* aliases[4];
+    size_t alias_count = tc_pass_get_inplace_aliases(join_pass.ptr(), aliases, 2);
+    REQUIRE(alias_count == 1u);
+    CHECK(std::string(aliases[0]) == "RT_COLOR");
+    CHECK(std::string(aliases[1]) == "JoinedFbo");
     pipeline->destroy();
     delete pipeline;
 }
@@ -318,15 +325,18 @@ TEST_CASE("Graph compiler supports DepthOnlyPass depth texture output")
     tc::GraphData graph = tc::GraphData::from_trent(data);
     tc::ResourceNaming naming = tc::assign_resource_names(graph);
 
-    CHECK(naming.socket_names["2"]["output_res"] == "RT_COLOR.depth");
+    CHECK(naming.socket_names["2"]["output_res"] == "DepthOnlyPass_2_output_res");
+    REQUIRE(naming.resource_views.count("DepthOnlyPass_2_output_res") == 1u);
+    CHECK(naming.resource_views["DepthOnlyPass_2_output_res"].parent == "RT_COLOR");
+    CHECK(naming.resource_views["DepthOnlyPass_2_output_res"].attachment == termin::AttachmentKind::Depth);
     CHECK(naming.resource_types[naming.socket_names["2"]["output_res"]] == "depth_texture");
     CHECK(naming.socket_names["3"]["depth"] == naming.socket_names["2"]["output_res"]);
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
-    REQUIRE(pipeline->pass_count() == 1u);
+    REQUIRE(pipeline->pass_count() == 4u);
 
-    termin::TcPassRef pass(pipeline->get_pass_at(0));
+    termin::TcPassRef pass(pipeline->get_pass_at(2));
     CHECK(pass.type_name() == "DepthOnlyPass");
 
     ResourceSpec pass_specs[4];
@@ -374,10 +384,10 @@ TEST_CASE("Graph compiler supports explicit depth color conversion passes")
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
-    REQUIRE(pipeline->pass_count() == 2u);
+    REQUIRE(pipeline->pass_count() == 5u);
 
-    termin::TcPassRef pass0(pipeline->get_pass_at(0));
-    termin::TcPassRef pass1(pipeline->get_pass_at(1));
+    termin::TcPassRef pass0(pipeline->get_pass_at(2));
+    termin::TcPassRef pass1(pipeline->get_pass_at(3));
     CHECK(pass0.type_name() == "DepthToColorPass");
     CHECK(pass1.type_name() == "ColorToDepthPass");
 
@@ -553,6 +563,47 @@ TEST_CASE("Graph compiler synthesizes blit for External RT to RenderTarget")
     termin::TcPassRef pass(pipeline->get_pass_at(0));
     CHECK(pass.type_name() == "PresentToScreenPass");
     CHECK(pass.pass_name() == "OutputBlit");
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "PipelineOutput", "x": 409.0, "y": 40.0, "node_type": "pipeline_output" },
+    {
+      "type": "External RT",
+      "x": 49.0,
+      "y": 21.0,
+      "node_type": "external_rt",
+      "params": { "slot": "fov_input" }
+    }
+  ],
+  "connections": [
+    { "from_node": 1, "from_socket": "fbo", "to_node": 0, "to_socket": "color" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    REQUIRE(naming.socket_names.count("1") == 1u);
+    REQUIRE(naming.socket_names["1"].count("fbo") == 1u);
+    CHECK(naming.socket_names["1"]["fbo"] == "fov_input");
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+    REQUIRE(pipeline->pass_count() == 1u);
+
+    termin::TcPassRef pass(pipeline->get_pass_at(0));
+    CHECK(pass.type_name() == "GraphAliasPass");
 
     pipeline->destroy();
     delete pipeline;
