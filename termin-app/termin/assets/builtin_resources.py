@@ -19,38 +19,10 @@ def register_default_shader(rm: "ResourceManager") -> None:
     if "DefaultShader" in rm.shaders:
         return
 
-    from termin.visualization.render.materials.default_material import (
-        DEFAULT_VERT,
-        DEFAULT_FRAG,
-    )
-    from termin.visualization.render.shader_parser import (
-        ShaderMultyPhaseProgramm,
-        ShaderPhase,
-        ShasderStage,
-        MaterialProperty,
-    )
+    from termin.visualization.render.materials.default_material import DEFAULT_SHADER_TEXT
+    from termin.visualization.render.shader_parser import parse_shader_text
 
-    vertex_stage = ShasderStage("vertex", DEFAULT_VERT)
-    fragment_stage = ShasderStage("fragment", DEFAULT_FRAG)
-
-    phase = ShaderPhase(
-        phase_mark="opaque",
-        priority=0,
-        gl_depth_mask=True,
-        gl_depth_test=True,
-        gl_blend=False,
-        gl_cull=True,
-        stages={"vertex": vertex_stage, "fragment": fragment_stage},
-        uniforms=[
-            MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
-            MaterialProperty("u_albedo_texture", "Texture", None),
-            MaterialProperty("u_shininess", "Float", 32.0, 1.0, 2048.0),
-            MaterialProperty("u_emission_color", "Color", (0.0, 0.0, 0.0, 1.0)),
-            MaterialProperty("u_emission_intensity", "Float", 0.0, 0.0, 100.0),
-        ],
-    )
-
-    program = ShaderMultyPhaseProgramm(program="DefaultShader", phases=[phase])
+    program = parse_shader_text(DEFAULT_SHADER_TEXT)
     rm.register_shader("DefaultShader", program, uuid=BUILTIN_UUIDS["DefaultShader"])
 
 

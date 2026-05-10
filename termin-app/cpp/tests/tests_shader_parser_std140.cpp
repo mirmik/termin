@@ -252,6 +252,21 @@ TEST_CASE("raw material stages rewrite engine uniforms for Vulkan")
     CHECK(out.find("#define u_model pc._u_model") != std::string::npos);
 }
 
+TEST_CASE("raw material engine uniform rewrite is idempotent")
+{
+    std::string src =
+        "#version 330 core\n"
+        "uniform mat4 u_model;\n"
+        "void main() { gl_Position = u_model * vec4(0.0, 0.0, 0.0, 1.0); }\n";
+
+    std::string once = rewrite_engine_uniforms_for_stage_source(src, "vertex");
+    std::string twice = rewrite_engine_uniforms_for_stage_source(once, "vertex");
+
+    CHECK_EQ(twice.find("uniform PerFrame"), twice.rfind("uniform PerFrame"));
+    CHECK_EQ(twice.find("struct ColorPushData"), twice.rfind("struct ColorPushData"));
+    CHECK_EQ(twice.find("#define u_model pc._u_model"), twice.rfind("#define u_model pc._u_model"));
+}
+
 TEST_CASE("parse_shader_text: material_ubo feature rewrites stage sources")
 {
     const std::string shader_text =
