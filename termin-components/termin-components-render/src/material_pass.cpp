@@ -3,7 +3,7 @@
 // Fully migrated to tgfx2: wraps the output FBO as a tgfx2 texture,
 // opens a ctx2 render pass, binds the material's own VS/FS through
 // tc_shader_ensure_tgfx2, applies @property UBO via
-// tc_material_phase_apply_ubo_gl (the C-API callback), and draws the
+// apply_material_phase_ubo_runtime (backend-neutral tgfx2 path), and draws the
 // built-in fullscreen quad. No legacy GraphicsBackend draw calls.
 
 #include <tcbase/tc_log.hpp>
@@ -13,8 +13,8 @@
 
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/i_render_device.hpp>
-#include <tgfx2/opengl/opengl_render_device.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
+#include <termin/render/material_ubo_runtime.hpp>
 
 namespace termin {
 
@@ -118,12 +118,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     }
     auto* ctx2 = ctx.ctx2;
     auto& device = ctx2->device();
-    auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device);
-    if (!gl_dev) {
-        tc::Log::error("[MaterialPass] '%s': tgfx2 device is not OpenGLRenderDevice",
-                       get_pass_name().c_str());
-        return;
-    }
 
     auto color_it = ctx.tex2_writes.find(output_res);
     if (color_it == ctx.tex2_writes.end() || !color_it->second) {
@@ -173,22 +167,18 @@ void MaterialPass::execute(ExecuteContext& ctx) {
 
     ctx2->bind_shader(vs2, fs2);
 
-    // Slot 0 is reserved for the material UBO (TC_MATERIAL_UBO_BINDING_SLOT).
-    // Texture bindings start at slot 1 to avoid clashing with sampler unit 0
-    // when the shader also declares its own sampler uniforms. Material
-    // phase textures (from @property Texture2D) stay on legacy units
-    // through the phase->textures[] loop below, bound via set_uniform_int
-    // against the currently-bound tgfx2 program.
-    uint32_t tex_slot = 1;
+    constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
+    constexpr uint32_t EXTRA_TEX_SLOT_BASE = 24;
+    uint32_t graph_tex_slot = EXTRA_TEX_SLOT_BASE;
     std::set<std::string> bound_uniforms;
 
     if (!input_res.empty()) {
         auto res_it = ctx.tex2_reads.find(input_res);
         if (res_it != ctx.tex2_reads.end() && res_it->second) {
-            ctx2->bind_sampled_texture(tex_slot, res_it->second);
-            ctx2->set_uniform_int("u_input", static_cast<int>(tex_slot));
+            ctx2->bind_sampled_texture(graph_tex_slot, res_it->second);
+            ctx2->set_uniform_int("u_input", static_cast<int>(graph_tex_slot));
             bound_uniforms.insert("u_input");
-            tex_slot++;
+            graph_tex_slot++;
         } else {
             tc::Log::warn("[MaterialPass] '%s': tgfx2 input texture for '%s' not available",
                 get_pass_name().c_str(), input_res.c_str());
@@ -204,10 +194,10 @@ void MaterialPass::execute(ExecuteContext& ctx) {
             continue;
         }
 
-        ctx2->bind_sampled_texture(tex_slot, res_it->second);
-        ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(tex_slot));
+        ctx2->bind_sampled_texture(graph_tex_slot, res_it->second);
+        ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(graph_tex_slot));
         bound_uniforms.insert(uniform_name);
-        tex_slot++;
+        graph_tex_slot++;
     }
 
     // texture_resources: same tgfx2 texture lookup, keyed by uniform name.
@@ -217,24 +207,24 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         auto res_it = ctx.tex2_reads.find(res_name);
         if (res_it == ctx.tex2_reads.end() || !res_it->second) continue;
 
-        ctx2->bind_sampled_texture(tex_slot, res_it->second);
-        ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(tex_slot));
+        ctx2->bind_sampled_texture(graph_tex_slot, res_it->second);
+        ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(graph_tex_slot));
         bound_uniforms.insert(uniform_name);
-        tex_slot++;
+        graph_tex_slot++;
     }
 
     ctx2->set_uniform_vec2("u_resolution",
                            static_cast<float>(w), static_cast<float>(h));
 
-    // Apply @property material UBO via the C-API callback (registered by
-    // termin-app's material_ubo_apply.cpp). This packs phase->uniforms[]
-    // and phase->textures[] into the shared std140 UBO and binds it at
-    // TC_MATERIAL_UBO_BINDING_SLOT via glBindBufferRange. The call is
-    // program-agnostic (glBindBufferRange is global state), so it works
-    // whatever shader program is currently bound — here it's the tgfx2 one.
+    // Apply @property material UBO through the backend-neutral tgfx2 path.
     if (shader->material_ubo_block_size > 0) {
-        if (tc_material_phase_apply_ubo_gl(
-                phase, shader, TC_MATERIAL_UBO_BINDING_SLOT, gl_dev)) {
+        if (apply_material_phase_ubo_runtime(
+                phase,
+                shader,
+                TC_MATERIAL_UBO_BINDING_SLOT,
+                MATERIAL_TEX_SLOT_BASE,
+                device,
+                *ctx2)) {
             ctx2->set_block_binding("MaterialParams", TC_MATERIAL_UBO_BINDING_SLOT);
         }
     }
