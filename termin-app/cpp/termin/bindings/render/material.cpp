@@ -353,10 +353,21 @@ void bind_tc_material(nb::module_& m) {
             const tc_render_state& state,
             const std::string& shader_uuid
         ) -> tc_material_phase* {
+            std::string vs = rewrite_engine_uniforms_for_stage_source(
+                vertex_source, "vertex");
+            std::string fs = rewrite_engine_uniforms_for_stage_source(
+                fragment_source, "fragment");
+            std::string gs;
+            const char* gs_ptr = nullptr;
+            if (!geometry_source.empty()) {
+                gs = rewrite_engine_uniforms_for_stage_source(
+                    geometry_source, "geometry");
+                gs_ptr = gs.c_str();
+            }
             return self.add_phase_from_sources(
-                vertex_source.c_str(),
-                fragment_source.c_str(),
-                geometry_source.empty() ? nullptr : geometry_source.c_str(),
+                vs.c_str(),
+                fs.c_str(),
+                gs_ptr,
                 shader_name.c_str(),
                 phase_mark.c_str(),
                 priority,
@@ -571,6 +582,32 @@ void bind_tc_material(nb::module_& m) {
                     if (feature == "lighting_ubo") {
                         shader.set_feature(TC_SHADER_FEATURE_LIGHTING_UBO);
                     }
+                }
+
+                const MaterialUboLayout& layout = shader_phase.material_ubo_layout;
+                if (!layout.empty()) {
+                    std::vector<tc_material_ubo_entry> entries;
+                    entries.reserve(layout.entries.size());
+                    for (const auto& src : layout.entries) {
+                        tc_material_ubo_entry entry{};
+                        std::strncpy(entry.name, src.name.c_str(), TC_MATERIAL_UBO_NAME_MAX - 1);
+                        entry.name[TC_MATERIAL_UBO_NAME_MAX - 1] = '\0';
+                        std::strncpy(
+                            entry.property_type,
+                            src.property_type.c_str(),
+                            TC_MATERIAL_UBO_TYPE_MAX - 1);
+                        entry.property_type[TC_MATERIAL_UBO_TYPE_MAX - 1] = '\0';
+                        entry.offset = src.offset;
+                        entry.size = src.size;
+                        entries.push_back(entry);
+                    }
+                    tc_shader_set_material_ubo_layout(
+                        tc_shader_get(phase->shader),
+                        entries.data(),
+                        static_cast<uint32_t>(entries.size()),
+                        layout.block_size);
+                } else {
+                    tc_shader_set_material_ubo_layout(tc_shader_get(phase->shader), nullptr, 0, 0);
                 }
 
                 // Apply uniforms from defaults

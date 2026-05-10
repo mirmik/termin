@@ -12,6 +12,7 @@ using termin::ShaderMultyPhaseProgramm;
 using termin::compute_std140_layout;
 using termin::inject_after_version;
 using termin::parse_shader_text;
+using termin::rewrite_engine_uniforms_for_stage_source;
 using termin::std140_pack;
 using termin::std140_size_align;
 using termin::strip_uniform_decls;
@@ -228,6 +229,27 @@ TEST_CASE("inject_after_version: prepends when there is no version line")
     std::string out = inject_after_version(src, "INJECTED\n");
     CHECK_EQ(out.substr(0, 18), std::string("#version 450 core\n"));
     CHECK_EQ(out.substr(18, 9), std::string("INJECTED\n"));
+}
+
+TEST_CASE("raw material stages rewrite engine uniforms for Vulkan")
+{
+    std::string src =
+        "#version 330 core\n"
+        "uniform mat4 u_model;\n"
+        "uniform mat4 u_view;\n"
+        "uniform mat4 u_projection;\n"
+        "void main() {\n"
+        "    gl_Position = u_projection * u_view * u_model * vec4(0.0, 0.0, 0.0, 1.0);\n"
+        "}\n";
+
+    std::string out = rewrite_engine_uniforms_for_stage_source(src, "vertex");
+    CHECK(out.find("#version 450 core") != std::string::npos);
+    CHECK(out.find("uniform mat4 u_model;") == std::string::npos);
+    CHECK(out.find("uniform mat4 u_view;") == std::string::npos);
+    CHECK(out.find("uniform mat4 u_projection;") == std::string::npos);
+    CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
+    CHECK(out.find("layout(push_constant) uniform ColorPushBlock") != std::string::npos);
+    CHECK(out.find("#define u_model pc._u_model") != std::string::npos);
 }
 
 TEST_CASE("parse_shader_text: material_ubo feature rewrites stage sources")
