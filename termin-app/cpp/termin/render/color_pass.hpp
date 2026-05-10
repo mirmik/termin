@@ -39,8 +39,10 @@ namespace termin {
  * Collects all Drawable components from entities, filters by phase_mark,
  * sorts by priority, and renders with materials and lighting.
  */
-// Starting texture unit for extra textures (after shadow maps 8-23)
-constexpr int EXTRA_TEXTURE_UNIT_START = 24;
+// Starting binding for extra sampled textures. Vulkan's shared descriptor
+// layout reserves 4..7 for material samplers, 8 for the shadow-map array,
+// and 9..15 for graph/debug extras.
+constexpr int EXTRA_TEXTURE_UNIT_START = 9;
 
 class ColorPass : public CxxFramePass {
 public:

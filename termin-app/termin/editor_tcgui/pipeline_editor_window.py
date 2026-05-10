@@ -230,6 +230,71 @@ def _extract_pass_socket_info(pass_class_name: str) -> tuple[list[tuple[str, str
     return list(inputs), list(outputs), list(inplace_pairs)
 
 
+def _material_pass_texture_inputs(material_name: object) -> list[tuple[str, str]]:
+    material_text = str(material_name)
+    if not material_text or material_text == "(None)":
+        return []
+    try:
+        from termin.visualization.render.framegraph.passes.material_pass import get_texture_inputs_for_material
+        return list(get_texture_inputs_for_material(material_text))
+    except Exception as e:
+        log.error(f"[PipelineEditor] failed to collect MaterialPass texture inputs for '{material_text}': {e}")
+        return []
+
+
+def _set_dynamic_input_sockets(graph, node, dynamic_inputs: list[tuple[str, str]], keep_sockets: set[str]) -> None:
+    from tcnodegraph.model import Socket
+
+    filtered_inputs: list[tuple[str, str]] = []
+    for socket_name, socket_type in dynamic_inputs:
+        name = str(socket_name)
+        if not name:
+            continue
+        if name in keep_sockets:
+            log.warn(f"[PipelineEditor] dynamic socket '{name}' conflicts with a static input on {node.title}")
+            continue
+        filtered_inputs.append((name, str(socket_type)))
+
+    wanted = {name for name, _ in filtered_inputs}
+    existing = {socket.name for socket in node.inputs}
+    remove_names = {
+        socket.name
+        for socket in node.inputs
+        if socket.name not in keep_sockets and socket.name not in wanted
+    }
+
+    if remove_names:
+        dead_edges = [
+            edge_id
+            for edge_id, edge in graph.edges.items()
+            if edge.dst_node_id == node.id and edge.dst_socket in remove_names
+        ]
+        for edge_id in dead_edges:
+            del graph.edges[edge_id]
+        node.inputs = [socket for socket in node.inputs if socket.name not in remove_names]
+
+    for socket_name, socket_type in filtered_inputs:
+        if socket_name in existing:
+            for socket in node.inputs:
+                if socket.name == socket_name:
+                    socket.socket_type = socket_type
+                    break
+        else:
+            node.inputs.append(Socket(socket_name, socket_type, is_input=True))
+
+    node.data["dynamic_inputs"] = filtered_inputs
+
+
+def _sync_material_pass_inputs(graph, node) -> bool:
+    if str(node.data.get("graph_type", "")) != "MaterialPass":
+        return False
+    static_inputs, _, _ = _extract_pass_socket_info("MaterialPass")
+    keep_sockets = {name for name, _ in static_inputs}
+    dynamic_inputs = _material_pass_texture_inputs(node.params.get("material", ""))
+    _set_dynamic_input_sockets(graph, node, dynamic_inputs, keep_sockets)
+    return True
+
+
 def _load_graph_from_pipeline_dict(data: dict):
     from tcnodegraph import Graph, GraphController
 
@@ -320,6 +385,7 @@ def _load_graph_from_pipeline_dict(data: dict):
                 has_dyn = any(s.name == dyn_name for s in node.inputs)
                 if not has_dyn:
                     controller.add_input_socket(node.id, dyn_name, dyn_type)
+            _sync_material_pass_inputs(graph, node)
 
         node_ids.append(node.id)
 
@@ -468,6 +534,7 @@ def _legacy_pipeline_to_graph(data: dict):
             controller.add_output_socket(node.id, socket_name, socket_type)
             if socket_name not in inplace_outputs:
                 controller.add_input_socket(node.id, f"{socket_name}_target", socket_type)
+        _sync_material_pass_inputs(graph, node)
 
         node_ids.append(node.id)
 
@@ -518,6 +585,14 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
     graph_view.preferred_height = pct(100)
     graph_view.offset_x = 500
     graph_view.offset_y = 320
+
+    def _on_graph_param_changed(node, name: str, _value: object) -> None:
+        if name != "material":
+            return
+        if _sync_material_pass_inputs(graph_view.adapter.graph, node):
+            graph_view.refresh()
+
+    graph_view.on_param_changed = _on_graph_param_changed
 
     root = VStack()
     root.preferred_width = pct(100)
@@ -634,6 +709,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
             graph_view.controller.add_output_socket(node.id, socket_name, socket_type)
             if socket_name not in inplace_outputs:
                 graph_view.controller.add_input_socket(node.id, f"{socket_name}_target", socket_type)
+        _sync_material_pass_inputs(graph_view.adapter.graph, node)
         graph_view.refresh()
 
     def _create_output_node(wx: float, wy: float) -> None:

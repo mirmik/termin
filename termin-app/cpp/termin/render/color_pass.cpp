@@ -1,5 +1,6 @@
 #include "color_pass.hpp"
 #include "termin/camera/render_camera_utils.hpp"
+#include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -390,30 +391,14 @@ void ColorPass::execute_with_data(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
-    // --- Per-frame UBO (binding 2) ------------------------------------
-    // Carries view / projection / view_projection / camera_position —
-    // the matrices shaders used to read from plain `uniform mat4` decls.
-    // Lazy-create once per device, refresh every frame. Uploaded BEFORE
-    // begin_pass because upload_buffer on Vulkan routes through a
-    // staging copy that must run outside any render pass.
-    struct PerFrameStd140 {
-        float u_view[16];
-        float u_projection[16];
-        float u_view_projection[16];
-        float u_camera_position[4];  // vec3 + pad to vec4
-    };
-    static_assert(sizeof(PerFrameStd140) == 208,
-                  "PerFrameStd140 must be exactly 3*mat4 + vec4");
-
-    PerFrameStd140 pf{};
-    std::memcpy(pf.u_view, view.data, sizeof(pf.u_view));
-    std::memcpy(pf.u_projection, projection.data, sizeof(pf.u_projection));
-    Mat44f vp = projection * view;
-    std::memcpy(pf.u_view_projection, vp.data, sizeof(pf.u_view_projection));
-    pf.u_camera_position[0] = static_cast<float>(camera_position.x);
-    pf.u_camera_position[1] = static_cast<float>(camera_position.y);
-    pf.u_camera_position[2] = static_cast<float>(camera_position.z);
-    pf.u_camera_position[3] = 1.0f;
+    EnginePerFrameStd140 pf = make_engine_per_frame_uniforms(
+        view,
+        projection,
+        camera_position,
+        static_cast<float>(rect.width),
+        static_cast<float>(rect.height),
+        ctx.camera ? static_cast<float>(ctx.camera->near_clip) : 0.1f,
+        ctx.camera ? static_cast<float>(ctx.camera->far_clip) : 100.0f);
 
     // --- Shadow metadata UBO (binding 3) ------------------------------
     // Packs the plain shadow uniforms shadows.glsl used to read through
@@ -468,9 +453,8 @@ void ColorPass::execute_with_data(
     // ResourceSet bindings are attached to the next pipeline flush
     // anyway. These stay bound for the whole pass; per-draw bindings
     // (material UBO, lighting UBO, shadow samplers) are set below.
-    constexpr uint32_t PER_FRAME_UBO_BINDING = 2;
     constexpr uint32_t SHADOW_UBO_BINDING    = 3;
-    ctx2->bind_uniform_buffer_ring(PER_FRAME_UBO_BINDING, &pf, sizeof(pf));
+    bind_engine_per_frame_uniforms(*ctx2, pf);
     ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING,    &sb, sizeof(sb));
 
     // Collect + sort draw calls. Reuses the legacy helpers —
@@ -698,7 +682,7 @@ void ColorPass::execute_with_data(
             if (tc_shader_has_feature(raw_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
                 ctx2->set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
             }
-            ctx2->set_block_binding("PerFrame",   PER_FRAME_UBO_BINDING);
+            ctx2->set_block_binding("PerFrame",   ENGINE_PER_FRAME_UBO_BINDING);
             ctx2->set_block_binding("ShadowBlock", SHADOW_UBO_BINDING);
 
             last_shader_handle = dc.final_shader;

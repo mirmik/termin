@@ -67,6 +67,58 @@ def test_pipeline_graph_load_handles_native_pass_metadata_without_python_fields(
     assert node.params["clear_depth"] is False
 
 
+def test_material_pass_loads_texture_inputs_from_material_shader():
+    from termin._native.render import TcMaterial
+    from termin.assets.resources import ResourceManager
+    from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm, parse_shader_text
+
+    shader_text = """
+@program TestMaterialPassDynamicInputs
+@phase main
+@property Texture2D u_input_tex = "white"
+@property Texture2D u_depth_texture = "depth_default"
+@stage vertex
+void main() {}
+@endstage
+@stage fragment
+void main() {}
+@endstage
+@endphase
+"""
+    rm = ResourceManager.instance()
+    program = ShaderMultyPhaseProgramm.from_tree(parse_shader_text(shader_text))
+    rm.register_shader("TestMaterialPassDynamicInputs", program)
+    mat = TcMaterial.create("TestMaterialPassDynamicInputsMaterial", "")
+    mat.shader_name = "TestMaterialPassDynamicInputs"
+    rm.register_material("TestMaterialPassDynamicInputsMaterial", mat)
+
+    graph = _load_graph_from_pipeline_dict(
+        {
+            "nodes": [
+                {
+                    "type": "MaterialPass",
+                    "node_type": "effect",
+                    "params": {"material": "TestMaterialPassDynamicInputsMaterial"},
+                },
+            ],
+            "connections": [],
+        }
+    )
+
+    node = graph.nodes["node_0"]
+
+    assert [socket.name for socket in node.inputs] == [
+        "input_res",
+        "output_res_target",
+        "u_input_tex",
+        "u_depth_texture",
+    ]
+    assert node.data["dynamic_inputs"] == [
+        ("u_input_tex", "fbo"),
+        ("u_depth_texture", "fbo"),
+    ]
+
+
 def test_pipeline_graph_loads_explicit_render_target_nodes():
     graph = _load_graph_from_pipeline_dict(
         {

@@ -8,7 +8,8 @@ input locations, and push constants across all engine passes.
 - `termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp` — `create_shared_layouts()`
   builds the universal `VkDescriptorSetLayout` / `VkPipelineLayout`.
 - `termin-app/cpp/termin/lighting/lighting_ubo.hpp` — `LightingUBOData`.
-- `termin-app/cpp/termin/render/color_pass.cpp` — `PerFrameStd140`, `ShadowBlockStd140`.
+- `termin-render/include/termin/render/frame_uniforms.hpp` — `EnginePerFrameStd140`.
+- `termin-app/cpp/termin/render/color_pass.cpp` — `ShadowBlockStd140`.
 - `termin-app/cpp/termin/render/shader_parser.cpp` — generated `MaterialParams` + `ColorPushBlock`.
 - `termin-app/cpp/termin/render/{shadow,id}_pass.cpp`,
   `termin-components/termin-components-render/src/{depth,normal}_pass.cpp` —
@@ -33,7 +34,7 @@ samplers map to texture units by the same number.
 |---|---|---|---|---|---|
 | 0 | UBO | 1 | ALL | `LightingBlock` | `LightingUBO` (`lighting_ubo.hpp`) |
 | 1 | UBO | 1 | ALL | `MaterialParams` | Synthesized per-shader by `shader_parser.cpp` from `@property` declarations; uploaded by `material_ubo_apply.cpp` |
-| 2 | UBO | 1 | ALL | `PerFrame` | Per pass (`ColorPass::execute_with_data`, `ShadowPass`, `DepthPass`, `NormalPass`, `IdPass`) |
+| 2 | UBO | 1 | ALL | `PerFrame` | `EnginePerFrameStd140` (`frame_uniforms.hpp`) for parser-generated material shaders; per-pass layouts for standalone built-in passes |
 | 3 | UBO | 1 | ALL | `ShadowBlock` | `ColorPass::execute_with_data` |
 | 4–7 | COMBINED_IMAGE_SAMPLER | 1 each | FS | material textures (`MATERIAL_TEX_SLOT_BASE = 4`) | `ColorPass::execute_with_data` + `apply_material_phase_ubo` |
 | 8 | COMBINED_IMAGE_SAMPLER | `MAX_SHADOW_MAPS = 16` | FS | `u_shadow_map[16]` (array descriptor) | `ColorPass::execute_with_data` |
@@ -84,23 +85,39 @@ Per-light `LightData` (80 B):
 
 **Synthesised per-shader.** The parser scans `@property` lines in `.shader`,
 packs them std140, and writes the block declaration into both GLSL and the
-`tc_material_ubo_entry[]` metadata on `tc_shader`. Runtime uploader
-(`tc_material_phase_apply_ubo_gl` / `_vk`) walks those entries and copies
-values from `phase->uniforms[]` into the right offsets.
+`tc_material_ubo_entry[]` metadata on `tc_shader`. Runtime uploaders
+(`material_ubo_apply.cpp` in `termin-app` and `material_ubo_runtime.cpp` in
+`termin-render`) walk those entries and copy values from `phase->uniforms[]`
+into the right offsets.
 
 Block size is available from `shader->material_ubo_block_size`; fields from
 `shader->material_ubo_entries[]`. Don't hardcode it.
 
-### `PerFrame` (binding 2) — **per-pass**, different layouts
+### `PerFrame` (binding 2)
 
-#### ColorPass `PerFrameStd140` (208 B)
+For parser-generated material shaders, `shader_parser.cpp` injects this
+shared block and `frame_uniforms.cpp` uploads it. This is what `ColorPass`
+and `MaterialPass` bind for ordinary `.shader` materials.
+
+#### `EnginePerFrameStd140` (352 B)
 
 ```
 0    mat4   u_view
 64   mat4   u_projection
 128  mat4   u_view_projection
-192  vec4   u_camera_position.xyz + _pad
+192  mat4   u_inv_view
+256  mat4   u_inv_proj
+320  vec4   u_camera_position.xyz + _pad
+336  vec2   u_resolution
+344  float  u_near
+348  float  u_far
 ```
+
+#### Standalone geometry/debug passes
+
+Some built-in passes compile their own shaders and still use smaller binding-2
+or binding-0 `PerFrame` blocks. Those layouts are local to those passes and
+must stay matched with their shader strings:
 
 #### ShadowPass / IdPass / NormalPass `*PerFrameStd140` (128 B)
 
