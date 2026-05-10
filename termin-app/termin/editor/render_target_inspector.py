@@ -36,6 +36,8 @@ _COLOR_FORMATS = [
     ("rgb8", "RGB8"),
     ("rg8", "RG8"),
     ("r8", "R8"),
+    ("r16f", "R16F"),
+    ("r32f", "R32F"),
     ("rgb16f", "RGB16F"),
 ]
 

@@ -180,12 +180,20 @@ def test_render_target_inspector_edits_attachment_formats():
 
     assert inspector._color_format.selected_index == 0
     assert inspector._depth_format.selected_index == 0
+    assert "R16F" in inspector._color_format.items
+    assert "R32F" in inspector._color_format.items
 
     inspector._on_color_format_changed(1, "RGBA8")
     inspector._on_depth_format_changed(1, "Depth 24")
 
     assert render_target.color_format == "rgba8"
     assert render_target.depth_format == "depth24"
+
+    inspector._on_color_format_changed(inspector._color_format.items.index("R16F"), "R16F")
+    assert render_target.color_format == "r16f"
+
+    inspector._on_color_format_changed(inspector._color_format.items.index("R32F"), "R32F")
+    assert render_target.color_format == "r32f"
 
 
 def test_render_target_inspector_edits_clear_settings():
