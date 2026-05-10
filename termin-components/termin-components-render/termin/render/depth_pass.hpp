@@ -79,6 +79,7 @@ public:
 
 public:
     std::string output_res = "depth_texture";
+    std::string output_res_target;
     std::string camera_name;
     std::vector<std::string> entity_names;
 
@@ -91,11 +92,12 @@ private:
 
 public:
     INSPECT_FIELD(DepthOnlyPass, output_res, "Output Resource", "string")
+    INSPECT_FIELD(DepthOnlyPass, output_res_target, "Output Target", "string")
     INSPECT_FIELD(DepthOnlyPass, camera_name, "Camera Name", "string")
     INSPECT_TYPE_METADATA(DepthOnlyPass, graph, make_pass_graph_metadata(
-        {},
+        {{"output_res_target", "depth_texture"}},
         {{"output_res", "depth_texture"}},
-        {}
+        {{"output_res_target", "output_res"}}
     ))
 
     DepthOnlyPass(
@@ -112,7 +114,9 @@ public:
     }
 
     std::set<const char*> compute_reads() const override {
-        return {};
+        return output_res_target.empty()
+            ? std::set<const char*>{}
+            : std::set<const char*>{output_res_target.c_str()};
     }
 
     std::set<const char*> compute_writes() const override {
@@ -128,7 +132,9 @@ public:
     }
 
     std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
-        return {};
+        return output_res_target.empty()
+            ? std::vector<std::pair<std::string, std::string>>{}
+            : std::vector<std::pair<std::string, std::string>>{{output_res_target, output_res}};
     }
 
     std::vector<std::string> get_internal_symbols() const override {
@@ -149,6 +155,7 @@ class DepthToColorPass : public CxxFramePass {
 public:
     std::string input_res = "depth_texture";
     std::string output_res = "depth_color";
+    std::string output_res_target;
 
 private:
     tgfx::IRenderDevice* device2_ = nullptr;
@@ -157,10 +164,11 @@ private:
 public:
     INSPECT_FIELD(DepthToColorPass, input_res, "Input Depth", "string")
     INSPECT_FIELD(DepthToColorPass, output_res, "Output Color", "string")
+    INSPECT_FIELD(DepthToColorPass, output_res_target, "Output Target", "string")
     INSPECT_TYPE_METADATA(DepthToColorPass, graph, make_pass_graph_metadata(
-        {{"input_res", "depth_texture"}},
+        {{"input_res", "depth_texture"}, {"output_res_target", "color_texture"}},
         {{"output_res", "color_texture"}},
-        {}
+        {{"output_res_target", "output_res"}}
     ))
 
     DepthToColorPass(
@@ -176,7 +184,11 @@ public:
     void destroy() override { release_tgfx2_resources(); }
 
     std::set<const char*> compute_reads() const override {
-        return {input_res.c_str()};
+        std::set<const char*> result{input_res.c_str()};
+        if (!output_res_target.empty()) {
+            result.insert(output_res_target.c_str());
+        }
+        return result;
     }
 
     std::set<const char*> compute_writes() const override {
@@ -191,6 +203,12 @@ public:
         return {spec};
     }
 
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+        return output_res_target.empty()
+            ? std::vector<std::pair<std::string, std::string>>{}
+            : std::vector<std::pair<std::string, std::string>>{{output_res_target, output_res}};
+    }
+
     void execute(ExecuteContext& ctx) override;
 
 private:
@@ -202,6 +220,7 @@ class ColorToDepthPass : public CxxFramePass {
 public:
     std::string input_res = "color_texture";
     std::string output_res = "depth_texture";
+    std::string output_res_target;
 
 private:
     tgfx::IRenderDevice* device2_ = nullptr;
@@ -210,10 +229,11 @@ private:
 public:
     INSPECT_FIELD(ColorToDepthPass, input_res, "Input Color", "string")
     INSPECT_FIELD(ColorToDepthPass, output_res, "Output Depth", "string")
+    INSPECT_FIELD(ColorToDepthPass, output_res_target, "Output Target", "string")
     INSPECT_TYPE_METADATA(ColorToDepthPass, graph, make_pass_graph_metadata(
-        {{"input_res", "color_texture"}},
+        {{"input_res", "color_texture"}, {"output_res_target", "depth_texture"}},
         {{"output_res", "depth_texture"}},
-        {}
+        {{"output_res_target", "output_res"}}
     ))
 
     ColorToDepthPass(
@@ -229,7 +249,11 @@ public:
     void destroy() override { release_tgfx2_resources(); }
 
     std::set<const char*> compute_reads() const override {
-        return {input_res.c_str()};
+        std::set<const char*> result{input_res.c_str()};
+        if (!output_res_target.empty()) {
+            result.insert(output_res_target.c_str());
+        }
+        return result;
     }
 
     std::set<const char*> compute_writes() const override {
@@ -242,6 +266,12 @@ public:
         spec.resource_type = "depth_texture";
         spec.format = "depth32f";
         return {spec};
+    }
+
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+        return output_res_target.empty()
+            ? std::vector<std::pair<std::string, std::string>>{}
+            : std::vector<std::pair<std::string, std::string>>{{output_res_target, output_res}};
     }
 
     void execute(ExecuteContext& ctx) override;

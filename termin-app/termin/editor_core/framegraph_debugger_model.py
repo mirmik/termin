@@ -341,7 +341,11 @@ class FramegraphDebuggerModel:
         for p in schedule:
             reads_str = ", ".join(sorted(p.reads)) if p.reads else "∅"
             writes_str = ", ".join(sorted(p.writes)) if p.writes else "∅"
+            aliases = p.get_inplace_aliases()
+            aliases_str = ", ".join(f"{src} -> {dst}" for src, dst in aliases)
             line = f"{p.pass_name}: {{{reads_str}}} → {{{writes_str}}}"
+            if aliases_str:
+                line += f" aliases [{aliases_str}]"
             if isinstance(p, FrameDebuggerPass):
                 line = f"<span style='color: #ffb86c;'>► {line}</span>"
             elif current_resource and current_resource in p.writes:
