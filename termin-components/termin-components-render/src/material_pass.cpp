@@ -8,6 +8,7 @@
 
 #include <tcbase/tc_log.hpp>
 
+#include <termin/render/frame_uniforms.hpp>
 #include <termin/render/material_pass.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
@@ -15,6 +16,8 @@
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
 #include <termin/render/material_ubo_runtime.hpp>
+
+#include <optional>
 
 namespace termin {
 
@@ -166,57 +169,47 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     ctx2->set_cull(tgfx::CullMode::None);
 
     ctx2->bind_shader(vs2, fs2);
+    bind_engine_per_frame_uniforms(*ctx2, ctx);
+    ctx2->set_block_binding("PerFrame", ENGINE_PER_FRAME_UBO_BINDING);
 
     constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
-    constexpr uint32_t EXTRA_TEX_SLOT_BASE = 24;
+    constexpr uint32_t EXTRA_TEX_SLOT_BASE = 9;
     uint32_t graph_tex_slot = EXTRA_TEX_SLOT_BASE;
     std::set<std::string> bound_uniforms;
 
-    if (!input_res.empty()) {
-        auto res_it = ctx.tex2_reads.find(input_res);
+    auto material_texture_slot = [&](const std::string& uniform_name) -> std::optional<uint32_t> {
+        for (size_t i = 0; i < phase->texture_count; ++i) {
+            if (uniform_name == phase->textures[i].name) {
+                return MATERIAL_TEX_SLOT_BASE + static_cast<uint32_t>(i);
+            }
+        }
+        return std::nullopt;
+    };
+
+    auto bind_graph_texture = [&](const std::string& res_name, const std::string& uniform_name) {
+        if (res_name.empty() || uniform_name.empty()) return;
+        auto res_it = ctx.tex2_reads.find(res_name);
         if (res_it != ctx.tex2_reads.end() && res_it->second) {
-            ctx2->bind_sampled_texture(graph_tex_slot, res_it->second);
-            ctx2->set_uniform_int("u_input", static_cast<int>(graph_tex_slot));
-            bound_uniforms.insert("u_input");
-            graph_tex_slot++;
+            uint32_t slot = graph_tex_slot;
+            if (auto material_slot = material_texture_slot(uniform_name)) {
+                slot = *material_slot;
+            } else {
+                if (graph_tex_slot > 15) {
+                    tc::Log::error("[MaterialPass] '%s': no Vulkan descriptor slot left for '%s'",
+                        get_pass_name().c_str(), uniform_name.c_str());
+                    return;
+                }
+                graph_tex_slot++;
+            }
+            ctx2->bind_sampled_texture(slot, res_it->second);
+            ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(slot));
+            bound_uniforms.insert(uniform_name);
         } else {
             tc::Log::warn("[MaterialPass] '%s': tgfx2 input texture for '%s' not available",
-                get_pass_name().c_str(), input_res.c_str());
-        }
-    }
-
-    // extra_resources: pull tgfx2 color textures directly from ctx.tex2_reads.
-    for (const auto& [res_name, uniform_name] : extra_resources) {
-        auto res_it = ctx.tex2_reads.find(res_name);
-        if (res_it == ctx.tex2_reads.end() || !res_it->second) {
-            tc::Log::warn("[MaterialPass] '%s': tgfx2 texture for '%s' not available",
                 get_pass_name().c_str(), res_name.c_str());
-            continue;
         }
+    };
 
-        ctx2->bind_sampled_texture(graph_tex_slot, res_it->second);
-        ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(graph_tex_slot));
-        bound_uniforms.insert(uniform_name);
-        graph_tex_slot++;
-    }
-
-    // texture_resources: same tgfx2 texture lookup, keyed by uniform name.
-    for (const auto& [uniform_name, res_name] : texture_resources) {
-        if (res_name.empty()) continue;
-
-        auto res_it = ctx.tex2_reads.find(res_name);
-        if (res_it == ctx.tex2_reads.end() || !res_it->second) continue;
-
-        ctx2->bind_sampled_texture(graph_tex_slot, res_it->second);
-        ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(graph_tex_slot));
-        bound_uniforms.insert(uniform_name);
-        graph_tex_slot++;
-    }
-
-    ctx2->set_uniform_vec2("u_resolution",
-                           static_cast<float>(w), static_cast<float>(h));
-
-    // Apply @property material UBO through the backend-neutral tgfx2 path.
     if (shader->material_ubo_block_size > 0) {
         if (apply_material_phase_ubo_runtime(
                 phase,
@@ -228,6 +221,23 @@ void MaterialPass::execute(ExecuteContext& ctx) {
             ctx2->set_block_binding("MaterialParams", TC_MATERIAL_UBO_BINDING_SLOT);
         }
     }
+
+    if (!input_res.empty()) {
+        bind_graph_texture(input_res, "u_input");
+    }
+
+    // extra_resources: pull tgfx2 color textures directly from ctx.tex2_reads.
+    for (const auto& [res_name, uniform_name] : extra_resources) {
+        bind_graph_texture(res_name, uniform_name);
+    }
+
+    // texture_resources: same tgfx2 texture lookup, keyed by uniform name.
+    for (const auto& [uniform_name, res_name] : texture_resources) {
+        bind_graph_texture(res_name, uniform_name);
+    }
+
+    ctx2->set_uniform_vec2("u_resolution",
+                           static_cast<float>(w), static_cast<float>(h));
 
     // Legacy plain-uniform uploads for non-@property uniforms (e.g.
     // u_resolution, per-pass state that hasn't moved to a UBO). These

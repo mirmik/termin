@@ -354,7 +354,12 @@ const char* const ENGINE_PLAIN_UNIFORM_NAMES[] = {
     "u_view",
     "u_projection",
     "u_view_projection",
+    "u_inv_view",
+    "u_inv_proj",
     "u_camera_position",
+    "u_resolution",
+    "u_near",
+    "u_far",
 };
 
 std::string strip_engine_uniform_decls(const std::string& source) {
@@ -395,7 +400,12 @@ layout(std140, binding = 2) uniform PerFrame {
     mat4 u_view;
     mat4 u_projection;
     mat4 u_view_projection;
+    mat4 u_inv_view;
+    mat4 u_inv_proj;
     vec4 u_camera_position;
+    vec2 u_resolution;
+    float u_near;
+    float u_far;
 };
 
 struct ColorPushData {

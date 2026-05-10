@@ -33,8 +33,10 @@ def get_texture_inputs_for_material(material_name: str) -> List[Tuple[str, str]]
 
     Returns:
         List of (input_name, socket_type) tuples for node inputs.
-        input_name is derived from uniform name (u_depth -> depth).
-        Includes u_input as "input" if shader uses it.
+        input_name is the shader uniform name.  The graph socket name must
+        stay identical to the material sampler so the compiled pass can bind
+        the connected resource to the material texture slot instead of a
+        separate ad-hoc slot.
     """
     if not material_name or material_name == "(None)":
         return []
@@ -61,14 +63,7 @@ def get_texture_inputs_for_material(material_name: str) -> List[Tuple[str, str]]
     inputs = []
     for prop in program.phases[0].uniforms:
         if prop.property_type == "Texture":
-            uniform_name = prop.name
-            # Convert uniform name to input name: u_depth_texture -> depth_texture
-            # u_input -> input (for standard post-effect input)
-            if uniform_name.startswith("u_"):
-                input_name = uniform_name[2:]
-            else:
-                input_name = uniform_name
-            inputs.append((input_name, "fbo"))
+            inputs.append((prop.name, "fbo"))
 
     return inputs
 
