@@ -7,7 +7,7 @@ import numpy as np
 from termin.visualization.render.postprocess import PostEffect
 from termin.visualization.core.picking import id_to_rgb
 from termin.editor.inspect_field import InspectField
-from tgfx._tgfx_native import Tgfx2ShaderStage
+from tgfx._tgfx_native import Tgfx2ShaderHandle, Tgfx2ShaderStage
 
 
 # Push constants carry per-frame highlight parameters (std140 lays them
@@ -28,17 +28,6 @@ layout(push_constant) uniform HighlightPushBlock { HighlightPushData pc; };
 #else
 layout(std140, binding = 14) uniform HighlightPushBlock { HighlightPushData pc; };
 #endif
-"""
-
-HIGHLIGHT_VERT = "#version 450 core\n" + HIGHLIGHT_PUSH_BLOCK + """
-layout(location=0) in vec2 a_pos;
-layout(location=1) in vec2 a_uv;
-layout(location=0) out vec2 v_uv;
-
-void main() {
-    v_uv = a_uv;
-    gl_Position = vec4(a_pos, 0.0, 1.0);
-}
 """
 
 HIGHLIGHT_FRAG = "#version 450 core\n" + HIGHLIGHT_PUSH_BLOCK + """
@@ -102,7 +91,6 @@ class HighlightEffect(PostEffect):
         "color": InspectField(path="_color", label="Outline Color", kind="color"),
     }
 
-    _vs = None
     _fs = None
 
     def __init__(self, selected_id_getter=None, color=(0.0, 0.0, 0.0, 1.0)):
@@ -117,8 +105,6 @@ class HighlightEffect(PostEffect):
 
     @classmethod
     def _ensure_shaders(cls, ctx2):
-        if cls._vs is None:
-            cls._vs = ctx2.device.create_shader(Tgfx2ShaderStage.Vertex, HIGHLIGHT_VERT)
         if cls._fs is None:
             cls._fs = ctx2.device.create_shader(Tgfx2ShaderStage.Fragment, HIGHLIGHT_FRAG)
 
@@ -128,7 +114,7 @@ class HighlightEffect(PostEffect):
         selected_id = self._get_id() if self._get_id else 0
 
         self._ensure_shaders(ctx2)
-        if not self._vs or not self._fs:
+        if not self._fs:
             return
 
         enabled = (tex_id2 is not None) and (selected_id > 0)
@@ -159,7 +145,7 @@ class HighlightEffect(PostEffect):
         push_buf = np.asarray(bytearray(push_bytes), dtype=np.uint8)
 
         def setup(ctx2):
-            ctx2.bind_shader(self._vs, self._fs)
+            ctx2.bind_shader(Tgfx2ShaderHandle(), self._fs)
             ctx2.bind_sampled_texture(4, color_tex2)
             # Vulkan's validator requires every shader-declared sampler
             # slot to carry a real descriptor even when the fragment

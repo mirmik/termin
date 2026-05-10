@@ -191,8 +191,10 @@ class PostEffect:
         ctx2.set_depth_write(False)
         ctx2.set_blend(False)
         ctx2.set_cull(CULL_NONE)
-        setup_fn(ctx2)
-        ctx2.end_pass()
+        try:
+            setup_fn(ctx2)
+        finally:
+            ctx2.end_pass()
 
     def clear_callbacks(self) -> None:
         """Clear any callbacks that reference external objects. Override in subclasses."""
@@ -435,4 +437,3 @@ class PostProcessPass(RenderFramePass):
             # Выход этого эффекта становится входом следующего
             if not is_last:
                 current_tex2 = target_tex2
-
