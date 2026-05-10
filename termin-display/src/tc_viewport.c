@@ -10,25 +10,29 @@
 #define MAX_VIEWPORTS 256
 #define INITIAL_POOL_CAPACITY 16
 
-typedef struct {
-    uint32_t* generations;
-    bool* alive;
-    char** names;
-    tc_render_target_handle* render_targets;
-    float* rects;
-    int* pixel_rects;
-    int* depths;
-    bool* enabled;
-    char** input_modes;
-    bool* block_input_in_editor;
-    char** managed_by;
-    tc_entity_handle* internal_entities;
-    tc_input_manager** input_managers;
-    tc_viewport_handle* display_prevs;
-    tc_viewport_handle* display_nexts;
+struct tc_viewport {
+    uint32_t generation;
+    bool alive;
+    char* name;
+    tc_render_target_handle render_target;
+    float rect[4];
+    int pixel_rect[4];
+    int depth;
+    bool enabled;
+    char* input_mode;
+    bool block_input_in_editor;
+    char* managed_by;
+    tc_entity_handle internal_entities;
+    tc_input_manager* input_manager;
+    tc_viewport_handle display_prev;
+    tc_viewport_handle display_next;
     // Own scene storage — viewport no longer proxies scene through
     // render target. Detach is now ordering-independent.
-    tc_scene_handle* scenes;
+    tc_scene_handle scene;
+};
+
+typedef struct {
+    tc_viewport* items;
     uint32_t* free_stack;
     size_t free_count;
     size_t capacity;
@@ -50,6 +54,35 @@ static void tc_strset(char** dest, const char* src) {
     *dest = tc_strdup_local(src);
 }
 
+static void viewport_init_empty(tc_viewport* vp, uint32_t generation) {
+    if (!vp) return;
+    memset(vp, 0, sizeof(*vp));
+    vp->generation = generation;
+    vp->render_target = TC_RENDER_TARGET_HANDLE_INVALID;
+    vp->scene = TC_SCENE_HANDLE_INVALID;
+    vp->internal_entities = TC_ENTITY_HANDLE_INVALID;
+    vp->display_prev = TC_VIEWPORT_HANDLE_INVALID;
+    vp->display_next = TC_VIEWPORT_HANDLE_INVALID;
+}
+
+static void viewport_free_strings(tc_viewport* vp) {
+    if (!vp) return;
+    free(vp->name);
+    free(vp->input_mode);
+    free(vp->managed_by);
+    vp->name = NULL;
+    vp->input_mode = NULL;
+    vp->managed_by = NULL;
+}
+
+static tc_viewport* viewport_get_alive(tc_viewport_handle h) {
+    if (!g_pool) return NULL;
+    if (h.index >= g_pool->capacity) return NULL;
+    tc_viewport* vp = &g_pool->items[h.index];
+    if (!vp->alive || vp->generation != h.generation) return NULL;
+    return vp;
+}
+
 void tc_viewport_pool_init(void) {
     if (g_pool) {
         tc_log_warn("[tc_viewport_pool] already initialized");
@@ -64,31 +97,21 @@ void tc_viewport_pool_init(void) {
 
     size_t cap = INITIAL_POOL_CAPACITY;
 
-    g_pool->generations = (uint32_t*)calloc(cap, sizeof(uint32_t));
-    g_pool->alive = (bool*)calloc(cap, sizeof(bool));
-    g_pool->names = (char**)calloc(cap, sizeof(char*));
-    g_pool->render_targets = (tc_render_target_handle*)calloc(cap, sizeof(tc_render_target_handle));
-    g_pool->rects = (float*)calloc(cap * 4, sizeof(float));
-    g_pool->pixel_rects = (int*)calloc(cap * 4, sizeof(int));
-    g_pool->depths = (int*)calloc(cap, sizeof(int));
-    g_pool->enabled = (bool*)calloc(cap, sizeof(bool));
-    g_pool->input_modes = (char**)calloc(cap, sizeof(char*));
-    g_pool->block_input_in_editor = (bool*)calloc(cap, sizeof(bool));
-    g_pool->managed_by = (char**)calloc(cap, sizeof(char*));
-    g_pool->input_managers = (tc_input_manager**)calloc(cap, sizeof(tc_input_manager*));
-    g_pool->internal_entities = (tc_entity_handle*)calloc(cap, sizeof(tc_entity_handle));
-    g_pool->scenes = (tc_scene_handle*)calloc(cap, sizeof(tc_scene_handle));
-    g_pool->display_prevs = (tc_viewport_handle*)calloc(cap, sizeof(tc_viewport_handle));
-    g_pool->display_nexts = (tc_viewport_handle*)calloc(cap, sizeof(tc_viewport_handle));
-
+    g_pool->items = (tc_viewport*)calloc(cap, sizeof(tc_viewport));
     g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
+
+    if (!g_pool->items || !g_pool->free_stack) {
+        tc_log_error("[tc_viewport_pool] storage allocation failed");
+        free(g_pool->items);
+        free(g_pool->free_stack);
+        free(g_pool);
+        g_pool = NULL;
+        return;
+    }
+
     for (size_t i = 0; i < cap; i++) {
         g_pool->free_stack[i] = (uint32_t)(cap - 1 - i);
-        g_pool->render_targets[i] = TC_RENDER_TARGET_HANDLE_INVALID;
-        g_pool->scenes[i] = TC_SCENE_HANDLE_INVALID;
-        g_pool->display_prevs[i] = TC_VIEWPORT_HANDLE_INVALID;
-        g_pool->display_nexts[i] = TC_VIEWPORT_HANDLE_INVALID;
-        g_pool->internal_entities[i] = TC_ENTITY_HANDLE_INVALID;
+        viewport_init_empty(&g_pool->items[i], 0);
     }
     g_pool->free_count = cap;
     g_pool->capacity = cap;
@@ -102,29 +125,12 @@ void tc_viewport_pool_shutdown(void) {
     }
 
     for (size_t i = 0; i < g_pool->capacity; i++) {
-        if (g_pool->alive[i]) {
-            free(g_pool->names[i]);
-            free(g_pool->input_modes[i]);
-            free(g_pool->managed_by[i]);
+        if (g_pool->items[i].alive) {
+            viewport_free_strings(&g_pool->items[i]);
         }
     }
 
-    free(g_pool->generations);
-    free(g_pool->alive);
-    free(g_pool->names);
-    free(g_pool->render_targets);
-    free(g_pool->rects);
-    free(g_pool->pixel_rects);
-    free(g_pool->depths);
-    free(g_pool->enabled);
-    free(g_pool->input_modes);
-    free(g_pool->block_input_in_editor);
-    free(g_pool->managed_by);
-    free(g_pool->input_managers);
-    free(g_pool->internal_entities);
-    free(g_pool->scenes);
-    free(g_pool->display_prevs);
-    free(g_pool->display_nexts);
+    free(g_pool->items);
     free(g_pool->free_stack);
     free(g_pool);
     g_pool = NULL;
@@ -139,43 +145,23 @@ static void pool_grow(void) {
         return;
     }
 
-    g_pool->generations = realloc(g_pool->generations, new_cap * sizeof(uint32_t));
-    g_pool->alive = realloc(g_pool->alive, new_cap * sizeof(bool));
-    g_pool->names = realloc(g_pool->names, new_cap * sizeof(char*));
-    g_pool->render_targets = realloc(g_pool->render_targets, new_cap * sizeof(tc_render_target_handle));
-    g_pool->rects = realloc(g_pool->rects, new_cap * 4 * sizeof(float));
-    g_pool->pixel_rects = realloc(g_pool->pixel_rects, new_cap * 4 * sizeof(int));
-    g_pool->depths = realloc(g_pool->depths, new_cap * sizeof(int));
-    g_pool->enabled = realloc(g_pool->enabled, new_cap * sizeof(bool));
-    g_pool->input_modes = realloc(g_pool->input_modes, new_cap * sizeof(char*));
-    g_pool->block_input_in_editor = realloc(g_pool->block_input_in_editor, new_cap * sizeof(bool));
-    g_pool->managed_by = realloc(g_pool->managed_by, new_cap * sizeof(char*));
-    g_pool->input_managers = realloc(g_pool->input_managers, new_cap * sizeof(tc_input_manager*));
-    g_pool->internal_entities = realloc(g_pool->internal_entities, new_cap * sizeof(tc_entity_handle));
-    g_pool->scenes = realloc(g_pool->scenes, new_cap * sizeof(tc_scene_handle));
-    g_pool->display_prevs = realloc(g_pool->display_prevs, new_cap * sizeof(tc_viewport_handle));
-    g_pool->display_nexts = realloc(g_pool->display_nexts, new_cap * sizeof(tc_viewport_handle));
-    g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
+    tc_viewport* new_items = (tc_viewport*)malloc(new_cap * sizeof(tc_viewport));
+    uint32_t* new_free_stack = (uint32_t*)malloc(new_cap * sizeof(uint32_t));
+    if (!new_items || !new_free_stack) {
+        tc_log_error("[tc_viewport_pool] grow allocation failed");
+        free(new_items);
+        free(new_free_stack);
+        return;
+    }
 
-    memset(g_pool->generations + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
-    memset(g_pool->alive + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
-    memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
-    memset(g_pool->rects + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(float));
-    memset(g_pool->pixel_rects + old_cap * 4, 0, (new_cap - old_cap) * 4 * sizeof(int));
-    memset(g_pool->depths + old_cap, 0, (new_cap - old_cap) * sizeof(int));
-    memset(g_pool->enabled + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
-    memset(g_pool->input_modes + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
-    memset(g_pool->block_input_in_editor + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
-    memset(g_pool->managed_by + old_cap, 0, (new_cap - old_cap) * sizeof(char*));
-    memset(g_pool->input_managers + old_cap, 0, (new_cap - old_cap) * sizeof(tc_input_manager*));
-    memset(g_pool->scenes + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_handle));
-
+    memcpy(new_items, g_pool->items, old_cap * sizeof(tc_viewport));
+    memcpy(new_free_stack, g_pool->free_stack, g_pool->free_count * sizeof(uint32_t));
+    free(g_pool->items);
+    free(g_pool->free_stack);
+    g_pool->items = new_items;
+    g_pool->free_stack = new_free_stack;
     for (size_t i = old_cap; i < new_cap; i++) {
-        g_pool->render_targets[i] = TC_RENDER_TARGET_HANDLE_INVALID;
-        g_pool->scenes[i] = TC_SCENE_HANDLE_INVALID;
-        g_pool->display_prevs[i] = TC_VIEWPORT_HANDLE_INVALID;
-        g_pool->display_nexts[i] = TC_VIEWPORT_HANDLE_INVALID;
-        g_pool->internal_entities[i] = TC_ENTITY_HANDLE_INVALID;
+        viewport_init_empty(&g_pool->items[i], 0);
     }
 
     for (size_t i = old_cap; i < new_cap; i++) {
@@ -186,9 +172,7 @@ static void pool_grow(void) {
 }
 
 static inline bool handle_alive(tc_viewport_handle h) {
-    if (!g_pool) return false;
-    if (h.index >= g_pool->capacity) return false;
-    return g_pool->alive[h.index] && g_pool->generations[h.index] == h.generation;
+    return viewport_get_alive(h) != NULL;
 }
 
 bool tc_viewport_pool_alive(tc_viewport_handle h) {
@@ -202,6 +186,9 @@ bool tc_viewport_alive(tc_viewport_handle h) {
 tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     if (!g_pool) {
         tc_viewport_pool_init();
+        if (!g_pool) {
+            return TC_VIEWPORT_HANDLE_INVALID;
+        }
     }
 
     if (g_pool->free_count == 0) {
@@ -213,29 +200,32 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
     }
 
     uint32_t idx = g_pool->free_stack[--g_pool->free_count];
-    uint32_t gen = g_pool->generations[idx];
+    tc_viewport* vp = &g_pool->items[idx];
+    uint32_t gen = vp->generation;
 
-    g_pool->alive[idx] = true;
-    g_pool->names[idx] = tc_strdup_local(name);
-    g_pool->render_targets[idx] = TC_RENDER_TARGET_HANDLE_INVALID;
-    g_pool->scenes[idx] = TC_SCENE_HANDLE_INVALID;
-    g_pool->rects[idx * 4 + 0] = 0.0f;
-    g_pool->rects[idx * 4 + 1] = 0.0f;
-    g_pool->rects[idx * 4 + 2] = 1.0f;
-    g_pool->rects[idx * 4 + 3] = 1.0f;
-    g_pool->pixel_rects[idx * 4 + 0] = 0;
-    g_pool->pixel_rects[idx * 4 + 1] = 0;
-    g_pool->pixel_rects[idx * 4 + 2] = 1;
-    g_pool->pixel_rects[idx * 4 + 3] = 1;
-    g_pool->depths[idx] = 0;
-    g_pool->enabled[idx] = true;
-    g_pool->input_modes[idx] = tc_strdup_local("simple");
-    g_pool->block_input_in_editor[idx] = false;
-    g_pool->managed_by[idx] = NULL;
-    g_pool->input_managers[idx] = NULL;
-    g_pool->internal_entities[idx] = TC_ENTITY_HANDLE_INVALID;
-    g_pool->display_prevs[idx] = TC_VIEWPORT_HANDLE_INVALID;
-    g_pool->display_nexts[idx] = TC_VIEWPORT_HANDLE_INVALID;
+    viewport_free_strings(vp);
+    viewport_init_empty(vp, gen);
+    vp->alive = true;
+    vp->name = tc_strdup_local(name);
+    vp->render_target = TC_RENDER_TARGET_HANDLE_INVALID;
+    vp->scene = TC_SCENE_HANDLE_INVALID;
+    vp->rect[0] = 0.0f;
+    vp->rect[1] = 0.0f;
+    vp->rect[2] = 1.0f;
+    vp->rect[3] = 1.0f;
+    vp->pixel_rect[0] = 0;
+    vp->pixel_rect[1] = 0;
+    vp->pixel_rect[2] = 1;
+    vp->pixel_rect[3] = 1;
+    vp->depth = 0;
+    vp->enabled = true;
+    vp->input_mode = tc_strdup_local("simple");
+    vp->block_input_in_editor = false;
+    vp->managed_by = NULL;
+    vp->input_manager = NULL;
+    vp->internal_entities = TC_ENTITY_HANDLE_INVALID;
+    vp->display_prev = TC_VIEWPORT_HANDLE_INVALID;
+    vp->display_next = TC_VIEWPORT_HANDLE_INVALID;
     g_pool->count++;
 
     tc_viewport_handle h = { idx, gen };
@@ -245,15 +235,12 @@ tc_viewport_handle tc_viewport_pool_alloc(const char* name) {
 void tc_viewport_pool_free(tc_viewport_handle h) {
     if (!handle_alive(h)) return;
     uint32_t idx = h.index;
+    tc_viewport* vp = &g_pool->items[idx];
 
-    free(g_pool->names[idx]);
-    free(g_pool->input_modes[idx]);
-    free(g_pool->managed_by[idx]);
+    viewport_free_strings(vp);
 
-    g_pool->render_targets[idx] = TC_RENDER_TARGET_HANDLE_INVALID;
-
-    g_pool->alive[idx] = false;
-    g_pool->generations[idx]++;
+    uint32_t next_generation = vp->generation + 1;
+    viewport_init_empty(vp, next_generation);
     g_pool->free_stack[g_pool->free_count++] = idx;
     g_pool->count--;
 }
@@ -261,8 +248,9 @@ void tc_viewport_pool_free(tc_viewport_handle h) {
 void tc_viewport_pool_foreach(tc_viewport_pool_iter_fn callback, void* user_data) {
     if (!g_pool || !callback) return;
     for (uint32_t i = 0; i < g_pool->capacity; i++) {
-        if (g_pool->alive[i]) {
-            tc_viewport_handle h = { i, g_pool->generations[i] };
+        tc_viewport* vp = &g_pool->items[i];
+        if (vp->alive) {
+            tc_viewport_handle h = { i, vp->generation };
             if (!callback(h, user_data)) {
                 break;
             }
@@ -288,102 +276,113 @@ void tc_viewport_free(tc_viewport_handle h) {
 }
 
 void tc_viewport_set_name(tc_viewport_handle h, const char* name) {
-    if (!handle_alive(h)) return;
-    tc_strset(&g_pool->names[h.index], name);
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    tc_strset(&vp->name, name);
 }
 
 const char* tc_viewport_get_name(tc_viewport_handle h) {
-    if (!handle_alive(h)) return NULL;
-    return g_pool->names[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->name : NULL;
 }
 
 void tc_viewport_set_rect(tc_viewport_handle h, float x, float y, float w, float height) {
-    if (!handle_alive(h)) return;
-    g_pool->rects[h.index * 4 + 0] = x;
-    g_pool->rects[h.index * 4 + 1] = y;
-    g_pool->rects[h.index * 4 + 2] = w;
-    g_pool->rects[h.index * 4 + 3] = height;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->rect[0] = x;
+    vp->rect[1] = y;
+    vp->rect[2] = w;
+    vp->rect[3] = height;
 }
 
 void tc_viewport_get_rect(tc_viewport_handle h, float* x, float* y, float* w, float* height) {
-    if (!handle_alive(h)) return;
-    if (x) *x = g_pool->rects[h.index * 4 + 0];
-    if (y) *y = g_pool->rects[h.index * 4 + 1];
-    if (w) *w = g_pool->rects[h.index * 4 + 2];
-    if (height) *height = g_pool->rects[h.index * 4 + 3];
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    if (x) *x = vp->rect[0];
+    if (y) *y = vp->rect[1];
+    if (w) *w = vp->rect[2];
+    if (height) *height = vp->rect[3];
 }
 
 void tc_viewport_set_pixel_rect(tc_viewport_handle h, int px, int py, int pw, int ph) {
-    if (!handle_alive(h)) return;
-    g_pool->pixel_rects[h.index * 4 + 0] = px;
-    g_pool->pixel_rects[h.index * 4 + 1] = py;
-    g_pool->pixel_rects[h.index * 4 + 2] = pw;
-    g_pool->pixel_rects[h.index * 4 + 3] = ph;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->pixel_rect[0] = px;
+    vp->pixel_rect[1] = py;
+    vp->pixel_rect[2] = pw;
+    vp->pixel_rect[3] = ph;
 }
 
 void tc_viewport_get_pixel_rect(tc_viewport_handle h, int* px, int* py, int* pw, int* ph) {
-    if (!handle_alive(h)) return;
-    if (px) *px = g_pool->pixel_rects[h.index * 4 + 0];
-    if (py) *py = g_pool->pixel_rects[h.index * 4 + 1];
-    if (pw) *pw = g_pool->pixel_rects[h.index * 4 + 2];
-    if (ph) *ph = g_pool->pixel_rects[h.index * 4 + 3];
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    if (px) *px = vp->pixel_rect[0];
+    if (py) *py = vp->pixel_rect[1];
+    if (pw) *pw = vp->pixel_rect[2];
+    if (ph) *ph = vp->pixel_rect[3];
 }
 
 void tc_viewport_set_depth(tc_viewport_handle h, int depth) {
-    if (!handle_alive(h)) return;
-    g_pool->depths[h.index] = depth;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->depth = depth;
 }
 
 int tc_viewport_get_depth(tc_viewport_handle h) {
-    if (!handle_alive(h)) return 0;
-    return g_pool->depths[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->depth : 0;
 }
 
 void tc_viewport_set_layer_mask(tc_viewport_handle h, uint64_t mask) {
-    if (!handle_alive(h)) return;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
     // Deprecated compatibility path: old callers wrote viewport.layer_mask,
     // which historically proxied to the render target. New render code uses
     // CameraComponent.layer_mask & RenderTarget.layer_mask directly.
-    tc_render_target_set_layer_mask(g_pool->render_targets[h.index], mask);
+    tc_render_target_set_layer_mask(vp->render_target, mask);
 }
 
 uint64_t tc_viewport_get_layer_mask(tc_viewport_handle h) {
-    if (!handle_alive(h)) return 0;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return 0;
     // Deprecated compatibility path; see tc_viewport_set_layer_mask.
-    return tc_render_target_get_layer_mask(g_pool->render_targets[h.index]);
+    return tc_render_target_get_layer_mask(vp->render_target);
 }
 
 void tc_viewport_set_enabled(tc_viewport_handle h, bool enabled) {
-    if (!handle_alive(h)) return;
-    g_pool->enabled[h.index] = enabled;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->enabled = enabled;
 }
 
 bool tc_viewport_get_enabled(tc_viewport_handle h) {
-    if (!handle_alive(h)) return false;
-    return g_pool->enabled[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->enabled : false;
 }
 
 void tc_viewport_set_scene(tc_viewport_handle h, tc_scene_handle scene) {
-    if (!handle_alive(h)) return;
-    g_pool->scenes[h.index] = scene;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->scene = scene;
     // Forward to render target for consistency when RT is set
-    tc_render_target_handle rt = g_pool->render_targets[h.index];
+    tc_render_target_handle rt = vp->render_target;
     if (tc_render_target_handle_valid(rt)) {
         tc_render_target_set_scene(rt, scene);
     }
 }
 
 tc_scene_handle tc_viewport_get_scene(tc_viewport_handle h) {
-    if (!handle_alive(h)) return TC_SCENE_HANDLE_INVALID;
-    return g_pool->scenes[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->scene : TC_SCENE_HANDLE_INVALID;
 }
 
 void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle rt) {
-    if (!handle_alive(h)) return;
-    g_pool->render_targets[h.index] = rt;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->render_target = rt;
     // Sync viewport's authoritative scene to the new render target
     if (tc_render_target_handle_valid(rt)) {
-        tc_scene_handle vp_scene = g_pool->scenes[h.index];
+        tc_scene_handle vp_scene = vp->scene;
         if (tc_scene_handle_valid(vp_scene)) {
             tc_render_target_set_scene(rt, vp_scene);
         }
@@ -391,8 +390,8 @@ void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle
 }
 
 tc_render_target_handle tc_viewport_get_render_target(tc_viewport_handle h) {
-    if (!handle_alive(h)) return TC_RENDER_TARGET_HANDLE_INVALID;
-    return g_pool->render_targets[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->render_target : TC_RENDER_TARGET_HANDLE_INVALID;
 }
 
 tc_component* tc_viewport_get_camera(tc_viewport_handle h) {
@@ -408,16 +407,18 @@ tc_pipeline_handle tc_viewport_get_pipeline(tc_viewport_handle h) {
 }
 
 void tc_viewport_set_override_resolution(tc_viewport_handle h, bool override_resolution) {
-    if (!handle_alive(h)) return;
-    tc_render_target_handle rt = g_pool->render_targets[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    tc_render_target_handle rt = vp->render_target;
     if (tc_render_target_handle_valid(rt)) {
         tc_render_target_set_dynamic_resolution(rt, override_resolution);
     }
 }
 
 bool tc_viewport_get_override_resolution(tc_viewport_handle h) {
-    if (!handle_alive(h)) return false;
-    tc_render_target_handle rt = g_pool->render_targets[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return false;
+    tc_render_target_handle rt = vp->render_target;
     if (tc_render_target_handle_valid(rt)) {
         return tc_render_target_get_dynamic_resolution(rt);
     }
@@ -425,89 +426,97 @@ bool tc_viewport_get_override_resolution(tc_viewport_handle h) {
 }
 
 void tc_viewport_set_input_mode(tc_viewport_handle h, const char* mode) {
-    if (!handle_alive(h)) return;
-    tc_strset(&g_pool->input_modes[h.index], mode ? mode : "simple");
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    tc_strset(&vp->input_mode, mode ? mode : "simple");
 }
 
 const char* tc_viewport_get_input_mode(tc_viewport_handle h) {
-    if (!handle_alive(h)) return NULL;
-    return g_pool->input_modes[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->input_mode : NULL;
 }
 
 void tc_viewport_set_managed_by(tc_viewport_handle h, const char* pipeline_name) {
-    if (!handle_alive(h)) return;
-    tc_strset(&g_pool->managed_by[h.index], pipeline_name);
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    tc_strset(&vp->managed_by, pipeline_name);
 }
 
 const char* tc_viewport_get_managed_by(tc_viewport_handle h) {
-    if (!handle_alive(h)) return NULL;
-    return g_pool->managed_by[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->managed_by : NULL;
 }
 
 void tc_viewport_set_block_input_in_editor(tc_viewport_handle h, bool block) {
-    if (!handle_alive(h)) return;
-    g_pool->block_input_in_editor[h.index] = block;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->block_input_in_editor = block;
 }
 
 bool tc_viewport_get_block_input_in_editor(tc_viewport_handle h) {
-    if (!handle_alive(h)) return false;
-    return g_pool->block_input_in_editor[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->block_input_in_editor : false;
 }
 
 void tc_viewport_set_input_manager(tc_viewport_handle h, tc_input_manager* manager) {
-    if (!handle_alive(h)) return;
-    g_pool->input_managers[h.index] = manager;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->input_manager = manager;
 }
 
 tc_input_manager* tc_viewport_get_input_manager(tc_viewport_handle h) {
-    if (!handle_alive(h)) return NULL;
-    return g_pool->input_managers[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->input_manager : NULL;
 }
 
 void tc_viewport_update_pixel_rect(tc_viewport_handle h, int display_width, int display_height) {
-    if (!handle_alive(h)) return;
-    float x = g_pool->rects[h.index * 4 + 0];
-    float y = g_pool->rects[h.index * 4 + 1];
-    float w = g_pool->rects[h.index * 4 + 2];
-    float height = g_pool->rects[h.index * 4 + 3];
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    float x = vp->rect[0];
+    float y = vp->rect[1];
+    float w = vp->rect[2];
+    float height = vp->rect[3];
 
-    g_pool->pixel_rects[h.index * 4 + 0] = (int)(x * display_width);
-    g_pool->pixel_rects[h.index * 4 + 1] = (int)(y * display_height);
-    g_pool->pixel_rects[h.index * 4 + 2] = (int)(w * display_width);
-    g_pool->pixel_rects[h.index * 4 + 3] = (int)(height * display_height);
+    vp->pixel_rect[0] = (int)(x * display_width);
+    vp->pixel_rect[1] = (int)(y * display_height);
+    vp->pixel_rect[2] = (int)(w * display_width);
+    vp->pixel_rect[3] = (int)(height * display_height);
 }
 
 void tc_viewport_set_internal_entities(tc_viewport_handle h, tc_entity_handle ent) {
-    if (!handle_alive(h)) return;
-    g_pool->internal_entities[h.index] = ent;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->internal_entities = ent;
 }
 
 tc_entity_handle tc_viewport_get_internal_entities(tc_viewport_handle h) {
-    if (!handle_alive(h)) return TC_ENTITY_HANDLE_INVALID;
-    return g_pool->internal_entities[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->internal_entities : TC_ENTITY_HANDLE_INVALID;
 }
 
 bool tc_viewport_has_internal_entities(tc_viewport_handle h) {
-    if (!handle_alive(h)) return false;
-    return tc_entity_handle_valid(g_pool->internal_entities[h.index]);
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? tc_entity_handle_valid(vp->internal_entities) : false;
 }
 
 tc_viewport_handle tc_viewport_get_display_next(tc_viewport_handle h) {
-    if (!handle_alive(h)) return TC_VIEWPORT_HANDLE_INVALID;
-    return g_pool->display_nexts[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->display_next : TC_VIEWPORT_HANDLE_INVALID;
 }
 
 tc_viewport_handle tc_viewport_get_display_prev(tc_viewport_handle h) {
-    if (!handle_alive(h)) return TC_VIEWPORT_HANDLE_INVALID;
-    return g_pool->display_prevs[h.index];
+    tc_viewport* vp = viewport_get_alive(h);
+    return vp ? vp->display_prev : TC_VIEWPORT_HANDLE_INVALID;
 }
 
 void tc_viewport_set_display_next(tc_viewport_handle h, tc_viewport_handle next) {
-    if (!handle_alive(h)) return;
-    g_pool->display_nexts[h.index] = next;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->display_next = next;
 }
 
 void tc_viewport_set_display_prev(tc_viewport_handle h, tc_viewport_handle prev) {
-    if (!handle_alive(h)) return;
-    g_pool->display_prevs[h.index] = prev;
+    tc_viewport* vp = viewport_get_alive(h);
+    if (!vp) return;
+    vp->display_prev = prev;
 }
