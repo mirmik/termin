@@ -195,7 +195,11 @@ class NodeGraphView(QGraphicsView):
         # Resources submenu
         resources_menu = menu.addMenu("Resources")
         resources_menu.addAction("FBO", lambda: self._create_node("resource", "FBO", pos))
+        resources_menu.addAction("Color Texture", lambda: self._create_node("resource", "Color Texture", pos))
+        resources_menu.addAction("Depth Texture", lambda: self._create_node("resource", "Depth Texture", pos))
         resources_menu.addAction("Shadow Maps", lambda: self._create_node("resource", "Shadow Maps", pos))
+        resources_menu.addAction("FBO Split", lambda: self._create_node("fbo_split", "FBO Split", pos))
+        resources_menu.addAction("FBO Join", lambda: self._create_node("fbo_join", "FBO Join", pos))
 
         # Build passes menu from registry
         categories = get_available_passes_by_category()

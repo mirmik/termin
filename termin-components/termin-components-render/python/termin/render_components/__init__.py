@@ -9,7 +9,10 @@ preload_sdk_libs("nanobind", "termin_components_render")
 
 from termin.render_components._components_render_native import (
     CameraComponent,
+    ColorToDepthPass,
+    DepthOnlyPass,
     DepthPass,
+    DepthToColorPass,
     LightComponent,
     MaterialPass,
     MeshRenderer,
@@ -20,7 +23,10 @@ from termin.render_components._components_render_native import (
 
 __all__ = [
     "CameraComponent",
+    "ColorToDepthPass",
+    "DepthOnlyPass",
     "DepthPass",
+    "DepthToColorPass",
     "LightComponent",
     "MaterialPass",
     "MeshRenderer",

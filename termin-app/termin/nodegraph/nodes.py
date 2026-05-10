@@ -45,16 +45,23 @@ def create_node(node_type: str, title: str) -> GraphNode:
         return create_effect_node(title)
     elif node_type == "viewport":
         return create_viewport_node(title)
+    elif node_type == "fbo_split":
+        return create_fbo_split_node(title)
+    elif node_type == "fbo_join":
+        return create_fbo_join_node(title)
     else:
         return GraphNode(title, node_type)
 
 
 def create_resource_node(title: str) -> GraphNode:
-    """Create a resource node (FBO or Shadow Maps)."""
+    """Create a resource node."""
     if title == "Shadow Maps":
         return _create_shadow_maps_node()
-    else:
-        return _create_fbo_node(title)
+    if title == "Color Texture":
+        return _create_texture_node("Color Texture", "color", "color_texture")
+    if title == "Depth Texture":
+        return _create_texture_node("Depth Texture", "depth", "depth_texture")
+    return _create_fbo_node(title)
 
 
 def _create_shadow_maps_node() -> GraphNode:
@@ -227,6 +234,60 @@ def _create_fbo_node(title: str = "FBO") -> GraphNode:
     return node
 
 
+def _create_texture_node(title: str, socket_name: str, socket_type: str) -> GraphNode:
+    """Create a standalone texture resource node."""
+    node = GraphNode(title, "resource")
+    node.add_output(NodeSocket(socket_name, socket_type))
+    node.data["resource_type"] = socket_type
+
+    format_choices = (
+        ["depth32f"]
+        if socket_type == "depth_texture"
+        else ["rgba8", "rgba16f", "rgba32f", "r16f", "r32f"]
+    )
+    node.add_param(NodeParam(
+        name="format",
+        label="Format",
+        param_type="choice",
+        default=format_choices[0],
+        choices=format_choices,
+    ))
+    node.add_param(NodeParam(
+        name="filter",
+        label="Filter",
+        param_type="choice",
+        default="linear",
+        choices=["linear", "nearest"],
+    ))
+    node.add_param(NodeParam(
+        name="size_mode",
+        label="Size",
+        param_type="choice",
+        default="viewport",
+        choices=["viewport", "fixed"],
+    ))
+    node.add_param(NodeParam(
+        name="scale",
+        label="Scale",
+        param_type="choice",
+        default="1.0",
+        choices=["0.25", "0.5", "1.0", "2.0"],
+    ))
+    node.add_param(NodeParam(
+        name="width",
+        label="Width",
+        param_type="int",
+        default=1024,
+    ))
+    node.add_param(NodeParam(
+        name="height",
+        label="Height",
+        param_type="int",
+        default=1024,
+    ))
+    return node
+
+
 def create_pass_node(title: str) -> GraphNode:
     """Create a render pass node."""
     node = GraphNode(title, "pass")
@@ -316,6 +377,24 @@ def create_viewport_node(title: str) -> GraphNode:
 
     # Viewport doesn't need params - use ViewportFrame for that
 
+    return node
+
+
+def create_fbo_split_node(title: str = "FBO Split") -> GraphNode:
+    """Create a compile-time node that exposes FBO attachments as texture views."""
+    node = GraphNode(title, "fbo_split")
+    node.add_input(NodeSocket("fbo", "fbo"))
+    node.add_output(NodeSocket("color", "color_texture"))
+    node.add_output(NodeSocket("depth", "depth_texture"))
+    return node
+
+
+def create_fbo_join_node(title: str = "FBO Join") -> GraphNode:
+    """Create a compile-time node that composes color/depth texture views into an FBO."""
+    node = GraphNode(title, "fbo_join")
+    node.add_input(NodeSocket("color", "color_texture"))
+    node.add_input(NodeSocket("depth", "depth_texture"))
+    node.add_output(NodeSocket("fbo", "fbo"))
     return node
 
 

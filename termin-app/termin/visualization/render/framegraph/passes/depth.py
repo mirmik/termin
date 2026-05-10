@@ -1,7 +1,17 @@
-"""DepthPass - linear depth rendering pass.
+"""Depth passes - linear depth rendering passes.
 
-Re-exports C++ DepthPass.
+Re-exports C++ DepthPass variants.
 """
-from termin.render_components import DepthPass
+from termin.render_components import (
+    ColorToDepthPass,
+    DepthOnlyPass,
+    DepthPass,
+    DepthToColorPass,
+)
 
-__all__ = ["DepthPass"]
+__all__ = [
+    "ColorToDepthPass",
+    "DepthOnlyPass",
+    "DepthPass",
+    "DepthToColorPass",
+]

@@ -437,6 +437,109 @@ NB_MODULE(_components_render_native, m) {
         m.attr("DepthPass").attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("input_res", "output_res"));
     }
 
+    nb::class_<DepthOnlyPass, CxxFramePass>(m, "DepthOnlyPass")
+        .def("__init__", [](DepthOnlyPass* self, const std::string& output_res, const std::string& pass_name) {
+            new (self) DepthOnlyPass(output_res, pass_name);
+            init_pass_from_python(self, "DepthOnlyPass");
+        }, nb::arg("output_res") = "depth_texture", nb::arg("pass_name") = "DepthOnly")
+        .def_rw("output_res", &DepthOnlyPass::output_res)
+        .def_rw("camera_name", &DepthOnlyPass::camera_name)
+        .def("get_internal_symbols", &DepthOnlyPass::get_internal_symbols)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            (void)resource_manager;
+            std::string pass_name = "DepthOnly";
+            std::string camera_name;
+            std::string output_res = "depth_texture";
+            if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("camera_name")) camera_name = nb::cast<std::string>(d["camera_name"]);
+                if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
+            }
+            auto* p = new DepthOnlyPass(output_res, pass_name);
+            p->camera_name = camera_name;
+            return init_pass_from_deserialize(p, "DepthOnlyPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def_prop_ro("reads", &DepthOnlyPass::compute_reads)
+        .def_prop_ro("writes", &DepthOnlyPass::compute_writes)
+        .def("destroy", &DepthOnlyPass::destroy);
+
+    {
+        nb::dict visibility;
+        nb::dict camera_cond;
+        camera_cond["_outside_viewport"] = true;
+        visibility["camera_name"] = camera_cond;
+        m.attr("DepthOnlyPass").attr("node_param_visibility") = visibility;
+        m.attr("DepthOnlyPass").attr("category") = "Render";
+        m.attr("DepthOnlyPass").attr("node_inputs") = nb::make_tuple();
+        m.attr("DepthOnlyPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "depth_texture"));
+        m.attr("DepthOnlyPass").attr("node_inplace_pairs") = nb::make_tuple();
+    }
+
+    nb::class_<DepthToColorPass, CxxFramePass>(m, "DepthToColorPass")
+        .def("__init__", [](DepthToColorPass* self, const std::string& input_res, const std::string& output_res, const std::string& pass_name) {
+            new (self) DepthToColorPass(input_res, output_res, pass_name);
+            init_pass_from_python(self, "DepthToColorPass");
+        }, nb::arg("input_res") = "depth_texture", nb::arg("output_res") = "depth_color", nb::arg("pass_name") = "DepthToColor")
+        .def_rw("input_res", &DepthToColorPass::input_res)
+        .def_rw("output_res", &DepthToColorPass::output_res)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            (void)resource_manager;
+            std::string pass_name = "DepthToColor";
+            std::string input_res = "depth_texture";
+            std::string output_res = "depth_color";
+            if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) input_res = nb::cast<std::string>(d["input_res"]);
+                if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
+            }
+            auto* p = new DepthToColorPass(input_res, output_res, pass_name);
+            return init_pass_from_deserialize(p, "DepthToColorPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def_prop_ro("reads", &DepthToColorPass::compute_reads)
+        .def_prop_ro("writes", &DepthToColorPass::compute_writes)
+        .def("destroy", &DepthToColorPass::destroy);
+
+    {
+        m.attr("DepthToColorPass").attr("category") = "Render";
+        m.attr("DepthToColorPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "depth_texture"));
+        m.attr("DepthToColorPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "color_texture"));
+        m.attr("DepthToColorPass").attr("node_inplace_pairs") = nb::make_tuple();
+    }
+
+    nb::class_<ColorToDepthPass, CxxFramePass>(m, "ColorToDepthPass")
+        .def("__init__", [](ColorToDepthPass* self, const std::string& input_res, const std::string& output_res, const std::string& pass_name) {
+            new (self) ColorToDepthPass(input_res, output_res, pass_name);
+            init_pass_from_python(self, "ColorToDepthPass");
+        }, nb::arg("input_res") = "color_texture", nb::arg("output_res") = "depth_texture", nb::arg("pass_name") = "ColorToDepth")
+        .def_rw("input_res", &ColorToDepthPass::input_res)
+        .def_rw("output_res", &ColorToDepthPass::output_res)
+        .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
+            (void)resource_manager;
+            std::string pass_name = "ColorToDepth";
+            std::string input_res = "color_texture";
+            std::string output_res = "depth_texture";
+            if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
+            if (data.contains("data")) {
+                nb::dict d = nb::cast<nb::dict>(data["data"]);
+                if (d.contains("input_res")) input_res = nb::cast<std::string>(d["input_res"]);
+                if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
+            }
+            auto* p = new ColorToDepthPass(input_res, output_res, pass_name);
+            return init_pass_from_deserialize(p, "ColorToDepthPass");
+        }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
+        .def_prop_ro("reads", &ColorToDepthPass::compute_reads)
+        .def_prop_ro("writes", &ColorToDepthPass::compute_writes)
+        .def("destroy", &ColorToDepthPass::destroy);
+
+    {
+        m.attr("ColorToDepthPass").attr("category") = "Render";
+        m.attr("ColorToDepthPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "color_texture"));
+        m.attr("ColorToDepthPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "depth_texture"));
+        m.attr("ColorToDepthPass").attr("node_inplace_pairs") = nb::make_tuple();
+    }
+
     nb::class_<NormalPass, CxxFramePass>(m, "NormalPass")
         .def("__init__", [](NormalPass* self, const std::string& input_res, const std::string& output_res, const std::string& pass_name) {
             new (self) NormalPass(input_res, output_res, pass_name);
