@@ -268,6 +268,10 @@ void RenderingManager::set_pipeline_factory(PipelineFactory factory) {
     pipeline_factory_ = std::move(factory);
 }
 
+void RenderingManager::set_render_request_callback(RenderRequestCallback callback) {
+    render_request_callback_ = std::move(callback);
+}
+
 tc_pipeline_handle RenderingManager::create_pipeline(const std::string& name) {
     if (name == "(Default)" || name == "Default" || name.empty()) {
         return make_default_pipeline();
@@ -276,6 +280,104 @@ tc_pipeline_handle RenderingManager::create_pipeline(const std::string& name) {
         return pipeline_factory_(name);
     }
     return TC_PIPELINE_HANDLE_INVALID;
+}
+
+size_t RenderingManager::recreate_render_target_pipelines_for_asset(
+    const std::string& asset_name,
+    const std::string& asset_uuid
+) {
+    if (asset_name.empty()) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] recreate pipeline requested with empty asset name");
+        return 0;
+    }
+    if (!pipeline_factory_) {
+        tc_log(TC_LOG_WARN,
+            "[RenderingManager] cannot recreate pipeline asset '%s': pipeline factory is not set",
+            asset_name.c_str());
+        return 0;
+    }
+
+    const std::string create_key = asset_uuid.empty() ? asset_name : asset_uuid;
+    struct TargetPipeline {
+        tc_render_target_handle render_target;
+        tc_pipeline_handle old_pipeline;
+    };
+    std::vector<TargetPipeline> targets;
+
+    struct CollectData {
+        const std::string* asset_name;
+        std::vector<TargetPipeline>* targets;
+    } collect_data{&asset_name, &targets};
+
+    tc_render_target_pool_foreach([](tc_render_target_handle rt, void* user_data) -> bool {
+        auto* d = static_cast<CollectData*>(user_data);
+        tc_pipeline_handle old_pipeline = tc_render_target_get_pipeline(rt);
+        if (!tc_pipeline_pool_alive(old_pipeline)) {
+            return true;
+        }
+
+        const char* old_name = tc_pipeline_get_name(old_pipeline);
+        if (!old_name || *old_name == '\0' || std::string(old_name) != *d->asset_name) {
+            return true;
+        }
+
+        d->targets->push_back(TargetPipeline{rt, old_pipeline});
+        return true;
+    }, &collect_data);
+
+    size_t rebound = 0;
+    std::vector<tc_pipeline_handle> old_pipelines;
+    old_pipelines.reserve(targets.size());
+
+    for (const TargetPipeline& target : targets) {
+        tc_pipeline_handle new_pipeline = create_pipeline(create_key);
+        if (!tc_pipeline_pool_alive(new_pipeline)) {
+            const char* rt_name = tc_render_target_get_name(target.render_target);
+            tc_log(TC_LOG_ERROR,
+                "[RenderingManager] failed to recreate pipeline asset '%s' for render target '%s'",
+                asset_name.c_str(),
+                rt_name ? rt_name : "<unnamed>");
+            continue;
+        }
+
+        tc_render_target_set_pipeline(target.render_target, new_pipeline);
+        old_pipelines.push_back(target.old_pipeline);
+        rebound++;
+
+        const char* rt_name = tc_render_target_get_name(target.render_target);
+        tc_log(TC_LOG_INFO,
+            "[RenderingManager] rebound render target '%s' to reloaded pipeline '%s'",
+            rt_name ? rt_name : "<unnamed>",
+            asset_name.c_str());
+    }
+
+    for (tc_pipeline_handle old_pipeline : old_pipelines) {
+        if (!tc_pipeline_pool_alive(old_pipeline)) {
+            continue;
+        }
+        bool still_used = false;
+        struct UseCheckData {
+            tc_pipeline_handle pipeline;
+            bool* still_used;
+        } use_check{old_pipeline, &still_used};
+        tc_render_target_pool_foreach([](tc_render_target_handle rt, void* user_data) -> bool {
+            auto* d = static_cast<UseCheckData*>(user_data);
+            if (tc_pipeline_handle_eq(tc_render_target_get_pipeline(rt), d->pipeline)) {
+                *d->still_used = true;
+                return false;
+            }
+            return true;
+        }, &use_check);
+        if (!still_used) {
+            tc_pipeline_destroy(old_pipeline);
+        }
+    }
+
+    if (rebound > 0 && render_request_callback_) {
+        render_request_callback_();
+    }
+
+    return rebound;
 }
 
 // Helper: create pass by type name, set pass_name and string fields via inspect
