@@ -1,5 +1,6 @@
 #include "recast_navmesh_builder_component.hpp"
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/render/shader_parser.hpp>
 #include <termin/geom/mat44.hpp>
 #include <array>
 #include <cstring>
@@ -1352,9 +1353,14 @@ void main() {
         state.cull = 0;  // No culling for debug mesh
         state.blend = 0;
 
+        std::string vertex_stage = rewrite_engine_uniforms_for_stage_source(
+            vertex_source, "vertex");
+        std::string fragment_stage = rewrite_engine_uniforms_for_stage_source(
+            fragment_source, "fragment");
+
         tc_material_phase* phase = _debug_material.add_phase_from_sources(
-            vertex_source,
-            fragment_source,
+            vertex_stage.c_str(),
+            fragment_stage.c_str(),
             nullptr,  // no geometry shader
             "navmesh_debug_shader",
             "opaque",

@@ -506,6 +506,24 @@ std::string inject_after_version(const std::string& source, const std::string& b
     return std::string("#version 450 core\n") + block + source;
 }
 
+std::string rewrite_engine_uniforms_for_stage_source(
+    const std::string& source,
+    const std::string& stage_name
+) {
+    std::string src = tgfx::internal::preprocess_shader_source(
+        source, stage_name.c_str());
+
+    bool needs_engine_block = stage_uses_engine_uniform(src);
+    if (needs_engine_block) {
+        src = strip_engine_uniform_decls(src);
+    }
+
+    return inject_after_version(
+        src,
+        needs_engine_block ? std::string(ENGINE_UNIFORMS_BLOCK) : std::string()
+    );
+}
+
 // ========== std140 value packer ==========
 
 namespace {

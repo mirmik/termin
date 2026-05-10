@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from termin._native.render import TcMaterial, TcRenderState
+from termin._native.render import TcMaterial
 
 # Матрицы работают в однородных координатах: gl_Position = P * V * M * [x, y, z, 1]^T
 DEFAULT_VERT = """#version 330 core
@@ -32,96 +32,92 @@ in vec3 v_world_pos;
 in vec3 v_normal;
 in vec2 v_uv;
 
-uniform vec4 u_color; // RGBA базового материала
-uniform sampler2D u_albedo_texture; // Текстура цвета (белая 1x1 по умолчанию)
-uniform float u_shininess; // Размер блика (1-128)
-
-// Emission (for bloom/glow effects)
-uniform vec4 u_emission_color;      // RGB = color, A unused
-uniform float u_emission_intensity; // 0 = no emission, >1 = HDR bloom
-
-// ============== Источники света ==============
 const int LIGHT_TYPE_DIRECTIONAL = 0;
-const int LIGHT_TYPE_POINT       = 1;
-const int LIGHT_TYPE_SPOT        = 2;
-
+const int LIGHT_TYPE_POINT = 1;
+const int LIGHT_TYPE_SPOT = 2;
 const int MAX_LIGHTS = 8;
+const int MAX_SHADOW_MAPS = 16;
 
-// ============== Camera ==============
-uniform vec3 u_camera_position;
+struct LightData {
+    vec4 color_intensity;
+    vec4 direction_range;
+    vec4 position_type;
+    vec4 attenuation_inner;
+    vec4 outer_cascade;
+};
 
-// ============== Ambient lighting (scene-level) ==============
-uniform vec3  u_ambient_color;
-uniform float u_ambient_intensity;
+layout(std140, binding = 0) uniform LightingBlock {
+    LightData u_lights[MAX_LIGHTS];
+    vec4 u_ambient_data;
+    vec4 u_camera_light_count;
+    vec4 u_shadow_settings;
+};
 
-uniform int   u_light_count;
-uniform int   u_light_type[MAX_LIGHTS];
-uniform vec3  u_light_color[MAX_LIGHTS];
-uniform float u_light_intensity[MAX_LIGHTS];
-uniform vec3  u_light_direction[MAX_LIGHTS];
-uniform vec3  u_light_position[MAX_LIGHTS];
-uniform float u_light_range[MAX_LIGHTS];
-uniform vec3  u_light_attenuation[MAX_LIGHTS]; // (constant, linear, quadratic)
-uniform float u_light_inner_angle[MAX_LIGHTS];
-uniform float u_light_outer_angle[MAX_LIGHTS];
+layout(std140, binding = 3) uniform ShadowBlock {
+    int u_shadow_map_count;
+    mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
+    int u_shadow_light_index[MAX_SHADOW_MAPS];
+    int u_shadow_cascade_index[MAX_SHADOW_MAPS];
+    float u_shadow_split_near[MAX_SHADOW_MAPS];
+    float u_shadow_split_far[MAX_SHADOW_MAPS];
+};
 
-// ============== Shadow Mapping ==============
-const int MAX_SHADOW_MAPS = 4;
-const float SHADOW_BIAS = 0.005;
+layout(binding = 8) uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
 
-uniform int u_shadow_map_count;
-uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];  // Hardware PCF
-uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
-uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
+uniform vec4 u_color;
+uniform sampler2D u_albedo_texture;
+uniform float u_shininess;
+uniform vec4 u_emission_color;
+uniform float u_emission_intensity;
 
 out vec4 FragColor;
 
-// GLSL 1.30+ forbids dynamic indexing of sampler arrays
-float sample_shadow_map(int idx, vec3 coords) {
-    if (idx == 0) return texture(u_shadow_map[0], coords);
-    if (idx == 1) return texture(u_shadow_map[1], coords);
-    if (idx == 2) return texture(u_shadow_map[2], coords);
-    if (idx == 3) return texture(u_shadow_map[3], coords);
-    return 1.0;
-}
+int get_light_count() { return int(u_camera_light_count.w); }
+int get_light_type(int i) { return int(u_lights[i].position_type.w); }
+vec3 get_light_color(int i) { return u_lights[i].color_intensity.rgb; }
+float get_light_intensity(int i) { return u_lights[i].color_intensity.w; }
+vec3 get_light_direction(int i) { return u_lights[i].direction_range.xyz; }
+vec3 get_light_position(int i) { return u_lights[i].position_type.xyz; }
+float get_light_range(int i) { return u_lights[i].direction_range.w; }
+vec3 get_light_attenuation(int i) { return u_lights[i].attenuation_inner.xyz; }
+float get_light_inner_angle(int i) { return u_lights[i].attenuation_inner.w; }
+float get_light_outer_angle(int i) { return u_lights[i].outer_cascade.x; }
+vec3 get_ambient_color() { return u_ambient_data.rgb; }
+float get_ambient_intensity() { return u_ambient_data.w; }
+vec3 get_camera_position() { return u_camera_light_count.xyz; }
+float get_shadow_bias() { return u_shadow_settings.z; }
 
-float compute_distance_attenuation(int idx, float dist) {
-    vec3 att = u_light_attenuation[idx];
-    float denom = att.x + att.y * dist + att.z * dist * dist;
+float compute_distance_attenuation(vec3 attenuation, float range, float dist) {
+    float denom = attenuation.x + attenuation.y * dist + attenuation.z * dist * dist;
     if (denom <= 0.0) {
         return 1.0;
     }
     float w = 1.0 / denom;
-    float range = u_light_range[idx];
     if (range > 0.0 && dist > range) {
         w = 0.0;
     }
     return w;
 }
 
-float compute_spot_weight(int idx, vec3 L) {
-    float cos_theta = dot(u_light_direction[idx], -L);
-    float cos_outer = cos(u_light_outer_angle[idx]);
-    float cos_inner = cos(u_light_inner_angle[idx]);
+float compute_spot_weight(vec3 light_dir, vec3 L, float inner_angle, float outer_angle) {
+    float cos_theta = dot(light_dir, -L);
+    float cos_outer = cos(outer_angle);
+    float cos_inner = cos(inner_angle);
 
     if (cos_theta <= cos_outer) return 0.0;
     if (cos_theta >= cos_inner) return 1.0;
 
     float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);
-    return t * t * (3.0 - 2.0 * t); // smoothstep
+    return t * t * (3.0 - 2.0 * t);
 }
 
-/**
- * Вычисляет коэффициент тени для источника света с hardware PCF.
- *
- * Использует sampler2DShadow для аппаратного сравнения глубины.
- * texture() возвращает результат сравнения с билинейной интерполяцией.
- *
- * Возвращает:
- *   1.0 — фрагмент освещён
- *   0.0 — фрагмент в тени
- */
-float compute_shadow(int light_index) {
+float blinn_phong_specular(vec3 N, vec3 L, vec3 V, float shininess) {
+    vec3 H = normalize(L + V);
+    float NdotH = max(dot(N, H), 0.0);
+    return pow(NdotH, shininess);
+}
+
+float compute_shadow_auto(int light_index) {
     for (int sm = 0; sm < u_shadow_map_count; ++sm) {
         if (u_shadow_light_index[sm] != light_index) {
             continue;
@@ -137,9 +133,7 @@ float compute_shadow(int light_index) {
             return 1.0;
         }
 
-        // Hardware PCF: texture() делает depth comparison автоматически
-        float shadow = sample_shadow_map(sm, vec3(proj_coords.xy, proj_coords.z - SHADOW_BIAS));
-        return shadow;
+        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - get_shadow_bias()));
     }
 
     return 1.0;
@@ -147,65 +141,85 @@ float compute_shadow(int light_index) {
 
 void main() {
     vec3 N = normalize(v_normal);
+    vec3 V = normalize(get_camera_position() - v_world_pos);
+
     vec4 tex_color = texture(u_albedo_texture, v_uv);
     vec3 base_color = u_color.rgb * tex_color.rgb;
 
-    // Scene-level ambient lighting
-    vec3 result = base_color * u_ambient_color * u_ambient_intensity;
+    vec3 result = base_color * get_ambient_color() * get_ambient_intensity();
 
-    for (int i = 0; i < u_light_count; ++i) {
-        int type = u_light_type[i];
-        vec3 radiance = u_light_color[i] * u_light_intensity[i];
+    for (int i = 0; i < get_light_count(); ++i) {
+        int type = get_light_type(i);
+        vec3 radiance = get_light_color(i) * get_light_intensity(i);
 
         vec3 L;
         float dist;
         float weight = 1.0;
 
         if (type == LIGHT_TYPE_DIRECTIONAL) {
-            L = normalize(-u_light_direction[i]); // направление на свет
+            L = normalize(-get_light_direction(i));
             dist = 1e9;
         } else {
-            vec3 to_light = u_light_position[i] - v_world_pos;
+            vec3 to_light = get_light_position(i) - v_world_pos;
             dist = length(to_light);
-            if (dist > 0.0001)
-                L = to_light / dist;
-            else
-                L = vec3(0.0, 1.0, 0.0);
+            L = dist > 0.0001 ? to_light / dist : vec3(0.0, 1.0, 0.0);
 
-            weight *= compute_distance_attenuation(i, dist);
+            weight *= compute_distance_attenuation(
+                get_light_attenuation(i),
+                get_light_range(i),
+                dist
+            );
 
             if (type == LIGHT_TYPE_SPOT) {
-                weight *= compute_spot_weight(i, L);
+                weight *= compute_spot_weight(
+                    get_light_direction(i),
+                    L,
+                    get_light_inner_angle(i),
+                    get_light_outer_angle(i)
+                );
             }
         }
 
-        // Вычисляем тень для directional lights
         float shadow = 1.0;
         if (type == LIGHT_TYPE_DIRECTIONAL) {
-            shadow = compute_shadow(i);
+            shadow = compute_shadow_auto(i);
         }
 
         float ndotl = max(dot(N, L), 0.0);
-        vec3 diffuse = base_color * ndotl; // Ламбертовский диффуз: L_d = c * max(N·L, 0)
+        vec3 diffuse = base_color * ndotl;
+        float spec = blinn_phong_specular(N, L, V, u_shininess);
+        vec3 specular = vec3(spec);
 
-        vec3 V = normalize(u_camera_position - v_world_pos);
-        vec3 H = normalize(L + V);
-        float ndoth = max(dot(N, H), 0.0);
-        float spec = pow(ndoth, u_shininess);
-
-        vec3 specular_color = vec3(1.0);
-        vec3 specular = spec * specular_color; // Блик Фонга: L_s = (max(N·H, 0))^n
-
-        // Применяем тень к диффузу и спекуляру
         result += (diffuse + specular) * radiance * weight * shadow;
     }
 
-    // Add emission (for HDR bloom)
-    vec3 emission = u_emission_color.rgb * u_emission_intensity;
-    result += emission;
-
-    FragColor = vec4(result, u_color.a);
+    result += u_emission_color.rgb * u_emission_intensity;
+    FragColor = vec4(result, u_color.a * tex_color.a);
 }
+"""
+
+DEFAULT_SHADER_TEXT = """@program DefaultShader
+@features lighting_ubo
+
+@phase opaque
+@priority 0
+@glDepthTest true
+@glDepthMask true
+@glCull true
+
+@property Color u_color = Color(1.0, 1.0, 1.0, 1.0)
+@property Float u_shininess = 32.0 range(1.0, 128.0)
+@property Color u_emission_color = Color(0.0, 0.0, 0.0, 1.0)
+@property Float u_emission_intensity = 0.0 range(0.0, 100.0)
+@property Texture u_albedo_texture = "white"
+
+@stage vertex
+""" + DEFAULT_VERT + """@endstage
+
+@stage fragment
+""" + DEFAULT_FRAG + """@endstage
+
+@endphase
 """
 
 
@@ -223,35 +237,18 @@ def create_default_material(
     Returns:
         TcMaterial с одной фазой "opaque".
     """
-    from termin.visualization.render.texture import get_white_texture
+    from termin.visualization.render.shader_parser import parse_shader_text
 
-    mat = TcMaterial.create(name, "")
-    mat.shader_name = "DefaultShader"
-
-    # Add opaque phase
-    state = TcRenderState.opaque()
-    phase = mat.add_phase_from_sources(
-        vertex_source=DEFAULT_VERT,
-        fragment_source=DEFAULT_FRAG,
-        geometry_source="",
-        shader_name="DefaultShader",
-        phase_mark="opaque",
-        priority=0,
-        state=state,
+    mat = TcMaterial.from_parsed(
+        parse_shader_text(DEFAULT_SHADER_TEXT),
+        name=name,
     )
 
+    phase = mat.default_phase()
     if phase is not None:
         # Set default color
         c = color or (1.0, 1.0, 1.0, 1.0)
         phase.set_color(c[0], c[1], c[2], c[3])
-
-        # Set white texture as default albedo
-        white_tex = get_white_texture()
-        if white_tex and white_tex.texture_data:
-            phase.set_texture("u_albedo_texture", white_tex.texture_data)
-
-        # Set default shininess
-        phase.set_uniform_float("u_shininess", 32.0)
 
     return mat
 

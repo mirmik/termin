@@ -272,6 +272,19 @@ std::string strip_uniform_decls(const std::string& source,
 std::string inject_after_version(const std::string& source, const std::string& block);
 
 /**
+ * Apply the same engine uniform rewrite used by .shader assets to a raw
+ * GLSL stage source created through TcMaterial.add_phase_from_sources().
+ *
+ * This strips plain u_model/u_view/u_projection-style declarations and
+ * injects the engine PerFrame block/push-constant bridge when the stage
+ * references those names. It also normalizes #version to 450 core.
+ */
+std::string rewrite_engine_uniforms_for_stage_source(
+    const std::string& source,
+    const std::string& stage_name
+);
+
+/**
  * Pack material property values into a std140-laid out byte buffer.
  *
  * For each entry in `layout.entries`, looks up a property with matching name
