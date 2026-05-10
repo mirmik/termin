@@ -24,6 +24,33 @@ namespace termin {
 uint32_t MaterialPass::s_quad_vao = 0;
 uint32_t MaterialPass::s_quad_vbo = 0;
 
+static tc_value string_map_to_tc_value(const std::unordered_map<std::string, std::string>& map) {
+    tc_value result = tc_value_dict_new();
+    for (const auto& [key, value] : map) {
+        tc_value_dict_set(&result, key.c_str(), tc_value_string(value.c_str()));
+    }
+    return result;
+}
+
+static void tc_value_to_string_map(
+    const tc_value* value,
+    std::unordered_map<std::string, std::string>& out
+) {
+    out.clear();
+    if (!value || value->type != TC_VALUE_DICT) {
+        return;
+    }
+
+    for (size_t i = 0; i < tc_value_dict_size(value); ++i) {
+        const char* key = nullptr;
+        tc_value* item = tc_value_dict_get_at(const_cast<tc_value*>(value), i, &key);
+        if (!key || !item || item->type != TC_VALUE_STRING || !item->data.s) {
+            continue;
+        }
+        out[key] = item->data.s;
+    }
+}
+
 MaterialPass::MaterialPass() {
     pass_name_set("MaterialPass");
     link_to_type_registry("MaterialPass");
@@ -31,6 +58,22 @@ MaterialPass::MaterialPass() {
 
 MaterialPass::~MaterialPass() {
     destroy();
+}
+
+tc_value MaterialPass::serialize_texture_resources() const {
+    return string_map_to_tc_value(texture_resources);
+}
+
+void MaterialPass::deserialize_texture_resources(const tc_value* value) {
+    tc_value_to_string_map(value, texture_resources);
+}
+
+tc_value MaterialPass::serialize_extra_resources() const {
+    return string_map_to_tc_value(extra_resources);
+}
+
+void MaterialPass::deserialize_extra_resources(const tc_value* value) {
+    tc_value_to_string_map(value, extra_resources);
 }
 
 void MaterialPass::set_texture_resource(const std::string& uniform_name, const std::string& resource_name) {

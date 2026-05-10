@@ -26,9 +26,16 @@ public:
     std::unordered_map<std::string, std::string> texture_resources;
     std::unordered_map<std::string, std::string> extra_resources;
 
+    tc_value serialize_texture_resources() const;
+    void deserialize_texture_resources(const tc_value* value);
+    tc_value serialize_extra_resources() const;
+    void deserialize_extra_resources(const tc_value* value);
+
     INSPECT_FIELD(MaterialPass, material, "Material", "tc_material")
     INSPECT_FIELD(MaterialPass, output_res, "Output Resource", "string")
     INSPECT_FIELD(MaterialPass, output_res_target, "Output Target", "string")
+    SERIALIZABLE_FIELD(MaterialPass, texture_resources, serialize_texture_resources(), deserialize_texture_resources(val))
+    SERIALIZABLE_FIELD(MaterialPass, extra_resources, serialize_extra_resources(), deserialize_extra_resources(val))
     INSPECT_TYPE_METADATA(MaterialPass, graph, make_pass_graph_metadata(
         {{"output_res_target", "fbo"}},
         {{"output_res", "fbo"}},
