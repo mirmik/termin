@@ -83,6 +83,7 @@ class RenderingControllerTcgui:
         # Register factories
         self._manager.set_display_factory(self._create_display_for_name)
         self._manager.set_pipeline_factory(self._create_pipeline_for_name)
+        self._manager.set_render_request_callback(self._request_update)
         self._manager.set_display_removed_callback(self._on_display_removed)
 
         self._connect_viewport_list_signals()

@@ -43,6 +43,7 @@ using DisplayFactory = std::function<tc_display*(const std::string& name)>;
 using PipelineFactory = std::function<tc_pipeline_handle(const std::string& name)>;
 using MakeCurrentCallback = std::function<void()>;
 using DisplayRemovedCallback = std::function<void(tc_display*)>;
+using RenderRequestCallback = std::function<void()>;
 
 // RenderingManager - manages displays and rendering
 //
@@ -83,8 +84,19 @@ public:
     // Set factory for creating pipelines by special name (e.g., "(Editor)")
     void set_pipeline_factory(PipelineFactory factory);
 
+    // Set callback used when rendering state changes outside the editor UI
+    // event path and a pull-mode host must render another frame.
+    void set_render_request_callback(RenderRequestCallback callback);
+
     // Create pipeline by name (uses C++ factory for "(Default)"/"Default", Python factory for rest)
     tc_pipeline_handle create_pipeline(const std::string& name);
+
+    // Recreate live render-target pipelines that were created from the given
+    // pipeline asset. Returns the number of render targets rebound.
+    size_t recreate_render_target_pipelines_for_asset(
+        const std::string& asset_name,
+        const std::string& asset_uuid
+    );
 
     // Create default render pipeline (Shadow, Skybox, Color, Transparent, PostFX, UIWidgets, Present)
     static tc_pipeline_handle make_default_pipeline();
@@ -328,6 +340,9 @@ private:
 
     // Callback when a display is removed
     DisplayRemovedCallback display_removed_callback_;
+
+    // Callback to request another frame in pull-rendering hosts.
+    RenderRequestCallback render_request_callback_;
 
     // Attached scenes (for scene pipeline execution)
     std::vector<tc_scene_handle> attached_scenes_;

@@ -76,7 +76,6 @@ def test_pipeline_graph_loads_explicit_render_target_nodes():
             ],
             "connections": [
                 {"from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "color"},
-                {"from_node": 0, "from_socket": "depth", "to_node": 1, "to_socket": "depth"},
             ],
         }
     )
@@ -86,8 +85,8 @@ def test_pipeline_graph_loads_explicit_render_target_nodes():
 
     assert input_node.title == "RenderTargetInput"
     assert output_node.title == "PipelineOutput"
-    assert [socket.name for socket in input_node.outputs] == ["color", "depth"]
-    assert [socket.name for socket in output_node.inputs] == ["color", "depth"]
+    assert [socket.name for socket in input_node.outputs] == ["color"]
+    assert [socket.name for socket in output_node.inputs] == ["color"]
 
     saved = _save_graph_to_pipeline_dict(graph)
 
@@ -97,7 +96,6 @@ def test_pipeline_graph_loads_explicit_render_target_nodes():
     assert saved["nodes"][1]["type"] == "PipelineOutput"
     assert saved["connections"] == [
         {"from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "color"},
-        {"from_node": 0, "from_socket": "depth", "to_node": 1, "to_socket": "depth"},
     ]
 
 

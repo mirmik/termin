@@ -153,6 +153,19 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("factory").none(),
            "Set factory for creating pipelines by special name")
 
+        .def("set_render_request_callback", [](RenderingManager& self, nb::callable callback) {
+            if (callback.is_none()) {
+                self.set_render_request_callback(nullptr);
+            } else {
+                nb::callable stored = callback;
+                self.set_render_request_callback([stored]() {
+                    nb::gil_scoped_acquire gil;
+                    stored();
+                });
+            }
+        }, nb::arg("callback").none(),
+           "Set callback called when rendering should be requested after internal render-state changes")
+
         .def("set_display_removed_callback", [](RenderingManager& self, nb::callable callback) {
             if (callback.is_none()) {
                 self.set_display_removed_callback(nullptr);
@@ -447,6 +460,12 @@ void bind_rendering_manager(nb::module_& m) {
             tc_pipeline_handle h = self.create_pipeline(name);
             return pipeline_to_python(h);
         }, nb::arg("name"))
+
+        .def("recreate_render_target_pipelines_for_asset",
+             &RenderingManager::recreate_render_target_pipelines_for_asset,
+             nb::arg("asset_name"),
+             nb::arg("asset_uuid") = "",
+             "Recreate live render-target pipelines that came from a pipeline asset")
 
         .def("shutdown", &RenderingManager::shutdown,
              "Cleanup all resources")

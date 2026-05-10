@@ -112,6 +112,7 @@ class RenderingController:
 
         # Register pipeline factory with RenderingManager
         self._manager.set_pipeline_factory(self._create_pipeline_for_name)
+        self._manager.set_render_request_callback(self._request_update)
 
         # Register display removed callback for Qt tab cleanup
         self._manager.set_display_removed_callback(self._on_display_removed)
