@@ -108,7 +108,6 @@ void main() {}
     node = graph.nodes["node_0"]
 
     assert [socket.name for socket in node.inputs] == [
-        "input_res",
         "output_res_target",
         "u_input_tex",
         "u_depth_texture",

@@ -21,18 +21,16 @@ namespace termin {
 class MaterialPass : public CxxFramePass {
 public:
     TcMaterial material;
-    std::string input_res = "input";
     std::string output_res = "color";
     std::string output_res_target;
     std::unordered_map<std::string, std::string> texture_resources;
     std::unordered_map<std::string, std::string> extra_resources;
 
     INSPECT_FIELD(MaterialPass, material, "Material", "tc_material")
-    INSPECT_FIELD(MaterialPass, input_res, "Input Resource", "string")
     INSPECT_FIELD(MaterialPass, output_res, "Output Resource", "string")
     INSPECT_FIELD(MaterialPass, output_res_target, "Output Target", "string")
     INSPECT_TYPE_METADATA(MaterialPass, graph, make_pass_graph_metadata(
-        {{"input_res", "fbo"}, {"output_res_target", "fbo"}},
+        {{"output_res_target", "fbo"}},
         {{"output_res", "fbo"}},
         {{"output_res_target", "output_res"}}
     ))

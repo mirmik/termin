@@ -605,15 +605,13 @@ NB_MODULE(_components_render_native, m) {
     }
 
     nb::class_<MaterialPass, CxxFramePass>(m, "MaterialPass")
-        .def("__init__", [](MaterialPass* self, const std::string& input_res, const std::string& output_res, nb::object material, const std::string& pass_name) {
+        .def("__init__", [](MaterialPass* self, const std::string& output_res, nb::object material, const std::string& pass_name) {
             new (self) MaterialPass();
-            self->input_res = input_res;
             self->output_res = output_res;
             self->set_pass_name(pass_name);
             set_material_from_python(*self, material);
             init_pass_from_python(self, "MaterialPass");
-        }, nb::arg("input_res") = "input", nb::arg("output_res") = "output", nb::arg("material") = nb::none(), nb::arg("pass_name") = "MaterialPass")
-        .def_rw("input_res", &MaterialPass::input_res)
+        }, nb::arg("output_res") = "output", nb::arg("material") = nb::none(), nb::arg("pass_name") = "MaterialPass")
         .def_rw("output_res", &MaterialPass::output_res)
         .def_rw("output_res_target", &MaterialPass::output_res_target)
         .def_prop_rw("material",
@@ -640,20 +638,17 @@ NB_MODULE(_components_render_native, m) {
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "MaterialPass";
-            std::string input_res = "input";
             std::string output_res = "output";
             std::string output_res_target;
             nb::object material = nb::none();
             if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
             if (data.contains("data")) {
                 nb::dict d = nb::cast<nb::dict>(data["data"]);
-                if (d.contains("input_res")) input_res = nb::cast<std::string>(d["input_res"]);
                 if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
                 if (d.contains("output_res_target")) output_res_target = nb::cast<std::string>(d["output_res_target"]);
                 if (d.contains("material")) material = nb::borrow<nb::object>(d["material"]);
             }
             auto* p = new MaterialPass();
-            p->input_res = input_res;
             p->output_res = output_res;
             p->output_res_target = output_res_target;
             p->set_pass_name(pass_name);
@@ -668,7 +663,6 @@ NB_MODULE(_components_render_native, m) {
     {
         m.attr("MaterialPass").attr("category") = "Render";
         m.attr("MaterialPass").attr("node_inputs") = nb::make_tuple(
-            nb::make_tuple("input_res", "fbo"),
             nb::make_tuple("output_res_target", "fbo")
         );
         m.attr("MaterialPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "fbo"));
