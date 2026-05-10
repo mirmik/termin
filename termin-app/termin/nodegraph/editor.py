@@ -22,7 +22,6 @@ from termin.nodegraph.view import NodeGraphView
 from termin.nodegraph.nodes import create_node
 from termin.nodegraph.serialization import serialize_graph, deserialize_graph
 from tcbase import log
-from termin.nodegraph.compiler import compile_graph_to_dict, CompileError
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -199,7 +198,7 @@ class PipelineGraphEditor(QMainWindow):
         self._status_bar.showMessage("Demo graph created. Nodes inside blue frame use viewport resolution.")
 
     def _compile_pipeline(self) -> None:
-        """Compile the graph into a RenderPipeline and print serialization."""
+        """Compile the graph with the native graph compiler and print serialization."""
         nodes = self._graph_scene.get_nodes()
         connections = self._graph_scene.get_connections()
 
@@ -207,7 +206,15 @@ class PipelineGraphEditor(QMainWindow):
         conn_count = len(connections)
 
         try:
-            pipeline_dict = compile_graph_to_dict(self._graph_scene)
+            from termin._native.render import compile_graph_from_json
+
+            graph_data = serialize_graph(self._graph_scene)
+            pipeline = compile_graph_from_json(json.dumps(graph_data))
+            if pipeline is None:
+                log.error("[PipelineGraphEditor] Native graph compiler returned None")
+                self._status_bar.showMessage("Compilation failed")
+                return
+            pipeline_dict = pipeline.serialize()
 
             self._status_bar.showMessage(
                 f"Compiled: {pass_count} passes, {conn_count} connections → "
@@ -221,12 +228,9 @@ class PipelineGraphEditor(QMainWindow):
             log.warning(json.dumps(pipeline_dict, indent=2, default=str))
             log.warning("=" * 60 + "\n")
 
-        except CompileError as e:
-            self._status_bar.showMessage(f"Compilation error: {e}")
-            log.error(f"\nCompilation error: {e}\n")
         except Exception as e:
-            self._status_bar.showMessage(f"Unexpected error: {e}")
-            log.error(f"\nUnexpected error during compilation: {e}\n")
+            self._status_bar.showMessage(f"Compilation error: {e}")
+            log.error(f"[PipelineGraphEditor] Native compilation failed: {e}")
             import traceback
             traceback.print_exc()
 
