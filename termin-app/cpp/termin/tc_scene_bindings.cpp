@@ -165,6 +165,25 @@ void bind_tc_scene(nb::module_& m) {
         .def_rw("dynamic_resolution", &RenderTargetConfig::dynamic_resolution)
         .def_rw("color_format", &RenderTargetConfig::color_format)
         .def_rw("depth_format", &RenderTargetConfig::depth_format)
+        .def_rw("clear_color", &RenderTargetConfig::clear_color)
+        .def_prop_rw("clear_color_value",
+            [](const RenderTargetConfig& self) {
+                return nb::make_tuple(
+                    self.clear_color_value[0],
+                    self.clear_color_value[1],
+                    self.clear_color_value[2],
+                    self.clear_color_value[3]);
+            },
+            [](RenderTargetConfig& self, nb::sequence value) {
+                if (nb::len(value) < 4) {
+                    throw nb::value_error("clear_color_value requires 4 values");
+                }
+                for (size_t i = 0; i < 4; i++) {
+                    self.clear_color_value[i] = nb::cast<float>(value[i]);
+                }
+            })
+        .def_rw("clear_depth", &RenderTargetConfig::clear_depth)
+        .def_rw("clear_depth_value", &RenderTargetConfig::clear_depth_value)
         .def_rw("pipeline_uuid", &RenderTargetConfig::pipeline_uuid)
         .def_rw("pipeline_name", &RenderTargetConfig::pipeline_name)
         .def_rw("layer_mask", &RenderTargetConfig::layer_mask)

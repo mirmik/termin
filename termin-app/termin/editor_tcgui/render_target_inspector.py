@@ -113,6 +113,47 @@ class RenderTargetInspectorTcgui(VStack):
         grid.add(self._depth_format_lbl, 6, 0)
         grid.add(self._depth_format, 6, 1)
 
+        clear_color_lbl = Label(); clear_color_lbl.text = "Clear Color:"; clear_color_lbl.preferred_width = px(96)
+        self._clear_color_lbl = clear_color_lbl
+        self._clear_color = Checkbox()
+        self._clear_color.on_changed = self._on_clear_color_changed
+        grid.add(self._clear_color_lbl, 7, 0)
+        grid.add(self._clear_color, 7, 1)
+
+        self._clear_color_value_lbls: list[Label] = []
+        self._clear_color_spins: list[SpinBox] = []
+        for idx, label in enumerate(("R:", "G:", "B:", "A:"), start=8):
+            lbl = Label(); lbl.text = label; lbl.preferred_width = px(96)
+            spin = SpinBox()
+            spin.decimals = 3
+            spin.step = 0.05
+            spin.min_value = -1000000.0
+            spin.max_value = 1000000.0
+            spin.on_changed = self._on_clear_color_value_changed
+            self._clear_color_value_lbls.append(lbl)
+            self._clear_color_spins.append(spin)
+            grid.add(lbl, idx, 0)
+            grid.add(spin, idx, 1)
+
+        clear_depth_lbl = Label(); clear_depth_lbl.text = "Clear Depth:"; clear_depth_lbl.preferred_width = px(96)
+        self._clear_depth_lbl = clear_depth_lbl
+        self._clear_depth = Checkbox()
+        self._clear_depth.on_changed = self._on_clear_depth_changed
+        grid.add(self._clear_depth_lbl, 12, 0)
+        grid.add(self._clear_depth, 12, 1)
+
+        clear_depth_value_lbl = Label(); clear_depth_value_lbl.text = "Depth Value:"; clear_depth_value_lbl.preferred_width = px(96)
+        self._clear_depth_value_lbl = clear_depth_value_lbl
+        self._clear_depth_value = SpinBox()
+        self._clear_depth_value.decimals = 4
+        self._clear_depth_value.step = 0.01
+        self._clear_depth_value.min_value = 0.0
+        self._clear_depth_value.max_value = 1.0
+        self._clear_depth_value.value = 1.0
+        self._clear_depth_value.on_changed = self._on_clear_depth_value_changed
+        grid.add(self._clear_depth_value_lbl, 13, 0)
+        grid.add(self._clear_depth_value, 13, 1)
+
         width_lbl = Label(); width_lbl.text = "Width:"; width_lbl.preferred_width = px(96)
         self._width_lbl = width_lbl
         self._width = SpinBox()
@@ -122,8 +163,8 @@ class RenderTargetInspectorTcgui(VStack):
         self._width.max_value = 8192
         self._width.value = 512
         self._width.on_changed = self._on_size_changed
-        grid.add(self._width_lbl, 7, 0)
-        grid.add(self._width, 7, 1)
+        grid.add(self._width_lbl, 14, 0)
+        grid.add(self._width, 14, 1)
 
         height_lbl = Label(); height_lbl.text = "Height:"; height_lbl.preferred_width = px(96)
         self._height_lbl = height_lbl
@@ -134,15 +175,15 @@ class RenderTargetInspectorTcgui(VStack):
         self._height.max_value = 8192
         self._height.value = 512
         self._height.on_changed = self._on_size_changed
-        grid.add(self._height_lbl, 8, 0)
-        grid.add(self._height, 8, 1)
+        grid.add(self._height_lbl, 15, 0)
+        grid.add(self._height, 15, 1)
 
         mask_lbl = Label(); mask_lbl.text = "Layer Mask:"; mask_lbl.preferred_width = px(96)
         self._mask_lbl = mask_lbl
         self._layer_mask_widget = LayerMaskFieldWidget()
         self._layer_mask_widget.on_value_changed = self._on_layer_mask_changed
-        grid.add(self._mask_lbl, 9, 0)
-        grid.add(self._layer_mask_widget, 9, 1)
+        grid.add(self._mask_lbl, 16, 0)
+        grid.add(self._layer_mask_widget, 16, 1)
 
         self._pipeline_params_sep = Separator()
         self._pipeline_params_sep.visible = False
@@ -207,6 +248,11 @@ class RenderTargetInspectorTcgui(VStack):
             self._dynamic_resolution.checked = bool(render_target.dynamic_resolution)
             self._select_combo_value(self._color_format, self._color_format_values, render_target.color_format)
             self._select_combo_value(self._depth_format, self._depth_format_values, render_target.depth_format)
+            self._clear_color.checked = bool(render_target.clear_color_enabled)
+            for spin, value in zip(self._clear_color_spins, render_target.clear_color_value):
+                spin.value = float(value)
+            self._clear_depth.checked = bool(render_target.clear_depth_enabled)
+            self._clear_depth_value.value = float(render_target.clear_depth_value)
             self._width.value = render_target.width
             self._height.value = render_target.height
             self._layer_mask_widget.set_value(render_target.layer_mask)
@@ -228,6 +274,16 @@ class RenderTargetInspectorTcgui(VStack):
         self._color_format.visible = has_target
         self._depth_format_lbl.visible = has_target
         self._depth_format.visible = has_target
+        self._clear_color_lbl.visible = has_target
+        self._clear_color.visible = has_target
+        for lbl in self._clear_color_value_lbls:
+            lbl.visible = has_target
+        for spin in self._clear_color_spins:
+            spin.visible = has_target
+        self._clear_depth_lbl.visible = has_target
+        self._clear_depth.visible = has_target
+        self._clear_depth_value_lbl.visible = has_target
+        self._clear_depth_value.visible = has_target
         self._mask_lbl.visible = has_target
         self._layer_mask_widget.visible = has_target
         self._update_size_visibility()
@@ -404,6 +460,30 @@ class RenderTargetInspectorTcgui(VStack):
             log.error(f"[RenderTargetInspector] invalid depth format index: {index}")
             return
         self._render_target.depth_format = self._depth_format_values[index]
+        self._emit_changed()
+
+    def _on_clear_color_changed(self, checked: bool) -> None:
+        if self._updating or self._render_target is None:
+            return
+        self._render_target.clear_color_enabled = bool(checked)
+        self._emit_changed()
+
+    def _on_clear_color_value_changed(self, _value: float) -> None:
+        if self._updating or self._render_target is None:
+            return
+        self._render_target.clear_color_value = tuple(spin.value for spin in self._clear_color_spins)
+        self._emit_changed()
+
+    def _on_clear_depth_changed(self, checked: bool) -> None:
+        if self._updating or self._render_target is None:
+            return
+        self._render_target.clear_depth_enabled = bool(checked)
+        self._emit_changed()
+
+    def _on_clear_depth_value_changed(self, _value: float) -> None:
+        if self._updating or self._render_target is None:
+            return
+        self._render_target.clear_depth_value = float(self._clear_depth_value.value)
         self._emit_changed()
 
     def _on_size_changed(self, _value: float) -> None:

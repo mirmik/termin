@@ -75,6 +75,14 @@ static uint64_t effective_layer_mask(uint64_t camera_mask, tc_render_target_hand
     return camera_mask & target_mask;
 }
 
+static void fill_render_target_clear_settings(ViewportContext& ctx, tc_render_target_handle rt) {
+    if (!tc_render_target_handle_valid(rt)) return;
+    ctx.clear_color_enabled = tc_render_target_get_clear_color_enabled(rt);
+    tc_render_target_get_clear_color_value(rt, ctx.clear_color);
+    ctx.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(rt);
+    ctx.clear_depth = tc_render_target_get_clear_depth_value(rt);
+}
+
 struct RenderTargetNameLookup {
     const char* name = nullptr;
     tc_render_target_handle result = TC_RENDER_TARGET_HANDLE_INVALID;
@@ -679,6 +687,15 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         }
         tc_render_target_set_layer_mask(rt, rtc->layer_mask);
         tc_render_target_set_enabled(rt, rtc->enabled);
+        tc_render_target_set_clear_color_enabled(rt, rtc->clear_color);
+        tc_render_target_set_clear_color_value(
+            rt,
+            rtc->clear_color_value[0],
+            rtc->clear_color_value[1],
+            rtc->clear_color_value[2],
+            rtc->clear_color_value[3]);
+        tc_render_target_set_clear_depth_enabled(rt, rtc->clear_depth);
+        tc_render_target_set_clear_depth_value(rt, rtc->clear_depth_value);
 
         if (rtc->camera_uuid && rtc->camera_uuid[0] != '\0' && pool) {
             tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, rtc->camera_uuid);
@@ -1219,6 +1236,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
             ctx.output_depth_format = render_target_format_to_tgfx2(
                 tc_render_target_get_depth_format(rt));
             fill_external_textures_from_render_target(ctx, rt, *vp_device);
+            fill_render_target_clear_settings(ctx, rt);
         } else {
             ViewportRenderState* state = get_viewport_state(viewport);
             if (state) {
@@ -1334,6 +1352,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         tc_render_target_get_color_format(rt));
     ctx.output_depth_format = render_target_format_to_tgfx2(
         tc_render_target_get_depth_format(rt));
+    fill_render_target_clear_settings(ctx, rt);
     fill_external_textures_from_render_target(ctx, rt, *device);
     contexts[ctx.name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
@@ -1439,6 +1458,7 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
         tc_render_target_get_color_format(rt));
     ctx.output_depth_format = render_target_format_to_tgfx2(
         tc_render_target_get_depth_format(rt));
+    fill_render_target_clear_settings(ctx, rt);
     fill_external_textures_from_render_target(ctx, rt, *device);
     contexts[name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
