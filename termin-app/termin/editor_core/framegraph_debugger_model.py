@@ -181,6 +181,15 @@ class FramegraphDebuggerModel:
         resource_type = self._resource_type(resource_name)
         if resource_type not in ("color_texture", "depth_texture", "fbo", "external_color"):
             resource_type = "depth_texture" if is_depth else "color_texture"
+        samples = 1
+        pipeline = self.get_current_pipeline()
+        if pipeline is not None and resource_name:
+            try:
+                source_info = pipeline.get_resource_info(resource_name)
+                if isinstance(source_info, dict) and "samples" in source_info:
+                    samples = int(source_info["samples"])
+            except Exception as e:
+                log.warn(f"[FrameDebugger] failed to read resource info for '{resource_name}': {e}")
         return {
             "key": resource_name,
             "width": int(capture.width),
@@ -188,7 +197,7 @@ class FramegraphDebuggerModel:
             "resource_type": resource_type,
             "color_format_name": _format_pixel_format(int(capture.format)),
             "has_depth": is_depth,
-            "samples": 1,
+            "samples": samples,
         }
 
     def _resource_type(self, resource_name: str) -> str | None:
@@ -302,6 +311,11 @@ class FramegraphDebuggerModel:
         parts.append(f"Тип: {resource['resource_type']}")
         parts.append(f"Размер: {w}×{h}")
         parts.append(f"fmt={resource['color_format_name']}")
+        samples = int(resource.get("samples", 1))
+        if samples > 1:
+            parts.append(f"MSAA={samples}x")
+        else:
+            parts.append("MSAA=off")
         return " | ".join(parts)
 
     def format_writer_pass(self) -> str:
@@ -325,24 +339,39 @@ class FramegraphDebuggerModel:
 
         current_resource = self._debug_source_res
         lines: list[str] = []
-        alias_lines: list[str] = []
         for p in schedule:
             reads_str = ", ".join(sorted(p.reads)) if p.reads else "∅"
             writes_str = ", ".join(sorted(p.writes)) if p.writes else "∅"
-            aliases = p.get_inplace_aliases()
             line = f"{p.pass_name}: {{{reads_str}}} → {{{writes_str}}}"
-            for src, dst in aliases:
-                alias_lines.append(f"{p.pass_name}: {src} -> {dst}")
             if isinstance(p, FrameDebuggerPass):
                 line = f"<span style='color: #ffb86c;'>► {line}</span>"
             elif current_resource and current_resource in p.writes:
                 line = f"<span style='color: #50fa7b; font-weight: bold;'>● {line}</span>"
             lines.append(line)
+        alias_lines = self._format_alias_groups()
         if alias_lines:
             lines.append("")
             lines.append("Aliases:")
             lines.extend(alias_lines)
         return "<pre>" + "<br>".join(lines) + "</pre>"
+
+    def _format_alias_groups(self) -> list[str]:
+        from termin.visualization.render.framegraph.core import FrameGraph
+
+        schedule = self._build_schedule(exclude_debugger=False)
+        if not schedule:
+            return []
+
+        graph = FrameGraph(schedule)
+        graph.build_schedule()
+
+        lines: list[str] = []
+        for canonical, group in sorted(graph.fbo_alias_groups().items()):
+            aliases = sorted(group)
+            if len(aliases) <= 1:
+                continue
+            lines.append(f"{canonical}: {', '.join(aliases)}")
+        return lines
 
     def format_pass_json(self) -> str:
         if self._selected_pass is None:

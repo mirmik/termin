@@ -10,6 +10,32 @@ from termin.render_framework import (
     tc_pass_registry_has,
 )
 
+
+def _collect_graph_socket_metadata(cls: type) -> dict:
+    inputs: list = []
+    outputs: list = []
+    inplace_pairs: list = []
+
+    for klass in reversed(cls.__mro__):
+        if klass is object:
+            continue
+        class_inputs = klass.__dict__.get("node_inputs")
+        if class_inputs is not None:
+            inputs = list(class_inputs)
+        class_outputs = klass.__dict__.get("node_outputs")
+        if class_outputs is not None:
+            outputs = list(class_outputs)
+        class_pairs = klass.__dict__.get("node_inplace_pairs")
+        if class_pairs is not None:
+            inplace_pairs = list(class_pairs)
+
+    return {
+        "node_inputs": inputs,
+        "node_outputs": outputs,
+        "node_inplace_pairs": inplace_pairs,
+    }
+
+
 class FramePass:
     """
     Логический проход кадра.
@@ -114,6 +140,12 @@ class FramePass:
             own_fields = cls.__dict__.get('inspect_fields', {})
             if own_fields:
                 registry.register_python_fields(cls.__name__, own_fields)
+
+            metadata = registry.get_type_metadata(cls.__name__)
+            if not isinstance(metadata, dict):
+                metadata = {}
+            metadata["graph"] = _collect_graph_socket_metadata(cls)
+            registry.set_type_metadata(cls.__name__, metadata)
 
             # Find parent type and register inheritance
             parent_name = None

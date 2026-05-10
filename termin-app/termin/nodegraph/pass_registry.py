@@ -146,6 +146,7 @@ SOCKET_FIELDS = {
     "depth_res",
     "id_res",
     "normal_res",
+    "output_res_target",
 }
 
 
@@ -330,27 +331,7 @@ def get_pass_sockets(class_name: str) -> tuple[list, list]:
     graph = _metadata_graph(class_name)
     metadata_inputs = _metadata_pairs(graph, "node_inputs")
     metadata_outputs = _metadata_pairs(graph, "node_outputs")
-    if metadata_inputs or metadata_outputs:
-        return metadata_inputs, metadata_outputs
-
-    cls = get_pass_class(class_name)
-    if cls is None:
-        return [], []
-
-    # Compatibility fallback for Python-only passes that still expose graph
-    # sockets as class metadata.
-    inputs = []
-    outputs = []
-
-    for klass in reversed(cls.__mro__):
-        class_inputs = klass.node_inputs
-        if class_inputs is not None:
-            inputs = list(class_inputs)
-        class_outputs = klass.node_outputs
-        if class_outputs is not None:
-            outputs = list(class_outputs)
-
-    return inputs, outputs
+    return metadata_inputs, metadata_outputs
 
 
 def get_pass_inplace_pairs(class_name: str) -> list:
@@ -365,23 +346,7 @@ def get_pass_inplace_pairs(class_name: str) -> list:
     """
     graph = _metadata_graph(class_name)
     metadata_pairs = _metadata_pairs(graph, "node_inplace_pairs")
-    if metadata_pairs:
-        return metadata_pairs
-
-    cls = get_pass_class(class_name)
-    if cls is None:
-        return []
-
-    # Compatibility fallback for Python-only passes that still expose graph
-    # sockets as class metadata.
-    pairs = []
-
-    for klass in reversed(cls.__mro__):
-        class_pairs = klass.node_inplace_pairs
-        if class_pairs is not None:
-            pairs = list(class_pairs)
-
-    return pairs
+    return metadata_pairs
 
 
 def get_pass_categories() -> Dict[str, List[str]]:

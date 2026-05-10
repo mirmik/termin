@@ -123,12 +123,14 @@ class ResolvePass(RenderFramePass):
 
     category = "Output"
 
-    node_inputs = [("input_res", "fbo")]
+    node_inputs = [("input_res", "fbo"), ("output_res_target", "fbo")]
     node_outputs = [("output_res", "fbo")]
+    node_inplace_pairs = [("output_res_target", "output_res")]
 
     inspect_fields = {
         "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
         "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+        "output_res_target": InspectField(path="output_res_target", label="Output Target", kind="string"),
     }
 
     def __init__(
@@ -140,12 +142,21 @@ class ResolvePass(RenderFramePass):
         super().__init__(pass_name=pass_name)
         self.input_res = input_res
         self.output_res = output_res
+        self.output_res_target = ""
 
     def compute_reads(self) -> Set[str]:
-        return {self.input_res}
+        reads = {self.input_res}
+        if self.output_res_target:
+            reads.add(self.output_res_target)
+        return reads
 
     def compute_writes(self) -> Set[str]:
         return {self.output_res}
+
+    def get_inplace_aliases(self) -> list[tuple[str, str]]:
+        if not self.output_res_target:
+            return []
+        return [(self.output_res_target, self.output_res)]
 
     def execute(self, ctx: "ExecuteContext") -> None:
         from tcbase import log

@@ -30,6 +30,7 @@ _SOCKET_PARAM_NAMES = {
     "depth_res",
     "id_res",
     "normal_res",
+    "output_res_target",
 }
 _FBO_FORMAT_CHOICES = [
     ("render_target", "As Output RenderTarget"),
@@ -154,12 +155,6 @@ def _add_inspect_params(node, class_name: str, seen: set[str]) -> None:
         log.warn(f"[PipelineEditor] failed to collect inspect params for {class_name}: {e}")
 
 
-def _is_python_frame_pass(pass_class) -> bool:
-    from termin.visualization.render.framegraph.core import FramePass
-
-    return issubclass(pass_class, FramePass)
-
-
 def _populate_pass_node_params(node, pass_class_name: str) -> None:
     from termin.visualization.core.resources import ResourceManager
 
@@ -219,44 +214,11 @@ def _node_title(node_type: str, graph_type: str, instance_name: str) -> str:
 
 
 def _extract_pass_socket_info(pass_class_name: str) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
-    from termin.visualization.core.resources import ResourceManager
+    from termin.nodegraph.pass_registry import get_pass_inplace_pairs, get_pass_sockets
 
-    rm = ResourceManager.instance()
-    rm.register_builtin_frame_passes()
-    cls = rm.get_frame_pass(pass_class_name)
-    if cls is None:
-        return [], [], []
-
-    inputs: list[tuple[str, str]] = []
-    outputs: list[tuple[str, str]] = []
-    inplace_pairs: list[tuple[str, str]] = []
-
-    if not _is_python_frame_pass(cls):
-        class_inputs = cls.__dict__.get("node_inputs")
-        if class_inputs is not None:
-            inputs = list(class_inputs)
-        class_outputs = cls.__dict__.get("node_outputs")
-        if class_outputs is not None:
-            outputs = list(class_outputs)
-        class_pairs = cls.__dict__.get("node_inplace_pairs")
-        if class_pairs is not None:
-            inplace_pairs = list(class_pairs)
-        return inputs, outputs, inplace_pairs
-
-    for klass in reversed(cls.__mro__):
-        if klass is object:
-            continue
-        class_inputs = klass.node_inputs
-        if class_inputs is not None:
-            inputs = list(class_inputs)
-        class_outputs = klass.node_outputs
-        if class_outputs is not None:
-            outputs = list(class_outputs)
-        class_pairs = klass.node_inplace_pairs
-        if class_pairs is not None:
-            inplace_pairs = list(class_pairs)
-
-    return inputs, outputs, inplace_pairs
+    inputs, outputs = get_pass_sockets(pass_class_name)
+    inplace_pairs = get_pass_inplace_pairs(pass_class_name)
+    return list(inputs), list(outputs), list(inplace_pairs)
 
 
 def _load_graph_from_pipeline_dict(data: dict):

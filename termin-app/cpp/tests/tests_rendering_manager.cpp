@@ -11,6 +11,7 @@ extern "C" {
 #include "core/tc_scene_render_mount.h"
 #include "render/tc_display.h"
 #include "render/tc_pipeline.h"
+#include "render/tc_frame_graph.h"
 #include "render/tc_pipeline_pool.h"
 #include "inspect/tc_inspect_pass_adapter.h"
 #include "render/tc_render_target.h"
@@ -112,10 +113,13 @@ TEST_CASE("Graph compiler treats render target input as external resources")
     REQUIRE(naming.socket_names.count("0") == 1u);
     CHECK(naming.socket_names["0"]["color"] == "RT_COLOR");
     CHECK(naming.socket_names["2"]["input_res"] == "fbo_1");
-    CHECK(naming.socket_names["2"]["output_res"] == "RT_COLOR");
-    CHECK(naming.socket_names["3"]["color"] == "RT_COLOR");
+    CHECK(naming.socket_names["2"]["output_res"] == "DepthPass_2_output_res");
+    CHECK(naming.socket_names["3"]["color"] == "DepthPass_2_output_res");
     CHECK(naming.resource_types["RT_COLOR"] == "external_color");
     CHECK(naming.external_resources["RT_COLOR"] == "render_target_color");
+    REQUIRE(naming.fbo_compositions.count("DepthPass_2_output_res") == 1u);
+    CHECK(naming.fbo_compositions["DepthPass_2_output_res"].color == "RT_COLOR");
+    CHECK(naming.fbo_compositions["DepthPass_2_output_res"].depth == "RT_COLOR");
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
@@ -129,8 +133,12 @@ TEST_CASE("Graph compiler treats render target input as external resources")
     tc_value_free(&input_res);
     tc_value output_res = tc_pass_inspect_get(pass.ptr(), "output_res");
     REQUIRE(output_res.type == TC_VALUE_STRING);
-    CHECK(std::string(output_res.data.s) == "RT_COLOR");
+    CHECK(std::string(output_res.data.s) == "DepthPass_2_output_res");
     tc_value_free(&output_res);
+
+    tc_frame_graph* fg = tc_pipeline_get_frame_graph(pipeline->handle());
+    REQUIRE(fg != nullptr);
+    CHECK(tc_frame_graph_get_error(fg) == TC_FG_OK);
 
     bool found_fbo = false;
     for (size_t i = 0; i < pipeline->spec_count(); i++) {
@@ -144,6 +152,45 @@ TEST_CASE("Graph compiler treats render target input as external resources")
         }
     }
     CHECK(found_fbo);
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler allows passes to write into render target input")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTargetInput", "node_type": "render_target_input", "x": -420.0, "y": -80.0 },
+    {
+      "type": "FBO",
+      "node_type": "resource",
+      "x": -263.0,
+      "y": -78.0,
+      "params": { "format": "r32f", "size_mode": "fixed", "width": 1024, "height": 1024 }
+    },
+    { "type": "DepthPass", "x": 81.0, "y": -17.0 },
+    { "type": "PipelineOutput", "node_type": "pipeline_output", "x": 409.0, "y": 40.0 }
+  ],
+  "connections": [
+    { "from_node": 1, "from_socket": "fbo", "to_node": 2, "to_socket": "input_res" },
+    { "from_node": 0, "from_socket": "color", "to_node": 2, "to_socket": "output_res_target" },
+    { "from_node": 2, "from_socket": "output_res", "to_node": 3, "to_socket": "color" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+
+    tc_frame_graph* fg = tc_pipeline_get_frame_graph(pipeline->handle());
+    REQUIRE(fg != nullptr);
+    CHECK(tc_frame_graph_get_error(fg) == TC_FG_OK);
 
     pipeline->destroy();
     delete pipeline;
@@ -397,8 +444,14 @@ TEST_CASE("Graph compiler supports standalone texture resource nodes")
     CHECK(naming.resource_types["ScratchColor"] == "color_texture");
     CHECK(naming.socket_names["1"]["depth"] == "ScratchDepth");
     CHECK(naming.resource_types["ScratchDepth"] == "depth_texture");
-    CHECK(naming.socket_names["2"]["output_res"] == "ScratchDepth");
-    CHECK(naming.socket_names["3"]["output_res"] == "ScratchColor");
+    CHECK(naming.socket_names["2"]["output_res"] == "ColorToDepthPass_2_output_res");
+    CHECK(naming.socket_names["3"]["output_res"] == "DepthToColorPass_3_output_res");
+    REQUIRE(naming.resource_views.count("ColorToDepthPass_2_output_res") == 1u);
+    CHECK(naming.resource_views["ColorToDepthPass_2_output_res"].parent == "ScratchDepth");
+    CHECK(naming.resource_views["ColorToDepthPass_2_output_res"].attachment == termin::AttachmentKind::Depth);
+    REQUIRE(naming.resource_views.count("DepthToColorPass_3_output_res") == 1u);
+    CHECK(naming.resource_views["DepthToColorPass_3_output_res"].parent == "ScratchColor");
+    CHECK(naming.resource_views["DepthToColorPass_3_output_res"].attachment == termin::AttachmentKind::Color);
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
