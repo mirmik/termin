@@ -443,6 +443,7 @@ NB_MODULE(_components_render_native, m) {
             init_pass_from_python(self, "DepthOnlyPass");
         }, nb::arg("output_res") = "depth_texture", nb::arg("pass_name") = "DepthOnly")
         .def_rw("output_res", &DepthOnlyPass::output_res)
+        .def_rw("output_res_target", &DepthOnlyPass::output_res_target)
         .def_rw("camera_name", &DepthOnlyPass::camera_name)
         .def("get_internal_symbols", &DepthOnlyPass::get_internal_symbols)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
@@ -450,14 +451,17 @@ NB_MODULE(_components_render_native, m) {
             std::string pass_name = "DepthOnly";
             std::string camera_name;
             std::string output_res = "depth_texture";
+            std::string output_res_target;
             if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
             if (data.contains("data")) {
                 nb::dict d = nb::cast<nb::dict>(data["data"]);
                 if (d.contains("camera_name")) camera_name = nb::cast<std::string>(d["camera_name"]);
                 if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
+                if (d.contains("output_res_target")) output_res_target = nb::cast<std::string>(d["output_res_target"]);
             }
             auto* p = new DepthOnlyPass(output_res, pass_name);
             p->camera_name = camera_name;
+            p->output_res_target = output_res_target;
             return init_pass_from_deserialize(p, "DepthOnlyPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &DepthOnlyPass::compute_reads)
@@ -471,9 +475,9 @@ NB_MODULE(_components_render_native, m) {
         visibility["camera_name"] = camera_cond;
         m.attr("DepthOnlyPass").attr("node_param_visibility") = visibility;
         m.attr("DepthOnlyPass").attr("category") = "Render";
-        m.attr("DepthOnlyPass").attr("node_inputs") = nb::make_tuple();
+        m.attr("DepthOnlyPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("output_res_target", "depth_texture"));
         m.attr("DepthOnlyPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "depth_texture"));
-        m.attr("DepthOnlyPass").attr("node_inplace_pairs") = nb::make_tuple();
+        m.attr("DepthOnlyPass").attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("output_res_target", "output_res"));
     }
 
     nb::class_<DepthToColorPass, CxxFramePass>(m, "DepthToColorPass")
@@ -483,18 +487,22 @@ NB_MODULE(_components_render_native, m) {
         }, nb::arg("input_res") = "depth_texture", nb::arg("output_res") = "depth_color", nb::arg("pass_name") = "DepthToColor")
         .def_rw("input_res", &DepthToColorPass::input_res)
         .def_rw("output_res", &DepthToColorPass::output_res)
+        .def_rw("output_res_target", &DepthToColorPass::output_res_target)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "DepthToColor";
             std::string input_res = "depth_texture";
             std::string output_res = "depth_color";
+            std::string output_res_target;
             if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
             if (data.contains("data")) {
                 nb::dict d = nb::cast<nb::dict>(data["data"]);
                 if (d.contains("input_res")) input_res = nb::cast<std::string>(d["input_res"]);
                 if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
+                if (d.contains("output_res_target")) output_res_target = nb::cast<std::string>(d["output_res_target"]);
             }
             auto* p = new DepthToColorPass(input_res, output_res, pass_name);
+            p->output_res_target = output_res_target;
             return init_pass_from_deserialize(p, "DepthToColorPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &DepthToColorPass::compute_reads)
@@ -503,9 +511,9 @@ NB_MODULE(_components_render_native, m) {
 
     {
         m.attr("DepthToColorPass").attr("category") = "Render";
-        m.attr("DepthToColorPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "depth_texture"));
+        m.attr("DepthToColorPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "depth_texture"), nb::make_tuple("output_res_target", "color_texture"));
         m.attr("DepthToColorPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "color_texture"));
-        m.attr("DepthToColorPass").attr("node_inplace_pairs") = nb::make_tuple();
+        m.attr("DepthToColorPass").attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("output_res_target", "output_res"));
     }
 
     nb::class_<ColorToDepthPass, CxxFramePass>(m, "ColorToDepthPass")
@@ -515,18 +523,22 @@ NB_MODULE(_components_render_native, m) {
         }, nb::arg("input_res") = "color_texture", nb::arg("output_res") = "depth_texture", nb::arg("pass_name") = "ColorToDepth")
         .def_rw("input_res", &ColorToDepthPass::input_res)
         .def_rw("output_res", &ColorToDepthPass::output_res)
+        .def_rw("output_res_target", &ColorToDepthPass::output_res_target)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
             std::string pass_name = "ColorToDepth";
             std::string input_res = "color_texture";
             std::string output_res = "depth_texture";
+            std::string output_res_target;
             if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
             if (data.contains("data")) {
                 nb::dict d = nb::cast<nb::dict>(data["data"]);
                 if (d.contains("input_res")) input_res = nb::cast<std::string>(d["input_res"]);
                 if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
+                if (d.contains("output_res_target")) output_res_target = nb::cast<std::string>(d["output_res_target"]);
             }
             auto* p = new ColorToDepthPass(input_res, output_res, pass_name);
+            p->output_res_target = output_res_target;
             return init_pass_from_deserialize(p, "ColorToDepthPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &ColorToDepthPass::compute_reads)
@@ -535,9 +547,9 @@ NB_MODULE(_components_render_native, m) {
 
     {
         m.attr("ColorToDepthPass").attr("category") = "Render";
-        m.attr("ColorToDepthPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "color_texture"));
+        m.attr("ColorToDepthPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "color_texture"), nb::make_tuple("output_res_target", "depth_texture"));
         m.attr("ColorToDepthPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "depth_texture"));
-        m.attr("ColorToDepthPass").attr("node_inplace_pairs") = nb::make_tuple();
+        m.attr("ColorToDepthPass").attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("output_res_target", "output_res"));
     }
 
     nb::class_<NormalPass, CxxFramePass>(m, "NormalPass")
