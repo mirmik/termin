@@ -78,6 +78,8 @@ def _material_choices() -> list[tuple[str, str]]:
 def _normalize_param_spec(kind: str, choices):
     if kind == "tc_material":
         return "enum", _material_choices()
+    if choices:
+        return "enum", choices
     return kind, choices
 
 
@@ -168,7 +170,7 @@ def _populate_pass_node_params(node, pass_class_name: str) -> None:
         log.warn(f"[PipelineEditor] pass class not found for node params: {pass_class_name}")
         return
 
-    seen = set(node.params.keys())
+    seen: set[str] = set()
     _add_inspect_params(node, pass_class_name, seen)
 
 

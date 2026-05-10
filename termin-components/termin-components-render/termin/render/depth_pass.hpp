@@ -28,6 +28,19 @@ private:
     void release_tgfx2_resources();
 
 public:
+    std::string depth_encoding = "linear";
+    bool clear = true;
+
+    INSPECT_FIELD_CHOICES(DepthPass, depth_encoding, "Depth Encoding", "string",
+        {"linear", "Linear"},
+        {"linear_inverse", "Linear Inverse"},
+        {"perspective", "Perspective"},
+        {"perspective_inverse", "Perspective Inverse"},
+        {"logarithmic", "Logarithmic"},
+        {"logarithmic_inverse", "Logarithmic Inverse"}
+    )
+    INSPECT_FIELD(DepthPass, clear, "Clear", "bool")
+
     DepthPass(
         const std::string& input_res = "empty_depth",
         const std::string& output_res = "depth",
@@ -62,7 +75,7 @@ public:
 protected:
     const char* vertex_shader_source() const override { return DEPTH_PASS_VERT; }
     const char* fragment_shader_source() const override { return DEPTH_PASS_FRAG; }
-    std::array<float, 4> clear_color() const override { return {1.0f, 1.0f, 1.0f, 1.0f}; }
+    std::array<float, 4> clear_color() const override;
     const char* phase_name() const override { return "depth"; }
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };

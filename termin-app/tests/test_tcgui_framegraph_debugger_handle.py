@@ -58,13 +58,16 @@ class _WindowUI:
 
 
 class _Capture:
+    capture_tex = object()
     width = 64
     height = 32
+    is_depth = False
 
 
 class _Core:
     capture_tex = object()
     capture = _Capture()
+    depth_capture = _Capture()
 
 
 class _Renderer:
@@ -115,6 +118,7 @@ def test_close_tears_down_and_closes_native_window_once():
 def test_capture_preview_forwards_channel_mode_to_texture_draw():
     preview = CapturePreviewWidget()
     preview._core = _Core()
+    preview._capture = preview._core.capture
     preview.has_content = True
     preview.channel_mode = 4
     preview.highlight_hdr = True
@@ -125,3 +129,20 @@ def test_capture_preview_forwards_channel_mode_to_texture_draw():
 
     assert renderer.texture_kwargs["channel_mode"] == 4
     assert renderer.texture_kwargs["highlight_hdr"] is True
+
+
+def test_capture_preview_forces_depth_to_red_channel_without_hdr():
+    preview = CapturePreviewWidget()
+    preview._core = _Core()
+    preview._capture = preview._core.capture
+    preview._capture.is_depth = True
+    preview.has_content = True
+    preview.channel_mode = 4
+    preview.highlight_hdr = True
+    preview.layout(0, 0, 120, 80, 120, 80)
+
+    renderer = _Renderer()
+    preview.render(renderer)
+
+    assert renderer.texture_kwargs["channel_mode"] == 5
+    assert renderer.texture_kwargs["highlight_hdr"] is False

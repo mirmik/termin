@@ -102,7 +102,9 @@ void OffscreenRenderSurface::allocate_textures() {
     depth_desc.height = static_cast<uint32_t>(height_);
     depth_desc.format = tgfx::PixelFormat::D24_UNorm;
     depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment |
-                       tgfx::TextureUsage::Sampled;
+                       tgfx::TextureUsage::Sampled |
+                       tgfx::TextureUsage::CopySrc |
+                       tgfx::TextureUsage::CopyDst;
     depth_tex_ = device_->create_texture(depth_desc);
 }
 

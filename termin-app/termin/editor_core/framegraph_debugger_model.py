@@ -64,19 +64,16 @@ class FramegraphDebugTarget:
     source: object
     label: str
     get_pipeline: Callable[[], object | None]
-    get_resource_info: Callable[[str], dict | None] | None
 
     def __init__(
         self,
         source: object,
         label: str,
         get_pipeline: Callable[[], object | None],
-        get_resource_info: Callable[[str], dict | None] | None = None,
     ) -> None:
         self.source = source
         self.label = label
         self.get_pipeline = get_pipeline
-        self.get_resource_info = get_resource_info
 
 
 class FramegraphDebuggerModel:
@@ -176,10 +173,39 @@ class FramegraphDebuggerModel:
                 result[key] = fbo
         return result
 
-    def get_target_resource_info(self, resource_name: str) -> dict | None:
-        if self._current_target is None or self._current_target.get_resource_info is None:
+    def get_capture_resource_info(self, resource_name: str) -> dict | None:
+        capture = self._core.capture
+        if not capture.has_capture():
             return None
-        return self._current_target.get_resource_info(resource_name)
+        is_depth = bool(capture.is_depth)
+        resource_type = self._resource_type(resource_name)
+        if resource_type not in ("color_texture", "depth_texture", "fbo", "external_color"):
+            resource_type = "depth_texture" if is_depth else "color_texture"
+        return {
+            "key": resource_name,
+            "width": int(capture.width),
+            "height": int(capture.height),
+            "resource_type": resource_type,
+            "color_format_name": _format_pixel_format(int(capture.format)),
+            "has_depth": is_depth,
+            "samples": 1,
+        }
+
+    def _resource_type(self, resource_name: str) -> str | None:
+        if not resource_name:
+            return None
+        if resource_name.endswith(".depth") or resource_name == "RT_DEPTH":
+            return "depth_texture"
+        if resource_name.endswith(".color"):
+            return "color_texture"
+
+        pipeline = self.get_current_pipeline()
+        if pipeline is None:
+            return None
+        for spec in pipeline.pipeline_specs:
+            if spec.resource == resource_name:
+                return spec.resource_type
+        return None
 
     # ------------------------------------------------------------------
     # Refresh list contents (from rendering_controller / pipeline state)
@@ -264,57 +290,18 @@ class FramegraphDebuggerModel:
     # ------------------------------------------------------------------
 
     def format_fbo_info(self) -> str:
-        """Info line for the currently-selected source resource.
-
-        ``RenderPipeline.get_fbo(key)`` returns a dict (see
-        render_pipeline_bindings.cpp); ``ShadowMapArrayResource`` is a
-        separate dataclass-like type — check its type first.
-        """
-        from termin.visualization.render.framegraph.resource import ShadowMapArrayResource
-
-        fbos = self.get_fbos()
+        """Info line for the resource actually captured by the debugger."""
         resource_name = self._debug_source_res
-        resource = None
-        if resource_name in ("OUTPUT", "DISPLAY", "RT_COLOR", "RT_DEPTH"):
-            resource = self.get_target_resource_info(resource_name)
+        resource = self.get_capture_resource_info(resource_name)
         if resource is None:
-            resource = fbos.get(resource_name) if fbos else None
-        if resource is None:
-            resource = self.get_target_resource_info(resource_name)
-        if resource is None:
-            return f"Ресурс '{resource_name}': не найден"
+            return f"Ресурс '{resource_name}': capture ещё не получен"
 
         parts = [f"<b>{resource_name}</b>"]
-        if isinstance(resource, ShadowMapArrayResource):
-            parts.append(f"Тип: ShadowMapArray ({len(resource)} entries)")
-            if len(resource) > 0:
-                fbo = resource[0].fbo
-                if fbo is not None:
-                    w, h = fbo.get_size()
-                    parts.append(f"Размер: {w}×{h}")
-        elif isinstance(resource, dict):
-            w = int(resource.get("width", 0))
-            h = int(resource.get("height", 0))
-            parts.append(f"Размер: {w}×{h}")
-            color_format_name = resource.get("color_format_name")
-            if color_format_name is None:
-                color_format = int(resource.get("color_format", 14))
-                color_format_name = _format_pixel_format(color_format)
-            parts.append(f"fmt={color_format_name}")
-            if resource.get("has_depth", False):
-                depth_format_name = resource.get("depth_format_name")
-                if depth_format_name is None:
-                    depth_format = int(resource.get("depth_format", 14))
-                    depth_format_name = _format_pixel_format(depth_format)
-                parts.append(f"depth_fmt={depth_format_name}")
-            samples = int(resource.get("samples", 1))
-            if samples > 1:
-                parts.append(f"MSAA={samples}x")
-            handle = resource.get("color_native_handle", 0)
-            if handle:
-                parts.append(f"id={handle}")
-        else:
-            parts.append(f"Тип: {type(resource).__name__}")
+        w = int(resource["width"])
+        h = int(resource["height"])
+        parts.append(f"Тип: {resource['resource_type']}")
+        parts.append(f"Размер: {w}×{h}")
+        parts.append(f"fmt={resource['color_format_name']}")
         return " | ".join(parts)
 
     def format_writer_pass(self) -> str:
@@ -338,19 +325,23 @@ class FramegraphDebuggerModel:
 
         current_resource = self._debug_source_res
         lines: list[str] = []
+        alias_lines: list[str] = []
         for p in schedule:
             reads_str = ", ".join(sorted(p.reads)) if p.reads else "∅"
             writes_str = ", ".join(sorted(p.writes)) if p.writes else "∅"
             aliases = p.get_inplace_aliases()
-            aliases_str = ", ".join(f"{src} -> {dst}" for src, dst in aliases)
             line = f"{p.pass_name}: {{{reads_str}}} → {{{writes_str}}}"
-            if aliases_str:
-                line += f" aliases [{aliases_str}]"
+            for src, dst in aliases:
+                alias_lines.append(f"{p.pass_name}: {src} -> {dst}")
             if isinstance(p, FrameDebuggerPass):
                 line = f"<span style='color: #ffb86c;'>► {line}</span>"
             elif current_resource and current_resource in p.writes:
                 line = f"<span style='color: #50fa7b; font-weight: bold;'>● {line}</span>"
             lines.append(line)
+        if alias_lines:
+            lines.append("")
+            lines.append("Aliases:")
+            lines.extend(alias_lines)
         return "<pre>" + "<br>".join(lines) + "</pre>"
 
     def format_pass_json(self) -> str:
@@ -489,6 +480,11 @@ class FramegraphDebuggerModel:
             self.hdr_stats_changed.emit(text)
             return text
 
+        if self._core.capture.is_depth:
+            text = "HDR stats недоступны для depth_texture"
+            self.hdr_stats_changed.emit(text)
+            return text
+
         stats = self._core.presenter.compute_hdr_stats(device, capture_tex)
         lines = [
             f"<b>R:</b> {stats.min_r:.3f} - {stats.max_r:.3f} (avg: {stats.avg_r:.3f})",
@@ -541,6 +537,7 @@ class FramegraphDebuggerModel:
                 p.clear_debug_capture()
         self._connected_pipeline = None
         self._core.capture.reset_capture()
+        self._core.depth_capture.reset_capture()
 
     def _known_pipelines(self) -> list:
         result = []
@@ -575,11 +572,18 @@ class FramegraphDebuggerModel:
                     return None
                 return self._debug_source_res
 
+            def get_source_type():
+                if self._debug_paused:
+                    return None
+                return self._resource_type(self._debug_source_res)
+
             self._frame_debugger_pass = FrameDebuggerPass(
                 get_source_res=get_source,
+                get_source_type=get_source_type,
                 pass_name="FrameDebugger",
             )
             self._frame_debugger_pass.set_capture(self._core.capture)
+            self._frame_debugger_pass.set_depth_capture(self._core.depth_capture)
             pipeline.add_pass(self._frame_debugger_pass)
             log.info(
                 f"[FrameDebugger] Connected: between mode, "

@@ -24,33 +24,6 @@ using termin::RenderingManager;
 using termin::RenderPipeline;
 using termin::ResourceSpec;
 
-TEST_CASE("Graph compiler maps RenderTarget output node to viewport OUTPUT")
-{
-    const char* json = R"JSON(
-{
-  "name": "graph_pipeline",
-  "nodes": [
-    { "type": "SkyBoxPass", "x": -40.0, "y": -37.0 },
-    { "type": "FBO", "x": -377.0, "y": -26.0, "node_type": "resource" },
-    { "type": "RenderTarget", "x": 281.0, "y": -34.0, "node_type": "output" }
-  ],
-  "connections": [
-    { "from_node": 1, "from_socket": "fbo", "to_node": 0, "to_socket": "input_res" },
-    { "from_node": 0, "from_socket": "output_res", "to_node": 2, "to_socket": "color" }
-  ],
-  "viewport_frames": []
-}
-)JSON";
-
-    nos::trent data = nos::json::parse(json);
-    tc::GraphData graph = tc::GraphData::from_trent(data);
-    tc::ResourceNaming naming = tc::assign_resource_names(graph);
-
-    REQUIRE(naming.socket_names.count("0") == 1u);
-    REQUIRE(naming.socket_names["0"].count("output_res") == 1u);
-    CHECK(naming.socket_names["0"]["output_res"] == "OUTPUT");
-}
-
 TEST_CASE("Graph compiler preserves FBO resource params on generated names")
 {
     const char* json = R"JSON(
@@ -199,13 +172,13 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
     tc::ResourceNaming naming = tc::assign_resource_names(graph);
 
     CHECK(naming.socket_names["1"]["input_res"] == "RT_COLOR");
-    CHECK(naming.socket_names["1"]["output_res"] == "OUTPUT");
-    CHECK(naming.socket_names["2"]["color"] == "OUTPUT");
+    CHECK(naming.socket_names["1"]["output_res"] == "DepthPass_1_output_res");
+    CHECK(naming.socket_names["2"]["color"] == "DepthPass_1_output_res");
 
     termin::RenderPipeline* pipeline = tc::compile_graph(graph);
     REQUIRE(pipeline != nullptr);
     REQUIRE(pipeline->pass_count() == 3u);
-    CHECK(pipeline->spec_count() == 0u);
+    CHECK(pipeline->spec_count() == 1u);
 
     termin::TcPassRef pass(pipeline->get_pass_at(1));
     CHECK(pass.type_name() == "DepthPass");
@@ -215,7 +188,7 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
     tc_value_free(&input_res);
     tc_value output_res = tc_pass_inspect_get(pass.ptr(), "output_res");
     REQUIRE(output_res.type == TC_VALUE_STRING);
-    CHECK(std::string(output_res.data.s) == "OUTPUT");
+    CHECK(std::string(output_res.data.s) == "DepthPass_1_output_res");
     tc_value_free(&output_res);
 
     pipeline->destroy();
@@ -526,48 +499,6 @@ TEST_CASE("Graph compiler rejects direct resource type conversion without split 
     REQUIRE(threw);
 }
 
-TEST_CASE("Graph compiler synthesizes blit for External RT to RenderTarget")
-{
-    const char* json = R"JSON(
-{
-  "name": "graph_pipeline",
-  "nodes": [
-    { "type": "RenderTarget", "x": 409.0, "y": 40.0, "node_type": "output" },
-    {
-      "type": "External RT",
-      "x": 49.0,
-      "y": 21.0,
-      "node_type": "external_rt",
-      "params": { "slot": "fov_input" }
-    }
-  ],
-  "connections": [
-    { "from_node": 1, "from_socket": "fbo", "to_node": 0, "to_socket": "color" }
-  ],
-  "viewport_frames": []
-}
-)JSON";
-
-    nos::trent data = nos::json::parse(json);
-    tc::GraphData graph = tc::GraphData::from_trent(data);
-    tc::ResourceNaming naming = tc::assign_resource_names(graph);
-
-    REQUIRE(naming.socket_names.count("1") == 1u);
-    REQUIRE(naming.socket_names["1"].count("fbo") == 1u);
-    CHECK(naming.socket_names["1"]["fbo"] == "fov_input");
-
-    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
-    REQUIRE(pipeline != nullptr);
-    REQUIRE(pipeline->pass_count() == 1u);
-
-    termin::TcPassRef pass(pipeline->get_pass_at(0));
-    CHECK(pass.type_name() == "PresentToScreenPass");
-    CHECK(pass.pass_name() == "OutputBlit");
-
-    pipeline->destroy();
-    delete pipeline;
-}
-
 TEST_CASE("Graph compiler keeps PipelineOutput as declarative graph endpoint")
 {
     const char* json = R"JSON(
@@ -615,7 +546,7 @@ TEST_CASE("Graph compiler prefers External RT slot over display name")
 {
   "name": "graph_pipeline",
   "nodes": [
-    { "type": "RenderTarget", "x": 409.0, "y": 40.0, "node_type": "output" },
+    { "type": "PipelineOutput", "x": 409.0, "y": 40.0, "node_type": "pipeline_output" },
     {
       "type": "External RT",
       "x": 49.0,
@@ -647,7 +578,7 @@ TEST_CASE("Graph compiler uses unnamed slot for External RT without name")
 {
   "name": "graph_pipeline",
   "nodes": [
-    { "type": "RenderTarget", "x": 409.0, "y": 40.0, "node_type": "output" },
+    { "type": "PipelineOutput", "x": 409.0, "y": 40.0, "node_type": "pipeline_output" },
     {
       "type": "External RT",
       "x": 49.0,
