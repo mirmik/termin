@@ -31,7 +31,8 @@ struct NormalPerFrameStd140 {
 static_assert(sizeof(NormalPerFrameStd140) == 128,
               "NormalPerFrameStd140 must be 2 * mat4");
 
-// PushConstants (binding 14): per-object model matrix.
+// PushConstants: per-object model matrix. Vulkan uses real push constants;
+// OpenGL falls back to binding 14 in the tgfx2 compatibility layer.
 struct NormalPushStd140 {
     float u_model[16];
 };
@@ -39,38 +40,42 @@ static_assert(sizeof(NormalPushStd140) == 64,
               "NormalPushStd140 must be exactly one mat4");
 
 constexpr const char* NORMAL_PASS_VERT_UBO = R"(
-#version 330 core
+#version 450 core
 #extension GL_ARB_shading_language_420pack : require
 
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
-layout(location = 2) in vec2 a_texcoord;
 
 layout(std140, binding = 0) uniform PerFrame {
     mat4 u_view;
     mat4 u_projection;
 };
 
-layout(std140, binding = 14) uniform PushConstants {
+struct NormalPushData {
     mat4 u_model;
 };
+#ifdef VULKAN
+layout(push_constant) uniform NormalPushBlock { NormalPushData pc; };
+#else
+layout(std140, binding = 14) uniform NormalPushBlock { NormalPushData pc; };
+#endif
 
-out vec3 v_world_normal;
+layout(location = 0) out vec3 v_world_normal;
 
 void main() {
-    mat3 normal_matrix = transpose(inverse(mat3(u_model)));
+    mat3 normal_matrix = transpose(inverse(mat3(pc.u_model)));
     v_world_normal = normalize(normal_matrix * a_normal);
 
-    vec4 world_pos = u_model * vec4(a_position, 1.0);
+    vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
     gl_Position = u_projection * u_view * world_pos;
 }
 )";
 
 constexpr const char* NORMAL_PASS_FRAG_UBO = R"(
-#version 330 core
+#version 450 core
 
-in vec3 v_world_normal;
-out vec4 FragColor;
+layout(location = 0) in vec3 v_world_normal;
+layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec3 encoded = normalize(v_world_normal) * 0.5 + 0.5;

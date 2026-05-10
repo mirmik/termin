@@ -181,6 +181,106 @@ def test_parse_property_directive_texture2d():
     assert prop.default is None
 
 
+def test_plain_uniforms_material_ubo_not_property():
+    """Plain GLSL uniforms participate in shader UBO layout but not inspector properties."""
+    shader_text = "\n".join([
+        "@program test",
+        "@phase main",
+        "@property Float u_strength = 0.5",
+        "@property Texture2D u_depth_texture = \"white\"",
+        "@stage fragment",
+        "#version 450 core",
+        "uniform float u_strength;",
+        "uniform mat4 u_fov_view;",
+        "uniform sampler2D u_depth_texture;",
+        "out vec4 FragColor;",
+        "void main() { FragColor = texture(u_depth_texture, vec2(0.5)) * u_strength + vec4(u_fov_view[0][0]); }",
+        "@endstage",
+        "@endphase",
+    ])
+
+    program = parse_shader_text(shader_text)
+    phase = program.phases[0]
+
+    assert [prop.name for prop in phase.uniforms] == ["u_strength", "u_depth_texture"]
+    assert [prop.name for prop in phase.material_uniforms] == ["u_fov_view"]
+    assert [entry.name for entry in phase.material_ubo_layout.entries] == ["u_strength", "u_fov_view"]
+
+    fragment = phase.stages["fragment"].source
+    assert "layout(std140, binding = 1) uniform MaterialParams" in fragment
+    assert "mat4 u_fov_view;" in fragment
+    assert "layout(binding = 4) uniform sampler2D u_depth_texture;" in fragment
+    assert "uniform mat4 u_fov_view;" not in fragment
+
+
+def test_shader_interface_compare_separates_source_from_inputs():
+    from termin.assets.shader_interface import compare_shader_interface
+
+    base = parse_shader_text("\n".join([
+        "@program test",
+        "@phase main",
+        "@property Texture2D u_input_tex = \"white\"",
+        "@stage fragment",
+        "#version 450 core",
+        "uniform sampler2D u_input_tex;",
+        "out vec4 FragColor;",
+        "void main() { FragColor = texture(u_input_tex, vec2(0.5)); }",
+        "@endstage",
+        "@endphase",
+    ]))
+    source_only = parse_shader_text("\n".join([
+        "@program test",
+        "@phase main",
+        "@property Texture2D u_input_tex = \"white\"",
+        "@stage fragment",
+        "#version 450 core",
+        "uniform sampler2D u_input_tex;",
+        "out vec4 FragColor;",
+        "void main() { FragColor = texture(u_input_tex, vec2(0.25)); }",
+        "@endstage",
+        "@endphase",
+    ]))
+    texture_input_added = parse_shader_text("\n".join([
+        "@program test",
+        "@phase main",
+        "@property Texture2D u_input_tex = \"white\"",
+        "@property Texture2D u_depth_texture = \"depth_default\"",
+        "@stage fragment",
+        "#version 450 core",
+        "uniform sampler2D u_input_tex;",
+        "uniform sampler2D u_depth_texture;",
+        "out vec4 FragColor;",
+        "void main() { FragColor = texture(u_input_tex, vec2(0.5)) + texture(u_depth_texture, vec2(0.5)); }",
+        "@endstage",
+        "@endphase",
+    ]))
+    numeric_uniform_added = parse_shader_text("\n".join([
+        "@program test",
+        "@phase main",
+        "@property Texture2D u_input_tex = \"white\"",
+        "@stage fragment",
+        "#version 450 core",
+        "uniform sampler2D u_input_tex;",
+        "uniform float u_factor;",
+        "out vec4 FragColor;",
+        "void main() { FragColor = texture(u_input_tex, vec2(0.5)) * u_factor; }",
+        "@endstage",
+        "@endphase",
+    ]))
+
+    no_interface_change = compare_shader_interface(base, source_only)
+    assert no_interface_change.material_changed is False
+    assert no_interface_change.graph_inputs_changed is False
+
+    graph_input_change = compare_shader_interface(base, texture_input_added)
+    assert graph_input_change.material_changed is True
+    assert graph_input_change.graph_inputs_changed is True
+
+    material_only_change = compare_shader_interface(base, numeric_uniform_added)
+    assert material_only_change.material_changed is True
+    assert material_only_change.graph_inputs_changed is False
+
+
 def test_parse_property_in_phase():
     """Тест парсинга @property внутри @phase."""
     shader_text = "\n".join([

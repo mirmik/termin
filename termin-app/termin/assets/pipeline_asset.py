@@ -90,6 +90,14 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
                 result.append(slot or name or "unnamed")
         return result
 
+    def uses_material_names(self, material_names: set[str]) -> bool:
+        """True if this pipeline graph references any of material_names."""
+        if not self._loaded:
+            return False
+        from termin.assets.pipeline_dependencies import uses_material_names
+
+        return uses_material_names(self._graph_data, material_names)
+
     def _parse_content(self, content: str) -> "RenderPipeline | None":
         """Parse JSON content into RenderPipeline. Detects graph vs legacy format."""
         data = json.loads(content)

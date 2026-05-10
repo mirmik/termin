@@ -327,6 +327,70 @@ std::string synthesize_material_sampler_glsl(
     return out.str();
 }
 
+bool is_engine_uniform_name(const std::string& name);
+
+std::optional<std::string> material_type_from_glsl_uniform_type(
+    const std::string& glsl_type)
+{
+    if (glsl_type == "float") return "Float";
+    if (glsl_type == "int") return "Int";
+    if (glsl_type == "bool") return "Bool";
+    if (glsl_type == "vec2") return "Vec2";
+    if (glsl_type == "vec3") return "Vec3";
+    if (glsl_type == "vec4") return "Vec4";
+    if (glsl_type == "mat4") return "Mat4";
+    if (glsl_type == "sampler2D") return "Texture";
+    return std::nullopt;
+}
+
+std::vector<MaterialProperty> discover_material_uniforms_from_stages(
+    const ShaderPhase& phase)
+{
+    std::vector<MaterialProperty> discovered;
+    std::vector<std::string> known_names;
+
+    for (const auto& prop : phase.uniforms) {
+        known_names.push_back(prop.name);
+    }
+
+    auto known = [&](const std::string& name) {
+        return std::find(known_names.begin(), known_names.end(), name) != known_names.end();
+    };
+
+    std::regex uniform_re(
+        R"(^[ \t]*(?:layout[ \t]*\([^)]*\)[ \t]*)?uniform[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]+([A-Za-z_][A-Za-z0-9_]*)(?:[ \t]*\[[^\]]+\])?[ \t]*;[ \t]*(?://.*)?$)");
+
+    for (const auto& kv : phase.stages) {
+        std::istringstream lines(kv.second.source);
+        std::string line;
+        while (std::getline(lines, line)) {
+            std::smatch match;
+            if (!std::regex_match(line, match, uniform_re)) {
+                continue;
+            }
+
+            std::string glsl_type = match[1].str();
+            std::string name = match[2].str();
+            if (known(name) || is_engine_uniform_name(name)) {
+                continue;
+            }
+
+            auto material_type = material_type_from_glsl_uniform_type(glsl_type);
+            if (!material_type.has_value()) {
+                continue;
+            }
+
+            known_names.push_back(name);
+            discovered.emplace_back(
+                name,
+                material_type.value(),
+                get_default_for_type(material_type.value()));
+        }
+    }
+
+    return discovered;
+}
+
 // ============================================================================
 // Engine uniforms auto-substitution
 // ============================================================================
@@ -361,6 +425,15 @@ const char* const ENGINE_PLAIN_UNIFORM_NAMES[] = {
     "u_near",
     "u_far",
 };
+
+bool is_engine_uniform_name(const std::string& name) {
+    for (const char* engine_name : ENGINE_PLAIN_UNIFORM_NAMES) {
+        if (name == engine_name) {
+            return true;
+        }
+    }
+    return false;
+}
 
 std::string strip_engine_uniform_decls(const std::string& source) {
     std::vector<std::regex> res;
@@ -675,9 +748,12 @@ void std140_pack(const MaterialUboLayout& layout,
 }
 
 
-MaterialProperty parse_property_directive(const std::string& line) {
-    // Remove @property prefix
-    std::string content = line.substr(9);  // len("@property") = 9
+static MaterialProperty parse_typed_uniform_directive(
+    const std::string& line,
+    const std::string& directive)
+{
+    // Remove directive prefix.
+    std::string content = line.substr(directive.size());
     content = trim(content);
 
     // Extract range(...) if present
@@ -689,7 +765,7 @@ MaterialProperty parse_property_directive(const std::string& line) {
             range_min = std::stod(trim(range_match[1].str()));
             range_max = std::stod(trim(range_match[2].str()));
         } catch (...) {
-            tc::Log::debug("Failed to parse range() in @property directive: {}", line);
+            tc::Log::debug("Failed to parse range() in {} directive: {}", directive, line);
         }
         // Remove range from content
         content = content.substr(0, range_match.position());
@@ -707,7 +783,7 @@ MaterialProperty parse_property_directive(const std::string& line) {
 
         auto parts = split_whitespace(left);
         if (parts.size() < 2) {
-            throw std::runtime_error("@property requires type and name: " + line);
+            throw std::runtime_error(directive + " requires type and name: " + line);
         }
         property_type = parts[0];
         name = parts[1];
@@ -715,7 +791,7 @@ MaterialProperty parse_property_directive(const std::string& line) {
         // No default value
         auto parts = split_whitespace(content);
         if (parts.size() < 2) {
-            throw std::runtime_error("@property requires type and name: " + line);
+            throw std::runtime_error(directive + " requires type and name: " + line);
         }
         property_type = parts[0];
         name = parts[1];
@@ -742,6 +818,10 @@ MaterialProperty parse_property_directive(const std::string& line) {
     }
 
     return MaterialProperty(name, property_type, default_value, range_min, range_max);
+}
+
+MaterialProperty parse_property_directive(const std::string& line) {
+    return parse_typed_uniform_directive(line, "@property");
 }
 
 
@@ -1092,12 +1172,12 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
     ShaderMultyPhaseProgramm result(program_name, std::move(phases), "", std::move(features));
 
     // Material UBO synthesis is unconditional: any phase that declares
-    // scalar/vector @property entries gets a std140 MaterialParams block
-    // auto-synthesized, injected into the stage sources, and the original
-    // `uniform T name;` decls stripped from the raw GLSL. Texture
-    // properties are not part of the UBO, but their sampler declarations
-    // still get explicit layout bindings that match ColorPass material
-    // texture slots.
+    // scalar/vector @property or @uniform entries gets a std140
+    // MaterialParams block auto-synthesized, injected into the stage
+    // sources, and the original `uniform T name;` decls stripped from the
+    // raw GLSL. Texture properties/uniforms are not part of the UBO, but
+    // their sampler declarations still get explicit layout bindings that
+    // match ColorPass material texture slots.
     //
     // Phases without UBO-eligible properties get an empty layout and
     // their sources are left alone.
@@ -1106,8 +1186,16 @@ ShaderMultyPhaseProgramm parse_shader_text(const std::string& text) {
     // for the migration; see shadow/depth/normal/id pass pattern for the
     // same "two code paths converge into one" cleanup.
     for (auto& phase : result.phases) {
-        MaterialUboLayout layout = compute_std140_layout(phase.uniforms);
-        std::vector<std::string> texture_names = collect_texture_properties(phase.uniforms);
+        phase.material_uniforms = discover_material_uniforms_from_stages(phase);
+
+        std::vector<MaterialProperty> shader_uniforms = phase.uniforms;
+        shader_uniforms.insert(
+            shader_uniforms.end(),
+            phase.material_uniforms.begin(),
+            phase.material_uniforms.end());
+
+        MaterialUboLayout layout = compute_std140_layout(shader_uniforms);
+        std::vector<std::string> texture_names = collect_texture_properties(shader_uniforms);
         std::string block_glsl;
         std::vector<std::string> ubo_names;
         if (!layout.empty()) {

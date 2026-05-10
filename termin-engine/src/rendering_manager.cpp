@@ -380,6 +380,59 @@ size_t RenderingManager::recreate_render_target_pipelines_for_asset(
     return rebound;
 }
 
+size_t RenderingManager::recreate_scene_pipelines_for_asset(
+    const std::string& asset_name,
+    const std::string& asset_uuid
+) {
+    (void)asset_uuid;
+    if (asset_name.empty()) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] recreate scene pipeline requested with empty asset name");
+        return 0;
+    }
+
+    std::vector<tc_scene_handle> scenes;
+    scenes.reserve(attached_scenes_.size());
+    for (tc_scene_handle scene : attached_scenes_) {
+        if (!tc_scene_handle_valid(scene) || !tc_scene_alive(scene)) {
+            continue;
+        }
+
+        tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
+        size_t template_count = mount ? mount->pipeline_template_count : 0;
+        bool found = false;
+        for (size_t i = 0; i < template_count; i++) {
+            tc_spt_handle spt_handle = mount->pipeline_templates[i];
+            if (!tc_spt_is_valid(spt_handle)) {
+                continue;
+            }
+            TcScenePipelineTemplate templ(spt_handle);
+            if (templ.name() == asset_name) {
+                found = true;
+                break;
+            }
+        }
+        if (found) {
+            scenes.push_back(scene);
+        }
+    }
+
+    size_t rebound = 0;
+    for (tc_scene_handle scene : scenes) {
+        clear_scene_pipelines(scene);
+        attach_scene(scene);
+        rebound++;
+        tc_log(TC_LOG_INFO,
+            "[RenderingManager] recompiled scene pipelines for scene after reloading '%s'",
+            asset_name.c_str());
+    }
+
+    if (rebound > 0 && render_request_callback_) {
+        render_request_callback_();
+    }
+
+    return rebound;
+}
+
 // Helper: create pass by type name, set pass_name and string fields via inspect
 static tc_pass* create_and_configure_pass(
     const char* type_name,

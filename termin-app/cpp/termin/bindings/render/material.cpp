@@ -610,8 +610,14 @@ void bind_tc_material(nb::module_& m) {
                     tc_shader_set_material_ubo_layout(tc_shader_get(phase->shader), nullptr, 0, 0);
                 }
 
+                std::vector<MaterialProperty> shader_uniforms = shader_phase.uniforms;
+                shader_uniforms.insert(
+                    shader_uniforms.end(),
+                    shader_phase.material_uniforms.begin(),
+                    shader_phase.material_uniforms.end());
+
                 // Apply uniforms from defaults
-                for (const auto& prop : shader_phase.uniforms) {
+                for (const auto& prop : shader_uniforms) {
                     if (std::holds_alternative<std::monostate>(prop.default_value)) continue;
 
                     if (std::holds_alternative<bool>(prop.default_value)) {
@@ -663,7 +669,7 @@ void bind_tc_material(nb::module_& m) {
                 }
 
                 // Set default textures
-                for (const auto& prop : shader_phase.uniforms) {
+                for (const auto& prop : shader_uniforms) {
                     if (prop.property_type == "Texture") {
                         if (std::holds_alternative<std::string>(prop.default_value)) {
                             const std::string& default_tex_name = std::get<std::string>(prop.default_value);
