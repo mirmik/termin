@@ -325,6 +325,10 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
         tc_render_target_get_color_format(rt));
     ctx.output_depth_format = render_target_format_to_tgfx2(
         tc_render_target_get_depth_format(rt));
+    ctx.clear_color_enabled = tc_render_target_get_clear_color_enabled(rt);
+    tc_render_target_get_clear_color_value(rt, ctx.clear_color);
+    ctx.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(rt);
+    ctx.clear_depth = tc_render_target_get_clear_depth_value(rt);
     contexts[name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
         render_pipeline, scene, contexts, lights, name

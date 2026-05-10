@@ -20,6 +20,10 @@ public:
     bool dynamic_resolution = false;
     std::string color_format = "rgba16f";
     std::string depth_format = "depth32f";
+    bool clear_color = false;
+    float clear_color_value[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    bool clear_depth = false;
+    float clear_depth_value = 1.0f;
     std::string pipeline_uuid;
     std::string pipeline_name;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;

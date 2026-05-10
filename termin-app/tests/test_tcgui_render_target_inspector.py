@@ -72,6 +72,10 @@ class _RenderTarget:
         self.height = 200
         self.color_format = "rgba16f"
         self.depth_format = "depth32f"
+        self.clear_color_enabled = False
+        self.clear_color_value = (0.0, 0.0, 0.0, 1.0)
+        self.clear_depth_enabled = False
+        self.clear_depth_value = 1.0
         self.layer_mask = 0xFFFFFFFF
         self.pipeline_params = {}
 
@@ -182,6 +186,30 @@ def test_render_target_inspector_edits_attachment_formats():
 
     assert render_target.color_format == "rgba8"
     assert render_target.depth_format == "depth24"
+
+
+def test_render_target_inspector_edits_clear_settings():
+    scene = _Scene("Scene", 1, [])
+    render_target = _RenderTarget(scene, None)
+
+    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector.set_scene_getter(lambda: [scene])
+    inspector.set_render_target(render_target, scene)
+
+    inspector._on_clear_color_changed(True)
+    inspector._clear_color_spins[0].value = 0.25
+    inspector._clear_color_spins[1].value = 0.5
+    inspector._clear_color_spins[2].value = 0.75
+    inspector._clear_color_spins[3].value = 1.0
+    inspector._on_clear_color_value_changed(0.25)
+    inspector._on_clear_depth_changed(True)
+    inspector._clear_depth_value.value = 0.5
+    inspector._on_clear_depth_value_changed(0.5)
+
+    assert render_target.clear_color_enabled is True
+    assert render_target.clear_color_value == (0.25, 0.5, 0.75, 1.0)
+    assert render_target.clear_depth_enabled is True
+    assert render_target.clear_depth_value == 0.5
 
 
 def test_texture_picker_with_scene_getter_includes_live_render_target_pool(monkeypatch):

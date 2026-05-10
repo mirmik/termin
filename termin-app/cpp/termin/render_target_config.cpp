@@ -1,6 +1,7 @@
 // render_target_config.cpp - RenderTargetConfig implementation
 #include "render_target_config.hpp"
 #include <tcbase/tgfx_intern_string.h>
+#include <cstring>
 
 namespace termin {
 
@@ -15,6 +16,10 @@ tc_render_target_config RenderTargetConfig::to_c() const {
     c.dynamic_resolution = dynamic_resolution;
     c.color_format = color_format.empty() ? nullptr : tgfx_intern_string(color_format.c_str());
     c.depth_format = depth_format.empty() ? nullptr : tgfx_intern_string(depth_format.c_str());
+    c.clear_color = clear_color;
+    std::memcpy(c.clear_color_value, clear_color_value, sizeof(c.clear_color_value));
+    c.clear_depth = clear_depth;
+    c.clear_depth_value = clear_depth_value;
     c.pipeline_uuid = pipeline_uuid.empty() ? nullptr : tgfx_intern_string(pipeline_uuid.c_str());
     c.pipeline_name = pipeline_name.empty() ? nullptr : tgfx_intern_string(pipeline_name.c_str());
     c.layer_mask = layer_mask;
@@ -41,6 +46,10 @@ RenderTargetConfig RenderTargetConfig::from_c(const tc_render_target_config* c) 
     cfg.dynamic_resolution = c->dynamic_resolution;
     cfg.color_format = c->color_format ? c->color_format : "rgba16f";
     cfg.depth_format = c->depth_format ? c->depth_format : "depth32f";
+    cfg.clear_color = c->clear_color;
+    std::memcpy(cfg.clear_color_value, c->clear_color_value, sizeof(cfg.clear_color_value));
+    cfg.clear_depth = c->clear_depth;
+    cfg.clear_depth_value = c->clear_depth_value;
     cfg.pipeline_uuid = c->pipeline_uuid ? c->pipeline_uuid : "";
     cfg.pipeline_name = c->pipeline_name ? c->pipeline_name : "";
     cfg.layer_mask = c->layer_mask;

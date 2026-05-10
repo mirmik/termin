@@ -85,6 +85,10 @@ class _RenderTargetConfig:
         self.dynamic_resolution = False
         self.color_format = "rgba16f"
         self.depth_format = "depth32f"
+        self.clear_color = False
+        self.clear_color_value = (0.0, 0.0, 0.0, 1.0)
+        self.clear_depth = False
+        self.clear_depth_value = 1.0
         self.pipeline_uuid = ""
         self.pipeline_name = "Triangle"
         self.layer_mask = 7
@@ -131,6 +135,10 @@ class _RenderTarget:
         self.dynamic_resolution = False
         self.color_format = "rgba16f"
         self.depth_format = "depth32f"
+        self.clear_color_enabled = False
+        self.clear_color_value = (0.0, 0.0, 0.0, 1.0)
+        self.clear_depth_enabled = False
+        self.clear_depth_value = 1.0
         self.pipeline = None
         self.layer_mask = 0
         self.enabled = False
@@ -352,6 +360,31 @@ def test_sync_render_target_configs_preserves_pipeline_params(monkeypatch):
     }
 
 
+def test_sync_render_target_configs_preserves_clear_settings(monkeypatch):
+    pool = []
+    _install_native_stubs(monkeypatch, pool)
+
+    scene = _Scene(_Mount([]))
+    manager = _Manager()
+    model = RenderingModel(manager)
+
+    render_target = _RenderTarget("ClearRT", pool)
+    render_target.scene = scene
+    render_target.clear_color_enabled = True
+    render_target.clear_color_value = (0.1, 0.2, 0.3, 1.0)
+    render_target.clear_depth_enabled = True
+    render_target.clear_depth_value = 0.5
+    manager.standalone_render_targets.append(render_target)
+
+    model.sync_render_target_configs_to_scene(scene)
+
+    config = scene._mount.render_target_configs[0]
+    assert config.clear_color is True
+    assert config.clear_color_value == (0.1, 0.2, 0.3, 1.0)
+    assert config.clear_depth is True
+    assert config.clear_depth_value == 0.5
+
+
 def test_render_target_config_dict_serialization_preserves_pipeline_params(monkeypatch):
     module = _load_render_target_config_module(monkeypatch)
 
@@ -387,6 +420,27 @@ def test_render_target_config_dict_serialization_preserves_formats(monkeypatch):
     restored = module.deserialize_render_target_config(serialized)
     assert restored.color_format == "rgba8"
     assert restored.depth_format == "depth24"
+
+
+def test_render_target_config_dict_serialization_preserves_clear_settings(monkeypatch):
+    module = _load_render_target_config_module(monkeypatch)
+
+    config = _RenderTargetConfig()
+    config.clear_color = True
+    config.clear_color_value = (0.1, 0.2, 0.3, 1.0)
+    config.clear_depth = True
+    config.clear_depth_value = 0.5
+
+    serialized = module.serialize_render_target_config(config)
+
+    assert serialized["clear_color"] == [0.1, 0.2, 0.3, 1.0]
+    assert serialized["clear_depth"] == 0.5
+
+    restored = module.deserialize_render_target_config(serialized)
+    assert restored.clear_color is True
+    assert restored.clear_color_value == (0.1, 0.2, 0.3, 1.0)
+    assert restored.clear_depth is True
+    assert restored.clear_depth_value == 0.5
 
 
 def test_sync_render_target_configs_only_includes_standalone_targets(monkeypatch):

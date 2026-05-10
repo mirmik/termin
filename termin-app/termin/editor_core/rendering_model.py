@@ -507,6 +507,10 @@ class RenderingModel:
             config.dynamic_resolution = bool(rt.dynamic_resolution)
             config.color_format = rt.color_format
             config.depth_format = rt.depth_format
+            config.clear_color = bool(rt.clear_color_enabled)
+            config.clear_color_value = tuple(float(v) for v in rt.clear_color_value)
+            config.clear_depth = bool(rt.clear_depth_enabled)
+            config.clear_depth_value = float(rt.clear_depth_value)
             config.pipeline_uuid = pipeline_uuid
             config.pipeline_name = pipeline_name
             config.layer_mask = rt.layer_mask
