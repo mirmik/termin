@@ -9,6 +9,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_pass.hpp>
@@ -20,16 +21,20 @@ namespace termin {
 class MaterialPass : public CxxFramePass {
 public:
     TcMaterial material;
+    std::string input_res = "input";
     std::string output_res = "color";
+    std::string output_res_target;
     std::unordered_map<std::string, std::string> texture_resources;
     std::unordered_map<std::string, std::string> extra_resources;
 
     INSPECT_FIELD(MaterialPass, material, "Material", "tc_material")
+    INSPECT_FIELD(MaterialPass, input_res, "Input Resource", "string")
     INSPECT_FIELD(MaterialPass, output_res, "Output Resource", "string")
+    INSPECT_FIELD(MaterialPass, output_res_target, "Output Target", "string")
     INSPECT_TYPE_METADATA(MaterialPass, graph, make_pass_graph_metadata(
-        {{"input_res", "fbo"}},
+        {{"input_res", "fbo"}, {"output_res_target", "fbo"}},
         {{"output_res", "fbo"}},
-        {{"input_res", "output_res"}}
+        {{"output_res_target", "output_res"}}
     ))
 
 private:
@@ -47,6 +52,11 @@ public:
     void execute(ExecuteContext& ctx) override;
     std::set<const char*> compute_reads() const override;
     std::set<const char*> compute_writes() const override;
+    bool set_graph_resource_input(
+        const std::string& socket_name,
+        const std::string& resource_name
+    ) override;
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
     void destroy() override;
 };
 

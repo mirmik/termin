@@ -606,34 +606,15 @@ NB_MODULE(_components_render_native, m) {
     nb::class_<MaterialPass, CxxFramePass>(m, "MaterialPass")
         .def("__init__", [](MaterialPass* self, const std::string& input_res, const std::string& output_res, nb::object material, const std::string& pass_name) {
             new (self) MaterialPass();
+            self->input_res = input_res;
             self->output_res = output_res;
             self->set_pass_name(pass_name);
-            if (!input_res.empty()) {
-                self->add_resource(input_res, "input");
-            }
             set_material_from_python(*self, material);
             init_pass_from_python(self, "MaterialPass");
         }, nb::arg("input_res") = "input", nb::arg("output_res") = "output", nb::arg("material") = nb::none(), nb::arg("pass_name") = "MaterialPass")
-        .def_prop_rw("input_res",
-            [](MaterialPass& self) -> std::string {
-                auto it = self.texture_resources.find("u_input");
-                if (it != self.texture_resources.end()) {
-                    return it->second;
-                }
-                auto extra_it = self.extra_resources.find("input");
-                if (extra_it != self.extra_resources.end()) {
-                    return "input";
-                }
-                return "";
-            },
-            [](MaterialPass& self, const std::string& value) {
-                self.texture_resources.erase("u_input");
-                self.extra_resources.erase("input");
-                if (!value.empty()) {
-                    self.add_resource(value, "input");
-                }
-            })
+        .def_rw("input_res", &MaterialPass::input_res)
         .def_rw("output_res", &MaterialPass::output_res)
+        .def_rw("output_res_target", &MaterialPass::output_res_target)
         .def_prop_rw("material",
             [](MaterialPass& self) -> TcMaterial {
                 return self.material;
@@ -660,32 +641,37 @@ NB_MODULE(_components_render_native, m) {
             std::string pass_name = "MaterialPass";
             std::string input_res = "input";
             std::string output_res = "output";
+            std::string output_res_target;
             nb::object material = nb::none();
             if (data.contains("pass_name")) pass_name = nb::cast<std::string>(data["pass_name"]);
             if (data.contains("data")) {
                 nb::dict d = nb::cast<nb::dict>(data["data"]);
                 if (d.contains("input_res")) input_res = nb::cast<std::string>(d["input_res"]);
                 if (d.contains("output_res")) output_res = nb::cast<std::string>(d["output_res"]);
+                if (d.contains("output_res_target")) output_res_target = nb::cast<std::string>(d["output_res_target"]);
                 if (d.contains("material")) material = nb::borrow<nb::object>(d["material"]);
             }
             auto* p = new MaterialPass();
+            p->input_res = input_res;
             p->output_res = output_res;
+            p->output_res_target = output_res_target;
             p->set_pass_name(pass_name);
-            if (!input_res.empty()) {
-                p->add_resource(input_res, "input");
-            }
             set_material_from_python(*p, material);
             return init_pass_from_deserialize(p, "MaterialPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &MaterialPass::compute_reads)
         .def_prop_ro("writes", &MaterialPass::compute_writes)
+        .def("get_inplace_aliases", &MaterialPass::get_inplace_aliases)
         .def("destroy", &MaterialPass::destroy);
 
     {
         m.attr("MaterialPass").attr("category") = "Render";
-        m.attr("MaterialPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "fbo"));
+        m.attr("MaterialPass").attr("node_inputs") = nb::make_tuple(
+            nb::make_tuple("input_res", "fbo"),
+            nb::make_tuple("output_res_target", "fbo")
+        );
         m.attr("MaterialPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "fbo"));
-        m.attr("MaterialPass").attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("input_res", "output_res"));
+        m.attr("MaterialPass").attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("output_res_target", "output_res"));
         m.attr("MaterialPass").attr("has_dynamic_inputs") = true;
     }
 }

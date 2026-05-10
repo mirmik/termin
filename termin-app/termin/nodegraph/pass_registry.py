@@ -27,6 +27,7 @@ def get_pass_class(class_name: str) -> Type["FramePass"] | None:
     try:
         from termin.visualization.core.resources import ResourceManager
         rm = ResourceManager.instance()
+        rm.register_builtin_frame_passes()
         return rm.get_frame_pass(class_name)
     except Exception as e:
         from tcbase import log
@@ -138,6 +139,18 @@ def inspect_field_info_to_node_param(info) -> NodeParam | None:
     return None
 
 
+def _default_for_inspect_field(registry, cls, class_name: str, field_path: str, fallback: Any) -> Any:
+    if cls is None:
+        return fallback
+    try:
+        instance = cls()
+        return registry.get(instance, field_path)
+    except Exception as e:
+        from tcbase import log
+        log.warn(f"[pass_registry] failed to read default for {class_name}.{field_path}: {e}")
+        return fallback
+
+
 # Fields that are represented as graph connections, not UI parameters
 SOCKET_FIELDS = {
     "input_res",
@@ -181,7 +194,6 @@ def create_params_from_pass(class_name: str) -> List[NodeParam]:
     Create NodeParam list from a pass class's inspect fields.
 
     Uses InspectRegistry to get fields (works for both C++ and Python classes).
-    Also reads Python-only inspect_fields from the class.
     Filters out fields that are represented as graph connections (sockets).
 
     Args:
@@ -193,13 +205,8 @@ def create_params_from_pass(class_name: str) -> List[NodeParam]:
     params = []
     seen_names = set()
 
-    # Get visibility conditions from class
     cls = get_pass_class(class_name)
-    visibility_conditions = {}
-    if cls is not None:
-        visibility_conditions = cls.node_param_visibility
 
-    # 1. Get fields from C++ InspectRegistry
     try:
         from termin._native.inspect import InspectRegistry
         registry = InspectRegistry.instance()
@@ -210,35 +217,23 @@ def create_params_from_pass(class_name: str) -> List[NodeParam]:
                 continue
             if info.path in SOCKET_FIELDS:
                 continue
+            if info.path in seen_names:
+                continue
 
             param = inspect_field_info_to_node_param(info)
             if param is not None:
-                # Apply visibility conditions
-                if param.name in visibility_conditions:
-                    param.visible_when = visibility_conditions[param.name]
+                param.default = _default_for_inspect_field(
+                    registry,
+                    cls,
+                    class_name,
+                    info.path,
+                    param.default,
+                )
                 params.append(param)
                 seen_names.add(param.name)
     except Exception as e:
         from tcbase import log
-        log.warn(f"[pass_registry] create_params_from_pass('{class_name}') C++ fields failed: {e}")
-
-    # 2. Get Python-only inspect_fields from class
-    if cls is not None:
-        py_fields = cls.inspect_fields
-        for name, field in py_fields.items():
-            if name in seen_names:
-                continue
-            if name in SOCKET_FIELDS:
-                continue
-            if not field.is_inspectable:
-                continue
-
-            param = _python_field_to_node_param(name, field)
-            if param is not None:
-                # Apply visibility conditions
-                if name in visibility_conditions:
-                    param.visible_when = visibility_conditions[name]
-                params.append(param)
+        log.warn(f"[pass_registry] create_params_from_pass('{class_name}') inspect fields failed: {e}")
 
     return params
 

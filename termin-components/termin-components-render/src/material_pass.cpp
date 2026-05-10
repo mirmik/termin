@@ -53,6 +53,13 @@ void MaterialPass::remove_resource(const std::string& resource_name) {
 std::set<const char*> MaterialPass::compute_reads() const {
     std::set<const char*> reads;
 
+    if (!input_res.empty()) {
+        reads.insert(input_res.c_str());
+    }
+    if (!output_res_target.empty()) {
+        reads.insert(output_res_target.c_str());
+    }
+
     for (const auto& [res_name, uniform_name] : extra_resources) {
         (void)uniform_name;
         reads.insert(res_name.c_str());
@@ -70,6 +77,33 @@ std::set<const char*> MaterialPass::compute_reads() const {
 
 std::set<const char*> MaterialPass::compute_writes() const {
     return {output_res.c_str()};
+}
+
+bool MaterialPass::set_graph_resource_input(
+    const std::string& socket_name,
+    const std::string& resource_name
+) {
+    if (socket_name.empty() || resource_name.empty()) {
+        return false;
+    }
+    if (socket_name == "input_res" || socket_name == "output_res" ||
+        socket_name == "output_res_target") {
+        return false;
+    }
+
+    std::string uniform_name = socket_name;
+    if (uniform_name.rfind("u_", 0) != 0) {
+        uniform_name = "u_" + uniform_name;
+    }
+    texture_resources[uniform_name] = resource_name;
+    return true;
+}
+
+std::vector<std::pair<std::string, std::string>> MaterialPass::get_inplace_aliases() const {
+    if (output_res_target.empty()) {
+        return {};
+    }
+    return {{output_res_target, output_res}};
 }
 
 void MaterialPass::execute(ExecuteContext& ctx) {
@@ -147,6 +181,19 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     // against the currently-bound tgfx2 program.
     uint32_t tex_slot = 1;
     std::set<std::string> bound_uniforms;
+
+    if (!input_res.empty()) {
+        auto res_it = ctx.tex2_reads.find(input_res);
+        if (res_it != ctx.tex2_reads.end() && res_it->second) {
+            ctx2->bind_sampled_texture(tex_slot, res_it->second);
+            ctx2->set_uniform_int("u_input", static_cast<int>(tex_slot));
+            bound_uniforms.insert("u_input");
+            tex_slot++;
+        } else {
+            tc::Log::warn("[MaterialPass] '%s': tgfx2 input texture for '%s' not available",
+                get_pass_name().c_str(), input_res.c_str());
+        }
+    }
 
     // extra_resources: pull tgfx2 color textures directly from ctx.tex2_reads.
     for (const auto& [res_name, uniform_name] : extra_resources) {
@@ -241,6 +288,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
 
 void MaterialPass::destroy() {
     material = TcMaterial();
+    input_res = "input";
     texture_resources.clear();
     extra_resources.clear();
 }

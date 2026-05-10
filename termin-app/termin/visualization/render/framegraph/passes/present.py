@@ -52,44 +52,45 @@ def _get_blit_shader() -> TcShader:
 
 class BlitPass(RenderFramePass):
     """
-    Копирует color-текстуру из одного FBO в другой через фуллскрин-квад.
-    Источник задаётся колбэком get_source_res, чтобы его можно было
-    динамически переключать из редактора/дебагера.
-
-    Для отключения пасса используйте enabled=False.
-
-    Note: get_source_res — runtime callback, не сериализуется.
-    При десериализации нужно задать его отдельно.
+    Копирует color-текстуру из одного FBO в другой через tgfx2 blit.
     """
 
     category = "Output"
 
-    node_inputs = [("input_res", "fbo")]
+    node_inputs = [("input_res", "fbo"), ("output_res_target", "fbo")]
     node_outputs = [("output_res", "fbo")]
+    node_inplace_pairs = [("output_res_target", "output_res")]
+
+    inspect_fields = {
+        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
+        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
+        "output_res_target": InspectField(path="output_res_target", label="Output Target", kind="string"),
+    }
 
     def __init__(
         self,
-        get_source_res=None,
+        input_res: str = "color",
         output_res: str = "debug",
         pass_name: str = "Blit",
     ):
         super().__init__(pass_name=pass_name)
-        self._get_source_res = get_source_res
+        self.input_res = input_res
         self.output_res = output_res
-        self._current_src_name: str | None = None
+        self.output_res_target = ""
 
     def compute_reads(self) -> Set[str]:
-        if self._get_source_res is None:
-            return set()
-        src_name = self._get_source_res()
-        if src_name:
-            self._current_src_name = src_name
-            return {src_name}
-        self._current_src_name = None
-        return set()
+        reads = {self.input_res}
+        if self.output_res_target:
+            reads.add(self.output_res_target)
+        return reads
 
     def compute_writes(self) -> Set[str]:
         return {self.output_res}
+
+    def get_inplace_aliases(self) -> list[tuple[str, str]]:
+        if not self.output_res_target:
+            return []
+        return [(self.output_res_target, self.output_res)]
 
     def required_resources(self) -> set[str]:
         return set(self.reads) | set(self.writes)
@@ -98,14 +99,7 @@ class BlitPass(RenderFramePass):
         if ctx.ctx2 is None:
             return
 
-        if self._get_source_res is None:
-            return
-
-        src_name = self._get_source_res()
-        if not src_name:
-            return
-
-        tex_in = ctx.tex2_reads.get(src_name)
+        tex_in = ctx.tex2_reads.get(self.input_res)
         tex_out = ctx.tex2_writes.get(self.output_res)
         if not tex_in or not tex_out:
             return

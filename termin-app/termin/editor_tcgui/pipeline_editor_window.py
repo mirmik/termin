@@ -69,6 +69,15 @@ def _default_for_param_kind(kind: str, choices) -> object:
     return ""
 
 
+def _default_for_inspect_field(registry, cls, class_name: str, field_path: str, kind: str, choices) -> object:
+    try:
+        instance = cls()
+        return registry.get(instance, field_path)
+    except Exception as e:
+        log.warn(f"[PipelineEditor] failed to read default for {class_name}.{field_path}: {e}")
+        return _default_for_param_kind(kind, choices)
+
+
 def _material_choices() -> list[tuple[str, str]]:
     from termin.visualization.core.resources import ResourceManager
 
@@ -127,7 +136,7 @@ def _add_node_param(
     specs[name] = spec
 
 
-def _add_inspect_params(node, class_name: str, seen: set[str]) -> None:
+def _add_inspect_params(node, class_name: str, cls, seen: set[str]) -> None:
     try:
         from termin._native.inspect import InspectRegistry
         registry = InspectRegistry.instance()
@@ -144,7 +153,7 @@ def _add_inspect_params(node, class_name: str, seen: set[str]) -> None:
                 info.path,
                 info.label,
                 info.kind,
-                _default_for_param_kind(info.kind, choices),
+                _default_for_inspect_field(registry, cls, class_name, info.path, info.kind, choices),
                 choices,
                 info.min,
                 info.max,
@@ -166,7 +175,7 @@ def _populate_pass_node_params(node, pass_class_name: str) -> None:
         return
 
     seen: set[str] = set()
-    _add_inspect_params(node, pass_class_name, seen)
+    _add_inspect_params(node, pass_class_name, cls, seen)
 
 
 def _populate_resource_node_params(node, graph_type: str) -> None:

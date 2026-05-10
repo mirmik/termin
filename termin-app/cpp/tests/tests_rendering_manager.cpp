@@ -39,7 +39,7 @@ TEST_CASE("Graph compiler preserves FBO resource params on generated names")
       "node_type": "resource",
       "params": {
         "format": "r32f",
-        "samples": 1,
+        "samples": "4",
         "size_mode": "fixed",
         "width": 1024,
         "height": 1024
@@ -72,6 +72,7 @@ TEST_CASE("Graph compiler preserves FBO resource params on generated names")
     REQUIRE(fbo_spec != nullptr);
     REQUIRE(fbo_spec->format.has_value());
     CHECK(*fbo_spec->format == "r32f");
+    CHECK(fbo_spec->samples == 4);
     REQUIRE(fbo_spec->size.has_value());
     CHECK(fbo_spec->size->first == 1024);
     CHECK(fbo_spec->size->second == 1024);
