@@ -22,6 +22,8 @@ class NodeSocket:
     # Socket type colors
     TYPE_COLORS = {
         "fbo": QColor(100, 180, 100),       # Green - framebuffer
+        "color_texture": QColor(75, 158, 235),  # Blue - color texture
+        "depth_texture": QColor(190, 142, 70),  # Brown - depth texture
         "texture": QColor(180, 150, 100),   # Orange - texture
         "shadow": QColor(80, 80, 120),      # Purple - shadow maps
         "any": QColor(150, 150, 150),       # Gray - any type

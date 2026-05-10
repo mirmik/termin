@@ -39,6 +39,16 @@ _FBO_FORMAT_CHOICES = [
     ("r16f", "R16F"),
     ("r32f", "R32F"),
 ]
+_COLOR_TEXTURE_FORMAT_CHOICES = [
+    ("rgba8", "RGBA8"),
+    ("rgba16f", "RGBA16F"),
+    ("rgba32f", "RGBA32F"),
+    ("r16f", "R16F"),
+    ("r32f", "R32F"),
+]
+_DEPTH_TEXTURE_FORMAT_CHOICES = [
+    ("depth32f", "Depth 32F"),
+]
 
 
 def _default_for_param_kind(kind: str, choices) -> object:
@@ -165,13 +175,20 @@ def _populate_pass_node_params(node, pass_class_name: str) -> None:
 def _populate_resource_node_params(node, graph_type: str) -> None:
     if graph_type == "Shadow Maps":
         return
-    _add_node_param(node, "format", "Format", "enum", "render_target", _FBO_FORMAT_CHOICES)
-    _add_node_param(node, "samples", "MSAA", "enum", "1", [("1", "1"), ("2", "2"), ("4", "4"), ("8", "8")])
+    if graph_type == "Color Texture":
+        _add_node_param(node, "format", "Format", "enum", "rgba8", _COLOR_TEXTURE_FORMAT_CHOICES)
+    elif graph_type == "Depth Texture":
+        _add_node_param(node, "format", "Format", "enum", "depth32f", _DEPTH_TEXTURE_FORMAT_CHOICES)
+    else:
+        _add_node_param(node, "format", "Format", "enum", "render_target", _FBO_FORMAT_CHOICES)
+        _add_node_param(node, "samples", "MSAA", "enum", "1", [("1", "1"), ("2", "2"), ("4", "4"), ("8", "8")])
     _add_node_param(node, "filter", "Filter", "enum", "linear", [("linear", "Linear"), ("nearest", "Nearest")])
     _add_node_param(node, "size_mode", "Size", "enum", "viewport", [("viewport", "Viewport"), ("fixed", "Fixed")])
     _add_node_param(node, "scale", "Scale", "enum", "1.0", [("0.25", "0.25"), ("0.5", "0.5"), ("1.0", "1.0"), ("2.0", "2.0")])
     _add_node_param(node, "width", "Width", "int", 1024)
     _add_node_param(node, "height", "Height", "int", 1024)
+    if graph_type != "FBO":
+        return
     _add_node_param(node, "has_color", "Color", "bool", True)
     _add_node_param(node, "has_depth", "Depth", "bool", True)
     _add_node_param(node, "clear_color", "Clear Color", "bool", False)
@@ -286,6 +303,10 @@ def _load_graph_from_pipeline_dict(data: dict):
             _populate_resource_node_params(node, graph_type)
             if graph_type == "Shadow Maps":
                 controller.add_output_socket(node.id, "shadow", "shadow")
+            elif graph_type == "Color Texture":
+                controller.add_output_socket(node.id, "color", "color_texture")
+            elif graph_type == "Depth Texture":
+                controller.add_output_socket(node.id, "depth", "depth_texture")
             else:
                 controller.add_output_socket(node.id, "fbo", "fbo")
         elif node_type == "external_rt":
@@ -297,6 +318,14 @@ def _load_graph_from_pipeline_dict(data: dict):
         elif node_type == "output":
             controller.add_input_socket(node.id, "color", "fbo")
             controller.add_input_socket(node.id, "depth", "fbo")
+        elif node_type == "fbo_split":
+            controller.add_input_socket(node.id, "fbo", "fbo")
+            controller.add_output_socket(node.id, "color", "color_texture")
+            controller.add_output_socket(node.id, "depth", "depth_texture")
+        elif node_type == "fbo_join":
+            controller.add_input_socket(node.id, "color", "color_texture")
+            controller.add_input_socket(node.id, "depth", "depth_texture")
+            controller.add_output_socket(node.id, "fbo", "fbo")
         elif node_type in ("pass", "effect"):
             pass_class = _pass_class_name(graph_type)
             _populate_pass_node_params(node, pass_class)
@@ -607,6 +636,10 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         _populate_resource_node_params(node, graph_type)
         if graph_type == "Shadow Maps":
             graph_view.controller.add_output_socket(node.id, "shadow", "shadow")
+        elif graph_type == "Color Texture":
+            graph_view.controller.add_output_socket(node.id, "color", "color_texture")
+        elif graph_type == "Depth Texture":
+            graph_view.controller.add_output_socket(node.id, "depth", "depth_texture")
         else:
             graph_view.controller.add_output_socket(node.id, "fbo", "fbo")
         graph_view.refresh()
@@ -672,6 +705,30 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         graph_view.controller.add_output_socket(node.id, "fbo", "fbo")
         graph_view.refresh()
 
+    def _create_fbo_split_node(wx: float, wy: float) -> None:
+        node = graph_view.controller.create_node("fbo_split", title="FBO Split", x=wx, y=wy)
+        node.data["graph_type"] = "FBO Split"
+        node.data["instance_name"] = ""
+        node.data["node_type"] = "fbo_split"
+        node.data["dynamic_inputs"] = []
+        node.data["explicit_size"] = False
+        graph_view.controller.add_input_socket(node.id, "fbo", "fbo")
+        graph_view.controller.add_output_socket(node.id, "color", "color_texture")
+        graph_view.controller.add_output_socket(node.id, "depth", "depth_texture")
+        graph_view.refresh()
+
+    def _create_fbo_join_node(wx: float, wy: float) -> None:
+        node = graph_view.controller.create_node("fbo_join", title="FBO Join", x=wx, y=wy)
+        node.data["graph_type"] = "FBO Join"
+        node.data["instance_name"] = ""
+        node.data["node_type"] = "fbo_join"
+        node.data["dynamic_inputs"] = []
+        node.data["explicit_size"] = False
+        graph_view.controller.add_input_socket(node.id, "color", "color_texture")
+        graph_view.controller.add_input_socket(node.id, "depth", "depth_texture")
+        graph_view.controller.add_output_socket(node.id, "fbo", "fbo")
+        graph_view.refresh()
+
     def _build_context_menu(wx: float, wy: float) -> list[MenuItem]:
         from tcnodegraph.view import NodeItem, EdgeItem
 
@@ -685,10 +742,14 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
                 MenuItem("Rename", on_click=lambda: _rename_node(node_id)),
                 MenuItem.sep(),
                 MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
+                MenuItem("Add Color Texture", on_click=lambda: _create_resource_node("Color Texture", wx, wy)),
+                MenuItem("Add Depth Texture", on_click=lambda: _create_resource_node("Depth Texture", wx, wy)),
                 MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),
                 MenuItem("Add Render Target Input", on_click=lambda: _create_render_target_input_node(wx, wy)),
                 MenuItem("Add Pipeline Output", on_click=lambda: _create_pipeline_output_node(wx, wy)),
                 MenuItem("Add External RT", on_click=lambda: _create_external_rt_node(wx, wy)),
+                MenuItem("Add FBO Split", on_click=lambda: _create_fbo_split_node(wx, wy)),
+                MenuItem("Add FBO Join", on_click=lambda: _create_fbo_join_node(wx, wy)),
                 MenuItem("Add Legacy Render Target", on_click=lambda: _create_output_node(wx, wy)),
             ]
             return items
@@ -718,8 +779,12 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
             MenuItem("Add Legacy Render Target", on_click=lambda: _create_output_node(wx, wy)),
             MenuItem.sep(),
             MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
+            MenuItem("Add Color Texture", on_click=lambda: _create_resource_node("Color Texture", wx, wy)),
+            MenuItem("Add Depth Texture", on_click=lambda: _create_resource_node("Depth Texture", wx, wy)),
             MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),
             MenuItem("Add External RT", on_click=lambda: _create_external_rt_node(wx, wy)),
+            MenuItem("Add FBO Split", on_click=lambda: _create_fbo_split_node(wx, wy)),
+            MenuItem("Add FBO Join", on_click=lambda: _create_fbo_join_node(wx, wy)),
             MenuItem.sep(),
         ]
         try:

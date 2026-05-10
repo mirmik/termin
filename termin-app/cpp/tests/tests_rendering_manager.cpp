@@ -15,6 +15,7 @@ extern "C" {
 #include "inspect/tc_inspect_pass_adapter.h"
 #include "render/tc_render_target.h"
 #include "render/tc_render_target_pool.h"
+#include "render/tc_pass.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
 }
@@ -219,6 +220,300 @@ TEST_CASE("Graph compiler asks pass metadata for inplace render target aliases")
 
     pipeline->destroy();
     delete pipeline;
+}
+
+TEST_CASE("Graph compiler creates FBO attachment views for FboSplit")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTargetInput", "node_type": "render_target_input", "x": -204.0, "y": -16.0 },
+    { "type": "FBO Split", "node_type": "fbo_split", "x": 106.0, "y": -122.0 }
+  ],
+  "connections": [
+    { "from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "fbo" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    CHECK(naming.socket_names["1"]["fbo"] == "RT_COLOR");
+    CHECK(naming.socket_names["1"]["color"] == "RT_COLOR.color");
+    CHECK(naming.socket_names["1"]["depth"] == "RT_COLOR.depth");
+    CHECK(naming.resource_types["RT_COLOR.color"] == "color_texture");
+    CHECK(naming.resource_types["RT_COLOR.depth"] == "depth_texture");
+    REQUIRE(naming.resource_views.count("RT_COLOR.color") == 1u);
+    CHECK(naming.resource_views["RT_COLOR.color"].parent == "RT_COLOR");
+    CHECK(naming.resource_views["RT_COLOR.color"].attachment == termin::AttachmentKind::Color);
+    REQUIRE(naming.resource_views.count("RT_COLOR.depth") == 1u);
+    CHECK(naming.resource_views["RT_COLOR.depth"].parent == "RT_COLOR");
+    CHECK(naming.resource_views["RT_COLOR.depth"].attachment == termin::AttachmentKind::Depth);
+}
+
+TEST_CASE("Graph compiler creates FBO composition for FboJoin without runtime passes")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTargetInput", "node_type": "render_target_input", "x": -204.0, "y": -16.0 },
+    { "type": "FBO Split", "node_type": "fbo_split", "x": 106.0, "y": -122.0 },
+    { "type": "FBO Join", "node_type": "fbo_join", "x": 306.0, "y": -122.0, "name": "JoinedFbo" },
+    { "type": "PipelineOutput", "node_type": "pipeline_output", "x": 409.0, "y": 40.0 }
+  ],
+  "connections": [
+    { "from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "fbo" },
+    { "from_node": 1, "from_socket": "color", "to_node": 2, "to_socket": "color" },
+    { "from_node": 1, "from_socket": "depth", "to_node": 2, "to_socket": "depth" },
+    { "from_node": 2, "from_socket": "fbo", "to_node": 3, "to_socket": "color" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    CHECK(naming.socket_names["2"]["fbo"] == "JoinedFbo");
+    CHECK(naming.socket_names["3"]["color"] == "JoinedFbo");
+    REQUIRE(naming.fbo_compositions.count("JoinedFbo") == 1u);
+    CHECK(naming.fbo_compositions["JoinedFbo"].color == "RT_COLOR.color");
+    CHECK(naming.fbo_compositions["JoinedFbo"].depth == "RT_COLOR.depth");
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+    CHECK(pipeline->pass_count() == 0u);
+    CHECK(pipeline->spec_count() == 0u);
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler supports DepthOnlyPass depth texture output")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTargetInput", "node_type": "render_target_input", "x": -204.0, "y": -16.0 },
+    { "type": "FBO Split", "node_type": "fbo_split", "x": 0.0, "y": -122.0 },
+    { "type": "DepthOnlyPass", "x": 220.0, "y": -122.0 },
+    { "type": "FBO Join", "node_type": "fbo_join", "x": 440.0, "y": -122.0 }
+  ],
+  "connections": [
+    { "from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "fbo" },
+    { "from_node": 1, "from_socket": "depth", "to_node": 2, "to_socket": "output_res_target" },
+    { "from_node": 2, "from_socket": "output_res", "to_node": 3, "to_socket": "depth" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    CHECK(naming.socket_names["2"]["output_res"] == "RT_COLOR.depth");
+    CHECK(naming.resource_types[naming.socket_names["2"]["output_res"]] == "depth_texture");
+    CHECK(naming.socket_names["3"]["depth"] == naming.socket_names["2"]["output_res"]);
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+    REQUIRE(pipeline->pass_count() == 1u);
+
+    termin::TcPassRef pass(pipeline->get_pass_at(0));
+    CHECK(pass.type_name() == "DepthOnlyPass");
+
+    ResourceSpec pass_specs[4];
+    size_t pass_spec_count = tc_pass_get_resource_specs(pass.ptr(), pass_specs, 4);
+    REQUIRE(pass_spec_count == 1u);
+    CHECK(pass_specs[0].resource == naming.socket_names["2"]["output_res"]);
+    CHECK(pass_specs[0].resource_type == "depth_texture");
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler supports explicit depth color conversion passes")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTargetInput", "node_type": "render_target_input", "x": -204.0, "y": -16.0 },
+    { "type": "FBO Split", "node_type": "fbo_split", "x": 0.0, "y": -122.0 },
+    { "type": "DepthToColorPass", "x": 220.0, "y": -122.0 },
+    { "type": "ColorToDepthPass", "x": 440.0, "y": -122.0 },
+    { "type": "FBO Join", "node_type": "fbo_join", "x": 660.0, "y": -122.0, "name": "ConvertedFbo" }
+  ],
+  "connections": [
+    { "from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "fbo" },
+    { "from_node": 1, "from_socket": "depth", "to_node": 2, "to_socket": "input_res" },
+    { "from_node": 2, "from_socket": "output_res", "to_node": 3, "to_socket": "input_res" },
+    { "from_node": 2, "from_socket": "output_res", "to_node": 4, "to_socket": "color" },
+    { "from_node": 3, "from_socket": "output_res", "to_node": 4, "to_socket": "depth" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    CHECK(naming.resource_types[naming.socket_names["2"]["output_res"]] == "color_texture");
+    CHECK(naming.resource_types[naming.socket_names["3"]["output_res"]] == "depth_texture");
+    REQUIRE(naming.fbo_compositions.count("ConvertedFbo") == 1u);
+    CHECK(naming.fbo_compositions["ConvertedFbo"].color == naming.socket_names["2"]["output_res"]);
+    CHECK(naming.fbo_compositions["ConvertedFbo"].depth == naming.socket_names["3"]["output_res"]);
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+    REQUIRE(pipeline->pass_count() == 2u);
+
+    termin::TcPassRef pass0(pipeline->get_pass_at(0));
+    termin::TcPassRef pass1(pipeline->get_pass_at(1));
+    CHECK(pass0.type_name() == "DepthToColorPass");
+    CHECK(pass1.type_name() == "ColorToDepthPass");
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler supports standalone texture resource nodes")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "Color Texture", "node_type": "resource", "name": "ScratchColor" },
+    { "type": "Depth Texture", "node_type": "resource", "name": "ScratchDepth" },
+    { "type": "ColorToDepthPass", "x": 220.0, "y": -122.0 },
+    { "type": "DepthToColorPass", "x": 440.0, "y": -122.0 }
+  ],
+  "connections": [
+    { "from_node": 0, "from_socket": "color", "to_node": 2, "to_socket": "input_res" },
+    { "from_node": 1, "from_socket": "depth", "to_node": 2, "to_socket": "output_res_target" },
+    { "from_node": 2, "from_socket": "output_res", "to_node": 3, "to_socket": "input_res" },
+    { "from_node": 0, "from_socket": "color", "to_node": 3, "to_socket": "output_res_target" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    CHECK(naming.socket_names["0"]["color"] == "ScratchColor");
+    CHECK(naming.resource_types["ScratchColor"] == "color_texture");
+    CHECK(naming.socket_names["1"]["depth"] == "ScratchDepth");
+    CHECK(naming.resource_types["ScratchDepth"] == "depth_texture");
+    CHECK(naming.socket_names["2"]["output_res"] == "ScratchDepth");
+    CHECK(naming.socket_names["3"]["output_res"] == "ScratchColor");
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+    REQUIRE(pipeline->pass_count() == 2u);
+
+    bool saw_color_spec = false;
+    bool saw_depth_spec = false;
+    for (const auto& spec : pipeline->specs()) {
+        if (spec.resource == "ScratchColor") {
+            saw_color_spec = true;
+            CHECK(spec.resource_type == "color_texture");
+        }
+        if (spec.resource == "ScratchDepth") {
+            saw_depth_spec = true;
+            CHECK(spec.resource_type == "depth_texture");
+        }
+    }
+    CHECK(saw_color_spec);
+    CHECK(saw_depth_spec);
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler creates typed temporary texture resources for empty inputs")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "ColorToDepthPass", "x": 220.0, "y": -122.0 }
+  ],
+  "connections": [],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+    tc::ResourceNaming naming = tc::assign_resource_names(graph);
+
+    REQUIRE(naming.socket_names["0"].count("input_res") == 1u);
+    const std::string input_name = naming.socket_names["0"]["input_res"];
+    CHECK(naming.resource_types[input_name] == "color_texture");
+    CHECK(naming.resource_types[naming.socket_names["0"]["output_res"]] == "depth_texture");
+
+    termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline != nullptr);
+
+    bool saw_input_spec = false;
+    bool saw_output_spec = false;
+    for (const auto& spec : pipeline->specs()) {
+        if (spec.resource == input_name) {
+            saw_input_spec = true;
+            CHECK(spec.resource_type == "color_texture");
+        }
+        if (spec.resource == naming.socket_names["0"]["output_res"]) {
+            saw_output_spec = true;
+            CHECK(spec.resource_type == "depth_texture");
+        }
+    }
+    CHECK(saw_input_spec);
+    CHECK(saw_output_spec);
+
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler rejects direct resource type conversion without split or join")
+{
+    const char* json = R"JSON(
+{
+  "name": "graph_pipeline",
+  "nodes": [
+    { "type": "RenderTargetInput", "node_type": "render_target_input", "x": -204.0, "y": -16.0 },
+    { "type": "FBO Join", "node_type": "fbo_join", "x": 306.0, "y": -122.0, "name": "JoinedFbo" }
+  ],
+  "connections": [
+    { "from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "depth" }
+  ],
+  "viewport_frames": []
+}
+)JSON";
+
+    nos::trent data = nos::json::parse(json);
+    tc::GraphData graph = tc::GraphData::from_trent(data);
+
+    bool threw = false;
+    try {
+        termin::RenderPipeline* pipeline = tc::compile_graph(graph);
+        if (pipeline) {
+            pipeline->destroy();
+            delete pipeline;
+        }
+    } catch (const tc::GraphCompileError&) {
+        threw = true;
+    }
+    REQUIRE(threw);
 }
 
 TEST_CASE("Graph compiler synthesizes blit for External RT to RenderTarget")

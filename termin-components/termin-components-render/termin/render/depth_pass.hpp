@@ -67,4 +67,188 @@ protected:
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };
 
+class DepthOnlyPass : public CxxFramePass {
+public:
+    struct DrawCall {
+    public:
+        Entity entity;
+        tc_component* component = nullptr;
+        tc_shader_handle final_shader = tc_shader_handle_invalid();
+        int geometry_id = 0;
+    };
+
+public:
+    std::string output_res = "depth_texture";
+    std::string camera_name;
+    std::vector<std::string> entity_names;
+
+private:
+    float _near_plane = 0.1f;
+    float _far_plane = 1000.0f;
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tc_shader_handle depth_shader_handle_ = tc_shader_handle_invalid();
+    mutable std::vector<DrawCall> cached_draw_calls_;
+
+public:
+    INSPECT_FIELD(DepthOnlyPass, output_res, "Output Resource", "string")
+    INSPECT_FIELD(DepthOnlyPass, camera_name, "Camera Name", "string")
+    INSPECT_TYPE_METADATA(DepthOnlyPass, graph, make_pass_graph_metadata(
+        {},
+        {{"output_res", "depth_texture"}},
+        {}
+    ))
+
+    DepthOnlyPass(
+        const std::string& output_res = "depth_texture",
+        const std::string& pass_name = "DepthOnly"
+    ) : output_res(output_res) {
+        set_pass_name(pass_name);
+    }
+
+    ~DepthOnlyPass() override { release_tgfx2_resources(); }
+
+    void destroy() override {
+        release_tgfx2_resources();
+    }
+
+    std::set<const char*> compute_reads() const override {
+        return {};
+    }
+
+    std::set<const char*> compute_writes() const override {
+        return {output_res.c_str()};
+    }
+
+    std::vector<ResourceSpec> get_resource_specs() const override {
+        ResourceSpec spec;
+        spec.resource = output_res;
+        spec.resource_type = "depth_texture";
+        spec.format = "depth32f";
+        return {spec};
+    }
+
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+        return {};
+    }
+
+    std::vector<std::string> get_internal_symbols() const override {
+        return entity_names;
+    }
+
+    void execute(ExecuteContext& ctx) override;
+
+private:
+    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
+    void release_tgfx2_resources();
+    CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name) const;
+    void collect_draw_calls(tc_scene_handle scene, uint64_t layer_mask) const;
+    void sort_draw_calls_by_shader() const;
+};
+
+class DepthToColorPass : public CxxFramePass {
+public:
+    std::string input_res = "depth_texture";
+    std::string output_res = "depth_color";
+
+private:
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
+
+public:
+    INSPECT_FIELD(DepthToColorPass, input_res, "Input Depth", "string")
+    INSPECT_FIELD(DepthToColorPass, output_res, "Output Color", "string")
+    INSPECT_TYPE_METADATA(DepthToColorPass, graph, make_pass_graph_metadata(
+        {{"input_res", "depth_texture"}},
+        {{"output_res", "color_texture"}},
+        {}
+    ))
+
+    DepthToColorPass(
+        const std::string& input_res = "depth_texture",
+        const std::string& output_res = "depth_color",
+        const std::string& pass_name = "DepthToColor"
+    ) : input_res(input_res), output_res(output_res) {
+        set_pass_name(pass_name);
+    }
+
+    ~DepthToColorPass() override { release_tgfx2_resources(); }
+
+    void destroy() override { release_tgfx2_resources(); }
+
+    std::set<const char*> compute_reads() const override {
+        return {input_res.c_str()};
+    }
+
+    std::set<const char*> compute_writes() const override {
+        return {output_res.c_str()};
+    }
+
+    std::vector<ResourceSpec> get_resource_specs() const override {
+        ResourceSpec spec;
+        spec.resource = output_res;
+        spec.resource_type = "color_texture";
+        spec.format = "rgba8";
+        return {spec};
+    }
+
+    void execute(ExecuteContext& ctx) override;
+
+private:
+    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
+    void release_tgfx2_resources();
+};
+
+class ColorToDepthPass : public CxxFramePass {
+public:
+    std::string input_res = "color_texture";
+    std::string output_res = "depth_texture";
+
+private:
+    tgfx::IRenderDevice* device2_ = nullptr;
+    tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
+
+public:
+    INSPECT_FIELD(ColorToDepthPass, input_res, "Input Color", "string")
+    INSPECT_FIELD(ColorToDepthPass, output_res, "Output Depth", "string")
+    INSPECT_TYPE_METADATA(ColorToDepthPass, graph, make_pass_graph_metadata(
+        {{"input_res", "color_texture"}},
+        {{"output_res", "depth_texture"}},
+        {}
+    ))
+
+    ColorToDepthPass(
+        const std::string& input_res = "color_texture",
+        const std::string& output_res = "depth_texture",
+        const std::string& pass_name = "ColorToDepth"
+    ) : input_res(input_res), output_res(output_res) {
+        set_pass_name(pass_name);
+    }
+
+    ~ColorToDepthPass() override { release_tgfx2_resources(); }
+
+    void destroy() override { release_tgfx2_resources(); }
+
+    std::set<const char*> compute_reads() const override {
+        return {input_res.c_str()};
+    }
+
+    std::set<const char*> compute_writes() const override {
+        return {output_res.c_str()};
+    }
+
+    std::vector<ResourceSpec> get_resource_specs() const override {
+        ResourceSpec spec;
+        spec.resource = output_res;
+        spec.resource_type = "depth_texture";
+        spec.format = "depth32f";
+        return {spec};
+    }
+
+    void execute(ExecuteContext& ctx) override;
+
+private:
+    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
+    void release_tgfx2_resources();
+};
+
 } // namespace termin
