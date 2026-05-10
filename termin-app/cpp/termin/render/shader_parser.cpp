@@ -513,6 +513,19 @@ std::string rewrite_engine_uniforms_for_stage_source(
     std::string src = tgfx::internal::preprocess_shader_source(
         source, stage_name.c_str());
 
+    // Parsed .shader sources may already have gone through the engine
+    // rewrite before they are passed to TcMaterial.add_phase_from_sources
+    // (e.g. builtin resources created from ShaderMultyPhaseProgramm). In
+    // that case `stage_uses_engine_uniform()` still sees `u_model` in the
+    // generated `#define`, so the helper must be idempotent.
+    bool already_rewritten =
+        src.find("uniform PerFrame") != std::string::npos ||
+        src.find("uniform ColorPushBlock") != std::string::npos ||
+        src.find("#define u_model pc._u_model") != std::string::npos;
+    if (already_rewritten) {
+        return inject_after_version(src, "");
+    }
+
     bool needs_engine_block = stage_uses_engine_uniform(src);
     if (needs_engine_block) {
         src = strip_engine_uniform_decls(src);
