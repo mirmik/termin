@@ -203,11 +203,25 @@ BloomPass::BloomPass(
 }
 
 std::set<const char*> BloomPass::compute_reads() const {
-    return {input_res.c_str()};
+    std::set<const char*> reads;
+    if (!input_res.empty()) {
+        reads.insert(input_res.c_str());
+    }
+    if (!output_res_target.empty()) {
+        reads.insert(output_res_target.c_str());
+    }
+    return reads;
 }
 
 std::set<const char*> BloomPass::compute_writes() const {
     return {output_res.c_str()};
+}
+
+std::vector<std::pair<std::string, std::string>> BloomPass::get_inplace_aliases() const {
+    if (output_res_target.empty()) {
+        return {};
+    }
+    return {{output_res_target, output_res}};
 }
 
 

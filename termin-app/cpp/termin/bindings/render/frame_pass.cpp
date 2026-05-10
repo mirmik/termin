@@ -378,6 +378,7 @@ void bind_frame_pass(nb::module_& m) {
              nb::arg("mip_levels") = 5)
         .def_rw("input_res", &BloomPass::input_res)
         .def_rw("output_res", &BloomPass::output_res)
+        .def_rw("output_res_target", &BloomPass::output_res_target)
         .def_rw("threshold", &BloomPass::threshold)
         .def_rw("soft_threshold", &BloomPass::soft_threshold)
         .def_rw("intensity", &BloomPass::intensity)
@@ -392,12 +393,15 @@ void bind_frame_pass(nb::module_& m) {
     {
         m.attr("BloomPass").attr("category") = "Effects";
         m.attr("BloomPass").attr("node_inputs") = nb::make_tuple(
-            nb::make_tuple("input_res", "fbo")
+            nb::make_tuple("input_res", "fbo"),
+            nb::make_tuple("output_res_target", "fbo")
         );
         m.attr("BloomPass").attr("node_outputs") = nb::make_tuple(
             nb::make_tuple("output_res", "fbo")
         );
-        m.attr("BloomPass").attr("node_inplace_pairs") = nb::make_tuple();
+        m.attr("BloomPass").attr("node_inplace_pairs") = nb::make_tuple(
+            nb::make_tuple("output_res_target", "output_res")
+        );
     }
 
     nb::class_<GrayscalePass, CxxFramePass>(m, "GrayscalePass")
@@ -490,6 +494,7 @@ void bind_frame_pass(nb::module_& m) {
              nb::arg("method") = 0)
         .def_rw("input_res", &TonemapPass::input_res)
         .def_rw("output_res", &TonemapPass::output_res)
+        .def_rw("output_res_target", &TonemapPass::output_res_target)
         .def_rw("exposure", &TonemapPass::exposure)
         .def_rw("method", &TonemapPass::method)
         .def("compute_reads", &TonemapPass::compute_reads)
@@ -502,12 +507,15 @@ void bind_frame_pass(nb::module_& m) {
     {
         m.attr("TonemapPass").attr("category") = "Effects";
         m.attr("TonemapPass").attr("node_inputs") = nb::make_tuple(
-            nb::make_tuple("input_res", "fbo")
+            nb::make_tuple("input_res", "fbo"),
+            nb::make_tuple("output_res_target", "fbo")
         );
         m.attr("TonemapPass").attr("node_outputs") = nb::make_tuple(
             nb::make_tuple("output_res", "fbo")
         );
-        m.attr("TonemapPass").attr("node_inplace_pairs") = nb::make_tuple();
+        m.attr("TonemapPass").attr("node_inplace_pairs") = nb::make_tuple(
+            nb::make_tuple("output_res_target", "output_res")
+        );
     }
 
     m.attr("TONEMAP_ACES") = 0;

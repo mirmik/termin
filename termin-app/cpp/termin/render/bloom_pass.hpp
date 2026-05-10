@@ -26,6 +26,7 @@ class BloomPass : public CxxFramePass {
 public:
     std::string input_res = "color";
     std::string output_res = "color";
+    std::string output_res_target;
     float threshold = 1.0f;
     float soft_threshold = 0.5f;
     float intensity = 1.0f;
@@ -55,14 +56,15 @@ private:
 public:
     INSPECT_FIELD(BloomPass, input_res, "Input", "string")
     INSPECT_FIELD(BloomPass, output_res, "Output", "string")
+    INSPECT_FIELD(BloomPass, output_res_target, "Output Target", "string")
     INSPECT_FIELD_RANGE(BloomPass, threshold, "Threshold", "float", 0.0f, 10.0f)
     INSPECT_FIELD_RANGE(BloomPass, soft_threshold, "Soft Knee", "float", 0.0f, 1.0f)
     INSPECT_FIELD_RANGE(BloomPass, intensity, "Intensity", "float", 0.0f, 5.0f)
     INSPECT_FIELD_RANGE(BloomPass, mip_levels, "Mip Levels", "int", 1, 8)
     INSPECT_TYPE_METADATA(BloomPass, graph, make_pass_graph_metadata(
-        {{"input_res", "fbo"}},
+        {{"input_res", "fbo"}, {"output_res_target", "fbo"}},
         {{"output_res", "fbo"}},
-        {}
+        {{"output_res_target", "output_res"}}
     ))
 
     BloomPass(
@@ -77,9 +79,7 @@ public:
     std::set<const char*> compute_reads() const override;
     std::set<const char*> compute_writes() const override;
 
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
-        return {};
-    }
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
 
     void execute(ExecuteContext& ctx) override;
     void destroy() override;
