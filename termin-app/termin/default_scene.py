@@ -201,7 +201,7 @@ def make_default_scene() -> dict:
                         "shadow_settings": {
                             "method": 1,
                             "softness": 1.0,
-                            "bias": 0.005,
+                            "bias": 0.0,
                         },
                     },
                     "skybox": {

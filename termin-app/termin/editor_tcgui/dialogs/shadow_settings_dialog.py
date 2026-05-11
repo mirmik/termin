@@ -63,13 +63,13 @@ def show_shadow_settings_dialog(
     bias_row = HStack()
     bias_row.spacing = 8
     bias_lbl = Label()
-    bias_lbl.text = "Bias:"
+    bias_lbl.text = "Bias (world):"
     bias_row.add_child(bias_lbl)
     bias_spin = SpinBox()
     bias_spin.value = ss.bias
     bias_spin.min_value = 0.0
-    bias_spin.max_value = 0.1
-    bias_spin.step = 0.001
+    bias_spin.max_value = 1.0
+    bias_spin.step = 0.005
     bias_spin.decimals = 4
     bias_row.add_child(bias_spin)
     content.add_child(bias_row)

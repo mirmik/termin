@@ -86,6 +86,10 @@ vec3 get_ambient_color() { return u_ambient_data.rgb; }
 float get_ambient_intensity() { return u_ambient_data.w; }
 vec3 get_camera_position() { return u_camera_light_count.xyz; }
 float get_shadow_bias() { return u_shadow_settings.z; }
+float shadow_bias_depth(int sm) {
+    float depth_range = max(u_shadow_split_far[sm] - u_shadow_split_near[sm], 0.0001);
+    return max(get_shadow_bias(), 0.0) / depth_range;
+}
 
 float compute_distance_attenuation(vec3 attenuation, float range, float dist) {
     float denom = attenuation.x + attenuation.y * dist + attenuation.z * dist * dist;
@@ -133,7 +137,7 @@ float compute_shadow_auto(int light_index) {
             continue;
         }
 
-        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - get_shadow_bias()));
+        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - shadow_bias_depth(sm)));
     }
 
     return 1.0;

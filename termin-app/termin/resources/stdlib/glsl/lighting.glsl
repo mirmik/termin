@@ -42,7 +42,7 @@ layout(std140, binding = 0) uniform LightingBlock {
     LightData u_lights[MAX_LIGHTS];      // 80 bytes * 8 = 640 bytes
     vec4 u_ambient_data;                 // ambient_color.rgb, ambient_intensity
     vec4 u_camera_light_count;           // camera_position.xyz, light_count
-    vec4 u_shadow_settings;              // shadow_method, shadow_softness, shadow_bias, _pad
+    vec4 u_shadow_settings;              // method, softness, world-space bias, _pad
 };
 
 // ============== Accessor Functions ==============
