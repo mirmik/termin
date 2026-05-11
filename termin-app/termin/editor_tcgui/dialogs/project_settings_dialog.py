@@ -9,6 +9,8 @@ from tcgui.widgets.vstack import VStack
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.combo_box import ComboBox
+from tcgui.widgets.text_input import TextInput
+from tcgui.widgets.units import px
 
 
 def show_project_settings_dialog(
@@ -49,6 +51,26 @@ def show_project_settings_dialog(
     combo.on_changed = lambda idx, _text: _on_changed(idx)
     row.add_child(combo)
     content.add_child(row)
+
+    build_row = HStack()
+    build_row.spacing = 8
+    build_label = Label()
+    build_label.text = "Build Output Dir:"
+    build_label.tooltip = "Project-relative generated build directory. Asset watcher ignores this directory."
+    build_row.add_child(build_label)
+
+    build_dir_input = TextInput()
+    build_dir_input.text = manager.settings.build_output_dir
+    build_dir_input.preferred_width = px(180)
+
+    def _on_build_dir_changed(text: str):
+        manager.set_build_output_dir(text)
+        if on_changed:
+            on_changed()
+
+    build_dir_input.on_submit = _on_build_dir_changed
+    build_row.add_child(build_dir_input)
+    content.add_child(build_row)
 
     dlg = Dialog()
     dlg.title = "Project Settings"

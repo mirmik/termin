@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QFormLayout,
     QComboBox,
+    QLineEdit,
     QDialogButtonBox,
     QLabel,
 )
@@ -80,6 +81,14 @@ class ProjectSettingsDialog(QDialog):
         )
         render_layout.addRow(sync_mode_label, self._sync_mode_combo)
 
+        self._build_output_edit = QLineEdit()
+        build_output_label = QLabel("Build output dir:")
+        build_output_label.setToolTip(
+            "Project-relative generated build directory.\n"
+            "The asset watcher ignores this directory."
+        )
+        render_layout.addRow(build_output_label, self._build_output_edit)
+
         layout.addWidget(render_group)
         layout.addStretch()
 
@@ -94,6 +103,7 @@ class ProjectSettingsDialog(QDialog):
             return
 
         settings = self._manager.settings
+        self._build_output_edit.setText(settings.build_output_dir)
 
         # Find index for current sync mode
         sync_mode_value = settings.render_sync_mode.value
@@ -108,6 +118,7 @@ class ProjectSettingsDialog(QDialog):
             return
 
         self._sync_mode_combo.currentIndexChanged.connect(self._on_sync_mode_changed)
+        self._build_output_edit.editingFinished.connect(self._on_build_output_changed)
 
     def _on_sync_mode_changed(self, index: int) -> None:
         """Handle sync mode combo change."""
@@ -119,6 +130,14 @@ class ProjectSettingsDialog(QDialog):
             sync_mode = RenderSyncMode.NONE
 
         self._manager.set_render_sync_mode(sync_mode)
+
+        if self._on_changed is not None:
+            self._on_changed()
+
+    def _on_build_output_changed(self) -> None:
+        """Handle build output directory change."""
+        self._manager.set_build_output_dir(self._build_output_edit.text())
+        self._build_output_edit.setText(self._manager.settings.build_output_dir)
 
         if self._on_changed is not None:
             self._on_changed()

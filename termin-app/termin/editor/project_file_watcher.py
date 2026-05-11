@@ -17,9 +17,11 @@ import os
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, Set
 
 from tcbase import log
+from termin.project.settings import ProjectSettingsManager
 
 if TYPE_CHECKING:
     from termin.visualization.core.resources import ResourceManager
@@ -380,7 +382,11 @@ class ProjectFileWatcher:
         pending_files: list[tuple[int, str, str]] = []
 
         for root, dirs, files in os.walk(path):
-            dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
+            dirs[:] = [
+                d for d in dirs
+                if not d.startswith((".", "__"))
+                and not self._is_ignored_path(os.path.join(root, d))
+            ]
             self._watched_dirs.add(root)
 
             for filename in files:
@@ -388,6 +394,9 @@ class ProjectFileWatcher:
                     continue
 
                 file_path = os.path.join(root, filename)
+                if self._is_ignored_path(file_path):
+                    continue
+
                 ext = os.path.splitext(filename)[1].lower()
 
                 if ext:
@@ -493,6 +502,9 @@ class ProjectFileWatcher:
                 log.exception(f"[ProjectFileWatcher] Error processing {path}")
 
     def _should_watch_file(self, path: str) -> bool:
+        if self._is_ignored_path(path):
+            return False
+
         ext = os.path.splitext(path)[1].lower()
         if ext in self._processors:
             return True
@@ -529,6 +541,29 @@ class ProjectFileWatcher:
                 processor.on_file_changed(path)
             except Exception:
                 log.exception(f"[ProjectFileWatcher] Error reloading {path}")
+
+    def _ignored_roots(self) -> tuple[Path, ...]:
+        if self._project_path is None:
+            return ()
+
+        project_root = Path(self._project_path).resolve()
+        settings = ProjectSettingsManager.instance().settings
+        # Build output is generated content, not source assets. The directory
+        # name is a project setting so this exclusion is visible and editable
+        # instead of being a hidden "dist" special case.
+        build_output_root = (project_root / settings.build_output_dir).resolve()
+        return (build_output_root,)
+
+    def _is_ignored_path(self, path: str) -> bool:
+        ignored_roots = self._ignored_roots()
+        if not ignored_roots:
+            return False
+
+        resolved = Path(path).resolve()
+        for ignored_root in ignored_roots:
+            if resolved == ignored_root or ignored_root in resolved.parents:
+                return True
+        return False
 
     # ------------------------------------------------------------------
     # Statistics
