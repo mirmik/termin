@@ -171,7 +171,7 @@ float compute_shadow(int light_index) {
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
             proj_coords.z < 0.0 || proj_coords.z > 1.0) {
-            return 1.0;
+            continue;
         }
 
         // Hardware PCF: texture() on sampler2DShadow does depth comparison
@@ -200,7 +200,7 @@ float compute_shadow_pcf(int light_index) {
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
             proj_coords.z < 0.0 || proj_coords.z > 1.0) {
-            return 1.0;
+            continue;
         }
 
         vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));
@@ -239,7 +239,7 @@ float compute_shadow_poisson(int light_index) {
         if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
             proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
             proj_coords.z < 0.0 || proj_coords.z > 1.0) {
-            return 1.0;
+            continue;
         }
 
         vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));

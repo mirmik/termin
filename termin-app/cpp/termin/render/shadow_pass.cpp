@@ -386,12 +386,15 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         }
     }
 
-    // Extract camera near plane (same logic as legacy path).
+    // Extract camera near plane from the engine's Vulkan-native Y-forward
+    // perspective matrix:
+    //   m(1, 2) = far / (far - near)
+    //   m(3, 2) = -far * near / (far - near)
     float camera_near = 0.1f;
-    float proj_23 = camera_projection(2, 3);
-    float proj_21 = camera_projection(2, 1);
-    if (std::abs(proj_21 - 1.0f) > 0.001f && std::abs(proj_23) > 0.001f) {
-        camera_near = -proj_23 / (proj_21 + 1.0f);
+    float proj_12 = camera_projection(1, 2);
+    float proj_32 = camera_projection(3, 2);
+    if (std::abs(proj_12) > 0.001f && std::abs(proj_32) > 0.001f) {
+        camera_near = -proj_32 / proj_12;
         if (camera_near < 0.01f) camera_near = 0.1f;
     }
 
