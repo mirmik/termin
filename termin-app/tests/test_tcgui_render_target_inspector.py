@@ -128,6 +128,14 @@ class _TextureResourceManager(_ResourceManager):
         return None
 
 
+class _FakeUi:
+    def __init__(self):
+        self.layout_requests = 0
+
+    def request_layout(self):
+        self.layout_requests += 1
+
+
 def test_render_target_inspector_reads_camera_from_render_target_scene(monkeypatch):
     camera_module = types.ModuleType("termin.visualization.core.camera")
     camera_module.CameraComponent = _CameraComponent
@@ -218,6 +226,26 @@ def test_render_target_inspector_edits_clear_settings():
     assert render_target.clear_color_value == (0.25, 0.5, 0.75, 1.0)
     assert render_target.clear_depth_enabled is True
     assert render_target.clear_depth_value == 0.5
+
+
+def test_render_target_inspector_requests_layout_when_manual_size_visibility_changes():
+    scene = _Scene("Scene", 1, [])
+    render_target = _RenderTarget(scene, None)
+
+    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    fake_ui = _FakeUi()
+    inspector._ui = fake_ui
+    inspector.set_scene_getter(lambda: [scene])
+    inspector.set_render_target(render_target, scene)
+
+    before = fake_ui.layout_requests
+    inspector._dynamic_resolution.checked = False
+    inspector._on_dynamic_resolution_changed(False)
+
+    assert render_target.dynamic_resolution is False
+    assert inspector._width.visible is True
+    assert inspector._height.visible is True
+    assert fake_ui.layout_requests > before
 
 
 def test_texture_picker_with_scene_getter_includes_live_render_target_pool(monkeypatch):
