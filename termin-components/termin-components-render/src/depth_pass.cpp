@@ -458,7 +458,7 @@ void DepthPass::execute_with_data_tgfx2(
 void DepthPass::execute(ExecuteContext& ctx) {
     tc_scene_handle scene = ctx.scene.handle();
     const RenderCamera* camera = ctx.camera;
-    Rect4i rect = ctx.rect;
+    Rect4i rect = ctx.render_rect;
     std::optional<RenderCamera> named_camera_snapshot;
 
     if (!camera_name.empty()) {
@@ -604,7 +604,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
     tc_scene_handle scene = ctx.scene.handle();
     const RenderCamera* camera = ctx.camera;
-    Rect4i rect = ctx.rect;
+    Rect4i rect = ctx.render_rect;
     std::optional<RenderCamera> named_camera_snapshot;
 
     if (!camera_name.empty()) {

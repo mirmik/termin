@@ -314,11 +314,11 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
     std::string name = vp_name ? vp_name : "";
 
-    std::unordered_map<std::string, ViewportContext> contexts;
-    ViewportContext ctx;
+    std::unordered_map<std::string, RenderTargetContext> contexts;
+    RenderTargetContext ctx;
     ctx.name = name;
     ctx.camera = render_camera;
-    ctx.rect = {0, 0, pw, ph};
+    ctx.render_rect = {0, 0, pw, ph};
     ctx.internal_entities = internal_entities;
     ctx.layer_mask = camera_layer_mask & tc_render_target_get_layer_mask(rt);
     ctx.output_color_tex = state->output_color_tex;

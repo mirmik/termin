@@ -77,32 +77,32 @@ void bind_render_engine(nb::module_& m) {
             RenderEngine& self,
             RenderPipeline& pipeline,
             TcSceneRef scene_ref,
-            const std::unordered_map<std::string, ViewportContext>& viewport_contexts,
-            const std::string& default_viewport
+            const std::unordered_map<std::string, RenderTargetContext>& render_target_contexts,
+            const std::string& default_render_target
         ) {
             std::vector<Light> lights;
             self.render_scene_pipeline_offscreen(
                 pipeline,
                 scene_ref.handle(),
-                viewport_contexts,
+                render_target_contexts,
                 lights,
-                default_viewport
+                default_render_target
             );
         },
              nb::arg("pipeline"),
              nb::arg("scene"),
-             nb::arg("viewport_contexts"),
-             nb::arg("default_viewport") = "");
+             nb::arg("render_target_contexts"),
+             nb::arg("default_render_target") = "");
 
-    // ViewportContext for multi-viewport rendering
-    nb::class_<ViewportContext>(m, "ViewportContext")
+    // RenderTargetContext for multi-target pipeline rendering.
+    nb::class_<RenderTargetContext>(m, "RenderTargetContext")
         .def(nb::init<>())
-        .def_rw("name", &ViewportContext::name)
-        .def_rw("camera", &ViewportContext::camera)
-        .def_rw("rect", &ViewportContext::rect)
-        .def_rw("layer_mask", &ViewportContext::layer_mask)
-        .def_rw("output_color_tex", &ViewportContext::output_color_tex)
-        .def_rw("output_depth_tex", &ViewportContext::output_depth_tex);
+        .def_rw("name", &RenderTargetContext::name)
+        .def_rw("camera", &RenderTargetContext::camera)
+        .def_rw("render_rect", &RenderTargetContext::render_rect)
+        .def_rw("layer_mask", &RenderTargetContext::layer_mask)
+        .def_rw("output_color_tex", &RenderTargetContext::output_color_tex)
+        .def_rw("output_depth_tex", &RenderTargetContext::output_depth_tex);
 }
 
 } // namespace termin
