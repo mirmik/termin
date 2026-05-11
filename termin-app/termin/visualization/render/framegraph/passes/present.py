@@ -282,7 +282,7 @@ class ResolvePass(RenderFramePass):
             log.error(f"[ResolvePass] Failed to create shaders for strategy='{strategy}', samples={samples}")
             return
 
-        _, _, width, height = ctx.rect
+        _, _, width, height = ctx.render_rect
         width = int(width)
         height = int(height)
         ctx.ctx2.begin_pass(tex_out)

@@ -63,7 +63,7 @@ class UIWidgetPass(RenderFramePass):
         return [(self.input_res, self.output_res)]
 
     def execute(self, ctx: "ExecuteContext") -> None:
-        px, py, pw, ph = ctx.rect
+        px, py, pw, ph = ctx.render_rect
 
         # UIComponent.render delegates to tcgui UIRenderer, which manages
         # its own offscreen FBO and blits to the window itself. No need
