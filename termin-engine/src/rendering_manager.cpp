@@ -77,7 +77,7 @@ static uint64_t effective_layer_mask(uint64_t camera_mask, tc_render_target_hand
     return camera_mask & target_mask;
 }
 
-static void fill_render_target_clear_settings(ViewportContext& ctx, tc_render_target_handle rt) {
+static void fill_render_target_clear_settings(RenderTargetContext& ctx, tc_render_target_handle rt) {
     if (!tc_render_target_handle_valid(rt)) return;
     ctx.clear_color_enabled = tc_render_target_get_clear_color_enabled(rt);
     tc_render_target_get_clear_color_value(rt, ctx.clear_color);
@@ -187,8 +187,26 @@ static tgfx::TextureHandle resolve_pipeline_texture_ref(
         tc_render_target_handle rt = find_render_target_by_name(ref, preferred_scene, render_targets);
         if (tc_render_target_handle_valid(rt)) {
             tc_render_target_ensure_textures(rt);
-            return wrap_tc_texture_as_tgfx2(
+            tgfx::TextureHandle tex = wrap_tc_texture_as_tgfx2(
                 device, tc_render_target_get_color_texture(rt));
+            tgfx::TextureDesc desc = device.texture_desc(tex);
+            tc_log(
+                TC_LOG_INFO,
+                "[RenderingManager] external RT ref '%s' resolved to rt='%s' scene=(%u,%u) fixed_size=%dx%d dynamic=%d tex=%u tex_size=%ux%u fmt=%d samples=%u",
+                ref,
+                tc_render_target_get_name(rt) ? tc_render_target_get_name(rt) : "<unnamed>",
+                tc_render_target_get_scene(rt).index,
+                tc_render_target_get_scene(rt).generation,
+                tc_render_target_get_width(rt),
+                tc_render_target_get_height(rt),
+                tc_render_target_get_dynamic_resolution(rt) ? 1 : 0,
+                tex.id,
+                desc.width,
+                desc.height,
+                static_cast<int>(desc.format),
+                desc.sample_count
+            );
+            return tex;
         }
     }
 
@@ -204,7 +222,7 @@ static tgfx::TextureHandle resolve_pipeline_texture_ref(
 }
 
 static void fill_external_textures_from_render_target(
-    ViewportContext& ctx,
+    RenderTargetContext& ctx,
     tc_render_target_handle rt,
     tgfx::IRenderDevice& device,
     const std::vector<tc_render_target_handle>& render_targets
@@ -224,6 +242,21 @@ static void fill_external_textures_from_render_target(
         tc_scene_handle scene = tc_render_target_get_scene(rt);
         tgfx::TextureHandle tex = resolve_pipeline_texture_ref(device, scene, render_targets, value->data.s);
         if (tex) {
+            tgfx::TextureDesc desc = device.texture_desc(tex);
+            tc_log(
+                TC_LOG_INFO,
+                "[RenderingManager] pipeline external texture slot='%s' ref='%s' target_rt='%s' target_scene=(%u,%u) tex=%u size=%ux%u fmt=%d samples=%u",
+                slot,
+                value->data.s,
+                tc_render_target_get_name(rt) ? tc_render_target_get_name(rt) : "<unnamed>",
+                scene.index,
+                scene.generation,
+                tex.id,
+                desc.width,
+                desc.height,
+                static_cast<int>(desc.format),
+                desc.sample_count
+            );
             ctx.external_textures[slot] = tex;
         }
     }
@@ -1348,8 +1381,8 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
     auto all_viewports = collect_all_viewports();
 
-    // Collect viewport contexts
-    std::unordered_map<std::string, ViewportContext> contexts;
+    // Collect render target contexts.
+    std::unordered_map<std::string, RenderTargetContext> contexts;
     std::string first_viewport_name;
 
     for (const std::string& vp_name : target_names) {
@@ -1428,11 +1461,13 @@ void RenderingManager::render_scene_pipeline_offscreen(
             out_depth = state->output_depth_tex;
         }
 
-        // Create viewport context
-        ViewportContext ctx;
+        // Create render target context. Its render_rect is the render target
+        // extent, not the viewport's screen rectangle unless dynamic resolution
+        // explicitly copied the viewport size into the render target above.
+        RenderTargetContext ctx;
         ctx.name = vp_name;
         ctx.camera = render_cam;
-        ctx.rect = {0, 0, rw, rh};  // Full render target, offset at blit time
+        ctx.render_rect = {0, 0, rw, rh};
         ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
         ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
         ctx.output_color_tex = out_color;
@@ -1544,13 +1579,13 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     // Collect lights
     std::vector<Light> lights = collect_lights(scene);
 
-    // Build a single-viewport context and run scene pipeline
+    // Build a single render target context and run scene pipeline.
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
-    std::unordered_map<std::string, ViewportContext> contexts;
-    ViewportContext ctx;
+    std::unordered_map<std::string, RenderTargetContext> contexts;
+    RenderTargetContext ctx;
     ctx.name = vp_name ? vp_name : "";
     ctx.camera = render_camera;
-    ctx.rect = {0, 0, rw, rh};
+    ctx.render_rect = {0, 0, rw, rh};
     ctx.internal_entities = internal_entities;
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.output_color_tex = out_color;
@@ -1652,11 +1687,11 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     std::vector<Light> lights = collect_lights(scene);
 
     std::string name = rt_name ? rt_name : "";
-    std::unordered_map<std::string, ViewportContext> contexts;
-    ViewportContext ctx;
+    std::unordered_map<std::string, RenderTargetContext> contexts;
+    RenderTargetContext ctx;
     ctx.name = name;
     ctx.camera = render_camera;
-    ctx.rect = {0, 0, w, h};
+    ctx.render_rect = {0, 0, w, h};
     ctx.internal_entities = TC_ENTITY_HANDLE_INVALID;
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.output_color_tex = out_color;

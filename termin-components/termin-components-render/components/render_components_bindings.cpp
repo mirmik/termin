@@ -632,7 +632,7 @@ NB_MODULE(_components_render_native, m) {
         .def("get_internal_symbols", &MaterialPass::get_internal_symbols)
         .def("execute_with_data", [](MaterialPass& self, nb::tuple rect_py) {
             ExecuteContext ctx;
-            ctx.rect = tuple_to_rect(rect_py);
+            ctx.render_rect = tuple_to_rect(rect_py);
             self.execute(ctx);
         }, nb::arg("rect"))
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
