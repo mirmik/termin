@@ -626,6 +626,8 @@ class RenderTargetInspectorTcgui(VStack):
         self._width.visible = manual
         self._height_lbl.visible = manual
         self._height.visible = manual
+        if self._ui is not None:
+            self._ui.request_layout()
 
     def _emit_changed(self) -> None:
         if self.on_changed is not None:
