@@ -253,7 +253,7 @@ class PlayerRuntime:
             if render_target is not None:
                 viewport_render_targets.add((render_target.index, render_target.generation))
 
-        for render_target in manager.standalone_render_targets:
+        for render_target in manager.managed_render_targets:
             key = (render_target.index, render_target.generation)
             if key in viewport_render_targets:
                 continue

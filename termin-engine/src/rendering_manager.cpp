@@ -115,31 +115,55 @@ static void resolve_render_target_size_for_viewport(
 
 struct RenderTargetNameLookup {
     const char* name = nullptr;
+    tc_scene_handle preferred_scene = TC_SCENE_HANDLE_INVALID;
     tc_render_target_handle result = TC_RENDER_TARGET_HANDLE_INVALID;
 };
 
-static bool find_render_target_by_name_cb(tc_render_target_handle h, void* user_data) {
-    auto* lookup = static_cast<RenderTargetNameLookup*>(user_data);
-    const char* candidate = tc_render_target_get_name(h);
-    if (candidate && lookup->name && std::strcmp(candidate, lookup->name) == 0) {
-        lookup->result = h;
-        return false;
-    }
-    return true;
-}
-
-static tc_render_target_handle find_render_target_by_name(const char* name) {
+static tc_render_target_handle find_render_target_by_name(
+    const char* name,
+    tc_scene_handle preferred_scene,
+    const std::vector<tc_render_target_handle>& render_targets
+) {
     if (!name || name[0] == '\0') {
         return TC_RENDER_TARGET_HANDLE_INVALID;
     }
     RenderTargetNameLookup lookup;
     lookup.name = name;
-    tc_render_target_pool_foreach(find_render_target_by_name_cb, &lookup);
-    return lookup.result;
+    lookup.preferred_scene = preferred_scene;
+
+    // RenderingManager must never resolve render targets by scanning the
+    // global render-target pool. The pool can contain stale/editor/game
+    // duplicates outside this manager's ownership boundary; only the
+    // manager's registered render_targets list is authoritative here.
+    for (tc_render_target_handle rt : render_targets) {
+        if (!tc_render_target_handle_valid(rt)) {
+            continue;
+        }
+        const char* candidate = tc_render_target_get_name(rt);
+        if (!candidate || std::strcmp(candidate, lookup.name) != 0) {
+            continue;
+        }
+
+        if (tc_scene_handle_valid(lookup.preferred_scene)) {
+            tc_scene_handle scene = tc_render_target_get_scene(rt);
+            if (!tc_scene_handle_eq(scene, lookup.preferred_scene)) {
+                continue;
+            }
+        }
+        lookup.result = rt;
+        break;
+    }
+
+    if (tc_render_target_handle_valid(lookup.result)) {
+        return lookup.result;
+    }
+    return TC_RENDER_TARGET_HANDLE_INVALID;
 }
 
 static tgfx::TextureHandle resolve_pipeline_texture_ref(
     tgfx::IRenderDevice& device,
+    tc_scene_handle preferred_scene,
+    const std::vector<tc_render_target_handle>& render_targets,
     const char* ref
 ) {
     if (!ref || ref[0] == '\0') {
@@ -160,7 +184,7 @@ static tgfx::TextureHandle resolve_pipeline_texture_ref(
         }
         return wrap_tc_texture_as_tgfx2(device, tex);
     } else {
-        tc_render_target_handle rt = find_render_target_by_name(ref);
+        tc_render_target_handle rt = find_render_target_by_name(ref, preferred_scene, render_targets);
         if (tc_render_target_handle_valid(rt)) {
             tc_render_target_ensure_textures(rt);
             return wrap_tc_texture_as_tgfx2(
@@ -182,7 +206,8 @@ static tgfx::TextureHandle resolve_pipeline_texture_ref(
 static void fill_external_textures_from_render_target(
     ViewportContext& ctx,
     tc_render_target_handle rt,
-    tgfx::IRenderDevice& device
+    tgfx::IRenderDevice& device,
+    const std::vector<tc_render_target_handle>& render_targets
 ) {
     const tc_value* params = tc_render_target_get_pipeline_params(rt);
     if (!params || params->type != TC_VALUE_DICT) {
@@ -196,7 +221,8 @@ static void fill_external_textures_from_render_target(
             continue;
         }
 
-        tgfx::TextureHandle tex = resolve_pipeline_texture_ref(device, value->data.s);
+        tc_scene_handle scene = tc_render_target_get_scene(rt);
+        tgfx::TextureHandle tex = resolve_pipeline_texture_ref(device, scene, render_targets, value->data.s);
         if (tex) {
             ctx.external_textures[slot] = tex;
         }
@@ -332,26 +358,25 @@ size_t RenderingManager::recreate_render_target_pipelines_for_asset(
     };
     std::vector<TargetPipeline> targets;
 
-    struct CollectData {
-        const std::string* asset_name;
-        std::vector<TargetPipeline>* targets;
-    } collect_data{&asset_name, &targets};
-
-    tc_render_target_pool_foreach([](tc_render_target_handle rt, void* user_data) -> bool {
-        auto* d = static_cast<CollectData*>(user_data);
+    // Do not scan the global render-target pool here. RenderingManager owns
+    // the render-target lifetime contract through managed_render_targets_;
+    // pool scans can accidentally touch stale or foreign editor/game targets.
+    for (tc_render_target_handle rt : managed_render_targets_) {
+        if (!tc_render_target_handle_valid(rt)) {
+            continue;
+        }
         tc_pipeline_handle old_pipeline = tc_render_target_get_pipeline(rt);
         if (!tc_pipeline_pool_alive(old_pipeline)) {
-            return true;
+            continue;
         }
 
         const char* old_name = tc_pipeline_get_name(old_pipeline);
-        if (!old_name || *old_name == '\0' || std::string(old_name) != *d->asset_name) {
-            return true;
+        if (!old_name || *old_name == '\0' || std::string(old_name) != asset_name) {
+            continue;
         }
 
-        d->targets->push_back(TargetPipeline{rt, old_pipeline});
-        return true;
-    }, &collect_data);
+        targets.push_back(TargetPipeline{rt, old_pipeline});
+    }
 
     size_t rebound = 0;
     std::vector<tc_pipeline_handle> old_pipelines;
@@ -384,18 +409,15 @@ size_t RenderingManager::recreate_render_target_pipelines_for_asset(
             continue;
         }
         bool still_used = false;
-        struct UseCheckData {
-            tc_pipeline_handle pipeline;
-            bool* still_used;
-        } use_check{old_pipeline, &still_used};
-        tc_render_target_pool_foreach([](tc_render_target_handle rt, void* user_data) -> bool {
-            auto* d = static_cast<UseCheckData*>(user_data);
-            if (tc_pipeline_handle_eq(tc_render_target_get_pipeline(rt), d->pipeline)) {
-                *d->still_used = true;
-                return false;
+        for (tc_render_target_handle rt : managed_render_targets_) {
+            if (!tc_render_target_handle_valid(rt)) {
+                continue;
             }
-            return true;
-        }, &use_check);
+            if (tc_pipeline_handle_eq(tc_render_target_get_pipeline(rt), old_pipeline)) {
+                still_used = true;
+                break;
+            }
+        }
         if (!still_used) {
             tc_pipeline_destroy(old_pipeline);
         }
@@ -728,7 +750,7 @@ tc_viewport_handle RenderingManager::mount_scene(
     tc_render_target_set_camera(rt, camera);
     tc_render_target_set_pipeline(rt, pipeline);
     tc_render_target_set_dynamic_resolution(rt, true);
-    register_standalone_render_target(rt);
+    register_managed_render_target(rt);
     tc_viewport_set_render_target(viewport, rt);
     tc_viewport_set_scene(viewport, scene);
 
@@ -768,13 +790,13 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
         // Free viewport
         tc_viewport_free(viewport);
 
-        bool registered_standalone = std::find_if(
-            standalone_render_targets_.begin(),
-            standalone_render_targets_.end(),
+        bool registered_managed = std::find_if(
+            managed_render_targets_.begin(),
+            managed_render_targets_.end(),
             [rt](tc_render_target_handle candidate) {
                 return tc_render_target_handle_eq(candidate, rt);
             }
-        ) != standalone_render_targets_.end();
+        ) != managed_render_targets_.end();
 
         bool still_referenced = false;
         auto scan_display_list = [&still_referenced, rt](const std::vector<tc_display*>& displays) {
@@ -794,7 +816,7 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
             scan_display_list(editor_displays_);
         }
 
-        if (tc_render_target_handle_valid(rt) && !registered_standalone && !still_referenced) {
+        if (tc_render_target_handle_valid(rt) && !registered_managed && !still_referenced) {
             uint64_t rt_key = render_target_key(rt);
             auto rt_it = render_target_states_.find(rt_key);
             if (rt_it != render_target_states_.end()) {
@@ -840,7 +862,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
     tc_entity_pool* pool = tc_scene_entity_pool(scene);
     tc_entity_pool_handle pool_handle = pool ? tc_entity_pool_registry_find(pool) : TC_ENTITY_POOL_HANDLE_INVALID;
 
-    // 1. Restore standalone render targets from render_target_configs
+    // 1. Restore managed render targets from render_target_configs
     size_t rt_count = mount ? mount->render_target_config_count : 0;
     for (size_t i = 0; i < rt_count; i++) {
         tc_render_target_config* rtc = &mount->render_target_configs[i];
@@ -909,7 +931,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
             tc_render_target_set_pipeline_params(rt, &rtc->pipeline_params);
         }
 
-        register_standalone_render_target(rt);
+        register_managed_render_target(rt);
     }
 
     // 2. Create viewports from viewport_configs
@@ -941,7 +963,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         tc_render_target_handle rt = TC_RENDER_TARGET_HANDLE_INVALID;
         std::string rt_name = config->render_target_name ? config->render_target_name : "";
         if (!rt_name.empty()) {
-            for (tc_render_target_handle candidate : standalone_render_targets_) {
+            for (tc_render_target_handle candidate : managed_render_targets_) {
                 if (!tc_render_target_handle_valid(candidate)) continue;
                 const char* candidate_name = tc_render_target_get_name(candidate);
                 if (candidate_name && rt_name == candidate_name) {
@@ -958,7 +980,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
             rt = tc_render_target_new(rt_name.empty() ? vp_name.c_str() : rt_name.c_str());
             tc_render_target_set_scene(rt, scene);
             tc_render_target_set_dynamic_resolution(rt, true);
-            register_standalone_render_target(rt);
+            register_managed_render_target(rt);
         }
 
         if (tc_render_target_handle_valid(rt)) {
@@ -988,10 +1010,10 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene) {
         unmount_scene(scene, display);
     }
 
-    // Free standalone render targets belonging to this scene.
+    // Free managed render targets belonging to this scene.
     // Iterate the managed list — never scan the global pool.
     std::vector<tc_render_target_handle> to_free;
-    for (tc_render_target_handle rt : standalone_render_targets_) {
+    for (tc_render_target_handle rt : managed_render_targets_) {
         if (!tc_render_target_handle_valid(rt)) continue;
         tc_scene_handle rt_scene = tc_render_target_get_scene(rt);
         if (tc_scene_handle_eq(rt_scene, scene)) {
@@ -999,7 +1021,7 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene) {
         }
     }
     for (tc_render_target_handle rt : to_free) {
-        unregister_standalone_render_target(rt);
+        unregister_managed_render_target(rt);
         uint64_t rt_key = render_target_key(rt);
         auto rt_it = render_target_states_.find(rt_key);
         if (rt_it != render_target_states_.end()) {
@@ -1158,32 +1180,32 @@ ViewportRenderState* RenderingManager::get_or_create_render_target_state(tc_rend
 }
 
 // ============================================================================
-// Standalone Render Target Management
+// Managed Render Target Management
 // ============================================================================
 
-void RenderingManager::register_standalone_render_target(tc_render_target_handle rt) {
+void RenderingManager::register_managed_render_target(tc_render_target_handle rt) {
     if (!tc_render_target_handle_valid(rt)) return;
     auto it = std::find_if(
-        standalone_render_targets_.begin(),
-        standalone_render_targets_.end(),
+        managed_render_targets_.begin(),
+        managed_render_targets_.end(),
         [rt](tc_render_target_handle candidate) {
             return tc_render_target_handle_eq(candidate, rt);
         }
     );
-    if (it != standalone_render_targets_.end()) return;
-    standalone_render_targets_.push_back(rt);
+    if (it != managed_render_targets_.end()) return;
+    managed_render_targets_.push_back(rt);
 }
 
-void RenderingManager::unregister_standalone_render_target(tc_render_target_handle rt) {
+void RenderingManager::unregister_managed_render_target(tc_render_target_handle rt) {
     auto it = std::find_if(
-        standalone_render_targets_.begin(),
-        standalone_render_targets_.end(),
+        managed_render_targets_.begin(),
+        managed_render_targets_.end(),
         [rt](tc_render_target_handle candidate) {
             return tc_render_target_handle_eq(candidate, rt);
         }
     );
-    if (it != standalone_render_targets_.end()) {
-        standalone_render_targets_.erase(it);
+    if (it != managed_render_targets_.end()) {
+        managed_render_targets_.erase(it);
     }
 }
 
@@ -1269,8 +1291,8 @@ void RenderingManager::render_all_offscreen() {
     // 0. Sync dynamic-resolution render targets from their attached viewport.
     sync_viewport_resolutions();
 
-    // 1. Render standalone render targets first (managed list, not pool scan).
-    for (tc_render_target_handle rt : standalone_render_targets_) {
+    // 1. Render managed render targets first (managed list, not pool scan).
+    for (tc_render_target_handle rt : managed_render_targets_) {
         if (tc_render_target_handle_valid(rt)) {
             render_render_target_offscreen(rt);
         }
@@ -1420,7 +1442,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
                 tc_render_target_get_color_format(rt));
             ctx.output_depth_format = render_target_format_to_tgfx2(
                 tc_render_target_get_depth_format(rt));
-            fill_external_textures_from_render_target(ctx, rt, *vp_device);
+            fill_external_textures_from_render_target(ctx, rt, *vp_device, managed_render_targets_);
             fill_render_target_clear_settings(ctx, rt);
         } else {
             ViewportRenderState* state = get_viewport_state(viewport);
@@ -1538,7 +1560,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     ctx.output_depth_format = render_target_format_to_tgfx2(
         tc_render_target_get_depth_format(rt));
     fill_render_target_clear_settings(ctx, rt);
-    fill_external_textures_from_render_target(ctx, rt, *device);
+    fill_external_textures_from_render_target(ctx, rt, *device, managed_render_targets_);
     contexts[ctx.name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
         render_pipeline, scene, contexts, lights, vp_name ? vp_name : ""
@@ -1644,7 +1666,7 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     ctx.output_depth_format = render_target_format_to_tgfx2(
         tc_render_target_get_depth_format(rt));
     fill_render_target_clear_settings(ctx, rt);
-    fill_external_textures_from_render_target(ctx, rt, *device);
+    fill_external_textures_from_render_target(ctx, rt, *device, managed_render_targets_);
     contexts[name] = std::move(ctx);
     engine->render_scene_pipeline_offscreen(
         render_pipeline, scene, contexts, lights, name
@@ -1964,8 +1986,8 @@ void RenderingManager::shutdown() {
     }
     viewport_states_.clear();
 
-    // Clear standalone render targets list (don't free — we don't own them)
-    standalone_render_targets_.clear();
+    // Clear managed render targets list (don't free — we don't own them)
+    managed_render_targets_.clear();
 
     // Clear attached scenes
     attached_scenes_.clear();

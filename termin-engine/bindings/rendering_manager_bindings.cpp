@@ -335,25 +335,25 @@ void bind_rendering_manager(nb::module_& m) {
            "Unmount scene from display (removes all viewports showing this scene)")
 
         // ================================================================
-        // Standalone Render Target Management
+        // Managed Render Target Management
         // ================================================================
 
-        .def("register_standalone_render_target", [](RenderingManager& self, nb::object rt_py) {
+        .def("register_managed_render_target", [](RenderingManager& self, nb::object rt_py) {
             auto h = nb::cast<tc_render_target_handle>(rt_py);
-            self.register_standalone_render_target(h);
+            self.register_managed_render_target(h);
         }, nb::arg("render_target"),
-           "Register a standalone render target for management")
+           "Register a render target managed by RenderingManager")
 
-        .def("unregister_standalone_render_target", [](RenderingManager& self, nb::object rt_py) {
+        .def("unregister_managed_render_target", [](RenderingManager& self, nb::object rt_py) {
             auto h = nb::cast<tc_render_target_handle>(rt_py);
-            self.unregister_standalone_render_target(h);
+            self.unregister_managed_render_target(h);
         }, nb::arg("render_target"),
-           "Unregister a standalone render target from management")
+           "Unregister a render target managed by RenderingManager")
 
-        .def_prop_ro("standalone_render_targets", [](RenderingManager& self)
+        .def_prop_ro("managed_render_targets", [](RenderingManager& self)
                 -> std::vector<tc_render_target_handle> {
-            return self.standalone_render_targets();
-        }, "List of managed standalone render targets")
+            return self.managed_render_targets();
+        }, "List of render targets managed by RenderingManager")
 
         // ================================================================
         // Scene Pipeline Management

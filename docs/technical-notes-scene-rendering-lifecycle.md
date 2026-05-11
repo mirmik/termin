@@ -107,7 +107,7 @@ RenderTarget (tc_render_target_handle)
 **Фаза 1 — `render_all_offscreen()`:**
 1. Установить offscreen GL-контекст (с share-group от первого дисплея)
 2. `sync_viewport_resolutions()` — синхронизировать dynamic-resolution render target'ы с актуальными pixel_rect'ами вьюпортов
-3. Отрендерить standalone render target'ы (те, что созданы сценами, но не привязаны к вьюпортам)
+3. Отрендерить managed render target'ы (те, что созданы сценами и отслеживаются `RenderingManager`)
 4. Выполнить сценовые пайплайны (`render_scene_pipeline_offscreen`) — для каждого attached_scene, для каждого pipeline:
    - Собрать `ViewportContext` для каждого target-вьюпорта пайплайна (камера, output-текстуры, layer_mask)
    - Собрать lights
@@ -127,7 +127,7 @@ RenderTarget (tc_render_target_handle)
 ### Монтирование/демонтирование сцен (attach_scene_full / detach_scene_full)
 
 **`attach_scene_full(scene)`** — полное подключение сцены к рендеру:
-1. Восстановить standalone render target'ы из `render_target_configs` сцены (с камерами, pipelines, настройками разрешения)
+1. Восстановить managed render target'ы из `render_target_configs` сцены (с камерами, pipelines, настройками разрешения)
 2. Создать вьюпорты из `viewport_configs` сцены:
    - Для каждого конфига: `get_or_create_display(display_name)` — найти или создать дисплей через factory
    - Аллоцировать вьюпорт, установить rect, depth, scene
@@ -140,8 +140,8 @@ RenderTarget (tc_render_target_handle)
 1. `unmount_scene(scene, display)` для каждого сценового дисплея:
    - Найти все вьюпорты на дисплее, ссылающиеся на эту сцену
    - Для каждого: удалить viewport state, удалить с дисплея, освободить вьюпорт
-   - Если render target не является standalone и больше нигде не используется — освободить и его
-2. Пройти по `standalone_render_targets_`, освободить принадлежащие сцене
+   - Если render target не зарегистрирован в `managed_render_targets_` и больше нигде не используется — освободить и его
+2. Пройти по `managed_render_targets_`, освободить принадлежащие сцене
 3. Удалить сцену из `attached_scenes_`
 4. `detach_scene(scene)` — уничтожить скомпилированные пайплайны, уведомить компоненты через `on_render_detach`
 

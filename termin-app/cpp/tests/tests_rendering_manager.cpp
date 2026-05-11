@@ -19,6 +19,7 @@ extern "C" {
 #include "render/tc_pass.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
+#include "tgfx/resources/tc_texture.h"
 }
 
 using termin::RenderingManager;
@@ -763,6 +764,29 @@ TEST_CASE("Viewport references render target without owning it")
     tc_render_target_free(second);
 }
 
+TEST_CASE("Render target ensure_textures refreshes owned texture size")
+{
+    tc_render_target_handle rt = tc_render_target_new("resize-target");
+    REQUIRE(tc_render_target_handle_valid(rt));
+
+    tc_render_target_set_width(rt, 128);
+    tc_render_target_set_height(rt, 64);
+    tc_render_target_ensure_textures(rt);
+
+    tc_texture* color = tc_texture_get(tc_render_target_get_color_texture(rt));
+    REQUIRE(color != nullptr);
+    CHECK_EQ(color->width, 128u);
+    CHECK_EQ(color->height, 64u);
+
+    tc_texture_set_size_format(color, 32, 32, TC_TEXTURE_RGBA8);
+    tc_render_target_ensure_textures(rt);
+
+    CHECK_EQ(color->width, 128u);
+    CHECK_EQ(color->height, 64u);
+
+    tc_render_target_free(rt);
+}
+
 TEST_CASE("RenderingManager attach detach restores editor render counts")
 {
     RenderingManager manager;
@@ -830,8 +854,8 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     CHECK_EQ(tc_viewport_pool_count(), baseline_viewports + 1);
     CHECK_EQ(tc_render_target_pool_count(), baseline_targets + 1);
     CHECK_EQ(tc_pipeline_pool_count(), baseline_pipelines + 1);
-    REQUIRE_EQ(manager.standalone_render_targets().size(), 1u);
-    tc_render_target_handle restored_rt = manager.standalone_render_targets()[0];
+    REQUIRE_EQ(manager.managed_render_targets().size(), 1u);
+    tc_render_target_handle restored_rt = manager.managed_render_targets()[0];
     CHECK(tc_render_target_get_dynamic_resolution(restored_rt));
     CHECK(tc_render_target_get_color_format(restored_rt) == TC_TEXTURE_RGBA8);
     CHECK(tc_render_target_get_depth_format(restored_rt) == TC_TEXTURE_DEPTH24);
@@ -841,7 +865,7 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     CHECK_EQ(tc_display_get_viewport_count(editor_display), 1u);
     CHECK(tc_render_target_alive(editor_rt));
     CHECK(tc_pipeline_pool_alive(editor_pipeline));
-    CHECK_EQ(manager.standalone_render_targets().size(), 0u);
+    CHECK_EQ(manager.managed_render_targets().size(), 0u);
     CHECK_EQ(tc_viewport_pool_count(), baseline_viewports);
     CHECK_EQ(tc_render_target_pool_count(), baseline_targets);
     CHECK_EQ(tc_pipeline_pool_count(), baseline_pipelines);
