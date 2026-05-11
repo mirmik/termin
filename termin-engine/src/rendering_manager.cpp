@@ -187,26 +187,7 @@ static tgfx::TextureHandle resolve_pipeline_texture_ref(
         tc_render_target_handle rt = find_render_target_by_name(ref, preferred_scene, render_targets);
         if (tc_render_target_handle_valid(rt)) {
             tc_render_target_ensure_textures(rt);
-            tgfx::TextureHandle tex = wrap_tc_texture_as_tgfx2(
-                device, tc_render_target_get_color_texture(rt));
-            tgfx::TextureDesc desc = device.texture_desc(tex);
-            tc_log(
-                TC_LOG_INFO,
-                "[RenderingManager] external RT ref '%s' resolved to rt='%s' scene=(%u,%u) fixed_size=%dx%d dynamic=%d tex=%u tex_size=%ux%u fmt=%d samples=%u",
-                ref,
-                tc_render_target_get_name(rt) ? tc_render_target_get_name(rt) : "<unnamed>",
-                tc_render_target_get_scene(rt).index,
-                tc_render_target_get_scene(rt).generation,
-                tc_render_target_get_width(rt),
-                tc_render_target_get_height(rt),
-                tc_render_target_get_dynamic_resolution(rt) ? 1 : 0,
-                tex.id,
-                desc.width,
-                desc.height,
-                static_cast<int>(desc.format),
-                desc.sample_count
-            );
-            return tex;
+            return wrap_tc_texture_as_tgfx2(device, tc_render_target_get_color_texture(rt));
         }
     }
 
@@ -242,21 +223,6 @@ static void fill_external_textures_from_render_target(
         tc_scene_handle scene = tc_render_target_get_scene(rt);
         tgfx::TextureHandle tex = resolve_pipeline_texture_ref(device, scene, render_targets, value->data.s);
         if (tex) {
-            tgfx::TextureDesc desc = device.texture_desc(tex);
-            tc_log(
-                TC_LOG_INFO,
-                "[RenderingManager] pipeline external texture slot='%s' ref='%s' target_rt='%s' target_scene=(%u,%u) tex=%u size=%ux%u fmt=%d samples=%u",
-                slot,
-                value->data.s,
-                tc_render_target_get_name(rt) ? tc_render_target_get_name(rt) : "<unnamed>",
-                scene.index,
-                scene.generation,
-                tex.id,
-                desc.width,
-                desc.height,
-                static_cast<int>(desc.format),
-                desc.sample_count
-            );
             ctx.external_textures[slot] = tex;
         }
     }
