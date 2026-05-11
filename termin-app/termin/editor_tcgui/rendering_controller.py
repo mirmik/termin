@@ -66,6 +66,7 @@ class RenderingControllerTcgui:
 
         self._display_surfaces: dict[int, object] = {}
         self._display_viewports: dict[int, object] = {}  # display_id -> Viewport3D
+        self._viewport_input_managers: dict[tuple[int, int], tuple[int, int]] = {}
         self._viewport_list = viewport_list_widget
         self._center_tabs = None
 
@@ -265,6 +266,9 @@ class RenderingControllerTcgui:
             setup_display_input=self._setup_display_input,
         )
 
+        for viewport in viewports:
+            self._ensure_viewport_input_manager(viewport)
+
         self._request_update()
         self._notify_rendering_changed()
 
@@ -275,6 +279,7 @@ class RenderingControllerTcgui:
         emptied = self._model.detach_scene(scene)
 
         for display_ptr in emptied:
+            self._free_viewport_input_managers(display_ptr)
             self._display_input_managers.pop(display_ptr, None)
 
         self._request_update()
@@ -310,6 +315,66 @@ class RenderingControllerTcgui:
         # handling wired up by ``EditorWindowTcgui._attach_editor_input_router``
         # directly; non-editor displays never carry input_mode="editor".
         self._model.apply_display_input(display, input_mode, surface)
+
+        viewport_widget = self._display_viewports.get(display_id)
+        if viewport_widget is not None:
+            viewport_widget._connect_input(display)
+
+    def _ensure_viewport_input_manager(self, viewport: "Viewport") -> None:
+        """Create a per-viewport scene input dispatcher for simple input."""
+        mode = viewport.input_mode or "simple"
+        if mode == "none" or mode == "editor":
+            return
+        if mode not in ("simple", "basic"):
+            log.warn(f"Unknown viewport input mode '{mode}' for viewport '{viewport.name}'")
+            return
+
+        display = self._manager.get_display_for_viewport(viewport)
+        if display is None:
+            log.warn(f"Cannot create input manager for viewport '{viewport.name}': display not found")
+            return
+
+        display_id = display.tc_display_ptr
+        if display_id == self._editor_display_ptr:
+            return
+
+        from termin.display._display_native import _viewport_input_manager_new
+
+        key = viewport._viewport_handle()
+        if key in self._viewport_input_managers:
+            return
+
+        idx, gen = key
+        ptr = _viewport_input_manager_new(idx, gen)
+        if not ptr:
+            log.error(f"Failed to create input manager for viewport '{viewport.name}'")
+            return
+        self._viewport_input_managers[key] = (display_id, ptr)
+
+    def _free_viewport_input_manager(self, viewport: "Viewport") -> None:
+        key = viewport._viewport_handle()
+        entry = self._viewport_input_managers.pop(key, None)
+        if entry is None:
+            return
+
+        from termin.display._display_native import _viewport_input_manager_free
+
+        _display_id, ptr = entry
+        _viewport_input_manager_free(ptr)
+
+    def _free_viewport_input_managers(self, display_id: int) -> None:
+        keys = [
+            key for key, (owner_display_id, _ptr) in self._viewport_input_managers.items()
+            if owner_display_id == display_id
+        ]
+        if not keys:
+            return
+
+        from termin.display._display_native import _viewport_input_manager_free
+
+        for key in keys:
+            _owner_display_id, ptr = self._viewport_input_managers.pop(key)
+            _viewport_input_manager_free(ptr)
 
     # ------------------------------------------------------------------
     # Viewport state (needed by EditorSceneAttachment.detach)
@@ -392,6 +457,8 @@ class RenderingControllerTcgui:
         if display_id in self._display_surfaces:
             del self._display_surfaces[display_id]
 
+        self._free_viewport_input_managers(display_id)
+
         if display_id in self._display_input_managers:
             del self._display_input_managers[display_id]
 
@@ -464,6 +531,7 @@ class RenderingControllerTcgui:
             return
 
         viewport = display.create_viewport(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
+        self._ensure_viewport_input_manager(viewport)
         self._viewport_list.refresh()
         self._request_update()
         self._notify_rendering_changed()
@@ -476,6 +544,7 @@ class RenderingControllerTcgui:
 
     def _on_remove_viewport_requested(self, viewport: "Viewport") -> None:
         display = self._manager.get_display_for_viewport(viewport)
+        self._free_viewport_input_manager(viewport)
         if display is not None:
             display.remove_viewport(viewport)
         if self._selected_viewport is viewport:
