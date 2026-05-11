@@ -108,7 +108,7 @@ def make_editor_pipeline() -> RenderPipeline:
 
     shadow_pass = ShadowPass(
         output_res="shadow_maps",
-        pass_name="Shadow",
+        pass_name="Shadow"
     )
 
     tonemap_pass = TonemapPass(
