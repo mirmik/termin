@@ -184,7 +184,7 @@ class RenderingModel:
         """Return render targets that can be inspected by Framegraph Debugger.
 
         The debugger operates on pipelines, not viewport ownership. Viewport-
-        owned render targets and standalone offscreen render targets are
+        owned render targets and manager-owned offscreen render targets are
         therefore exposed through the same target descriptor.
         """
         from termin.editor_core.framegraph_debugger_model import FramegraphDebugTarget
@@ -219,7 +219,7 @@ class RenderingModel:
                         self._pipeline_for_viewport_render_target(viewport, render_target),
                 ))
 
-        for render_target in self._manager.standalone_render_targets:
+        for render_target in self._manager.managed_render_targets:
             rt_name = render_target.name or "RenderTarget"
             result.append(FramegraphDebugTarget(
                 source=render_target,
@@ -257,7 +257,7 @@ class RenderingModel:
             name = render_target.name or ""
             if name:
                 self._remove_render_target_config_by_name(scene, name)
-        self._manager.unregister_standalone_render_target(render_target)
+        self._manager.unregister_managed_render_target(render_target)
         render_target.free()
 
     def _remove_render_target_config_by_name(self, scene: "Scene", name: str) -> None:
@@ -278,7 +278,7 @@ class RenderingModel:
                     keys.add((render_target.index, render_target.generation))
         return keys
 
-    def standalone_render_targets(self, render_targets) -> list:
+    def managed_render_targets(self, render_targets) -> list:
         """Return render targets that are not owned by a live viewport."""
         owned_keys = self._live_viewport_render_target_keys()
         result = []
@@ -468,14 +468,14 @@ class RenderingModel:
                 rm.add_viewport_config(config)
 
     def sync_render_target_configs_to_scene(self, scene: "Scene") -> None:
-        """Snapshot managed standalone render targets into ``scene.render_target_configs``."""
+        """Snapshot manager-owned render targets into ``scene.render_target_configs``."""
         from termin.visualization.core.render_target_config import RenderTargetConfig
         from termin.visualization.core.scene import scene_render_mount
 
         rm = scene_render_mount(scene)
         rm.clear_render_target_configs()
 
-        for rt in self._manager.standalone_render_targets:
+        for rt in self._manager.managed_render_targets:
             rt_scene = rt.scene
             if rt_scene is None or not rt_scene.equal(scene):
                 continue

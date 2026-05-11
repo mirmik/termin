@@ -26,7 +26,6 @@ extern "C" {
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
 #include "render/tc_render_target.h"
-#include "render/tc_render_target_pool.h"
 #include "render/tc_render_surface.h"
 }
 
@@ -257,19 +256,19 @@ public:
     void clear_all_scene_pipelines();
 
     // ========================================================================
-    // Standalone Render Target Management
+    // Managed Render Target Management
     // ========================================================================
 
-    // Register a standalone render target (not owned by any viewport).
+    // Register a render target managed by RenderingManager.
     // The manager will track it for rendering and scene-detach cleanup.
-    void register_standalone_render_target(tc_render_target_handle rt);
+    void register_managed_render_target(tc_render_target_handle rt);
 
-    // Unregister a standalone render target.
-    void unregister_standalone_render_target(tc_render_target_handle rt);
+    // Unregister a render target managed by RenderingManager.
+    void unregister_managed_render_target(tc_render_target_handle rt);
 
-    // Get all registered standalone render targets.
-    const std::vector<tc_render_target_handle>& standalone_render_targets() const {
-        return standalone_render_targets_;
+    // Get all render targets managed by RenderingManager.
+    const std::vector<tc_render_target_handle>& managed_render_targets() const {
+        return managed_render_targets_;
     }
 
     // ========================================================================
@@ -291,7 +290,7 @@ private:
     void render_viewport_offscreen(tc_viewport_handle viewport);
 
 public:
-    // Render single standalone render target to its output FBO
+    // Render a single managed render target to its output FBO
     void render_render_target_offscreen(tc_render_target_handle rt);
 
 private:
@@ -362,10 +361,12 @@ private:
     // Pipeline targets: pipeline_name -> list of viewport names
     std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;
 
-    // Managed standalone render targets (not owned by any viewport).
-    // Used for offscreen rendering and scene-detach cleanup instead of
-    // iterating the global render target pool directly.
-    std::vector<tc_render_target_handle> standalone_render_targets_;
+    // Render targets managed by this RenderingManager.
+    // Used for offscreen rendering, viewport target lookup, and scene-detach cleanup.
+    // RenderingManager code must use this list as the ownership boundary and
+    // must not scan the global render-target pool for lookup or rebinding:
+    // the pool may contain stale, foreign, or duplicate editor/game targets.
+    std::vector<tc_render_target_handle> managed_render_targets_;
 
     // Render target states (key = render_target handle as uint64)
     std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> render_target_states_;

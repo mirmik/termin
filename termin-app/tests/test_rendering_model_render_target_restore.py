@@ -169,7 +169,7 @@ class _Manager:
         self.attached = []
         self.detached = []
         self.display_for_viewport = None
-        self.standalone_render_targets = []
+        self.managed_render_targets = []
         self.registered = []
         self.unregistered = []
 
@@ -187,15 +187,15 @@ class _Manager:
     def get_display_for_viewport(self, viewport):
         return self.display_for_viewport
 
-    def register_standalone_render_target(self, rt):
+    def register_managed_render_target(self, rt):
         self.registered.append(rt)
-        if rt not in self.standalone_render_targets:
-            self.standalone_render_targets.append(rt)
+        if rt not in self.managed_render_targets:
+            self.managed_render_targets.append(rt)
 
-    def unregister_standalone_render_target(self, rt):
+    def unregister_managed_render_target(self, rt):
         self.unregistered.append(rt)
-        if rt in self.standalone_render_targets:
-            self.standalone_render_targets.remove(rt)
+        if rt in self.managed_render_targets:
+            self.managed_render_targets.remove(rt)
 
 
 def _install_native_stubs(monkeypatch, pool):
@@ -296,7 +296,7 @@ def test_remove_render_target_removes_live_target_and_scene_config(monkeypatch):
     model = RenderingModel(manager)
     render_target = _RenderTarget("Custom", pool)
     pool.append(render_target)
-    manager.standalone_render_targets.append(render_target)
+    manager.managed_render_targets.append(render_target)
 
     model.remove_render_target(render_target, scene=scene)
 
@@ -320,14 +320,14 @@ def test_sync_render_target_configs_writes_only_targets_from_scene(monkeypatch):
     owned.width = 100
     owned.height = 50
     owned.pipeline = None
-    manager.standalone_render_targets.append(owned)
+    manager.managed_render_targets.append(owned)
 
     foreign = _RenderTarget("Foreign", pool)
     foreign.scene = other_scene
-    manager.standalone_render_targets.append(foreign)
+    manager.managed_render_targets.append(foreign)
 
     detached = _RenderTarget("Detached", pool)
-    manager.standalone_render_targets.append(detached)
+    manager.managed_render_targets.append(detached)
 
     model.sync_render_target_configs_to_scene(scene)
 
@@ -347,7 +347,7 @@ def test_sync_render_target_configs_preserves_pipeline_params(monkeypatch):
     render_target.color_format = "rgba8"
     render_target.depth_format = "depth24"
     render_target.pipeline_params = {"input_texture": "FovTarget", "mask": "file:Noise"}
-    manager.standalone_render_targets.append(render_target)
+    manager.managed_render_targets.append(render_target)
 
     model.sync_render_target_configs_to_scene(scene)
 
@@ -374,7 +374,7 @@ def test_sync_render_target_configs_preserves_clear_settings(monkeypatch):
     render_target.clear_color_value = (0.1, 0.2, 0.3, 1.0)
     render_target.clear_depth_enabled = True
     render_target.clear_depth_value = 0.5
-    manager.standalone_render_targets.append(render_target)
+    manager.managed_render_targets.append(render_target)
 
     model.sync_render_target_configs_to_scene(scene)
 
@@ -445,7 +445,7 @@ def test_render_target_config_dict_serialization_preserves_clear_settings(monkey
 
 def test_sync_render_target_configs_only_includes_standalone_targets(monkeypatch):
     """Standalone targets from the scene are written; viewport-owned targets
-    are not in standalone_render_targets to begin with."""
+    are not in managed_render_targets to begin with."""
     pool = []
     _install_native_stubs(monkeypatch, pool)
 
@@ -455,7 +455,7 @@ def test_sync_render_target_configs_only_includes_standalone_targets(monkeypatch
 
     standalone = _RenderTarget("StandaloneRT", pool)
     standalone.scene = scene
-    manager.standalone_render_targets.append(standalone)
+    manager.managed_render_targets.append(standalone)
 
     viewport = _Viewport()
     viewport.render_target = _RenderTarget("ViewportRT", pool)
@@ -468,7 +468,7 @@ def test_sync_render_target_configs_only_includes_standalone_targets(monkeypatch
     assert [config.name for config in scene._mount.render_target_configs] == ["StandaloneRT"]
 
 
-def test_standalone_render_targets_filters_viewport_owned_targets(monkeypatch):
+def test_managed_render_targets_filters_viewport_owned_targets(monkeypatch):
     pool = []
     _install_native_stubs(monkeypatch, pool)
 
@@ -484,4 +484,4 @@ def test_standalone_render_targets_filters_viewport_owned_targets(monkeypatch):
     viewport.render_target = viewport_target
     manager.displays = [types.SimpleNamespace(viewports=[viewport])]
 
-    assert model.standalone_render_targets(pool) == [standalone_target]
+    assert model.managed_render_targets(pool) == [standalone_target]

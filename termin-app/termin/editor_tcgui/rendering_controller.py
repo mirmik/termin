@@ -190,7 +190,7 @@ class RenderingControllerTcgui:
     def _refresh_render_targets(self) -> None:
         """Refresh render target list in the viewport list widget."""
         self._viewport_list.set_render_targets(
-            list(self._manager.standalone_render_targets)
+            list(self._manager.managed_render_targets)
         )
 
     def sync_viewport_list_from_manager(self) -> None:
@@ -560,7 +560,7 @@ class RenderingControllerTcgui:
         scene = self._get_scene() if self._get_scene is not None else None
         if scene is not None:
             render_target.scene = scene
-        self._manager.register_standalone_render_target(render_target)
+        self._manager.register_managed_render_target(render_target)
         self._refresh_render_targets()
         self._notify_rendering_changed()
 
