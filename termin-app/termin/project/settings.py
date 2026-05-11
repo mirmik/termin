@@ -14,6 +14,7 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Optional
 
 from tcbase import log
@@ -59,11 +60,16 @@ class ProjectSettings:
     """
 
     render_sync_mode: RenderSyncMode = RenderSyncMode.NONE
+    # Project-relative directory used by the build command. The editor
+    # treats this directory as generated output and excludes it from asset
+    # discovery and live file watching.
+    build_output_dir: str = "dist"
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         return {
             "render_sync_mode": self.render_sync_mode.value,
+            "build_output_dir": self.build_output_dir,
         }
 
     @staticmethod
@@ -76,8 +82,15 @@ class ProjectSettings:
             log.warning(f"[ProjectSettings] Unknown render_sync_mode '{sync_mode_str}', falling back to NONE")
             sync_mode = RenderSyncMode.NONE
 
+        build_output_dir = _normalize_project_relative_dir(
+            data.get("build_output_dir", "dist"),
+            fallback="dist",
+            field_name="build_output_dir",
+        )
+
         return ProjectSettings(
             render_sync_mode=sync_mode,
+            build_output_dir=build_output_dir,
         )
 
 
@@ -170,6 +183,15 @@ class ProjectSettingsManager:
         c_set_render_sync_mode(mode.to_c())
         self.save()
 
+    def set_build_output_dir(self, value: str) -> None:
+        """Set project-relative build output directory and save."""
+        self._settings.build_output_dir = _normalize_project_relative_dir(
+            value,
+            fallback="dist",
+            field_name="build_output_dir",
+        )
+        self.save()
+
     def _get_editor_state_path(self) -> Optional[Path]:
         """Get path to .editor_state.json (per-user, not committed)."""
         if self._project_path is None:
@@ -205,3 +227,22 @@ class ProjectSettingsManager:
                 json.dump(data, f, indent=2)
         except Exception as e:
             log.error(f"[ProjectSettings] Failed to save editor state: {e}")
+
+
+def _normalize_project_relative_dir(value: object, *, fallback: str, field_name: str) -> str:
+    if not isinstance(value, str):
+        log.warning(f"[ProjectSettings] {field_name} must be a string, falling back to '{fallback}'")
+        return fallback
+
+    normalized = value.strip().replace("\\", "/")
+    rel_path = PurePosixPath(normalized)
+    if (
+        normalized == ""
+        or rel_path.is_absolute()
+        or normalized == "."
+        or ".." in rel_path.parts
+    ):
+        log.warning(f"[ProjectSettings] Invalid {field_name} '{value}', falling back to '{fallback}'")
+        return fallback
+
+    return rel_path.as_posix()

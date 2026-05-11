@@ -1554,7 +1554,9 @@ class EditorWindowTcgui:
             self._log_to_console("Build entry scene must be inside the current project.")
             return None
 
-        output_dir = project_root / "dist" / project_root.name
+        from termin.project.settings import ProjectSettingsManager
+        build_output_dir = ProjectSettingsManager.instance().settings.build_output_dir
+        output_dir = project_root / build_output_dir / project_root.name
 
         try:
             from termin.project_builder import build_project

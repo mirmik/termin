@@ -126,7 +126,7 @@ class ModulesPanel(VStack):
 
         header.add_child(_hdr("Module", stretch=True))
         header.add_child(_hdr("Status", 70))
-        header.add_child(_hdr("Kind / Components", 160))
+        header.add_child(_hdr("Kind / Components", 260))
         self.add_child(header)
 
         list_scroll = ScrollArea()
@@ -288,7 +288,7 @@ class ModulesPanel(VStack):
         comp_lbl.text = components
         comp_lbl.font_size = 12
         comp_lbl.text_color = _TEXT_DIM
-        comp_lbl.preferred_width = px(160)
+        comp_lbl.preferred_width = px(260)
         row.add_child(comp_lbl)
 
         return row
