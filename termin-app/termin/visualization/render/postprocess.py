@@ -387,7 +387,7 @@ class PostProcessPass(RenderFramePass):
             log.error(f"[PostProcessPass] '{self.pass_name}': ctx.ctx2 is None — PostProcessPass is tgfx2-only")
             return
 
-        px, py, pw, ph = ctx.rect
+        px, py, pw, ph = ctx.render_rect
         size = (pw, ph)
         ctx2 = ctx.ctx2
 

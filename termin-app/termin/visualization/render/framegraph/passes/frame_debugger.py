@@ -108,13 +108,16 @@ class FrameDebuggerPass(RenderFramePass):
             )
             return
 
-        px, py, pw, ph = ctx.rect
+        # The debugged resource can have a different size than the target
+        # currently executing the pass. Pass 0x0 so FrameGraphCapture uses
+        # the real source texture dimensions from tgfx2.
         self._capture.capture_direct_via_ctx2(
-            ctx.ctx2, src_tex, pw, ph
+            ctx.ctx2, src_tex, 0, 0
         )
         log.debug(
             f"[FrameDebuggerPass] execute: captured {resource_kind} "
-            f"'{src_name}' {pw}x{ph}, has={self._capture.has_capture()}"
+            f"'{src_name}' {self._capture.width}x{self._capture.height}, "
+            f"has={self._capture.has_capture()}"
         )
 
         if self._depth_capture is None:
@@ -123,5 +126,5 @@ class FrameDebuggerPass(RenderFramePass):
             self._depth_capture.reset_capture()
             return
         self._depth_capture.capture_direct_via_ctx2(
-            ctx.ctx2, depth_tex, pw, ph
+            ctx.ctx2, depth_tex, 0, 0
         )

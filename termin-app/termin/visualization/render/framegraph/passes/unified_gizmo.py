@@ -81,7 +81,7 @@ class UnifiedGizmoPass(RenderFramePass):
             manager = self._get_gizmo_manager()
             renderer = ImmediateRenderer.instance()
 
-            px, py, pw, ph = ctx.rect
+            px, py, pw, ph = ctx.render_rect
 
             target_tex2 = ctx.tex2_writes.get(self.output_res)
             if not target_tex2:

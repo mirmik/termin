@@ -76,7 +76,7 @@ class ImmediateDepthPass(RenderFramePass):
             log.warn(f"[ImmediateDepthPass] tex2 write '{self.output_res}' missing")
             return
 
-        px, py, pw, ph = ctx.rect
+        px, py, pw, ph = ctx.render_rect
         ctx2 = ctx.ctx2
 
         ctx2.begin_pass(target_tex2)

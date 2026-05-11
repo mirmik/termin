@@ -84,7 +84,7 @@ class GizmoPass(RenderFramePass):
         return self._shader
 
     def execute(self, ctx: "ExecuteContext") -> None:
-        px, py, pw, ph = ctx.rect
+        px, py, pw, ph = ctx.render_rect
 
         if ctx.ctx2 is None:
             from tcbase import log
