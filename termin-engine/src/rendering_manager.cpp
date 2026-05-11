@@ -85,6 +85,34 @@ static void fill_render_target_clear_settings(ViewportContext& ctx, tc_render_ta
     ctx.clear_depth = tc_render_target_get_clear_depth_value(rt);
 }
 
+static void resolve_render_target_size_for_viewport(
+    tc_render_target_handle rt,
+    int viewport_width,
+    int viewport_height,
+    int& render_width,
+    int& render_height
+) {
+    render_width = viewport_width;
+    render_height = viewport_height;
+
+    if (!tc_render_target_handle_valid(rt)) {
+        return;
+    }
+
+    if (tc_render_target_get_dynamic_resolution(rt)) {
+        tc_render_target_set_width(rt, viewport_width);
+        tc_render_target_set_height(rt, viewport_height);
+        return;
+    }
+
+    int fixed_width = tc_render_target_get_width(rt);
+    int fixed_height = tc_render_target_get_height(rt);
+    if (fixed_width > 0 && fixed_height > 0) {
+        render_width = fixed_width;
+        render_height = fixed_height;
+    }
+}
+
 struct RenderTargetNameLookup {
     const char* name = nullptr;
     tc_render_target_handle result = TC_RENDER_TARGET_HANDLE_INVALID;
@@ -1336,7 +1364,11 @@ void RenderingManager::render_scene_pipeline_offscreen(
             continue;
         }
 
-        double aspect = static_cast<double>(pw) / std::max(1, ph);
+        int rw = pw;
+        int rh = ph;
+        resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
+
+        double aspect = static_cast<double>(rw) / std::max(1, rh);
         RenderCamera render_cam;
         uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
         if (!get_render_camera(camera_comp, aspect, &render_cam, &camera_layer_mask)) {
@@ -1362,10 +1394,6 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
         tgfx::TextureHandle out_color{}, out_depth{};
         if (tc_render_target_handle_valid(rt)) {
-            if (tc_render_target_get_dynamic_resolution(rt)) {
-                tc_render_target_set_width(rt, pw);
-                tc_render_target_set_height(rt, ph);
-            }
             tc_render_target_ensure_textures(rt);
             out_color = wrap_tc_texture_as_tgfx2(*vp_device,
                 tc_render_target_get_color_texture(rt));
@@ -1373,7 +1401,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
                 tc_render_target_get_depth_texture(rt));
         } else {
             ViewportRenderState* state = get_or_create_viewport_state(viewport);
-            state->ensure_output_textures(*vp_device, pw, ph);
+            state->ensure_output_textures(*vp_device, rw, rh);
             out_color = state->output_color_tex;
             out_depth = state->output_depth_tex;
         }
@@ -1382,7 +1410,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
         ViewportContext ctx;
         ctx.name = vp_name;
         ctx.camera = render_cam;
-        ctx.rect = {0, 0, pw, ph};  // Full FBO, offset at blit time
+        ctx.rect = {0, 0, rw, rh};  // Full render target, offset at blit time
         ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
         ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
         ctx.output_color_tex = out_color;
@@ -1463,7 +1491,11 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
     if (pw <= 0 || ph <= 0) return;
 
-    double aspect = static_cast<double>(pw) / std::max(1, ph);
+    int rw = pw;
+    int rh = ph;
+    resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
+
+    double aspect = static_cast<double>(rw) / std::max(1, rh);
     RenderCamera render_camera;
     uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
     if (!get_render_camera(camera_comp, aspect, &render_camera, &camera_layer_mask)) {
@@ -1481,10 +1513,6 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
                vp_name ? vp_name : "(null)");
         return;
     }
-    if (tc_render_target_get_dynamic_resolution(rt)) {
-        tc_render_target_set_width(rt, pw);
-        tc_render_target_set_height(rt, ph);
-    }
     tc_render_target_ensure_textures(rt);
     tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
         *device, tc_render_target_get_color_texture(rt));
@@ -1500,7 +1528,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     ViewportContext ctx;
     ctx.name = vp_name ? vp_name : "";
     ctx.camera = render_camera;
-    ctx.rect = {0, 0, pw, ph};
+    ctx.rect = {0, 0, rw, rh};
     ctx.internal_entities = internal_entities;
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.output_color_tex = out_color;
