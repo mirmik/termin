@@ -29,7 +29,7 @@ class ShadowSettingsDialog(QDialog):
     Settings:
     - Method: Hard / PCF 5x5 / Poisson
     - Softness: Sampling radius multiplier
-    - Bias: Depth bias to prevent shadow acne
+    - Bias: World-space offset along light depth to prevent shadow acne
 
     Changes are applied immediately as the user edits values.
     """
@@ -84,14 +84,14 @@ class ShadowSettingsDialog(QDialog):
 
         # Bias spin
         self._bias_spin = DoubleSpinBox()
-        self._bias_spin.setRange(0.0, 0.1)
-        self._bias_spin.setSingleStep(0.001)
+        self._bias_spin.setRange(0.0, 1.0)
+        self._bias_spin.setSingleStep(0.005)
         self._bias_spin.setDecimals(4)
         self._bias_spin.setToolTip(
-            "Depth bias to prevent shadow acne.\n"
+            "World-space offset along the light depth axis.\n"
             "Increase if you see striping artifacts on surfaces."
         )
-        form.addRow("Bias:", self._bias_spin)
+        form.addRow("Bias (world):", self._bias_spin)
 
         layout.addWidget(group)
 

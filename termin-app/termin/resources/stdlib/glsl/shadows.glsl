@@ -31,10 +31,6 @@
 #define MAX_LIGHTS 8
 #endif
 
-#ifndef SHADOW_BIAS
-#define SHADOW_BIAS 0.005
-#endif
-
 // Shadow metadata. Packed by ColorPass into ShadowBlockStd140. std140
 // forces each scalar-in-array element to a 16-byte stride, which is
 // exactly how the C++ side lays the memory out — the GLSL side reads
@@ -95,10 +91,14 @@ const vec2 poissonDisk[16] = vec2[](
     vec2( 0.14383161, -0.14100790)
 );
 
-// Get effective shadow bias (uniform or fallback to define).
+// Get effective shadow bias in world units along the light depth axis.
 float _get_shadow_bias() {
-    float bias = _get_shadow_bias_val();
-    return bias > 0.0 ? bias : SHADOW_BIAS;
+    return _get_shadow_bias_val();
+}
+
+float _shadow_bias_depth(int sm, float bias_world) {
+    float depth_range = max(u_shadow_split_far[sm] - u_shadow_split_near[sm], 0.0001);
+    return max(bias_world, 0.0) / depth_range;
 }
 
 // Sample single shadow map at given index using selected method.
@@ -120,7 +120,7 @@ float _sample_shadow_map(int sm, vec3 world_pos, float bias) {
         return 1.0;
     }
 
-    float compare_depth = proj_coords.z - bias;
+    float compare_depth = proj_coords.z - _shadow_bias_depth(sm, bias);
     int method = _get_shadow_method_val();
     float softness = max(_get_shadow_softness_val(), 0.0);
 
@@ -175,7 +175,7 @@ float compute_shadow(int light_index) {
         }
 
         // Hardware PCF: texture() on sampler2DShadow does depth comparison
-        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - bias));
+        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - _shadow_bias_depth(sm, bias)));
     }
 
     return 1.0;
@@ -204,7 +204,7 @@ float compute_shadow_pcf(int light_index) {
         }
 
         vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));
-        float compare_depth = proj_coords.z - bias;
+        float compare_depth = proj_coords.z - _shadow_bias_depth(sm, bias);
 
         float shadow = 0.0;
         for (int x = -2; x <= 2; ++x) {
@@ -243,7 +243,7 @@ float compute_shadow_poisson(int light_index) {
         }
 
         vec2 texel_size = 1.0 / vec2(textureSize(u_shadow_map[sm], 0));
-        float compare_depth = proj_coords.z - bias;
+        float compare_depth = proj_coords.z - _shadow_bias_depth(sm, bias);
         float radius = 2.5 * softness;
 
         float shadow = 0.0;
