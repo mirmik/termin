@@ -18,6 +18,7 @@ _METHOD_NAMES = ["Hard", "PCF", "Poisson"]
 def show_shadow_settings_dialog(
     ui,
     scene,
+    mirror_scenes: list | None = None,
     on_changed: Callable[[], None] | None = None,
 ) -> None:
     """Show shadow settings dialog. Changes apply immediately.
@@ -79,6 +80,11 @@ def show_shadow_settings_dialog(
         ss.softness = softness_spin.value
         ss.bias = bias_spin.value
         rs.shadow_settings = ss
+        for mirror_scene in mirror_scenes or []:
+            if mirror_scene is scene:
+                continue
+            mirror_rs = scene_render_state(mirror_scene)
+            mirror_rs.shadow_settings = ss
         if on_changed:
             on_changed()
 

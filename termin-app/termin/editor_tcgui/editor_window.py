@@ -1306,7 +1306,20 @@ class EditorWindowTcgui:
         if self._ui is None or self.scene is None:
             return
         from termin.editor_tcgui.dialogs.shadow_settings_dialog import show_shadow_settings_dialog
-        show_shadow_settings_dialog(self._ui, self.scene, on_changed=self._request_viewport_update)
+        scene = self.scene
+        mirror_scenes = []
+        game_scene_name = self._game_scene_name
+        if game_scene_name is not None:
+            game_scene = self.scene_manager.get_scene(game_scene_name)
+            if game_scene is not None:
+                scene = game_scene
+                mirror_scenes.append(self.scene)
+        show_shadow_settings_dialog(
+            self._ui,
+            scene,
+            mirror_scenes=mirror_scenes,
+            on_changed=self._request_viewport_update,
+        )
 
     def _show_agent_types(self) -> None:
         if self._ui is None:
