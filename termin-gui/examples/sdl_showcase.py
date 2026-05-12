@@ -5,7 +5,6 @@
 
 import ctypes
 import sdl2
-from sdl2 import video
 
 from tcbase import Key, MouseButton
 
@@ -48,7 +47,7 @@ from tcgui.widgets.units import px, pct
 from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.frame_time_graph import FrameTimeGraph
 
-from termin.display import BackendWindow
+from termin.display import SDLBackendWindow
 from tgfx import Tgfx2Context
 
 
@@ -720,7 +719,7 @@ def _get_event_window_id(event):
 
 
 def main():
-    window = BackendWindow("tcgui — Widget Showcase", 900, 680)
+    window = SDLBackendWindow("tcgui — Widget Showcase", 900, 680)
 
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
@@ -740,7 +739,7 @@ def main():
                 break
 
             if etype == sdl2.SDL_WINDOWEVENT:
-                if event.window.event == video.SDL_WINDOWEVENT_CLOSE:
+                if event.window.event == sdl2.SDL_WINDOWEVENT_CLOSE:
                     if event.window.windowID == main_id:
                         running = False
                         break
@@ -784,6 +783,7 @@ def main():
         if tex is not None:
             window.present(tex)
 
+    window.close()
     sdl2.SDL_Quit()
 
 

@@ -12,10 +12,8 @@ Run: python3 examples/sdl_multiwindow.py
 
 import ctypes
 from dataclasses import dataclass
-from typing import Any
 
 import sdl2
-from sdl2 import video
 
 from tcbase import Key, MouseButton, Mods
 
@@ -24,38 +22,8 @@ from tcgui.widgets.basic import Label, Button, TextInput, SpinBox
 from tcgui.widgets.containers import VStack, HStack, Panel
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.units import px, pct
-
-
-# ---------------------------------------------------------------------------
-# SDL helpers (same as sdl_hello.py)
-# ---------------------------------------------------------------------------
-
-def _create_sdl_window(title: str, width: int, height: int,
-                       maximized: bool = False):
-    flags = video.SDL_WINDOW_OPENGL | video.SDL_WINDOW_RESIZABLE | video.SDL_WINDOW_SHOWN
-    if maximized:
-        flags |= video.SDL_WINDOW_MAXIMIZED
-    window = video.SDL_CreateWindow(
-        title.encode("utf-8"),
-        video.SDL_WINDOWPOS_CENTERED,
-        video.SDL_WINDOWPOS_CENTERED,
-        width, height, flags,
-    )
-    if not window:
-        raise RuntimeError(f"SDL_CreateWindow failed: {sdl2.SDL_GetError()}")
-    gl_ctx = video.SDL_GL_CreateContext(window)
-    if not gl_ctx:
-        video.SDL_DestroyWindow(window)
-        raise RuntimeError(f"SDL_GL_CreateContext failed: {sdl2.SDL_GetError()}")
-    video.SDL_GL_MakeCurrent(window, gl_ctx)
-    video.SDL_GL_SetSwapInterval(1)
-    return window, gl_ctx
-
-
-def _get_drawable_size(window):
-    w, h = ctypes.c_int(), ctypes.c_int()
-    video.SDL_GL_GetDrawableSize(window, ctypes.byref(w), ctypes.byref(h))
-    return w.value, h.value
+from termin.display import SDLBackendWindow
+from tgfx import Tgfx2Context
 
 
 _KEY_MAP = {
@@ -107,8 +75,7 @@ def _translate_mods(sdl_mods):
 
 @dataclass
 class _WinEntry:
-    sdl_window: Any
-    gl_context: Any
+    window: SDLBackendWindow
     ui: UI
     is_main: bool = False
 
@@ -117,28 +84,27 @@ class _WindowManager:
     def __init__(self):
         self._windows: list[_WinEntry] = []
 
-    def register_main(self, sdl_window, gl_context, ui):
-        entry = _WinEntry(sdl_window, gl_context, ui, is_main=True)
+    def register_main(self, window: SDLBackendWindow, ui: UI):
+        entry = _WinEntry(window, ui, is_main=True)
         self._windows.append(entry)
         ui.create_window = self.create_window
 
     def create_window(self, title: str, width: int, height: int) -> UI | None:
-        video.SDL_GL_SetAttribute(video.SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1)
-        sdl_win, gl_ctx = _create_sdl_window(title, width, height)
-        # Restore previous context
-        if self._windows:
-            prev = self._windows[0]
-            video.SDL_GL_MakeCurrent(prev.sdl_window, prev.gl_context)
+        share_with = self._windows[0].window if self._windows else None
+        if share_with is None:
+            window = SDLBackendWindow(title, width, height)
+        else:
+            window = SDLBackendWindow(title, width, height, share_with)
 
-        window_ui = UI()
-        entry = _WinEntry(sdl_win, gl_ctx, window_ui)
+        graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
+        window_ui = UI(graphics=graphics)
+        entry = _WinEntry(window, window_ui)
         self._windows.append(entry)
 
         def _destroy():
             if entry in self._windows:
                 self._windows.remove(entry)
-                video.SDL_GL_DeleteContext(entry.gl_context)
-                video.SDL_DestroyWindow(entry.sdl_window)
+                entry.window.close()
 
         window_ui.close_window = _destroy
         window_ui.on_empty = _destroy
@@ -147,13 +113,13 @@ class _WindowManager:
 
     def get_ui_for_window_id(self, wid):
         for e in self._windows:
-            if video.SDL_GetWindowID(e.sdl_window) == wid:
+            if e.window.window_id() == wid:
                 return e.ui
         return None
 
     def handle_window_close(self, wid) -> bool:
         for e in self._windows:
-            if video.SDL_GetWindowID(e.sdl_window) == wid:
+            if e.window.window_id() == wid:
                 if e.is_main:
                     return True
                 if e.ui.close_window:
@@ -163,16 +129,15 @@ class _WindowManager:
 
     def render_all(self):
         for e in list(self._windows):
-            video.SDL_GL_MakeCurrent(e.sdl_window, e.gl_context)
-            vw, vh = _get_drawable_size(e.sdl_window)
-            e.ui.render(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
+            vw, vh = e.window.framebuffer_size()
+            tex = e.ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
             e.ui.process_deferred()
-            video.SDL_GL_SwapWindow(e.sdl_window)
+            if tex is not None:
+                e.window.present(tex)
 
     def destroy_all(self):
         for e in list(self._windows):
-            video.SDL_GL_DeleteContext(e.gl_context)
-            video.SDL_DestroyWindow(e.sdl_window)
+            e.window.close()
         self._windows.clear()
 
 
@@ -204,7 +169,7 @@ def dispatch_events(wm: _WindowManager) -> bool:
             return False
 
         if t == sdl2.SDL_WINDOWEVENT:
-            if event.window.event == video.SDL_WINDOWEVENT_CLOSE:
+            if event.window.event == sdl2.SDL_WINDOWEVENT_CLOSE:
                 if wm.handle_window_close(event.window.windowID):
                     return False
             continue
@@ -248,7 +213,7 @@ def dispatch_events(wm: _WindowManager) -> bool:
 # UI setup
 # ---------------------------------------------------------------------------
 
-def build_main_ui(wm):
+def build_main_ui(wm, graphics):
     root = Panel()
     root.preferred_width = pct(100)
     root.preferred_height = pct(100)
@@ -270,7 +235,7 @@ def build_main_ui(wm):
     subtitle.text_color = (0.6, 0.6, 0.6, 1.0)
     stack.add_child(subtitle)
 
-    ui = UI()
+    ui = UI(graphics=graphics)
 
     # --- Button: open a simple widget in a window ---
     btn_widget = Button()
@@ -418,22 +383,13 @@ def build_main_ui(wm):
 # ---------------------------------------------------------------------------
 
 def main():
-    if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
-        raise RuntimeError(f"SDL_Init failed: {sdl2.SDL_GetError()}")
-
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MINOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_PROFILE_MASK,
-                              video.SDL_GL_CONTEXT_PROFILE_CORE)
-    video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
-    video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
-
-    window, gl_ctx = _create_sdl_window("tcgui Multi-Window", 600, 400)
+    window = SDLBackendWindow("tcgui Multi-Window", 600, 400)
+    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
     wm = _WindowManager()
 
-    ui = build_main_ui(wm)
-    wm.register_main(window, gl_ctx, ui)
+    ui = build_main_ui(wm, graphics)
+    wm.register_main(window, ui)
 
     sdl2.SDL_StartTextInput()
 
