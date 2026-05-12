@@ -288,6 +288,15 @@ void SDLBackendWindow::close() {
 #endif
     if (impl_->shared_ctx_owner == nullptr) {
         // Primary window — we own the device/ctx/cache chain.
+        // Tgfx2Context.from_window() publishes this device through the
+        // legacy tgfx2 interop bridge. Clear the global pointer before
+        // destroying the device; otherwise late Python/nanobind-owned
+        // objects (notably the process-default FontAtlas) can see a
+        // dangling "live" device during interpreter shutdown and call
+        // back into freed memory.
+        if (impl_->device && tgfx2_interop_get_device() == impl_->device.get()) {
+            tgfx2_interop_set_device(nullptr);
+        }
         impl_->ctx.reset();
         impl_->cache.reset();
         impl_->device.reset();
