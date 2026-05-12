@@ -752,11 +752,6 @@ void main() {
             null
         );
 
-        var shaderPtr = TerminCore.ShaderGet(_shaderHandle);
-        if (shaderPtr != IntPtr.Zero)
-        {
-            TerminCore.ShaderCompileGpu(shaderPtr);
-        }
     }
 
     private void GlControl_Render(TimeSpan delta)

@@ -83,12 +83,6 @@ void main() {
 }";
 
             _shader = TerminCore.ShaderFromSources(vertexShader, fragmentShader, null, "SimpleShader", null, null);
-            var shaderPtr = TerminCore.ShaderGet(_shader);
-            if (shaderPtr != IntPtr.Zero)
-            {
-                TerminCore.ShaderCompileGpu(shaderPtr);
-            }
-
             // Create material
             _material = TerminCore.MaterialCreate(null, "SimpleMaterial");
             var matPtr = TerminCore.MaterialGet(_material);

@@ -92,15 +92,13 @@ void main() {
 }";
 
         _defaultShader = TerminCore.ShaderFromSources(vertexShader, fragmentShader, null, "DefaultShader", null, null);
-        var shaderPtr = TerminCore.ShaderGet(_defaultShader);
-        if (shaderPtr != IntPtr.Zero)
+        if (_defaultShader.Index != 0xFFFFFFFF)
         {
-            TerminCore.ShaderCompileGpu(shaderPtr);
-            Console.WriteLine($"[SceneApp] Shader compiled: {_defaultShader.Index}:{_defaultShader.Generation}");
+            Console.WriteLine($"[SceneApp] Shader registered: {_defaultShader.Index}:{_defaultShader.Generation}");
         }
         else
         {
-            Console.WriteLine("[SceneApp] ERROR: Failed to get shader pointer");
+            Console.WriteLine("[SceneApp] ERROR: Failed to create shader");
         }
 
         // Create material with opaque phase

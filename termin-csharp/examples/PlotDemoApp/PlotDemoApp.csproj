@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\termin-csharp\Termin.Native\Termin.Native.csproj" />
+    <ProjectReference Include="..\..\Termin.Native\Termin.Native.csproj" />
   </ItemGroup>
 
   <ItemGroup>

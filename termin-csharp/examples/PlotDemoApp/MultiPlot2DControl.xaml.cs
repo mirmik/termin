@@ -188,7 +188,8 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         System.Diagnostics.Debug.WriteLine(
             $"MultiPlot2DControl: loading font {ttfPath}");
 
-        _view = new PlotView2DMulti(ttfPath, PanelCount);
+        Tgfx2Host.EnsureCreated(ttfPath);
+        _view = new PlotView2DMulti(Tgfx2Host.Instance, PanelCount);
         _view.set_msaa_samples(_msaaSamples);
         if (PanelHeight > 0)
         {

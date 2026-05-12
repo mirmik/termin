@@ -43,7 +43,7 @@ namespace Termin.Native
                     throw new FileNotFoundException(
                         $"Tgfx2Host: font file not found: {ttfPath}");
                 }
-                _host = new GpuHost(ttfPath);
+                _host = new GpuHost(ttfPath, BackendType.OpenGL);
             }
         }
     }

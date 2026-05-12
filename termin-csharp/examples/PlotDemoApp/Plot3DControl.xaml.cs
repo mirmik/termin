@@ -9,9 +9,9 @@ using Termin.Native;
 
 namespace PlotDemoApp;
 
-// Thin WPF host for a tcplot PlotView3D. The native side owns the
-// OpenGL offscreen FBO, the tgfx2 render context, the font atlas,
-// and the plot engine; this class only:
+// Thin WPF host for a tcplot PlotView3D. Tgfx2Host owns the shared
+// tgfx2 runtime; PlotView3D owns only its offscreen target and plot
+// engine. This class only:
 //   - boots the GL context (tc_opengl_init) once per process,
 //   - forwards the Render tick by calling PlotView3D.render(w, h, fb_id),
 //   - translates WPF mouse events into engine calls.
@@ -103,7 +103,8 @@ public partial class Plot3DControl : UserControl, IDisposable
             ?? throw new InvalidOperationException(
                 "No system TTF font found for Plot3DControl.");
 
-        _view = new PlotView3D(ttfPath);
+        Tgfx2Host.EnsureCreated(ttfPath);
+        _view = new PlotView3D(Tgfx2Host.Instance);
         _initialized = true;
         NativeInitialized?.Invoke(this, EventArgs.Empty);
     }

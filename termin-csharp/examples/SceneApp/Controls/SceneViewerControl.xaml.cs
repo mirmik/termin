@@ -210,7 +210,13 @@ public partial class SceneViewerControl : UserControl, IDisposable
         // Set pipeline
 
         // Set internal entities
-        TerminCore.ViewportSetInternalEntities(_viewportHandle, _internalPool.Handle, _internalRootId);
+        TerminCore.ViewportSetInternalEntities(
+            _viewportHandle,
+            new TcEntityHandle
+            {
+                Pool = _internalPool.PoolHandle,
+                Id = _internalRootId
+            });
 
         // Add viewport to display
         _displayManager.AddViewport(_viewportHandle);
