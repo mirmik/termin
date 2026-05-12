@@ -25,6 +25,5 @@ nav:
     - C API: api/c-api.md
   - Архитектура:
     - Расширения сцены: scene_extensions_architecture.md
-    - Миграция tc_scene: termin_scene_migration_checklist.md
-    - MeshCollider: mesh_collider_plan.md
-  - Миграция на tcgui: migration-tcgui.md
+    - Архитектура редактора: editor-architecture.md
+    - Flat Viewport/RenderTarget: rendering-flat-viewport-target-model.md

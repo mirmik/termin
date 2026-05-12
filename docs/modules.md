@@ -148,7 +148,7 @@ Input abstraction. UI event routing остается в [termin-gui](#termin-gui
 
 ### termin-app
 
-Source of truth: [editor architecture](../termin-app/docs/editor-architecture.md), [tcgui migration](../termin-app/docs/migration-tcgui.md). The current [termin-app docs index](../termin-app/docs/index.md) is stale and should not be treated as an API reference.
+Source of truth: [editor architecture](../termin-app/docs/editor-architecture.md), [flat viewport target model](../termin-app/docs/rendering-flat-viewport-target-model.md). Historical context: [tcgui migration](plans/2026-03-09-termin-app-tcgui-migration.md). The current [termin-app docs index](../termin-app/docs/index.md) is stale and should not be treated as an API reference.
 
 Основное приложение/редактор. tcgui является primary UI. Qt поддерживается по возможности, но не должен быть основным направлением новых архитектурных решений.
 

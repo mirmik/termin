@@ -5,7 +5,7 @@
 > Актуальные документы по редактору:
 >
 > - [Архитектура редактора](editor-architecture.md)
-> - [Миграция на tcgui](migration-tcgui.md)
+> - [Исторический план миграции на tcgui](../../docs/plans/2026-03-09-termin-app-tcgui-migration.md)
 > - [Project build manifest](project-build-manifest.md)
 
 `termin-app` — основной application/editor слой монорепозитория Termin. Здесь живут редактор, project tooling и интеграция engine/domain-модулей в пользовательское приложение.
@@ -19,6 +19,6 @@
 
 getting-started
 concepts
-scene_extensions_architecture
-api/index
+    scene_extensions_architecture
+    api/index
 ```
