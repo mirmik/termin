@@ -424,7 +424,7 @@ class VoxelDisplayComponent(DrawableComponent):
             try:
                 self._rebuild_mesh()
                 # Request render update after mesh rebuild
-                from termin.editor.render_request import request_render_update
+                from termin.editor_core.render_request import request_render_update
                 request_render_update()
             except Exception as e:
                 log.error(f"[VoxelDisplayComponent.update] error rebuilding mesh: {e}")

@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
 )
 
-from termin.editor.settings import EditorSettings
+from termin.editor_core.settings import EditorSettings
 
 
 class SettingsDialog(QDialog):

@@ -30,7 +30,7 @@ def _make_spin_row(label_text: str, value: float, min_v: float, max_v: float,
 
 def show_settings_dialog(ui) -> None:
     """Show modal settings dialog."""
-    from termin.editor.settings import EditorSettings
+    from termin.editor_core.settings import EditorSettings
     settings = EditorSettings.instance()
 
     content = VStack()

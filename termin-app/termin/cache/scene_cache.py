@@ -120,9 +120,9 @@ class FilesystemSceneCache(SceneCache):
 
     def _get_cache_root(self, scene_name: str) -> Path:
         """Get cache root directory for scene."""
-        from termin.editor.project_browser import ProjectBrowser
+        from termin.editor_core.project_context import current_project_path
 
-        project_root = ProjectBrowser.current_project_path
+        project_root = current_project_path()
         if project_root is None:
             # Fallback to current directory
             project_root = Path.cwd()

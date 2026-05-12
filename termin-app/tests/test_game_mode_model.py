@@ -531,12 +531,12 @@ def test_game_mode_model_restores_render_counts_with_shared_render_attachment(mo
 
 
 def test_editor_scene_attachment_reuses_editor_render_target(monkeypatch):
-    from termin.editor import editor_camera
+    from termin.editor_core import editor_camera
     import termin.render_framework._render_framework_native as render_framework_native
 
     EditorSceneAttachment = _load_source_module(
         "editor_scene_attachment_under_test",
-        "termin-app/termin/editor/editor_scene_attachment.py",
+        "termin-app/termin/editor_core/editor_scene_attachment.py",
     ).EditorSceneAttachment
 
     monkeypatch.setattr(editor_camera, "EditorCameraManager", _CameraManager)

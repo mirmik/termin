@@ -223,7 +223,7 @@ class DialogManager:
 
     def show_settings_dialog(self) -> None:
         """Opens editor settings dialog."""
-        from termin.editor.settings_dialog import SettingsDialog
+        from termin.editor_core.settings_dialog import SettingsDialog
 
         dialog = SettingsDialog(self._parent)
         dialog.exec()

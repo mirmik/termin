@@ -16,7 +16,7 @@ from termin._native.scene import SceneManager, SceneMode, default_scene_extensio
 from termin.editor.dialog_manager import DialogManager
 from termin.editor.inspector_controller import InspectorController
 from termin.editor.menu_bar_controller import MenuBarController
-from termin.editor.editor_scene_attachment import EditorSceneAttachment
+from termin.editor_core.editor_scene_attachment import EditorSceneAttachment
 from termin.editor_core.resource_loader import ResourceLoader
 from termin.editor.viewport_list_widget import ViewportListWidget
 from termin.editor.rendering_controller import RenderingController
@@ -47,7 +47,7 @@ from termin.editor.modules_panel import ModulesPanel
 from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
-from termin.editor.settings import EditorSettings
+from termin.editor_core.settings import EditorSettings
 from termin.editor.drag_drop import EditorMimeTypes, parse_asset_path_mime_data
 from termin.assets.resources import ResourceManager
 from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
@@ -363,7 +363,7 @@ class EditorWindow(QMainWindow):
         self.scene_manager.set_on_after_render(self._after_render)
 
         # Set editor pipeline maker for RenderingController (and ViewportInspector)
-        from termin.editor.editor_pipeline import make_editor_pipeline
+        from termin.editor_core.editor_pipeline import make_editor_pipeline
         self._rendering_controller.set_editor_pipeline_maker(make_editor_pipeline)
 
         # --- EditorSceneAttachment ---
@@ -1052,7 +1052,7 @@ class EditorWindow(QMainWindow):
     def _create_pipeline_by_name(self, pipeline_name: str):
         """Create pipeline by name."""
         if pipeline_name == "(Editor)":
-            from termin.editor.editor_pipeline import make_editor_pipeline
+            from termin.editor_core.editor_pipeline import make_editor_pipeline
             return make_editor_pipeline()
 
         if not pipeline_name or pipeline_name == "(Default)":
@@ -1113,7 +1113,7 @@ class EditorWindow(QMainWindow):
         )
 
         # Register global callbacks
-        from termin.editor.render_request import set_request_update_callback, set_scene_tree_rebuild_callback
+        from termin.editor_core.render_request import set_request_update_callback, set_scene_tree_rebuild_callback
         set_request_update_callback(self._request_viewport_update)
         set_scene_tree_rebuild_callback(self._rebuild_scene_tree)
 
@@ -2072,7 +2072,7 @@ class EditorWindow(QMainWindow):
 
             # Set editor pipeline for the viewport (if it has viewports)
             if display.viewports:
-                from termin.editor.editor_pipeline import make_editor_pipeline
+                from termin.editor_core.editor_pipeline import make_editor_pipeline
                 editor_pipeline = make_editor_pipeline()
                 self._rendering_controller.set_viewport_pipeline(
                     display.viewports[0],

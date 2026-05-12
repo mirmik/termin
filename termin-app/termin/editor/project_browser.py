@@ -25,7 +25,8 @@ from PyQt6.QtGui import QDrag
 from PyQt6.QtWidgets import QFileIconProvider
 
 from tcbase import log
-from termin.editor.settings import EditorSettings
+from termin.editor_core.project_context import set_current_project_path
+from termin.editor_core.settings import EditorSettings
 from termin.editor.drag_drop import EditorMimeTypes, create_asset_path_mime_data
 
 
@@ -473,9 +474,6 @@ class ProjectBrowser:
         on_file_double_clicked: Callback при двойном клике на файл
     """
 
-    # Глобальный путь к текущему проекту (устанавливается в set_root_path)
-    current_project_path: Path | None = None
-
     # Расширения файлов, которые показываем
     SUPPORTED_EXTENSIONS = {
         ".scene",     # Сцены
@@ -573,7 +571,7 @@ class ProjectBrowser:
             return
 
         self._root_path = path
-        ProjectBrowser.current_project_path = path
+        set_current_project_path(path)
         self._current_file_dir = path  # Текущая директория в правой панели
         path_str = str(path)
 
