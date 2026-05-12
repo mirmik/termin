@@ -80,7 +80,6 @@ BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
     ("termin.visualization.render.framegraph.passes.tonemap", "TonemapPass"),
     ("termin.render_framework", "GraphAliasPass"),
     # Debug
-    ("termin.visualization.render.framegraph.passes.frame_debugger", "FrameDebuggerPass"),
     ("termin.visualization.render.framegraph.passes.debug_triangle", "DebugTrianglePass"),
 ]
 
