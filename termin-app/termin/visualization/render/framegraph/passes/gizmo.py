@@ -5,7 +5,7 @@ from typing import List, Optional, Set, Tuple
 from typing import TYPE_CHECKING
 
 from tgfx import TcShader
-from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.render_framework.python_pass import PythonFramePass
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -38,7 +38,7 @@ void main() {
 
 from typing import Callable
 
-class GizmoPass(RenderFramePass):
+class GizmoPass(PythonFramePass):
     category = "ID/Picking"
 
     node_inputs = [("input_res", "fbo")]

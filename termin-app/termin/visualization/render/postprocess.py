@@ -5,7 +5,7 @@ from typing import Dict, Set, Tuple, List, TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.render.framegraph import RenderFramePass
+from termin.render_framework.python_pass import PythonFramePass
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -201,7 +201,7 @@ class PostEffect:
         pass
 
 
-class PostProcessPass(RenderFramePass):
+class PostProcessPass(PythonFramePass):
     category = "Effects"
 
     node_inputs = [("input_res", "fbo")]

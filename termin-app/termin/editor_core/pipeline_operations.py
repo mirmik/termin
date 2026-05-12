@@ -17,7 +17,6 @@ from termin.editor_core.signal import Signal
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.pipeline import RenderPipeline
-    from termin.visualization.render.framegraph.passes.base import RenderFramePass
     from termin.visualization.render.framegraph.resource_spec import ResourceSpec
 
 
@@ -194,10 +193,11 @@ class PipelineOperations:
 
     def load_from_file(self, path: str) -> "RenderPipeline | None":
         from termin.visualization.render.framegraph.pipeline import RenderPipeline
+        from termin.visualization.core.resources import ResourceManager
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            pipeline = RenderPipeline.deserialize(data)
+            pipeline = RenderPipeline.deserialize(data, ResourceManager.instance())
         except Exception as e:
             log.error(f"[PipelineOperations] load_from_file failed: {e}")
             self._dialog.show_error("Load Pipeline Failed", str(e))
