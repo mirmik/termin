@@ -216,7 +216,8 @@ def build_ui(graphics):
 
     canvas.on_canvas_mouse_move = on_move
 
-    def on_down(ix, iy, button):
+    def on_down(ix, iy, button, mods):
+        _ = mods
         if sel_state["active"] and button == MouseButton.LEFT:
             sel_state["start"] = (ix, iy)
             sel_state["end"] = (ix, iy)
