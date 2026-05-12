@@ -7,6 +7,7 @@
 - [Documentation System](docs/documentation-system.md) - правила, по которым поддерживается документация.
 - [Module Map](docs/modules.md) - карта модулей, границы ответственности и ссылки на локальные docs.
 - [Architecture Index](docs/index.md) - существующий верхнеуровневый индекс.
+- [Architecture Notes](docs/architecture/index.md) - cross-module архитектурные заметки.
 - [Library Dependencies](docs/library-dependencies.md) - граф зависимостей модулей.
 
 ## Живые области
@@ -22,5 +23,5 @@
 
 ## Рабочие заметки
 
-- [Plans](docs/plans/) - временные планы и миграционные заметки.
-- [Architecture TODO](ARCHITECTURE_TODO.md) - исторический список архитектурных задач.
+- [Plans](docs/plans/index.md) - временные планы и миграционные заметки.
+- [Architecture TODO](docs/architecture/2026-03-16-architecture-todo.md) - исторический список архитектурных задач.

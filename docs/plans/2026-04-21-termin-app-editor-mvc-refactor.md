@@ -4,7 +4,7 @@
 
 В проекте две реализации редактора:
 - `termin/editor/` — Qt6, "золотой стандарт", работает лучше
-- `termin/editor_tcgui/` — tcgui, активная миграция (см. `migration-tcgui.md`), местами расходится с Qt
+- `termin/editor_tcgui/` — tcgui, активная миграция (см. [termin-app tcgui migration](2026-03-09-termin-app-tcgui-migration.md)), местами расходится с Qt
 
 Цель — вынести бизнес-логику в UI-agnostic слой, чтобы оба view делили одну модель и отличались только рендером/ивентами. Устранить дублирование и причину расхождений поведения между редакторами.
 
@@ -129,7 +129,7 @@
 | 2 | ✅ | `InspectorModel` (kind + target + extras + Signal). Qt/tcgui `InspectorController` подписываются. |
 | 3 | ✅ | `RenderingModel`: editor_display_ptr, offscreen_context, selected display/viewport, display_input_managers, attach/detach scene, config sync, find_viewport_config, apply_display_input. Селекшн-стейт через Signal. ViewportListWidget портирован на tcgui. |
 | 4 | ⏳ opportunistic | Диалоги во view-specific коде (pipeline_inspector, project_browser, scene_manager_viewer) остаются на прямых Qt/tcgui вызовах. Переводим на `DialogService` по мере касания. |
-| 5 | ✅ | Cleanup: мёртвый код удалён (-137 LOC в Qt rendering_controller). Архитектура задокументирована — см. [`editor-architecture.md`](editor-architecture.md). |
+| 5 | ✅ | Cleanup: мёртвый код удалён (-137 LOC в Qt rendering_controller). Архитектура задокументирована — см. [editor architecture](../../termin-app/docs/editor-architecture.md). |
 
 ## Что получено в цифрах
 
@@ -145,7 +145,7 @@
 - Новое rendering-состояние → поле + Signal в `RenderingModel`, view подписывается.
 - Новый diagnostic/CRUD диалог → метод в `DialogService` (если shared) или напрямую в view (если UI-specific).
 
-Подробности: [`editor-architecture.md`](editor-architecture.md).
+Подробности: [editor architecture](../../termin-app/docs/editor-architecture.md).
 
 ## Журнал
 

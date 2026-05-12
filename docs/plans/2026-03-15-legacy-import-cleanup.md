@@ -13,7 +13,7 @@ modules, фиксация финального API.
   - Canonical modules importing from legacy native paths: `termin/termin/animation/clip.py`, `termin/termin/animation/clip_io.py`, `termin/termin/animation_components/__init__.py`, `termin/termin/assets/animation_clip_handle.py`, `termin/termin/assets/glb_asset.py`
   - Examples: `termin/examples/loader/load_fbx.py`, `termin/examples/visual/broken/keyframe_animation.py`
   - External project: `/home/mirmik/project/chronosquad-termin` (2 файла с legacy imports)
-  - Documentation: `CANONICAL_NAMING.md`
+  - Documentation: [canonical naming](../architecture/2026-03-15-canonical-naming.md)
 - Related patterns: все facade modules - чистые re-export обёртки
 - Dependencies: native модули `_animation_native` и `_components_animation_native` живут под `termin.visualization.animation.*` и импортируются каноническими модулями
 
@@ -114,9 +114,9 @@ modules, фиксация финального API.
 ### Task 7: Обновить документацию и финальная верификация
 
 **Files:**
-- Modify: `CANONICAL_NAMING.md`
+- Modify: [canonical naming](../architecture/2026-03-15-canonical-naming.md)
 
-- [x] Обновить CANONICAL_NAMING.md: убрать раздел legacy facades, зафиксировать финальную import-модель
+- [x] Обновить [canonical naming](../architecture/2026-03-15-canonical-naming.md): убрать раздел legacy facades, зафиксировать финальную import-модель
 - [x] Финальное сканирование всех проектов на любые оставшиеся legacy import paths
 - [x] Запустить полный набор тестов
 - [x] Удалить `LEGACY_IMPORT_CLEANUP_PLAN.md` из корня репозитория
