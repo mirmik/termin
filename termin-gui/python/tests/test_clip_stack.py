@@ -86,6 +86,8 @@ def make_ui_renderer_for_clip(viewport_w: int = 900, viewport_h: int = 520):
     renderer._viewport_h = viewport_h
     renderer._clip_stack = []
     renderer._ctx = ScissorContext()
+    renderer._canvas = None
+    renderer._canvas_active = False
     return renderer
 
 
