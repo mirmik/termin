@@ -17,13 +17,20 @@
 | Проект | Описание |
 |--------|----------|
 | [termin-app](./modules.md#termin-app) | Основное приложение/редактор |
+| [termin-base](../termin-base/docs/index.md) | Базовые типы, logging, settings, geometry, low-level utilities |
+| [termin-mesh](../termin-mesh/docs/index.md) | Canonical mesh/resource data layer |
+| [termin-graphics](../termin-graphics/docs/index.md) | tgfx/tgfx2, backend-neutral GPU API |
+| [termin-render](../termin-render/docs/index.md) | Render framework, pipelines, frame graph |
+| [termin-display](../termin-display/docs/index.md) | Windows/display/platform integration |
 | [termin-inspect](../termin-inspect/docs/index.md) | Система инспекции: Kind-типы, рефлексия полей, сериализация C/C++/Python |
 | [termin-scene](../termin-scene/docs/index.md) | ECS-сцена: Entity, Component, SoA-хранилище, хэндлы, lifecycle |
 | [termin-collision](../termin-collision/docs/index.md) | Коллизии: GJK, коллайдеры, collision world, C/Python API |
+| [termin-physics](../termin-physics/docs/index.md) | Physics-domain bindings |
+| [termin-input](../termin-input/docs/index.md) | Input abstractions |
 | [termin-gui](../termin-gui/docs/index.md) | UI фреймворк (tcgui): виджеты, лейауты, диалоги, Canvas/Viewport |
 | [termin-modules](../termin-modules/docs/index.md) | Система модулей: C++/Python плагины, дескрипторы, lifecycle, callbacks |
-| [termin-graphics](../termin-graphics/docs/migration-tgfx2.md) | tgfx/tgfx2, backend-neutral GPU API |
-| [tcplot](./modules.md#tcplot) | Plotting library поверх tgfx/tcgui |
+| [termin-components](../termin-components/docs/index.md) | Component packages |
+| [tcplot](../tcplot/docs/index.md) | Plotting library поверх tgfx/tcgui |
 
 ## Архитектура
 
