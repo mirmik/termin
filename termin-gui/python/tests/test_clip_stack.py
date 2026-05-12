@@ -2,6 +2,7 @@
 
 from tcgui.widgets.vstack import VStack
 from tcgui.widgets.scroll_area import ScrollArea
+from tcgui.widgets.renderer import UIRenderer
 from tcgui.widgets.units import px
 from tests.conftest import make_widget
 
@@ -68,6 +69,26 @@ class MockRenderer:
         pass
 
 
+class ScissorContext:
+    def __init__(self):
+        self.calls: list[tuple[str, tuple[int, ...]]] = []
+
+    def set_scissor(self, x: int, y: int, w: int, h: int) -> None:
+        self.calls.append(("set", (x, y, w, h)))
+
+    def clear_scissor(self) -> None:
+        self.calls.append(("clear", ()))
+
+
+def make_ui_renderer_for_clip(viewport_w: int = 900, viewport_h: int = 520):
+    renderer = object.__new__(UIRenderer)
+    renderer._viewport_w = viewport_w
+    renderer._viewport_h = viewport_h
+    renderer._clip_stack = []
+    renderer._ctx = ScissorContext()
+    return renderer
+
+
 # --- Tests ---
 
 def test_single_clip():
@@ -76,6 +97,31 @@ def test_single_clip():
     assert r._graphics.scissor_active
     r.end_clip()
     assert not r._graphics.scissor_active
+
+
+def test_ui_renderer_clamps_negative_clip_to_viewport():
+    r = make_ui_renderer_for_clip()
+
+    r.begin_clip(-46, -35, 260, 380)
+
+    assert r._ctx.calls == [("set", (0, 0, 214, 345))]
+    assert r._clip_stack == [(0, 0, 214, 345)]
+
+
+def test_ui_renderer_clamps_nested_clip_to_viewport_and_parent():
+    r = make_ui_renderer_for_clip()
+
+    r.begin_clip(-60, 20, 1020, 440)
+    r.begin_clip(-46, 50, 260, 380)
+    r.end_clip()
+    r.end_clip()
+
+    assert r._ctx.calls == [
+        ("set", (0, 20, 900, 440)),
+        ("set", (0, 50, 214, 380)),
+        ("set", (0, 20, 900, 440)),
+        ("clear", ()),
+    ]
 
 
 def test_nested_clip_restores_parent():

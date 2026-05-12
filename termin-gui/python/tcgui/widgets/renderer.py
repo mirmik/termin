@@ -173,7 +173,7 @@ class UIRenderer:
         self._viewport_h: int = 0
 
         # CPU scissor stack for nested begin_clip/end_clip. Stored in
-        # GL (bottom-left, y+ up) pixel coordinates.
+        # top-left-origin viewport pixel coordinates.
         self._clip_stack: list[tuple[int, int, int, int]] = []
 
         # --- tgfx2 resources ---
@@ -480,23 +480,32 @@ class UIRenderer:
         on one of the backends and leave text input content outside the
         clip rect on the other.
         """
-        ix = int(x)
-        iy = int(y)
-        iw = int(w)
-        ih = int(h)
+        ix0 = math.floor(x)
+        iy0 = math.floor(y)
+        ix1 = math.ceil(x + w)
+        iy1 = math.ceil(y + h)
 
         if self._clip_stack:
             px, py, pw, ph = self._clip_stack[-1]
-            x1 = max(ix, px)
-            y1 = max(iy, py)
-            x2 = min(ix + iw, px + pw)
-            y2 = min(iy + ih, py + ph)
-            iw = max(0, x2 - x1)
-            ih = max(0, y2 - y1)
-            ix, iy = x1, y1
+            ix0 = max(ix0, px)
+            iy0 = max(iy0, py)
+            ix1 = min(ix1, px + pw)
+            iy1 = min(iy1, py + ph)
 
-        self._clip_stack.append((ix, iy, iw, ih))
-        self._ctx.set_scissor(ix, iy, iw, ih)
+        ix0 = max(0, ix0)
+        iy0 = max(0, iy0)
+        ix1 = min(self._viewport_w, ix1)
+        iy1 = min(self._viewport_h, iy1)
+
+        iw = max(0, ix1 - ix0)
+        ih = max(0, iy1 - iy0)
+        if iw == 0:
+            ix0 = min(max(0, ix0), self._viewport_w)
+        if ih == 0:
+            iy0 = min(max(0, iy0), self._viewport_h)
+
+        self._clip_stack.append((ix0, iy0, iw, ih))
+        self._ctx.set_scissor(ix0, iy0, iw, ih)
 
     def end_clip(self) -> None:
         """Pop scissor clip rect. Restore parent clip or disable."""
