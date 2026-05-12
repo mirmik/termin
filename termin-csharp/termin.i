@@ -1115,6 +1115,16 @@ namespace termin {
     double* out_screen_dist_px
 }
 
+namespace tgfx {
+enum class BackendType {
+    OpenGL,
+    Vulkan,
+    Metal,
+    D3D12,
+    Null
+};
+}
+
 namespace tcplot {
 
 struct Color4 {
@@ -1144,9 +1154,16 @@ public:
     void pan(float dx, float dy);
 };
 
+class GpuHost {
+public:
+    GpuHost(const std::string& ttf_path);
+    GpuHost(const std::string& ttf_path, tgfx::BackendType backend);
+    ~GpuHost();
+};
+
 class PlotView3D {
 public:
-    PlotView3D(const std::string& ttf_path);
+    PlotView3D(GpuHost& host);
     ~PlotView3D();
 
     void plot(const double* x, const double* y, const double* z,
@@ -1236,14 +1253,9 @@ public:
 // the process. See tcplot/include/tcplot/gpu_host.hpp for the
 // rationale (one device per process, shared GL context).
 // ----------------------------------------------------------------------------
-class GpuHost {
-public:
-    GpuHost(const std::string& ttf_path);
-    ~GpuHost();
-};
 
 // ----------------------------------------------------------------------------
-// PlotView2DMulti — stacked panels with shared X + real-time append.
+// PlotView2DMulti - stacked panels with shared X + real-time append.
 // ----------------------------------------------------------------------------
 
 %apply double INPUT[] { const double* x, const double* y }
