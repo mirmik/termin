@@ -9,9 +9,10 @@ Internally the renderer drives a ``Tgfx2Context`` (created lazily on
 first ``begin()``) and keeps an offscreen native tgfx2 color+depth
 texture pair as its draw target. At ``end()`` it blits the offscreen
 color to the default framebuffer via
-``RenderContext2::blit_to_external_fbo``. Text is delegated to
-``Text2DRenderer``. Rects / lines / images use a small UI shader
-compiled once per holder through ``tc_shader_ensure_tgfx2``.
+``RenderContext2::blit_to_external_fbo``. Common 2D primitives,
+simple textures and text are delegated to the C++ ``Canvas2DRenderer``.
+The local UI shader remains for image preview modes that need channel
+selection or HDR highlighting.
 """
 
 from __future__ import annotations
@@ -20,9 +21,8 @@ import math
 
 import numpy as np
 
-from tgfx import TcShader, GPUTextureHandle
+from tgfx import Canvas2DRenderer, TcShader, GPUTextureHandle
 from tgfx.font import FontTextureAtlas, get_default_font
-from tgfx.text2d import Text2DRenderer
 from tgfx._tgfx_native import (
     Tgfx2Context,
     Tgfx2TextureHandle,
@@ -187,7 +187,8 @@ class UIRenderer:
         # object whose backing C++ already died. Fetch lazily on first
         # begin().
         self._ctx = None
-        self._text2d: Text2DRenderer | None = None
+        self._canvas: Canvas2DRenderer | None = None
+        self._canvas_active: bool = False
 
         self._ui_tc_shader: TcShader | None = None
         self._ui_vs = None
@@ -212,19 +213,6 @@ class UIRenderer:
         # into — either _offscreen_color_tex (standalone) or the host's
         # target_color (in-scene).
         self._current_target: Tgfx2TextureHandle | None = None
-
-        # Batched solid/textured quads. Each draw_rect/draw_line/etc.
-        # appends into _batch_verts; _flush_batch emits one
-        # draw_immediate_triangles covering every quad with the current
-        # (color, texture_mode, texture_handle) state. Anything that
-        # would change those — different color, switch to textured,
-        # scissor change, Text2D draw, end_pass — calls _flush_batch
-        # first. Turns N tiny draws into 1 big one on OpenGL where
-        # immediate draws are CPU-synchronous in the driver.
-        self._batch_verts: list[float] = []
-        self._batch_color: tuple[float, float, float, float] | None = None
-        self._batch_mode: int = 0  # 0 = solid, 2 = textured
-        self._batch_texture = None  # Tgfx2TextureHandle for mode == 2
 
     # ------------------------------------------------------------------
     # Font property
@@ -266,8 +254,8 @@ class UIRenderer:
         if self._ctx is None:
             # Fetched lazily — see __init__ comment on cycle collection.
             self._ctx = self._graphics.context
-        if self._text2d is None:
-            self._text2d = Text2DRenderer(font=self._font)
+        if self._canvas is None:
+            self._canvas = Canvas2DRenderer(self.font)
 
         if self._ui_vs is None:
             # Register the UI shader with the tc_shader registry — hash-
@@ -403,13 +391,9 @@ class UIRenderer:
         ctx.set_blend_func(Tgfx2BlendFactor.SrcAlpha,
                            Tgfx2BlendFactor.OneMinusSrcAlpha)
 
-        # Text2D uses the same projection matrix — its begin() sets
-        # its own u_projection on its own shader, so we must call it
-        # here after the ctx is in a pass. Go through the `font`
-        # property so the default system font is lazily resolved if
-        # the caller did not supply one.
-        self._text2d.begin(self._ctx, self._viewport_w, self._viewport_h,
-                           font=self.font)
+        self._canvas.set_default_font(self.font)
+        self._canvas.begin(self._ctx, self._viewport_w, self._viewport_h)
+        self._canvas_active = True
 
     def end(self) -> None:
         """End UI rendering pass, composite offscreen → default GL FBO.
@@ -440,7 +424,9 @@ class UIRenderer:
         if self._ctx is None:
             return None
 
-        self._text2d.end()
+        if self._canvas is not None and self._canvas_active:
+            self._canvas.end()
+            self._canvas_active = False
         self._ctx.end_pass()
         # Match the begin_frame decision from begin(): close only the
         # frame we opened. Command list ownership belongs to whoever
@@ -465,6 +451,8 @@ class UIRenderer:
             self._graphics.destroy_texture(self._offscreen_depth_tex)
             self._offscreen_depth_tex = None
         self._offscreen_size = (0, 0)
+        if self._canvas is not None:
+            self._canvas.release_gpu()
 
     # ------------------------------------------------------------------
     # Scissor / clip stack
@@ -505,7 +493,10 @@ class UIRenderer:
             iy0 = min(max(0, iy0), self._viewport_h)
 
         self._clip_stack.append((ix0, iy0, iw, ih))
-        self._ctx.set_scissor(ix0, iy0, iw, ih)
+        if self._canvas is not None and self._canvas_active:
+            self._canvas.begin_clip(x, y, w, h)
+        else:
+            self._ctx.set_scissor(ix0, iy0, iw, ih)
 
     def end_clip(self) -> None:
         """Pop scissor clip rect. Restore parent clip or disable."""
@@ -513,13 +504,33 @@ class UIRenderer:
             self._clip_stack.pop()
         if self._clip_stack:
             px, py, pw, ph = self._clip_stack[-1]
-            self._ctx.set_scissor(px, py, pw, ph)
+            if self._canvas is not None and self._canvas_active:
+                self._canvas.end_clip()
+            else:
+                self._ctx.set_scissor(px, py, pw, ph)
         else:
-            self._ctx.clear_scissor()
+            if self._canvas is not None and self._canvas_active:
+                self._canvas.end_clip()
+            else:
+                self._ctx.clear_scissor()
 
     # ------------------------------------------------------------------
     # Primitive drawing helpers
     # ------------------------------------------------------------------
+
+    def _suspend_canvas_for_legacy_draw(self) -> None:
+        if self._canvas is not None and self._canvas_active:
+            self._canvas.end()
+            self._canvas_active = False
+
+    def _resume_canvas_after_legacy_draw(self) -> None:
+        if self._canvas is None or self._ctx is None:
+            return
+        self._canvas.set_default_font(self.font)
+        self._canvas.begin(self._ctx, self._viewport_w, self._viewport_h)
+        self._canvas_active = True
+        for x, y, w, h in self._clip_stack:
+            self._canvas.begin_clip(x, y, w, h)
 
     def _push_ui_state(
         self,
@@ -540,6 +551,7 @@ class UIRenderer:
         # mat4. Transpose here once instead of a shader-side transpose
         # marker (set_uniform_mat4 had a transpose flag; push_constants
         # is raw bytes).
+        self._suspend_canvas_for_legacy_draw()
         proj = _build_ortho_pixel_to_ndc(
             float(self._viewport_w), float(self._viewport_h),
         )
@@ -604,12 +616,8 @@ class UIRenderer:
         ignored (the legacy implementation also ignored it)."""
         if w <= 0 or h <= 0:
             return
-        with _prof.section("draw_rect.push"):
-            self._bind_ui_shader_solid(color)
-        with _prof.section("draw_rect.emit"):
-            verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
-        with _prof.section("draw_rect.draw"):
-            self._ctx.draw_immediate_triangles(verts, 6)
+        if self._canvas is not None and self._canvas_active:
+            self._canvas.draw_rect(x, y, w, h, color, border_radius)
 
     def draw_rect_outline(
         self, x: float, y: float, w: float, h: float,
@@ -617,10 +625,8 @@ class UIRenderer:
         thickness: float = 1.0,
     ) -> None:
         """Draw an unfilled rectangle outline."""
-        self.draw_rect(x, y, w, thickness, color)                   # top
-        self.draw_rect(x, y + h - thickness, w, thickness, color)   # bottom
-        self.draw_rect(x, y, thickness, h, color)                   # left
-        self.draw_rect(x + w - thickness, y, thickness, h, color)   # right
+        if self._canvas is not None and self._canvas_active:
+            self._canvas.draw_rect_outline(x, y, w, h, color, thickness)
 
     def draw_line(
         self, x1: float, y1: float, x2: float, y2: float,
@@ -628,37 +634,8 @@ class UIRenderer:
         thickness: float = 1.0,
     ) -> None:
         """Draw a thick line between two pixel coordinates."""
-        dx = x2 - x1
-        dy = y2 - y1
-        length = math.sqrt(dx * dx + dy * dy)
-        if length < 0.001:
-            return
-
-        half = thickness / 2.0
-        # Perpendicular unit vector × half-thickness
-        nx = -dy / length * half
-        ny = dx / length * half
-
-        # Quad corners in pixel coords. Naming mirrors `_emit_quad`
-        # expectations (tl/bl/br/tr) so winding stays consistent.
-        ax, ay = x1 + nx, y1 + ny  # "TL" — start, +normal
-        bx, by = x1 - nx, y1 - ny  # "BL" — start, -normal
-        cx, cy = x2 - nx, y2 - ny  # "BR" — end, -normal
-        dx_, dy_ = x2 + nx, y2 + ny  # "TR" — end, +normal
-
-        self._bind_ui_shader_solid(color)
-        verts = np.array(
-            [
-                ax, ay, 0.0, 0.0, 0.0, 0.0, 0.0,  # "TL"
-                bx, by, 0.0, 0.0, 1.0, 0.0, 0.0,  # "BL"
-                cx, cy, 0.0, 1.0, 1.0, 0.0, 0.0,  # "BR"
-                ax, ay, 0.0, 0.0, 0.0, 0.0, 0.0,  # "TL"
-                cx, cy, 0.0, 1.0, 1.0, 0.0, 0.0,  # "BR"
-                dx_, dy_, 0.0, 1.0, 0.0, 0.0, 0.0,  # "TR"
-            ],
-            dtype=np.float32,
-        )
-        self._ctx.draw_immediate_triangles(verts, 6)
+        if self._canvas is not None and self._canvas_active:
+            self._canvas.draw_line(x1, y1, x2, y2, color, thickness)
 
     # ------------------------------------------------------------------
     # Text
@@ -672,22 +649,16 @@ class UIRenderer:
         """Draw text at the given pixel position. ``y`` is the
         baseline (legacy convention), not the top of the text box."""
         font = self.font
-        if not font or not text or self._text2d is None:
+        if not font or not text or self._canvas is None or not self._canvas_active:
             return
 
-        # `ascent_at` returns the ascent already in display pixels at
-        # this font_size — the atlas bakes per (codepoint, integer px)
-        # so no caller-side scale multiplication is needed.
-        ascent = font.ascent_at(font_size)
-
-        # Translate baseline → top-of-glyph for Text2DRenderer, which
-        # uses top-left anchoring.
-        top_y = y - ascent
+        # Canvas2DRenderer/Text2DRenderer use top-left anchoring, while
+        # the public UIRenderer API historically takes a baseline y.
+        top_y = y - font.ascent_at(font_size)
 
         with _prof.section("text2d.draw"):
-            self._text2d.draw(
-                text, x, top_y,
-                color=color, size=float(font_size), anchor="left",
+            self._canvas.draw_text(
+                text, x, top_y, float(font_size), color, font, "left",
             )
 
     def draw_text_centered(
@@ -697,7 +668,7 @@ class UIRenderer:
     ) -> None:
         """Draw text centered on (cx, cy)."""
         font = self.font
-        if not font or not text or self._text2d is None:
+        if not font or not text:
             return
 
         with _prof.section("draw_text_centered.measure"):
@@ -772,13 +743,14 @@ class UIRenderer:
             )
             tex2 = wrapped
 
-        self._push_ui_state(tint, 2)
-        # Sampler slot 4 matches `layout(binding=4) uniform sampler2D
-        # u_texture` in the UI fragment shader — same on both backends.
-        ctx.bind_sampled_texture(4, tex2)
-
-        verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
-        ctx.draw_immediate_triangles(verts, 6)
+        if wrapped is None and self._canvas is not None and self._canvas_active:
+            self._canvas.draw_texture(tex2, x, y, w, h, tint)
+        else:
+            self._push_ui_state(tint, 2)
+            ctx.bind_sampled_texture(4, tex2)
+            verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
+            ctx.draw_immediate_triangles(verts, 6)
+            self._resume_canvas_after_legacy_draw()
 
         if wrapped is not None:
             self._graphics.destroy_texture(wrapped)
@@ -868,6 +840,10 @@ class UIRenderer:
         if w <= 0 or h <= 0 or handle is None or self._ctx is None:
             return
 
+        if channel_mode == 0 and not highlight_hdr and self._canvas is not None and self._canvas_active:
+            self._canvas.draw_texture(handle, x, y, w, h, tint, flip_v)
+            return
+
         ctx = self._ctx
         self._push_ui_state(tint, 2, channel_mode, highlight_hdr)
         ctx.bind_sampled_texture(4, handle)
@@ -877,6 +853,7 @@ class UIRenderer:
         else:
             verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
         ctx.draw_immediate_triangles(verts, 6)
+        self._resume_canvas_after_legacy_draw()
 
     def draw_external_gl_texture(
         self, x: float, y: float, w: float, h: float,
@@ -914,6 +891,7 @@ class UIRenderer:
             else:
                 verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
             ctx.draw_immediate_triangles(verts, 6)
+            self._resume_canvas_after_legacy_draw()
         finally:
             # Non-owning wrapper: release the HandlePool entry but
             # leave the underlying GL texture alone.
