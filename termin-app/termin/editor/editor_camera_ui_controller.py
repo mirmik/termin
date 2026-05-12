@@ -19,7 +19,7 @@ from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.core.camera import CameraComponent
 from termin.visualization.ui.widgets.component import UIComponent
 from tcgui.widgets.basic import IconButton
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.viewport import Viewport

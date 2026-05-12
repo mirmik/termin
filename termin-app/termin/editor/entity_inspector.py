@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from termin.editor.undo_stack import UndoCommand
+from termin.editor_core.undo_stack import UndoCommand
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity

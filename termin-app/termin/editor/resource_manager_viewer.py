@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 if TYPE_CHECKING:
-    from termin.editor.project_file_watcher import ProjectFileWatcher
+    from termin.editor_core.project_file_watcher import ProjectFileWatcher
 
 from termin.assets.resources import ResourceManager
 

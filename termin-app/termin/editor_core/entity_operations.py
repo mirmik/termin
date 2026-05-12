@@ -21,14 +21,14 @@ from typing import Callable
 
 from tcbase import log
 
-from termin.editor.editor_commands import (
+from termin.editor_core.editor_commands import (
     AddEntityCommand,
     DeleteEntityCommand,
     DuplicateEntityCommand,
     RenameEntityCommand,
     ReparentEntityCommand,
 )
-from termin.editor.undo_stack import UndoCommand
+from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.dialog_service import DialogService
 from termin.kinematic.transform import Transform3
 from termin.visualization.core.entity import Entity

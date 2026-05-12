@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QTreeView, QMenu
 from PyQt6.QtGui import QAction
 
 from termin.editor.editor_tree import SceneTreeModel
-from termin.editor.undo_stack import UndoCommand
+from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.entity_operations import EntityOperations
 from termin.visualization.core.entity import Entity

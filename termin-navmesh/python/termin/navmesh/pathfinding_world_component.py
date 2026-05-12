@@ -11,7 +11,7 @@ import numpy as np
 
 from tcbase import log
 from termin.visualization.core.python_component import PythonComponent
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 from termin.navmesh.pathfinding import (
     RegionGraph,
     NavMeshGraph,

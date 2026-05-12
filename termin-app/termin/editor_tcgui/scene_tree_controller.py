@@ -8,7 +8,7 @@ from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.label import Label
 from tcgui.widgets.menu import Menu, MenuItem
 
-from termin.editor.undo_stack import UndoCommand
+from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.entity_operations import EntityOperations
 from termin.visualization.core.entity import Entity

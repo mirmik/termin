@@ -2,14 +2,14 @@ import unittest
 
 import numpy as np
 
-from termin.editor.editor_commands import (
+from termin.editor_core.editor_commands import (
     AddEntityCommand,
     DeleteEntityCommand,
     RenameEntityCommand,
     ReparentEntityCommand,
     TransformEditCommand,
 )
-from termin.editor.undo_stack import UndoStack
+from termin.editor_core.undo_stack import UndoStack
 from termin.geombase import GeneralPose3
 from termin.scene import TcScene
 

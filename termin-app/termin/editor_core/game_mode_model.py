@@ -58,7 +58,7 @@ class GameModeModel:
     def is_game_paused(self) -> bool:
         if not self.is_game_mode:
             return False
-        from termin.editor.scene_manager import SceneMode
+        from termin._native.scene import SceneMode
         return self._scene_manager.get_mode(self._game_scene_name) == SceneMode.STOP
 
     # ------------------------------------------------------------------
@@ -74,7 +74,7 @@ class GameModeModel:
     def toggle_pause(self) -> None:
         if not self.is_game_mode or self._game_scene_name is None:
             return
-        from termin.editor.scene_manager import SceneMode
+        from termin._native.scene import SceneMode
         current_mode = self._scene_manager.get_mode(self._game_scene_name)
         if current_mode == SceneMode.PLAY:
             self._scene_manager.set_mode(self._game_scene_name, SceneMode.STOP)
@@ -89,7 +89,7 @@ class GameModeModel:
         if editor_scene_name is None:
             return
 
-        from termin.editor.scene_manager import SceneMode
+        from termin._native.scene import SceneMode
         from termin.modules import get_project_modules_runtime
         get_project_modules_runtime().rebuild_stale_modules()
 
@@ -137,7 +137,7 @@ class GameModeModel:
         if not self.is_game_mode:
             return
 
-        from termin.editor.scene_manager import SceneMode
+        from termin._native.scene import SceneMode
 
         self._editor_connector.detach_editor_from_scene(
             save_state=True,

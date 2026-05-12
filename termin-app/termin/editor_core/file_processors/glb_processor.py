@@ -1,32 +1,32 @@
-"""Texture file pre-loader for image files."""
+"""GLB file pre-loader for 3D model files with animations."""
 
 from __future__ import annotations
 
 from typing import Set
 
-from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
+from termin.editor_core.project_file_watcher import FilePreLoader, PreLoadResult
 
 
-class TexturePreLoader(FilePreLoader):
-    """Pre-loads texture files - reads content and UUID from spec."""
+class GLBPreLoader(FilePreLoader):
+    """Pre-loads GLB files - reads content and UUID from meta file."""
 
     @property
     def priority(self) -> int:
-        return 10  # Textures have no dependencies
+        return 10  # GLB files have no dependencies
 
     @property
     def extensions(self) -> Set[str]:
-        return {".png", ".jpg", ".jpeg", ".tga", ".bmp"}
+        return {".glb", ".gltf"}
 
     @property
     def resource_type(self) -> str:
-        return "texture"
+        return "glb"
 
     def preload(self, path: str) -> PreLoadResult | None:
         """
-        Pre-load texture file: only read UUID from spec (lazy loading).
+        Pre-load GLB file: only read UUID from spec (lazy loading).
         """
-        # Read spec file (may contain uuid, flip_x, flip_y, transpose)
+        # Read spec file (may contain uuid, normalize_scale, etc.)
         spec_data = self.read_spec_file(path)
         uuid = spec_data.get("uuid") if spec_data else None
 
@@ -37,7 +37,3 @@ class TexturePreLoader(FilePreLoader):
             uuid=uuid,
             spec_data=spec_data,
         )
-
-
-# Backward compatibility alias
-TextureFileProcessor = TexturePreLoader

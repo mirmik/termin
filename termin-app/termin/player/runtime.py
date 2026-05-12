@@ -357,18 +357,18 @@ class PlayerRuntime:
 
     def _create_asset_preloaders(self):
         from termin.assets.resources import ResourceManager
-        from termin.editor.file_processors import (
+        from termin.editor_core.file_processors import (
             MaterialPreLoader,
-            ShaderFileProcessor,
-            TextureFileProcessor,
+            ShaderPreLoader,
+            TexturePreLoader,
             ComponentFileProcessor,
-            MeshFileProcessor,
+            MeshPreLoader,
             GLBPreLoader,
             PrefabPreLoader,
             AudioPreLoader,
             GlslPreLoader,
-            NavMeshProcessor,
-            VoxelGridProcessor,
+            NavMeshPreLoader,
+            VoxelGridPreLoader,
             PipelinePreLoader,
             ScenePipelinePreLoader,
             UIPreLoader,
@@ -379,16 +379,16 @@ class PlayerRuntime:
             GlslPreLoader(rm),
             PipelinePreLoader(rm),
             ScenePipelinePreLoader(rm),
-            ShaderFileProcessor(rm),
-            TextureFileProcessor(rm),
+            ShaderPreLoader(rm),
+            TexturePreLoader(rm),
             MaterialPreLoader(rm),
             ComponentFileProcessor(rm),
-            MeshFileProcessor(rm),
+            MeshPreLoader(rm),
             GLBPreLoader(rm),
             PrefabPreLoader(rm),
             AudioPreLoader(rm),
-            NavMeshProcessor(rm),
-            VoxelGridProcessor(rm),
+            NavMeshPreLoader(rm),
+            VoxelGridPreLoader(rm),
             UIPreLoader(rm),
         ]
 

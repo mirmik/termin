@@ -10,7 +10,7 @@ from tcgui.widgets.list_widget import ListWidget
 from tcgui.widgets.button import Button
 from tcgui.widgets.units import px
 
-from termin.editor.undo_stack import UndoStack
+from termin.editor_core.undo_stack import UndoStack
 
 
 def show_undo_stack_viewer(ui, undo_stack: UndoStack) -> None:

@@ -6,7 +6,7 @@ from termin.visualization.core.python_component import PythonComponent
 from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase import GeneralPose3
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 from typing import Optional
 import warnings

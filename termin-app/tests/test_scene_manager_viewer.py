@@ -24,7 +24,7 @@ def test_scene_manager_viewers_format_scene_handle_object():
         repo_root / "termin-app/termin/editor_tcgui/dialogs/scene_manager_viewer.py",
     )
 
-    from termin.editor.scene_manager import SceneManager
+    from termin._native.scene import SceneManager
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])

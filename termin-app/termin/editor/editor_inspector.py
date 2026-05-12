@@ -22,10 +22,10 @@ from termin.kinematic.transform import Transform3
 from termin.visualization.core.entity import Entity, Component
 from termin.assets.resources import ResourceManager
 from termin.editor.inspect_field_panel import InspectFieldPanel
-from termin.editor.undo_stack import UndoCommand
+from termin.editor_core.undo_stack import UndoCommand
 from termin.editor.widgets.field_widgets import ButtonFieldWidget
 
-from termin.editor.editor_commands import (
+from termin.editor_core.editor_commands import (
     ComponentFieldEditCommand,
     AddComponentCommand,
     RemoveComponentCommand,

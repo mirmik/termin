@@ -22,7 +22,7 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from termin.editor.color_dialog import ColorDialog
-from termin.editor.undo_stack import UndoCommand
+from termin.editor_core.undo_stack import UndoCommand
 from termin.visualization.core.scene import Scene, scene_render_state, scene_render_mount
 from tcbase import log
 

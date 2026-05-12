@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from tgfx import TcShader
 from termin.render_framework.python_pass import PythonFramePass
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.execute_context import ExecuteContext

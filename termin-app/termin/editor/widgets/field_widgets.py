@@ -25,7 +25,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 
 if TYPE_CHECKING:
-    from termin.editor.inspect_field import InspectField
+    from termin.inspect import InspectField
     from termin.assets.resources import ResourceManager
 
 

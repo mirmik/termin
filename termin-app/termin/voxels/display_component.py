@@ -19,7 +19,7 @@ from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from tmesh import TcMesh
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 from tcbase import log
 
 if TYPE_CHECKING:

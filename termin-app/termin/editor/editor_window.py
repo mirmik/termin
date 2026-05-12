@@ -8,32 +8,32 @@ from PyQt6 import uic
 from PyQt6.QtWidgets import QMainWindow, QWidget, QTreeView, QListView, QLabel, QMenu, QTabWidget, QPlainTextEdit
 from PyQt6.QtWidgets import QPushButton
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
-from termin.editor.undo_stack import UndoStack, UndoCommand
-from termin.editor.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
+from termin.editor_core.undo_stack import UndoStack, UndoCommand
+from termin.editor_core.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
 from termin.editor.prefab_edit_controller import PrefabEditController
-from termin.editor.scene_manager import SceneManager, SceneMode, default_scene_extensions
+from termin._native.scene import SceneManager, SceneMode, default_scene_extensions
 from termin.editor.dialog_manager import DialogManager
 from termin.editor.inspector_controller import InspectorController
 from termin.editor.menu_bar_controller import MenuBarController
 from termin.editor.editor_scene_attachment import EditorSceneAttachment
-from termin.editor.resource_loader import ResourceLoader
+from termin.editor_core.resource_loader import ResourceLoader
 from termin.editor.viewport_list_widget import ViewportListWidget
 from termin.editor.rendering_controller import RenderingController
 from termin.visualization.render import RenderingManager
 from termin.editor.scene_file_controller import SceneFileController
-from termin.editor.project_file_watcher import ProjectFileWatcher
+from termin.editor_core.project_file_watcher import ProjectFileWatcher
 from termin.editor.editor_mode_controller import EditorModeController
-from termin.editor.file_processors import (
+from termin.editor_core.file_processors import (
     MaterialPreLoader,
-    MeshFileProcessor,
-    ShaderFileProcessor,
-    TextureFileProcessor,
+    MeshPreLoader,
+    ShaderPreLoader,
+    TexturePreLoader,
     ComponentFileProcessor,
     PipelinePreLoader,
     ScenePipelinePreLoader,
-    VoxelGridProcessor,
-    NavMeshProcessor,
+    VoxelGridPreLoader,
+    NavMeshPreLoader,
     GLBPreLoader,
     GlslPreLoader,
     PrefabPreLoader,
@@ -148,13 +148,13 @@ class EditorWindow(QMainWindow):
             )
         )
         self._project_file_watcher.register_processor(
-            ShaderFileProcessor(
+            ShaderPreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
         )
         self._project_file_watcher.register_processor(
-            TextureFileProcessor(
+            TexturePreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
@@ -178,19 +178,19 @@ class EditorWindow(QMainWindow):
             )
         )
         self._project_file_watcher.register_processor(
-            MeshFileProcessor(
+            MeshPreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
         )
         self._project_file_watcher.register_processor(
-            VoxelGridProcessor(
+            VoxelGridPreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
         )
         self._project_file_watcher.register_processor(
-            NavMeshProcessor(
+            NavMeshPreLoader(
                 resource_manager=self.resource_manager,
                 on_resource_reloaded=self._on_resource_reloaded,
             )
@@ -1471,7 +1471,7 @@ class EditorWindow(QMainWindow):
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
         """C++ TransformGizmo callback — drag finished."""
-        from termin.editor.editor_commands import TransformEditCommand
+        from termin.editor_core.editor_commands import TransformEditCommand
         tg = self._interaction_system.transform_gizmo
         if tg is None or not tg.target.valid():
             return

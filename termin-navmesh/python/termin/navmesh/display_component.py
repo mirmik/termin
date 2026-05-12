@@ -18,7 +18,7 @@ from termin.mesh import TcMesh
 from termin.assets.navmesh_handle import NavMeshHandle
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.render_components.line_renderer import _build_line_ribbon
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

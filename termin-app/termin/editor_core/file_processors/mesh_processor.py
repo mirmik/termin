@@ -1,33 +1,32 @@
-"""Pipeline file pre-loader for .pipeline files."""
+"""Mesh file pre-loader for 3D model files."""
 
 from __future__ import annotations
 
 from typing import Set
 
-from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
+from termin.editor_core.project_file_watcher import FilePreLoader, PreLoadResult
 
 
-class PipelinePreLoader(FilePreLoader):
-    """Pre-loads .pipeline files - render pipeline configurations."""
+class MeshPreLoader(FilePreLoader):
+    """Pre-loads mesh files - reads content and UUID from spec."""
 
     @property
     def priority(self) -> int:
-        # Load after frame passes but before materials
-        return 5
+        return 10  # Meshes have no dependencies
 
     @property
     def extensions(self) -> Set[str]:
-        return {".pipeline"}
+        return {".stl", ".obj"}
 
     @property
     def resource_type(self) -> str:
-        return "pipeline"
+        return "mesh"
 
     def preload(self, path: str) -> PreLoadResult | None:
         """
-        Pre-load pipeline file: read UUID from spec (lazy loading).
+        Pre-load mesh file: only read UUID from spec (lazy loading).
         """
-        # Read UUID from .meta file
+        # Read spec file (may contain uuid, scale, axis mappings)
         spec_data = self.read_spec_file(path)
         uuid = spec_data.get("uuid") if spec_data else None
 

@@ -10,14 +10,14 @@ from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QWidget
-    from termin.editor.undo_stack import UndoStack
+    from termin.editor_core.undo_stack import UndoStack
     from termin.editor.scene_inspector import SceneInspector
-    from termin.editor.undo_stack_viewer import UndoStackViewer
+    from termin.editor_core.undo_stack_viewer import UndoStackViewer
     from termin.editor.framegraph_debugger import FramegraphDebugDialog
     from termin.editor.resource_manager_viewer import ResourceManagerViewer
     from termin.editor.audio_debugger import AudioDebugDialog
     from termin.editor.core_registry_viewer import CoreRegistryViewer
-    from termin.editor.project_file_watcher import ProjectFileWatcher
+    from termin.editor_core.project_file_watcher import ProjectFileWatcher
     from termin.editor.spacemouse_controller import SpaceMouseController
     from termin.visualization.core.scene import Scene
     from termin.assets.resources import ResourceManager
@@ -102,7 +102,7 @@ class DialogManager:
     def show_undo_stack_viewer(self) -> None:
         """Opens undo/redo stack viewer window."""
         if self._undo_stack_viewer is None:
-            from termin.editor.undo_stack_viewer import UndoStackViewer
+            from termin.editor_core.undo_stack_viewer import UndoStackViewer
 
             self._undo_stack_viewer = UndoStackViewer(
                 self._undo_stack,

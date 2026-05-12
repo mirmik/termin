@@ -83,7 +83,6 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.visualization.components": "termin-components-mesh",
     "termin.entity": "termin-scene",
     "termin.scene": "termin-scene",
-    "termin.editor.inspect_field": "termin-inspect",
     "termin.inspect": "termin-inspect",
     "termin.render_components": "termin-components-render",
     "termin.render_framework": "termin-render",

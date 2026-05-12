@@ -13,7 +13,7 @@ import numpy as np
 from tcbase import log, MouseButton, Action
 from termin.visualization.core.component import InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.navmesh.pathfinding_world_component import PathfindingWorldComponent

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
 if TYPE_CHECKING:
-    from termin.editor.scene_manager import SceneManager
+    from termin._native.scene import SceneManager
     from termin.assets.resources import ResourceManager
     from termin.visualization.core.entity import Entity
 
@@ -105,7 +105,7 @@ class PrefabEditController:
             return False
 
         # Set editor scene to inactive
-        from termin.editor.scene_manager import SceneMode, default_scene_extensions
+        from termin._native.scene import SceneMode, default_scene_extensions
         if self._scene_manager.has_scene("editor"):
             self._scene_manager.set_mode("editor", SceneMode.INACTIVE)
 
@@ -222,7 +222,7 @@ class PrefabEditController:
             self._scene_manager.close_scene("prefab")
 
         # Reactivate editor scene
-        from termin.editor.scene_manager import SceneMode
+        from termin._native.scene import SceneMode
         if self._scene_manager.has_scene("editor"):
             self._scene_manager.set_mode("editor", SceneMode.STOP)
 
@@ -241,7 +241,7 @@ class PrefabEditController:
         Load prefab contents into a new "prefab" scene.
         """
         from termin.editor.prefab_persistence import PrefabPersistence
-        from termin.editor.scene_manager import SceneMode
+        from termin._native.scene import SceneMode
 
         # Load prefab entity
         persistence = PrefabPersistence(self._resource_manager)

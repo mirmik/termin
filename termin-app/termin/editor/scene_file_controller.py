@@ -17,7 +17,7 @@ from termin.project.settings import ProjectSettingsManager
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.editor.scene_manager import SceneManager
+    from termin._native.scene import SceneManager
 
 
 class SceneFileController:

@@ -1,32 +1,32 @@
-"""Audio file pre-loader for audio files."""
+"""Texture file pre-loader for image files."""
 
 from __future__ import annotations
 
 from typing import Set
 
-from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
+from termin.editor_core.project_file_watcher import FilePreLoader, PreLoadResult
 
 
-class AudioPreLoader(FilePreLoader):
-    """Pre-loads audio files - reads UUID from spec (lazy loading)."""
+class TexturePreLoader(FilePreLoader):
+    """Pre-loads texture files - reads content and UUID from spec."""
 
     @property
     def priority(self) -> int:
-        return 10  # Audio files have no dependencies (like textures)
+        return 10  # Textures have no dependencies
 
     @property
     def extensions(self) -> Set[str]:
-        return {".wav", ".ogg", ".mp3", ".flac"}
+        return {".png", ".jpg", ".jpeg", ".tga", ".bmp"}
 
     @property
     def resource_type(self) -> str:
-        return "audio_clip"
+        return "texture"
 
     def preload(self, path: str) -> PreLoadResult | None:
         """
-        Pre-load audio file: only read UUID from spec (lazy loading).
+        Pre-load texture file: only read UUID from spec (lazy loading).
         """
-        # Read spec file (may contain uuid)
+        # Read spec file (may contain uuid, flip_x, flip_y, transpose)
         spec_data = self.read_spec_file(path)
         uuid = spec_data.get("uuid") if spec_data else None
 

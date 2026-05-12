@@ -16,7 +16,7 @@ from tcgui.widgets.button import Button
 from tcgui.widgets.separator import Separator
 from tcgui.widgets.units import px
 
-from termin.editor.project_file_watcher import FilePreLoader
+from termin.editor_core.project_file_watcher import FilePreLoader
 
 
 class GLBInspectorTcgui(VStack):

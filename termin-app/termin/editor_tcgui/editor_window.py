@@ -23,25 +23,25 @@ from tcgui.widgets.label import Label
 from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.message_box import MessageBox
 
-from termin.editor.undo_stack import UndoStack, UndoCommand
-from termin.editor.editor_commands import (
+from termin.editor_core.undo_stack import UndoStack, UndoCommand
+from termin.editor_core.editor_commands import (
     AddEntityCommand,
     DeleteEntityCommand,
     RenameEntityCommand,
 )
-from termin.editor.scene_manager import SceneManager, SceneMode, default_scene_extensions
-from termin.editor.resource_loader import ResourceLoader
-from termin.editor.project_file_watcher import ProjectFileWatcher
-from termin.editor.file_processors import (
+from termin._native.scene import SceneManager, SceneMode, default_scene_extensions
+from termin.editor_core.resource_loader import ResourceLoader
+from termin.editor_core.project_file_watcher import ProjectFileWatcher
+from termin.editor_core.file_processors import (
     MaterialPreLoader,
-    MeshFileProcessor,
-    ShaderFileProcessor,
-    TextureFileProcessor,
+    MeshPreLoader,
+    ShaderPreLoader,
+    TexturePreLoader,
     ComponentFileProcessor,
     PipelinePreLoader,
     ScenePipelinePreLoader,
-    VoxelGridProcessor,
-    NavMeshProcessor,
+    VoxelGridPreLoader,
+    NavMeshPreLoader,
     GLBPreLoader,
     GlslPreLoader,
     PrefabPreLoader,
@@ -879,7 +879,7 @@ class EditorWindowTcgui:
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
         """C++ TransformGizmo drag-end callback — push an undo command."""
-        from termin.editor.editor_commands import TransformEditCommand
+        from termin.editor_core.editor_commands import TransformEditCommand
         tg = self._interaction_system.transform_gizmo if self._interaction_system else None
         if tg is None or not tg.target.valid():
             return
@@ -1813,14 +1813,14 @@ class EditorWindowTcgui:
         for processor_cls in [
             MaterialPreLoader,
             GlslPreLoader,
-            ShaderFileProcessor,
-            TextureFileProcessor,
+            ShaderPreLoader,
+            TexturePreLoader,
             ComponentFileProcessor,
             PipelinePreLoader,
             ScenePipelinePreLoader,
-            MeshFileProcessor,
-            VoxelGridProcessor,
-            NavMeshProcessor,
+            MeshPreLoader,
+            VoxelGridPreLoader,
+            NavMeshPreLoader,
             GLBPreLoader,
             PrefabPreLoader,
             AudioPreLoader,
