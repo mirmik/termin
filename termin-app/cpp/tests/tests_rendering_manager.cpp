@@ -20,6 +20,7 @@ extern "C" {
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
 #include "tgfx/resources/tc_texture.h"
+#include "tgfx/resources/tc_texture_registry.h"
 }
 
 using termin::RenderingManager;
