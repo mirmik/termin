@@ -5,6 +5,11 @@
 Связанные документы:
 
 - [Module Map](../../docs/modules.md#termin-engine)
+- [Engine Managers](managers.md)
+- [EngineCore](engine-core.md)
+- [SceneManager](scene-manager.md)
+- [RenderingManager](rendering-manager.md)
+- [ViewportRenderState](viewport-render-state.md)
 - [termin-scene](../../termin-scene/docs/index.md)
 - [termin-render](../../termin-render/docs/index.md)
 
@@ -15,9 +20,17 @@
 - Python bindings в `bindings/`.
 - Python package в `python/termin/engine`.
 
+## Ключевые классы
+
+- [EngineCore](engine-core.md) - runtime owner и frame loop.
+- [SceneManager](scene-manager.md) - registry/lifecycle/update cycle сцен.
+- [RenderingManager](rendering-manager.md) - displays, viewports, render targets, pipelines и presentation.
+- [ViewportRenderState](viewport-render-state.md) - GPU output state для viewport/render target.
+
+Подробнее: [Engine Managers](managers.md).
+
 ## Публичный API
 
 Python package: `termin.engine` через пакет `termin-engine`.
 
 Модуль связывает нижележащие подсистемы, но не является application/editor слоем. Application policy живет в `termin-app`.
-
