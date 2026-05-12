@@ -142,7 +142,7 @@ class PrefabEditController:
 
         # Save prefab
         try:
-            from termin.editor.prefab_persistence import PrefabPersistence
+            from termin.editor_core.prefab_persistence import PrefabPersistence
 
             persistence = PrefabPersistence(self._resource_manager)
             stats = persistence.save(root_entity, self._prefab_path)
@@ -163,7 +163,7 @@ class PrefabEditController:
         Looks for entity named "[Root]" first, then falls back to
         first serializable root entity (without parent).
         """
-        from termin.editor.prefab_persistence import PrefabPersistence
+        from termin.editor_core.prefab_persistence import PrefabPersistence
 
         scene = self._scene_manager.get_scene("prefab")
         if scene is None:
@@ -240,7 +240,7 @@ class PrefabEditController:
         """
         Load prefab contents into a new "prefab" scene.
         """
-        from termin.editor.prefab_persistence import PrefabPersistence
+        from termin.editor_core.prefab_persistence import PrefabPersistence
         from termin._native.scene import SceneMode
 
         # Load prefab entity

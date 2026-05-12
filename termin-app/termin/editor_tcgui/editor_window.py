@@ -48,11 +48,11 @@ from termin.editor_core.file_processors import (
     AudioPreLoader,
     UIPreLoader,
 )
-from termin.editor.settings import EditorSettings
+from termin.editor_core.settings import EditorSettings
 from termin.assets.resources import ResourceManager
 from termin.visualization.platform.backends.fbo_backend import FBOSurface
 
-from termin.editor.editor_state_io import EditorStateIO
+from termin.editor_core.editor_state_io import EditorStateIO
 from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
@@ -444,8 +444,8 @@ class EditorWindowTcgui:
 
         # Setup rendering controller and editor display
         if self._editor_display is not None:
-            from termin.editor.editor_pipeline import make_editor_pipeline
-            from termin.editor.editor_scene_attachment import EditorSceneAttachment
+            from termin.editor_core.editor_pipeline import make_editor_pipeline
+            from termin.editor_core.editor_scene_attachment import EditorSceneAttachment
             from termin.editor_tcgui.rendering_controller import RenderingControllerTcgui
             from termin._native.render import RenderingManager
 
@@ -1239,7 +1239,7 @@ class EditorWindowTcgui:
         elif ext == ".tc_prefab":
             self._open_prefab(path)
         else:
-            from termin.editor.external_editor import open_in_text_editor
+            from termin.editor_core.external_editor import open_in_text_editor
             try:
                 open_in_text_editor(path)
             except Exception as e:

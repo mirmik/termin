@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from PyQt6.QtCore import QThread
 from PyQt6.QtWidgets import QApplication
 
-from termin.editor.settings import EditorSettings
+from termin.editor_core.settings import EditorSettings
 from termin.project.settings import ProjectSettingsManager
 from tcbase import log
 

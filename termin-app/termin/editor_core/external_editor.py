@@ -13,7 +13,7 @@ from typing import Callable
 
 from tcbase import log
 
-from termin.editor.settings import EditorSettings
+from termin.editor_core.settings import EditorSettings
 
 
 def open_in_text_editor(

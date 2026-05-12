@@ -49,7 +49,7 @@ BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     # Tween
     ("termin.tween.component", "TweenManagerComponent"),
     # Rfmeas
-    ("termin.editor.rfmeas_axis_binding", "RfmeasAxisBinding"),
+    ("termin.components.rfmeas_axis_binding", "RfmeasAxisBinding"),
 ]
 
 # Список встроенных FramePass'ов для предрегистрации.

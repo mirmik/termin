@@ -6,8 +6,8 @@ from typing import Callable, TYPE_CHECKING
 from PyQt6.QtWidgets import QFileDialog, QListView, QTreeView
 
 from termin.editor.project_browser import ProjectBrowser
-from termin.editor.settings import EditorSettings
-from termin.editor.external_editor import open_in_text_editor
+from termin.editor_core.settings import EditorSettings
+from termin.editor_core.external_editor import open_in_text_editor
 from termin.launcher.recent import read_launch_project
 
 if TYPE_CHECKING:

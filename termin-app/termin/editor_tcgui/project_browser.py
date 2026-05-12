@@ -15,6 +15,7 @@ from tcgui.widgets.icon_theme import FileIconProvider
 from tcgui.widgets.menu import Menu, MenuItem
 
 from termin.editor_core.project_operations import ProjectOperations, sync_stdlib
+from termin.editor_core.project_context import set_current_project_path
 
 
 # File extensions that are recognized as known asset types
@@ -113,6 +114,7 @@ class ProjectBrowserTcgui:
         sync_stdlib(root)
 
         self._root_path = root
+        set_current_project_path(root)
         self._selected_dir = root
         self._rebuild_tree()
         self._show_files(root)

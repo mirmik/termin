@@ -19,7 +19,7 @@ from termin.visualization.core.viewport_hint import ViewportHintComponent
 from termin.visualization.ui.widgets.component import UIComponent
 
 # Import to register component in ComponentRegistry
-from termin.editor.editor_camera_ui_controller import EditorCameraUIController  # noqa: F401
+from termin.editor_core.editor_camera_ui_controller import EditorCameraUIController  # noqa: F401
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

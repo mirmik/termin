@@ -80,7 +80,7 @@ def import_rfmeas_model(
     global _rfmeas_source_path
 
     # Ensure RfmeasAxisBinding is registered before loading data
-    import termin.editor.rfmeas_axis_binding  # noqa: F401
+    import termin.components.rfmeas_axis_binding  # noqa: F401
 
     scene = scene_manager.get_scene(scene_name)
     if scene is None:

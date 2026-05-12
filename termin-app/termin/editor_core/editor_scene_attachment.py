@@ -9,7 +9,7 @@ Handles:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
     from tgfx.window import BackendWindow
     from termin.visualization.render.framegraph import RenderPipeline
-    from termin.editor.rendering_controller import RenderingController
-    from termin.editor.editor_camera import EditorCameraManager
+    from termin.editor_core.editor_camera import EditorCameraManager
+    RenderingController = Any
 
 
 
@@ -129,7 +129,7 @@ class EditorSceneAttachment:
         if self._attached_scene is not None:
             self.detach(save_state=True)
 
-        from termin.editor.editor_camera import EditorCameraManager
+        from termin.editor_core.editor_camera import EditorCameraManager
 
         # Create EditorEntities in scene
         self._camera_manager = EditorCameraManager()

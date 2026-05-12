@@ -469,7 +469,7 @@ class ProjectOperations:
             self._dialog.show_error("Error", f"File '{file_path.name}' already exists.")
             return
         try:
-            from termin.editor.prefab_persistence import PrefabPersistence
+            from termin.editor_core.prefab_persistence import PrefabPersistence
             from termin.assets.resources import ResourceManager
             PrefabPersistence(ResourceManager.instance()).create_empty(file_path, name=clean)
         except Exception as e:

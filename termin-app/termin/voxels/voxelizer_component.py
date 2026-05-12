@@ -773,8 +773,8 @@ void main() {
 
             # Если путь относительный, разрешаем относительно директории проекта
             if not output_path.is_absolute():
-                from termin.editor.project_browser import ProjectBrowser
-                project_root = ProjectBrowser.current_project_path
+                from termin.editor_core.project_context import current_project_path
+                project_root = current_project_path()
                 if project_root is not None:
                     output_path = project_root / output_path
 
@@ -890,8 +890,8 @@ void main() {
 
             # Если путь относительный, разрешаем относительно директории проекта
             if not output_path.is_absolute():
-                from termin.editor.project_browser import ProjectBrowser
-                project_root = ProjectBrowser.current_project_path
+                from termin.editor_core.project_context import current_project_path
+                project_root = current_project_path()
                 if project_root is not None:
                     output_path = project_root / output_path
 

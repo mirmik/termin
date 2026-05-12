@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Callable
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.editor.editor_scene_attachment import EditorSceneAttachment
+    from termin.editor_core.editor_scene_attachment import EditorSceneAttachment
     from termin.visualization.core.entity import Entity
 
 

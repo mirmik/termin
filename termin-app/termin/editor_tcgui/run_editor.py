@@ -212,7 +212,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     # Apply font size settings before widget tree is built.
     # Widgets read from current_theme in __init__, so this must happen before build().
-    from termin.editor.settings import EditorSettings
+    from termin.editor_core.settings import EditorSettings
     from tcgui.widgets.theme import current_theme
     settings = EditorSettings.instance()
     current_theme.font_size = settings.get_font_size()
