@@ -1,5 +1,9 @@
 # Установка и начало работы
 
+> Status: stale. This page contains an old package/install model and an old example API.
+>
+> For the current repository workflow use the root [build system documentation](../../docs/build-system.md) and [documentation system](../../docs/documentation-system.md). For editor structure use [editor architecture](editor-architecture.md).
+
 ## Требования
 
 - Python 3.10+

@@ -1,33 +1,16 @@
 # Termin
 
-Библиотека для 3D-симуляции, физики и визуализации.
+> Status: stale. This page is not a reliable API reference.
+>
+> Актуальные документы по редактору:
+>
+> - [Архитектура редактора](editor-architecture.md)
+> - [Миграция на tcgui](migration-tcgui.md)
+> - [Project build manifest](project-build-manifest.md)
 
-## Возможности
+`termin-app` — основной application/editor слой монорепозитория Termin. Здесь живут редактор, project tooling и интеграция engine/domain-модулей в пользовательское приложение.
 
-- **Entity-Component System** — управление объектами сцены
-- **Физика** — симуляция твёрдых тел, коллизии
-- **Рендеринг** — OpenGL, освещение, viewport
-- **Скелетная анимация** — загрузка и воспроизведение анимаций
-- **NavMesh** — навигация и pathfinding
-- **FEM** — метод конечных элементов для мультифизики
-
-## Быстрый старт
-
-```python
-from termin import Scene, Entity
-
-# Создаём сцену
-scene = Scene()
-
-# Добавляем сущность
-entity = scene.create_entity("player")
-entity.position = (0, 0, 0)
-
-# Основной цикл
-while scene.running:
-    scene.update(dt=0.016)
-    scene.render()
-```
+Старое описание публичного `Scene`/`Entity` API удалено с этой страницы, потому что оно не отражало текущую реализацию.
 
 ## Содержание
 
