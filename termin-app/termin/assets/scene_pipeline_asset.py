@@ -146,7 +146,7 @@ class ScenePipelineAsset(Asset):
         """Deserialize pipeline format directly."""
         try:
             from termin.visualization.render.framegraph.pipeline import RenderPipeline
-            from termin.visualization.core.resources import ResourceManager
+            from termin.assets.resources import ResourceManager
 
             rm = ResourceManager.instance()
             pipeline = RenderPipeline.deserialize(data, rm)

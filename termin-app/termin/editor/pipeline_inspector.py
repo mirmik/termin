@@ -190,7 +190,7 @@ class PipelineInspector(QWidget):
         self._details_layout.addWidget(self._pass_inspector)
 
         # Set resources for handle widgets
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         self._pass_inspector.set_resources(rm)
 
@@ -399,7 +399,7 @@ class PipelineInspector(QWidget):
 
     def load_pipeline_file(self, path: str | Path) -> None:
         """Load pipeline from .pipeline file."""
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
 
         path = Path(path)
         if not path.exists():
@@ -596,7 +596,7 @@ class PipelineInspector(QWidget):
         if self._selected_postprocess is None or self._ops is None:
             return
 
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
 
         rm = ResourceManager.instance()
         effect_names = rm.list_post_effect_names()
@@ -744,7 +744,7 @@ class PipelineInspector(QWidget):
         if self._pipeline is None:
             return
 
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
 
         rm = ResourceManager.instance()
         pass_names = rm.list_frame_pass_names()

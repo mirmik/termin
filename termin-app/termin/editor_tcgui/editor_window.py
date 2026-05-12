@@ -49,7 +49,7 @@ from termin.editor.file_processors import (
     UIPreLoader,
 )
 from termin.editor.settings import EditorSettings
-from termin.visualization.core.resources import ResourceManager
+from termin.assets.resources import ResourceManager
 from termin.visualization.platform.backends.fbo_backend import FBOSurface
 
 from termin.editor.editor_state_io import EditorStateIO

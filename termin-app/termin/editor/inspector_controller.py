@@ -16,7 +16,7 @@ from termin.editor_core.inspector_model import InspectorKind, InspectorModel
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QWidget
     from termin.visualization.core.entity import Entity
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
     from termin.visualization.core.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.scene import Scene

@@ -414,7 +414,7 @@ def instantiate_glb(
     Returns:
         GLBInstantiateResult containing root Entity, SkeletonController, and AnimationPlayer.
     """
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
     from termin.visualization.core.scene import Scene
 
     # Access scene_data triggers lazy loading and populates child assets

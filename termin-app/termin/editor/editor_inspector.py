@@ -20,7 +20,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 
 from termin.kinematic.transform import Transform3
 from termin.visualization.core.entity import Entity, Component
-from termin.visualization.core.resources import ResourceManager
+from termin.assets.resources import ResourceManager
 from termin.editor.inspect_field_panel import InspectFieldPanel
 from termin.editor.undo_stack import UndoCommand
 from termin.editor.widgets.field_widgets import ButtonFieldWidget

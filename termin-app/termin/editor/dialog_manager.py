@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from termin.editor.project_file_watcher import ProjectFileWatcher
     from termin.editor.spacemouse_controller import SpaceMouseController
     from termin.visualization.core.scene import Scene
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
 
 
 class DialogManager:

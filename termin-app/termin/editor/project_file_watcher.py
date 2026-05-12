@@ -24,7 +24,7 @@ from tcbase import log
 from termin.project.settings import ProjectSettingsManager
 
 if TYPE_CHECKING:
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
 
 # Debounce delay in seconds
 DEBOUNCE_DELAY_S = 0.3

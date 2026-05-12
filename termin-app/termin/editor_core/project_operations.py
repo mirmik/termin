@@ -470,7 +470,7 @@ class ProjectOperations:
             return
         try:
             from termin.editor.prefab_persistence import PrefabPersistence
-            from termin.visualization.core.resources import ResourceManager
+            from termin.assets.resources import ResourceManager
             PrefabPersistence(ResourceManager.instance()).create_empty(file_path, name=clean)
         except Exception as e:
             log.error(f"[ProjectOperations] create prefab failed: {e}")

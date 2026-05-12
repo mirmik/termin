@@ -25,7 +25,7 @@ def get_pass_class(class_name: str) -> Type["PythonFramePass"] | None:
         The class or None if not found.
     """
     try:
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         rm.register_builtin_frame_passes()
         return rm.get_frame_pass(class_name)
@@ -38,7 +38,7 @@ def get_pass_class(class_name: str) -> Type["PythonFramePass"] | None:
 def get_all_pass_names() -> List[str]:
     """Get list of all registered FramePass class names."""
     try:
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         return list(rm.frame_passes.keys())
     except Exception as e:
@@ -123,7 +123,7 @@ def inspect_field_info_to_node_param(info) -> NodeParam | None:
 
     elif kind == "tc_material":
         # Get material names from ResourceManager
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         material_names = rm.list_material_names()
         choices = ["(None)"] + material_names
@@ -297,7 +297,7 @@ def _python_field_to_node_param(name: str, field) -> NodeParam | None:
         )
     elif kind == "tc_material":
         # Get material names from ResourceManager
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         material_names = rm.list_material_names()
         choices = ["(None)"] + material_names

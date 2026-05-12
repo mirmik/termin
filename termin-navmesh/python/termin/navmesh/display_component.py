@@ -15,7 +15,7 @@ import numpy as np
 from termin.render import DrawableComponent
 from termin.visualization.core.material import Material
 from termin.mesh import TcMesh
-from termin.visualization.core.navmesh_handle import NavMeshHandle
+from termin.assets.navmesh_handle import NavMeshHandle
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.render_components.line_renderer import _build_line_ribbon
 from termin.editor.inspect_field import InspectField
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 def _get_navmesh_choices() -> list[tuple[str, str]]:
     """Получить список NavMesh для комбобокса."""
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
     rm = ResourceManager.instance()
     names = rm.list_navmesh_names()
     return [(name, name) for name in names]
@@ -148,7 +148,7 @@ class NavMeshDisplayComponent(DrawableComponent):
     def _get_or_create_material(self) -> Material:
         """Получить или создать материал."""
         if self._material is None:
-            from termin.visualization.render.renderpass import RenderState
+            from tgfx import RenderState
             from termin.navmesh.navmesh_shader import navmesh_display_shader
 
             shader = navmesh_display_shader()
@@ -170,7 +170,7 @@ class NavMeshDisplayComponent(DrawableComponent):
     def _get_or_create_contour_material(self) -> Material:
         """Получить или создать материал для контуров."""
         if self._contour_material is None:
-            from termin.visualization.render.renderpass import RenderState
+            from tgfx import RenderState
             from tgfx import TcShader
 
             # Простой шейдер для линий

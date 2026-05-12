@@ -6,7 +6,7 @@ import json
 from typing import List, Optional
 
 from termin.visualization.core.scene import Scene
-from termin.visualization.core.resources import ResourceManager
+from termin.assets.resources import ResourceManager
 from tcbase import log
 
 

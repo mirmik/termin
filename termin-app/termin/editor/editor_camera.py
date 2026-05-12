@@ -126,7 +126,7 @@ class EditorCameraManager:
         ui_comp.set_ui_layout_by_name("editor_camera_ui")
 
         # Add EditorCameraUIController if available (loaded from stdlib)
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         #controller_cls = rm.get_component("EditorCameraUIController")
         #if controller_cls is not None:

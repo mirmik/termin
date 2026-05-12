@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 
 if TYPE_CHECKING:
     from termin.editor.scene_manager import SceneManager
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
     from termin.visualization.core.entity import Entity
 
 

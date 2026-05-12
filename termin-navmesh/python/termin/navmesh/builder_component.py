@@ -561,7 +561,7 @@ class NavMeshBuilderComponent(DrawableComponent):
         """Create material for debug visualization."""
         if self._debug_material is None:
             from termin.voxels.voxel_shader import voxel_display_shader
-            from termin.visualization.render.renderpass import RenderState
+            from tgfx import RenderState
 
             shader = voxel_display_shader()
             self._debug_material = Material(
@@ -580,7 +580,7 @@ class NavMeshBuilderComponent(DrawableComponent):
     def _get_or_create_line_material(self) -> Material:
         """Create material for contour lines."""
         if self._debug_line_material is None:
-            from termin.visualization.render.renderpass import RenderState
+            from tgfx import RenderState
             from tgfx import TcShader
 
             vertex_source = """

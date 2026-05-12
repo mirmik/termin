@@ -24,7 +24,7 @@ from termin.editor.widgets.field_widgets import (
 )
 
 if TYPE_CHECKING:
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
 
 
 def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
