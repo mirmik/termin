@@ -8,7 +8,6 @@ Run: python3 examples/sdl_canvas_demo.py
 
 import ctypes
 import sdl2
-from sdl2 import video
 import numpy as np
 
 from tcbase import Key, MouseButton, Mods
@@ -22,40 +21,8 @@ from tcgui.widgets.vstack import VStack
 from tcgui.widgets.panel import Panel
 from tcgui.widgets.status_bar import StatusBar
 from tcgui.widgets.units import px, pct
-
-
-# --- SDL helpers (same as showcase) ---
-
-def create_window(title: str, width: int, height: int):
-    if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
-        raise RuntimeError(f"SDL_Init failed: {sdl2.SDL_GetError()}")
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MAJOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_MINOR_VERSION, 3)
-    video.SDL_GL_SetAttribute(video.SDL_GL_CONTEXT_PROFILE_MASK,
-                              video.SDL_GL_CONTEXT_PROFILE_CORE)
-    video.SDL_GL_SetAttribute(video.SDL_GL_DOUBLEBUFFER, 1)
-    video.SDL_GL_SetAttribute(video.SDL_GL_DEPTH_SIZE, 24)
-    flags = (video.SDL_WINDOW_OPENGL | video.SDL_WINDOW_RESIZABLE |
-             video.SDL_WINDOW_SHOWN)
-    window = video.SDL_CreateWindow(title.encode("utf-8"),
-                                    video.SDL_WINDOWPOS_CENTERED,
-                                    video.SDL_WINDOWPOS_CENTERED,
-                                    width, height, flags)
-    if not window:
-        raise RuntimeError(f"SDL_CreateWindow failed: {sdl2.SDL_GetError()}")
-    gl_ctx = video.SDL_GL_CreateContext(window)
-    if not gl_ctx:
-        video.SDL_DestroyWindow(window)
-        raise RuntimeError(f"SDL_GL_CreateContext failed: {sdl2.SDL_GetError()}")
-    video.SDL_GL_MakeCurrent(window, gl_ctx)
-    video.SDL_GL_SetSwapInterval(1)
-    return window, gl_ctx
-
-
-def get_drawable_size(window):
-    w, h = ctypes.c_int(), ctypes.c_int()
-    video.SDL_GL_GetDrawableSize(window, ctypes.byref(w), ctypes.byref(h))
-    return w.value, h.value
+from termin.display import SDLBackendWindow
+from tgfx import Tgfx2Context
 
 
 _KEY_MAP = {
@@ -299,7 +266,7 @@ def build_ui(graphics):
     root.add_child(canvas)
     root.add_child(status_bar)
 
-    ui = UI()
+    ui = UI(graphics=graphics)
     ui.root = root
     return ui, canvas
 
@@ -307,7 +274,8 @@ def build_ui(graphics):
 # --- Main ---
 
 def main():
-    window, gl_ctx = create_window("tcgui — Canvas Demo", 800, 600)
+    window = SDLBackendWindow("tcgui — Canvas Demo", 800, 600)
+    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
     ui, canvas = build_ui(graphics)
 
@@ -341,7 +309,7 @@ def main():
         if t == sdl2.SDL_QUIT:
             running = False
         elif t == sdl2.SDL_WINDOWEVENT:
-            if ev.window.event == video.SDL_WINDOWEVENT_CLOSE:
+            if ev.window.event == sdl2.SDL_WINDOWEVENT_CLOSE:
                 running = False
         elif t == sdl2.SDL_MOUSEMOTION:
             ui.mouse_move(float(ev.motion.x), float(ev.motion.y))
@@ -371,19 +339,17 @@ def main():
         if not running:
             break
 
-        vw, vh = get_drawable_size(window)
-
-        ui.render(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
+        vw, vh = window.framebuffer_size()
+        tex = ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
+        if tex is not None:
+            window.present(tex)
 
         # Fit on first frame (canvas needs layout first)
         if first_frame:
             canvas.fit_in_view()
             first_frame = False
 
-        video.SDL_GL_SwapWindow(window)
-
-    video.SDL_GL_DeleteContext(gl_ctx)
-    video.SDL_DestroyWindow(window)
+    window.close()
     sdl2.SDL_Quit()
 
 
