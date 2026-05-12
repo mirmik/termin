@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, Dict, List, Any, Type
 from termin.nodegraph.node import NodeParam
 
 if TYPE_CHECKING:
-    from termin.visualization.render.framegraph.core import FramePass
+    from termin.render_framework.python_pass import PythonFramePass
 
 
-def get_pass_class(class_name: str) -> Type["FramePass"] | None:
+def get_pass_class(class_name: str) -> Type["PythonFramePass"] | None:
     """
     Get a FramePass class by name from ResourceManager.
 

@@ -3,7 +3,9 @@ from termin.visualization.render.framegraph.core import (
     FrameGraphCycleError,
     FrameGraphError,
     FrameGraphMultiWriterError,
+    PythonFramePass,
     FramePass,
+    RenderFramePass,
 )
 from termin.visualization.render.framegraph.pipeline import RenderPipeline
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
@@ -13,7 +15,6 @@ from termin.visualization.render.framegraph.resource import (
     ShadowMapArrayResource,
     ShadowMapArrayEntry,
 )
-from termin.visualization.render.framegraph.passes.base import RenderFramePass
 from termin.visualization.render.framegraph.passes.color import ColorPass
 from termin.visualization.render.framegraph.passes.depth import DepthPass
 from termin.visualization.render.framegraph.passes.normal_pass import NormalPass
@@ -33,6 +34,7 @@ __all__ = [
     "FrameGraphCycleError",
     "FrameGraphError",
     "FrameGraphMultiWriterError",
+    "PythonFramePass",
     "FramePass",
     "ResourceSpec",
     "RenderPipeline",

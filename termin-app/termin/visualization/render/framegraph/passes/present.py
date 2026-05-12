@@ -5,7 +5,7 @@ from typing import Set, TYPE_CHECKING
 from tgfx import TcShader
 from tgfx._tgfx_native import Tgfx2ShaderStage
 from termin._native.render import PresentToScreenPass
-from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.render_framework.python_pass import PythonFramePass
 from termin.editor.inspect_field import InspectField
 
 if TYPE_CHECKING:
@@ -120,7 +120,7 @@ def _normalize_resolve_samples(value: int) -> int | None:
     return value
 
 
-class BlitPass(RenderFramePass):
+class BlitPass(PythonFramePass):
     """
     Копирует color-текстуру из одного FBO в другой через tgfx2 blit.
     """
@@ -177,7 +177,7 @@ class BlitPass(RenderFramePass):
         ctx.ctx2.blit(tex_in, tex_out)
 
 
-class ResolvePass(RenderFramePass):
+class ResolvePass(PythonFramePass):
     """
     Resolve MSAA FBO в обычный FBO.
 

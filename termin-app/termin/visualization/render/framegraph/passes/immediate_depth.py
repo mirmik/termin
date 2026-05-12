@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import List, Set, Tuple, TYPE_CHECKING
 
-from termin.visualization.render.framegraph.passes.base import RenderFramePass
+from termin.render_framework.python_pass import PythonFramePass
 from termin.visualization.render.immediate import ImmediateRenderer
 from termin.editor.inspect_field import InspectField
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 
-class ImmediateDepthPass(RenderFramePass):
+class ImmediateDepthPass(PythonFramePass):
     """
     Framegraph pass that renders depth-tested immediate geometry.
 

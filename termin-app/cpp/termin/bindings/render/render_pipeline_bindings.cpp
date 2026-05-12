@@ -396,8 +396,8 @@ void bind_render_pipeline(nb::module_& m) {
             // it works for any pass class (C++ or Python) without relying
             // on the FramePass classmethod, which only covered Python-side
             // subclasses of the Python FramePass base.
-            nb::module_ core_module = nb::module_::import_("termin.visualization.render.framegraph.core");
-            nb::object deserialize_pass = core_module.attr("deserialize_pass");
+            nb::module_ pass_module = nb::module_::import_("termin.render_framework.python_pass");
+            nb::object deserialize_pass = pass_module.attr("deserialize_pass");
 
             std::string name = "default";
             if (data.contains("name")) {

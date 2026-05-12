@@ -120,8 +120,8 @@ class ComponentsMixin:
             Список имён загруженных FramePass'ов.
         """
         from termin.visualization.core.plugin_loader import scan_for_subclasses
-        from termin.visualization.render.framegraph.core import FramePass
-        return scan_for_subclasses(paths, FramePass, self.frame_passes, "_dynamic_frame_passes_")
+        from termin.render_framework.python_pass import PythonFramePass
+        return scan_for_subclasses(paths, PythonFramePass, self.frame_passes, "_dynamic_frame_passes_")
 
     # --------- PostEffect'ы ---------
     def register_post_effect(self, name: str, cls: type):
