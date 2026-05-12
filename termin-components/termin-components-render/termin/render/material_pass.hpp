@@ -34,8 +34,6 @@ public:
     INSPECT_FIELD(MaterialPass, material, "Material", "tc_material")
     INSPECT_FIELD(MaterialPass, output_res, "Output Resource", "string")
     INSPECT_FIELD(MaterialPass, output_res_target, "Output Target", "string")
-    SERIALIZABLE_FIELD(MaterialPass, texture_resources, serialize_texture_resources(), deserialize_texture_resources(val))
-    SERIALIZABLE_FIELD(MaterialPass, extra_resources, serialize_extra_resources(), deserialize_extra_resources(val))
     INSPECT_TYPE_METADATA(MaterialPass, graph, make_pass_graph_metadata(
         {{"output_res_target", "fbo"}},
         {{"output_res", "fbo"}},
@@ -64,5 +62,8 @@ public:
     std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
     void destroy() override;
 };
+
+SERIALIZABLE_FIELD(MaterialPass, texture_resources, serialize_texture_resources(), deserialize_texture_resources(val))
+SERIALIZABLE_FIELD(MaterialPass, extra_resources, serialize_extra_resources(), deserialize_extra_resources(val))
 
 } // namespace termin
