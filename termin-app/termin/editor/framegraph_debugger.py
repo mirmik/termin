@@ -14,14 +14,14 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
     Framegraph debugger window with two connection modes:
 
     1. "Between passes" — select intermediate resource (FBO) between passes.
-       Uses FrameDebuggerPass to capture selected resource into offscreen FBO.
+       Uses native FrameDebugCapturePass to capture selected resource.
 
     2. "Inside pass" — select pass and its internal symbol.
        E.g., for ColorPass you can select a mesh and see state after rendering it.
 
     Architecture:
     - FrameGraphDebuggerCore (C++) handles capture and presentation
-    - Capture phase: blit src FBO -> capture FBO (during render, same GL context)
+    - Capture phase: blit selected tgfx2 texture -> capture texture during render
     - Present phase: render capture FBO -> SDL window (after render, SDL context)
     """
 
