@@ -2,7 +2,7 @@
 
 Both Qt (``editor/framegraph_debugger.py``) and tcgui (``editor_tcgui/dialogs/framegraph_debugger.py``)
 views subscribe to this model and convert its state snapshots into their own
-widget updates. Pipeline connection (``FrameDebuggerPass`` lifecycle, per-pass
+widget updates. Pipeline connection (``FrameDebugCapturePass`` lifecycle, per-pass
 ``set_debug_internal_point``) is owned here; views never touch the pipeline
 directly.
 
@@ -23,6 +23,7 @@ import json
 from typing import TYPE_CHECKING, Callable
 
 from tcbase import log
+from termin.render_framework import FrameDebugCapturePass, PipelineFrameGraphView
 
 from termin.editor_core.signal import Signal
 
@@ -268,8 +269,6 @@ class FramegraphDebuggerModel:
         """List of (pass_name, has_internal_symbols) from current pipeline,
         with the debugger pass filtered out. ShadowPass is treated as having
         no symbols (matches Qt behaviour)."""
-        from termin.visualization.render.framegraph.passes.shadow import ShadowPass
-
         pipeline = self.get_current_pipeline()
         if pipeline is None:
             return []
@@ -277,7 +276,7 @@ class FramegraphDebuggerModel:
         for p in pipeline.passes:
             if p.pass_name == "FrameDebugger":
                 continue
-            if isinstance(p, ShadowPass):
+            if p.type_name == "ShadowPass" or p.pass_name == "ShadowPass":
                 has_syms = False
             else:
                 has_syms = bool(p.get_internal_symbols())
@@ -331,8 +330,6 @@ class FramegraphDebuggerModel:
     def format_pipeline_info(self) -> str:
         """HTML pipeline schedule with FrameDebugger highlighted in orange
         and the writer of the current debug-source resource in green."""
-        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
-
         schedule = self._build_schedule(exclude_debugger=False)
         if not schedule:
             return "<i>Pipeline пуст</i>"
@@ -343,7 +340,7 @@ class FramegraphDebuggerModel:
             reads_str = ", ".join(sorted(p.reads)) if p.reads else "∅"
             writes_str = ", ".join(sorted(p.writes)) if p.writes else "∅"
             line = f"{p.pass_name}: {{{reads_str}}} → {{{writes_str}}}"
-            if isinstance(p, FrameDebuggerPass):
+            if p.pass_name == "FrameDebugger":
                 line = f"<span style='color: #ffb86c;'>► {line}</span>"
             elif current_resource and current_resource in p.writes:
                 line = f"<span style='color: #50fa7b; font-weight: bold;'>● {line}</span>"
@@ -356,17 +353,14 @@ class FramegraphDebuggerModel:
         return "<pre>" + "<br>".join(lines) + "</pre>"
 
     def _format_alias_groups(self) -> list[str]:
-        from termin.visualization.render.framegraph.core import FrameGraph
-
-        schedule = self._build_schedule(exclude_debugger=False)
-        if not schedule:
+        pipeline = self.get_current_pipeline()
+        if pipeline is None:
             return []
 
-        graph = FrameGraph(schedule)
-        graph.build_schedule()
-
         lines: list[str] = []
-        for canonical, group in sorted(graph.fbo_alias_groups().items()):
+        with PipelineFrameGraphView(pipeline) as graph:
+            alias_groups = graph.alias_groups()
+        for canonical, group in sorted(alias_groups.items()):
             aliases = sorted(group)
             if len(aliases) <= 1:
                 continue
@@ -473,6 +467,8 @@ class FramegraphDebuggerModel:
 
     def set_paused(self, paused: bool) -> None:
         self._debug_paused = bool(paused)
+        if self._frame_debugger_pass is not None:
+            self._frame_debugger_pass.set_paused(self._debug_paused)
 
     def set_channel_mode(self, mode: int) -> None:
         self._channel_mode = int(mode)
@@ -594,23 +590,11 @@ class FramegraphDebuggerModel:
         if self._mode == "between":
             if not self._debug_source_res:
                 return
-            from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
 
-            def get_source():
-                if self._debug_paused:
-                    return None
-                return self._debug_source_res
-
-            def get_source_type():
-                if self._debug_paused:
-                    return None
-                return self._resource_type(self._debug_source_res)
-
-            self._frame_debugger_pass = FrameDebuggerPass(
-                get_source_res=get_source,
-                get_source_type=get_source_type,
-                pass_name="FrameDebugger",
-            )
+            self._frame_debugger_pass = FrameDebugCapturePass(pass_name="FrameDebugger")
+            self._frame_debugger_pass.set_source_resource(self._debug_source_res)
+            self._frame_debugger_pass.set_source_type(self._resource_type(self._debug_source_res) or "")
+            self._frame_debugger_pass.set_paused(self._debug_paused)
             self._frame_debugger_pass.set_capture(self._core.capture)
             self._frame_debugger_pass.set_depth_capture(self._core.depth_capture)
             pipeline.add_pass(self._frame_debugger_pass)
@@ -640,24 +624,13 @@ class FramegraphDebuggerModel:
     # ------------------------------------------------------------------
 
     def _build_schedule(self, exclude_debugger: bool = False) -> list:
-        """Ordered pass list resolved by FrameGraph dependency analysis
-        (mirrors Qt ``FramegraphDebugDialog._build_schedule``). Every pass
-        is asked for its required_resources before the graph is built."""
-        from termin.visualization.render.framegraph.core import FrameGraph
-        from termin.visualization.render.framegraph.passes.base import RenderFramePass
-        from termin.visualization.render.framegraph.passes.frame_debugger import FrameDebuggerPass
-
+        """Ordered pass list resolved by native tc_frame_graph dependency analysis."""
         pipeline = self.get_current_pipeline()
         if pipeline is None:
             return []
 
-        passes = pipeline.passes
+        with PipelineFrameGraphView(pipeline) as graph:
+            passes = graph.schedule()
         if exclude_debugger:
-            passes = [p for p in passes if not isinstance(p, FrameDebuggerPass)]
-
-        for render_pass in passes:
-            if isinstance(render_pass, RenderFramePass):
-                render_pass.required_resources()
-
-        graph = FrameGraph(passes)
-        return graph.build_schedule()
+            passes = [p for p in passes if p.pass_name != "FrameDebugger"]
+        return passes
