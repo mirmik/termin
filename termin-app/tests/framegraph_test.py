@@ -3,16 +3,20 @@
 import unittest
 from typing import List, Tuple
 
-from termin.visualization.render.framegraph import (
-    FramePass,
-    FrameGraph,
-    FrameGraphCycleError,
-    FrameGraphMultiWriterError,
-    FrameGraphError,
-)
+from termin.render_framework.frame_graph_view import PipelineFrameGraphView
+from termin.render_framework.python_pass import PythonFramePass
+from termin.visualization.render.framegraph.pipeline import RenderPipeline
 
 
-class DummyPass(FramePass):
+def build_schedule(passes):
+    pipeline = RenderPipeline("test")
+    for frame_pass in passes:
+        pipeline.add_pass(frame_pass)
+    with PipelineFrameGraphView(pipeline) as graph:
+        return graph.schedule()
+
+
+class DummyPass(PythonFramePass):
     """Тестовый пасс без реального исполнения."""
 
     def __init__(self, pass_name, reads=None, writes=None, inplace=False):
@@ -52,8 +56,7 @@ class FrameGraphTests(unittest.TestCase):
         b = DummyPass("B", reads={"g1"}, writes={"g2"})
         c = DummyPass("C", reads={"g2"})
 
-        g = FrameGraph([a, b, c])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b, c])
         names = [p.pass_name for p in schedule]
 
         self.assertEqual(set(names), {"A", "B", "C"})
@@ -71,8 +74,7 @@ class FrameGraphTests(unittest.TestCase):
         c = DummyPass("C", reads={"r1"}, writes={"r3"})
         d = DummyPass("D", reads={"r2", "r3"})
 
-        g = FrameGraph([a, b, c, d])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b, c, d])
         names = [p.pass_name for p in schedule]
 
         # A должен быть до B и C
@@ -87,8 +89,7 @@ class FrameGraphTests(unittest.TestCase):
         a = DummyPass("A", reads={"external_x"}, writes={"r1"})
         b = DummyPass("B", reads={"r1"})
 
-        g = FrameGraph([a, b])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b])
         names = [p.pass_name for p in schedule]
 
         self.assertLess(names.index("A"), names.index("B"))
@@ -99,9 +100,8 @@ class FrameGraphTests(unittest.TestCase):
         a = DummyPass("A", writes={"r1"})
         b = DummyPass("B", writes={"r1"})
 
-        g = FrameGraph([a, b])
-        with self.assertRaises(FrameGraphMultiWriterError):
-            g.build_schedule()
+        with self.assertRaises(RuntimeError):
+            build_schedule([a, b])
 
     def test_cycle_detection(self):
         # A пишет r1, читает r2
@@ -109,9 +109,8 @@ class FrameGraphTests(unittest.TestCase):
         a = DummyPass("A", reads={"r2"}, writes={"r1"})
         b = DummyPass("B", reads={"r1"}, writes={"r2"})
 
-        g = FrameGraph([a, b])
-        with self.assertRaises(FrameGraphCycleError):
-            g.build_schedule()
+        with self.assertRaises(RuntimeError):
+            build_schedule([a, b])
 
     def test_pass_without_resources(self):
         # Пассы без reads/writes ни от чего не зависят
@@ -119,15 +118,13 @@ class FrameGraphTests(unittest.TestCase):
         b = DummyPass("B")
         c = DummyPass("C")
 
-        g = FrameGraph([a, b, c])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b, c])
         # Любой порядок валиден, главное — все на месте
         names = [p.pass_name for p in schedule]
         self.assertEqual(set(names), {"A", "B", "C"})
 
     def test_empty_graph(self):
-        g = FrameGraph([])
-        schedule = g.build_schedule()
+        schedule = build_schedule([])
         self.assertEqual(schedule, [])
     
     def test_inplace_d_last(self):
@@ -136,8 +133,7 @@ class FrameGraphTests(unittest.TestCase):
         c = DummyPass("C", reads={"r"}, writes={"y"})
         d = DummyPass("D", reads={"r"}, writes={"r_mod"}, inplace=True)
 
-        g = FrameGraph([a, b, c, d])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b, c, d])
 
         names = [p.pass_name for p in schedule]
         self.assertLess(names.index("A"), names.index("B"))
@@ -152,8 +148,7 @@ class FrameGraphTests(unittest.TestCase):
         c = DummyPass("C", reads={"r"}, writes={"y"})
         d = DummyPass("D", reads={"r"}, writes={"r_mod"}, inplace=True)
 
-        g = FrameGraph([a, d, c, b])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, d, c, b])
 
         names = [p.pass_name for p in schedule]
         self.assertLess(names.index("A"), names.index("B"))
@@ -168,8 +163,7 @@ class FrameGraphTests(unittest.TestCase):
         c = DummyPass("C", reads={"b"}, writes={"c"}, inplace=True)
         d = DummyPass("D", reads={"c"}, writes={"d"}, inplace=True)
 
-        g = FrameGraph([a, b, c, d])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b, c, d])
 
         names = [p.pass_name for p in schedule]
         self.assertLess(names.index("A"), names.index("B"))
@@ -184,10 +178,8 @@ class FrameGraphTests(unittest.TestCase):
         d = DummyPass("D", reads={"c"}, writes={"d"}, inplace=True)
         e = DummyPass("E", reads={"b"}, writes={"e"}, inplace=True)
 
-        g = FrameGraph([a, b, c, d, e])
-
-        with self.assertRaises(FrameGraphError):
-            g.build_schedule()
+        with self.assertRaises(RuntimeError):
+            build_schedule([a, b, c, d, e])
 
     def test_inplace_after_all_readers(self):
         """
@@ -204,8 +196,7 @@ class FrameGraphTests(unittest.TestCase):
         c = DummyPass("C", reads={"r"}, writes={"y"})
         d = DummyPass("D", reads={"r"}, writes={"r_mod"}, inplace=True)
 
-        g = FrameGraph([a, b, c, d])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b, c, d])
         names = [p.pass_name for p in schedule]
 
         self.assertLess(names.index("A"), names.index("B"))
@@ -231,8 +222,7 @@ class FrameGraphTests(unittest.TestCase):
         c = DummyPass("C", reads={"r_mod"})
         d = DummyPass("D", reads={"r_mod"})
 
-        g = FrameGraph([a, b, c, d])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b, c, d])
         names = [p.pass_name for p in schedule]
 
         self.assertLess(names.index("A"), names.index("B"))
@@ -258,8 +248,7 @@ class FrameGraphTests(unittest.TestCase):
         d = DummyPass("D", reads={"r_mod"})
         e = DummyPass("E", reads={"r"})
 
-        g = FrameGraph([a, b, c, d, e])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b, c, d, e])
         names = [p.pass_name for p in schedule]
 
         self.assertLess(names.index("A"), names.index("B"))
@@ -284,8 +273,7 @@ class FrameGraphTests(unittest.TestCase):
         a = DummyPass("A", reads={"ext"}, writes={"r"}, inplace=True)
         b = DummyPass("B", reads={"r"})
 
-        g = FrameGraph([a, b])
-        schedule = g.build_schedule()
+        schedule = build_schedule([a, b])
         names = [p.pass_name for p in schedule]
 
         # Просто проверяем, что порядок зависимостей соблюдён
@@ -299,10 +287,8 @@ class FrameGraphTests(unittest.TestCase):
         a = DummyPass("A", writes={"r"})
         b = DummyPass("B", reads={"r"}, writes={"r"}, inplace=True)  # пишет тот же ресурс
 
-        g = FrameGraph([a, b])
-        # Должен сработать MultiWriter, а не какая-нибудь странная другая ошибка
-        with self.assertRaises(FrameGraphMultiWriterError):
-            g.build_schedule()
+        with self.assertRaises(RuntimeError):
+            build_schedule([a, b])
 
     def test_cycle_with_inplace(self):
         """
@@ -314,9 +300,8 @@ class FrameGraphTests(unittest.TestCase):
         a = DummyPass("A", reads={"r"}, writes={"r2"}, inplace=True)
         b = DummyPass("B", reads={"r2"}, writes={"r"})
 
-        g = FrameGraph([a, b])
-        with self.assertRaises(FrameGraphCycleError):
-            g.build_schedule()
+        with self.assertRaises(RuntimeError):
+            build_schedule([a, b])
 
     def test_two_inplace_on_same_input_must_fail(self):
         """
@@ -330,9 +315,8 @@ class FrameGraphTests(unittest.TestCase):
         b = DummyPass("B", reads={"r"}, writes={"r1"}, inplace=True)
         c = DummyPass("C", reads={"r"}, writes={"r2"}, inplace=True)
 
-        g = FrameGraph([a, b, c])
-        with self.assertRaises(FrameGraphError):
-            g.build_schedule()
+        with self.assertRaises(RuntimeError):
+            build_schedule([a, b, c])
 
 
     def test_frame_debugger_before_inplace_color_pass(self):
@@ -352,8 +336,7 @@ class FrameGraphTests(unittest.TestCase):
         color = DummyPass("Color", reads={"skybox"}, writes={"color_scene"}, inplace=True)
         debugger = DummyPass("FrameDebugger", reads={"skybox"})
 
-        g = FrameGraph([skybox, color, debugger])
-        schedule = g.build_schedule()
+        schedule = build_schedule([skybox, color, debugger])
         names = [p.pass_name for p in schedule]
 
         # Skybox должен быть первым (пишет ресурс)
@@ -372,18 +355,15 @@ class FrameGraphTests(unittest.TestCase):
         debugger = DummyPass("FrameDebugger", reads={"skybox"})
 
         # Порядок 1: debugger в конце
-        g1 = FrameGraph([skybox, color, debugger])
-        names1 = [p.pass_name for p in g1.build_schedule()]
+        names1 = [p.pass_name for p in build_schedule([skybox, color, debugger])]
         self.assertLess(names1.index("FrameDebugger"), names1.index("Color"))
 
         # Порядок 2: debugger перед color
-        g2 = FrameGraph([skybox, debugger, color])
-        names2 = [p.pass_name for p in g2.build_schedule()]
+        names2 = [p.pass_name for p in build_schedule([skybox, debugger, color])]
         self.assertLess(names2.index("FrameDebugger"), names2.index("Color"))
 
         # Порядок 3: debugger первый после skybox
-        g3 = FrameGraph([debugger, skybox, color])
-        names3 = [p.pass_name for p in g3.build_schedule()]
+        names3 = [p.pass_name for p in build_schedule([debugger, skybox, color])]
         self.assertLess(names3.index("FrameDebugger"), names3.index("Color"))
 
 
