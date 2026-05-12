@@ -707,7 +707,9 @@ class UIRenderer:
             # has per-size caches; unbaked size means missing entries).
             text_width, _ = self.measure_text(text, font_size)
         x = cx - text_width / 2
-        y = cy + font_size / 2  # baseline offset (legacy)
+        line_height = float(font.line_height_at(font_size))
+        ascent = float(font.ascent_at(font_size))
+        y = cy - line_height / 2 + ascent
         self.draw_text(x, y, text, color, font_size)
 
     def measure_text(
@@ -723,6 +725,18 @@ class UIRenderer:
         # deferred to the next draw call (which passes a ctx).
         font.ensure_glyphs(text, font_size)
         return font.measure_text(text, font_size)
+
+    def ascent_at(self, font_size: float = 14) -> float:
+        font = self.font
+        if not font:
+            return font_size * 0.8
+        return float(font.ascent_at(font_size))
+
+    def line_height_at(self, font_size: float = 14) -> float:
+        font = self.font
+        if not font:
+            return font_size
+        return float(font.line_height_at(font_size))
 
     # ------------------------------------------------------------------
     # Images

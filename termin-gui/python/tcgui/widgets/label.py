@@ -45,6 +45,10 @@ class Label(Widget):
 
     def render(self, renderer: 'UIRenderer'):
         text = self._fit_text(renderer)
+        line_height = renderer.line_height_at(self.font_size)
+        ascent = renderer.ascent_at(self.font_size)
+        baseline_y = self.y + max(0.0, (self.height - line_height) / 2.0) + ascent
+
         renderer.begin_clip(self.x, self.y, self.width, self.height)
         if self.alignment == "center":
             renderer.draw_text_centered(
@@ -58,7 +62,7 @@ class Label(Widget):
             text_width, _ = renderer.measure_text(text, self.font_size)
             renderer.draw_text(
                 self.x + max(0.0, self.width - text_width),
-                self.y + self.font_size,
+                baseline_y,
                 text,
                 self.text_color,
                 self.font_size
@@ -66,7 +70,7 @@ class Label(Widget):
         else:  # left
             renderer.draw_text(
                 self.x,
-                self.y + self.font_size,
+                baseline_y,
                 text,
                 self.text_color,
                 self.font_size
