@@ -2,10 +2,33 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from termin.visualization.render.framegraph.core import FrameGraph, FramePass
+from termin.render_framework.frame_graph_view import PipelineFrameGraphView
+from termin.render_framework.python_pass import PythonFramePass
+from termin.visualization.render.framegraph.pipeline import RenderPipeline
 
 
-class DummyPass(FramePass):
+def build_pipeline(passes):
+    pipeline = RenderPipeline("test")
+    for frame_pass in passes:
+        pipeline.add_pass(frame_pass)
+    return pipeline
+
+
+def build_schedule(passes):
+    with PipelineFrameGraphView(build_pipeline(passes)) as graph:
+        return graph.schedule()
+
+
+def build_alias_groups(passes):
+    with PipelineFrameGraphView(build_pipeline(passes)) as graph:
+        graph.schedule()
+        return {
+            canonical: set(aliases)
+            for canonical, aliases in graph.alias_groups().items()
+        }
+
+
+class DummyPass(PythonFramePass):
     def __init__(self, name: str, reads=None, writes=None, inplace: bool = False):
         if reads is None:
             reads = set()
@@ -40,7 +63,7 @@ class DummyPass(FramePass):
 
 
 def test_framepass_has_no_internal_symbols_by_default():
-    p = FramePass(pass_name="simple")
+    p = PythonFramePass(pass_name="simple")
     assert p.get_internal_symbols() == []
 
 
@@ -68,7 +91,7 @@ def test_debug_internal_point_configuration_is_mutable():
 
 def test_debugger_window_configuration():
     """Тест для set_debugger_window / get_debugger_window."""
-    p = FramePass(pass_name="p")
+    p = PythonFramePass(pass_name="p")
 
     # По умолчанию окно не задано
     assert p.get_debugger_window() is None
@@ -96,11 +119,10 @@ def test_framegraph_builds_with_and_without_debug_internal_point():
     p2 = DummyPass(name="B", reads={"a"}, writes={"b"})
 
     # 1) Без конфигурации точки дебага
-    graph1 = FrameGraph([p1, p2])
-    schedule1 = [p.pass_name for p in graph1.build_schedule()]
+    schedule1 = [p.pass_name for p in build_schedule([p1, p2])]
     assert schedule1 == ["A", "B"]
 
-    groups1 = graph1.fbo_alias_groups()
+    groups1 = build_alias_groups([p1, p2])
     # оба ресурса независимы и имеют свои канонические имена
     assert groups1["a"] == {"a"}
     assert groups1["b"] == {"b"}
@@ -108,12 +130,11 @@ def test_framegraph_builds_with_and_without_debug_internal_point():
     # 2) С установленной точкой дебага на втором пассе
     p2.set_debug_internal_point("b")
 
-    graph2 = FrameGraph([p1, p2])
-    schedule2 = [p.pass_name for p in graph2.build_schedule()]
+    schedule2 = [p.pass_name for p in build_schedule([p1, p2])]
     # порядок выполнения не должен измениться
     assert schedule2 == ["A", "B"]
 
-    groups2 = graph2.fbo_alias_groups()
+    groups2 = build_alias_groups([p1, p2])
     # основные alias-группы сохраняются
     assert groups2["a"] == {"a"}
     assert groups2["b"] == {"b"}
@@ -139,12 +160,11 @@ def test_inplace_pass_with_debug_internal_point():
 
     # Граф должен корректно строиться
     p_source = DummyPass(name="Source", writes={"input"})
-    graph = FrameGraph([p_source, p_inplace])
-    schedule = [p.pass_name for p in graph.build_schedule()]
+    schedule = [p.pass_name for p in build_schedule([p_source, p_inplace])]
     assert schedule == ["Source", "InplaceWithDebug"]
 
     # Alias группы
-    groups = graph.fbo_alias_groups()
+    groups = build_alias_groups([p_source, p_inplace])
     # input и output — синонимы (inplace)
     assert "input" in groups
 
@@ -153,7 +173,7 @@ def test_inplace_pass_with_debug_internal_point():
 
 def test_framepass_enabled_by_default():
     """По умолчанию пасс включён."""
-    p = FramePass(pass_name="test")
+    p = PythonFramePass(pass_name="test")
     assert p.enabled is True
 
 
@@ -164,14 +184,12 @@ def test_disabled_pass_not_in_schedule():
     p3 = DummyPass(name="C", reads={"b"}, writes={"c"})
 
     # Все пассы включены — все в расписании
-    graph1 = FrameGraph([p1, p2, p3])
-    schedule1 = [p.pass_name for p in graph1.build_schedule()]
+    schedule1 = [p.pass_name for p in build_schedule([p1, p2, p3])]
     assert schedule1 == ["A", "B", "C"]
 
     # Отключаем средний пасс
     p2.enabled = False
-    graph2 = FrameGraph([p1, p2, p3])
-    schedule2 = [p.pass_name for p in graph2.build_schedule()]
+    schedule2 = [p.pass_name for p in build_schedule([p1, p2, p3])]
     # B отключён, его нет в расписании
     # C читает из b, но b никто не пишет — C всё равно выполнится
     # (просто получит пустой/внешний ресурс)
@@ -189,16 +207,14 @@ def test_disabled_pass_does_not_conflict_writes():
     p2 = DummyPass(name="Writer2", writes={"shared"})
 
     # Оба включены — конфликт
-    from termin.visualization.render.framegraph.core import FrameGraphMultiWriterError
     import pytest
 
-    with pytest.raises(FrameGraphMultiWriterError):
-        FrameGraph([p1, p2]).build_schedule()
+    with pytest.raises(RuntimeError):
+        build_schedule([p1, p2])
 
     # Отключаем один — конфликта нет
     p2.enabled = False
-    graph = FrameGraph([p1, p2])
-    schedule = [p.pass_name for p in graph.build_schedule()]
+    schedule = [p.pass_name for p in build_schedule([p1, p2])]
     assert schedule == ["Writer1"]
 
 
@@ -208,9 +224,7 @@ def test_disabled_pass_not_in_alias_groups():
     p2 = DummyPass(name="B", writes={"b"})
     p2.enabled = False
 
-    graph = FrameGraph([p1, p2])
-    graph.build_schedule()  # нужно вызвать для построения canonical_resources
-    groups = graph.fbo_alias_groups()
+    groups = build_alias_groups([p1, p2])
 
     assert "a" in groups
     assert "b" not in groups  # B отключён, его ресурс не учитывается
