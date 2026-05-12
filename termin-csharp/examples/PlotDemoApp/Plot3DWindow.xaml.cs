@@ -8,9 +8,7 @@ public partial class Plot3DWindow : Window
     public Plot3DWindow()
     {
         InitializeComponent();
-        // Populate once the Plot3DControl's native view is ready. The
-        // control fires NativeInitialized after tc_opengl_init +
-        // PlotView3D construction complete.
+        // Populate once the Plot3DControl's native view is ready.
         Plot.NativeInitialized += (_, _) => Populate();
     }
 

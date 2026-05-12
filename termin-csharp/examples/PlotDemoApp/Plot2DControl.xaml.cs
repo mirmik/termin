@@ -10,11 +10,10 @@ namespace PlotDemoApp;
 
 public partial class Plot2DControl : UserControl, IDisposable
 {
-    private static bool _openglBooted;
-
     private PlotView2D? _view;
     private bool _initialized;
     private bool _disposed;
+    private bool _hostLeaseHeld;
 
     public Plot2DControl()
     {
@@ -74,21 +73,21 @@ public partial class Plot2DControl : UserControl, IDisposable
 
         TerminCore.InitFull();
 
-        if (!_openglBooted)
-        {
-            if (!termin.tc_opengl_init())
-            {
-                throw new InvalidOperationException("tc_opengl_init() failed");
-            }
-            _openglBooted = true;
-        }
-
         var ttfPath = Plot3DControl.FindSystemFont()
             ?? throw new InvalidOperationException(
                 "No system TTF font found for Plot2DControl.");
 
-        Tgfx2Host.EnsureCreated(ttfPath);
-        _view = new PlotView2D(Tgfx2Host.Instance);
+        var host = Tgfx2Host.Acquire(ttfPath);
+        try
+        {
+            _view = new PlotView2D(host);
+            _hostLeaseHeld = true;
+        }
+        catch
+        {
+            Tgfx2Host.Release();
+            throw;
+        }
         _initialized = true;
         NativeInitialized?.Invoke(this, EventArgs.Empty);
     }
@@ -152,6 +151,11 @@ public partial class Plot2DControl : UserControl, IDisposable
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;
+        if (_hostLeaseHeld)
+        {
+            Tgfx2Host.Release();
+            _hostLeaseHeld = false;
+        }
         _initialized = false;
         GC.SuppressFinalize(this);
     }

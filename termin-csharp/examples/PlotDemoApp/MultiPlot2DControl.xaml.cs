@@ -14,11 +14,10 @@ namespace PlotDemoApp;
 // events, and exposes thin Plot/AppendToLine helpers to the window.
 public partial class MultiPlot2DControl : UserControl, IDisposable
 {
-    private static bool _openglBooted;
-
     private PlotView2DMulti? _view;
     private bool _initialized;
     private bool _disposed;
+    private bool _hostLeaseHeld;
 
     // Set this before the control is first loaded. Changing it later
     // has no effect.
@@ -165,15 +164,6 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
 
         TerminCore.InitFull();
 
-        if (!_openglBooted)
-        {
-            if (!termin.tc_opengl_init())
-            {
-                throw new InvalidOperationException("tc_opengl_init() failed");
-            }
-            _openglBooted = true;
-        }
-
         string ttfPath;
         if (!string.IsNullOrEmpty(FontPath) && File.Exists(FontPath))
         {
@@ -188,8 +178,17 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         System.Diagnostics.Debug.WriteLine(
             $"MultiPlot2DControl: loading font {ttfPath}");
 
-        Tgfx2Host.EnsureCreated(ttfPath);
-        _view = new PlotView2DMulti(Tgfx2Host.Instance, PanelCount);
+        var host = Tgfx2Host.Acquire(ttfPath);
+        try
+        {
+            _view = new PlotView2DMulti(host, PanelCount);
+            _hostLeaseHeld = true;
+        }
+        catch
+        {
+            Tgfx2Host.Release();
+            throw;
+        }
         _view.set_msaa_samples(_msaaSamples);
         if (PanelHeight > 0)
         {
@@ -325,6 +324,11 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;
+        if (_hostLeaseHeld)
+        {
+            Tgfx2Host.Release();
+            _hostLeaseHeld = false;
+        }
 
         _initialized = false;
         GC.SuppressFinalize(this);
