@@ -1,6 +1,6 @@
 """Multi-window example for termin.display.
 
-Opens one primary BackendWindow and one (or more) secondary windows
+Opens one primary SDLBackendWindow and one (or more) secondary windows
 that share the primary's IRenderDevice. Each window gets its own
 colour attachment and is filled with an animated clear colour — a
 minimal demonstration that independent presentation works through a
@@ -25,9 +25,9 @@ import sdl2
 from tgfx._tgfx_native import Tgfx2Context, Tgfx2PixelFormat
 
 from termin.display import (
-    BackendWindow,
     BackendWindowEntry,
     BackendWindowManager,
+    SDLBackendWindow,
 )
 
 
@@ -162,7 +162,7 @@ def main() -> None:
     if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
         raise RuntimeError(f"SDL_Init failed: {sdl2.SDL_GetError()}")
 
-    main_window = BackendWindow("termin.display multi-window (primary)", 800, 600)
+    main_window = SDLBackendWindow("termin.display multi-window (primary)", 800, 600)
     ctx = Tgfx2Context.from_window(
         main_window.device_ptr(), main_window.context_ptr())
 

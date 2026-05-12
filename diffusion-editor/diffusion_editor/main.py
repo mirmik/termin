@@ -1,9 +1,9 @@
 """Entry point for diffusion-editor.
 
-Runs on ``termin.display.BackendWindow`` — backend is selected by the
-env-var ``TERMIN_BACKEND`` (``opengl`` / ``vulkan``). A single tgfx2
-IRenderDevice is owned by the BackendWindow; the UI borrows it via
-``Tgfx2Context.borrow`` so every renderer lands on the same device.
+Runs on ``termin.display.SDLBackendWindow`` — backend is selected by
+the env-var ``TERMIN_BACKEND`` (``opengl`` / ``vulkan``). A single
+tgfx2 IRenderDevice is owned by the window; the UI borrows it via the
+shared ``Tgfx2Context`` so every renderer lands on the same device.
 """
 
 import sys
@@ -15,7 +15,7 @@ from tcbase import Key, MouseButton, Mods
 from tcbase import log
 
 from tgfx import Tgfx2Context
-from termin.display._platform_native import BackendWindow
+from termin.display import SDLBackendWindow
 
 from .editor_window import EditorWindow
 
@@ -122,10 +122,10 @@ def main():
     faulthandler.enable()
     log.set_level(log.Level.INFO)
 
-    # BackendWindow owns the device + SDL window; backend picked from
+    # SDLBackendWindow owns the device + SDL window; backend picked from
     # TERMIN_BACKEND env-var (default: opengl). Vulkan is an opt-in:
     # `TERMIN_BACKEND=vulkan ./run.sh`.
-    window = BackendWindow("Diffusion Editor", 1280, 800)
+    window = SDLBackendWindow("Diffusion Editor", 1280, 800)
     tgfx2_ctx = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
     log.info("[main] Window created")
 
@@ -196,7 +196,7 @@ def main():
             editor.poll()
 
             # Render into the UI's offscreen texture, then publish via
-            # BackendWindow.present — on OpenGL this blits to the
+            # SDLBackendWindow.present — on OpenGL this blits to the
             # default framebuffer and calls SwapWindow; on Vulkan it
             # acquires a swapchain image, blits, submits, presents.
             vw, vh = window.framebuffer_size()
@@ -205,9 +205,9 @@ def main():
                 window.present(tex)
     finally:
         editor.close()
-        # BackendWindow destructor cleans up SDL window + GL/Vulkan
+        # SDLBackendWindow destructor cleans up SDL window + GL/Vulkan
         # device in the correct order. Dropping the Python wrapper is
-        # enough; explicit sdl2.SDL_Quit is handled by BackendWindow.
+        # enough; explicit sdl2.SDL_Quit is handled by SDLBackendWindow.
 
 
 if __name__ == "__main__":

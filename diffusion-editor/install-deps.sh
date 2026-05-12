@@ -53,12 +53,12 @@ echo "=== Installing termin-scene (tc_scene_handle types) ==="
 # at nanobind init to resolve cross-module type references (tc_scene_handle
 # in viewport bindings). Without it `termin.display.__init__` fails
 # before `_platform_native` is reachable — we need termin-scene even
-# though diffusion-editor only uses BackendWindow.
+# though diffusion-editor only uses SDLBackendWindow.
 $PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-scene"
 
 echo ""
-echo "=== Installing termin-display (BackendWindow) ==="
-# BackendWindow replaces the old SDL+GL bootstrap in main.py; under
+echo "=== Installing termin-display (SDLBackendWindow) ==="
+# SDLBackendWindow replaces the old SDL+GL bootstrap in main.py; under
 # TERMIN_BACKEND=vulkan it acquires a VkSurfaceKHR and drives the
 # swapchain. Must be installed alongside tgfx so the process shares
 # a single IRenderDevice.
