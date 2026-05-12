@@ -10,13 +10,8 @@
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/opengl/opengl_render_device.hpp"
-#include "tgfx2/pipeline_cache.hpp"
 #include "tgfx2/render_context.hpp"
-
-extern "C" {
-#include "tgfx/tc_gpu_context.h"
-#include "tgfx/tgfx2_interop.h"
-}
+#include "tgfx2/render_runtime.hpp"
 
 #ifdef TGFX2_HAS_VULKAN
 #include <SDL2/SDL_vulkan.h>
@@ -44,18 +39,13 @@ void configure_sdl_window_hints() {
 
 struct SDLBackendWindow::Impl {
     tgfx::BackendType backend = tgfx::BackendType::OpenGL;
-    // Owned IRenderDevice for primary windows; left empty on secondary
+    // Owned GPU runtime for primary windows; left empty on secondary
     // windows (they point `device_ref` at the primary's device instead).
-    std::unique_ptr<tgfx::IRenderDevice> device;
+    std::unique_ptr<tgfx::RenderRuntime> runtime;
     // Non-owning pointer used by the rest of the class. Always set —
-    // equals device.get() for primary, or the shared device for
+    // equals runtime->device() for primary, or the shared device for
     // secondary.
     tgfx::IRenderDevice* device_ref = nullptr;
-    // Lazily-built pipeline cache + RenderContext2 bound to `device`.
-    // Owned only by primary windows; secondary windows forward context()
-    // calls to the primary via `shared_ctx_owner`.
-    std::unique_ptr<tgfx::PipelineCache> cache;
-    std::unique_ptr<tgfx::RenderContext2> ctx;
     // Primary the secondary window borrows its device/context from.
     // nullptr on primaries. Used so context() / device() return the
     // same objects everywhere.
@@ -121,17 +111,12 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
 
         // OpenGLRenderDevice ctor loads GLAD and validates the live
         // context — it expects MakeCurrent to already have happened.
-        impl_->device = tgfx::create_device(tgfx::BackendType::OpenGL);
-        impl_->device_ref = impl_->device.get();
+        impl_->runtime = tgfx::RenderRuntime::create(tgfx::BackendType::OpenGL);
+        impl_->device_ref = &impl_->runtime->device();
 
-        // Wire up legacy tgfx_gpu_ops so TcShader / TcTexture / TcMesh
-        // calls (tc_shader_ensure_tgfx2, tc_mesh_upload_gpu, ...) route
-        // through the tgfx2 device. Vulkan has no such interop yet —
-        // the factory-default vtable stays unset there, legacy paths
-        // aren't expected to run under Vulkan.
-        tc_ensure_default_gpu_context();
-        tgfx2_interop_set_device(impl_->device.get());
-        tgfx2_gpu_ops_register();
+        // RenderRuntime wires the process-wide tgfx2 interop pointer
+        // and, on OpenGL, the tgfx_gpu_ops bridge used by TcShader /
+        // TcTexture / TcMesh GPU uploads.
     }
 #ifdef TGFX2_HAS_VULKAN
     else if (impl_->backend == tgfx::BackendType::Vulkan) {
@@ -165,8 +150,9 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
             return surf;
         };
 
-        impl_->device = std::make_unique<tgfx::VulkanRenderDevice>(info);
-        impl_->device_ref = impl_->device.get();
+        impl_->runtime = std::make_unique<tgfx::RenderRuntime>(
+            std::make_unique<tgfx::VulkanRenderDevice>(info));
+        impl_->device_ref = &impl_->runtime->device();
     }
 #endif
     else {
@@ -287,19 +273,9 @@ void SDLBackendWindow::close() {
     }
 #endif
     if (impl_->shared_ctx_owner == nullptr) {
-        // Primary window — we own the device/ctx/cache chain.
-        // Tgfx2Context.from_window() publishes this device through the
-        // legacy tgfx2 interop bridge. Clear the global pointer before
-        // destroying the device; otherwise late Python/nanobind-owned
-        // objects (notably the process-default FontAtlas) can see a
-        // dangling "live" device during interpreter shutdown and call
-        // back into freed memory.
-        if (impl_->device && tgfx2_interop_get_device() == impl_->device.get()) {
-            tgfx2_interop_set_device(nullptr);
-        }
-        impl_->ctx.reset();
-        impl_->cache.reset();
-        impl_->device.reset();
+        // Primary window — RenderRuntime owns the device/ctx/cache chain
+        // and clears the process-wide interop pointer before teardown.
+        impl_->runtime.reset();
     }
     // Shared devices still accessed through device_ref; stop using it.
     impl_->device_ref = nullptr;
@@ -335,11 +311,10 @@ tgfx::RenderContext2* SDLBackendWindow::context() {
     if (impl_->shared_ctx_owner) {
         return impl_->shared_ctx_owner->context();
     }
-    if (!impl_->ctx && impl_->device_ref) {
-        impl_->cache = std::make_unique<tgfx::PipelineCache>(*impl_->device_ref);
-        impl_->ctx = std::make_unique<tgfx::RenderContext2>(*impl_->device_ref, *impl_->cache);
+    if (!impl_->runtime) {
+        return nullptr;
     }
-    return impl_->ctx.get();
+    return &impl_->runtime->context();
 }
 
 std::pair<int, int> SDLBackendWindow::framebuffer_size() const {
