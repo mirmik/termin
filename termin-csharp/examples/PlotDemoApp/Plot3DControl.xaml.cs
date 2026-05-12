@@ -12,16 +12,14 @@ namespace PlotDemoApp;
 // Thin WPF host for a tcplot PlotView3D. Tgfx2Host owns the shared
 // tgfx2 runtime; PlotView3D owns only its offscreen target and plot
 // engine. This class only:
-//   - boots the GL context (tc_opengl_init) once per process,
 //   - forwards the Render tick by calling PlotView3D.render(w, h, fb_id),
 //   - translates WPF mouse events into engine calls.
 public partial class Plot3DControl : UserControl, IDisposable
 {
-    private static bool _openglBooted;
-
     private PlotView3D? _view;
     private bool _initialized;
     private bool _disposed;
+    private bool _hostLeaseHeld;
 
     public Plot3DControl()
     {
@@ -90,21 +88,21 @@ public partial class Plot3DControl : UserControl, IDisposable
 
         TerminCore.InitFull();
 
-        if (!_openglBooted)
-        {
-            if (!termin.tc_opengl_init())
-            {
-                throw new InvalidOperationException("tc_opengl_init() failed");
-            }
-            _openglBooted = true;
-        }
-
         var ttfPath = FindSystemFont()
             ?? throw new InvalidOperationException(
                 "No system TTF font found for Plot3DControl.");
 
-        Tgfx2Host.EnsureCreated(ttfPath);
-        _view = new PlotView3D(Tgfx2Host.Instance);
+        var host = Tgfx2Host.Acquire(ttfPath);
+        try
+        {
+            _view = new PlotView3D(host);
+            _hostLeaseHeld = true;
+        }
+        catch
+        {
+            Tgfx2Host.Release();
+            throw;
+        }
         _initialized = true;
         NativeInitialized?.Invoke(this, EventArgs.Empty);
     }
@@ -196,6 +194,11 @@ public partial class Plot3DControl : UserControl, IDisposable
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;
+        if (_hostLeaseHeld)
+        {
+            Tgfx2Host.Release();
+            _hostLeaseHeld = false;
+        }
 
         _initialized = false;
         GC.SuppressFinalize(this);
