@@ -87,7 +87,8 @@ public partial class Plot2DControl : UserControl, IDisposable
             ?? throw new InvalidOperationException(
                 "No system TTF font found for Plot2DControl.");
 
-        _view = new PlotView2D(ttfPath);
+        Tgfx2Host.EnsureCreated(ttfPath);
+        _view = new PlotView2D(Tgfx2Host.Instance);
         _initialized = true;
         NativeInitialized?.Invoke(this, EventArgs.Empty);
     }

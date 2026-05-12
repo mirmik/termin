@@ -1211,7 +1211,7 @@ public:
 
 class PlotView2D {
 public:
-    PlotView2D(const std::string& ttf_path);
+    PlotView2D(GpuHost& host);
     ~PlotView2D();
 
     void plot(const double* x, const double* y, size_t n,
