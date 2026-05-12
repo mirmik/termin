@@ -38,32 +38,6 @@ public:
     INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "tc_mesh")
     INSPECT_FIELD(MeshRenderer, material, "Material", "tc_material")
     INSPECT_FIELD(MeshRenderer, cast_shadow, "Cast Shadow", "bool")
-    INSPECT_FIELD_CALLBACK(
-        MeshRenderer,
-        bool,
-        _override_material,
-        "Override Material",
-        "bool",
-        [](MeshRenderer* self) -> bool& { return self->_override_material; },
-        [](MeshRenderer* self, const bool& value) {
-            set_mesh_renderer_override_material_from_inspect(self, value);
-        })
-    INSPECT_FIELD_ACCESSORS(
-        MeshRenderer,
-        TcMaterial,
-        _overridden_material,
-        "Overridden Material",
-        "tc_material",
-        [](MeshRenderer* self) -> TcMaterial {
-            return self ? self->_overridden_material : TcMaterial();
-        },
-        [](MeshRenderer* self, TcMaterial value) {
-            if (self) {
-                self->_overridden_material = value;
-            }
-        },
-        false,
-        true)
     INSPECT_FIELD(MeshRenderer, mesh_offset_enabled,  "Mesh Offset",     "bool")
     INSPECT_FIELD(MeshRenderer, mesh_offset_position, "Offset Position", "vec3")
     INSPECT_FIELD(MeshRenderer, mesh_offset_euler,    "Offset Rotation", "vec3")
@@ -110,8 +84,35 @@ public:
     void set_override_data(const tc_value* val);
     void try_create_override_material();
 
-    SERIALIZABLE_FIELD(MeshRenderer, _overridden_material_data, get_override_data(), set_override_data(val))
 };
+
+INSPECT_FIELD_CALLBACK(
+    MeshRenderer,
+    bool,
+    _override_material,
+    "Override Material",
+    "bool",
+    [](MeshRenderer* self) -> bool& { return self->_override_material; },
+    [](MeshRenderer* self, const bool& value) {
+        set_mesh_renderer_override_material_from_inspect(self, value);
+    })
+INSPECT_FIELD_ACCESSORS(
+    MeshRenderer,
+    TcMaterial,
+    _overridden_material,
+    "Overridden Material",
+    "tc_material",
+    [](MeshRenderer* self) -> TcMaterial {
+        return self ? self->_overridden_material : TcMaterial();
+    },
+    [](MeshRenderer* self, TcMaterial value) {
+        if (self) {
+            self->_overridden_material = value;
+        }
+    },
+    false,
+    true)
+SERIALIZABLE_FIELD(MeshRenderer, _overridden_material_data, get_override_data(), set_override_data(val))
 
 inline void set_mesh_renderer_override_material_from_inspect(MeshRenderer* self, const bool& value) {
     if (self) {
