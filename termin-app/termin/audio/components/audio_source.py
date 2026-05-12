@@ -6,7 +6,7 @@ import numpy as np
 from typing import TYPE_CHECKING
 
 from termin.visualization.core.python_component import PythonComponent
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 from termin.assets.audio_clip_handle import AudioClipHandle
 
 if TYPE_CHECKING:

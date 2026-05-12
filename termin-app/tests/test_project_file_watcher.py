@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Set
 
-from termin.editor.project_file_watcher import FilePreLoader, ProjectFileWatcher
+from termin.editor_core.project_file_watcher import FilePreLoader, ProjectFileWatcher
 
 
 class RecordingPreLoader(FilePreLoader):

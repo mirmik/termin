@@ -15,7 +15,7 @@ from termin.visualization.core.python_component import PythonComponent
 from termin.visualization.render.render_context import RenderContext
 from termin._native.render import TcMaterial, TcRenderState
 from termin.visualization.render.drawable import GeometryDrawCall
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin._native.render import TcMaterialPhase

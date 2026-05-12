@@ -1,30 +1,31 @@
-"""Shader file pre-loader for .shader files."""
+"""Pipeline file pre-loader for .pipeline files."""
 
 from __future__ import annotations
 
 from typing import Set
 
-from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
+from termin.editor_core.project_file_watcher import FilePreLoader, PreLoadResult
 
 
-class ShaderPreLoader(FilePreLoader):
-    """Pre-loads .shader files - reads content and UUID from meta file."""
+class PipelinePreLoader(FilePreLoader):
+    """Pre-loads .pipeline files - render pipeline configurations."""
 
     @property
     def priority(self) -> int:
-        return 0  # Shaders have no dependencies, load first
+        # Load after frame passes but before materials
+        return 5
 
     @property
     def extensions(self) -> Set[str]:
-        return {".shader"}
+        return {".pipeline"}
 
     @property
     def resource_type(self) -> str:
-        return "shader"
+        return "pipeline"
 
     def preload(self, path: str) -> PreLoadResult | None:
         """
-        Pre-load shader file: only read UUID from spec (lazy loading).
+        Pre-load pipeline file: read UUID from spec (lazy loading).
         """
         # Read UUID from .meta file
         spec_data = self.read_spec_file(path)
@@ -37,7 +38,3 @@ class ShaderPreLoader(FilePreLoader):
             uuid=uuid,
             spec_data=spec_data,
         )
-
-
-# Backward compatibility alias
-ShaderFileProcessor = ShaderPreLoader

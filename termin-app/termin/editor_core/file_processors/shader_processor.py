@@ -1,32 +1,32 @@
-"""Voxel grid file pre-loader for .voxels files."""
+"""Shader file pre-loader for .shader files."""
 
 from __future__ import annotations
 
 from typing import Set
 
-from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
+from termin.editor_core.project_file_watcher import FilePreLoader, PreLoadResult
 
 
-class VoxelGridPreLoader(FilePreLoader):
-    """Pre-loads voxel grid files - reads content and UUID from spec."""
+class ShaderPreLoader(FilePreLoader):
+    """Pre-loads .shader files - reads content and UUID from meta file."""
 
     @property
     def priority(self) -> int:
-        return 10  # Voxel grids have no dependencies
+        return 0  # Shaders have no dependencies, load first
 
     @property
     def extensions(self) -> Set[str]:
-        return {".voxels"}
+        return {".shader"}
 
     @property
     def resource_type(self) -> str:
-        return "voxel_grid"
+        return "shader"
 
     def preload(self, path: str) -> PreLoadResult | None:
         """
-        Pre-load voxel grid file: only read UUID from spec (lazy loading).
+        Pre-load shader file: only read UUID from spec (lazy loading).
         """
-        # Read spec file (may contain uuid)
+        # Read UUID from .meta file
         spec_data = self.read_spec_file(path)
         uuid = spec_data.get("uuid") if spec_data else None
 
@@ -37,7 +37,3 @@ class VoxelGridPreLoader(FilePreLoader):
             uuid=uuid,
             spec_data=spec_data,
         )
-
-
-# Backward compatibility alias
-VoxelGridProcessor = VoxelGridPreLoader

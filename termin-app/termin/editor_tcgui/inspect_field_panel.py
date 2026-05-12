@@ -11,7 +11,7 @@ from tcgui.widgets.grid_layout import GridLayout
 from tcgui.widgets.separator import Separator
 from tcgui.widgets.units import px
 
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 from termin.editor_tcgui.widgets.field_widgets import FieldWidget, FieldWidgetFactory
 
 

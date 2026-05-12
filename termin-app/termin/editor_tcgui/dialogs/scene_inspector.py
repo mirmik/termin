@@ -18,7 +18,7 @@ from tcgui.widgets.group_box import GroupBox
 from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import px
 
-from termin.editor.undo_stack import UndoCommand
+from termin.editor_core.undo_stack import UndoCommand
 from termin.visualization.core.scene import Scene, scene_render_state, scene_render_mount
 from tcbase import log
 

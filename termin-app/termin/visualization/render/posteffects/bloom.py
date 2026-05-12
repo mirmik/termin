@@ -6,7 +6,7 @@ Based on the approach used in Unreal Engine and Unity.
 
 from tgfx import TcShader
 from ..postprocess import PostEffect
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 
 # ================================================================

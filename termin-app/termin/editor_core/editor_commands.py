@@ -6,12 +6,12 @@ from typing import Any
 
 import numpy as np
 
-from termin.editor.undo_stack import UndoCommand
+from termin.editor_core.undo_stack import UndoCommand
 from termin.geombase import GeneralPose3
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
 from termin.entity import TcComponentRef
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 
 _logger = logging.getLogger(__name__)

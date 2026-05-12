@@ -10,7 +10,7 @@ from termin.visualization.core.python_component import PythonComponent
 from termin.fem.multibody3d_3 import RigidBody3D
 from termin.fem.inertia3d import SpatialInertia3D
 from termin.geombase import Pose3
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

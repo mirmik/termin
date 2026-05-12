@@ -10,7 +10,7 @@ from tcbase import Action
 from tcgui.widgets.ui import UI
 from tcgui.widgets.widget import Widget
 from tgfx.font import FontTextureAtlas
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.assets.ui_handle import UIHandle

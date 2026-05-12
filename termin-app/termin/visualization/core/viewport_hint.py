@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from termin.visualization.core.python_component import PythonComponent
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.pipeline import RenderPipeline

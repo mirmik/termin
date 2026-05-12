@@ -6,7 +6,7 @@ import numpy as np
 
 from termin.visualization.render.postprocess import PostEffect
 from termin.visualization.core.picking import id_to_rgb
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 from tgfx._tgfx_native import Tgfx2ShaderHandle, Tgfx2ShaderStage
 
 

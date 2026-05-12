@@ -9,7 +9,7 @@ from termin.visualization.core.python_component import PythonComponent
 from termin.geombase._geom_native import Vec3
 from termin.collision import CollisionWorld
 from termin.physics._physics_native import PhysicsWorld
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 from tcbase import log
 
 if TYPE_CHECKING:

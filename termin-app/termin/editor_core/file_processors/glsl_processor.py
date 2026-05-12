@@ -1,32 +1,33 @@
-"""GLB file pre-loader for 3D model files with animations."""
+"""GLSL file pre-loader for .glsl files."""
 
 from __future__ import annotations
 
 from typing import Set
 
-from termin.editor.project_file_watcher import FilePreLoader, PreLoadResult
+from termin.editor_core.project_file_watcher import FilePreLoader, PreLoadResult
 
 
-class GLBPreLoader(FilePreLoader):
-    """Pre-loads GLB files - reads content and UUID from meta file."""
+class GlslPreLoader(FilePreLoader):
+    """Pre-loads .glsl files - GLSL include files for shaders."""
 
     @property
     def priority(self) -> int:
-        return 10  # GLB files have no dependencies
+        # Load before shaders since shaders may #include them
+        return -10
 
     @property
     def extensions(self) -> Set[str]:
-        return {".glb", ".gltf"}
+        return {".glsl"}
 
     @property
     def resource_type(self) -> str:
-        return "glb"
+        return "glsl"
 
     def preload(self, path: str) -> PreLoadResult | None:
         """
-        Pre-load GLB file: only read UUID from spec (lazy loading).
+        Pre-load GLSL file: read UUID from spec (lazy loading).
         """
-        # Read spec file (may contain uuid, normalize_scale, etc.)
+        # Read UUID from .meta file
         spec_data = self.read_spec_file(path)
         uuid = spec_data.get("uuid") if spec_data else None
 

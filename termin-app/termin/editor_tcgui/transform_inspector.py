@@ -15,8 +15,8 @@ from tcgui.widgets.units import px
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity
 from termin.geombase import GeneralPose3
-from termin.editor.undo_stack import UndoCommand
-from termin.editor.editor_commands import TransformEditCommand
+from termin.editor_core.undo_stack import UndoCommand
+from termin.editor_core.editor_commands import TransformEditCommand
 
 
 class TransformInspector(VStack):

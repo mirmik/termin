@@ -26,7 +26,7 @@ from tcgui.widgets.widget import Widget
 from tcgui.widgets.units import px
 
 if TYPE_CHECKING:
-    from termin.editor.inspect_field import InspectField
+    from termin.inspect import InspectField
     from termin.assets.resources import ResourceManager
 
 

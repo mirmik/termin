@@ -8,7 +8,7 @@ import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
 from termin.fem.dynamic_assembler import DynamicMatrixAssembler
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.physics.fem_rigid_body_component import FEMRigidBodyComponent

@@ -1,6 +1,6 @@
 import unittest
 
-from termin.editor.undo_stack import UndoStack, UndoCommand
+from termin.editor_core.undo_stack import UndoStack, UndoCommand
 
 
 class CounterCommand(UndoCommand):

@@ -265,10 +265,6 @@ class FilePreLoader(ABC):
             self._on_resource_reloaded(self.resource_type, resource_name)
 
 
-# Backward compatibility alias
-FileTypeProcessor = FilePreLoader
-
-
 class _WatchHandler:
     """watchdog event handler that enqueues changes for ProjectFileWatcher."""
 

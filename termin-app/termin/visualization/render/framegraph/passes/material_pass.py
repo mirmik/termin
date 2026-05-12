@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from termin.render_components import MaterialPass
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 from tcbase import log
 
 __all__ = ["MaterialPass", "get_texture_inputs_for_material"]

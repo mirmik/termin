@@ -296,7 +296,7 @@ class GLBInspector(QWidget):
 
     def _load_spec_from_file(self, glb_path: str) -> None:
         """Load spec settings from .glb.meta file."""
-        from termin.editor.project_file_watcher import FilePreLoader
+        from termin.editor_core.project_file_watcher import FilePreLoader
 
         spec_data = FilePreLoader.read_spec_file(glb_path)
         if spec_data:
@@ -317,7 +317,7 @@ class GLBInspector(QWidget):
         if not self._file_path:
             return
 
-        from termin.editor.project_file_watcher import FilePreLoader
+        from termin.editor_core.project_file_watcher import FilePreLoader
 
         # Read existing spec to preserve UUID
         existing = FilePreLoader.read_spec_file(self._file_path) or {}

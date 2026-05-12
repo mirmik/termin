@@ -21,8 +21,8 @@ from tcgui.widgets.input_dialog import show_input_dialog
 from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.kinematic.general_transform import GeneralTransform3
-from termin.editor.undo_stack import UndoCommand
-from termin.editor.editor_commands import (
+from termin.editor_core.undo_stack import UndoCommand
+from termin.editor_core.editor_commands import (
     AddComponentCommand,
     RemoveComponentCommand,
     ComponentFieldEditCommand,

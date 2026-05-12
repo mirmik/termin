@@ -12,7 +12,7 @@ from typing import Any, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene

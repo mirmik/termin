@@ -25,11 +25,11 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QBrush
 
-from termin.editor.scene_manager import SceneMode
+from termin._native.scene import SceneMode
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.editor.scene_manager import SceneManager
+    from termin._native.scene import SceneManager
 
 
 def _format_scene_handle(handle) -> str:

@@ -20,7 +20,7 @@ from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.voxels import VoxelizeSource
 from termin.visualization.render.drawable import GeometryDrawCall
-from termin.editor.inspect_field import InspectField
+from termin.inspect import InspectField
 from termin.navmesh.settings import NavigationSettingsManager
 from tcbase import log
 

@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from termin.editor.undo_stack import UndoStack, UndoCommand
+from termin.editor_core.undo_stack import UndoStack, UndoCommand
 
 
 class UndoStackViewer(QDialog):

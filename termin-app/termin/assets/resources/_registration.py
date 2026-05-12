@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.editor.project_file_watcher import PreLoadResult
+    from termin.editor_core.project_file_watcher import PreLoadResult
     from termin.assets.glb_asset import GLBAsset
 
 
