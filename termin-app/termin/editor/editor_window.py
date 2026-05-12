@@ -49,7 +49,7 @@ from termin.visualization.core.entity import Entity
 from termin.kinematic.transform import Transform3
 from termin.editor.settings import EditorSettings
 from termin.editor.drag_drop import EditorMimeTypes, parse_asset_path_mime_data
-from termin.visualization.core.resources import ResourceManager
+from termin.assets.resources import ResourceManager
 from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 from termin.editor.project_controller import EditorProjectController
 from termin.editor.editor_ui_builder import EditorUIBuilder

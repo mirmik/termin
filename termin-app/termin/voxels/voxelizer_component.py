@@ -467,7 +467,7 @@ class VoxelizerComponent(DrawableComponent):
         """Создаёт материал для отладочной визуализации."""
         if self._debug_material is None:
             from termin.voxels.voxel_shader import voxel_display_shader
-            from termin.visualization.render.renderpass import RenderState
+            from tgfx import RenderState
 
             shader = voxel_display_shader()
             self._debug_material = Material(
@@ -488,7 +488,7 @@ class VoxelizerComponent(DrawableComponent):
         """Создаёт материал для transparent рендеринга (внутренние контуры)."""
         if self._debug_transparent_material is None:
             from termin.voxels.voxel_shader import voxel_display_shader
-            from termin.visualization.render.renderpass import RenderState
+            from tgfx import RenderState
 
             shader = voxel_display_shader()
             self._debug_transparent_material = Material(
@@ -510,7 +510,7 @@ class VoxelizerComponent(DrawableComponent):
     def _get_or_create_line_material(self) -> Material:
         """Создаёт материал для отрисовки контурных линий."""
         if self._debug_line_material is None:
-            from termin.visualization.render.renderpass import RenderState
+            from tgfx import RenderState
             from tgfx import TcShader
 
             # Простой шейдер для линий с vertex colors
@@ -676,7 +676,7 @@ void main() {
         Returns:
             True если успешно, False если ошибка.
         """
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         from termin.voxels.grid import VoxelGrid
         from termin.voxels.voxelizer import VOXEL_SOLID
         from termin.voxels.persistence import VoxelPersistence
@@ -799,7 +799,7 @@ void main() {
         Returns:
             True если успешно, False если ошибка.
         """
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         from termin.navmesh import PolygonBuilder, NavMeshConfig
         from termin.navmesh.persistence import NavMeshPersistence
 

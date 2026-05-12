@@ -118,7 +118,7 @@ class PostEffect:
 
         # Получаем класс из ResourceManager
         if resource_manager is None:
-            from termin.visualization.core.resources import ResourceManager
+            from termin.assets.resources import ResourceManager
             resource_manager = ResourceManager.instance()
 
         effect_cls = resource_manager.get_post_effect(effect_type)

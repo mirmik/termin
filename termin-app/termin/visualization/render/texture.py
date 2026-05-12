@@ -8,7 +8,7 @@ from typing import Optional, TYPE_CHECKING
 import numpy as np
 
 from termin.visualization.core.texture_handle import TextureHandle
-from termin.visualization.render.texture_asset import TextureAsset
+from termin.assets.texture_asset import TextureAsset
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QPixmap

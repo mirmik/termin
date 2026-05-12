@@ -1,7 +1,6 @@
 from termin.visualization.render.framegraph.core import (
     PythonFramePass,
     FramePass,
-    RenderFramePass,
 )
 from termin.visualization.render.framegraph.pipeline import RenderPipeline
 from termin.visualization.render.framegraph.resource_spec import ResourceSpec
@@ -30,7 +29,6 @@ __all__ = [
     "FramePass",
     "ResourceSpec",
     "RenderPipeline",
-    "RenderFramePass",
     "ExecuteContext",
     "FrameGraphResource",
     "ShadowMapArrayResource",

@@ -17,7 +17,7 @@ from tcbase import log
 
 def show_resource_manager_viewer(ui) -> None:
     """Show Resource Manager viewer dialog."""
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
 
     rm = ResourceManager.instance()
 

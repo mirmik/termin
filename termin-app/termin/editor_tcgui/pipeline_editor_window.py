@@ -79,7 +79,7 @@ def _default_for_inspect_field(registry, cls, class_name: str, field_path: str, 
 
 
 def _material_choices() -> list[tuple[str, str]]:
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
 
     rm = ResourceManager.instance()
     return [("(None)", "(None)")] + [(name, name) for name in rm.list_material_names()]
@@ -165,7 +165,7 @@ def _add_inspect_params(node, class_name: str, cls, seen: set[str]) -> None:
 
 
 def _populate_pass_node_params(node, pass_class_name: str) -> None:
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
 
     rm = ResourceManager.instance()
     rm.register_builtin_frame_passes()
@@ -545,7 +545,7 @@ def _reload_pipeline_asset(file_path: str) -> None:
     """Reload the PipelineAsset for the given file so the inspector refreshes."""
     try:
         name = Path(file_path).stem
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         asset = rm.get_pipeline_asset(name)
         if asset is not None and asset.is_loaded:
@@ -837,7 +837,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
             MenuItem.sep(),
         ]
         try:
-            from termin.visualization.core.resources import ResourceManager
+            from termin.assets.resources import ResourceManager
             rm = ResourceManager.instance()
             rm.register_builtin_frame_passes()
             pass_names = sorted(rm.frame_passes.keys())

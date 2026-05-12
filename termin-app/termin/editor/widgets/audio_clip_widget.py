@@ -15,7 +15,7 @@ from PyQt6.QtCore import pyqtSignal
 from termin.editor.widgets.field_widgets import FieldWidget
 
 if TYPE_CHECKING:
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
     from termin.audio.audio_clip import AudioClipHandle
 
 

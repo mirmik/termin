@@ -204,7 +204,7 @@ class VoxelDisplayComponent(DrawableComponent):
         """Получить материал с voxel шейдером."""
         if self._material is None:
             from termin.voxels.voxel_shader import voxel_display_shader
-            from termin.visualization.render.renderpass import RenderState
+            from tgfx import RenderState
 
             shader = voxel_display_shader()
             self._material = Material(

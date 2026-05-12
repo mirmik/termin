@@ -1,12 +1,9 @@
 """
 ResourceHandle — базовый класс для умных ссылок на ресурсы.
 
-Три режима работы:
+Два режима работы:
 1. Direct — хранит raw объект напрямую (Texture, TcShader)
 2. Asset — хранит ссылку на Asset
-3. Named — хранит имя, ищет в ResourceManager при get()
-
-ResourceKeeper оставлен для обратной совместимости (VoxelGrid, NavMesh, AnimationClip).
 """
 
 from __future__ import annotations
@@ -18,53 +15,6 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")  # Raw resource type (Texture, TcShader, etc.)
 AssetT = TypeVar("AssetT", bound="Asset")  # Asset type
-
-
-class ResourceKeeper(Generic[T]):
-    """
-    Базовый владелец ресурса по имени.
-
-    DEPRECATED: Используется только для VoxelGrid, NavMesh, AnimationClip.
-    Новые ресурсы используют Handle → Asset напрямую.
-    """
-
-    def __init__(self, name: str):
-        self.name = name
-        self._resource: T | None = None
-        self._source_path: str | None = None
-
-    @property
-    def resource(self) -> T | None:
-        """Текущий ресурс или None если не загружен."""
-        return self._resource
-
-    @property
-    def source_path(self) -> str | None:
-        """Путь к файлу-источнику ресурса."""
-        return self._source_path
-
-    @property
-    def has_resource(self) -> bool:
-        """Есть ли ресурс."""
-        return self._resource is not None
-
-    def _on_cleanup(self, resource: T) -> None:
-        """Override для очистки."""
-        pass
-
-    def set_resource(self, resource: T, source_path: str | None = None) -> None:
-        """Установить ресурс."""
-        if self._resource is not None:
-            self._on_cleanup(self._resource)
-        self._resource = resource
-        if source_path is not None:
-            self._source_path = source_path
-
-    def update_resource(self, resource: T) -> None:
-        """Обновить ресурс (hot-reload)."""
-        if self._resource is not None:
-            self._on_cleanup(self._resource)
-        self._resource = resource
 
 
 class ResourceHandle(Generic[T, AssetT]):

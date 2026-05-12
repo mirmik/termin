@@ -174,7 +174,7 @@ class PrefabInstanceMarker(PythonComponent):
         if not self.prefab_uuid:
             return None
 
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         return rm.get_prefab_by_uuid(self.prefab_uuid)
 

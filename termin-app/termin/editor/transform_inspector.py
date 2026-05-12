@@ -25,7 +25,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
 from termin.geombase import GeneralPose3
-from termin.visualization.core.resources import ResourceManager
+from termin.assets.resources import ResourceManager
 from termin.editor.inspect_field import InspectField
 from termin.editor.undo_stack import UndoCommand
 from termin.editor.editor_commands import TransformEditCommand

@@ -313,7 +313,7 @@ class TextureSelector(QWidget):
 
     def refresh_texture_list(self) -> None:
         """Обновить список текстур из ResourceManager."""
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
 
         rm = ResourceManager.instance()
         names = rm.list_texture_names()
@@ -395,7 +395,7 @@ class TextureSelector(QWidget):
             self._update_placeholder()
             return
 
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
 
         rm = ResourceManager.instance()
         texture = rm.get_texture(self._current_texture_name)
@@ -555,7 +555,7 @@ class MaterialInspector(QWidget):
 
     def load_material_file(self, path: str | Path) -> None:
         """Загрузить материал из .material файла."""
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
 
         path = Path(path)
         if not path.exists():
@@ -596,7 +596,7 @@ class MaterialInspector(QWidget):
             log.warning("[MaterialInspector] save_material_file: material is None")
             return False
 
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
         asset = rm.get_material_asset(self._material.name)
 
@@ -659,7 +659,7 @@ class MaterialInspector(QWidget):
 
     def _rebuild_ui(self) -> None:
         """Перестроить UI под текущий материал."""
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
 
         # Очищаем старые виджеты свойств
         self._uniform_widgets.clear()
@@ -926,7 +926,7 @@ class MaterialInspector(QWidget):
         return editor
 
     def _create_texture_editor(self, prop: MaterialProperty, value: Any) -> TextureSelector:
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         from termin.visualization.render.texture import Texture
 
         editor = TextureSelector()
@@ -997,7 +997,7 @@ class MaterialInspector(QWidget):
         if not shader_name or self._material is None:
             return
 
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         from tcbase import log
 
         rm = ResourceManager.instance()
@@ -1030,7 +1030,7 @@ class MaterialInspector(QWidget):
             log.warning("[MaterialInspector] _on_texture_changed: material is None")
             return
 
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         from termin.visualization.core.texture_handle import get_white_texture_handle, get_normal_texture_handle
 
         rm = ResourceManager.instance()

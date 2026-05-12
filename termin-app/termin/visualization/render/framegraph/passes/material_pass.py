@@ -41,7 +41,7 @@ def get_texture_inputs_for_material(material_name: str) -> List[Tuple[str, str]]
     if not material_name or material_name == "(None)":
         return []
 
-    from termin.visualization.core.resources import ResourceManager
+    from termin.assets.resources import ResourceManager
 
     rm = ResourceManager.instance()
     material = rm.get_material(material_name)

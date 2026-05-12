@@ -77,7 +77,7 @@ class MaterialPropertiesEditor(QWidget):
         if shader_program is not None:
             self._shader_program = shader_program
         elif material is not None:
-            from termin.visualization.core.resources import ResourceManager
+            from termin.assets.resources import ResourceManager
             rm = ResourceManager.instance()
             self._shader_program = rm.get_shader(material.shader_name)
         else:
@@ -357,7 +357,7 @@ class MaterialPropertiesEditor(QWidget):
         self, prop: "MaterialProperty", value: Any
     ) -> "TextureSelector":
         from termin.editor.material_inspector import TextureSelector
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
 
         editor = TextureSelector()
         editor.refresh_texture_list()
@@ -409,7 +409,7 @@ class MaterialPropertiesEditor(QWidget):
         if self._material is None:
             return
 
-        from termin.visualization.core.resources import ResourceManager
+        from termin.assets.resources import ResourceManager
         from termin.visualization.core.texture_handle import get_white_texture_handle, get_normal_texture_handle
 
         rm = ResourceManager.instance()

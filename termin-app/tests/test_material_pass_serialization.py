@@ -1,6 +1,6 @@
 from termin.render_components import MaterialPass
 from termin.render_framework import RenderPipeline
-from termin.visualization.core.resources import ResourceManager
+from termin.assets.resources import ResourceManager
 
 
 def test_material_pass_graph_texture_inputs_survive_pipeline_copy():

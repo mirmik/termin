@@ -26,7 +26,7 @@ from PyQt6.QtCore import Qt
 if TYPE_CHECKING:
     from termin.editor.project_file_watcher import ProjectFileWatcher
 
-from termin.visualization.core.resources import ResourceManager
+from termin.assets.resources import ResourceManager
 
 
 class ResourceManagerViewer(QDialog):

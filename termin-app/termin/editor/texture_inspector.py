@@ -151,7 +151,7 @@ class TextureInspector(QWidget):
             self._name_label.setText(name or "-")
 
             # UUID from TextureAsset
-            from termin.visualization.core.resources import ResourceManager
+            from termin.assets.resources import ResourceManager
             rm = ResourceManager.instance()
             asset = rm.get_texture_asset(name) if name else None
             self._uuid_label.setText(asset.uuid if asset else "—")
