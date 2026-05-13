@@ -20,7 +20,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, Set
 
 from tcbase import log
-from termin_assets import PreLoadResult
+from termin_assets import (
+    PreLoadResult,
+    get_uuid_from_spec,
+    read_spec_file,
+    write_spec_file,
+)
 from termin.project.settings import ProjectSettingsManager
 
 if TYPE_CHECKING:
@@ -99,86 +104,18 @@ class FilePreLoader(ABC):
 
     @staticmethod
     def read_spec_file(path: str) -> dict | None:
-        """
-        Read .meta file for a resource (with .spec fallback for migration).
-
-        Args:
-            path: Path to main resource file (e.g., "texture.png")
-
-        Returns:
-            Spec data dict or None if meta file doesn't exist.
-        """
-        import json
-
-        # Try .meta first (new format)
-        meta_path = path + ".meta"
-        if os.path.exists(meta_path):
-            try:
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                log.warning(f"[ProjectFileWatcher] Failed to read meta file: {meta_path}", exc_info=True)
-
-        # Fallback to .spec (old format, for migration)
-        spec_path = path + ".spec"
-        if os.path.exists(spec_path):
-            try:
-                with open(spec_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                log.warning(f"[ProjectFileWatcher] Failed to read spec file: {spec_path}", exc_info=True)
-
-        return None
+        """Compatibility wrapper for termin_assets.read_spec_file."""
+        return read_spec_file(path)
 
     @staticmethod
     def write_spec_file(path: str, data: dict) -> bool:
-        """
-        Write .meta file for a resource.
-
-        Also removes old .spec file if it exists (automatic migration).
-
-        Args:
-            path: Path to main resource file (e.g., "texture.png")
-            data: Spec data dict (must include "uuid")
-
-        Returns:
-            True if written successfully.
-        """
-        import json
-
-        meta_path = path + ".meta"
-        try:
-            with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
-            # Remove old .spec file if exists (migration)
-            old_spec_path = path + ".spec"
-            if os.path.exists(old_spec_path):
-                try:
-                    os.remove(old_spec_path)
-                except Exception:
-                    log.warning(f"[ProjectFileWatcher] Failed to remove old spec file: {old_spec_path}", exc_info=True)
-
-            return True
-        except Exception:
-            log.error(f"[ProjectFileWatcher] Failed to write meta file: {meta_path}", exc_info=True)
-            return False
+        """Compatibility wrapper for termin_assets.write_spec_file."""
+        return write_spec_file(path, data)
 
     @staticmethod
     def get_uuid_from_spec(path: str) -> str | None:
-        """
-        Get UUID from spec file.
-
-        Args:
-            path: Path to main resource file
-
-        Returns:
-            UUID string or None.
-        """
-        spec_data = FilePreLoader.read_spec_file(path)
-        if spec_data:
-            return spec_data.get("uuid")
-        return None
+        """Compatibility wrapper for termin_assets.get_uuid_from_spec."""
+        return get_uuid_from_spec(path)
 
     def on_file_added(self, path: str) -> None:
         """

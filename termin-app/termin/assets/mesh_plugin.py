@@ -16,10 +16,9 @@ class MeshAssetPlugin:
     priority = 10
 
     def preload(self, path: str) -> "PreLoadResult | None":
-        from termin_assets import PreLoadResult
-        from termin.editor_core.project_file_watcher import FilePreLoader
+        from termin_assets import PreLoadResult, read_spec_file
 
-        spec_data = FilePreLoader.read_spec_file(path)
+        spec_data = read_spec_file(path)
         uuid = spec_data.get("uuid") if spec_data else None
         return PreLoadResult(
             resource_type=self.type_id,
