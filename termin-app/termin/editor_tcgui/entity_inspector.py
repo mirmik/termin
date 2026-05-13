@@ -26,61 +26,14 @@ from termin.editor_core.editor_commands import (
     AddComponentCommand,
     RemoveComponentCommand,
     ComponentFieldEditCommand,
+    ComponentDisplayNameEditCommand,
+    EntityPropertyEditCommand,
+    RecursiveLayerChangeCommand,
+    AddSoAComponentCommand,
+    RemoveSoAComponentCommand,
 )
 from termin.editor_tcgui.transform_inspector import TransformInspector
 from termin.editor_tcgui.inspect_field_panel import InspectFieldPanel
-
-
-class EntityPropertyEditCommand(UndoCommand):
-    """Undo command for editing entity properties."""
-
-    def __init__(self, entity: Entity, property_name: str, old_value: Any, new_value: Any):
-        self._entity = entity
-        self._property_name = property_name
-        self._old_value = old_value
-        self._new_value = new_value
-
-    def _apply(self, value: Any) -> None:
-        if self._property_name == "name":
-            self._entity.name = str(value)
-            return
-        if self._property_name == "layer":
-            self._entity.layer = int(value)
-
-    def do(self) -> None:
-        self._apply(self._new_value)
-
-    def undo(self) -> None:
-        self._apply(self._old_value)
-
-    def merge_with(self, other: UndoCommand) -> bool:
-        if not isinstance(other, EntityPropertyEditCommand):
-            return False
-        if other._entity is not self._entity:
-            return False
-        if other._property_name != self._property_name:
-            return False
-        self._new_value = other._new_value
-        return True
-
-
-class RecursiveLayerChangeCommand(UndoCommand):
-    """Undo command for changing layer on entity descendants."""
-
-    def __init__(self, entities_and_old_layers: list[tuple[Entity, int]], new_layer: int):
-        self._entities_and_old_layers = entities_and_old_layers
-        self._new_layer = new_layer
-
-    def do(self) -> None:
-        for entity, _ in self._entities_and_old_layers:
-            entity.layer = self._new_layer
-
-    def undo(self) -> None:
-        for entity, old_layer in self._entities_and_old_layers:
-            entity.layer = old_layer
-
-    def merge_with(self, other: UndoCommand) -> bool:
-        return False
 
 
 class EntityInspector(VStack):
@@ -498,11 +451,15 @@ class EntityInspector(VStack):
     def _add_soa_component(self, name: str) -> None:
         if self._entity is None:
             return
-        try:
-            self._entity.add_soa_by_name(name)
-        except Exception as e:
-            log.error(f"Failed to add SoA component {name}: {e}")
-            return
+        if self._push_undo_command is not None:
+            cmd = AddSoAComponentCommand(self._entity, name)
+            self._push_undo_command(cmd, False)
+        else:
+            try:
+                self._entity.add_soa_by_name(name)
+            except Exception as e:
+                log.error(f"Failed to add SoA component {name}: {e}")
+                return
         self._rebuild_component_list()
         if self.on_component_changed is not None:
             self.on_component_changed()
@@ -522,8 +479,16 @@ class EntityInspector(VStack):
     def _apply_component_rename(self, ref, index: int, value: str | None) -> None:
         if self._entity is None or value is None:
             return
+        old_name = ref.get_field("display_name") or ""
+        new_name = value.strip()
+        if new_name == old_name:
+            return
         try:
-            ref.set_field("display_name", value.strip())
+            if self._push_undo_command is not None:
+                cmd = ComponentDisplayNameEditCommand(ref, old_name, new_name)
+                self._push_undo_command(cmd, False)
+            else:
+                ref.set_field("display_name", new_name)
         except Exception as e:
             log.error(f"Failed to rename component: {e}")
             return
@@ -572,11 +537,15 @@ class EntityInspector(VStack):
     def _remove_soa_component(self, soa_name: str) -> None:
         if self._entity is None:
             return
-        try:
-            self._entity.remove_soa_by_name(soa_name)
-        except Exception as e:
-            log.error(f"Failed to remove SoA component {soa_name}: {e}")
-            return
+        if self._push_undo_command is not None:
+            cmd = RemoveSoAComponentCommand(self._entity, soa_name)
+            self._push_undo_command(cmd, False)
+        else:
+            try:
+                self._entity.remove_soa_by_name(soa_name)
+            except Exception as e:
+                log.error(f"Failed to remove SoA component {soa_name}: {e}")
+                return
         self._selected_comp_ref = None
         self._field_panel.set_target(None)
         self._rebuild_component_list()

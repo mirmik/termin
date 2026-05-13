@@ -23,72 +23,14 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from termin.editor_core.undo_stack import UndoCommand
+from termin.editor_core.editor_commands import (
+    EntityPropertyEditCommand,
+    RecursiveLayerChangeCommand,
+)
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Entity
     from termin.visualization.core.scene import Scene
-
-
-class EntityPropertyEditCommand(UndoCommand):
-    """Undo command for editing entity properties."""
-
-    def __init__(
-        self,
-        entity: "Entity",
-        property_name: str,
-        old_value,
-        new_value,
-    ):
-        self._entity = entity
-        self._property_name = property_name
-        self._old_value = old_value
-        self._new_value = new_value
-
-    def do(self) -> None:
-        setattr(self._entity, self._property_name, self._new_value)
-
-    def undo(self) -> None:
-        setattr(self._entity, self._property_name, self._old_value)
-
-    def merge_with(self, other: UndoCommand) -> bool:
-        if not isinstance(other, EntityPropertyEditCommand):
-            return False
-        if other._entity is not self._entity:
-            return False
-        if other._property_name != self._property_name:
-            return False
-        self._new_value = other._new_value
-        return True
-
-    def __repr__(self) -> str:
-        return f"EntityPropertyEditCommand({self._property_name})"
-
-
-class RecursiveLayerChangeCommand(UndoCommand):
-    """Undo command for changing layer on entity and all its descendants."""
-
-    def __init__(
-        self,
-        entities_and_old_layers: list[tuple["Entity", int]],
-        new_layer: int,
-    ):
-        self._entities_and_old_layers = entities_and_old_layers
-        self._new_layer = new_layer
-
-    def do(self) -> None:
-        for entity, _ in self._entities_and_old_layers:
-            entity.layer = self._new_layer
-
-    def undo(self) -> None:
-        for entity, old_layer in self._entities_and_old_layers:
-            entity.layer = old_layer
-
-    def merge_with(self, other: UndoCommand) -> bool:
-        return False
-
-    def __repr__(self) -> str:
-        return f"RecursiveLayerChangeCommand({len(self._entities_and_old_layers)} entities)"
-
 
 class EntityInspector(QWidget):
     """Inspector widget for entity properties."""

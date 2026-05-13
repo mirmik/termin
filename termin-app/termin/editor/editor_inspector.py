@@ -27,8 +27,11 @@ from termin.editor.widgets.field_widgets import ButtonFieldWidget
 
 from termin.editor_core.editor_commands import (
     ComponentFieldEditCommand,
+    ComponentDisplayNameEditCommand,
     AddComponentCommand,
     RemoveComponentCommand,
+    AddSoAComponentCommand,
+    RemoveSoAComponentCommand,
 )
 from termin.editor.transform_inspector import TransformInspector
 from termin.editor.entity_inspector import EntityInspector as EntityPropertiesInspector
@@ -231,8 +234,15 @@ class ComponentsPanel(QWidget):
         )
 
         if ok:
-            # Set new display name (empty string clears custom name)
-            ref.set_field("display_name", new_name.strip())
+            old_name = current_name
+            new_name = new_name.strip()
+            if new_name == old_name:
+                return
+            if self._push_undo_command is not None:
+                cmd = ComponentDisplayNameEditCommand(ref, old_name, new_name)
+                self._push_undo_command(cmd, False)
+            else:
+                ref.set_field("display_name", new_name)
             # Update list item
             row = self._list.currentRow()
             item = self._list.item(row)
@@ -249,11 +259,15 @@ class ComponentsPanel(QWidget):
             row = self._list.currentRow()
             item = self._list.item(row)
             soa_name = item.data(Qt.ItemDataRole.UserRole)
-            try:
-                self._entity.remove_soa_by_name(soa_name)
-            except Exception:
-                logger.exception("Failed to remove SoA component %s", soa_name)
-                return
+            if self._push_undo_command is not None:
+                cmd = RemoveSoAComponentCommand(self._entity, soa_name)
+                self._push_undo_command(cmd, False)
+            else:
+                try:
+                    self._entity.remove_soa_by_name(soa_name)
+                except Exception:
+                    logger.exception("Failed to remove SoA component %s", soa_name)
+                    return
             self.set_entity(self._entity)
             self.components_changed.emit()
             return
@@ -301,11 +315,15 @@ class ComponentsPanel(QWidget):
         if self._entity is None:
             return
 
-        try:
-            self._entity.add_soa_by_name(name)
-        except Exception:
-            logger.exception("Failed to add SoA component %s", name)
-            return
+        if self._push_undo_command is not None:
+            cmd = AddSoAComponentCommand(self._entity, name)
+            self._push_undo_command(cmd, False)
+        else:
+            try:
+                self._entity.add_soa_by_name(name)
+            except Exception:
+                logger.exception("Failed to add SoA component %s", name)
+                return
 
         self.set_entity(self._entity)
         self.components_changed.emit()
