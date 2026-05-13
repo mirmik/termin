@@ -267,10 +267,10 @@ class DataAsset(Asset, Generic[T]):
         if self._parent_asset is not None:
             return False
 
-        from termin.editor_core.project_file_watcher import FilePreLoader
+        from termin_assets import write_spec_file
 
         spec_data = self._build_spec_data()
-        if FilePreLoader.write_spec_file(str(self._source_path), spec_data):
+        if write_spec_file(str(self._source_path), spec_data):
             self.mark_just_saved()
             return True
         return False
