@@ -12,9 +12,21 @@ from termin.kinematic.general_transform import GeneralTransform3
 from termin.visualization.core.entity import Entity, Component
 from termin.entity import TcComponentRef
 from termin.inspect import InspectField
+from termin.visualization.core.scene import scene_render_state
 
 
 _logger = logging.getLogger(__name__)
+
+
+_SCENE_RENDER_STATE_PROPERTIES = {
+    "background_color",
+    "ambient_color",
+    "ambient_intensity",
+    "skybox_color",
+    "skybox_top_color",
+    "skybox_bottom_color",
+    "skybox_type",
+}
 
 
 def _clone_pose(pose: GeneralPose3) -> GeneralPose3:
@@ -37,6 +49,54 @@ def _clone_value(value: Any) -> Any:
     if isinstance(value, np.ndarray):
         return value.copy()
     return value
+
+
+def _set_scene_render_state_property(scene, property_name: str, value: Any) -> None:
+    rs = scene_render_state(scene)
+    if property_name == "background_color":
+        rs.background_color = _coerce_scene_vector_value(rs.background_color, value)
+        return
+    if property_name == "ambient_color":
+        rs.ambient_color = _coerce_scene_vector_value(rs.ambient_color, value)
+        return
+    if property_name == "ambient_intensity":
+        rs.ambient_intensity = float(value)
+        return
+    if property_name == "skybox_color":
+        rs.skybox_color = _coerce_scene_vector_value(rs.skybox_color, value)
+        return
+    if property_name == "skybox_top_color":
+        rs.skybox_top_color = _coerce_scene_vector_value(rs.skybox_top_color, value)
+        return
+    if property_name == "skybox_bottom_color":
+        rs.skybox_bottom_color = _coerce_scene_vector_value(rs.skybox_bottom_color, value)
+        return
+    if property_name == "skybox_type":
+        rs.skybox_type = str(value)
+        return
+    _logger.error("Unsupported scene render state property: %s", property_name)
+    raise RuntimeError(f"Unsupported scene render state property: {property_name}")
+
+
+def _coerce_scene_vector_value(current_value: Any, value: Any) -> Any:
+    if isinstance(value, np.ndarray):
+        components = value.reshape(-1).tolist()
+    elif isinstance(value, (list, tuple)):
+        components = list(value)
+    else:
+        components = [value[i] for i in range(len(value))]
+
+    target_len = len(current_value)
+    if target_len == 4 and len(components) == 3:
+        components.append(1.0)
+    if len(components) < target_len:
+        _logger.error(
+            "Scene vector value has %d components, expected %d",
+            len(components),
+            target_len,
+        )
+        raise RuntimeError("Scene vector value has too few components")
+    return current_value.__class__(*[float(v) for v in components[:target_len]])
 
 
 def _entity_is_valid(entity: Entity | None) -> bool:
@@ -602,6 +662,58 @@ class RemoveSoAComponentCommand(UndoCommand):
         entity.add_soa_by_name(self._soa_name)
 
 
+class ScenePropertyEditCommand(UndoCommand):
+    """Команда изменения поля scene render state."""
+
+    def __init__(
+        self,
+        scene,
+        property_name: str,
+        old_value: Any,
+        new_value: Any,
+        text: str | None = None,
+    ) -> None:
+        if property_name not in _SCENE_RENDER_STATE_PROPERTIES:
+            _logger.error("Unsupported scene render state property: %s", property_name)
+            raise RuntimeError(f"Unsupported scene render state property: {property_name}")
+        if text is None:
+            text = f"Edit scene {property_name}"
+        super().__init__(text)
+        self._scene = scene
+        self._property_name = property_name
+        self._old_value = _clone_value(old_value)
+        self._new_value = _clone_value(new_value)
+
+    def do(self) -> None:
+        _set_scene_render_state_property(self._scene, self._property_name, self._new_value)
+
+    def undo(self) -> None:
+        _set_scene_render_state_property(self._scene, self._property_name, self._old_value)
+
+    def merge_with(self, other: UndoCommand) -> bool:
+        if not isinstance(other, ScenePropertyEditCommand):
+            return False
+        if other._scene is not self._scene:
+            return False
+        if other._property_name != self._property_name:
+            return False
+        self._new_value = _clone_value(other._new_value)
+        return True
+
+
+class SkyboxTypeEditCommand(ScenePropertyEditCommand):
+    """Команда изменения skybox type."""
+
+    def __init__(
+        self,
+        scene,
+        old_type: str,
+        new_type: str,
+        text: str = "Edit skybox type",
+    ) -> None:
+        super().__init__(scene, "skybox_type", old_type, new_type, text)
+
+
 class AddEntityCommand(UndoCommand):
     """
     Добавление сущности в сцену.
@@ -780,6 +892,8 @@ __all__ = [
     "RecursiveLayerChangeCommand",
     "AddSoAComponentCommand",
     "RemoveSoAComponentCommand",
+    "ScenePropertyEditCommand",
+    "SkyboxTypeEditCommand",
     "AddEntityCommand",
     "DeleteEntityCommand",
     "ReparentEntityCommand",

@@ -18,63 +18,9 @@ from tcgui.widgets.group_box import GroupBox
 from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import px
 
-from termin.editor_core.undo_stack import UndoCommand
+from termin.editor_core.editor_commands import ScenePropertyEditCommand, SkyboxTypeEditCommand
 from termin.visualization.core.scene import Scene, scene_render_state, scene_render_mount
 from tcbase import log
-
-
-class ScenePropertyEditCommand(UndoCommand):
-    """Undo command for editing scene properties."""
-
-    def __init__(self, scene: Scene, property_name: str, old_value, new_value):
-        self._scene = scene
-        self._property_name = property_name
-        self._old_value = self._clone(old_value)
-        self._new_value = self._clone(new_value)
-
-    def _clone(self, value):
-        if isinstance(value, np.ndarray):
-            return value.copy()
-        return value
-
-    def do(self) -> None:
-        rs = scene_render_state(self._scene)
-        setattr(rs, self._property_name, self._clone(self._new_value))
-
-    def undo(self) -> None:
-        rs = scene_render_state(self._scene)
-        setattr(rs, self._property_name, self._clone(self._old_value))
-
-    def merge_with(self, other: UndoCommand) -> bool:
-        if not isinstance(other, ScenePropertyEditCommand):
-            return False
-        if other._scene is not self._scene:
-            return False
-        if other._property_name != self._property_name:
-            return False
-        self._new_value = self._clone(other._new_value)
-        return True
-
-    def __repr__(self) -> str:
-        return f"ScenePropertyEditCommand({self._property_name})"
-
-
-class SkyboxTypeEditCommand(UndoCommand):
-    """Undo command for changing skybox type."""
-
-    def __init__(self, scene: Scene, old_type: str, new_type: str):
-        self._scene = scene
-        self._old_type = old_type
-        self._new_type = new_type
-
-    def do(self) -> None:
-        scene_render_state(self._scene).skybox_type = self._new_type
-
-    def undo(self) -> None:
-        scene_render_state(self._scene).skybox_type = self._old_type
-
-    def __repr__(self) -> str:
-        return f"SkyboxTypeEditCommand({self._old_type} -> {self._new_type})"
 
 
 def _color_to_rgba255(value) -> tuple[int, int, int, int]:
