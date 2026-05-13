@@ -6,8 +6,8 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
-      - 'termin/docs/**'
-      - 'termin/mkdocs.yml'
+      - 'termin-app/docs/**'
+      - 'termin-app/mkdocs.yml'
       - 'termin-collision/docs/**'
       - 'termin-collision/mkdocs.yml'
       - 'termin-gui/docs/**'
@@ -50,11 +50,11 @@ jobs:
 
       - name: Build MkDocs projects
         run: |
-          for project in termin termin-collision termin-gui termin-inspect termin-scene termin-modules; do
+          for project in termin-app termin-collision termin-gui termin-inspect termin-scene termin-modules; do
             echo "=== Building $project docs ==="
-            cd $project
+            pushd "$project"
             mkdocs build -d ../_site/$project
-            cd ..
+            popd
           done
 
       - name: Upload Pages artifact
