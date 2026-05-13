@@ -32,22 +32,7 @@ from termin.editor_core.editor_commands import (
 from termin._native.scene import SceneManager, SceneMode, default_scene_extensions
 from termin.editor_core.resource_loader import ResourceLoader
 from termin.editor_core.project_file_watcher import ProjectFileWatcher
-from termin.editor_core.file_processors import (
-    MaterialPreLoader,
-    MeshPreLoader,
-    ShaderPreLoader,
-    TexturePreLoader,
-    ComponentFileProcessor,
-    PipelinePreLoader,
-    ScenePipelinePreLoader,
-    VoxelGridPreLoader,
-    NavMeshPreLoader,
-    GLBPreLoader,
-    GlslPreLoader,
-    PrefabPreLoader,
-    AudioPreLoader,
-    UIPreLoader,
-)
+from termin.editor_core.default_preloaders import register_default_preloaders
 from termin.editor_core.settings import EditorSettings
 from termin.assets.resources import ResourceManager
 from termin.visualization.platform.backends.fbo_backend import FBOSurface
@@ -1810,31 +1795,14 @@ class EditorWindowTcgui:
                 log.error(f"Resource scan failed: {e}")
 
     def _register_file_processors(self) -> None:
-        for processor_cls in [
-            MaterialPreLoader,
-            GlslPreLoader,
-            ShaderPreLoader,
-            TexturePreLoader,
-            ComponentFileProcessor,
-            PipelinePreLoader,
-            ScenePipelinePreLoader,
-            MeshPreLoader,
-            VoxelGridPreLoader,
-            NavMeshPreLoader,
-            GLBPreLoader,
-            PrefabPreLoader,
-            AudioPreLoader,
-            UIPreLoader,
-        ]:
-            try:
-                self._project_file_watcher.register_processor(
-                    processor_cls(
-                        resource_manager=self.resource_manager,
-                        on_resource_reloaded=self._on_resource_reloaded,
-                    )
-                )
-            except Exception as e:
-                log.error(f"Failed to register processor {processor_cls.__name__}: {e}")
+        try:
+            register_default_preloaders(
+                self._project_file_watcher,
+                self.resource_manager,
+                self._on_resource_reloaded,
+            )
+        except Exception as e:
+            log.error(f"Failed to register default file processors: {e}")
 
     # ------------------------------------------------------------------
     # Scene / scene manager callbacks
