@@ -121,6 +121,7 @@ PACKAGES=(
     termin-build-tools
     termin-nanobind-sdk
     termin-base
+    termin-assets
     termin-mesh
     termin-graphics
     termin-modules

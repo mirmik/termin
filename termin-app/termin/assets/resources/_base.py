@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from termin.assets.glb_asset import GLBAsset
     from termin.assets.audio_clip_asset import AudioClipAsset
     from termin.visualization.core.entity import Component
+    from termin_assets import AssetTypeRegistry
 
 
 class ResourceManagerBase:
@@ -45,6 +46,9 @@ class ResourceManagerBase:
         from termin.assets.asset import Asset
         self._assets_by_uuid: Dict[str, Asset] = {}
 
+        from termin_assets import AssetTypeRegistry
+        self._asset_type_plugins = AssetTypeRegistry()
+
         # Asset registries
         self._mesh_registry = self._create_mesh_registry()
         self._texture_registry = self._create_texture_registry()
@@ -63,6 +67,18 @@ class ResourceManagerBase:
         self._shader_assets: Dict[str, "ShaderAsset"] = {}
         self._glb_assets: Dict[str, "GLBAsset"] = {}
         self._prefab_assets: Dict[str, "PrefabAsset"] = {}
+
+        self._register_builtin_asset_type_plugins()
+
+    def _register_builtin_asset_type_plugins(self) -> None:
+        """Register asset plugins that have already migrated off hard-coded dispatch."""
+        from termin.assets.mesh_plugin import register_mesh_asset_plugin
+
+        register_mesh_asset_plugin(self._asset_type_plugins)
+
+    @property
+    def asset_type_plugins(self) -> "AssetTypeRegistry":
+        return self._asset_type_plugins
 
     def _create_mesh_registry(self):
         """Create AssetRegistry for meshes."""

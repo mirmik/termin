@@ -63,6 +63,7 @@ Write-Host "Using TERMIN_SDK=$($env:TERMIN_SDK)"
 $Packages = @(
     "termin-build-tools",
     "termin-nanobind-sdk",
+    "termin-assets",
     "termin-app",
     "termin-base",
     "termin-mesh",

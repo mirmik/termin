@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tcbase import log
+from termin_assets import AssetContext
 
 if TYPE_CHECKING:
-    from termin.editor_core.project_file_watcher import PreLoadResult
+    from termin_assets import PreLoadResult
     from termin.assets.glb_asset import GLBAsset
 
 
@@ -29,6 +30,11 @@ class RegistrationMixin:
             name = os.path.basename(result.path)
         else:
             name = os.path.splitext(os.path.basename(result.path))[0]
+
+        plugin = self._asset_type_plugins.get_runtime(result.resource_type)
+        if plugin is not None:
+            plugin.register(AssetContext(resource_manager=self, name=name), result)
+            return
 
         # Dispatch by resource type
         if result.resource_type == "material":
@@ -73,6 +79,11 @@ class RegistrationMixin:
             name = os.path.basename(result.path)
         else:
             name = os.path.splitext(os.path.basename(result.path))[0]
+
+        plugin = self._asset_type_plugins.get_runtime(result.resource_type)
+        if plugin is not None:
+            plugin.reload(AssetContext(resource_manager=self, name=name), result)
+            return
 
         if result.resource_type == "material":
             self._reload_material_file(name, result)
