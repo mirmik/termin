@@ -52,7 +52,8 @@ public partial class ScaledPlot3DWindow : Window
                              label: "scaled-time-surface");
         Plot.SetSurfaceGrid(0, visible: true,
                             rowStep: 8, colStep: 12,
-                            0.04f, 0.04f, 0.04f, 0.72f);
+                            0.04f, 0.04f, 0.04f, 0.72f,
+                            widthPx: 2.5f);
 
         Plot.View.fit_camera();
     }

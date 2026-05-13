@@ -21,7 +21,7 @@
 | Colormap поверхности | `SurfaceColorMap` | `Jet`, `Viridis`, `Plasma`, `Grayscale`, `CoolWarm`, `Solid` | Enum из `Termin.Native` |
 | Смена colormap | `set_surface_colormap` | surface_idx, colormap | Меняет уже добавленную surface-серию |
 | Смена цвета surface | `set_surface_color` | surface_idx, r, g, b, a | RGB нужен для `Solid`; alpha работает для всех схем |
-| Data grid поверх surface | `set_surface_grid` | surface_idx, visible, row_step, col_step, r, g, b, a | Разреженная сетка по данным без полного wireframe |
+| Data grid поверх surface | `set_surface_grid` | surface_idx, visible, row_step, col_step, r, g, b, a, width_px | Shader-side сетка по данным без полного wireframe |
 | Очистка данных | `clear` | - | Удаляет все серии |
 | Подписи осей | `set_axis_labels` | x_label, y_label, z_label | Рисуются около положительных концов осей |
 | Подпись X/Y/Z | `set_x_label` / `set_y_label` / `set_z_label` | label | Можно менять по отдельности |
@@ -119,15 +119,19 @@ bool ok = View.set_surface_grid(
     visible: true,
     row_step: 8,
     col_step: 8,
-    r: 0.05f, g: 0.05f, b: 0.05f, a: 0.85f);
+    r: 0.05f, g: 0.05f, b: 0.05f, a: 0.85f,
+    width_px: 2.0f);
 ```
 
 `row_step` и `col_step` меньше 1 автоматически зажимаются до 1. Первая и
 последняя строка/колонка всегда включаются, чтобы у поверхности был контур.
 Метод возвращает `false`, если `surface_idx` вне диапазона.
 
-Сетка рисуется отдельным line mesh поверх surface. Это намеренно не triangle
-wireframe и не меняет mesh самой поверхности.
+Сетка рисуется прямо в fragment shader основного surface pass по
+интерполированным индексам строки/колонки. Поэтому она проходит тот же depth
+test, что и surface, не требует отдельного line mesh и поддерживает толщину
+`width_px` в экранных пикселях. Это намеренно не triangle wireframe и не меняет
+исходные X/Y/Z данные поверхности.
 
 ---
 

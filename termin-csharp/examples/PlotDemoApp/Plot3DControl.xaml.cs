@@ -95,11 +95,13 @@ public partial class Plot3DControl : UserControl, IDisposable
     public bool SetSurfaceGrid(int surfaceIndex, bool visible,
                                uint rowStep, uint colStep,
                                float r = 0.05f, float g = 0.05f,
-                               float b = 0.05f, float a = 1f)
+                               float b = 0.05f, float a = 1f,
+                               float widthPx = 1.5f)
     {
         return View.set_surface_grid(surfaceIndex, visible,
                                      rowStep, colStep,
-                                     r, g, b, a);
+                                     r, g, b, a,
+                                     widthPx);
     }
 
     public void SetAxisScale(float x, float y, float z)
