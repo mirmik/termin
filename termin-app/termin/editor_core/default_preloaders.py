@@ -8,7 +8,6 @@ from tcbase import log
 
 from termin.assets.resources import ResourceManager
 from termin.editor_core.file_processors import (
-    AudioPreLoader,
     ComponentFileProcessor,
     GLBPreLoader,
     GlslPreLoader,
@@ -18,7 +17,6 @@ from termin.editor_core.file_processors import (
     PrefabPreLoader,
     ScenePipelinePreLoader,
     ShaderPreLoader,
-    TexturePreLoader,
     UIPreLoader,
     VoxelGridPreLoader,
 )
@@ -48,13 +46,13 @@ def create_default_preloaders(
         PipelinePreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
         ScenePipelinePreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
         ShaderPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
-        TexturePreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "texture", on_resource_reloaded),
         MaterialPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
         ComponentFileProcessor(resource_manager, on_resource_reloaded=on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "mesh", on_resource_reloaded),
         GLBPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
         PrefabPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
-        AudioPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "audio_clip", on_resource_reloaded),
         NavMeshPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
         VoxelGridPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
         UIPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),

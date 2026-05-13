@@ -72,9 +72,13 @@ class ResourceManagerBase:
 
     def _register_builtin_asset_type_plugins(self) -> None:
         """Register asset plugins that have already migrated off hard-coded dispatch."""
+        from termin.assets.audio_clip_plugin import register_audio_clip_asset_plugin
         from termin.assets.mesh_plugin import register_mesh_asset_plugin
+        from termin.assets.texture_plugin import register_texture_asset_plugin
 
+        register_audio_clip_asset_plugin(self._asset_type_plugins)
         register_mesh_asset_plugin(self._asset_type_plugins)
+        register_texture_asset_plugin(self._asset_type_plugins)
 
     @property
     def asset_type_plugins(self) -> "AssetTypeRegistry":
