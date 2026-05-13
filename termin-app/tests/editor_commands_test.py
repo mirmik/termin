@@ -9,11 +9,14 @@ from termin.editor_core.editor_commands import (
     RenameEntityCommand,
     ReparentEntityCommand,
     RecursiveLayerChangeCommand,
+    ScenePropertyEditCommand,
+    SkyboxTypeEditCommand,
     TransformEditCommand,
 )
 from termin.editor_core.undo_stack import UndoStack
 from termin.geombase import GeneralPose3
 from termin.scene import TcScene
+from termin.visualization.core.scene import scene_render_state
 
 
 class TestEditorUndoCommands(unittest.TestCase):
@@ -168,6 +171,46 @@ class TestEditorUndoCommands(unittest.TestCase):
         stack.undo()
         self.assertEqual(child.layer, 2)
         self.assertEqual(grandchild.layer, 4)
+
+    def test_scene_property_command_edits_render_state(self) -> None:
+        rs = scene_render_state(self.scene)
+        old_color = rs.background_color.copy()
+        new_color = np.array([0.2, 0.3, 0.4, 1.0], dtype=np.float32)
+
+        stack = UndoStack()
+        stack.push(ScenePropertyEditCommand(self.scene, "background_color", old_color, new_color))
+
+        np.testing.assert_allclose(rs.background_color, new_color)
+
+        stack.undo()
+        np.testing.assert_allclose(rs.background_color, old_color)
+
+    def test_scene_property_command_merges_same_property(self) -> None:
+        rs = scene_render_state(self.scene)
+        old_value = rs.ambient_intensity
+
+        stack = UndoStack()
+        stack.push(ScenePropertyEditCommand(self.scene, "ambient_intensity", old_value, 0.5))
+        stack.push(ScenePropertyEditCommand(self.scene, "ambient_intensity", 0.5, 0.75), merge=True)
+
+        self.assertEqual(len(stack), 1)
+        self.assertAlmostEqual(rs.ambient_intensity, 0.75)
+
+        stack.undo()
+        self.assertAlmostEqual(rs.ambient_intensity, old_value)
+
+    def test_skybox_type_command_edits_render_state(self) -> None:
+        rs = scene_render_state(self.scene)
+        old_type = rs.skybox_type
+        new_type = "solid" if old_type != "solid" else "gradient"
+
+        stack = UndoStack()
+        stack.push(SkyboxTypeEditCommand(self.scene, old_type, new_type))
+
+        self.assertEqual(rs.skybox_type, new_type)
+
+        stack.undo()
+        self.assertEqual(rs.skybox_type, old_type)
 
 
 if __name__ == "__main__":
