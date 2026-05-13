@@ -70,7 +70,8 @@ public partial class Plot3DWindow : Window
                              label: "gaussian");
         Plot.SetSurfaceGrid(0, visible: true,
                             rowStep: 5, colStep: 5,
-                            0.05f, 0.05f, 0.05f, 0.85f);
+                            0.05f, 0.05f, 0.05f, 0.85f,
+                            widthPx: 1.5f);
 
         Plot.View.fit_camera();
     }
