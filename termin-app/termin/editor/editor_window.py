@@ -24,22 +24,7 @@ from termin.visualization.render import RenderingManager
 from termin.editor.scene_file_controller import SceneFileController
 from termin.editor_core.project_file_watcher import ProjectFileWatcher
 from termin.editor.editor_mode_controller import EditorModeController
-from termin.editor_core.file_processors import (
-    MaterialPreLoader,
-    MeshPreLoader,
-    ShaderPreLoader,
-    TexturePreLoader,
-    ComponentFileProcessor,
-    PipelinePreLoader,
-    ScenePipelinePreLoader,
-    VoxelGridPreLoader,
-    NavMeshPreLoader,
-    GLBPreLoader,
-    GlslPreLoader,
-    PrefabPreLoader,
-    AudioPreLoader,
-    UIPreLoader,
-)
+from termin.editor_core.default_preloaders import register_default_preloaders
 from termin.editor.spacemouse_controller import SpaceMouseController
 from termin.editor.profiler import ProfilerPanel
 from termin.editor.modules_panel import ModulesPanel
@@ -135,89 +120,10 @@ class EditorWindow(QMainWindow):
         self._project_file_watcher = ProjectFileWatcher(
             on_resource_reloaded=self._on_resource_reloaded,
         )
-        self._project_file_watcher.register_processor(
-            MaterialPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            GlslPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            ShaderPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            TexturePreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            ComponentFileProcessor(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            PipelinePreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            ScenePipelinePreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            MeshPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            VoxelGridPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            NavMeshPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            GLBPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            PrefabPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            AudioPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-        )
-        self._project_file_watcher.register_processor(
-            UIPreLoader(
-                resource_manager=self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
+        register_default_preloaders(
+            self._project_file_watcher,
+            self.resource_manager,
+            self._on_resource_reloaded,
         )
 
         # --- UI из .ui ---
