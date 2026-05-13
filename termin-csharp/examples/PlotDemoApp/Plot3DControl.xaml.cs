@@ -82,6 +82,46 @@ public partial class Plot3DControl : UserControl, IDisposable
         View.surface(X, Y, Z, rows, cols, r, g, b, a, wireframe, label);
     }
 
+    public void SurfaceColormap(double[] X, double[] Y, double[] Z,
+                                uint rows, uint cols,
+                                SurfaceColorMap colormap,
+                                float r = 1f, float g = 1f, float b = 1f, float a = 1f,
+                                bool wireframe = false, string label = "")
+    {
+        View.surface_colormap(X, Y, Z, rows, cols, colormap,
+                              r, g, b, a, wireframe, label);
+    }
+
+    public bool SetSurfaceGrid(int surfaceIndex, bool visible,
+                               uint rowStep, uint colStep,
+                               float r = 0.05f, float g = 0.05f,
+                               float b = 0.05f, float a = 1f)
+    {
+        return View.set_surface_grid(surfaceIndex, visible,
+                                     rowStep, colStep,
+                                     r, g, b, a);
+    }
+
+    public void SetAxisScale(float x, float y, float z)
+    {
+        View.set_axis_scale(x, y, z);
+    }
+
+    public void SetAxisLabels(string x, string y, string z)
+    {
+        View.set_axis_labels(x, y, z);
+    }
+
+    public void SetSurfaceShading(bool enabled, float strength = 0.35f)
+    {
+        View.set_surface_shading(enabled, strength);
+    }
+
+    public void SetSurfaceLightDir(float x, float y, float z)
+    {
+        View.set_surface_light_dir(x, y, z);
+    }
+
     private void InitializeNative()
     {
         if (_initialized) return;
