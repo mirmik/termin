@@ -34,6 +34,7 @@ from termin.editor_core.resource_loader import ResourceLoader
 from termin.editor_core.project_file_watcher import ProjectFileWatcher
 from termin.editor_core.default_preloaders import register_default_preloaders
 from termin.editor_core.settings import EditorSettings
+from termin.editor_core.signal import Signal
 from termin.assets.resources import ResourceManager
 from termin.visualization.platform.backends.fbo_backend import FBOSurface
 
@@ -72,6 +73,7 @@ class EditorWindowTcgui:
         self._ui: UI | None = None
 
         self.undo_stack = UndoStack()
+        self.undo_stack_changed = Signal()
 
         # Resource manager
         self.resource_manager = ResourceManager.instance()
@@ -773,6 +775,7 @@ class EditorWindowTcgui:
         self.undo_stack.push(cmd, merge=merge)
         self._request_viewport_update()
         self._update_undo_redo_actions()
+        self.undo_stack_changed.emit()
 
     def undo(self) -> None:
         cmd = self.undo_stack.undo()
@@ -790,6 +793,8 @@ class EditorWindowTcgui:
         self._request_viewport_update()
         self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
+        if cmd is not None:
+            self.undo_stack_changed.emit()
 
     def redo(self) -> None:
         cmd = self.undo_stack.redo()
@@ -807,6 +812,8 @@ class EditorWindowTcgui:
         self._request_viewport_update()
         self._resync_inspector_from_selection()
         self._update_undo_redo_actions()
+        if cmd is not None:
+            self.undo_stack_changed.emit()
 
     def _resync_inspector_from_selection(self) -> None:
         if self._interaction_system is None or self._inspector_controller is None:
@@ -1590,7 +1597,11 @@ class EditorWindowTcgui:
         if self._ui is None:
             return
         from termin.editor_tcgui.dialogs.undo_stack_viewer import show_undo_stack_viewer
-        show_undo_stack_viewer(self._ui, self.undo_stack)
+        show_undo_stack_viewer(
+            self._ui,
+            self.undo_stack,
+            stack_changed_signal=self.undo_stack_changed,
+        )
 
     # ------------------------------------------------------------------
     # Debug panels (Profiler / Modules)
@@ -1821,6 +1832,9 @@ class EditorWindowTcgui:
         if self._inspector_controller is not None:
             self._inspector_controller.set_scene(scene)
             self._inspector_controller.clear()
+        self.undo_stack.clear()
+        self._update_undo_redo_actions()
+        self.undo_stack_changed.emit()
 
     def _open_prefab(self, path: str) -> None:
         parent_entity = None

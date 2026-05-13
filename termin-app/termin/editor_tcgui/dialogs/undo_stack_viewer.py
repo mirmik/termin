@@ -13,7 +13,7 @@ from tcgui.widgets.units import px
 from termin.editor_core.undo_stack import UndoStack
 
 
-def show_undo_stack_viewer(ui, undo_stack: UndoStack) -> None:
+def show_undo_stack_viewer(ui, undo_stack: UndoStack, stack_changed_signal=None) -> None:
     """Show non-modal undo stack viewer."""
     content = VStack()
     content.spacing = 4
@@ -69,6 +69,8 @@ def show_undo_stack_viewer(ui, undo_stack: UndoStack) -> None:
         undone_list.set_items(undone_items)
 
     _refresh()
+    if stack_changed_signal is not None:
+        stack_changed_signal.connect(_refresh)
     refresh_btn.on_click = _refresh
     content.add_child(refresh_btn)
 

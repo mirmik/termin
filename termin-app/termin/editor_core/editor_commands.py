@@ -405,6 +405,203 @@ class RemoveComponentCommand(UndoCommand):
             ref.deserialize_data(self._data)
 
 
+class ComponentDisplayNameEditCommand(UndoCommand):
+    """Команда изменения display_name у tc component."""
+
+    def __init__(
+        self,
+        component: TcComponentRef,
+        old_name: str,
+        new_name: str,
+        text: str = "Rename component",
+    ) -> None:
+        super().__init__(text)
+        entity = _component_entity(component)
+        self._scene = entity.scene if entity is not None else None
+        self._entity_uuid = _entity_uuid(entity)
+        self._component_type_name = _component_type_name(component)
+        self._component = component
+        self._old_name = old_name
+        self._new_name = new_name
+
+    def _current_component(self) -> TcComponentRef:
+        if self._scene is not None:
+            self._component = _resolve_command_component(
+                self._scene,
+                self._entity_uuid,
+                self._component_type_name,
+                self.text,
+            )
+            return self._component
+        if self._component.valid:
+            return self._component
+        _logger.error(
+            "ComponentDisplayNameEditCommand has no live component entity=%s component=%s",
+            self._entity_uuid,
+            self._component_type_name,
+        )
+        raise RuntimeError("ComponentDisplayNameEditCommand has no live component")
+
+    def do(self) -> None:
+        self._current_component().set_field("display_name", self._new_name)
+
+    def undo(self) -> None:
+        self._current_component().set_field("display_name", self._old_name)
+
+
+class EntityPropertyEditCommand(UndoCommand):
+    """Команда изменения простых свойств entity."""
+
+    def __init__(
+        self,
+        entity: Entity,
+        property_name: str,
+        old_value: Any,
+        new_value: Any,
+        text: str | None = None,
+    ) -> None:
+        if text is None:
+            text = f"Edit entity {property_name}"
+        super().__init__(text)
+        self._entity = entity
+        self._scene = entity.scene
+        self._entity_uuid = _entity_uuid(entity)
+        self._property_name = property_name
+        self._old_value = old_value
+        self._new_value = new_value
+
+    def _current_entity(self) -> Entity:
+        if _entity_is_valid(self._entity):
+            return self._entity
+        self._entity = _resolve_command_entity(self._scene, self._entity_uuid, self.text)
+        return self._entity
+
+    def _apply(self, value: Any) -> None:
+        entity = self._current_entity()
+        if self._property_name == "name":
+            entity.name = str(value)
+            return
+        if self._property_name == "layer":
+            entity.layer = int(value)
+            return
+        _logger.error("Unsupported entity property for undo command: %s", self._property_name)
+        raise RuntimeError(f"Unsupported entity property: {self._property_name}")
+
+    def do(self) -> None:
+        self._apply(self._new_value)
+
+    def undo(self) -> None:
+        self._apply(self._old_value)
+
+    def merge_with(self, other: UndoCommand) -> bool:
+        if not isinstance(other, EntityPropertyEditCommand):
+            return False
+        if other._entity_uuid != self._entity_uuid:
+            return False
+        if other._property_name != self._property_name:
+            return False
+        self._new_value = other._new_value
+        return True
+
+
+class RecursiveLayerChangeCommand(UndoCommand):
+    """Команда изменения слоя у набора entity."""
+
+    def __init__(
+        self,
+        entities_and_old_layers: list[tuple[Entity, int]],
+        new_layer: int,
+        text: str = "Apply layer to descendants",
+    ) -> None:
+        super().__init__(text)
+        self._items = [
+            (entity, entity.scene, _entity_uuid(entity), int(old_layer))
+            for entity, old_layer in entities_and_old_layers
+        ]
+        self._new_layer = int(new_layer)
+
+    def _apply(self, use_new_layer: bool) -> None:
+        for entity, scene, entity_uuid, old_layer in self._items:
+            current = entity
+            if not _entity_is_valid(current):
+                current = _resolve_command_entity(scene, entity_uuid, self.text)
+            current.layer = self._new_layer if use_new_layer else old_layer
+
+    def do(self) -> None:
+        self._apply(True)
+
+    def undo(self) -> None:
+        self._apply(False)
+
+
+class AddSoAComponentCommand(UndoCommand):
+    """Команда добавления SoA component по имени типа."""
+
+    def __init__(
+        self,
+        entity: Entity,
+        soa_name: str,
+        text: str = "Add SoA component",
+    ) -> None:
+        super().__init__(text)
+        self._entity = entity
+        self._scene = entity.scene
+        self._entity_uuid = _entity_uuid(entity)
+        self._soa_name = soa_name
+
+    def _current_entity(self) -> Entity:
+        if _entity_is_valid(self._entity):
+            return self._entity
+        self._entity = _resolve_command_entity(self._scene, self._entity_uuid, self.text)
+        return self._entity
+
+    def do(self) -> None:
+        entity = self._current_entity()
+        if self._soa_name in entity.soa_component_names:
+            return
+        entity.add_soa_by_name(self._soa_name)
+
+    def undo(self) -> None:
+        entity = self._current_entity()
+        if self._soa_name not in entity.soa_component_names:
+            return
+        entity.remove_soa_by_name(self._soa_name)
+
+
+class RemoveSoAComponentCommand(UndoCommand):
+    """Команда удаления SoA component по имени типа."""
+
+    def __init__(
+        self,
+        entity: Entity,
+        soa_name: str,
+        text: str = "Remove SoA component",
+    ) -> None:
+        super().__init__(text)
+        self._entity = entity
+        self._scene = entity.scene
+        self._entity_uuid = _entity_uuid(entity)
+        self._soa_name = soa_name
+
+    def _current_entity(self) -> Entity:
+        if _entity_is_valid(self._entity):
+            return self._entity
+        self._entity = _resolve_command_entity(self._scene, self._entity_uuid, self.text)
+        return self._entity
+
+    def do(self) -> None:
+        entity = self._current_entity()
+        if self._soa_name not in entity.soa_component_names:
+            return
+        entity.remove_soa_by_name(self._soa_name)
+
+    def undo(self) -> None:
+        entity = self._current_entity()
+        if self._soa_name in entity.soa_component_names:
+            return
+        entity.add_soa_by_name(self._soa_name)
+
+
 class AddEntityCommand(UndoCommand):
     """
     Добавление сущности в сцену.
@@ -578,6 +775,11 @@ __all__ = [
     "ComponentFieldEditCommand",
     "AddComponentCommand",
     "RemoveComponentCommand",
+    "ComponentDisplayNameEditCommand",
+    "EntityPropertyEditCommand",
+    "RecursiveLayerChangeCommand",
+    "AddSoAComponentCommand",
+    "RemoveSoAComponentCommand",
     "AddEntityCommand",
     "DeleteEntityCommand",
     "ReparentEntityCommand",
