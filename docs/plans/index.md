@@ -28,4 +28,5 @@
 - [external render target graph output](2026-05-09-external-render-target-graph-output.md)
 - [render graph resource types](2026-05-10-render-graph-resource-types.md)
 - [tgfx renderer facades](2026-05-12-tgfx-renderer-facades.md)
+- [plugin asset system migration](2026-05-13-plugin-asset-system.md)
 
