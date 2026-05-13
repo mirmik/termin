@@ -16,11 +16,11 @@ from __future__ import annotations
 import os
 import threading
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Dict, Set
 
 from tcbase import log
+from termin_assets import PreLoadResult
 from termin.project.settings import ProjectSettingsManager
 
 if TYPE_CHECKING:
@@ -28,18 +28,6 @@ if TYPE_CHECKING:
 
 # Debounce delay in seconds
 DEBOUNCE_DELAY_S = 0.3
-
-
-@dataclass
-class PreLoadResult:
-    """Result of pre-loading a file."""
-
-    resource_type: str  # "material", "shader", "texture", "mesh", etc.
-    path: str  # path to main file
-    content: str | bytes | None = None  # file content (text or bytes)
-    uuid: str | None = None  # UUID if found in file
-    spec_data: dict | None = None  # data from .meta file if exists
-    extra: dict = field(default_factory=dict)  # additional data
 
 
 class FilePreLoader(ABC):
