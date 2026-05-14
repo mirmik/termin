@@ -33,6 +33,9 @@ class DetourNavMeshData:
     build: dict
     tiles: list[DetourNavMeshTileData]
 
+    def detour_tile_blobs(self) -> list[bytes]:
+        return [tile.data for tile in self.tiles]
+
     def polygon_count(self) -> int:
         return 0
 
@@ -76,6 +79,26 @@ class NavMeshAsset(DataAsset["NavMesh"]):
         """Set navmesh and bump version."""
         self.data = value
 
+    def parse_spec(self, spec_data: dict | None) -> None:
+        super().parse_spec(spec_data)
+        self._declare_runtime_resource()
+
+    def _declare_runtime_resource(self) -> None:
+        from termin.navmesh._navmesh_native import declare_navmesh_asset
+
+        declare_navmesh_asset(self.uuid, self.name)
+
+    def _sync_detour_runtime_resource(self, data: DetourNavMeshData) -> None:
+        from termin.navmesh._navmesh_native import set_detour_navmesh_asset_data
+
+        set_detour_navmesh_asset_data(
+            self.uuid,
+            data.name or self.name,
+            data.agent_type,
+            data.coordinate_system,
+            data.tiles,
+        )
+
     # --- Content parsing ---
 
     def _parse_content(self, content: str) -> "NavMesh | None":
@@ -102,13 +125,15 @@ class NavMeshAsset(DataAsset["NavMesh"]):
                     data=blob,
                 ))
 
-            return DetourNavMeshData(
+            detour_data = DetourNavMeshData(
                 name=data.get("name", self._name),
                 agent_type=data.get("agent_type", ""),
                 coordinate_system=data.get("coordinate_system", ""),
                 build=data.get("build", {}),
                 tiles=tiles,
             )
+            self._sync_detour_runtime_resource(detour_data)
+            return detour_data
 
         from termin.navmesh.persistence import NavMeshPersistence
 

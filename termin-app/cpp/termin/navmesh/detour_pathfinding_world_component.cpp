@@ -2,7 +2,6 @@
 
 #include "detour_navmesh_asset_utils.hpp"
 #include <termin/entity/component_registry.hpp>
-#include <termin/tc_scene.hpp>
 #include <DetourNavMesh.h>
 #include <DetourNavMeshQuery.h>
 #include <DetourStatus.h>
@@ -60,36 +59,23 @@ bool DetourPathfindingWorldComponent::ensure_query_loaded() {
     clear();
     _loaded_navmesh_uuid = navmesh_uuid;
 
-    TcSceneRef scene = entity().scene();
-    if (!scene.valid() || scene.source_path().empty()) {
-        _load_failed = true;
-        return false;
-    }
-
-    std::filesystem::path asset_path =
-        find_navmesh_asset_by_uuid(std::filesystem::path(scene.source_path()), navmesh_uuid);
-    if (asset_path.empty()) {
-        tc_log_warn("[DetourPathfindingWorldComponent] navmesh asset not found for uuid=%s",
+    TcNavMesh navmesh = TcNavMesh::from_uuid(navmesh_uuid);
+    if (!navmesh.is_valid()) {
+        tc_log_warn("[DetourPathfindingWorldComponent] navmesh not found for uuid=%s",
                     navmesh_uuid.c_str());
         _load_failed = true;
         return false;
     }
+    _loaded_asset_path = navmesh.name();
 
-    try {
-        if (!load_detour_tile_blobs(asset_path, _tile_blobs)) {
-            _load_failed = true;
-            return false;
-        }
-    } catch (const std::exception& e) {
-        tc_log_warn("[DetourPathfindingWorldComponent] failed to read '%s': %s",
-                    asset_path.string().c_str(), e.what());
+    if (!load_detour_tile_blobs_from_navmesh(navmesh, _tile_blobs)) {
         _load_failed = true;
         return false;
     }
 
     if (_tile_blobs.size() != 1) {
-        tc_log_warn("[DetourPathfindingWorldComponent] multi-tile Detour assets are not supported yet: '%s'",
-                    asset_path.string().c_str());
+        tc_log_warn("[DetourPathfindingWorldComponent] multi-tile Detour assets are not supported yet: %s",
+                    _loaded_asset_path.c_str());
         _load_failed = true;
         return false;
     }
@@ -107,7 +93,6 @@ bool DetourPathfindingWorldComponent::ensure_query_loaded() {
         return false;
     }
 
-    _loaded_asset_path = asset_path.string();
     tc_log_info("[DetourPathfindingWorldComponent] loaded '%s'", _loaded_asset_path.c_str());
     return true;
 }

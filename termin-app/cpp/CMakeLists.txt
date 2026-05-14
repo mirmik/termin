@@ -134,6 +134,7 @@ find_package(termin_skeleton REQUIRED)
 find_package(termin_animation REQUIRED)
 find_package(termin_components_skeleton REQUIRED)
 find_package(termin_modules REQUIRED)
+find_package(termin_navmesh REQUIRED)
 
 # Core C library
 if(BUILD_TESTS)
@@ -277,7 +278,7 @@ if(TERMIN_HAS_RECAST)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include/cpp>
     )
-    target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast Detour)
+    target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast Detour termin_navmesh::termin_navmesh)
     target_compile_options(navmesh_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
     set_target_properties(navmesh_lib PROPERTIES
@@ -503,6 +504,10 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
 )
 if(TERMIN_HAS_RECAST)
     install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Recast/Include/
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
+        FILES_MATCHING PATTERN "*.h"
+    )
+    install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Detour/Include/
         DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
         FILES_MATCHING PATTERN "*.h"
     )

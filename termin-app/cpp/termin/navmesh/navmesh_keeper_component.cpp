@@ -2,7 +2,6 @@
 
 #include "detour_navmesh_asset_utils.hpp"
 #include <termin/entity/component_registry.hpp>
-#include <termin/tc_scene.hpp>
 #include <utility>
 #include <tcbase/tc_log.hpp>
 
@@ -35,35 +34,20 @@ bool NavMeshKeeperComponent::ensure_debug_mesh_loaded() const {
     invalidate_debug_mesh();
     _loaded_navmesh_uuid = navmesh_uuid;
 
-    TcSceneRef scene = entity().scene();
-    if (!scene.valid() || scene.source_path().empty()) {
+    TcNavMesh navmesh = TcNavMesh::from_uuid(navmesh_uuid);
+    if (!navmesh.is_valid()) {
+        tc_log_warn("[NavMeshKeeperComponent] navmesh not found for uuid=%s", navmesh_uuid.c_str());
         _load_failed = true;
         return false;
     }
-
-    std::filesystem::path asset_path =
-        find_navmesh_asset_by_uuid(std::filesystem::path(scene.source_path()), navmesh_uuid);
-    if (asset_path.empty()) {
-        tc_log_warn("[NavMeshKeeperComponent] navmesh asset not found for uuid=%s", navmesh_uuid.c_str());
-        _load_failed = true;
-        return false;
-    }
-
-    try {
-        _navmesh_debug_mesh = build_detour_debug_mesh(asset_path);
-    } catch (const std::exception& e) {
-        tc_log_warn("[NavMeshKeeperComponent] failed to build debug mesh from '%s': %s",
-                    asset_path.string().c_str(), e.what());
-        _load_failed = true;
-        return false;
-    }
+    _loaded_asset_path = navmesh.name();
+    _navmesh_debug_mesh = build_detour_debug_mesh(navmesh);
 
     if (!_navmesh_debug_mesh.is_valid()) {
         _load_failed = true;
         return false;
     }
 
-    _loaded_asset_path = asset_path.string();
     return true;
 }
 
