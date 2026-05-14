@@ -256,6 +256,8 @@ class InspectFieldPanel(QWidget):
                 widget = self._widgets.get(key)
                 if widget is None:
                     continue
+                if field.kind == "button":
+                    continue
                 value = field.get_value(self._target)
                 widget.set_value(value)
         finally:
