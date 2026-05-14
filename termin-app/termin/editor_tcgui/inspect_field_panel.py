@@ -30,8 +30,6 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
                 if not info.is_inspectable:
                     continue
                 choices = [(c.value, c.label) for c in info.choices] if info.choices else None
-                action = info.action if info.action is not None else None
-
                 def make_getter(path):
                     def getter(o):
                         return o.get_field(path)
@@ -42,6 +40,11 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
                         o.set_field(path, v)
                     return setter
 
+                def make_action(path):
+                    def action(o):
+                        o.action_field(path)
+                    return action
+
                 result[info.path] = InspectField(
                     path=info.path,
                     label=info.label,
@@ -50,7 +53,7 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
                     max=info.max,
                     step=info.step,
                     choices=choices,
-                    action=action,
+                    action=make_action(info.path) if info.action is not None else None,
                     metadata={},
                     getter=make_getter(info.path),
                     setter=make_setter(info.path),

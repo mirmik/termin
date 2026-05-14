@@ -207,6 +207,23 @@ public:
         tc_value_free(&v);
     }
 
+    void action_field(const std::string& field_name) {
+        if (!_c) return;
+
+        void* obj_ptr = (_c->kind == TC_CXX_COMPONENT)
+            ? static_cast<void*>(CxxComponent::from_tc(_c))
+            : _c->body;
+        if (!obj_ptr) return;
+
+        tc::InspectContext inspect_ctx;
+        tc::InspectRegistry::instance().action_field(
+            obj_ptr,
+            tc_component_type_name(_c),
+            field_name,
+            inspect_ctx
+        );
+    }
+
     bool operator==(const TcComponentRef& other) const { return _c == other._c; }
     bool operator!=(const TcComponentRef& other) const { return _c != other._c; }
 };
@@ -253,7 +270,10 @@ void bind_tc_component_ref(nb::module_& m) {
             "Get field value by name. Returns None if field not found.")
         .def("set_field", &TcComponentRef::set_field,
             nb::arg("field_name"), nb::arg("value"), nb::arg("scene") = TcSceneRef(),
-            "Set field value by name.");
+            "Set field value by name.")
+        .def("action_field", &TcComponentRef::action_field,
+            nb::arg("field_name"),
+            "Invoke an inspect action field by name.");
 }
 
 } // namespace termin
