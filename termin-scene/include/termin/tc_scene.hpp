@@ -130,6 +130,10 @@ public:
     std::string name() const;
     void set_name(const std::string& n);
 
+    // Transient source file path. Not serialized into scene data.
+    std::string source_path() const;
+    void set_source_path(const std::string& path);
+
     // Scene UUID
     std::string uuid() const;
     void set_uuid(const std::string& u);

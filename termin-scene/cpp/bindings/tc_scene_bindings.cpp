@@ -226,6 +226,7 @@ void bind_tc_scene_core(nb::module_& m) {
 
         // Scene name and UUID
         .def_prop_rw("name", &TcSceneRef::name, &TcSceneRef::set_name)
+        .def_prop_rw("source_path", &TcSceneRef::source_path, &TcSceneRef::set_source_path)
         .def_prop_rw("uuid", &TcSceneRef::uuid, &TcSceneRef::set_uuid)
 
         // Layer names (0-63)

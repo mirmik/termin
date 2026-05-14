@@ -109,6 +109,11 @@ void SceneManager::set_scene_path(const std::string& name, const std::string& pa
     } else {
         _paths[name] = path;
     }
+
+    tc_scene_handle scene = get_scene(name);
+    if (tc_scene_handle_valid(scene)) {
+        tc_scene_set_source_path(scene, path.empty() ? nullptr : path.c_str());
+    }
 }
 
 tc_scene_mode SceneManager::get_mode(const std::string& name) const {

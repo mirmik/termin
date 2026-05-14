@@ -149,20 +149,26 @@ set(LIB_VERSION 1.6.0)
 set(RECASTNAVIGATION_ENABLE_ASSERTS OFF)
 set(SKIP_INSTALL_ALL ON)  # Don't use recast's own install rules
 set(TERMIN_RECAST_DIR "${TERMIN_ROOT}/third/recastnavigation/Recast")
+set(TERMIN_DETOUR_DIR "${TERMIN_ROOT}/third/recastnavigation/Detour")
 set(TERMIN_HAS_RECAST OFF)
-if(EXISTS "${TERMIN_RECAST_DIR}/CMakeLists.txt")
+if(EXISTS "${TERMIN_RECAST_DIR}/CMakeLists.txt" AND EXISTS "${TERMIN_DETOUR_DIR}/CMakeLists.txt")
     add_subdirectory(${TERMIN_RECAST_DIR} ${CMAKE_CURRENT_BINARY_DIR}/Recast EXCLUDE_FROM_ALL)
+    add_subdirectory(${TERMIN_DETOUR_DIR} ${CMAKE_CURRENT_BINARY_DIR}/Detour EXCLUDE_FROM_ALL)
 
     # Re-add Recast to build (EXCLUDE_FROM_ALL removed it from default)
     set_target_properties(Recast PROPERTIES EXCLUDE_FROM_ALL FALSE)
+    set_target_properties(Detour PROPERTIES EXCLUDE_FROM_ALL FALSE)
 
     # Add INSTALL_INTERFACE to Recast includes for proper export
     target_include_directories(Recast PUBLIC
         $<INSTALL_INTERFACE:include/recastnavigation>
     )
+    target_include_directories(Detour PUBLIC
+        $<INSTALL_INTERFACE:include/recastnavigation>
+    )
     set(TERMIN_HAS_RECAST ON)
 else()
-    message(WARNING "Recast submodule not found at ${TERMIN_RECAST_DIR}; navmesh support will be disabled.")
+    message(WARNING "Recast/Detour submodules not found; navmesh support will be disabled.")
 endif()
 
 # ============== Entity shared library ==============
@@ -268,7 +274,7 @@ if(TERMIN_HAS_RECAST)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include/cpp>
     )
-    target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast)
+    target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast Detour)
     target_compile_options(navmesh_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
     set_target_properties(navmesh_lib PROPERTIES
@@ -469,7 +475,7 @@ endif()
 # ============== Install shared libraries ==============
 set(TERMIN_INSTALL_TARGETS trent entity_lib termin_core render_lib)
 if(TERMIN_HAS_RECAST)
-    list(APPEND TERMIN_INSTALL_TARGETS navmesh_lib Recast)
+    list(APPEND TERMIN_INSTALL_TARGETS navmesh_lib Recast Detour)
 endif()
 install(TARGETS ${TERMIN_INSTALL_TARGETS}
     EXPORT terminTargets
