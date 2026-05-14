@@ -178,7 +178,7 @@ class Viewport3D(Widget):
                 from termin._native.render import _input_manager_on_scroll
                 _input_manager_on_scroll(
                     self._input_manager_ptr,
-                    float(event.dx), float(event.dy), 0,
+                    float(event.dx), float(event.dy), event.mods,
                 )
             except Exception as e:
                 log.error(f"Viewport3D.on_mouse_wheel: {e}")

@@ -40,6 +40,19 @@ class MouseWheelEvent:
     dy: float
     x: float  # cursor x at scroll time
     y: float  # cursor y at scroll time
+    mods: int = 0  # bitmask of Mods values
+
+    @property
+    def shift(self) -> bool:
+        return bool(self.mods & Mods.SHIFT.value)
+
+    @property
+    def ctrl(self) -> bool:
+        return bool(self.mods & Mods.CTRL.value)
+
+    @property
+    def alt(self) -> bool:
+        return bool(self.mods & Mods.ALT.value)
 
 
 @dataclass(frozen=True, slots=True)
