@@ -8,11 +8,48 @@
 #include <termin/entity/component.hpp>
 #include "termin/bindings/entity/entity_helpers.hpp"
 #include <nanobind/stl/string.h>
+#include <mutex>
+#include <unordered_map>
 #include <utility>
 
 namespace termin {
 
 namespace {
+static std::mutex g_navmesh_callback_mutex;
+static std::unordered_map<std::string, nb::callable> g_navmesh_load_callbacks;
+
+void cleanup_navmesh_callbacks() {
+    std::lock_guard<std::mutex> lock(g_navmesh_callback_mutex);
+    g_navmesh_load_callbacks.clear();
+}
+
+bool python_navmesh_load_callback(tc_navmesh* navmesh, void* user_data) {
+    (void)user_data;
+    if (!navmesh) {
+        return false;
+    }
+
+    std::string uuid(navmesh->uuid);
+    nb::callable callback;
+    {
+        std::lock_guard<std::mutex> lock(g_navmesh_callback_mutex);
+        auto it = g_navmesh_load_callbacks.find(uuid);
+        if (it == g_navmesh_load_callbacks.end()) {
+            return false;
+        }
+        callback = it->second;
+    }
+
+    nb::gil_scoped_acquire gil;
+    try {
+        nb::object result = callback(nb::cast(TcNavMesh(navmesh)));
+        return nb::cast<bool>(result);
+    } catch (const std::exception& e) {
+        tc_log_error("Python navmesh load callback failed for '%s': %s", uuid.c_str(), e.what());
+        return false;
+    }
+}
+
 std::array<float, 3> py_vec3(nb::handle value) {
     nb::sequence seq = nb::cast<nb::sequence>(value);
     return {
@@ -78,6 +115,36 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         TcNavMesh navmesh = TcNavMesh::declare(uuid, name);
         return navmesh.is_valid();
     }, nb::arg("uuid"), nb::arg("name") = "");
+
+    m.def("set_navmesh_load_callback", [](TcNavMesh& navmesh, nb::callable callback) {
+        tc_navmesh* raw = navmesh.get();
+        if (!raw) {
+            throw std::runtime_error("Invalid navmesh handle");
+        }
+
+        std::string uuid(raw->uuid);
+        {
+            std::lock_guard<std::mutex> lock(g_navmesh_callback_mutex);
+            g_navmesh_load_callbacks[uuid] = callback;
+        }
+
+        tc_navmesh_set_load_callback(navmesh.handle, python_navmesh_load_callback, nullptr);
+    }, nb::arg("navmesh"), nb::arg("callback"));
+
+    m.def("clear_navmesh_load_callback", [](TcNavMesh& navmesh) {
+        tc_navmesh* raw = navmesh.get();
+        if (!raw) {
+            return;
+        }
+
+        std::string uuid(raw->uuid);
+        {
+            std::lock_guard<std::mutex> lock(g_navmesh_callback_mutex);
+            g_navmesh_load_callbacks.erase(uuid);
+        }
+
+        tc_navmesh_set_load_callback(navmesh.handle, nullptr, nullptr);
+    }, nb::arg("navmesh"));
 
     m.def("set_detour_navmesh_asset_data",
           [](const std::string& uuid,
@@ -275,6 +342,9 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def("clear_debug_data", &RecastNavMeshBuilderComponent::clear_debug_data)
         // Free result
         .def_static("free_result", &RecastNavMeshBuilderComponent::free_result);
+
+    nb::module_ atexit = nb::module_::import_("atexit");
+    atexit.attr("register")(nb::cpp_function(&cleanup_navmesh_callbacks));
 }
 
 } // namespace termin

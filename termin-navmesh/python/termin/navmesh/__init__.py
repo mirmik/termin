@@ -25,7 +25,9 @@ from termin.navmesh._navmesh_native import (
     RecastNavMeshBuilderComponent as _RecastNavMeshBuilderComponent,
     RecastBuildResult,
     TcNavMesh,
+    clear_navmesh_load_callback,
     declare_navmesh_asset,
+    set_navmesh_load_callback,
     set_detour_navmesh_asset_data,
 )
 
@@ -42,6 +44,8 @@ __all__ = [
     "RecastNavMeshBuilderComponent",
     "RecastBuildResult",
     "TcNavMesh",
+    "clear_navmesh_load_callback",
     "declare_navmesh_asset",
+    "set_navmesh_load_callback",
     "set_detour_navmesh_asset_data",
 ]
