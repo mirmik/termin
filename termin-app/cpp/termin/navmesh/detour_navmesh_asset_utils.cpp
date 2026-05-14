@@ -414,29 +414,13 @@ void append_detour_tile_debug_mesh(const dtMeshTile* tile,
     }
 }
 
-TcMesh build_detour_debug_mesh(const std::filesystem::path& asset_path) {
-    nos::trent data = nos::json::parse_file(asset_path.string());
-    if (!data.is_dict() || !data.contains("format") ||
-        !data["format"].is_string() || data["format"].as_string() != "termin.detour_navmesh" ||
-        !data.contains("tiles") || !data["tiles"].is_list()) {
-        return {};
-    }
-
+TcMesh build_detour_debug_mesh(const std::vector<std::vector<unsigned char>>& blobs) {
     std::vector<NavMeshDebugVertex> vertices;
     std::vector<uint32_t> indices;
     int poly_offset = 0;
 
-    for (const nos::trent& tile_data : data["tiles"].as_list()) {
-        if (!tile_data.is_dict() ||
-            !tile_data.contains("data_encoding") ||
-            !tile_data["data_encoding"].is_string() ||
-            tile_data["data_encoding"].as_string() != "base64" ||
-            !tile_data.contains("data") ||
-            !tile_data["data"].is_string()) {
-            continue;
-        }
-
-        std::vector<unsigned char> blob = base64_decode(tile_data["data"].as_string());
+    for (const std::vector<unsigned char>& source_blob : blobs) {
+        std::vector<unsigned char> blob = source_blob;
         if (blob.empty()) {
             continue;
         }
@@ -483,6 +467,22 @@ TcMesh build_detour_debug_mesh(const std::filesystem::path& asset_path) {
     return TcMesh(h);
 }
 
+TcMesh build_detour_debug_mesh(const std::filesystem::path& asset_path) {
+    std::vector<std::vector<unsigned char>> blobs;
+    if (!load_detour_tile_blobs(asset_path, blobs)) {
+        return {};
+    }
+    return build_detour_debug_mesh(blobs);
+}
+
+TcMesh build_detour_debug_mesh(const TcNavMesh& navmesh) {
+    std::vector<std::vector<unsigned char>> blobs;
+    if (!load_detour_tile_blobs_from_navmesh(navmesh, blobs)) {
+        return {};
+    }
+    return build_detour_debug_mesh(blobs);
+}
+
 bool load_detour_tile_blobs(const std::filesystem::path& asset_path,
                             std::vector<std::vector<unsigned char>>& blobs) {
     blobs.clear();
@@ -511,6 +511,35 @@ bool load_detour_tile_blobs(const std::filesystem::path& asset_path,
     }
 
     return !blobs.empty();
+}
+
+bool load_detour_tile_blobs_from_navmesh(const TcNavMesh& navmesh,
+                                         std::vector<std::vector<unsigned char>>& blobs) {
+    blobs.clear();
+    if (!navmesh.is_valid()) {
+        return false;
+    }
+    if (!navmesh.ensure_loaded()) {
+        tc_log_warn("[NavMesh] failed to ensure navmesh loaded uuid=%s", navmesh.uuid());
+        return false;
+    }
+
+    const tc_navmesh* raw = navmesh.get();
+    if (!raw) {
+        return false;
+    }
+    blobs.reserve(raw->tile_count);
+    for (size_t i = 0; i < raw->tile_count; ++i) {
+        const tc_navmesh_tile& tile = raw->tiles[i];
+        if (tile.data && tile.data_size > 0) {
+            blobs.emplace_back(tile.data, tile.data + tile.data_size);
+        }
+    }
+    if (blobs.empty()) {
+        tc_log_warn("[NavMesh] navmesh has no Detour tile blobs uuid=%s", navmesh.uuid());
+        return false;
+    }
+    return true;
 }
 
 std::array<float, 3> termin_to_recast(const std::array<float, 3>& p) {

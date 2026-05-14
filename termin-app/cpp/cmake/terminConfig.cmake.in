@@ -24,6 +24,7 @@ find_dependency(termin_components_render REQUIRED)
 find_dependency(termin_skeleton REQUIRED)
 find_dependency(termin_animation REQUIRED)
 find_dependency(termin_modules REQUIRED)
+find_dependency(termin_navmesh REQUIRED PATHS "${PACKAGE_PREFIX_DIR}")
 
 # Include exported targets
 include("${CMAKE_CURRENT_LIST_DIR}/terminTargets.cmake")

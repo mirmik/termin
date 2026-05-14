@@ -24,6 +24,9 @@ from termin.navmesh._navmesh_native import (
     NavMeshKeeperComponent as _NavMeshKeeperComponent,
     RecastNavMeshBuilderComponent as _RecastNavMeshBuilderComponent,
     RecastBuildResult,
+    TcNavMesh,
+    declare_navmesh_asset,
+    set_detour_navmesh_asset_data,
 )
 
 # Keep public name so `termin.navmesh.RecastNavMeshBuilderComponent` works.
@@ -38,4 +41,7 @@ __all__ = [
     "NavMeshKeeperComponent",
     "RecastNavMeshBuilderComponent",
     "RecastBuildResult",
+    "TcNavMesh",
+    "declare_navmesh_asset",
+    "set_detour_navmesh_asset_data",
 ]

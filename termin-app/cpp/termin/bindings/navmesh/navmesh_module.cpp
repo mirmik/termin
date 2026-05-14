@@ -4,8 +4,10 @@
 #include "termin/navmesh/detour_pathfinding_world_component.hpp"
 #include "termin/navmesh/navmesh_keeper_component.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
+#include "termin/navmesh/tc_navmesh_handle.hpp"
 #include <termin/entity/component.hpp>
 #include "termin/bindings/entity/entity_helpers.hpp"
+#include <nanobind/stl/string.h>
 #include <utility>
 
 namespace termin {
@@ -39,11 +41,70 @@ nb::list point_to_python(const std::array<float, 3>& point) {
     result.append(point[2]);
     return result;
 }
+
+tc_navmesh_tile tile_from_python(nb::handle tile) {
+    tc_navmesh_tile result{};
+    result.x = nb::cast<int32_t>(tile.attr("x"));
+    result.y = nb::cast<int32_t>(tile.attr("y"));
+    result.layer = nb::cast<int32_t>(tile.attr("layer"));
+
+    nb::bytes data = nb::cast<nb::bytes>(tile.attr("data"));
+    char* raw = nullptr;
+    Py_ssize_t size = 0;
+    if (PyBytes_AsStringAndSize(data.ptr(), &raw, &size) == 0 && raw && size > 0) {
+        result.data = reinterpret_cast<unsigned char*>(raw);
+        result.data_size = static_cast<size_t>(size);
+    }
+    return result;
+}
 }
 
 void bind_recast_navmesh_builder(nb::module_& m) {
     // Import _entity_native so nanobind can find Component type for inheritance
     nb::module_::import_("termin.entity._entity_native");
+
+    nb::class_<TcNavMesh>(m, "TcNavMesh")
+        .def(nb::init<>())
+        .def_static("from_uuid", &TcNavMesh::from_uuid, nb::arg("uuid"))
+        .def_static("declare", &TcNavMesh::declare, nb::arg("uuid"), nb::arg("name") = "")
+        .def_prop_ro("is_valid", &TcNavMesh::is_valid)
+        .def_prop_ro("is_loaded", &TcNavMesh::is_loaded)
+        .def_prop_ro("uuid", [](const TcNavMesh& self) { return std::string(self.uuid()); })
+        .def_prop_ro("name", [](const TcNavMesh& self) { return std::string(self.name()); })
+        .def_prop_ro("version", &TcNavMesh::version)
+        .def("ensure_loaded", &TcNavMesh::ensure_loaded);
+
+    m.def("declare_navmesh_asset", [](const std::string& uuid, const std::string& name) {
+        TcNavMesh navmesh = TcNavMesh::declare(uuid, name);
+        return navmesh.is_valid();
+    }, nb::arg("uuid"), nb::arg("name") = "");
+
+    m.def("set_detour_navmesh_asset_data",
+          [](const std::string& uuid,
+             const std::string& name,
+             const std::string& agent_type,
+             const std::string& coordinate_system,
+             nb::sequence tiles) {
+              TcNavMesh navmesh = TcNavMesh::declare(uuid, name);
+              tc_navmesh* raw = navmesh.get();
+              if (!raw) {
+                  return false;
+              }
+
+              tc_navmesh_set_metadata(raw,
+                                      name.empty() ? nullptr : name.c_str(),
+                                      agent_type.empty() ? nullptr : agent_type.c_str(),
+                                      coordinate_system.empty() ? nullptr : coordinate_system.c_str());
+
+              std::vector<tc_navmesh_tile> c_tiles;
+              c_tiles.reserve(static_cast<size_t>(nb::len(tiles)));
+              for (nb::handle tile : tiles) {
+                  c_tiles.push_back(tile_from_python(tile));
+              }
+              return tc_navmesh_set_tiles(raw, c_tiles.data(), c_tiles.size());
+          },
+          nb::arg("uuid"), nb::arg("name"), nb::arg("agent_type"),
+          nb::arg("coordinate_system"), nb::arg("tiles"));
 
     // MeshSource enum
     nb::enum_<MeshSource>(m, "MeshSource")
