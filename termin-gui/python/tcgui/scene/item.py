@@ -230,8 +230,8 @@ class GraphicsWidgetItem(GraphicsItem):
         self._pressed_widget = None
         return True
 
-    def dispatch_mouse_wheel(self, dx: float, dy: float, x: float, y: float) -> bool:
-        event = MouseWheelEvent(dx, dy, x, y)
+    def dispatch_mouse_wheel(self, dx: float, dy: float, x: float, y: float, mods: int = 0) -> bool:
+        event = MouseWheelEvent(dx, dy, x, y, mods)
         hit = self.widget.hit_test(x, y)
         widget = hit
         while widget is not None:

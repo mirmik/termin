@@ -147,8 +147,9 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
             mx = ctypes.c_int()
             my = ctypes.c_int()
             sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
+            mods = _translate_sdl_mods(sdl2.SDL_GetModState())
             target_ui.mouse_wheel(float(event.wheel.x), float(event.wheel.y),
-                                  float(mx.value), float(my.value))
+                                  float(mx.value), float(my.value), mods)
         elif etype == sdl2.SDL_KEYDOWN:
             key = _translate_sdl_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)

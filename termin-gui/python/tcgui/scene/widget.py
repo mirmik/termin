@@ -204,7 +204,7 @@ class SceneView(Widget):
         hit = self.scene.hit_test(wx, wy)
         if isinstance(hit, GraphicsWidgetItem):
             self._prepare_widget_item_layout(hit)
-            if hit.dispatch_mouse_wheel(event.dx, event.dy, event.x, event.y):
+            if hit.dispatch_mouse_wheel(event.dx, event.dy, event.x, event.y, event.mods):
                 return True
 
         before_wx, before_wy = self.screen_to_world(event.x, event.y)

@@ -637,12 +637,12 @@ class UI:
             return True
         return False
 
-    def mouse_wheel(self, dx: float, dy: float, x: float, y: float) -> bool:
+    def mouse_wheel(self, dx: float, dy: float, x: float, y: float, mods: int = 0) -> bool:
         """Handle mouse wheel event. Bubbles up through parents."""
         if not self._root and not self._overlays:
             return False
 
-        event = MouseWheelEvent(dx, dy, x, y)
+        event = MouseWheelEvent(dx, dy, x, y, mods)
 
         # Check overlays first
         for entry in reversed(self._overlays):
