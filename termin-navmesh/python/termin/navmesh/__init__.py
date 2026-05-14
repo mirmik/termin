@@ -18,16 +18,23 @@ from termin_nanobind.runtime import preload_sdk_libs
 preload_sdk_libs("entity_lib")
 
 from termin.navmesh._navmesh_native import (
+    DetourClosestPointResult,
+    DetourPathfindingWorldComponent as _DetourPathfindingWorldComponent,
+    DetourRaycastResult,
     NavMeshKeeperComponent as _NavMeshKeeperComponent,
     RecastNavMeshBuilderComponent as _RecastNavMeshBuilderComponent,
     RecastBuildResult,
 )
 
 # Keep public name so `termin.navmesh.RecastNavMeshBuilderComponent` works.
+DetourPathfindingWorldComponent = _DetourPathfindingWorldComponent
 NavMeshKeeperComponent = _NavMeshKeeperComponent
 RecastNavMeshBuilderComponent = _RecastNavMeshBuilderComponent
 
 __all__ = [
+    "DetourClosestPointResult",
+    "DetourPathfindingWorldComponent",
+    "DetourRaycastResult",
     "NavMeshKeeperComponent",
     "RecastNavMeshBuilderComponent",
     "RecastBuildResult",

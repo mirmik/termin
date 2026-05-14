@@ -268,6 +268,9 @@ set_target_properties(render_lib PROPERTIES
 if(TERMIN_HAS_RECAST)
     # ============== NavMesh library ==============
     add_library(navmesh_lib SHARED
+        termin/navmesh/detour_navmesh_asset_utils.cpp
+        termin/navmesh/detour_pathfinding_world_component.cpp
+        termin/navmesh/navmesh_keeper_component.cpp
         termin/navmesh/recast_navmesh_builder_component.cpp
     )
     target_include_directories(navmesh_lib PUBLIC

@@ -1,11 +1,45 @@
 // navmesh_module.cpp - NavMesh bindings module
 
 #include "common.hpp"
+#include "termin/navmesh/detour_pathfinding_world_component.hpp"
+#include "termin/navmesh/navmesh_keeper_component.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
 #include <termin/entity/component.hpp>
 #include "termin/bindings/entity/entity_helpers.hpp"
+#include <utility>
 
 namespace termin {
+
+namespace {
+std::array<float, 3> py_vec3(nb::handle value) {
+    nb::sequence seq = nb::cast<nb::sequence>(value);
+    return {
+        nb::cast<float>(seq[0]),
+        nb::cast<float>(seq[1]),
+        nb::cast<float>(seq[2]),
+    };
+}
+
+nb::list path_to_python(const std::vector<std::array<float, 3>>& path) {
+    nb::list result;
+    for (const auto& p : path) {
+        nb::list item;
+        item.append(p[0]);
+        item.append(p[1]);
+        item.append(p[2]);
+        result.append(item);
+    }
+    return result;
+}
+
+nb::list point_to_python(const std::array<float, 3>& point) {
+    nb::list result;
+    result.append(point[0]);
+    result.append(point[1]);
+    result.append(point[2]);
+    return result;
+}
+}
 
 void bind_recast_navmesh_builder(nb::module_& m) {
     // Import _entity_native so nanobind can find Component type for inheritance
@@ -52,6 +86,66 @@ void bind_recast_navmesh_builder(nb::module_& m) {
                     self.navmesh_uuid.clear();
                 }
             });
+
+    nb::class_<DetourClosestPointResult>(m, "DetourClosestPointResult")
+        .def_ro("success", &DetourClosestPointResult::success)
+        .def_ro("over_poly", &DetourClosestPointResult::over_poly)
+        .def_ro("poly_ref", &DetourClosestPointResult::poly_ref)
+        .def_prop_ro("point", [](const DetourClosestPointResult& self) {
+            return point_to_python(self.point);
+        });
+
+    nb::class_<DetourRaycastResult>(m, "DetourRaycastResult")
+        .def_ro("success", &DetourRaycastResult::success)
+        .def_ro("hit", &DetourRaycastResult::hit)
+        .def_ro("t", &DetourRaycastResult::t)
+        .def_ro("visited", &DetourRaycastResult::visited)
+        .def_prop_ro("hit_position", [](const DetourRaycastResult& self) {
+            return point_to_python(self.hit_position);
+        })
+        .def_prop_ro("hit_normal", [](const DetourRaycastResult& self) {
+            return point_to_python(self.hit_normal);
+        });
+
+    nb::class_<DetourPathfindingWorldComponent, CxxComponent>(m, "DetourPathfindingWorldComponent")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<DetourPathfindingWorldComponent>(self);
+        })
+        .def_rw("navmesh_uuid", &DetourPathfindingWorldComponent::navmesh_uuid)
+        .def_rw("query_extent_x", &DetourPathfindingWorldComponent::query_extent_x)
+        .def_rw("query_extent_y", &DetourPathfindingWorldComponent::query_extent_y)
+        .def_rw("query_extent_z", &DetourPathfindingWorldComponent::query_extent_z)
+        .def_rw("max_polys", &DetourPathfindingWorldComponent::max_polys)
+        .def_rw("max_straight_path", &DetourPathfindingWorldComponent::max_straight_path)
+        .def_prop_rw("navmesh",
+            [](DetourPathfindingWorldComponent& self) {
+                nb::dict value;
+                value["uuid"] = self.navmesh_uuid;
+                value["name"] = "";
+                return value;
+            },
+            [](DetourPathfindingWorldComponent& self, nb::dict value) {
+                std::string uuid;
+                if (value.contains("uuid")) {
+                    uuid = nb::cast<std::string>(value["uuid"]);
+                }
+                if (self.navmesh_uuid != uuid) {
+                    self.navmesh_uuid = std::move(uuid);
+                    self.clear();
+                }
+            })
+        .def("rebuild", &DetourPathfindingWorldComponent::rebuild)
+        .def("clear", &DetourPathfindingWorldComponent::clear)
+        .def("is_ready", &DetourPathfindingWorldComponent::is_ready)
+        .def("closest_point", [](DetourPathfindingWorldComponent& self, nb::handle point) {
+            return self.closest_point(py_vec3(point));
+        }, nb::arg("point"))
+        .def("find_path", [](DetourPathfindingWorldComponent& self, nb::handle start, nb::handle end) {
+            return path_to_python(self.find_path(py_vec3(start), py_vec3(end)));
+        }, nb::arg("start"), nb::arg("end"))
+        .def("raycast", [](DetourPathfindingWorldComponent& self, nb::handle start, nb::handle end) {
+            return self.raycast(py_vec3(start), py_vec3(end));
+        }, nb::arg("start"), nb::arg("end"));
 
     // RecastNavMeshBuilderComponent
     nb::class_<RecastNavMeshBuilderComponent, CxxComponent>(m, "RecastNavMeshBuilderComponent")
