@@ -23,7 +23,6 @@ from termin.visualization.core.entity import Entity, Component
 from termin.assets.resources import ResourceManager
 from termin.editor.inspect_field_panel import InspectFieldPanel
 from termin.editor_core.undo_stack import UndoCommand
-from termin.editor.widgets.field_widgets import ButtonFieldWidget
 
 from termin.editor_core.editor_commands import (
     ComponentFieldEditCommand,
@@ -379,12 +378,6 @@ class ComponentInspectorPanel(QWidget):
     def set_component(self, comp: Optional[Component]) -> None:
         self._component = comp
         self._panel.set_target(comp)
-
-        # Update button targets
-        if comp is not None:
-            for widget in self._panel._widgets.values():
-                if isinstance(widget, ButtonFieldWidget):
-                    widget.set_target(comp)
 
         # Update material properties editor visibility
         self._update_material_props_editor()

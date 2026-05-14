@@ -237,16 +237,16 @@ class InspectFieldPanel(VStack):
 
     def _add_field_row(self, row_index: int, key: str, field: InspectField, metadata: dict[str, Any]) -> int:
         widget = self._factory.create(field, metadata)
+        widget.bind_field(key, field, self._target)
         self._widgets[key] = widget
         self._field_metadata[key] = metadata
         row_widgets: list[Any] = [widget]
 
-        if field.kind == "button":
+        if widget.full_row():
             self._grid.add(widget, row_index, 0, 1, 2)
         elif metadata.get("widget") in ("inline_material", "material_inline"):
             self._grid.add(widget, row_index, 0, 1, 2)
-            value = field.get_value(self._target)
-            widget.set_value(value)
+            widget.load_from_target()
         else:
             lbl = Label()
             lbl.text = field.label or key
@@ -254,8 +254,7 @@ class InspectFieldPanel(VStack):
             self._grid.add(lbl, row_index, 0)
             self._grid.add(widget, row_index, 1)
             row_widgets.append(lbl)
-            value = field.get_value(self._target)
-            widget.set_value(value)
+            widget.load_from_target()
 
         self._row_widgets[key] = row_widgets
         self._connect_widget(widget, key, field)
@@ -269,10 +268,9 @@ class InspectFieldPanel(VStack):
                 return
             if self._target is not target:
                 return
-            old_value = field.get_value(target)
-            new_value = widget.get_value()
-            field.set_value(target, new_value)
-            if self.on_field_changed is not None:
+            applied = widget.apply_to_target()
+            if applied is not None and self.on_field_changed is not None:
+                old_value, new_value = applied
                 self.on_field_changed(key, old_value, new_value)
             self._sync_visibility()
 
@@ -302,11 +300,7 @@ class InspectFieldPanel(VStack):
             for widget in row_widgets:
                 widget.visible = visible
             if visible:
-                field = self._fields[key]
-                if field.kind == "button":
-                    continue
-                value = field.get_value(self._target)
-                self._widgets[key].set_value(value)
+                self._widgets[key].load_from_target()
 
     def refresh(self) -> None:
         if self._target is None:
@@ -316,9 +310,7 @@ class InspectFieldPanel(VStack):
             for key, field in self._fields.items():
                 widget = self._widgets.get(key)
                 if widget is not None:
-                    if field.kind == "button":
-                        continue
-                    widget.set_value(field.get_value(self._target))
+                    widget.load_from_target()
         finally:
             self._updating_from_model = False
 

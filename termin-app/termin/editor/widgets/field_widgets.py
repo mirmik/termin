@@ -74,6 +74,20 @@ class FieldWidget(QWidget):
 
     value_changed = pyqtSignal()
 
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._field_key: str = ""
+        self._field: InspectField | None = None
+        self._target: Any = None
+
+    def bind_field(self, key: str, field: "InspectField", target: Any) -> None:
+        self._field_key = key
+        self._field = field
+        self._target = target
+
+    def full_row(self) -> bool:
+        return False
+
     def get_value(self) -> Any:
         """Get current widget value."""
         raise NotImplementedError
@@ -81,6 +95,19 @@ class FieldWidget(QWidget):
     def set_value(self, value: Any) -> None:
         """Set widget value."""
         raise NotImplementedError
+
+    def load_from_target(self) -> None:
+        if self._field is None or self._target is None:
+            return
+        self.set_value(self._field.get_value(self._target))
+
+    def apply_to_target(self) -> tuple[Any, Any] | None:
+        if self._field is None or self._target is None:
+            return None
+        old_value = self._field.get_value(self._target)
+        new_value = self.get_value()
+        self._field.set_value(self._target, new_value)
+        return old_value, new_value
 
     @staticmethod
     def _values_equal(a: Any, b: Any) -> bool:
@@ -456,12 +483,9 @@ class ButtonFieldWidget(FieldWidget):
     def __init__(
         self,
         label: str = "Action",
-        action: Optional[Callable] = None,
         parent: Optional[QWidget] = None,
     ):
         super().__init__(parent)
-        self._action = action
-        self._target: Any = None
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -470,9 +494,8 @@ class ButtonFieldWidget(FieldWidget):
         self._btn.clicked.connect(self._on_click)
         layout.addWidget(self._btn)
 
-    def set_target(self, target: Any) -> None:
-        """Set the target object for the action callback."""
-        self._target = target
+    def full_row(self) -> bool:
+        return True
 
     def get_value(self) -> None:
         return None
@@ -480,13 +503,16 @@ class ButtonFieldWidget(FieldWidget):
     def set_value(self, value: Any) -> None:
         pass
 
+    def load_from_target(self) -> None:
+        pass
+
+    def apply_to_target(self) -> tuple[Any, Any] | None:
+        if self._field is not None and self._target is not None and self._field.action is not None:
+            self._field.action(self._target)
+        return None
+
     def _on_click(self) -> None:
-        if self._action is not None and self._target is not None:
-            try:
-                self._action(self._target)
-            except Exception as e:
-                from tcbase import log
-                log.error(f"Button action failed: {e}")
+        self.value_changed.emit()
 
 
 class ComboFieldWidget(FieldWidget):
@@ -601,9 +627,8 @@ class ClipSelectorWidget(FieldWidget):
         self._combo.currentIndexChanged.connect(lambda _: self.value_changed.emit())
         layout.addWidget(self._combo)
 
-    def set_target(self, target: Any) -> None:
-        """Set target component to read available clips from."""
-        self._target = target
+    def bind_field(self, key: str, field: "InspectField", target: Any) -> None:
+        super().bind_field(key, field, target)
         self._refresh_choices()
 
     def _refresh_choices(self) -> None:
@@ -851,7 +876,6 @@ class FieldWidgetFactory:
         if kind == "button":
             return ButtonFieldWidget(
                 label=field.label or "Action",
-                action=field.action,
             )
 
         if kind == "enum":
