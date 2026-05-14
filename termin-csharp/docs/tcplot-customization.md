@@ -16,6 +16,7 @@
 | Цвет заголовка | `set_title_color` / `clear_title_color` | r, g, b, a | Override. Без вызова = `label_color` |
 | Цвет серии | `set_line_color` | panel_idx, series_idx, r, g, b, a | Смена цвета уже добавленной линии |
 | Линия по scalar-цвету | `plot_colormap` / `add_line_colormap` | x, y, scalar, n, colormap, min, max, thickness, label | Для маршрутов: XY-линия, цвет кодирует третью величину |
+| Инверсия colormap | `colormap_reversed` / `set_line_colormap_reversed` | bool или panel_idx+series_idx+bool | Меняет направление шкалы; например инвертированный `Jet` |
 | Пунктир / точки | `set_line_style` | series_idx или panel_idx+series_idx, `LineStyle`, dash_px, gap_px | Длина штриха и пробела задаётся в экранных пикселях |
 | Маркеры-точки | `scatter` / `add_scatter` | x, y, n, r, g, b, a, size, label | Scatter рисуется кругами; удобно для старт/финиш |
 | Размер шрифтов | `set_font_size` | label_px, title_px | Подписи осей и заголовок |
@@ -77,7 +78,8 @@ View.plot_colormap(x, y, z, (uint)x.Length,
     SurfaceColorMap.Viridis,
     zMin, zMax,
     thickness: 3.0,
-    label: "True trajectory");
+    label: "True trajectory",
+    colormap_reversed: false);
 
 View.plot(navX, navY, (uint)navX.Length,
     0.0f, 0.47f, 0.83f, 1.0f,
@@ -97,6 +99,26 @@ View.scatter(new[] { x[^1] }, new[] { y[^1] }, 1,
 
 В `PlotView2DMulti` те же операции называются `add_line_colormap`,
 `add_scatter` и `set_line_style(panel_idx, series_idx, ...)`.
+
+Для инвертированной шкалы можно передать `colormap_reversed: true` при создании серии.
+Например, инвертированный Jet для высоты:
+
+```csharp
+View.plot_colormap(x, y, z, (uint)x.Length,
+    SurfaceColorMap.Jet,
+    zMin, zMax,
+    thickness: 3.0,
+    label: "Altitude",
+    colormap_reversed: true);
+```
+
+У уже добавленной серии направление шкалы меняется без пересоздания данных:
+
+```csharp
+View.set_line_colormap_reversed(series_idx: 0, reversed: true);
+// PlotView2DMulti:
+View.set_line_colormap_reversed(panel_idx: 0, series_idx: 0, reversed: true);
+```
 
 ### Шрифты и отступы
 
