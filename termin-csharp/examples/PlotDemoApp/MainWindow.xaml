@@ -27,6 +27,11 @@
                 Padding="12,8"
                 Margin="0,0,0,8"
                 Click="OnOpen2D"/>
+        <Button x:Name="BtnRoute2D"
+                Content="Open 2D route demo (colormap + dash + markers)"
+                Padding="12,8"
+                Margin="0,0,0,8"
+                Click="OnOpenRoute2D"/>
         <Button x:Name="BtnMulti2D"
                 Content="Open multi-panel 2D time-series demo"
                 Padding="12,8"

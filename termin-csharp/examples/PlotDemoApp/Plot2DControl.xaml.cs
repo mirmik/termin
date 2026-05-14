@@ -60,11 +60,26 @@ public partial class Plot2DControl : UserControl, IDisposable
         View.plot(x, y, (uint)x.Length, r, g, b, a, thickness, label);
     }
 
+    public void PlotColormap(double[] x, double[] y, double[] scalar,
+                             SurfaceColorMap colormap = SurfaceColorMap.Jet,
+                             double scalarMin = 0.0, double scalarMax = 1.0,
+                             double thickness = 1.5, string label = "")
+    {
+        View.plot_colormap(x, y, scalar, (uint)x.Length, colormap,
+            scalarMin, scalarMax, thickness, label);
+    }
+
     public void Scatter(double[] x, double[] y,
                         float r = 1f, float g = 1f, float b = 1f, float a = 1f,
                         double size = 4.0, string label = "")
     {
         View.scatter(x, y, (uint)x.Length, r, g, b, a, size, label);
+    }
+
+    public void SetLineStyle(int series, LineStyle style,
+                             float dashPx = 8.0f, float gapPx = 5.0f)
+    {
+        View.set_line_style(series, style, dashPx, gapPx);
     }
 
     private void InitializeNative()
