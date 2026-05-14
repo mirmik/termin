@@ -2,16 +2,617 @@
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/shader_parser.hpp>
 #include <termin/geom/mat44.hpp>
+#include <termin/tc_scene.hpp>
+#include <DetourAlloc.h>
+#include <DetourNavMeshBuilder.h>
+#include <DetourNavMesh.h>
+#include <DetourStatus.h>
+#include <inspect/tc_kind_cpp.hpp>
+#include <trent/json.h>
 #include <array>
+#include <any>
+#include <algorithm>
 #include <cstring>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iterator>
+#include <memory>
+#include <sstream>
 #include <set>
+#include <utility>
+#include <vector>
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
 
 namespace {
 constexpr const char* NAVMESH_DEBUG_PHASE = "editor_debug";
+
+struct NavMeshHandleKindRegistrar {
+    NavMeshHandleKindRegistrar() {
+        tc::KindRegistryCpp::instance().register_kind(
+            "navmesh_handle",
+            [](const std::any& value) -> tc_value {
+                const std::string uuid =
+                    value.type() == typeid(std::string) ? std::any_cast<std::string>(value) : std::string();
+                tc_value result = tc_value_dict_new();
+                tc_value_dict_set(&result, "uuid", tc_value_string(uuid.c_str()));
+                tc_value_dict_set(&result, "name", tc_value_string(""));
+                return result;
+            },
+            [](const tc_value* value, void*) -> std::any {
+                if (!value || value->type == TC_VALUE_NIL) {
+                    return std::string();
+                }
+                if (value->type == TC_VALUE_STRING && value->data.s) {
+                    return std::string(value->data.s);
+                }
+                if (value->type == TC_VALUE_DICT) {
+                    tc_value* uuid = tc_value_dict_get(const_cast<tc_value*>(value), "uuid");
+                    if (uuid && uuid->type == TC_VALUE_STRING && uuid->data.s) {
+                        return std::string(uuid->data.s);
+                    }
+                }
+                return std::string();
+            }
+        );
+    }
+};
+
+NavMeshHandleKindRegistrar navmesh_handle_kind_registrar;
+
+std::string json_escape(const std::string& value) {
+    std::ostringstream out;
+    for (char ch : value) {
+        switch (ch) {
+            case '\\': out << "\\\\"; break;
+            case '"': out << "\\\""; break;
+            case '\n': out << "\\n"; break;
+            case '\r': out << "\\r"; break;
+            case '\t': out << "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(ch) < 0x20) {
+                    out << "\\u" << std::hex << std::setw(4) << std::setfill('0')
+                        << static_cast<int>(static_cast<unsigned char>(ch));
+                } else {
+                    out << ch;
+                }
+                break;
+        }
+    }
+    return out.str();
+}
+
+std::string base64_encode(const unsigned char* data, int size) {
+    static constexpr char alphabet[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve(((size + 2) / 3) * 4);
+
+    for (int i = 0; i < size; i += 3) {
+        unsigned int v = static_cast<unsigned int>(data[i]) << 16;
+        if (i + 1 < size) v |= static_cast<unsigned int>(data[i + 1]) << 8;
+        if (i + 2 < size) v |= static_cast<unsigned int>(data[i + 2]);
+
+        out.push_back(alphabet[(v >> 18) & 0x3f]);
+        out.push_back(alphabet[(v >> 12) & 0x3f]);
+        out.push_back((i + 1 < size) ? alphabet[(v >> 6) & 0x3f] : '=');
+        out.push_back((i + 2 < size) ? alphabet[v & 0x3f] : '=');
+    }
+    return out;
+}
+
+std::vector<unsigned char> base64_decode(const std::string& input) {
+    static constexpr signed char invalid = -1;
+    static constexpr signed char padding = -2;
+    signed char table[256];
+    std::fill(std::begin(table), std::end(table), invalid);
+
+    const char* alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    for (int i = 0; alphabet[i]; ++i) {
+        table[static_cast<unsigned char>(alphabet[i])] = static_cast<signed char>(i);
+    }
+    table[static_cast<unsigned char>('=')] = padding;
+
+    std::vector<unsigned char> out;
+    int value = 0;
+    int bits = -8;
+    for (unsigned char ch : input) {
+        if (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t') {
+            continue;
+        }
+        signed char decoded = table[ch];
+        if (decoded == padding) {
+            break;
+        }
+        if (decoded == invalid) {
+            return {};
+        }
+        value = (value << 6) | decoded;
+        bits += 6;
+        if (bits >= 0) {
+            out.push_back(static_cast<unsigned char>((value >> bits) & 0xff));
+            bits -= 8;
+        }
+    }
+    return out;
+}
+
+std::string sanitize_filename(std::string value) {
+    if (value.empty()) {
+        value = "navmesh";
+    }
+    for (char& ch : value) {
+        const bool ok =
+            (ch >= 'a' && ch <= 'z') ||
+            (ch >= 'A' && ch <= 'Z') ||
+            (ch >= '0' && ch <= '9') ||
+            ch == '_' || ch == '-';
+        if (!ok) {
+            ch = '_';
+        }
+    }
+    return value;
+}
+
+std::string entity_path_string(Entity entity) {
+    std::vector<std::string> parts;
+    while (entity.valid()) {
+        const char* name = entity.name();
+        parts.push_back(sanitize_filename(name && name[0] ? std::string(name) : std::string("entity")));
+        entity = entity.parent();
+    }
+    std::reverse(parts.begin(), parts.end());
+
+    std::ostringstream out;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i > 0) {
+            out << "__";
+        }
+        out << parts[i];
+    }
+    return out.str();
+}
+
+uint64_t fnv1a64(const std::string& value) {
+    uint64_t hash = 1469598103934665603ull;
+    for (unsigned char ch : value) {
+        hash ^= ch;
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+std::string stable_uuid(const std::string& seed) {
+    const uint64_t a = fnv1a64(seed);
+    const uint64_t b = fnv1a64("termin-navmesh:" + seed);
+    std::ostringstream out;
+    out << std::hex << std::setfill('0')
+        << std::setw(8) << static_cast<uint32_t>(a >> 32) << "-"
+        << std::setw(4) << static_cast<uint16_t>(a >> 16) << "-"
+        << std::setw(4) << static_cast<uint16_t>(a) << "-"
+        << std::setw(4) << static_cast<uint16_t>(b >> 48) << "-"
+        << std::setw(12) << (b & 0x0000ffffffffffffull);
+    return out.str();
+}
+
+std::filesystem::path resolve_output_path(const Entity& entity, const std::string& agent_type_name) {
+    TcSceneRef scene = entity.scene();
+    if (!scene.valid()) {
+        return {};
+    }
+
+    std::string scene_path = scene.source_path();
+    if (scene_path.empty()) {
+        return {};
+    }
+
+    std::filesystem::path scene_file_path(scene_path);
+    std::string scene_stem = scene_file_path.stem().string();
+    if (scene_stem.empty()) {
+        scene_stem = scene.name();
+    }
+
+    const std::string file_name =
+        entity_path_string(entity) + "-" + sanitize_filename(agent_type_name) + ".navmesh";
+
+    return scene_file_path.parent_path()
+        / "navmeshes"
+        / sanitize_filename(scene_stem)
+        / file_name;
+}
+
+std::filesystem::path find_navmesh_asset_by_uuid(const std::filesystem::path& scene_path,
+                                                 const std::string& uuid) {
+    if (uuid.empty()) {
+        return {};
+    }
+
+    std::filesystem::path root = scene_path.parent_path() / "navmeshes";
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec)) {
+        return {};
+    }
+
+    std::filesystem::recursive_directory_iterator it(root, ec);
+    std::filesystem::recursive_directory_iterator end;
+    while (!ec && it != end) {
+        const std::filesystem::path path = it->path();
+        if (it->is_regular_file(ec) && path.extension() == ".meta") {
+            try {
+                nos::trent meta = nos::json::parse_file(path.string());
+                if (meta.is_dict() && meta.contains("uuid") &&
+                    meta["uuid"].is_string() && meta["uuid"].as_string() == uuid) {
+                    std::filesystem::path asset_path = path;
+                    asset_path.replace_extension("");
+                    return asset_path;
+                }
+            } catch (const std::exception& e) {
+                tc_log_warn("[NavMeshKeeperComponent] failed to read meta '%s': %s",
+                            path.string().c_str(), e.what());
+            }
+        }
+        it.increment(ec);
+    }
+
+    return {};
+}
+
+TcMaterial get_or_create_navmesh_debug_material(TcMaterial& material) {
+    if (material.is_valid()) {
+        return material;
+    }
+
+    material = TcMaterial::create("navmesh_debug_material");
+    if (!material.is_valid()) {
+        tc_log_error("[NavMesh] Failed to create debug material");
+        return material;
+    }
+
+    const char* vertex_source = R"(
+#version 330 core
+
+layout(location = 0) in vec3 a_position;
+layout(location = 5) in vec4 a_color;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+out vec4 v_color;
+
+void main() {
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+    v_color = a_color;
+}
+)";
+
+    const char* fragment_source = R"(
+#version 330 core
+
+in vec4 v_color;
+out vec4 frag_color;
+
+void main() {
+    frag_color = v_color;
+}
+)";
+
+    tc_render_state state = tc_render_state_opaque();
+    state.depth_test = 1;
+    state.depth_write = 0;
+    state.cull = 0;
+    state.blend = 0;
+
+    std::string vertex_stage = rewrite_engine_uniforms_for_stage_source(vertex_source, "vertex");
+    std::string fragment_stage = rewrite_engine_uniforms_for_stage_source(fragment_source, "fragment");
+
+    tc_material_phase* phase = material.add_phase_from_sources(
+        vertex_stage.c_str(),
+        fragment_stage.c_str(),
+        nullptr,
+        "navmesh_debug_shader",
+        NAVMESH_DEBUG_PHASE,
+        0,
+        state
+    );
+
+    if (!phase) {
+        tc_log_error("[NavMesh] Failed to add phase to debug material");
+    }
+
+    return material;
+}
+
+std::array<float, 4> navmesh_poly_color(int poly_index) {
+    float hue = std::fmod((poly_index + 1) * 0.618033988749895f, 1.0f);
+    float saturation = 0.5f;
+    float value = 1.0f;
+
+    float h = hue * 6.0f;
+    int i = static_cast<int>(h);
+    float f = h - i;
+    float p = value * (1.0f - saturation);
+    float q = value * (1.0f - saturation * f);
+    float t = value * (1.0f - saturation * (1.0f - f));
+
+    float r, g, b;
+    switch (i % 6) {
+        case 0: r = value; g = t; b = p; break;
+        case 1: r = q; g = value; b = p; break;
+        case 2: r = p; g = value; b = t; break;
+        case 3: r = p; g = q; b = value; break;
+        case 4: r = t; g = p; b = value; break;
+        default: r = value; g = p; b = q; break;
+    }
+    return {r, g, b, 0.9f};
+}
+
+struct NavMeshDebugVertex {
+    float pos[3];
+    float color[4];
+};
+
+void push_detour_vertex(std::vector<NavMeshDebugVertex>& vertices,
+                        const float* rc_pos,
+                        const std::array<float, 4>& color) {
+    vertices.push_back({{
+        rc_pos[0],
+        rc_pos[2],
+        rc_pos[1],
+    }, {
+        color[0], color[1], color[2], color[3],
+    }});
+}
+
+const float* detour_detail_vertex(const dtMeshTile* tile,
+                                  const dtPoly* poly,
+                                  const dtPolyDetail* detail,
+                                  unsigned char tri_vertex) {
+    if (tri_vertex < poly->vertCount) {
+        return &tile->verts[poly->verts[tri_vertex] * 3];
+    }
+    return &tile->detailVerts[(detail->vertBase + tri_vertex - poly->vertCount) * 3];
+}
+
+void append_detour_tile_debug_mesh(const dtMeshTile* tile,
+                                   std::vector<NavMeshDebugVertex>& vertices,
+                                   std::vector<uint32_t>& indices,
+                                   int& poly_offset) {
+    if (!tile || !tile->header || !tile->polys || !tile->verts) {
+        return;
+    }
+
+    const dtMeshHeader* header = tile->header;
+    for (int p = 0; p < header->polyCount; ++p) {
+        const dtPoly* poly = &tile->polys[p];
+        if (poly->getType() != DT_POLYTYPE_GROUND || poly->vertCount < 3) {
+            continue;
+        }
+
+        const auto color = navmesh_poly_color(poly_offset++);
+        if (tile->detailMeshes && tile->detailTris && header->detailTriCount > 0) {
+            const dtPolyDetail* detail = &tile->detailMeshes[p];
+            for (unsigned int t = 0; t < detail->triCount; ++t) {
+                const unsigned char* tri = &tile->detailTris[(detail->triBase + t) * 4];
+                const uint32_t base = static_cast<uint32_t>(vertices.size());
+                push_detour_vertex(vertices, detour_detail_vertex(tile, poly, detail, tri[0]), color);
+                push_detour_vertex(vertices, detour_detail_vertex(tile, poly, detail, tri[1]), color);
+                push_detour_vertex(vertices, detour_detail_vertex(tile, poly, detail, tri[2]), color);
+                indices.push_back(base);
+                indices.push_back(base + 1);
+                indices.push_back(base + 2);
+            }
+            continue;
+        }
+
+        const uint32_t base = static_cast<uint32_t>(vertices.size());
+        for (unsigned char i = 0; i < poly->vertCount; ++i) {
+            push_detour_vertex(vertices, &tile->verts[poly->verts[i] * 3], color);
+        }
+        for (unsigned char i = 2; i < poly->vertCount; ++i) {
+            indices.push_back(base);
+            indices.push_back(base + i - 1);
+            indices.push_back(base + i);
+        }
+    }
+}
+
+TcMesh build_detour_debug_mesh(const std::filesystem::path& asset_path) {
+    nos::trent data = nos::json::parse_file(asset_path.string());
+    if (!data.is_dict() || !data.contains("format") ||
+        !data["format"].is_string() || data["format"].as_string() != "termin.detour_navmesh" ||
+        !data.contains("tiles") || !data["tiles"].is_list()) {
+        return {};
+    }
+
+    std::vector<NavMeshDebugVertex> vertices;
+    std::vector<uint32_t> indices;
+    int poly_offset = 0;
+
+    for (const nos::trent& tile_data : data["tiles"].as_list()) {
+        if (!tile_data.is_dict() ||
+            !tile_data.contains("data_encoding") ||
+            !tile_data["data_encoding"].is_string() ||
+            tile_data["data_encoding"].as_string() != "base64" ||
+            !tile_data.contains("data") ||
+            !tile_data["data"].is_string()) {
+            continue;
+        }
+
+        std::vector<unsigned char> blob = base64_decode(tile_data["data"].as_string());
+        if (blob.empty()) {
+            continue;
+        }
+
+        std::unique_ptr<dtNavMesh, decltype(&dtFreeNavMesh)> navmesh(dtAllocNavMesh(), dtFreeNavMesh);
+        if (!navmesh) {
+            continue;
+        }
+        if (!dtStatusSucceed(navmesh->init(blob.data(), static_cast<int>(blob.size()), 0))) {
+            continue;
+        }
+
+        const dtNavMesh* navmesh_view = navmesh.get();
+        append_detour_tile_debug_mesh(navmesh_view->getTile(0), vertices, indices, poly_offset);
+    }
+
+    if (vertices.empty() || indices.empty()) {
+        return {};
+    }
+
+    tc_vertex_layout layout;
+    tc_vertex_layout_init(&layout);
+    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+
+    char uuid[40];
+    tc_mesh_compute_uuid(vertices.data(), vertices.size() * sizeof(NavMeshDebugVertex),
+                         indices.data(), indices.size(), uuid);
+
+    tc_mesh_handle h = tc_mesh_get_or_create(uuid);
+    tc_mesh* mesh = tc_mesh_get(h);
+    if (!mesh) {
+        return {};
+    }
+    if (mesh->vertex_count == 0) {
+        tc_mesh_set_data(mesh,
+            vertices.data(), vertices.size(), &layout,
+            indices.data(), indices.size(),
+            "navmesh_keeper_debug_mesh");
+    }
+
+    tc_log_info("[NavMeshKeeperComponent] Detour debug mesh: %zu verts, %zu tris",
+                vertices.size(), indices.size() / 3);
+    return TcMesh(h);
+}
+}
+
+NavMeshKeeperComponent::NavMeshKeeperComponent() {
+    declare_type_name("NavMeshKeeperComponent");
+    install_drawable_vtable(&_c);
+}
+
+void NavMeshKeeperComponent::invalidate_debug_mesh() const {
+    _loaded_navmesh_uuid.clear();
+    _loaded_asset_path.clear();
+    _navmesh_debug_mesh = TcMesh();
+    _load_failed = false;
+}
+
+bool NavMeshKeeperComponent::ensure_debug_mesh_loaded() const {
+    if (navmesh_uuid.empty()) {
+        invalidate_debug_mesh();
+        return false;
+    }
+    if (_loaded_navmesh_uuid == navmesh_uuid && _navmesh_debug_mesh.is_valid()) {
+        return true;
+    }
+    if (_loaded_navmesh_uuid == navmesh_uuid && _load_failed) {
+        return false;
+    }
+
+    invalidate_debug_mesh();
+    _loaded_navmesh_uuid = navmesh_uuid;
+
+    TcSceneRef scene = entity().scene();
+    if (!scene.valid() || scene.source_path().empty()) {
+        _load_failed = true;
+        return false;
+    }
+
+    std::filesystem::path asset_path =
+        find_navmesh_asset_by_uuid(std::filesystem::path(scene.source_path()), navmesh_uuid);
+    if (asset_path.empty()) {
+        tc_log_warn("[NavMeshKeeperComponent] navmesh asset not found for uuid=%s", navmesh_uuid.c_str());
+        _load_failed = true;
+        return false;
+    }
+
+    try {
+        _navmesh_debug_mesh = build_detour_debug_mesh(asset_path);
+    } catch (const std::exception& e) {
+        tc_log_warn("[NavMeshKeeperComponent] failed to build debug mesh from '%s': %s",
+                    asset_path.string().c_str(), e.what());
+        _load_failed = true;
+        return false;
+    }
+
+    if (!_navmesh_debug_mesh.is_valid()) {
+        _load_failed = true;
+        return false;
+    }
+
+    _loaded_asset_path = asset_path.string();
+    return true;
+}
+
+std::set<std::string> NavMeshKeeperComponent::get_phase_marks() const {
+    if (navmesh_uuid.empty()) {
+        return {};
+    }
+    return {NAVMESH_DEBUG_PHASE};
+}
+
+void NavMeshKeeperComponent::draw_geometry(const RenderContext& context, int geometry_id) {
+    (void)context;
+    (void)geometry_id;
+    if (ensure_debug_mesh_loaded() && _navmesh_debug_mesh.is_valid()) {
+        tc_mesh_draw_gpu(_navmesh_debug_mesh.get());
+    }
+}
+
+std::vector<GeometryDrawCall> NavMeshKeeperComponent::get_geometry_draws(const std::string* phase_mark) {
+    std::vector<GeometryDrawCall> result;
+    if (phase_mark && *phase_mark != NAVMESH_DEBUG_PHASE) {
+        return result;
+    }
+    if (!ensure_debug_mesh_loaded()) {
+        return result;
+    }
+
+    TcMaterial mat = get_or_create_navmesh_debug_material(_navmesh_debug_material);
+    if (!mat.is_valid()) {
+        return result;
+    }
+
+    tc_material* material = mat.get();
+    if (!material) {
+        return result;
+    }
+
+    for (size_t i = 0; i < material->phase_count; ++i) {
+        tc_material_phase* phase = &material->phases[i];
+        if (phase_mark && phase->phase_mark != *phase_mark) {
+            continue;
+        }
+        result.emplace_back(phase, 0);
+    }
+    return result;
+}
+
+tc_mesh* NavMeshKeeperComponent::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
+    (void)geometry_id;
+    if (phase_mark != NAVMESH_DEBUG_PHASE) {
+        return nullptr;
+    }
+    return ensure_debug_mesh_loaded() && _navmesh_debug_mesh.is_valid() ? _navmesh_debug_mesh.get() : nullptr;
+}
+
+namespace {
+
+tc::InspectAccessorFieldRegistrar<NavMeshKeeperComponent, std::string>
+    navmesh_keeper_navmesh_field_reg{
+        "NavMeshKeeperComponent",
+        "navmesh",
+        "NavMesh",
+        "navmesh_handle",
+        [](NavMeshKeeperComponent* self) { return self->navmesh_uuid; },
+        [](NavMeshKeeperComponent* self, std::string value) { self->navmesh_uuid = std::move(value); }
+    };
+
 }
 
 // Simple context for logging
@@ -363,6 +964,152 @@ void RecastNavMeshBuilderComponent::free_result(RecastBuildResult& result) {
         result.detail_mesh = nullptr;
     }
     result.success = false;
+}
+
+bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& result) {
+    rcPolyMesh* pmesh = result.poly_mesh;
+    if (!result.success || !pmesh) {
+        tc_log_error("RecastNavMeshBuilderComponent: cannot save Detour asset without a successful poly mesh");
+        return false;
+    }
+
+    std::vector<unsigned short> poly_flags(static_cast<size_t>(pmesh->npolys), 0);
+    std::vector<unsigned char> poly_areas(static_cast<size_t>(pmesh->npolys), 0);
+    for (int i = 0; i < pmesh->npolys; ++i) {
+        const unsigned char area = pmesh->areas ? pmesh->areas[i] : RC_WALKABLE_AREA;
+        poly_areas[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : 0;
+        poly_flags[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : 1;
+    }
+
+    dtNavMeshCreateParams params;
+    std::memset(&params, 0, sizeof(params));
+    params.verts = pmesh->verts;
+    params.vertCount = pmesh->nverts;
+    params.polys = pmesh->polys;
+    params.polyAreas = poly_areas.data();
+    params.polyFlags = poly_flags.data();
+    params.polyCount = pmesh->npolys;
+    params.nvp = pmesh->nvp;
+
+    if (result.detail_mesh) {
+        params.detailMeshes = result.detail_mesh->meshes;
+        params.detailVerts = result.detail_mesh->verts;
+        params.detailVertsCount = result.detail_mesh->nverts;
+        params.detailTris = result.detail_mesh->tris;
+        params.detailTriCount = result.detail_mesh->ntris;
+    }
+
+    rcVcopy(params.bmin, pmesh->bmin);
+    rcVcopy(params.bmax, pmesh->bmax);
+    params.walkableHeight = agent_height;
+    params.walkableRadius = agent_radius;
+    params.walkableClimb = agent_max_climb;
+    params.cs = pmesh->cs;
+    params.ch = pmesh->ch;
+    params.buildBvTree = true;
+
+    unsigned char* nav_data = nullptr;
+    int nav_data_size = 0;
+    if (!dtCreateNavMeshData(&params, &nav_data, &nav_data_size) || !nav_data || nav_data_size <= 0) {
+        tc_log_error("RecastNavMeshBuilderComponent: dtCreateNavMeshData failed");
+        return false;
+    }
+
+    const char* entity_name_c = entity().valid() && entity().name() ? entity().name() : "navmesh";
+    std::string entity_name(entity_name_c);
+    std::filesystem::path output_path = resolve_output_path(entity(), agent_type_name);
+    if (output_path.empty()) {
+        tc_log_error("RecastNavMeshBuilderComponent: cannot save Detour navmesh: scene has no file path");
+        dtFree(nav_data);
+        return false;
+    }
+    std::error_code ec;
+    std::filesystem::create_directories(output_path.parent_path(), ec);
+    if (ec) {
+        tc_log_error("RecastNavMeshBuilderComponent: failed to create directory '%s': %s",
+                     output_path.parent_path().string().c_str(), ec.message().c_str());
+        dtFree(nav_data);
+        return false;
+    }
+
+    NavMeshKeeperComponent* keeper = entity().get_component<NavMeshKeeperComponent>();
+    if (!keeper) {
+        keeper = new NavMeshKeeperComponent();
+        entity().add_component(keeper);
+    }
+    std::string uuid = keeper && !keeper->navmesh_uuid.empty()
+        ? keeper->navmesh_uuid
+        : stable_uuid(std::string(entity().uuid() ? entity().uuid() : entity_name) + ":" + agent_type_name);
+    std::string asset_name = output_path.stem().string();
+
+    const std::string blob = base64_encode(nav_data, nav_data_size);
+
+    std::ofstream out(output_path, std::ios::binary);
+    if (!out) {
+        tc_log_error("RecastNavMeshBuilderComponent: failed to open '%s' for writing",
+                     output_path.string().c_str());
+        dtFree(nav_data);
+        return false;
+    }
+
+    out << "{\n";
+    out << "  \"format\": \"termin.detour_navmesh\",\n";
+    out << "  \"version\": 2,\n";
+    out << "  \"name\": \"" << json_escape(asset_name) << "\",\n";
+    out << "  \"agent_type\": \"" << json_escape(agent_type_name) << "\",\n";
+    out << "  \"coordinate_system\": \"recast_y_up\",\n";
+    out << "  \"source_entity_uuid\": \"" << json_escape(entity().uuid() ? entity().uuid() : "") << "\",\n";
+    out << "  \"source_entity_name\": \"" << json_escape(entity_name) << "\",\n";
+    out << "  \"build\": {\n";
+    out << "    \"cell_size\": " << cell_size << ",\n";
+    out << "    \"cell_height\": " << cell_height << ",\n";
+    out << "    \"agent_height\": " << agent_height << ",\n";
+    out << "    \"agent_radius\": " << agent_radius << ",\n";
+    out << "    \"agent_max_climb\": " << agent_max_climb << ",\n";
+    out << "    \"agent_max_slope\": " << agent_max_slope << ",\n";
+    out << "    \"max_verts_per_poly\": " << max_verts_per_poly << "\n";
+    out << "  },\n";
+    out << "  \"tiles\": [\n";
+    out << "    {\n";
+    out << "      \"x\": 0,\n";
+    out << "      \"y\": 0,\n";
+    out << "      \"layer\": 0,\n";
+    out << "      \"data_encoding\": \"base64\",\n";
+    out << "      \"data_size\": " << nav_data_size << ",\n";
+    out << "      \"data\": \"" << blob << "\"\n";
+    out << "    }\n";
+    out << "  ]\n";
+    out << "}\n";
+    out.close();
+
+    if (!out) {
+        tc_log_error("RecastNavMeshBuilderComponent: failed while writing '%s'",
+                     output_path.string().c_str());
+        dtFree(nav_data);
+        return false;
+    }
+
+    const std::filesystem::path meta_path = output_path.string() + ".meta";
+    std::ofstream meta(meta_path);
+    if (meta) {
+        meta << "{\n";
+        meta << "  \"uuid\": \"" << json_escape(uuid) << "\",\n";
+        meta << "  \"type\": \"navmesh\",\n";
+        meta << "  \"format\": \"termin.detour_navmesh\",\n";
+        meta << "  \"version\": 2\n";
+        meta << "}\n";
+    } else {
+        tc_log_error("RecastNavMeshBuilderComponent: failed to write meta '%s'",
+                     meta_path.string().c_str());
+    }
+
+    keeper->navmesh_uuid = uuid;
+    keeper->invalidate_debug_mesh();
+
+    tc_log_info("RecastNavMeshBuilderComponent: saved Detour navmesh '%s' (%d bytes, uuid=%s)",
+                output_path.string().c_str(), nav_data_size, uuid.c_str());
+    dtFree(nav_data);
+    return true;
 }
 
 // --- Drawable interface ---
@@ -1673,6 +2420,7 @@ void RecastNavMeshBuilderComponent::build_from_entity() {
     if (result.success) {
         tc_log_info("RecastNavMeshBuilderComponent: build successful (%d polys)",
                     result.poly_mesh ? result.poly_mesh->npolys : 0);
+        save_detour_asset(result);
     } else {
         tc_log_error("RecastNavMeshBuilderComponent: build failed - %s", result.error.c_str());
     }

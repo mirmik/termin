@@ -33,6 +33,26 @@ void bind_recast_navmesh_builder(nb::module_& m) {
             return r.poly_mesh ? r.poly_mesh->nverts : 0;
         });
 
+    nb::class_<NavMeshKeeperComponent, CxxComponent>(m, "NavMeshKeeperComponent")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<NavMeshKeeperComponent>(self);
+        })
+        .def_rw("navmesh_uuid", &NavMeshKeeperComponent::navmesh_uuid)
+        .def_prop_rw("navmesh",
+            [](NavMeshKeeperComponent& self) {
+                nb::dict value;
+                value["uuid"] = self.navmesh_uuid;
+                value["name"] = "";
+                return value;
+            },
+            [](NavMeshKeeperComponent& self, nb::dict value) {
+                if (value.contains("uuid")) {
+                    self.navmesh_uuid = nb::cast<std::string>(value["uuid"]);
+                } else {
+                    self.navmesh_uuid.clear();
+                }
+            });
+
     // RecastNavMeshBuilderComponent
     nb::class_<RecastNavMeshBuilderComponent, CxxComponent>(m, "RecastNavMeshBuilderComponent")
         .def("__init__", [](nb::handle self) {

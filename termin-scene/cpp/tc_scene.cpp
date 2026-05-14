@@ -156,6 +156,15 @@ void TcSceneRef::set_name(const std::string& n) {
     tc_scene_set_name(_h, n.c_str());
 }
 
+std::string TcSceneRef::source_path() const {
+    const char* path = tc_scene_get_source_path(_h);
+    return path ? std::string(path) : "";
+}
+
+void TcSceneRef::set_source_path(const std::string& path) {
+    tc_scene_set_source_path(_h, path.empty() ? nullptr : path.c_str());
+}
+
 std::string TcSceneRef::uuid() const {
     const char* u = tc_scene_get_uuid(_h);
     return u ? std::string(u) : "";

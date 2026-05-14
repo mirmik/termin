@@ -196,6 +196,10 @@ TC_API void tc_scene_set_mode(tc_scene_handle h, tc_scene_mode mode);
 TC_API const char* tc_scene_get_name(tc_scene_handle h);
 TC_API void tc_scene_set_name(tc_scene_handle h, const char* name);
 
+// Transient source file path. Not serialized into scene data.
+TC_API const char* tc_scene_get_source_path(tc_scene_handle h);
+TC_API void tc_scene_set_source_path(tc_scene_handle h, const char* path);
+
 TC_API const char* tc_scene_get_uuid(tc_scene_handle h);
 TC_API void tc_scene_set_uuid(tc_scene_handle h, const char* uuid);
 

@@ -84,6 +84,7 @@ typedef struct {
     tc_resource_map** type_heads;
     tc_value* metadata;  // Extensible metadata storage (dict per scene)
     const char** names;
+    const char** source_paths;
     const char** uuids;
     tc_component** capability_heads;
     size_t* capability_counts;
@@ -141,6 +142,7 @@ void tc_scene_pool_init(void) {
     g_pool->type_heads = (tc_resource_map**)calloc(cap, sizeof(tc_resource_map*));
     g_pool->metadata = (tc_value*)calloc(cap, sizeof(tc_value));
     g_pool->names = (const char**)calloc(cap, sizeof(const char*));
+    g_pool->source_paths = (const char**)calloc(cap, sizeof(const char*));
     g_pool->uuids = (const char**)calloc(cap, sizeof(const char*));
     g_pool->capability_heads = (tc_component**)calloc(cap * TC_COMPONENT_MAX_CAPABILITIES, sizeof(tc_component*));
     g_pool->capability_counts = (size_t*)calloc(cap * TC_COMPONENT_MAX_CAPABILITIES, sizeof(size_t));
@@ -184,6 +186,7 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->type_heads);
     free(g_pool->metadata);
     free(g_pool->names);
+    free(g_pool->source_paths);
     free(g_pool->uuids);
     free(g_pool->capability_heads);
     free(g_pool->capability_counts);
@@ -221,6 +224,7 @@ static void pool_grow(void) {
     g_pool->type_heads = realloc(g_pool->type_heads, new_cap * sizeof(tc_resource_map*));
     g_pool->metadata = realloc(g_pool->metadata, new_cap * sizeof(tc_value));
     g_pool->names = realloc(g_pool->names, new_cap * sizeof(const char*));
+    g_pool->source_paths = realloc(g_pool->source_paths, new_cap * sizeof(const char*));
     g_pool->uuids = realloc(g_pool->uuids, new_cap * sizeof(const char*));
     g_pool->capability_heads = realloc(g_pool->capability_heads, new_cap * TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
     g_pool->capability_counts = realloc(g_pool->capability_counts, new_cap * TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
@@ -243,6 +247,7 @@ static void pool_grow(void) {
     memset(g_pool->type_heads + old_cap, 0, (new_cap - old_cap) * sizeof(tc_resource_map*));
     memset(g_pool->metadata + old_cap, 0, (new_cap - old_cap) * sizeof(tc_value));
     memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
+    memset(g_pool->source_paths + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
     memset(g_pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
     memset(g_pool->capability_heads + old_cap * TC_COMPONENT_MAX_CAPABILITIES, 0,
            (new_cap - old_cap) * TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
@@ -314,6 +319,7 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     g_pool->type_heads[idx] = tc_resource_map_new(NULL);
     g_pool->metadata[idx] = tc_value_dict_new();
     g_pool->names[idx] = name ? tgfx_intern_string(name) : tgfx_intern_string("(unnamed)");
+    g_pool->source_paths[idx] = NULL;
     memset(g_pool->ext_instances + idx * TC_SCENE_EXT_TYPE_COUNT, 0, TC_SCENE_EXT_TYPE_COUNT * sizeof(void*));
 
     tc_scene_handle h = { idx, gen };
@@ -425,6 +431,16 @@ const char* tc_scene_get_name(tc_scene_handle h) {
 
 void tc_scene_set_name(tc_scene_handle h, const char* name) {
     tc_scene_pool_set_name(h, name);
+}
+
+const char* tc_scene_get_source_path(tc_scene_handle h) {
+    if (!handle_alive(h)) return NULL;
+    return g_pool->source_paths[h.index];
+}
+
+void tc_scene_set_source_path(tc_scene_handle h, const char* path) {
+    if (!handle_alive(h)) return;
+    g_pool->source_paths[h.index] = (path && path[0]) ? tgfx_intern_string(path) : NULL;
 }
 
 // ============================================================================

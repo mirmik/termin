@@ -141,6 +141,7 @@ class PlayerRuntime:
 
         # Create new scene and load data
         self.scene = create_scene(name=self.scene_name)
+        self.scene.source_path = str(scene_path.resolve())
         scene_data = data.get("scene") or (data.get("scenes", [None])[0])
         if scene_data:
             self.scene.load_from_data(scene_data, context=None, update_settings=True)
