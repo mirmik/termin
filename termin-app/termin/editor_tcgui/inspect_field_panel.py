@@ -303,6 +303,8 @@ class InspectFieldPanel(VStack):
                 widget.visible = visible
             if visible:
                 field = self._fields[key]
+                if field.kind == "button":
+                    continue
                 value = field.get_value(self._target)
                 self._widgets[key].set_value(value)
 
@@ -314,6 +316,8 @@ class InspectFieldPanel(VStack):
             for key, field in self._fields.items():
                 widget = self._widgets.get(key)
                 if widget is not None:
+                    if field.kind == "button":
+                        continue
                     widget.set_value(field.get_value(self._target))
         finally:
             self._updating_from_model = False
