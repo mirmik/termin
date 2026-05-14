@@ -5,8 +5,8 @@
 
 Интерфейс намеренно повторяет Qt-версию:
     widget = FloatFieldWidget(min_val=0, max_val=1)
-    widget.set_value(0.5)
-    widget.on_value_changed = lambda: do_something(widget.get_value())
+    widget.bind_field(key, field, target)
+    widget.load_from_target()
 """
 
 from __future__ import annotations
@@ -40,12 +40,36 @@ class FieldWidget(Widget):
     def __init__(self) -> None:
         super().__init__()
         self.on_value_changed: Callable[[], None] | None = None
+        self._field_key: str = ""
+        self._field: InspectField | None = None
+        self._target: Any = None
+
+    def bind_field(self, key: str, field: "InspectField", target: Any) -> None:
+        self._field_key = key
+        self._field = field
+        self._target = target
+
+    def full_row(self) -> bool:
+        return False
 
     def get_value(self) -> Any:
         raise NotImplementedError
 
     def set_value(self, value: Any) -> None:
         raise NotImplementedError
+
+    def load_from_target(self) -> None:
+        if self._field is None or self._target is None:
+            return
+        self.set_value(self._field.get_value(self._target))
+
+    def apply_to_target(self) -> tuple[Any, Any] | None:
+        if self._field is None or self._target is None:
+            return None
+        old_value = self._field.get_value(self._target)
+        new_value = self.get_value()
+        self._field.set_value(self._target, new_value)
+        return old_value, new_value
 
     def _emit(self) -> None:
         if self.on_value_changed is not None:
@@ -445,19 +469,16 @@ class ButtonFieldWidget(FieldWidget):
     def __init__(
         self,
         label: str = "Action",
-        action: Optional[Callable] = None,
     ) -> None:
         super().__init__()
-        self._action = action
-        self._target: Any = None
 
         self._btn = Button()
         self._btn.text = label
         self._btn.on_click = self._on_click
         self.add_child(self._btn)
 
-    def set_target(self, target: Any) -> None:
-        self._target = target
+    def full_row(self) -> bool:
+        return True
 
     def get_value(self) -> None:
         return None
@@ -465,12 +486,16 @@ class ButtonFieldWidget(FieldWidget):
     def set_value(self, value: Any) -> None:
         pass
 
+    def load_from_target(self) -> None:
+        pass
+
+    def apply_to_target(self) -> tuple[Any, Any] | None:
+        if self._field is not None and self._target is not None and self._field.action is not None:
+            self._field.action(self._target)
+        return None
+
     def _on_click(self) -> None:
-        if self._action is not None and self._target is not None:
-            try:
-                self._action(self._target)
-            except Exception as e:
-                log.error(f"[ButtonFieldWidget] Action failed: {e}")
+        self._emit()
 
 
 # ------------------------------------------------------------------
@@ -580,13 +605,12 @@ class ClipSelectorWidget(FieldWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._target: Any = None
         self._combo = ComboBox()
         self._combo.on_changed = self._on_changed
         self.add_child(self._combo)
 
-    def set_target(self, target: Any) -> None:
-        self._target = target
+    def bind_field(self, key: str, field: "InspectField", target: Any) -> None:
+        super().bind_field(key, field, target)
         self._refresh_choices()
 
     def _refresh_choices(self) -> None:
@@ -792,7 +816,6 @@ class FieldWidgetFactory:
         if kind == "button":
             return ButtonFieldWidget(
                 label=field.label or "Action",
-                action=field.action,
             )
 
         if kind in ("enum", "combo"):

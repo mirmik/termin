@@ -19,8 +19,6 @@ from termin.inspect import InspectField
 from termin.editor.widgets.field_widgets import (
     FieldWidget,
     FieldWidgetFactory,
-    ButtonFieldWidget,
-    ClipSelectorWidget,
 )
 
 if TYPE_CHECKING:
@@ -200,20 +198,15 @@ class InspectFieldPanel(QWidget):
         try:
             for key, field in fields.items():
                 widget = self._factory.create(field)
+                widget.bind_field(key, field, target)
                 self._widgets[key] = widget
 
-                # Set target for widgets that need it
-                if isinstance(widget, (ButtonFieldWidget, ClipSelectorWidget)):
-                    widget.set_target(target)
-
-                # Buttons span the full row, no separate label
-                if field.kind == "button":
+                if widget.full_row():
                     self._layout.addRow(widget)
                 else:
                     label = field.label or key
                     self._layout.addRow(QLabel(label), widget)
-                    value = field.get_value(target)
-                    widget.set_value(value)
+                    widget.load_from_target()
 
                 self._connect_widget(widget, key, field)
         finally:
@@ -231,10 +224,10 @@ class InspectFieldPanel(QWidget):
                 return
             if self._target is not target:
                 return  # Target changed, ignore stale callback
-            old_value = field.get_value(target)
-            new_value = widget.get_value()
-            field.set_value(target, new_value)
-            self.field_changed.emit(key, old_value, new_value)
+            applied = widget.apply_to_target()
+            if applied is not None:
+                old_value, new_value = applied
+                self.field_changed.emit(key, old_value, new_value)
             # Refresh all widgets (a field change may affect other fields)
             self.refresh()
             # Request viewport redraw after property change
@@ -256,10 +249,7 @@ class InspectFieldPanel(QWidget):
                 widget = self._widgets.get(key)
                 if widget is None:
                     continue
-                if field.kind == "button":
-                    continue
-                value = field.get_value(self._target)
-                widget.set_value(value)
+                widget.load_from_target()
         finally:
             self._updating_from_model = False
 
