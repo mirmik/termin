@@ -20,6 +20,7 @@
 | Поверхность с colormap | `surface_colormap` | X, Y, Z, rows, cols, colormap, r, g, b, a, wireframe, label | Основной способ задавать цветовую схему surface |
 | Colormap поверхности | `SurfaceColorMap` | `Jet`, `Viridis`, `Plasma`, `Grayscale`, `CoolWarm`, `Solid` | Enum из `Termin.Native` |
 | Смена colormap | `set_surface_colormap` | surface_idx, colormap | Меняет уже добавленную surface-серию |
+| Инверсия colormap | `colormap_reversed` / `set_surface_colormap_reversed` | bool или surface_idx+bool | Меняет направление шкалы; например инвертированный `Jet` |
 | Смена цвета surface | `set_surface_color` | surface_idx, r, g, b, a | RGB нужен для `Solid`; alpha работает для всех схем |
 | Data grid поверх surface | `set_surface_grid` | surface_idx, visible, row_step, col_step, r, g, b, a, width_px | Shader-side сетка по данным без полного wireframe |
 | Очистка данных | `clear` | - | Удаляет все серии |
@@ -56,7 +57,8 @@ View.surface_colormap(
     SurfaceColorMap.Viridis,
     0f, 0f, 0f, 1f,
     wireframe: false,
-    label: "surface");
+    label: "surface",
+    colormap_reversed: false);
 ```
 
 Для `Jet`, `Viridis`, `Plasma`, `Grayscale`, `CoolWarm` RGB из цветового
@@ -75,6 +77,19 @@ View.surface_colormap(
 ```
 
 Старый `surface(...)` оставлен как короткий путь и использует `Jet`.
+
+Для инвертированной шкалы передайте `colormap_reversed: true`. Например, инвертированный `Jet`:
+
+```csharp
+View.surface_colormap(
+    X, Y, Z,
+    rows, cols,
+    SurfaceColorMap.Jet,
+    0f, 0f, 0f, 1f,
+    wireframe: false,
+    label: "surface",
+    colormap_reversed: true);
+```
 
 ---
 
@@ -169,6 +184,7 @@ if (!ok)
 
 View.set_surface_color(0, 0.2f, 0.8f, 0.3f, 1f);
 View.set_surface_colormap(0, SurfaceColorMap.Solid);
+View.set_surface_colormap_reversed(0, true);
 ```
 
 После смены стиля engine помечает данные dirty и перестроит GPU mesh при
