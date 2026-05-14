@@ -38,7 +38,8 @@ public partial class RoutePlot2DWindow : Window
             Plot.View.set_y_label("Y, m");
 
             Plot.PlotColormap(trueX, trueY, trueZ, SurfaceColorMap.Viridis,
-                zMin, zMax, thickness: 3.0, label: "true trajectory by Z");
+                zMin, zMax, thickness: 3.0, label: "true trajectory by Z",
+                colormapReversed: true);
 
             Plot.Plot(navX, navY,
                 0.0f, 0.47f, 0.83f, 1.0f,

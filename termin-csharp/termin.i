@@ -1203,7 +1203,8 @@ public:
                           SurfaceColorMap colormap,
                           float cr, float cg, float cb, float ca,
                           bool wireframe = false,
-                          const char* label = "");
+                          const char* label = "",
+                          bool colormap_reversed = false);
 
     void clear();
     void set_title(const char* title);
@@ -1214,6 +1215,7 @@ public:
                          const char* y_label,
                          const char* z_label);
     bool set_surface_colormap(int surface_idx, SurfaceColorMap colormap);
+    bool set_surface_colormap_reversed(int surface_idx, bool reversed);
     bool set_surface_color(int surface_idx, float r, float g, float b, float a);
     bool set_surface_grid(int surface_idx, bool visible,
                           unsigned int row_step, unsigned int col_step,
@@ -1264,7 +1266,8 @@ public:
                        double scalar_min = 0.0,
                        double scalar_max = 1.0,
                        double thickness = 1.5,
-                       const char* label = "");
+                       const char* label = "",
+                       bool colormap_reversed = false);
 
     void scatter(const double* x, const double* y, size_t n,
                  float cr, float cg, float cb, float ca,
@@ -1283,6 +1286,7 @@ public:
     bool set_line_style(int idx, LineStyle style,
                         float dash_px = 8.0f,
                         float gap_px = 5.0f);
+    bool set_line_colormap_reversed(int idx, bool reversed);
 
     bool on_mouse_down(float x, float y, int button);
     void on_mouse_move(float x, float y);
@@ -1334,7 +1338,8 @@ public:
                           double scalar_min = 0.0,
                           double scalar_max = 1.0,
                           double thickness = 1.5,
-                          const char* label = "");
+                          const char* label = "",
+                          bool colormap_reversed = false);
 
     int add_scatter(int panel_idx,
                     const double* x, const double* y, size_t n,
@@ -1376,6 +1381,8 @@ public:
                              LineStyle style,
                              float dash_px = 8.0f,
                              float gap_px = 5.0f);
+    void set_line_colormap_reversed(int panel_idx, int series_idx,
+                                    bool reversed);
     void set_font_size      (float label_px, float title_px);
     void set_panel_margins  (int left, int right, int top, int bottom);
     void set_title_pad      (float pad);

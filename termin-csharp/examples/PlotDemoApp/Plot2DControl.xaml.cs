@@ -63,10 +63,11 @@ public partial class Plot2DControl : UserControl, IDisposable
     public void PlotColormap(double[] x, double[] y, double[] scalar,
                              SurfaceColorMap colormap = SurfaceColorMap.Jet,
                              double scalarMin = 0.0, double scalarMax = 1.0,
-                             double thickness = 1.5, string label = "")
+                             double thickness = 1.5, string label = "",
+                             bool colormapReversed = false)
     {
         View.plot_colormap(x, y, scalar, (uint)x.Length, colormap,
-            scalarMin, scalarMax, thickness, label);
+            scalarMin, scalarMax, thickness, label, colormapReversed);
     }
 
     public void Scatter(double[] x, double[] y,
