@@ -1099,7 +1099,7 @@ namespace termin {
 // the genuinely array-shaped parameters get the typemap; a lone
 // `double*` out-param (see pick()) stays as a pointer for `ref`/out.
 %apply double INPUT[] {
-    const double* x, const double* y, const double* z,
+    const double* x, const double* y, const double* z, const double* scalar,
     const double* X, const double* Y, const double* Z
 }
 
@@ -1141,6 +1141,12 @@ enum class SurfaceColorMap {
     Grayscale,
     CoolWarm,
     Solid
+};
+
+enum class LineStyle {
+    Solid,
+    Dash,
+    Dot
 };
 
 class OrbitCamera {
@@ -1252,6 +1258,14 @@ public:
               double thickness = 1.5,
               const char* label = "");
 
+    void plot_colormap(const double* x, const double* y, const double* scalar,
+                       size_t n,
+                       SurfaceColorMap colormap = SurfaceColorMap::Jet,
+                       double scalar_min = 0.0,
+                       double scalar_max = 1.0,
+                       double thickness = 1.5,
+                       const char* label = "");
+
     void scatter(const double* x, const double* y, size_t n,
                  float cr, float cg, float cb, float ca,
                  double size = 4.0,
@@ -1264,6 +1278,11 @@ public:
     void set_title(const char* title);
     void set_x_label(const char* label);
     void set_y_label(const char* label);
+    bool set_line_color(int idx, float r, float g, float b, float a);
+    bool set_scatter_color(int idx, float r, float g, float b, float a);
+    bool set_line_style(int idx, LineStyle style,
+                        float dash_px = 8.0f,
+                        float gap_px = 5.0f);
 
     bool on_mouse_down(float x, float y, int button);
     void on_mouse_move(float x, float y);
@@ -1308,6 +1327,21 @@ public:
                  double thickness = 1.5,
                  const char* label = "");
 
+    int add_line_colormap(int panel_idx,
+                          const double* x, const double* y,
+                          const double* scalar, size_t n,
+                          SurfaceColorMap colormap = SurfaceColorMap::Jet,
+                          double scalar_min = 0.0,
+                          double scalar_max = 1.0,
+                          double thickness = 1.5,
+                          const char* label = "");
+
+    int add_scatter(int panel_idx,
+                    const double* x, const double* y, size_t n,
+                    float cr, float cg, float cb, float ca,
+                    double size = 4.0,
+                    const char* label = "");
+
     void append_to_line(int panel_idx, int series_idx,
                         const double* x, const double* y, size_t n);
 
@@ -1336,6 +1370,12 @@ public:
     void clear_title_color  ();
     void set_line_color     (int panel_idx, int series_idx,
                              float r, float g, float b, float a);
+    void set_scatter_color  (int panel_idx, int series_idx,
+                             float r, float g, float b, float a);
+    void set_line_style     (int panel_idx, int series_idx,
+                             LineStyle style,
+                             float dash_px = 8.0f,
+                             float gap_px = 5.0f);
     void set_font_size      (float label_px, float title_px);
     void set_panel_margins  (int left, int right, int top, int bottom);
     void set_title_pad      (float pad);
