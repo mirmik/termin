@@ -3,6 +3,7 @@ EditorCameraUIController - контроллер для UI редакторско
 
 Подписывается на кнопки в editor_camera_ui.uiscript и управляет:
 - Отображением коллайдеров (ColliderGizmoPass.enabled)
+- Отображением editor debug navmesh overlay (EditorDebug.passthrough)
 - Режимом wireframe (TODO)
 - Ортографической камерой (TODO)
 
@@ -46,6 +47,12 @@ class EditorCameraUIController(PythonComponent):
             is_serializable=True,
             is_inspectable=True,
         ),
+        "navmesh_enabled": InspectField(
+            path="navmesh_enabled",
+            kind="bool",
+            is_serializable=True,
+            is_inspectable=True,
+        ),
         "ortho_enabled": InspectField(
             path="ortho_enabled",
             kind="bool",
@@ -62,11 +69,13 @@ class EditorCameraUIController(PythonComponent):
 
         # Serializable state
         self.colliders_enabled: bool = False
+        self.navmesh_enabled: bool = True
         self.wireframe_enabled: bool = False
         self.ortho_enabled: bool = False
 
         # Кнопки (найдутся в start)
         self._colliders_btn: IconButton | None = None
+        self._navmesh_btn: IconButton | None = None
         self._wireframe_btn: IconButton | None = None
         self._ortho_btn: IconButton | None = None
 
@@ -120,6 +129,10 @@ class EditorCameraUIController(PythonComponent):
         if self._colliders_btn is not None:
             self._colliders_btn.on_click = self._on_colliders_click
 
+        self._navmesh_btn = self._ui_component.find("navmesh_btn")
+        if self._navmesh_btn is not None:
+            self._navmesh_btn.on_click = self._on_navmesh_click
+
         self._wireframe_btn = self._ui_component.find("wireframe_btn")
         if self._wireframe_btn is not None:
             self._wireframe_btn.on_click = self._on_wireframe_click
@@ -136,6 +149,13 @@ class EditorCameraUIController(PythonComponent):
             collider_pass.passthrough = not self.colliders_enabled
         if self._colliders_btn is not None:
             self._colliders_btn.active = self.colliders_enabled
+
+        # NavMesh / editor debug overlay
+        editor_debug_pass = self._find_pass_by_name("EditorDebug")
+        if editor_debug_pass is not None:
+            editor_debug_pass.passthrough = not self.navmesh_enabled
+        if self._navmesh_btn is not None:
+            self._navmesh_btn.active = self.navmesh_enabled
 
         # Wireframe
         color_pass = self._find_pass_by_name("Color")
@@ -176,6 +196,16 @@ class EditorCameraUIController(PythonComponent):
             collider_pass.passthrough = not self.colliders_enabled
         if self._colliders_btn is not None:
             self._colliders_btn.active = self.colliders_enabled
+
+    def _on_navmesh_click(self) -> None:
+        """Переключает отображение navmesh/editor debug overlay."""
+        self.navmesh_enabled = not self.navmesh_enabled
+
+        editor_debug_pass = self._find_pass_by_name("EditorDebug")
+        if editor_debug_pass is not None:
+            editor_debug_pass.passthrough = not self.navmesh_enabled
+        if self._navmesh_btn is not None:
+            self._navmesh_btn.active = self.navmesh_enabled
 
     def _on_wireframe_click(self) -> None:
         """Переключает wireframe режим."""

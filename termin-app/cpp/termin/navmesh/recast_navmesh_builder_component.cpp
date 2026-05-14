@@ -10,6 +10,10 @@
 
 namespace termin {
 
+namespace {
+constexpr const char* NAVMESH_DEBUG_PHASE = "editor_debug";
+}
+
 // Simple context for logging
 class BuildContext : public rcContext {
 public:
@@ -369,7 +373,7 @@ std::set<std::string> RecastNavMeshBuilderComponent::get_phase_marks() const {
     // Only participate in rendering if we have something to show
     if (show_input_mesh || show_heightfield || show_regions || show_distance_field ||
         show_contours || show_poly_mesh || show_detail_mesh) {
-        marks.insert("opaque");
+        marks.insert(NAVMESH_DEBUG_PHASE);
     }
 
     return marks;
@@ -429,8 +433,7 @@ void RecastNavMeshBuilderComponent::draw_geometry(const RenderContext& context, 
 std::vector<GeometryDrawCall> RecastNavMeshBuilderComponent::get_geometry_draws(const std::string* phase_mark) {
     std::vector<GeometryDrawCall> result;
 
-    // Only support opaque phase for now
-    if (phase_mark && *phase_mark != "opaque") {
+    if (phase_mark && *phase_mark != NAVMESH_DEBUG_PHASE) {
         return result;
     }
 
@@ -473,6 +476,34 @@ std::vector<GeometryDrawCall> RecastNavMeshBuilderComponent::get_geometry_draws(
     }
 
     return result;
+}
+
+tc_mesh* RecastNavMeshBuilderComponent::get_mesh_for_phase(
+    const std::string& phase_mark,
+    int geometry_id
+) const {
+    if (phase_mark != NAVMESH_DEBUG_PHASE) {
+        return nullptr;
+    }
+
+    switch (geometry_id) {
+        case GEOMETRY_INPUT_MESH:
+            return (show_input_mesh && _input_mesh.is_valid()) ? _input_mesh.get() : nullptr;
+        case GEOMETRY_HEIGHTFIELD:
+            return (show_heightfield && _heightfield_mesh.is_valid()) ? _heightfield_mesh.get() : nullptr;
+        case GEOMETRY_REGIONS:
+            return (show_regions && _regions_mesh.is_valid()) ? _regions_mesh.get() : nullptr;
+        case GEOMETRY_DISTANCE_FIELD:
+            return (show_distance_field && _distance_field_mesh.is_valid()) ? _distance_field_mesh.get() : nullptr;
+        case GEOMETRY_CONTOURS:
+            return (show_contours && _contours_mesh.is_valid()) ? _contours_mesh.get() : nullptr;
+        case GEOMETRY_POLY_MESH:
+            return (show_poly_mesh && _poly_mesh_debug.is_valid()) ? _poly_mesh_debug.get() : nullptr;
+        case GEOMETRY_DETAIL_MESH:
+            return (show_detail_mesh && _detail_mesh_debug.is_valid()) ? _detail_mesh_debug.get() : nullptr;
+        default:
+            return nullptr;
+    }
 }
 
 // --- Mesh generation ---
@@ -1349,7 +1380,7 @@ void main() {
 
         tc_render_state state = tc_render_state_opaque();
         state.depth_test = 1;
-        state.depth_write = 1;
+        state.depth_write = 0;
         state.cull = 0;  // No culling for debug mesh
         state.blend = 0;
 
@@ -1363,7 +1394,7 @@ void main() {
             fragment_stage.c_str(),
             nullptr,  // no geometry shader
             "navmesh_debug_shader",
-            "opaque",
+            NAVMESH_DEBUG_PHASE,
             0,  // priority
             state
         );
