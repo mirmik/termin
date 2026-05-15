@@ -68,33 +68,35 @@ static bool list_contains(ComponentList* list, tc_component* c) {
 #define MAX_SCENES 256
 #define INITIAL_POOL_CAPACITY 16
 
-typedef struct {
-    // Generational data
-    uint32_t* generations;
-    bool* alive;
+typedef struct tc_scene_slot {
+    uint32_t generation;
+    bool alive;
 
-    // Scene data arrays (SoA)
-    tc_entity_pool** pools;
-    tc_scene_mode* modes;
-    ComponentList* pending_starts;
-    ComponentList* update_lists;
-    ComponentList* fixed_update_lists;
-    ComponentList* before_render_lists;
-    double* fixed_timesteps;
-    double* accumulated_times;
-    tc_resource_map** type_heads;
-    tc_value* metadata;  // Extensible metadata storage (dict per scene)
-    const char** names;
-    const char** source_paths;
-    const char** uuids;
-    tc_component** capability_heads;
-    size_t* capability_counts;
-    tc_event_bus** event_buses;
+    tc_entity_pool* pool;
+    tc_scene_mode mode;
+    ComponentList pending_starts;
+    ComponentList update_list;
+    ComponentList fixed_update_list;
+    ComponentList before_render_list;
+    double fixed_timestep;
+    double accumulated_time;
+    tc_resource_map* type_heads;
+    tc_value metadata;  // Extensible metadata storage (dict per scene)
+    const char* name;
+    const char* source_path;
+    const char* uuid;
+    tc_component* capability_heads[TC_COMPONENT_MAX_CAPABILITIES];
+    size_t capability_counts[TC_COMPONENT_MAX_CAPABILITIES];
+    tc_event_bus* event_bus;
 
     // Layer and flag names (64 each per scene, interned strings)
-    const char** layer_names;  // [capacity * 64]
-    const char** flag_names;   // [capacity * 64]
-    void** ext_instances;      // [capacity * TC_SCENE_EXT_TYPE_COUNT]
+    const char* layer_names[64];
+    const char* flag_names[64];
+    void* ext_instances[TC_SCENE_EXT_TYPE_COUNT];
+} tc_scene_slot;
+
+typedef struct {
+    tc_scene_slot* slots;
 
     // Pool management
     uint32_t* free_stack;
@@ -105,9 +107,10 @@ typedef struct {
 
 static ScenePool* g_pool = NULL;
 
-#define CAPABILITY_HEAD(idx, slot) g_pool->capability_heads[(idx) * TC_COMPONENT_MAX_CAPABILITIES + (slot)]
-#define CAPABILITY_COUNT(idx, slot) g_pool->capability_counts[(idx) * TC_COMPONENT_MAX_CAPABILITIES + (slot)]
-#define EXT_INSTANCE(idx, slot) g_pool->ext_instances[(idx) * TC_SCENE_EXT_TYPE_COUNT + (slot)]
+#define SCENE_SLOT(idx) (&g_pool->slots[(idx)])
+#define CAPABILITY_HEAD(idx, slot) SCENE_SLOT(idx)->capability_heads[(slot)]
+#define CAPABILITY_COUNT(idx, slot) SCENE_SLOT(idx)->capability_counts[(slot)]
+#define EXT_INSTANCE(idx, slot) SCENE_SLOT(idx)->ext_instances[(slot)]
 
 static void scene_capability_attach(uint32_t idx, tc_component* c, uint32_t slot);
 static void scene_capability_detach(uint32_t idx, tc_component* c, uint32_t slot);
@@ -131,27 +134,7 @@ void tc_scene_pool_init(void) {
 
     size_t cap = INITIAL_POOL_CAPACITY;
 
-    g_pool->generations = (uint32_t*)calloc(cap, sizeof(uint32_t));
-    g_pool->alive = (bool*)calloc(cap, sizeof(bool));
-    g_pool->pools = (tc_entity_pool**)calloc(cap, sizeof(tc_entity_pool*));
-    g_pool->modes = (tc_scene_mode*)calloc(cap, sizeof(tc_scene_mode));
-    g_pool->pending_starts = (ComponentList*)calloc(cap, sizeof(ComponentList));
-    g_pool->update_lists = (ComponentList*)calloc(cap, sizeof(ComponentList));
-    g_pool->fixed_update_lists = (ComponentList*)calloc(cap, sizeof(ComponentList));
-    g_pool->before_render_lists = (ComponentList*)calloc(cap, sizeof(ComponentList));
-    g_pool->fixed_timesteps = (double*)calloc(cap, sizeof(double));
-    g_pool->accumulated_times = (double*)calloc(cap, sizeof(double));
-    g_pool->type_heads = (tc_resource_map**)calloc(cap, sizeof(tc_resource_map*));
-    g_pool->metadata = (tc_value*)calloc(cap, sizeof(tc_value));
-    g_pool->names = (const char**)calloc(cap, sizeof(const char*));
-    g_pool->source_paths = (const char**)calloc(cap, sizeof(const char*));
-    g_pool->uuids = (const char**)calloc(cap, sizeof(const char*));
-    g_pool->capability_heads = (tc_component**)calloc(cap * TC_COMPONENT_MAX_CAPABILITIES, sizeof(tc_component*));
-    g_pool->capability_counts = (size_t*)calloc(cap * TC_COMPONENT_MAX_CAPABILITIES, sizeof(size_t));
-    g_pool->event_buses = (tc_event_bus**)calloc(cap, sizeof(tc_event_bus*));
-    g_pool->layer_names = (const char**)calloc(cap * 64, sizeof(const char*));
-    g_pool->flag_names = (const char**)calloc(cap * 64, sizeof(const char*));
-    g_pool->ext_instances = (void**)calloc(cap * TC_SCENE_EXT_TYPE_COUNT, sizeof(void*));
+    g_pool->slots = (tc_scene_slot*)calloc(cap, sizeof(tc_scene_slot));
     g_pool->free_stack = (uint32_t*)malloc(cap * sizeof(uint32_t));
     for (size_t i = 0; i < cap; i++) {
         g_pool->free_stack[i] = (uint32_t)(cap - 1 - i);
@@ -170,33 +153,13 @@ void tc_scene_pool_shutdown(void) {
 
     // Free all alive scenes
     for (size_t i = 0; i < g_pool->capacity; i++) {
-        if (g_pool->alive[i]) {
-            tc_scene_handle h = { (uint32_t)i, g_pool->generations[i] };
+        if (g_pool->slots[i].alive) {
+            tc_scene_handle h = { (uint32_t)i, g_pool->slots[i].generation };
             tc_scene_free(h);
         }
     }
 
-    free(g_pool->generations);
-    free(g_pool->alive);
-    free(g_pool->pools);
-    free(g_pool->modes);
-    free(g_pool->pending_starts);
-    free(g_pool->update_lists);
-    free(g_pool->fixed_update_lists);
-    free(g_pool->before_render_lists);
-    free(g_pool->fixed_timesteps);
-    free(g_pool->accumulated_times);
-    free(g_pool->type_heads);
-    free(g_pool->metadata);
-    free(g_pool->names);
-    free(g_pool->source_paths);
-    free(g_pool->uuids);
-    free(g_pool->capability_heads);
-    free(g_pool->capability_counts);
-    free(g_pool->event_buses);
-    free(g_pool->layer_names);
-    free(g_pool->flag_names);
-    free(g_pool->ext_instances);
+    free(g_pool->slots);
     free(g_pool->free_stack);
     free(g_pool);
     g_pool = NULL;
@@ -215,55 +178,21 @@ static void pool_grow(void) {
         return;
     }
 
-    g_pool->generations = realloc(g_pool->generations, new_cap * sizeof(uint32_t));
-    g_pool->alive = realloc(g_pool->alive, new_cap * sizeof(bool));
-    g_pool->pools = realloc(g_pool->pools, new_cap * sizeof(tc_entity_pool*));
-    g_pool->modes = realloc(g_pool->modes, new_cap * sizeof(tc_scene_mode));
-    g_pool->pending_starts = realloc(g_pool->pending_starts, new_cap * sizeof(ComponentList));
-    g_pool->update_lists = realloc(g_pool->update_lists, new_cap * sizeof(ComponentList));
-    g_pool->fixed_update_lists = realloc(g_pool->fixed_update_lists, new_cap * sizeof(ComponentList));
-    g_pool->before_render_lists = realloc(g_pool->before_render_lists, new_cap * sizeof(ComponentList));
-    g_pool->fixed_timesteps = realloc(g_pool->fixed_timesteps, new_cap * sizeof(double));
-    g_pool->accumulated_times = realloc(g_pool->accumulated_times, new_cap * sizeof(double));
-    g_pool->type_heads = realloc(g_pool->type_heads, new_cap * sizeof(tc_resource_map*));
-    g_pool->metadata = realloc(g_pool->metadata, new_cap * sizeof(tc_value));
-    g_pool->names = realloc(g_pool->names, new_cap * sizeof(const char*));
-    g_pool->source_paths = realloc(g_pool->source_paths, new_cap * sizeof(const char*));
-    g_pool->uuids = realloc(g_pool->uuids, new_cap * sizeof(const char*));
-    g_pool->capability_heads = realloc(g_pool->capability_heads, new_cap * TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
-    g_pool->capability_counts = realloc(g_pool->capability_counts, new_cap * TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
-    g_pool->event_buses = realloc(g_pool->event_buses, new_cap * sizeof(tc_event_bus*));
-    g_pool->layer_names = realloc(g_pool->layer_names, new_cap * 64 * sizeof(const char*));
-    g_pool->flag_names = realloc(g_pool->flag_names, new_cap * 64 * sizeof(const char*));
-    g_pool->ext_instances = realloc(g_pool->ext_instances, new_cap * TC_SCENE_EXT_TYPE_COUNT * sizeof(void*));
-    g_pool->free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
+    tc_scene_slot* new_slots = realloc(g_pool->slots, new_cap * sizeof(tc_scene_slot));
+    if (!new_slots) {
+        tc_log_error("[tc_scene_pool] failed to grow scene pool");
+        return;
+    }
+    g_pool->slots = new_slots;
 
-    // Initialize new slots
-    memset(g_pool->generations + old_cap, 0, (new_cap - old_cap) * sizeof(uint32_t));
-    memset(g_pool->alive + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
-    memset(g_pool->pools + old_cap, 0, (new_cap - old_cap) * sizeof(tc_entity_pool*));
-    memset(g_pool->modes + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_mode));
-    memset(g_pool->pending_starts + old_cap, 0, (new_cap - old_cap) * sizeof(ComponentList));
-    memset(g_pool->update_lists + old_cap, 0, (new_cap - old_cap) * sizeof(ComponentList));
-    memset(g_pool->fixed_update_lists + old_cap, 0, (new_cap - old_cap) * sizeof(ComponentList));
-    memset(g_pool->before_render_lists + old_cap, 0, (new_cap - old_cap) * sizeof(ComponentList));
-    memset(g_pool->fixed_timesteps + old_cap, 0, (new_cap - old_cap) * sizeof(double));
-    memset(g_pool->accumulated_times + old_cap, 0, (new_cap - old_cap) * sizeof(double));
-    memset(g_pool->type_heads + old_cap, 0, (new_cap - old_cap) * sizeof(tc_resource_map*));
-    memset(g_pool->metadata + old_cap, 0, (new_cap - old_cap) * sizeof(tc_value));
-    memset(g_pool->names + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
-    memset(g_pool->source_paths + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
-    memset(g_pool->uuids + old_cap, 0, (new_cap - old_cap) * sizeof(const char*));
-    memset(g_pool->capability_heads + old_cap * TC_COMPONENT_MAX_CAPABILITIES, 0,
-           (new_cap - old_cap) * TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
-    memset(g_pool->capability_counts + old_cap * TC_COMPONENT_MAX_CAPABILITIES, 0,
-           (new_cap - old_cap) * TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
-    memset(g_pool->event_buses + old_cap, 0, (new_cap - old_cap) * sizeof(tc_event_bus*));
-    memset(g_pool->layer_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
-    memset(g_pool->flag_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
-    memset(g_pool->ext_instances + old_cap * TC_SCENE_EXT_TYPE_COUNT, 0,
-           (new_cap - old_cap) * TC_SCENE_EXT_TYPE_COUNT * sizeof(void*));
-    // Add new slots to free stack
+    uint32_t* new_free_stack = realloc(g_pool->free_stack, new_cap * sizeof(uint32_t));
+    if (!new_free_stack) {
+        tc_log_error("[tc_scene_pool] failed to grow scene pool");
+        return;
+    }
+    g_pool->free_stack = new_free_stack;
+    memset(g_pool->slots + old_cap, 0, (new_cap - old_cap) * sizeof(tc_scene_slot));
+
     for (size_t i = old_cap; i < new_cap; i++) {
         g_pool->free_stack[g_pool->free_count++] = (uint32_t)(new_cap - 1 - (i - old_cap));
     }
@@ -278,7 +207,7 @@ static void pool_grow(void) {
 static inline bool handle_alive(tc_scene_handle h) {
     if (!g_pool) return false;
     if (h.index >= g_pool->capacity) return false;
-    return g_pool->alive[h.index] && g_pool->generations[h.index] == h.generation;
+    return g_pool->slots[h.index].alive && g_pool->slots[h.index].generation == h.generation;
 }
 
 bool tc_scene_pool_alive(tc_scene_handle h) {
@@ -308,31 +237,31 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     }
 
     uint32_t idx = g_pool->free_stack[--g_pool->free_count];
-    uint32_t gen = g_pool->generations[idx];
+    uint32_t gen = g_pool->slots[idx].generation;
 
     // Initialize slot
-    g_pool->alive[idx] = true;
+    g_pool->slots[idx].alive = true;
     // Create pool and register it in the entity pool registry for safe handle-based access
-    g_pool->pools[idx] = tc_entity_pool_create(512);
-    tc_entity_pool_registry_register(g_pool->pools[idx]);
-    g_pool->modes[idx] = TC_SCENE_MODE_INACTIVE;
-    list_init(&g_pool->pending_starts[idx]);
-    list_init(&g_pool->update_lists[idx]);
-    list_init(&g_pool->fixed_update_lists[idx]);
-    list_init(&g_pool->before_render_lists[idx]);
-    g_pool->fixed_timesteps[idx] = 1.0 / 60.0;
-    g_pool->accumulated_times[idx] = 0.0;
-    g_pool->type_heads[idx] = tc_resource_map_new(NULL);
-    g_pool->event_buses[idx] = tc_event_bus_create();
-    g_pool->metadata[idx] = tc_value_dict_new();
-    g_pool->names[idx] = name ? tgfx_intern_string(name) : tgfx_intern_string("(unnamed)");
-    g_pool->source_paths[idx] = NULL;
-    memset(g_pool->ext_instances + idx * TC_SCENE_EXT_TYPE_COUNT, 0, TC_SCENE_EXT_TYPE_COUNT * sizeof(void*));
+    g_pool->slots[idx].pool = tc_entity_pool_create(512);
+    tc_entity_pool_registry_register(g_pool->slots[idx].pool);
+    g_pool->slots[idx].mode = TC_SCENE_MODE_INACTIVE;
+    list_init(&g_pool->slots[idx].pending_starts);
+    list_init(&g_pool->slots[idx].update_list);
+    list_init(&g_pool->slots[idx].fixed_update_list);
+    list_init(&g_pool->slots[idx].before_render_list);
+    g_pool->slots[idx].fixed_timestep = 1.0 / 60.0;
+    g_pool->slots[idx].accumulated_time = 0.0;
+    g_pool->slots[idx].type_heads = tc_resource_map_new(NULL);
+    g_pool->slots[idx].event_bus = tc_event_bus_create();
+    g_pool->slots[idx].metadata = tc_value_dict_new();
+    g_pool->slots[idx].name = name ? tgfx_intern_string(name) : tgfx_intern_string("(unnamed)");
+    g_pool->slots[idx].source_path = NULL;
+    memset(g_pool->slots[idx].ext_instances, 0, sizeof(g_pool->slots[idx].ext_instances));
 
     tc_scene_handle h = { idx, gen };
 
     // Set scene handle on entity pool
-    tc_entity_pool_set_scene(g_pool->pools[idx], h);
+    tc_entity_pool_set_scene(g_pool->slots[idx].pool, h);
 
     g_pool->count++;
 
@@ -360,53 +289,51 @@ void tc_scene_free(tc_scene_handle h) {
     tc_scene_ext_detach_all(h);
 
     // Free metadata
-    tc_value_free(&g_pool->metadata[idx]);
+    tc_value_free(&g_pool->slots[idx].metadata);
 
     // Stop delivering scene events before scene-owned resources are torn down.
-    tc_event_bus_destroy(g_pool->event_buses[idx]);
-    g_pool->event_buses[idx] = NULL;
+    tc_event_bus_destroy(g_pool->slots[idx].event_bus);
+    g_pool->slots[idx].event_bus = NULL;
 
     // Free component lists
-    list_free(&g_pool->pending_starts[idx]);
-    list_free(&g_pool->update_lists[idx]);
-    list_free(&g_pool->fixed_update_lists[idx]);
-    list_free(&g_pool->before_render_lists[idx]);
+    list_free(&g_pool->slots[idx].pending_starts);
+    list_free(&g_pool->slots[idx].update_list);
+    list_free(&g_pool->slots[idx].fixed_update_list);
+    list_free(&g_pool->slots[idx].before_render_list);
 
     // Free type heads map
-    tc_resource_map_free(g_pool->type_heads[idx]);
-    g_pool->type_heads[idx] = NULL;
+    tc_resource_map_free(g_pool->slots[idx].type_heads);
+    g_pool->slots[idx].type_heads = NULL;
 
     // Destroy entity pool via registry to invalidate handles
-    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(g_pool->pools[idx]);
+    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(g_pool->slots[idx].pool);
     if (tc_entity_pool_handle_valid(pool_handle)) {
         tc_entity_pool_registry_destroy(pool_handle);
     } else {
         // Fallback: pool not in registry, destroy directly
-        tc_entity_pool_destroy(g_pool->pools[idx]);
+        tc_entity_pool_destroy(g_pool->slots[idx].pool);
     }
-    g_pool->pools[idx] = NULL;
+    g_pool->slots[idx].pool = NULL;
 
     // Clear capability linked lists (prevent dangling pointers on slot reuse)
-    memset(g_pool->capability_heads + idx * TC_COMPONENT_MAX_CAPABILITIES, 0,
-           TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
-    memset(g_pool->capability_counts + idx * TC_COMPONENT_MAX_CAPABILITIES, 0,
-           TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
+    memset(g_pool->slots[idx].capability_heads, 0, sizeof(g_pool->slots[idx].capability_heads));
+    memset(g_pool->slots[idx].capability_counts, 0, sizeof(g_pool->slots[idx].capability_counts));
 
     // Mark as dead
-    g_pool->alive[idx] = false;
-    g_pool->generations[idx]++;
+    g_pool->slots[idx].alive = false;
+    g_pool->slots[idx].generation++;
     g_pool->free_stack[g_pool->free_count++] = idx;
     g_pool->count--;
 }
 
 tc_event_bus* tc_scene_event_bus(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return g_pool->event_buses[h.index];
+    return g_pool->slots[h.index].event_bus;
 }
 
 void tc_scene_publish_event(tc_scene_handle h, const tc_event* event) {
     if (!handle_alive(h) || !event) return;
-    tc_event_bus_publish(g_pool->event_buses[h.index], event);
+    tc_event_bus_publish(g_pool->slots[h.index].event_bus, event);
 }
 
 void* tc_scene_ext_slot_get(tc_scene_handle h, tc_scene_ext_type_id type_id) {
@@ -438,12 +365,12 @@ size_t tc_scene_pool_count(void) {
 
 const char* tc_scene_pool_get_name(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return g_pool->names[h.index];
+    return g_pool->slots[h.index].name;
 }
 
 void tc_scene_pool_set_name(tc_scene_handle h, const char* name) {
     if (!handle_alive(h)) return;
-    g_pool->names[h.index] = name ? tgfx_intern_string(name) : tgfx_intern_string("(unnamed)");
+    g_pool->slots[h.index].name = name ? tgfx_intern_string(name) : tgfx_intern_string("(unnamed)");
 }
 
 const char* tc_scene_get_name(tc_scene_handle h) {
@@ -456,12 +383,12 @@ void tc_scene_set_name(tc_scene_handle h, const char* name) {
 
 const char* tc_scene_get_source_path(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return g_pool->source_paths[h.index];
+    return g_pool->slots[h.index].source_path;
 }
 
 void tc_scene_set_source_path(tc_scene_handle h, const char* path) {
     if (!handle_alive(h)) return;
-    g_pool->source_paths[h.index] = (path && path[0]) ? tgfx_intern_string(path) : NULL;
+    g_pool->slots[h.index].source_path = (path && path[0]) ? tgfx_intern_string(path) : NULL;
 }
 
 // ============================================================================
@@ -470,12 +397,12 @@ void tc_scene_set_source_path(tc_scene_handle h, const char* path) {
 
 const char* tc_scene_get_uuid(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return g_pool->uuids[h.index];
+    return g_pool->slots[h.index].uuid;
 }
 
 void tc_scene_set_uuid(tc_scene_handle h, const char* uuid) {
     if (!handle_alive(h)) return;
-    g_pool->uuids[h.index] = uuid ? tgfx_intern_string(uuid) : NULL;
+    g_pool->slots[h.index].uuid = uuid ? tgfx_intern_string(uuid) : NULL;
 }
 
 // ============================================================================
@@ -485,25 +412,25 @@ void tc_scene_set_uuid(tc_scene_handle h, const char* uuid) {
 const char* tc_scene_get_layer_name(tc_scene_handle h, int index) {
     if (!handle_alive(h)) return NULL;
     if (index < 0 || index >= 64) return NULL;
-    return g_pool->layer_names[h.index * 64 + index];
+    return g_pool->slots[h.index].layer_names[index];
 }
 
 void tc_scene_set_layer_name(tc_scene_handle h, int index, const char* name) {
     if (!handle_alive(h)) return;
     if (index < 0 || index >= 64) return;
-    g_pool->layer_names[h.index * 64 + index] = (name && name[0]) ? tgfx_intern_string(name) : NULL;
+    g_pool->slots[h.index].layer_names[index] = (name && name[0]) ? tgfx_intern_string(name) : NULL;
 }
 
 const char* tc_scene_get_flag_name(tc_scene_handle h, int index) {
     if (!handle_alive(h)) return NULL;
     if (index < 0 || index >= 64) return NULL;
-    return g_pool->flag_names[h.index * 64 + index];
+    return g_pool->slots[h.index].flag_names[index];
 }
 
 void tc_scene_set_flag_name(tc_scene_handle h, int index, const char* name) {
     if (!handle_alive(h)) return;
     if (index < 0 || index >= 64) return;
-    g_pool->flag_names[h.index * 64 + index] = (name && name[0]) ? tgfx_intern_string(name) : NULL;
+    g_pool->slots[h.index].flag_names[index] = (name && name[0]) ? tgfx_intern_string(name) : NULL;
 }
 
 // ============================================================================
@@ -514,8 +441,8 @@ void tc_scene_pool_foreach(tc_scene_pool_iter_fn callback, void* user_data) {
     if (!g_pool || !callback) return;
 
     for (size_t i = 0; i < g_pool->capacity; i++) {
-        if (g_pool->alive[i]) {
-            tc_scene_handle h = { (uint32_t)i, g_pool->generations[i] };
+        if (g_pool->slots[i].alive) {
+            tc_scene_handle h = { (uint32_t)i, g_pool->slots[i].generation };
             if (!callback(h, user_data)) {
                 break;
             }
@@ -534,14 +461,14 @@ tc_scene_info* tc_scene_pool_get_all_info(size_t* count) {
 
     size_t idx = 0;
     for (size_t i = 0; i < g_pool->capacity && idx < g_pool->count; i++) {
-        if (g_pool->alive[i]) {
-            tc_scene_handle h = { (uint32_t)i, g_pool->generations[i] };
+        if (g_pool->slots[i].alive) {
+            tc_scene_handle h = { (uint32_t)i, g_pool->slots[i].generation };
             infos[idx].handle = h;
-            infos[idx].name = g_pool->names[i];
-            infos[idx].entity_count = tc_entity_pool_count(g_pool->pools[i]);
-            infos[idx].pending_count = g_pool->pending_starts[i].count;
-            infos[idx].update_count = g_pool->update_lists[i].count;
-            infos[idx].fixed_update_count = g_pool->fixed_update_lists[i].count;
+            infos[idx].name = g_pool->slots[i].name;
+            infos[idx].entity_count = tc_entity_pool_count(g_pool->slots[i].pool);
+            infos[idx].pending_count = g_pool->slots[i].pending_starts.count;
+            infos[idx].update_count = g_pool->slots[i].update_list.count;
+            infos[idx].fixed_update_count = g_pool->slots[i].fixed_update_list.count;
             idx++;
         }
     }
@@ -556,7 +483,7 @@ tc_scene_info* tc_scene_pool_get_all_info(size_t* count) {
 
 tc_entity_pool* tc_scene_entity_pool(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return g_pool->pools[h.index];
+    return g_pool->slots[h.index].pool;
 }
 
 // ============================================================================
@@ -570,19 +497,19 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
     scene_capability_sync_legacy_bridges(c);
 
     // Add to pending_start if not started
-    if (!c->_started && !list_contains(&g_pool->pending_starts[idx], c)) {
-        list_push(&g_pool->pending_starts[idx], c);
+    if (!c->_started && !list_contains(&g_pool->slots[idx].pending_starts, c)) {
+        list_push(&g_pool->slots[idx].pending_starts, c);
     }
 
     // Add to update lists based on flags
-    if (c->has_update && !list_contains(&g_pool->update_lists[idx], c)) {
-        list_push(&g_pool->update_lists[idx], c);
+    if (c->has_update && !list_contains(&g_pool->slots[idx].update_list, c)) {
+        list_push(&g_pool->slots[idx].update_list, c);
     }
-    if (c->has_fixed_update && !list_contains(&g_pool->fixed_update_lists[idx], c)) {
-        list_push(&g_pool->fixed_update_lists[idx], c);
+    if (c->has_fixed_update && !list_contains(&g_pool->slots[idx].fixed_update_list, c)) {
+        list_push(&g_pool->slots[idx].fixed_update_list, c);
     }
-    if (c->has_before_render && !list_contains(&g_pool->before_render_lists[idx], c)) {
-        list_push(&g_pool->before_render_lists[idx], c);
+    if (c->has_before_render && !list_contains(&g_pool->slots[idx].before_render_list, c)) {
+        list_push(&g_pool->slots[idx].before_render_list, c);
     }
 
     for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
@@ -592,14 +519,14 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
     // Add to type list (intrusive doubly-linked list)
     const char* type_name = tc_component_type_name(c);
     if (type_name && c->type_prev == NULL && c->type_next == NULL) {
-        tc_component* head = (tc_component*)tc_resource_map_get(g_pool->type_heads[idx], type_name);
+        tc_component* head = (tc_component*)tc_resource_map_get(g_pool->slots[idx].type_heads, type_name);
         if (head == NULL) {
-            tc_resource_map_add(g_pool->type_heads[idx], type_name, c);
+            tc_resource_map_add(g_pool->slots[idx].type_heads, type_name, c);
         } else if (head != c) {
             c->type_next = head;
             head->type_prev = c;
-            tc_resource_map_remove(g_pool->type_heads[idx], type_name);
-            tc_resource_map_add(g_pool->type_heads[idx], type_name, c);
+            tc_resource_map_remove(g_pool->slots[idx].type_heads, type_name);
+            tc_resource_map_add(g_pool->slots[idx].type_heads, type_name, c);
         }
     }
 }
@@ -609,10 +536,10 @@ void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
 
     uint32_t idx = h.index;
 
-    list_remove(&g_pool->pending_starts[idx], c);
-    list_remove(&g_pool->update_lists[idx], c);
-    list_remove(&g_pool->fixed_update_lists[idx], c);
-    list_remove(&g_pool->before_render_lists[idx], c);
+    list_remove(&g_pool->slots[idx].pending_starts, c);
+    list_remove(&g_pool->slots[idx].update_list, c);
+    list_remove(&g_pool->slots[idx].fixed_update_list, c);
+    list_remove(&g_pool->slots[idx].before_render_list, c);
 
     for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
         scene_capability_detach(idx, c, slot);
@@ -621,12 +548,12 @@ void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
     // Remove from type list
     const char* type_name = tc_component_type_name(c);
     if (type_name) {
-        tc_component* head = (tc_component*)tc_resource_map_get(g_pool->type_heads[idx], type_name);
+        tc_component* head = (tc_component*)tc_resource_map_get(g_pool->slots[idx].type_heads, type_name);
         if (head == c) {
-            tc_resource_map_remove(g_pool->type_heads[idx], type_name);
+            tc_resource_map_remove(g_pool->slots[idx].type_heads, type_name);
             if (c->type_next) {
                 c->type_next->type_prev = NULL;
-                tc_resource_map_add(g_pool->type_heads[idx], type_name, c->type_next);
+                tc_resource_map_add(g_pool->slots[idx].type_heads, type_name, c->type_next);
             }
         } else {
             if (c->type_prev) c->type_prev->type_next = c->type_next;
@@ -644,7 +571,7 @@ void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
 // ============================================================================
 
 static void process_pending_start(uint32_t idx, bool editor_mode) {
-    ComponentList* pending = &g_pool->pending_starts[idx];
+    ComponentList* pending = &g_pool->slots[idx].pending_starts;
     size_t count = pending->count;
     if (count == 0) return;
 
@@ -737,22 +664,22 @@ void tc_scene_update(tc_scene_handle h, double dt) {
     process_pending_start(idx, false);
 
     // 2. Fixed update loop
-    g_pool->accumulated_times[idx] += dt;
-    double fixed_dt = g_pool->fixed_timesteps[idx];
-    ComponentList* fixed_list = &g_pool->fixed_update_lists[idx];
+    g_pool->slots[idx].accumulated_time += dt;
+    double fixed_dt = g_pool->slots[idx].fixed_timestep;
+    ComponentList* fixed_list = &g_pool->slots[idx].fixed_update_list;
 
-    while (g_pool->accumulated_times[idx] >= fixed_dt) {
+    while (g_pool->slots[idx].accumulated_time >= fixed_dt) {
         for (size_t i = 0; i < fixed_list->count; i++) {
             tc_component* c = fixed_list->items[i];
             if (c->enabled && component_entity_enabled(c)) {
                 tc_component_fixed_update(c, (float)fixed_dt);
             }
         }
-        g_pool->accumulated_times[idx] -= fixed_dt;
+        g_pool->slots[idx].accumulated_time -= fixed_dt;
     }
 
     // 3. Regular update
-    ComponentList* update_list = &g_pool->update_lists[idx];
+    ComponentList* update_list = &g_pool->slots[idx].update_list;
     for (size_t i = 0; i < update_list->count; i++) {
         tc_component* c = update_list->items[i];
         if (c->enabled && component_entity_enabled(c)) {
@@ -772,22 +699,22 @@ void tc_scene_editor_update(tc_scene_handle h, double dt) {
     process_pending_start(idx, true);
 
     // Fixed update - only active_in_editor
-    g_pool->accumulated_times[idx] += dt;
-    double fixed_dt = g_pool->fixed_timesteps[idx];
-    ComponentList* fixed_list = &g_pool->fixed_update_lists[idx];
+    g_pool->slots[idx].accumulated_time += dt;
+    double fixed_dt = g_pool->slots[idx].fixed_timestep;
+    ComponentList* fixed_list = &g_pool->slots[idx].fixed_update_list;
 
-    while (g_pool->accumulated_times[idx] >= fixed_dt) {
+    while (g_pool->slots[idx].accumulated_time >= fixed_dt) {
         for (size_t i = 0; i < fixed_list->count; i++) {
             tc_component* c = fixed_list->items[i];
             if (c->enabled && c->active_in_editor && component_entity_enabled(c)) {
                 tc_component_fixed_update(c, (float)fixed_dt);
             }
         }
-        g_pool->accumulated_times[idx] -= fixed_dt;
+        g_pool->slots[idx].accumulated_time -= fixed_dt;
     }
 
     // Regular update - only active_in_editor
-    ComponentList* update_list = &g_pool->update_lists[idx];
+    ComponentList* update_list = &g_pool->slots[idx].update_list;
     for (size_t i = 0; i < update_list->count; i++) {
         tc_component* c = update_list->items[i];
         if (c->enabled && c->active_in_editor && component_entity_enabled(c)) {
@@ -803,7 +730,7 @@ void tc_scene_before_render(tc_scene_handle h) {
     if (!handle_alive(h)) return;
 
     uint32_t idx = h.index;
-    ComponentList* list = &g_pool->before_render_lists[idx];
+    ComponentList* list = &g_pool->slots[idx].before_render_list;
 
     for (size_t i = 0; i < list->count; i++) {
         tc_component* c = list->items[i];
@@ -874,7 +801,7 @@ static bool notify_editor_start_callback(tc_entity_pool* pool, tc_entity_id id, 
 
 void tc_scene_notify_editor_start(tc_scene_handle h) {
     if (!handle_alive(h)) return;
-    tc_entity_pool_foreach(g_pool->pools[h.index], notify_editor_start_callback, NULL);
+    tc_entity_pool_foreach(g_pool->slots[h.index].pool, notify_editor_start_callback, NULL);
 }
 
 static bool notify_scene_inactive_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
@@ -891,7 +818,7 @@ static bool notify_scene_inactive_callback(tc_entity_pool* pool, tc_entity_id id
 
 void tc_scene_notify_scene_inactive(tc_scene_handle h) {
     if (!handle_alive(h)) return;
-    tc_entity_pool_foreach(g_pool->pools[h.index], notify_scene_inactive_callback, NULL);
+    tc_entity_pool_foreach(g_pool->slots[h.index].pool, notify_scene_inactive_callback, NULL);
 }
 
 static bool notify_scene_active_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
@@ -908,7 +835,7 @@ static bool notify_scene_active_callback(tc_entity_pool* pool, tc_entity_id id, 
 
 void tc_scene_notify_scene_active(tc_scene_handle h) {
     if (!handle_alive(h)) return;
-    tc_entity_pool_foreach(g_pool->pools[h.index], notify_scene_active_callback, NULL);
+    tc_entity_pool_foreach(g_pool->slots[h.index].pool, notify_scene_active_callback, NULL);
 }
 
 // ============================================================================
@@ -917,22 +844,22 @@ void tc_scene_notify_scene_active(tc_scene_handle h) {
 
 double tc_scene_fixed_timestep(tc_scene_handle h) {
     if (!handle_alive(h)) return 1.0 / 60.0;
-    return g_pool->fixed_timesteps[h.index];
+    return g_pool->slots[h.index].fixed_timestep;
 }
 
 void tc_scene_set_fixed_timestep(tc_scene_handle h, double dt) {
     if (!handle_alive(h) || dt <= 0) return;
-    g_pool->fixed_timesteps[h.index] = dt;
+    g_pool->slots[h.index].fixed_timestep = dt;
 }
 
 double tc_scene_accumulated_time(tc_scene_handle h) {
     if (!handle_alive(h)) return 0.0;
-    return g_pool->accumulated_times[h.index];
+    return g_pool->slots[h.index].accumulated_time;
 }
 
 void tc_scene_reset_accumulated_time(tc_scene_handle h) {
     if (!handle_alive(h)) return;
-    g_pool->accumulated_times[h.index] = 0.0;
+    g_pool->slots[h.index].accumulated_time = 0.0;
 }
 
 // ============================================================================
@@ -941,22 +868,22 @@ void tc_scene_reset_accumulated_time(tc_scene_handle h) {
 
 size_t tc_scene_entity_count(tc_scene_handle h) {
     if (!handle_alive(h)) return 0;
-    return tc_entity_pool_count(g_pool->pools[h.index]);
+    return tc_entity_pool_count(g_pool->slots[h.index].pool);
 }
 
 size_t tc_scene_pending_start_count(tc_scene_handle h) {
     if (!handle_alive(h)) return 0;
-    return g_pool->pending_starts[h.index].count;
+    return g_pool->slots[h.index].pending_starts.count;
 }
 
 size_t tc_scene_update_list_count(tc_scene_handle h) {
     if (!handle_alive(h)) return 0;
-    return g_pool->update_lists[h.index].count;
+    return g_pool->slots[h.index].update_list.count;
 }
 
 size_t tc_scene_fixed_update_list_count(tc_scene_handle h) {
     if (!handle_alive(h)) return 0;
-    return g_pool->fixed_update_lists[h.index].count;
+    return g_pool->slots[h.index].fixed_update_list.count;
 }
 
 // ============================================================================
@@ -985,7 +912,7 @@ tc_entity_id tc_scene_find_entity_by_name(tc_scene_handle h, const char* name) {
     data.target_name = name;
     data.found_id = TC_ENTITY_ID_INVALID;
 
-    tc_entity_pool_foreach(g_pool->pools[h.index], find_by_name_callback, &data);
+    tc_entity_pool_foreach(g_pool->slots[h.index].pool, find_by_name_callback, &data);
     return data.found_id;
 }
 
@@ -995,7 +922,7 @@ tc_entity_id tc_scene_find_entity_by_name(tc_scene_handle h, const char* name) {
 
 tc_component* tc_scene_first_component_of_type(tc_scene_handle h, const char* type_name) {
     if (!handle_alive(h) || !type_name) return NULL;
-    return (tc_component*)tc_resource_map_get(g_pool->type_heads[h.index], type_name);
+    return (tc_component*)tc_resource_map_get(g_pool->slots[h.index].type_heads, type_name);
 }
 
 size_t tc_scene_count_components_of_type(tc_scene_handle h, const char* type_name) {
@@ -1080,7 +1007,7 @@ tc_scene_component_type* tc_scene_get_all_component_types(tc_scene_handle h, siz
     if (!handle_alive(h)) return NULL;
 
     ComponentTypeCollector collector = {NULL, 0, 0};
-    tc_resource_map_foreach(g_pool->type_heads[h.index], collect_component_type, &collector);
+    tc_resource_map_foreach(g_pool->slots[h.index].type_heads, collect_component_type, &collector);
 
     *out_count = collector.count;
     return collector.types;
@@ -1092,14 +1019,14 @@ tc_scene_component_type* tc_scene_get_all_component_types(tc_scene_handle h, siz
 
 tc_scene_mode tc_scene_get_mode(tc_scene_handle h) {
     if (!handle_alive(h)) return TC_SCENE_MODE_INACTIVE;
-    return g_pool->modes[h.index];
+    return g_pool->slots[h.index].mode;
 }
 
 void tc_scene_set_mode(tc_scene_handle h, tc_scene_mode mode) {
     if (!handle_alive(h)) return;
 
-    tc_scene_mode old_mode = g_pool->modes[h.index];
-    g_pool->modes[h.index] = mode;
+    tc_scene_mode old_mode = g_pool->slots[h.index].mode;
+    g_pool->slots[h.index].mode = mode;
 
     if (mode == TC_SCENE_MODE_INACTIVE && old_mode != TC_SCENE_MODE_INACTIVE) {
         tc_scene_notify_scene_inactive(h);
@@ -1114,13 +1041,13 @@ void tc_scene_set_mode(tc_scene_handle h, tc_scene_mode mode) {
 
 tc_value* tc_scene_get_metadata(tc_scene_handle h) {
     if (!handle_alive(h)) return NULL;
-    return &g_pool->metadata[h.index];
+    return &g_pool->slots[h.index].metadata;
 }
 
 void tc_scene_set_metadata(tc_scene_handle h, tc_value value) {
     if (!handle_alive(h)) return;
-    tc_value_free(&g_pool->metadata[h.index]);
-    g_pool->metadata[h.index] = value;
+    tc_value_free(&g_pool->slots[h.index].metadata);
+    g_pool->slots[h.index].metadata = value;
 }
 
 // ============================================================================
@@ -1141,7 +1068,7 @@ static bool notify_render_attach_callback(tc_entity_pool* pool, tc_entity_id id,
 
 void tc_scene_notify_render_attach(tc_scene_handle h) {
     if (!handle_alive(h)) return;
-    tc_entity_pool_foreach(g_pool->pools[h.index], notify_render_attach_callback, NULL);
+    tc_entity_pool_foreach(g_pool->slots[h.index].pool, notify_render_attach_callback, NULL);
 }
 
 static bool notify_render_detach_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
@@ -1158,5 +1085,5 @@ static bool notify_render_detach_callback(tc_entity_pool* pool, tc_entity_id id,
 
 void tc_scene_notify_render_detach(tc_scene_handle h) {
     if (!handle_alive(h)) return;
-    tc_entity_pool_foreach(g_pool->pools[h.index], notify_render_detach_callback, NULL);
+    tc_entity_pool_foreach(g_pool->slots[h.index].pool, notify_render_detach_callback, NULL);
 }
