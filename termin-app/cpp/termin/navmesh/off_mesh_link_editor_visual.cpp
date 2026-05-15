@@ -68,11 +68,6 @@ public:
         } else {
             _component->end_local = to_tc_vec3(local);
         }
-        tc_log(TC_LOG_INFO,
-               "[OffMeshLinkEditorVisual] relocated %s endpoint world=(%.3f, %.3f, %.3f) local=(%.3f, %.3f, %.3f)",
-               _endpoint == OFF_MESH_LINK_ENDPOINT_START ? "start" : "end",
-               pose.lin.x, pose.lin.y, pose.lin.z,
-               local.x, local.y, local.z);
     }
 
     Entity entity() const override {
@@ -122,21 +117,8 @@ public:
                         static_cast<double>(closest.point[1]),
                         static_cast<double>(closest.point[2]),
                     };
-                    tc_log(TC_LOG_INFO,
-                           "[NavMeshEditorSnapProvider] closest point ref=(%.3f, %.3f, %.3f) result=(%.3f, %.3f, %.3f)",
-                           request.reference_position.x,
-                           request.reference_position.y,
-                           request.reference_position.z,
-                           result.position.x,
-                           result.position.y,
-                           result.position.z);
                     return true;
                 }
-                tc_log(TC_LOG_WARN,
-                       "[NavMeshEditorSnapProvider] DetourPathfindingWorldComponent rejected ref=(%.3f, %.3f, %.3f)",
-                       request.reference_position.x,
-                       request.reference_position.y,
-                       request.reference_position.z);
             }
             component = component->type_next;
         }

@@ -142,16 +142,6 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
     if (!tc_viewport_alive(_viewport)) return;
 
     _current_mods = mods;
-    if (key == TC_KEY_T || key == 't' || key == 292) {
-        tc_log(TC_LOG_INFO,
-               "[EditorViewportInputManager] key event key=%d scancode=%d action=%d mods=%d cursor=(%.1f, %.1f) has_cursor=%d viewport=(%u,%u) display=%p",
-               key, scancode, action, mods,
-               _last_cursor_x, _last_cursor_y,
-               _has_cursor ? 1 : 0,
-               _viewport.index, _viewport.generation,
-               static_cast<void*>(_display));
-    }
-
     KeyEvent event(_viewport, key, scancode, action, mods);
     _dispatch_to_internal_entities(&event);
     _dispatch_to_editor_components(&event);
@@ -168,12 +158,6 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
             static_cast<float>(_last_cursor_y),
             _viewport,
             _display);
-        if (key == TC_KEY_T || key == 't' || key == 292) {
-            tc_log(TC_LOG_INFO,
-                   "[EditorViewportInputManager] editor key handler result handled=%d sys=%p",
-                   handled_by_editor ? 1 : 0,
-                   static_cast<void*>(sys));
-        }
     } else if (key == TC_KEY_T || key == 't' || key == 292) {
         tc_log(TC_LOG_WARN,
                "[EditorViewportInputManager] no EditorInteractionSystem for snap hotkey");
