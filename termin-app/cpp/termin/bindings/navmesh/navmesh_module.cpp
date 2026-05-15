@@ -3,6 +3,7 @@
 #include "common.hpp"
 #include "termin/navmesh/detour_pathfinding_world_component.hpp"
 #include "termin/navmesh/navmesh_keeper_component.hpp"
+#include "termin/navmesh/off_mesh_link_component.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
 #include "termin/navmesh/tc_navmesh_handle.hpp"
 #include <termin/entity/component.hpp>
@@ -76,6 +77,31 @@ nb::list point_to_python(const std::array<float, 3>& point) {
     result.append(point[0]);
     result.append(point[1]);
     result.append(point[2]);
+    return result;
+}
+
+nb::list vec3_to_python(const Vec3& point) {
+    nb::list result;
+    result.append(point.x);
+    result.append(point.y);
+    result.append(point.z);
+    return result;
+}
+
+tc_vec3 tc_vec3_from_python(nb::handle value) {
+    nb::sequence seq = nb::cast<nb::sequence>(value);
+    return {
+        nb::cast<double>(seq[0]),
+        nb::cast<double>(seq[1]),
+        nb::cast<double>(seq[2]),
+    };
+}
+
+nb::list tc_vec3_to_python(const tc_vec3& point) {
+    nb::list result;
+    result.append(point.x);
+    result.append(point.y);
+    result.append(point.z);
     return result;
 }
 
@@ -214,6 +240,43 @@ void bind_recast_navmesh_builder(nb::module_& m) {
                     self.navmesh_uuid.clear();
                 }
             });
+
+    nb::enum_<OffMeshLinkType>(m, "OffMeshLinkType")
+        .value("Generic", OffMeshLinkType::Generic)
+        .value("JumpDown", OffMeshLinkType::JumpDown)
+        .value("Jump", OffMeshLinkType::Jump)
+        .value("Climb", OffMeshLinkType::Climb);
+
+    nb::class_<OffMeshLinkComponent, CxxComponent>(m, "OffMeshLinkComponent")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<OffMeshLinkComponent>(self);
+        })
+        .def_rw("enabled", &OffMeshLinkComponent::enabled)
+        .def_rw("link_type", &OffMeshLinkComponent::link_type)
+        .def_rw("agent_type", &OffMeshLinkComponent::agent_type)
+        .def_prop_rw("start_local",
+            [](OffMeshLinkComponent& self) {
+                return tc_vec3_to_python(self.start_local);
+            },
+            [](OffMeshLinkComponent& self, nb::handle value) {
+                self.start_local = tc_vec3_from_python(value);
+            })
+        .def_prop_rw("end_local",
+            [](OffMeshLinkComponent& self) {
+                return tc_vec3_to_python(self.end_local);
+            },
+            [](OffMeshLinkComponent& self, nb::handle value) {
+                self.end_local = tc_vec3_from_python(value);
+            })
+        .def_rw("radius", &OffMeshLinkComponent::radius)
+        .def_rw("bidirectional", &OffMeshLinkComponent::bidirectional)
+        .def("start_world", [](OffMeshLinkComponent& self) {
+            return vec3_to_python(self.start_world());
+        })
+        .def("end_world", [](OffMeshLinkComponent& self) {
+            return vec3_to_python(self.end_world());
+        })
+        .def("center_entity", &OffMeshLinkComponent::center_entity);
 
     nb::class_<DetourClosestPointResult>(m, "DetourClosestPointResult")
         .def_ro("success", &DetourClosestPointResult::success)

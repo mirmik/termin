@@ -2,6 +2,7 @@
 
 #include "termin/editor/gizmo.hpp"
 #include "termin/editor/gizmo_types.hpp"
+#include "termin/editor/editor_snap.hpp"
 #include <termin/entity/entity.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/geom/general_pose3.hpp>
@@ -47,7 +48,10 @@ public:
     virtual void relocate_global(const GeneralPose3& pose) = 0;
 
     virtual Entity entity() const { return Entity(); }
+    virtual bool supports_transform_undo() const { return false; }
     virtual bool supports_rotation() const { return true; }
+    virtual bool can_snap() const { return false; }
+    virtual EditorSnapSource preferred_snap_source() const { return EditorSnapSource::None; }
 };
 
 class EntityTransformGizmoTarget : public TransformGizmoTarget {
@@ -62,6 +66,9 @@ public:
     GeneralPose3 local_pose_for_undo() const override { return _entity.transform().local_pose(); }
     void relocate_global(const GeneralPose3& pose) override { _entity.transform().relocate_global(pose); }
     Entity entity() const override { return _entity; }
+    bool supports_transform_undo() const override { return true; }
+    bool can_snap() const override { return true; }
+    EditorSnapSource preferred_snap_source() const override { return EditorSnapSource::VisibleGeometry; }
 };
 
 // ============================================================
@@ -127,6 +134,12 @@ public:
     void set_target(Entity entity);
     void set_target(std::shared_ptr<TransformGizmoTarget> target);
     void clear_target();
+    bool has_target() const { return _has_target(); }
+    bool can_snap() const;
+    EditorSnapSource preferred_snap_source() const;
+    Vec3 snap_reference_position() const;
+    Entity snap_target_entity() const;
+    bool snap_to(const Vec3& position);
 
     void set_screen_scale(float scale) { _screen_scale = scale; }
     void set_orientation_mode(const std::string& mode) { orientation_mode = mode; }
