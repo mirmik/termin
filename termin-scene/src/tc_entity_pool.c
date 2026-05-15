@@ -128,6 +128,35 @@ struct tc_entity_pool {
     uint64_t* soa_type_masks;         // [capacity] per-entity type bitmask
 };
 
+static void publish_structure_changed(
+    tc_entity_pool* pool,
+    tc_scene_structure_change_kind kind,
+    tc_entity_id entity,
+    tc_entity_id parent,
+    const char* component_type
+) {
+    if (!pool) return;
+
+    tc_scene_handle scene = tc_entity_pool_get_scene(pool);
+    if (!tc_scene_handle_valid(scene)) return;
+
+    tc_scene_structure_changed_event payload = {
+        scene,
+        entity,
+        parent,
+        kind,
+        component_type
+    };
+    tc_event event = {
+        TC_EVENT_SCENE_STRUCTURE_CHANGED,
+        pool,
+        &payload,
+        sizeof(payload),
+        0
+    };
+    tc_scene_publish_event(scene, &event);
+}
+
 // ============================================================================
 // Helper functions
 // ============================================================================
@@ -589,6 +618,14 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     tc_str_map_set(pool->by_uuid, pool->uuids[idx], pack_entity_id(result));
     tc_u32_map_set(pool->by_pick_id, pool->pick_ids[idx], pack_entity_id(result));
 
+    publish_structure_changed(
+        pool,
+        TC_SCENE_STRUCTURE_ENTITY_CREATED,
+        result,
+        TC_ENTITY_ID_INVALID,
+        NULL
+    );
+
     return result;
 }
 
@@ -601,6 +638,7 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
 
     uint32_t idx = id.index;
     tc_scene_handle scene = tc_entity_pool_get_scene(pool);
+    tc_entity_id old_parent_id = pool->parent_ids[idx];
 
     // Remove all components properly
     ComponentArray* comps = &pool->components[idx];
@@ -633,9 +671,8 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
     comps->capacity = 0;
 
     // Remove from parent's children
-    tc_entity_id parent_id = pool->parent_ids[idx];
-    if (tc_entity_id_valid(parent_id) && tc_entity_pool_alive(pool, parent_id)) {
-        entity_id_array_remove(&pool->children[parent_id.index], id);
+    if (tc_entity_id_valid(old_parent_id) && tc_entity_pool_alive(pool, old_parent_id)) {
+        entity_id_array_remove(&pool->children[old_parent_id.index], id);
     }
 
     // Orphan children (or could recursively delete)
@@ -676,6 +713,14 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
         pool->soa_archetype_rows[idx] = 0;
         pool->soa_type_masks[idx] = 0;
     }
+
+    publish_structure_changed(
+        pool,
+        TC_SCENE_STRUCTURE_ENTITY_DESTROYED,
+        id,
+        old_parent_id,
+        NULL
+    );
 
     pool->alive[idx] = false;
     pool->generations[idx]++;
@@ -1203,6 +1248,7 @@ void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_
 
     uint32_t idx = id.index;
     tc_entity_id old_parent_id = pool->parent_ids[idx];
+    tc_entity_id new_parent_id = TC_ENTITY_ID_INVALID;
 
     // Remove from old parent's children
     if (tc_entity_id_valid(old_parent_id) && tc_entity_pool_alive(pool, old_parent_id)) {
@@ -1211,13 +1257,24 @@ void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_
 
     // Set new parent (store full entity_id including generation)
     if (tc_entity_id_valid(parent) && tc_entity_pool_alive(pool, parent)) {
-        pool->parent_ids[idx] = parent;
-        entity_id_array_push(&pool->children[parent.index], id);
+        new_parent_id = parent;
+        pool->parent_ids[idx] = new_parent_id;
+        entity_id_array_push(&pool->children[new_parent_id.index], id);
     } else {
         pool->parent_ids[idx] = TC_ENTITY_ID_INVALID;
     }
 
     tc_entity_pool_mark_dirty(pool, id);
+
+    if (old_parent_id.index != new_parent_id.index || old_parent_id.generation != new_parent_id.generation) {
+        publish_structure_changed(
+            pool,
+            TC_SCENE_STRUCTURE_PARENT_CHANGED,
+            id,
+            new_parent_id,
+            NULL
+        );
+    }
 }
 
 size_t tc_entity_pool_children_count(const tc_entity_pool* pool, tc_entity_id id) {
@@ -1288,6 +1345,14 @@ static void tc_entity_pool_add_component_raw(tc_entity_pool* pool, tc_entity_id 
     // Notify component it was added to entity
     tc_component_on_added_to_entity(c);
     tc_component_on_added(c);
+
+    publish_structure_changed(
+        pool,
+        TC_SCENE_STRUCTURE_COMPONENT_ADDED,
+        id,
+        pool->parent_ids[id.index],
+        tc_component_type_name(c)
+    );
 }
 
 static bool tc_entity_pool_add_component_with_requirements(
@@ -1391,6 +1456,8 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
 void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
     if (!tc_entity_pool_alive(pool, id) || !c) return;
 
+    const char* component_type = tc_component_type_name(c);
+
     // Notify component it's being removed from scene
     tc_component_on_removed(c);
 
@@ -1407,6 +1474,14 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
 
     // Remove from entity's component array
     component_array_remove(&pool->components[id.index], c);
+
+    publish_structure_changed(
+        pool,
+        TC_SCENE_STRUCTURE_COMPONENT_REMOVED,
+        id,
+        pool->parent_ids[id.index],
+        component_type
+    );
 
     // Release component - may delete if ref_count reaches 0
     // Works for both Python (Py_DECREF) and C++ (--ref_count, delete if 0)

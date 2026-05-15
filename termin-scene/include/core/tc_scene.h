@@ -8,6 +8,7 @@
 #include "core/tc_component.h"
 #include "core/tc_component_capability.h"
 #include "tc_value.h"
+#include <tcbase/tc_event.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,6 +23,31 @@ typedef enum tc_scene_mode {
     TC_SCENE_MODE_STOP = 1,      // Editor update (gizmos, selection)
     TC_SCENE_MODE_PLAY = 2       // Full simulation
 } tc_scene_mode;
+
+// ============================================================================
+// Scene Events
+// ============================================================================
+
+#define TC_EVENT_SCENE_STRUCTURE_CHANGED "tc.scene.structure_changed"
+
+typedef enum tc_scene_structure_change_kind {
+    TC_SCENE_STRUCTURE_ENTITY_CREATED = 1,
+    TC_SCENE_STRUCTURE_ENTITY_DESTROYED = 2,
+    TC_SCENE_STRUCTURE_PARENT_CHANGED = 3,
+    TC_SCENE_STRUCTURE_COMPONENT_ADDED = 4,
+    TC_SCENE_STRUCTURE_COMPONENT_REMOVED = 5
+} tc_scene_structure_change_kind;
+
+typedef struct tc_scene_structure_changed_event {
+    tc_scene_handle scene;
+    tc_entity_id entity;
+    tc_entity_id parent;
+    tc_scene_structure_change_kind kind;
+    const char* component_type;
+} tc_scene_structure_changed_event;
+
+TC_API tc_event_bus* tc_scene_event_bus(tc_scene_handle h);
+TC_API void tc_scene_publish_event(tc_scene_handle h, const tc_event* event);
 
 // ============================================================================
 // Scene Creation / Destruction
