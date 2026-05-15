@@ -156,6 +156,8 @@ class EditorWindowTcgui:
         self._last_profiler_update: float = 0.0
         self._last_modules_update: float = 0.0
         self._framegraph_debugger = None
+        self._scene_event_subscription = None
+        self._scene_tree_rebuild_pending: bool = False
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
@@ -411,6 +413,7 @@ class EditorWindowTcgui:
             dialog_service=self._dialog_service,
         )
         self._inspector_controller.set_scene(self.scene)
+        self._observe_scene_events(self.scene)
         self._inspector_controller.set_render_target_scene_getter(
             lambda: [
                 self.scene_manager.get_scene(name)
@@ -602,6 +605,7 @@ class EditorWindowTcgui:
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(scene)
             self.scene_tree_controller.rebuild()
+        self._observe_scene_events(scene)
 
         if self._inspector_controller is not None:
             self._inspector_controller.set_scene(scene)
@@ -634,6 +638,7 @@ class EditorWindowTcgui:
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(None)
             self.scene_tree_controller.rebuild()
+        self._observe_scene_events(None)
 
         if self._inspector_controller is not None:
             self._inspector_controller.set_scene(None)
@@ -960,6 +965,35 @@ class EditorWindowTcgui:
     def _request_viewport_update(self) -> None:
         self.scene_manager.request_render()
 
+    def _observe_scene_events(self, scene) -> None:
+        if self._scene_event_subscription is not None:
+            self._scene_event_subscription.unsubscribe()
+            self._scene_event_subscription = None
+
+        self._scene_tree_rebuild_pending = False
+        if scene is None:
+            return
+
+        try:
+            self._scene_event_subscription = scene.subscribe_event(
+                "tc.scene.structure_changed",
+                self._on_scene_structure_changed,
+            )
+        except Exception as e:
+            log.error(f"[EditorWindowTcgui] failed to subscribe to scene events: {e}")
+
+    def _on_scene_structure_changed(self, _event) -> None:
+        self._scene_tree_rebuild_pending = True
+        self._request_viewport_update()
+
+    def _process_pending_scene_tree_rebuild(self) -> None:
+        if not self._scene_tree_rebuild_pending:
+            return
+        self._scene_tree_rebuild_pending = False
+        if self.scene_tree_controller is not None:
+            self.scene_tree_controller.rebuild()
+        self._request_viewport_update()
+
     # ------------------------------------------------------------------
     # Scene file operations
     # ------------------------------------------------------------------
@@ -972,6 +1006,7 @@ class EditorWindowTcgui:
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(self.scene)
             self.scene_tree_controller.rebuild()
+        self._observe_scene_events(self.scene)
         self._update_window_title()
 
     def _save_scene(self) -> None:
@@ -1020,6 +1055,7 @@ class EditorWindowTcgui:
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(self.scene)
             self.scene_tree_controller.rebuild()
+        self._observe_scene_events(self.scene)
         self._update_window_title()
 
     def _save_scene_to_file(self, path: str) -> None:
@@ -1067,6 +1103,7 @@ class EditorWindowTcgui:
             if self.scene_tree_controller is not None:
                 self.scene_tree_controller.set_scene(self.scene)
                 self.scene_tree_controller.rebuild()
+            self._observe_scene_events(self.scene)
             if self._inspector_controller is not None:
                 self._inspector_controller.set_scene(self.scene)
                 self._inspector_controller.clear()
@@ -1474,6 +1511,7 @@ class EditorWindowTcgui:
             self.scene_tree_controller.rebuild()
             if expanded_uuids:
                 self.scene_tree_controller.set_expanded_entity_uuids(expanded_uuids)
+        self._observe_scene_events(scene)
 
         if self._inspector_controller is not None:
             self._inspector_controller.clear()
@@ -1862,6 +1900,7 @@ class EditorWindowTcgui:
                 self._last_modules_update = now
         if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
             self._framegraph_debugger.update()
+        self._process_pending_scene_tree_rebuild()
 
     def _after_render(self) -> None:
         if not self._ar_logged:
@@ -1871,6 +1910,7 @@ class EditorWindowTcgui:
             self._interaction_system.after_render()
         if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
             self._framegraph_debugger.update()
+        self._process_pending_scene_tree_rebuild()
 
     def _on_material_file_selected(self, path: str | None) -> None:
         if not path:

@@ -18,6 +18,7 @@
 #include <trent/json.h>
 #include "core/tc_component.h"
 #include "core/tc_scene.h"
+#include <tcbase/tc_event.h>
 
 namespace nb = nanobind;
 
@@ -101,6 +102,92 @@ struct ForeachCallbackData {
     bool should_continue;
 };
 
+static const char* structure_change_kind_name(tc_scene_structure_change_kind kind) {
+    switch (kind) {
+        case TC_SCENE_STRUCTURE_ENTITY_CREATED:
+            return "entity_created";
+        case TC_SCENE_STRUCTURE_ENTITY_DESTROYED:
+            return "entity_destroyed";
+        case TC_SCENE_STRUCTURE_PARENT_CHANGED:
+            return "parent_changed";
+        case TC_SCENE_STRUCTURE_COMPONENT_ADDED:
+            return "component_added";
+        case TC_SCENE_STRUCTURE_COMPONENT_REMOVED:
+            return "component_removed";
+        default:
+            return "unknown";
+    }
+}
+
+static nb::object entity_id_to_python(tc_entity_id id) {
+    if (!tc_entity_id_valid(id)) {
+        return nb::none();
+    }
+    nb::dict result;
+    result["index"] = id.index;
+    result["generation"] = id.generation;
+    return result;
+}
+
+struct SceneEventSubscription {
+    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+    tc_event_subscription subscription = {0};
+    nb::object callback;
+    bool active = false;
+
+    SceneEventSubscription(tc_scene_handle scene_handle, nb::object py_callback)
+        : scene(scene_handle), callback(std::move(py_callback)) {}
+
+    ~SceneEventSubscription() {
+        unsubscribe();
+    }
+
+    void unsubscribe() {
+        if (!active || !tc_event_subscription_valid(subscription)) {
+            active = false;
+            return;
+        }
+
+        tc_event_bus* bus = tc_scene_event_bus(scene);
+        if (bus) {
+            tc_event_bus_unsubscribe(bus, subscription);
+        }
+        active = false;
+        subscription = {0};
+    }
+};
+
+static nb::dict scene_event_to_python(const tc_event* event) {
+    nb::dict result;
+    result["type"] = event && event->type ? event->type : "";
+    result["flags"] = event ? event->flags : 0;
+
+    if (event && event->type && std::string(event->type) == TC_EVENT_SCENE_STRUCTURE_CHANGED &&
+        event->payload && event->payload_size == sizeof(tc_scene_structure_changed_event)) {
+        const auto* payload = static_cast<const tc_scene_structure_changed_event*>(event->payload);
+        result["scene"] = nb::make_tuple(payload->scene.index, payload->scene.generation);
+        result["entity"] = entity_id_to_python(payload->entity);
+        result["parent"] = entity_id_to_python(payload->parent);
+        result["kind"] = static_cast<int>(payload->kind);
+        result["kind_name"] = structure_change_kind_name(payload->kind);
+        result["component_type"] = payload->component_type ? payload->component_type : "";
+    }
+
+    return result;
+}
+
+static void scene_event_callback(const tc_event* event, void* user_data) {
+    auto* subscription = static_cast<SceneEventSubscription*>(user_data);
+    if (!subscription || !subscription->active) return;
+
+    nb::gil_scoped_acquire gil;
+    try {
+        subscription->callback(scene_event_to_python(event));
+    } catch (const nb::python_error& e) {
+        tc::Log::error("Error in scene event callback: %s", e.what());
+    }
+}
+
 // ============================================================================
 // Core TcSceneRef binding
 // ============================================================================
@@ -119,6 +206,10 @@ void bind_tc_scene_core(nb::module_& m) {
         .def_rw("generation", &tc_scene_handle::generation)
         .def_prop_ro("valid", [](const tc_scene_handle& h) { return tc_scene_handle_valid(h); })
         .def_prop_ro("alive", [](const tc_scene_handle& h) { return tc_scene_alive(h); });
+
+    nb::class_<SceneEventSubscription>(m, "SceneEventSubscription")
+        .def("unsubscribe", &SceneEventSubscription::unsubscribe)
+        .def_prop_ro("active", [](const SceneEventSubscription& self) { return self.active; });
 
     nb::class_<TcSceneRef>(m, "TcScene")
         .def(nb::init<>(), "Create invalid scene reference")
@@ -384,6 +475,27 @@ void bind_tc_scene_core(nb::module_& m) {
         .def("notify_render_detach", [](TcSceneRef& self) {
             tc_scene_notify_render_detach(self._h);
         })
+
+        .def("subscribe_event", [](TcSceneRef& self, const std::string& event_type, nb::callable callback) {
+            if (!tc_scene_alive(self._h)) {
+                throw std::runtime_error("Cannot subscribe to events of dead scene");
+            }
+
+            auto* subscription = new SceneEventSubscription(self._h, callback);
+            tc_event_bus* bus = tc_scene_event_bus(self._h);
+            subscription->subscription = tc_event_bus_subscribe(
+                bus,
+                event_type.c_str(),
+                scene_event_callback,
+                subscription
+            );
+            subscription->active = tc_event_subscription_valid(subscription->subscription);
+            if (!subscription->active) {
+                delete subscription;
+                throw std::runtime_error("Failed to subscribe to scene event");
+            }
+            return subscription;
+        }, nb::arg("event_type"), nb::arg("callback"), nb::rv_policy::take_ownership)
 
         // Serialization
         .def("serialize", [](TcSceneRef& self) -> nb::object {

@@ -2,6 +2,7 @@
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
 #include "core/tc_scene_extension.h"
+#include <tcbase/tc_event.h>
 #include <tcbase/tc_resource_map.h>
 #include <tcbase/tgfx_intern_string.h>
 #include <tcbase/tc_log.h>
@@ -88,6 +89,7 @@ typedef struct {
     const char** uuids;
     tc_component** capability_heads;
     size_t* capability_counts;
+    tc_event_bus** event_buses;
 
     // Layer and flag names (64 each per scene, interned strings)
     const char** layer_names;  // [capacity * 64]
@@ -146,6 +148,7 @@ void tc_scene_pool_init(void) {
     g_pool->uuids = (const char**)calloc(cap, sizeof(const char*));
     g_pool->capability_heads = (tc_component**)calloc(cap * TC_COMPONENT_MAX_CAPABILITIES, sizeof(tc_component*));
     g_pool->capability_counts = (size_t*)calloc(cap * TC_COMPONENT_MAX_CAPABILITIES, sizeof(size_t));
+    g_pool->event_buses = (tc_event_bus**)calloc(cap, sizeof(tc_event_bus*));
     g_pool->layer_names = (const char**)calloc(cap * 64, sizeof(const char*));
     g_pool->flag_names = (const char**)calloc(cap * 64, sizeof(const char*));
     g_pool->ext_instances = (void**)calloc(cap * TC_SCENE_EXT_TYPE_COUNT, sizeof(void*));
@@ -190,6 +193,7 @@ void tc_scene_pool_shutdown(void) {
     free(g_pool->uuids);
     free(g_pool->capability_heads);
     free(g_pool->capability_counts);
+    free(g_pool->event_buses);
     free(g_pool->layer_names);
     free(g_pool->flag_names);
     free(g_pool->ext_instances);
@@ -228,6 +232,7 @@ static void pool_grow(void) {
     g_pool->uuids = realloc(g_pool->uuids, new_cap * sizeof(const char*));
     g_pool->capability_heads = realloc(g_pool->capability_heads, new_cap * TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
     g_pool->capability_counts = realloc(g_pool->capability_counts, new_cap * TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
+    g_pool->event_buses = realloc(g_pool->event_buses, new_cap * sizeof(tc_event_bus*));
     g_pool->layer_names = realloc(g_pool->layer_names, new_cap * 64 * sizeof(const char*));
     g_pool->flag_names = realloc(g_pool->flag_names, new_cap * 64 * sizeof(const char*));
     g_pool->ext_instances = realloc(g_pool->ext_instances, new_cap * TC_SCENE_EXT_TYPE_COUNT * sizeof(void*));
@@ -253,6 +258,7 @@ static void pool_grow(void) {
            (new_cap - old_cap) * TC_COMPONENT_MAX_CAPABILITIES * sizeof(tc_component*));
     memset(g_pool->capability_counts + old_cap * TC_COMPONENT_MAX_CAPABILITIES, 0,
            (new_cap - old_cap) * TC_COMPONENT_MAX_CAPABILITIES * sizeof(size_t));
+    memset(g_pool->event_buses + old_cap, 0, (new_cap - old_cap) * sizeof(tc_event_bus*));
     memset(g_pool->layer_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
     memset(g_pool->flag_names + old_cap * 64, 0, (new_cap - old_cap) * 64 * sizeof(const char*));
     memset(g_pool->ext_instances + old_cap * TC_SCENE_EXT_TYPE_COUNT, 0,
@@ -317,6 +323,7 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     g_pool->fixed_timesteps[idx] = 1.0 / 60.0;
     g_pool->accumulated_times[idx] = 0.0;
     g_pool->type_heads[idx] = tc_resource_map_new(NULL);
+    g_pool->event_buses[idx] = tc_event_bus_create();
     g_pool->metadata[idx] = tc_value_dict_new();
     g_pool->names[idx] = name ? tgfx_intern_string(name) : tgfx_intern_string("(unnamed)");
     g_pool->source_paths[idx] = NULL;
@@ -355,6 +362,10 @@ void tc_scene_free(tc_scene_handle h) {
     // Free metadata
     tc_value_free(&g_pool->metadata[idx]);
 
+    // Stop delivering scene events before scene-owned resources are torn down.
+    tc_event_bus_destroy(g_pool->event_buses[idx]);
+    g_pool->event_buses[idx] = NULL;
+
     // Free component lists
     list_free(&g_pool->pending_starts[idx]);
     list_free(&g_pool->update_lists[idx]);
@@ -386,6 +397,16 @@ void tc_scene_free(tc_scene_handle h) {
     g_pool->generations[idx]++;
     g_pool->free_stack[g_pool->free_count++] = idx;
     g_pool->count--;
+}
+
+tc_event_bus* tc_scene_event_bus(tc_scene_handle h) {
+    if (!handle_alive(h)) return NULL;
+    return g_pool->event_buses[h.index];
+}
+
+void tc_scene_publish_event(tc_scene_handle h, const tc_event* event) {
+    if (!handle_alive(h) || !event) return;
+    tc_event_bus_publish(g_pool->event_buses[h.index], event);
 }
 
 void* tc_scene_ext_slot_get(tc_scene_handle h, tc_scene_ext_type_id type_id) {
