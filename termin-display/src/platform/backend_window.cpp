@@ -246,6 +246,17 @@ void SDLBackendWindow::maximize() {
     }
 }
 
+void SDLBackendWindow::set_always_on_top(bool enabled) {
+    if (!window_) {
+        return;
+    }
+#if SDL_VERSION_ATLEAST(2, 0, 16)
+    SDL_SetWindowAlwaysOnTop(window_, enabled ? SDL_TRUE : SDL_FALSE);
+#else
+    (void)enabled;
+#endif
+}
+
 void SDLBackendWindow::close() {
     // Idempotent teardown — callers (both the dtor and Python
     // `window.close()`) can invoke this without checking state first.

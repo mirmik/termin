@@ -44,7 +44,13 @@ class BackendWindowManager(_BaseManager):
         ui.on_present_requested = lambda: self.render_entry(entry)
         return entry
 
-    def _ui_create_window(self, title: str, width: int, height: int) -> UI | None:
+    def _ui_create_window(
+        self,
+        title: str,
+        width: int,
+        height: int,
+        always_on_top: bool = False,
+    ) -> UI | None:
         """Bound to ``UI.create_window`` on every managed UI so widgets
         can pop secondary windows via ``parent_ui.create_window(...)``."""
         if self._graphics is None:
@@ -61,7 +67,9 @@ class BackendWindowManager(_BaseManager):
 
         entry = super().create_window(
             title, width, height,
-            host_data=window_ui, on_destroy=_on_destroy)
+            host_data=window_ui,
+            always_on_top=always_on_top,
+            on_destroy=_on_destroy)
 
         # Let widgets inside this UI pop their own windows and close
         # themselves. close_window is the graceful path (button / esc);

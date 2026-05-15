@@ -158,6 +158,9 @@ class EditorWindowTcgui:
         self._framegraph_debugger = None
         self._scene_event_subscription = None
         self._scene_tree_rebuild_pending: bool = False
+        self._viewport_click_interceptor: Callable[
+            [object, float, float, bool, float, float, float, float, float, float, float], bool
+        ] | None = None
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
@@ -501,6 +504,7 @@ class EditorWindowTcgui:
             self._interaction_system.selection.on_selection_changed = self._on_selection_changed
             self._interaction_system.selection.on_hover_changed = self._on_hover_changed
             self._interaction_system.on_request_update = self._request_viewport_update
+            self._interaction_system.on_entity_click = self._on_editor_viewport_click
             # Transform gizmo drag-end → push an undo command, same as the
             # Qt editor (editor_window.py::_on_transform_end).
             self._interaction_system.on_transform_end = self._on_transform_end
@@ -772,6 +776,14 @@ class EditorWindowTcgui:
     def should_close(self) -> bool:
         return self._should_close
 
+    def set_viewport_click_interceptor(
+        self,
+        callback: Callable[
+            [object, float, float, bool, float, float, float, float, float, float, float], bool
+        ] | None,
+    ) -> None:
+        self._viewport_click_interceptor = callback
+
     # ------------------------------------------------------------------
     # Undo / Redo
     # ------------------------------------------------------------------
@@ -873,6 +885,31 @@ class EditorWindowTcgui:
 
     def _on_hover_changed(self, entity) -> None:
         self._request_viewport_update()
+
+    def _on_editor_viewport_click(
+        self,
+        entity,
+        x: float,
+        y: float,
+        has_world_point: bool,
+        world_x: float,
+        world_y: float,
+        world_z: float,
+        depth: float,
+        view_depth: float,
+        reproject_screen_error: float,
+        reproject_depth_error: float,
+    ) -> bool:
+        if self._viewport_click_interceptor is None:
+            return False
+        try:
+            return bool(self._viewport_click_interceptor(
+                entity, x, y, has_world_point, world_x, world_y, world_z, depth, view_depth,
+                reproject_screen_error, reproject_depth_error
+            ))
+        except Exception as e:
+            log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
+            return False
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
         """C++ TransformGizmo drag-end callback — push an undo command."""
@@ -1216,6 +1253,7 @@ class EditorWindowTcgui:
         EditorSettings.instance().set("last_project_file", path)
 
         self._load_project_modules(project_root)
+        self._run_project_init_script(project_root)
         self._rescan_file_resources()
         if self._project_browser is not None:
             self._project_browser.set_root(project_dir)
@@ -1258,6 +1296,45 @@ class EditorWindowTcgui:
             self._log_to_console(f"Loaded {py_loaded} Python module(s)")
         if py_failed > 0:
             self._log_to_console(f"Failed to load {py_failed} Python module(s)")
+
+    def _run_project_init_script(self, project_root: Path) -> None:
+        init_script = project_root / "InitScript.py"
+        if not init_script.is_file():
+            return
+
+        import runpy
+        import sys
+
+        project_path = str(project_root)
+        inserted_project_path = False
+        if project_path not in sys.path:
+            sys.path.insert(0, project_path)
+            inserted_project_path = True
+
+        try:
+            runpy.run_path(
+                str(init_script),
+                init_globals={
+                    "editor": self,
+                    "project_root": project_root,
+                },
+            )
+        except Exception as e:
+            log.error(f"Project init script failed: {init_script}: {e}")
+            self._log_to_console(f"Project init script failed: {e}")
+        finally:
+            if inserted_project_path:
+                sys.path.remove(project_path)
+
+    @property
+    def ui(self) -> UI | None:
+        return self._ui
+
+    def add_project_menu(self, name: str, menu) -> None:
+        if self._menu_bar_widget is None:
+            log.error(f"Cannot add project menu '{name}': menu bar is not initialized")
+            return
+        self._menu_bar_widget.add_menu(name, menu)
 
     def _on_project_file_activated(self, path: str) -> None:
         """Called when a file is double-clicked in the project browser."""

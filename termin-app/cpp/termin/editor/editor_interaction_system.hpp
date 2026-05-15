@@ -17,6 +17,16 @@
 
 namespace termin {
 
+struct SurfacePickResult {
+    Entity entity;
+    bool has_world_point = false;
+    std::array<double, 3> world_point = {0.0, 0.0, 0.0};
+    float depth = 1.0f;
+    double view_depth = 0.0;
+    double reproject_screen_error = 0.0;
+    double reproject_depth_error = 0.0;
+};
+
 class EditorInteractionSystem {
 public:
     // Shared state
@@ -54,6 +64,7 @@ public:
     std::function<void()> on_request_update;
     std::function<void(const GeneralPose3&, const GeneralPose3&)> on_transform_end;
     std::function<void(const KeyEvent&)> on_key;
+    std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double)> on_entity_click;
 
 public:
     EditorInteractionSystem();
@@ -69,6 +80,7 @@ public:
 
     // Picking (reads from ID buffer)
     Entity pick_entity_at(float x, float y, tc_viewport_handle viewport, tc_display* display);
+    SurfacePickResult pick_surface_at(float x, float y, tc_viewport_handle viewport, tc_display* display);
 
     // Post-render processing - call once per frame after rendering
     void after_render();

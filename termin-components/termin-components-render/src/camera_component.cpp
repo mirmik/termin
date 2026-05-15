@@ -223,7 +223,7 @@ std::pair<Vec3, Vec3> CameraComponent::screen_point_to_ray(double x, double y, i
     Mat44 proj_matrix = compute_projection_matrix(vp_aspect);
     Mat44 pv = proj_matrix * get_view_matrix();
     Mat44 inv_pv = pv.inverse();
-    Vec3 p_near = inv_pv.transform_point(Vec3{nx, ny, -1.0});
+    Vec3 p_near = inv_pv.transform_point(Vec3{nx, ny, 0.0});
     Vec3 p_far = inv_pv.transform_point(Vec3{nx, ny, 1.0});
     Vec3 direction = (p_far - p_near).normalized();
     return {p_near, direction};

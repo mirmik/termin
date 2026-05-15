@@ -86,6 +86,32 @@ void bind_editor_interaction(nb::module_& m) {
             return s.pick_entity_at(x, y, vp,
                 reinterpret_cast<tc_display*>(display_ptr));
         })
+        .def("pick_surface_at", [](EditorInteractionSystem& s,
+                float x, float y,
+                uint32_t vp_index, uint32_t vp_generation,
+                uintptr_t display_ptr) {
+            tc_viewport_handle vp;
+            vp.index = vp_index;
+            vp.generation = vp_generation;
+            SurfacePickResult result = s.pick_surface_at(
+                x, y, vp, reinterpret_cast<tc_display*>(display_ptr));
+            nb::dict d;
+            if (result.entity.valid()) {
+                d["entity"] = nb::cast(result.entity);
+            } else {
+                d["entity"] = nb::none();
+            }
+            d["has_world_point"] = result.has_world_point;
+            d["world_point"] = nb::make_tuple(
+                result.world_point[0],
+                result.world_point[1],
+                result.world_point[2]);
+            d["depth"] = result.depth;
+            d["view_depth"] = result.view_depth;
+            d["reproject_screen_error"] = result.reproject_screen_error;
+            d["reproject_depth_error"] = result.reproject_depth_error;
+            return d;
+        })
         .def_prop_rw("on_request_update",
             [](EditorInteractionSystem& s) { return s.on_request_update; },
             [](EditorInteractionSystem& s, std::function<void()> cb) {
@@ -102,6 +128,12 @@ void bind_editor_interaction(nb::module_& m) {
             [](EditorInteractionSystem& s,
                std::function<void(const KeyEvent&)> cb) {
                 s.on_key = cb;
+            })
+        .def_prop_rw("on_entity_click",
+            [](EditorInteractionSystem& s) { return s.on_entity_click; },
+            [](EditorInteractionSystem& s,
+               std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double)> cb) {
+                s.on_entity_click = cb;
             });
 }
 
