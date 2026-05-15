@@ -8,6 +8,7 @@
 #include "tgfx/types.hpp"
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -33,6 +34,37 @@ enum class TransformElement {
 };
 
 // ============================================================
+// TransformGizmoTarget
+// ============================================================
+
+class TransformGizmoTarget {
+public:
+    virtual ~TransformGizmoTarget() = default;
+
+    virtual bool valid() const = 0;
+    virtual GeneralPose3 global_pose() const = 0;
+    virtual GeneralPose3 local_pose_for_undo() const = 0;
+    virtual void relocate_global(const GeneralPose3& pose) = 0;
+
+    virtual Entity entity() const { return Entity(); }
+    virtual bool supports_rotation() const { return true; }
+};
+
+class EntityTransformGizmoTarget : public TransformGizmoTarget {
+private:
+    Entity _entity;
+
+public:
+    explicit EntityTransformGizmoTarget(Entity entity) : _entity(entity) {}
+
+    bool valid() const override { return _entity.valid(); }
+    GeneralPose3 global_pose() const override { return _entity.transform().global_pose(); }
+    GeneralPose3 local_pose_for_undo() const override { return _entity.transform().local_pose(); }
+    void relocate_global(const GeneralPose3& pose) override { _entity.transform().relocate_global(pose); }
+    Entity entity() const override { return _entity; }
+};
+
+// ============================================================
 // TransformGizmo
 // ============================================================
 
@@ -48,8 +80,8 @@ public:
     std::string orientation_mode = "local";  // "local" or "world"
 
 private:
-    // Target entity
-    Entity _target;
+    // Target being edited. EntityTransformGizmoTarget preserves the old behavior.
+    std::shared_ptr<TransformGizmoTarget> _target;
     Vec3f _target_position{0.0f, 0.0f, 0.0f};
 
     // Undo support - pose at drag start
@@ -91,8 +123,10 @@ public:
     ~TransformGizmo() override = default;
 
     // Target
-    Entity target() const { return _target; }
+    Entity target() const;
     void set_target(Entity entity);
+    void set_target(std::shared_ptr<TransformGizmoTarget> target);
+    void clear_target();
 
     void set_screen_scale(float scale) { _screen_scale = scale; }
     void set_orientation_mode(const std::string& mode) { orientation_mode = mode; }
@@ -124,6 +158,7 @@ public:
     void on_release(int collider_id) override;
 
 private:
+    bool _has_target() const;
     void _update_position();
     Vec3f _get_position();
     Vec3f _get_world_axis(const std::string& axis);
