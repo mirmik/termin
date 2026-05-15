@@ -159,7 +159,18 @@ class EditorWindowTcgui:
         self._scene_event_subscription = None
         self._scene_tree_rebuild_pending: bool = False
         self._viewport_click_interceptor: Callable[
-            [object, float, float, bool, float, float, float, float, float, float, float], bool
+            [
+                object,
+                float, float,
+                bool, float, float, float,
+                float, float, float, float,
+                bool, float, float, float,
+                float, float, float,
+                int, int, int, int,
+                bool, float, float, float,
+                int, int, float, int,
+            ],
+            bool,
         ] | None = None
 
         # Setup ResourceLoader and ProjectFileWatcher
@@ -779,7 +790,18 @@ class EditorWindowTcgui:
     def set_viewport_click_interceptor(
         self,
         callback: Callable[
-            [object, float, float, bool, float, float, float, float, float, float, float], bool
+            [
+                object,
+                float, float,
+                bool, float, float, float,
+                float, float, float, float,
+                bool, float, float, float,
+                float, float, float,
+                int, int, int, int,
+                bool, float, float, float,
+                int, int, float, int,
+            ],
+            bool,
         ] | None,
     ) -> None:
         self._viewport_click_interceptor = callback
@@ -899,13 +921,37 @@ class EditorWindowTcgui:
         view_depth: float,
         reproject_screen_error: float,
         reproject_depth_error: float,
+        has_mesh_hit: bool,
+        mesh_x: float,
+        mesh_y: float,
+        mesh_z: float,
+        normal_x: float,
+        normal_y: float,
+        normal_z: float,
+        triangle_index: int,
+        index0: int,
+        index1: int,
+        index2: int,
+        has_surface_edge: bool,
+        edge_x: float,
+        edge_y: float,
+        edge_z: float,
+        edge_index0: int,
+        edge_index1: int,
+        edge_distance: float,
+        edge_side: int,
     ) -> bool:
         if self._viewport_click_interceptor is None:
             return False
         try:
             return bool(self._viewport_click_interceptor(
                 entity, x, y, has_world_point, world_x, world_y, world_z, depth, view_depth,
-                reproject_screen_error, reproject_depth_error
+                reproject_screen_error, reproject_depth_error,
+                has_mesh_hit, mesh_x, mesh_y, mesh_z,
+                normal_x, normal_y, normal_z,
+                triangle_index, index0, index1, index2,
+                has_surface_edge, edge_x, edge_y, edge_z,
+                edge_index0, edge_index1, edge_distance, edge_side
             ))
         except Exception as e:
             log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")

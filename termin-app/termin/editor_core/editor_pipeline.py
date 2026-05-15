@@ -91,10 +91,20 @@ def make_editor_pipeline() -> RenderPipeline:
         shadow_res=None,
         pass_name="EditorDebug",
         phase_mark="editor_debug",
+        sort_mode="near_to_far",
+    )
+
+    editor_debug_transparent_pass = ColorPass(
+        input_res="color_editor_debug",
+        output_res="color_editor_debug_transparent",
+        shadow_res=None,
+        pass_name="EditorDebugTransparent",
+        phase_mark="editor_debug_transparent",
+        sort_mode="far_to_near",
     )
 
     collider_gizmo_pass = ColliderGizmoPass(
-        input_res="color_editor_debug",
+        input_res="color_editor_debug_transparent",
         output_res="color_colliders",
         pass_name="ColliderGizmo",
     )
@@ -138,8 +148,9 @@ def make_editor_pipeline() -> RenderPipeline:
         transparent_pass,
         editor_color_pass,
         editor_debug_pass,
-        immediate_depth_pass,
+        editor_debug_transparent_pass,
         collider_gizmo_pass,
+        immediate_depth_pass,
         gizmo_pass,
         depth_pass,
         IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
@@ -199,6 +210,10 @@ def make_editor_pipeline() -> RenderPipeline:
         ),
         ResourceSpec(
             resource="color_editor_debug",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_editor_debug_transparent",
             format=color_fbo_format,
         ),
         ResourceSpec(

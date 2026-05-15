@@ -25,6 +25,16 @@ struct SurfacePickResult {
     double view_depth = 0.0;
     double reproject_screen_error = 0.0;
     double reproject_depth_error = 0.0;
+    bool has_mesh_hit = false;
+    std::array<double, 3> mesh_point = {0.0, 0.0, 0.0};
+    std::array<double, 3> mesh_normal = {0.0, 0.0, 0.0};
+    uint32_t mesh_triangle_index = 0;
+    std::array<uint32_t, 3> mesh_indices = {0, 0, 0};
+    bool has_surface_edge = false;
+    std::array<double, 3> surface_edge_point = {0.0, 0.0, 0.0};
+    std::array<uint32_t, 2> surface_edge_indices = {0, 0};
+    double surface_edge_distance = 0.0;
+    int surface_edge_side = 0;
 };
 
 class EditorInteractionSystem {
@@ -64,7 +74,7 @@ public:
     std::function<void()> on_request_update;
     std::function<void(const GeneralPose3&, const GeneralPose3&)> on_transform_end;
     std::function<void(const KeyEvent&)> on_key;
-    std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double)> on_entity_click;
+    std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double, bool, double, double, double, double, double, double, uint32_t, uint32_t, uint32_t, uint32_t, bool, double, double, double, uint32_t, uint32_t, double, int)> on_entity_click;
 
 public:
     EditorInteractionSystem();
