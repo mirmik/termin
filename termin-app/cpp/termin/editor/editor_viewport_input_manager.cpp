@@ -142,6 +142,15 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
     if (!tc_viewport_alive(_viewport)) return;
 
     _current_mods = mods;
+    if (key == TC_KEY_T || key == 't' || key == 292) {
+        tc_log(TC_LOG_INFO,
+               "[EditorViewportInputManager] key event key=%d scancode=%d action=%d mods=%d cursor=(%.1f, %.1f) has_cursor=%d viewport=(%u,%u) display=%p",
+               key, scancode, action, mods,
+               _last_cursor_x, _last_cursor_y,
+               _has_cursor ? 1 : 0,
+               _viewport.index, _viewport.generation,
+               static_cast<void*>(_display));
+    }
 
     KeyEvent event(_viewport, key, scancode, action, mods);
     _dispatch_to_internal_entities(&event);
@@ -150,10 +159,31 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
 
     // Delegate to EditorInteractionSystem for editor-level key handling
     auto* sys = EditorInteractionSystem::instance();
+    bool handled_by_editor = false;
+    if (sys) {
+        KeyEvent key_event(_viewport, key, scancode, action, mods);
+        handled_by_editor = sys->handle_key_event(
+            key_event,
+            static_cast<float>(_last_cursor_x),
+            static_cast<float>(_last_cursor_y),
+            _viewport,
+            _display);
+        if (key == TC_KEY_T || key == 't' || key == 292) {
+            tc_log(TC_LOG_INFO,
+                   "[EditorViewportInputManager] editor key handler result handled=%d sys=%p",
+                   handled_by_editor ? 1 : 0,
+                   static_cast<void*>(sys));
+        }
+    } else if (key == TC_KEY_T || key == 't' || key == 292) {
+        tc_log(TC_LOG_WARN,
+               "[EditorViewportInputManager] no EditorInteractionSystem for snap hotkey");
+    }
     if (sys && sys->on_key) {
         KeyEvent key_event(_viewport, key, scancode, action, mods);
-        sys->on_key(key_event);
-    } else {
+        if (!handled_by_editor) {
+            sys->on_key(key_event);
+        }
+    } else if (!sys) {
         tc_log(TC_LOG_WARN, "EditorViewportInputManager::on_key: no sys=%p or no on_key callback", (void*)sys);
     }
 }

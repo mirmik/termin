@@ -1,8 +1,11 @@
 // editor_interaction_system.cpp - Singleton editor interaction coordinator
 
 #include "termin/editor/editor_interaction_system.hpp"
+#include "termin/editor/component_editor_visual.hpp"
+#include "termin/editor/editor_snap.hpp"
 #include "core/tc_scene.h"
 #include "termin/render/render_pipeline.hpp"
+#include <termin/tc_scene.hpp>
 #include "termin/camera/camera_component.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include <termin/entity/component.hpp>
@@ -301,6 +304,7 @@ EditorInteractionSystem::EditorInteractionSystem() {
 }
 
 EditorInteractionSystem::~EditorInteractionSystem() {
+    _clear_component_visual_gizmos();
     gizmo_manager.remove_gizmo(&_transform_gizmo);
 
     if (tc_editor_interaction_instance() ==
@@ -331,6 +335,40 @@ void EditorInteractionSystem::set_instance(EditorInteractionSystem* inst) {
 void EditorInteractionSystem::set_gizmo_target(Entity entity) {
     _transform_gizmo.set_target(entity);
     _transform_gizmo.visible = entity.valid();
+    _rebuild_component_visual_gizmos(entity);
+}
+
+void EditorInteractionSystem::_rebuild_component_visual_gizmos(Entity entity) {
+    _clear_component_visual_gizmos();
+    if (!entity.valid()) {
+        return;
+    }
+
+    ComponentEditorVisualContext context;
+    context.transform_gizmo = &_transform_gizmo;
+
+    std::vector<std::unique_ptr<Gizmo>> new_gizmos;
+    size_t count = entity.component_count();
+    for (size_t i = 0; i < count; ++i) {
+        tc_component* component = entity.component_at(i);
+        ComponentEditorVisualRegistry::instance().collect_gizmos(
+            entity,
+            component,
+            context,
+            new_gizmos);
+    }
+
+    for (auto& gizmo : new_gizmos) {
+        gizmo_manager.add_gizmo(gizmo.get());
+        _component_visual_gizmos.push_back(std::move(gizmo));
+    }
+}
+
+void EditorInteractionSystem::_clear_component_visual_gizmos() {
+    for (auto& gizmo : _component_visual_gizmos) {
+        gizmo_manager.remove_gizmo(gizmo.get());
+    }
+    _component_visual_gizmos.clear();
 }
 
 // ============================================================================
@@ -383,6 +421,120 @@ void EditorInteractionSystem::on_mouse_move(
     }
 
     _request_update();
+}
+
+bool EditorInteractionSystem::handle_key_event(
+    const KeyEvent& event,
+    float cursor_x,
+    float cursor_y,
+    tc_viewport_handle viewport,
+    tc_display* display)
+{
+    if (event.action != TC_ACTION_PRESS) {
+        if (event.key == TC_KEY_T || event.key == 't' || event.key == 292) {
+            tc_log(TC_LOG_INFO,
+                   "[EditorSnap] ignoring non-press hotkey key=%d action=%d",
+                   event.key,
+                   event.action);
+        }
+        return false;
+    }
+    if (event.key == TC_KEY_T || event.key == 't' || event.key == 292) {
+        tc_log(TC_LOG_INFO,
+               "[EditorSnap] snap hotkey received key=%d action=%d mods=%d cursor=(%.1f, %.1f) viewport=(%u,%u) display=%p",
+               event.key, event.action, event.mods,
+               cursor_x, cursor_y,
+               viewport.index, viewport.generation,
+               static_cast<void*>(display));
+        bool handled = _snap_transform_gizmo_target(cursor_x, cursor_y, viewport, display);
+        if (!handled) {
+            tc_log(TC_LOG_WARN, "[EditorSnap] snap hotkey was not handled");
+        }
+        return handled;
+    }
+    return false;
+}
+
+bool EditorInteractionSystem::_snap_transform_gizmo_target(
+    float cursor_x,
+    float cursor_y,
+    tc_viewport_handle viewport,
+    tc_display* display)
+{
+    if (!_transform_gizmo.can_snap()) {
+        tc_log(TC_LOG_WARN,
+               "[EditorSnap] active transform target cannot snap has_target=%d source=%d target_valid=%d",
+               _transform_gizmo.has_target() ? 1 : 0,
+               static_cast<int>(_transform_gizmo.preferred_snap_source()),
+               _transform_gizmo.snap_target_entity().valid() ? 1 : 0);
+        return false;
+    }
+
+    Entity target_entity = _transform_gizmo.snap_target_entity();
+    if (!target_entity.valid()) {
+        tc_log(TC_LOG_ERROR, "[EditorSnap] cannot snap: target entity is invalid");
+        return false;
+    }
+
+    EditorSnapRequest request;
+    request.source = _transform_gizmo.preferred_snap_source();
+    request.target_entity = target_entity;
+    request.reference_position = _transform_gizmo.snap_reference_position();
+    request.scene = target_entity.scene().handle();
+
+    SurfacePickResult surface = pick_surface_at(cursor_x, cursor_y, viewport, display);
+    if (surface.has_world_point) {
+        request.reference_position = Vec3{
+            surface.world_point[0],
+            surface.world_point[1],
+            surface.world_point[2],
+        };
+        tc_log(TC_LOG_INFO,
+               "[EditorSnap] using cursor surface reference (%.3f, %.3f, %.3f) picked='%s' has_mesh_hit=%d raw_depth=%.6f view_depth=%.3f",
+               request.reference_position.x,
+               request.reference_position.y,
+               request.reference_position.z,
+               surface.entity.valid() ? surface.entity.name() : "<none>",
+               surface.has_mesh_hit ? 1 : 0,
+               surface.depth,
+               surface.view_depth);
+    } else {
+        tc_log(TC_LOG_WARN,
+               "[EditorSnap] no cursor surface reference at cursor=(%.1f, %.1f); using target position (%.3f, %.3f, %.3f)",
+               cursor_x,
+               cursor_y,
+               request.reference_position.x,
+               request.reference_position.y,
+               request.reference_position.z);
+        if (request.source == EditorSnapSource::VisibleGeometry) {
+            return false;
+        }
+    }
+
+    EditorSnapResult result;
+    if (!EditorSnapRegistry::instance().snap(request, result) || !result.success) {
+        tc_log(TC_LOG_WARN, "[EditorSnap] snap failed for source=%d",
+               static_cast<int>(request.source));
+        return false;
+    }
+
+    if (!_transform_gizmo.snap_to(result.position)) {
+        tc_log(TC_LOG_ERROR, "[EditorSnap] failed to apply snapped position");
+        return false;
+    }
+
+    tc_log(TC_LOG_INFO,
+           "[EditorSnap] snapped transform target source=%d entity='%s' from_ref=(%.3f, %.3f, %.3f) to=(%.3f, %.3f, %.3f)",
+           static_cast<int>(request.source),
+           target_entity.name(),
+           request.reference_position.x,
+           request.reference_position.y,
+           request.reference_position.z,
+           result.position.x,
+           result.position.y,
+           result.position.z);
+    _request_update();
+    return true;
 }
 
 // ============================================================================

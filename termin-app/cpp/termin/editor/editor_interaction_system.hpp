@@ -11,9 +11,11 @@
 #include "render/tc_viewport.h"
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <array>
 #include <chrono>
+#include <vector>
 
 namespace termin {
 
@@ -45,6 +47,7 @@ public:
 
 private:
     TransformGizmo _transform_gizmo;
+    std::vector<std::unique_ptr<Gizmo>> _component_visual_gizmos;
 
     // Click/drag detection
     float _press_x = 0.0f;
@@ -94,6 +97,11 @@ public:
 
     // Post-render processing - call once per frame after rendering
     void after_render();
+    bool handle_key_event(const KeyEvent& event,
+                          float cursor_x,
+                          float cursor_y,
+                          tc_viewport_handle viewport,
+                          tc_display* display);
 
     // Called by EditorViewportInputManager instances
     void on_mouse_button(int button, int action, int mods,
@@ -106,6 +114,12 @@ private:
     void _process_pending_release();
     void _process_pending_hover();
     void _handle_double_click(float x, float y, tc_viewport_handle vp, tc_display* display);
+    void _rebuild_component_visual_gizmos(Entity entity);
+    void _clear_component_visual_gizmos();
+    bool _snap_transform_gizmo_target(float cursor_x,
+                                      float cursor_y,
+                                      tc_viewport_handle viewport,
+                                      tc_display* display);
 
     bool _window_to_fbo_coords(float x, float y, tc_viewport_handle vp,
                                tc_display* display, int& fx, int& fy);

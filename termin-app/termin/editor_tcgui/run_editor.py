@@ -29,6 +29,32 @@ from termin.editor_tcgui.backend_window_manager import BackendWindowManager
 
 def _translate_sdl_key(scancode: int) -> Key:
     _MAP = {
+        sdl2.SDL_SCANCODE_A: Key.A,
+        sdl2.SDL_SCANCODE_B: Key.B,
+        sdl2.SDL_SCANCODE_C: Key.C,
+        sdl2.SDL_SCANCODE_D: Key.D,
+        sdl2.SDL_SCANCODE_E: Key.E,
+        sdl2.SDL_SCANCODE_F: Key.F,
+        sdl2.SDL_SCANCODE_G: Key.G,
+        sdl2.SDL_SCANCODE_H: Key.H,
+        sdl2.SDL_SCANCODE_I: Key.I,
+        sdl2.SDL_SCANCODE_J: Key.J,
+        sdl2.SDL_SCANCODE_K: Key.K,
+        sdl2.SDL_SCANCODE_L: Key.L,
+        sdl2.SDL_SCANCODE_M: Key.M,
+        sdl2.SDL_SCANCODE_N: Key.N,
+        sdl2.SDL_SCANCODE_O: Key.O,
+        sdl2.SDL_SCANCODE_P: Key.P,
+        sdl2.SDL_SCANCODE_Q: Key.Q,
+        sdl2.SDL_SCANCODE_R: Key.R,
+        sdl2.SDL_SCANCODE_S: Key.S,
+        sdl2.SDL_SCANCODE_T: Key.T,
+        sdl2.SDL_SCANCODE_U: Key.U,
+        sdl2.SDL_SCANCODE_V: Key.V,
+        sdl2.SDL_SCANCODE_W: Key.W,
+        sdl2.SDL_SCANCODE_X: Key.X,
+        sdl2.SDL_SCANCODE_Y: Key.Y,
+        sdl2.SDL_SCANCODE_Z: Key.Z,
         sdl2.SDL_SCANCODE_BACKSPACE: Key.BACKSPACE,
         sdl2.SDL_SCANCODE_DELETE: Key.DELETE,
         sdl2.SDL_SCANCODE_LEFT: Key.LEFT,
@@ -153,6 +179,17 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
         elif etype == sdl2.SDL_KEYDOWN:
             key = _translate_sdl_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)
+            log.info(
+                "[run_editor] SDL_KEYDOWN "
+                f"window={event.key.windowID} "
+                f"scancode={event.key.keysym.scancode} "
+                f"sym={event.key.keysym.sym} "
+                f"repeat={event.key.repeat} "
+                f"sdl_mods=0x{event.key.keysym.mod:x} "
+                f"mods=0x{mods:x} "
+                f"key={key.name}({int(key)}) "
+                f"target_ui={type(target_ui).__name__}"
+            )
             target_ui.key_down(key, mods)
             # ESC closes the event's window — not always the main one.
             if key == Key.ESCAPE:
@@ -162,6 +199,19 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
                 if wm is not None and wm.handle_window_close(wid):
                     bw.set_should_close(True)
                     return False
+        elif etype == sdl2.SDL_KEYUP:
+            key = _translate_sdl_key(event.key.keysym.scancode)
+            mods = _translate_sdl_mods(event.key.keysym.mod)
+            log.info(
+                "[run_editor] SDL_KEYUP "
+                f"window={event.key.windowID} "
+                f"scancode={event.key.keysym.scancode} "
+                f"sym={event.key.keysym.sym} "
+                f"sdl_mods=0x{event.key.keysym.mod:x} "
+                f"mods=0x{mods:x} "
+                f"key={key.name}({int(key)}) "
+                f"target_ui={type(target_ui).__name__}"
+            )
         elif etype == sdl2.SDL_TEXTINPUT:
             text = event.text.text.decode("utf-8", errors="replace")
             target_ui.text_input(text)

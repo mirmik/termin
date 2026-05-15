@@ -22,6 +22,8 @@ from termin.navmesh._navmesh_native import (
     DetourPathfindingWorldComponent as _DetourPathfindingWorldComponent,
     DetourRaycastResult,
     NavMeshKeeperComponent as _NavMeshKeeperComponent,
+    OffMeshLinkComponent as _OffMeshLinkComponent,
+    OffMeshLinkType,
     RecastNavMeshBuilderComponent as _RecastNavMeshBuilderComponent,
     RecastBuildResult,
     TcNavMesh,
@@ -34,6 +36,7 @@ from termin.navmesh._navmesh_native import (
 # Keep public name so `termin.navmesh.RecastNavMeshBuilderComponent` works.
 DetourPathfindingWorldComponent = _DetourPathfindingWorldComponent
 NavMeshKeeperComponent = _NavMeshKeeperComponent
+OffMeshLinkComponent = _OffMeshLinkComponent
 RecastNavMeshBuilderComponent = _RecastNavMeshBuilderComponent
 
 __all__ = [
@@ -41,6 +44,8 @@ __all__ = [
     "DetourPathfindingWorldComponent",
     "DetourRaycastResult",
     "NavMeshKeeperComponent",
+    "OffMeshLinkComponent",
+    "OffMeshLinkType",
     "RecastNavMeshBuilderComponent",
     "RecastBuildResult",
     "TcNavMesh",

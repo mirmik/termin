@@ -65,10 +65,13 @@ nanobind_add_module(_native NB_SHARED
     termin/bindings/editor/gizmo_bindings.cpp
     termin/bindings/editor/editor_interaction_bindings.cpp
     termin/bindings/editor/frame_graph_debugger_bindings.cpp
+    termin/editor/component_editor_visual.cpp
+    termin/editor/editor_snap.cpp
     termin/editor/gizmo_manager.cpp
     termin/editor/transform_gizmo.cpp
     termin/editor/editor_viewport_input_manager.cpp
     termin/editor/editor_interaction_system.cpp
+    termin/navmesh/off_mesh_link_editor_visual.cpp
     termin/bindings/modules/term_modules_integration_bindings.cpp
     termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp

@@ -120,6 +120,42 @@ bool TransformGizmo::_has_target() const {
     return _target && _target->valid();
 }
 
+bool TransformGizmo::can_snap() const {
+    return _has_target() && _target->can_snap();
+}
+
+EditorSnapSource TransformGizmo::preferred_snap_source() const {
+    return _has_target() ? _target->preferred_snap_source() : EditorSnapSource::None;
+}
+
+Vec3 TransformGizmo::snap_reference_position() const {
+    return _has_target() ? _target->global_pose().lin : Vec3::zero();
+}
+
+Entity TransformGizmo::snap_target_entity() const {
+    return _has_target() ? _target->entity() : Entity();
+}
+
+bool TransformGizmo::snap_to(const Vec3& position) {
+    if (!_has_target()) {
+        return false;
+    }
+
+    GeneralPose3 old_pose = _target->local_pose_for_undo();
+    GeneralPose3 new_global = _target->global_pose();
+    new_global.lin = position;
+    _target->relocate_global(new_global);
+    _update_position();
+
+    if (on_transform_changed) {
+        on_transform_changed();
+    }
+    if (on_drag_end && _target->supports_transform_undo()) {
+        on_drag_end(old_pose, _target->local_pose_for_undo());
+    }
+    return true;
+}
+
 void TransformGizmo::_update_position() {
     if (_has_target()) {
         GeneralPose3 pose = _target->global_pose();
@@ -465,7 +501,7 @@ void TransformGizmo::on_drag(int collider_id, const Vec3f& position, const Vec3f
 
 void TransformGizmo::on_release(int collider_id) {
     // Call drag end handler for undo support
-    if (on_drag_end && _has_target()) {
+    if (on_drag_end && _has_target() && _target->supports_transform_undo()) {
         GeneralPose3 end_pose = _target->local_pose_for_undo();
         on_drag_end(_drag_start_pose, end_pose);
     }
