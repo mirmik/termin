@@ -110,6 +110,30 @@ void bind_editor_interaction(nb::module_& m) {
             d["view_depth"] = result.view_depth;
             d["reproject_screen_error"] = result.reproject_screen_error;
             d["reproject_depth_error"] = result.reproject_depth_error;
+            d["has_mesh_hit"] = result.has_mesh_hit;
+            d["mesh_point"] = nb::make_tuple(
+                result.mesh_point[0],
+                result.mesh_point[1],
+                result.mesh_point[2]);
+            d["mesh_normal"] = nb::make_tuple(
+                result.mesh_normal[0],
+                result.mesh_normal[1],
+                result.mesh_normal[2]);
+            d["mesh_triangle_index"] = result.mesh_triangle_index;
+            d["mesh_indices"] = nb::make_tuple(
+                result.mesh_indices[0],
+                result.mesh_indices[1],
+                result.mesh_indices[2]);
+            d["has_surface_edge"] = result.has_surface_edge;
+            d["surface_edge_point"] = nb::make_tuple(
+                result.surface_edge_point[0],
+                result.surface_edge_point[1],
+                result.surface_edge_point[2]);
+            d["surface_edge_indices"] = nb::make_tuple(
+                result.surface_edge_indices[0],
+                result.surface_edge_indices[1]);
+            d["surface_edge_distance"] = result.surface_edge_distance;
+            d["surface_edge_side"] = result.surface_edge_side;
             return d;
         })
         .def_prop_rw("on_request_update",
@@ -132,7 +156,7 @@ void bind_editor_interaction(nb::module_& m) {
         .def_prop_rw("on_entity_click",
             [](EditorInteractionSystem& s) { return s.on_entity_click; },
             [](EditorInteractionSystem& s,
-               std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double)> cb) {
+               std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double, bool, double, double, double, double, double, double, uint32_t, uint32_t, uint32_t, uint32_t, bool, double, double, double, uint32_t, uint32_t, double, int)> cb) {
                 s.on_entity_click = cb;
             });
 }

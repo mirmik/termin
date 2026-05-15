@@ -4,6 +4,7 @@
 #include "core/tc_scene.h"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/camera/camera_component.hpp"
+#include "termin/render/mesh_renderer.hpp"
 #include <termin/entity/component.hpp>
 #include "editor/tc_editor_interaction.h"
 #include "render/tc_viewport.h"
@@ -16,8 +17,264 @@
 
 #include <cmath>
 #include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <queue>
+#include <unordered_map>
+#include <vector>
 
 namespace termin {
+
+namespace {
+
+struct LocalSurfaceEdgeHit {
+    bool found = false;
+    Vec3 point = Vec3::zero();
+    uint32_t indices[2] = {0, 0};
+    double distance = 0.0;
+    int side = 0;
+};
+
+static uint64_t edge_key(uint32_t a, uint32_t b) {
+    uint32_t lo = std::min(a, b);
+    uint32_t hi = std::max(a, b);
+    return (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+}
+
+static bool mesh_vertex_position(const tc_mesh* mesh, uint32_t index, Vec3& out) {
+    float p[3];
+    if (!tc_mesh_get_position3f(mesh, index, p)) {
+        return false;
+    }
+    out = Vec3(
+        static_cast<double>(p[0]),
+        static_cast<double>(p[1]),
+        static_cast<double>(p[2]));
+    return true;
+}
+
+static bool mesh_triangle_indices(const tc_mesh* mesh, uint32_t tri, uint32_t out[3]) {
+    if (!mesh || !mesh->indices) {
+        return false;
+    }
+    size_t first = static_cast<size_t>(tri) * 3;
+    if (first + 2 >= mesh->index_count) {
+        return false;
+    }
+    out[0] = mesh->indices[first];
+    out[1] = mesh->indices[first + 1];
+    out[2] = mesh->indices[first + 2];
+    return true;
+}
+
+static bool mesh_triangle_normal(const tc_mesh* mesh, uint32_t tri, Vec3& out) {
+    uint32_t idx[3];
+    Vec3 a, b, c;
+    if (!mesh_triangle_indices(mesh, tri, idx) ||
+        !mesh_vertex_position(mesh, idx[0], a) ||
+        !mesh_vertex_position(mesh, idx[1], b) ||
+        !mesh_vertex_position(mesh, idx[2], c)) {
+        return false;
+    }
+
+    Vec3 n = (b - a).cross(c - a);
+    if (n.norm_squared() < 1e-20) {
+        return false;
+    }
+    out = n.normalized();
+    return true;
+}
+
+static LocalSurfaceEdgeHit find_surface_edge_from_triangle(
+    const tc_mesh* mesh,
+    uint32_t start_triangle,
+    const Vec3& local_point,
+    const Vec3& local_normal,
+    const Vec3& local_up)
+{
+    LocalSurfaceEdgeHit result;
+    if (!mesh || !mesh->indices || mesh->draw_mode != TC_DRAW_TRIANGLES) {
+        return result;
+    }
+    if (!tc_mesh_ensure_loaded_ptr(const_cast<tc_mesh*>(mesh))) {
+        return result;
+    }
+
+    const size_t triangle_count = mesh->index_count / 3;
+    if (start_triangle >= triangle_count) {
+        return result;
+    }
+
+    Vec3 up = local_up.normalized();
+    Vec3 n0 = local_normal.normalized();
+    Vec3 horizontal_normal = n0 - up * n0.dot(up);
+    if (horizontal_normal.norm_squared() < 1e-12) {
+        return result;
+    }
+    horizontal_normal = horizontal_normal.normalized();
+    Vec3 tangent = up.cross(horizontal_normal).normalized();
+
+    std::unordered_map<uint64_t, std::vector<uint32_t>> edge_to_triangles;
+    edge_to_triangles.reserve(triangle_count * 3);
+    std::vector<Vec3> normals(triangle_count);
+    std::vector<char> has_normal(triangle_count, 0);
+
+    for (uint32_t tri = 0; tri < static_cast<uint32_t>(triangle_count); ++tri) {
+        uint32_t idx[3];
+        if (!mesh_triangle_indices(mesh, tri, idx)) {
+            continue;
+        }
+        edge_to_triangles[edge_key(idx[0], idx[1])].push_back(tri);
+        edge_to_triangles[edge_key(idx[1], idx[2])].push_back(tri);
+        edge_to_triangles[edge_key(idx[2], idx[0])].push_back(tri);
+
+        Vec3 n;
+        if (mesh_triangle_normal(mesh, tri, n)) {
+            normals[tri] = n;
+            has_normal[tri] = 1;
+        }
+    }
+
+    if (!has_normal[start_triangle]) {
+        return result;
+    }
+
+    constexpr double normal_cos_threshold = 0.9063077870366499; // cos(25 deg)
+    constexpr double plane_distance_threshold = 0.05;
+    std::vector<char> accepted(triangle_count, 0);
+    std::queue<uint32_t> queue;
+    accepted[start_triangle] = 1;
+    queue.push(start_triangle);
+
+    while (!queue.empty()) {
+        uint32_t tri = queue.front();
+        queue.pop();
+
+        uint32_t idx[3];
+        if (!mesh_triangle_indices(mesh, tri, idx)) {
+            continue;
+        }
+
+        for (int e = 0; e < 3; ++e) {
+            uint32_t a = idx[e];
+            uint32_t b = idx[(e + 1) % 3];
+            auto edge_it = edge_to_triangles.find(edge_key(a, b));
+            if (edge_it == edge_to_triangles.end()) {
+                continue;
+            }
+
+            for (uint32_t next : edge_it->second) {
+                if (next == tri || accepted[next] || !has_normal[next]) {
+                    continue;
+                }
+                if (normals[next].dot(n0) < normal_cos_threshold) {
+                    continue;
+                }
+
+                uint32_t next_idx[3];
+                Vec3 v0;
+                if (!mesh_triangle_indices(mesh, next, next_idx) ||
+                    !mesh_vertex_position(mesh, next_idx[0], v0)) {
+                    continue;
+                }
+                if (std::abs((v0 - local_point).dot(n0)) > plane_distance_threshold) {
+                    continue;
+                }
+
+                accepted[next] = 1;
+                queue.push(next);
+            }
+        }
+    }
+
+    double best_abs_distance = std::numeric_limits<double>::infinity();
+    Vec3 best_point;
+    uint32_t best_a = 0;
+    uint32_t best_b = 0;
+    int best_side = 0;
+
+    for (uint32_t tri = 0; tri < static_cast<uint32_t>(triangle_count); ++tri) {
+        if (!accepted[tri]) {
+            continue;
+        }
+
+        uint32_t idx[3];
+        if (!mesh_triangle_indices(mesh, tri, idx)) {
+            continue;
+        }
+
+        for (int e = 0; e < 3; ++e) {
+            uint32_t ia = idx[e];
+            uint32_t ib = idx[(e + 1) % 3];
+            auto edge_it = edge_to_triangles.find(edge_key(ia, ib));
+            bool boundary = edge_it == edge_to_triangles.end();
+            if (!boundary) {
+                boundary = true;
+                for (uint32_t neighbor : edge_it->second) {
+                    if (neighbor != tri && neighbor < accepted.size() && accepted[neighbor]) {
+                        boundary = false;
+                        break;
+                    }
+                }
+            }
+            if (!boundary) {
+                continue;
+            }
+
+            Vec3 a, b;
+            if (!mesh_vertex_position(mesh, ia, a) ||
+                !mesh_vertex_position(mesh, ib, b)) {
+                continue;
+            }
+
+            double au = (a - local_point).dot(up);
+            double bu = (b - local_point).dot(up);
+            double at = (a - local_point).dot(tangent);
+            double bt = (b - local_point).dot(tangent);
+
+            double s_candidates[2] = {0.0, 0.0};
+            int candidate_count = 0;
+            if (std::abs(bu - au) > 1e-8) {
+                double k = -au / (bu - au);
+                if (k >= -1e-6 && k <= 1.0 + 1e-6) {
+                    s_candidates[candidate_count++] = at + (bt - at) * k;
+                }
+            } else if (std::abs(au) < 1e-4) {
+                s_candidates[candidate_count++] = at;
+                s_candidates[candidate_count++] = bt;
+            }
+
+            for (int ci = 0; ci < candidate_count; ++ci) {
+                double s = s_candidates[ci];
+                if (std::abs(s) < 1e-5) {
+                    continue;
+                }
+                double abs_s = std::abs(s);
+                if (abs_s < best_abs_distance) {
+                    best_abs_distance = abs_s;
+                    best_point = local_point + tangent * s;
+                    best_a = ia;
+                    best_b = ib;
+                    best_side = s > 0.0 ? 1 : -1;
+                }
+            }
+        }
+    }
+
+    if (!std::isfinite(best_abs_distance)) {
+        return result;
+    }
+
+    result.found = true;
+    result.point = best_point;
+    result.indices[0] = best_a;
+    result.indices[1] = best_b;
+    result.distance = best_abs_distance;
+    result.side = best_side;
+    return result;
+}
+
+} // namespace
 
 // ============================================================================
 // Constructor / Destructor
@@ -201,7 +458,17 @@ void EditorInteractionSystem::_process_pending_release() {
             pick.entity, x, y, pick.has_world_point,
             pick.world_point[0], pick.world_point[1], pick.world_point[2],
             pick.depth, pick.view_depth,
-            pick.reproject_screen_error, pick.reproject_depth_error)) {
+            pick.reproject_screen_error, pick.reproject_depth_error,
+            pick.has_mesh_hit,
+            pick.mesh_point[0], pick.mesh_point[1], pick.mesh_point[2],
+            pick.mesh_normal[0], pick.mesh_normal[1], pick.mesh_normal[2],
+            pick.mesh_triangle_index,
+            pick.mesh_indices[0], pick.mesh_indices[1], pick.mesh_indices[2],
+            pick.has_surface_edge,
+            pick.surface_edge_point[0], pick.surface_edge_point[1], pick.surface_edge_point[2],
+            pick.surface_edge_indices[0], pick.surface_edge_indices[1],
+            pick.surface_edge_distance,
+            pick.surface_edge_side)) {
         _request_update();
         return;
     }
@@ -408,6 +675,70 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
     result.has_world_point = true;
     result.world_point = {world.x, world.y, world.z};
     result.view_depth = view_point.y;
+
+    MeshRenderer* renderer = result.entity.get_component<MeshRenderer>();
+    if (renderer) {
+        tc_mesh* mesh = renderer->mesh.get();
+        GeneralPose3 pose = result.entity.transform().global_pose();
+        Vec3 camera_position = camera->get_position();
+        Vec3 world_direction = (world - camera_position).normalized();
+        Vec3 local_origin = pose.inverse_transform_point(camera_position);
+        Vec3 local_direction = pose.inverse_transform_vector(world_direction).normalized();
+
+        tc_mesh_ray ray;
+        ray.origin[0] = static_cast<float>(local_origin.x);
+        ray.origin[1] = static_cast<float>(local_origin.y);
+        ray.origin[2] = static_cast<float>(local_origin.z);
+        ray.direction[0] = static_cast<float>(local_direction.x);
+        ray.direction[1] = static_cast<float>(local_direction.y);
+        ray.direction[2] = static_cast<float>(local_direction.z);
+        ray.t_min = 0.0f;
+        ray.t_max = 1000000.0f;
+
+        tc_mesh_hit hit;
+        if (tc_mesh_raycast(mesh, &ray, &hit)) {
+            Vec3 local_hit(
+                static_cast<double>(hit.position[0]),
+                static_cast<double>(hit.position[1]),
+                static_cast<double>(hit.position[2])
+            );
+            Vec3 local_normal(
+                static_cast<double>(hit.normal[0]),
+                static_cast<double>(hit.normal[1]),
+                static_cast<double>(hit.normal[2])
+            );
+            Vec3 world_hit = pose.transform_point(local_hit);
+            Vec3 world_normal = pose.to_pose3().transform_vector(local_normal).normalized();
+
+            result.has_mesh_hit = true;
+            result.mesh_point = {world_hit.x, world_hit.y, world_hit.z};
+            result.mesh_normal = {world_normal.x, world_normal.y, world_normal.z};
+            result.mesh_triangle_index = hit.triangle_index;
+            result.mesh_indices = std::array<uint32_t, 3>{
+                hit.indices[0],
+                hit.indices[1],
+                hit.indices[2]
+            };
+
+            LocalSurfaceEdgeHit edge_hit = find_surface_edge_from_triangle(
+                mesh,
+                hit.triangle_index,
+                local_hit,
+                local_normal,
+                pose.inverse_transform_vector(Vec3::unit_z()).normalized());
+            if (edge_hit.found) {
+                Vec3 world_edge = pose.transform_point(edge_hit.point);
+                result.has_surface_edge = true;
+                result.surface_edge_point = {world_edge.x, world_edge.y, world_edge.z};
+                result.surface_edge_indices = std::array<uint32_t, 2>{
+                    edge_hit.indices[0],
+                    edge_hit.indices[1]
+                };
+                result.surface_edge_distance = edge_hit.distance;
+                result.surface_edge_side = edge_hit.side;
+            }
+        }
+    }
     return result;
 }
 

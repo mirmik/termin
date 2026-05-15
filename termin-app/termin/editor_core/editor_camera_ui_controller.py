@@ -151,9 +151,7 @@ class EditorCameraUIController(PythonComponent):
             self._colliders_btn.active = self.colliders_enabled
 
         # NavMesh / editor debug overlay
-        editor_debug_pass = self._find_pass_by_name("EditorDebug")
-        if editor_debug_pass is not None:
-            editor_debug_pass.passthrough = not self.navmesh_enabled
+        self._set_editor_debug_passthrough(not self.navmesh_enabled)
         if self._navmesh_btn is not None:
             self._navmesh_btn.active = self.navmesh_enabled
 
@@ -187,6 +185,16 @@ class EditorCameraUIController(PythonComponent):
                 return p
         return None
 
+    def _set_editor_debug_passthrough(self, passthrough: bool) -> None:
+        """Переключает все editor debug ColorPass'ы."""
+        editor_debug_pass = self._find_pass_by_name("EditorDebug")
+        if editor_debug_pass is not None:
+            editor_debug_pass.passthrough = passthrough
+
+        editor_debug_transparent_pass = self._find_pass_by_name("EditorDebugTransparent")
+        if editor_debug_transparent_pass is not None:
+            editor_debug_transparent_pass.passthrough = passthrough
+
     def _on_colliders_click(self) -> None:
         """Переключает отображение коллайдеров."""
         self.colliders_enabled = not self.colliders_enabled
@@ -201,9 +209,7 @@ class EditorCameraUIController(PythonComponent):
         """Переключает отображение navmesh/editor debug overlay."""
         self.navmesh_enabled = not self.navmesh_enabled
 
-        editor_debug_pass = self._find_pass_by_name("EditorDebug")
-        if editor_debug_pass is not None:
-            editor_debug_pass.passthrough = not self.navmesh_enabled
+        self._set_editor_debug_passthrough(not self.navmesh_enabled)
         if self._navmesh_btn is not None:
             self._navmesh_btn.active = self.navmesh_enabled
 
