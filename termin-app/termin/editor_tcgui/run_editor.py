@@ -179,17 +179,6 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
         elif etype == sdl2.SDL_KEYDOWN:
             key = _translate_sdl_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)
-            log.info(
-                "[run_editor] SDL_KEYDOWN "
-                f"window={event.key.windowID} "
-                f"scancode={event.key.keysym.scancode} "
-                f"sym={event.key.keysym.sym} "
-                f"repeat={event.key.repeat} "
-                f"sdl_mods=0x{event.key.keysym.mod:x} "
-                f"mods=0x{mods:x} "
-                f"key={key.name}({int(key)}) "
-                f"target_ui={type(target_ui).__name__}"
-            )
             target_ui.key_down(key, mods)
             # ESC closes the event's window — not always the main one.
             if key == Key.ESCAPE:
@@ -200,18 +189,7 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
                     bw.set_should_close(True)
                     return False
         elif etype == sdl2.SDL_KEYUP:
-            key = _translate_sdl_key(event.key.keysym.scancode)
-            mods = _translate_sdl_mods(event.key.keysym.mod)
-            log.info(
-                "[run_editor] SDL_KEYUP "
-                f"window={event.key.windowID} "
-                f"scancode={event.key.keysym.scancode} "
-                f"sym={event.key.keysym.sym} "
-                f"sdl_mods=0x{event.key.keysym.mod:x} "
-                f"mods=0x{mods:x} "
-                f"key={key.name}({int(key)}) "
-                f"target_ui={type(target_ui).__name__}"
-            )
+            pass
         elif etype == sdl2.SDL_TEXTINPUT:
             text = event.text.text.decode("utf-8", errors="replace")
             target_ui.text_input(text)

@@ -431,21 +431,9 @@ bool EditorInteractionSystem::handle_key_event(
     tc_display* display)
 {
     if (event.action != TC_ACTION_PRESS) {
-        if (event.key == TC_KEY_T || event.key == 't' || event.key == 292) {
-            tc_log(TC_LOG_INFO,
-                   "[EditorSnap] ignoring non-press hotkey key=%d action=%d",
-                   event.key,
-                   event.action);
-        }
         return false;
     }
     if (event.key == TC_KEY_T || event.key == 't' || event.key == 292) {
-        tc_log(TC_LOG_INFO,
-               "[EditorSnap] snap hotkey received key=%d action=%d mods=%d cursor=(%.1f, %.1f) viewport=(%u,%u) display=%p",
-               event.key, event.action, event.mods,
-               cursor_x, cursor_y,
-               viewport.index, viewport.generation,
-               static_cast<void*>(display));
         bool handled = _snap_transform_gizmo_target(cursor_x, cursor_y, viewport, display);
         if (!handled) {
             tc_log(TC_LOG_WARN, "[EditorSnap] snap hotkey was not handled");
@@ -489,23 +477,11 @@ bool EditorInteractionSystem::_snap_transform_gizmo_target(
             surface.world_point[1],
             surface.world_point[2],
         };
-        tc_log(TC_LOG_INFO,
-               "[EditorSnap] using cursor surface reference (%.3f, %.3f, %.3f) picked='%s' has_mesh_hit=%d raw_depth=%.6f view_depth=%.3f",
-               request.reference_position.x,
-               request.reference_position.y,
-               request.reference_position.z,
-               surface.entity.valid() ? surface.entity.name() : "<none>",
-               surface.has_mesh_hit ? 1 : 0,
-               surface.depth,
-               surface.view_depth);
     } else {
         tc_log(TC_LOG_WARN,
-               "[EditorSnap] no cursor surface reference at cursor=(%.1f, %.1f); using target position (%.3f, %.3f, %.3f)",
+               "[EditorSnap] no cursor surface reference at cursor=(%.1f, %.1f)",
                cursor_x,
-               cursor_y,
-               request.reference_position.x,
-               request.reference_position.y,
-               request.reference_position.z);
+               cursor_y);
         if (request.source == EditorSnapSource::VisibleGeometry) {
             return false;
         }
@@ -523,16 +499,8 @@ bool EditorInteractionSystem::_snap_transform_gizmo_target(
         return false;
     }
 
-    tc_log(TC_LOG_INFO,
-           "[EditorSnap] snapped transform target source=%d entity='%s' from_ref=(%.3f, %.3f, %.3f) to=(%.3f, %.3f, %.3f)",
-           static_cast<int>(request.source),
-           target_entity.name(),
-           request.reference_position.x,
-           request.reference_position.y,
-           request.reference_position.z,
-           result.position.x,
-           result.position.y,
-           result.position.z);
+    tc_log(TC_LOG_INFO, "[EditorSnap] snapped transform target to (%.3f, %.3f, %.3f)",
+           result.position.x, result.position.y, result.position.z);
     _request_update();
     return true;
 }
