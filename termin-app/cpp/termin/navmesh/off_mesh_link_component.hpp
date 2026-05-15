@@ -32,6 +32,7 @@ public:
     bool enabled = true;
     int link_type = static_cast<int>(OffMeshLinkType::JumpDown);
     std::string agent_type = "Human";
+    int area_id = 0;
     tc_vec3 start_local = {0.0, 0.0, 0.0};
     tc_vec3 end_local = {0.0, 1.0, -1.0};
     double radius = 0.35;
@@ -43,6 +44,7 @@ public:
     INSPECT_FIELD_CHOICES(OffMeshLinkComponent, link_type, "Type", "enum",
         {"0", "Generic"}, {"1", "JumpDown"}, {"2", "Jump"}, {"3", "Climb"})
     INSPECT_FIELD(OffMeshLinkComponent, agent_type, "Agent Type", "string")
+    INSPECT_FIELD(OffMeshLinkComponent, area_id, "Area", "navmesh_area")
     INSPECT_FIELD(OffMeshLinkComponent, start_local, "Start Local", "vec3")
     INSPECT_FIELD(OffMeshLinkComponent, end_local, "End Local", "vec3")
     INSPECT_FIELD(OffMeshLinkComponent, radius, "Radius", "double", 0.01, 10.0, 0.01)

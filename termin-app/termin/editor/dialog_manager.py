@@ -60,6 +60,9 @@ class DialogManager:
         self._inspect_registry_viewer = None
         self._navmesh_registry_viewer = None
         self._spacemouse_settings_dialog = None
+        self._agent_types_dialog = None
+        self._navmesh_areas_dialog = None
+        self._project_settings_dialog = None
 
     @property
     def framegraph_debugger(self) -> "FramegraphDebugDialog | None":
@@ -274,6 +277,24 @@ class DialogManager:
         dialog.setModal(False)
         dialog.finished.connect(lambda: self.__dict__.__setitem__('_agent_types_dialog', None))
         self._agent_types_dialog = dialog
+        dialog.show()
+
+    def show_navmesh_areas_dialog(self) -> None:
+        """Opens navmesh areas configuration dialog."""
+        from termin.editor.navmesh_areas_dialog import NavMeshAreasDialog
+
+        if self._navmesh_areas_dialog is not None:
+            self._navmesh_areas_dialog.raise_()
+            self._navmesh_areas_dialog.activateWindow()
+            return
+
+        dialog = NavMeshAreasDialog(
+            parent=self._parent,
+            on_changed=self._request_viewport_update,
+        )
+        dialog.setModal(False)
+        dialog.finished.connect(lambda: self.__dict__.__setitem__('_navmesh_areas_dialog', None))
+        self._navmesh_areas_dialog = dialog
         dialog.show()
 
     def show_spacemouse_settings_dialog(self, spacemouse: "SpaceMouseController") -> None:

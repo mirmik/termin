@@ -92,7 +92,12 @@ DetourOffMeshLinks collect_off_mesh_links_for_builder(
         links.verts.push_back(static_cast<float>(end_recast.z));
         links.radii.push_back(static_cast<float>(link->radius));
         links.dirs.push_back(link->bidirectional ? DT_OFFMESH_CON_BIDIR : 0);
-        links.areas.push_back(0);
+        const int area_id = std::clamp(link->area_id, 0, 63);
+        if (area_id != link->area_id) {
+            tc_log_warn("[NavMesh] OffMeshLinkComponent area_id=%d is outside Detour range, using %d",
+                        link->area_id, area_id);
+        }
+        links.areas.push_back(static_cast<unsigned char>(area_id));
         links.flags.push_back(1);
         links.user_ids.push_back(next_user_id++);
     }
@@ -464,11 +469,17 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
         return false;
     }
 
+    const int poly_area_id = std::clamp(area_id, 0, 63);
+    if (poly_area_id != area_id) {
+        tc_log_warn("[NavMesh] RecastNavMeshBuilderComponent area_id=%d is outside Detour range, using %d",
+                    area_id, poly_area_id);
+    }
+
     std::vector<unsigned short> poly_flags(static_cast<size_t>(pmesh->npolys), 0);
     std::vector<unsigned char> poly_areas(static_cast<size_t>(pmesh->npolys), 0);
     for (int i = 0; i < pmesh->npolys; ++i) {
         const unsigned char area = pmesh->areas ? pmesh->areas[i] : RC_WALKABLE_AREA;
-        poly_areas[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : 0;
+        poly_areas[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : static_cast<unsigned char>(poly_area_id);
         poly_flags[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : 1;
     }
 

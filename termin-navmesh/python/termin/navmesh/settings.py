@@ -14,6 +14,15 @@ from typing import List, Optional
 
 from tcbase import log
 
+NAVMESH_AREA_COUNT = 64
+
+
+def default_navmesh_area_names() -> List[str]:
+    """Default Detour area names."""
+    names = [""] * NAVMESH_AREA_COUNT
+    names[0] = "Walkable"
+    return names
+
 
 @dataclass
 class AgentType:
@@ -58,11 +67,13 @@ class NavigationSettings:
     """
 
     agent_types: List[AgentType] = field(default_factory=lambda: [AgentType()])
+    navmesh_area_names: List[str] = field(default_factory=default_navmesh_area_names)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         return {
             "agent_types": [agent.to_dict() for agent in self.agent_types],
+            "navmesh_area_names": list(self.navmesh_area_names),
         }
 
     @staticmethod
@@ -74,7 +85,10 @@ class NavigationSettings:
         ]
         if not agent_types:
             agent_types = [AgentType()]
-        return NavigationSettings(agent_types=agent_types)
+        return NavigationSettings(
+            agent_types=agent_types,
+            navmesh_area_names=_normalize_navmesh_area_names(data.get("navmesh_area_names")),
+        )
 
     def get_agent_type(self, name: str) -> Optional[AgentType]:
         """Get agent type by name."""
@@ -126,6 +140,12 @@ class NavigationSettingsManager:
         settings_dir = self._project_path / "project_settings"
         return settings_dir / "navigation.json"
 
+    def _get_legacy_project_settings_path(self) -> Optional[Path]:
+        """Get path to legacy project settings file."""
+        if self._project_path is None:
+            return None
+        return self._project_path / "project_settings" / "project.json"
+
     def _load(self) -> None:
         """Load settings from file."""
         path = self._get_settings_path()
@@ -137,9 +157,27 @@ class NavigationSettingsManager:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self._settings = NavigationSettings.from_dict(data)
+            if "navmesh_area_names" not in data:
+                self._load_legacy_navmesh_area_names()
         except Exception as e:
             log.error(f"[NavigationSettings] Failed to load settings: {e}")
             self._settings = NavigationSettings()
+
+    def _load_legacy_navmesh_area_names(self) -> None:
+        """Load area names from old project settings location if present."""
+        path = self._get_legacy_project_settings_path()
+        if path is None or not path.exists():
+            return
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            log.error(f"[NavigationSettings] Failed to load legacy project settings: {e}")
+            return
+
+        if "navmesh_area_names" in data:
+            self._settings.navmesh_area_names = _normalize_navmesh_area_names(data.get("navmesh_area_names"))
 
     def save(self) -> bool:
         """Save settings to file."""
@@ -175,3 +213,49 @@ class NavigationSettingsManager:
         """Update agent type at index."""
         if 0 <= index < len(self._settings.agent_types):
             self._settings.agent_types[index] = agent
+
+    def set_navmesh_area_name(self, index: int, name: str) -> None:
+        """Set a Detour navmesh area name."""
+        if index < 0 or index >= NAVMESH_AREA_COUNT:
+            log.error(f"[NavigationSettings] navmesh area index {index} is outside 0..63")
+            return
+        self._settings.navmesh_area_names[index] = _normalize_navmesh_area_name(name)
+
+    def navmesh_area_label(self, index: int) -> str:
+        """Display label for a Detour navmesh area."""
+        if index < 0 or index >= NAVMESH_AREA_COUNT:
+            return f"Area {index}"
+        name = self._settings.navmesh_area_names[index]
+        return name if name else f"Area {index}"
+
+
+def _normalize_navmesh_area_name(value: object) -> str:
+    if type(value) is not str:
+        return ""
+    return value.strip()[:64]
+
+
+def _normalize_navmesh_area_names(value: object) -> List[str]:
+    names = default_navmesh_area_names()
+    if type(value) is list:
+        limit = min(len(value), NAVMESH_AREA_COUNT)
+        for i in range(limit):
+            names[i] = _normalize_navmesh_area_name(value[i])
+        if names[0] == "":
+            names[0] = "Walkable"
+        return names
+
+    if type(value) is dict:
+        for key, name in value.items():
+            try:
+                index = int(key)
+            except ValueError:
+                log.warning(f"[NavigationSettings] invalid navmesh area index '{key}'")
+                continue
+            if 0 <= index < NAVMESH_AREA_COUNT:
+                names[index] = _normalize_navmesh_area_name(name)
+        if names[0] == "":
+            names[0] = "Walkable"
+        return names
+
+    return names

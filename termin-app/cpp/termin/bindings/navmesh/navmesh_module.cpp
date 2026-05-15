@@ -80,6 +80,24 @@ nb::list point_to_python(const std::array<float, 3>& point) {
     return result;
 }
 
+nb::list detailed_path_to_python(const DetourPathResult& path) {
+    nb::list result;
+    if (!path.success) {
+        return result;
+    }
+    for (const DetourPathPoint& p : path.points) {
+        nb::dict item;
+        item["point"] = point_to_python(p.point);
+        item["flags"] = p.flags;
+        item["poly_ref"] = p.poly_ref;
+        item["off_mesh_connection"] = p.off_mesh_connection;
+        item["off_mesh_user_id"] = p.off_mesh_user_id;
+        item["area"] = p.area;
+        result.append(item);
+    }
+    return result;
+}
+
 nb::list vec3_to_python(const Vec3& point) {
     nb::list result;
     result.append(point.x);
@@ -254,6 +272,7 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def_rw("enabled", &OffMeshLinkComponent::enabled)
         .def_rw("link_type", &OffMeshLinkComponent::link_type)
         .def_rw("agent_type", &OffMeshLinkComponent::agent_type)
+        .def_rw("area_id", &OffMeshLinkComponent::area_id)
         .def_prop_rw("start_local",
             [](OffMeshLinkComponent& self) {
                 return tc_vec3_to_python(self.start_local);
@@ -334,6 +353,9 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def("find_path", [](DetourPathfindingWorldComponent& self, nb::handle start, nb::handle end) {
             return path_to_python(self.find_path(py_vec3(start), py_vec3(end)));
         }, nb::arg("start"), nb::arg("end"))
+        .def("find_detailed_path", [](DetourPathfindingWorldComponent& self, nb::handle start, nb::handle end) {
+            return detailed_path_to_python(self.find_detailed_path(py_vec3(start), py_vec3(end)));
+        }, nb::arg("start"), nb::arg("end"))
         .def("raycast", [](DetourPathfindingWorldComponent& self, nb::handle start, nb::handle end) {
             return self.raycast(py_vec3(start), py_vec3(end));
         }, nb::arg("start"), nb::arg("end"));
@@ -345,6 +367,7 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         })
         // Agent type selection
         .def_rw("agent_type_name", &RecastNavMeshBuilderComponent::agent_type_name)
+        .def_rw("area_id", &RecastNavMeshBuilderComponent::area_id)
         // Rasterization parameters
         .def_rw("cell_size", &RecastNavMeshBuilderComponent::cell_size)
         .def_rw("cell_height", &RecastNavMeshBuilderComponent::cell_height)

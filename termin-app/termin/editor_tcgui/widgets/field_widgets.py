@@ -597,6 +597,67 @@ class AgentTypeFieldWidget(FieldWidget):
 
 
 # ------------------------------------------------------------------
+# NavMeshArea
+# ------------------------------------------------------------------
+
+class NavMeshAreaFieldWidget(FieldWidget):
+    """ComboBox with Detour area names from NavigationSettingsManager."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._selected_area_index = 0
+        self._combo = ComboBox()
+        self._combo.on_changed = self._on_changed
+        self.add_child(self._combo)
+        self._refresh_choices()
+
+    def _refresh_choices(self) -> None:
+        old = self._combo.on_changed
+        self._combo.on_changed = None
+        current = self._combo.selected_index
+        self._combo.clear()
+        try:
+            from termin.navmesh.settings import NAVMESH_AREA_COUNT, NavigationSettingsManager
+            manager = NavigationSettingsManager.instance()
+            for area_index in range(NAVMESH_AREA_COUNT):
+                self._combo.add_item(f"{area_index}: {manager.navmesh_area_label(area_index)}")
+        except Exception as e:
+            log.debug(f"[NavMeshAreaFieldWidget] Failed to get navmesh areas: {e}")
+            for area_index in range(64):
+                label = "Walkable" if area_index == 0 else f"Area {area_index}"
+                self._combo.add_item(f"{area_index}: {label}")
+        if 0 <= current < self._combo.item_count:
+            self._combo.selected_index = current
+        elif self._combo.item_count > 0:
+            self._combo.selected_index = 0
+        self._selected_area_index = max(0, self._combo.selected_index)
+        self._combo.on_changed = old
+
+    def _on_changed(self, index: int, _text: str) -> None:
+        self._selected_area_index = max(0, index)
+        self._emit()
+
+    def get_value(self) -> int:
+        return self._selected_area_index
+
+    def set_value(self, value: Any) -> None:
+        old = self._combo.on_changed
+        self._combo.on_changed = None
+        self._refresh_choices()
+        try:
+            area_index = int(value)
+        except (TypeError, ValueError):
+            area_index = 0
+        if area_index < 0:
+            area_index = 0
+        if area_index >= self._combo.item_count:
+            area_index = self._combo.item_count - 1
+        self._combo.selected_index = area_index
+        self._selected_area_index = max(0, area_index)
+        self._combo.on_changed = old
+
+
+# ------------------------------------------------------------------
 # ClipSelector
 # ------------------------------------------------------------------
 
@@ -826,6 +887,9 @@ class FieldWidgetFactory:
 
         if kind == "agent_type":
             return AgentTypeFieldWidget()
+
+        if kind == "navmesh_area":
+            return NavMeshAreaFieldWidget()
 
         if kind in (
             "tc_material", "mesh_handle", "tc_mesh",

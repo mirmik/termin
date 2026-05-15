@@ -53,6 +53,7 @@ class MenuBarControllerTcgui:
         on_pipeline_editor: Callable,
         # Navigation
         on_show_agent_types: Callable,
+        on_show_navmesh_areas: Callable,
         # Game
         on_toggle_game_mode: Callable,
         on_build_project: Callable,
@@ -120,6 +121,7 @@ class MenuBarControllerTcgui:
             on_shadow_settings=on_shadow_settings,
             on_pipeline_editor=on_pipeline_editor,
             on_show_agent_types=on_show_agent_types,
+            on_show_navmesh_areas=on_show_navmesh_areas,
             on_toggle_game_mode=on_toggle_game_mode,
             on_build_project=on_build_project,
             on_run_build=on_run_build,

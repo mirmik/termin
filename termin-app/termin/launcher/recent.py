@@ -159,7 +159,26 @@ def create_project(name: str, location: str) -> str:
 
     # Project settings
     with open(os.path.join(settings_dir, "project.json"), "w", encoding="utf-8") as f:
-        json.dump({"render_sync_mode": "none"}, f, indent=2)
+        json.dump({
+            "render_sync_mode": "none",
+        }, f, indent=2)
+
+    # Navigation settings
+    with open(os.path.join(settings_dir, "navigation.json"), "w", encoding="utf-8") as f:
+        navmesh_area_names = [""] * 64
+        navmesh_area_names[0] = "Walkable"
+        json.dump({
+            "agent_types": [
+                {
+                    "name": "Human",
+                    "radius": 0.5,
+                    "height": 2.0,
+                    "max_slope": 45.0,
+                    "step_height": 0.4,
+                }
+            ],
+            "navmesh_area_names": navmesh_area_names,
+        }, f, indent=2)
 
     # Editor state — remember the default scene
     with open(os.path.join(settings_dir, ".editor_state.json"), "w", encoding="utf-8") as f:
