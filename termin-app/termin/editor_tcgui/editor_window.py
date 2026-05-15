@@ -172,6 +172,8 @@ class EditorWindowTcgui:
             ],
             bool,
         ] | None = None
+        self._viewport_click_interceptors: list[Callable] = []
+        self._viewport_overlay_drawers: list[Callable[[], None]] = []
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
@@ -807,6 +809,34 @@ class EditorWindowTcgui:
     ) -> None:
         self._viewport_click_interceptor = callback
 
+    def add_viewport_click_interceptor(self, callback: Callable) -> None:
+        for existing in self._viewport_click_interceptors:
+            if existing == callback:
+                return
+        self._viewport_click_interceptors.append(callback)
+
+    def remove_viewport_click_interceptor(self, callback: Callable) -> None:
+        kept = []
+        for existing in self._viewport_click_interceptors:
+            if existing != callback:
+                kept.append(existing)
+        self._viewport_click_interceptors = kept
+
+    def add_viewport_overlay_drawer(self, callback: Callable[[], None]) -> None:
+        for existing in self._viewport_overlay_drawers:
+            if existing == callback:
+                return
+        self._viewport_overlay_drawers.append(callback)
+        self._request_viewport_update()
+
+    def remove_viewport_overlay_drawer(self, callback: Callable[[], None]) -> None:
+        kept = []
+        for existing in self._viewport_overlay_drawers:
+            if existing != callback:
+                kept.append(existing)
+        self._viewport_overlay_drawers = kept
+        self._request_viewport_update()
+
     # ------------------------------------------------------------------
     # Undo / Redo
     # ------------------------------------------------------------------
@@ -942,21 +972,30 @@ class EditorWindowTcgui:
         edge_distance: float,
         edge_side: int,
     ) -> bool:
-        if self._viewport_click_interceptor is None:
-            return False
-        try:
-            return bool(self._viewport_click_interceptor(
-                entity, x, y, has_world_point, world_x, world_y, world_z, depth, view_depth,
-                reproject_screen_error, reproject_depth_error,
-                has_mesh_hit, mesh_x, mesh_y, mesh_z,
-                normal_x, normal_y, normal_z,
-                triangle_index, index0, index1, index2,
-                has_surface_edge, edge_x, edge_y, edge_z,
-                edge_index0, edge_index1, edge_distance, edge_side
-            ))
-        except Exception as e:
-            log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
-            return False
+        args = (
+            entity, x, y, has_world_point, world_x, world_y, world_z, depth, view_depth,
+            reproject_screen_error, reproject_depth_error,
+            has_mesh_hit, mesh_x, mesh_y, mesh_z,
+            normal_x, normal_y, normal_z,
+            triangle_index, index0, index1, index2,
+            has_surface_edge, edge_x, edge_y, edge_z,
+            edge_index0, edge_index1, edge_distance, edge_side
+        )
+        if self._viewport_click_interceptor is not None:
+            try:
+                if bool(self._viewport_click_interceptor(*args)):
+                    return True
+            except Exception as e:
+                log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
+                return False
+        for callback in self._viewport_click_interceptors:
+            try:
+                if bool(callback(*args)):
+                    return True
+            except Exception as e:
+                log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
+                return False
+        return False
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
         """C++ TransformGizmo drag-end callback — push an undo command."""
@@ -1382,6 +1421,20 @@ class EditorWindowTcgui:
             log.error(f"Cannot add project menu '{name}': menu bar is not initialized")
             return
         self._menu_bar_widget.add_menu(name, menu)
+
+    def add_menu_item(self, menu_name: str, item) -> None:
+        if self._menu_bar_widget is None:
+            log.error(f"Cannot add menu item to '{menu_name}': menu bar is not initialized")
+            return
+        for label, menu in self._menu_bar_widget._entries:
+            if label == menu_name:
+                menu.items.append(item)
+                return
+
+        from tcgui.widgets.menu import Menu
+        menu = Menu()
+        menu.items = [item]
+        self._menu_bar_widget.add_menu(menu_name, menu)
 
     def _on_project_file_activated(self, path: str) -> None:
         """Called when a file is double-clicked in the project browser."""
@@ -2038,9 +2091,18 @@ class EditorWindowTcgui:
             self._ar_logged = True
         if self._interaction_system is not None:
             self._interaction_system.after_render()
+        has_overlay_drawers = False
+        for drawer in self._viewport_overlay_drawers:
+            has_overlay_drawers = True
+            try:
+                drawer()
+            except Exception as e:
+                log.error(f"[EditorWindowTcgui] viewport overlay drawer failed: {e}")
         if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
             self._framegraph_debugger.update()
         self._process_pending_scene_tree_rebuild()
+        if has_overlay_drawers:
+            self._request_viewport_update()
 
     def _on_material_file_selected(self, path: str | None) -> None:
         if not path:
