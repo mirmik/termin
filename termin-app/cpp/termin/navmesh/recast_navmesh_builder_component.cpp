@@ -97,6 +97,17 @@ DetourOffMeshLinks collect_off_mesh_links_for_builder(
             tc_log_warn("[NavMesh] OffMeshLinkComponent area_id=%d is outside Detour range, using %d",
                         link->area_id, area_id);
         }
+        tc_log_info("[NavMesh] OffMeshLinkComponent '%s': type=%d agent='%s' area_id=%d area=%d "
+                    "bidir=%d radius=%.3f start=(%.3f, %.3f, %.3f) end=(%.3f, %.3f, %.3f)",
+                    ent.name().c_str(),
+                    link->link_type,
+                    link->agent_type.c_str(),
+                    link->area_id,
+                    area_id,
+                    link->bidirectional ? 1 : 0,
+                    link->radius,
+                    start_local.x, start_local.y, start_local.z,
+                    end_local.x, end_local.y, end_local.z);
         links.areas.push_back(static_cast<unsigned char>(area_id));
         links.flags.push_back(1);
         links.user_ids.push_back(next_user_id++);
