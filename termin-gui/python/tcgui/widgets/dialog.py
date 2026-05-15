@@ -38,6 +38,7 @@ class Dialog(Widget):
         self.cancel_button: str | None = None
         self.on_result: Callable[[str], None] | None = None
         self.min_width: float = 300
+        self.always_on_top: bool = False
 
         # Style
         self.background_color: tuple[float, float, float, float] = _t.bg_surface
@@ -106,7 +107,12 @@ class Dialog(Widget):
             nat_w, nat_h = self._compute_natural_size(vw, vh)
             # Window doesn't need internal title bar — OS provides one.
             win_h = nat_h - self.title_height + self.padding
-            window_ui = ui.create_window(self.title, int(nat_w), int(win_h))
+            window_ui = ui.create_window(
+                self.title,
+                int(nat_w),
+                int(win_h),
+                self.always_on_top,
+            )
             if window_ui is not None:
                 self._windowed = True
                 self._window_ui = window_ui

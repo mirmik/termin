@@ -71,6 +71,7 @@ class BackendWindowManager:
 
     def create_window(self, title: str, width: int, height: int, *,
                       host_data: Any = None,
+                      always_on_top: bool = False,
                       on_destroy: Callable[[BackendWindowEntry], None] | None = None
                       ) -> BackendWindowEntry:
         """Open a secondary OS window backed by the primary's
@@ -85,6 +86,7 @@ class BackendWindowManager:
         if SDLBackendWindow is None:
             raise RuntimeError("SDLBackendWindow is not available in this build.")
         secondary = SDLBackendWindow(title, width, height, main.window)
+        secondary.set_always_on_top(always_on_top)
         entry = BackendWindowEntry(
             window=secondary, is_main=False,
             host_data=host_data, on_destroy=on_destroy)

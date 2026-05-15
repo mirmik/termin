@@ -95,7 +95,7 @@ class UI:
         self.on_cursor_changed: Callable[[str], None] | None = None
 
         # Window management callbacks (set by application)
-        self.create_window: Callable[[str, int, int], UI | None] | None = None
+        self.create_window: Callable[[str, int, int, bool], UI | None] | None = None
         self.close_window: Callable[[], None] | None = None
         self.on_empty: Callable[[], None] | None = None
         self.on_destroy: Callable[[], None] | None = None

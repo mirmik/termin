@@ -37,6 +37,7 @@ public:
     void set_should_close(bool v) override { should_close_ = v; }
 
     void maximize() override;
+    void set_always_on_top(bool enabled);
     void close() override;
     void poll_events() override;
     bool poll_event(SDL_Event& out_event);

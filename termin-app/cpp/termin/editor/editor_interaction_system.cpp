@@ -15,6 +15,7 @@
 #include <tcbase/tc_log.h>
 
 #include <cmath>
+#include <algorithm>
 
 namespace termin {
 
@@ -195,9 +196,18 @@ void EditorInteractionSystem::_process_pending_release() {
         _has_press = false;
     }
 
+    SurfacePickResult pick = pick_surface_at(x, y, vp, display);
+    if (on_entity_click && on_entity_click(
+            pick.entity, x, y, pick.has_world_point,
+            pick.world_point[0], pick.world_point[1], pick.world_point[2],
+            pick.depth, pick.view_depth,
+            pick.reproject_screen_error, pick.reproject_depth_error)) {
+        _request_update();
+        return;
+    }
+
     // Pick entity and select
-    Entity ent = pick_entity_at(x, y, vp, display);
-    selection.select(ent);
+    selection.select(pick.entity);
     _request_update();
 }
 
@@ -297,6 +307,108 @@ Entity EditorInteractionSystem::pick_entity_at(
     if (!tc_entity_id_valid(eid)) return Entity();
 
     return Entity(pool, eid);
+}
+
+SurfacePickResult EditorInteractionSystem::pick_surface_at(
+    float x, float y, tc_viewport_handle viewport, tc_display* display)
+{
+    SurfacePickResult result;
+
+    if (!tc_viewport_handle_valid(viewport)) {
+        tc_log(TC_LOG_INFO, "[DBG pick_surface] viewport invalid");
+        return result;
+    }
+
+    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+    tc_pipeline_handle pipeline_h = tc_render_target_get_pipeline(rt);
+    if (!tc_pipeline_pool_alive(pipeline_h)) {
+        tc_log(TC_LOG_INFO, "[DBG pick_surface] pipeline not alive");
+        return result;
+    }
+    RenderPipeline pipeline(pipeline_h);
+
+    tgfx::TextureHandle id_tex = pipeline.get_color_tex2("id");
+    if (!id_tex) return result;
+
+    auto* dev = pipeline.tex2_device();
+    if (!dev) return result;
+
+    int fx, fy;
+    if (!_window_to_fbo_coords(x, y, viewport, display, fx, fy)) return result;
+
+    float color[4] = {0, 0, 0, 0};
+    if (!dev->read_pixel_rgba8(id_tex, fx, fy, color)) return result;
+
+    int r = (int)std::round(color[0] * 255.0f);
+    int g = (int)std::round(color[1] * 255.0f);
+    int b = (int)std::round(color[2] * 255.0f);
+    int pick_id = tc_picking_rgb_to_id(r, g, b);
+    if (pick_id == 0) return result;
+
+    tc_scene_handle scene = tc_viewport_get_scene(viewport);
+    if (!tc_scene_handle_valid(scene)) return result;
+
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    if (!pool) return result;
+
+    tc_entity_id eid = tc_entity_pool_find_by_pick_id(pool, pick_id);
+    if (!tc_entity_id_valid(eid)) return result;
+
+    result.entity = Entity(pool, eid);
+
+    tgfx::TextureHandle depth_tex = pipeline.get_depth_tex2("id");
+    if (!depth_tex) return result;
+
+    float depth = 1.0f;
+    if (!dev->read_pixel_depth_float(depth_tex, fx, fy, &depth)) return result;
+    result.depth = depth;
+    if (depth >= 1.0f) return result;
+
+    tc_component* cam_comp = tc_render_target_get_camera(rt);
+    if (!cam_comp) return result;
+
+    CxxComponent* cxx = CxxComponent::from_tc(cam_comp);
+    if (!cxx) return result;
+
+    auto* camera = static_cast<CameraComponent*>(cxx);
+
+    auto desc = dev->texture_desc(id_tex);
+    const double width = std::max(1.0, static_cast<double>(desc.width));
+    const double height = std::max(1.0, static_cast<double>(desc.height));
+
+    const double nx = ((static_cast<double>(fx) + 0.5) / width) * 2.0 - 1.0;
+    const double ny = ((static_cast<double>(fy) + 0.5) / height) * 2.0 - 1.0;
+
+    const double aspect = width / height;
+    Mat44 view = camera->get_view_matrix();
+    Mat44 projection = camera->compute_projection_matrix(aspect);
+    Mat44 pv = projection * view;
+    Mat44 inv_pv = pv.inverse();
+    Vec3 world = inv_pv.transform_point(Vec3{nx, ny, static_cast<double>(depth)});
+    Vec3 view_point = view.transform_point(world);
+
+    const double clip_x =
+        pv(0, 0) * world.x + pv(1, 0) * world.y + pv(2, 0) * world.z + pv(3, 0);
+    const double clip_y =
+        pv(0, 1) * world.x + pv(1, 1) * world.y + pv(2, 1) * world.z + pv(3, 1);
+    const double clip_z =
+        pv(0, 2) * world.x + pv(1, 2) * world.y + pv(2, 2) * world.z + pv(3, 2);
+    const double clip_w =
+        pv(0, 3) * world.x + pv(1, 3) * world.y + pv(2, 3) * world.z + pv(3, 3);
+    if (std::abs(clip_w) > 1e-10) {
+        const double reproj_x = ((clip_x / clip_w) + 1.0) * 0.5 * width - 0.5;
+        const double reproj_y = ((clip_y / clip_w) + 1.0) * 0.5 * height - 0.5;
+        const double reproj_depth = clip_z / clip_w;
+        const double dx = reproj_x - static_cast<double>(fx);
+        const double dy = reproj_y - static_cast<double>(fy);
+        result.reproject_screen_error = std::sqrt(dx * dx + dy * dy);
+        result.reproject_depth_error = reproj_depth - static_cast<double>(depth);
+    }
+
+    result.has_world_point = true;
+    result.world_point = {world.x, world.y, world.z};
+    result.view_depth = view_point.y;
+    return result;
 }
 
 // ============================================================================

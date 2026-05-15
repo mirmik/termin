@@ -408,15 +408,35 @@ class EntityInspector(VStack):
         if self._entity is None or self._ui is None:
             return
         tc_components = self._entity.tc_components
+        soa_components = self._entity.soa_component_names
 
         is_empty_area = index < 0
-        is_soa = index >= len(tc_components) and not is_empty_area
-        ref = tc_components[index] if not is_soa else None
+        component_count = len(tc_components)
+        soa_count = len(soa_components)
+        total_count = component_count + soa_count
+
+        if not is_empty_area and index >= total_count:
+            log.error(
+                "[EntityInspector] component context menu index out of range: "
+                f"index={index} components={component_count} soa={soa_count}"
+            )
+            self._rebuild_component_list()
+            is_empty_area = True
+
+        is_soa = index >= component_count and not is_empty_area
+        ref = tc_components[index] if not is_empty_area and not is_soa else None
         soa_name = ""
         if is_soa:
-            soa_index = index - len(tc_components)
-            if 0 <= soa_index < len(self._entity.soa_component_names):
-                soa_name = self._entity.soa_component_names[soa_index]
+            soa_index = index - component_count
+            if 0 <= soa_index < soa_count:
+                soa_name = soa_components[soa_index]
+            else:
+                log.error(
+                    "[EntityInspector] SoA component context menu index out of range: "
+                    f"index={index} soa_index={soa_index} components={component_count} soa={soa_count}"
+                )
+                self._rebuild_component_list()
+                is_empty_area = True
 
         ctx = Menu()
         items: list[MenuItem] = []
