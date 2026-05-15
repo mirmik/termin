@@ -751,6 +751,7 @@ class EditorWindowTcgui:
             on_shadow_settings=self._show_shadow_settings,
             on_pipeline_editor=self._show_pipeline_editor,
             on_show_agent_types=self._show_agent_types,
+            on_show_navmesh_areas=self._show_navmesh_areas,
             on_toggle_game_mode=self._toggle_game_mode,
             on_build_project=self._build_project,
             on_run_build=self._run_build,
@@ -1478,6 +1479,12 @@ class EditorWindowTcgui:
             return
         from termin.editor_tcgui.dialogs.agent_types_dialog import show_agent_types_dialog
         show_agent_types_dialog(self._ui)
+
+    def _show_navmesh_areas(self) -> None:
+        if self._ui is None:
+            return
+        from termin.editor_tcgui.dialogs.navmesh_areas_dialog import show_navmesh_areas_dialog
+        show_navmesh_areas_dialog(self._ui, on_changed=self._request_viewport_update)
 
     def _show_spacemouse_settings(self) -> None:
         if self._ui is None:

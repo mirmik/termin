@@ -230,7 +230,7 @@ class ProjectSettingsManager:
 
 
 def _normalize_project_relative_dir(value: object, *, fallback: str, field_name: str) -> str:
-    if not isinstance(value, str):
+    if type(value) is not str:
         log.warning(f"[ProjectSettings] {field_name} must be a string, falling back to '{fallback}'")
         return fallback
 

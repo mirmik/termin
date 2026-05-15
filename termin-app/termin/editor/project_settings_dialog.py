@@ -90,6 +90,7 @@ class ProjectSettingsDialog(QDialog):
         render_layout.addRow(build_output_label, self._build_output_edit)
 
         layout.addWidget(render_group)
+
         layout.addStretch()
 
         # Close button

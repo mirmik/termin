@@ -385,6 +385,7 @@ class EditorWindow(QMainWindow):
             on_shadow_settings=self._show_shadow_settings_dialog,
             on_pipeline_editor=self._show_pipeline_editor,
             on_show_agent_types=self._show_agent_types_dialog,
+            on_show_navmesh_areas=self._show_navmesh_areas_dialog,
             on_toggle_game_mode=self._mode_controller.toggle_game_mode,
             on_build_project=self._build_project,
             on_run_build=self._run_build,
@@ -478,6 +479,10 @@ class EditorWindow(QMainWindow):
     def _show_agent_types_dialog(self) -> None:
         """Opens agent types configuration dialog."""
         self._dialog_manager.show_agent_types_dialog()
+
+    def _show_navmesh_areas_dialog(self) -> None:
+        """Opens navmesh areas configuration dialog."""
+        self._dialog_manager.show_navmesh_areas_dialog()
 
     def _show_spacemouse_settings_dialog(self) -> None:
         """Opens SpaceMouse settings dialog."""

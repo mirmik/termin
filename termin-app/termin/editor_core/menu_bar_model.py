@@ -46,6 +46,7 @@ def build_editor_menu_spec(
     on_pipeline_editor: Callable[[], None],
     # Navigation
     on_show_agent_types: Callable[[], None],
+    on_show_navmesh_areas: Callable[[], None],
     # Game
     on_toggle_game_mode: Callable[[], None],
     on_build_project: Callable[[], None],
@@ -147,6 +148,7 @@ def build_editor_menu_spec(
             name="Navigation",
             items=[
                 MenuItemSpec("Agent Types...", on_show_agent_types),
+                MenuItemSpec("NavMesh Areas...", on_show_navmesh_areas),
             ],
         ),
         # ── Game ───────────────────────────────────────────────────────

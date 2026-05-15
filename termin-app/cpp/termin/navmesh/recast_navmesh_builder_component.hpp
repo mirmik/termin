@@ -38,6 +38,7 @@ public:
 
     // Agent type selection (from Navigation Settings)
     std::string agent_type_name = "Human";
+    int area_id = 0;
 
     // Rasterization
     float cell_size = 0.3f;
@@ -84,6 +85,7 @@ public:
 
     // Inspector field declarations - Configuration
     INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_type_name, "Agent Type", "agent_type")
+    INSPECT_FIELD(RecastNavMeshBuilderComponent, area_id, "Area", "navmesh_area")
     INSPECT_FIELD(RecastNavMeshBuilderComponent, cell_size, "Cell Size", "float", 0.05, 2.0, 0.05)
     INSPECT_FIELD(RecastNavMeshBuilderComponent, cell_height, "Cell Height", "float", 0.05, 2.0, 0.05)
     INSPECT_FIELD(RecastNavMeshBuilderComponent, min_region_area, "Min Region Area", "int", 0, 100, 1)

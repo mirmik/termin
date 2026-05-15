@@ -27,6 +27,20 @@ struct DetourClosestPointResult {
     std::array<float, 3> point{0.0f, 0.0f, 0.0f};
 };
 
+struct DetourPathPoint {
+    std::array<float, 3> point{0.0f, 0.0f, 0.0f};
+    unsigned char flags = 0;
+    unsigned long long poly_ref = 0;
+    bool off_mesh_connection = false;
+    unsigned int off_mesh_user_id = 0;
+    unsigned char area = 0;
+};
+
+struct DetourPathResult {
+    bool success = false;
+    std::vector<DetourPathPoint> points;
+};
+
 class DetourPathfindingWorldComponent : public CxxComponent {
 public:
     std::string navmesh_uuid;
@@ -44,6 +58,10 @@ public:
     bool is_ready() const;
 
     std::vector<std::array<float, 3>> find_path(
+        const std::array<float, 3>& start,
+        const std::array<float, 3>& end);
+
+    DetourPathResult find_detailed_path(
         const std::array<float, 3>& start,
         const std::array<float, 3>& end);
 

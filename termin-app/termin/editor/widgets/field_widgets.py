@@ -613,6 +613,72 @@ class AgentTypeFieldWidget(FieldWidget):
         self._combo.blockSignals(False)
 
 
+class NavMeshAreaFieldWidget(FieldWidget):
+    """Widget for selecting Detour navmesh area from NavigationSettingsManager."""
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._combo = QComboBox()
+        self._combo.currentIndexChanged.connect(lambda _: self.value_changed.emit())
+        layout.addWidget(self._combo)
+
+        self._refresh_choices()
+
+    def _refresh_choices(self) -> None:
+        self._combo.blockSignals(True)
+        current = self._combo.currentData()
+        self._combo.clear()
+
+        try:
+            from termin.navmesh.settings import NAVMESH_AREA_COUNT, NavigationSettingsManager
+            manager = NavigationSettingsManager.instance()
+            for area_index in range(NAVMESH_AREA_COUNT):
+                self._combo.addItem(
+                    f"{area_index}: {manager.navmesh_area_label(area_index)}",
+                    area_index,
+                )
+        except Exception as e:
+            log.debug(f"[NavMeshAreaFieldWidget] Failed to get navmesh areas: {e}")
+            for area_index in range(64):
+                label = "Walkable" if area_index == 0 else f"Area {area_index}"
+                self._combo.addItem(f"{area_index}: {label}", area_index)
+
+        if current is not None:
+            idx = self._combo.findData(current)
+            if idx >= 0:
+                self._combo.setCurrentIndex(idx)
+            elif self._combo.count() > 0:
+                self._combo.setCurrentIndex(0)
+        elif self._combo.count() > 0:
+            self._combo.setCurrentIndex(0)
+
+        self._combo.blockSignals(False)
+
+    def get_value(self) -> int:
+        data = self._combo.currentData()
+        if data is None:
+            return 0
+        return int(data)
+
+    def set_value(self, value: Any) -> None:
+        self._combo.blockSignals(True)
+        self._refresh_choices()
+        try:
+            area_index = int(value)
+        except (TypeError, ValueError):
+            area_index = 0
+        idx = self._combo.findData(area_index)
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+        elif self._combo.count() > 0:
+            self._combo.setCurrentIndex(0)
+        self._combo.blockSignals(False)
+
+
 class ClipSelectorWidget(FieldWidget):
     """Widget for selecting animation clip from available clips."""
 
@@ -886,6 +952,9 @@ class FieldWidgetFactory:
 
         if kind == "agent_type":
             return AgentTypeFieldWidget()
+
+        if kind == "navmesh_area":
+            return NavMeshAreaFieldWidget()
 
         # Handle-based resource selectors
         if kind in (
