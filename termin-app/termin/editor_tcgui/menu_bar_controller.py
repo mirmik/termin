@@ -70,6 +70,8 @@ class MenuBarControllerTcgui:
         on_show_inspect_registry_viewer: Callable,
         on_show_navmesh_registry_viewer: Callable,
         on_show_scene_manager_viewer: Callable,
+        on_toggle_surface_edge_debug_tool: Callable,
+        is_surface_edge_debug_tool_enabled: Callable[[], bool],
         # Utils
         on_import_rfmeas: Callable,
         on_export_rfmeas: Callable,
@@ -86,6 +88,7 @@ class MenuBarControllerTcgui:
         self._is_fullscreen = is_fullscreen
         self._is_profiler_visible = is_profiler_visible
         self._is_modules_visible = is_modules_visible
+        self._is_surface_edge_debug_tool_enabled = is_surface_edge_debug_tool_enabled
 
         # Toolkit-specific handles for dynamic state
         self._item_undo: MenuItem | None = None
@@ -94,6 +97,7 @@ class MenuBarControllerTcgui:
         self._item_fullscreen: MenuItem | None = None
         self._item_profiler: MenuItem | None = None
         self._item_modules: MenuItem | None = None
+        self._item_surface_edge_debug_tool: MenuItem | None = None
 
         # Build shared menu spec
         specs = build_editor_menu_spec(
@@ -138,6 +142,8 @@ class MenuBarControllerTcgui:
             on_show_inspect_registry_viewer=on_show_inspect_registry_viewer,
             on_show_navmesh_registry_viewer=on_show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=on_show_scene_manager_viewer,
+            on_toggle_surface_edge_debug_tool=on_toggle_surface_edge_debug_tool,
+            is_surface_edge_debug_tool_enabled=is_surface_edge_debug_tool_enabled,
             on_import_rfmeas=on_import_rfmeas,
             on_export_rfmeas=on_export_rfmeas,
             # Handle setters — direct assignment, no reflection
@@ -147,6 +153,7 @@ class MenuBarControllerTcgui:
             set_fullscreen_handle=self._set_fullscreen_handle,
             set_profiler_handle=self._set_profiler_handle,
             set_modules_handle=self._set_modules_handle,
+            set_surface_edge_debug_tool_handle=self._set_surface_edge_debug_tool_handle,
         )
 
         self._render_specs(menu_bar, specs)
@@ -173,6 +180,9 @@ class MenuBarControllerTcgui:
 
     def _set_modules_handle(self, h: MenuItem) -> None:
         self._item_modules = h
+
+    def _set_surface_edge_debug_tool_handle(self, h: MenuItem) -> None:
+        self._item_surface_edge_debug_tool = h
 
     def _render_specs(self, menu_bar: MenuBar, specs: list[MenuSpec]) -> None:
         """Render MenuSpec list into tcgui Menu / MenuItem widgets."""
@@ -231,3 +241,8 @@ class MenuBarControllerTcgui:
         """Update modules action checked state."""
         if self._item_modules is not None:
             self._item_modules.checked = self._is_modules_visible()
+
+    def update_surface_edge_debug_tool_action(self) -> None:
+        """Update surface-edge debug tool action checked state."""
+        if self._item_surface_edge_debug_tool is not None:
+            self._item_surface_edge_debug_tool.checked = self._is_surface_edge_debug_tool_enabled()
