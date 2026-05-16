@@ -84,9 +84,17 @@ class Menu(Widget):
         self.padding_x: float = 6.0
         self.padding_y: float = 4.0
         self.shortcut_gap: float = 32.0
+        self.scroll_speed: float = 30.0
+        self.scrollbar_width: float = 8.0
+        self.scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
+        self.scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
+        self.viewport_margin: float = 4.0
+        self.min_scrollable_height: float = 80.0
 
         # Internal
         self._hovered_index: int = -1
+        self._scroll_offset: float = 0.0
+        self._content_height: float = 0.0
 
     def add_item(self, item: MenuItem) -> None:
         """Append a menu item."""
@@ -127,7 +135,9 @@ class Menu(Widget):
         return max(content_w, 80.0), content_h
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
-        return self._compute_content_size()
+        w, h = self._compute_content_size()
+        max_h = max(self.min_scrollable_height, viewport_h - self.viewport_margin * 2)
+        return w, min(h, max_h)
 
     # ------------------------------------------------------------------
     # Show / hide via overlay
@@ -135,15 +145,21 @@ class Menu(Widget):
 
     def show(self, ui, x: float, y: float):
         """Show this menu as an overlay at (*x*, *y*)."""
-        w, h = self._compute_content_size()
+        w, content_h = self._compute_content_size()
         vw = ui._viewport_w
         vh = ui._viewport_h
+        self._content_height = content_h
+        h = min(content_h, max(self.min_scrollable_height, vh - self.viewport_margin * 2))
+        self._scroll_offset = 0.0
+
+        if w > vw - self.viewport_margin * 2:
+            w = max(80.0, vw - self.viewport_margin * 2)
 
         # Clamp to viewport
         if x + w > vw:
-            x = max(0, vw - w - 2)
+            x = max(self.viewport_margin, vw - w - self.viewport_margin)
         if y + h > vh:
-            y = max(0, vh - h - 2)
+            y = max(self.viewport_margin, vh - h - self.viewport_margin)
 
         self.x = x
         self.y = y
@@ -170,9 +186,37 @@ class Menu(Widget):
             y += self.separator_height if it.separator else self.item_height
         return y
 
+    def _max_scroll(self) -> float:
+        return max(0.0, self._content_height - self.height)
+
+    def _set_scroll_offset(self, value: float) -> None:
+        self._scroll_offset = max(0.0, min(value, self._max_scroll()))
+
+    def _has_scrollbar(self) -> bool:
+        return self._max_scroll() > 0.0
+
+    def _scrollbar_track_rect(self) -> tuple[float, float, float, float]:
+        return (
+            self.x + self.width - self.scrollbar_width,
+            self.y,
+            self.scrollbar_width,
+            self.height,
+        )
+
+    def _scrollbar_thumb_rect(self) -> tuple[float, float, float, float]:
+        track_x, track_y, track_w, track_h = self._scrollbar_track_rect()
+        if self._content_height <= 0:
+            return track_x, track_y, track_w, track_h
+        thumb_h = max(24.0, track_h * (track_h / self._content_height))
+        max_scroll = self._max_scroll()
+        thumb_y = track_y
+        if max_scroll > 0:
+            thumb_y += (track_h - thumb_h) * (self._scroll_offset / max_scroll)
+        return track_x, thumb_y, track_w, thumb_h
+
     def _index_at(self, y: float) -> int:
         """Return item index at absolute y, or -1."""
-        rel = y - self.y
+        rel = y - self.y + self._scroll_offset
         acc = self.padding_y
         for i, it in enumerate(self.items):
             h = self.separator_height if it.separator else self.item_height
@@ -198,6 +242,7 @@ class Menu(Widget):
         # Background
         renderer.draw_rect(self.x, self.y, self.width, self.height,
                            self.background_color, self.border_radius)
+        renderer.begin_clip(self.x, self.y, self.width, self.height)
 
         has_icons = self._has_icons()
         has_checkable = self._has_checkable()
@@ -205,23 +250,30 @@ class Menu(Widget):
         if has_checkable:
             text_x_offset += self.font_size  # space for checkmark
 
-        y = self.y + self.padding_y
+        scrollbar_pad = self.scrollbar_width if self._has_scrollbar() else 0.0
+        y = self.y + self.padding_y - self._scroll_offset
         for i, it in enumerate(self.items):
             if it.separator:
                 sep_y = y + self.separator_height / 2
-                renderer.draw_rect(
-                    self.x + self.padding_x, sep_y - 0.5,
-                    self.width - self.padding_x * 2, 1,
-                    self.separator_color,
-                )
+                if self.y <= sep_y <= self.y + self.height:
+                    renderer.draw_rect(
+                        self.x + self.padding_x, sep_y - 0.5,
+                        self.width - self.padding_x * 2 - scrollbar_pad, 1,
+                        self.separator_color,
+                    )
                 y += self.separator_height
+                continue
+
+            item_bottom = y + self.item_height
+            if item_bottom < self.y or y > self.y + self.height:
+                y += self.item_height
                 continue
 
             # Hover highlight
             if i == self._hovered_index and it.enabled:
                 renderer.draw_rect(
                     self.x + 2, y,
-                    self.width - 4, self.item_height,
+                    self.width - 4 - scrollbar_pad, self.item_height,
                     self.item_hover_color, self.border_radius - 1,
                 )
 
@@ -260,12 +312,32 @@ class Menu(Widget):
             if it.shortcut:
                 sc_w = len(it.shortcut) * self.font_size * 0.55
                 renderer.draw_text(
-                    self.x + self.width - self.padding_x - sc_w,
+                    self.x + self.width - self.padding_x - scrollbar_pad - sc_w,
                     y + self.item_height / 2 + self.font_size * 0.35,
                     it.shortcut, self.shortcut_color, self.font_size * 0.9,
                 )
 
             y += self.item_height
+        renderer.end_clip()
+
+        if self._has_scrollbar():
+            track_x, track_y, track_w, track_h = self._scrollbar_track_rect()
+            thumb_x, thumb_y, thumb_w, thumb_h = self._scrollbar_thumb_rect()
+            renderer.draw_rect(
+                track_x,
+                track_y,
+                track_w,
+                track_h,
+                (0.0, 0.0, 0.0, 0.18),
+            )
+            renderer.draw_rect(
+                thumb_x,
+                thumb_y,
+                thumb_w,
+                thumb_h,
+                self.scrollbar_color,
+                thumb_w / 2,
+            )
 
     # ------------------------------------------------------------------
     # Mouse events
@@ -297,6 +369,13 @@ class Menu(Widget):
             self._ui.hide_overlay(self)
         if callback is not None:
             callback()
+
+    def on_mouse_wheel(self, event) -> bool:
+        if not self._has_scrollbar():
+            return False
+        self._set_scroll_offset(self._scroll_offset - event.dy * self.scroll_speed)
+        self._hovered_index = self._index_at(event.y)
+        return True
 
     def hit_test(self, px: float, py: float):
         if not self.visible:
@@ -350,4 +429,17 @@ class Menu(Widget):
             it = self.items[idx]
             if not it.separator and it.enabled:
                 self._hovered_index = idx
+                self._ensure_hover_visible()
                 return
+
+    def _ensure_hover_visible(self) -> None:
+        if self._hovered_index < 0:
+            return
+        item_top = self._item_y(self._hovered_index)
+        item_bottom = item_top + self.item_height
+        top = self._scroll_offset
+        bottom = self._scroll_offset + self.height
+        if item_top < top:
+            self._set_scroll_offset(item_top)
+        elif item_bottom > bottom:
+            self._set_scroll_offset(item_bottom - self.height)
