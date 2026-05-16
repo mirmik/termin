@@ -29,6 +29,7 @@ TERMIN_COLLISION_API void tc_collision_world_set_allocator(
 // Internal functions used by tc_scene.c (use registered allocators)
 TERMIN_COLLISION_API tc_collision_world* tc_collision_world_new(void);
 TERMIN_COLLISION_API void tc_collision_world_free(tc_collision_world* cw);
+TERMIN_COLLISION_API void tc_collision_world_bind_scene(tc_collision_world* cw, tc_scene_handle scene);
 
 // Register builtin collision-world extension type in scene-extension registry.
 // Safe to call multiple times.

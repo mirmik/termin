@@ -157,8 +157,12 @@ NB_MODULE(_collision_native, m) {
         .def("broad_phase_mode", &CollisionWorld::broad_phase_mode)
         .def("detect_contacts", &CollisionWorld::detect_contacts)
         .def("query_aabb", &CollisionWorld::query_aabb, nb::arg("aabb"))
-        .def("raycast", &CollisionWorld::raycast, nb::arg("ray"))
-        .def("raycast_closest", &CollisionWorld::raycast_closest, nb::arg("ray"))
+        .def("raycast", [](const CollisionWorld& world, const Ray3& ray) {
+            return world.raycast(ray);
+        }, nb::arg("ray"))
+        .def("raycast_closest", [](const CollisionWorld& world, const Ray3& ray) {
+            return world.raycast_closest(ray);
+        }, nb::arg("ray"))
         .def_prop_ro("bvh", [](const CollisionWorld& w) -> const BVH& {
             return w.bvh();
         }, nb::rv_policy::reference_internal);

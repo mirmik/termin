@@ -14,7 +14,6 @@ typedef struct tc_collision_world_ext_instance {
 } tc_collision_world_ext_instance;
 
 static void* collision_world_ext_create(tc_scene_handle scene, void* type_userdata) {
-    (void)scene;
     (void)type_userdata;
 
     tc_collision_world_ext_instance* inst =
@@ -30,6 +29,7 @@ static void* collision_world_ext_create(tc_scene_handle scene, void* type_userda
             free(inst);
             return NULL;
         }
+        tc_collision_world_bind_scene(inst->world, scene);
     }
 
     return inst;
