@@ -10,6 +10,7 @@
 
 #include "bvh.hpp"
 #include "contact_manifold.hpp"
+#include "termin/colliders/attached_collider.hpp"
 #include "termin/colliders/colliders.hpp"
 #include "physics/tc_collision_world.h"
 #include "core/tc_scene.h"
@@ -21,6 +22,10 @@ namespace termin {
 namespace collision {
 
 using colliders::Collider;
+
+struct RaycastQuery {
+    uint64_t layer_mask = ~uint64_t{0};
+};
 
 enum class BroadPhaseMode {
     BVH = 0,
@@ -37,6 +42,10 @@ public:
     // Get scene collision world extension as C++ object.
     static CollisionWorld* from_scene(tc_scene_handle scene) {
         return reinterpret_cast<CollisionWorld*>(tc_collision_world_get_scene(scene));
+    }
+
+    void set_scene(tc_scene_handle scene) {
+        scene_ = scene;
     }
 
     // ==================== Collider management ====================
@@ -500,10 +509,18 @@ public:
      * Returns all hits sorted by distance.
      */
     std::vector<RayHit> raycast(const Ray3& ray) const {
+        return raycast(ray, RaycastQuery{});
+    }
+
+    std::vector<RayHit> raycast(const Ray3& ray, const RaycastQuery& query) const {
         std::vector<RayHit> hits;
 
         // Use BVH to find candidate colliders
         bvh_.query_ray(ray, [&](Collider* collider, double /*t_min*/, double /*t_max*/) {
+            if (!accepts_raycast_collider(collider, query)) {
+                return;
+            }
+
             colliders::RayHit collider_hit = collider->closest_to_ray(ray);
 
             if (collider_hit.hit()) {
@@ -532,7 +549,11 @@ public:
      * Raycast and return only the closest hit.
      */
     RayHit raycast_closest(const Ray3& ray) const {
-        auto hits = raycast(ray);
+        return raycast_closest(ray, RaycastQuery{});
+    }
+
+    RayHit raycast_closest(const Ray3& ray, const RaycastQuery& query) const {
+        auto hits = raycast(ray, query);
         if (hits.empty()) {
             return RayHit{};
         }
@@ -546,8 +567,40 @@ public:
     const std::vector<Collider*>& colliders() const { return colliders_; }
 
 private:
+    bool accepts_raycast_collider(Collider* collider, const RaycastQuery& query) const {
+        if (query.layer_mask == ~uint64_t{0}) {
+            return true;
+        }
+
+        if (!tc_scene_handle_valid(scene_)) {
+            return true;
+        }
+
+        auto* attached = dynamic_cast<colliders::AttachedCollider*>(collider);
+        if (attached == nullptr) {
+            return true;
+        }
+
+        tc_entity_id entity_id = attached->owner_entity_id();
+        if (!tc_entity_id_valid(entity_id)) {
+            return true;
+        }
+
+        tc_entity_pool* pool = tc_scene_entity_pool(scene_);
+        if (pool == nullptr) {
+            return true;
+        }
+
+        uint64_t layer = tc_entity_pool_layer(pool, entity_id);
+        if (layer >= 64) {
+            return false;
+        }
+        return (query.layer_mask & (uint64_t{1} << layer)) != 0;
+    }
+
     BVH bvh_;
     BroadPhaseMode broad_phase_mode_ = BroadPhaseMode::BVH;
+    tc_scene_handle scene_ = TC_SCENE_HANDLE_INVALID;
     std::vector<Collider*> colliders_;
 };
 

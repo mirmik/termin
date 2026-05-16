@@ -40,6 +40,11 @@ TERMIN_COLLISION_API void tc_collision_world_destroy(void* cw) {
     collision_world_free(static_cast<tc_collision_world*>(cw));
 }
 
+TERMIN_COLLISION_API void tc_collision_world_bind_scene(tc_collision_world* cw, tc_scene_handle scene) {
+    if (!cw) return;
+    static_cast<CollisionWorld*>(cw)->set_scene(scene);
+}
+
 TERMIN_COLLISION_API int tc_collision_world_size(void* cw) {
     if (!cw) return 0;
     return static_cast<int>(static_cast<CollisionWorld*>(cw)->size());
