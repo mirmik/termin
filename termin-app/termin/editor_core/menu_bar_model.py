@@ -75,8 +75,43 @@ def build_editor_menu_spec(
     set_fullscreen_handle: Callable[[object], None],
     set_profiler_handle: Callable[[object], None],
     set_modules_handle: Callable[[object], None],
+    on_toggle_surface_edge_debug_tool: Callable[[], None] | None = None,
+    is_surface_edge_debug_tool_enabled: Callable[[], bool] | None = None,
+    set_surface_edge_debug_tool_handle: Callable[[object], None] | None = None,
 ) -> list[MenuSpec]:
     """Build the full menu-bar specification for the editor."""
+    debug_items = [
+        MenuItemSpec(
+            "Profiler", on_toggle_profiler, shortcut="F7",
+            is_checkable=True, state_getter=is_profiler_visible,
+            handle_getter=set_profiler_handle,
+        ),
+        MenuItemSpec(
+            "Modules", on_toggle_modules, shortcut="F8",
+            is_checkable=True, state_getter=is_modules_visible,
+            handle_getter=set_modules_handle,
+        ),
+        None,
+        MenuItemSpec("Undo/Redo Stack...", on_show_undo_stack_viewer),
+        MenuItemSpec("Framegraph Texture Viewer...", on_show_framegraph_debugger),
+        MenuItemSpec("Resource Manager...", on_show_resource_manager_viewer),
+        MenuItemSpec("Audio Debugger...", on_show_audio_debugger),
+        MenuItemSpec("Core Registry...", on_show_core_registry_viewer),
+        MenuItemSpec("Inspect Registry...", on_show_inspect_registry_viewer),
+        MenuItemSpec("NavMesh Registry...", on_show_navmesh_registry_viewer),
+        MenuItemSpec("Scene Manager...", on_show_scene_manager_viewer),
+    ]
+    if on_toggle_surface_edge_debug_tool is not None:
+        debug_items.extend([
+            None,
+            MenuItemSpec(
+                "Surface Edge Debug Tool",
+                on_toggle_surface_edge_debug_tool,
+                is_checkable=True,
+                state_getter=is_surface_edge_debug_tool_enabled,
+                handle_getter=set_surface_edge_debug_tool_handle,
+            ),
+        ])
 
     return [
         # ── File ───────────────────────────────────────────────────────
@@ -167,27 +202,7 @@ def build_editor_menu_spec(
         # ── Debug ──────────────────────────────────────────────────────
         MenuSpec(
             name="Debug",
-            items=[
-                MenuItemSpec(
-                    "Profiler", on_toggle_profiler, shortcut="F7",
-                    is_checkable=True, state_getter=is_profiler_visible,
-                    handle_getter=set_profiler_handle,
-                ),
-                MenuItemSpec(
-                    "Modules", on_toggle_modules, shortcut="F8",
-                    is_checkable=True, state_getter=is_modules_visible,
-                    handle_getter=set_modules_handle,
-                ),
-                None,
-                MenuItemSpec("Undo/Redo Stack...", on_show_undo_stack_viewer),
-                MenuItemSpec("Framegraph Texture Viewer...", on_show_framegraph_debugger),
-                MenuItemSpec("Resource Manager...", on_show_resource_manager_viewer),
-                MenuItemSpec("Audio Debugger...", on_show_audio_debugger),
-                MenuItemSpec("Core Registry...", on_show_core_registry_viewer),
-                MenuItemSpec("Inspect Registry...", on_show_inspect_registry_viewer),
-                MenuItemSpec("NavMesh Registry...", on_show_navmesh_registry_viewer),
-                MenuItemSpec("Scene Manager...", on_show_scene_manager_viewer),
-            ],
+            items=debug_items,
         ),
         # ── Utils ──────────────────────────────────────────────────────
         MenuSpec(

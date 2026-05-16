@@ -124,16 +124,6 @@ void bind_editor_interaction(nb::module_& m) {
                 result.mesh_indices[0],
                 result.mesh_indices[1],
                 result.mesh_indices[2]);
-            d["has_surface_edge"] = result.has_surface_edge;
-            d["surface_edge_point"] = nb::make_tuple(
-                result.surface_edge_point[0],
-                result.surface_edge_point[1],
-                result.surface_edge_point[2]);
-            d["surface_edge_indices"] = nb::make_tuple(
-                result.surface_edge_indices[0],
-                result.surface_edge_indices[1]);
-            d["surface_edge_distance"] = result.surface_edge_distance;
-            d["surface_edge_side"] = result.surface_edge_side;
             return d;
         })
         .def_prop_rw("on_request_update",
@@ -156,7 +146,7 @@ void bind_editor_interaction(nb::module_& m) {
         .def_prop_rw("on_entity_click",
             [](EditorInteractionSystem& s) { return s.on_entity_click; },
             [](EditorInteractionSystem& s,
-               std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double, bool, double, double, double, double, double, double, uint32_t, uint32_t, uint32_t, uint32_t, bool, double, double, double, uint32_t, uint32_t, double, int)> cb) {
+               std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double, bool, double, double, double, double, double, double, uint32_t, uint32_t, uint32_t, uint32_t)> cb) {
                 s.on_entity_click = cb;
             });
 }

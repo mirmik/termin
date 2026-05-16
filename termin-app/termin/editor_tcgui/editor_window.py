@@ -156,6 +156,7 @@ class EditorWindowTcgui:
         self._last_profiler_update: float = 0.0
         self._last_modules_update: float = 0.0
         self._framegraph_debugger = None
+        self._surface_edge_debug_tool = None
         self._scene_event_subscription = None
         self._scene_tree_rebuild_pending: bool = False
         self._viewport_click_interceptor: Callable[
@@ -167,8 +168,6 @@ class EditorWindowTcgui:
                 bool, float, float, float,
                 float, float, float,
                 int, int, int, int,
-                bool, float, float, float,
-                int, int, float, int,
             ],
             bool,
         ] | None = None
@@ -768,6 +767,8 @@ class EditorWindowTcgui:
             on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
             on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
+            on_toggle_surface_edge_debug_tool=self._toggle_surface_edge_debug_tool,
+            is_surface_edge_debug_tool_enabled=self._is_surface_edge_debug_tool_enabled,
             on_import_rfmeas=self._import_rfmeas,
             on_export_rfmeas=self._export_rfmeas,
             can_undo=lambda: self.undo_stack.can_undo,
@@ -801,8 +802,6 @@ class EditorWindowTcgui:
                 bool, float, float, float,
                 float, float, float,
                 int, int, int, int,
-                bool, float, float, float,
-                int, int, float, int,
             ],
             bool,
         ] | None,
@@ -836,6 +835,19 @@ class EditorWindowTcgui:
                 kept.append(existing)
         self._viewport_overlay_drawers = kept
         self._request_viewport_update()
+
+    def _toggle_surface_edge_debug_tool(self) -> None:
+        if self._surface_edge_debug_tool is None:
+            from termin.editor_tcgui.surface_edge_debug_tool import SurfaceEdgeDebugTool
+            self._surface_edge_debug_tool = SurfaceEdgeDebugTool(self)
+        self._surface_edge_debug_tool.toggle()
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_surface_edge_debug_tool_action()
+
+    def _is_surface_edge_debug_tool_enabled(self) -> bool:
+        if self._surface_edge_debug_tool is None:
+            return False
+        return self._surface_edge_debug_tool.enabled()
 
     # ------------------------------------------------------------------
     # Undo / Redo
@@ -963,23 +975,13 @@ class EditorWindowTcgui:
         index0: int,
         index1: int,
         index2: int,
-        has_surface_edge: bool,
-        edge_x: float,
-        edge_y: float,
-        edge_z: float,
-        edge_index0: int,
-        edge_index1: int,
-        edge_distance: float,
-        edge_side: int,
     ) -> bool:
         args = (
             entity, x, y, has_world_point, world_x, world_y, world_z, depth, view_depth,
             reproject_screen_error, reproject_depth_error,
             has_mesh_hit, mesh_x, mesh_y, mesh_z,
             normal_x, normal_y, normal_z,
-            triangle_index, index0, index1, index2,
-            has_surface_edge, edge_x, edge_y, edge_z,
-            edge_index0, edge_index1, edge_distance, edge_side
+            triangle_index, index0, index1, index2
         )
         if self._viewport_click_interceptor is not None:
             try:
