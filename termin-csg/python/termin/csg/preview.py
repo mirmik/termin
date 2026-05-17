@@ -17,7 +17,7 @@ import sdl2
 from termin.csg import Solid, to_mesh3, to_tc_mesh
 from termin.display import SDLBackendWindow
 from tgfx import (
-    CULL_BACK,
+    CULL_NONE,
     PIXEL_D32F,
     PIXEL_RGBA8,
     Tgfx2Context,
@@ -95,11 +95,14 @@ def _look_at(eye, target, up):
 
 def _perspective(fovy, aspect, near, far):
     f = 1.0 / math.tan(fovy * 0.5)
+    fn = far - near
     m = np.zeros((4, 4), dtype=np.float32)
     m[0, 0] = f / aspect
-    m[1, 1] = f
-    m[2, 2] = (far + near) / (near - far)
-    m[2, 3] = (2.0 * far * near) / (near - far)
+    # Termin/tgfx2 use Vulkan-style clip coordinates: Y points down and
+    # hardware depth is in [0, 1]. This matches tcplot's orbit camera.
+    m[1, 1] = -f
+    m[2, 2] = -far / fn
+    m[2, 3] = -(far * near) / fn
     m[3, 2] = -1.0
     return m
 
@@ -287,16 +290,19 @@ def draw_solids(*solids, title="termin-csg", show_wireframe=True, size=(1000, 76
         ctx.set_viewport(0, 0, w, h)
         ctx.set_depth_test(True)
         ctx.set_depth_write(True)
-        ctx.set_cull(CULL_BACK)
+        ctx.set_blend(False)
+        ctx.set_cull(CULL_NONE)
         ctx.bind_shader(vs, fs)
         for mesh in preview_meshes:
             _push_draw_state(ctx, mvp, mesh.color)
             draw_tc_mesh(ctx, mesh.solid_mesh)
         if show_wireframe:
+            ctx.set_depth_test(False)
             ctx.set_depth_write(False)
             for mesh in preview_meshes:
                 _push_draw_state(ctx, mvp, mesh.line_color)
                 draw_tc_mesh(ctx, mesh.line_mesh)
+            ctx.set_depth_test(True)
         ctx.end_pass()
         ctx.end_frame()
         window.present(color_tex)
