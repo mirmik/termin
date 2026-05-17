@@ -86,6 +86,7 @@ public:
     // Set callback used when rendering state changes outside the editor UI
     // event path and a pull-mode host must render another frame.
     void set_render_request_callback(RenderRequestCallback callback);
+    void request_render_update();
 
     // Create pipeline by name (uses C++ factory for "(Default)"/"Default", Python factory for rest)
     tc_pipeline_handle create_pipeline(const std::string& name);
