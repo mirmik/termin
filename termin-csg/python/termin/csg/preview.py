@@ -60,7 +60,15 @@ uniform vec4 u_color;
 layout(location=0) in vec3 v_world_pos;
 layout(location=0) out vec4 frag_color;
 void main() {
-    frag_color = U_COLOR;
+    vec3 color = U_COLOR.rgb;
+    if (U_COLOR.a >= 0.0) {
+        vec3 n = normalize(cross(dFdy(v_world_pos), dFdx(v_world_pos)));
+        vec3 light_ray_dir = normalize(vec3(0.35, 0.45, -0.82));
+        float lambert = max(dot(n, -light_ray_dir), 0.0);
+        float intensity = 0.32 + 0.68 * lambert;
+        color *= intensity;
+    }
+    frag_color = vec4(color, abs(U_COLOR.a));
 }
 """
 
@@ -199,7 +207,7 @@ class _PreviewMesh:
         self.solid_mesh = to_tc_mesh(solid, f"csg-preview-solid-{index}", str(uuid.uuid4()))
         self.line_mesh = _build_line_mesh(self.cpu_mesh, f"csg-preview-wire-{index}")
         self.color = _COLORS[index % len(_COLORS)]
-        self.line_color = (0.015, 0.020, 0.025, 1.0)
+        self.line_color = (0.015, 0.020, 0.025, -1.0)
 
 
 def _solids_to_preview_meshes(solids):
