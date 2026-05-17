@@ -201,6 +201,36 @@ def _build_line_mesh(mesh, name):
     )
 
 
+def _build_contour_mesh(contour, name):
+    vertices = []
+    indices = []
+
+    def append_loop(points):
+        start = len(vertices)
+        for x, y in points:
+            vertices.append((float(x), float(y), 0.0))
+        count = len(points)
+        for index in range(count):
+            indices.append(start + index)
+            indices.append(start + ((index + 1) % count))
+
+    append_loop(contour.points)
+    for hole in contour.holes:
+        append_loop(hole)
+
+    layout = TcVertexLayout()
+    layout.add("position", 3, TcAttribType.FLOAT32, 0)
+    return TcMesh.from_interleaved(
+        vertices=np.ascontiguousarray(np.array(vertices, dtype=np.float32).reshape(-1), dtype=np.float32),
+        vertex_count=len(vertices),
+        indices=np.ascontiguousarray(np.array(indices, dtype=np.uint32), dtype=np.uint32),
+        layout=layout,
+        name=name,
+        uuid=str(uuid.uuid4()),
+        draw_mode=TcDrawMode.LINES,
+    )
+
+
 class _PreviewMesh:
     def __init__(self, solid, index):
         self.cpu_mesh = to_mesh3(solid, f"csg-preview-{index}")
@@ -208,14 +238,39 @@ class _PreviewMesh:
         self.line_mesh = _build_line_mesh(self.cpu_mesh, f"csg-preview-wire-{index}")
         self.color = _COLORS[index % len(_COLORS)]
         self.line_color = (0.015, 0.020, 0.025, -1.0)
+        self.draw_solid = True
 
 
-def _solids_to_preview_meshes(solids):
+class _PreviewContour:
+    def __init__(self, contour, index):
+        self.cpu_mesh = _contour_bounds_mesh(contour)
+        self.solid_mesh = TcMesh()
+        self.line_mesh = _build_contour_mesh(contour, f"csg-preview-contour-{index}")
+        self.color = _COLORS[index % len(_COLORS)]
+        self.line_color = (0.95, 0.95, 0.98, -1.0)
+        self.draw_solid = False
+
+
+def _contour_bounds_mesh(contour):
+    vertices = [(float(x), float(y), 0.0) for x, y in contour.points]
+    for hole in contour.holes:
+        vertices.extend((float(x), float(y), 0.0) for x, y in hole)
+    mesh = type("_ContourBoundsMesh", (), {})()
+    mesh.vertices = vertices
+    return mesh
+
+
+def _items_to_preview_meshes(items):
+    from termin.csg.cad import Contour
+
     meshes = []
-    for index, solid in enumerate(solids):
-        if type(solid) is not Solid:
-            raise TypeError("draw() expects termin.csg.Solid objects")
-        meshes.append(_PreviewMesh(solid, index))
+    for index, item in enumerate(items):
+        if type(item) is Solid:
+            meshes.append(_PreviewMesh(item, index))
+        elif type(item) is Contour:
+            meshes.append(_PreviewContour(item, index))
+        else:
+            raise TypeError("draw() expects termin.csg.Solid or termin.csg.cad.Contour objects")
     return meshes
 
 
@@ -258,8 +313,8 @@ def _dispatch_event(window, camera, state, ev):
 
 
 def draw_solids(*solids, title="termin-csg", show_wireframe=True, size=(1000, 760)):
-    """Open an interactive preview window and render CSG solids."""
-    preview_meshes = _solids_to_preview_meshes(solids)
+    """Open an interactive preview window and render CSG solids or contours."""
+    preview_meshes = _items_to_preview_meshes(solids)
     camera = _Camera([m.cpu_mesh for m in preview_meshes])
 
     window = SDLBackendWindow(title, int(size[0]), int(size[1]))
@@ -302,8 +357,9 @@ def draw_solids(*solids, title="termin-csg", show_wireframe=True, size=(1000, 76
         ctx.set_cull(CULL_NONE)
         ctx.bind_shader(vs, fs)
         for mesh in preview_meshes:
-            _push_draw_state(ctx, mvp, mesh.color)
-            draw_tc_mesh(ctx, mesh.solid_mesh)
+            if mesh.draw_solid:
+                _push_draw_state(ctx, mvp, mesh.color)
+                draw_tc_mesh(ctx, mesh.solid_mesh)
         if show_wireframe:
             ctx.set_depth_test(False)
             ctx.set_depth_write(False)
