@@ -129,11 +129,11 @@ PACKAGES=(
     termin-inspect
     termin-components/termin-components-kinematic
     termin-scene
+    termin-lighting
     termin-input
     termin-collision
     termin-render
     termin-display
-    termin-lighting
     termin-entity
     termin-navmesh
     termin-physics

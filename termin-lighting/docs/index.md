@@ -1,6 +1,6 @@
 # termin-lighting
 
-`termin-lighting` содержит lighting primitives и Python bindings для lighting-domain API.
+`termin-lighting` содержит C++ lighting primitives и Python bindings для lighting-domain API.
 
 Связанные документы:
 
@@ -9,6 +9,7 @@
 
 ## Основные области
 
+- C++ public headers в `include/termin/lighting`.
 - C++ binding/source code в `cpp/`.
 - Python package в `python/termin/lighting`.
 - Packaging metadata в `setup.py` / `pyproject.toml`.
@@ -16,4 +17,3 @@
 ## Публичный API
 
 Python package: `termin.lighting` через пакет `termin-lighting`.
-

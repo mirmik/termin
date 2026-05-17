@@ -17,7 +17,7 @@ class IRenderDevice;
 class RenderContext2;
 }
 #include "tgfx/render_state.hpp"
-#include <termin/render/light.hpp>
+#include <termin/lighting/light.hpp>
 #include "termin/lighting/shadow.hpp"
 #include "termin/lighting/lighting_upload.hpp"
 #include "termin/lighting/lighting_ubo.hpp"

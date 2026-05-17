@@ -5,7 +5,7 @@
 #include <span>
 #include <vector>
 
-#include <termin/render/light.hpp>
+#include <termin/lighting/light.hpp>
 #include "termin/lighting/shadow.hpp"
 #include "tgfx2/handles.hpp"
 #include "tgfx2/descriptors.hpp"

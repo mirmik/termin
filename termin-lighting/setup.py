@@ -22,7 +22,7 @@ setup(
     python_requires=">=3.8",
     packages=["termin.lighting"],
     package_dir={"termin.lighting": "python/termin/lighting"},
-    install_requires=["termin-nanobind"],
+    install_requires=["termin-nanobind", "termin-base"],
     ext_modules=[
         Extension("termin.lighting._lighting_native", sources=[]),
     ],

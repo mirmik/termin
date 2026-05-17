@@ -3,7 +3,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/export.hpp>
 #include <termin/geom/vec3.hpp>
-#include <termin/render/light.hpp>
+#include <termin/lighting/light.hpp>
 
 namespace termin {
 

@@ -27,7 +27,7 @@ digraph termin_dependencies {
 		fontname="DejaVu Sans";
 		fontsize=12;
 		"diffusion-editor";
-		"termin";
+		"termin-app";
 	}
 
 	subgraph cluster_foundation {
@@ -39,13 +39,25 @@ digraph termin_dependencies {
 		"termin-animation";
 		"termin-base";
 		"termin-collision";
+		"termin-csg";
 		"termin-input";
 		"termin-inspect";
 		"termin-mesh";
 		"termin-modules";
+		"termin-navmesh";
 		"termin-physics";
 		"termin-scene";
 		"termin-skeleton";
+	}
+
+	subgraph cluster_native_bundle {
+		label="Native Bundle";
+		style=dashed;
+		color="#999999";
+		fontname="DejaVu Sans";
+		fontsize=12;
+		"termin";
+		"termin-csharp";
 	}
 
 	subgraph cluster_other_components {
@@ -62,6 +74,16 @@ digraph termin_dependencies {
 		"termin-components-skeleton";
 	}
 
+	subgraph cluster_python_support {
+		label="Python Support";
+		style=dashed;
+		color="#999999";
+		fontname="DejaVu Sans";
+		fontsize=12;
+		"termin-assets";
+		"termin-nanobind-sdk";
+	}
+
 	subgraph cluster_render_stack {
 		label="Render Stack";
 		style=dashed;
@@ -71,6 +93,7 @@ digraph termin_dependencies {
 		"termin-components-render";
 		"termin-display";
 		"termin-graphics";
+		"termin-lighting";
 		"termin-render";
 	}
 
@@ -81,6 +104,15 @@ digraph termin_dependencies {
 		fontname="DejaVu Sans";
 		fontsize=12;
 		"termin-engine";
+	}
+
+	subgraph cluster_thin_facades {
+		label="Thin Facades";
+		style=dashed;
+		color="#999999";
+		fontname="DejaVu Sans";
+		fontsize=12;
+		"termin-entity";
 	}
 
 	subgraph cluster_ui {
@@ -94,25 +126,35 @@ digraph termin_dependencies {
 		"termin-nodegraph";
 	}
 
-	"termin-csharp";
 
+	"termin" -> "termin-app";
 	"termin" -> "termin-csharp";
+	"termin" -> "termin-entity";
+	"termin" -> "termin-navmesh";
+	"termin-animation" -> "termin";
 	"termin-animation" -> "termin-components-animation";
+	"termin-assets" -> "termin-app";
 	"termin-base" -> "termin-inspect";
+	"termin-base" -> "termin-lighting";
 	"termin-base" -> "termin-mesh";
 	"termin-base" -> "termin-modules";
 	"termin-collision" -> "termin-components-collision";
 	"termin-collision" -> "termin-engine";
 	"termin-collision" -> "termin-physics";
-	"termin-components-animation" -> "termin";
-	"termin-components-collision" -> "termin-components-physics";
+	"termin-components-animation" -> "termin-app";
+	"termin-components-collision" -> "termin";
 	"termin-components-kinematic" -> "termin";
-	"termin-components-physics" -> "termin";
+	"termin-components-mesh" -> "termin-components-collision";
+	"termin-components-mesh" -> "termin-components-render";
+	"termin-components-physics" -> "termin-app";
 	"termin-components-render" -> "termin";
+	"termin-components-skeleton" -> "termin";
 	"termin-components-skeleton" -> "termin-components-animation";
+	"termin-display" -> "diffusion-editor";
 	"termin-display" -> "termin-components-render";
 	"termin-display" -> "termin-engine";
 	"termin-engine" -> "termin";
+	"termin-entity" -> "termin-app";
 	"termin-graphics" -> "termin-gui";
 	"termin-graphics" -> "termin-render";
 	"termin-gui" -> "diffusion-editor";
@@ -120,12 +162,15 @@ digraph termin_dependencies {
 	"termin-gui" -> "termin-nodegraph";
 	"termin-input" -> "termin-display";
 	"termin-inspect" -> "termin-scene";
-	"termin-mesh" -> "termin-components-collision";
+	"termin-lighting" -> "termin-render";
 	"termin-mesh" -> "termin-components-mesh";
+	"termin-mesh" -> "termin-csg";
 	"termin-mesh" -> "termin-graphics";
 	"termin-modules" -> "termin";
-	"termin-nodegraph" -> "termin";
-	"termin-physics" -> "termin-components-physics";
+	"termin-nanobind-sdk" -> "termin-base";
+	"termin-navmesh" -> "termin-app";
+	"termin-nodegraph" -> "termin-app";
+	"termin-physics" -> "termin-app";
 	"termin-render" -> "termin-display";
 	"termin-scene" -> "termin-collision";
 	"termin-scene" -> "termin-components-kinematic";

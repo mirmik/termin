@@ -22,9 +22,9 @@ extern "C" {
 #include "termin/render/tonemap_pass.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/shadow.hpp"
-#include "termin/lighting/shadow_settings.hpp"
+#include <termin/lighting/shadow_settings.hpp>
 #include <termin/render/frame_graph_debugger_core.hpp>
-#include <termin/render/light.hpp>
+#include <termin/lighting/light.hpp>
 #include <termin/tc_scene.hpp>
 #include <tcbase/tc_log.hpp>
 

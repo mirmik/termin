@@ -23,6 +23,7 @@ CMAKE_TARGET_TO_DIR = {
     "termin_graphics": "termin-graphics",
     "termin_mesh": "termin-mesh",
     "termin_scene": "termin-scene",
+    "termin_lighting": "termin-lighting",
     "termin_render": "termin-render",
     "termin_display": "termin-display",
     "termin_input": "termin-input",
@@ -40,6 +41,8 @@ CMAKE_TARGET_TO_DIR = {
     "termin_components_physics": "termin-components-physics",
     "termin_components_skeleton": "termin-components-skeleton",
     "termin_components_animation": "termin-components-animation",
+    # The installed CMake package `termin` is the main native/core bundle
+    # produced from termin-app/cpp. It is not the application layer.
     "termin": "termin",
 }
 
@@ -52,7 +55,15 @@ PYTHON_PKG_TO_DIR = {
     "tcnodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
     "tcplot": "tcplot",
-    "termin": "termin",
+    "termin": "termin-app",
+    "termin-app": "termin-app",
+    "termin-base": "termin-base",
+    "termin-assets": "termin-assets",
+    "termin-nanobind": "termin-nanobind-sdk",
+    "termin-csg": "termin-csg",
+    "termin-lighting": "termin-lighting",
+    "termin-entity": "termin-entity",
+    "termin-navmesh": "termin-navmesh",
 }
 
 # External deps to skip
@@ -71,9 +82,13 @@ PYTHON_IMPORT_TO_DIR = {
     "tcgui": "termin-gui",
     "tcnodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
+    "termin_nanobind": "termin-nanobind-sdk",
+    "termin_assets": "termin-assets",
     "diffusion_editor": "diffusion-editor",
     "tcplot": "tcplot",
     # termin.* submodules → actual library
+    "termin.assets": "termin-app",
+    "termin.csg": "termin-csg",
     "termin.geombase": "termin-base",
     "termin.collision": "termin-collision",
     "termin.colliders": "termin-components-collision",
@@ -81,12 +96,12 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.physics_components": "termin-components-physics",
     "termin.visualization.core": "termin-scene",
     "termin.visualization.components": "termin-components-mesh",
-    "termin.entity": "termin-scene",
+    "termin.entity": "termin-entity",
     "termin.scene": "termin-scene",
     "termin.inspect": "termin-inspect",
     "termin.render_components": "termin-components-render",
     "termin.render_framework": "termin-render",
-    "termin.lighting": "termin-render",
+    "termin.lighting": "termin-lighting",
     "termin.viewport": "termin-render",
     "termin.engine": "termin-engine",
     "termin.input": "termin-input",
@@ -97,8 +112,9 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.skeleton_components": "termin-components-skeleton",
     "termin.kinematic": "termin-components-kinematic",
     "termin.modules": "termin-modules",
-    # Fallback: termin.* → termin (editor, assets, etc.)
-    "termin": "termin",
+    "termin.navmesh": "termin-navmesh",
+    # Fallback: termin.* belongs to the application/umbrella Python package.
+    "termin": "termin-app",
 }
 
 # Directories to scan for CMakeLists.txt
@@ -119,15 +135,23 @@ for name in os.listdir(ROOT):
             if os.path.isdir(subpath) and os.path.exists(cmake):
                 CMAKE_DIRS.append((sub, cmake))
 
-# termin/ — scan root and cpp/ CMakeLists.txt
-for subpath in ["CMakeLists.txt", "cpp/CMakeLists.txt"]:
-    cmake = os.path.join(ROOT, "termin", subpath)
-    if os.path.exists(cmake):
-        CMAKE_DIRS.append(("termin", cmake))
+# Main native/core bundle exported as the CMake package `termin`.
+termin_native_cmake = os.path.join(ROOT, "termin-app", "cpp", "CMakeLists.txt")
+if os.path.exists(termin_native_cmake):
+    CMAKE_DIRS.append(("termin", termin_native_cmake))
 
 # Pure-Python packages (no CMakeLists.txt) — will be scanned via import analysis
 PYTHON_ONLY_DIRS = {
     "diffusion-editor": os.path.join(ROOT, "diffusion-editor"),
+}
+
+# Dependencies that are structural but not reliably visible from setup.py or
+# CMake parsing. Thin Python facades copy native modules produced by the main
+# termin build, and termin-app is the composition package over that bundle.
+MANUAL_DEPS = {
+    "termin-app": {"termin"},
+    "termin-entity": {"termin"},
+    "termin-navmesh": {"termin"},
 }
 
 
@@ -287,10 +311,11 @@ def main():
             if os.path.isdir(candidate):
                 scan_targets.append((dir_name, candidate))
 
-    # Always scan termin/termin/ for Python-level deps (top package)
-    termin_py = os.path.join(ROOT, "termin", "termin")
-    if os.path.isdir(termin_py):
-        scan_targets.append(("termin", termin_py))
+    # Always scan termin-app/termin/ for Python-level deps. termin-app owns the
+    # root `termin` namespace and composes editor/player/runtime packages.
+    termin_app_py = os.path.join(ROOT, "termin-app", "termin")
+    if os.path.isdir(termin_app_py):
+        scan_targets.append(("termin-app", termin_app_py))
 
     # Pure-Python packages (no CMake)
     for dir_name, py_dir in PYTHON_ONLY_DIRS.items():
@@ -303,6 +328,16 @@ def main():
         for dep in import_deps:
             if dep != dir_name:
                 edges.add((dep, dir_name))
+                all_nodes.add(dep)
+
+    manual_edges = set()
+    for dst, deps in MANUAL_DEPS.items():
+        all_nodes.add(dst)
+        for dep in deps:
+            if dep != dst:
+                edge = (dep, dst)
+                edges.add(edge)
+                manual_edges.add(edge)
                 all_nodes.add(dep)
 
     # Transitive reduction: remove edge A→B if there's a path A→...→B of length >= 2
@@ -329,7 +364,7 @@ def main():
     reduced_edges = set()
     for edge in edges:
         src, dst = edge
-        if not reachable_without_direct(src, dst, edges):
+        if edge in manual_edges or not reachable_without_direct(src, dst, edges):
             reduced_edges.add(edge)
 
     print(f"  Transitive reduction: {len(edges)} -> {len(reduced_edges)} edges")
@@ -338,19 +373,25 @@ def main():
     # Node groups (rendered as subgraph clusters with border)
     GROUPS = {
         "UI": ["termin-gui", "termin-nodegraph", "tcplot"],
-        "Application": ["termin", "diffusion-editor"],
-        "Render Stack": ["termin-graphics", "termin-render", "termin-display", "termin-components-render"],
+        "Application": ["termin-app", "diffusion-editor"],
+        "Native Bundle": ["termin", "termin-csharp"],
+        "Python Support": ["termin-assets", "termin-nanobind-sdk"],
+        "Render Stack": [
+            "termin-graphics", "termin-lighting", "termin-render",
+            "termin-display", "termin-components-render",
+        ],
         "Runtime": ["termin-engine"],
         "Foundation": [
             "termin-base", "termin-mesh", "termin-inspect", "termin-modules",
             "termin-scene", "termin-skeleton", "termin-collision", "termin-input",
-            "termin-animation", "termin-physics",
+            "termin-animation", "termin-physics", "termin-csg", "termin-navmesh",
         ],
         "Other Components": [
             "termin-components-skeleton", "termin-components-animation",
             "termin-components-collision", "termin-components-physics",
             "termin-components-kinematic", "termin-components-mesh",
         ],
+        "Thin Facades": ["termin-entity"],
     }
 
     # Build reverse map: node → group name
