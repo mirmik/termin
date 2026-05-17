@@ -31,6 +31,15 @@ def _generate_action(component) -> None:
     component.generate()
 
 
+def _request_render_update() -> None:
+    try:
+        from termin._native.render import RenderingManager
+
+        RenderingManager.instance().request_render_update()
+    except Exception as e:
+        log.error(f"[ScriptMeshComponent] Failed to request render update: {e}")
+
+
 class ScriptMeshComponent(PythonComponent):
     """Builds a TcMesh from a small termin-csg script and writes MeshComponent."""
 
@@ -205,6 +214,7 @@ class ScriptMeshComponent(PythonComponent):
             return
 
         mesh_component.set_mesh(tc_mesh)
+        _request_render_update()
         self._last_build_key = self._build_key()
         log.info(
             f"[ScriptMeshComponent] Generated mesh '{self.mesh_name}' "

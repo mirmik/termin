@@ -325,6 +325,12 @@ void RenderingManager::set_render_request_callback(RenderRequestCallback callbac
     render_request_callback_ = std::move(callback);
 }
 
+void RenderingManager::request_render_update() {
+    if (render_request_callback_) {
+        render_request_callback_();
+    }
+}
+
 tc_pipeline_handle RenderingManager::create_pipeline(const std::string& name) {
     if (name == "(Default)" || name == "Default" || name.empty()) {
         return make_default_pipeline();
