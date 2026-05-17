@@ -5,6 +5,7 @@ import numpy as np
 from termin.editor_core.editor_commands import (
     AddEntityCommand,
     DeleteEntityCommand,
+    DuplicateEntityCommand,
     EntityPropertyEditCommand,
     RenameEntityCommand,
     ReparentEntityCommand,
@@ -133,6 +134,48 @@ class TestEditorUndoCommands(unittest.TestCase):
         self.assertIsNone(self.scene.get_entity(root_uuid))
         self.assertIsNone(self.scene.get_entity(child_uuid))
         self.assertIsNone(self.scene.get_entity(grandchild_uuid))
+
+    def test_duplicate_entity_command_duplicates_subtree(self) -> None:
+        root = self.scene.create_entity("root")
+        child = self.scene.create_entity("child")
+        grandchild = self.scene.create_entity("grandchild")
+        child.transform.set_parent(root.transform)
+        grandchild.transform.set_parent(child.transform)
+
+        stack = UndoStack()
+        cmd = DuplicateEntityCommand(self.scene, root)
+        stack.push(cmd)
+
+        duplicated_root = cmd.entity
+        self.assertIsNotNone(duplicated_root)
+        self.assertEqual(duplicated_root.name, "root_copy")
+        self.assertNotEqual(duplicated_root.uuid, root.uuid)
+
+        duplicated_children = list(duplicated_root.transform.children)
+        self.assertEqual(len(duplicated_children), 1)
+        duplicated_child = duplicated_children[0].entity
+        self.assertIsNotNone(duplicated_child)
+        self.assertEqual(duplicated_child.name, "child")
+        self.assertNotEqual(duplicated_child.uuid, child.uuid)
+        self.assertEqual(duplicated_child.transform.parent.entity.uuid, duplicated_root.uuid)
+
+        duplicated_grandchildren = list(duplicated_child.transform.children)
+        self.assertEqual(len(duplicated_grandchildren), 1)
+        duplicated_grandchild = duplicated_grandchildren[0].entity
+        self.assertIsNotNone(duplicated_grandchild)
+        self.assertEqual(duplicated_grandchild.name, "grandchild")
+        self.assertNotEqual(duplicated_grandchild.uuid, grandchild.uuid)
+        self.assertEqual(duplicated_grandchild.transform.parent.entity.uuid, duplicated_child.uuid)
+
+        duplicated_root_uuid = duplicated_root.uuid
+        duplicated_child_uuid = duplicated_child.uuid
+        duplicated_grandchild_uuid = duplicated_grandchild.uuid
+
+        stack.undo()
+
+        self.assertIsNone(self.scene.get_entity(duplicated_root_uuid))
+        self.assertIsNone(self.scene.get_entity(duplicated_child_uuid))
+        self.assertIsNone(self.scene.get_entity(duplicated_grandchild_uuid))
 
     def test_entity_property_command_edits_name_and_layer(self) -> None:
         entity = self.scene.create_entity("entity")

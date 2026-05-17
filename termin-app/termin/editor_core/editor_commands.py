@@ -225,6 +225,160 @@ def _remove_entity_tree(scene, entity: Entity) -> None:
     scene.remove(entity)
 
 
+def _source_copy_entity_pairs(source_data: dict, copy_entity: Entity) -> list[tuple[dict, Entity]]:
+    pairs: list[tuple[dict, Entity]] = []
+
+    def walk(data: dict, entity: Entity) -> None:
+        pairs.append((data, entity))
+        source_children = data.get("children", [])
+        copy_children = list(entity.transform.children) if entity.transform is not None else []
+        if len(source_children) != len(copy_children):
+            _logger.warning(
+                "Duplicate remap: child count mismatch for '%s': source=%d copy=%d",
+                data.get("name", "entity"),
+                len(source_children),
+                len(copy_children),
+            )
+        for child_data, child_transform in zip(source_children, copy_children):
+            child_entity = child_transform.entity
+            if child_entity is not None:
+                walk(child_data, child_entity)
+
+    walk(source_data, copy_entity)
+    return pairs
+
+
+def _read_serialized_field(data: dict, path: str) -> tuple[bool, Any]:
+    current: Any = data
+    for part in path.split("."):
+        if not isinstance(current, dict):
+            return False, None
+        if part not in current:
+            return False, None
+        current = current[part]
+    return True, current
+
+
+def _serialized_entity_ref_uuid(value: Any) -> str | None:
+    if isinstance(value, dict):
+        uuid = value.get("uuid")
+        return uuid if isinstance(uuid, str) and uuid else None
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _remap_serialized_entity_ref(
+    value: Any,
+    old_to_new_entities: dict[str, Entity],
+) -> tuple[Any, bool]:
+    old_uuid = _serialized_entity_ref_uuid(value)
+    if old_uuid is None:
+        return value, False
+    new_entity = old_to_new_entities.get(old_uuid)
+    if new_entity is None:
+        return value, False
+    remapped = {"uuid": new_entity.uuid}
+    if new_entity.name:
+        remapped["name"] = new_entity.name
+    return remapped, True
+
+
+def _remap_serialized_entity_ref_list(
+    value: Any,
+    old_to_new_entities: dict[str, Entity],
+) -> tuple[Any, bool]:
+    if not isinstance(value, list):
+        return value, False
+    changed = False
+    remapped_items: list[Any] = []
+    for item in value:
+        remapped, item_changed = _remap_serialized_entity_ref(item, old_to_new_entities)
+        remapped_items.append(remapped)
+        changed = changed or item_changed
+    return remapped_items, changed
+
+
+def _remap_duplicate_internal_entity_refs(scene, source_data: dict, copy_entity: Entity) -> None:
+    pairs = _source_copy_entity_pairs(source_data, copy_entity)
+    old_to_new_entities: dict[str, Entity] = {}
+    for data, entity in pairs:
+        old_uuid = data.get("uuid")
+        if isinstance(old_uuid, str) and old_uuid:
+            old_to_new_entities[old_uuid] = entity
+
+    if not old_to_new_entities:
+        return
+
+    try:
+        from termin._native.inspect import InspectRegistry
+        registry = InspectRegistry.instance()
+    except (ImportError, RuntimeError) as e:
+        _logger.error("Duplicate remap: failed to access InspectRegistry: %s", e)
+        return
+
+    for data, entity in pairs:
+        component_snapshots = data.get("components", [])
+        component_refs = list(entity.tc_components)
+        if len(component_snapshots) != len(component_refs):
+            _logger.warning(
+                "Duplicate remap: component count mismatch for '%s': source=%d copy=%d",
+                data.get("name", "entity"),
+                len(component_snapshots),
+                len(component_refs),
+            )
+
+        for component_snapshot, component_ref in zip(component_snapshots, component_refs):
+            type_name = component_snapshot.get("type", "")
+            if component_ref.type_name != type_name:
+                _logger.warning(
+                    "Duplicate remap: component order mismatch on '%s': source=%s copy=%s",
+                    data.get("name", "entity"),
+                    type_name,
+                    component_ref.type_name,
+                )
+                continue
+
+            component_data = component_snapshot.get("data", {})
+            if not isinstance(component_data, dict):
+                continue
+
+            try:
+                fields = registry.all_fields(type_name)
+            except RuntimeError as e:
+                _logger.error("Duplicate remap: failed to inspect component '%s': %s", type_name, e)
+                continue
+
+            for info in fields:
+                if info.kind != "entity" and info.kind != "list[entity]":
+                    continue
+                exists, serialized_value = _read_serialized_field(component_data, info.path)
+                if not exists:
+                    continue
+                if info.kind == "entity":
+                    remapped_value, changed = _remap_serialized_entity_ref(
+                        serialized_value,
+                        old_to_new_entities,
+                    )
+                else:
+                    remapped_value, changed = _remap_serialized_entity_ref_list(
+                        serialized_value,
+                        old_to_new_entities,
+                    )
+                if not changed:
+                    continue
+                try:
+                    component_ref.set_field(info.path, remapped_value, scene)
+                except RuntimeError as e:
+                    _logger.error(
+                        "Duplicate remap: failed to set %s.%s on '%s': %s",
+                        type_name,
+                        info.path,
+                        entity.name,
+                        e,
+                    )
+
+
 class TransformEditCommand(UndoCommand):
     """
     Команда изменения положения, ориентации и масштаба сущности
@@ -979,7 +1133,8 @@ class DuplicateEntityCommand(UndoCommand):
         self._copy: Entity | None = None
 
         # Serialize source for do/redo
-        self._serialized_data = _snapshot_entity(source_entity)
+        self._source_serialized_data = _snapshot_entity(source_entity)
+        self._serialized_data = copy.deepcopy(self._source_serialized_data)
         self._remove_uuids_recursive(self._serialized_data)
 
     @property
@@ -997,21 +1152,21 @@ class DuplicateEntityCommand(UndoCommand):
             self._remove_uuids_recursive(child)
 
     def do(self) -> None:
-        # Deserialize directly into scene's pool
-        self._copy = Entity.deserialize(
-            copy.deepcopy(self._serialized_data), context=None, scene=self._scene
+        self._copy = _deserialize_entity_snapshot(
+            self._scene,
+            self._serialized_data,
+            self._parent_uuid,
+            self.text,
+            with_children=True,
         )
-        if self._copy is None or not self._copy.valid():
-            _logger.error("Failed to duplicate entity '%s'", self._source_name)
-            raise RuntimeError(f"Failed to duplicate entity '{self._source_name}'")
         self._copy.name = f"{self._source_name}_copy"
-
-        # Set parent
-        parent_transform = _resolve_parent_transform(self._scene, self._parent_uuid)
-        if parent_transform is not None:
-            self._copy.transform.set_parent(parent_transform)
+        _remap_duplicate_internal_entity_refs(
+            self._scene,
+            self._source_serialized_data,
+            self._copy,
+        )
 
     def undo(self) -> None:
         if self._copy is not None:
-            self._scene.remove(self._copy)
+            _remove_entity_tree(self._scene, self._copy)
             self._copy = None
