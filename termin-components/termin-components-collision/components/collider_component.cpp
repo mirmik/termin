@@ -1,9 +1,11 @@
 #include <components/collider_component.hpp>
+#include <components/mesh_component.hpp>
 #include <tcbase/tc_log.hpp>
 #include "core/tc_entity_pool.h"
 #include "physics/tc_collision_world.h"
 #include "tc_inspect_cpp.hpp"
 #include <algorithm>
+#include <vector>
 
 namespace termin {
 
@@ -36,6 +38,34 @@ static struct _ColliderTypeFieldRegistrar {
         tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
     }
 } _collider_type_registrar;
+
+// Register ConvexHull mesh source field with enum choices
+static struct _ConvexHullMeshSourceFieldRegistrar {
+    _ConvexHullMeshSourceFieldRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "ColliderComponent";
+        info.path = "convex_hull_mesh_source";
+        info.label = "Convex Hull Mesh Source";
+        info.kind = "enum";
+
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<ColliderComponent*>(obj);
+            return tc_value_string(c->convex_hull_mesh_source.c_str());
+        };
+
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* c = static_cast<ColliderComponent*>(obj);
+            if (value.type == TC_VALUE_STRING) {
+                c->set_convex_hull_mesh_source(value.data.s);
+            }
+        };
+
+        info.choices.push_back({"Field", "Field"});
+        info.choices.push_back({"MeshComponent", "MeshComponent"});
+
+        tc::InspectRegistry::instance().add_field_with_choices("ColliderComponent", std::move(info));
+    }
+} _convex_hull_mesh_source_registrar;
 
 ColliderComponent::ColliderComponent()
     : CxxComponent("ColliderComponent")
@@ -90,8 +120,9 @@ void ColliderComponent::rebuild_collider() {
         return;
     }
 
-    // Apply collider offset if enabled
-    if (collider_offset_enabled) {
+    // MeshComponent-sourced convex hulls already follow the render mesh local data.
+    // In that mode Collider Offset is intentionally ignored to avoid a second offset stack.
+    if (collider_offset_enabled && !_uses_mesh_component_mesh()) {
         _collider->transform.lin = Vec3(
             collider_offset_position.x,
             collider_offset_position.y,
@@ -134,9 +165,20 @@ void ColliderComponent::set_box_size(const tc_vec3& size) {
     rebuild_collider();
 }
 
+void ColliderComponent::set_convex_hull_mesh_source(const std::string& source) {
+    if (source != convex_hull_mesh_source) {
+        convex_hull_mesh_source = source;
+        rebuild_collider();
+    }
+}
+
 void ColliderComponent::set_convex_hull_mesh(const TcMesh& mesh) {
     convex_hull_mesh = mesh;
     rebuild_collider();
+}
+
+bool ColliderComponent::_uses_mesh_component_mesh() const {
+    return collider_type == "ConvexHull" && convex_hull_mesh_source == "MeshComponent";
 }
 
 std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collider() const {
@@ -158,9 +200,33 @@ std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collide
         return std::make_unique<colliders::CapsuleCollider>(radius, half_height);
     }
     else if (collider_type == "ConvexHull") {
-        tc_mesh* m = convex_hull_mesh.get();
+        tc_mesh* m = nullptr;
+        Mat44f mesh_offset = Mat44f::identity();
+        bool from_mesh_component = false;
+
+        if (convex_hull_mesh_source == "MeshComponent") {
+            Entity ent = entity();
+            if (!ent.valid()) {
+                tc::Log::error("ColliderComponent: ConvexHull MeshComponent source requires a valid entity");
+                return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+            }
+
+            MeshComponent* mesh_component = ent.get_component<MeshComponent>();
+            if (!mesh_component) {
+                tc::Log::error("ColliderComponent: ConvexHull MeshComponent source requires MeshComponent on the same entity");
+                return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+            }
+
+            m = mesh_component->mesh.get();
+            mesh_offset = mesh_component->get_mesh_offset_matrix();
+            from_mesh_component = true;
+        }
+        else {
+            m = convex_hull_mesh.get();
+        }
+
         if (!m || !m->vertices || m->vertex_count == 0) {
-            tc::Log::error("ColliderComponent: ConvexHull requires convex_hull_mesh with loaded vertex data");
+            tc::Log::error("ColliderComponent: ConvexHull requires source mesh with loaded vertex data");
             return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
         }
 
@@ -180,10 +246,17 @@ std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collide
 
         for (size_t i = 0; i < m->vertex_count; ++i) {
             const float* pos = reinterpret_cast<const float*>(raw + i * stride + offset);
-            points.push_back(Vec3(
-                pos[0] * box_size.x,
-                pos[1] * box_size.y,
-                pos[2] * box_size.z));
+            Vec3 point{pos[0], pos[1], pos[2]};
+            if (from_mesh_component) {
+                point = mesh_offset.transform_point(point);
+            }
+            else {
+                point = Vec3(
+                    point.x * box_size.x,
+                    point.y * box_size.y,
+                    point.z * box_size.z);
+            }
+            points.push_back(point);
         }
 
         return std::make_unique<colliders::ConvexHullCollider>(
