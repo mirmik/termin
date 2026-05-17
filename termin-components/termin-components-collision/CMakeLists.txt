@@ -11,6 +11,7 @@ find_package(termin_scene REQUIRED)
 find_package(termin_inspect REQUIRED)
 find_package(termin_mesh REQUIRED)
 find_package(termin_collision REQUIRED)
+find_package(termin_components_mesh REQUIRED)
 
 include(${CMAKE_CURRENT_LIST_DIR}/../cmake/TerminModule.cmake)
 
@@ -18,8 +19,8 @@ termin_add_module(
     NAME termin_components_collision
     NAMESPACE termin_components_collision::
     SOURCES components/collider_component.cpp
-    PUBLIC_DEPS tcbase::termin_base termin_scene::termin_scene termin_inspect::termin_inspect tmesh::termin_mesh termin_collision::termin_collision
-    FIND_DEPS termin_base termin_scene termin_inspect termin_mesh termin_collision
+    PUBLIC_DEPS tcbase::termin_base termin_scene::termin_scene termin_inspect::termin_inspect tmesh::termin_mesh termin_collision::termin_collision termin_components_mesh::termin_components_mesh
+    FIND_DEPS termin_base termin_scene termin_inspect termin_mesh termin_collision termin_components_mesh
     INSTALL_HEADERS components
 )
 
