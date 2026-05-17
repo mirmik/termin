@@ -32,6 +32,7 @@ public:
 
     Solid translated(double x, double y, double z) const;
     Solid scaled(double x, double y, double z) const;
+    Solid rotated(double x_degrees, double y_degrees, double z_degrees) const;
 
 private:
     struct Impl;
@@ -41,6 +42,8 @@ private:
 
     friend Solid make_box(double, double, double, bool);
     friend Solid make_sphere(double, int);
+    friend Solid make_cylinder(double, double, int, bool);
+    friend Solid make_cone(double, double, double, int, bool);
     friend Solid unite(const Solid&, const Solid&);
     friend Solid subtract(const Solid&, const Solid&);
     friend Solid intersect(const Solid&, const Solid&);
@@ -50,6 +53,8 @@ private:
 
 Solid make_box(double x, double y, double z, bool centered = true);
 Solid make_sphere(double radius, int circular_segments = 0);
+Solid make_cylinder(double radius, double height, int circular_segments = 0, bool centered = true);
+Solid make_cone(double radius_low, double radius_high, double height, int circular_segments = 0, bool centered = true);
 Solid unite(const Solid& a, const Solid& b);
 Solid subtract(const Solid& a, const Solid& b);
 Solid intersect(const Solid& a, const Solid& b);

@@ -145,12 +145,27 @@ Solid Solid::scaled(double x, double y, double z) const {
     return Solid(Impl(impl_->manifold.Scale(vec3(x, y, z))));
 }
 
+Solid Solid::rotated(double x_degrees, double y_degrees, double z_degrees) const {
+    if (!impl_) {
+        return Solid();
+    }
+    return Solid(Impl(impl_->manifold.Rotate(x_degrees, y_degrees, z_degrees)));
+}
+
 Solid make_box(double x, double y, double z, bool centered) {
     return Solid(Solid::Impl(Manifold::Cube(vec3(x, y, z), centered)));
 }
 
 Solid make_sphere(double radius, int circular_segments) {
     return Solid(Solid::Impl(Manifold::Sphere(radius, circular_segments)));
+}
+
+Solid make_cylinder(double radius, double height, int circular_segments, bool centered) {
+    return Solid(Solid::Impl(Manifold::Cylinder(height, radius, radius, circular_segments, centered)));
+}
+
+Solid make_cone(double radius_low, double radius_high, double height, int circular_segments, bool centered) {
+    return Solid(Solid::Impl(Manifold::Cylinder(height, radius_low, radius_high, circular_segments, centered)));
 }
 
 Solid unite(const Solid& a, const Solid& b) {

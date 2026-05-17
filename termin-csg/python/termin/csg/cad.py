@@ -3,10 +3,10 @@
 The API is intentionally tiny for now:
 
     from termin.csg.cad import *
-    draw(box(2, 2, 2, center=True) - sphere(1.15))
+    draw(box(2, 2, 2, center=True) - sphere(1.15).up(0.25))
 """
 
-from termin.csg import Solid, make_box, make_sphere, to_mesh3
+from termin.csg import Solid, make_box, make_cone, make_cylinder, make_sphere, to_mesh3
 
 
 def box(x, y=None, z=None, *, center=True):
@@ -29,16 +29,35 @@ def sphere(radius, *, segments=32):
     return make_sphere(float(radius), int(segments))
 
 
+def cylinder(radius, height, *, segments=32, center=True):
+    """Create a Z-axis cylinder."""
+    return make_cylinder(float(radius), float(height), int(segments), bool(center))
+
+
+def cone(radius_low, radius_high=0.0, height=1.0, *, segments=32, center=True):
+    """Create a Z-axis cone or truncated cone."""
+    return make_cone(
+        float(radius_low),
+        float(radius_high),
+        float(height),
+        int(segments),
+        bool(center),
+    )
+
+
 def translate(solid, x=0.0, y=0.0, z=0.0):
     """Return a translated copy of ``solid``."""
-    return solid.translated(float(x), float(y), float(z))
+    return solid.move(x, y, z)
 
 
 def scale(solid, x, y=None, z=None):
     """Return a scaled copy of ``solid``."""
-    yy = x if y is None else y
-    zz = x if z is None else z
-    return solid.scaled(float(x), float(yy), float(zz))
+    return solid.scale(x, y, z)
+
+
+def rotate(solid, x=0.0, y=0.0, z=0.0):
+    """Return a rotated copy of ``solid``. Angles are in degrees."""
+    return solid.rotate(x, y, z)
 
 
 def draw(*solids, title="termin-csg", show_wireframe=True):
@@ -61,8 +80,11 @@ def mesh(solid, name="csg"):
 
 __all__ = [
     "box",
+    "cone",
+    "cylinder",
     "draw",
     "mesh",
+    "rotate",
     "scale",
     "sphere",
     "translate",
