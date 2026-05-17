@@ -224,46 +224,31 @@ void NormalPass::execute_with_data_tgfx2(
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, normal_shader_handle_);
 
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
-        if (bind.index_count == 0) continue;
-
         NormalPushStd140 push{};
         std::memcpy(push.u_model, model.data, sizeof(float) * 16);
         ctx.ctx2->set_push_constants(&push, sizeof(push));
 
         if (override_is_base) {
-            ctx.ctx2->set_vertex_layout(
-                filter_vertex_layout_to_locations(bind.layout, {0, 1}));
-            ctx.ctx2->set_topology(bind.topology);
-            ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                           bind.index_count, bind.index_type);
+            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1});
         } else {
             // Skinning variant: compile via bridge, bind, rely on
             // SkinnedMeshRenderer to upload BoneBlock UBO.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
-                release_mesh_binding(device, bind);
                 continue;
             }
             tgfx::ShaderHandle vs2, fs2;
             if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
-                release_mesh_binding(device, bind);
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
-            ctx.ctx2->set_vertex_layout(
-                filter_vertex_layout_to_locations(bind.layout, {0, 1, 6, 7}));
-            ctx.ctx2->set_topology(bind.topology);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                           bind.index_count, bind.index_type);
+            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
             ctx.ctx2->bind_shader(normal_vs2, normal_fs2);
         }
-
-        release_mesh_binding(device, bind);
     }
 
     ctx.ctx2->end_pass();

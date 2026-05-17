@@ -403,9 +403,6 @@ void DepthPass::execute_with_data_tgfx2(
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
 
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
-        if (bind.index_count == 0) continue;
-
         // Both paths share push_constants + PerFrame UBO — the skinned
         // variant is just DEPTH_PASS_VERT_UBO with injected BoneBlock.
         DepthPushStd140 push{};
@@ -415,40 +412,28 @@ void DepthPass::execute_with_data_tgfx2(
         if (override_is_base) {
             // Base depth VS only reads a_position. See IdPass / ShadowPass
             // for the rationale of stripping unused attributes.
-            ctx.ctx2->set_vertex_layout(
-                filter_vertex_layout_to_locations(bind.layout, {0}));
-            ctx.ctx2->set_topology(bind.topology);
-            ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                           bind.index_count, bind.index_type);
+            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
         } else {
             // Skinning variant: compile via bridge, bind, upload BoneBlock
             // UBO from SkinnedMeshRenderer, draw.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
-                release_mesh_binding(device, bind);
                 continue;
             }
             tgfx::ShaderHandle vs2, fs2;
             if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
-                release_mesh_binding(device, bind);
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
             // Skinned depth VS uses a_position (0), a_normal (1),
             // a_joints (3), a_weights (4). a_texcoord (2) stays unused.
-            ctx.ctx2->set_vertex_layout(
-                filter_vertex_layout_to_locations(bind.layout, {0, 1, 6, 7}));
-            ctx.ctx2->set_topology(bind.topology);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                           bind.index_count, bind.index_type);
+            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
             ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
         }
-
-        release_mesh_binding(device, bind);
     }
 
     ctx.ctx2->end_pass();
@@ -719,44 +704,29 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
 
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
-        if (bind.index_count == 0) continue;
-
         DepthPushStd140 push{};
         std::memcpy(push.u_model, model.data, sizeof(float) * 16);
         ctx.ctx2->set_push_constants(&push, sizeof(push));
 
         if (override_is_base) {
-            ctx.ctx2->set_vertex_layout(
-                filter_vertex_layout_to_locations(bind.layout, {0}));
-            ctx.ctx2->set_topology(bind.topology);
-            ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                           bind.index_count, bind.index_type);
+            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
         } else {
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
-                release_mesh_binding(device, bind);
                 continue;
             }
             tgfx::ShaderHandle vs2, fs2;
             if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
-                release_mesh_binding(device, bind);
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
-            ctx.ctx2->set_vertex_layout(
-                filter_vertex_layout_to_locations(bind.layout, {0, 1, 6, 7}));
-            ctx.ctx2->set_topology(bind.topology);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                           bind.index_count, bind.index_type);
+            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
             ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
         }
-
-        release_mesh_binding(device, bind);
     }
 
     ctx.ctx2->end_pass();

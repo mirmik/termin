@@ -503,9 +503,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 bool override_is_base =
                     tc_shader_handle_eq(dc.final_shader, shadow_shader_handle_);
 
-                Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
-                if (bind.index_count == 0) continue;
-
                 // Both paths share the same push_constants + PerFrame UBO
                 // layout (the skinned variant is just SHADOW_VS_UBO with
                 // injected BoneBlock). Push u_model once up-front.
@@ -517,45 +514,31 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // Non-skinned fast path. Shadow VS only reads
                     // a_position — filter unused attrs so Vulkan doesn't
                     // complain about loc 1/2/3 per pipeline creation.
-                    ctx.ctx2->set_vertex_layout(
-                        filter_vertex_layout_to_locations(bind.layout, {0}));
-                    ctx.ctx2->set_topology(bind.topology);
-                    ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                                   bind.index_count, bind.index_type);
+                    termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
                 } else {
                     // Skinning variant: compile via bridge, bind, upload
                     // BoneBlock UBO (SkinnedMeshRenderer takes care of
                     // that in upload_per_draw_uniforms_tgfx2), draw.
                     tc_shader* raw = tc_shader_get(dc.final_shader);
                     if (!raw) {
-                        release_mesh_binding(device, bind);
                         continue;
                     }
                     tgfx::ShaderHandle vs2, fs2;
                     if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
-                        release_mesh_binding(device, bind);
                         continue;
                     }
                     ctx.ctx2->bind_shader(vs2, fs2);
-                    // Skinning VS reads a_position (0) + a_joints (3) +
-                    // a_weights (4). Filter to those three — Normal/UV
-                    // locations stay unused by the injected shadow VS.
-                    ctx.ctx2->set_vertex_layout(
-                        filter_vertex_layout_to_locations(bind.layout, {0, 6, 7}));
-                    ctx.ctx2->set_topology(bind.topology);
 
                     drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-                    ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                                   bind.index_count, bind.index_type);
+                    // Skinning VS reads a_position (0) + joints/weights.
+                    termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 6, 7});
 
                     // Next mesh-backed draw must re-bind the base shadow
                     // shader; skinning variant left its own program bound.
                     last_shader = dc.final_shader;
                     ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
                 }
-
-                release_mesh_binding(device, bind);
             }
             (void)last_shader;
 

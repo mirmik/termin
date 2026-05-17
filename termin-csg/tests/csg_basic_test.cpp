@@ -28,6 +28,10 @@ int main() {
     ok &= expect(box.triangle_count() == 12, "box should have 12 triangles");
     ok &= expect(near(box.volume(), 24.0), "box volume should be 24");
 
+    termin::csg::Solid sphere = termin::csg::make_sphere(1.0, 16);
+    ok &= expect(!sphere.is_empty(), "sphere should not be empty");
+    ok &= expect(sphere.triangle_count() > box.triangle_count(), "sphere should be tessellated");
+
     termin::csg::Solid cut = termin::csg::make_box(1.0, 1.0, 6.0).translated(0.0, 0.0, 0.0);
     termin::csg::Solid difference = termin::csg::subtract(box, cut);
     ok &= expect(!difference.is_empty(), "difference should not be empty");

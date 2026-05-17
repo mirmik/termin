@@ -40,6 +40,7 @@ private:
     Impl* impl_ = nullptr;
 
     friend Solid make_box(double, double, double, bool);
+    friend Solid make_sphere(double, int);
     friend Solid unite(const Solid&, const Solid&);
     friend Solid subtract(const Solid&, const Solid&);
     friend Solid intersect(const Solid&, const Solid&);
@@ -48,6 +49,7 @@ private:
 };
 
 Solid make_box(double x, double y, double z, bool centered = true);
+Solid make_sphere(double radius, int circular_segments = 0);
 Solid unite(const Solid& a, const Solid& b);
 Solid subtract(const Solid& a, const Solid& b);
 Solid intersect(const Solid& a, const Solid& b);
