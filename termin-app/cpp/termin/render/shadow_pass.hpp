@@ -14,7 +14,7 @@
 #include "tgfx/handles.hpp"
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
-#include <termin/render/light.hpp>
+#include <termin/lighting/light.hpp>
 #include "termin/render/shadow_camera.hpp"
 #include <termin/geom/mat44.hpp>
 #include <termin/entity/entity.hpp>
