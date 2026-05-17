@@ -7,6 +7,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_CSG_BUILD_TESTS "Build termin-csg tests" OFF)
 option(TERMIN_CSG_BUILD_EXAMPLES "Build termin-csg examples" OFF)
+option(TERMIN_BUILD_PYTHON "Build termin-csg Python bindings" OFF)
 
 find_package(termin_base REQUIRED)
 find_package(termin_mesh REQUIRED)
@@ -72,6 +73,10 @@ endif()
 
 if(TERMIN_CSG_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+if(TERMIN_BUILD_PYTHON)
+    add_subdirectory(python)
 endif()
 
 include(GNUInstallDirs)

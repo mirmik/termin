@@ -123,6 +123,7 @@ PACKAGES=(
     termin-base
     termin-assets
     termin-mesh
+    termin-csg
     termin-graphics
     termin-modules
     termin-inspect

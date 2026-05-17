@@ -261,9 +261,6 @@ void IdPass::execute_with_data_tgfx2(
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, id_shader_handle_);
 
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
-        if (bind.index_count == 0) continue;
-
         // Push constants (u_model + u_pickColor) are shared between the
         // base and skinned paths — the skinned variant is just
         // ID_PASS_VERT_UBO with injected BoneBlock, same push layout.
@@ -281,39 +278,27 @@ void IdPass::execute_with_data_tgfx2(
             // inputs are a_position only — trim the pipeline's vertex
             // layout to match, otherwise Vulkan logs performance warnings
             // about loc 1/2/3 for every pipeline variant.
-            ctx.ctx2->set_vertex_layout(
-                filter_vertex_layout_to_locations(bind.layout, {0}));
-            ctx.ctx2->set_topology(bind.topology);
-            ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                           bind.index_count, bind.index_type);
+            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
         } else {
             // Skinning variant: compile via bridge, bind, rely on
             // SkinnedMeshRenderer to upload BoneBlock UBO.
             tc_shader* raw = tc_shader_get(dc.final_shader);
             if (!raw) {
-                release_mesh_binding(device, bind);
                 continue;
             }
             tgfx::ShaderHandle vs2, fs2;
             if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
-                release_mesh_binding(device, bind);
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
-            // a_position (0) + a_normal (1) used by skinning function + joints/weights.
-            ctx.ctx2->set_vertex_layout(
-                filter_vertex_layout_to_locations(bind.layout, {0, 1, 6, 7}));
-            ctx.ctx2->set_topology(bind.topology);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            ctx.ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                           bind.index_count, bind.index_type);
+            // a_position (0) + a_normal (1) used by skinning function + joints/weights.
+            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
             ctx.ctx2->bind_shader(id_vs2, id_fs2);
         }
-
-        release_mesh_binding(device, bind);
     }
 
     ctx.ctx2->end_pass();

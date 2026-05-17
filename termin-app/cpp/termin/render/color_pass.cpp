@@ -550,26 +550,18 @@ void ColorPass::execute_with_data(
 
         Mat44f model = drawable->get_model_matrix(dc.entity);
 
-        // Wrap the mesh's per-context VBO/EBO as tgfx2 buffers for
-        // the duration of this draw. Destroyed right after draw —
-        // wrap_mesh is cheap and avoids growing the HandlePool.
-        Tgfx2MeshBinding bind = wrap_mesh_as_tgfx2(device, mesh);
-        if (bind.index_count == 0) continue;
-
         // Compile the shader through the tc_shader_ensure_tgfx2 bridge.
         // This is a separate GL program from the legacy one — ctx2
         // binds it via bind_shader, legacy TcShader still has its own
         // program id which is now unused for this pass.
         tc_shader* raw_shader = tc_shader_get(dc.final_shader);
         if (!raw_shader) {
-            release_mesh_binding(device, bind);
             continue;
         }
         tgfx::ShaderHandle vs2, fs2;
         if (!tc_shader_ensure_tgfx2(raw_shader, &device, &vs2, &fs2)) {
             tc::Log::error("[ColorPass/tgfx2] tc_shader_ensure_tgfx2 failed for shader '%s'",
                            raw_shader->name ? raw_shader->name : raw_shader->uuid);
-            release_mesh_binding(device, bind);
             continue;
         }
 
@@ -588,8 +580,6 @@ void ColorPass::execute_with_data(
                                : tgfx::PolygonMode::Fill);
 
         ctx2->bind_shader(vs2, fs2);
-        ctx2->set_vertex_layout(bind.layout);
-        ctx2->set_topology(bind.topology);
 
         // --- UBO bindings ---
         // Lighting UBO at slot 0.
@@ -693,12 +683,11 @@ void ColorPass::execute_with_data(
         // Default implementation is a no-op for non-skinned drawables.
         drawable->upload_per_draw_uniforms_tgfx2(*ctx2, dc.geometry_id);
 
-        // Issue the draw. This flushes the pending ctx2 state into a
-        // pipeline binding + glDrawElements inside the ctx2 render pass.
-        ctx2->draw(bind.vertex_buffer, bind.index_buffer,
-                   bind.index_count, bind.index_type);
-
-        release_mesh_binding(device, bind);
+        // Issue the draw through the shared backend-neutral TcMesh path.
+        // It sets vertex layout/topology, wraps/uploads mesh buffers for the
+        // current backend, submits ctx2->draw(), then releases transient
+        // bindings.
+        termin::draw_tc_mesh(*ctx2, mesh);
     }
 
     ctx2->end_pass();

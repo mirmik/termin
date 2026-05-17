@@ -149,6 +149,10 @@ Solid make_box(double x, double y, double z, bool centered) {
     return Solid(Solid::Impl(Manifold::Cube(vec3(x, y, z), centered)));
 }
 
+Solid make_sphere(double radius, int circular_segments) {
+    return Solid(Solid::Impl(Manifold::Sphere(radius, circular_segments)));
+}
+
 Solid unite(const Solid& a, const Solid& b) {
     return Solid(Solid::Impl(a.impl_->manifold + b.impl_->manifold));
 }
