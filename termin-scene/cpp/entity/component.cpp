@@ -53,7 +53,7 @@ const tc_component_vtable CxxComponent::_cxx_vtable = {
     nullptr
 };
 
-CxxComponent::CxxComponent() {
+CxxComponent::CxxComponent(const char* type_name) {
     tc_component_init(&_c, &_cxx_vtable);
     _c.ref_vtable = &g_cxx_component_ref_vtable;
     _c.kind = TC_CXX_COMPONENT;
@@ -65,6 +65,12 @@ CxxComponent::CxxComponent() {
     _c.has_update = false;
     _c.has_fixed_update = false;
     _c.has_before_render = false;
+    tc_component_set_declared_type_name(&_c, type_name);
+    tc_type_entry* entry = tc_component_registry_get_entry(type_name);
+    if (entry) {
+        _c.type_entry = entry;
+        _c.type_version = entry->version;
+    }
 }
 
 CxxComponent::~CxxComponent() {
@@ -75,19 +81,6 @@ void CxxComponent::release() {
     int prev = _ref_count.fetch_sub(1);
     if (prev <= 1) {
         delete this;
-    }
-}
-
-void CxxComponent::declare_type_name(const char* type_name) {
-    tc_component_set_declared_type_name(&_c, type_name);
-}
-
-void CxxComponent::link_type_entry(const char* type_name) {
-    declare_type_name(type_name);
-    tc_type_entry* entry = tc_component_registry_get_entry(type_name);
-    if (entry) {
-        _c.type_entry = entry;
-        _c.type_version = entry->version;
     }
 }
 

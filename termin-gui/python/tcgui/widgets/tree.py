@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from tcbase import MouseButton, log
 from tcgui.widgets.widget import Widget
-from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent
+from tcgui.widgets.events import DragEvent, MouseEvent, MouseWheelEvent, KeyEvent
 from tcgui.widgets.theme import current_theme as _t
 
 
@@ -115,6 +115,8 @@ class TreeWidget(Widget):
         self.on_context_menu: Callable[[TreeNode | None, float, float], None] | None = None
         # on_drop(dragged_node, target_node, position)
         # position: "above" | "below" | "inside" | "root"
+        self.on_external_drag: Callable[[DragEvent, TreeNode | None, str], bool] | None = None
+        self.on_external_drop: Callable[[DragEvent, TreeNode | None, str], bool] | None = None
 
         # State
         self.selected_node: TreeNode | None = None
@@ -462,6 +464,27 @@ class TreeWidget(Widget):
             self._cancel_drag()
             return
         self._cancel_drag()
+
+    def on_drag_move(self, event: DragEvent) -> bool:
+        if self.on_external_drag is None:
+            return False
+        self._update_drop_target(event.y)
+        if not self.on_external_drag(event, self._drop_target, self._drop_position):
+            self._cancel_drag()
+            return False
+        self._drag_active = True
+        return True
+
+    def on_drag_leave(self, event: DragEvent):
+        self._cancel_drag()
+
+    def on_drag_drop(self, event: DragEvent) -> bool:
+        if self.on_external_drop is None:
+            self._cancel_drag()
+            return False
+        accepted = self.on_external_drop(event, self._drop_target, self._drop_position)
+        self._cancel_drag()
+        return accepted
 
     # --- Drag & drop helpers ---
 

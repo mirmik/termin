@@ -22,55 +22,52 @@ namespace {
 
 class ReloadableComponent : public termin::CxxComponent {
 public:
-    ReloadableComponent() {
-        declare_type_name("ReloadableComponent");
-    }
+    ReloadableComponent()
+        : termin::CxxComponent("ReloadableComponent") {}
 
     int value = 0;
 };
 
 class SecondaryComponent : public termin::CxxComponent {
 public:
-    SecondaryComponent() {
-        declare_type_name("SecondaryComponent");
-    }
+    SecondaryComponent()
+        : termin::CxxComponent("SecondaryComponent") {}
 
     int amount = 0;
 };
 
 class RequiredBaseComponent : public termin::CxxComponent {
 public:
-    RequiredBaseComponent() {
-        declare_type_name("RequiredBaseComponent");
-    }
+    RequiredBaseComponent()
+        : RequiredBaseComponent("RequiredBaseComponent") {}
+
+protected:
+    explicit RequiredBaseComponent(const char* type_name)
+        : termin::CxxComponent(type_name) {}
 };
 
 class RequiredDerivedComponent : public RequiredBaseComponent {
 public:
-    RequiredDerivedComponent() {
-        declare_type_name("RequiredDerivedComponent");
-    }
+    RequiredDerivedComponent()
+        : RequiredBaseComponent("RequiredDerivedComponent") {}
 };
 
 class NeedsBaseComponent : public termin::CxxComponent {
 public:
-    NeedsBaseComponent() {
-        declare_type_name("NeedsBaseComponent");
-    }
+    NeedsBaseComponent()
+        : termin::CxxComponent("NeedsBaseComponent") {}
 };
 
 class CycleAComponent : public termin::CxxComponent {
 public:
-    CycleAComponent() {
-        declare_type_name("CycleAComponent");
-    }
+    CycleAComponent()
+        : termin::CxxComponent("CycleAComponent") {}
 };
 
 class CycleBComponent : public termin::CxxComponent {
 public:
-    CycleBComponent() {
-        declare_type_name("CycleBComponent");
-    }
+    CycleBComponent()
+        : termin::CxxComponent("CycleBComponent") {}
 };
 
 static ::termin::ComponentRegistrar<ReloadableComponent>

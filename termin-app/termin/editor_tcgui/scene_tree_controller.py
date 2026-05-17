@@ -7,6 +7,7 @@ from typing import Callable, Optional
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.label import Label
 from tcgui.widgets.menu import Menu, MenuItem
+from tcgui.widgets.events import DragEvent
 
 from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.dialog_service import DialogService
@@ -45,6 +46,8 @@ class SceneTreeControllerTcgui:
         self._tree.draggable = True
         self._tree.on_select = self._on_tree_select
         self._tree.on_drop = self._on_drop
+        self._tree.on_external_drag = self._on_external_drag
+        self._tree.on_external_drop = self._on_external_drop
         self._tree.on_context_menu = self._on_tree_context_menu
 
         self._ctx_menu = Menu()
@@ -337,3 +340,44 @@ class SceneTreeControllerTcgui:
                 new_parent_entity = None
 
         self._ops.reparent_entity(entity, new_parent_entity)
+
+    def _on_external_drag(self, event: DragEvent, target: TreeNode | None, position: str) -> bool:
+        if event.payload.kind != "project_file":
+            return False
+        data = event.payload.data
+        if not isinstance(data, dict):
+            return False
+        return data.get("extension") in (".glb", ".fbx", ".prefab", ".tc_prefab")
+
+    def _on_external_drop(self, event: DragEvent, target: TreeNode | None, position: str) -> bool:
+        if not self._on_external_drag(event, target, position):
+            return False
+        data = event.payload.data
+        if not isinstance(data, dict):
+            return False
+        path = data.get("path")
+        ext = data.get("extension")
+        if not isinstance(path, str) or not isinstance(ext, str):
+            return False
+
+        parent_entity = self._drop_parent_entity(target, position)
+        if ext == ".glb":
+            self._ops.drop_glb(path, parent_entity)
+            return True
+        if ext == ".fbx":
+            self._ops.drop_fbx(path, parent_entity)
+            return True
+        if ext in (".prefab", ".tc_prefab"):
+            self._ops.drop_prefab(path, parent_entity)
+            return True
+        return False
+
+    def _drop_parent_entity(self, target: TreeNode | None, position: str) -> Entity | None:
+        if target is None or position == "root":
+            return None
+        if position == "inside":
+            return target.data if isinstance(target.data, Entity) else None
+        if isinstance(target.data, Entity):
+            parent_t = target.data.transform.parent if target.data.transform else None
+            return parent_t.entity if parent_t else None
+        return None

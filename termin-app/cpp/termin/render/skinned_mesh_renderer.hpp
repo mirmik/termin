@@ -97,5 +97,6 @@ public:
 };
 
 REGISTER_COMPONENT(SkinnedMeshRenderer, MeshRenderer);
+REQUIRE_COMPONENT(SkinnedMeshRenderer, MeshComponent);
 
 } // namespace termin

@@ -14,6 +14,7 @@
 #include <termin/render/render_context.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
+#include <components/mesh_component.hpp>
 
 namespace termin {
 
@@ -24,6 +25,8 @@ inline tc_value make_mesh_renderer_inspector_metadata();
 
 class ENTITY_API MeshRenderer : public Component, public Drawable {
 public:
+    // Legacy storage kept only for migration from old scenes where MeshRenderer
+    // owned mesh data directly. New scenes store geometry in MeshComponent.
     TcMesh mesh;
     TcMaterial material;
     bool cast_shadow = true;
@@ -44,16 +47,22 @@ public:
     INSPECT_FIELD(MeshRenderer, mesh_offset_scale,    "Offset Scale", "vec3")
 
 private:
+    MeshComponent* _mesh_component = nullptr;
+
+    void bind_mesh_component();
+    void migrate_legacy_mesh_to_component();
+    tc_mesh* current_mesh_ptr() const;
     void ensure_override_material_ready();
     void recreate_overridden_material();
     void apply_pending_override_data();
 
 public:
-    MeshRenderer();
+    explicit MeshRenderer(const char* type_name = "MeshRenderer");
     virtual ~MeshRenderer();
 
-    TcMesh& get_mesh() { return mesh; }
-    const TcMesh& get_mesh() const { return mesh; }
+    TcMesh& get_mesh();
+    const TcMesh& get_mesh() const;
+    MeshComponent* mesh_component() const { return _mesh_component; }
     void set_mesh(const TcMesh& m);
     void set_mesh_by_name(const std::string& name);
 
@@ -71,11 +80,18 @@ public:
 
     std::set<std::string> get_phase_marks() const override;
     std::set<std::string> phase_marks() const { return get_phase_marks(); }
+    void on_added() override;
+    void start() override;
+    void on_editor_start() override;
+    void on_scene_active() override;
+    void on_render_attach() override;
+    tc_value serialize_data() const override;
+    void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
     tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override {
         (void)phase_mark;
         (void)geometry_id;
-        return mesh.get();
+        return current_mesh_ptr();
     }
     Mat44f get_model_matrix(const Entity& entity) const override;
     std::vector<tc_material_phase*> get_phases_for_mark(const std::string& phase_mark);
@@ -185,5 +201,6 @@ inline tc_value make_mesh_renderer_inspector_metadata() {
 INSPECT_TYPE_METADATA(MeshRenderer, inspector, make_mesh_renderer_inspector_metadata())
 
 REGISTER_COMPONENT(MeshRenderer, Component);
+REQUIRE_COMPONENT(MeshRenderer, MeshComponent);
 
 } // namespace termin

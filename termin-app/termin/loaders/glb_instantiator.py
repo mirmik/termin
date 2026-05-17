@@ -430,15 +430,17 @@ def instantiate_glb(
 
     rm = ResourceManager.instance()
 
-    # Get materials (as assets for proper serialization)
-    # Use StandartMaterial for all meshes
-    default_material_asset = rm.get_material_asset("StandartMaterial")
-    skinned_material_asset = rm.get_material_asset("StandartMaterial")
+    # Get materials (as assets for proper serialization).
+    # GLB material restoration is still incomplete; use the current builtin PBR
+    # material for all imported primitives until GLB materials are mapped properly.
+    default_material_asset = rm.get_material_asset("NormalizedPBR")
+    skinned_material_asset = rm.get_material_asset("NormalizedPBR")
 
     if default_material_asset is None or skinned_material_asset is None:
         raise RuntimeError(
             f"[glb_instantiator] Builtin materials not registered: "
-            f"DefaultMaterial={default_material_asset is not None}, StandartMaterial={skinned_material_asset is not None}"
+            f"NormalizedPBR(default)={default_material_asset is not None}, "
+            f"NormalizedPBR(skinned)={skinned_material_asset is not None}"
         )
 
     meshes: Dict[int, TcMesh] = {}

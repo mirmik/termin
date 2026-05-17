@@ -63,9 +63,9 @@ void MeshComponent::register_type() {
     }
 }
 
-MeshComponent::MeshComponent() {
-    link_type_entry("MeshComponent");
-}
+MeshComponent::MeshComponent()
+    : CxxComponent("MeshComponent")
+{}
 
 void MeshComponent::set_mesh(const TcMesh& value) {
     mesh = value;

@@ -5,8 +5,9 @@
 
 namespace termin {
 
-UnknownComponent::UnknownComponent() {
-    link_type_entry("UnknownComponent");
+UnknownComponent::UnknownComponent()
+    : CxxComponent("UnknownComponent")
+{
     set_enabled(false);
 }
 

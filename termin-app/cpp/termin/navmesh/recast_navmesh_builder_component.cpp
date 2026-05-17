@@ -124,8 +124,9 @@ protected:
     }
 };
 
-RecastNavMeshBuilderComponent::RecastNavMeshBuilderComponent() {
-    // type_entry is set by registry when component is created via factory
+RecastNavMeshBuilderComponent::RecastNavMeshBuilderComponent()
+    : CxxComponent("RecastNavMeshBuilderComponent")
+{
     install_drawable_vtable(&_c);
 }
 

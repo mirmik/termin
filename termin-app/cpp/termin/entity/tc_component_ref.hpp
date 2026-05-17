@@ -56,18 +56,21 @@ public:
     nos::trent serialize_data_trent() const {
         if (!_c) return nos::trent();
 
-        void* obj_ptr = nullptr;
         if (_c->kind == TC_CXX_COMPONENT) {
-            obj_ptr = CxxComponent::from_tc(_c);
+            CxxComponent* cxx = CxxComponent::from_tc(_c);
+            if (!cxx) return nos::trent();
+            tc_value v = cxx->serialize_data();
+            nos::trent result = tc::tc_value_to_trent(v);
+            tc_value_free(&v);
+            return result;
         } else {
-            obj_ptr = _c->body;
+            void* obj_ptr = _c->body;
+            if (!obj_ptr) return nos::trent();
+            tc_value v = tc_inspect_serialize(obj_ptr, tc_component_type_name(_c));
+            nos::trent result = tc::tc_value_to_trent(v);
+            tc_value_free(&v);
+            return result;
         }
-        if (!obj_ptr) return nos::trent();
-
-        tc_value v = tc_inspect_serialize(obj_ptr, tc_component_type_name(_c));
-        nos::trent result = tc::tc_value_to_trent(v);
-        tc_value_free(&v);
-        return result;
     }
 
     // Full serialize to trent (type + data)
@@ -107,18 +110,21 @@ public:
     void deserialize_data_trent(const nos::trent& data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
         if (!_c || data.is_nil()) return;
 
-        void* obj_ptr = nullptr;
         if (_c->kind == TC_CXX_COMPONENT) {
-            obj_ptr = CxxComponent::from_tc(_c);
+            CxxComponent* cxx = CxxComponent::from_tc(_c);
+            if (!cxx) return;
+            tc_value v = tc::trent_to_tc_value(data);
+            cxx->deserialize_data(&v, scene);
+            tc_value_free(&v);
+            return;
         } else {
-            obj_ptr = _c->body;
+            void* obj_ptr = _c->body;
+            if (!obj_ptr) return;
+            tc_value v = tc::trent_to_tc_value(data);
+            tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
+            tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, &inspect_ctx);
+            tc_value_free(&v);
         }
-        if (!obj_ptr) return;
-
-        tc_value v = tc::trent_to_tc_value(data);
-        tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
-        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, &inspect_ctx);
-        tc_value_free(&v);
     }
 
     // Comparison

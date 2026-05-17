@@ -11,6 +11,7 @@ import subprocess
 import platform
 
 from tcbase import log
+from tcgui.widgets.events import DragPayload
 from tcgui.widgets.icon_theme import FileIconProvider
 from tcgui.widgets.menu import Menu, MenuItem
 
@@ -99,6 +100,8 @@ class ProjectBrowserTcgui:
         self._file_list.on_select = self._on_file_selected
         self._file_list.on_activate = self._on_file_activated
         self._file_list.on_context_menu = self._on_file_context_menu
+        self._file_list.drag_enabled = True
+        self._file_list.drag_payload_factory = self._make_file_drag_payload
 
     @property
     def root_path(self) -> Path | None:
@@ -297,6 +300,19 @@ class ProjectBrowserTcgui:
             return
         if self.on_file_selected is not None:
             self.on_file_selected(str(path))
+
+    def _make_file_drag_payload(self, index: int, item: dict) -> DragPayload | None:
+        path: Path | None = item.get("data")
+        if path is None or not path.is_file():
+            return None
+        return DragPayload(
+            "project_file",
+            {
+                "path": str(path),
+                "extension": path.suffix.lower(),
+                "name": path.name,
+            },
+        )
 
     def _on_file_activated(self, index: int, item: dict) -> None:
         path: Path | None = item.get("data")

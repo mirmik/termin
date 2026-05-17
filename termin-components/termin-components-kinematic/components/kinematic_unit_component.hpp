@@ -63,6 +63,9 @@ public:
     virtual void capture_base();
 
 protected:
+    explicit KinematicUnitComponent(const char* type_name)
+        : CxxComponent(type_name) {}
+
     // Get normalized axis with fallback for zero-length
     Vec3 normalized_axis(Vec3 fallback) const;
 

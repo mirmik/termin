@@ -8,6 +8,7 @@ button IDs and modifier keys.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from tcbase import Key, MouseButton, Mods
 
@@ -78,3 +79,20 @@ class KeyEvent:
 class TextEvent:
     """Text input event (character/string entered)."""
     text: str
+
+
+@dataclass(frozen=True, slots=True)
+class DragPayload:
+    """Typed drag payload passed between source and drop target widgets."""
+    kind: str
+    data: Any
+
+
+@dataclass(frozen=True, slots=True)
+class DragEvent:
+    """Drag/drop event with current cursor position and source payload."""
+    x: float
+    y: float
+    payload: DragPayload
+    source: object | None = None
+    mods: int = 0

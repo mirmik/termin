@@ -67,18 +67,21 @@ public:
     nb::object serialize_data() const {
         if (!_c) return nb::none();
 
-        void* obj_ptr = nullptr;
         if (_c->kind == TC_CXX_COMPONENT) {
-            obj_ptr = CxxComponent::from_tc(_c);
+            CxxComponent* cxx = CxxComponent::from_tc(_c);
+            if (!cxx) return nb::none();
+            tc_value v = cxx->serialize_data();
+            nb::object result = tc_value_to_py(&v);
+            tc_value_free(&v);
+            return result;
         } else {
-            obj_ptr = _c->body;
+            void* obj_ptr = _c->body;
+            if (!obj_ptr) return nb::none();
+            tc_value v = tc_inspect_serialize(obj_ptr, tc_component_type_name(_c));
+            nb::object result = tc_value_to_py(&v);
+            tc_value_free(&v);
+            return result;
         }
-        if (!obj_ptr) return nb::none();
-
-        tc_value v = tc_inspect_serialize(obj_ptr, tc_component_type_name(_c));
-        nb::object result = tc_value_to_py(&v);
-        tc_value_free(&v);
-        return result;
     }
 
     // Full serialize (type + data)
@@ -136,21 +139,27 @@ public:
             return;
         }
 
-        void* obj_ptr = nullptr;
         if (_c->kind == TC_CXX_COMPONENT) {
-            obj_ptr = CxxComponent::from_tc(_c);
-        } else {
-            obj_ptr = _c->body;
-        }
-        if (!obj_ptr) {
-            tc::Log::warn("[Inspect] deserialize_data: null object pointer for %s", tc_component_type_name(_c));
+            CxxComponent* cxx = CxxComponent::from_tc(_c);
+            if (!cxx) {
+                tc::Log::warn("[Inspect] deserialize_data: null C++ object for %s", tc_component_type_name(_c));
+                return;
+            }
+            tc_value v = py_to_tc_value(data);
+            cxx->deserialize_data(&v, scene_handle);
+            tc_value_free(&v);
             return;
+        } else {
+            void* obj_ptr = _c->body;
+            if (!obj_ptr) {
+                tc::Log::warn("[Inspect] deserialize_data: null object pointer for %s", tc_component_type_name(_c));
+                return;
+            }
+            tc_value v = py_to_tc_value(data);
+            tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene_handle);
+            tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, &inspect_ctx);
+            tc_value_free(&v);
         }
-
-        tc_value v = py_to_tc_value(data);
-        tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene_handle);
-        tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, &inspect_ctx);
-        tc_value_free(&v);
     }
 
     // Get field value by name

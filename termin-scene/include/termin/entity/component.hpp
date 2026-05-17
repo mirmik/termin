@@ -88,11 +88,6 @@ public:
         return _c.type_entry ? _c.type_entry->type_name : nullptr;
     }
 
-protected:
-    void declare_type_name(const char* type_name);
-    // Link component to type registry entry by name.
-    void link_type_entry(const char* type_name);
-
 public:
     // Accessors for tc_component flags
     bool enabled() const { return _c.enabled; }
@@ -167,7 +162,7 @@ public:
     }
 
 public:
-    CxxComponent();
+    explicit CxxComponent(const char* type_name);
 
 private:
     // Static callbacks that dispatch to C++ virtual methods

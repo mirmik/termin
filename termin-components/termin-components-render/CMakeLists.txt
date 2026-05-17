@@ -13,6 +13,7 @@ find_package(termin_inspect REQUIRED)
 find_package(termin_scene REQUIRED)
 find_package(termin_render REQUIRED)
 find_package(termin_display REQUIRED)
+find_package(termin_components_mesh REQUIRED)
 
 include(${CMAKE_CURRENT_LIST_DIR}/../cmake/TerminModule.cmake)
 
@@ -35,6 +36,7 @@ termin_add_module(
         termin_scene::termin_scene
         termin_render::termin_render
         termin_display::termin_display
+        termin_components_mesh::termin_components_mesh
     FIND_DEPS
         termin_base
         termin_mesh
@@ -43,6 +45,7 @@ termin_add_module(
         termin_scene
         termin_render
         termin_display
+        termin_components_mesh
     INSTALL_HEADERS
         termin
 )

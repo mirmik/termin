@@ -4,11 +4,13 @@
 #include <cstring>
 
 #include <tcbase/tc_log.hpp>
+#include <tc_inspect_cpp.hpp>
 
 namespace termin {
 
-MeshRenderer::MeshRenderer() {
-    link_type_entry("MeshRenderer");
+MeshRenderer::MeshRenderer(const char* type_name)
+    : Component(type_name)
+{
     install_drawable_vtable(&_c);
 }
 
@@ -16,17 +18,83 @@ MeshRenderer::~MeshRenderer() {
     tc_value_free(&_pending_override_data);
 }
 
+TcMesh& MeshRenderer::get_mesh() {
+    bind_mesh_component();
+    return _mesh_component ? _mesh_component->mesh : mesh;
+}
+
+const TcMesh& MeshRenderer::get_mesh() const {
+    const_cast<MeshRenderer*>(this)->bind_mesh_component();
+    return _mesh_component ? _mesh_component->mesh : mesh;
+}
+
 void MeshRenderer::set_mesh(const TcMesh& m) {
-    mesh = m;
+    bind_mesh_component();
+    if (_mesh_component) {
+        _mesh_component->set_mesh(m);
+    } else {
+        mesh = m;
+    }
 }
 
 void MeshRenderer::set_mesh_by_name(const std::string& name) {
     tc_mesh_handle h = tc_mesh_find_by_name(name.c_str());
     if (!tc_mesh_handle_is_invalid(h)) {
-        mesh = TcMesh(h);
+        set_mesh(TcMesh(h));
     } else {
-        mesh = TcMesh();
+        set_mesh(TcMesh());
     }
+}
+
+void MeshRenderer::bind_mesh_component() {
+    if (_mesh_component) {
+        return;
+    }
+    Entity owner = entity();
+    if (!owner.valid()) {
+        return;
+    }
+    _mesh_component = owner.get_component<MeshComponent>();
+}
+
+void MeshRenderer::migrate_legacy_mesh_to_component() {
+    bind_mesh_component();
+    if (!_mesh_component) {
+        return;
+    }
+
+    bool migrated = false;
+    if (mesh.is_valid() && !_mesh_component->mesh.is_valid()) {
+        _mesh_component->mesh = mesh;
+        mesh = TcMesh();
+        migrated = true;
+    }
+
+    if (mesh_offset_enabled && !_mesh_component->mesh_offset_enabled) {
+        _mesh_component->mesh_offset_enabled = mesh_offset_enabled;
+        _mesh_component->mesh_offset_position = mesh_offset_position;
+        _mesh_component->mesh_offset_euler = mesh_offset_euler;
+        _mesh_component->mesh_offset_scale = mesh_offset_scale;
+        mesh_offset_enabled = false;
+        mesh_offset_position = {0, 0, 0};
+        mesh_offset_euler = {0, 0, 0};
+        mesh_offset_scale = {1.0, 1.0, 1.0};
+        migrated = true;
+    }
+
+    if (migrated) {
+        const char* owner_name = entity().valid() ? entity().name() : "<invalid>";
+        tc::Log::info("[MeshRenderer] migrated legacy mesh data to MeshComponent on '%s'",
+                      owner_name ? owner_name : "<unnamed>");
+    }
+}
+
+tc_mesh* MeshRenderer::current_mesh_ptr() const {
+    const_cast<MeshRenderer*>(this)->bind_mesh_component();
+    if (_mesh_component) {
+        return _mesh_component->mesh.get();
+    }
+    return mesh.get();
 }
 
 TcMaterial MeshRenderer::get_material() const {
@@ -276,24 +344,29 @@ std::set<std::string> MeshRenderer::get_phase_marks() const {
 Mat44f MeshRenderer::get_model_matrix(const Entity& entity) const {
     Mat44f model = Drawable::get_model_matrix(entity);
 
-    if (!mesh_offset_enabled) return model;
+    const_cast<MeshRenderer*>(this)->bind_mesh_component();
+    if (_mesh_component) {
+        return model * _mesh_component->get_mesh_offset_matrix();
+    }
 
+    if (!mesh_offset_enabled) {
+        return model;
+    }
     constexpr double deg2rad = 3.14159265358979323846 / 180.0;
-    Quat rx = Quat::from_axis_angle(Vec3(1,0,0), mesh_offset_euler.x * deg2rad);
-    Quat ry = Quat::from_axis_angle(Vec3(0,1,0), mesh_offset_euler.y * deg2rad);
-    Quat rz = Quat::from_axis_angle(Vec3(0,0,1), mesh_offset_euler.z * deg2rad);
-    Quat rotation = rz * ry * rx;
-
-    Vec3 pos(mesh_offset_position.x, mesh_offset_position.y, mesh_offset_position.z);
-    Vec3 scl(mesh_offset_scale.x, mesh_offset_scale.y, mesh_offset_scale.z);
-    Mat44f offset = Mat44f::compose(pos, rotation, scl);
+    Quat rx = Quat::from_axis_angle(Vec3(1, 0, 0), mesh_offset_euler.x * deg2rad);
+    Quat ry = Quat::from_axis_angle(Vec3(0, 1, 0), mesh_offset_euler.y * deg2rad);
+    Quat rz = Quat::from_axis_angle(Vec3(0, 0, 1), mesh_offset_euler.z * deg2rad);
+    Mat44f offset = Mat44f::compose(
+        Vec3(mesh_offset_position.x, mesh_offset_position.y, mesh_offset_position.z),
+        rz * ry * rx,
+        Vec3(mesh_offset_scale.x, mesh_offset_scale.y, mesh_offset_scale.z));
     return model * offset;
 }
 
 void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
     (void)context;
     (void)geometry_id;
-    tc_mesh* m = mesh.get();
+    tc_mesh* m = current_mesh_ptr();
     if (!m) {
         return;
     }
@@ -316,7 +389,7 @@ std::vector<tc_material_phase*> MeshRenderer::get_phases_for_mark(const std::str
 
 std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string* phase_mark) {
     std::vector<GeometryDrawCall> draws;
-    tc_mesh* m = mesh.get();
+    tc_mesh* m = current_mesh_ptr();
     if (!m) return draws;
 
     tc_material* mat = get_material_ptr();
@@ -335,6 +408,67 @@ std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string
         draws.emplace_back(phase, 0);
     }
     return draws;
+}
+
+void MeshRenderer::on_added() {
+    Component::on_added();
+    bind_mesh_component();
+    migrate_legacy_mesh_to_component();
+}
+
+void MeshRenderer::start() {
+    Component::start();
+    bind_mesh_component();
+    migrate_legacy_mesh_to_component();
+}
+
+void MeshRenderer::on_editor_start() {
+    bind_mesh_component();
+    migrate_legacy_mesh_to_component();
+}
+
+void MeshRenderer::on_scene_active() {
+    bind_mesh_component();
+    migrate_legacy_mesh_to_component();
+}
+
+void MeshRenderer::on_render_attach() {
+    bind_mesh_component();
+    migrate_legacy_mesh_to_component();
+}
+
+tc_value MeshRenderer::serialize_data() const {
+    tc_value raw = Component::serialize_data();
+    tc_value result = tc_value_dict_new();
+    if (raw.type != TC_VALUE_DICT) {
+        tc_value_free(&raw);
+        return result;
+    }
+
+    for (size_t i = 0; i < tc_value_dict_size(&raw); ++i) {
+        const char* key = nullptr;
+        tc_value* value = tc_value_dict_get_at(&raw, i, &key);
+        if (!key || !value) {
+            continue;
+        }
+        if (std::strcmp(key, "mesh") == 0 ||
+            std::strcmp(key, "mesh_offset_enabled") == 0 ||
+            std::strcmp(key, "mesh_offset_position") == 0 ||
+            std::strcmp(key, "mesh_offset_euler") == 0 ||
+            std::strcmp(key, "mesh_offset_scale") == 0) {
+            continue;
+        }
+        tc_value_dict_set(&result, key, tc_value_copy(value));
+    }
+
+    tc_value_free(&raw);
+    return result;
+}
+
+void MeshRenderer::deserialize_data(const tc_value* data, tc_scene_handle scene) {
+    Component::deserialize_data(data, scene);
+    bind_mesh_component();
+    migrate_legacy_mesh_to_component();
 }
 
 tc_value MeshRenderer::get_override_data() const {

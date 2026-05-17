@@ -30,6 +30,7 @@ from termin.editor_core.editor_commands import (
 )
 from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.dialog_service import DialogService
+from termin.geombase import GeneralPose3, Vec3
 from termin.kinematic.transform import Transform3
 from termin.visualization.core.entity import Entity
 
@@ -249,7 +250,12 @@ class EntityOperations:
         self._view.add_entity_hierarchy(entity)
         self._notify_viewport()
 
-    def drop_glb(self, glb_path: str, parent: Entity | None) -> None:
+    def drop_glb(
+        self,
+        glb_path: str,
+        parent: Entity | None,
+        world_position: tuple[float, float, float] | None = None,
+    ) -> None:
         from termin.loaders.glb_instantiator import instantiate_glb
         from termin.assets.resources import ResourceManager
 
@@ -270,6 +276,13 @@ class EntityOperations:
             return
 
         entity = result.entity
+        if world_position is not None and parent is None:
+            pose = entity.transform.local_pose()
+            entity.transform.relocate(GeneralPose3(
+                ang=pose.ang.copy(),
+                lin=Vec3(float(world_position[0]), float(world_position[1]), float(world_position[2])),
+                scale=pose.scale.copy(),
+            ))
         parent_transform = parent.transform if parent else None
         cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
         self._undo_handler(cmd, False)

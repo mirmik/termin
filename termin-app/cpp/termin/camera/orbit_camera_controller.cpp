@@ -20,12 +20,12 @@ OrbitCameraController::OrbitCameraController(
     double max_radius,
     bool prevent_moving
 )
-    : radius(radius)
+    : CxxComponent("OrbitCameraController")
+    , radius(radius)
     , min_radius(min_radius)
     , max_radius(max_radius)
     , _prevent_moving(prevent_moving)
 {
-    link_type_entry("OrbitCameraController");
     set_has_update(true);
     set_active_in_editor(true);
 

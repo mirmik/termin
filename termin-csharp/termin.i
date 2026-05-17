@@ -551,6 +551,7 @@ namespace termin {
 %ignore termin::MeshRenderer::get_model_matrix;
 
 // KinematicUnitComponent - base fields hidden from SWIG (accessed via inspect system)
+%nodefaultctor termin::KinematicUnitComponent;
 %ignore termin::KinematicUnitComponent::base_position;
 %ignore termin::KinematicUnitComponent::base_rotation;
 %ignore termin::KinematicUnitComponent::base_scale;
