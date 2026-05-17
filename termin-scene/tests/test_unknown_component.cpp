@@ -168,16 +168,21 @@ int test_degrade_upgrade_roundtrip() {
 
     auto* component = new ReloadableComponent();
     TEST_ASSERT(component != nullptr, "reloadable component created manually");
-    TEST_ASSERT(component->type_name() == nullptr, "type entry is not linked before add");
+    TEST_ASSERT(component->type_name() != nullptr, "manual component has declared type entry");
+    size_t before_count = tc_component_registry_instance_count("ReloadableComponent");
     component->value = 123;
     entity.add_component(component);
     TEST_ASSERT(component->type_name() != nullptr, "type entry linked on add");
+    TEST_ASSERT(tc_component_registry_instance_count("ReloadableComponent") == before_count + 1,
+                "manual component instance is linked on add");
 
     termin::UnknownComponentStats degraded =
         termin::degrade_components_to_unknown(scene, {"ReloadableComponent"});
 
     TEST_ASSERT(degraded.degraded == 1, "one component degraded");
     TEST_ASSERT(entity.get_component_by_type_name("ReloadableComponent") == nullptr, "original component removed");
+    TEST_ASSERT(tc_component_registry_instance_count("ReloadableComponent") == before_count,
+                "original component instance is unlinked after degrade");
 
     tc_component* unknown_tc = entity.get_component_by_type_name("UnknownComponent");
     TEST_ASSERT(unknown_tc != nullptr, "unknown component created");

@@ -369,9 +369,12 @@ void tc_component_set_declared_type_name(tc_component* c, const char* type_name)
 }
 
 void tc_component_try_link_declared_type(tc_component* c) {
-    if (!c || c->type_entry || !c->declared_type_name || !g_component_registry) return;
+    if (!c || !c->declared_type_name || !g_component_registry) return;
+    if (tc_dlist_is_linked(&c->registry_node)) return;
 
-    tc_type_entry* entry = tc_type_registry_get(g_component_registry, c->declared_type_name);
+    tc_type_entry* entry = c->type_entry
+        ? c->type_entry
+        : tc_type_registry_get(g_component_registry, c->declared_type_name);
     if (!entry || !entry->registered) return;
 
     c->type_entry = entry;
