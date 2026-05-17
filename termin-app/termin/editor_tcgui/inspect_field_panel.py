@@ -37,7 +37,11 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
 
                 def make_setter(path):
                     def setter(o, v):
-                        o.set_field(path, v)
+                        entity = o.entity
+                        if entity is not None and entity.valid():
+                            o.set_field(path, v, entity.scene)
+                        else:
+                            o.set_field(path, v)
                     return setter
 
                 def make_action(path):
@@ -247,6 +251,7 @@ class InspectFieldPanel(VStack):
 
         if widget.full_row():
             self._grid.add(widget, row_index, 0, 1, 2)
+            widget.load_from_target()
         elif metadata.get("widget") in ("inline_material", "material_inline"):
             self._grid.add(widget, row_index, 0, 1, 2)
             widget.load_from_target()

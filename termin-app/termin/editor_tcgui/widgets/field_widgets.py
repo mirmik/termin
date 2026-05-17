@@ -22,6 +22,7 @@ from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.slider import Slider
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.combo_box import ComboBox
+from tcgui.widgets.list_widget import ListWidget
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.units import px
 
@@ -809,6 +810,173 @@ class HandleSelectorWidget(FieldWidget):
         self._combo.on_changed = old
 
 
+class SerializedListFieldWidget(FieldWidget):
+    """Scrollable inspector widget for serialized list fields."""
+
+    def __init__(self, element_kind: str = "") -> None:
+        super().__init__()
+        self._element_kind = element_kind
+        self._value: list[Any] = []
+        self._label_prefix = "Items"
+
+        self._count_label = Label()
+        self._count_label.text = "0 items"
+        self._list = ListWidget()
+        self._list.item_height = 34
+        self._list.empty_text = "Empty"
+        self._list.preferred_height = px(112)
+
+        self.add_child(self._count_label)
+        self.add_child(self._list)
+
+    def bind_field(self, key: str, field: "InspectField", target: Any) -> None:
+        super().bind_field(key, field, target)
+        self._label_prefix = field.label or key
+
+    def full_row(self) -> bool:
+        return True
+
+    def get_value(self) -> list[Any]:
+        return list(self._value)
+
+    def set_value(self, value: Any) -> None:
+        if value is None:
+            self._value = []
+        elif isinstance(value, list):
+            self._value = list(value)
+        else:
+            self._value = [value]
+        self._rebuild()
+
+    def _item_title(self, index: int, item: Any) -> str:
+        if isinstance(item, dict):
+            name = item.get("name")
+            uuid = item.get("uuid")
+            if name:
+                return f"{index}: {name}"
+            if uuid:
+                return f"{index}: {uuid}"
+        return f"{index}: {item}"
+
+    def _item_subtitle(self, item: Any) -> str:
+        if isinstance(item, dict):
+            uuid = item.get("uuid")
+            item_type = item.get("type")
+            if uuid and item_type:
+                return f"{item_type}  {uuid}"
+            if uuid:
+                return str(uuid)
+        return self._element_kind
+
+    def _rebuild(self) -> None:
+        count = len(self._value)
+        label = "item" if count == 1 else "items"
+        self._count_label.text = f"{self._label_prefix}: {count} {label}"
+        items = []
+        for i, item in enumerate(self._value):
+            items.append({
+                "text": self._item_title(i, item),
+                "subtitle": self._item_subtitle(item),
+                "data": item,
+            })
+        self._list.set_items(items)
+
+    def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
+        list_h = min(156.0, max(42.0, len(self._value) * 36.0 + 4.0))
+        return (320.0, 22.0 + list_h)
+
+    def layout(self, x: float, y: float, width: float, height: float,
+               viewport_w: float, viewport_h: float) -> None:
+        Widget.layout(self, x, y, width, height, viewport_w, viewport_h)
+        self._count_label.layout(x, y, width, 20.0, viewport_w, viewport_h)
+        self._list.layout(x, y + 22.0, width, max(24.0, height - 22.0), viewport_w, viewport_h)
+
+
+class EntityListFieldWidget(SerializedListFieldWidget):
+    """Unity-like list widget for fields storing Entity UUID references."""
+
+    def __init__(self, scene_getter: Callable[[], Any] | None = None) -> None:
+        super().__init__("entity")
+        self._scene_getter = scene_getter
+        self._up_btn = Button()
+        self._up_btn.text = "Up"
+        self._up_btn.on_click = self._move_up
+        self._down_btn = Button()
+        self._down_btn.text = "Down"
+        self._down_btn.on_click = self._move_down
+        self._remove_btn = Button()
+        self._remove_btn.text = "Remove"
+        self._remove_btn.on_click = self._remove_selected
+        self.add_child(self._up_btn)
+        self.add_child(self._down_btn)
+        self.add_child(self._remove_btn)
+
+    def _entity_label(self, uuid: str) -> str:
+        scene = self._scene_getter() if self._scene_getter is not None else None
+        if scene is not None:
+            entity = scene.get_entity(uuid)
+            if entity is not None and entity.valid():
+                return str(entity.name)
+        return uuid
+
+    def _item_title(self, index: int, item: Any) -> str:
+        if isinstance(item, dict):
+            uuid = item.get("uuid")
+            if uuid:
+                return f"{index}: {self._entity_label(str(uuid))}"
+        return super()._item_title(index, item)
+
+    def _item_subtitle(self, item: Any) -> str:
+        if isinstance(item, dict):
+            uuid = item.get("uuid")
+            if uuid:
+                return str(uuid)
+        return ""
+
+    def _move_up(self) -> None:
+        idx = self._list.selected_index
+        if idx <= 0 or idx >= len(self._value):
+            return
+        self._value[idx - 1], self._value[idx] = self._value[idx], self._value[idx - 1]
+        self._list.selected_index = idx - 1
+        self._rebuild()
+        self._emit()
+
+    def _move_down(self) -> None:
+        idx = self._list.selected_index
+        if idx < 0 or idx >= len(self._value) - 1:
+            return
+        self._value[idx + 1], self._value[idx] = self._value[idx], self._value[idx + 1]
+        self._list.selected_index = idx + 1
+        self._rebuild()
+        self._emit()
+
+    def _remove_selected(self) -> None:
+        idx = self._list.selected_index
+        if idx < 0 or idx >= len(self._value):
+            return
+        del self._value[idx]
+        self._list.selected_index = min(idx, len(self._value) - 1)
+        self._rebuild()
+        self._emit()
+
+    def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
+        list_h = min(156.0, max(42.0, len(self._value) * 36.0 + 4.0))
+        return (320.0, 50.0 + list_h)
+
+    def layout(self, x: float, y: float, width: float, height: float,
+               viewport_w: float, viewport_h: float) -> None:
+        Widget.layout(self, x, y, width, height, viewport_w, viewport_h)
+        self._count_label.layout(x, y, width, 20.0, viewport_w, viewport_h)
+        list_h = max(24.0, height - 50.0)
+        self._list.layout(x, y + 22.0, width, list_h, viewport_w, viewport_h)
+        btn_y = y + 24.0 + list_h
+        btn_w = min(72.0, max(48.0, (width - 8.0) / 3.0))
+        self._up_btn.layout(x, btn_y, btn_w, 24.0, viewport_w, viewport_h)
+        self._down_btn.layout(x + btn_w + 4.0, btn_y, btn_w, 24.0, viewport_w, viewport_h)
+        self._remove_btn.layout(x + (btn_w + 4.0) * 2.0, btn_y, btn_w, 24.0, viewport_w, viewport_h)
+
+
 # ------------------------------------------------------------------
 # FieldWidgetFactory
 # ------------------------------------------------------------------
@@ -890,6 +1058,12 @@ class FieldWidgetFactory:
 
         if kind == "navmesh_area":
             return NavMeshAreaFieldWidget()
+
+        if kind in ("entity_list", "list[entity]"):
+            return EntityListFieldWidget(self._scene_getter)
+
+        if kind.startswith("list[") and kind.endswith("]"):
+            return SerializedListFieldWidget(kind[5:-1])
 
         if kind in (
             "tc_material", "mesh_handle", "tc_mesh",
