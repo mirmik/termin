@@ -8,4 +8,4 @@ Run from a termin test venv:
 from termin.csg.cad import box, draw, sphere, translate
 
 
-draw(box(4, 4, 2, center=True) + translate(box(2, 2, 2, center=True), 0, 0, 2))
+draw(box(4, 4, 2, center=True) - translate(box(2, 2, 2, center=True), 0, 0, 1))
