@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Callable
 
 from tcgui.widgets.units import Value, px
-from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
+from tcgui.widgets.events import DragEvent, DragPayload, MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
 
 
 class Widget:
@@ -182,6 +182,31 @@ class Widget:
     def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
         """Handle mouse wheel. event.dy > 0 = scroll up. Return True if handled."""
         return False
+
+    # Drag/drop events (override in widgets that source or accept payloads)
+    def make_drag_payload(self, event: MouseEvent) -> DragPayload | None:
+        """Return payload to start a UI-level drag, or None to keep local handling."""
+        return None
+
+    def on_drag_enter(self, event: DragEvent) -> bool:
+        """Return True if this widget can accept the drag payload."""
+        return False
+
+    def on_drag_move(self, event: DragEvent) -> bool:
+        """Return True if this widget wants continued drag hover updates."""
+        return self.on_drag_enter(event)
+
+    def on_drag_leave(self, event: DragEvent):
+        """Called when drag hover leaves this widget."""
+        pass
+
+    def on_drag_drop(self, event: DragEvent) -> bool:
+        """Handle a completed drop. Return True if consumed."""
+        return False
+
+    def on_drag_end(self, event: DragEvent, accepted: bool):
+        """Called on drag source when the drag finishes."""
+        pass
 
     # Focus events (override in focusable widgets)
     def on_focus(self):

@@ -37,9 +37,9 @@ static struct _ColliderTypeFieldRegistrar {
     }
 } _collider_type_registrar;
 
-ColliderComponent::ColliderComponent() {
-    link_type_entry("ColliderComponent");
-}
+ColliderComponent::ColliderComponent()
+    : CxxComponent("ColliderComponent")
+{}
 
 ColliderComponent::~ColliderComponent() {
     _remove_from_collision_world();

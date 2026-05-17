@@ -294,11 +294,11 @@ NB_MODULE(_components_render_native, m) {
 
             if (!mesh_arg.is_none()) {
                 if (nb::isinstance<TcMesh>(mesh_arg)) {
-                    cpp->mesh = nb::cast<TcMesh>(mesh_arg);
+                    cpp->set_mesh(nb::cast<TcMesh>(mesh_arg));
                 } else if (nb::hasattr(mesh_arg, "mesh_data")) {
                     nb::object res = mesh_arg.attr("mesh_data");
                     if (nb::isinstance<TcMesh>(res)) {
-                        cpp->mesh = nb::cast<TcMesh>(res);
+                        cpp->set_mesh(nb::cast<TcMesh>(res));
                     }
                 } else if (nb::isinstance<nb::str>(mesh_arg)) {
                     cpp->set_mesh_by_name(nb::cast<std::string>(mesh_arg));
@@ -314,8 +314,8 @@ NB_MODULE(_components_render_native, m) {
             }
         }, nb::arg("mesh") = nb::none(), nb::arg("material") = nb::none(), nb::arg("cast_shadow") = true)
         .def_prop_rw("mesh",
-            [](MeshRenderer& self) -> TcMesh& { return self.mesh; },
-            [](MeshRenderer& self, const TcMesh& v) { self.mesh = v; },
+            [](MeshRenderer& self) -> TcMesh& { return self.get_mesh(); },
+            [](MeshRenderer& self, const TcMesh& v) { self.set_mesh(v); },
             nb::rv_policy::reference_internal)
         .def_prop_rw("material",
             [](MeshRenderer& self) -> TcMaterial& { return self.material; },

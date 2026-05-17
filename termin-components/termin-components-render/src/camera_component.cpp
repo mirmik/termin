@@ -45,8 +45,9 @@ static const tc_camera_vtable g_camera_vtable = {
     .get_camera_data = camera_cap_get_data,
 };
 
-CameraComponent::CameraComponent() {
-    link_type_entry("CameraComponent");
+CameraComponent::CameraComponent()
+    : CxxComponent("CameraComponent")
+{
     tc_camera_capability_attach(&_c, &g_camera_vtable, this);
 }
 

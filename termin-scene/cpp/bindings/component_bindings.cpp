@@ -20,7 +20,7 @@ namespace termin {
 void bind_cxx_component(nb::module_& m) {
     nb::class_<CxxComponent>(m, "Component", nb::dynamic_attr())
         .def("__init__", [](nb::handle self) {
-            cxx_component_init<CxxComponent>(self);
+            cxx_component_init<CxxComponent>(self, "Component");
         })
         .def("start", &CxxComponent::start)
         .def("update", &CxxComponent::update)

@@ -48,8 +48,9 @@ static struct _CameraViewportLayerMaskRegistrar {
 // Constructor
 // ---------------------------------------------------------------------------
 
-CameraViewportComponent::CameraViewportComponent() {
-    link_type_entry("CameraViewportComponent");
+CameraViewportComponent::CameraViewportComponent()
+    : CxxComponent("CameraViewportComponent")
+{
     set_active_in_editor(true);
 }
 

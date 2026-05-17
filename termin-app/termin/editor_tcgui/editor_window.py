@@ -296,6 +296,8 @@ class EditorWindowTcgui:
 
         self._viewport_widget = Viewport3D()
         self._viewport_widget.stretch = True
+        self._viewport_widget.on_external_drag = self._on_viewport_external_drag
+        self._viewport_widget.on_external_drop = self._on_viewport_external_drop
         center_tabs.add_tab("Editor", self._viewport_widget)
 
         center_area.add_child(center_tabs)
@@ -848,6 +850,68 @@ class EditorWindowTcgui:
         if self._surface_edge_debug_tool is None:
             return False
         return self._surface_edge_debug_tool.enabled()
+
+    def _on_viewport_external_drag(self, event) -> bool:
+        if event.payload.kind != "project_file":
+            return False
+        data = event.payload.data
+        if not isinstance(data, dict):
+            return False
+        return data.get("extension") == ".glb"
+
+    def _on_viewport_external_drop(self, event) -> bool:
+        if not self._on_viewport_external_drag(event):
+            return False
+        data = event.payload.data
+        if not isinstance(data, dict):
+            return False
+        path = data.get("path")
+        if not isinstance(path, str):
+            return False
+        if self.scene_tree_controller is None:
+            log.error("[EditorWindowTcgui] GLB viewport drop failed: scene tree controller is not available")
+            return False
+        world_pos = self._world_position_for_viewport_drop(event.x, event.y)
+        self.scene_tree_controller.operations.drop_glb(path, None, world_position=world_pos)
+        return True
+
+    def _world_position_for_viewport_drop(self, x: float, y: float) -> tuple[float, float, float]:
+        fallback = self._fallback_drop_position()
+        if self._interaction_system is None or self._editor_display is None:
+            return fallback
+        if not self._editor_display.viewports:
+            return fallback
+        if self._viewport_widget is None:
+            return fallback
+
+        viewport = self._editor_display.viewports[0]
+        vp_idx, vp_gen = viewport._viewport_handle()
+        local_x = float(x - self._viewport_widget.x)
+        local_y = float(y - self._viewport_widget.y)
+        try:
+            pick = self._interaction_system.pick_surface_at(
+                local_x, local_y, vp_idx, vp_gen, self._editor_display.tc_display_ptr,
+            )
+        except Exception as e:
+            log.error(f"[EditorWindowTcgui] GLB viewport drop pick failed: {e}")
+            return fallback
+        if bool(pick["has_world_point"]):
+            point = pick["world_point"]
+            return (float(point[0]), float(point[1]), float(point[2]))
+        return fallback
+
+    def _fallback_drop_position(self) -> tuple[float, float, float]:
+        if self.camera is None or self.camera.entity is None:
+            return (0.0, 0.0, 0.0)
+        cam_pose = self.camera.entity.transform.global_pose()
+        cam_pos = cam_pose.lin
+        rot = cam_pose.rotation_matrix()
+        forward = rot[:, 1]
+        return (
+            float(cam_pos[0] + forward[0] * 5.0),
+            float(cam_pos[1] + forward[1] * 5.0),
+            float(cam_pos[2] + forward[2] * 5.0),
+        )
 
     # ------------------------------------------------------------------
     # Undo / Redo

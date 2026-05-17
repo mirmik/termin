@@ -51,8 +51,9 @@ public:
     INSPECT_FIELD(OffMeshLinkComponent, bidirectional, "Bidirectional", "bool")
     INSPECT_BUTTON(OffMeshLinkComponent, center_btn, "Center Entity", &OffMeshLinkComponent::center_entity)
 
-    OffMeshLinkComponent() {
-        link_type_entry("OffMeshLinkComponent");
+    OffMeshLinkComponent()
+        : CxxComponent("OffMeshLinkComponent")
+    {
         install_drawable_vtable(&_c);
     }
 

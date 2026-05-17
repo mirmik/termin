@@ -7,8 +7,9 @@
 
 namespace termin {
 
-NavMeshKeeperComponent::NavMeshKeeperComponent() {
-    declare_type_name("NavMeshKeeperComponent");
+NavMeshKeeperComponent::NavMeshKeeperComponent()
+    : CxxComponent("NavMeshKeeperComponent")
+{
     install_drawable_vtable(&_c);
 }
 

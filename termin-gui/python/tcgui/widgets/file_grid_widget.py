@@ -7,7 +7,7 @@ import time
 from typing import Callable
 
 from tcbase import MouseButton
-from tcgui.widgets.events import MouseEvent, MouseWheelEvent
+from tcgui.widgets.events import DragPayload, MouseEvent, MouseWheelEvent
 from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.widget import Widget
 
@@ -42,11 +42,14 @@ class FileGridWidget(Widget):
         self.on_select: Callable[[int, dict], None] | None = None
         self.on_activate: Callable[[int, dict], None] | None = None
         self.on_context_menu: Callable[[int, dict, float, float], None] | None = None
+        self.drag_enabled: bool = False
+        self.drag_payload_factory: Callable[[int, dict], DragPayload | None] | None = None
 
         self.icon_provider = None
 
         self._scroll_offset: float = 0.0
         self._hovered_index: int = -1
+        self._drag_start_index: int = -1
         self._last_click_index: int = -1
         self._last_click_time: float = 0.0
         self._DOUBLE_CLICK_INTERVAL: float = 0.4
@@ -247,6 +250,22 @@ class FileGridWidget(Widget):
         self._last_click_index = idx
         self._last_click_time = now
         self.selected_index = idx
+        self._drag_start_index = idx
         if self.on_select is not None:
             self.on_select(idx, self._items[idx])
         return True
+
+    def on_mouse_up(self, event: MouseEvent):
+        self._drag_start_index = -1
+
+    def make_drag_payload(self, event: MouseEvent) -> DragPayload | None:
+        if not self.drag_enabled:
+            return None
+        if self._drag_start_index < 0 or self._drag_start_index >= len(self._items):
+            return None
+        if self.drag_payload_factory is None:
+            return None
+        return self.drag_payload_factory(self._drag_start_index, self._items[self._drag_start_index])
+
+    def on_drag_end(self, event, accepted: bool):
+        self._drag_start_index = -1

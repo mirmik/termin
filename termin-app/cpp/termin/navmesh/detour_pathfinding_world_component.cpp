@@ -162,9 +162,9 @@ void log_detour_poly_info(dtNavMesh* navmesh, const char* prefix, int index, dtP
 
 } // namespace
 
-DetourPathfindingWorldComponent::DetourPathfindingWorldComponent() {
-    declare_type_name("DetourPathfindingWorldComponent");
-}
+DetourPathfindingWorldComponent::DetourPathfindingWorldComponent()
+    : CxxComponent("DetourPathfindingWorldComponent")
+{}
 
 DetourPathfindingWorldComponent::~DetourPathfindingWorldComponent() {
     clear();

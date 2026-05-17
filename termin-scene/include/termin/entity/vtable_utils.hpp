@@ -9,13 +9,15 @@ namespace termin {
 // Helper class that can instantiate CxxComponent (protected constructor).
 class ENTITY_API ComponentVTableProbe : public CxxComponent {
 public:
-    ComponentVTableProbe() = default;
+    ComponentVTableProbe()
+        : CxxComponent("ComponentVTableProbe") {}
 };
 
 // Probe class that overrides ONLY update() - used to find its vtable slot.
 class ENTITY_API UpdateProbe : public CxxComponent {
 public:
-    UpdateProbe() = default;
+    UpdateProbe()
+        : CxxComponent("UpdateProbe") {}
     void update(float dt) override;
 private:
     volatile float _probe_marker = 0;
@@ -24,7 +26,8 @@ private:
 // Probe class that overrides ONLY fixed_update() - used to find its vtable slot.
 class ENTITY_API FixedUpdateProbe : public CxxComponent {
 public:
-    FixedUpdateProbe() = default;
+    FixedUpdateProbe()
+        : CxxComponent("FixedUpdateProbe") {}
     void fixed_update(float dt) override;
 private:
     volatile float _probe_marker = 0;

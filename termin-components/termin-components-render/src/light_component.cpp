@@ -48,8 +48,9 @@ static const tc_light_vtable g_light_vtable = {
     .get_light_data = light_cap_get_data,
 };
 
-LightComponent::LightComponent() {
-    link_type_entry("LightComponent");
+LightComponent::LightComponent()
+    : CxxComponent("LightComponent")
+{
     tc_light_capability_attach(&_c, &g_light_vtable, this);
 }
 

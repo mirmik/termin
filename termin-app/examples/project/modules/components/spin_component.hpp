@@ -14,7 +14,8 @@ public:
 
     INSPECT_FIELD(SpinComponent, speed, "Speed", "float", -360.0, 360.0, 1.0)
 
-    SpinComponent() {}
+    SpinComponent()
+        : termin::CxxComponent("SpinComponent") {}
 
     void update(float dt) override;
 };

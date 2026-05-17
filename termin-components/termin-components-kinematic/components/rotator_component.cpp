@@ -6,8 +6,9 @@
 
 namespace termin {
 
-RotatorComponent::RotatorComponent() {
-    link_type_entry("RotatorComponent");
+RotatorComponent::RotatorComponent()
+    : KinematicUnitComponent("RotatorComponent")
+{
     axis_z = 1.0;  // Default: Z axis
 }
 

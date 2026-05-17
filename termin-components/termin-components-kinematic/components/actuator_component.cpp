@@ -23,8 +23,9 @@ void ActuatorComponent::register_type() {
         "ActuatorComponent", "KinematicUnitComponent");
 }
 
-ActuatorComponent::ActuatorComponent() {
-    link_type_entry("ActuatorComponent");
+ActuatorComponent::ActuatorComponent()
+    : KinematicUnitComponent("ActuatorComponent")
+{
     axis_x = 1.0;  // Default: X axis
 }
 

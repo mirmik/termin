@@ -10,7 +10,7 @@ from tcbase import Key, MouseButton, Mods, log
 from tgfx.font import FontTextureAtlas
 from tgfx import Tgfx2Context
 from tcgui.widgets.widget import Widget
-from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
+from tcgui.widgets.events import DragEvent, DragPayload, MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
 from tcgui.widgets.renderer import UIRenderer
 from tcgui.widgets.loader import UILoader
 from tcgui.widgets.shortcuts import ShortcutRegistry
@@ -61,6 +61,12 @@ class UI:
         self._hovered_widget: Widget | None = None
         self._pressed_widget: Widget | None = None
         self._focused_widget: Widget | None = None
+        self._press_x: float = 0.0
+        self._press_y: float = 0.0
+        self._drag_payload: DragPayload | None = None
+        self._drag_source: Widget | None = None
+        self._drag_hover_widget: Widget | None = None
+        self._drag_threshold: float = 6.0
 
         # Viewport dimensions
         self._viewport_w: int = 0
@@ -509,8 +515,24 @@ class UI:
 
         event = MouseEvent(x, y, mods=mods)
 
-        # If we're dragging, send move to pressed widget
+        # UI-level drag/drop. Widgets opt in by returning a DragPayload from
+        # make_drag_payload(); otherwise their existing local drag handling
+        # continues to receive mouse_move as before.
         if self._pressed_widget:
+            if self._drag_payload is None:
+                dx = x - self._press_x
+                dy = y - self._press_y
+                if dx * dx + dy * dy >= self._drag_threshold * self._drag_threshold:
+                    payload = self._pressed_widget.make_drag_payload(event)
+                    if payload is not None:
+                        self._drag_payload = payload
+                        self._drag_source = self._pressed_widget
+                        self._hide_tooltip()
+                        self._update_drag_hover(x, y, mods)
+                        return True
+            if self._drag_payload is not None:
+                self._update_drag_hover(x, y, mods)
+                return True
             self._pressed_widget.on_mouse_move(event)
             return True
 
@@ -622,6 +644,8 @@ class UI:
         if hit:
             if hit.on_mouse_down(event):
                 self._pressed_widget = hit
+                self._press_x = x
+                self._press_y = y
                 return True
 
         return False
@@ -630,12 +654,71 @@ class UI:
                  button: MouseButton = MouseButton.LEFT,
                  mods: int = 0) -> bool:
         """Handle mouse up event."""
+        if self._drag_payload is not None:
+            accepted = self._finish_drag(x, y, mods)
+            self._pressed_widget = None
+            return accepted
         if self._pressed_widget:
             event = MouseEvent(x, y, button, mods)
             self._pressed_widget.on_mouse_up(event)
             self._pressed_widget = None
             return True
         return False
+
+    def _drag_event(self, x: float, y: float, mods: int) -> DragEvent | None:
+        if self._drag_payload is None:
+            return None
+        return DragEvent(x=x, y=y, payload=self._drag_payload, source=self._drag_source, mods=mods)
+
+    def _hit_widget_for_drag(self, x: float, y: float) -> Widget | None:
+        for entry in reversed(self._overlays):
+            if entry.widget is self._tooltip_widget:
+                continue
+            hit = entry.widget.hit_test(x, y)
+            if hit:
+                return hit
+            if entry.modal:
+                return None
+        if self._root is None:
+            return None
+        return self._root.hit_test(x, y)
+
+    def _find_drag_target(self, hit: Widget | None, event: DragEvent) -> Widget | None:
+        widget = hit
+        while widget is not None:
+            if widget.on_drag_move(event):
+                return widget
+            widget = widget.parent
+        return None
+
+    def _update_drag_hover(self, x: float, y: float, mods: int) -> None:
+        event = self._drag_event(x, y, mods)
+        if event is None:
+            return
+        target = self._find_drag_target(self._hit_widget_for_drag(x, y), event)
+        if target is self._drag_hover_widget:
+            return
+        if self._drag_hover_widget is not None:
+            self._drag_hover_widget.on_drag_leave(event)
+        if target is not None:
+            target.on_drag_enter(event)
+        self._drag_hover_widget = target
+
+    def _finish_drag(self, x: float, y: float, mods: int) -> bool:
+        event = self._drag_event(x, y, mods)
+        accepted = False
+        if event is not None:
+            target = self._find_drag_target(self._hit_widget_for_drag(x, y), event)
+            if target is not None:
+                accepted = bool(target.on_drag_drop(event))
+            if self._drag_hover_widget is not None and self._drag_hover_widget is not target:
+                self._drag_hover_widget.on_drag_leave(event)
+            if self._drag_source is not None:
+                self._drag_source.on_drag_end(event, accepted)
+        self._drag_payload = None
+        self._drag_source = None
+        self._drag_hover_widget = None
+        return accepted
 
     def mouse_wheel(self, dx: float, dy: float, x: float, y: float, mods: int = 0) -> bool:
         """Handle mouse wheel event. Bubbles up through parents."""

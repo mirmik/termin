@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
-from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent
+from tcgui.widgets.events import DragEvent, MouseEvent, MouseWheelEvent, KeyEvent
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.fbo_backend import FBOSurface
@@ -43,6 +43,8 @@ class Viewport3D(Widget):
 
         # Коллбек вызывается при изменении размера (до того как FBO пересоздан)
         self.on_before_resize: Callable[[int, int], None] | None = None
+        self.on_external_drag: Callable[[DragEvent], bool] | None = None
+        self.on_external_drop: Callable[[DragEvent], bool] | None = None
 
     # ------------------------------------------------------------------
     # Подключение
@@ -183,6 +185,16 @@ class Viewport3D(Widget):
             except Exception as e:
                 log.error(f"Viewport3D.on_mouse_wheel: {e}")
         return True
+
+    def on_drag_move(self, event: DragEvent) -> bool:
+        if self.on_external_drag is None:
+            return False
+        return bool(self.on_external_drag(event))
+
+    def on_drag_drop(self, event: DragEvent) -> bool:
+        if self.on_external_drop is None:
+            return False
+        return bool(self.on_external_drop(event))
 
     def _dispatch_mouse_button(self, button, action: int, mods: int) -> None:
         from tcbase import MouseButton, log

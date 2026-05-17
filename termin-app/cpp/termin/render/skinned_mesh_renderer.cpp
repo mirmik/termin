@@ -47,9 +47,8 @@ struct TcShaderEqual {
 static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> s_skinned_shader_cache;
 
 SkinnedMeshRenderer::SkinnedMeshRenderer()
-    : MeshRenderer()
+    : MeshRenderer("SkinnedMeshRenderer")
 {
-    // type_entry is set by registry when component is created via factory
 }
 
 SkinnedMeshRenderer::~SkinnedMeshRenderer() = default;
