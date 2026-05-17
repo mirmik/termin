@@ -69,6 +69,46 @@ const char* status_to_string(Manifold::Error status) {
     return "Unknown Error";
 }
 
+Mesh3 make_flat_shaded(const Mesh3& source) {
+    Mesh3 result;
+    result.name = source.name;
+    result.uuid = source.uuid;
+
+    const size_t triangle_index_count = source.triangles.size();
+    result.vertices.reserve(triangle_index_count);
+    result.normals.reserve(triangle_index_count);
+    result.triangles.reserve(triangle_index_count);
+
+    for (size_t i = 0; i + 2 < triangle_index_count; i += 3) {
+        const uint32_t i0 = source.triangles[i + 0];
+        const uint32_t i1 = source.triangles[i + 1];
+        const uint32_t i2 = source.triangles[i + 2];
+        if (i0 >= source.vertices.size() ||
+            i1 >= source.vertices.size() ||
+            i2 >= source.vertices.size()) {
+            continue;
+        }
+
+        const Vec3f& v0 = source.vertices[i0];
+        const Vec3f& v1 = source.vertices[i1];
+        const Vec3f& v2 = source.vertices[i2];
+        const Vec3f normal = (v1 - v0).cross(v2 - v0).normalized();
+        const uint32_t base = static_cast<uint32_t>(result.vertices.size());
+
+        result.vertices.push_back(v0);
+        result.vertices.push_back(v1);
+        result.vertices.push_back(v2);
+        result.normals.push_back(normal);
+        result.normals.push_back(normal);
+        result.normals.push_back(normal);
+        result.triangles.push_back(base + 0);
+        result.triangles.push_back(base + 1);
+        result.triangles.push_back(base + 2);
+    }
+
+    return result;
+}
+
 } // namespace
 
 struct Solid::Impl {
@@ -185,7 +225,10 @@ Solid extrude(const Polygon2& outer, const std::vector<Polygon2>& holes, double 
     return Solid(Solid::Impl(Manifold::Extrude(cross_section.ToPolygons(), height)));
 }
 
-Mesh3 to_mesh3(const Solid& solid, const std::string& name, const std::string& uuid) {
+Mesh3 to_mesh3(const Solid& solid,
+               const std::string& name,
+               const std::string& uuid,
+               bool flat_shading) {
     Mesh3 mesh;
     mesh.name = name;
     mesh.uuid = uuid;
@@ -212,12 +255,19 @@ Mesh3 to_mesh3(const Solid& solid, const std::string& name, const std::string& u
         mesh.triangles.push_back(index);
     }
 
+    if (flat_shading) {
+        return make_flat_shaded(mesh);
+    }
+
     mesh.compute_normals();
     return mesh;
 }
 
-TcMesh to_tc_mesh(const Solid& solid, const std::string& name, const std::string& uuid) {
-    return TcMesh::from_mesh3(to_mesh3(solid, name, uuid), name, uuid);
+TcMesh to_tc_mesh(const Solid& solid,
+                  const std::string& name,
+                  const std::string& uuid,
+                  bool flat_shading) {
+    return TcMesh::from_mesh3(to_mesh3(solid, name, uuid, flat_shading), name, uuid);
 }
 
 } // namespace termin::csg

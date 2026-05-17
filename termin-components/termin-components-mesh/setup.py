@@ -22,7 +22,7 @@ setup(
     python_requires=">=3.8",
     packages=["termin.mesh"],
     package_dir={"termin.mesh": "python/termin/mesh"},
-    install_requires=["termin-nanobind", "tgfx"],
+    install_requires=["termin-nanobind", "tgfx", "termin-csg"],
     ext_modules=[
         Extension("termin.mesh._components_mesh_native", sources=[]),
     ],
