@@ -48,7 +48,7 @@ private:
     friend Solid subtract(const Solid&, const Solid&);
     friend Solid intersect(const Solid&, const Solid&);
     friend Solid extrude(const Polygon2&, const std::vector<Polygon2>&, double);
-    friend Mesh3 to_mesh3(const Solid&, const std::string&, const std::string&);
+    friend Mesh3 to_mesh3(const Solid&, const std::string&, const std::string&, bool);
 };
 
 Solid make_box(double x, double y, double z, bool centered = true);
@@ -66,10 +66,12 @@ Solid extrude(const Polygon2& outer, const std::vector<Polygon2>& holes, double 
 
 Mesh3 to_mesh3(const Solid& solid,
                const std::string& name = "",
-               const std::string& uuid = "");
+               const std::string& uuid = "",
+               bool flat_shading = false);
 
 TcMesh to_tc_mesh(const Solid& solid,
                   const std::string& name = "",
-                  const std::string& uuid = "");
+                  const std::string& uuid = "",
+                  bool flat_shading = false);
 
 } // namespace termin::csg

@@ -213,11 +213,11 @@ def draw(*solids, title="termin-csg", show_wireframe=True):
     return draw_solids(*solids, title=title, show_wireframe=show_wireframe)
 
 
-def mesh(solid, name="csg"):
+def mesh(solid, name="csg", *, flat_shading=False):
     """Convert a solid to a CPU Mesh3 for lower-level experiments."""
     if type(solid) is not Solid:
         raise TypeError("mesh() expects termin.csg.Solid")
-    return to_mesh3(solid, name)
+    return to_mesh3(solid, name, flat_shading=bool(flat_shading))
 
 
 __all__ = [

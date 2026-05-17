@@ -153,7 +153,13 @@ NB_MODULE(_csg_native, m) {
           nb::arg("outer"), nb::arg("height"),
           nb::arg("holes") = std::vector<std::vector<std::pair<double, double>>>());
     m.def("to_mesh3", &termin::csg::to_mesh3,
-          nb::arg("solid"), nb::arg("name") = std::string(), nb::arg("uuid") = std::string());
+          nb::arg("solid"),
+          nb::arg("name") = std::string(),
+          nb::arg("uuid") = std::string(),
+          nb::arg("flat_shading") = false);
     m.def("to_tc_mesh", &termin::csg::to_tc_mesh,
-          nb::arg("solid"), nb::arg("name") = std::string(), nb::arg("uuid") = std::string());
+          nb::arg("solid"),
+          nb::arg("name") = std::string(),
+          nb::arg("uuid") = std::string(),
+          nb::arg("flat_shading") = false);
 }

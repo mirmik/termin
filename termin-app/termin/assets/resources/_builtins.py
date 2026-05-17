@@ -31,6 +31,7 @@ BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.colliders.collider_component", "ColliderComponent"),
     # Меш
     ("termin.mesh.mesh_component", "MeshComponent"),
+    ("termin.mesh.script_mesh_component", "ScriptMeshComponent"),
     # Воксели
     ("termin.voxels.voxelizer_component", "VoxelizerComponent"),
     ("termin.voxels.display_component", "VoxelDisplayComponent"),
