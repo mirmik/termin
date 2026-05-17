@@ -2,6 +2,7 @@
 #include "detour_navmesh_asset_utils.hpp"
 #include "navmesh_keeper_component.hpp"
 #include "off_mesh_link_component.hpp"
+#include <components/mesh_component.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/shader_parser.hpp>
 #include <termin/geom/mat44.hpp>
@@ -40,6 +41,14 @@ struct DetourOffMeshLinks {
 
 Vec3 termin_local_to_recast(const Vec3& point) {
     return Vec3{point.x, point.z, point.y};
+}
+
+Mat44 mat44_from_mat44f(const Mat44f& value) {
+    Mat44 result;
+    for (int i = 0; i < 16; ++i) {
+        result.data[i] = static_cast<double>(value.data[i]);
+    }
+    return result;
 }
 
 DetourOffMeshLinks collect_off_mesh_links_for_builder(
@@ -1873,13 +1882,13 @@ static void collect_meshes_recursive(Entity ent, const Mat44& base_inv, std::vec
     // Compute local_to_base = B^-1 @ W
     Mat44 local_to_base = base_inv * world;
 
-    // Get MeshRenderer from this entity
-    MeshRenderer* mr = ent.get_component<MeshRenderer>();
-    if (mr && mr->mesh.is_valid()) {
+    MeshComponent* mesh_component = ent.get_component<MeshComponent>();
+    if (mesh_component && mesh_component->mesh.is_valid()) {
+        Mat44 mesh_to_base = local_to_base * mat44_from_mat44f(mesh_component->get_mesh_offset_matrix());
         tc_log_info("[NavMesh] Processing entity: %s", ent.name() ? ent.name() : "(unnamed)");
         tc_log_info("[NavMesh]   world col0: (%.2f, %.2f, %.2f, %.2f)", w_data[0], w_data[1], w_data[2], w_data[3]);
         tc_log_info("[NavMesh]   world col3: (%.2f, %.2f, %.2f, %.2f)", w_data[12], w_data[13], w_data[14], w_data[15]);
-        extract_mesh_positions(mr->mesh, local_to_base, verts, tris);
+        extract_mesh_positions(mesh_component->mesh, mesh_to_base, verts, tris);
     }
 
     // Recurse into children
