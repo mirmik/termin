@@ -135,6 +135,7 @@ digraph termin_dependencies {
 	}
 
 
+	"tcplot" -> "termin-csharp";
 	"termin" -> "termin-app";
 	"termin" -> "termin-entity";
 	"termin" -> "termin-navmesh";
