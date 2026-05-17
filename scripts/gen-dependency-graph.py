@@ -41,9 +41,10 @@ CMAKE_TARGET_TO_DIR = {
     "termin_components_physics": "termin-components-physics",
     "termin_components_skeleton": "termin-components-skeleton",
     "termin_components_animation": "termin-components-animation",
-    # The installed CMake package `termin` is the main native/core bundle
-    # produced from termin-app/cpp. It is not the application layer.
-    "termin": "termin",
+    # The installed CMake package `termin` is produced from termin-app/cpp.
+    # On the high-level diagram route those native bundle dependencies to
+    # termin-app; the `termin` node itself is only the Python namespace root.
+    "termin": "termin-app",
 }
 
 # Map Python package names to directory names
@@ -55,7 +56,7 @@ PYTHON_PKG_TO_DIR = {
     "tcnodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
     "tcplot": "tcplot",
-    "termin": "termin-app",
+    "termin": "termin",
     "termin-app": "termin-app",
     "termin-base": "termin-base",
     "termin-assets": "termin-assets",
@@ -113,8 +114,8 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.kinematic": "termin-components-kinematic",
     "termin.modules": "termin-modules",
     "termin.navmesh": "termin-navmesh",
-    # Fallback: termin.* belongs to the application/umbrella Python package.
-    "termin": "termin-app",
+    # Fallback: bare `import termin` touches only the namespace root.
+    "termin": "termin",
 }
 
 # Directories to scan for CMakeLists.txt
@@ -136,9 +137,10 @@ for name in os.listdir(ROOT):
                 CMAKE_DIRS.append((sub, cmake))
 
 # Main native/core bundle exported as the CMake package `termin`.
+# It is an implementation detail of termin-app on this high-level diagram.
 termin_native_cmake = os.path.join(ROOT, "termin-app", "cpp", "CMakeLists.txt")
 if os.path.exists(termin_native_cmake):
-    CMAKE_DIRS.append(("termin", termin_native_cmake))
+    CMAKE_DIRS.append(("termin-app", termin_native_cmake))
 
 # Pure-Python packages (no CMakeLists.txt) — will be scanned via import analysis
 PYTHON_ONLY_DIRS = {
@@ -146,8 +148,8 @@ PYTHON_ONLY_DIRS = {
 }
 
 # Dependencies that are structural but not reliably visible from setup.py or
-# CMake parsing. Thin Python facades copy native modules produced by the main
-# termin build, and termin-app is the composition package over that bundle.
+# CMake parsing. `termin` is the namespace root; packages extending termin.*
+# conceptually sit on top of it, but it does not depend on engine libraries.
 MANUAL_DEPS = {
     "termin-app": {"termin"},
     "termin-entity": {"termin"},
@@ -374,7 +376,8 @@ def main():
     GROUPS = {
         "UI": ["termin-gui", "termin-nodegraph", "tcplot"],
         "Application": ["termin-app", "diffusion-editor"],
-        "Native Bundle": ["termin", "termin-csharp"],
+        "Namespace": ["termin"],
+        "Native Interop": ["termin-csharp"],
         "Python Support": ["termin-assets", "termin-nanobind-sdk"],
         "Render Stack": [
             "termin-graphics", "termin-lighting", "termin-render",

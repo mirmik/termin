@@ -4,12 +4,22 @@ project(termin_components_physics VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(termin_physics REQUIRED)
+find_package(termin_collision REQUIRED)
+find_package(termin_components_collision REQUIRED)
+
 add_library(termin_components_physics INTERFACE)
 add_library(termin_components_physics::termin_components_physics ALIAS termin_components_physics)
 
 target_include_directories(termin_components_physics INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries(termin_components_physics INTERFACE
+    termin_physics::termin_physics
+    termin_collision::termin_collision
+    termin_components_collision::termin_components_collision
 )
 
 include(GNUInstallDirs)
