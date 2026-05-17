@@ -41,6 +41,7 @@ CMAKE_TARGET_TO_DIR = {
     "termin_components_physics": "termin-components-physics",
     "termin_components_skeleton": "termin-components-skeleton",
     "termin_components_animation": "termin-components-animation",
+    "tcplot": "tcplot",
     # The installed CMake package `termin` is produced from termin-app/cpp.
     # On the high-level diagram route those native bundle dependencies to
     # termin-app; the `termin` node itself is only the Python namespace root.
