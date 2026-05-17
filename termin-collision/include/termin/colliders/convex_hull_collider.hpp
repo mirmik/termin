@@ -374,8 +374,11 @@ inline RayHit ConvexHullCollider::closest_to_ray(const Ray3& ray) const {
         return best;
     }
 
-    // Möller-Trumbore for each face
+    // Möller-Trumbore for each face. RayHit::distance is the distance between
+    // the ray and collider points, so all real intersections have distance=0.
+    // Keep the ray parameter separately to return the first surface hit.
     bool any_hit = false;
+    double best_t = std::numeric_limits<double>::max();
     for (const auto& face : faces) {
         Vec3 A = vertex_world(face.a);
         Vec3 B = vertex_world(face.b);
@@ -397,7 +400,8 @@ inline RayHit ConvexHullCollider::closest_to_ray(const Ray3& ray) const {
         if (v < -1e-8 || u + v > 1.0 + 1e-8) continue;
 
         double t = inv_det * AC.dot(q);
-        if (t >= 0 && t < best.distance) {
+        if (t >= 0 && t < best_t) {
+            best_t = t;
             best.point_on_ray = ray.point_at(t);
             best.point_on_collider = best.point_on_ray;
             best.distance = 0.0;

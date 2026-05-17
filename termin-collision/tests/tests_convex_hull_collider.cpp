@@ -162,6 +162,19 @@ TEST_CASE("ConvexHull cube matches Box: distance to box")
     CHECK_EQ(hull_hit.distance, Approx(box_hit.distance).epsilon(0.1));
 }
 
+TEST_CASE("ConvexHull raycast returns first intersection")
+{
+    auto hull = make_cube_hull(Vec3(1, 1, 1));
+
+    auto top_hit = hull.closest_to_ray(termin::Ray3(Vec3(0, 0, 5), Vec3(0, 0, -1)));
+    CHECK(top_hit.hit());
+    CHECK_EQ(top_hit.point_on_collider.z, Approx(1.0).epsilon(1e-6));
+
+    auto bottom_hit = hull.closest_to_ray(termin::Ray3(Vec3(0, 0, -5), Vec3(0, 0, 1)));
+    CHECK(bottom_hit.hit());
+    CHECK_EQ(bottom_hit.point_on_collider.z, Approx(-1.0).epsilon(1e-6));
+}
+
 // ==================== Reverse dispatch: Box/Sphere → ConvexHull ====================
 
 TEST_CASE("Box.closest_to_collider(ConvexHull) works")
