@@ -128,16 +128,16 @@ class SurfaceEdgeDebugTool:
         mesh_normal: tuple[float, float, float],
         triangle_index: int,
     ) -> _SurfaceEdgeDebugHit | None:
-        from termin.render_components import MeshRenderer
+        from termin.mesh.mesh_component import MeshComponent
 
-        renderer = entity.get_component(MeshRenderer)
-        if renderer is None:
-            log.error("[SurfaceEdgeDebugTool] edge query failed: picked entity has no MeshRenderer")
+        mesh_component = entity.get_component(MeshComponent)
+        if mesh_component is None:
+            log.error("[SurfaceEdgeDebugTool] edge query failed: picked entity has no MeshComponent")
             return None
 
-        mesh = renderer.mesh
+        mesh = mesh_component.mesh
         if mesh is None:
-            log.error("[SurfaceEdgeDebugTool] edge query failed: MeshRenderer has no mesh")
+            log.error("[SurfaceEdgeDebugTool] edge query failed: MeshComponent has no mesh")
             return None
 
         vertices = mesh.vertices
@@ -146,10 +146,12 @@ class SurfaceEdgeDebugTool:
             return None
 
         pose = entity.transform.global_pose()
+        mesh_offset = mesh_component.get_mesh_offset_matrix()
+        inverse_mesh_offset = mesh_offset.inverse()
         metric = entity.transform.global_scale
-        local_point = pose.inverse_transform_point(np.asarray(mesh_point, dtype=float))
-        local_normal = pose.inverse_transform_vector(np.asarray(mesh_normal, dtype=float))
-        local_up = pose.inverse_transform_vector(np.asarray((0.0, 0.0, 1.0), dtype=float))
+        local_point = _world_point_to_mesh_local(pose, inverse_mesh_offset, mesh_point)
+        local_normal = _world_vector_to_mesh_local(pose, inverse_mesh_offset, mesh_normal)
+        local_up = _world_vector_to_mesh_local(pose, inverse_mesh_offset, (0.0, 0.0, 1.0))
 
         edge = mesh.find_surface_edge(
             triangle_index,
@@ -182,10 +184,10 @@ class SurfaceEdgeDebugTool:
         return _SurfaceEdgeDebugHit(
             entity_name=entity.name,
             click_point=mesh_point,
-            edge_point=_tuple3(pose.transform_point(local_edge_point)),
-            edge_a=_tuple3(pose.transform_point(local_edge_a)),
-            edge_b=_tuple3(pose.transform_point(local_edge_b)),
-            normal_end=_tuple3(pose.transform_point(local_normal_end)),
+            edge_point=_tuple3(_mesh_point_to_world(pose, mesh_offset, local_edge_point)),
+            edge_a=_tuple3(_mesh_point_to_world(pose, mesh_offset, local_edge_a)),
+            edge_b=_tuple3(_mesh_point_to_world(pose, mesh_offset, local_edge_b)),
+            normal_end=_tuple3(_mesh_point_to_world(pose, mesh_offset, local_normal_end)),
             triangle_index=triangle_index,
             edge_indices=(index_a, index_b),
             distance=float(edge["distance"]),
@@ -214,3 +216,15 @@ def _tuple3(v) -> tuple[float, float, float]:
 
 def _vec3(point: tuple[float, float, float]) -> Vec3:
     return Vec3(point[0], point[1], point[2])
+
+
+def _world_point_to_mesh_local(pose, inverse_mesh_offset, point: tuple[float, float, float]) -> Vec3:
+    return inverse_mesh_offset.transform_point(pose.inverse_transform_point(_vec3(point)))
+
+
+def _world_vector_to_mesh_local(pose, inverse_mesh_offset, vector: tuple[float, float, float]) -> Vec3:
+    return inverse_mesh_offset.transform_direction(pose.inverse_transform_vector(_vec3(vector)))
+
+
+def _mesh_point_to_world(pose, mesh_offset, point) -> Vec3:
+    return pose.transform_point(mesh_offset.transform_point(_vec3(_tuple3(point))))

@@ -20,6 +20,9 @@ NB_MODULE(_components_collision_native, m) {
         .def_prop_rw("collider_type",
             [](ColliderComponent& c) { return c.collider_type; },
             [](ColliderComponent& c, const std::string& v) { c.set_collider_type(v); })
+        .def_prop_rw("convex_hull_mesh_source",
+            [](ColliderComponent& c) { return c.convex_hull_mesh_source; },
+            [](ColliderComponent& c, const std::string& v) { c.set_convex_hull_mesh_source(v); })
         .def_prop_rw("box_size",
             [](ColliderComponent& c) {
                 return nb::make_tuple(c.box_size.x, c.box_size.y, c.box_size.z);

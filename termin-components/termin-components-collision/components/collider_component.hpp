@@ -39,6 +39,8 @@ public:
     tc_vec3 collider_offset_euler = {0, 0, 0};  // Euler degrees (XYZ)
 
     // Source mesh for ConvexHull collider
+    // "Field" uses convex_hull_mesh. "MeshComponent" uses the sibling MeshComponent mesh.
+    std::string convex_hull_mesh_source = "Field";
     TcMesh convex_hull_mesh;
 
 private:
@@ -80,9 +82,12 @@ public:
     void set_box_size(const tc_vec3& size);
     void set_box_size(double x, double y, double z) { set_box_size(tc_vec3{x, y, z}); }
     Vec3 get_box_size() const { return Vec3{box_size.x, box_size.y, box_size.z}; }
+    void set_convex_hull_mesh_source(const std::string& source);
     void set_convex_hull_mesh(const TcMesh& mesh);
 
 private:
+    bool _uses_mesh_component_mesh() const;
+
     // Create collider primitive based on current type and parameters
     std::unique_ptr<colliders::ColliderPrimitive> _create_collider() const;
 

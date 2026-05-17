@@ -22,5 +22,6 @@ NB_MODULE(_components_mesh_native, m) {
             return c.get_mesh();
         })
         .def("set_mesh", &MeshComponent::set_mesh)
-        .def("set_mesh_by_name", &MeshComponent::set_mesh_by_name);
+        .def("set_mesh_by_name", &MeshComponent::set_mesh_by_name)
+        .def("get_mesh_offset_matrix", &MeshComponent::get_mesh_offset_matrix);
 }

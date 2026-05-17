@@ -8,6 +8,7 @@
 #include <termin/tc_scene.hpp>
 #include "termin/camera/camera_component.hpp"
 #include "termin/render/mesh_renderer.hpp"
+#include <components/mesh_component.hpp>
 #include <termin/entity/component.hpp>
 #include "editor/tc_editor_interaction.h"
 #include "render/tc_viewport.h"
@@ -554,14 +555,20 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
     result.world_point = {world.x, world.y, world.z};
     result.view_depth = view_point.y;
 
-    MeshRenderer* renderer = result.entity.get_component<MeshRenderer>();
-    if (renderer) {
-        tc_mesh* mesh = renderer->mesh.get();
+    MeshComponent* mesh_component = result.entity.get_component<MeshComponent>();
+    if (mesh_component) {
+        tc_mesh* mesh = mesh_component->mesh.get();
+        if (!mesh) return result;
+
         GeneralPose3 pose = result.entity.transform().global_pose();
+        Mat44f mesh_offset = mesh_component->get_mesh_offset_matrix();
+        Mat44f inverse_mesh_offset = mesh_offset.inverse();
         Vec3 camera_position = camera->get_position();
         Vec3 world_direction = (world - camera_position).normalized();
-        Vec3 local_origin = pose.inverse_transform_point(camera_position);
-        Vec3 local_direction = pose.inverse_transform_vector(world_direction).normalized();
+        Vec3 entity_local_origin = pose.inverse_transform_point(camera_position);
+        Vec3 entity_local_direction = pose.inverse_transform_vector(world_direction).normalized();
+        Vec3 local_origin = inverse_mesh_offset.transform_point(entity_local_origin);
+        Vec3 local_direction = inverse_mesh_offset.transform_direction(entity_local_direction).normalized();
 
         tc_mesh_ray ray;
         ray.origin[0] = static_cast<float>(local_origin.x);
@@ -585,8 +592,10 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
                 static_cast<double>(hit.normal[1]),
                 static_cast<double>(hit.normal[2])
             );
-            Vec3 world_hit = pose.transform_point(local_hit);
-            Vec3 world_normal = pose.to_pose3().transform_vector(local_normal).normalized();
+            Vec3 entity_local_hit = mesh_offset.transform_point(local_hit);
+            Vec3 entity_local_normal = mesh_offset.transform_direction(local_normal).normalized();
+            Vec3 world_hit = pose.transform_point(entity_local_hit);
+            Vec3 world_normal = pose.to_pose3().transform_vector(entity_local_normal).normalized();
 
             result.has_mesh_hit = true;
             result.mesh_point = {world_hit.x, world_hit.y, world_hit.z};
