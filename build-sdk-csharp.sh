@@ -18,6 +18,7 @@ for arg in "$@"; do
         --clean|-c)    CLEAN=1 ;;
         --no-parallel) NO_PARALLEL=1 ;;
         --ccache|--no-ccache) ;;
+        --ninja) ;;
         --unity|--no-unity) ;;
         --pch|--no-pch) ;;
         --no-vulkan|--vulkan) ;;
@@ -31,6 +32,7 @@ for arg in "$@"; do
             echo "  --no-parallel     Disable parallel compilation (equivalent to -j1)"
             echo "  --ccache          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-ccache       Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --ninja           Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --unity           Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-unity        Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --pch             Accepted for top-level SDK builds; ignored by C# stage"
