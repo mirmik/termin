@@ -1,268 +1,154 @@
-# CMake Monorepo Build Plan
+# CMake Monorepo Build Status
 
-## Goal
+## Summary
 
-Move the C++ SDK development build from script-driven sequential module installs to a single top-level CMake graph built with `add_subdirectory`.
+The SDK build has been migrated from a script-orchestrated per-module CMake loop to a single top-level CMake target graph built with `add_subdirectory()`.
 
-The existing standalone module builds and SDK install pipeline must keep working during the migration. The first target is a C++-only monorepo build; Python bindings, C# bindings, packaging, and install layout parity are later phases.
+The migration kept the public scripts as the user-facing entry points:
 
-## Current Problem
+- `./build-sdk.sh`
+- `./build-sdk-cpp.sh`
+- `./build-sdk-bindings.sh`
+- `./run-tests-cpp.sh`
+- `./run-tests-python.sh`
 
-`build-sdk-cpp.sh` configures, builds, and installs every module one after another. Parallel compilation only happens inside the current module, so independent parts of the SDK cannot build concurrently.
+The old term "superbuild" in this plan refers to the migration effort. The implemented solution is not an `ExternalProject_Add` superbuild; it is a monorepo CMake graph.
 
-Most modules also assume dependencies are already installed into `sdk/` and discover them through `find_package(...)`. In a monorepo build those dependencies are already CMake targets, so unconditional `find_package(...) REQUIRED` calls become the main blocker.
+## Current Workflow
 
-## Target Shape
-
-Root `CMakeLists.txt`:
-
-```cmake
-add_subdirectory(termin-base)
-add_subdirectory(termin-modules)
-add_subdirectory(termin-mesh)
-add_subdirectory(termin-csg)
-add_subdirectory(termin-navmesh)
-add_subdirectory(termin-graphics)
-add_subdirectory(termin-inspect)
-add_subdirectory(termin-scene)
-...
-add_subdirectory(termin-app/cpp)
-add_subdirectory(tcplot)
-```
-
-Each module supports both modes:
-
-1. Standalone mode: dependencies are loaded through `find_package`.
-2. Monorepo mode: dependencies are already available as local targets.
-
-## Phase 1: C++-Only Configure Skeleton
-
-Add shared CMake helpers:
-
-- `cmake/TerminDependencies.cmake`
-- `termin_require_package(<package> <target> [<target>...])`
-- `termin_add_alias_if_missing(<alias> <target>)`
-
-Add missing aliases required by existing target links:
-
-- `tcbase::termin_base -> termin_base`
-- `tgfx::termin_graphics -> termin_graphics`
-- `tgfx::termin_graphics2 -> termin_graphics2`
-- component aliases created by `termin_add_module`
-- `termin::trent -> trent`
-- `termin::entity_lib -> entity_lib`
-- `termin::render_lib -> render_lib`
-- `termin::termin_core -> termin_core`
-- `termin::navmesh_lib -> navmesh_lib` when navmesh is enabled
-
-Add a root `CMakeLists.txt` with conservative defaults:
-
-- `TERMIN_BUILD_MONOREPO=ON`
-- `TERMIN_BUILD_PYTHON=OFF`
-- all module tests OFF by default
-- editor executables OFF by default
-- Vulkan and SDL controlled by root options
-
-Expected result:
+Full SDK build:
 
 ```bash
-cmake -S . -B build/monorepo -G Ninja -DTERMIN_BUILD_PYTHON=OFF
+./build-sdk.sh --no-vulkan --sdl
 ```
 
-configures far enough to expose real target/dependency issues.
-
-## Phase 2: Replace Direct `find_package` Calls
-
-Replace internal package lookups with `termin_require_package`:
-
-- `termin_base`
-- `termin_modules`
-- `termin_mesh`
-- `termin_graphics`
-- `termin_inspect`
-- `termin_scene`
-- `termin_lighting`
-- `termin_render`
-- `termin_input`
-- `termin_display`
-- `termin_collision`
-- `termin_physics`
-- component packages
-- `termin_skeleton`
-- `termin_animation`
-- `termin_navmesh`
-
-External packages remain normal `find_package` calls:
-
-- `Python`
-- `nanobind`
-- `OpenGL`
-- `Vulkan`
-- `SDL2`
-- `PkgConfig`
-- `Qt`
-
-Expected result:
+C/C++ SDK stage:
 
 ```bash
-cmake --build build/monorepo --target termin_render termin_engine
+./build-sdk-cpp.sh --no-vulkan --sdl
 ```
 
-builds selected mid-level targets without installing SDK artifacts.
-
-## Phase 3: Build Full C++ Graph
-
-Enable the full C++ graph:
-
-- all core libraries
-- component libraries
-- `termin-app/cpp` libraries
-- `tcplot`
-
-Fix issues found during full graph generation:
-
-- target name collisions
-- global cache option collisions
-- unsafe `CMAKE_SOURCE_DIR` usage
-- `BUILD_SHARED_LIBS` leakage from third-party projects
-- output directory assumptions
-- RPATH assumptions
-
-Expected result:
+Python/nanobind bindings stage:
 
 ```bash
-cmake --build build/monorepo --parallel
+./build-sdk-bindings.sh --no-vulkan --sdl
 ```
 
-builds the C++ SDK graph without per-module install steps.
-
-## Phase 4: Tests
-
-Unify test options under a root switch:
-
-- `TERMIN_BUILD_TESTS=OFF` by default
-- `TERMIN_BUILD_TGFX2_TESTS=ON` controls tgfx2 tests when tests are enabled
-- `TERMIN_BUILD_WINDOW_TESTS=OFF` controls tests that create windows or GL contexts
-- module-specific test options remain available
-
-Add a root target:
+C++ tests:
 
 ```bash
-cmake --build build/monorepo --target test
-ctest --test-dir build/monorepo --output-on-failure
+bash run-tests-cpp.sh --no-vulkan --sdl
+bash run-tests-cpp.sh --no-vulkan --sdl --window-tests
 ```
 
-Test failures must log useful diagnostics and must not be silently ignored.
-
-Current status:
-
-- `run-tests-cpp.sh` uses the top-level CMake graph.
-- `--vulkan/--no-vulkan` maps to `TERMIN_ENABLE_VULKAN`.
-- `--window-tests/--no-window-tests` controls tests that need a windowing system.
-- tgfx2 window tests are present in CTest when window tests are enabled, but skip cleanly when the current environment has no usable video backend.
-- Vulkan tgfx2 smoke tests are wired behind `TERMIN_ENABLE_VULKAN`; the local host still needs shaderc for a Vulkan-enabled build.
-
-## Phase 5: Python Bindings
-
-Enable Python bindings in the monorepo graph after C++-only is stable.
-
-Current status:
-
-- `TERMIN_BUILD_PYTHON=ON` configures, builds, and installs from the top-level CMake graph.
-- The top-level graph now selects one Python interpreter and exports it through `Python_EXECUTABLE` so subprojects do not accidentally switch to a different system Python.
-- `termin-nanobind-sdk` participates in the root graph and installs the shared `nanobind` support library plus helper package.
-- `build-sdk-bindings.sh` uses the top-level graph instead of the old per-module `modules.conf` loop and `termin-app/build.sh`.
-- Basic SDK imports from `sdk/lib/python` pass for core packages after install.
-
-Remaining issues to fix:
-
-- audit remaining `CMAKE_SOURCE_DIR` usage in binding subdirectories;
-- verify Python module output/install directories against the old SDK layout;
-- reduce duplicate nanobind compilation (`nanobind` shared library and per-module `nanobind-static`);
-- verify editable test-venv refresh path after root-built bindings;
-- keep checking copied `.py` package layout parity.
-
-Working root build:
+Direct root CMake build:
 
 ```bash
-cmake -S . -B build/Release -DTERMIN_BUILD_PYTHON=ON -DTERMIN_ENABLE_VULKAN=OFF -DTERMIN_ENABLE_SDL=ON
+cmake -S . -B build/Release \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DTERMIN_BUILD_PYTHON=ON \
+  -DTERMIN_BUILD_TESTS=OFF \
+  -DTERMIN_ENABLE_VULKAN=OFF \
+  -DTERMIN_ENABLE_SDL=ON
 cmake --build build/Release --parallel
 cmake --install build/Release
 ```
 
-## Phase 6: Install and SDK Layout
+## Root Options
 
-Keep install support but make it a separate step:
+- `TERMIN_BUILD_MONOREPO=ON` enables the top-level monorepo graph.
+- `TERMIN_BUILD_PYTHON=ON/OFF` controls nanobind extension targets.
+- `TERMIN_BUILD_TESTS=ON/OFF` controls C/C++ tests.
+- `TERMIN_BUILD_TGFX2_TESTS=ON/OFF` controls tgfx2 tests when tests are enabled.
+- `TERMIN_BUILD_WINDOW_TESTS=ON/OFF` controls tests that create windows or GL contexts.
+- `TERMIN_ENABLE_VULKAN=ON/OFF` controls Vulkan support.
+- `TERMIN_ENABLE_SDL=ON/OFF` controls SDL support.
+- `TERMIN_BUILD_EDITOR_MINIMAL`, `TERMIN_BUILD_EDITOR_EXE`, and `TERMIN_BUILD_LAUNCHER` remain off for SDK builds.
 
-```bash
-cmake --install build/monorepo --prefix sdk
-```
+## Completed
 
-Verify parity with the current SDK layout:
+### C++ Graph
 
-- headers
-- shared libraries
-- CMake package configs
-- Python extension modules when enabled
-- RPATH behavior
+- The root `CMakeLists.txt` adds the C/C++ modules through `add_subdirectory()`.
+- Internal dependencies can use already-existing CMake targets instead of requiring prior installation into `sdk/`.
+- `build-sdk-cpp.sh` uses the top-level graph and installs into `sdk/`.
+- The default build directory is `build/<BUILD_TYPE>`; for Release this is `build/Release`.
+- Standalone module builds remain supported through normal `find_package(...)` paths.
 
-## Phase 7: C# and Packaging
+### Tests
 
-Integrate C# only after C++ and Python are stable.
+- `run-tests-cpp.sh` uses the top-level graph.
+- `--vulkan/--no-vulkan` maps to `TERMIN_ENABLE_VULKAN`.
+- `--window-tests/--no-window-tests` controls tests requiring a usable windowing/video backend.
+- tgfx2 tests are wired into CTest.
+- tgfx2 window tests and display window tests skip cleanly when the environment has no usable video backend.
 
-Known concerns:
+### Python Bindings
 
-- C# CMake currently links `termin::...` imported targets.
-- SWIG output writes into source-side generated directories.
-- Recommended C# SDK build uses `--no-sdl --no-vulkan`; mirror this as root options.
+- `TERMIN_BUILD_PYTHON=ON` configures, builds, and installs from the top-level graph.
+- The root graph selects one Python interpreter and exports it through `Python_EXECUTABLE`.
+- `termin-nanobind-sdk` is part of the root graph.
+- `build-sdk-bindings.sh` uses the top-level graph instead of the old `modules.conf` loop and `termin-app/build.sh`.
+- Project nanobind modules use the shared `libnanobind.so`; `nanobind-static` is no longer built for project modules.
+- Python extension modules install under the SDK Python layout, not duplicated at the SDK root.
+- Duplicate SDK `.so` verification passes.
 
-## Rollback Strategy
+### Install Layout
 
-The existing scripts remain the source of truth until monorepo build reaches parity:
+- `cmake --install build/Release` installs headers, shared libraries, CMake packages, Python extension modules, and Python package files into `sdk/`.
+- The full `build-sdk.sh` path has been reported working after the migration.
 
-- `build-sdk-cpp.sh`
-- `build-sdk-bindings.sh`
-- `build-sdk.sh`
-- `run-tests-cpp.sh`
-- `run-tests-python.sh`
+## Open Work
 
-No existing build script should be removed during the migration.
+### Python Test Workflow
 
-## Success Criteria
-
-The migration is complete when:
-
-- standalone module builds still work;
-- root C++ monorepo build works without install-before-use;
-- root test run works;
-- Python bindings can be built from the root;
-- SDK install layout matches the current scripts;
-- development docs mention both legacy and monorepo workflows.
-
-## Current Status
-
-Initial C++-only monorepo build is implemented.
-
-Verified:
+Verify the editable Python workflow after root-built bindings:
 
 ```bash
-cmake -S . -B build/monorepo -G Ninja -DTERMIN_BUILD_PYTHON=OFF -DTERMIN_ENABLE_VULKAN=OFF -DTERMIN_ENABLE_SDL=ON
-cmake --build build/monorepo --parallel 4
+./setup-test-venv.sh --force
+bash run-tests-python.sh
 ```
 
-Result: full C++ graph configured and built successfully.
+This should confirm that rebuilt native extensions are copied into editable package sources and imported from the expected SDK.
 
-Also verified standalone configure still works for at least one dependent module:
+### C# Stage
 
-```bash
-cmake -S termin-render -B /tmp/termin-render-standalone-check -G Ninja -DCMAKE_PREFIX_PATH=/home/rfmeas/project/termin/sdk -DCMAKE_INSTALL_PREFIX=/tmp/termin-render-standalone-install -DTERMIN_BUILD_PYTHON=OFF -DTERMIN_RENDER_BUILD_TESTS=OFF
-```
+`build-sdk-csharp.sh` remains a separate stage. It should be evaluated separately if C# is brought into the monorepo graph.
 
-Remaining work:
+Known C# constraints:
 
-- run broader standalone checks;
-- add root documentation for the new workflow;
-- enable and verify root C++ tests;
-- migrate Python bindings;
-- verify `cmake --install` SDK layout parity;
-- address third-party option isolation more thoroughly, especially Manifold/Clipper2.
+- The recommended C# SDK build is OpenGL-only: `--no-sdl --no-vulkan`.
+- Existing C# CMake links against installed/imported targets.
+- Generated SWIG output may still write into source-side generated directories.
+
+### Vulkan
+
+Vulkan tests and Vulkan-enabled builds are wired behind `TERMIN_ENABLE_VULKAN`, but the local environment still needs `shaderc` for a Vulkan-enabled build.
+
+The remaining task is to improve the diagnostic or dependency policy for `--vulkan`, so failure is explicit and actionable.
+
+### Documentation
+
+Keep user-facing docs aligned with the current workflow:
+
+- root CMake graph is the default SDK build backend;
+- scripts remain the stable user entry points;
+- Python tests should use the venv/editable flow;
+- C# remains a separate stage unless explicitly migrated.
+
+### Standalone Checks
+
+Broaden standalone checks for selected modules to ensure the migration did not break package consumers that build modules outside the root graph.
+
+## Historical Notes
+
+The earlier migration phases were:
+
+1. Add root CMake graph and dependency helpers.
+2. Replace internal unconditional `find_package(...)` calls with target-aware helpers.
+3. Build the full C++ graph.
+4. Move C++ tests to the root graph.
+5. Move Python/nanobind bindings to the root graph.
+6. Verify install layout parity.
+
+These phases are complete for the main SDK workflow.
