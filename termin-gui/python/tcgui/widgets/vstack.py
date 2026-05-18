@@ -29,8 +29,7 @@ class VStack(Widget):
                 continue
             cw, ch = child.compute_size(viewport_w, viewport_h)
             max_width = max(max_width, cw)
-            if not child.stretch:
-                total_height += ch
+            total_height += ch
 
         visible = [c for c in self.children if c.visible]
         if visible:
@@ -51,27 +50,26 @@ class VStack(Widget):
         if not visible:
             return
 
-        # First pass: measure non-stretch children, count stretch children
-        fixed_height = 0.0
+        # First pass: measure every child. A stretch child keeps its
+        # preferred height as a minimum and receives a share of extra space.
+        base_height = 0.0
         stretch_count = 0
         child_heights = []
         for child in visible:
+            _, ch = child.compute_size(viewport_w, viewport_h)
+            base_height += ch
+            child_heights.append(ch)
             if child.stretch:
                 stretch_count += 1
-                child_heights.append(0.0)
-            else:
-                _, ch = child.compute_size(viewport_w, viewport_h)
-                fixed_height += ch
-                child_heights.append(ch)
 
         spacing_total = self.spacing * (len(visible) - 1)
-        remaining = max(0.0, height - fixed_height - spacing_total)
-        stretch_h = remaining / stretch_count if stretch_count > 0 else 0.0
+        remaining = max(0.0, height - base_height - spacing_total)
+        stretch_extra_h = remaining / stretch_count if stretch_count > 0 else 0.0
 
-        # Fill in stretch heights
+        # Add extra height to stretch children.
         for i, child in enumerate(visible):
             if child.stretch:
-                child_heights[i] = stretch_h
+                child_heights[i] += stretch_extra_h
 
         # Vertical justify (only meaningful without stretch children)
         total_h = sum(child_heights) + spacing_total

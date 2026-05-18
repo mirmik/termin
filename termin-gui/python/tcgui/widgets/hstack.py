@@ -28,8 +28,7 @@ class HStack(Widget):
             if not child.visible:
                 continue
             cw, ch = child.compute_size(viewport_w, viewport_h)
-            if not child.stretch:
-                total_width += cw
+            total_width += cw
             max_height = max(max_height, ch)
 
         visible = [c for c in self.children if c.visible]
@@ -52,27 +51,26 @@ class HStack(Widget):
         if not visible:
             return
 
-        # First pass: measure non-stretch children, count stretch children
-        fixed_width = 0.0
+        # First pass: measure every child. A stretch child keeps its
+        # preferred width as a minimum and receives a share of extra space.
+        base_width = 0.0
         stretch_count = 0
         child_widths = []
         for child in visible:
+            cw, _ = child.compute_size(viewport_w, viewport_h)
+            base_width += cw
+            child_widths.append(cw)
             if child.stretch:
                 stretch_count += 1
-                child_widths.append(0.0)
-            else:
-                cw, _ = child.compute_size(viewport_w, viewport_h)
-                fixed_width += cw
-                child_widths.append(cw)
 
         spacing_total = self.spacing * (len(visible) - 1)
-        remaining = max(0.0, width - fixed_width - spacing_total)
-        stretch_w = remaining / stretch_count if stretch_count > 0 else 0.0
+        remaining = max(0.0, width - base_width - spacing_total)
+        stretch_extra_w = remaining / stretch_count if stretch_count > 0 else 0.0
 
-        # Fill in stretch widths
+        # Add extra width to stretch children.
         for i, child in enumerate(visible):
             if child.stretch:
-                child_widths[i] = stretch_w
+                child_widths[i] += stretch_extra_w
 
         # Horizontal justify (only meaningful without stretch children)
         total_w = sum(child_widths) + spacing_total

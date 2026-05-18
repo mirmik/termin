@@ -88,11 +88,21 @@ def test_stretch_with_spacing():
     assert_rect(stretch, 0, 60, W, 540)
 
 
-def test_stretch_ignores_preferred_height():
+def test_stretch_keeps_preferred_height_as_minimum():
     c = make_widget(100, 999, stretch=True)
     _make_vstack(c)
-    # stretch overrides preferred_height
-    assert_rect(c, 0, 0, W, H)
+    assert_rect(c, 0, 0, W, 999)
+
+
+def test_compute_size_includes_stretch_preferred_height():
+    fixed = make_widget(100, 50)
+    stretch = make_widget(100, 180, stretch=True)
+    vs = VStack()
+    vs.spacing = 10
+    vs.add_child(fixed)
+    vs.add_child(stretch)
+
+    assert vs.compute_size(VIEWPORT_W, VIEWPORT_H) == (100, 240)
 
 
 # --- Invisible ---
