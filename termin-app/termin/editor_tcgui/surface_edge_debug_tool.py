@@ -8,6 +8,7 @@ import numpy as np
 from tcbase import log
 from tcbase._geom_native import Vec3
 from tgfx._tgfx_native import Color4
+from termin.mesh.surface_edge_query import find_surface_edge_for_entity
 
 
 _COLOR_CLICK = Color4(1.00, 1.00, 1.00, 1.00)
@@ -145,25 +146,11 @@ class SurfaceEdgeDebugTool:
             log.error("[SurfaceEdgeDebugTool] edge query failed: mesh has no CPU vertex data")
             return None
 
-        pose = entity.transform.global_pose()
-        mesh_offset = mesh_component.get_mesh_offset_matrix()
-        inverse_mesh_offset = mesh_offset.inverse()
-        metric = entity.transform.global_scale
-        local_point = _world_point_to_mesh_local(pose, inverse_mesh_offset, mesh_point)
-        local_normal = _world_vector_to_mesh_local(pose, inverse_mesh_offset, mesh_normal)
-        local_up = _world_vector_to_mesh_local(pose, inverse_mesh_offset, (0.0, 0.0, 1.0))
-
-        edge = mesh.find_surface_edge(
-            triangle_index,
-            _tuple3(local_point),
-            _tuple3(local_normal),
-            _tuple3(local_up),
-            _tuple3(metric),
-        )
+        edge = find_surface_edge_for_entity(entity, mesh_point, mesh_normal, triangle_index)
         if edge is None:
             return None
 
-        edge_indices = edge["indices"]
+        edge_indices = edge.indices
         index_a = int(edge_indices[0])
         index_b = int(edge_indices[1])
         if index_a < 0 or index_b < 0 or index_a >= vertices.shape[0] or index_b >= vertices.shape[0]:
@@ -172,9 +159,13 @@ class SurfaceEdgeDebugTool:
                 f"edge indices out of mesh vertex range ({index_a}, {index_b})"
             )
             return None
-        local_edge_point = np.asarray(edge["point"], dtype=float)
+        pose = entity.transform.global_pose()
+        mesh_offset = mesh_component.get_mesh_offset_matrix()
+        inverse_mesh_offset = mesh_offset.inverse()
+        local_edge_point = inverse_mesh_offset.transform_point(pose.point_to_local(_vec3(edge.point)))
         local_edge_a = np.asarray(vertices[index_a], dtype=float)
         local_edge_b = np.asarray(vertices[index_b], dtype=float)
+        local_normal = inverse_mesh_offset.transform_direction(pose.vector_to_local(_vec3(mesh_normal)))
         local_normal_vec = np.asarray(local_normal, dtype=float)
         normal_length = np.linalg.norm(local_normal_vec)
         if normal_length > 0.000001:
@@ -190,8 +181,8 @@ class SurfaceEdgeDebugTool:
             normal_end=_tuple3(_mesh_point_to_world(pose, mesh_offset, local_normal_end)),
             triangle_index=triangle_index,
             edge_indices=(index_a, index_b),
-            distance=float(edge["distance"]),
-            side=int(edge["side"]),
+            distance=float(edge.distance),
+            side=int(edge.side),
         )
 
     def _draw_overlay(self) -> None:
@@ -216,14 +207,6 @@ def _tuple3(v) -> tuple[float, float, float]:
 
 def _vec3(point: tuple[float, float, float]) -> Vec3:
     return Vec3(point[0], point[1], point[2])
-
-
-def _world_point_to_mesh_local(pose, inverse_mesh_offset, point: tuple[float, float, float]) -> Vec3:
-    return inverse_mesh_offset.transform_point(pose.inverse_transform_point(_vec3(point)))
-
-
-def _world_vector_to_mesh_local(pose, inverse_mesh_offset, vector: tuple[float, float, float]) -> Vec3:
-    return inverse_mesh_offset.transform_direction(pose.inverse_transform_vector(_vec3(vector)))
 
 
 def _mesh_point_to_world(pose, mesh_offset, point) -> Vec3:
