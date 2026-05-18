@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tcbase import log
 from termin.inspect import InspectField
-from termin.csg.procedural_document import ProceduralMeshDocument
+from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
 from termin.scene.python_component import PythonComponent
 
 
@@ -95,8 +95,15 @@ class ProceduralMeshComponent(PythonComponent):
             f"operations={len(self.document.operations)}"
         )
 
-    def add_contour_from_world_points(self, points: list[tuple[float, float, float]]) -> bool:
-        contour = self.document.add_contour_from_world_points(points)
+    def add_contour_from_world_points(
+        self,
+        points: list[tuple[float, float, float]],
+        plane: ProceduralPlane | None = None,
+    ) -> bool:
+        if plane is None:
+            contour = self.document.add_contour_from_world_points(points)
+        else:
+            contour = self.document.add_contour_on_plane_from_world_points(points, plane)
         if contour is None:
             return False
         log.info(
