@@ -53,6 +53,9 @@ class EntityInspector(VStack):
         self.on_component_changed: Optional[Callable[[], None]] = None
         # on_component_field_changed(component, field_key, new_value)
         self.on_component_field_changed: Optional[Callable[[Any, str, Any], None]] = None
+        # on_component_selected(entity, component_ref) / on_component_cleared()
+        self.on_component_selected: Optional[Callable[[Entity, Any], None]] = None
+        self.on_component_cleared: Optional[Callable[[], None]] = None
 
         inspector_title = Label()
         inspector_title.text = "Inspector"
@@ -137,6 +140,11 @@ class EntityInspector(VStack):
         self._field_panel.on_field_changed = self._on_field_changed
         self.add_child(self._field_panel)
 
+        self._extension_panel_host = VStack()
+        self._extension_panel_host.spacing = 4
+        self._extension_panel_host.visible = False
+        self.add_child(self._extension_panel_host)
+
         # Current component reference (for undo/context menu)
         self._selected_comp_ref = None
 
@@ -194,6 +202,8 @@ class EntityInspector(VStack):
         self._transform_inspector.set_target(ent)
         self._rebuild_component_list()
         self._field_panel.set_target(None)
+        self.clear_component_extension_panel()
+        self._emit_component_cleared()
         if self._ui is not None:
             self._ui.request_layout()
 
@@ -316,6 +326,8 @@ class EntityInspector(VStack):
         if self._entity is None or index < 0:
             self._selected_comp_ref = None
             self._field_panel.set_target(None)
+            self.clear_component_extension_panel()
+            self._emit_component_cleared()
             return
 
         tc_components = self._entity.tc_components
@@ -323,13 +335,42 @@ class EntityInspector(VStack):
             # SoA component — no field editing yet
             self._selected_comp_ref = None
             self._field_panel.set_target(None)
+            self.clear_component_extension_panel()
+            self._emit_component_cleared()
             return
 
         ref = tc_components[index]
         self._selected_comp_ref = ref
         self._field_panel.set_target(ref)
+        self.clear_component_extension_panel()
+        if self.on_component_selected is not None:
+            self.on_component_selected(self._entity, ref)
         if self._ui is not None:
             self._ui.request_layout()
+
+    def set_component_extension_panel(self, panel) -> None:
+        self.clear_component_extension_panel()
+        if panel is None:
+            return
+        self._extension_panel_host.add_child(Separator())
+        self._extension_panel_host.add_child(panel)
+        self._extension_panel_host.visible = True
+        if self._ui is not None:
+            self._ui.request_layout()
+
+    def clear_component_extension_panel(self) -> None:
+        if not self._extension_panel_host.children:
+            self._extension_panel_host.visible = False
+            return
+        for child in self._extension_panel_host.children[:]:
+            self._extension_panel_host.remove_child(child)
+        self._extension_panel_host.visible = False
+        if self._ui is not None:
+            self._ui.request_layout()
+
+    def _emit_component_cleared(self) -> None:
+        if self.on_component_cleared is not None:
+            self.on_component_cleared()
 
     def _on_transform_changed(self) -> None:
         if self.on_transform_changed is not None:

@@ -62,6 +62,10 @@ class InspectorControllerTcgui:
         self._entity_inspector.set_undo_command_handler(push_undo_command)
         self._entity_inspector.on_transform_changed = on_transform_changed
         self._entity_inspector.on_component_changed = on_component_changed
+        self.on_component_selected: Optional[Callable[[Any, Any], None]] = None
+        self.on_component_cleared: Optional[Callable[[], None]] = None
+        self._entity_inspector.on_component_selected = self._emit_component_selected
+        self._entity_inspector.on_component_cleared = self._emit_component_cleared
         container.add_child(self._entity_inspector)
 
         self._material_inspector = MaterialInspectorTcgui(resource_manager)
@@ -212,6 +216,9 @@ class InspectorControllerTcgui:
 
         file_path = model.extras.get("file_path")
 
+        if kind is not InspectorKind.ENTITY:
+            self._emit_component_cleared()
+
         if kind is InspectorKind.ENTITY:
             self._entity_inspector.set_target(model.target)
 
@@ -269,6 +276,20 @@ class InspectorControllerTcgui:
             self._render_target_inspector.set_render_target(model.target, model.scene)
 
         self._show_panel(panel)
+
+    def set_component_extension_panel(self, panel) -> None:
+        self._entity_inspector.set_component_extension_panel(panel)
+
+    def clear_component_extension_panel(self) -> None:
+        self._entity_inspector.clear_component_extension_panel()
+
+    def _emit_component_selected(self, entity, component_ref) -> None:
+        if self.on_component_selected is not None:
+            self.on_component_selected(entity, component_ref)
+
+    def _emit_component_cleared(self) -> None:
+        if self.on_component_cleared is not None:
+            self.on_component_cleared()
 
     # ------------------------------------------------------------------
     # Panel → controller change relays

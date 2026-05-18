@@ -43,6 +43,9 @@ from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
+from termin.editor_tcgui.default_component_editor_extensions import (
+    register_default_component_editor_extensions,
+)
 
 
 class EditorWindowTcgui:
@@ -80,6 +83,7 @@ class EditorWindowTcgui:
         self.resource_manager.register_builtin_components()
         self.resource_manager.register_builtin_frame_passes()
         self.resource_manager.register_builtin_post_effects()
+        register_default_component_editor_extensions()
 
         # Scene manager
         self.scene_manager = scene_manager
@@ -173,6 +177,7 @@ class EditorWindowTcgui:
         ] | None = None
         self._viewport_click_interceptors: list[Callable] = []
         self._viewport_overlay_drawers: list[Callable[[], None]] = []
+        self._active_component_editor_extension = None
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
@@ -429,6 +434,8 @@ class EditorWindowTcgui:
             on_edit_pipeline=self._open_pipeline_file_for_edit,
             dialog_service=self._dialog_service,
         )
+        self._inspector_controller.on_component_selected = self._on_inspector_component_selected
+        self._inspector_controller.on_component_cleared = self._clear_component_editor_extension
         self._inspector_controller.set_scene(self.scene)
         self._observe_scene_events(self.scene)
         self._inspector_controller.set_render_target_scene_getter(
@@ -837,6 +844,50 @@ class EditorWindowTcgui:
                 kept.append(existing)
         self._viewport_overlay_drawers = kept
         self._request_viewport_update()
+
+    def _on_inspector_component_selected(self, entity, component_ref) -> None:
+        self._clear_component_editor_extension()
+        type_name = component_ref.type_name
+        from termin.editor_tcgui.component_editor_extension import (
+            create_component_editor_extension,
+        )
+
+        extension = create_component_editor_extension(type_name)
+        if extension is None:
+            return
+
+        try:
+            extension.attach(self, entity, component_ref)
+            panel = extension.build_panel()
+        except Exception as e:
+            log.error(
+                "[EditorWindowTcgui] component editor extension attach failed "
+                f"for '{type_name}': {e}"
+            )
+            try:
+                extension.detach()
+            except Exception as detach_error:
+                log.error(
+                    "[EditorWindowTcgui] component editor extension detach failed "
+                    f"after attach error for '{type_name}': {detach_error}"
+                )
+            return
+
+        self._active_component_editor_extension = extension
+        if self._inspector_controller is not None:
+            self._inspector_controller.set_component_extension_panel(panel)
+
+    def _clear_component_editor_extension(self) -> None:
+        extension = self._active_component_editor_extension
+        self._active_component_editor_extension = None
+        if self._inspector_controller is not None:
+            self._inspector_controller.clear_component_extension_panel()
+        if extension is None:
+            return
+        try:
+            extension.detach()
+        except Exception as e:
+            log.error(f"[EditorWindowTcgui] component editor extension detach failed: {e}")
 
     def _toggle_surface_edge_debug_tool(self) -> None:
         if self._surface_edge_debug_tool is None:

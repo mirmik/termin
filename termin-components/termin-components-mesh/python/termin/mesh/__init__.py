@@ -6,6 +6,7 @@ preload_sdk_libs("nanobind", "termin_components_mesh")
 
 from tmesh import Mesh3, TcMesh
 from termin.mesh.mesh_component import MeshComponent
+from termin.mesh.procedural_mesh_component import ProceduralMeshComponent
 from termin.mesh.script_mesh_component import ScriptMeshComponent
 from termin.mesh.surface_edge_query import (
     SurfaceEdgeHit,
@@ -17,6 +18,7 @@ __all__ = [
     "Mesh3",
     "TcMesh",
     "MeshComponent",
+    "ProceduralMeshComponent",
     "ScriptMeshComponent",
     "SurfaceEdgeHit",
     "find_surface_edge_for_entity",
