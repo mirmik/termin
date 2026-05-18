@@ -165,6 +165,7 @@ const tc_render_surface_vtable SDLWindowRenderSurface::s_vtable = {
     .get_cursor_pos = &SDLWindowRenderSurface::vtable_get_cursor_pos,
     .destroy = &SDLWindowRenderSurface::vtable_destroy,
     .share_group_key = nullptr,
+    .get_tgfx_color_tex_id = nullptr,
 };
 
 SDLWindowRenderSurface::SDLWindowRenderSurface(
@@ -249,7 +250,7 @@ uintptr_t SDLWindowRenderSurface::get_native_handle() const {
 // ============================================================================
 
 uint32_t SDLWindowRenderSurface::vtable_get_framebuffer(tc_render_surface* self) {
-    auto* surface = from_tc_surface(self);
+    (void)self;
     // Window framebuffer is always 0
     return 0;
 }
@@ -277,6 +278,7 @@ uintptr_t SDLWindowRenderSurface::vtable_context_key(tc_render_surface* self) {
 }
 
 void SDLWindowRenderSurface::vtable_poll_events(tc_render_surface* self) {
+    (void)self;
     // poll_events вызывается через backend, не через отдельный surface
 }
 
@@ -305,6 +307,7 @@ void SDLWindowRenderSurface::vtable_get_cursor_pos(tc_render_surface* self, doub
 }
 
 void SDLWindowRenderSurface::vtable_destroy(tc_render_surface* self) {
+    (void)self;
     // Деструктор вызывается через C++ delete, не через vtable
 }
 
