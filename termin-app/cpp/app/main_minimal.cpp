@@ -93,6 +93,7 @@ int main(int argc, char* argv[]) {
 
     fs::path python_stdlib = find_python_stdlib(install_root);
     fs::path termin_path;
+    bool sdk_python_tree = false;
 
     if (!python_stdlib.empty()) {
         bundled_python = true;
@@ -118,6 +119,18 @@ int main(int argc, char* argv[]) {
 
         Py_NoSiteFlag = 0;
         Py_IgnoreEnvironmentFlag = 1;
+    } else if (fs::exists(install_root / "lib" / "python" / "termin")) {
+        sdk_python_tree = true;
+        termin_path = install_root / "lib" / "python" / "termin";
+        std::cout << "Using SDK Python modules: " << termin_path << std::endl;
+
+        if (std::getenv("TERMIN_SDK") == nullptr) {
+#ifdef _WIN32
+            _putenv_s("TERMIN_SDK", install_root.string().c_str());
+#else
+            setenv("TERMIN_SDK", install_root.c_str(), 1);
+#endif
+        }
     } else {
         fs::path project_root = exe_dir;
         while (!project_root.empty()) {
@@ -155,6 +168,18 @@ int main(int argc, char* argv[]) {
             "import sys\n"
             "sys.path.insert(0, r'" + termin_path.parent_path().string() + "')\n"
             "sys.path.insert(0, r'" + site_packages.string() + "')\n";
+    } else if (sdk_python_tree) {
+        path_code =
+            "import sys, types\n"
+            "host_paths = [p for p in r'" TERMIN_HOST_PYTHON_PATHS "'.split(':') if p]\n"
+            "for p in reversed(host_paths):\n"
+            "    if p and p not in sys.path:\n"
+            "        sys.path.insert(0, p)\n"
+            "sys.path.insert(0, r'" + termin_path.parent_path().string() + "')\n"
+            "termin_pkg = types.ModuleType('termin')\n"
+            "termin_pkg.__path__ = [r'" + termin_path.string() + "']\n"
+            "termin_pkg.__package__ = 'termin'\n"
+            "sys.modules['termin'] = termin_pkg\n";
     } else {
         path_code =
             "import sys\n"
