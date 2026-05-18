@@ -550,7 +550,7 @@ if(BUILD_TESTS)
     target_compile_options(termin_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
 
-    add_custom_target(run_tests
+    add_custom_target(termin_run_tests
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
         DEPENDS termin_tests
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
