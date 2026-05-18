@@ -70,6 +70,15 @@ endif()
 
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 
+set(TERMIN_HOST_PYTHON_PATHS "")
+foreach(path_var Python_SITELIB Python_SITEARCH)
+    if(DEFINED ${path_var} AND NOT "${${path_var}}" STREQUAL "")
+        list(APPEND TERMIN_HOST_PYTHON_PATHS "${${path_var}}")
+    endif()
+endforeach()
+list(REMOVE_DUPLICATES TERMIN_HOST_PYTHON_PATHS)
+string(REPLACE ";" ":" TERMIN_HOST_PYTHON_PATHS_STR "${TERMIN_HOST_PYTHON_PATHS}")
+
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -457,6 +466,7 @@ if(BUILD_EDITOR_MINIMAL)
     )
     target_link_libraries(termin_editor PRIVATE Python::Python termin_engine::termin_engine)
     target_compile_options(termin_editor PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+    target_compile_definitions(termin_editor PRIVATE TERMIN_HOST_PYTHON_PATHS="${TERMIN_HOST_PYTHON_PATHS_STR}")
     set_target_properties(termin_editor PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     )
@@ -484,6 +494,7 @@ if(BUILD_LAUNCHER)
     )
     target_link_libraries(termin_launcher PRIVATE Python::Python)
     target_compile_options(termin_launcher PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+    target_compile_definitions(termin_launcher PRIVATE TERMIN_HOST_PYTHON_PATHS="${TERMIN_HOST_PYTHON_PATHS_STR}")
     set_target_properties(termin_launcher PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     )
@@ -584,6 +595,28 @@ install(TARGETS ${TERMIN_INSTALL_TARGETS}
 if(WIN32 AND SDL2_DLL)
     install(FILES ${SDL2_DLL} DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
+
+# Install termin-app Python sources (editor, launcher, project tooling, facades).
+# Native modules and extracted subproject packages install their own files into
+# the same namespace; this adds the app-level Python modules they do not own.
+install(DIRECTORY ${TERMIN_ROOT}/termin/
+    DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}
+    PATTERN "__pycache__" EXCLUDE
+    PATTERN "*.pyc" EXCLUDE
+    PATTERN "*.pyo" EXCLUDE
+    PATTERN "*.so" EXCLUDE
+    PATTERN "*.dll" EXCLUDE
+    PATTERN "*.dylib" EXCLUDE
+    PATTERN "*.egg-info" EXCLUDE
+    PATTERN "tests" EXCLUDE
+    PATTERN "include" EXCLUDE
+)
+install(DIRECTORY ${TERMIN_ROOT}/../termin-assets/termin_assets
+    DESTINATION lib/python
+    PATTERN "__pycache__" EXCLUDE
+    PATTERN "*.pyc" EXCLUDE
+    PATTERN "*.pyo" EXCLUDE
+)
 
 # Install headers
 install(DIRECTORY ${TERMIN_ROOT}/core_c/include/
