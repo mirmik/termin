@@ -11,8 +11,16 @@ option(TERMIN_SCENE_BUILD_TESTS "Build tests" ON)
 option(TERMIN_BUILD_PYTHON "Build Python bindings (_scene_native)" OFF)
 
 # Dependencies
-find_package(termin_base REQUIRED)
-find_package(termin_inspect REQUIRED)
+if(COMMAND termin_require_package)
+    termin_require_package(termin_base tcbase::termin_base)
+else()
+    find_package(termin_base REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_inspect termin_inspect::termin_inspect)
+else()
+    find_package(termin_inspect REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)

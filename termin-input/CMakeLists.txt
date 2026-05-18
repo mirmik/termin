@@ -9,8 +9,16 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python-related input bridge code" OFF)
 
-find_package(termin_base REQUIRED)
-find_package(termin_scene REQUIRED)
+if(COMMAND termin_require_package)
+    termin_require_package(termin_base tcbase::termin_base)
+else()
+    find_package(termin_base REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_scene termin_scene::termin_scene)
+else()
+    find_package(termin_scene REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)

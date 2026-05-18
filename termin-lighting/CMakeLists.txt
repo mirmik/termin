@@ -7,7 +7,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python binding _lighting_native" OFF)
 
-find_package(termin_base REQUIRED)
+if(COMMAND termin_require_package)
+    termin_require_package(termin_base tcbase::termin_base)
+else()
+    find_package(termin_base REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -34,7 +38,11 @@ if(TERMIN_BUILD_PYTHON)
     endif()
     find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
+    if(COMMAND termin_require_package)
+    termin_require_package(termin_scene termin_scene::termin_scene)
+else()
     find_package(termin_scene REQUIRED)
+endif()
 
     nanobind_add_module(_lighting_native NB_SHARED
         cpp/bindings/lighting_bindings.cpp

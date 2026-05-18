@@ -11,7 +11,11 @@ option(TERMIN_MODULES_BUILD_TESTS "Build termin-modules tests" ON)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-find_package(termin_base REQUIRED)
+if(COMMAND termin_require_package)
+    termin_require_package(termin_base tcbase::termin_base)
+else()
+    find_package(termin_base REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
