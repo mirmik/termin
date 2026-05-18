@@ -8,6 +8,8 @@
 // specifics are inside BackendWindow + IRenderDevice.
 #include <chrono>
 #include <cmath>
+#include <cstring>
+#include <exception>
 #include <cstdio>
 #include <cstdlib>
 
@@ -18,8 +20,19 @@
 #include "tgfx2/i_render_device.hpp"
 
 int main() {
+try {
     const char* backend_env = std::getenv("TERMIN_BACKEND");
     printf("TERMIN_BACKEND=%s\n", backend_env ? backend_env : "(unset, using opengl)");
+
+    double max_seconds = 3.0;
+    if (const char* max_seconds_env = std::getenv("TERMIN_TEST_MAX_SECONDS")) {
+        char* end = nullptr;
+        double parsed = std::strtod(max_seconds_env, &end);
+        if (end != max_seconds_env && parsed >= 0.0) {
+            max_seconds = parsed;
+        }
+    }
+    printf("TERMIN_TEST_MAX_SECONDS=%.2f\n", max_seconds);
 
     termin::SDLBackendWindow win("BackendWindow triangle smoke", 800, 600);
     tgfx::IRenderDevice* dev = win.device();
@@ -110,8 +123,9 @@ void main() {
 
         auto now = std::chrono::steady_clock::now();
         float t = std::chrono::duration<float>(now - start).count();
-        if (t > 3.0f) win.set_should_close(true);
-
+        if (max_seconds > 0.0 && t >= max_seconds) {
+            break;
+        }
         // Render triangle into `rt` through the tgfx2 command list —
         // same code both backends.
         auto cmd = dev->create_command_list();
@@ -153,4 +167,11 @@ void main() {
 
     printf("Frames: %llu. OK.\n", static_cast<unsigned long long>(frame_index));
     return 0;
+} catch (const std::exception& e) {
+    fprintf(stderr, "backend_window_triangle failed: %s\n", e.what());
+    if (std::strstr(e.what(), "No available video device")) {
+        return 77;
+    }
+    return 1;
+}
 }
