@@ -27,7 +27,7 @@ option(TERMIN_BUILD_PYTHON "Build Python/nanobind bindings" ON)
 # Install prefix for Python modules only.
 # Shared C/C++ runtime libraries are installed into the normal lib/bin dirs.
 # For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
-if(BUILD_STANDALONE)
+if(BUILD_STANDALONE OR TERMIN_BUILD_MONOREPO)
     set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}/lib/python/termin")
     set(TERMIN_PYTHON_INSTALL_DIR "lib/python/termin")
 else()
