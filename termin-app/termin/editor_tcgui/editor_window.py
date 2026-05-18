@@ -964,6 +964,38 @@ class EditorWindowTcgui:
             float(cam_pos[2] + forward[2] * 5.0),
         )
 
+    def world_point_on_oxy_plane(self, x: float, y: float) -> tuple[float, float, float] | None:
+        if self.camera is None or self.camera.entity is None:
+            log.error("[EditorWindowTcgui] OXY plane pick failed: editor camera is not available")
+            return None
+        if self._viewport_widget is None:
+            log.error("[EditorWindowTcgui] OXY plane pick failed: viewport widget is not available")
+            return None
+
+        viewport_rect = (
+            0,
+            0,
+            int(max(1.0, self._viewport_widget.width)),
+            int(max(1.0, self._viewport_widget.height)),
+        )
+        try:
+            ray = self.camera.screen_point_to_ray(float(x), float(y), viewport_rect)
+            origin = ray.origin
+            direction = ray.direction
+            dz = float(direction[2])
+            if abs(dz) < 1e-9:
+                log.error("[EditorWindowTcgui] OXY plane pick failed: ray is parallel to OXY plane")
+                return None
+            t = -float(origin[2]) / dz
+            return (
+                float(origin[0] + direction[0] * t),
+                float(origin[1] + direction[1] * t),
+                0.0,
+            )
+        except Exception as e:
+            log.error(f"[EditorWindowTcgui] OXY plane pick failed: {e}")
+            return None
+
     # ------------------------------------------------------------------
     # Undo / Redo
     # ------------------------------------------------------------------
@@ -1204,6 +1236,9 @@ class EditorWindowTcgui:
 
     def _request_viewport_update(self) -> None:
         self.scene_manager.request_render()
+
+    def request_viewport_update(self) -> None:
+        self._request_viewport_update()
 
     def _observe_scene_events(self, scene) -> None:
         if self._scene_event_subscription is not None:
