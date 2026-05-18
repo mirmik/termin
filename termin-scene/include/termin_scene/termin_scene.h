@@ -1,5 +1,6 @@
 #pragma once
 
+#ifndef TERMIN_SCENE_API
 #ifdef _WIN32
     #if defined(TERMIN_SCENE_EXPORTS)
         #define TERMIN_SCENE_API __declspec(dllexport)
@@ -7,7 +8,8 @@
         #define TERMIN_SCENE_API __declspec(dllimport)
     #endif
 #else
-    #define TERMIN_SCENE_API
+    #define TERMIN_SCENE_API __attribute__((visibility("default")))
+#endif
 #endif
 
 #ifdef __cplusplus

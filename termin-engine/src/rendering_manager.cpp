@@ -817,23 +817,6 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
     }
 }
 
-// Helper struct for camera search callback
-// Find first component with camera capability in scene
-struct CameraSearchData {
-    tc_component* camera;
-    const char* found_name;
-};
-
-static bool find_first_camera_cb(tc_component* c, void* user_data) {
-    CameraSearchData* data = static_cast<CameraSearchData*>(user_data);
-    data->camera = c;
-    if (tc_entity_handle_valid(c->owner)) {
-        tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
-        if (pool) data->found_name = tc_entity_pool_name(pool, c->owner.id);
-    }
-    return false; // Stop iteration — found first camera
-}
-
 std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_handle scene) {
     std::vector<tc_viewport_handle> viewports;
 

@@ -329,6 +329,7 @@ void PullRenderingManager::shutdown() {
 
 // Helpers
 std::vector<Light> PullRenderingManager::collect_lights(tc_scene_handle scene) {
+    (void)scene;
     return {};
 }
 
