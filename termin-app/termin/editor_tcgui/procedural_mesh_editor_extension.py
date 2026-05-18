@@ -19,6 +19,7 @@ from termin.csg import (
     Solid,
     extrude as csg_extrude,
 )
+from termin.csg.procedural_document import ProceduralPlane
 from termin.csg.solid_render import (
     PointTransform,
     SolidRenderStyle,
@@ -39,6 +40,7 @@ class ProceduralMeshEditorExtension:
         self._document_tree = TreeWidget()
         self._selected_node_data: tuple[str, str] | None = None
         self._draft_points: list[tuple[float, float, float]] = []
+        self._draft_plane: ProceduralPlane | None = None
 
     def attach(self, editor, entity, component_ref) -> None:
         self._editor = editor
@@ -62,6 +64,7 @@ class ProceduralMeshEditorExtension:
         self._component = None
         self._mode = "idle"
         self._draft_points = []
+        self._draft_plane = None
         log.info("[ProceduralMeshEditor] extension detached")
 
     def build_panel(self):
@@ -155,11 +158,12 @@ class ProceduralMeshEditorExtension:
         if component is None:
             log.error("[ProceduralMeshEditor] cannot close contour: component object is not available")
             return
-        if not component.add_contour_from_world_points(self._draft_points[:]):
+        if not component.add_contour_from_world_points(self._draft_points[:], self._draft_plane):
             return
         if component.document.items:
             self._selected_node_data = ("sketch", component.document.items[0].id)
         self._draft_points = []
+        self._draft_plane = None
         self._refresh_mode_label()
         self._refresh_document_tree()
         self._request_viewport_update()
@@ -193,6 +197,7 @@ class ProceduralMeshEditorExtension:
 
             component.document = ProceduralMeshDocument()
         self._draft_points = []
+        self._draft_plane = None
         self._selected_node_data = None
         self._refresh_mode_label()
         self._refresh_document_tree()
@@ -390,6 +395,8 @@ class ProceduralMeshEditorExtension:
         else:
             point_kind = "oxy"
         if self._mode == "draw_sketch":
+            if not self._draft_points:
+                self._draft_plane = self._initial_draft_plane(point_kind)
             self._draft_points.append(point)
             self._refresh_mode_label()
             self._request_viewport_update()
@@ -401,6 +408,11 @@ class ProceduralMeshEditorExtension:
             f"tri={triangle_index} draft_points={len(self._draft_points)}"
         )
         return True
+
+    def _initial_draft_plane(self, point_kind: str) -> ProceduralPlane | None:
+        if point_kind == "oxy":
+            return ProceduralPlane()
+        return None
 
     def _click_point(
         self,

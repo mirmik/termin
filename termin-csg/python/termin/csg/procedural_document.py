@@ -222,6 +222,18 @@ class ProceduralMeshDocument:
         sketch = self.ensure_sketch_for_world_points(points)
         return sketch.add_contour_from_world_points(points)
 
+    def add_contour_on_plane_from_world_points(
+        self,
+        points: list[Vec3Data],
+        plane: ProceduralPlane,
+    ) -> ContourDocument | None:
+        if self.items:
+            sketch = self.items[0]
+        else:
+            sketch = SketchItemDocument(plane=plane)
+            self.items.append(sketch)
+        return sketch.add_contour_from_world_points(points)
+
     def contour_count(self) -> int:
         return sum(len(item.contours) for item in self.items)
 
