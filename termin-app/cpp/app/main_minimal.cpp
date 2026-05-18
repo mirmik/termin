@@ -188,7 +188,6 @@ int main(int argc, char* argv[]) {
 
     if (PyRun_SimpleString(path_code.c_str()) != 0) {
         std::cerr << "Failed to set Python path" << std::endl;
-        Py_Finalize();
         return 1;
     }
 
@@ -201,13 +200,13 @@ init_editor()
     int result = PyRun_SimpleString(init_code);
     if (result != 0) {
         PyErr_Print();
-        Py_Finalize();
         return 1;
     }
 
     // Run main loop in C++
     engine.run();
 
-    Py_Finalize();
+    // Let the OS tear down the embedded interpreter. Some app/UI destructors
+    // can still touch Python during shutdown, and Py_Finalize makes that crash.
     return 0;
 }
