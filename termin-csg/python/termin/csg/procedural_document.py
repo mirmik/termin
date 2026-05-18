@@ -1,4 +1,4 @@
-"""Small editable document model for procedural mesh construction."""
+"""Small editable document model for procedural CSG construction."""
 
 from __future__ import annotations
 

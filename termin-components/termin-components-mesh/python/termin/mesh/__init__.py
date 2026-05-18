@@ -7,13 +7,6 @@ preload_sdk_libs("nanobind", "termin_components_mesh")
 from tmesh import Mesh3, TcMesh
 from termin.mesh.mesh_component import MeshComponent
 from termin.mesh.procedural_mesh_component import ProceduralMeshComponent
-from termin.mesh.procedural_mesh_document import (
-    ContourDocument,
-    OperationDocument,
-    ProceduralMeshDocument,
-    ProceduralPlane,
-    SketchItemDocument,
-)
 from termin.mesh.script_mesh_component import ScriptMeshComponent
 from termin.mesh.surface_edge_query import (
     SurfaceEdgeHit,
@@ -26,11 +19,6 @@ __all__ = [
     "TcMesh",
     "MeshComponent",
     "ProceduralMeshComponent",
-    "ContourDocument",
-    "OperationDocument",
-    "ProceduralMeshDocument",
-    "ProceduralPlane",
-    "SketchItemDocument",
     "ScriptMeshComponent",
     "SurfaceEdgeHit",
     "find_surface_edge_for_entity",
