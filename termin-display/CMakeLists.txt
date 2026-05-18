@@ -316,6 +316,11 @@ if(TERMIN_DISPLAY_HAS_SDL)
             PRIVATE termin_display ${SDL2_LIBRARIES})
         target_include_directories(backend_window_triangle
             PRIVATE ${SDL2_INCLUDE_DIRS})
+        add_test(NAME backend_window_triangle COMMAND backend_window_triangle)
+        set_tests_properties(backend_window_triangle PROPERTIES
+            TIMEOUT 10
+            SKIP_RETURN_CODE 77
+            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device")
     endif()
 endif()
 

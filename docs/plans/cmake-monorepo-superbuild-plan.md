@@ -141,6 +141,8 @@ builds the C++ SDK graph without per-module install steps.
 Unify test options under a root switch:
 
 - `TERMIN_BUILD_TESTS=OFF` by default
+- `TERMIN_BUILD_TGFX2_TESTS=ON` controls tgfx2 tests when tests are enabled
+- `TERMIN_BUILD_WINDOW_TESTS=OFF` controls tests that create windows or GL contexts
 - module-specific test options remain available
 
 Add a root target:
@@ -151,6 +153,14 @@ ctest --test-dir build/monorepo --output-on-failure
 ```
 
 Test failures must log useful diagnostics and must not be silently ignored.
+
+Current status:
+
+- `run-tests-cpp.sh` uses the top-level CMake graph.
+- `--vulkan/--no-vulkan` maps to `TERMIN_ENABLE_VULKAN`.
+- `--window-tests/--no-window-tests` controls tests that need a windowing system.
+- tgfx2 window tests are present in CTest when window tests are enabled, but skip cleanly when the current environment has no usable video backend.
+- Vulkan tgfx2 smoke tests are wired behind `TERMIN_ENABLE_VULKAN`; the local host still needs shaderc for a Vulkan-enabled build.
 
 ## Phase 5: Python Bindings
 
