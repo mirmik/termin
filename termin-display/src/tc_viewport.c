@@ -49,7 +49,7 @@ static char* tc_strdup_local(const char* s) {
     return copy;
 }
 
-static void tc_strset(char** dest, const char* src) {
+static void tc_viewport_strset(char** dest, const char* src) {
     free(*dest);
     *dest = tc_strdup_local(src);
 }
@@ -278,7 +278,7 @@ void tc_viewport_free(tc_viewport_handle h) {
 void tc_viewport_set_name(tc_viewport_handle h, const char* name) {
     tc_viewport* vp = viewport_get_alive(h);
     if (!vp) return;
-    tc_strset(&vp->name, name);
+    tc_viewport_strset(&vp->name, name);
 }
 
 const char* tc_viewport_get_name(tc_viewport_handle h) {
@@ -428,7 +428,7 @@ bool tc_viewport_get_override_resolution(tc_viewport_handle h) {
 void tc_viewport_set_input_mode(tc_viewport_handle h, const char* mode) {
     tc_viewport* vp = viewport_get_alive(h);
     if (!vp) return;
-    tc_strset(&vp->input_mode, mode ? mode : "simple");
+    tc_viewport_strset(&vp->input_mode, mode ? mode : "simple");
 }
 
 const char* tc_viewport_get_input_mode(tc_viewport_handle h) {
@@ -439,7 +439,7 @@ const char* tc_viewport_get_input_mode(tc_viewport_handle h) {
 void tc_viewport_set_managed_by(tc_viewport_handle h, const char* pipeline_name) {
     tc_viewport* vp = viewport_get_alive(h);
     if (!vp) return;
-    tc_strset(&vp->managed_by, pipeline_name);
+    tc_viewport_strset(&vp->managed_by, pipeline_name);
 }
 
 const char* tc_viewport_get_managed_by(tc_viewport_handle h) {

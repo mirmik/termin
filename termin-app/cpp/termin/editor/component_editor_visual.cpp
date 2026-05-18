@@ -3,8 +3,8 @@
 namespace termin {
 
 ComponentEditorVisualRegistry& ComponentEditorVisualRegistry::instance() {
-    static ComponentEditorVisualRegistry registry;
-    return registry;
+    static ComponentEditorVisualRegistry component_editor_visual_registry;
+    return component_editor_visual_registry;
 }
 
 void ComponentEditorVisualRegistry::register_provider(std::unique_ptr<ComponentEditorVisualProvider> provider) {

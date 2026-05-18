@@ -18,7 +18,7 @@ static char* tc_strdup(const char* s) {
     return copy;
 }
 
-static void tc_strset(char** dest, const char* src) {
+static void tc_display_strset(char** dest, const char* src) {
     free(*dest);
     *dest = tc_strdup(src);
 }
@@ -80,7 +80,7 @@ void tc_display_free(tc_display* display) {
 // ============================================================================
 
 void tc_display_set_name(tc_display* display, const char* name) {
-    if (display) tc_strset(&display->name, name);
+    if (display) tc_display_strset(&display->name, name);
 }
 
 const char* tc_display_get_name(const tc_display* display) {
@@ -88,7 +88,7 @@ const char* tc_display_get_name(const tc_display* display) {
 }
 
 void tc_display_set_uuid(tc_display* display, const char* uuid) {
-    if (display) tc_strset(&display->uuid, uuid);
+    if (display) tc_display_strset(&display->uuid, uuid);
 }
 
 const char* tc_display_get_uuid(const tc_display* display) {

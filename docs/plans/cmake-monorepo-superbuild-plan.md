@@ -77,6 +77,7 @@ cmake --install build/Release
 - The default build directory is `build/<BUILD_TYPE>`; for Release this is `build/Release`.
 - Shell scripts use `ccache` automatically when available and select `Ninja` for new build directories when available.
 - `--unity` enables targeted unity build for checked C++ targets (`termin_graphics2`, `termin_render`, `trent`, `entity_lib`, `render_lib`).
+- Global `CMAKE_UNITY_BUILD=ON` has been cleaned up for the root C++/Python/test graphs. Internal helper/state names were made domain-specific, shared helpers were extracted where duplication was real, and vendored `Recast`/`Detour` targets are explicitly excluded from unity.
 - Standalone module builds remain supported through normal `find_package(...)` paths.
 
 ### Tests

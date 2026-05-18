@@ -231,8 +231,8 @@ if(EXISTS "${TERMIN_RECAST_DIR}/CMakeLists.txt" AND EXISTS "${TERMIN_DETOUR_DIR}
     add_subdirectory(${TERMIN_DETOUR_DIR} ${CMAKE_CURRENT_BINARY_DIR}/Detour EXCLUDE_FROM_ALL)
 
     # Re-add Recast to build (EXCLUDE_FROM_ALL removed it from default)
-    set_target_properties(Recast PROPERTIES EXCLUDE_FROM_ALL FALSE)
-    set_target_properties(Detour PROPERTIES EXCLUDE_FROM_ALL FALSE)
+    set_target_properties(Recast PROPERTIES EXCLUDE_FROM_ALL FALSE UNITY_BUILD OFF)
+    set_target_properties(Detour PROPERTIES EXCLUDE_FROM_ALL FALSE UNITY_BUILD OFF)
 
     # Add INSTALL_INTERFACE to Recast includes for proper export
     target_include_directories(Recast PUBLIC
