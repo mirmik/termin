@@ -97,9 +97,9 @@ class _RenderTargetConfig:
 
 
 def _load_render_target_config_module(monkeypatch):
-    entity_native = types.ModuleType("termin.entity._entity_native")
-    entity_native.RenderTargetConfig = _RenderTargetConfig
-    monkeypatch.setitem(sys.modules, "termin.entity._entity_native", entity_native)
+    native_mod = types.ModuleType("termin._native")
+    native_mod.RenderTargetConfig = _RenderTargetConfig
+    monkeypatch.setitem(sys.modules, "termin._native", native_mod)
 
     spec = importlib.util.spec_from_file_location(
         "render_target_config_source",

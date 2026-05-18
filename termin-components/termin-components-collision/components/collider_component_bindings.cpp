@@ -10,7 +10,7 @@ using namespace termin;
 NB_MODULE(_components_collision_native, m) {
     m.doc() = "Native collision component bindings";
 
-    nb::module_::import_("termin.entity._entity_native");
+    nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.colliders._colliders_native");
 
     nb::class_<ColliderComponent, CxxComponent>(m, "ColliderComponent")

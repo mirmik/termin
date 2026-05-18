@@ -29,6 +29,9 @@ void bind_frame_graph_debugger(nb::module_& m);
 void cleanup_pass_classes();
 }
 
+// Entity domain bindings (migrated from _entity_native)
+void bind_entity_domain(nb::module_& m);
+
 // Cleanup function for _native module only
 static void cleanup_all_python_objects() {
     termin::cleanup_pass_classes();
@@ -126,11 +129,9 @@ NB_MODULE(_native, m) {
     nb::module_ viewport_native = nb::module_::import_("termin.viewport._viewport_native");
     m.attr("viewport") = viewport_native;
 
-    // Import _entity_native and re-export as submodule
-    // Types like Component, Entity, EntityHandle are defined there
-    // Must be imported before render (MeshRenderer inherits Component)
-    nb::module_ entity_native = nb::module_::import_("termin.entity._entity_native");
-    m.attr("entity") = entity_native;
+    // Entity domain bindings (migrated from _entity_native)
+    bind_entity_domain(m);
+
     nb::module_ engine_native = nb::module_::import_("termin.engine._engine_native");
 
     // Termin-specific: RenderSyncMode (from tc_project_settings.h)

@@ -1,9 +1,10 @@
-// Entity native module (_entity_native).
+// Entity domain bindings for _native module.
+// Migrated from _entity_native to eliminate the termin.entity Python package.
 //
-// Core types (Entity, Component, ComponentRegistry, TcScene, TcComponentRef,
-// TcComponent, SoA) are registered in _scene_native and re-exported here.
-// This module adds domain-specific bindings: EntityRegistry,
-// OrbitCameraController, InputEvents, lighting.
+// Core ECS types (Entity, Component, ComponentRegistry, TcScene, TcComponentRef,
+// TcComponent) are owned by _scene_native and should be imported from there.
+// This module provides domain-specific bindings: EntityRegistry,
+// OrbitCameraController, InputEvents, TcScene render extensions.
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -25,27 +26,12 @@
 namespace nb = nanobind;
 using namespace termin;
 
-NB_MODULE(_entity_native, m) {
-    m.doc() = "Entity native module (Component, Entity, registries)";
-
-    // Import tmesh native module so TcMesh is registered before
-    // SceneRenderState::skybox_mesh() bindings are attached.
-    nb::module_::import_("tmesh._tmesh_native");
-
-    // Import _viewport_native for TcViewport type (used by input events)
-    nb::module_::import_("termin.viewport._viewport_native");
-
-    // Import tcbase for Action, MouseButton, Mods enums (used by input events)
-    nb::module_::import_("tcbase._tcbase_native");
-
-    // Import _scene_native — canonical owner of core types
+void bind_entity_domain(nb::module_& m) {
+    // Import _scene_native first. It owns the ECS nanobind types; this module
+    // adds render/editor domain helpers and re-exports the core types.
     nb::module_ scene_native = nb::module_::import_("termin.scene._scene_native");
-
-    // Import _inspect_native for singleton address checks
-    nb::module_ inspect_native = nb::module_::import_("termin.inspect._inspect_native");
-
-    // Re-export core types from _scene_native
     m.attr("TcScene") = scene_native.attr("TcScene");
+    m.attr("TcSceneRef") = scene_native.attr("TcScene");
     m.attr("Component") = scene_native.attr("Component");
     m.attr("ComponentRegistry") = scene_native.attr("ComponentRegistry");
     m.attr("TcComponentRef") = scene_native.attr("TcComponentRef");
@@ -59,12 +45,17 @@ NB_MODULE(_entity_native, m) {
     m.attr("soa_registry_get_all_info") = scene_native.attr("soa_registry_get_all_info");
     m.attr("soa_registry_type_count") = scene_native.attr("soa_registry_type_count");
 
-    // Re-export singleton address helpers from _inspect_native
-    m.attr("_inspect_registry_address") = inspect_native.attr("inspect_registry_address");
-    m.attr("_kind_registry_cpp_address") = inspect_native.attr("kind_registry_cpp_address");
+    // Import tmesh native module so TcMesh is registered before
+    // SceneRenderState::skybox_mesh() bindings are attached.
+    nb::module_::import_("tmesh._tmesh_native");
+
+    // Import _viewport_native for TcViewport type (used by input events)
+    nb::module_::import_("termin.viewport._viewport_native");
+
+    // Import tcbase for Action, MouseButton, Mods enums (used by input events)
+    nb::module_::import_("tcbase._tcbase_native");
 
     // --- TcScene render extensions (ViewportConfig, background_color, pipelines, etc.) ---
-    // TcScene base is in _scene_native; bind_tc_scene extends it with render methods
     bind_tc_scene(m);
     bind_tc_scene_lighting(m);
 
@@ -156,4 +147,9 @@ NB_MODULE(_entity_native, m) {
         tc::KindRegistry::instance().clear_python();
     });
     atexit_mod.attr("register")(cleanup_fn);
+
+    // Expose singleton address helpers at _native top level (for backward compat with shim)
+    nb::module_ inspect_native = nb::module_::import_("termin.inspect._inspect_native");
+    m.attr("_inspect_registry_address") = inspect_native.attr("inspect_registry_address");
+    m.attr("_kind_registry_cpp_address") = inspect_native.attr("kind_registry_cpp_address");
 }

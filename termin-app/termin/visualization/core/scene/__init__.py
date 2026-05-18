@@ -1,6 +1,6 @@
 """Scene module - container for entities and scene configuration."""
 
-from termin.entity._entity_native import (
+from termin._native import (
     TcScene as Scene,
     deserialize_scene,
     create_scene,

@@ -165,7 +165,6 @@ PYTHON_MODULES=(
     "termin-display       | termin/display    | _display_native*.so               | termin-display/python/termin/display"
     "termin-display       | termin/viewport   | _viewport_native*.so              | termin-display/python/termin/viewport"
     "termin-lighting      | termin/lighting   | _lighting_native*.so              | termin-lighting/python/termin/lighting"
-    "termin-entity        | termin/entity     |                                   | termin-entity/python/termin/entity"
     "termin-navmesh       | termin/navmesh    |                                   | termin-navmesh/python/termin/navmesh"
     "termin-physics       | termin/physics    | _physics_native*.so               | termin-physics/python/termin/physics"
     "termin-engine        | termin/engine     | _engine_native*.so                | termin-engine/python/termin/engine"

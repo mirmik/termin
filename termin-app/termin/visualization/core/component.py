@@ -1,11 +1,11 @@
 """
 Component re-exports.
 
-The actual Component class comes from C++ (_entity_native).
+The actual Component class comes from termin.scene.
 PythonComponent and InputComponent are pure Python base classes.
 """
 
-from termin.entity import Component, ComponentRegistry
+from termin.scene import Component, ComponentRegistry
 from termin.visualization.core.python_component import PythonComponent, InputComponent
 from termin.inspect import InspectField
 

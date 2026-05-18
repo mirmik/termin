@@ -16,7 +16,6 @@ NB_MODULE(_engine_native, m) {
     nb::module_::import_("termin.display._display_native");
     nb::module_::import_("termin.viewport._viewport_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
-    nb::module_::import_("termin.entity._entity_native");
 
     auto scene_module = m.def_submodule("scene", "Scene management");
     auto render_module = m.def_submodule("render", "Rendering management");

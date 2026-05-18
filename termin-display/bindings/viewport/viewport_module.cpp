@@ -1,5 +1,5 @@
 // viewport_module.cpp - Viewport native module (_viewport_native)
-// Contains TcViewport binding, shared between _entity_native and _native
+// Contains TcViewport binding, shared by display/render/native modules.
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -121,9 +121,8 @@ void bind_tc_viewport_class(nb::module_& m) {
             [](TcViewport& self) -> nb::object {
                 tc_scene_handle s = self.scene();
                 if (tc_scene_handle_valid(s) && tc_scene_alive(s)) {
-                    // Import TcScene from _entity_native and create via from_handle
-                    nb::module_ entity_module = nb::module_::import_("termin.entity._entity_native");
-                    nb::object tc_scene_class = entity_module.attr("TcScene");
+                    nb::module_ scene_module = nb::module_::import_("termin.scene._scene_native");
+                    nb::object tc_scene_class = scene_module.attr("TcScene");
                     return tc_scene_class.attr("from_handle")(s.index, s.generation);
                 }
                 return nb::none();

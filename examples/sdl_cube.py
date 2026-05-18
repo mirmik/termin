@@ -13,7 +13,7 @@ import numpy as np
 import sdl2
 from sdl2 import video
 
-from termin.entity import Entity, TcScene
+from termin.scene import Entity, TcScene
 from termin.render_components import PerspectiveCameraComponent, MeshRenderer
 from termin.geombase import Pose3
 from tgfx import TcShader

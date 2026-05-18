@@ -82,9 +82,9 @@ nb::object ComponentRegistryPython::get_class(const std::string& name) {
     }
 
     try {
-        nb::object entity_mod = nb::module_::import_("termin.entity._entity_native");
-        if (nb::hasattr(entity_mod, name.c_str())) {
-            return entity_mod.attr(name.c_str());
+        nb::object scene_mod = nb::module_::import_("termin.scene._scene_native");
+        if (nb::hasattr(scene_mod, name.c_str())) {
+            return scene_mod.attr(name.c_str());
         }
         nb::object render_mod = nb::module_::import_("termin._native.render");
         if (nb::hasattr(render_mod, name.c_str())) {

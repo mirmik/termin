@@ -34,7 +34,7 @@ from termin.render_components import (
     PerspectiveCameraComponent,
     OrthographicCameraComponent,
 )
-from termin.entity._entity_native import (
+from termin._native import (
     OrbitCameraController,
 )
 

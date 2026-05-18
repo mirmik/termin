@@ -11,8 +11,8 @@
 namespace termin {
 
 void bind_renderers(nb::module_& m) {
-    // Import _entity_native so nanobind can find Component type for inheritance
-    nb::module_::import_("termin.entity._entity_native");
+    // Import scene native so nanobind can find Component type for inheritance.
+    nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.render_components._components_render_native");
 
     // Import skeleton component bindings without pulling in termin.visualization package

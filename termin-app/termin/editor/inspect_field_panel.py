@@ -31,7 +31,7 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
 
     try:
         from termin._native.inspect import InspectRegistry, TypeBackend
-        from termin.entity import TcComponentRef
+        from termin.scene import TcComponentRef
         registry = InspectRegistry.instance()
 
         # Check if obj is TcComponentRef (C++ component wrapper)

@@ -1,6 +1,6 @@
 """Input event structures.
 
-Re-exports C++ event classes from _entity_native module.
+Re-exports C++ event classes from termin._native.
 These structures are used for input event dispatch between
 the platform layer and C++ components.
 
@@ -23,8 +23,8 @@ from __future__ import annotations
 # Input enums from tcbase
 from tcbase import MouseButton, Action, Mods
 
-# Event classes from termin entity
-from termin.entity._entity_native import (
+# Event classes from termin._native
+from termin._native import (
     MouseButtonEvent,
     MouseMoveEvent,
     ScrollEvent,

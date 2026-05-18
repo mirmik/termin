@@ -127,7 +127,6 @@ NB_MODULE(_components_render_native, m) {
 
     nb::module_::import_("tgfx._tgfx_native");
     nb::module_::import_("termin.scene._scene_native");
-    nb::module_::import_("termin.entity._entity_native");
     nb::module_::import_("termin.lighting._lighting_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
     nb::module_::import_("termin.viewport._viewport_native");

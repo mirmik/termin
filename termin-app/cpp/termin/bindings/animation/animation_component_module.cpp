@@ -54,7 +54,7 @@ void bind_animation_player(nb::module_& m) {
 NB_MODULE(_components_animation_native, m) {
     m.doc() = "Native C++ animation component module (AnimationPlayer)";
 
-    nb::module_::import_("termin.entity._entity_native");
+    nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.skeleton._skeleton_native");
     nb::module_::import_("termin.skeleton._components_skeleton_native");
     nb::module_::import_("termin.animation._animation_native");

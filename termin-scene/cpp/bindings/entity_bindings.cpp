@@ -787,7 +787,7 @@ void bind_entity_class(nb::module_& m) {
         .def_static("deserialize_with_children", [](nb::object data, nb::object context, nb::object scene) -> nb::object {
             std::function<nb::object(nb::object, nb::object, nb::object)> deserialize_recursive;
             deserialize_recursive = [&deserialize_recursive](nb::object data, nb::object context, nb::object scene) -> nb::object {
-                nb::object entity_cls = nb::module_::import_("termin.entity").attr("Entity");
+                nb::object entity_cls = nb::module_::import_("termin.scene").attr("Entity");
                 nb::object ent = entity_cls.attr("deserialize")(data, context, scene);
                 if (ent.is_none()) return nb::none();
 
