@@ -64,7 +64,7 @@ PYTHON_PKG_TO_DIR = {
     "termin-nanobind": "termin-nanobind-sdk",
     "termin-csg": "termin-csg",
     "termin-lighting": "termin-lighting",
-    "termin-entity": "termin-entity",
+    # "termin-entity": "termin-entity",  # удалён, мигрирован в termin-app
     "termin-navmesh": "termin-navmesh",
 }
 
@@ -98,7 +98,7 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.physics_components": "termin-components-physics",
     "termin.visualization.core": "termin-scene",
     "termin.visualization.components": "termin-components-mesh",
-    "termin.entity": "termin-entity",
+    # "termin.entity" был удалён — ECS API мигрирован в termin.scene
     "termin.scene": "termin-scene",
     "termin.inspect": "termin-inspect",
     "termin.render_components": "termin-components-render",
@@ -153,7 +153,7 @@ PYTHON_ONLY_DIRS = {
 # conceptually sit on top of it, but it does not depend on engine libraries.
 MANUAL_DEPS = {
     "termin-app": {"termin"},
-    "termin-entity": {"termin"},
+    # "termin-entity": {"termin"},  # удалён, мигрирован в termin-app
     "termin-navmesh": {"termin"},
 }
 
@@ -395,7 +395,7 @@ def main():
             "termin-components-collision", "termin-components-physics",
             "termin-components-kinematic", "termin-components-mesh",
         ],
-        "Thin Facades": ["termin-entity"],
+        "Thin Facades": [],  # termin-entity удалён
     }
 
     # Build reverse map: node → group name

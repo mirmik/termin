@@ -15,18 +15,6 @@ target_link_libraries(_voxels_native PRIVATE entity_lib trent)
 
 # ============== Core entity modules ==============
 
-# Entity native module (Component, Entity, Scene, registries)
-nanobind_add_module(_entity_native NB_SHARED
-    termin/bindings/entity/entity_module.cpp
-    termin/bindings/camera/orbit_camera_bindings.cpp
-    termin/bindings/input/input_events_bindings.cpp
-    termin/tc_scene_bindings.cpp
-    termin/tc_scene_lighting_bindings.cpp
-)
-target_link_libraries(_entity_native PRIVATE entity_lib trent render_lib)
-target_compile_definitions(_entity_native PRIVATE TERMIN_HAS_NANOBIND)
-target_compile_options(_entity_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-
 if(TERMIN_HAS_RECAST)
     # NavMesh native module (RecastNavMeshBuilderComponent)
     nanobind_add_module(_navmesh_native NB_SHARED
@@ -85,6 +73,13 @@ nanobind_add_module(_native NB_SHARED
     # Keep this list tight — every file here compiled twice = duplicate symbols.
     termin/render/solid_primitive_renderer.cpp
     termin/render/skinned_mesh_renderer.cpp
+
+    # Entity domain bindings (migrated from _entity_native)
+    termin/bindings/entity/entity_native_to_native.cpp
+    termin/bindings/camera/orbit_camera_bindings.cpp
+    termin/bindings/input/input_events_bindings.cpp
+    termin/tc_scene_bindings.cpp
+    termin/tc_scene_lighting_bindings.cpp
 )
 target_link_libraries(_native PRIVATE
     OpenGL::GL
@@ -140,10 +135,6 @@ set_target_properties(_voxels_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_entity_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 if(TERMIN_HAS_RECAST)
     set_target_properties(_navmesh_native PROPERTIES
         INSTALL_RPATH "${TERMIN_PY_RPATH}"
@@ -161,5 +152,4 @@ install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/voxels)
 if(TERMIN_HAS_RECAST)
     install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/navmesh)
 endif()
-install(TARGETS _entity_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/entity)
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})

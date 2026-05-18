@@ -9,7 +9,7 @@ using namespace termin;
 NB_MODULE(_components_mesh_native, m) {
     m.doc() = "Native mesh component bindings";
 
-    nb::module_::import_("termin.entity._entity_native");
+    nb::module_::import_("termin.scene._scene_native");
 
     nb::class_<MeshComponent, CxxComponent>(m, "MeshComponent")
         .def("__init__", [](nb::handle self) {

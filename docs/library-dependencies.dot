@@ -114,15 +114,6 @@ digraph termin_dependencies {
 		"termin-engine";
 	}
 
-	subgraph cluster_thin_facades {
-		label="Thin Facades";
-		style=dashed;
-		color="#999999";
-		fontname="DejaVu Sans";
-		fontsize=12;
-		"termin-entity";
-	}
-
 	subgraph cluster_ui {
 		label="UI";
 		style=dashed;
@@ -137,7 +128,6 @@ digraph termin_dependencies {
 
 	"tcplot" -> "termin-csharp";
 	"termin" -> "termin-app";
-	"termin" -> "termin-entity";
 	"termin" -> "termin-navmesh";
 	"termin-animation" -> "termin-components-animation";
 	"termin-app" -> "termin-csharp";
@@ -162,7 +152,6 @@ digraph termin_dependencies {
 	"termin-display" -> "termin-components-render";
 	"termin-display" -> "termin-engine";
 	"termin-engine" -> "termin-app";
-	"termin-entity" -> "termin-app";
 	"termin-graphics" -> "termin-gui";
 	"termin-graphics" -> "termin-render";
 	"termin-gui" -> "diffusion-editor";
@@ -176,7 +165,6 @@ digraph termin_dependencies {
 	"termin-mesh" -> "termin-graphics";
 	"termin-modules" -> "termin-app";
 	"termin-nanobind-sdk" -> "termin-base";
-	"termin-nanobind-sdk" -> "termin-entity";
 	"termin-navmesh" -> "termin-app";
 	"termin-nodegraph" -> "termin-app";
 	"termin-physics" -> "termin-components-physics";

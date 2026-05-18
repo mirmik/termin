@@ -927,7 +927,7 @@ class EditorWindow(QMainWindow):
     def _on_component_field_changed(self, component, field_key: str, new_value):
         """Handle component field changes for ViewportHintComponent and CameraViewportComponent."""
         from termin.visualization.core.viewport_hint import ViewportHintComponent
-        from termin.entity import TcComponentRef
+        from termin.scene import TcComponentRef
 
         is_viewport_hint = isinstance(component, ViewportHintComponent)
         is_camera_viewport = (

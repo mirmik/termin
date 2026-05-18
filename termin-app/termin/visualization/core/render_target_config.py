@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from termin.entity._entity_native import RenderTargetConfig
+from termin._native import RenderTargetConfig
 
 __all__ = ["RenderTargetConfig", "serialize_render_target_config", "deserialize_render_target_config"]
 

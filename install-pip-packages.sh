@@ -134,7 +134,6 @@ PACKAGES=(
     termin-collision
     termin-render
     termin-display
-    termin-entity
     termin-navmesh
     termin-physics
     termin-engine

@@ -34,7 +34,7 @@ from termin.editor_core.editor_commands import (
 )
 from termin.editor.transform_inspector import TransformInspector
 from termin.editor.entity_inspector import EntityInspector as EntityPropertiesInspector
-from termin.entity._entity_native import soa_registry_get_all_info
+from termin.scene._scene_native import soa_registry_get_all_info
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class ComponentsPanel(QWidget):
         return tc_components[row]
 
     def _get_component_library(self) -> list[str]:
-        from termin.entity import ComponentRegistry
+        from termin.scene import ComponentRegistry
         # Import native modules to trigger static component registration
         import termin.render_components  # noqa: F401 - registers MeshRenderer, etc.
         import termin.skeleton._components_skeleton_native  # noqa: F401 - registers SkeletonController
@@ -385,7 +385,7 @@ class ComponentInspectorPanel(QWidget):
     def _update_material_props_editor(self) -> None:
         """Update material properties editor visibility and content."""
         from termin.render_components import MeshRenderer  # SkinnedMeshRenderer inherits from this
-        from termin.entity import TcComponentRef
+        from termin.scene import TcComponentRef
 
         # For TcComponentRef, try to get Python object for MeshRenderer
         comp = self._component
@@ -431,7 +431,7 @@ class ComponentInspectorPanel(QWidget):
         # If override_material changed, call the setter to create/delete the override copy
         if key == "_override_material":
             from termin.render_components import MeshRenderer
-            from termin.entity import TcComponentRef
+            from termin.scene import TcComponentRef
             comp = self._component
             if isinstance(comp, TcComponentRef):
                 if comp.type_name in ('MeshRenderer', 'SkinnedMeshRenderer'):

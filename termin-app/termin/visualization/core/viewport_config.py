@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 # Re-export C++ class
-from termin.entity._entity_native import ViewportConfig
+from termin._native import ViewportConfig
 
 __all__ = ["ViewportConfig", "serialize_viewport_config", "deserialize_viewport_config"]
 

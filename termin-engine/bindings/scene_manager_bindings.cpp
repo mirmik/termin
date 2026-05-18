@@ -19,6 +19,20 @@ namespace nb = nanobind;
 
 namespace termin {
 
+static nb::object scene_from_handle(tc_scene_handle h) {
+    nb::module_ scene_module = nb::module_::import_("termin.scene._scene_native");
+    nb::object tc_scene_class = scene_module.attr("TcScene");
+    return tc_scene_class.attr("from_handle")(h.index, h.generation);
+}
+
+static std::vector<tc_scene_ext_type_id> default_scene_extension_ids() {
+    return {
+        TC_SCENE_EXT_TYPE_RENDER_MOUNT,
+        TC_SCENE_EXT_TYPE_RENDER_STATE,
+        TC_SCENE_EXT_TYPE_COLLISION_WORLD,
+    };
+}
+
 // Trampoline class for Python inheritance
 class PySceneManager : public SceneManager {
 public:
@@ -41,13 +55,7 @@ void bind_scene_manager(nb::module_& m) {
     m.attr("SCENE_EXT_TYPE_RENDER_STATE") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_STATE);
     m.attr("SCENE_EXT_TYPE_COLLISION_WORLD") = nb::int_(TC_SCENE_EXT_TYPE_COLLISION_WORLD);
 
-    m.def("default_scene_extensions", []() {
-        return std::vector<tc_scene_ext_type_id>{
-            TC_SCENE_EXT_TYPE_RENDER_MOUNT,
-            TC_SCENE_EXT_TYPE_RENDER_STATE,
-            TC_SCENE_EXT_TYPE_COLLISION_WORLD,
-        };
-    });
+    m.def("default_scene_extensions", &default_scene_extension_ids);
 
     // Bind SceneManager class
     nb::class_<SceneManager, PySceneManager>(m, "SceneManager")
@@ -64,10 +72,7 @@ void bind_scene_manager(nb::module_& m) {
             if (!tc_scene_handle_valid(h)) {
                 return nb::none();
             }
-            // Import TcScene from _entity_native and create via from_handle
-            nb::module_ entity_module = nb::module_::import_("termin.entity._entity_native");
-            nb::object tc_scene_class = entity_module.attr("TcScene");
-            return tc_scene_class.attr("from_handle")(h.index, h.generation);
+            return scene_from_handle(h);
         }, nb::arg("name"), nb::arg("extensions") = nb::none(),
            "Create a new scene and register it. Returns TcScene.")
 
@@ -84,21 +89,17 @@ void bind_scene_manager(nb::module_& m) {
                 return nb::none();
             }
 
-            // Get source scene as TcScene
-            nb::module_ entity_module = nb::module_::import_("termin.entity._entity_native");
-            nb::object tc_scene_class = entity_module.attr("TcScene");
-            nb::object src_scene = tc_scene_class.attr("from_handle")(src_h.index, src_h.generation);
+            nb::object src_scene = scene_from_handle(src_h);
 
             // Serialize source
             nb::object data = src_scene.attr("serialize")();
 
-            // Create destination scene with default extensions
-            nb::object dst_scene = entity_module.attr("create_scene")(dst_name);
+            tc_scene_handle dst_h = self.create_scene(dst_name, default_scene_extension_ids());
+            if (!tc_scene_handle_valid(dst_h)) {
+                return nb::none();
+            }
+            nb::object dst_scene = scene_from_handle(dst_h);
             dst_scene.attr("load_from_data")(data, nb::none(), true);
-
-            // Register in SceneManager
-            tc_scene_handle dst_h = nb::cast<tc_scene_handle>(dst_scene.attr("scene_handle")());
-            self.register_scene(dst_name, dst_h);
 
             return dst_scene;
         }, nb::arg("source_name"), nb::arg("dest_name"),
@@ -130,18 +131,17 @@ void bind_scene_manager(nb::module_& m) {
                 }
             }
 
-            // Create scene with default extensions
-            nb::module_ entity_module = nb::module_::import_("termin.entity._entity_native");
-            nb::object scene = entity_module.attr("create_scene")(name);
+            tc_scene_handle handle = self.create_scene(name, default_scene_extension_ids());
+            if (!tc_scene_handle_valid(handle)) {
+                return nb::none();
+            }
+            nb::object scene = scene_from_handle(handle);
 
             // Load data if present
             if (!scene_data.is_none()) {
                 scene.attr("load_from_data")(scene_data, nb::none(), true);
             }
 
-            // Register in SceneManager
-            tc_scene_handle handle = nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
-            self.register_scene(name, handle);
             self.set_scene_path(name, path);
 
             // Notify editor start
@@ -159,10 +159,7 @@ void bind_scene_manager(nb::module_& m) {
                 return false;
             }
 
-            // Get scene as TcScene
-            nb::module_ entity_module = nb::module_::import_("termin.entity._entity_native");
-            nb::object tc_scene_class = entity_module.attr("TcScene");
-            nb::object scene = tc_scene_class.attr("from_handle")(h.index, h.generation);
+            nb::object scene = scene_from_handle(h);
 
             // Serialize scene
             nb::object scene_data = scene.attr("serialize")();
@@ -206,9 +203,7 @@ void bind_scene_manager(nb::module_& m) {
             if (!tc_scene_handle_valid(h)) {
                 return nb::none();
             }
-            nb::module_ entity_module = nb::module_::import_("termin.entity._entity_native");
-            nb::object tc_scene_class = entity_module.attr("TcScene");
-            return tc_scene_class.attr("from_handle")(h.index, h.generation);
+            return scene_from_handle(h);
         }, nb::arg("name"),
            "Get scene by name. Returns TcScene or None.")
 

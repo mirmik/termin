@@ -141,8 +141,8 @@ tc_navmesh_tile tile_from_python(nb::handle tile) {
 }
 
 void bind_recast_navmesh_builder(nb::module_& m) {
-    // Import _entity_native so nanobind can find Component type for inheritance
-    nb::module_::import_("termin.entity._entity_native");
+    // Import scene native so nanobind can find Component type for inheritance.
+    nb::module_::import_("termin.scene._scene_native");
 
     nb::class_<TcNavMesh>(m, "TcNavMesh")
         .def(nb::init<>())

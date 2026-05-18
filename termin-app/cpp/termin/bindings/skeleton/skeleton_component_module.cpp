@@ -84,7 +84,7 @@ void bind_skeleton_controller(nb::module_& m) {
 NB_MODULE(_components_skeleton_native, m) {
     m.doc() = "Native C++ skeleton component module (SkeletonController)";
 
-    nb::module_::import_("termin.entity._entity_native");
+    nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.skeleton._skeleton_native");
 
     termin::bind_skeleton_controller(m);

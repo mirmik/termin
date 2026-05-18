@@ -53,8 +53,7 @@ static GeneralPose3 nb_pose_to_cpp(nb::object py_pose) {
 
 void bind_transform(nb::module_& m) {
     // GeneralTransform3 - view into entity pool data (same as Entity, but transform-focused API)
-    // NOTE: This binding depends on Entity which is in _entity_native.
-    // It will be enabled when _entity_native is migrated to nanobind.
+    // NOTE: This binding depends on Entity from termin.scene._scene_native.
     nb::class_<GeneralTransform3>(m, "GeneralTransform3")
         // Default constructor - allocate entity in standalone pool (like Entity())
         .def("__init__", [](GeneralTransform3* self) {

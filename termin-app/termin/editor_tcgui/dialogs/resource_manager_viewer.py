@@ -202,7 +202,7 @@ def show_resource_manager_viewer(ui) -> None:
         rows = []
         names = []
         try:
-            from termin.entity import ComponentRegistry
+            from termin.scene import ComponentRegistry
             reg = ComponentRegistry.instance()
             for name in sorted(reg.list_native()):
                 rows.append([name, "C++"])
@@ -423,7 +423,7 @@ def show_resource_manager_viewer(ui) -> None:
     def _show_component_registry_details(name: str):
         lines = [f"=== Component: {name} ===", ""]
         try:
-            from termin.entity import ComponentRegistry
+            from termin.scene import ComponentRegistry
             reg = ComponentRegistry.instance()
             native = reg.list_native()
             if name in native:

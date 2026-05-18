@@ -11,7 +11,7 @@ using namespace termin;
 NB_MODULE(_components_kinematic_native, m) {
     m.doc() = "Native kinematic component bindings (ActuatorComponent, RotatorComponent)";
 
-    nb::module_::import_("termin.entity._entity_native");
+    nb::module_::import_("termin.scene._scene_native");
 
     // KinematicUnitComponent (abstract base)
     nb::class_<KinematicUnitComponent, CxxComponent>(m, "KinematicUnitComponent")

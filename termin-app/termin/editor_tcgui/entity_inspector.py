@@ -363,7 +363,7 @@ class EntityInspector(VStack):
     def _show_add_component_menu_at(self, x: float | None, y: float | None) -> None:
         if self._entity is None:
             return
-        from termin.entity import ComponentRegistry
+        from termin.scene import ComponentRegistry
 
         component_names = ComponentRegistry.instance().list_all()
         items = [MenuItem(name, on_click=(lambda n=name: self._add_component(n))) for name in component_names]
@@ -381,7 +381,7 @@ class EntityInspector(VStack):
     def _show_add_soa_component_menu_at(self, x: float | None, y: float | None) -> None:
         if self._entity is None:
             return
-        from termin.entity._entity_native import soa_registry_get_all_info
+        from termin.scene._scene_native import soa_registry_get_all_info
 
         soa_infos = soa_registry_get_all_info()
         items = [

@@ -43,7 +43,6 @@ if __name__ == "__main__":
                 "termin.display", "termin.display.*",           # termin-display
                 "termin.viewport", "termin.viewport.*",         # termin-display
                 "termin.scene", "termin.scene.*",               # termin-scene
-                "termin.entity", "termin.entity.*",             # termin-entity
                 "termin.input", "termin.input.*",               # termin-input
                 "termin.inspect", "termin.inspect.*",           # termin-inspect
                 "termin.mesh", "termin.mesh.*",                 # termin-components-mesh

@@ -43,7 +43,7 @@ from termin.render_framework import (
     tc_pass_registry_get_all_instance_info,
     tc_pass_registry_get_all_types,
 )
-from termin.entity._entity_native import (
+from termin.scene._scene_native import (
     component_registry_get_all_info,
     component_registry_type_count,
     soa_registry_get_all_info,

@@ -20,7 +20,7 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
     result: dict[str, InspectField] = {}
     try:
         from termin._native.inspect import InspectRegistry, TypeBackend
-        from termin.entity import TcComponentRef
+        from termin.scene import TcComponentRef
         registry = InspectRegistry.instance()
 
         if isinstance(obj, TcComponentRef):
@@ -116,7 +116,7 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
 
 
 def _type_name_for_target(obj: Any) -> str:
-    from termin.entity import TcComponentRef
+    from termin.scene import TcComponentRef
 
     if isinstance(obj, TcComponentRef):
         return obj.type_name

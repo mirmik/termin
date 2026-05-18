@@ -170,7 +170,7 @@ bvh.validate()
 _collision_native
 ├── _colliders_native
 ├── _geom_native (termin.geombase)
-└── _entity_native (termin.entity)
+└── _scene_native (termin.scene)
 
 _colliders_native
 └── _geom_native (termin.geombase)

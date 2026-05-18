@@ -700,7 +700,7 @@ class ResourceManagerViewer(QDialog):
 
     def _refresh_registry(self) -> None:
         """Обновляет список компонентов из C++ ComponentRegistry."""
-        from termin.entity import ComponentRegistry
+        from termin.scene import ComponentRegistry
 
         self._registry_tree.clear()
         reg = ComponentRegistry.instance()

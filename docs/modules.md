@@ -142,11 +142,8 @@ Source of truth: [termin-engine docs](../termin-engine/docs/index.md)
 
 Engine-level orchestration поверх scene/render/input/domain modules.
 
-### termin-entity
-
-Source of truth: [termin-entity docs](../termin-entity/docs/index.md)
-
-Python-facing entity/component distribution layer.
+> **termin-entity** был удалён — его биндинги мигрированы в `termin._native` (termin-app).
+ECS-типы (Entity, Component, ComponentRegistry, TcScene) импортируются из `termin.scene`.
 
 ### termin-lighting
 

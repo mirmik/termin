@@ -23,7 +23,7 @@ from PyQt6.QtCore import pyqtSignal, QMimeData
 from tcbase import log
 from termin.editor.drag_drop import EditorMimeTypes, parse_entity_mime_data
 from termin.editor.widgets.generic_list_widget import _DropListWidget
-from termin.entity import Entity
+from termin.scene import Entity
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
