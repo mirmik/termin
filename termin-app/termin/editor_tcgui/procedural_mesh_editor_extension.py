@@ -23,6 +23,8 @@ class ProceduralMeshEditorExtension:
         self._component_ref = None
         self._mode = "idle"
         self._mode_label = Label()
+        self._draft_points: list[tuple[float, float, float]] = []
+        self._closed_contours: list[list[tuple[float, float, float]]] = []
 
     def attach(self, editor, entity, component_ref) -> None:
         self._editor = editor
@@ -41,6 +43,8 @@ class ProceduralMeshEditorExtension:
         self._entity = None
         self._component_ref = None
         self._mode = "idle"
+        self._draft_points = []
+        self._closed_contours = []
         log.info("[ProceduralMeshEditor] extension detached")
 
     def build_panel(self):
@@ -59,13 +63,19 @@ class ProceduralMeshEditorExtension:
         row.spacing = 4
         row.preferred_height = px(28)
         row.add_child(self._make_button("Draw Sketch", "draw_sketch"))
-        row.add_child(self._make_button("Move Points", "move_points"))
+        close_btn = Button()
+        close_btn.text = "Close Contour"
+        close_btn.on_click = self._close_contour
+        row.add_child(close_btn)
         root.add_child(row)
 
         row2 = HStack()
         row2.spacing = 4
         row2.preferred_height = px(28)
-        row2.add_child(self._make_button("Extrude", "extrude"))
+        clear_btn = Button()
+        clear_btn.text = "Clear Sketch"
+        clear_btn.on_click = self._clear_sketch
+        row2.add_child(clear_btn)
         row2.add_child(self._make_button("Clear Tool", "idle"))
         root.add_child(row2)
 
@@ -80,10 +90,46 @@ class ProceduralMeshEditorExtension:
     def _set_mode(self, mode: str) -> None:
         self._mode = mode
         self._mode_label.text = self._mode_text()
+        self._request_viewport_update()
         log.info(f"[ProceduralMeshEditor] mode={mode}")
 
     def _mode_text(self) -> str:
-        return f"Mode: {self._mode}"
+        return (
+            f"Mode: {self._mode}; "
+            f"draft points: {len(self._draft_points)}; "
+            f"contours: {len(self._closed_contours)}"
+        )
+
+    def _refresh_mode_label(self) -> None:
+        self._mode_label.text = self._mode_text()
+
+    def _close_contour(self) -> None:
+        if len(self._draft_points) < 3:
+            log.error(
+                "[ProceduralMeshEditor] cannot close contour: "
+                f"need at least 3 points, got {len(self._draft_points)}"
+            )
+            return
+        self._closed_contours.append(self._draft_points[:])
+        self._draft_points = []
+        self._refresh_mode_label()
+        self._request_viewport_update()
+        log.info(
+            "[ProceduralMeshEditor] contour closed "
+            f"contours={len(self._closed_contours)}"
+        )
+
+    def _clear_sketch(self) -> None:
+        self._draft_points = []
+        self._closed_contours = []
+        self._refresh_mode_label()
+        self._request_viewport_update()
+        log.info("[ProceduralMeshEditor] sketch cleared")
+
+    def _request_viewport_update(self) -> None:
+        editor = self._editor
+        if editor is not None:
+            editor.request_viewport_update()
 
     def _on_viewport_click(
         self,
@@ -117,23 +163,62 @@ class ProceduralMeshEditorExtension:
         if entity.valid():
             picked_name = entity.name
 
+        point = self._click_point(
+            x,
+            y,
+            has_mesh_hit,
+            mesh_x,
+            mesh_y,
+            mesh_z,
+            has_world_point,
+            world_x,
+            world_y,
+            world_z,
+        )
+        if point is None:
+            log.error("[ProceduralMeshEditor] click ignored: no mesh hit and no OXY plane point")
+            return True
+
         if has_mesh_hit:
-            point = (mesh_x, mesh_y, mesh_z)
             point_kind = "mesh"
         elif has_world_point:
-            point = (world_x, world_y, world_z)
             point_kind = "world"
         else:
-            log.error("[ProceduralMeshEditor] click ignored: no world point")
-            return True
+            point_kind = "oxy"
+        if self._mode == "draw_sketch":
+            self._draft_points.append(point)
+            self._refresh_mode_label()
+            self._request_viewport_update()
 
         log.info(
             "[ProceduralMeshEditor] viewport click "
             f"mode={self._mode} screen=({x:.1f}, {y:.1f}) picked='{picked_name}' "
             f"{point_kind}=({point[0]:.3f}, {point[1]:.3f}, {point[2]:.3f}) "
-            f"tri={triangle_index}"
+            f"tri={triangle_index} draft_points={len(self._draft_points)}"
         )
         return True
+
+    def _click_point(
+        self,
+        x: float,
+        y: float,
+        has_mesh_hit: bool,
+        mesh_x: float,
+        mesh_y: float,
+        mesh_z: float,
+        has_world_point: bool,
+        world_x: float,
+        world_y: float,
+        world_z: float,
+    ) -> tuple[float, float, float] | None:
+        if has_mesh_hit:
+            return (float(mesh_x), float(mesh_y), float(mesh_z))
+        if has_world_point:
+            return (float(world_x), float(world_y), float(world_z))
+        editor = self._editor
+        if editor is None:
+            return None
+        return editor.world_point_on_oxy_plane(x, y)
 
     def _draw_overlay(self) -> None:
         entity = self._entity
@@ -149,26 +234,63 @@ class ProceduralMeshEditorExtension:
         from termin.visualization.render.immediate import ImmediateRenderer
 
         renderer = ImmediateRenderer.instance()
-        color = Color4(0.1, 0.9, 1.0, 1.0)
+        anchor_color = Color4(0.1, 0.9, 1.0, 1.0)
         radius = 0.35
         renderer.line(
             Vec3(center.x - radius, center.y, center.z),
             Vec3(center.x + radius, center.y, center.z),
-            color,
+            anchor_color,
             True,
         )
         renderer.line(
             Vec3(center.x, center.y - radius, center.z),
             Vec3(center.x, center.y + radius, center.z),
-            color,
+            anchor_color,
             True,
         )
         renderer.line(
             Vec3(center.x, center.y, center.z - radius),
             Vec3(center.x, center.y, center.z + radius),
-            color,
+            anchor_color,
             True,
         )
+        self._draw_contours(renderer)
+
+    def _draw_contours(self, renderer) -> None:
+        contour_color = Color4(0.0, 0.95, 0.95, 1.0)
+        draft_color = Color4(1.0, 0.78, 0.12, 1.0)
+        point_color = Color4(1.0, 1.0, 1.0, 1.0)
+        for contour in self._closed_contours:
+            self._draw_polyline(renderer, contour, contour_color, True)
+            self._draw_points(renderer, contour, point_color)
+        self._draw_polyline(renderer, self._draft_points, draft_color, False)
+        self._draw_points(renderer, self._draft_points, draft_color)
+
+    def _draw_polyline(
+        self,
+        renderer,
+        points: list[tuple[float, float, float]],
+        color: Color4,
+        closed: bool,
+    ) -> None:
+        if len(points) < 2:
+            return
+        for i in range(len(points) - 1):
+            renderer.line(self._vec3(points[i]), self._vec3(points[i + 1]), color, False)
+        if closed:
+            renderer.line(self._vec3(points[-1]), self._vec3(points[0]), color, False)
+
+    def _draw_points(
+        self,
+        renderer,
+        points: list[tuple[float, float, float]],
+        color: Color4,
+    ) -> None:
+        for point in points:
+            renderer.sphere_wireframe(self._vec3(point), 0.055, color, 8, False)
+
+    def _vec3(self, point: tuple[float, float, float]) -> Vec3:
+        return Vec3(point[0], point[1], point[2])
 
 
 def register_default_extension() -> None:
