@@ -20,6 +20,9 @@ function(termin_add_module)
     set(_config_path "${CMAKE_CURRENT_BINARY_DIR}/${TAM_NAME}Config.cmake")
 
     add_library(${TAM_NAME} SHARED ${TAM_SOURCES})
+    if(COMMAND termin_add_alias_if_missing)
+        termin_add_alias_if_missing(${TAM_NAMESPACE}${TAM_NAME} ${TAM_NAME})
+    endif()
     # Component modules reuse ENTITY_API from termin-scene headers.
     # On Windows, mark those declarations as exports while building the module itself.
     target_compile_definitions(${TAM_NAME} PRIVATE TERMIN_SCENE_EXPORTS)
