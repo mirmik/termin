@@ -95,15 +95,15 @@ class ProceduralMeshComponent(PythonComponent):
             f"operations={len(self.document.operations)}"
         )
 
-    def add_contour_from_world_points(
+    def add_contour_from_points(
         self,
         points: list[tuple[float, float, float]],
         plane: ProceduralPlane | None = None,
     ) -> bool:
         if plane is None:
-            contour = self.document.add_contour_from_world_points(points)
+            contour = self.document.add_contour_from_points(points)
         else:
-            contour = self.document.add_contour_on_plane_from_world_points(points, plane)
+            contour = self.document.add_contour_on_plane_from_points(points, plane)
         if contour is None:
             return False
         log.info(

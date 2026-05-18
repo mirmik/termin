@@ -70,7 +70,7 @@ class ProceduralPlane:
         return _normalized(_cross(self.x_axis, self.y_axis), (0.0, 0.0, 1.0))
 
     @classmethod
-    def from_world_points(cls, points: list[Vec3Data]) -> "ProceduralPlane":
+    def from_points(cls, points: list[Vec3Data]) -> "ProceduralPlane":
         if len(points) < 2:
             return cls()
 
@@ -141,7 +141,7 @@ class SketchItemDocument:
     plane: ProceduralPlane = field(default_factory=ProceduralPlane)
     contours: list[ContourDocument] = field(default_factory=list)
 
-    def add_contour_from_world_points(self, points: list[Vec3Data]) -> ContourDocument | None:
+    def add_contour_from_points(self, points: list[Vec3Data]) -> ContourDocument | None:
         if len(points) < 3:
             log.error(f"[ProceduralMeshDocument] contour needs at least 3 points, got {len(points)}")
             return None
@@ -152,7 +152,7 @@ class SketchItemDocument:
         self.contours.append(contour)
         return contour
 
-    def contour_world_points(self, contour: ContourDocument) -> list[Vec3Data]:
+    def contour_points(self, contour: ContourDocument) -> list[Vec3Data]:
         return [self.plane.unproject(point) for point in contour.points]
 
     def to_dict(self) -> dict:
@@ -211,18 +211,18 @@ class ProceduralMeshDocument:
     items: list[SketchItemDocument] = field(default_factory=list)
     operations: list[OperationDocument] = field(default_factory=list)
 
-    def ensure_sketch_for_world_points(self, points: list[Vec3Data]) -> SketchItemDocument:
+    def ensure_sketch_for_points(self, points: list[Vec3Data]) -> SketchItemDocument:
         if self.items:
             return self.items[0]
-        sketch = SketchItemDocument(plane=ProceduralPlane.from_world_points(points))
+        sketch = SketchItemDocument(plane=ProceduralPlane.from_points(points))
         self.items.append(sketch)
         return sketch
 
-    def add_contour_from_world_points(self, points: list[Vec3Data]) -> ContourDocument | None:
-        sketch = self.ensure_sketch_for_world_points(points)
-        return sketch.add_contour_from_world_points(points)
+    def add_contour_from_points(self, points: list[Vec3Data]) -> ContourDocument | None:
+        sketch = self.ensure_sketch_for_points(points)
+        return sketch.add_contour_from_points(points)
 
-    def add_contour_on_plane_from_world_points(
+    def add_contour_on_plane_from_points(
         self,
         points: list[Vec3Data],
         plane: ProceduralPlane,
@@ -232,7 +232,7 @@ class ProceduralMeshDocument:
         else:
             sketch = SketchItemDocument(plane=plane)
             self.items.append(sketch)
-        return sketch.add_contour_from_world_points(points)
+        return sketch.add_contour_from_points(points)
 
     def contour_count(self) -> int:
         return sum(len(item.contours) for item in self.items)
