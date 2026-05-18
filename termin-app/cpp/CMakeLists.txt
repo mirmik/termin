@@ -106,6 +106,9 @@ set_target_properties(trent PROPERTIES
 if(COMMAND termin_enable_unity_build_for)
     termin_enable_unity_build_for(trent)
 endif()
+if(COMMAND termin_enable_pch_for)
+    termin_enable_pch_for(trent)
+endif()
 
 # ============== External dependencies ==============
 
