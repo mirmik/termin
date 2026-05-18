@@ -18,12 +18,18 @@ foreach ($arg in $args) {
         "--clean"  { $Clean = $true }
         "-c"       { $Clean = $true }
         "--no-parallel" { $UseParallel = $false }
+        "--ccache"      { }
+        "--no-ccache"   { }
+        "--unity"       { }
+        "--no-unity"    { }
+        "--pch"         { }
+        "--no-pch"      { }
         "--no-vulkan"   { }
         "--vulkan"      { }
         "--no-sdl"      { }
         "--sdl"         { }
-        "--help"   { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--no-vulkan|--vulkan] [--no-sdl|--sdl]"; exit 0 }
-        "-h"       { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--no-vulkan|--vulkan] [--no-sdl|--sdl]"; exit 0 }
+        "--help"   { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--ccache|--no-ccache] [--unity|--no-unity] [--pch|--no-pch] [--no-vulkan|--vulkan] [--no-sdl|--sdl]"; exit 0 }
+        "-h"       { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--ccache|--no-ccache] [--unity|--no-unity] [--pch|--no-pch] [--no-vulkan|--vulkan] [--no-sdl|--sdl]"; exit 0 }
         default    { Write-Error "Unknown option: $arg"; exit 1 }
     }
 }
