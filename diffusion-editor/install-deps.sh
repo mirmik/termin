@@ -14,6 +14,19 @@ fi
 PIP="$VENV/bin/pip"
 
 TERMIN_ENV="$(cd .. && pwd)"
+LOCAL_TERMIN_SDK="$TERMIN_ENV/sdk"
+if [ -z "${TERMIN_SDK:-}" ]; then
+    if [ -d "$LOCAL_TERMIN_SDK/lib" ]; then
+        export TERMIN_SDK="$LOCAL_TERMIN_SDK"
+    else
+        echo "ERROR: termin SDK not found."
+        echo "Build it first with: cd \"$TERMIN_ENV\" && ./build-sdk.sh"
+        echo "Or set TERMIN_SDK explicitly before running this script."
+        exit 1
+    fi
+fi
+
+echo "Using TERMIN_SDK=$TERMIN_SDK"
 
 echo "=== Installing termin-build-tools ==="
 $PIP install --no-cache-dir --no-build-isolation "$TERMIN_ENV/termin-build-tools"

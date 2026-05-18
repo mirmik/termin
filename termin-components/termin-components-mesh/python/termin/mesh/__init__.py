@@ -7,5 +7,18 @@ preload_sdk_libs("nanobind", "termin_components_mesh")
 from tmesh import Mesh3, TcMesh
 from termin.mesh.mesh_component import MeshComponent
 from termin.mesh.script_mesh_component import ScriptMeshComponent
+from termin.mesh.surface_edge_query import (
+    SurfaceEdgeHit,
+    find_aligned_surface_edge_for_entity,
+    find_surface_edge_for_entity,
+)
 
-__all__ = ["Mesh3", "TcMesh", "MeshComponent", "ScriptMeshComponent"]
+__all__ = [
+    "Mesh3",
+    "TcMesh",
+    "MeshComponent",
+    "ScriptMeshComponent",
+    "SurfaceEdgeHit",
+    "find_surface_edge_for_entity",
+    "find_aligned_surface_edge_for_entity",
+]
