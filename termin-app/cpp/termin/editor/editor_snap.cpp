@@ -3,8 +3,8 @@
 namespace termin {
 
 EditorSnapRegistry& EditorSnapRegistry::instance() {
-    static EditorSnapRegistry registry;
-    return registry;
+    static EditorSnapRegistry editor_snap_registry;
+    return editor_snap_registry;
 }
 
 void EditorSnapRegistry::register_provider(std::unique_ptr<EditorSnapProvider> provider) {
