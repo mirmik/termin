@@ -19,6 +19,7 @@ for arg in "$@"; do
         --no-parallel) NO_PARALLEL=1 ;;
         --ccache|--no-ccache) ;;
         --unity|--no-unity) ;;
+        --pch|--no-pch) ;;
         --no-vulkan|--vulkan) ;;
         --no-sdl|--sdl) ;;
         --help|-h)
@@ -32,6 +33,8 @@ for arg in "$@"; do
             echo "  --no-ccache       Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --unity           Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-unity        Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --pch             Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --no-pch          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-vulkan       Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --vulkan          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-sdl          Accepted for top-level SDK builds; ignored by C# stage"

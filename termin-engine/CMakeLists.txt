@@ -67,6 +67,10 @@ endif()
 
 add_library(termin_engine::termin_engine ALIAS termin_engine)
 
+if(COMMAND termin_enable_pch_for)
+    termin_enable_pch_for(termin_engine)
+endif()
+
 set_target_properties(termin_engine PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
