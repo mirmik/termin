@@ -12,6 +12,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SdkPrefix = if ($env:SDK_PREFIX) { $env:SDK_PREFIX } else { Join-Path $ScriptDir "sdk" }
 $Editable = $false
 $TargetDir = ""
+$Force = $false
 
 # Parse arguments
 $i = 0
@@ -20,8 +21,10 @@ while ($i -lt $args.Count) {
         "--editable" { $Editable = $true }
         "-e"         { $Editable = $true }
         "--target"   { $i++; $TargetDir = $args[$i] }
-        "--help"     { Write-Host "Usage: .\install-pip-packages.ps1 [--editable] [--target DIR]"; exit 0 }
-        "-h"         { Write-Host "Usage: .\install-pip-packages.ps1 [--editable] [--target DIR]"; exit 0 }
+        "--force"    { $Force = $true }
+        "-f"         { $Force = $true }
+        "--help"     { Write-Host "Usage: .\install-pip-packages.ps1 [--editable] [--target DIR] [--force]"; exit 0 }
+        "-h"         { Write-Host "Usage: .\install-pip-packages.ps1 [--editable] [--target DIR] [--force]"; exit 0 }
         default      { Write-Error "Unknown option: $($args[$i])"; exit 1 }
     }
     $i++
@@ -57,25 +60,33 @@ if ($env:TERMIN_SDK) {
 }
 Write-Host "Using TERMIN_SDK=$($env:TERMIN_SDK)"
 
-# List of termin packages in topological dependency order.
-# Main termin is installed BEFORE subpackages so that its uninstall step
-# does not remove __init__.py files that subpackages later provide.
+# List of termin packages to install, in topological dependency order.
+# Each entry is a path relative to ScriptDir.
+#
+# Note: several "components-*" C++ targets install into the same Python
+# namespace as their parent subproject. Those are merged into the parent
+# pip package rather than shipped separately to avoid filesystem overlap
+# at install time.
+# Packages are ordered by dependency: each package is listed after its
+# install_requires. termin-app owns the termin namespace root and comes
+# near the end, after all subpackages that extend termin.*.
 $Packages = @(
     "termin-build-tools",
     "termin-nanobind-sdk",
-    "termin-assets",
-    "termin-app",
     "termin-base",
+    "termin-assets",
     "termin-mesh",
+    "termin-csg",
     "termin-graphics",
     "termin-modules",
     "termin-inspect",
+    "termin-components/termin-components-kinematic",
     "termin-scene",
+    "termin-lighting",
     "termin-input",
     "termin-collision",
     "termin-render",
     "termin-display",
-    "termin-lighting",
     "termin-entity",
     "termin-navmesh",
     "termin-physics",
@@ -84,12 +95,32 @@ $Packages = @(
     "termin-animation",
     "termin-components/termin-components-render",
     "termin-components/termin-components-mesh",
-    "termin-components/termin-components-kinematic",
     "termin-gui",
-    "termin-nodegraph"
+    "termin-nodegraph",
+    "termin-app",
+    "tcplot"
 )
 
 $env:CMAKE_PREFIX_PATH = $SdkPrefix
+
+if ($Force) {
+    Write-Host "--force: clearing per-package pip build caches before install"
+    foreach ($pkg in $Packages) {
+        $pkgDir = Join-Path $ScriptDir $pkg
+        if (-not (Test-Path $pkgDir)) { continue }
+
+        Get-ChildItem -Path (Join-Path $pkgDir "build") -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "lib.*" -or $_.Name -like "bdist.*" } |
+            Remove-Item -Recurse -Force
+        Get-ChildItem -Path $pkgDir -Directory -Filter "*.egg-info" -ErrorAction SilentlyContinue |
+            Remove-Item -Recurse -Force
+    }
+}
+
+$ForceFlags = @()
+if ($Force) {
+    $ForceFlags = @("--force-reinstall", "--no-cache-dir", "--no-deps")
+}
 
 if ($TargetDir) {
     # --target mode: install ALL packages in a single pip invocation.
@@ -109,7 +140,13 @@ if ($TargetDir) {
     Write-Host ""
     Write-Host "Install mode: --target $TargetDir (single pip invocation, no-deps)"
 
-    $pipArgs = @("install", "--no-build-isolation", "--no-deps", "--upgrade", "--target", $TargetDir)
+    # Pre-install termin-build-tools into the current Python environment
+    # so termin_build.cmake_ext is importable when pip processes setup.py
+    # metadata for other packages.
+    & python -m pip install --no-build-isolation (Join-Path $ScriptDir "termin-build-tools")
+    if ($LASTEXITCODE -ne 0) { throw "pip install termin-build-tools failed" }
+
+    $pipArgs = @("install", "--no-build-isolation", "--no-deps", "--upgrade", "--target", $TargetDir) + $ForceFlags
     foreach ($pkg in $Packages) {
         $pipArgs += (Join-Path $ScriptDir $pkg)
     }
@@ -119,18 +156,22 @@ if ($TargetDir) {
     # Host-env mode: sequential installs so errors are attributed to a
     # specific package and intermediate state is inspectable.
     Write-Host "Install mode: current pip environment (sequential pip install)"
+    $EditableFlag = @()
+    $NoDepsFlag = @()
+    if ($Editable) {
+        $EditableFlag = @("-e")
+        $NoDepsFlag = @("--no-deps")
+    }
+
     foreach ($pkg in $Packages) {
         Write-Host ""
         Write-Host "========================================"
-        Write-Host "  Installing $pkg"
+        $Mode = if ($Editable) { " (editable)" } else { "" }
+        Write-Host "  Installing $pkg$Mode"
         Write-Host "========================================"
         Write-Host ""
 
-        if ($pkg -eq "termin-app" -and $Editable) {
-            & python -m pip install --no-build-isolation -e (Join-Path $ScriptDir $pkg)
-        } else {
-            & python -m pip install --no-build-isolation (Join-Path $ScriptDir $pkg)
-        }
+        & python -m pip install --no-build-isolation @ForceFlags @NoDepsFlag @EditableFlag (Join-Path $ScriptDir $pkg)
         if ($LASTEXITCODE -ne 0) { throw "pip install $pkg failed" }
     }
 }
