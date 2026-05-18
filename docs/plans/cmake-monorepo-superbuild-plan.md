@@ -63,6 +63,8 @@ cmake --install build/Release
 - `TERMIN_BUILD_WINDOW_TESTS=ON/OFF` controls tests that create windows or GL contexts.
 - `TERMIN_ENABLE_VULKAN=ON/OFF` controls Vulkan support.
 - `TERMIN_ENABLE_SDL=ON/OFF` controls SDL support.
+- `TERMIN_USE_CCACHE=ON/OFF` controls automatic `ccache` compiler launcher use when `ccache` is available.
+- `TERMIN_ENABLE_UNITY_BUILD=ON/OFF` enables targeted unity build for selected C++-heavy targets.
 - `TERMIN_BUILD_EDITOR_MINIMAL`, `TERMIN_BUILD_EDITOR_EXE`, and `TERMIN_BUILD_LAUNCHER` remain off for SDK builds.
 
 ## Completed
@@ -73,6 +75,8 @@ cmake --install build/Release
 - Internal dependencies can use already-existing CMake targets instead of requiring prior installation into `sdk/`.
 - `build-sdk-cpp.sh` uses the top-level graph and installs into `sdk/`.
 - The default build directory is `build/<BUILD_TYPE>`; for Release this is `build/Release`.
+- Shell scripts use `ccache` automatically when available and select `Ninja` for new build directories when available.
+- `--unity` enables targeted unity build for checked C++ targets (`termin_graphics2`, `termin_render`, `trent`, `entity_lib`, `render_lib`).
 - Standalone module builds remain supported through normal `find_package(...)` paths.
 
 ### Tests
