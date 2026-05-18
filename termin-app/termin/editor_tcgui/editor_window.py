@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from tcbase import log
+from tcbase._geom_native import Vec3
 
 from tcgui.widgets.ui import UI
 from tcgui.widgets.vstack import VStack
@@ -965,11 +966,21 @@ class EditorWindowTcgui:
         )
 
     def world_point_on_oxy_plane(self, x: float, y: float) -> tuple[float, float, float] | None:
+        return self.world_point_on_plane(x, y, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), "OXY plane")
+
+    def world_point_on_plane(
+        self,
+        x: float,
+        y: float,
+        plane_origin: tuple[float, float, float],
+        plane_normal: tuple[float, float, float],
+        label: str = "plane",
+    ) -> tuple[float, float, float] | None:
         if self.camera is None or self.camera.entity is None:
-            log.error("[EditorWindowTcgui] OXY plane pick failed: editor camera is not available")
+            log.error(f"[EditorWindowTcgui] {label} pick failed: editor camera is not available")
             return None
         if self._viewport_widget is None:
-            log.error("[EditorWindowTcgui] OXY plane pick failed: viewport widget is not available")
+            log.error(f"[EditorWindowTcgui] {label} pick failed: viewport widget is not available")
             return None
 
         viewport_rect = (
@@ -982,19 +993,42 @@ class EditorWindowTcgui:
             ray = self.camera.screen_point_to_ray(float(x), float(y), viewport_rect)
             origin = ray.origin
             direction = ray.direction
-            dz = float(direction[2])
-            if abs(dz) < 1e-9:
-                log.error("[EditorWindowTcgui] OXY plane pick failed: ray is parallel to OXY plane")
+            denom = (
+                float(direction[0]) * plane_normal[0]
+                + float(direction[1]) * plane_normal[1]
+                + float(direction[2]) * plane_normal[2]
+            )
+            if abs(denom) < 1e-9:
+                log.error(f"[EditorWindowTcgui] {label} pick failed: ray is parallel to plane")
                 return None
-            t = -float(origin[2]) / dz
+            t = (
+                (plane_origin[0] - float(origin[0])) * plane_normal[0]
+                + (plane_origin[1] - float(origin[1])) * plane_normal[1]
+                + (plane_origin[2] - float(origin[2])) * plane_normal[2]
+            ) / denom
             return (
                 float(origin[0] + direction[0] * t),
                 float(origin[1] + direction[1] * t),
-                0.0,
+                float(origin[2] + direction[2] * t),
             )
         except Exception as e:
-            log.error(f"[EditorWindowTcgui] OXY plane pick failed: {e}")
+            log.error(f"[EditorWindowTcgui] {label} pick failed: {e}")
             return None
+
+    def world_point_on_entity_local_oxy_plane(self, x: float, y: float, entity) -> tuple[float, float, float] | None:
+        if entity is None or not entity.valid():
+            log.error("[EditorWindowTcgui] entity local OXY plane pick failed: entity is not available")
+            return None
+        pose = entity.transform.global_pose()
+        origin = pose.point_to_global(Vec3(0.0, 0.0, 0.0))
+        normal = pose.vector_to_global(Vec3(0.0, 0.0, 1.0))
+        return self.world_point_on_plane(
+            x,
+            y,
+            (float(origin.x), float(origin.y), float(origin.z)),
+            (float(normal.x), float(normal.y), float(normal.z)),
+            "entity local OXY plane",
+        )
 
     # ------------------------------------------------------------------
     # Undo / Redo
