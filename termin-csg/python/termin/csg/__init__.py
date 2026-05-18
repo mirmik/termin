@@ -18,6 +18,13 @@ from termin.csg._csg_native import (  # noqa: E402
     unite,
 )
 from termin.csg._csg_native import _extrude_pairs, _extrude_points  # noqa: E402
+from termin.csg.procedural_document import (  # noqa: E402
+    ContourDocument,
+    OperationDocument,
+    ProceduralMeshDocument,
+    ProceduralPlane,
+    SketchItemDocument,
+)
 
 
 def _point2(value):
@@ -53,6 +60,11 @@ def extrude(outer, height, holes=None):
 
 __all__ = [
     "Point2",
+    "ContourDocument",
+    "OperationDocument",
+    "ProceduralMeshDocument",
+    "ProceduralPlane",
+    "SketchItemDocument",
     "Solid",
     "extrude",
     "intersect",

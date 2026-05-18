@@ -15,6 +15,15 @@ from tcgui.widgets.units import px
 from termin.editor_tcgui.component_editor_extension import (
     register_component_editor_extension,
 )
+from termin.csg import (
+    Solid,
+    extrude as csg_extrude,
+)
+from termin.csg.solid_render import (
+    PointTransform,
+    SolidRenderStyle,
+    draw_solid,
+)
 
 
 class ProceduralMeshEditorExtension:
@@ -180,7 +189,7 @@ class ProceduralMeshEditorExtension:
     def _clear_sketch(self) -> None:
         component = self._component
         if component is not None:
-            from termin.mesh.procedural_mesh_document import ProceduralMeshDocument
+            from termin.csg.procedural_document import ProceduralMeshDocument
 
             component.document = ProceduralMeshDocument()
         self._draft_points = []
@@ -449,21 +458,120 @@ class ProceduralMeshEditorExtension:
             anchor_color,
             True,
         )
-        self._draw_contours(renderer)
+        self._draw_document_debug(renderer)
 
-    def _draw_contours(self, renderer) -> None:
+    def _draw_document_debug(self, renderer) -> None:
         contour_color = Color4(0.0, 0.95, 0.95, 1.0)
+        contour_selected_color = Color4(1.0, 1.0, 1.0, 1.0)
         draft_color = Color4(1.0, 0.78, 0.12, 1.0)
         point_color = Color4(1.0, 1.0, 1.0, 1.0)
         component = self._component
         if component is not None:
-            for item in component.document.items:
-                for contour in item.contours:
-                    points = item.contour_world_points(contour)
-                    self._draw_polyline(renderer, points, contour_color, True)
-                    self._draw_points(renderer, points, point_color)
+            document = component.document
+            used_sketch_ids = document.used_source_sketch_ids()
+            for operation in document.operations:
+                selected = self._selected_node_data == ("operation", operation.id)
+                style = self._solid_style(selected)
+                for solid, point_transform in self._operation_solids(document, operation):
+                    draw_solid(renderer, solid, style, point_transform)
+
+            for item in document.items:
+                if item.id not in used_sketch_ids:
+                    self._draw_sketch_contours(renderer, item, contour_color, point_color)
+
+            self._draw_selected_document_item(renderer, document, contour_selected_color)
         self._draw_polyline(renderer, self._draft_points, draft_color, False)
         self._draw_points(renderer, self._draft_points, draft_color)
+
+    def _draw_sketch_contours(self, renderer, sketch, color: Color4, point_color: Color4) -> None:
+        for contour in sketch.contours:
+            points = sketch.contour_world_points(contour)
+            self._draw_polyline(renderer, points, color, True)
+            self._draw_points(renderer, points, point_color)
+
+    def _operation_solids(self, document, operation) -> list[tuple[Solid, PointTransform]]:
+        if not operation.enabled:
+            return []
+        if operation.kind == "extrude":
+            return self._extrude_solids(document, operation)
+        return []
+
+    def _extrude_solids(self, document, operation) -> list[tuple[Solid, PointTransform]]:
+        source_sketch_id = str(operation.params.get("source_sketch_id", ""))
+        sketch = document.find_sketch(source_sketch_id)
+        if sketch is None:
+            return []
+
+        height = float(operation.params.get("height", 1.0))
+        solids: list[tuple[Solid, PointTransform]] = []
+        point_transform = self._sketch_point_transform(sketch)
+        for contour in sketch.contours:
+            if contour.id in operation.inputs:
+                try:
+                    solid = csg_extrude(contour.points, height)
+                except Exception as e:
+                    log.error(
+                        "[ProceduralMeshEditor] failed to build extrude solid "
+                        f"operation='{operation.id}' contour='{contour.id}': {e}"
+                    )
+                    continue
+                solids.append((solid, point_transform))
+        return solids
+
+    def _sketch_point_transform(self, sketch) -> PointTransform:
+        origin = sketch.plane.origin
+        x_axis = sketch.plane.x_axis
+        y_axis = sketch.plane.y_axis
+        normal = sketch.plane.normal
+
+        def transform(point: tuple[float, float, float]) -> tuple[float, float, float]:
+            return (
+                origin[0] + x_axis[0] * point[0] + y_axis[0] * point[1] + normal[0] * point[2],
+                origin[1] + x_axis[1] * point[0] + y_axis[1] * point[1] + normal[1] * point[2],
+                origin[2] + x_axis[2] * point[0] + y_axis[2] * point[1] + normal[2] * point[2],
+            )
+
+        return transform
+
+    def _solid_style(self, selected: bool) -> SolidRenderStyle:
+        if selected:
+            return SolidRenderStyle(
+                fill_color=Color4(0.15, 0.85, 1.0, 0.32),
+                edge_color=Color4(0.85, 1.0, 1.0, 1.0),
+                depth_test=True,
+            )
+        return SolidRenderStyle(
+            fill_color=Color4(0.0, 0.65, 0.95, 0.20),
+            edge_color=Color4(0.0, 0.95, 0.95, 0.85),
+            depth_test=True,
+        )
+
+    def _draw_selected_document_item(self, renderer, document, color: Color4) -> None:
+        node_data = self._selected_node_data
+        if node_data is None:
+            return
+        kind = node_data[0]
+        item_id = node_data[1]
+        if kind == "sketch":
+            sketch = document.find_sketch(item_id)
+            if sketch is not None:
+                self._draw_sketch_contours(renderer, sketch, color, color)
+            return
+        if kind == "contour":
+            contour_ref = self._find_contour(document, item_id)
+            if contour_ref is None:
+                return
+            sketch, contour = contour_ref
+            points = sketch.contour_world_points(contour)
+            self._draw_polyline(renderer, points, color, True, False)
+            self._draw_points(renderer, points, color)
+
+    def _find_contour(self, document, contour_id: str):
+        for sketch in document.items:
+            for contour in sketch.contours:
+                if contour.id == contour_id:
+                    return (sketch, contour)
+        return None
 
     def _draw_polyline(
         self,
@@ -471,13 +579,14 @@ class ProceduralMeshEditorExtension:
         points: list[tuple[float, float, float]],
         color: Color4,
         closed: bool,
+        depth_test: bool = False,
     ) -> None:
         if len(points) < 2:
             return
         for i in range(len(points) - 1):
-            renderer.line(self._vec3(points[i]), self._vec3(points[i + 1]), color, False)
+            renderer.line(self._vec3(points[i]), self._vec3(points[i + 1]), color, depth_test)
         if closed:
-            renderer.line(self._vec3(points[-1]), self._vec3(points[0]), color, False)
+            renderer.line(self._vec3(points[-1]), self._vec3(points[0]), color, depth_test)
 
     def _draw_points(
         self,
