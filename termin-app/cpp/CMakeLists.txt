@@ -103,6 +103,9 @@ set_target_properties(trent PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
     INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
 )
+if(COMMAND termin_enable_unity_build_for)
+    termin_enable_unity_build_for(trent)
+endif()
 
 # ============== External dependencies ==============
 
@@ -294,6 +297,9 @@ set_target_properties(entity_lib PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS ON
     INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
 )
+if(COMMAND termin_enable_unity_build_for)
+    termin_enable_unity_build_for(entity_lib)
+endif()
 
 # ============== Render library ==============
 # Includes passes with TC_REGISTER_FRAME_PASS for static registration
@@ -342,6 +348,9 @@ set_target_properties(render_lib PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS ON
     INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
 )
+if(COMMAND termin_enable_unity_build_for)
+    termin_enable_unity_build_for(render_lib)
+endif()
 
 if(TERMIN_HAS_RECAST)
     # ============== NavMesh library ==============

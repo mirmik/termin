@@ -10,13 +10,15 @@ SDK_PREFIX="${SDK_PREFIX:-$SCRIPT_DIR/sdk}"
 BUILD_TYPE="Release"
 CLEAN=0
 NO_PARALLEL=0
-BUILD_JOBS="$(nproc)"
+BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
 
 for arg in "$@"; do
     case "$arg" in
         --debug|-d)    BUILD_TYPE="Debug" ;;
         --clean|-c)    CLEAN=1 ;;
         --no-parallel) NO_PARALLEL=1 ;;
+        --ccache|--no-ccache) ;;
+        --unity|--no-unity) ;;
         --no-vulkan|--vulkan) ;;
         --no-sdl|--sdl) ;;
         --help|-h)
@@ -26,6 +28,10 @@ for arg in "$@"; do
             echo "  --debug, -d       Debug build"
             echo "  --clean, -c       Clean build directories first"
             echo "  --no-parallel     Disable parallel compilation (equivalent to -j1)"
+            echo "  --ccache          Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --no-ccache       Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --unity           Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --no-unity        Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-vulkan       Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --vulkan          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-sdl          Accepted for top-level SDK builds; ignored by C# stage"
