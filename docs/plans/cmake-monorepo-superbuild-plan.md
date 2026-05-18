@@ -166,19 +166,28 @@ Current status:
 
 Enable Python bindings in the monorepo graph after C++-only is stable.
 
-Known issues to fix:
+Current status:
 
-- `CMAKE_SOURCE_DIR` usage in binding subdirectories
-- Python module output directories
-- nanobind target availability
-- install destinations under `lib/python`
-- copied `.py` package layout
+- `TERMIN_BUILD_PYTHON=ON` configures, builds, and installs from the top-level CMake graph.
+- The top-level graph now selects one Python interpreter and exports it through `Python_EXECUTABLE` so subprojects do not accidentally switch to a different system Python.
+- `termin-nanobind-sdk` participates in the root graph and installs the shared `nanobind` support library plus helper package.
+- `build-sdk-bindings.sh` uses the top-level graph instead of the old per-module `modules.conf` loop and `termin-app/build.sh`.
+- Basic SDK imports from `sdk/lib/python` pass for core packages after install.
 
-Expected result:
+Remaining issues to fix:
+
+- audit remaining `CMAKE_SOURCE_DIR` usage in binding subdirectories;
+- verify Python module output/install directories against the old SDK layout;
+- reduce duplicate nanobind compilation (`nanobind` shared library and per-module `nanobind-static`);
+- verify editable test-venv refresh path after root-built bindings;
+- keep checking copied `.py` package layout parity.
+
+Working root build:
 
 ```bash
-cmake -S . -B build/monorepo-py -G Ninja -DTERMIN_BUILD_PYTHON=ON
-cmake --build build/monorepo-py --parallel
+cmake -S . -B build/Release -DTERMIN_BUILD_PYTHON=ON -DTERMIN_ENABLE_VULKAN=OFF -DTERMIN_ENABLE_SDL=ON
+cmake --build build/Release --parallel
+cmake --install build/Release
 ```
 
 ## Phase 6: Install and SDK Layout
