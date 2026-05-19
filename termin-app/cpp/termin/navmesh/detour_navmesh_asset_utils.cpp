@@ -1,6 +1,6 @@
 #include "detour_navmesh_asset_utils.hpp"
 
-#include <termin/render/shader_parser.hpp>
+#include <termin/materials/shader_parser.hpp>
 #include <termin/tc_scene.hpp>
 #include <DetourNavMesh.h>
 #include <DetourStatus.h>

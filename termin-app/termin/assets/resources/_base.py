@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from termin.assets.material_asset import MaterialAsset
     from termin.assets.mesh_asset import MeshAsset
     from termin.assets.texture_asset import TextureAsset
-    from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm
+    from termin.materials import ShaderMultyPhaseProgramm
     from termin.assets.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
     from termin.assets.voxel_grid_asset import VoxelGridAsset

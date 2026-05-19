@@ -1,6 +1,6 @@
 import pytest
 
-from termin.visualization.render.shader_parser import (
+from termin.materials import (
     ShasderStage,
     ShaderMultyPhaseProgramm,
     ShaderPhase,

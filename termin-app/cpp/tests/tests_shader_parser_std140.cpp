@@ -1,5 +1,5 @@
 #include "guard/guard.h"
-#include "termin/render/shader_parser.hpp"
+#include "termin/materials/shader_parser.hpp"
 
 #include <cstdint>
 #include <cstring>

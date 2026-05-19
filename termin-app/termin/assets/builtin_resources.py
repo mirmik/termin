@@ -20,7 +20,7 @@ def register_default_shader(rm: "ResourceManager") -> None:
         return
 
     from termin.visualization.render.materials.default_material import DEFAULT_SHADER_TEXT
-    from termin.visualization.render.shader_parser import parse_shader_text
+    from termin.materials import parse_shader_text
 
     program = parse_shader_text(DEFAULT_SHADER_TEXT)
     rm.register_shader("DefaultShader", program, uuid=BUILTIN_UUIDS["DefaultShader"])
@@ -35,7 +35,7 @@ def register_pbr_shader(rm: "ResourceManager") -> None:
         PBR_VERT,
         PBR_FRAG,
     )
-    from termin.visualization.render.shader_parser import (
+    from termin.materials import (
         ShaderMultyPhaseProgramm,
         ShaderPhase,
         ShasderStage,
@@ -74,7 +74,7 @@ def register_skinned_shader(rm: "ResourceManager") -> None:
         SKINNED_VERT,
         SKINNED_FRAG,
     )
-    from termin.visualization.render.shader_parser import (
+    from termin.materials import (
         ShaderMultyPhaseProgramm,
         ShaderPhase,
         ShasderStage,

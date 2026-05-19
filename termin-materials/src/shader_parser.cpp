@@ -1,4 +1,4 @@
-#include "shader_parser.hpp"
+#include <termin/materials/shader_parser.hpp>
 
 #include <tcbase/tc_log.hpp>
 

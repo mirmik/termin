@@ -1,6 +1,6 @@
-"""GLSL Preprocessor - re-export from C++."""
+"""GLSL preprocessor integration for app ResourceManager includes."""
 
-from termin._native.render import (
+from termin.materials import (
     GlslPreprocessor,
     glsl_preprocessor,
     register_glsl_preprocessor,

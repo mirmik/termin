@@ -4,6 +4,14 @@
 
 Статус: декларация о намерениях, не детальный migration checklist.
 
+Обновление 2026-05-19:
+
+- Создан первичный пакет `termin-materials`.
+- В `termin-materials` вынесены C++ `shader_parser`, `glsl_preprocessor` и Python binding `termin.materials._materials_native`.
+- Python shader-parser imports внутри `termin-app` переведены на canonical `termin.materials`.
+- `termin._native.render` пока сохраняет исторический export этих типов через импорт `termin.materials._materials_native`; это совместимость существующего пути, не новый owner.
+- App-level GLSL fallback loader через `ResourceManager` остается в `termin.visualization.render.glsl_preprocessor`, потому что это не core material/shader-format логика.
+
 ## Зачем
 
 Текущая граница вокруг material/shader runtime размазана:
@@ -91,8 +99,8 @@ Do not add new compatibility wrappers. When a domain moves, replace imports with
 
 Preferred staged migration:
 
-1. Create `termin-materials` CMake/Python package.
-2. Move shader-format code from `termin-app` into `termin-materials`:
+1. Create `termin-materials` CMake/Python package. **Done: initial package exists.**
+2. Move shader-format code from `termin-app` into `termin-materials`: **Partially done for parser/preprocessor.**
    - shader parser;
    - GLSL preprocessor;
    - include bank;

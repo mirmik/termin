@@ -2,7 +2,7 @@
 #include <nanobind/stl/optional.h>
 #include <tgfx/tgfx_material_handle.hpp>
 #include "termin/assets/handles.hpp"
-#include "termin/render/shader_parser.hpp"
+#include "termin/materials/shader_parser.hpp"
 #include "tgfx/render_state.hpp"
 #include <tgfx/tgfx_shader_handle.hpp>
 #include "termin/inspect/tc_kind.hpp"

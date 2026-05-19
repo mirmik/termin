@@ -3,7 +3,7 @@
 
 #include "termin/render/execute_context.hpp"
 #include "termin/render/material_ubo_apply.hpp"
-#include "termin/render/shader_parser.hpp"
+#include "termin/materials/shader_parser.hpp"
 #include "termin/render/render_camera.hpp"
 
 #include "tgfx2/render_context.hpp"
