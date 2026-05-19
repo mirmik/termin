@@ -15,7 +15,7 @@ from termin.inspect import InspectField
 from termin.core.profiler import Profiler
 
 if TYPE_CHECKING:
-    from termin.editor.gizmo import GizmoManager
+    from termin.editor_core.gizmo import GizmoManager
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 

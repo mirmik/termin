@@ -301,6 +301,7 @@ class EditorWindow(QMainWindow):
             on_mode_changed=self._on_prefab_mode_changed,
             on_request_update=self._request_viewport_update,
             log_message=self._log_to_console,
+            get_editor_scene_name=lambda: self._editor_scene_name,
         )
 
         # --- SceneFileController ---
