@@ -60,6 +60,7 @@ android {
     sourceSets {
         main {
             jniLibs.srcDir layout.buildDirectory.dir("generated/terminJniLibs").get().asFile
+            assets.srcDir new File(terminRoot, "termin-android/assets")
         }
     }
 }
