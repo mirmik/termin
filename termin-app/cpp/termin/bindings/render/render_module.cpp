@@ -48,6 +48,8 @@ void bind_render(nb::module_& m) {
     m.attr("ExecuteContext") = framework.attr("ExecuteContext");
     m.attr("FramePass") = framework.attr("FramePass");
     m.attr("RenderContext") = framework.attr("RenderContext");
+    m.attr("RenderEngine") = framework.attr("RenderEngine");
+    m.attr("RenderTargetContext") = framework.attr("RenderTargetContext");
     m.attr("HDRStats") = framework.attr("HDRStats");
     m.attr("TextureInfo") = framework.attr("TextureInfo");
     m.attr("FrameGraphCapture") = framework.attr("FrameGraphCapture");
@@ -121,9 +123,6 @@ void bind_render(nb::module_& m) {
 
     // SolidPrimitiveRenderer
     bind_solid_primitive(m);
-
-    // RenderEngine
-    bind_render_engine(m);
 
 }
 
