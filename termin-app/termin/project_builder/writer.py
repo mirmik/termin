@@ -42,6 +42,8 @@ class ProjectBuildWriter:
     def _copy_manifest_files(self, manifest: ProjectBuildManifest) -> None:
         copied: set[str] = set()
         for resource in manifest.resources:
+            if resource.kind == "generated":
+                continue
             self._copy_file_once(resource.source_path, resource.build_path, copied)
             if resource.meta_path is not None and resource.meta_build_path is not None:
                 self._copy_file_once(resource.meta_path, resource.meta_build_path, copied)

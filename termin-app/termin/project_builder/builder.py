@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 from termin.project_builder.manifest import BuildProjectResult
 from termin.project_builder.scanner import ProjectScanner
+from termin.project_builder.shader_build import compile_shader_usages
 from termin.project_builder.writer import ProjectBuildWriter
 
 
@@ -15,6 +17,9 @@ def build_project(
     entry_scene: str | Path,
     output_dir: str | Path,
     copy_files: bool = True,
+    compile_shaders: bool = False,
+    shader_usages: Iterable[object] | None = None,
+    shader_compiler: str | Path | None = None,
 ) -> BuildProjectResult:
     project_root_path = Path(project_root).resolve()
     output_dir_path = Path(output_dir).resolve()
@@ -26,6 +31,19 @@ def build_project(
         output_dir=output_dir_path,
     )
     manifest = scanner.scan()
+
+    if compile_shaders:
+        if shader_usages is None:
+            raise ValueError(
+                "compile_shaders=True requires shader_usages from a live scene shader usage collector"
+            )
+        manifest.resources.extend(
+            compile_shader_usages(
+                shader_usages=shader_usages,
+                output_dir=output_dir_path,
+                shader_compiler=Path(shader_compiler) if shader_compiler is not None else None,
+            )
+        )
 
     writer = ProjectBuildWriter(
         project_root=project_root_path,

@@ -128,3 +128,53 @@ def test_build_project_excludes_output_directory(tmp_path: Path) -> None:
     source_paths = {resource.source_path for resource in result.manifest.resources}
     assert "Main.scene" in source_paths
     assert "dist/Game/assets/Old.scene" not in source_paths
+
+
+class _FakeShader:
+    is_valid = True
+    uuid = "shader-phase-uuid"
+    name = "TestShader"
+    vertex_source = "#version 450\nvoid main() {}\n"
+    fragment_source = "#version 450\nlayout(location=0) out vec4 c; void main() { c = vec4(1); }\n"
+    geometry_source = ""
+
+
+def test_build_project_compiles_shader_usages(tmp_path: Path) -> None:
+    project = tmp_path / "ShaderGame"
+    project.mkdir()
+    _write_json(project / "game.terminproj", {"version": 1, "name": "ShaderGame"})
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+
+    compiler = tmp_path / "fake_termin_shaderc.py"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import pathlib, sys\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "out.parent.mkdir(parents=True, exist_ok=True)\n"
+        "out.write_bytes(b'SPIRV')\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+
+    result = build_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "ShaderGame",
+        compile_shaders=True,
+        shader_usages=[_FakeShader()],
+        shader_compiler=compiler,
+    )
+
+    source_root = result.output_dir / ".build" / "shaders" / "source"
+    artifact_root = result.output_dir / "assets" / "shaders" / "vulkan"
+    assert (source_root / "shader-phase-uuid.vert.glsl").exists()
+    assert (source_root / "shader-phase-uuid.frag.glsl").exists()
+    assert (artifact_root / "shader-phase-uuid.vert.spv").read_bytes() == b"SPIRV"
+    assert (artifact_root / "shader-phase-uuid.frag.spv").read_bytes() == b"SPIRV"
+
+    resources = result.manifest.resources
+    shader_resources = [resource for resource in resources if resource.type == "shader_spirv"]
+    assert {resource.build_path for resource in shader_resources} == {
+        "assets/shaders/vulkan/shader-phase-uuid.vert.spv",
+        "assets/shaders/vulkan/shader-phase-uuid.frag.spv",
+    }

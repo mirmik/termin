@@ -40,7 +40,7 @@ Gradle не обязан владеть сборкой C++ SDK. CMake долже
 - `termin-components-render`;
 - `termin-engine`.
 
-Для Android `TGFX2_ENABLE_SHADERC` по умолчанию выключен: NDK содержит Vulkan headers/libs, но не готовую target-библиотеку `shaderc`. Vulkan runtime на Android принимает precompiled SPIR-V bytecode; попытка runtime GLSL-компиляции логируется и завершается ошибкой. Это временно, пока не появится offline shader compilation/asset pipeline.
+Для Android `TGFX2_ENABLE_SHADERC` по умолчанию выключен: NDK содержит Vulkan headers/libs, но не готовую target-библиотеку `shaderc`. Vulkan runtime на Android принимает precompiled SPIR-V bytecode. Host-сборка теперь имеет первый offline shader compilation path: редактор собирает используемые сценой `TcShader`/варианты, вызывает host `termin_shaderc`, кладет SPIR-V в `assets/shaders/vulkan/<shader-uuid>.<stage>.spv`, а Vulkan runtime ищет эти artifacts перед fallback на runtime GLSL.
 
 Рабочий вызов:
 
@@ -94,7 +94,7 @@ libtermin_components_render.so
 libtermin_engine.so
 ```
 
-Ограничение этого результата: это пока не player/runtime с Android surface/app wrapper. `termin-app/cpp`, skeleton/animation components и `tcplot` остаются вне Android-графа. Для реального runtime также нужен offline shader pipeline, потому что Android-профиль не линкует `shaderc`.
+Ограничение этого результата: это пока не player/runtime с Android surface/app wrapper. `termin-app/cpp`, skeleton/animation components и `tcplot` остаются вне Android-графа. Offline shader pipeline уже закрывает первый SPIR-V path для `termin-app` project builder, но Android wrapper еще должен упаковывать эти assets и выставлять shader artifact root при запуске runtime.
 
 No-OpenGL host editor smoke build:
 
@@ -211,6 +211,8 @@ Vulkan выглядит более реалистичным первым backend
 - хост-компиляция GLSL/HLSL в SPIR-V на этапе сборки;
 - SPIR-V кладется в assets или compiled resources;
 - Android runtime только загружает готовые shader blobs.
+
+Статус 2026-05-19: первый GLSL -> SPIR-V path реализован для editor project build. `Drawable` получает API объявления shader usages, `SkinnedMeshRenderer` объявляет базовый и skinned-вариант, `collect_scene_shader_usages` собирает usages из сцены, `termin.project_builder.shader_build` пишет временные `.build/shaders/source/*.glsl` и готовые `assets/shaders/vulkan/*.spv`. Следующий недостающий кусок для Android: packaging/lifecycle layer должен передать runtime путь к unpacked assets через `tgfx2_set_shader_artifact_root` или `TERMIN_SHADER_ARTIFACT_ROOT`.
 
 ## Как подключать Python
 

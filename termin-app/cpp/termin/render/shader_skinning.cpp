@@ -288,13 +288,21 @@ TcShader get_skinned_shader(TcShader original_shader) {
         ? std::string("Skinned_") + original_shader.uuid()
         : orig_name + "_Skinned";
 
+    char variant_uuid[40];
+    tc_shader_make_variant_uuid(
+        variant_uuid,
+        sizeof(variant_uuid),
+        original_shader.uuid(),
+        TC_SHADER_VARIANT_SKINNING
+    );
+
     tc_shader_handle h = tc_shader_from_sources(
         skinned_vertex.c_str(),
         fragment_source.c_str(),
         geometry_source.empty() ? nullptr : geometry_source.c_str(),
         skinned_name.c_str(),
         original_shader.source_path(),
-        nullptr  // auto-generate uuid
+        variant_uuid
     );
 
     if (tc_shader_handle_is_invalid(h)) {
