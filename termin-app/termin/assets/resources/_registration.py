@@ -36,35 +36,7 @@ class RegistrationMixin:
             plugin.register(AssetContext(resource_manager=self, name=name), result)
             return
 
-        # Dispatch by resource type
-        if result.resource_type == "material":
-            self._register_material_file(name, result)
-        elif result.resource_type == "shader":
-            self._register_shader_file(name, result)
-        elif result.resource_type == "texture":
-            self._register_texture_file(name, result)
-        elif result.resource_type == "mesh":
-            self._register_mesh_file(name, result)
-        elif result.resource_type == "voxel_grid":
-            self._register_voxel_grid_file(name, result)
-        elif result.resource_type == "navmesh":
-            self._register_navmesh_file(name, result)
-        elif result.resource_type == "glb":
-            self._register_glb_file(name, result)
-        elif result.resource_type == "glsl":
-            self._register_glsl_file(name, result)
-        elif result.resource_type == "prefab":
-            self._register_prefab_file(name, result)
-        elif result.resource_type == "audio_clip":
-            self._register_audio_clip_file(name, result)
-        elif result.resource_type == "ui":
-            self._register_ui_file(name, result)
-        elif result.resource_type == "pipeline":
-            self._register_pipeline_file(name, result)
-        elif result.resource_type == "scene_pipeline":
-            self._register_scene_pipeline_file(name, result)
-        else:
-            log.warn(f"[ResourceManager] Unknown resource type: {result.resource_type}")
+        log.error(f"[ResourceManager] No runtime asset plugin registered for type: {result.resource_type}")
 
     def reload_file(self, result: "PreLoadResult") -> None:
         """
@@ -85,34 +57,7 @@ class RegistrationMixin:
             plugin.reload(AssetContext(resource_manager=self, name=name), result)
             return
 
-        if result.resource_type == "material":
-            self._reload_material_file(name, result)
-        elif result.resource_type == "shader":
-            self._reload_shader_file(name, result)
-        elif result.resource_type == "texture":
-            self._reload_texture_file(name, result)
-        elif result.resource_type == "mesh":
-            self._reload_mesh_file(name, result)
-        elif result.resource_type == "voxel_grid":
-            self._reload_voxel_grid_file(name, result)
-        elif result.resource_type == "navmesh":
-            self._reload_navmesh_file(name, result)
-        elif result.resource_type == "glb":
-            self._reload_glb_file(name, result)
-        elif result.resource_type == "glsl":
-            self._reload_glsl_file(name, result)
-        elif result.resource_type == "prefab":
-            self._reload_prefab_file(name, result)
-        elif result.resource_type == "audio_clip":
-            self._reload_audio_clip_file(name, result)
-        elif result.resource_type == "ui":
-            self._reload_ui_file(name, result)
-        elif result.resource_type == "pipeline":
-            self._reload_pipeline_file(name, result)
-        elif result.resource_type == "scene_pipeline":
-            self._reload_scene_pipeline_file(name, result)
-        else:
-            log.warn(f"[ResourceManager] Unknown resource type for reload: {result.resource_type}")
+        log.error(f"[ResourceManager] No runtime asset plugin registered for reload type: {result.resource_type}")
 
     def _register_material_file(self, name: str, result: "PreLoadResult") -> None:
         """Register material from PreLoadResult."""
