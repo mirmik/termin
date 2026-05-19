@@ -25,9 +25,22 @@ Gradle не обязан владеть сборкой C++ SDK. CMake долже
 
 - установлен NDK `27.2.12479018` (`r27c`);
 - первый configure полного monorepo-графа уперся в desktop OpenGL: `termin-graphics` безусловно вызывает `find_package(OpenGL REQUIRED)`;
-- добавлен CMake-флаг `TERMIN_PLATFORM_ANDROID`, который включает native smoke profile без Python, тестов, desktop SDL/Vulkan, editor/launcher и desktop graphics/app/render стека;
+- добавлен CMake-флаг `TERMIN_PLATFORM_ANDROID`, который включает native Android profile без Python, тестов, desktop SDL, editor/launcher и desktop app/executable стека;
 - добавлен отдельный CMake-флаг `TERMIN_ENABLE_OPENGL`; при `OFF` monorepo не ищет и не линкует desktop `OpenGL::GL`, но оставляет Vulkan render/editor targets в графе;
 - Android smoke build под `arm64-v8a` успешно сконфигурирован, собран и установлен в тестовый prefix `/tmp/termin-android-smoke`.
+- Android render build под `arm64-v8a` успешно сконфигурирован, собран и установлен в тестовый prefix `/tmp/termin-android-render`.
+
+Расширенный Android render profile теперь собирает:
+
+- `termin-graphics` / `termin_graphics2` без OpenGL;
+- Vulkan backend через NDK `libvulkan.so`;
+- `termin-materials`;
+- `termin-render`;
+- `termin-display` без SDL;
+- `termin-components-render`;
+- `termin-engine`.
+
+Для Android `TGFX2_ENABLE_SHADERC` по умолчанию выключен: NDK содержит Vulkan headers/libs, но не готовую target-библиотеку `shaderc`. Vulkan runtime на Android принимает precompiled SPIR-V bytecode; попытка runtime GLSL-компиляции логируется и завершается ошибкой. Это временно, пока не появится offline shader compilation/asset pipeline.
 
 Рабочий вызов:
 
@@ -42,6 +55,13 @@ cmake -S . -B build/android/arm64-v8a \
 cmake --build build/android/arm64-v8a --parallel 8
 
 cmake --install build/android/arm64-v8a --prefix /tmp/termin-android-smoke
+```
+
+Для проверки расширенного профиля использовался тот же build directory и install prefix `/tmp/termin-android-render`:
+
+```bash
+cmake --build build/android/arm64-v8a --parallel 8
+cmake --install build/android/arm64-v8a --prefix /tmp/termin-android-render
 ```
 
 Собранные `.so` в первом Android smoke-профиле:
@@ -62,7 +82,19 @@ libtermin_components_collision.so
 libtermin_components_kinematic.so
 ```
 
-Ограничение этого результата: это пока не player/runtime с рендером. `termin-graphics`, `termin-materials`, `termin-render`, `termin-display`, `termin-engine`, `termin-app/cpp`, skeleton/animation components и `tcplot` исключены из Android smoke-графа, потому что текущие CMake targets все еще завязаны на desktop `OpenGL::GL` или на библиотеки, которые через него проходят.
+Дополнительно в расширенном Android render profile собираются и устанавливаются:
+
+```text
+libtermin_graphics.so
+libtermin_graphics2.so
+libtermin_materials.so
+libtermin_render.so
+libtermin_display.so
+libtermin_components_render.so
+libtermin_engine.so
+```
+
+Ограничение этого результата: это пока не player/runtime с Android surface/app wrapper. `termin-app/cpp`, skeleton/animation components и `tcplot` остаются вне Android-графа. Для реального runtime также нужен offline shader pipeline, потому что Android-профиль не линкует `shaderc`.
 
 No-OpenGL host editor smoke build:
 
@@ -85,15 +117,14 @@ This builds `termin_editor` and keeps `libvulkan.so.1` / `libshaderc.so.1` depen
 
 ## Что сейчас мешает Android
 
-Текущая сборка SDK desktop-центрична:
+Часть desktop-центричных зависимостей уже снята, но оставшиеся риски важны:
 
-- `termin-graphics` безусловно делает `find_package(OpenGL REQUIRED)`, а Android дает OpenGL ES, не desktop OpenGL.
-- SDL2 ищется как desktop/system package через `find_package(SDL2)` или `pkg-config`.
-- Vulkan path тянет host-style Vulkan SDK и `shaderc`.
+- SDL2 ищется как desktop/system package через `find_package(SDL2)` или `pkg-config`; Android-профиль сейчас собирает `termin-display` без SDL.
+- Vulkan path на Android собран через NDK `libvulkan.so`, но runtime GLSL compilation отключен без `shaderc`.
 - Python-пакеты устанавливаются через host `pip` и предполагают `$TERMIN_SDK`.
 - `termin-app` содержит desktop/editor код, включая Qt, SDL desktop backend, PyQt6 imports и tooling.
 
-Это означает, что Android не должен быть набором исключений в текущих desktop-целях. Нужен явный platform profile.
+Это означает, что следующий слой должен быть не очередным desktop executable, а отдельный Android wrapper/lifecycle/surface profile.
 
 ## Предлагаемый native Android profile
 
