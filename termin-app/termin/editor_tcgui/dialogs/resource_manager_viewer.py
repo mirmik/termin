@@ -15,7 +15,7 @@ from tcgui.widgets.units import px
 from tcbase import log
 
 
-def show_resource_manager_viewer(ui) -> None:
+def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
     """Show Resource Manager viewer dialog."""
     from termin.assets.resources import ResourceManager
 
@@ -48,6 +48,7 @@ def show_resource_manager_viewer(ui) -> None:
         "ScenePipelines": _pipeline_cols,
         "Components": [TableColumn("Name"), TableColumn("Module")],
         "ComponentRegistry": [TableColumn("Name"), TableColumn("Type", 80)],
+        "Watched Files": [TableColumn("Group", 160), TableColumn("File"), TableColumn("Resources", 180)],
     }
     tab_lists: dict[str, TableWidget] = {}
     tab_names = list(tab_columns.keys())
@@ -113,6 +114,7 @@ def show_resource_manager_viewer(ui) -> None:
         _refresh_scene_pipelines()
         _refresh_components()
         _refresh_component_registry()
+        _refresh_watched_files()
         _update_status()
 
     def _make_status(name: str, is_loaded: bool) -> str:
@@ -214,6 +216,49 @@ def show_resource_manager_viewer(ui) -> None:
             log.error(f"Failed to get ComponentRegistry: {e}")
         _set_tab("ComponentRegistry", rows, names)
 
+    # --- Watched Files ---
+    def _refresh_watched_files():
+        rows = []
+        names = []
+        watcher = project_file_watcher
+        if watcher is None:
+            _set_tab("Watched Files", rows, names)
+            return
+
+        try:
+            all_files_stats = watcher.get_all_files_by_extension()
+            total_files = watcher.get_all_files_count()
+            if all_files_stats:
+                rows.append(["By Extension", "Total", f"{total_files} files"])
+                names.append(("summary", "all"))
+                for ext, count in all_files_stats.items():
+                    rows.append(["By Extension", ext, str(count)])
+                    names.append(("extension", ext))
+
+            watched_dirs = watcher.watched_dirs
+            if watched_dirs:
+                rows.append(["Watched Directories", "", f"{len(watched_dirs)} dirs"])
+                names.append(("dirs", "all"))
+                for path in sorted(watched_dirs):
+                    rows.append(["Watched Directories", path, "directory"])
+                    names.append(("dir", path))
+
+            for processor in watcher.get_all_processors():
+                tracked = processor.get_tracked_files()
+                if not tracked:
+                    continue
+                type_name = processor.resource_type.capitalize()
+                rows.append([f"{type_name} Files", "", f"{len(tracked)} files"])
+                names.append(("processor", processor.resource_type))
+                for path, resource_names in sorted(tracked.items()):
+                    resources = ", ".join(sorted(resource_names)) if resource_names else "(pending)"
+                    rows.append([f"{type_name} Files", path, resources])
+                    names.append(("file", path))
+        except Exception as e:
+            log.error(f"Failed to refresh watched files: {e}")
+
+        _set_tab("Watched Files", rows, names)
+
     # --- Status bar ---
     def _update_status():
         parts = []
@@ -260,6 +305,8 @@ def show_resource_manager_viewer(ui) -> None:
             _show_component_details(name)
         elif tab == "ComponentRegistry":
             _show_component_registry_details(name)
+        elif tab == "Watched Files":
+            _show_watched_file_details(name)
 
     def _show_material_details(name: str):
         mat = rm.materials.get(name)
@@ -432,6 +479,45 @@ def show_resource_manager_viewer(ui) -> None:
                 lines.append("Backend: Python")
         except Exception as e:
             log.debug(f"[ResourceManager] Failed to get component registry details for {name}: {e}")
+        details.text = "\n".join(lines)
+
+    def _show_watched_file_details(name):
+        kind = ""
+        value = ""
+        if isinstance(name, tuple) and len(name) == 2:
+            kind, value = name
+        else:
+            value = str(name)
+
+        watcher = project_file_watcher
+        lines = ["=== Watched Files ===", ""]
+        if watcher is None:
+            lines.append("Project file watcher is not available.")
+            details.text = "\n".join(lines)
+            return
+
+        lines.append(f"Watcher: {'enabled' if watcher.is_enabled else 'disabled'}")
+        lines.append(f"Project: {watcher.project_path or '(none)'}")
+        lines.append(f"Watched dirs: {len(watcher.watched_dirs)}")
+        lines.append(f"Watched files: {watcher.get_file_count()}")
+        lines.append(f"Known files: {watcher.get_all_files_count()}")
+
+        if kind:
+            lines.append("")
+            lines.append(f"Selection: {kind}")
+            lines.append(f"Value: {value}")
+
+        if kind == "file":
+            for processor in watcher.get_all_processors():
+                tracked = processor.get_tracked_files()
+                if value in tracked:
+                    resources = ", ".join(sorted(tracked[value])) if tracked[value] else "(pending)"
+                    lines.append(f"Resource type: {processor.resource_type}")
+                    lines.append(f"Resources: {resources}")
+                    break
+        elif kind == "extension":
+            lines.append(f"Files with extension: {watcher.get_file_count(value)}")
+
         details.text = "\n".join(lines)
 
     # --- Load asset ---
