@@ -206,7 +206,7 @@ class PipelineGraphEditor(QMainWindow):
         conn_count = len(connections)
 
         try:
-            from termin._native.render import compile_graph_from_json
+            from termin.render_framework import compile_graph_from_json
 
             graph_data = serialize_graph(self._graph_scene)
             pipeline = compile_graph_from_json(json.dumps(graph_data))

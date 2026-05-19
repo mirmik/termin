@@ -160,7 +160,7 @@ class DisplayInspector(QWidget):
 
         # Router status
         try:
-            from termin._native.render import _render_surface_get_input_manager, _display_get_surface_ptr
+            from termin.display import _render_surface_get_input_manager, _display_get_surface_ptr
             surface_ptr = _display_get_surface_ptr(display.tc_display_ptr)
             surface_im = _render_surface_get_input_manager(surface_ptr) if surface_ptr else 0
             self._router_label.setText("Active" if surface_im else "None")
@@ -200,7 +200,7 @@ class DisplayInspector(QWidget):
     def _update_debug_info(self, display: "Display") -> None:
         """Update debug info label with native state."""
         try:
-            from termin._native.render import (
+            from termin.display import (
                 _render_surface_get_input_manager,
                 _display_get_surface_ptr,
             )
@@ -215,7 +215,7 @@ class DisplayInspector(QWidget):
             ]
 
             # Viewport input managers
-            from termin._native.render import _viewport_get_input_manager
+            from termin.display import _viewport_get_input_manager
             for i, vp in enumerate(display.viewports):
                 try:
                     vp_index, vp_generation = vp._viewport_handle()

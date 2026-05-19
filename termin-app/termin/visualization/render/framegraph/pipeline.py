@@ -4,6 +4,6 @@ RenderPipeline — контейнер для конвейера рендерин
 Re-exported from C++ native module.
 """
 
-from termin._native.render import RenderPipeline
+from termin.render_framework import RenderPipeline
 
 __all__ = ["RenderPipeline"]

@@ -1,5 +1,5 @@
 """ResourceSpec - re-exported from C++ native module."""
 
-from termin._native.render import ResourceSpec
+from termin.render_framework import ResourceSpec
 
 __all__ = ["ResourceSpec"]
