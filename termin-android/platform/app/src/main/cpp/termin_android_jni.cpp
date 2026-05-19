@@ -36,6 +36,15 @@ Java_org_termin_android_TerminActivity_nativeInitialize(
     const char* asset_root_chars = jstring_chars(env, asset_root);
     const char* native_lib_dir_chars = jstring_chars(env, native_lib_dir);
 
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kLogTag,
+        "nativeInitialize app_data_dir='%s' asset_root='%s' native_lib_dir='%s'",
+        app_data_dir_chars ? app_data_dir_chars : "",
+        asset_root_chars ? asset_root_chars : "",
+        native_lib_dir_chars ? native_lib_dir_chars : ""
+    );
+
     termin_android_config config{};
     config.app_data_dir = app_data_dir_chars;
     config.asset_root = asset_root_chars;
@@ -52,6 +61,7 @@ Java_org_termin_android_TerminActivity_nativeInitialize(
 
 extern "C" JNIEXPORT void JNICALL
 Java_org_termin_android_TerminActivity_nativeShutdown(JNIEnv*, jclass) {
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "nativeShutdown");
     termin_android_shutdown();
 }
 
@@ -66,6 +76,7 @@ Java_org_termin_android_TerminActivity_nativeSurfaceCreated(
         return;
     }
 
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "nativeSurfaceCreated");
     ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
     if (!window) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "ANativeWindow_fromSurface failed");
@@ -83,11 +94,25 @@ Java_org_termin_android_TerminActivity_nativeSurfaceChanged(
     jint width,
     jint height
 ) {
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kLogTag,
+        "nativeSurfaceChanged size=%dx%d",
+        static_cast<int>(width),
+        static_cast<int>(height)
+    );
     termin_android_on_surface_changed(static_cast<int32_t>(width), static_cast<int32_t>(height));
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_org_termin_android_TerminActivity_nativeSurfaceDestroyed(JNIEnv*, jclass) {
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "nativeSurfaceDestroyed");
     termin_android_on_surface_destroyed();
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_termin_android_TerminActivity_nativeSmokeRender(JNIEnv*, jclass) {
+    int ok = termin_android_smoke_render();
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "nativeSmokeRender result=%d", ok);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
