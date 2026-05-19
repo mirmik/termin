@@ -180,11 +180,21 @@ class CsgSceneRenderer:
         ctx.set_cull(CULL_NONE)
         ctx.bind_shader(self.vs, self.fs)
 
+        reference_meshes = build_reference_meshes()
         solid_meshes, line_meshes = build_document_meshes(document)
         if draft_points is not None:
             draft_mesh = _build_polyline_mesh(draft_points, False, "cad-draft-polyline")
             if draft_mesh is not None:
                 line_meshes.append(draft_mesh)
+
+        ctx.set_depth_test(False)
+        ctx.set_depth_write(False)
+        for mesh, color in reference_meshes:
+            _push_draw_state(ctx, mvp, color)
+            draw_tc_mesh(ctx, mesh)
+
+        ctx.set_depth_test(True)
+        ctx.set_depth_write(True)
         for mesh in solid_meshes:
             _push_draw_state(ctx, mvp, (0.12, 0.72, 0.95, 1.0))
             draw_tc_mesh(ctx, mesh)
@@ -246,6 +256,34 @@ def build_document_meshes(document: ProceduralMeshDocument) -> tuple[list[TcMesh
             if line_mesh is not None:
                 line_meshes.append(line_mesh)
     return solid_meshes, line_meshes
+
+
+def build_reference_meshes() -> list[tuple[TcMesh, tuple[float, float, float, float]]]:
+    """Build persistent viewport reference grid and coordinate axes."""
+
+    grid_segments: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
+    extent = 10
+    for i in range(-extent, extent + 1):
+        value = float(i)
+        grid_segments.append(((-extent, value, 0.0), (extent, value, 0.0)))
+        grid_segments.append(((value, -extent, 0.0), (value, extent, 0.0)))
+
+    axis_len = float(extent)
+    return [
+        (_build_line_segments_mesh(grid_segments, "cad-reference-grid"), (0.23, 0.25, 0.29, -1.0)),
+        (
+            _build_line_segments_mesh([((-axis_len, 0.0, 0.0), (axis_len, 0.0, 0.0))], "cad-x-axis"),
+            (0.92, 0.18, 0.18, -1.0),
+        ),
+        (
+            _build_line_segments_mesh([((0.0, -axis_len, 0.0), (0.0, axis_len, 0.0))], "cad-y-axis"),
+            (0.18, 0.82, 0.22, -1.0),
+        ),
+        (
+            _build_line_segments_mesh([((0.0, 0.0, 0.0), (0.0, 0.0, axis_len * 0.5))], "cad-z-axis"),
+            (0.25, 0.45, 1.0, -1.0),
+        ),
+    ]
 
 
 def document_bounds(document: ProceduralMeshDocument):
@@ -326,6 +364,30 @@ def _build_polyline_mesh(points, closed: bool, name: str) -> TcMesh | None:
     )
 
 
+def _build_line_segments_mesh(
+    segments: list[tuple[tuple[float, float, float], tuple[float, float, float]]],
+    name: str,
+) -> TcMesh:
+    vertices: list[tuple[float, float, float]] = []
+    indices: list[int] = []
+    for start, end in segments:
+        index = len(vertices)
+        vertices.append(start)
+        vertices.append(end)
+        indices.append(index)
+        indices.append(index + 1)
+    vertices_arr = np.asarray(vertices, dtype=np.float32).reshape(-1, 3)
+    return TcMesh.from_interleaved(
+        vertices=np.ascontiguousarray(vertices_arr.reshape(-1), dtype=np.float32),
+        vertex_count=vertices_arr.shape[0],
+        indices=np.ascontiguousarray(np.array(indices, dtype=np.uint32), dtype=np.uint32),
+        layout=_position_layout(),
+        name=name,
+        uuid=str(uuid.uuid4()),
+        draw_mode=TcDrawMode.LINES,
+    )
+
+
 def _position_layout() -> TcVertexLayout:
     layout = TcVertexLayout()
     layout.add("position", 3, TcAttribType.FLOAT32, 0)
@@ -344,6 +406,7 @@ def _push_draw_state(ctx, mvp, color) -> None:
 __all__ = [
     "CadViewportWidget",
     "CsgSceneRenderer",
+    "build_reference_meshes",
     "build_document_meshes",
     "document_bounds",
 ]
