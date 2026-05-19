@@ -10,7 +10,7 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
-#include "termin/render/shader_parser.hpp"
+#include "termin/materials/shader_parser.hpp"
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
 extern "C" {

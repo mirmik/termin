@@ -23,7 +23,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 
 if TYPE_CHECKING:
     from termin.visualization.core.material import Material, MaterialPhase
-    from termin.visualization.render.shader_parser import (
+    from termin.materials import (
         ShaderMultyPhaseProgramm,
         MaterialProperty,
     )

@@ -137,6 +137,12 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_graphics REQUIRED)
 endif()
+# termin-materials (shader parser, GLSL preprocessor, material-format runtime)
+if(COMMAND termin_require_package)
+    termin_require_package(termin_materials termin_materials::termin_materials)
+else()
+    find_package(termin_materials REQUIRED)
+endif()
 # termin-inspect (extracted inspect/kind core + python bridge)
 if(COMMAND termin_require_package)
     termin_require_package(termin_inspect termin_inspect::termin_inspect)
@@ -329,11 +335,9 @@ set(RENDER_LIB_SOURCES
     termin/render/bloom_pass.cpp
     termin/render/grayscale_pass.cpp
     termin/render/tonemap_pass.cpp
-    termin/render/shader_parser.cpp
     termin/render/material_ubo_apply.cpp
     termin/render/skybox_pass.cpp
     termin/render/shadow_camera.cpp
-    termin/render/glsl_preprocessor.cpp
     termin/render/shader_skinning.cpp
     termin/modules/term_modules_integration.cpp
     termin/camera/camera_viewport_component.cpp
@@ -348,7 +352,7 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_render::termin_render termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
+target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_materials::termin_materials termin_render::termin_render termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
 target_compile_definitions(render_lib PRIVATE TERMIN_RENDER_EXPORTS)
 target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(render_lib PRIVATE termin/pch.hpp)

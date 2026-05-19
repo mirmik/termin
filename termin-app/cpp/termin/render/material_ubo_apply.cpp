@@ -1,6 +1,6 @@
 // material_ubo_apply.cpp - Implementation of bind_material_ubo.
 #include "termin/render/material_ubo_apply.hpp"
-#include "termin/render/shader_parser.hpp"
+#include "termin/materials/shader_parser.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include "tgfx2/i_render_device.hpp"

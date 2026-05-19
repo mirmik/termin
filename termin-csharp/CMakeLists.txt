@@ -28,6 +28,11 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
     find_package(OpenGL REQUIRED)
     find_package(termin REQUIRED)
     if(COMMAND termin_require_package)
+        termin_require_package(termin_materials termin_materials::termin_materials)
+    else()
+        find_package(termin_materials REQUIRED)
+    endif()
+    if(COMMAND termin_require_package)
     termin_require_package(termin_scene termin_scene::termin_scene)
 else()
     find_package(termin_scene REQUIRED)
@@ -161,6 +166,7 @@ endif()
         termin_render::termin_render
         tgfx::termin_graphics
         tgfx::termin_graphics2
+        termin_materials::termin_materials
         termin_modules::termin_modules
         tmesh::termin_mesh
         tcplot::tcplot

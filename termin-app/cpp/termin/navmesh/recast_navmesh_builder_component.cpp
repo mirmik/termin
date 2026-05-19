@@ -3,7 +3,7 @@
 #include "navmesh_keeper_component.hpp"
 #include "off_mesh_link_component.hpp"
 #include <components/mesh_component.hpp>
-#include <termin/render/shader_parser.hpp>
+#include <termin/materials/shader_parser.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/tc_scene.hpp>
 #include <DetourAlloc.h>

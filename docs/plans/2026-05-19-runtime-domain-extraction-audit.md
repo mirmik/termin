@@ -208,7 +208,7 @@ from tgfx import TcTexture, tc_texture_declare, ...
 
 ## `termin.geombase`
 
-Сейчас лежит в `termin-app`, но по смыслу ближе к base/math runtime.
+Обновление 2026-05-19: чистая часть `termin.geombase` уже физически лежит в `termin-base` и устанавливается в SDK через `termin-base/python/CMakeLists.txt`.
 
 Содержит:
 
@@ -229,6 +229,8 @@ from tgfx import TcTexture, tc_texture_declare, ...
    - `pose2.py`;
    - `screw.py`;
    - `transform_aabb.py`.
+
+   **Done for current source tree and SDK install.**
 
 2. Проверить зависимости `GeneralTransform3` и `Ray3`.
    Если `termin-base` не должен зависеть от `termin-scene`/`termin-collision`, эти re-export imports надо убрать из `termin.geombase.__init__` или перенести в более высокий слой.

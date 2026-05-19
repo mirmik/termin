@@ -52,7 +52,7 @@ from PyQt6.QtGui import QColor, QImage, QPixmap
 from termin.editor.color_dialog import ColorDialog
 from termin.visualization.core.material import Material
 from termin.geombase import Vec4
-from termin.visualization.render.shader_parser import (
+from termin.materials import (
     ShaderMultyPhaseProgramm,
     MaterialProperty,
 )

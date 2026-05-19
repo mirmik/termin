@@ -121,7 +121,7 @@ class ResourceLoader:
     def load_material_from_path(self, file_path: str) -> None:
         """Load material from a shader file path."""
         try:
-            from termin.visualization.render.shader_parser import parse_shader_text, ShaderMultyPhaseProgramm
+            from termin.materials import parse_shader_text, ShaderMultyPhaseProgramm
             from termin.visualization.core.material import Material
 
             with open(file_path, "r", encoding="utf-8") as f:

@@ -1,17 +1,15 @@
-"""Shader parser - canonical re-export from termin.materials."""
-
-from termin.materials import (
+from . import (
     MaterialProperty,
     MaterialUboEntry,
     MaterialUboLayout,
     PhaseRenderSettings,
-    UniformProperty,
-    ShaderStage,
     ShasderStage,
-    ShaderPhase,
     ShaderMultyPhaseProgramm,
-    parse_shader_text,
+    ShaderPhase,
+    ShaderStage,
+    UniformProperty,
     parse_property_directive,
+    parse_shader_text,
 )
 
 __all__ = [
@@ -19,11 +17,11 @@ __all__ = [
     "MaterialUboEntry",
     "MaterialUboLayout",
     "PhaseRenderSettings",
-    "UniformProperty",
-    "ShaderStage",
     "ShasderStage",
-    "ShaderPhase",
     "ShaderMultyPhaseProgramm",
-    "parse_shader_text",
+    "ShaderPhase",
+    "ShaderStage",
+    "UniformProperty",
     "parse_property_directive",
+    "parse_shader_text",
 ]
