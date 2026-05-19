@@ -43,6 +43,7 @@ class CadApp:
         self.selection_label = Label()
         self.tree = TreeWidget()
         self.dirty = True
+        self.preview_revision = 0
 
     def build_ui(self):
         root = HStack()
@@ -73,6 +74,8 @@ class CadApp:
             width,
             height,
             self.draft_points,
+            self.selected_node_data,
+            self.preview_revision,
         )
         self.viewport.texture = texture
         self.viewport.texture_size = (width, height)
@@ -80,6 +83,10 @@ class CadApp:
 
     def request_render(self) -> None:
         self.dirty = True
+
+    def request_preview_rebuild(self) -> None:
+        self.preview_revision += 1
+        self.request_render()
 
     def _build_side_panel(self):
         root = VStack()
@@ -132,7 +139,7 @@ class CadApp:
         self.draft_points = []
         self.draft_plane = ProceduralPlane()
         self._refresh_labels()
-        self.request_render()
+        self.request_preview_rebuild()
         log.info("[CsgCad] mode=draw_sketch")
 
     def close_contour(self) -> None:
@@ -146,7 +153,7 @@ class CadApp:
             self.selected_node_data = ("sketch", self.document.items[0].id)
         self.draft_points = []
         self.refresh_tree()
-        self.request_render()
+        self.request_preview_rebuild()
         log.info(f"[CsgCad] contour closed id='{contour.id}'")
 
     def extrude_selected(self) -> None:
@@ -160,7 +167,7 @@ class CadApp:
         self.selected_node_data = ("operation", operation.id)
         self.refresh_tree()
         self.fit_camera()
-        self.request_render()
+        self.request_preview_rebuild()
         log.info(f"[CsgCad] extrude added id='{operation.id}' sketch='{sketch_id}'")
 
     def fit_camera(self) -> None:
@@ -174,6 +181,7 @@ class CadApp:
         self.selected_node_data = None
         self.refresh_tree()
         self.fit_camera()
+        self.request_preview_rebuild()
         log.info("[CsgCad] document cleared")
 
     def refresh_tree(self) -> None:
@@ -219,7 +227,7 @@ class CadApp:
     def _on_tree_select(self, node: TreeNode) -> None:
         self.selected_node_data = node.data
         self._refresh_labels()
-        self.request_render()
+        self.request_preview_rebuild()
 
     def _on_scene_click(self, x: float, y: float, width: int, height: int) -> bool:
         if self.mode != "draw_sketch":
@@ -230,6 +238,7 @@ class CadApp:
             return True
         self.draft_points.append(point)
         self._refresh_labels()
+        self.request_preview_rebuild()
         log.info(
             "[CsgCad] draft point added "
             f"point=({point[0]:.3f}, {point[1]:.3f}, {point[2]:.3f}) "
