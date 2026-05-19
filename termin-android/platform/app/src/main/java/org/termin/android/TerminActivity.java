@@ -3,9 +3,8 @@ package org.termin.android;
 import android.app.Activity;
 import android.graphics.PixelFormat;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
+import android.view.Choreographer;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -25,23 +24,23 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     }
 
     private SurfaceView surfaceView;
-    private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean surfaceAlive = false;
-    private int smokeFramesQueued = 0;
+    private boolean renderLoopRunning = false;
+    private int smokeFrameLogCounter = 0;
 
-    private final Runnable smokeRenderRunnable = new Runnable() {
+    private final Choreographer.FrameCallback smokeRenderFrameCallback = new Choreographer.FrameCallback() {
         @Override
-        public void run() {
-            if (!surfaceAlive) {
-                Log.i(TAG, "smokeRender skipped: surface is not alive");
+        public void doFrame(long frameTimeNanos) {
+            if (!surfaceAlive || !renderLoopRunning) {
+                renderLoopRunning = false;
                 return;
             }
             boolean ok = nativeSmokeRender();
-            Log.i(TAG, "smokeRender frame result=" + ok);
-            smokeFramesQueued -= 1;
-            if (surfaceAlive && smokeFramesQueued > 0) {
-                handler.postDelayed(this, 250);
+            smokeFrameLogCounter += 1;
+            if (!ok || smokeFrameLogCounter % 60 == 0) {
+                Log.i(TAG, "smokeRender frame result=" + ok + " frame=" + smokeFrameLogCounter);
             }
+            Choreographer.getInstance().postFrameCallback(this);
         }
     };
 
@@ -66,7 +65,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     @Override
     protected void onDestroy() {
         Log.i(TAG, "onDestroy");
-        handler.removeCallbacks(smokeRenderRunnable);
+        stopRenderLoop();
         nativeShutdown();
         super.onDestroy();
     }
@@ -87,17 +86,14 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         Log.i(TAG, "surfaceChanged format=" + format + " size=" + width + "x" + height);
         nativeSurfaceChanged(width, height);
-        smokeFramesQueued = 4;
-        handler.removeCallbacks(smokeRenderRunnable);
-        handler.postDelayed(smokeRenderRunnable, 100);
+        startRenderLoop();
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         Log.i(TAG, "surfaceDestroyed");
         surfaceAlive = false;
-        smokeFramesQueued = 0;
-        handler.removeCallbacks(smokeRenderRunnable);
+        stopRenderLoop();
         nativeSurfaceDestroyed();
     }
 
@@ -107,6 +103,25 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     private static native void nativeSurfaceChanged(int width, int height);
     private static native void nativeSurfaceDestroyed();
     private static native boolean nativeSmokeRender();
+
+    private void startRenderLoop() {
+        if (renderLoopRunning) {
+            return;
+        }
+        renderLoopRunning = true;
+        smokeFrameLogCounter = 0;
+        Log.i(TAG, "renderLoop start");
+        Choreographer.getInstance().postFrameCallback(smokeRenderFrameCallback);
+    }
+
+    private void stopRenderLoop() {
+        if (!renderLoopRunning) {
+            return;
+        }
+        renderLoopRunning = false;
+        Choreographer.getInstance().removeFrameCallback(smokeRenderFrameCallback);
+        Log.i(TAG, "renderLoop stop");
+    }
 
     private void copyAssetTree(String assetPath, File target) {
         try {
