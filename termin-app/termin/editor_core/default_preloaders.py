@@ -10,13 +10,10 @@ from termin.assets.resources import ResourceManager
 from termin.editor_core.file_processors import (
     ComponentFileProcessor,
     GLBPreLoader,
-    GlslPreLoader,
-    MaterialPreLoader,
     NavMeshPreLoader,
     PipelinePreLoader,
     PrefabPreLoader,
     ScenePipelinePreLoader,
-    ShaderPreLoader,
     UIPreLoader,
     VoxelGridPreLoader,
 )
@@ -42,12 +39,12 @@ def create_default_preloaders(
     on_resource_reloaded: Callable[[str, str], None] | None = None,
 ) -> list[FilePreLoader]:
     return [
-        GlslPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "glsl", on_resource_reloaded),
         PipelinePreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
         ScenePipelinePreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
-        ShaderPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "shader", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "texture", on_resource_reloaded),
-        MaterialPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "material", on_resource_reloaded),
         ComponentFileProcessor(resource_manager, on_resource_reloaded=on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "mesh", on_resource_reloaded),
         GLBPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),

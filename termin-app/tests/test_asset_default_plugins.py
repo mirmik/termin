@@ -14,6 +14,9 @@ def test_default_plugins_register_runtime_and_import_sides_separately() -> None:
     assert registry.get_runtime("texture") is not None
     assert registry.get_runtime("mesh") is not None
     assert registry.get_runtime("audio_clip") is not None
+    assert registry.get_runtime("glsl") is not None
+    assert registry.get_runtime("shader") is not None
+    assert registry.get_runtime("material") is not None
     assert registry.get_import("texture") is None
 
     register_default_import_asset_plugins(registry)
@@ -21,6 +24,9 @@ def test_default_plugins_register_runtime_and_import_sides_separately() -> None:
     assert registry.get_import("texture") is not None
     assert registry.get_import("mesh") is not None
     assert registry.get_import("audio_clip") is not None
+    assert registry.get_import("glsl") is not None
+    assert registry.get_import("shader") is not None
+    assert registry.get_import("material") is not None
 
 
 def test_default_import_plugin_extension_map_uses_plugin_type_ids() -> None:
@@ -32,3 +38,6 @@ def test_default_import_plugin_extension_map_uses_plugin_type_ids() -> None:
     assert extension_map[".png"].type_id == "texture"
     assert extension_map[".obj"].type_id == "mesh"
     assert extension_map[".wav"].type_id == "audio_clip"
+    assert extension_map[".glsl"].type_id == "glsl"
+    assert extension_map[".shader"].type_id == "shader"
+    assert extension_map[".material"].type_id == "material"

@@ -34,6 +34,25 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         '{"uuid": "audio-uuid"}',
         encoding="utf-8",
     )
+    glsl = tmp_path / "assets" / "Shaders" / "lighting.glsl"
+    glsl.parent.mkdir(parents=True)
+    glsl.write_text("// include", encoding="utf-8")
+    glsl.with_name(glsl.name + ".meta").write_text(
+        '{"uuid": "glsl-uuid"}',
+        encoding="utf-8",
+    )
+    shader = tmp_path / "assets" / "Shaders" / "Standard.shader"
+    shader.write_text("shader", encoding="utf-8")
+    shader.with_name(shader.name + ".meta").write_text(
+        '{"uuid": "shader-uuid"}',
+        encoding="utf-8",
+    )
+    material = tmp_path / "assets" / "Materials" / "Default.material"
+    material.parent.mkdir(parents=True)
+    material.write_text(
+        '{"uuid": "material-uuid", "shader": "Standard"}',
+        encoding="utf-8",
+    )
 
     rm = RecordingResourceManager()
     resources = [
@@ -49,8 +68,23 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         },
         {
             "kind": "asset",
+            "type": "glsl",
+            "build_path": "assets/Shaders/lighting.glsl",
+        },
+        {
+            "kind": "asset",
+            "type": "shader",
+            "build_path": "assets/Shaders/Standard.shader",
+        },
+        {
+            "kind": "asset",
             "type": "material",
-            "build_path": "assets/Materials/Test.material",
+            "build_path": "assets/Materials/Default.material",
+        },
+        {
+            "kind": "asset",
+            "type": "pipeline",
+            "build_path": "assets/Pipelines/Test.pipeline",
         },
         {
             "kind": "asset",
@@ -66,6 +100,18 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         import_registry=_default_import_registry(),
     )
 
-    assert loaded_count == 2
-    assert [result.resource_type for result in rm.results] == ["audio_clip", "texture"]
-    assert [result.uuid for result in rm.results] == ["audio-uuid", "texture-uuid"]
+    assert loaded_count == 5
+    assert [result.resource_type for result in rm.results] == [
+        "glsl",
+        "shader",
+        "audio_clip",
+        "texture",
+        "material",
+    ]
+    assert [result.uuid for result in rm.results] == [
+        "glsl-uuid",
+        "shader-uuid",
+        "audio-uuid",
+        "texture-uuid",
+        "material-uuid",
+    ]

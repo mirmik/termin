@@ -11,22 +11,34 @@ if TYPE_CHECKING:
 def register_default_runtime_asset_plugins(registry: "AssetTypeRegistry") -> None:
     """Register runtime-side asset plugins that have migrated off hard-coded dispatch."""
     from termin.assets.audio_clip_plugin import register_audio_clip_runtime_plugin
+    from termin.assets.glsl_plugin import register_glsl_runtime_plugin
+    from termin.assets.material_plugin import register_material_runtime_plugin
     from termin.assets.mesh_plugin import register_mesh_runtime_plugin
+    from termin.assets.shader_plugin import register_shader_runtime_plugin
     from termin.assets.texture_plugin import register_texture_runtime_plugin
 
     register_audio_clip_runtime_plugin(registry)
+    register_glsl_runtime_plugin(registry)
+    register_material_runtime_plugin(registry)
     register_mesh_runtime_plugin(registry)
+    register_shader_runtime_plugin(registry)
     register_texture_runtime_plugin(registry)
 
 
 def register_default_import_asset_plugins(registry: "AssetTypeRegistry") -> None:
     """Register import-side asset plugins that are safe outside editor_core."""
     from termin.assets.audio_clip_plugin import register_audio_clip_import_plugin
+    from termin.assets.glsl_plugin import register_glsl_import_plugin
+    from termin.assets.material_plugin import register_material_import_plugin
     from termin.assets.mesh_plugin import register_mesh_import_plugin
+    from termin.assets.shader_plugin import register_shader_import_plugin
     from termin.assets.texture_plugin import register_texture_import_plugin
 
     register_audio_clip_import_plugin(registry)
+    register_glsl_import_plugin(registry)
+    register_material_import_plugin(registry)
     register_mesh_import_plugin(registry)
+    register_shader_import_plugin(registry)
     register_texture_import_plugin(registry)
 
 
