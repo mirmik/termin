@@ -23,8 +23,10 @@ list(APPEND CMAKE_PREFIX_PATH "${TERMIN_ANDROID_SDK_PREFIX}")
 set(termin_base_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_base")
 set(termin_mesh_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_mesh")
 set(termin_graphics_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_graphics")
+set(termin_openxr_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_openxr")
 set(termin_android_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_android")
 
+find_package(termin_openxr REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
 find_package(termin_android REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
 
 find_library(ANDROID_LOG_LIB log REQUIRED)
@@ -35,6 +37,7 @@ add_library(termin_android_jni SHARED termin_android_jni.cpp)
 target_link_libraries(termin_android_jni
     PRIVATE
         termin_android::termin_android
+        termin_openxr::termin_openxr
         ${ANDROID_LOG_LIB}
         ${ANDROID_NATIVE_LIB}
 )
