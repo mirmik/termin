@@ -1,0 +1,129 @@
+#!/bin/bash
+# Build the Termin Android debug APK.
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLATFORM_DIR="$SCRIPT_DIR/termin-android/platform"
+
+ANDROID_ABI_VALUE="${ANDROID_ABI:-arm64-v8a}"
+ANDROID_PLATFORM_VALUE="${ANDROID_PLATFORM:-android-26}"
+ANDROID_SDK_ROOT_VALUE="${TERMIN_ANDROID_SDK_ROOT:-$SCRIPT_DIR/sdk/android}"
+ANDROID_NDK_VERSION_VALUE="${TERMIN_ANDROID_NDK_VERSION:-27.2.12479018}"
+GRADLE_BIN_VALUE="${GRADLE_BIN:-gradle}"
+GRADLE_TASK="assembleDebug"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --abi)
+            ANDROID_ABI_VALUE="$2"
+            shift
+            ;;
+        --abi=*)
+            ANDROID_ABI_VALUE="${1#--abi=}"
+            ;;
+        --platform)
+            ANDROID_PLATFORM_VALUE="$2"
+            shift
+            ;;
+        --platform=*)
+            ANDROID_PLATFORM_VALUE="${1#--platform=}"
+            ;;
+        --sdk-root)
+            ANDROID_SDK_ROOT_VALUE="$2"
+            shift
+            ;;
+        --sdk-root=*)
+            ANDROID_SDK_ROOT_VALUE="${1#--sdk-root=}"
+            ;;
+        --ndk-version)
+            ANDROID_NDK_VERSION_VALUE="$2"
+            shift
+            ;;
+        --ndk-version=*)
+            ANDROID_NDK_VERSION_VALUE="${1#--ndk-version=}"
+            ;;
+        --gradle)
+            GRADLE_BIN_VALUE="$2"
+            shift
+            ;;
+        --gradle=*)
+            GRADLE_BIN_VALUE="${1#--gradle=}"
+            ;;
+        --task)
+            GRADLE_TASK="$2"
+            shift
+            ;;
+        --task=*)
+            GRADLE_TASK="${1#--task=}"
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --abi ABI             Android ABI (default: arm64-v8a)"
+            echo "  --platform API        Android platform (default: android-26)"
+            echo "  --sdk-root DIR        Termin Android SDK root (default: ./sdk/android)"
+            echo "  --ndk-version VER     Android NDK version for Gradle (default: 27.2.12479018)"
+            echo "  --gradle PATH         Gradle executable (default: \$GRADLE_BIN or gradle)"
+            echo "  --task TASK           Gradle task (default: assembleDebug)"
+            echo "  --help, -h            Show this help"
+            echo ""
+            echo "Environment:"
+            echo "  GRADLE_BIN            Gradle executable. Gradle 8.x is required."
+            echo "  GRADLE_USER_HOME      Gradle cache dir (default: ./build/gradle-home)"
+            echo "  TERMIN_ANDROID_SDK_ROOT"
+            echo "                        Termin Android SDK root if --sdk-root is omitted"
+            echo "  TERMIN_ANDROID_NDK_VERSION"
+            echo "                        NDK version if --ndk-version is omitted"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+if ! command -v "$GRADLE_BIN_VALUE" >/dev/null 2>&1; then
+    echo "ERROR: Gradle executable not found: $GRADLE_BIN_VALUE" >&2
+    echo "  Install Gradle 8.x or pass --gradle /path/to/gradle." >&2
+    exit 1
+fi
+
+GRADLE_VERSION="$("$GRADLE_BIN_VALUE" --version | sed -n 's/^Gradle //p' | head -n 1)"
+GRADLE_MAJOR="${GRADLE_VERSION%%.*}"
+if [[ -z "$GRADLE_MAJOR" || "$GRADLE_MAJOR" -lt 8 ]]; then
+    echo "ERROR: Gradle 8.x is required, found: ${GRADLE_VERSION:-unknown}." >&2
+    echo "  The apt package may install Gradle 4.x, which is too old for Android Gradle Plugin 8.x." >&2
+    echo "  Pass --gradle /path/to/gradle-8.x/bin/gradle or set GRADLE_BIN." >&2
+    exit 1
+fi
+
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$SCRIPT_DIR/build/gradle-home}"
+
+echo ""
+echo "========================================"
+echo "  Building Termin Android APK"
+echo "========================================"
+echo ""
+echo "Gradle:          $GRADLE_BIN_VALUE ($GRADLE_VERSION)"
+echo "Gradle home:     $GRADLE_USER_HOME"
+echo "Project:         $PLATFORM_DIR"
+echo "Task:            $GRADLE_TASK"
+echo "Termin SDK root: $ANDROID_SDK_ROOT_VALUE"
+echo "ABI:             $ANDROID_ABI_VALUE"
+echo "Platform:        $ANDROID_PLATFORM_VALUE"
+echo "NDK version:     $ANDROID_NDK_VERSION_VALUE"
+echo ""
+
+cd "$PLATFORM_DIR"
+"$GRADLE_BIN_VALUE" --no-daemon "$GRADLE_TASK" \
+    -PterminAndroidSdkRoot="$ANDROID_SDK_ROOT_VALUE" \
+    -PterminAndroidAbi="$ANDROID_ABI_VALUE" \
+    -PterminAndroidPlatform="$ANDROID_PLATFORM_VALUE" \
+    -PterminAndroidNdkVersion="$ANDROID_NDK_VERSION_VALUE"
+
+echo ""
+echo "APK: $PLATFORM_DIR/app/build/outputs/apk/debug/app-debug.apk"
