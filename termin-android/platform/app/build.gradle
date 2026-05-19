@@ -47,6 +47,7 @@ android {
     externalNativeBuild {
         cmake {
             path file("src/main/cpp/CMakeLists.txt")
+            buildStagingDirectory new File(terminRoot, "build/android-gradle/cxx/app")
             version "3.22.1"
         }
     }
