@@ -5,7 +5,7 @@ from PIL import Image
 
 from termin.assets.resources import ResourceManager
 from termin.assets.project_file_watcher import PreLoadResult
-from termin.texture import TcTexture, tc_texture_ensure_loaded, tc_texture_is_loaded
+from tgfx import TcTexture, tc_texture_ensure_loaded, tc_texture_is_loaded
 
 
 def test_texture_file_registration_declares_lazy_core_texture(tmp_path: Path) -> None:

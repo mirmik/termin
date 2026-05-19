@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin.assets.data_asset import DataAsset
-from termin.texture import TcTexture
+from tgfx import TcTexture
 
 if TYPE_CHECKING:
     import numpy as np

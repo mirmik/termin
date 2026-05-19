@@ -183,7 +183,7 @@ class Texture:
         Returns:
             Texture instance with the provided data.
         """
-        from termin.texture import TcTexture
+        from tgfx import TcTexture
 
         texture_data = TcTexture.from_data(
             data=data,

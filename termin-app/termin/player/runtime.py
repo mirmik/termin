@@ -336,7 +336,7 @@ class PlayerRuntime:
 
     def _ensure_texture_registry(self) -> None:
         """Load the tgfx texture registry before app-native modules."""
-        from termin.texture import tc_texture_count
+        from tgfx import tc_texture_count
 
         tc_texture_count()
 

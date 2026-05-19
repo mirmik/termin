@@ -629,7 +629,7 @@ class AssetsMixin:
 
     def find_texture_name(self, texture) -> Optional[str]:
         from termin.assets.texture_handle import TextureHandle
-        from termin.texture import TcTexture
+        from tgfx import TcTexture
 
         if isinstance(texture, TextureHandle):
             # Get asset from handle and compare by uuid
