@@ -98,6 +98,21 @@ def show_core_registry_viewer(ui) -> None:
     details.placeholder = "Select an item to view details"
     right.add_child(details)
 
+    entities_label = Label()
+    entities_label.text = "Entities"
+    entities_label.visible = False
+    right.add_child(entities_label)
+
+    entities_table = TableWidget()
+    entities_table.set_columns([
+        TableColumn("Name"),
+        TableColumn("Components", 90),
+        TableColumn("State", 90),
+    ])
+    entities_table.preferred_height = px(180)
+    entities_table.visible = False
+    right.add_child(entities_table)
+
     btn_row = HStack()
     btn_row.spacing = 4
     refresh_btn = Button()
@@ -292,7 +307,16 @@ def show_core_registry_viewer(ui) -> None:
         selected.clear()
         selected["tab"] = tab
         selected["info"] = info
+        if tab != "Scenes":
+            _clear_entities()
         _show_details(tab, info)
+
+    def _on_entity_select(idx, data):
+        if data is None:
+            return
+        _show_entity_details(data)
+
+    entities_table.on_select = _on_entity_select
 
     for tw in tab_lists.values():
         tw.on_select = _on_select
@@ -501,18 +525,50 @@ def show_core_registry_viewer(ui) -> None:
             # Entities
             try:
                 entities = tc_scene_get_entities(handle)
-                if entities:
-                    lines.append("")
-                    lines.append(f"--- Entities ({len(entities)}) ---")
-                    for ent in entities[:50]:
-                        enabled = "on" if ent.get("enabled", True) else "off"
-                        visible = "vis" if ent.get("visible", True) else "hid"
-                        lines.append(f"  {ent.get('name', '?')}  [{enabled}/{visible}]  comp={ent.get('component_count', 0)}")
-                    if len(entities) > 50:
-                        lines.append(f"  ... and {len(entities) - 50} more")
+                _load_entities(entities)
             except Exception as e:
                 log.debug(f"[CoreRegistry] Failed to get entities for scene {info.get('name', '?')}: {e}")
+                _clear_entities()
 
+        details.text = "\n".join(lines)
+
+    def _load_entities(entities: list[dict]) -> None:
+        rows = []
+        data = []
+        for entity in sorted(entities, key=lambda x: x.get("name") or x.get("uuid") or ""):
+            name = entity.get("name") or "(unnamed)"
+            enabled = "on" if entity.get("enabled", True) else "off"
+            visible = "vis" if entity.get("visible", True) else "hid"
+            rows.append([
+                name,
+                str(entity.get("component_count", 0)),
+                f"{enabled}/{visible}",
+            ])
+            data.append(entity)
+        entities_table.set_rows(rows, data)
+        entities_table.visible = True
+        entities_label.visible = True
+        entities_label.text = f"Entities ({len(rows)})"
+
+    def _clear_entities() -> None:
+        entities_table.set_rows([], [])
+        entities_table.visible = False
+        entities_label.visible = False
+
+    def _show_entity_details(info: dict) -> None:
+        lines = [
+            "=== ENTITY ===",
+            "",
+            f"Name:           {info.get('name') or '(unnamed)'}",
+            f"UUID:           {info.get('uuid', '')}",
+            "",
+            "--- State ---",
+            f"Enabled:        {info.get('enabled', True)}",
+            f"Visible:        {info.get('visible', True)}",
+            "",
+            "--- Components ---",
+            f"Count:          {info.get('component_count', 0)}",
+        ]
         details.text = "\n".join(lines)
 
     _refresh_all()

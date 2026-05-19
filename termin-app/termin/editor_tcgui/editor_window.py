@@ -1895,7 +1895,7 @@ class EditorWindowTcgui:
         if self._ui is None:
             return
         from termin.editor_tcgui.dialogs.resource_manager_viewer import show_resource_manager_viewer
-        show_resource_manager_viewer(self._ui)
+        show_resource_manager_viewer(self._ui, project_file_watcher=self._project_file_watcher)
 
     def _show_core_registry_viewer(self) -> None:
         if self._ui is None:
