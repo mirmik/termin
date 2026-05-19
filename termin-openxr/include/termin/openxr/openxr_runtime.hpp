@@ -16,7 +16,18 @@ struct OpenXRBuildInfo {
     const char* vulkan_enable2_extension = "";
 };
 
+struct OpenXRAndroidProbeResult {
+    bool loader_loaded = false;
+    bool loader_initialized = false;
+    bool instance_created = false;
+    bool system_found = false;
+    int32_t last_result = 0;
+    const char* stage = "";
+    const char* detail = "";
+};
+
 TERMIN_OPENXR_API OpenXRBuildInfo build_info();
 TERMIN_OPENXR_API const char* runtime_intent();
+TERMIN_OPENXR_API OpenXRAndroidProbeResult probe_android_runtime(void* java_vm, void* activity_or_context);
 
 } // namespace termin::openxr

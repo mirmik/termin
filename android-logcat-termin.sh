@@ -34,6 +34,7 @@ fi
 "$ADB_BIN" logcat \
     -s \
     TerminActivity:I \
+    TerminOpenXRActivity:I \
     TerminAndroidJNI:I \
     TerminAndroid:I \
     AndroidRuntime:E \
