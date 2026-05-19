@@ -15,6 +15,9 @@ def terminAndroidPlatform = providers.gradleProperty("terminAndroidPlatform")
 def terminAndroidNdkVersion = providers.gradleProperty("terminAndroidNdkVersion")
         .orElse(providers.environmentVariable("TERMIN_ANDROID_NDK_VERSION"))
         .orElse("27.2.12479018")
+def terminQuestOpenXr = providers.gradleProperty("terminQuestOpenXr")
+        .orElse(providers.environmentVariable("TERMIN_QUEST_OPENXR"))
+        .orElse("false")
 
 android {
     namespace "org.termin.android"
@@ -27,6 +30,9 @@ android {
         targetSdk 35
         versionCode 1
         versionName "0.1.0"
+        manifestPlaceholders = [
+                terminOpenXrActivityEnabled: terminQuestOpenXr.get()
+        ]
 
         ndk {
             abiFilters terminAndroidAbi.get()
@@ -38,7 +44,8 @@ android {
                 arguments(
                         "-DTERMIN_ANDROID_SDK_ROOT=${terminAndroidSdkRoot.get()}",
                         "-DTERMIN_ANDROID_ABI=${terminAndroidAbi.get()}",
-                        "-DANDROID_PLATFORM=${terminAndroidPlatform.get()}"
+                        "-DANDROID_PLATFORM=${terminAndroidPlatform.get()}",
+                        "-DTERMIN_QUEST_OPENXR=${terminQuestOpenXr.get()}"
                 )
             }
         }
