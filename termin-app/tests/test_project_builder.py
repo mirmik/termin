@@ -27,6 +27,10 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     texture.parent.mkdir()
     texture.write_bytes(b"png")
     _write_json(texture.with_name(texture.name + ".meta"), {"uuid": "texture-uuid"})
+    audio = project / "Audio" / "Hit.wav"
+    audio.parent.mkdir()
+    audio.write_bytes(b"wav")
+    _write_json(audio.with_name(audio.name + ".meta"), {"uuid": "audio-uuid"})
     shader = project / "stdlib" / "shaders" / "StandardShader.shader"
     shader.parent.mkdir(parents=True)
     shader.write_text("shader", encoding="utf-8")
@@ -51,6 +55,8 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     assert by_source["Scenes/Main.scene"]["uuid"] == "scene-uuid"
     assert by_source["Scenes/Main.scene"]["type"] == "scene"
     assert by_source["Textures/Albedo.png"]["uuid"] == "texture-uuid"
+    assert by_source["Audio/Hit.wav"]["type"] == "audio_clip"
+    assert by_source["Audio/Hit.wav"]["uuid"] == "audio-uuid"
     assert by_source["stdlib/shaders/StandardShader.shader"]["build_path"] == "stdlib/shaders/StandardShader.shader"
 
     build_data = json.loads(result.build_json_path.read_text(encoding="utf-8"))

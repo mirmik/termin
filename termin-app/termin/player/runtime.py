@@ -11,7 +11,63 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from termin_assets import AssetTypeRegistry
     from termin.visualization.core.scene import Scene
+
+
+def load_manifest_assets_with_import_plugins(
+    project_path: Path,
+    resources: list,
+    resource_manager: object,
+    import_registry: "AssetTypeRegistry",
+) -> int:
+    """Load plugin-backed build manifest assets without editor_core preloaders."""
+    from tcbase import log
+
+    pending = []
+    for resource in resources:
+        if not isinstance(resource, dict):
+            continue
+        if resource.get("kind") != "asset":
+            continue
+
+        resource_type = resource.get("type")
+        if not isinstance(resource_type, str) or resource_type == "":
+            log.warning("[PlayerRuntime] Build asset has no valid type")
+            continue
+
+        plugin = import_registry.get_import(resource_type)
+        if plugin is None:
+            if resource_type != "scene":
+                log.warning(f"[PlayerRuntime] Build asset type is not plugin-backed yet: {resource_type}")
+            continue
+
+        build_path = resource.get("build_path")
+        if not isinstance(build_path, str) or build_path == "":
+            log.warning(f"[PlayerRuntime] Build asset has no build_path: {resource_type}")
+            continue
+
+        path = project_path / build_path
+        pending.append((plugin.priority, str(path), plugin))
+
+    pending.sort(key=lambda item: (item[0], item[1]))
+
+    loaded_count = 0
+    for _priority, path, plugin in pending:
+        asset_path = Path(path)
+        if not asset_path.exists():
+            log.error(f"[PlayerRuntime] Build asset not found: {asset_path}")
+            continue
+        try:
+            result = plugin.preload(str(asset_path))
+            if result is not None:
+                log.info(f"[PlayerRuntime] Loading build {result.resource_type}: {asset_path.name}")
+                resource_manager.register_file(result)
+                loaded_count += 1
+        except Exception as e:
+            log.error(f"[PlayerRuntime] Failed to load build asset {asset_path}: {e}")
+
+    return loaded_count
 
 
 class PlayerRuntime:
@@ -371,6 +427,14 @@ class PlayerRuntime:
                 ext_map[ext] = pl
         return ext_map
 
+    def _create_build_import_registry(self) -> "AssetTypeRegistry":
+        from termin.assets.default_plugins import register_default_import_asset_plugins
+        from termin_assets import AssetTypeRegistry
+
+        registry = AssetTypeRegistry()
+        register_default_import_asset_plugins(registry)
+        return registry
+
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""
         import os
@@ -412,7 +476,6 @@ class PlayerRuntime:
 
     def _load_manifest_assets(self) -> None:
         """Load build resources listed by assets/manifest.json."""
-        import os
         from tcbase import log
         from termin.assets.resources import ResourceManager
 
@@ -449,40 +512,13 @@ class PlayerRuntime:
             log.warning(f"[PlayerRuntime] Build diagnostic {level}: {path}: {message}")
 
         rm = ResourceManager.instance()
-        ext_map = self._create_asset_preloader_map()
-
-        pending = []
-        for resource in resources:
-            if not isinstance(resource, dict):
-                continue
-            if resource.get("kind") != "asset":
-                continue
-            build_path = resource.get("build_path")
-            if not isinstance(build_path, str) or build_path == "":
-                continue
-
-            path = self.project_path / build_path
-            ext = path.suffix.lower()
-            preloader = ext_map.get(ext)
-            if preloader is None:
-                continue
-            pending.append((preloader.priority, str(path), preloader))
-
-        pending.sort(key=lambda x: (x[0], x[1]))
-
-        loaded_count = 0
-        for _priority, path, preloader in pending:
-            if not os.path.exists(path):
-                log.error(f"[PlayerRuntime] Build asset not found: {path}")
-                continue
-            try:
-                result = preloader.preload(path)
-                if result is not None:
-                    log.info(f"[PlayerRuntime] Loading build {result.resource_type}: {os.path.basename(path)}")
-                    rm.register_file(result)
-                    loaded_count += 1
-            except Exception as e:
-                log.error(f"[PlayerRuntime] Failed to load build asset {path}: {e}")
+        import_registry = self._create_build_import_registry()
+        loaded_count = load_manifest_assets_with_import_plugins(
+            project_path=self.project_path,
+            resources=resources,
+            resource_manager=rm,
+            import_registry=import_registry,
+        )
 
         log.info(f"[PlayerRuntime] Loaded {loaded_count} build assets from manifest")
 
