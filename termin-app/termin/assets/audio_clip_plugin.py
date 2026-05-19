@@ -8,8 +8,8 @@ if TYPE_CHECKING:
     from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult
 
 
-class AudioClipAssetPlugin:
-    """Plugin handling lazy audio clip registration and reload."""
+class AudioClipImportPlugin:
+    """Import-side plugin for audio clip source files."""
 
     type_id = "audio_clip"
     extensions = {".wav", ".ogg", ".mp3", ".flac"}
@@ -27,6 +27,12 @@ class AudioClipAssetPlugin:
             uuid=uuid,
             spec_data=spec_data,
         )
+
+
+class AudioClipRuntimePlugin:
+    """Runtime-side plugin handling lazy audio clip registration and reload."""
+
+    type_id = "audio_clip"
 
     def register(self, context: "AssetContext", result: "PreLoadResult") -> None:
         from termin.assets.audio_clip_asset import AudioClipAsset
@@ -66,5 +72,18 @@ class AudioClipAssetPlugin:
         asset.reload()
 
 
+class AudioClipAssetPlugin(AudioClipImportPlugin, AudioClipRuntimePlugin):
+    """Compatibility combined audio clip plugin."""
+
+
+def register_audio_clip_import_plugin(registry: "AssetTypeRegistry") -> None:
+    registry.register_import(AudioClipImportPlugin())
+
+
+def register_audio_clip_runtime_plugin(registry: "AssetTypeRegistry") -> None:
+    registry.register_runtime(AudioClipRuntimePlugin())
+
+
 def register_audio_clip_asset_plugin(registry: "AssetTypeRegistry") -> None:
-    registry.register(AudioClipAssetPlugin())
+    register_audio_clip_import_plugin(registry)
+    register_audio_clip_runtime_plugin(registry)

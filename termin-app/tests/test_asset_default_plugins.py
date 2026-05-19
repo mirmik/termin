@@ -1,0 +1,34 @@
+from termin.assets.default_plugins import (
+    build_import_plugin_extension_map,
+    register_default_import_asset_plugins,
+    register_default_runtime_asset_plugins,
+)
+from termin_assets import AssetTypeRegistry
+
+
+def test_default_plugins_register_runtime_and_import_sides_separately() -> None:
+    registry = AssetTypeRegistry()
+
+    register_default_runtime_asset_plugins(registry)
+
+    assert registry.get_runtime("texture") is not None
+    assert registry.get_runtime("mesh") is not None
+    assert registry.get_runtime("audio_clip") is not None
+    assert registry.get_import("texture") is None
+
+    register_default_import_asset_plugins(registry)
+
+    assert registry.get_import("texture") is not None
+    assert registry.get_import("mesh") is not None
+    assert registry.get_import("audio_clip") is not None
+
+
+def test_default_import_plugin_extension_map_uses_plugin_type_ids() -> None:
+    registry = AssetTypeRegistry()
+    register_default_import_asset_plugins(registry)
+
+    extension_map = build_import_plugin_extension_map(registry)
+
+    assert extension_map[".png"].type_id == "texture"
+    assert extension_map[".obj"].type_id == "mesh"
+    assert extension_map[".wav"].type_id == "audio_clip"

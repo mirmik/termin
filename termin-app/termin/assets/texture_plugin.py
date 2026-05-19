@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult
 
 
-class TextureAssetPlugin:
-    """Plugin handling lazy texture registration and reload."""
+class TextureImportPlugin:
+    """Import-side plugin for texture source files."""
 
     type_id = "texture"
     extensions = {".png", ".jpg", ".jpeg", ".tga", ".bmp"}
@@ -29,6 +29,12 @@ class TextureAssetPlugin:
             uuid=uuid,
             spec_data=spec_data,
         )
+
+
+class TextureRuntimePlugin:
+    """Runtime-side plugin handling lazy texture registration and reload."""
+
+    type_id = "texture"
 
     def register(self, context: "AssetContext", result: "PreLoadResult") -> None:
         from termin.assets.texture_asset import TextureAsset
@@ -83,5 +89,18 @@ class TextureAssetPlugin:
         asset.delete_gpu()
 
 
+class TextureAssetPlugin(TextureImportPlugin, TextureRuntimePlugin):
+    """Compatibility combined texture plugin."""
+
+
+def register_texture_import_plugin(registry: "AssetTypeRegistry") -> None:
+    registry.register_import(TextureImportPlugin())
+
+
+def register_texture_runtime_plugin(registry: "AssetTypeRegistry") -> None:
+    registry.register_runtime(TextureRuntimePlugin())
+
+
 def register_texture_asset_plugin(registry: "AssetTypeRegistry") -> None:
-    registry.register(TextureAssetPlugin())
+    register_texture_import_plugin(registry)
+    register_texture_runtime_plugin(registry)

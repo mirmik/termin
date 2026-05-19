@@ -8,8 +8,8 @@ if TYPE_CHECKING:
     from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult
 
 
-class MeshAssetPlugin:
-    """Plugin handling standalone mesh asset registration and reload."""
+class MeshImportPlugin:
+    """Import-side plugin for standalone mesh source files."""
 
     type_id = "mesh"
     extensions = {".stl", ".obj"}
@@ -27,6 +27,12 @@ class MeshAssetPlugin:
             uuid=uuid,
             spec_data=spec_data,
         )
+
+
+class MeshRuntimePlugin:
+    """Runtime-side plugin handling standalone mesh asset registration and reload."""
+
+    type_id = "mesh"
 
     def register(self, context: "AssetContext", result: "PreLoadResult") -> None:
         from termin.assets.mesh_asset import MeshAsset
@@ -70,5 +76,18 @@ class MeshAssetPlugin:
         asset.delete_gpu()
 
 
+class MeshAssetPlugin(MeshImportPlugin, MeshRuntimePlugin):
+    """Compatibility combined mesh plugin."""
+
+
+def register_mesh_import_plugin(registry: "AssetTypeRegistry") -> None:
+    registry.register_import(MeshImportPlugin())
+
+
+def register_mesh_runtime_plugin(registry: "AssetTypeRegistry") -> None:
+    registry.register_runtime(MeshRuntimePlugin())
+
+
 def register_mesh_asset_plugin(registry: "AssetTypeRegistry") -> None:
-    registry.register(MeshAssetPlugin())
+    register_mesh_import_plugin(registry)
+    register_mesh_runtime_plugin(registry)

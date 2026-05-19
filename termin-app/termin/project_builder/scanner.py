@@ -7,7 +7,12 @@ import os
 from pathlib import Path
 from typing import Any
 
+from termin.assets.default_plugins import (
+    build_import_plugin_extension_map,
+    register_default_import_asset_plugins,
+)
 from termin.project_builder.manifest import BuildDiagnostic, BuildResource, ProjectBuildManifest
+from termin_assets import AssetImportPlugin, AssetTypeRegistry
 
 
 RESOURCE_EXTENSIONS: dict[str, str] = {
@@ -46,11 +51,19 @@ class ProjectScanner:
         project_root: Path,
         entry_scene: Path,
         output_dir: Path | None = None,
+        asset_type_registry: AssetTypeRegistry | None = None,
     ) -> None:
         self.project_root = project_root.resolve()
         self.entry_scene = entry_scene
         self.output_dir = output_dir.resolve() if output_dir is not None else None
         self.diagnostics: list[BuildDiagnostic] = []
+        self.asset_type_registry = asset_type_registry or self._create_default_asset_type_registry()
+        self.import_plugins_by_extension = build_import_plugin_extension_map(self.asset_type_registry)
+
+    def _create_default_asset_type_registry(self) -> AssetTypeRegistry:
+        registry = AssetTypeRegistry()
+        register_default_import_asset_plugins(registry)
+        return registry
 
     def scan(self) -> ProjectBuildManifest:
         self._validate_project_root()
@@ -149,7 +162,13 @@ class ProjectScanner:
         return rel.as_posix()
 
     def _resource_type(self, path: Path) -> str | None:
+        plugin = self._import_plugin_for(path)
+        if plugin is not None:
+            return plugin.type_id
         return RESOURCE_EXTENSIONS.get(path.suffix.lower())
+
+    def _import_plugin_for(self, path: Path) -> AssetImportPlugin | None:
+        return self.import_plugins_by_extension.get(path.suffix.lower())
 
     def _project_file_type(self, path: Path) -> str | None:
         if self._is_project_settings_file(path):
