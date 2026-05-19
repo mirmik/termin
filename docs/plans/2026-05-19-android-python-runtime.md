@@ -42,7 +42,18 @@ Gradle не обязан владеть сборкой C++ SDK. CMake долже
 
 Для Android `TGFX2_ENABLE_SHADERC` по умолчанию выключен: NDK содержит Vulkan headers/libs, но не готовую target-библиотеку `shaderc`. Vulkan runtime на Android принимает precompiled SPIR-V bytecode. Host-сборка теперь имеет первый offline shader compilation path: редактор собирает используемые сценой `TcShader`/варианты, вызывает host `termin_shaderc`, кладет SPIR-V в `assets/shaders/vulkan/<shader-uuid>.<stage>.spv`, а Vulkan runtime ищет эти artifacts перед fallback на runtime GLSL.
 
-Рабочий вызов:
+Рабочий вызов через корневой helper:
+
+```bash
+./build-sdk-android.sh \
+  --ndk /home/mirmik/Android/Sdk/ndk/27.2.12479018 \
+  --abi arm64-v8a \
+  --platform android-26
+```
+
+По умолчанию он собирает `build/android/<ABI>` и устанавливает Android SDK prefix в `sdk/android/<ABI>`.
+
+Эквивалентный ручной CMake вызов:
 
 ```bash
 cmake -S . -B build/android/arm64-v8a \
@@ -165,10 +176,27 @@ cmake -S . -B build/android/arm64-v8a \
 
 ## APK/App layer
 
-Для реального приложения нужен тонкий Android wrapper, например:
+Для реального приложения нужен тонкий Android wrapper. Android-specific код держим в отдельном модуле `termin-android`, чтобы не размазывать Activity/JNI/assets/lifecycle glue по runtime-библиотекам.
+
+Первый native слой уже заведен как CMake module:
 
 ```text
-platform/android/
+termin-android/
+  include/termin/android/bootstrap.h
+  src/bootstrap.cpp
+```
+
+Его текущая ответственность:
+
+- хранить Android bootstrap config (`app_data_dir`, `asset_root`, `native_lib_dir`);
+- принимать `ANativeWindow` lifecycle callbacks;
+- выставлять shader artifact root в tgfx2 через `tgfx2_set_shader_artifact_root`;
+- собираться только при `TERMIN_PLATFORM_ANDROID=ON`.
+
+Следующий Gradle/JNI слой должен жить рядом:
+
+```text
+termin-android/platform/
   settings.gradle
   build.gradle
   app/build.gradle
