@@ -52,6 +52,44 @@ def test_audio_clip_register_file_uses_asset_plugin() -> None:
     assert rm.get_asset_by_uuid("audio-plugin-test-uuid") is asset
 
 
+def test_glb_register_file_creates_spec_child_assets() -> None:
+    rm = ResourceManager()
+    result = PreLoadResult(
+        resource_type="glb",
+        path="/tmp/robot.glb",
+        content=None,
+        uuid="glb-plugin-test-uuid",
+        spec_data={
+            "uuid": "glb-plugin-test-uuid",
+            "resources": {
+                "meshes": {"Body": "glb-mesh-child-uuid"},
+                "skeletons": {"skeleton": "glb-skeleton-child-uuid"},
+                "animations": {"Walk": "glb-animation-child-uuid"},
+            },
+        },
+    )
+
+    rm.register_file(result)
+
+    glb_asset = rm.get_glb_asset("robot")
+    assert glb_asset is not None
+    assert glb_asset.uuid == "glb-plugin-test-uuid"
+    assert glb_asset.source_path is not None
+    assert str(glb_asset.source_path) == "/tmp/robot.glb"
+    assert rm.get_asset_by_uuid("glb-plugin-test-uuid") is glb_asset
+
+    mesh_asset = rm.get_mesh_asset_by_uuid("glb-mesh-child-uuid")
+    skeleton_asset = rm.get_skeleton_asset_by_uuid("glb-skeleton-child-uuid")
+    animation_asset = rm.get_animation_clip_asset_by_uuid("glb-animation-child-uuid")
+
+    assert mesh_asset is not None
+    assert mesh_asset.name == "robot_Body"
+    assert skeleton_asset is not None
+    assert skeleton_asset.name == "robot_skeleton"
+    assert animation_asset is not None
+    assert animation_asset.name == "Walk"
+
+
 def test_asset_plugin_registry_can_find_audio_by_extension() -> None:
     rm = ResourceManager()
     plugins = rm.asset_type_plugins.get_for_extension(".wav")
@@ -66,6 +104,14 @@ def test_asset_plugin_registry_can_find_texture_by_extension() -> None:
 
     assert len(plugins) == 1
     assert plugins[0].type_id == "texture"
+
+
+def test_asset_plugin_registry_can_find_glb_by_extension() -> None:
+    rm = ResourceManager()
+    plugins = rm.asset_type_plugins.get_for_extension(".glb")
+
+    assert len(plugins) == 1
+    assert plugins[0].type_id == "glb"
 
 
 def test_default_preloaders_use_plugin_adapter_for_mesh() -> None:
@@ -124,6 +170,7 @@ def test_default_preloaders_use_plugin_adapter_for_migrated_assets() -> None:
         "navmesh",
         "voxel_grid",
         "ui",
+        "glb",
     }
     by_resource_type = {
         preloader.resource_type: preloader

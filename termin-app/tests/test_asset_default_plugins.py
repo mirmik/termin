@@ -23,6 +23,7 @@ def test_default_plugins_register_runtime_and_import_sides_separately() -> None:
     assert registry.get_runtime("navmesh") is not None
     assert registry.get_runtime("voxel_grid") is not None
     assert registry.get_runtime("ui") is not None
+    assert registry.get_runtime("glb") is not None
     assert registry.get_import("texture") is None
 
     register_default_import_asset_plugins(registry)
@@ -39,6 +40,7 @@ def test_default_plugins_register_runtime_and_import_sides_separately() -> None:
     assert registry.get_import("navmesh") is not None
     assert registry.get_import("voxel_grid") is not None
     assert registry.get_import("ui") is not None
+    assert registry.get_import("glb") is not None
 
 
 def test_default_import_plugin_extension_map_uses_plugin_type_ids() -> None:
@@ -59,3 +61,5 @@ def test_default_import_plugin_extension_map_uses_plugin_type_ids() -> None:
     assert extension_map[".navmesh"].type_id == "navmesh"
     assert extension_map[".voxels"].type_id == "voxel_grid"
     assert extension_map[".uiscript"].type_id == "ui"
+    assert extension_map[".glb"].type_id == "glb"
+    assert extension_map[".gltf"].type_id == "glb"

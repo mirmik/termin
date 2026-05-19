@@ -7,10 +7,7 @@ from collections.abc import Callable
 from tcbase import log
 
 from termin.assets.resources import ResourceManager
-from termin.editor_core.file_processors import (
-    ComponentFileProcessor,
-    GLBPreLoader,
-)
+from termin.editor_core.file_processors import ComponentFileProcessor
 from termin.editor_core.plugin_preloader import PluginPreLoader
 from termin.editor_core.project_file_watcher import FilePreLoader, ProjectFileWatcher
 
@@ -41,7 +38,7 @@ def create_default_preloaders(
         _create_plugin_preloader(resource_manager, "material", on_resource_reloaded),
         ComponentFileProcessor(resource_manager, on_resource_reloaded=on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "mesh", on_resource_reloaded),
-        GLBPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "glb", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "prefab", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "audio_clip", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "navmesh", on_resource_reloaded),

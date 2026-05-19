@@ -90,6 +90,13 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         '{"uuid": "ui-uuid"}',
         encoding="utf-8",
     )
+    glb = tmp_path / "assets" / "Models" / "Character.glb"
+    glb.parent.mkdir(parents=True)
+    glb.write_bytes(b"glb")
+    glb.with_name(glb.name + ".meta").write_text(
+        '{"uuid": "glb-uuid"}',
+        encoding="utf-8",
+    )
 
     rm = RecordingResourceManager()
     resources = [
@@ -167,13 +174,14 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         import_registry=_default_import_registry(),
     )
 
-    assert loaded_count == 11
+    assert loaded_count == 12
     assert [result.resource_type for result in rm.results] == [
         "glsl",
         "shader",
         "pipeline",
         "scene_pipeline",
         "audio_clip",
+        "glb",
         "navmesh",
         "texture",
         "ui",
@@ -187,6 +195,7 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         "pipeline-uuid",
         "scene-pipeline-uuid",
         "audio-uuid",
+        "glb-uuid",
         "navmesh-uuid",
         "texture-uuid",
         "ui-uuid",

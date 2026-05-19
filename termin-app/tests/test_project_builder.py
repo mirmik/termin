@@ -57,6 +57,10 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     ui.parent.mkdir()
     ui.write_text("ui", encoding="utf-8")
     _write_json(ui.with_name(ui.name + ".meta"), {"uuid": "ui-uuid"})
+    glb = project / "Models" / "Robot.glb"
+    glb.parent.mkdir()
+    glb.write_bytes(b"glb")
+    _write_json(glb.with_name(glb.name + ".meta"), {"uuid": "glb-uuid"})
 
     result = build_project(
         project_root=project,
@@ -96,6 +100,8 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     assert by_source["Voxels/Level.voxels"]["uuid"] == "voxel-grid-uuid"
     assert by_source["UI/Hud.uiscript"]["type"] == "ui"
     assert by_source["UI/Hud.uiscript"]["uuid"] == "ui-uuid"
+    assert by_source["Models/Robot.glb"]["type"] == "glb"
+    assert by_source["Models/Robot.glb"]["uuid"] == "glb-uuid"
     assert by_source["stdlib/shaders/StandardShader.shader"]["build_path"] == "stdlib/shaders/StandardShader.shader"
 
     build_data = json.loads(result.build_json_path.read_text(encoding="utf-8"))
