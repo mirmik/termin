@@ -14,6 +14,8 @@ def register_default_runtime_asset_plugins(registry: "AssetTypeRegistry") -> Non
     from termin.assets.glsl_plugin import register_glsl_runtime_plugin
     from termin.assets.material_plugin import register_material_runtime_plugin
     from termin.assets.mesh_plugin import register_mesh_runtime_plugin
+    from termin.assets.pipeline_plugin import register_pipeline_runtime_plugin
+    from termin.assets.scene_pipeline_plugin import register_scene_pipeline_runtime_plugin
     from termin.assets.shader_plugin import register_shader_runtime_plugin
     from termin.assets.texture_plugin import register_texture_runtime_plugin
 
@@ -21,6 +23,8 @@ def register_default_runtime_asset_plugins(registry: "AssetTypeRegistry") -> Non
     register_glsl_runtime_plugin(registry)
     register_material_runtime_plugin(registry)
     register_mesh_runtime_plugin(registry)
+    register_pipeline_runtime_plugin(registry)
+    register_scene_pipeline_runtime_plugin(registry)
     register_shader_runtime_plugin(registry)
     register_texture_runtime_plugin(registry)
 
@@ -31,6 +35,8 @@ def register_default_import_asset_plugins(registry: "AssetTypeRegistry") -> None
     from termin.assets.glsl_plugin import register_glsl_import_plugin
     from termin.assets.material_plugin import register_material_import_plugin
     from termin.assets.mesh_plugin import register_mesh_import_plugin
+    from termin.assets.pipeline_plugin import register_pipeline_import_plugin
+    from termin.assets.scene_pipeline_plugin import register_scene_pipeline_import_plugin
     from termin.assets.shader_plugin import register_shader_import_plugin
     from termin.assets.texture_plugin import register_texture_import_plugin
 
@@ -38,6 +44,8 @@ def register_default_import_asset_plugins(registry: "AssetTypeRegistry") -> None
     register_glsl_import_plugin(registry)
     register_material_import_plugin(registry)
     register_mesh_import_plugin(registry)
+    register_pipeline_import_plugin(registry)
+    register_scene_pipeline_import_plugin(registry)
     register_shader_import_plugin(registry)
     register_texture_import_plugin(registry)
 

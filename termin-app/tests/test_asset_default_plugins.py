@@ -17,6 +17,8 @@ def test_default_plugins_register_runtime_and_import_sides_separately() -> None:
     assert registry.get_runtime("glsl") is not None
     assert registry.get_runtime("shader") is not None
     assert registry.get_runtime("material") is not None
+    assert registry.get_runtime("pipeline") is not None
+    assert registry.get_runtime("scene_pipeline") is not None
     assert registry.get_import("texture") is None
 
     register_default_import_asset_plugins(registry)
@@ -27,6 +29,8 @@ def test_default_plugins_register_runtime_and_import_sides_separately() -> None:
     assert registry.get_import("glsl") is not None
     assert registry.get_import("shader") is not None
     assert registry.get_import("material") is not None
+    assert registry.get_import("pipeline") is not None
+    assert registry.get_import("scene_pipeline") is not None
 
 
 def test_default_import_plugin_extension_map_uses_plugin_type_ids() -> None:
@@ -41,3 +45,5 @@ def test_default_import_plugin_extension_map_uses_plugin_type_ids() -> None:
     assert extension_map[".glsl"].type_id == "glsl"
     assert extension_map[".shader"].type_id == "shader"
     assert extension_map[".material"].type_id == "material"
+    assert extension_map[".pipeline"].type_id == "pipeline"
+    assert extension_map[".scene_pipeline"].type_id == "scene_pipeline"
