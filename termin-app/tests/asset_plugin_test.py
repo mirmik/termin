@@ -110,17 +110,19 @@ def test_default_preloaders_use_plugin_adapter_for_texture() -> None:
     assert texture_preloaders[0].resource_type == "texture"
 
 
-def test_default_preloaders_use_plugin_adapter_for_glsl_shader_material() -> None:
+def test_default_preloaders_use_plugin_adapter_for_glsl_shader_material_pipelines() -> None:
     rm = ResourceManager()
     preloaders = create_default_preloaders(rm)
 
     by_resource_type = {
         preloader.resource_type: preloader
         for preloader in preloaders
-        if preloader.resource_type in {"glsl", "shader", "material"}
+        if preloader.resource_type in {"glsl", "shader", "material", "pipeline", "scene_pipeline"}
     }
 
-    assert set(by_resource_type.keys()) == {"glsl", "shader", "material"}
+    assert set(by_resource_type.keys()) == {"glsl", "shader", "material", "pipeline", "scene_pipeline"}
     assert isinstance(by_resource_type["glsl"], PluginPreLoader)
     assert isinstance(by_resource_type["shader"], PluginPreLoader)
     assert isinstance(by_resource_type["material"], PluginPreLoader)
+    assert isinstance(by_resource_type["pipeline"], PluginPreLoader)
+    assert isinstance(by_resource_type["scene_pipeline"], PluginPreLoader)

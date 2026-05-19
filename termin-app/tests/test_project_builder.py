@@ -37,6 +37,12 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     _write_json(shader.with_name(shader.name + ".meta"), {"uuid": "shader-uuid"})
     material = project / "Materials" / "Default.material"
     _write_json(material, {"uuid": "material-uuid", "shader": "StandardShader"})
+    pipeline = project / "Pipelines" / "Main.pipeline"
+    _write_json(pipeline, {"nodes": []})
+    _write_json(pipeline.with_name(pipeline.name + ".meta"), {"uuid": "pipeline-uuid"})
+    scene_pipeline = project / "Pipelines" / "Scene.scene_pipeline"
+    _write_json(scene_pipeline, {"nodes": []})
+    _write_json(scene_pipeline.with_name(scene_pipeline.name + ".meta"), {"uuid": "scene-pipeline-uuid"})
 
     result = build_project(
         project_root=project,
@@ -64,6 +70,10 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     assert by_source["Materials/Default.material"]["uuid"] == "material-uuid"
     assert by_source["stdlib/shaders/StandardShader.shader"]["type"] == "shader"
     assert by_source["stdlib/shaders/StandardShader.shader"]["uuid"] == "shader-uuid"
+    assert by_source["Pipelines/Main.pipeline"]["type"] == "pipeline"
+    assert by_source["Pipelines/Main.pipeline"]["uuid"] == "pipeline-uuid"
+    assert by_source["Pipelines/Scene.scene_pipeline"]["type"] == "scene_pipeline"
+    assert by_source["Pipelines/Scene.scene_pipeline"]["uuid"] == "scene-pipeline-uuid"
     assert by_source["stdlib/shaders/StandardShader.shader"]["build_path"] == "stdlib/shaders/StandardShader.shader"
 
     build_data = json.loads(result.build_json_path.read_text(encoding="utf-8"))

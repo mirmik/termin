@@ -53,6 +53,19 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         '{"uuid": "material-uuid", "shader": "Standard"}',
         encoding="utf-8",
     )
+    pipeline = tmp_path / "assets" / "Pipelines" / "Main.pipeline"
+    pipeline.parent.mkdir(parents=True)
+    pipeline.write_text('{"nodes": []}', encoding="utf-8")
+    pipeline.with_name(pipeline.name + ".meta").write_text(
+        '{"uuid": "pipeline-uuid"}',
+        encoding="utf-8",
+    )
+    scene_pipeline = tmp_path / "assets" / "Pipelines" / "Scene.scene_pipeline"
+    scene_pipeline.write_text('{"nodes": []}', encoding="utf-8")
+    scene_pipeline.with_name(scene_pipeline.name + ".meta").write_text(
+        '{"uuid": "scene-pipeline-uuid"}',
+        encoding="utf-8",
+    )
 
     rm = RecordingResourceManager()
     resources = [
@@ -84,7 +97,17 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         {
             "kind": "asset",
             "type": "pipeline",
-            "build_path": "assets/Pipelines/Test.pipeline",
+            "build_path": "assets/Pipelines/Main.pipeline",
+        },
+        {
+            "kind": "asset",
+            "type": "scene_pipeline",
+            "build_path": "assets/Pipelines/Scene.scene_pipeline",
+        },
+        {
+            "kind": "asset",
+            "type": "prefab",
+            "build_path": "assets/Prefabs/Test.prefab",
         },
         {
             "kind": "asset",
@@ -100,10 +123,12 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         import_registry=_default_import_registry(),
     )
 
-    assert loaded_count == 5
+    assert loaded_count == 7
     assert [result.resource_type for result in rm.results] == [
         "glsl",
         "shader",
+        "pipeline",
+        "scene_pipeline",
         "audio_clip",
         "texture",
         "material",
@@ -111,6 +136,8 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
     assert [result.uuid for result in rm.results] == [
         "glsl-uuid",
         "shader-uuid",
+        "pipeline-uuid",
+        "scene-pipeline-uuid",
         "audio-uuid",
         "texture-uuid",
         "material-uuid",

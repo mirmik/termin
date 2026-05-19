@@ -11,9 +11,7 @@ from termin.editor_core.file_processors import (
     ComponentFileProcessor,
     GLBPreLoader,
     NavMeshPreLoader,
-    PipelinePreLoader,
     PrefabPreLoader,
-    ScenePipelinePreLoader,
     UIPreLoader,
     VoxelGridPreLoader,
 )
@@ -40,8 +38,8 @@ def create_default_preloaders(
 ) -> list[FilePreLoader]:
     return [
         _create_plugin_preloader(resource_manager, "glsl", on_resource_reloaded),
-        PipelinePreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
-        ScenePipelinePreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "pipeline", on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "scene_pipeline", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "shader", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "texture", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "material", on_resource_reloaded),
