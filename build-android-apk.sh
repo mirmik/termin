@@ -5,6 +5,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLATFORM_DIR="$SCRIPT_DIR/termin-android/platform"
+ANDROID_GRADLE_BUILD_ROOT="$SCRIPT_DIR/build/android-gradle"
 
 ANDROID_ABI_VALUE="${ANDROID_ABI:-arm64-v8a}"
 ANDROID_PLATFORM_VALUE="${ANDROID_PLATFORM:-android-26}"
@@ -102,6 +103,7 @@ if [[ -z "$GRADLE_MAJOR" || "$GRADLE_MAJOR" -lt 8 ]]; then
 fi
 
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$SCRIPT_DIR/build/gradle-home}"
+GRADLE_PROJECT_CACHE_DIR="$ANDROID_GRADLE_BUILD_ROOT/project-cache"
 
 echo ""
 echo "========================================"
@@ -110,6 +112,7 @@ echo "========================================"
 echo ""
 echo "Gradle:          $GRADLE_BIN_VALUE ($GRADLE_VERSION)"
 echo "Gradle home:     $GRADLE_USER_HOME"
+echo "Project cache:   $GRADLE_PROJECT_CACHE_DIR"
 echo "Project:         $PLATFORM_DIR"
 echo "Task:            $GRADLE_TASK"
 echo "Termin SDK root: $ANDROID_SDK_ROOT_VALUE"
@@ -120,10 +123,13 @@ echo ""
 
 cd "$PLATFORM_DIR"
 "$GRADLE_BIN_VALUE" --no-daemon "$GRADLE_TASK" \
+    --project-cache-dir "$GRADLE_PROJECT_CACHE_DIR" \
     -PterminAndroidSdkRoot="$ANDROID_SDK_ROOT_VALUE" \
     -PterminAndroidAbi="$ANDROID_ABI_VALUE" \
     -PterminAndroidPlatform="$ANDROID_PLATFORM_VALUE" \
     -PterminAndroidNdkVersion="$ANDROID_NDK_VERSION_VALUE"
 
+rm -rf "$PLATFORM_DIR/.gradle" "$PLATFORM_DIR/app/.cxx" "$PLATFORM_DIR/app/build"
+
 echo ""
-echo "APK: $PLATFORM_DIR/app/build/outputs/apk/debug/app-debug.apk"
+echo "APK: $ANDROID_GRADLE_BUILD_ROOT/app/outputs/apk/debug/app-debug.apk"
