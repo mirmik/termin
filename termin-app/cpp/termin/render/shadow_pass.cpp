@@ -8,7 +8,9 @@
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_render_device.hpp"
+#ifdef TGFX2_HAS_OPENGL
 #include "tgfx2/opengl/opengl_render_device.hpp"
+#endif
 #include "tgfx2/tc_shader_bridge.hpp"
 
 extern "C" {
@@ -183,10 +185,12 @@ tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
         if (it->second.tex) device.destroy(it->second.tex);
         // Reusing the same gl_id for a new texture of a different
         // size invalidates any FBO the device cached on the old id.
+#ifdef TGFX2_HAS_OPENGL
         if (auto* gl_dev =
                 dynamic_cast<tgfx::OpenGLRenderDevice*>(&device)) {
             gl_dev->invalidate_fbo_cache();
         }
+#endif
         depth_pool_.erase(it);
     }
 
@@ -218,6 +222,7 @@ tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
     // the texture rather than the sampler, so setting them here is the
     // right place. Legacy OpenGLShadowFramebufferHandle::create() does
     // the equivalent setup.
+#ifdef TGFX2_HAS_OPENGL
     if (auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device)) {
         auto* gl_tex = gl_dev->get_texture(tex);
         if (gl_tex) {
@@ -231,6 +236,7 @@ tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
             glBindTexture(gl_tex->target, 0);
         }
     }
+#endif
 
     depth_pool_[index] = ShadowDepthSlot{tex, resolution};
     return tex;

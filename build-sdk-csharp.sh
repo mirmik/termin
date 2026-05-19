@@ -10,6 +10,7 @@ SDK_PREFIX="${SDK_PREFIX:-$SCRIPT_DIR/sdk}"
 BUILD_TYPE="Release"
 CLEAN=0
 NO_PARALLEL=0
+OPENGL_MODE="on"
 BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
 
 for arg in "$@"; do
@@ -23,6 +24,8 @@ for arg in "$@"; do
         --pch|--no-pch) ;;
         --no-vulkan|--vulkan) ;;
         --no-sdl|--sdl) ;;
+        --no-opengl) OPENGL_MODE="off" ;;
+        --opengl) OPENGL_MODE="on" ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -41,6 +44,8 @@ for arg in "$@"; do
             echo "  --vulkan          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-sdl          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --sdl             Accepted for top-level SDK builds; ignored by C# stage"
+            echo "  --no-opengl       Skip C# native bindings; they currently require render_lib/OpenGL"
+            echo "  --opengl          Build C# native bindings (default)"
             echo "  --help, -h        Show this help"
             exit 0
             ;;
@@ -50,6 +55,17 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+if [[ "$OPENGL_MODE" == "off" ]]; then
+    echo ""
+    echo "========================================"
+    echo "  Skipping termin-csharp"
+    echo "========================================"
+    echo ""
+    echo "C# native bindings currently depend on render_lib/OpenGL."
+    echo "Re-run without --no-opengl when the OpenGL-backed SDK is available."
+    exit 0
+fi
 
 if [[ $NO_PARALLEL -eq 1 ]]; then
     BUILD_JOBS=1

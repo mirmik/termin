@@ -81,7 +81,6 @@ nanobind_add_module(_native NB_SHARED
     termin/tc_scene_lighting_bindings.cpp
 )
 target_link_libraries(_native PRIVATE
-    OpenGL::GL
     trent
     entity_lib
     termin_inspect::termin_inspect_python
@@ -90,6 +89,9 @@ target_link_libraries(_native PRIVATE
     render_lib
     tgfx::termin_graphics
 )
+if(TGFX2_ENABLE_OPENGL)
+    target_link_libraries(_native PRIVATE OpenGL::GL)
+endif()
 if(TERMIN_HAS_RECAST)
     target_link_libraries(_native PRIVATE navmesh_lib)
 endif()

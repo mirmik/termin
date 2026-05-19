@@ -5,7 +5,6 @@
 #include "termin/render/render_camera.hpp"
 #include <cstring>
 
-#include <tgfx2/opengl/opengl_render_device.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include "tgfx/handles.hpp"
 

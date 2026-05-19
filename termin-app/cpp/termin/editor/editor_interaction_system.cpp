@@ -16,7 +16,6 @@
 #include "render/tc_render_target.h"
 #include "render/tc_render_surface.h"
 #include "tc_picking.h"
-#include "tgfx2/opengl/opengl_render_device.hpp"
 #include <tcbase/tc_log.h>
 
 #include <cmath>

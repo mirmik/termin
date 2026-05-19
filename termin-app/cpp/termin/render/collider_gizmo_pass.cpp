@@ -2,9 +2,9 @@
 #include "tgfx/handles.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
+#include "tgfx2/i_render_device.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/enums.hpp"
-#include "tgfx2/opengl/opengl_render_device.hpp"
 #include <termin/entity/entity.hpp>
 #include <components/collider_component.hpp>
 #include "termin/colliders/convex_hull_collider.hpp"

@@ -9,7 +9,9 @@
 #include "tgfx2/device_factory.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_render_device.hpp"
+#ifdef TGFX2_HAS_OPENGL
 #include "tgfx2/opengl/opengl_render_device.hpp"
+#endif
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/render_runtime.hpp"
 
@@ -79,6 +81,7 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
     impl_->backend = tgfx::default_backend_from_env();
 
     if (impl_->backend == tgfx::BackendType::OpenGL) {
+#ifdef TGFX2_HAS_OPENGL
         // GL 4.3 core — gives us `layout(binding=N)` on UBOs (GL 4.2+,
         // needed for the push-constants ring UBO trick at binding 14)
         // plus `layout(location=N)` on varyings (GL 4.1+). The single
@@ -117,6 +120,9 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
         // RenderRuntime wires the process-wide tgfx2 interop pointer
         // and, on OpenGL, the tgfx_gpu_ops bridge used by TcShader /
         // TcTexture / TcMesh GPU uploads.
+#else
+        throw std::runtime_error("BackendWindow: OpenGL backend not compiled");
+#endif
     }
 #ifdef TGFX2_HAS_VULKAN
     else if (impl_->backend == tgfx::BackendType::Vulkan) {
@@ -182,6 +188,7 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
     configure_sdl_window_hints();
 
     if (impl_->backend == tgfx::BackendType::OpenGL) {
+#ifdef TGFX2_HAS_OPENGL
         // Secondary GL windows don't get their own GL context — they
         // borrow the primary's. One context can be made current against
         // any of its owner's compatible windows, which is exactly what
@@ -205,6 +212,9 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
         // GL call dispatched through GLAD hits a null function pointer
         // and segfaults.
         SDL_GL_MakeCurrent(share_with.window_, share_with.impl_->gl_context);
+#else
+        throw std::runtime_error("BackendWindow(secondary): OpenGL backend not compiled");
+#endif
     }
 #ifdef TGFX2_HAS_VULKAN
     else if (impl_->backend == tgfx::BackendType::Vulkan) {
