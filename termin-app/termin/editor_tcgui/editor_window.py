@@ -34,6 +34,7 @@ from termin._native.scene import SceneManager, SceneMode, default_scene_extensio
 from termin.editor_core.resource_loader import ResourceLoader
 from termin.editor_core.project_file_watcher import ProjectFileWatcher
 from termin.editor_core.default_preloaders import register_default_preloaders
+from termin.editor_core.prefab_edit_controller import PrefabEditController
 from termin.editor_core.settings import EditorSettings
 from termin.editor_core.signal import Signal
 from termin.assets.resources import ResourceManager
@@ -145,6 +146,12 @@ class EditorWindowTcgui:
         self._center_tabs: TabView | None = None
         self._play_button = None
         self._pause_button = None
+        self._prefab_toolbar: HStack | None = None
+        self._prefab_toolbar_label: Label | None = None
+        self._save_prefab_button = None
+        self._exit_prefab_button = None
+        self._pre_prefab_scene_name: str | None = None
+        self.prefab_edit_controller: PrefabEditController | None = None
         # Game mode state + transitions live in GameModeModel. The model is
         # created after editor_attachment/rendering_controller exist (end of build()).
         self._game_mode_model = None
@@ -287,6 +294,35 @@ class EditorWindowTcgui:
         pause_btn.on_click = self._toggle_pause
         self._pause_button = pause_btn
         toolbar.add_child(pause_btn)
+
+        prefab_toolbar = HStack()
+        prefab_toolbar.spacing = 4
+        prefab_toolbar.visible = False
+        self._prefab_toolbar = prefab_toolbar
+
+        prefab_label = Label()
+        prefab_label.text = "Editing Prefab"
+        prefab_label.mouse_transparent = True
+        self._prefab_toolbar_label = prefab_label
+        prefab_toolbar.add_child(prefab_label)
+
+        save_prefab_btn = Button()
+        save_prefab_btn.text = "Save"
+        save_prefab_btn.preferred_width = px(60)
+        save_prefab_btn.preferred_height = px(24)
+        save_prefab_btn.on_click = self._save_prefab
+        self._save_prefab_button = save_prefab_btn
+        prefab_toolbar.add_child(save_prefab_btn)
+
+        exit_prefab_btn = Button()
+        exit_prefab_btn.text = "Exit"
+        exit_prefab_btn.preferred_width = px(60)
+        exit_prefab_btn.preferred_height = px(24)
+        exit_prefab_btn.on_click = self._exit_prefab_editing
+        self._exit_prefab_button = exit_prefab_btn
+        prefab_toolbar.add_child(exit_prefab_btn)
+
+        toolbar.add_child(prefab_toolbar)
 
         spacer_right = Label()
         spacer_right.stretch = True
@@ -539,6 +575,14 @@ class EditorWindowTcgui:
 
         # Load settings and last scene
         EditorSettings.instance().init_text_editor_if_empty()
+        self.prefab_edit_controller = PrefabEditController(
+            scene_manager=self.scene_manager,
+            resource_manager=self.resource_manager,
+            on_mode_changed=self._on_prefab_mode_changed,
+            on_request_update=self._request_viewport_update,
+            log_message=self._log_to_console,
+            get_editor_scene_name=lambda: self._editor_scene_name,
+        )
         self._restore_project()
         # _rescan_file_resources is called inside _load_project, don't call again
         if self._current_project_path is None:
@@ -1338,10 +1382,28 @@ class EditorWindowTcgui:
     # ------------------------------------------------------------------
 
     def _new_scene(self) -> None:
-        # TODO: confirm dialog if unsaved changes
+        if self._ui is None:
+            self._do_new_scene()
+            return
+        MessageBox.question(
+            self._ui,
+            "New Scene",
+            "Create a new scene?\n\nThis will remove all entities and resources.",
+            on_result=lambda result: self._do_new_scene() if result == "Yes" else None,
+        )
+
+    def _do_new_scene(self) -> None:
         old_scene_name = self._editor_scene_name
+        if old_scene_name and self.scene_manager.has_scene(old_scene_name):
+            self.detach_editor_from_scene(save_state=True, clear_editor_scene_name=False)
+            self.detach_scene_from_render(old_scene_name, save_state=True)
+            self.scene_manager.close_scene(old_scene_name)
+        self._editor_scene_name = "untitled"
         self.scene_manager.create_scene(self._editor_scene_name, default_scene_extensions())
         self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
+        if self._editor_attachment is not None:
+            self.attach_editor_to_scene(self._editor_scene_name, restore_state=False)
+            self.attach_scene_to_render(self._editor_scene_name)
         if self.scene_tree_controller is not None:
             self.scene_tree_controller.set_scene(self.scene)
             self.scene_tree_controller.rebuild()
@@ -1400,6 +1462,8 @@ class EditorWindowTcgui:
     def _save_scene_to_file(self, path: str) -> None:
         if not path:
             return
+        if not self._validate_scene_path(path):
+            return
         scene_name = self._editor_scene_name
         if scene_name is None:
             return
@@ -1417,6 +1481,8 @@ class EditorWindowTcgui:
 
     def _load_scene_from_file(self, path: str) -> None:
         if not path:
+            return
+        if not self._validate_scene_path(path):
             return
         try:
             from termin.editor_core import scene_name_from_file_path
@@ -1462,6 +1528,26 @@ class EditorWindowTcgui:
         except Exception as e:
             log.error(f"Failed to load scene: {e}")
             self._log_to_console(f"Error loading: {e}")
+
+    def _validate_scene_path(self, path: str) -> bool:
+        project_path = self._get_project_path()
+        if not project_path:
+            return True
+        import os
+        real_file = os.path.realpath(path)
+        real_project = os.path.realpath(project_path)
+        if real_file.startswith(real_project + os.sep) or real_file == real_project:
+            return True
+        if self._ui is not None:
+            MessageBox.warning(
+                self._ui,
+                "Scene Outside Project",
+                f"The scene file must be inside the project directory.\n\n"
+                f"Scene: {path}\n"
+                f"Project: {project_path}",
+            )
+        log.error(f"Scene path outside project: scene={path} project={project_path}")
+        return False
 
     def _load_last_scene(self) -> None:
         # Per-project last scene has priority
@@ -1511,11 +1597,13 @@ class EditorWindowTcgui:
     def _new_project(self) -> None:
         if self._ui is None:
             return
-        from tcgui.widgets.file_dialog_overlay import show_open_directory_dialog
-        show_open_directory_dialog(
+        from tcgui.widgets.file_dialog_overlay import show_save_file_dialog
+        show_save_file_dialog(
             self._ui,
-            title="New Project — Select Directory",
-            on_result=lambda path: self._init_project(path) if path else None,
+            title="Create New Project",
+            directory=self._current_project_path or str(Path.cwd()),
+            filter_str="Termin Project (*.terminproj);;All Files (*)",
+            on_result=lambda path: self._create_project_file(path) if path else None,
             windowed=True,
         )
 
@@ -1531,12 +1619,26 @@ class EditorWindowTcgui:
             windowed=True,
         )
 
-    def _init_project(self, path: str) -> None:
-        self._current_project_path = path
-        self._project_name = Path(path).name
-        self._log_to_console(f"Project: {path}")
-        if self._project_browser is not None:
-            self._project_browser.set_root(path)
+    def _create_project_file(self, path: str) -> None:
+        if not path:
+            return
+        project_file = Path(path)
+        if project_file.suffix != ".terminproj":
+            project_file = project_file.with_suffix(".terminproj")
+        try:
+            import json
+            project_data = {
+                "version": 1,
+                "name": project_file.stem,
+            }
+            project_file.parent.mkdir(parents=True, exist_ok=True)
+            project_file.write_text(json.dumps(project_data, indent=2), encoding="utf-8")
+        except Exception as e:
+            log.error(f"Failed to create project file {project_file}: {e}")
+            if self._ui is not None:
+                MessageBox.error(self._ui, "Create Project Failed", f"Failed to create project:\n{e}")
+            return
+        self._load_project(str(project_file))
 
     def _load_project(self, path: str) -> None:
         project_root = Path(path).parent
@@ -1769,7 +1871,7 @@ class EditorWindowTcgui:
 
     def _init_spacemouse(self) -> None:
         """Initialize SpaceMouse controller if device available."""
-        from termin.editor.spacemouse_controller import SpaceMouseController
+        from termin.editor_core.spacemouse_controller import SpaceMouseController
         spacemouse = SpaceMouseController()
         if spacemouse.open(self._editor_attachment, self._request_viewport_update):
             self._spacemouse = spacemouse
@@ -2194,7 +2296,9 @@ class EditorWindowTcgui:
 
     def _update_window_title(self) -> None:
         scene_label = "No Scene"
-        if self._editor_scene_name is not None:
+        if self.prefab_edit_controller is not None and self.prefab_edit_controller.is_editing:
+            scene_label = f"Prefab: {self.prefab_edit_controller.prefab_name or ''}"
+        elif self._editor_scene_name is not None:
             scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
             if scene_path is not None:
                 scene_label = Path(scene_path).stem
@@ -2274,11 +2378,57 @@ class EditorWindowTcgui:
         self.undo_stack_changed.emit()
 
     def _open_prefab(self, path: str) -> None:
-        parent_entity = None
-        if self._interaction_system is not None:
-            parent_entity = self._interaction_system.selection.selected
+        if self.prefab_edit_controller is None:
+            log.error("[EditorWindowTcgui] prefab edit controller is not initialized")
+            return
+        if self.prefab_edit_controller.is_editing:
+            log.error("[EditorWindowTcgui] already editing a prefab")
+            return
+        self._pre_prefab_scene_name = self._editor_scene_name
+        if not self.prefab_edit_controller.open_prefab(path):
+            self._pre_prefab_scene_name = None
+
+    def _save_prefab(self) -> None:
+        if self.prefab_edit_controller is None:
+            log.error("[EditorWindowTcgui] prefab edit controller is not initialized")
+            return
+        self.prefab_edit_controller.save()
+
+    def _exit_prefab_editing(self) -> None:
+        if self.prefab_edit_controller is None:
+            log.error("[EditorWindowTcgui] prefab edit controller is not initialized")
+            return
+        if not self.prefab_edit_controller.is_editing:
+            return
+        if self._editor_scene_name == "prefab":
+            self.detach_editor_from_scene(save_state=False, clear_editor_scene_name=False)
+            self.detach_scene_from_render("prefab", save_state=False)
+        self.prefab_edit_controller.exit()
+
+    def _on_prefab_mode_changed(self, is_editing: bool, prefab_name: str | None) -> None:
+        if is_editing:
+            if self._prefab_toolbar is not None:
+                self._prefab_toolbar.visible = True
+            if self._prefab_toolbar_label is not None:
+                self._prefab_toolbar_label.text = f"Editing Prefab: {prefab_name or ''}"
+            if self._play_button is not None:
+                self._play_button.enabled = False
+            self.attach_editor_to_scene("prefab", restore_state=False)
+            self.attach_scene_to_render("prefab")
+        else:
+            if self._prefab_toolbar is not None:
+                self._prefab_toolbar.visible = False
+            if self._play_button is not None:
+                self._play_button.enabled = True
+            previous_scene_name = self._pre_prefab_scene_name
+            self._pre_prefab_scene_name = None
+            if previous_scene_name and self.scene_manager.has_scene(previous_scene_name):
+                self.attach_editor_to_scene(previous_scene_name, restore_state=True)
+                self.attach_scene_to_render(previous_scene_name)
         if self.scene_tree_controller is not None:
-            self.scene_tree_controller.operations.drop_prefab(path, parent_entity)
+            self.scene_tree_controller.rebuild()
+        self._update_window_title()
+        self._request_viewport_update()
 
     # ------------------------------------------------------------------
     # Per-frame polling
@@ -2305,6 +2455,8 @@ class EditorWindowTcgui:
         if not self._ar_logged:
             log.info(f"[DBG _after_render] first call, interaction_system={self._interaction_system}")
             self._ar_logged = True
+        if self._spacemouse is not None:
+            self._spacemouse.poll()
         if self._interaction_system is not None:
             self._interaction_system.after_render()
         has_overlay_drawers = False

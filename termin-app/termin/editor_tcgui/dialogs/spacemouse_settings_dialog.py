@@ -14,7 +14,7 @@ from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.group_box import GroupBox
 
 if TYPE_CHECKING:
-    from termin.editor.spacemouse_controller import SpaceMouseController
+    from termin.editor_core.spacemouse_controller import SpaceMouseController
 
 
 def show_spacemouse_settings_dialog(
