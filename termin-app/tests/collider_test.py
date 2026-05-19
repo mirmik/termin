@@ -2,10 +2,11 @@ import unittest
 import numpy as np
 from termin.colliders import (
     CapsuleCollider, SphereCollider, BoxCollider,
-    UnionCollider, AttachedCollider
+    UnionCollider, AttachedCollider, Ray3
 )
-from termin.geombase import GeneralTransform3, GeneralPose3, Ray3, Quat
+from termin.geombase import GeneralPose3, Quat
 from termin.geombase._geom_native import Vec3
+from termin.scene import GeneralTransform3
 
 
 def vec3_to_np(v: Vec3) -> np.ndarray:

@@ -42,6 +42,7 @@ if __name__ == "__main__":
                 "termin.render", "termin.render.*",             # termin-render
                 "termin.display", "termin.display.*",           # termin-display
                 "termin.viewport", "termin.viewport.*",         # termin-display
+                "termin.geombase", "termin.geombase.*",         # tcbase
                 "termin.scene", "termin.scene.*",               # termin-scene
                 "termin.input", "termin.input.*",               # termin-input
                 "termin.inspect", "termin.inspect.*",           # termin-inspect
