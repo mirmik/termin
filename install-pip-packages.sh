@@ -123,8 +123,10 @@ PACKAGES=(
     termin-base
     termin-assets
     termin-mesh
-    termin-csg
     termin-graphics
+    termin-gui
+    termin-display
+    termin-csg
     termin-modules
     termin-inspect
     termin-components/termin-components-kinematic
@@ -133,7 +135,6 @@ PACKAGES=(
     termin-input
     termin-collision
     termin-render
-    termin-display
     termin-navmesh
     termin-physics
     termin-engine
@@ -141,7 +142,6 @@ PACKAGES=(
     termin-animation
     termin-components/termin-components-render
     termin-components/termin-components-mesh
-    termin-gui
     termin-nodegraph
     termin-app
     tcplot
