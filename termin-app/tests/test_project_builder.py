@@ -34,6 +34,9 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     shader = project / "stdlib" / "shaders" / "StandardShader.shader"
     shader.parent.mkdir(parents=True)
     shader.write_text("shader", encoding="utf-8")
+    _write_json(shader.with_name(shader.name + ".meta"), {"uuid": "shader-uuid"})
+    material = project / "Materials" / "Default.material"
+    _write_json(material, {"uuid": "material-uuid", "shader": "StandardShader"})
 
     result = build_project(
         project_root=project,
@@ -57,6 +60,10 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     assert by_source["Textures/Albedo.png"]["uuid"] == "texture-uuid"
     assert by_source["Audio/Hit.wav"]["type"] == "audio_clip"
     assert by_source["Audio/Hit.wav"]["uuid"] == "audio-uuid"
+    assert by_source["Materials/Default.material"]["type"] == "material"
+    assert by_source["Materials/Default.material"]["uuid"] == "material-uuid"
+    assert by_source["stdlib/shaders/StandardShader.shader"]["type"] == "shader"
+    assert by_source["stdlib/shaders/StandardShader.shader"]["uuid"] == "shader-uuid"
     assert by_source["stdlib/shaders/StandardShader.shader"]["build_path"] == "stdlib/shaders/StandardShader.shader"
 
     build_data = json.loads(result.build_json_path.read_text(encoding="utf-8"))
