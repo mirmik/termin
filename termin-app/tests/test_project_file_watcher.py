@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Set
 
+from termin.assets.texture_plugin import TextureImportPlugin
+from termin.editor_core.plugin_preloader import PluginPreLoader
 from termin.editor_core.project_file_watcher import FilePreLoader, ProjectFileWatcher
+from termin_assets import PreLoadResult
 
 
 class RecordingPreLoader(FilePreLoader):
@@ -35,3 +38,121 @@ def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> 
     watcher.poll()
 
     assert processor.changed == [str(shader_path)]
+
+
+class RecordingResourceManager:
+    def __init__(self) -> None:
+        self.registered: list[PreLoadResult] = []
+        self.reloaded: list[PreLoadResult] = []
+
+    def register_file(self, result: PreLoadResult) -> None:
+        self.registered.append(result)
+
+    def reload_file(self, result: PreLoadResult) -> None:
+        self.reloaded.append(result)
+
+
+def _queue_change(watcher: ProjectFileWatcher, path: Path, kind: str) -> None:
+    with watcher._lock:
+        watcher._pending_changes[str(path)] = kind
+
+
+def test_project_file_watcher_initial_scan_registers_plugin_assets(tmp_path: Path) -> None:
+    texture_path = tmp_path / "Textures" / "Albedo.png"
+    texture_path.parent.mkdir()
+    texture_path.write_bytes(b"png")
+    texture_path.with_name(texture_path.name + ".meta").write_text(
+        '{"uuid": "texture-scan-uuid"}',
+        encoding="utf-8",
+    )
+
+    rm = RecordingResourceManager()
+    preloader = PluginPreLoader(TextureImportPlugin(), rm)
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(preloader)
+
+    watcher._project_path = str(tmp_path)
+    watcher._scan_directory(str(tmp_path))
+
+    assert [result.resource_type for result in rm.registered] == ["texture"]
+    assert rm.registered[0].path == str(texture_path)
+    assert rm.registered[0].uuid == "texture-scan-uuid"
+    assert preloader.get_tracked_files() == {str(texture_path): {"Albedo"}}
+
+
+def test_project_file_watcher_created_file_registers_plugin_asset(tmp_path: Path) -> None:
+    texture_path = tmp_path / "Albedo.png"
+    texture_path.write_bytes(b"png")
+    texture_path.with_name(texture_path.name + ".meta").write_text(
+        '{"uuid": "texture-created-uuid"}',
+        encoding="utf-8",
+    )
+
+    rm = RecordingResourceManager()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(PluginPreLoader(TextureImportPlugin(), rm))
+    _queue_change(watcher, texture_path, "created")
+
+    watcher.poll()
+
+    assert [result.uuid for result in rm.registered] == ["texture-created-uuid"]
+    assert rm.registered[0].path == str(texture_path)
+    assert rm.reloaded == []
+
+
+def test_project_file_watcher_modified_file_reloads_plugin_asset(tmp_path: Path) -> None:
+    texture_path = tmp_path / "Albedo.png"
+    texture_path.write_bytes(b"png")
+    texture_path.with_name(texture_path.name + ".meta").write_text(
+        '{"uuid": "texture-modified-uuid"}',
+        encoding="utf-8",
+    )
+
+    rm = RecordingResourceManager()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(PluginPreLoader(TextureImportPlugin(), rm))
+    _queue_change(watcher, texture_path, "modified")
+
+    watcher.poll()
+
+    assert rm.registered == []
+    assert [result.uuid for result in rm.reloaded] == ["texture-modified-uuid"]
+    assert rm.reloaded[0].path == str(texture_path)
+
+
+def test_project_file_watcher_meta_change_reloads_resource_file(tmp_path: Path) -> None:
+    texture_path = tmp_path / "Albedo.png"
+    meta_path = tmp_path / "Albedo.png.meta"
+    texture_path.write_bytes(b"png")
+    meta_path.write_text('{"uuid": "texture-meta-uuid"}', encoding="utf-8")
+
+    rm = RecordingResourceManager()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(PluginPreLoader(TextureImportPlugin(), rm))
+    _queue_change(watcher, meta_path, "modified")
+
+    watcher.poll()
+
+    assert rm.registered == []
+    assert [result.uuid for result in rm.reloaded] == ["texture-meta-uuid"]
+    assert rm.reloaded[0].path == str(texture_path)
+
+
+def test_project_file_watcher_deleted_file_clears_plugin_tracking(tmp_path: Path) -> None:
+    texture_path = tmp_path / "Albedo.png"
+    texture_path.write_bytes(b"png")
+
+    rm = RecordingResourceManager()
+    preloader = PluginPreLoader(TextureImportPlugin(), rm)
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(preloader)
+    preloader.on_file_added(str(texture_path))
+
+    assert preloader.get_tracked_files() == {str(texture_path): {"Albedo"}}
+
+    texture_path.unlink()
+    _queue_change(watcher, texture_path, "deleted")
+
+    watcher.poll()
+
+    assert preloader.get_tracked_files() == {}
