@@ -1,5 +1,5 @@
 """ExecuteContext - context passed to render passes during execution."""
 
-from termin._native.render import ExecuteContext
+from termin.render_framework import ExecuteContext
 
 __all__ = ["ExecuteContext"]

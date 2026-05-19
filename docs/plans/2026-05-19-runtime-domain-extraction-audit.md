@@ -254,19 +254,39 @@ from tgfx import TcTexture, tc_texture_declare, ...
 
 Сейчас активно импортирует `termin._native.render`, хотя часть этих типов уже должна идти через `termin.engine.render`, `termin.render_framework`, `termin.display`, `termin.viewport`, `termin.render_components`.
 
+### Аудит `termin._native.render`
+
+Первые безопасные замены уже очевидны:
+
+- `Display`, `FBOSurface`, `DisplayInputRouter` и низовые input/surface helpers имеют canonical owner `termin.display`;
+- `RenderPipeline`, `ResourceSpec`, `ExecuteContext`, `RenderContext`, pipeline/pass registry helpers и `compile_graph_from_json` имеют canonical owner `termin.render_framework`;
+- `RenderingManager` и `ViewportRenderState` уже должны идти через `termin.engine`.
+
+Оставшиеся группы пока не имеют подтвержденного clean canonical owner:
+
+- material layer: `TcMaterial`, `TcMaterialPhase`, `TcRenderState`, material registry helpers;
+- shader/parser layer: `GlslPreprocessor`, `glsl_preprocessor`, shader parser/property types;
+- app-bound render runtime: `RenderEngine`, `ImmediateRenderer`, `SolidPrimitiveRenderer`;
+- concrete passes still bound in `termin-app`: `ColorPass`, `ShadowPass`, `IdPass`, `ColliderGizmoPass`, `DebugTrianglePass`, `PresentToScreenPass`, `BloomPass`, `GrayscalePass`, `SkyBoxPass`, `TonemapPass`;
+- shadow helpers/resources still bound in `termin-app`;
+- `termin-components-render` still depends on `termin._native.render` for `TcMaterial`/`TcRenderState` and `SkinnedMeshRenderer`.
+
+Это значит, что следующий C++-перенос должен начинаться не с `visualization`, а с material/shader/pass ownership. Иначе `termin-components-render` и `termin.visualization.render` продолжат держаться за `termin-app`.
+
 ### План
 
 Не начинать с полного переноса `termin.visualization`.
 
 Сначала уменьшить legacy imports:
 
-1. `termin._native.render.RenderingManager` -> `termin.engine.RenderingManager`.
-2. `termin._native.render.Display/FBOSurface/input helpers` -> `termin.display` / `termin.display._platform_native`, если типы уже там есть.
-3. `termin._native.render.RenderPipeline/ResourceSpec/ExecuteContext/pass classes` -> проверить canonical owner:
-   - `termin-render`;
-   - `termin-render_framework`;
-   - `termin-components-render`;
-   - или оставить временно как отдельный перенос C++ bindings.
+1. `termin._native.render.RenderingManager` -> `termin.engine.RenderingManager` (уже сделано для текущих Python-потребителей).
+2. `termin._native.render.Display/FBOSurface/input helpers` -> `termin.display`.
+3. `termin._native.render.RenderPipeline/ResourceSpec/ExecuteContext/RenderContext/registry helpers` -> `termin.render_framework`.
+4. Для concrete passes разделить ownership:
+   - generic framegraph/runtime passes в `termin-render`;
+   - geometry/material/depth/normal passes в `termin-components-render`;
+   - editor/debug-only passes оставить отдельно или вынести в editor/runtime package.
+5. Material/shader APIs вынести из `termin-app` раньше render-components cleanup, потому что `termin-components-render` уже зависит от этих типов.
 
 После этого определить новый package, например:
 

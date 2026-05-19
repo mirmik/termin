@@ -201,7 +201,7 @@ class EditorWindow(QMainWindow):
         self.gizmo_manager = self._interaction_system.gizmo_manager
 
         # Per-display routers and per-viewport editor input managers
-        from termin._native.render import DisplayInputRouter
+        from termin.display import DisplayInputRouter
         self._display_routers: dict[int, DisplayInputRouter] = {}
         self._editor_viewport_input_managers: list[CppEditorViewportInputManager] = []
 
@@ -1967,7 +1967,7 @@ class EditorWindow(QMainWindow):
             if display_id in self._display_routers:
                 return
 
-            from termin._native.render import DisplayInputRouter
+            from termin.display import DisplayInputRouter
             from termin._native.editor import EditorViewportInputManager as CppEditorViewportInputManager
 
             # Create router for display

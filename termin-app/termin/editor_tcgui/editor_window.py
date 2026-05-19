@@ -616,7 +616,7 @@ class EditorWindowTcgui:
         surface stays on the default scene-pipeline input_manager and
         Viewport3D never sees editor-aware input.
         """
-        from termin._native.render import DisplayInputRouter
+        from termin.display import DisplayInputRouter
 
         display_id = display.tc_display_ptr
         router = DisplayInputRouter(display_id)

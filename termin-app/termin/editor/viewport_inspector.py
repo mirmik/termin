@@ -463,7 +463,7 @@ class ViewportInspector(QWidget):
     def _update_debug_info(self, viewport: "Viewport") -> None:
         """Update debug info label with native state."""
         try:
-            from termin._native.render import _viewport_get_input_manager
+            from termin.display import _viewport_get_input_manager
 
             vh = viewport._viewport_handle()
             vp_index, vp_generation = vh

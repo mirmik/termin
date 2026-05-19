@@ -30,7 +30,7 @@ class _TcSurfaceWrapper:
 
 def _create_tc_render_surface(surface: "SDLEmbeddedWindowHandle") -> int:
     """Create tc_render_surface for SDLEmbeddedWindowHandle."""
-    from termin._native.render import _render_surface_new_from_python
+    from termin.display import _render_surface_new_from_python
     return _render_surface_new_from_python(surface)
 
 
@@ -132,7 +132,7 @@ class QtKeyEventFilter:
             action = Action.RELEASE
 
         if self._backend_window._input_manager_ptr:
-            from termin._native.render import _input_manager_on_key
+            from termin.display import _input_manager_on_key
             _input_manager_on_key(
                 self._backend_window._input_manager_ptr,
                 key.value, scancode, action.value, mods
@@ -413,12 +413,12 @@ class SDLEmbeddedWindowHandle(BackendWindow):
     @property
     def _input_manager_ptr(self) -> int:
         """Read input_manager pointer directly from C surface."""
-        from termin._native.render import _render_surface_get_input_manager
+        from termin.display import _render_surface_get_input_manager
         return _render_surface_get_input_manager(self._tc_surface_ptr)
 
     def set_input_manager(self, input_manager_ptr: int) -> None:
         """Set input manager for this render surface."""
-        from termin._native.render import _render_surface_set_input_manager
+        from termin.display import _render_surface_set_input_manager
         _render_surface_set_input_manager(self._tc_surface_ptr, input_manager_ptr)
 
     @property
@@ -434,7 +434,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
     def close(self) -> None:
         # Free tc_render_surface first
         if self._tc_surface_ptr:
-            from termin._native.render import _render_surface_free_external
+            from termin.display import _render_surface_free_external
             _render_surface_free_external(self._tc_surface_ptr)
             self._tc_surface_ptr = 0
 
@@ -566,7 +566,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             self._last_height = new_h
             # Notify via tc_render_surface callback
             if self._tc_surface_ptr:
-                from termin._native.render import _render_surface_notify_resize
+                from termin.display import _render_surface_notify_resize
                 _render_surface_notify_resize(self._tc_surface_ptr, new_w, new_h)
             # Legacy callback
             if self._framebuffer_size_callback is not None:
@@ -595,7 +595,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         elif event_type == sdl2.SDL_MOUSEMOTION:
             # Route through tc_input_manager if set
             if self._input_manager_ptr:
-                from termin._native.render import _input_manager_on_mouse_move
+                from termin.display import _input_manager_on_mouse_move
                 _input_manager_on_mouse_move(self._input_manager_ptr, float(event.motion.x), float(event.motion.y))
             elif self._cursor_pos_callback is not None:
                 self._cursor_pos_callback(
@@ -606,7 +606,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             mods = self.get_tracked_mods()
             # Route through tc_input_manager if set
             if self._input_manager_ptr:
-                from termin._native.render import _input_manager_on_scroll
+                from termin.display import _input_manager_on_scroll
                 _input_manager_on_scroll(self._input_manager_ptr, float(event.wheel.x), float(event.wheel.y), mods)
             elif self._scroll_callback is not None:
                 self._scroll_callback(
@@ -621,7 +621,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             mods = _translate_sdl_mods(sdl2.SDL_GetModState())
             # Route through tc_input_manager if set
             if self._input_manager_ptr:
-                from termin._native.render import _input_manager_on_mouse_button
+                from termin.display import _input_manager_on_mouse_button
                 _input_manager_on_mouse_button(self._input_manager_ptr, button.value, Action.PRESS.value, mods)
             elif self._mouse_button_callback is not None:
                 self._mouse_button_callback(self, button, Action.PRESS, mods)
@@ -631,7 +631,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             mods = _translate_sdl_mods(sdl2.SDL_GetModState())
             # Route through tc_input_manager if set
             if self._input_manager_ptr:
-                from termin._native.render import _input_manager_on_mouse_button
+                from termin.display import _input_manager_on_mouse_button
                 _input_manager_on_mouse_button(self._input_manager_ptr, button.value, Action.RELEASE.value, mods)
             elif self._mouse_button_callback is not None:
                 self._mouse_button_callback(self, button, Action.RELEASE, mods)
@@ -641,7 +641,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             action = Action.REPEAT if event.key.repeat else Action.PRESS
             mods = _translate_sdl_mods(event.key.keysym.mod)
             if self._input_manager_ptr:
-                from termin._native.render import _input_manager_on_key
+                from termin.display import _input_manager_on_key
                 _input_manager_on_key(self._input_manager_ptr, key.value, event.key.keysym.scancode, action.value, mods)
             elif self._key_callback is not None:
                 self._key_callback(self, key, event.key.keysym.scancode, action, mods)
@@ -650,7 +650,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             key = _translate_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)
             if self._input_manager_ptr:
-                from termin._native.render import _input_manager_on_key
+                from termin.display import _input_manager_on_key
                 _input_manager_on_key(self._input_manager_ptr, key.value, event.key.keysym.scancode, Action.RELEASE.value, mods)
             elif self._key_callback is not None:
                 self._key_callback(

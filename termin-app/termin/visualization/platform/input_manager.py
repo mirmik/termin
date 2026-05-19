@@ -5,8 +5,8 @@ DisplayInputRouter — routes events from display surface to viewport's input ma
 ViewportInputManager — per-viewport scene dispatch (C implementation).
 """
 
-from termin._native.render import DisplayInputRouter
-from termin._native.render import (
+from termin.display import DisplayInputRouter
+from termin.display import (
     _display_input_router_new,
     _display_input_router_free,
     _display_input_router_base,

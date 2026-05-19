@@ -1,5 +1,5 @@
 """Native Display re-export."""
 
-from termin._native.render import Display
+from termin.display import Display
 
 __all__ = ["Display"]
