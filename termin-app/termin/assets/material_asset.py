@@ -29,7 +29,7 @@ from termin.assets.shader_asset import make_phase_uuid
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin._native.render import TcMaterial
+    from termin.materials import TcMaterial
 
 
 class MaterialAsset(DataAsset["TcMaterial"]):
@@ -174,7 +174,7 @@ class MaterialAsset(DataAsset["TcMaterial"]):
 
 def _build_render_state(shader_phase, phase_mark: str | None = None):
     """Build tc_render_state from shader phase flags."""
-    from termin._native.render import TcRenderState
+    from termin.materials import TcRenderState
 
     # Start with default based on phase mark
     mark = phase_mark or shader_phase.phase_mark
@@ -293,7 +293,7 @@ def _parse_material_content(
     Returns:
         Tuple of (TcMaterial, uuid or None)
     """
-    from termin._native.render import TcMaterial, TcRenderState
+    from termin.materials import TcMaterial, TcRenderState
     from termin.assets.resources import ResourceManager
     from termin.geombase import Vec3, Vec4
 
@@ -462,7 +462,7 @@ def _load_material_file(path: str) -> tuple["TcMaterial", str | None]:
     Returns:
         Tuple of (TcMaterial, uuid or None)
     """
-    from termin._native.render import TcMaterial
+    from termin.materials import TcMaterial
     path = Path(path)
 
     with open(path, "r", encoding="utf-8") as f:
@@ -480,7 +480,7 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
         path: Path to save to
         uuid: UUID to include in file
     """
-    from termin._native.render import TcMaterial
+    from termin.materials import TcMaterial
     from termin.geombase import Vec3, Vec4
     from termin.assets.resources import ResourceManager
 

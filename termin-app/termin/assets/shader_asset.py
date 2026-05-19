@@ -39,7 +39,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
         shader_name: Shader name
         shader_uuid: Shader asset UUID
     """
-    from termin._native.render import TcRenderState
+    from termin.materials import TcRenderState
     from termin.assets.material_asset import _build_render_state, _apply_uniform_defaults, _apply_texture_defaults
     from termin.assets.resources import ResourceManager
 

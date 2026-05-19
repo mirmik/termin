@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Set
 
 from termin.visualization.render.postprocess import PostEffect
-from termin._native.render import TcMaterial
+from termin.materials import TcMaterial
 from termin.inspect import InspectField
 from tcbase import log
 from tgfx._tgfx_native import Tgfx2ShaderStage

@@ -8,8 +8,10 @@
 
 - Создан первичный пакет `termin-materials`.
 - В `termin-materials` вынесены C++ `shader_parser`, `glsl_preprocessor` и Python binding `termin.materials._materials_native`.
+- В `termin-materials` вынесены Python bindings `TcRenderState`, `TcMaterialPhase`, `TcMaterial` и material registry helpers.
 - Python shader-parser imports внутри `termin-app` переведены на canonical `termin.materials`.
-- `termin._native.render` пока сохраняет исторический export этих типов через импорт `termin.materials._materials_native`; это совместимость существующего пути, не новый owner.
+- `TcMaterial` binding больше не зависит от app-level `TextureHandle`: `set_texture` и `from_parsed(..., textures=...)` принимают `TcTexture`, а default white/normal texture lookup передается из app слоя через `default_white_texture` / `default_normal_texture`.
+- `termin._native.render` пока сохраняет исторический export material/shader типов через импорт `termin.materials._materials_native`; это совместимость существующего пути, не новый owner.
 - App-level GLSL fallback loader через `ResourceManager` остается в `termin.visualization.render.glsl_preprocessor`, потому что это не core material/shader-format логика.
 
 ## Зачем
@@ -106,10 +108,10 @@ Preferred staged migration:
    - include bank;
    - material UBO layout synthesis.
 3. Move Python bindings for material API into `termin-materials`:
-   - `TcRenderState`;
-   - `TcMaterialPhase`;
-   - `TcMaterial`;
-   - material registry info functions.
+   - `TcRenderState`; **Done.**
+   - `TcMaterialPhase`; **Done.**
+   - `TcMaterial`; **Done.**
+   - material registry info functions. **Done.**
 4. Replace Python imports from `termin._native.render` to the new canonical material package.
 5. Keep app/resource-manager conveniences outside the core material binding:
    - default white/normal texture lookup;
@@ -132,5 +134,5 @@ Preferred staged migration:
 
 - `termin-components-render` still includes app directories in CMake. This is a migration debt and should be removed.
 - `termin._native.render` still exports material types and many concrete passes.
-- `TcMaterial.from_parsed` currently mixes material construction, shader parser structures, default texture lookup, and app-level texture handles.
+- `TcMaterial.from_parsed` still mixes material construction and shader parser structures. Default texture lookup and app-level `TextureHandle` usage were removed from the binding, but call sites still need cleanup toward a clearer Python/C++ factory boundary.
 - `termin-render` is already broad enough; avoid solving pass ownership by adding more concrete pass code there.

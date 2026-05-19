@@ -11,7 +11,7 @@ Provides visual feedback (magenta color).
 
 from __future__ import annotations
 
-from termin._native.render import TcMaterial, TcRenderState
+from termin.materials import TcMaterial, TcRenderState
 
 
 UNKNOWN_VERT = """#version 330 core

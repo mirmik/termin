@@ -135,7 +135,7 @@ class InlineMaterialFieldWidget(FieldWidget):
         if isinstance(value, dict):
             uuid = value.get("uuid")
             if isinstance(uuid, str) and uuid:
-                from termin._native.render import TcMaterial
+                from termin.materials import TcMaterial
                 return TcMaterial.from_uuid(uuid)
             return None
         return value

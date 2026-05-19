@@ -143,19 +143,28 @@ def register_builtin_textures(rm: "ResourceManager") -> None:
 def register_builtin_materials(rm: "ResourceManager") -> None:
     """Register built-in materials."""
     from termin.visualization.core.material import Material
-    from termin.visualization.core.texture_handle import get_white_texture_handle
+    from termin.visualization.core.texture_handle import (
+        get_normal_texture_handle,
+        get_white_texture_handle,
+    )
 
     # Ensure shaders are registered
     register_builtin_shaders(rm)
     register_builtin_textures(rm)
 
-    white_tex = get_white_texture_handle()
+    white_tex = get_white_texture_handle().get()
+    normal_tex = get_normal_texture_handle().get()
 
     # DefaultMaterial (Blinn-Phong)
     if "DefaultMaterial" not in rm.materials:
         shader = rm.shaders.get("DefaultShader")
         if shader is not None:
-            mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
+            mat = Material.from_parsed(
+                shader,
+                textures={"u_albedo_texture": white_tex},
+                default_white_texture=white_tex,
+                default_normal_texture=normal_tex,
+            )
             mat.name = "DefaultMaterial"
             mat.color = (0.3, 0.85, 0.9, 1.0)
             rm.register_material("DefaultMaterial", mat, uuid=BUILTIN_UUIDS["DefaultMaterial"])
@@ -164,7 +173,12 @@ def register_builtin_materials(rm: "ResourceManager") -> None:
     if "PBRMaterial" not in rm.materials:
         shader = rm.shaders.get("PBRShader")
         if shader is not None:
-            mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
+            mat = Material.from_parsed(
+                shader,
+                textures={"u_albedo_texture": white_tex},
+                default_white_texture=white_tex,
+                default_normal_texture=normal_tex,
+            )
             mat.name = "PBRMaterial"
             mat.color = (0.8, 0.8, 0.8, 1.0)
             rm.register_material("PBRMaterial", mat, uuid=BUILTIN_UUIDS["PBRMaterial"])
@@ -180,7 +194,12 @@ def register_builtin_materials(rm: "ResourceManager") -> None:
     if "SkinnedMaterial" not in rm.materials:
         shader = rm.shaders.get("SkinnedShader")
         if shader is not None:
-            mat = Material.from_parsed(shader, textures={"u_albedo_texture": white_tex})
+            mat = Material.from_parsed(
+                shader,
+                textures={"u_albedo_texture": white_tex},
+                default_white_texture=white_tex,
+                default_normal_texture=normal_tex,
+            )
             mat.name = "SkinnedMaterial"
             mat.color = (0.8, 0.8, 0.8, 1.0)
             rm.register_material("SkinnedMaterial", mat, uuid=BUILTIN_UUIDS["SkinnedMaterial"])
