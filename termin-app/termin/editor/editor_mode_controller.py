@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QLabel, QStatusBar
 
-from termin._native.scene import SceneMode
+from termin.engine import scene as engine_scene
+
+SceneMode = engine_scene.SceneMode
 from termin.editor_core.game_mode_model import GameModeModel
 
 if TYPE_CHECKING:

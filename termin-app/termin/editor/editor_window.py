@@ -12,7 +12,7 @@ from termin.editor_core.undo_stack import UndoStack, UndoCommand
 from termin.editor_core.editor_commands import AddEntityCommand, DeleteEntityCommand, RenameEntityCommand
 from termin.editor.scene_tree_controller import SceneTreeController
 from termin.editor.prefab_edit_controller import PrefabEditController
-from termin._native.scene import SceneManager, SceneMode, default_scene_extensions
+from termin.engine import SceneManager, scene as engine_scene
 from termin.editor.dialog_manager import DialogManager
 from termin.editor.inspector_controller import InspectorController
 from termin.editor.menu_bar_controller import MenuBarController
@@ -38,6 +38,9 @@ from termin.assets.resources import ResourceManager
 from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
 from termin.editor.project_controller import EditorProjectController
 from termin.editor.editor_ui_builder import EditorUIBuilder
+
+SceneMode = engine_scene.SceneMode
+default_scene_extensions = engine_scene.default_scene_extensions
 
 
 class EditorWindow(QMainWindow):

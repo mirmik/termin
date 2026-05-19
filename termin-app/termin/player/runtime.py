@@ -343,7 +343,7 @@ class PlayerRuntime:
     def _ensure_engine_core(self) -> bool:
         """Ensure EngineCore exists so RenderingManager has a real backend."""
         from tcbase import log
-        from termin._native import EngineCore
+        from termin.engine import EngineCore
 
         engine = EngineCore.instance()
         if engine is not None:

@@ -128,7 +128,7 @@ class ProfilerPanel(VStack):
         self._include_ui_check.text = "Include UI"
         self._include_ui_check.font_size = 12
         self._include_ui_check.on_changed = self._on_include_ui_toggled
-        from termin._native import EngineCore
+        from termin.engine import EngineCore
         engine = EngineCore.instance()
         if engine is not None:
             self._include_ui_check.checked = engine.profile_ui
@@ -204,7 +204,7 @@ class ProfilerPanel(VStack):
         self._profiler.detailed_rendering = checked
 
     def _on_include_ui_toggled(self, checked: bool) -> None:
-        from termin._native import EngineCore
+        from termin.engine import EngineCore
         engine = EngineCore.instance()
         if engine is not None:
             engine.profile_ui = checked
@@ -247,7 +247,7 @@ class ProfilerPanel(VStack):
         detailed = self._collect_sections(frame)
         if self._debug_dump_pending > 0:
             self._debug_dump_pending -= 1
-            from termin._native import EngineCore
+            from termin.engine import EngineCore
             eng = EngineCore.instance()
             pui = eng.profile_ui if eng is not None else "NONE"
             sec_count = len(frame.sections) if frame and frame.sections else 0
