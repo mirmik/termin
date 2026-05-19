@@ -25,6 +25,7 @@ from termin.csg.procedural_document import (  # noqa: E402
     ProceduralPlane,
     SketchItemDocument,
 )
+from termin.csg.document_eval import EvaluatedSolid, evaluate_document  # noqa: E402
 
 
 def _point2(value):
@@ -65,7 +66,9 @@ __all__ = [
     "ProceduralMeshDocument",
     "ProceduralPlane",
     "SketchItemDocument",
+    "EvaluatedSolid",
     "Solid",
+    "evaluate_document",
     "extrude",
     "intersect",
     "make_box",

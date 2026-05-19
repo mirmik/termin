@@ -22,7 +22,15 @@ setup(
     python_requires=">=3.8",
     packages=["termin.csg"],
     package_dir={"termin.csg": "python/termin/csg"},
-    install_requires=["termin-nanobind", "numpy", "tcbase", "tgfx", "tmesh"],
+    install_requires=[
+        "termin-nanobind",
+        "numpy",
+        "tcbase",
+        "tcgui",
+        "termin-display",
+        "tgfx",
+        "tmesh",
+    ],
     ext_modules=[
         Extension("termin.csg._csg_native", sources=[]),
     ],
