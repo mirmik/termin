@@ -241,7 +241,7 @@ def create_default_material(
     Returns:
         TcMaterial с одной фазой "opaque".
     """
-    from termin.materials import parse_shader_text
+    from termin.materials import create_material_from_parsed, parse_shader_text
     from termin.visualization.core.texture_handle import (
         get_normal_texture_handle,
         get_white_texture_handle,
@@ -250,7 +250,7 @@ def create_default_material(
     white_tex = get_white_texture_handle().get()
     normal_tex = get_normal_texture_handle().get()
 
-    mat = TcMaterial.from_parsed(
+    mat = create_material_from_parsed(
         parse_shader_text(DEFAULT_SHADER_TEXT),
         name=name,
         default_white_texture=white_tex,
