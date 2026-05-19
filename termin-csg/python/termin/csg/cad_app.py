@@ -20,6 +20,15 @@ from termin.display import SDLBackendWindow
 from tgfx import Tgfx2Context
 
 from termin.csg.cad_viewer import CadViewportWidget, CsgSceneRenderer, document_bounds
+from termin.csg.document_edit import (
+    SketchDraft,
+    add_draft_point_from_ray,
+    add_extrude_for_selection,
+    clear_document,
+    close_draft_contour,
+    selected_sketch_id,
+    start_sketch_draft,
+)
 from termin.csg.document_tree_model import DocumentTreeNode, build_document_tree, document_summary
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
 from termin.csg.viewer_camera import OrbitCamera
@@ -34,8 +43,7 @@ class CadApp:
         self.camera = OrbitCamera()
         self.viewport = CadViewportWidget(self.camera)
         self.mode = "idle"
-        self.draft_points: list[tuple[float, float, float]] = []
-        self.draft_plane = ProceduralPlane()
+        self.draft: SketchDraft = start_sketch_draft()
         self.selected_node_data: tuple[str, str] | None = None
 
         self.mode_label = Label()
@@ -73,7 +81,7 @@ class CadApp:
             self.camera,
             width,
             height,
-            self.draft_points,
+            self.draft.points,
             self.selected_node_data,
             self.preview_revision,
         )
@@ -136,39 +144,36 @@ class CadApp:
 
     def start_draw_sketch(self) -> None:
         self.mode = "draw_sketch"
-        self.draft_points = []
-        self.draft_plane = ProceduralPlane()
+        self.draft = start_sketch_draft()
         self._refresh_labels()
         self.request_preview_rebuild()
         log.info("[CsgCad] mode=draw_sketch")
 
     def close_contour(self) -> None:
-        if len(self.draft_points) < 3:
-            log.error(f"[CsgCad] cannot close contour: need 3 points, got {len(self.draft_points)}")
+        result = close_draft_contour(self.document, self.draft)
+        if not result.success:
             return
-        contour = self.document.add_contour_on_plane_from_points(self.draft_points[:], self.draft_plane)
-        if contour is None:
-            return
-        if self.document.items:
-            self.selected_node_data = ("sketch", self.document.items[0].id)
-        self.draft_points = []
+        self.selected_node_data = result.selection
         self.refresh_tree()
         self.request_preview_rebuild()
-        log.info(f"[CsgCad] contour closed id='{contour.id}'")
+        contour_id = ""
+        if result.contour is not None:
+            contour_id = result.contour.id
+        log.info(f"[CsgCad] contour closed id='{contour_id}'")
 
     def extrude_selected(self) -> None:
-        sketch_id = self._selected_sketch_id()
-        if not sketch_id:
-            log.error("[CsgCad] cannot extrude: select a sketch")
+        sketch_id = selected_sketch_id(self.document, self.selected_node_data)
+        result = add_extrude_for_selection(self.document, self.selected_node_data, 1.0)
+        if not result.success:
             return
-        operation = self.document.add_extrude_operation_for_sketch(sketch_id, 1.0)
-        if operation is None:
-            return
-        self.selected_node_data = ("operation", operation.id)
+        self.selected_node_data = result.selection
         self.refresh_tree()
         self.fit_camera()
         self.request_preview_rebuild()
-        log.info(f"[CsgCad] extrude added id='{operation.id}' sketch='{sketch_id}'")
+        operation_id = ""
+        if result.operation is not None:
+            operation_id = result.operation.id
+        log.info(f"[CsgCad] extrude added id='{operation_id}' sketch='{sketch_id}'")
 
     def fit_camera(self) -> None:
         lo, hi = document_bounds(self.document)
@@ -176,8 +181,8 @@ class CadApp:
         self.request_render()
 
     def clear_document(self) -> None:
-        self.document = ProceduralMeshDocument()
-        self.draft_points = []
+        self.document = clear_document()
+        self.draft = start_sketch_draft()
         self.selected_node_data = None
         self.refresh_tree()
         self.fit_camera()
@@ -232,33 +237,29 @@ class CadApp:
     def _on_scene_click(self, x: float, y: float, width: int, height: int) -> bool:
         if self.mode != "draw_sketch":
             return False
-        point = self.camera.world_point_on_z_plane(x, y, width, height, 0.0)
-        if point is None:
-            log.error("[CsgCad] draw sketch click ignored: ray does not hit OXY plane")
+        ray_origin, ray_direction = self.camera.screen_ray(x, y, width, height)
+        fallback_point = self.camera.world_point_on_z_plane(x, y, width, height, 0.0)
+        result = add_draft_point_from_ray(
+            self.document,
+            self.draft,
+            ray_origin,
+            ray_direction,
+            fallback_point=fallback_point,
+            fallback_plane=ProceduralPlane(),
+            fallback_kind="oxy",
+        )
+        if not result.success or result.point is None:
             return True
-        self.draft_points.append(point)
         self._refresh_labels()
         self.request_preview_rebuild()
+        point = result.point
         log.info(
             "[CsgCad] draft point added "
+            f"kind={result.kind} "
             f"point=({point[0]:.3f}, {point[1]:.3f}, {point[2]:.3f}) "
-            f"count={len(self.draft_points)}"
+            f"count={len(self.draft.points)}"
         )
         return True
-
-    def _selected_sketch_id(self) -> str:
-        data = self.selected_node_data
-        if data is None:
-            if self.document.items:
-                return self.document.items[0].id
-            return ""
-        if data[0] == "sketch":
-            return data[1]
-        if data[0] == "operation":
-            for operation in self.document.operations:
-                if operation.id == data[1]:
-                    return str(operation.params.get("source_sketch_id", ""))
-        return ""
 
     def _refresh_labels(self) -> None:
         self.mode_label.text = self._mode_text()
@@ -272,7 +273,7 @@ class CadApp:
             )
 
     def _mode_text(self) -> str:
-        return f"Mode: {self.mode}; draft points: {len(self.draft_points)}"
+        return f"Mode: {self.mode}; draft points: {len(self.draft.points)}"
 
 
 def run_cad_app(title: str = "termin-csg CAD", size: tuple[int, int] = (1200, 760)) -> None:

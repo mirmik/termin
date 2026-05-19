@@ -211,28 +211,30 @@ class ProceduralMeshDocument:
     items: list[SketchItemDocument] = field(default_factory=list)
     operations: list[OperationDocument] = field(default_factory=list)
 
-    def ensure_sketch_for_points(self, points: list[Vec3Data]) -> SketchItemDocument:
-        if self.items:
-            return self.items[0]
-        sketch = SketchItemDocument(plane=ProceduralPlane.from_points(points))
-        self.items.append(sketch)
-        return sketch
-
     def add_contour_from_points(self, points: list[Vec3Data]) -> ContourDocument | None:
-        sketch = self.ensure_sketch_for_points(points)
-        return sketch.add_contour_from_points(points)
+        return self.add_contour_on_plane_from_points(points, ProceduralPlane.from_points(points))
 
     def add_contour_on_plane_from_points(
         self,
         points: list[Vec3Data],
         plane: ProceduralPlane,
     ) -> ContourDocument | None:
-        if self.items:
-            sketch = self.items[0]
-        else:
-            sketch = SketchItemDocument(plane=plane)
-            self.items.append(sketch)
-        return sketch.add_contour_from_points(points)
+        sketch = SketchItemDocument(
+            name=f"Sketch {len(self.items) + 1}",
+            plane=plane,
+        )
+        contour = sketch.add_contour_from_points(points)
+        if contour is None:
+            return None
+        self.items.append(sketch)
+        return contour
+
+    def find_sketch_id_for_contour(self, contour_id: str) -> str:
+        for item in self.items:
+            for contour in item.contours:
+                if contour.id == contour_id:
+                    return item.id
+        return ""
 
     def contour_count(self) -> int:
         return sum(len(item.contours) for item in self.items)
@@ -248,6 +250,12 @@ class ProceduralMeshDocument:
         for item in self.items:
             if item.id == sketch_id:
                 return item
+        return None
+
+    def find_operation(self, operation_id: str) -> OperationDocument | None:
+        for operation in self.operations:
+            if operation.id == operation_id:
+                return operation
         return None
 
     def used_source_sketch_ids(self) -> set[str]:

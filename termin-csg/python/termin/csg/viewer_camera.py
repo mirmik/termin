@@ -98,7 +98,7 @@ class OrbitCamera:
         proj = perspective(self.fov_y, aspect, self.near, self.far)
         return proj @ view
 
-    def world_point_on_z_plane(self, screen_x, screen_y, width, height, z=0.0):
+    def screen_ray(self, screen_x, screen_y, width, height):
         vp = self.view_projection(width, height)
         inv_vp = np.linalg.inv(vp)
         ndc_x = float(screen_x) / max(float(width), 1.0) * 2.0 - 1.0
@@ -107,14 +107,24 @@ class OrbitCamera:
         far = inv_vp @ np.array((ndc_x, ndc_y, 1.0, 1.0), dtype=np.float32)
         near = near[:3] / near[3]
         far = far[:3] / far[3]
-        direction = far - near
+        direction = normalize(far - near)
+        return (
+            (float(near[0]), float(near[1]), float(near[2])),
+            (float(direction[0]), float(direction[1]), float(direction[2])),
+        )
+
+    def world_point_on_z_plane(self, screen_x, screen_y, width, height, z=0.0):
+        near, direction = self.screen_ray(screen_x, screen_y, width, height)
         if abs(float(direction[2])) < 1.0e-8:
             return None
-        t = (float(z) - float(near[2])) / float(direction[2])
+        t = (float(z) - near[2]) / direction[2]
         if t < 0.0:
             return None
-        point = near + direction * t
-        return (float(point[0]), float(point[1]), float(point[2]))
+        return (
+            near[0] + direction[0] * t,
+            near[1] + direction[1] * t,
+            near[2] + direction[2] * t,
+        )
 
 
 __all__ = [
