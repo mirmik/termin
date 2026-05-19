@@ -222,7 +222,7 @@ Mat4 smoke_mvp_locked() {
     if (g_state.smoke_height != 0) {
         aspect = static_cast<float>(g_state.smoke_width) / static_cast<float>(g_state.smoke_height);
     }
-    float t = static_cast<float>(g_state.smoke_frame) * 0.22f;
+    float t = static_cast<float>(g_state.smoke_frame) * 0.016f;
     Mat4 projection = mat4_perspective(55.0f * kPi / 180.0f, aspect, 0.1f, 20.0f);
     Mat4 view = mat4_translation(0.0f, 0.0f, -3.0f);
     Mat4 model = mat4_mul(mat4_rotation_y(t), mat4_rotation_x(t * 0.67f));
@@ -524,16 +524,18 @@ int render_smoke_frame_locked() {
 
         bool recreate = device.swapchain()->compose_and_present(g_state.smoke_render_target);
         ++g_state.smoke_frame;
-        android_log_info(
-            "smoke: rendered cube frame=%u recreate=%d",
-            g_state.smoke_frame,
-            recreate ? 1 : 0
-        );
-        tc_log_info(
-            "termin_android_smoke: rendered cube frame=%u recreate=%d",
-            g_state.smoke_frame,
-            recreate ? 1 : 0
-        );
+        if (recreate || g_state.smoke_frame == 1 || g_state.smoke_frame % 60 == 0) {
+            android_log_info(
+                "smoke: rendered cube frame=%u recreate=%d",
+                g_state.smoke_frame,
+                recreate ? 1 : 0
+            );
+            tc_log_info(
+                "termin_android_smoke: rendered cube frame=%u recreate=%d",
+                g_state.smoke_frame,
+                recreate ? 1 : 0
+            );
+        }
         if (recreate) {
             destroy_smoke_renderer_locked();
         }
