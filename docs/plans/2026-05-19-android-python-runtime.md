@@ -19,6 +19,50 @@ Gradle не обязан владеть сборкой C++ SDK. CMake долже
 2. Проверить, какие цели ломаются на Android toolchain.
 3. После этого добавить минимальный Android wrapper project.
 
+## Фактическая проверка NDK
+
+Проверено 2026-05-19 на Android SDK в `/home/mirmik/Android/Sdk`:
+
+- установлен NDK `27.2.12479018` (`r27c`);
+- первый configure полного monorepo-графа уперся в desktop OpenGL: `termin-graphics` безусловно вызывает `find_package(OpenGL REQUIRED)`;
+- добавлен CMake-флаг `TERMIN_PLATFORM_ANDROID`, который включает native smoke profile без Python, тестов, desktop SDL/Vulkan, editor/launcher и desktop graphics/app/render стека;
+- Android smoke build под `arm64-v8a` успешно сконфигурирован, собран и установлен в тестовый prefix `/tmp/termin-android-smoke`.
+
+Рабочий вызов:
+
+```bash
+cmake -S . -B build/android/arm64-v8a \
+  -DCMAKE_TOOLCHAIN_FILE=/home/mirmik/Android/Sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake \
+  -DANDROID_ABI=arm64-v8a \
+  -DANDROID_PLATFORM=android-26 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DTERMIN_PLATFORM_ANDROID=ON
+
+cmake --build build/android/arm64-v8a --parallel 8
+
+cmake --install build/android/arm64-v8a --prefix /tmp/termin-android-smoke
+```
+
+Собранные `.so` в первом Android smoke-профиле:
+
+```text
+libtermin_base.so
+libtermin_modules.so
+libtermin_mesh.so
+libtermin_csg.so
+libtermin_navmesh.so
+libtermin_inspect.so
+libtermin_scene.so
+libtermin_input.so
+libtermin_collision.so
+libtermin_physics.so
+libtermin_components_mesh.so
+libtermin_components_collision.so
+libtermin_components_kinematic.so
+```
+
+Ограничение этого результата: это пока не player/runtime с рендером. `termin-graphics`, `termin-materials`, `termin-render`, `termin-display`, `termin-engine`, `termin-app/cpp`, skeleton/animation components и `tcplot` исключены из Android smoke-графа, потому что текущие CMake targets все еще завязаны на desktop `OpenGL::GL` или на библиотеки, которые через него проходят.
+
 ## Что сейчас мешает Android
 
 Текущая сборка SDK desktop-центрична:
