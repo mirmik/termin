@@ -266,10 +266,20 @@ from tgfx import TcTexture, tc_texture_declare, ...
 
 - material layer: `TcMaterial`, `TcMaterialPhase`, `TcRenderState`, material registry helpers;
 - shader/parser layer: `GlslPreprocessor`, `glsl_preprocessor`, shader parser/property types;
-- app-bound render runtime: `RenderEngine`, `ImmediateRenderer`, `SolidPrimitiveRenderer`;
+- app-bound render runtime: `ImmediateRenderer`, `SolidPrimitiveRenderer`;
 - concrete passes still bound in `termin-app`: `ColorPass`, `ShadowPass`, `IdPass`, `ColliderGizmoPass`, `DebugTrianglePass`, `PresentToScreenPass`, `BloomPass`, `GrayscalePass`, `SkyBoxPass`, `TonemapPass`;
 - shadow helpers/resources still bound in `termin-app`;
 - `termin-components-render` still depends on `termin._native.render` for `TcMaterial`/`TcRenderState` and `SkinnedMeshRenderer`.
+
+`RenderEngine` binding moved to canonical owner `termin.render_framework`:
+
+```python
+from termin.render_framework import RenderEngine, RenderTargetContext
+```
+
+The historical `termin._native.render.RenderEngine` export now points at the same native type imported from `termin.render_framework`; it is a pre-existing compatibility export, not a new Python wrapper.
+
+During the move we found a packaging smell in `termin-render`: `install(DIRECTORY python/termin/render_framework/ ...)` was copying stale source-tree `.so` files after `install(TARGETS _render_framework_native ...)`, overwriting freshly built bindings. The install rules now exclude `*.so` for `termin.render_framework` and `termin.render`.
 
 Это значит, что следующий C++-перенос должен начинаться не с `visualization`, а с material/shader/pass ownership. Иначе `termin-components-render` и `termin.visualization.render` продолжат держаться за `termin-app`.
 
@@ -282,11 +292,12 @@ from tgfx import TcTexture, tc_texture_declare, ...
 1. `termin._native.render.RenderingManager` -> `termin.engine.RenderingManager` (уже сделано для текущих Python-потребителей).
 2. `termin._native.render.Display/FBOSurface/input helpers` -> `termin.display`.
 3. `termin._native.render.RenderPipeline/ResourceSpec/ExecuteContext/RenderContext/registry helpers` -> `termin.render_framework`.
-4. Для concrete passes разделить ownership:
+4. `termin._native.render.RenderEngine` -> `termin.render_framework.RenderEngine` (binding moved; current app export is only historical compatibility).
+5. Для concrete passes разделить ownership:
    - generic framegraph/runtime passes в `termin-render`;
    - geometry/material/depth/normal passes в `termin-components-render`;
    - editor/debug-only passes оставить отдельно или вынести в editor/runtime package.
-5. Material/shader APIs вынести из `termin-app` раньше render-components cleanup, потому что `termin-components-render` уже зависит от этих типов.
+6. Material/shader APIs вынести из `termin-app` раньше render-components cleanup, потому что `termin-components-render` уже зависит от этих типов.
 
 После этого определить новый package, например:
 

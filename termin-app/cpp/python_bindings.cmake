@@ -49,7 +49,6 @@ nanobind_add_module(_native NB_SHARED
     termin/bindings/render/drawable.cpp
     termin/bindings/render/renderers.cpp
     termin/bindings/render/solid_primitive.cpp
-    termin/bindings/render/render_engine.cpp
     termin/bindings/editor/gizmo_bindings.cpp
     termin/bindings/editor/editor_interaction_bindings.cpp
     termin/bindings/editor/frame_graph_debugger_bindings.cpp
