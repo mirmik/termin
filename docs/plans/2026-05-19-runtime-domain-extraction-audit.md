@@ -143,7 +143,7 @@ from termin.modules import ProjectModulesRuntime, get_project_modules_runtime
 `termin.assets` сильно связан с:
 
 - `termin.core.identifiable`;
-- `termin.texture`;
+- texture bindings from `termin-graphics` (`tgfx`);
 - `termin.visualization.render.framegraph`;
 - `termin.render_framework`;
 - `termin.engine`;
@@ -186,7 +186,7 @@ from termin.modules import ProjectModulesRuntime, get_project_modules_runtime
 
 ## `termin.texture`
 
-Сейчас лежит в `termin-app`, но является почти чистым wrapper над `tgfx`:
+Сейчас лежит в `termin-app`, но является чистым re-export wrapper над `tgfx`:
 
 ```python
 from tgfx import TcTexture, tc_texture_declare, ...
@@ -194,17 +194,17 @@ from tgfx import TcTexture, tc_texture_declare, ...
 
 ### План
 
-Перенести `termin.texture` в более подходящий пакет, вероятно `termin-graphics`.
+Не переносить `termin.texture` как отдельный пакет. Это создало бы новый wrapper/re-export слой, что противоречит правилу миграции.
 
 После переноса:
 
-1. `termin-graphics` начинает поставлять `termin.texture`.
-2. Все импорты остаются `from termin.texture import ...`, но физически модуль больше не в `termin-app`.
-3. Удалить `termin-app/termin/texture`.
+1. Заменить все импорты `from termin.texture import ...` на прямые импорты из `tgfx`.
+2. Удалить `termin-app/termin/texture`.
+3. Не добавлять `termin.texture` в `termin-graphics`.
 
 ### Риск
 
-Низкий. Модуль небольшой и не содержит app/editor логики.
+Низкий. Модуль не содержит app/editor логики и не добавляет собственной семантики поверх `tgfx`.
 
 ## `termin.geombase`
 
@@ -296,14 +296,14 @@ termin-scene-runtime
 - `termin.visualization`;
 - `termin.assets`;
 - `termin.modules`;
-- `termin.texture`;
+- direct `tgfx` texture APIs;
 - `termin.geombase`;
 - исторически `termin._native.EngineCore`.
 
 После первых переносов можно быстро уменьшить app-coupling:
 
 1. `EngineCore` импортировать из `termin.engine`.
-2. `termin.texture` вынести из `termin-app`.
+2. Разобрать `termin.texture`: заменить импорты на `tgfx` и удалить пакет из `termin-app`.
 3. `termin.geombase` вынести из `termin-app`.
 4. `termin.modules` перенести в `termin-modules`.
 
@@ -317,7 +317,7 @@ termin-scene-runtime
 ## Рекомендуемый порядок работ
 
 1. `termin.engine` import cleanup.
-2. `termin.texture` physical move.
+2. `termin.texture` removal.
 3. `termin.geombase` physical move.
 4. `termin.modules` integration move.
 5. Аудит `termin._native.render` references и замена на canonical owners.

@@ -232,7 +232,7 @@ class RegistrationMixin:
     def _register_texture_file(self, name: str, result: "PreLoadResult") -> None:
         """Register texture from PreLoadResult (lazy loading)."""
         from termin.assets.texture_asset import TextureAsset
-        from termin.texture import tc_texture_declare, tc_texture_set_load_callback
+        from tgfx import tc_texture_declare, tc_texture_set_load_callback
 
         if name in self._texture_assets:
             return
