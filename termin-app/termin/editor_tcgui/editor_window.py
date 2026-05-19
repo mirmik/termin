@@ -968,6 +968,36 @@ class EditorWindowTcgui:
     def world_point_on_oxy_plane(self, x: float, y: float) -> tuple[float, float, float] | None:
         return self.world_point_on_plane(x, y, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), "OXY plane")
 
+    def world_ray_from_viewport_point(
+        self,
+        x: float,
+        y: float,
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+        if self.camera is None or self.camera.entity is None:
+            log.error("[EditorWindowTcgui] viewport ray failed: editor camera is not available")
+            return None
+        if self._viewport_widget is None:
+            log.error("[EditorWindowTcgui] viewport ray failed: viewport widget is not available")
+            return None
+
+        viewport_rect = (
+            0,
+            0,
+            int(max(1.0, self._viewport_widget.width)),
+            int(max(1.0, self._viewport_widget.height)),
+        )
+        try:
+            ray = self.camera.screen_point_to_ray(float(x), float(y), viewport_rect)
+            origin = ray.origin
+            direction = ray.direction
+            return (
+                (float(origin[0]), float(origin[1]), float(origin[2])),
+                (float(direction[0]), float(direction[1]), float(direction[2])),
+            )
+        except Exception as e:
+            log.error(f"[EditorWindowTcgui] viewport ray failed: {e}")
+            return None
+
     def world_point_on_plane(
         self,
         x: float,
