@@ -121,8 +121,9 @@ endif()
 
 # ============== External dependencies ==============
 
-# Find OpenGL
-find_package(OpenGL REQUIRED)
+if(TGFX2_ENABLE_OPENGL)
+    find_package(OpenGL REQUIRED)
+endif()
 
 # termin-base (provides shared enums: MouseButton, Action, Mods)
 if(COMMAND termin_require_package)
@@ -352,7 +353,10 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_link_libraries(render_lib PUBLIC entity_lib trent OpenGL::GL tgfx::termin_graphics termin_materials::termin_materials termin_render::termin_render termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
+target_link_libraries(render_lib PUBLIC entity_lib trent tgfx::termin_graphics termin_materials::termin_materials termin_render::termin_render termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
+if(TGFX2_ENABLE_OPENGL)
+    target_link_libraries(render_lib PUBLIC OpenGL::GL)
+endif()
 target_compile_definitions(render_lib PRIVATE TERMIN_RENDER_EXPORTS)
 target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
 target_precompile_headers(render_lib PRIVATE termin/pch.hpp)

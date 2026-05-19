@@ -5,9 +5,11 @@
 
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/render_context.hpp"
+#ifdef TGFX2_HAS_OPENGL
 #include "tgfx2/opengl/opengl_render_device.hpp"
 
 #include <glad/glad.h>
+#endif
 
 #include <tcbase/tc_log.hpp>
 
@@ -312,6 +314,7 @@ bool apply_material_phase_ubo_gl(
     uint32_t binding_slot,
     tgfx::IRenderDevice& device)
 {
+#ifdef TGFX2_HAS_OPENGL
     if (!phase || !shader) return false;
     if (shader->material_ubo_block_size == 0) return false;
 
@@ -356,6 +359,11 @@ bool apply_material_phase_ubo_gl(
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
     return true;
+#else
+    (void)phase; (void)shader; (void)binding_slot; (void)device;
+    tc::Log::error("apply_material_phase_ubo_gl: OpenGL backend not compiled");
+    return false;
+#endif
 }
 
 } // namespace termin

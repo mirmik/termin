@@ -26,6 +26,7 @@ Gradle не обязан владеть сборкой C++ SDK. CMake долже
 - установлен NDK `27.2.12479018` (`r27c`);
 - первый configure полного monorepo-графа уперся в desktop OpenGL: `termin-graphics` безусловно вызывает `find_package(OpenGL REQUIRED)`;
 - добавлен CMake-флаг `TERMIN_PLATFORM_ANDROID`, который включает native smoke profile без Python, тестов, desktop SDL/Vulkan, editor/launcher и desktop graphics/app/render стека;
+- добавлен отдельный CMake-флаг `TERMIN_ENABLE_OPENGL`; при `OFF` monorepo не ищет и не линкует desktop `OpenGL::GL`, но оставляет Vulkan render/editor targets в графе;
 - Android smoke build под `arm64-v8a` успешно сконфигурирован, собран и установлен в тестовый prefix `/tmp/termin-android-smoke`.
 
 Рабочий вызов:
@@ -62,6 +63,25 @@ libtermin_components_kinematic.so
 ```
 
 Ограничение этого результата: это пока не player/runtime с рендером. `termin-graphics`, `termin-materials`, `termin-render`, `termin-display`, `termin-engine`, `termin-app/cpp`, skeleton/animation components и `tcplot` исключены из Android smoke-графа, потому что текущие CMake targets все еще завязаны на desktop `OpenGL::GL` или на библиотеки, которые через него проходят.
+
+No-OpenGL host editor smoke build:
+
+```bash
+cmake -S . -B build/no-opengl-editor \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DTERMIN_ENABLE_OPENGL=OFF \
+  -DTERMIN_ENABLE_VULKAN=ON \
+  -DTERMIN_BUILD_PYTHON=OFF \
+  -DTERMIN_BUILD_TESTS=OFF \
+  -DTERMIN_BUILD_EDITOR_MINIMAL=ON \
+  -DTERMIN_BUILD_EDITOR_EXE=OFF \
+  -DTERMIN_BUILD_LAUNCHER=ON \
+  -DTERMIN_BUNDLE_PYTHON=ON
+
+cmake --build build/no-opengl-editor --parallel 8
+```
+
+This builds `termin_editor` and keeps `libvulkan.so.1` / `libshaderc.so.1` dependencies while avoiding direct `libGL` linkage. SDK scripts also accept `--no-opengl`. In that mode `build-sdk-csharp.sh` still skips C# native bindings because they currently compile `tc_opengl.cpp` and link `OpenGL::GL` directly.
 
 ## Что сейчас мешает Android
 
