@@ -6,6 +6,9 @@
 #include <stdexcept>
 #include <cstdarg>
 #include <cstdint>
+#include <cmath>
+#include <fstream>
+#include <vector>
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -24,7 +27,6 @@
 #include <tgfx2/i_command_list.hpp>
 #include <tgfx2/vulkan/vulkan_render_device.hpp>
 #include <tgfx2/vulkan/vulkan_swapchain.hpp>
-#include "android_mesh_spv.hpp"
 #endif
 
 namespace {
@@ -45,6 +47,7 @@ struct AndroidBootstrapState {
     tgfx::BufferHandle smoke_vertex_buffer;
     tgfx::BufferHandle smoke_index_buffer;
     tgfx::TextureHandle smoke_render_target;
+    tgfx::TextureHandle smoke_depth_target;
     uint32_t smoke_width = 0;
     uint32_t smoke_height = 0;
     uint32_t smoke_frame = 0;
@@ -84,6 +87,7 @@ void reset_smoke_resources_locked() {
     g_state.smoke_vertex_buffer = {};
     g_state.smoke_index_buffer = {};
     g_state.smoke_render_target = {};
+    g_state.smoke_depth_target = {};
 }
 
 void destroy_smoke_resources_locked() {
@@ -105,6 +109,9 @@ void destroy_smoke_resources_locked() {
     if (g_state.smoke_render_target) {
         device.destroy(g_state.smoke_render_target);
     }
+    if (g_state.smoke_depth_target) {
+        device.destroy(g_state.smoke_depth_target);
+    }
     if (g_state.smoke_fragment_shader) {
         device.destroy(g_state.smoke_fragment_shader);
     }
@@ -112,6 +119,114 @@ void destroy_smoke_resources_locked() {
         device.destroy(g_state.smoke_vertex_shader);
     }
     reset_smoke_resources_locked();
+}
+
+std::vector<uint8_t> read_asset_file_locked(const char* relative_path) {
+    std::string path = g_state.asset_root;
+    if (!path.empty() && path.back() != '/') {
+        path.push_back('/');
+    }
+    path += relative_path;
+
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        throw std::runtime_error("failed to open asset file: " + path);
+    }
+    in.seekg(0, std::ios::end);
+    std::streamoff size = in.tellg();
+    if (size <= 0) {
+        throw std::runtime_error("asset file is empty: " + path);
+    }
+    in.seekg(0, std::ios::beg);
+
+    std::vector<uint8_t> bytes(static_cast<size_t>(size));
+    in.read(reinterpret_cast<char*>(bytes.data()), size);
+    if (!in) {
+        throw std::runtime_error("failed to read asset file: " + path);
+    }
+    android_log_info("smoke: loaded shader asset '%s' bytes=%zu", path.c_str(), bytes.size());
+    return bytes;
+}
+
+struct Mat4 {
+    float v[16] = {};
+};
+
+Mat4 mat4_identity() {
+    Mat4 out;
+    out.v[0] = 1.0f;
+    out.v[5] = 1.0f;
+    out.v[10] = 1.0f;
+    out.v[15] = 1.0f;
+    return out;
+}
+
+Mat4 mat4_mul(const Mat4& a, const Mat4& b) {
+    Mat4 out;
+    for (int col = 0; col < 4; ++col) {
+        for (int row = 0; row < 4; ++row) {
+            float sum = 0.0f;
+            for (int k = 0; k < 4; ++k) {
+                sum += a.v[k * 4 + row] * b.v[col * 4 + k];
+            }
+            out.v[col * 4 + row] = sum;
+        }
+    }
+    return out;
+}
+
+Mat4 mat4_translation(float x, float y, float z) {
+    Mat4 out = mat4_identity();
+    out.v[12] = x;
+    out.v[13] = y;
+    out.v[14] = z;
+    return out;
+}
+
+Mat4 mat4_rotation_x(float radians) {
+    Mat4 out = mat4_identity();
+    float c = std::cos(radians);
+    float s = std::sin(radians);
+    out.v[5] = c;
+    out.v[6] = s;
+    out.v[9] = -s;
+    out.v[10] = c;
+    return out;
+}
+
+Mat4 mat4_rotation_y(float radians) {
+    Mat4 out = mat4_identity();
+    float c = std::cos(radians);
+    float s = std::sin(radians);
+    out.v[0] = c;
+    out.v[2] = -s;
+    out.v[8] = s;
+    out.v[10] = c;
+    return out;
+}
+
+Mat4 mat4_perspective(float fovy_radians, float aspect, float near_z, float far_z) {
+    Mat4 out;
+    float f = 1.0f / std::tan(fovy_radians * 0.5f);
+    out.v[0] = f / aspect;
+    out.v[5] = -f;
+    out.v[10] = far_z / (near_z - far_z);
+    out.v[11] = -1.0f;
+    out.v[14] = (far_z * near_z) / (near_z - far_z);
+    return out;
+}
+
+Mat4 smoke_mvp_locked() {
+    constexpr float kPi = 3.14159265358979323846f;
+    float aspect = 1.0f;
+    if (g_state.smoke_height != 0) {
+        aspect = static_cast<float>(g_state.smoke_width) / static_cast<float>(g_state.smoke_height);
+    }
+    float t = static_cast<float>(g_state.smoke_frame) * 0.22f;
+    Mat4 projection = mat4_perspective(55.0f * kPi / 180.0f, aspect, 0.1f, 20.0f);
+    Mat4 view = mat4_translation(0.0f, 0.0f, -3.0f);
+    Mat4 model = mat4_mul(mat4_rotation_y(t), mat4_rotation_x(t * 0.67f));
+    return mat4_mul(projection, mat4_mul(view, model));
 }
 
 bool create_smoke_mesh_resources_locked() {
@@ -126,19 +241,18 @@ bool create_smoke_mesh_resources_locked() {
         return false;
     }
 
-    using namespace termin_android_smoke;
     auto& device = *g_state.smoke_device;
 
     tgfx::ShaderDesc vs_desc;
     vs_desc.stage = tgfx::ShaderStage::Vertex;
-    vs_desc.debug_name = "android_smoke_mesh_vs";
-    vs_desc.bytecode.assign(kAndroidMeshVertSpv, kAndroidMeshVertSpv + kAndroidMeshVertSpvLen);
+    vs_desc.debug_name = "android_smoke_cube_vs";
+    vs_desc.bytecode = read_asset_file_locked("shaders/android_smoke_cube.vert.spv");
     g_state.smoke_vertex_shader = device.create_shader(vs_desc);
 
     tgfx::ShaderDesc fs_desc;
     fs_desc.stage = tgfx::ShaderStage::Fragment;
-    fs_desc.debug_name = "android_smoke_mesh_fs";
-    fs_desc.bytecode.assign(kAndroidMeshFragSpv, kAndroidMeshFragSpv + kAndroidMeshFragSpvLen);
+    fs_desc.debug_name = "android_smoke_cube_fs";
+    fs_desc.bytecode = read_asset_file_locked("shaders/android_smoke_cube.frag.spv");
     g_state.smoke_fragment_shader = device.create_shader(fs_desc);
 
     tgfx::TextureDesc rt_desc;
@@ -150,28 +264,42 @@ bool create_smoke_mesh_resources_locked() {
                     tgfx::TextureUsage::Sampled;
     g_state.smoke_render_target = device.create_texture(rt_desc);
 
+    tgfx::TextureDesc depth_desc;
+    depth_desc.width = g_state.smoke_width;
+    depth_desc.height = g_state.smoke_height;
+    depth_desc.format = tgfx::PixelFormat::D32F;
+    depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment;
+    g_state.smoke_depth_target = device.create_texture(depth_desc);
+
     tgfx::PipelineDesc pipeline_desc;
     pipeline_desc.vertex_shader = g_state.smoke_vertex_shader;
     pipeline_desc.fragment_shader = g_state.smoke_fragment_shader;
     pipeline_desc.topology = tgfx::PrimitiveTopology::TriangleList;
-    pipeline_desc.depth_stencil.depth_test = false;
-    pipeline_desc.depth_stencil.depth_write = false;
+    pipeline_desc.depth_stencil.depth_test = true;
+    pipeline_desc.depth_stencil.depth_write = true;
+    pipeline_desc.depth_stencil.depth_compare = tgfx::CompareOp::Less;
     pipeline_desc.raster.cull = tgfx::CullMode::None;
     pipeline_desc.color_formats = {tgfx::PixelFormat::RGBA8_UNorm};
+    pipeline_desc.depth_format = tgfx::PixelFormat::D32F;
 
     tgfx::VertexBufferLayout layout;
-    layout.stride = 5 * sizeof(float);
+    layout.stride = 6 * sizeof(float);
     layout.attributes = {
-        {0, tgfx::VertexFormat::Float2, 0},
-        {1, tgfx::VertexFormat::Float3, 2 * sizeof(float)},
+        {0, tgfx::VertexFormat::Float3, 0},
+        {1, tgfx::VertexFormat::Float3, 3 * sizeof(float)},
     };
     pipeline_desc.vertex_layouts.push_back(layout);
     g_state.smoke_pipeline = device.create_pipeline(pipeline_desc);
 
     const float vertices[] = {
-         0.0f, -0.62f,  1.0f, 0.0f, 0.0f,
-        -0.72f,  0.58f,  0.0f, 1.0f, 0.0f,
-         0.72f,  0.58f,  0.0f, 0.0f, 1.0f,
+        -0.55f, -0.55f, -0.55f,  0.95f, 0.10f, 0.10f,
+         0.55f, -0.55f, -0.55f,  0.95f, 0.70f, 0.10f,
+         0.55f,  0.55f, -0.55f,  0.95f, 0.95f, 0.10f,
+        -0.55f,  0.55f, -0.55f,  0.15f, 0.85f, 0.20f,
+        -0.55f, -0.55f,  0.55f,  0.10f, 0.70f, 0.95f,
+         0.55f, -0.55f,  0.55f,  0.25f, 0.25f, 1.00f,
+         0.55f,  0.55f,  0.55f,  0.90f, 0.20f, 0.95f,
+        -0.55f,  0.55f,  0.55f,  0.80f, 0.80f, 1.00f,
     };
     tgfx::BufferDesc vb_desc;
     vb_desc.size = sizeof(vertices);
@@ -183,7 +311,14 @@ bool create_smoke_mesh_resources_locked() {
         {reinterpret_cast<const uint8_t*>(vertices), sizeof(vertices)}
     );
 
-    const uint32_t indices[] = {0, 1, 2};
+    const uint32_t indices[] = {
+        4, 5, 6,  4, 6, 7,
+        1, 0, 3,  1, 3, 2,
+        0, 4, 7,  0, 7, 3,
+        5, 1, 2,  5, 2, 6,
+        3, 7, 6,  3, 6, 2,
+        0, 1, 5,  0, 5, 4,
+    };
     tgfx::BufferDesc ib_desc;
     ib_desc.size = sizeof(indices);
     ib_desc.usage = tgfx::BufferUsage::Index;
@@ -195,7 +330,7 @@ bool create_smoke_mesh_resources_locked() {
     );
 
     android_log_info(
-        "smoke: mesh resources created rt=%ux%u vs=%u fs=%u pipeline=%u vb=%u ib=%u",
+        "smoke: cube resources created rt=%ux%u vs=%u fs=%u pipeline=%u vb=%u ib=%u",
         g_state.smoke_width,
         g_state.smoke_height,
         g_state.smoke_vertex_shader.id,
@@ -205,7 +340,7 @@ bool create_smoke_mesh_resources_locked() {
         g_state.smoke_index_buffer.id
     );
     tc_log_info(
-        "termin_android_smoke: mesh resources created rt=%ux%u pipeline=%u",
+        "termin_android_smoke: cube resources created rt=%ux%u pipeline=%u",
         g_state.smoke_width,
         g_state.smoke_height,
         g_state.smoke_pipeline.id
@@ -368,14 +503,20 @@ int render_smoke_frame_locked() {
         color_att.clear_color[2] = 0.035f;
         color_att.clear_color[3] = 1.0f;
         pass.colors.push_back(color_att);
+        pass.depth.texture = g_state.smoke_depth_target;
+        pass.depth.load = tgfx::LoadOp::Clear;
+        pass.depth.clear_depth = 1.0f;
+        pass.has_depth = true;
 
         cmd->begin_render_pass(pass);
         cmd->set_viewport(0, 0, static_cast<int>(g_state.smoke_width), static_cast<int>(g_state.smoke_height));
         cmd->set_scissor(0, 0, static_cast<int>(g_state.smoke_width), static_cast<int>(g_state.smoke_height));
         cmd->bind_pipeline(g_state.smoke_pipeline);
+        Mat4 mvp = smoke_mvp_locked();
+        cmd->set_push_constants(mvp.v, static_cast<uint32_t>(sizeof(mvp.v)));
         cmd->bind_vertex_buffer(0, g_state.smoke_vertex_buffer);
         cmd->bind_index_buffer(g_state.smoke_index_buffer, tgfx::IndexType::Uint32);
-        cmd->draw_indexed(3);
+        cmd->draw_indexed(36);
         cmd->end_render_pass();
 
         cmd->end();
@@ -384,12 +525,12 @@ int render_smoke_frame_locked() {
         bool recreate = device.swapchain()->compose_and_present(g_state.smoke_render_target);
         ++g_state.smoke_frame;
         android_log_info(
-            "smoke: rendered mesh frame=%u recreate=%d",
+            "smoke: rendered cube frame=%u recreate=%d",
             g_state.smoke_frame,
             recreate ? 1 : 0
         );
         tc_log_info(
-            "termin_android_smoke: rendered mesh frame=%u recreate=%d",
+            "termin_android_smoke: rendered cube frame=%u recreate=%d",
             g_state.smoke_frame,
             recreate ? 1 : 0
         );

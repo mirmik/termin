@@ -9,6 +9,11 @@ import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 public final class TerminActivity extends Activity implements SurfaceHolder.Callback {
     private static final String TAG = "TerminActivity";
@@ -44,6 +49,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.i(TAG, "onCreate");
+        copyAssetTree("shaders", new File(getFilesDir(), "shaders"));
         nativeInitialize(
                 getFilesDir().getAbsolutePath(),
                 getFilesDir().getAbsolutePath(),
@@ -101,4 +107,40 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     private static native void nativeSurfaceChanged(int width, int height);
     private static native void nativeSurfaceDestroyed();
     private static native boolean nativeSmokeRender();
+
+    private void copyAssetTree(String assetPath, File target) {
+        try {
+            String[] children = getAssets().list(assetPath);
+            if (children == null || children.length == 0) {
+                copyAssetFile(assetPath, target);
+                return;
+            }
+            if (!target.isDirectory() && !target.mkdirs()) {
+                Log.e(TAG, "failed to create asset directory: " + target);
+                return;
+            }
+            for (String child : children) {
+                copyAssetTree(assetPath + "/" + child, new File(target, child));
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "failed to copy asset tree '" + assetPath + "' to " + target, e);
+        }
+    }
+
+    private void copyAssetFile(String assetPath, File target) throws IOException {
+        File parent = target.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+            Log.e(TAG, "failed to create asset file parent: " + parent);
+            return;
+        }
+        try (InputStream in = getAssets().open(assetPath);
+             OutputStream out = new FileOutputStream(target)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+        }
+        Log.i(TAG, "copied asset " + assetPath + " -> " + target.getAbsolutePath());
+    }
 }
