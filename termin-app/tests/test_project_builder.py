@@ -43,6 +43,20 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     scene_pipeline = project / "Pipelines" / "Scene.scene_pipeline"
     _write_json(scene_pipeline, {"nodes": []})
     _write_json(scene_pipeline.with_name(scene_pipeline.name + ".meta"), {"uuid": "scene-pipeline-uuid"})
+    prefab = project / "Prefabs" / "Enemy.prefab"
+    _write_json(prefab, {"uuid": "prefab-uuid", "entities": []})
+    navmesh = project / "Nav" / "Level.navmesh"
+    navmesh.parent.mkdir()
+    navmesh.write_bytes(b"navmesh")
+    _write_json(navmesh.with_name(navmesh.name + ".meta"), {"uuid": "navmesh-uuid"})
+    voxels = project / "Voxels" / "Level.voxels"
+    voxels.parent.mkdir()
+    voxels.write_bytes(b"voxels")
+    _write_json(voxels.with_name(voxels.name + ".meta"), {"uuid": "voxel-grid-uuid"})
+    ui = project / "UI" / "Hud.uiscript"
+    ui.parent.mkdir()
+    ui.write_text("ui", encoding="utf-8")
+    _write_json(ui.with_name(ui.name + ".meta"), {"uuid": "ui-uuid"})
 
     result = build_project(
         project_root=project,
@@ -74,6 +88,14 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     assert by_source["Pipelines/Main.pipeline"]["uuid"] == "pipeline-uuid"
     assert by_source["Pipelines/Scene.scene_pipeline"]["type"] == "scene_pipeline"
     assert by_source["Pipelines/Scene.scene_pipeline"]["uuid"] == "scene-pipeline-uuid"
+    assert by_source["Prefabs/Enemy.prefab"]["type"] == "prefab"
+    assert by_source["Prefabs/Enemy.prefab"]["uuid"] == "prefab-uuid"
+    assert by_source["Nav/Level.navmesh"]["type"] == "navmesh"
+    assert by_source["Nav/Level.navmesh"]["uuid"] == "navmesh-uuid"
+    assert by_source["Voxels/Level.voxels"]["type"] == "voxel_grid"
+    assert by_source["Voxels/Level.voxels"]["uuid"] == "voxel-grid-uuid"
+    assert by_source["UI/Hud.uiscript"]["type"] == "ui"
+    assert by_source["UI/Hud.uiscript"]["uuid"] == "ui-uuid"
     assert by_source["stdlib/shaders/StandardShader.shader"]["build_path"] == "stdlib/shaders/StandardShader.shader"
 
     build_data = json.loads(result.build_json_path.read_text(encoding="utf-8"))

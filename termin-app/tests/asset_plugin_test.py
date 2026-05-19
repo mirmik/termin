@@ -110,19 +110,27 @@ def test_default_preloaders_use_plugin_adapter_for_texture() -> None:
     assert texture_preloaders[0].resource_type == "texture"
 
 
-def test_default_preloaders_use_plugin_adapter_for_glsl_shader_material_pipelines() -> None:
+def test_default_preloaders_use_plugin_adapter_for_migrated_assets() -> None:
     rm = ResourceManager()
     preloaders = create_default_preloaders(rm)
 
+    migrated = {
+        "glsl",
+        "shader",
+        "material",
+        "pipeline",
+        "scene_pipeline",
+        "prefab",
+        "navmesh",
+        "voxel_grid",
+        "ui",
+    }
     by_resource_type = {
         preloader.resource_type: preloader
         for preloader in preloaders
-        if preloader.resource_type in {"glsl", "shader", "material", "pipeline", "scene_pipeline"}
+        if preloader.resource_type in migrated
     }
 
-    assert set(by_resource_type.keys()) == {"glsl", "shader", "material", "pipeline", "scene_pipeline"}
-    assert isinstance(by_resource_type["glsl"], PluginPreLoader)
-    assert isinstance(by_resource_type["shader"], PluginPreLoader)
-    assert isinstance(by_resource_type["material"], PluginPreLoader)
-    assert isinstance(by_resource_type["pipeline"], PluginPreLoader)
-    assert isinstance(by_resource_type["scene_pipeline"], PluginPreLoader)
+    assert set(by_resource_type.keys()) == migrated
+    for resource_type in migrated:
+        assert isinstance(by_resource_type[resource_type], PluginPreLoader)

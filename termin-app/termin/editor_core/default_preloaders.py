@@ -10,10 +10,6 @@ from termin.assets.resources import ResourceManager
 from termin.editor_core.file_processors import (
     ComponentFileProcessor,
     GLBPreLoader,
-    NavMeshPreLoader,
-    PrefabPreLoader,
-    UIPreLoader,
-    VoxelGridPreLoader,
 )
 from termin.editor_core.plugin_preloader import PluginPreLoader
 from termin.editor_core.project_file_watcher import FilePreLoader, ProjectFileWatcher
@@ -46,11 +42,11 @@ def create_default_preloaders(
         ComponentFileProcessor(resource_manager, on_resource_reloaded=on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "mesh", on_resource_reloaded),
         GLBPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
-        PrefabPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "prefab", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "audio_clip", on_resource_reloaded),
-        NavMeshPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
-        VoxelGridPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
-        UIPreLoader(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "navmesh", on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "voxel_grid", on_resource_reloaded),
+        _create_plugin_preloader(resource_manager, "ui", on_resource_reloaded),
     ]
 
 

@@ -66,6 +66,30 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         '{"uuid": "scene-pipeline-uuid"}',
         encoding="utf-8",
     )
+    prefab = tmp_path / "assets" / "Prefabs" / "Enemy.prefab"
+    prefab.parent.mkdir(parents=True)
+    prefab.write_text('{"uuid": "prefab-uuid", "entities": []}', encoding="utf-8")
+    navmesh = tmp_path / "assets" / "Nav" / "Level.navmesh"
+    navmesh.parent.mkdir(parents=True)
+    navmesh.write_bytes(b"navmesh")
+    navmesh.with_name(navmesh.name + ".meta").write_text(
+        '{"uuid": "navmesh-uuid"}',
+        encoding="utf-8",
+    )
+    voxels = tmp_path / "assets" / "Voxels" / "Level.voxels"
+    voxels.parent.mkdir(parents=True)
+    voxels.write_bytes(b"voxels")
+    voxels.with_name(voxels.name + ".meta").write_text(
+        '{"uuid": "voxel-grid-uuid"}',
+        encoding="utf-8",
+    )
+    ui = tmp_path / "assets" / "UI" / "Hud.uiscript"
+    ui.parent.mkdir(parents=True)
+    ui.write_text("ui", encoding="utf-8")
+    ui.with_name(ui.name + ".meta").write_text(
+        '{"uuid": "ui-uuid"}',
+        encoding="utf-8",
+    )
 
     rm = RecordingResourceManager()
     resources = [
@@ -107,7 +131,27 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         {
             "kind": "asset",
             "type": "prefab",
-            "build_path": "assets/Prefabs/Test.prefab",
+            "build_path": "assets/Prefabs/Enemy.prefab",
+        },
+        {
+            "kind": "asset",
+            "type": "navmesh",
+            "build_path": "assets/Nav/Level.navmesh",
+        },
+        {
+            "kind": "asset",
+            "type": "voxel_grid",
+            "build_path": "assets/Voxels/Level.voxels",
+        },
+        {
+            "kind": "asset",
+            "type": "ui",
+            "build_path": "assets/UI/Hud.uiscript",
+        },
+        {
+            "kind": "asset",
+            "type": "glb",
+            "build_path": "assets/Models/Character.glb",
         },
         {
             "kind": "asset",
@@ -123,15 +167,19 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         import_registry=_default_import_registry(),
     )
 
-    assert loaded_count == 7
+    assert loaded_count == 11
     assert [result.resource_type for result in rm.results] == [
         "glsl",
         "shader",
         "pipeline",
         "scene_pipeline",
         "audio_clip",
+        "navmesh",
         "texture",
+        "ui",
+        "voxel_grid",
         "material",
+        "prefab",
     ]
     assert [result.uuid for result in rm.results] == [
         "glsl-uuid",
@@ -139,6 +187,10 @@ def test_manifest_loader_uses_resource_type_import_plugins(tmp_path: Path) -> No
         "pipeline-uuid",
         "scene-pipeline-uuid",
         "audio-uuid",
+        "navmesh-uuid",
         "texture-uuid",
+        "ui-uuid",
+        "voxel-grid-uuid",
         "material-uuid",
+        "prefab-uuid",
     ]
