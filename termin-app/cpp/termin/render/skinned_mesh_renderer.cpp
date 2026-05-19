@@ -170,6 +170,35 @@ TcShader SkinnedMeshRenderer::override_shader(
     return original_shader;
 }
 
+void SkinnedMeshRenderer::collect_shader_usages(
+    const std::string& phase_mark,
+    int geometry_id,
+    TcShader original_shader,
+    const std::function<void(TcShader)>& emit
+) {
+    (void)phase_mark;
+    (void)geometry_id;
+
+    emit(original_shader);
+
+    if (!original_shader.is_valid()) {
+        return;
+    }
+
+    const char* vert_source = original_shader.vertex_source();
+    if (!vert_source || vert_source[0] == '\0') {
+        return;
+    }
+    if (std::strstr(vert_source, "u_bone_matrices") != nullptr) {
+        return;
+    }
+
+    TcShader skinned = get_skinned_shader(original_shader);
+    if (skinned.is_valid()) {
+        emit(skinned);
+    }
+}
+
 std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string* phase_mark) {
     // Use parent implementation - shader override happens in override_shader()
     return MeshRenderer::get_geometry_draws(phase_mark);

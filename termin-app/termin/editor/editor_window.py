@@ -1725,11 +1725,20 @@ class EditorWindow(QMainWindow):
 
         try:
             from termin.project_builder import build_project
+            from termin.render_framework import collect_scene_shader_usages
+
+            scene = self.scene_manager.get_scene(self._editor_scene_name)
+            if scene is None:
+                QMessageBox.warning(self, "Build Project", "No loaded scene - cannot collect shader usages.")
+                return None
+            shader_usages = collect_scene_shader_usages(scene.scene_handle())
 
             result = build_project(
                 project_root=project_root,
                 entry_scene=scene_name,
                 output_dir=output_dir,
+                compile_shaders=True,
+                shader_usages=shader_usages,
             )
         except Exception as e:
             log.error(f"[EditorWindow._build_project] Build failed: {e}", exc_info=True)
