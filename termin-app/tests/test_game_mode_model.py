@@ -1,7 +1,9 @@
 import importlib.util
 from pathlib import Path
 
-from termin._native.scene import SceneManager, SceneMode
+from termin.engine import SceneManager, scene as engine_scene
+
+SceneMode = engine_scene.SceneMode
 
 
 def _load_source_module(name: str, relative_path: str):

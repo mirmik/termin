@@ -124,7 +124,7 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False):
         init_editor_tcgui(debug_resource=debug_resource, no_scene=no_scene)
         return
 
-    from termin._native import EngineCore
+    from termin.engine import EngineCore
 
     # Get EngineCore instance (created in C++)
     engine = EngineCore.instance()
@@ -191,7 +191,7 @@ def run_editor(debug_resource: str | None = None, no_scene: bool = False):
     Run the editor (legacy entry point).
     Must be called from C++ entry point.
     """
-    from termin._native import EngineCore
+    from termin.engine import EngineCore
 
     engine = EngineCore.instance()
     if engine is None:

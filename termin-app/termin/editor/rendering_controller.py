@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.camera import CameraComponent
     from termin.visualization.core.entity import Entity
     from termin.visualization.platform.backends.sdl_embedded import SDLEmbeddedWindowBackend
-    from termin._native.render import ViewportRenderState
+    from termin.engine import ViewportRenderState
     from termin.visualization.render.framegraph import RenderPipeline
     from termin.visualization.render.offscreen_context import OffscreenContext
     from termin.editor.viewport_list_widget import ViewportListWidget

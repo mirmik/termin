@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.render_pipeline import RenderPipeline
-    from termin._native.render import RenderingManager
+    from termin.engine import RenderingManager
 
 
 class RenderingModel:

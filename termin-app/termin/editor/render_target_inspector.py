@@ -313,7 +313,7 @@ class RenderTargetInspector(QWidget):
             return
 
         if text == "(Default)":
-            from termin._native.render import RenderingManager
+            from termin.engine import RenderingManager
             pipeline = RenderingManager.instance().create_pipeline("Default")
             if pipeline is not None:
                 self._render_target.pipeline = pipeline
@@ -321,7 +321,7 @@ class RenderTargetInspector(QWidget):
             # Pipeline by name via pipeline_name_getter
             idx = index - 2
             if 0 <= idx < len(self._pipeline_names):
-                from termin._native.render import RenderingManager
+                from termin.engine import RenderingManager
                 pipeline = RenderingManager.instance().create_pipeline(self._pipeline_names[idx])
                 if pipeline is not None:
                     self._render_target.pipeline = pipeline

@@ -206,7 +206,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     Called from C++ before EngineCore.run(). Does NOT call engine.run().
     """
-    from termin._native import EngineCore
+    from termin.engine import EngineCore
 
     engine = EngineCore.instance()
     if engine is None:
@@ -293,7 +293,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
 def run_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False) -> None:
     """Run the tcgui editor (legacy entry point for C++ callers)."""
-    from termin._native import EngineCore
+    from termin.engine import EngineCore
 
     engine = EngineCore.instance()
     if engine is None:

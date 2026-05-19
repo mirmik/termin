@@ -1,5 +1,5 @@
-"""RenderingManager - re-export from C++."""
+"""RenderingManager - canonical engine export."""
 
-from termin._native.render import RenderingManager
+from termin.engine import RenderingManager
 
 __all__ = ["RenderingManager"]

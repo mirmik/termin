@@ -13,10 +13,12 @@ from tcgui.widgets.table_widget import TableWidget, TableColumn
 from tcgui.widgets.button import Button
 from tcgui.widgets.units import px
 
-from termin._native.scene import SceneMode
+from termin.engine import scene as engine_scene
 
 if TYPE_CHECKING:
-    from termin._native.scene import SceneManager
+    from termin.engine import SceneManager
+
+SceneMode = engine_scene.SceneMode
 
 
 def _format_scene_handle(handle) -> str:

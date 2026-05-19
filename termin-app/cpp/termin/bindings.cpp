@@ -132,8 +132,6 @@ NB_MODULE(_native, m) {
     // Entity domain bindings (migrated from _entity_native)
     bind_entity_domain(m);
 
-    nb::module_ engine_native = nb::module_::import_("termin.engine._engine_native");
-
     // Termin-specific: RenderSyncMode (from tc_project_settings.h)
     nb::enum_<tc_render_sync_mode>(m, "RenderSyncMode")
         .value("NONE", TC_RENDER_SYNC_NONE)
@@ -179,15 +177,6 @@ NB_MODULE(_native, m) {
     // TcComponent is registered in _scene_native — re-export it
     nb::module_ scene_native = nb::module_::import_("termin.scene._scene_native");
     component_module.attr("TcComponent") = scene_native.attr("TcComponent");
-    m.attr("EngineCore") = engine_native.attr("EngineCore");
-    nb::module_ engine_scene = nb::borrow<nb::module_>(engine_native.attr("scene"));
-    scene_module.attr("SceneMode") = engine_scene.attr("SceneMode");
-    scene_module.attr("SceneManager") = engine_scene.attr("SceneManager");
-    scene_module.attr("SCENE_EXT_TYPE_RENDER_MOUNT") = engine_scene.attr("SCENE_EXT_TYPE_RENDER_MOUNT");
-    scene_module.attr("SCENE_EXT_TYPE_RENDER_STATE") = engine_scene.attr("SCENE_EXT_TYPE_RENDER_STATE");
-    scene_module.attr("SCENE_EXT_TYPE_COLLISION_WORLD") = engine_scene.attr("SCENE_EXT_TYPE_COLLISION_WORLD");
-    scene_module.attr("default_scene_extensions") = engine_scene.attr("default_scene_extensions");
-
     // Initialize termin-specific drawable and input callbacks
     termin::init_python_component_callbacks();
 

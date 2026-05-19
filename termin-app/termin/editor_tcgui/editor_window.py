@@ -30,7 +30,7 @@ from termin.editor_core.editor_commands import (
     DeleteEntityCommand,
     RenameEntityCommand,
 )
-from termin._native.scene import SceneManager, SceneMode, default_scene_extensions
+from termin.engine import SceneManager, scene as engine_scene
 from termin.editor_core.resource_loader import ResourceLoader
 from termin.editor_core.project_file_watcher import ProjectFileWatcher
 from termin.editor_core.default_preloaders import register_default_preloaders
@@ -48,6 +48,9 @@ from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
 from termin.editor_tcgui.default_component_editor_extensions import (
     register_default_component_editor_extensions,
 )
+
+SceneMode = engine_scene.SceneMode
+default_scene_extensions = engine_scene.default_scene_extensions
 
 
 class EditorWindowTcgui:
@@ -498,7 +501,7 @@ class EditorWindowTcgui:
             from termin.editor_core.editor_pipeline import make_editor_pipeline
             from termin.editor_core.editor_scene_attachment import EditorSceneAttachment
             from termin.editor_tcgui.rendering_controller import RenderingControllerTcgui
-            from termin._native.render import RenderingManager
+            from termin.engine import RenderingManager
 
             # Create rendering controller (registers factories with RenderingManager)
             self._rendering_controller = RenderingControllerTcgui(
@@ -1309,7 +1312,7 @@ class EditorWindowTcgui:
         )
         current_display = None
         if self._rendering_controller is not None:
-            from termin._native.render import RenderingManager
+            from termin.engine import RenderingManager
             current_display = RenderingManager.instance().get_display_for_viewport(viewport)
             scene = viewport.scene or self.scene
         self._inspector_controller.show_viewport_inspector(

@@ -44,7 +44,7 @@ class RenderingControllerTcgui:
         on_entity_selected: Callable[[object], None] | None = None,
         on_render_target_selected: Callable[[object], None] | None = None,
     ) -> None:
-        from termin._native.render import RenderingManager
+        from termin.engine import RenderingManager
         from termin.editor_core.rendering_model import RenderingModel
 
         self._manager = RenderingManager.instance()

@@ -17,7 +17,7 @@ from termin.project.settings import ProjectSettingsManager
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin._native.scene import SceneManager
+    from termin.engine import SceneManager
 
 
 class SceneFileController:
@@ -384,7 +384,7 @@ class SceneFileController:
     def _extract_editor_data(self, file_path: str) -> dict:
         """Extract editor data from scene file."""
         import json
-        from termin._native.scene import SceneManager
+        from termin.engine import SceneManager
 
         json_str = SceneManager.read_json_file(file_path)
         if not json_str:

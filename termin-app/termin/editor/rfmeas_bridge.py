@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin._native.scene import SceneManager
+    from termin.engine import SceneManager
 
 
 _BINDING_TYPE = "RfmeasAxisBinding"
