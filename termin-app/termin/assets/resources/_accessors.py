@@ -7,7 +7,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from ._handle_accessors import HandleAccessors
 
 if TYPE_CHECKING:
-    from termin._native.render import TcMaterial
+    from termin.materials import TcMaterial
     from termin.assets.voxel_grid_handle import VoxelGridHandle
     from termin.assets.navmesh_handle import NavMeshHandle
     from termin.assets.skeleton_handle import TcSkeleton
@@ -96,13 +96,13 @@ class AccessorsMixin:
     # Handle accessors for TcMaterial
     def _get_tc_material(self, name: str) -> Optional["TcMaterial"]:
         """Get TcMaterial by name."""
-        from termin._native.render import TcMaterial
+        from termin.materials import TcMaterial
         mat = TcMaterial.from_name(name)
         return mat if mat.is_valid else None
 
     def _find_tc_material_name(self, handle: Any) -> Optional[str]:
         """Find name for a TcMaterial."""
-        from termin._native.render import TcMaterial
+        from termin.materials import TcMaterial
         if isinstance(handle, TcMaterial):
             if handle.is_valid:
                 return handle.name or None
@@ -271,7 +271,7 @@ class AccessorsMixin:
             return self.get_mesh_by_uuid(uuid)
 
         if kind == "material":
-            from termin._native.render import TcMaterial
+            from termin.materials import TcMaterial
             return TcMaterial.from_uuid(uuid)
 
         if kind == "voxel_grid":

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from termin._native.render import TcMaterial, TcRenderState
+from termin.materials import TcMaterial, TcRenderState
 
 ColorMaterial_VERT = """
 #version 330 core

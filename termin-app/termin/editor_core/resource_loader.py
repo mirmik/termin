@@ -123,13 +123,22 @@ class ResourceLoader:
         try:
             from termin.materials import parse_shader_text, ShaderMultyPhaseProgramm
             from termin.visualization.core.material import Material
+            from termin.visualization.core.texture_handle import (
+                get_normal_texture_handle,
+                get_white_texture_handle,
+            )
 
             with open(file_path, "r", encoding="utf-8") as f:
                 shader_text = f.read()
 
             tree = parse_shader_text(shader_text)
             program = ShaderMultyPhaseProgramm.from_tree(tree)
-            material = Material.from_parsed(program, source_path=file_path)
+            material = Material.from_parsed(
+                program,
+                source_path=file_path,
+                default_white_texture=get_white_texture_handle().get(),
+                default_normal_texture=get_normal_texture_handle().get(),
+            )
 
             # Determine material name
             material_name = program.program

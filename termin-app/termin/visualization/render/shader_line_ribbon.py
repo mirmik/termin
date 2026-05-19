@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from termin._native.render import TcMaterial, TcRenderState
+from termin.materials import TcMaterial, TcRenderState
 
 if TYPE_CHECKING:
     from tgfx import TcShader

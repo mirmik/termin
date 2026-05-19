@@ -325,8 +325,12 @@ class MaterialInspectorTcgui(VStack):
         if tag == "default" or not texture_name:
             handle = get_normal_texture_handle() if default_tex == "normal" else get_white_texture_handle()
             if handle is not None:
+                tc_tex = handle.get()
+                if tc_tex is None or not tc_tex.is_valid:
+                    log.error(f"[MaterialInspectorTcgui] default texture is invalid: {default_tex}")
+                    return
                 for phase in self._material.phases:
-                    phase.set_texture(uniform_name, handle)
+                    phase.set_texture(uniform_name, tc_tex)
             self._emit_changed()
             return
 
@@ -335,8 +339,12 @@ class MaterialInspectorTcgui(VStack):
             if handle is None:
                 log.error(f"[MaterialInspectorTcgui] texture handle not found: {texture_name}")
                 return
+            tc_tex = handle.get()
+            if tc_tex is None or not tc_tex.is_valid:
+                log.error(f"[MaterialInspectorTcgui] texture is invalid: {texture_name}")
+                return
             for phase in self._material.phases:
-                phase.set_texture(uniform_name, handle)
+                phase.set_texture(uniform_name, tc_tex)
             self._emit_changed()
             return
 
