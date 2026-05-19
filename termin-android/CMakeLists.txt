@@ -46,7 +46,12 @@ set_target_properties(termin_android PROPERTIES
 )
 termin_set_rpath_lib(termin_android)
 
-target_compile_definitions(termin_android PRIVATE TERMIN_ANDROID_EXPORTS)
+target_compile_definitions(termin_android
+    PRIVATE
+        TERMIN_ANDROID_EXPORTS
+        TGFX2_HAS_VULKAN
+        VK_USE_PLATFORM_ANDROID_KHR
+)
 
 target_include_directories(termin_android
     PUBLIC
@@ -58,6 +63,7 @@ target_compile_features(termin_android PUBLIC cxx_std_20)
 
 find_library(ANDROID_LOG_LIB log REQUIRED)
 find_library(ANDROID_NATIVE_LIB android REQUIRED)
+find_library(ANDROID_VULKAN_LIB vulkan REQUIRED)
 
 target_link_libraries(termin_android
     PUBLIC
@@ -66,6 +72,7 @@ target_link_libraries(termin_android
     PRIVATE
         ${ANDROID_LOG_LIB}
         ${ANDROID_NATIVE_LIB}
+        ${ANDROID_VULKAN_LIB}
 )
 
 target_compile_options(termin_android PRIVATE -Wall -Wextra)
@@ -106,4 +113,3 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_androidConfigVersion.cmake
     DESTINATION lib/cmake/termin_android
 )
-
