@@ -412,21 +412,6 @@ class PlayerRuntime:
         log.info(f"[PlayerRuntime] C++ modules: {cpp_loaded} loaded, {cpp_failed} failed")
         log.info(f"[PlayerRuntime] Python modules: {py_loaded} loaded, {py_failed} failed")
 
-    def _create_asset_preloaders(self):
-        from termin.assets.resources import ResourceManager
-        from termin.editor_core.default_preloaders import create_default_preloaders
-
-        rm = ResourceManager.instance()
-        return create_default_preloaders(rm)
-
-    def _create_asset_preloader_map(self):
-        preloaders = self._create_asset_preloaders()
-        ext_map = {}
-        for pl in preloaders:
-            for ext in pl.extensions:
-                ext_map[ext] = pl
-        return ext_map
-
     def _create_build_import_registry(self) -> "AssetTypeRegistry":
         from termin.assets.default_plugins import register_default_import_asset_plugins
         from termin_assets import AssetTypeRegistry
@@ -435,6 +420,12 @@ class PlayerRuntime:
         register_default_import_asset_plugins(registry)
         return registry
 
+    def _create_asset_import_plugin_map(self):
+        from termin.assets.default_plugins import build_import_plugin_extension_map
+
+        registry = self._create_build_import_registry()
+        return build_import_plugin_extension_map(registry)
+
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""
         import os
@@ -442,7 +433,7 @@ class PlayerRuntime:
         from termin.assets.resources import ResourceManager
 
         rm = ResourceManager.instance()
-        ext_map = self._create_asset_preloader_map()
+        ext_map = self._create_asset_import_plugin_map()
 
         # Collect files sorted by priority
         pending = []  # (priority, path, preloader)

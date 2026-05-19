@@ -1,4 +1,4 @@
-"""Default file pre-loader registration for editor and player."""
+"""Default file pre-loader registration for editor project watching."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from collections.abc import Callable
 from tcbase import log
 
 from termin.assets.resources import ResourceManager
+from termin.assets.plugin_preloader import PluginPreLoader
+from termin.assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
 from termin.editor_core.file_processors import ComponentFileProcessor
-from termin.editor_core.plugin_preloader import PluginPreLoader
-from termin.editor_core.project_file_watcher import FilePreLoader, ProjectFileWatcher
 
 
 def _create_plugin_preloader(
