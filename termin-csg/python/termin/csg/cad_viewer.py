@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from math import cos, sin, tau
 
 import numpy as np
 
@@ -21,6 +22,7 @@ from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
 
 from termin.csg import to_mesh3
 from termin.csg.document_eval import evaluate_document
+from termin.csg.document_visual_model import build_document_visual_model
 from termin.csg.procedural_document import ProceduralMeshDocument
 from termin.csg.viewer_camera import OrbitCamera
 
@@ -82,7 +84,7 @@ class CadViewportWidget(Widget):
         self.texture_size = (0, 0)
         self.on_changed = None
         self.on_scene_click = None
-        self._dragging = False
+        self._drag_mode = ""
         self._drag_x = 0.0
         self._drag_y = 0.0
 
@@ -114,21 +116,34 @@ class CadViewportWidget(Widget):
                 if handled:
                     self._notify_changed()
                     return True
-            self._dragging = True
-            self._drag_x = float(event.x)
-            self._drag_y = float(event.y)
+            return True
+        if event.button == MouseButton.MIDDLE:
+            self._begin_drag("orbit", event)
+            return True
+        if event.button == MouseButton.RIGHT:
+            self._begin_drag("pan", event)
             return True
         return False
 
+    def _begin_drag(self, mode: str, event: MouseEvent) -> None:
+        self._drag_mode = mode
+        self._drag_x = float(event.x)
+        self._drag_y = float(event.y)
+
     def on_mouse_up(self, event: MouseEvent) -> None:
-        self._dragging = False
+        self._drag_mode = ""
 
     def on_mouse_move(self, event: MouseEvent) -> None:
-        if not self._dragging:
+        if not self._drag_mode:
             return
         x = float(event.x)
         y = float(event.y)
-        self.camera.orbit(x - self._drag_x, y - self._drag_y)
+        dx = x - self._drag_x
+        dy = y - self._drag_y
+        if self._drag_mode == "orbit":
+            self.camera.orbit(dx, dy)
+        elif self._drag_mode == "pan":
+            self.camera.pan(-dx, dy)
         self._drag_x = x
         self._drag_y = y
         self._notify_changed()
@@ -154,6 +169,10 @@ class CsgSceneRenderer:
         self.color_tex = None
         self.depth_tex = None
         self.size = (0, 0)
+        self.reference_meshes = build_reference_meshes()
+        self._preview_key = None
+        self._solid_meshes: list[TcMesh] = []
+        self._line_meshes: list[tuple[TcMesh, tuple[float, float, float, float]]] = []
 
     def render_document(
         self,
@@ -162,6 +181,8 @@ class CsgSceneRenderer:
         width: int,
         height: int,
         draft_points: list[tuple[float, float, float]] | None = None,
+        selected_node_data: tuple[str, str] | None = None,
+        preview_key=None,
     ):
         width = max(int(width), 1)
         height = max(int(height), 1)
@@ -180,35 +201,46 @@ class CsgSceneRenderer:
         ctx.set_cull(CULL_NONE)
         ctx.bind_shader(self.vs, self.fs)
 
-        reference_meshes = build_reference_meshes()
-        solid_meshes, line_meshes = build_document_meshes(document)
-        if draft_points is not None:
-            draft_mesh = _build_polyline_mesh(draft_points, False, "cad-draft-polyline")
-            if draft_mesh is not None:
-                line_meshes.append(draft_mesh)
+        self._ensure_preview_meshes(document, draft_points, selected_node_data, preview_key)
 
         ctx.set_depth_test(False)
         ctx.set_depth_write(False)
-        for mesh, color in reference_meshes:
+        for mesh, color in self.reference_meshes:
             _push_draw_state(ctx, mvp, color)
             draw_tc_mesh(ctx, mesh)
 
         ctx.set_depth_test(True)
         ctx.set_depth_write(True)
-        for mesh in solid_meshes:
+        for mesh in self._solid_meshes:
             _push_draw_state(ctx, mvp, (0.12, 0.72, 0.95, 1.0))
             draw_tc_mesh(ctx, mesh)
 
         ctx.set_depth_test(False)
         ctx.set_depth_write(False)
-        for mesh in line_meshes:
-            _push_draw_state(ctx, mvp, (0.92, 0.96, 1.0, -1.0))
+        for mesh, color in self._line_meshes:
+            _push_draw_state(ctx, mvp, _line_color(color))
             draw_tc_mesh(ctx, mesh)
 
         ctx.end_pass()
         if opened_frame:
             ctx.end_frame()
         return self.color_tex
+
+    def _ensure_preview_meshes(
+        self,
+        document: ProceduralMeshDocument,
+        draft_points: list[tuple[float, float, float]] | None,
+        selected_node_data: tuple[str, str] | None,
+        preview_key,
+    ) -> None:
+        if preview_key is not None and preview_key == self._preview_key:
+            return
+
+        solid_meshes = build_document_solid_meshes(document)
+        line_meshes = build_document_line_meshes(document, draft_points, selected_node_data)
+        self._solid_meshes = solid_meshes
+        self._line_meshes = line_meshes
+        self._preview_key = preview_key
 
     def close(self) -> None:
         if self.color_tex is not None:
@@ -232,9 +264,8 @@ class CsgSceneRenderer:
         self.size = (width, height)
 
 
-def build_document_meshes(document: ProceduralMeshDocument) -> tuple[list[TcMesh], list[TcMesh]]:
+def build_document_solid_meshes(document: ProceduralMeshDocument) -> list[TcMesh]:
     solid_meshes: list[TcMesh] = []
-    line_meshes: list[TcMesh] = []
     for index, evaluated in enumerate(evaluate_document(document)):
         try:
             mesh = to_mesh3(evaluated.solid, f"cad-solid-{index}", "", True)
@@ -245,16 +276,55 @@ def build_document_meshes(document: ProceduralMeshDocument) -> tuple[list[TcMesh
             )
             triangles = np.asarray(mesh.triangles, dtype=np.uint32).reshape(-1)
             solid_meshes.append(_build_triangle_mesh(transformed, triangles, f"cad-solid-{index}"))
-            line_meshes.append(_build_edge_mesh(transformed, triangles, f"cad-solid-wire-{index}"))
         except Exception as e:
             log.error(f"[CsgCad] failed to build solid preview mesh: {e}")
+    return solid_meshes
 
-    for sketch in document.items:
-        for contour in sketch.contours:
-            points = sketch.contour_points(contour)
-            line_mesh = _build_polyline_mesh(points, True, f"cad-contour-{contour.id}")
-            if line_mesh is not None:
-                line_meshes.append(line_mesh)
+
+def build_document_line_meshes(
+    document: ProceduralMeshDocument,
+    draft_points: list[tuple[float, float, float]] | None,
+    selected_node_data: tuple[str, str] | None,
+) -> list[tuple[TcMesh, tuple[float, float, float, float]]]:
+    line_meshes: list[tuple[TcMesh, tuple[float, float, float, float]]] = []
+    for index, evaluated in enumerate(evaluate_document(document)):
+        edge_mesh = _build_evaluated_solid_edge_mesh(evaluated, f"cad-solid-wire-{index}")
+        if edge_mesh is None:
+            continue
+        if selected_node_data == ("operation", evaluated.operation_id):
+            line_meshes.append((edge_mesh, (0.85, 1.0, 1.0, 1.0)))
+        else:
+            line_meshes.append((edge_mesh, (0.0, 0.95, 0.95, 0.85)))
+
+    visual_model = build_document_visual_model(document, draft_points, selected_node_data)
+    for index, polyline in enumerate(visual_model.polylines):
+        line_mesh = _build_polyline_mesh(polyline.points, polyline.closed, f"cad-polyline-{index}")
+        if line_mesh is not None:
+            line_meshes.append((line_mesh, polyline.color))
+    for index, point in enumerate(visual_model.points):
+        point_mesh = _build_point_marker_mesh(point.point, point.radius, f"cad-point-{index}")
+        line_meshes.append((point_mesh, point.color))
+    return line_meshes
+
+
+def _build_evaluated_solid_edge_mesh(evaluated, name: str) -> TcMesh | None:
+    try:
+        mesh = to_mesh3(evaluated.solid, name, "", True)
+        vertices = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 3)
+        transformed = np.array(
+            [evaluated.point_transform((float(v[0]), float(v[1]), float(v[2]))) for v in vertices],
+            dtype=np.float32,
+        )
+        triangles = np.asarray(mesh.triangles, dtype=np.uint32).reshape(-1)
+        return _build_edge_mesh(transformed, triangles, name)
+    except Exception as e:
+        log.error(f"[CsgCad] failed to build solid edge preview mesh: {e}")
+        return None
+
+
+def build_document_meshes(document: ProceduralMeshDocument) -> tuple[list[TcMesh], list[TcMesh]]:
+    solid_meshes = build_document_solid_meshes(document)
+    line_meshes = [mesh for mesh, color in build_document_line_meshes(document, None, None)]
     return solid_meshes, line_meshes
 
 
@@ -342,6 +412,29 @@ def _build_edge_mesh(vertices: np.ndarray, triangles: np.ndarray, name: str) -> 
     )
 
 
+def _build_point_marker_mesh(point: tuple[float, float, float], radius: float, name: str) -> TcMesh:
+    segments: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
+    steps = 8
+    cx = float(point[0])
+    cy = float(point[1])
+    cz = float(point[2])
+    for plane in ("xy", "xz", "yz"):
+        ring: list[tuple[float, float, float]] = []
+        for i in range(steps):
+            angle = tau * float(i) / float(steps)
+            ca = cos(angle) * radius
+            sa = sin(angle) * radius
+            if plane == "xy":
+                ring.append((cx + ca, cy + sa, cz))
+            elif plane == "xz":
+                ring.append((cx + ca, cy, cz + sa))
+            else:
+                ring.append((cx, cy + ca, cz + sa))
+        for i in range(steps):
+            segments.append((ring[i], ring[(i + 1) % steps]))
+    return _build_line_segments_mesh(segments, name)
+
+
 def _build_polyline_mesh(points, closed: bool, name: str) -> TcMesh | None:
     if len(points) < 2:
         return None
@@ -403,10 +496,16 @@ def _push_draw_state(ctx, mvp, color) -> None:
     ctx.set_uniform_vec4("u_color", color[0], color[1], color[2], color[3])
 
 
+def _line_color(color: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+    return (color[0], color[1], color[2], -abs(color[3]))
+
+
 __all__ = [
     "CadViewportWidget",
     "CsgSceneRenderer",
     "build_reference_meshes",
+    "build_document_line_meshes",
     "build_document_meshes",
+    "build_document_solid_meshes",
     "document_bounds",
 ]

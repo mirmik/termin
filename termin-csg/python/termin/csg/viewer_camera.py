@@ -60,6 +60,19 @@ class OrbitCamera:
         factor = 1.0 - float(delta) * 0.10
         self.distance = max(0.05, self.distance * max(0.15, factor))
 
+    def pan(self, dx, dy) -> None:
+        right, up = self.screen_axes()
+        scale = self.distance * 0.002
+        self.target = self.target + right * float(dx) * scale + up * float(dy) * scale
+
+    def screen_axes(self):
+        eye = self.eye()
+        forward = normalize(self.target - eye)
+        world_up = np.array((0.0, 0.0, 1.0), dtype=np.float32)
+        right = normalize(np.cross(forward, world_up))
+        up = normalize(np.cross(right, forward))
+        return right, up
+
     def fit_bounds(self, lo, hi) -> None:
         center = (lo + hi) * 0.5
         extent = hi - lo

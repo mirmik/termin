@@ -15,10 +15,8 @@ from tcgui.widgets.units import px
 from termin.editor_tcgui.component_editor_extension import (
     register_component_editor_extension,
 )
-from termin.csg import (
-    Solid,
-    extrude as csg_extrude,
-)
+from termin.csg.document_eval import evaluate_document
+from termin.csg.document_visual_model import build_document_visual_model
 from termin.csg.procedural_document import ProceduralPlane
 from termin.csg.solid_render import (
     PointTransform,
@@ -491,79 +489,57 @@ class ProceduralMeshEditorExtension:
         self._draw_document_debug(renderer, pose)
 
     def _draw_document_debug(self, renderer, entity_pose) -> None:
-        contour_color = Color4(0.0, 0.95, 0.95, 1.0)
-        contour_selected_color = Color4(1.0, 1.0, 1.0, 1.0)
-        draft_color = Color4(1.0, 0.78, 0.12, 1.0)
-        point_color = Color4(1.0, 1.0, 1.0, 1.0)
         component = self._component
         if component is not None:
             document = component.document
-            used_sketch_ids = document.used_source_sketch_ids()
+            evaluated_solids = evaluate_document(document)
             for operation in document.operations:
                 selected = self._selected_node_data == ("operation", operation.id)
                 style = self._solid_style(selected)
-                for solid, point_transform in self._operation_solids(document, operation, entity_pose):
-                    draw_solid(renderer, solid, style, point_transform)
+                for evaluated in evaluated_solids:
+                    if evaluated.operation_id == operation.id:
+                        draw_solid(
+                            renderer,
+                            evaluated.solid,
+                            style,
+                            self._compose_point_transform(entity_pose, evaluated.point_transform),
+                        )
 
-            for item in document.items:
-                if item.id not in used_sketch_ids:
-                    self._draw_sketch_contours(renderer, entity_pose, item, contour_color, point_color)
-
-            self._draw_selected_document_item(renderer, entity_pose, document, contour_selected_color)
-        self._draw_polyline(renderer, entity_pose, self._draft_points, draft_color, False)
-        self._draw_points(renderer, entity_pose, self._draft_points, draft_color)
-
-    def _draw_sketch_contours(self, renderer, entity_pose, sketch, color: Color4, point_color: Color4) -> None:
-        for contour in sketch.contours:
-            points = sketch.contour_points(contour)
-            self._draw_polyline(renderer, entity_pose, points, color, True)
-            self._draw_points(renderer, entity_pose, points, point_color)
-
-    def _operation_solids(self, document, operation, entity_pose) -> list[tuple[Solid, PointTransform]]:
-        if not operation.enabled:
-            return []
-        if operation.kind == "extrude":
-            return self._extrude_solids(document, operation, entity_pose)
-        return []
-
-    def _extrude_solids(self, document, operation, entity_pose) -> list[tuple[Solid, PointTransform]]:
-        source_sketch_id = str(operation.params.get("source_sketch_id", ""))
-        sketch = document.find_sketch(source_sketch_id)
-        if sketch is None:
-            return []
-
-        height = float(operation.params.get("height", 1.0))
-        solids: list[tuple[Solid, PointTransform]] = []
-        point_transform = self._sketch_point_transform(entity_pose, sketch)
-        for contour in sketch.contours:
-            if contour.id in operation.inputs:
-                try:
-                    solid = csg_extrude(contour.points, height)
-                except Exception as e:
-                    log.error(
-                        "[ProceduralMeshEditor] failed to build extrude solid "
-                        f"operation='{operation.id}' contour='{contour.id}': {e}"
-                    )
-                    continue
-                solids.append((solid, point_transform))
-        return solids
-
-    def _sketch_point_transform(self, entity_pose, sketch) -> PointTransform:
-        origin = sketch.plane.origin
-        x_axis = sketch.plane.x_axis
-        y_axis = sketch.plane.y_axis
-        normal = sketch.plane.normal
-
-        def transform(point: tuple[float, float, float]) -> tuple[float, float, float]:
-            local_point = (
-                origin[0] + x_axis[0] * point[0] + y_axis[0] * point[1] + normal[0] * point[2],
-                origin[1] + x_axis[1] * point[0] + y_axis[1] * point[1] + normal[1] * point[2],
-                origin[2] + x_axis[2] * point[0] + y_axis[2] * point[1] + normal[2] * point[2],
+            visual_model = build_document_visual_model(
+                document,
+                self._draft_points,
+                self._selected_node_data,
             )
-            world_point = entity_pose.point_to_global(Vec3(local_point[0], local_point[1], local_point[2]))
+            for polyline in visual_model.polylines:
+                self._draw_polyline(
+                    renderer,
+                    entity_pose,
+                    polyline.points,
+                    self._color4(polyline.color),
+                    polyline.closed,
+                    polyline.depth_test,
+                )
+            for point in visual_model.points:
+                renderer.sphere_wireframe(
+                    self._world_vec3(entity_pose, point.point),
+                    point.radius,
+                    self._color4(point.color),
+                    8,
+                    point.depth_test,
+                )
+
+    def _compose_point_transform(self, entity_pose, document_transform: PointTransform) -> PointTransform:
+        def transform(point: tuple[float, float, float]) -> tuple[float, float, float]:
+            local_point = document_transform(point)
+            world_point = entity_pose.point_to_global(
+                Vec3(local_point[0], local_point[1], local_point[2])
+            )
             return (float(world_point.x), float(world_point.y), float(world_point.z))
 
         return transform
+
+    def _color4(self, color: tuple[float, float, float, float]) -> Color4:
+        return Color4(color[0], color[1], color[2], color[3])
 
     def _solid_style(self, selected: bool) -> SolidRenderStyle:
         if selected:
@@ -577,33 +553,6 @@ class ProceduralMeshEditorExtension:
             edge_color=Color4(0.0, 0.95, 0.95, 0.85),
             depth_test=True,
         )
-
-    def _draw_selected_document_item(self, renderer, entity_pose, document, color: Color4) -> None:
-        node_data = self._selected_node_data
-        if node_data is None:
-            return
-        kind = node_data[0]
-        item_id = node_data[1]
-        if kind == "sketch":
-            sketch = document.find_sketch(item_id)
-            if sketch is not None:
-                self._draw_sketch_contours(renderer, entity_pose, sketch, color, color)
-            return
-        if kind == "contour":
-            contour_ref = self._find_contour(document, item_id)
-            if contour_ref is None:
-                return
-            sketch, contour = contour_ref
-            points = sketch.contour_points(contour)
-            self._draw_polyline(renderer, entity_pose, points, color, True, False)
-            self._draw_points(renderer, entity_pose, points, color)
-
-    def _find_contour(self, document, contour_id: str):
-        for sketch in document.items:
-            for contour in sketch.contours:
-                if contour.id == contour_id:
-                    return (sketch, contour)
-        return None
 
     def _draw_polyline(
         self,
@@ -630,16 +579,6 @@ class ProceduralMeshEditorExtension:
                 color,
                 depth_test,
             )
-
-    def _draw_points(
-        self,
-        renderer,
-        entity_pose,
-        points: list[tuple[float, float, float]],
-        color: Color4,
-    ) -> None:
-        for point in points:
-            renderer.sphere_wireframe(self._world_vec3(entity_pose, point), 0.055, color, 8, False)
 
     def _world_vec3(self, entity_pose, point: tuple[float, float, float]) -> Vec3:
         world = entity_pose.point_to_global(Vec3(point[0], point[1], point[2]))
