@@ -22,6 +22,8 @@ extern "C" {
 
 namespace termin {
 
+constexpr const char* TONEMAP_ENGINE_SHADER_UUID = "termin-engine-tonemap";
+
 // Backend-neutral: `#version 450 core` compiles directly on GL 4.3+ and
 // via shaderc for Vulkan. UBO at binding 0, sampler at binding 4 — matches
 // the shared descriptor set layout (UBO 0-3, COMBINED_IMAGE_SAMPLER 4-7).
@@ -142,8 +144,9 @@ void TonemapPass::execute(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = tc_shader_register_static(
-            /*vertex=*/nullptr, TONEMAP_FRAG_UBO, nullptr, "TonemapEngineFS");
+        shader_handle_ = tc_shader_register_static_uuid(
+            /*vertex=*/nullptr, TONEMAP_FRAG_UBO, nullptr,
+            "TonemapEngineFS", TONEMAP_ENGINE_SHADER_UUID);
     }
     if (!params_ubo_) {
         tgfx::BufferDesc ubo_desc;
