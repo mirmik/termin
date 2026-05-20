@@ -1,4 +1,4 @@
-#include "guard/guard.h"
+#include "guard_main.h"
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/graph_compiler.hpp"
 #include "termin/render/tc_pass.hpp"
