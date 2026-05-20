@@ -22,7 +22,10 @@ setup(
     python_requires=">=3.8",
     packages=["termin.input"],
     package_dir={"termin.input": "python/termin/input"},
-    install_requires=["termin-nanobind"],
+    install_requires=[
+        "termin-nanobind",
+        "termin-scene",
+    ],
     ext_modules=[
         Extension("termin.input._input_native", sources=[]),
     ],
