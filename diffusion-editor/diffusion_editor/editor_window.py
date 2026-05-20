@@ -30,7 +30,6 @@ from tcgui.widgets.splitter import Splitter
 
 from .agent_chat import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPanel
 from .agent_tools import create_editor_tool_registry
-from .grounding_dialog import GroundingDialog
 from .layer_stack import LayerStack
 from .mask import coerce_mask_data
 from .layer import Layer
@@ -43,9 +42,7 @@ from .diffusion_panel import DiffusionPanel
 from .lama_panel import LamaPanel
 from .instruct_panel import InstructPanel
 from .selection_panel import SelectionPanel
-from .diffusion_engine import DiffusionEngine
 from .lama_engine import LamaEngine
-from .instruct_engine import InstructEngine
 from .segmentation import SegmentationEngine
 from .diffusion_brush import extract_patch, extract_mask_patch
 from .file_dialog import open_file_dialog, save_file_dialog, open_directory_dialog
@@ -115,6 +112,9 @@ class EditorWindow:
         self._layer_stack = LayerStack()
 
         # Engines
+        from .diffusion_engine import DiffusionEngine
+        from .instruct_engine import InstructEngine
+
         self._engine = DiffusionEngine()
         self._seg_engine = SegmentationEngine()
         self._lama_engine = LamaEngine()
@@ -1743,6 +1743,8 @@ class EditorWindow:
             self._pending_request = None
 
     def _show_grounding_dialog(self) -> None:
+        from .grounding_dialog import GroundingDialog
+
         GroundingDialog(self).show()
 
     def _poll_grounding(self) -> None:
