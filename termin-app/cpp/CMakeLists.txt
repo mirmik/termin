@@ -308,7 +308,11 @@ else()
 endif()
 target_compile_definitions(entity_lib PRIVATE TERMIN_SCENE_EXPORTS ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-target_precompile_headers(entity_lib PRIVATE termin/pch.hpp)
+if(COMMAND termin_enable_pch_for)
+    termin_enable_pch_for(entity_lib)
+else()
+    target_precompile_headers(entity_lib PRIVATE termin/pch.hpp)
+endif()
 set_target_properties(entity_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -359,7 +363,11 @@ if(TGFX2_ENABLE_OPENGL)
 endif()
 target_compile_definitions(render_lib PRIVATE TERMIN_RENDER_EXPORTS)
 target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
+if(COMMAND termin_enable_pch_for)
+    termin_enable_pch_for(render_lib)
+else()
+    target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
+endif()
 set_target_properties(render_lib PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -390,7 +398,11 @@ if(TERMIN_HAS_RECAST)
     )
     target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast Detour termin_navmesh::termin_navmesh)
     target_compile_options(navmesh_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-    target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
+    if(COMMAND termin_enable_pch_for)
+        termin_enable_pch_for(navmesh_lib)
+    else()
+        target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
+    endif()
     set_target_properties(navmesh_lib PROPERTIES
         POSITION_INDEPENDENT_CODE ON
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
