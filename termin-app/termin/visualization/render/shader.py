@@ -2,7 +2,7 @@
 
 # Re-export C++ classes
 from tgfx import TcShader
-from termin._native.render import (
+from termin.materials import (
     GlslPreprocessor,
     glsl_preprocessor,
 )

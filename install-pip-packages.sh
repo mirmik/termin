@@ -124,6 +124,7 @@ PACKAGES=(
     termin-assets
     termin-mesh
     termin-graphics
+    termin-materials
     termin-gui
     termin-display
     termin-csg

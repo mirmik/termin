@@ -52,7 +52,7 @@ from PyQt6.QtGui import QColor, QImage, QPixmap
 from termin.editor.color_dialog import ColorDialog
 from termin.visualization.core.material import Material
 from termin.geombase import Vec4
-from termin.visualization.render.shader_parser import (
+from termin.materials import (
     ShaderMultyPhaseProgramm,
     MaterialProperty,
 )
@@ -1059,10 +1059,15 @@ class MaterialInspector(QWidget):
                 log.info(f"[MaterialInspector] _on_texture_changed: using white texture (default)")
 
         if texture_handle is not None:
+            tc_tex = texture_handle.get()
+            if tc_tex is None or not tc_tex.is_valid:
+                log.warning(f"[MaterialInspector] _on_texture_changed: resolved texture is invalid for '{texture_name}'")
+                return
+
             # Обновляем текстуру во всех фазах материала
             for i, phase in enumerate(self._material.phases):
                 log.info(f"[MaterialInspector] phase[{i}].textures BEFORE: {dict(phase.textures)}")
-                phase.set_texture(uniform_name, texture_handle)
+                phase.set_texture(uniform_name, tc_tex)
                 log.info(f"[MaterialInspector] phase[{i}].textures AFTER: {dict(phase.textures)}")
         else:
             log.warning(f"[MaterialInspector] _on_texture_changed: texture_handle is None for '{texture_name}'")

@@ -5,7 +5,8 @@
 #include <nanobind/stl/string.h>
 #include <unordered_map>
 
-#include "tc_component_python.h"
+#include "tc_component_python_drawable.h"
+#include "tc_component_python_input.h"
 #include <tgfx/resources/tc_material.h>
 #include "core/tc_scene.h"
 #include <tcbase/tc_log.hpp>

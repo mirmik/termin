@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Protocol, Set, runtime_checkable
 
 if TYPE_CHECKING:
-    from termin._native.render import TcMaterialPhase
+    from termin.materials import TcMaterialPhase
     from termin.visualization.render.render_context import RenderContext
 
 

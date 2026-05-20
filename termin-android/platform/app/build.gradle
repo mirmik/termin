@@ -1,0 +1,94 @@
+plugins {
+    id "com.android.application"
+}
+
+def terminRoot = rootProject.projectDir.parentFile.parentFile
+def terminAndroidSdkRoot = providers.gradleProperty("terminAndroidSdkRoot")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_SDK_ROOT"))
+        .orElse(new File(terminRoot, "sdk/android").absolutePath)
+def terminAndroidAbi = providers.gradleProperty("terminAndroidAbi")
+        .orElse(providers.environmentVariable("ANDROID_ABI"))
+        .orElse("arm64-v8a")
+def terminAndroidPlatform = providers.gradleProperty("terminAndroidPlatform")
+        .orElse(providers.environmentVariable("ANDROID_PLATFORM"))
+        .orElse("android-26")
+def terminAndroidNdkVersion = providers.gradleProperty("terminAndroidNdkVersion")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_NDK_VERSION"))
+        .orElse("27.2.12479018")
+def terminQuestOpenXr = providers.gradleProperty("terminQuestOpenXr")
+        .orElse(providers.environmentVariable("TERMIN_QUEST_OPENXR"))
+        .orElse("false")
+
+android {
+    namespace "org.termin.android"
+    compileSdk 35
+    ndkVersion terminAndroidNdkVersion.get()
+
+    defaultConfig {
+        applicationId "org.termin.android"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "0.1.0"
+        manifestPlaceholders = [
+                terminOpenXrActivityEnabled: terminQuestOpenXr.get()
+        ]
+
+        ndk {
+            abiFilters terminAndroidAbi.get()
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++20"
+                arguments(
+                        "-DTERMIN_ANDROID_SDK_ROOT=${terminAndroidSdkRoot.get()}",
+                        "-DTERMIN_ANDROID_ABI=${terminAndroidAbi.get()}",
+                        "-DANDROID_PLATFORM=${terminAndroidPlatform.get()}",
+                        "-DTERMIN_QUEST_OPENXR=${terminQuestOpenXr.get()}"
+                )
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("src/main/cpp/CMakeLists.txt")
+            buildStagingDirectory new File(terminRoot, "build/android-gradle/cxx/app")
+            version "3.22.1"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDir layout.buildDirectory.dir("generated/terminJniLibs").get().asFile
+            assets.srcDir new File(terminRoot, "termin-android/assets")
+        }
+    }
+}
+
+tasks.register("copyTerminAndroidLibraries", Copy) {
+    def sdkLibDir = new File(new File(terminAndroidSdkRoot.get(), terminAndroidAbi.get()), "lib")
+    from(sdkLibDir) {
+        include "*.so"
+    }
+    into(layout.buildDirectory.dir("generated/terminJniLibs/${terminAndroidAbi.get()}"))
+    doFirst {
+        if (!sdkLibDir.isDirectory()) {
+            throw new GradleException(
+                    "Termin Android SDK lib dir not found: ${sdkLibDir}. " +
+                    "Run ./build-sdk-android.sh --abi ${terminAndroidAbi.get()} first, " +
+                    "or pass -PterminAndroidSdkRoot=/path/to/sdk/android"
+            )
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn("copyTerminAndroidLibraries")
+}

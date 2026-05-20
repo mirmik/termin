@@ -1,4 +1,4 @@
-#include "shader_parser.hpp"
+#include <termin/materials/shader_parser.hpp>
 
 #include <tcbase/tc_log.hpp>
 
@@ -765,7 +765,8 @@ static MaterialProperty parse_typed_uniform_directive(
             range_min = std::stod(trim(range_match[1].str()));
             range_max = std::stod(trim(range_match[2].str()));
         } catch (...) {
-            tc::Log::debug("Failed to parse range() in {} directive: {}", directive, line);
+            tc::Log::debug("Failed to parse range() in %s directive: %s",
+                           directive.c_str(), line.c_str());
         }
         // Remove range from content
         content = content.substr(0, range_match.position());

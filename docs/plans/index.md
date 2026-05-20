@@ -29,4 +29,6 @@
 - [render graph resource types](2026-05-10-render-graph-resource-types.md)
 - [tgfx renderer facades](2026-05-12-tgfx-renderer-facades.md)
 - [plugin asset system migration](2026-05-13-plugin-asset-system.md)
-
+- [runtime domain extraction audit](2026-05-19-runtime-domain-extraction-audit.md)
+- [termin materials intent](2026-05-19-termin-materials-intent.md)
+- [Android build and embedded Python runtime](2026-05-19-android-python-runtime.md)

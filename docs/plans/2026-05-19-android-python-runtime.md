@@ -19,17 +19,123 @@ Gradle не обязан владеть сборкой C++ SDK. CMake долже
 2. Проверить, какие цели ломаются на Android toolchain.
 3. После этого добавить минимальный Android wrapper project.
 
+## Фактическая проверка NDK
+
+Проверено 2026-05-19 на Android SDK в `/home/mirmik/Android/Sdk`:
+
+- установлен NDK `27.2.12479018` (`r27c`);
+- первый configure полного monorepo-графа уперся в desktop OpenGL: `termin-graphics` безусловно вызывает `find_package(OpenGL REQUIRED)`;
+- добавлен CMake-флаг `TERMIN_PLATFORM_ANDROID`, который включает native Android profile без Python, тестов, desktop SDL, editor/launcher и desktop app/executable стека;
+- добавлен отдельный CMake-флаг `TERMIN_ENABLE_OPENGL`; при `OFF` monorepo не ищет и не линкует desktop `OpenGL::GL`, но оставляет Vulkan render/editor targets в графе;
+- Android smoke build под `arm64-v8a` успешно сконфигурирован, собран и установлен в тестовый prefix `/tmp/termin-android-smoke`.
+- Android render build под `arm64-v8a` успешно сконфигурирован, собран и установлен в тестовый prefix `/tmp/termin-android-render`.
+
+Расширенный Android render profile теперь собирает:
+
+- `termin-graphics` / `termin_graphics2` без OpenGL;
+- Vulkan backend через NDK `libvulkan.so`;
+- `termin-materials`;
+- `termin-render`;
+- `termin-display` без SDL;
+- `termin-components-render`;
+- `termin-engine`.
+
+Для Android `TGFX2_ENABLE_SHADERC` по умолчанию выключен: NDK содержит Vulkan headers/libs, но не готовую target-библиотеку `shaderc`. Vulkan runtime на Android принимает precompiled SPIR-V bytecode. Host-сборка теперь имеет первый offline shader compilation path: редактор собирает используемые сценой `TcShader`/варианты, вызывает host `termin_shaderc`, кладет SPIR-V в `assets/shaders/vulkan/<shader-uuid>.<stage>.spv`, а Vulkan runtime ищет эти artifacts перед fallback на runtime GLSL.
+
+Рабочий вызов через корневой helper:
+
+```bash
+./build-sdk-android.sh \
+  --ndk /home/mirmik/Android/Sdk/ndk/27.2.12479018 \
+  --abi arm64-v8a \
+  --platform android-26
+```
+
+По умолчанию он собирает `build/android/<ABI>` и устанавливает Android SDK prefix в `sdk/android/<ABI>`.
+
+Эквивалентный ручной CMake вызов:
+
+```bash
+cmake -S . -B build/android/arm64-v8a \
+  -DCMAKE_TOOLCHAIN_FILE=/home/mirmik/Android/Sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake \
+  -DANDROID_ABI=arm64-v8a \
+  -DANDROID_PLATFORM=android-26 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DTERMIN_PLATFORM_ANDROID=ON
+
+cmake --build build/android/arm64-v8a --parallel 8
+
+cmake --install build/android/arm64-v8a --prefix /tmp/termin-android-smoke
+```
+
+Для проверки расширенного профиля использовался тот же build directory и install prefix `/tmp/termin-android-render`:
+
+```bash
+cmake --build build/android/arm64-v8a --parallel 8
+cmake --install build/android/arm64-v8a --prefix /tmp/termin-android-render
+```
+
+Собранные `.so` в первом Android smoke-профиле:
+
+```text
+libtermin_base.so
+libtermin_modules.so
+libtermin_mesh.so
+libtermin_csg.so
+libtermin_navmesh.so
+libtermin_inspect.so
+libtermin_scene.so
+libtermin_input.so
+libtermin_collision.so
+libtermin_physics.so
+libtermin_components_mesh.so
+libtermin_components_collision.so
+libtermin_components_kinematic.so
+```
+
+Дополнительно в расширенном Android render profile собираются и устанавливаются:
+
+```text
+libtermin_graphics.so
+libtermin_graphics2.so
+libtermin_materials.so
+libtermin_render.so
+libtermin_display.so
+libtermin_components_render.so
+libtermin_engine.so
+```
+
+Ограничение этого результата: это пока не player/runtime с Android surface/app wrapper. `termin-app/cpp`, skeleton/animation components и `tcplot` остаются вне Android-графа. Offline shader pipeline уже закрывает первый SPIR-V path для `termin-app` project builder, но Android wrapper еще должен упаковывать эти assets и выставлять shader artifact root при запуске runtime.
+
+No-OpenGL host editor smoke build:
+
+```bash
+cmake -S . -B build/no-opengl-editor \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DTERMIN_ENABLE_OPENGL=OFF \
+  -DTERMIN_ENABLE_VULKAN=ON \
+  -DTERMIN_BUILD_PYTHON=OFF \
+  -DTERMIN_BUILD_TESTS=OFF \
+  -DTERMIN_BUILD_EDITOR_MINIMAL=ON \
+  -DTERMIN_BUILD_EDITOR_EXE=OFF \
+  -DTERMIN_BUILD_LAUNCHER=ON \
+  -DTERMIN_BUNDLE_PYTHON=ON
+
+cmake --build build/no-opengl-editor --parallel 8
+```
+
+This builds `termin_editor` and keeps `libvulkan.so.1` / `libshaderc.so.1` dependencies while avoiding direct `libGL` linkage. SDK scripts also accept `--no-opengl`. In that mode `build-sdk-csharp.sh` still skips C# native bindings because they currently compile `tc_opengl.cpp` and link `OpenGL::GL` directly.
+
 ## Что сейчас мешает Android
 
-Текущая сборка SDK desktop-центрична:
+Часть desktop-центричных зависимостей уже снята, но оставшиеся риски важны:
 
-- `termin-graphics` безусловно делает `find_package(OpenGL REQUIRED)`, а Android дает OpenGL ES, не desktop OpenGL.
-- SDL2 ищется как desktop/system package через `find_package(SDL2)` или `pkg-config`.
-- Vulkan path тянет host-style Vulkan SDK и `shaderc`.
+- SDL2 ищется как desktop/system package через `find_package(SDL2)` или `pkg-config`; Android-профиль сейчас собирает `termin-display` без SDL.
+- Vulkan path на Android собран через NDK `libvulkan.so`, но runtime GLSL compilation отключен без `shaderc`.
 - Python-пакеты устанавливаются через host `pip` и предполагают `$TERMIN_SDK`.
 - `termin-app` содержит desktop/editor код, включая Qt, SDL desktop backend, PyQt6 imports и tooling.
 
-Это означает, что Android не должен быть набором исключений в текущих desktop-целях. Нужен явный platform profile.
+Это означает, что следующий слой должен быть не очередным desktop executable, а отдельный Android wrapper/lifecycle/surface profile.
 
 ## Предлагаемый native Android profile
 
@@ -70,10 +176,27 @@ cmake -S . -B build/android/arm64-v8a \
 
 ## APK/App layer
 
-Для реального приложения нужен тонкий Android wrapper, например:
+Для реального приложения нужен тонкий Android wrapper. Android-specific код держим в отдельном модуле `termin-android`, чтобы не размазывать Activity/JNI/assets/lifecycle glue по runtime-библиотекам.
+
+Первый native слой уже заведен как CMake module:
 
 ```text
-platform/android/
+termin-android/
+  include/termin/android/bootstrap.h
+  src/bootstrap.cpp
+```
+
+Его текущая ответственность:
+
+- хранить Android bootstrap config (`app_data_dir`, `asset_root`, `native_lib_dir`);
+- принимать `ANativeWindow` lifecycle callbacks;
+- выставлять shader artifact root в tgfx2 через `tgfx2_set_shader_artifact_root`;
+- собираться только при `TERMIN_PLATFORM_ANDROID=ON`.
+
+Следующий Gradle/JNI слой должен жить рядом:
+
+```text
+termin-android/platform/
   settings.gradle
   build.gradle
   app/build.gradle
@@ -116,6 +239,8 @@ Vulkan выглядит более реалистичным первым backend
 - хост-компиляция GLSL/HLSL в SPIR-V на этапе сборки;
 - SPIR-V кладется в assets или compiled resources;
 - Android runtime только загружает готовые shader blobs.
+
+Статус 2026-05-19: первый GLSL -> SPIR-V path реализован для editor project build. `Drawable` получает API объявления shader usages, `SkinnedMeshRenderer` объявляет базовый и skinned-вариант, `collect_scene_shader_usages` собирает usages из сцены, `termin.project_builder.shader_build` пишет временные `.build/shaders/source/*.glsl` и готовые `assets/shaders/vulkan/*.spv`. Следующий недостающий кусок для Android: packaging/lifecycle layer должен передать runtime путь к unpacked assets через `tgfx2_set_shader_artifact_root` или `TERMIN_SHADER_ARTIFACT_ROOT`.
 
 ## Как подключать Python
 

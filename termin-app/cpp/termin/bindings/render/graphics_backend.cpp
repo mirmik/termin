@@ -2,8 +2,8 @@
 #include <nanobind/stl/unique_ptr.h>
 #include "termin/render/render.hpp"
 #include "tgfx/types.hpp"
-#include "termin/render/shader_parser.hpp"
-#include "termin/render/glsl_preprocessor.hpp"
+#include "termin/materials/shader_parser.hpp"
+#include "termin/materials/glsl_preprocessor.hpp"
 #include "termin/lighting/shadow.hpp"
 #include <termin/geom/mat44.hpp>
 #include <tcbase/tc_log.hpp>

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include <termin/render/mesh_renderer.hpp>
@@ -83,6 +84,13 @@ public:
         const std::string& phase_mark,
         int geometry_id,
         TcShader original_shader
+    ) override;
+
+    void collect_shader_usages(
+        const std::string& phase_mark,
+        int geometry_id,
+        TcShader original_shader,
+        const std::function<void(TcShader)>& emit
     ) override;
 
     /**

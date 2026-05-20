@@ -1,7 +1,10 @@
-"""Shader parser - re-exported from C++ native module."""
+"""Shader parser - canonical re-export from termin.materials."""
 
-from termin._native.render import (
+from termin.materials import (
     MaterialProperty,
+    MaterialUboEntry,
+    MaterialUboLayout,
+    PhaseRenderSettings,
     UniformProperty,
     ShaderStage,
     ShasderStage,
@@ -13,6 +16,9 @@ from termin._native.render import (
 
 __all__ = [
     "MaterialProperty",
+    "MaterialUboEntry",
+    "MaterialUboLayout",
+    "PhaseRenderSettings",
     "UniformProperty",
     "ShaderStage",
     "ShasderStage",

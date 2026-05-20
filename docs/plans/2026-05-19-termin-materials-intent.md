@@ -4,6 +4,17 @@
 
 Статус: декларация о намерениях, не детальный migration checklist.
 
+Обновление 2026-05-19:
+
+- Создан первичный пакет `termin-materials`.
+- В `termin-materials` вынесены C++ `shader_parser`, `glsl_preprocessor` и Python binding `termin.materials._materials_native`.
+- В `termin-materials` вынесены Python bindings `TcRenderState`, `TcMaterialPhase`, `TcMaterial` и material registry helpers.
+- Построение материала из `ShaderMultyPhaseProgramm` вынесено в явный module-level API `termin.materials.create_material_from_parsed(...)`; `TcMaterial.from_parsed(...)` оставлен как legacy-forwarder.
+- Python shader-parser imports внутри `termin-app` переведены на canonical `termin.materials`.
+- `TcMaterial` binding больше не зависит от app-level `TextureHandle`: `set_texture` и `from_parsed(..., textures=...)` принимают `TcTexture`, а default white/normal texture lookup передается из app слоя через `default_white_texture` / `default_normal_texture`.
+- `termin._native.render` пока сохраняет исторический export material/shader типов через импорт `termin.materials._materials_native`; это совместимость существующего пути, не новый owner.
+- App-level GLSL fallback loader через `ResourceManager` остается в `termin.visualization.render.glsl_preprocessor`, потому что это не core material/shader-format логика.
+
 ## Зачем
 
 Текущая граница вокруг material/shader runtime размазана:
@@ -91,17 +102,17 @@ Do not add new compatibility wrappers. When a domain moves, replace imports with
 
 Preferred staged migration:
 
-1. Create `termin-materials` CMake/Python package.
-2. Move shader-format code from `termin-app` into `termin-materials`:
+1. Create `termin-materials` CMake/Python package. **Done: initial package exists.**
+2. Move shader-format code from `termin-app` into `termin-materials`: **Partially done for parser/preprocessor.**
    - shader parser;
    - GLSL preprocessor;
    - include bank;
    - material UBO layout synthesis.
 3. Move Python bindings for material API into `termin-materials`:
-   - `TcRenderState`;
-   - `TcMaterialPhase`;
-   - `TcMaterial`;
-   - material registry info functions.
+   - `TcRenderState`; **Done.**
+   - `TcMaterialPhase`; **Done.**
+   - `TcMaterial`; **Done.**
+   - material registry info functions. **Done.**
 4. Replace Python imports from `termin._native.render` to the new canonical material package.
 5. Keep app/resource-manager conveniences outside the core material binding:
    - default white/normal texture lookup;
@@ -116,7 +127,7 @@ Preferred staged migration:
 
 - Should `TcShader` stay in `termin-graphics`, or should shader registry move together with materials?
 - Should material kind registration live in `termin-materials` or in an inspect integration package?
-- Should `from_parsed` remain a method on `TcMaterial`, or become a free/factory function in `termin-materials`?
+- Should `TcMaterial.from_parsed` be removed entirely after downstream call sites migrate? It is now only a compatibility forwarder to `create_material_from_parsed`.
 - How much of existing app-level `TextureHandle` compatibility should survive after material extraction?
 - Do scene/material/depth/id/shadow passes belong in one `termin-passes` package, or should scene-dependent passes be separated from pure postprocess passes?
 
@@ -124,5 +135,5 @@ Preferred staged migration:
 
 - `termin-components-render` still includes app directories in CMake. This is a migration debt and should be removed.
 - `termin._native.render` still exports material types and many concrete passes.
-- `TcMaterial.from_parsed` currently mixes material construction, shader parser structures, default texture lookup, and app-level texture handles.
+- `create_material_from_parsed` still does a lot in one function: phase creation, shader feature propagation, material UBO layout upload, default uniform application, texture defaults, and color overrides. The ownership is clearer now, but the implementation should eventually be split into smaller internal helpers.
 - `termin-render` is already broad enough; avoid solving pass ownership by adding more concrete pass code there.

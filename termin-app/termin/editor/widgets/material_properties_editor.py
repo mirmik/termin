@@ -23,7 +23,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 
 if TYPE_CHECKING:
     from termin.visualization.core.material import Material, MaterialPhase
-    from termin.visualization.render.shader_parser import (
+    from termin.materials import (
         ShaderMultyPhaseProgramm,
         MaterialProperty,
     )
@@ -433,8 +433,14 @@ class MaterialPropertiesEditor(QWidget):
                 texture_handle = get_white_texture_handle()
 
         if texture_handle is not None:
+            from tcbase import log
+
+            tc_tex = texture_handle.get()
+            if tc_tex is None or not tc_tex.is_valid:
+                log.warning(f"[MaterialPropertiesEditor] resolved texture is invalid for '{texture_name}'")
+                return
             for phase in self._material.phases:
-                phase.set_texture(uniform_name, texture_handle)
+                phase.set_texture(uniform_name, tc_tex)
 
         self.property_changed.emit(uniform_name, texture_name)
 

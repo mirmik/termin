@@ -2094,11 +2094,20 @@ class EditorWindowTcgui:
 
         try:
             from termin.project_builder import build_project
+            from termin.render_framework import collect_scene_shader_usages
+
+            scene = self.scene_manager.get_scene(scene_name)
+            if scene is None:
+                self._log_to_console("No loaded scene - cannot collect shader usages.")
+                return None
+            shader_usages = collect_scene_shader_usages(scene.scene_handle())
 
             result = build_project(
                 project_root=project_root,
                 entry_scene=scene_rel_path,
                 output_dir=output_dir,
+                compile_shaders=True,
+                shader_usages=shader_usages,
             )
         except Exception as e:
             log.error(f"Build failed: {e}")
