@@ -1,8 +1,9 @@
 #include "termin_modules/module_runtime.hpp"
 
+#include "guard_main.h"
+
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <memory>
 #include <string>
 #include <chrono>
@@ -12,13 +13,9 @@ using namespace termin_modules;
 
 namespace {
 
-struct TestFailure {
-    std::string message;
-};
-
 void expect(bool condition, const std::string& message) {
     if (!condition) {
-        throw TestFailure{message};
+        FAIL(message);
     }
 }
 
@@ -232,34 +229,22 @@ void test_missing_dependency() {
     expect(backend->load_calls.empty(), "backend must not be called");
 }
 
-void run_test(const char* name, void (*fn)(), int& failures) {
-    try {
-        fn();
-        std::cout << "[PASS] " << name << "\n";
-    } catch (const TestFailure& failure) {
-        ++failures;
-        std::cerr << "[FAIL] " << name << ": " << failure.message << "\n";
-    } catch (const std::exception& e) {
-        ++failures;
-        std::cerr << "[FAIL] " << name << ": unexpected exception: " << e.what() << "\n";
-    }
-}
-
 } // namespace
 
-int main() {
-    int failures = 0;
-
-    run_test("descriptor_parsing_and_discovery", test_descriptor_parsing_and_discovery, failures);
-    run_test("load_order_and_unload_guard", test_load_order_and_unload_guard, failures);
-    run_test("cycle_detection", test_cycle_detection, failures);
-    run_test("missing_dependency", test_missing_dependency, failures);
-
-    if (failures != 0) {
-        std::cerr << failures << " termin-modules test(s) failed\n";
-        return 1;
-    }
-
-    std::cout << "All termin-modules tests passed\n";
-    return 0;
+TEST_CASE("module runtime parses descriptors and discovers modules") {
+    test_descriptor_parsing_and_discovery();
 }
+
+TEST_CASE("module runtime respects load order and unload guards") {
+    test_load_order_and_unload_guard();
+}
+
+TEST_CASE("module runtime rejects dependency cycles") {
+    test_cycle_detection();
+}
+
+TEST_CASE("module runtime reports missing dependencies") {
+    test_missing_dependency();
+}
+
+GUARD_TEST_MAIN();

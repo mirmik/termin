@@ -226,6 +226,9 @@ if(TERMIN_SCENE_BUILD_TESTS)
     add_test(NAME termin_scene_unknown_component_test COMMAND termin_scene_unknown_component_test)
 
     add_executable(termin_scene_component_capability_test tests/test_component_capability.c)
+    target_include_directories(termin_scene_component_capability_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
     target_link_libraries(termin_scene_component_capability_test PRIVATE termin_scene)
     add_test(NAME termin_scene_component_capability_test COMMAND termin_scene_component_capability_test)
 

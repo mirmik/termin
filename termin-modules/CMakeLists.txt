@@ -164,6 +164,10 @@ if(TERMIN_MODULES_BUILD_TESTS)
         tests/test_module_runtime.cpp
     )
 
+    target_include_directories(termin_modules_runtime_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+
     target_link_libraries(termin_modules_runtime_test PRIVATE termin_modules)
     set_target_properties(termin_modules_runtime_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

@@ -1,19 +1,10 @@
-#include <stdio.h>
-#include <string.h>
+#include "guard_c.h"
 
 #include "core/tc_component.h"
 #include "core/tc_component_capability.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
-
-#define TEST_ASSERT(cond, msg) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL: %s (line %d)\n", msg, __LINE__); \
-            return 1; \
-        } \
-    } while (0)
 
 static bool count_components(tc_component* c, void* user_data) {
     (void)c;
@@ -22,77 +13,65 @@ static bool count_components(tc_component* c, void* user_data) {
     return true;
 }
 
-static int test_capability_register_and_attach(void) {
-    printf("Testing Component Capability Register/Attach...\n");
-
+GUARD_C_TEST(test_capability_register_and_attach) {
     tc_component_cap_id cap = tc_component_capability_register("test.capability");
-    TEST_ASSERT(cap != TC_COMPONENT_CAPABILITY_INVALID_ID, "capability registered");
-    TEST_ASSERT(tc_component_capability_valid(cap), "capability valid");
-    TEST_ASSERT(tc_component_capability_register("test.capability") == cap, "duplicate returns same id");
+    GUARD_C_REQUIRE(cap != TC_COMPONENT_CAPABILITY_INVALID_ID);
+    GUARD_C_CHECK(tc_component_capability_valid(cap));
+    GUARD_C_CHECK_EQ_UINT(cap, tc_component_capability_register("test.capability"));
 
     tc_component component;
     tc_component_init(&component, NULL);
 
     int marker = 42;
-    TEST_ASSERT(tc_component_attach_capability(&component, cap, &marker), "attach capability");
-    TEST_ASSERT(tc_component_has_capability(&component, cap), "component has capability");
-    TEST_ASSERT(tc_component_get_capability(&component, cap) == &marker, "capability pointer stored");
+    GUARD_C_REQUIRE(tc_component_attach_capability(&component, cap, &marker));
+    GUARD_C_CHECK(tc_component_has_capability(&component, cap));
+    GUARD_C_CHECK_PTR_EQ(&marker, tc_component_get_capability(&component, cap));
 
     tc_component_detach_capability(&component, cap);
-    TEST_ASSERT(!tc_component_has_capability(&component, cap), "capability detached");
-    TEST_ASSERT(tc_component_get_capability(&component, cap) == NULL, "capability pointer cleared");
+    GUARD_C_CHECK_FALSE(tc_component_has_capability(&component, cap));
+    GUARD_C_CHECK_PTR_EQ(NULL, tc_component_get_capability(&component, cap));
 
-    printf("  Component Capability Register/Attach: PASS\n");
     return 0;
 }
 
-static int test_scene_capability_iteration(void) {
-    printf("Testing Scene Capability Iteration...\n");
-
+GUARD_C_TEST(test_scene_capability_iteration) {
     tc_component_cap_id cap = tc_component_capability_register("test.scene_capability");
-    TEST_ASSERT(cap != TC_COMPONENT_CAPABILITY_INVALID_ID, "scene capability registered");
+    GUARD_C_REQUIRE(cap != TC_COMPONENT_CAPABILITY_INVALID_ID);
 
     tc_scene_handle scene = tc_scene_new_named("capability-scene");
-    TEST_ASSERT(tc_scene_alive(scene), "scene created");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
 
     tc_entity_pool* pool = tc_scene_entity_pool(scene);
-    TEST_ASSERT(pool != NULL, "scene pool exists");
+    GUARD_C_REQUIRE(pool != NULL);
 
     tc_entity_id entity = tc_entity_pool_alloc(pool, "entity");
-    TEST_ASSERT(tc_entity_id_valid(entity), "entity created");
+    GUARD_C_REQUIRE(tc_entity_id_valid(entity));
 
     tc_component component;
     tc_component_init(&component, NULL);
 
     int payload = 7;
-    TEST_ASSERT(tc_component_attach_capability(&component, cap, &payload), "attach before add");
+    GUARD_C_REQUIRE(tc_component_attach_capability(&component, cap, &payload));
 
     tc_entity_pool_add_component(pool, entity, &component);
-    TEST_ASSERT(tc_component_has_capability(&component, cap), "component still has capability");
-    TEST_ASSERT(tc_scene_capability_count(scene, cap) == 1, "scene indexed capability");
+    GUARD_C_CHECK(tc_component_has_capability(&component, cap));
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_capability_count(scene, cap));
 
     int count = 0;
     tc_scene_foreach_with_capability(scene, cap, count_components, &count, TC_SCENE_FILTER_NONE);
-    TEST_ASSERT(count == 1, "scene iteration sees one capability component");
+    GUARD_C_CHECK_EQ_INT(1, count);
 
     tc_entity_pool_remove_component(pool, entity, &component);
-    TEST_ASSERT(tc_scene_capability_count(scene, cap) == 0, "scene capability index cleared on remove");
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_capability_count(scene, cap));
 
     tc_scene_free(scene);
 
-    printf("  Scene Capability Iteration: PASS\n");
     return 0;
 }
 
-int main(void) {
-    int result = 0;
-
-    result |= test_capability_register_and_attach();
-    result |= test_scene_capability_iteration();
-
-    if (result == 0) {
-        printf("\nAll component capability tests PASSED\n");
-    }
-
-    return result;
+int main(int argc, char** argv) {
+    GUARD_C_BEGIN_ARGS(argc, argv);
+    GUARD_C_RUN(test_capability_register_and_attach);
+    GUARD_C_RUN(test_scene_capability_iteration);
+    return GUARD_C_END();
 }
