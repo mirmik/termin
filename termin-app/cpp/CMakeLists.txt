@@ -590,7 +590,7 @@ if(BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
     )
-    target_link_libraries(termin_tests PRIVATE entity_lib render_lib)
+    target_link_libraries(termin_tests PRIVATE entity_lib render_lib ${CMAKE_DL_LIBS})
     target_compile_options(termin_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
 
