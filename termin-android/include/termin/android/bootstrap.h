@@ -29,6 +29,7 @@ TERMIN_ANDROID_API const char* termin_android_get_shader_artifact_root(void);
 TERMIN_ANDROID_API void termin_android_on_surface_created(ANativeWindow* window);
 TERMIN_ANDROID_API void termin_android_on_surface_changed(int32_t width, int32_t height);
 TERMIN_ANDROID_API void termin_android_on_surface_destroyed(void);
+TERMIN_ANDROID_API int termin_android_render_frame(void);
 TERMIN_ANDROID_API int termin_android_smoke_render(void);
 
 TERMIN_ANDROID_API ANativeWindow* termin_android_native_window(void);

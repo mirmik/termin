@@ -125,9 +125,11 @@ Java_org_termin_android_TerminActivity_nativeSurfaceDestroyed(JNIEnv*, jclass) {
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_org_termin_android_TerminActivity_nativeSmokeRender(JNIEnv*, jclass) {
-    int ok = termin_android_smoke_render();
-    __android_log_print(ANDROID_LOG_INFO, kLogTag, "nativeSmokeRender result=%d", ok);
+Java_org_termin_android_TerminActivity_nativeRenderFrame(JNIEnv*, jclass) {
+    int ok = termin_android_render_frame();
+    if (!ok) {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "nativeRenderFrame failed");
+    }
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
