@@ -13,6 +13,7 @@
 - **2.1 частично:** прямые include paths на `termin-render/include` удалены из `termin-display` и `termin-components-render`, где уже есть CMake target dependency. Широкий `termin-app/cpp/termin` include в `termin-components-render` заменён точечным include path на `entity_helpers.hpp`. Прямые пути на `termin-app/core_c` оставлены как часть отдельной проблемы 1.2/ownership `core_c`.
 - **4.1 закрыто:** дублирующийся `tc_registry_utils.h` вынесен в `termin-base/include/tcbase/tc_registry_utils.h`; копии из `termin-graphics` и `termin-mesh` удалены.
 - **3.3 закрыто:** `tc_registry_utils.h`, `tc_resource.h` и generic handle include вынесены на `termin-base`; `termin-skeleton` больше не зависит от `termin_graphics`, старые resource includes в `termin-render` переведены на `tcbase`.
+- **3.4 частично:** `install_requires` приведены к фактическим импортам для `termin-render`, `termin-input`, `termin-animation`, `termin-components-mesh`; `termin-navmesh` оставлен как отдельная задача разделения core/editor/visual слоёв.
 
 ---
 
@@ -312,6 +313,14 @@ static void ensure_builtin_scene_extensions_registered() {
 
 **Проблема:** Работает в monorepo, но сломается при независимой установке pip-пакетов.
 
+**Статус 2026-05-21:** частично исправлено. Для простых пакетов зависимости добавлены в metadata:
+- `termin-render` → `tcbase`, `termin-scene`, `termin-inspect`
+- `termin-input` → `termin-scene`
+- `termin-animation` → `tcbase`
+- `termin-components-mesh` → `tcbase`, `tmesh`, `termin-inspect`, `termin-scene` плюс уже существующие `tgfx`, `termin-csg`
+
+`termin-navmesh` не исправлен простым добавлением зависимостей: пакет смешивает навигационное ядро, editor/visual components, voxel/cache/render integration и требует отдельного разбиения.
+
 ---
 
 ### 3.5 termin-csg — самый проблемный Python пакет
@@ -496,7 +505,7 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
 | 3.1 | Внутренние include из нижних уровней | termin-engine | rendering_manager.cpp | 🟡 Средняя |
 | 3.2 | EngineCore жёстко знает о extensions | termin-engine | engine_core.cpp | 🟡 Средняя |
 | 3.3 | termin-skeleton → termin_graphics для 2 хедеров | termin-skeleton | CMakeLists.txt | ✅ Исправлено |
-| 3.4 | Неявные зависимости Python пакетов | termin-* python | install_requires | 🟡 Средняя |
+| 3.4 | Неявные зависимости Python пакетов | termin-* python | install_requires | 🟡 Частично исправлено |
 | 3.5 | termin-csg — перегруженный пакет | termin-csg | cad_app.py, procedural_document.py | 🟡 Средняя |
 | 3.6 | termin-display экспортирует приватные функции | termin-display | __init__.py | ✅ Исправлено |
 | 3.7 | Пропуск preload_sdk_libs() | termin-engine, termin-inspect | __init__.py | ✅ Исправлено |
