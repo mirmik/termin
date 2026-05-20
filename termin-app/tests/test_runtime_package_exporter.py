@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import numpy as np
+
 from termin.project_build import build_android_project, export_runtime_package
 
 
@@ -116,6 +118,117 @@ def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
 
     scene_data = json.loads(result.scene_path.read_text(encoding="utf-8"))
     assert scene_data == {"uuid": "root-scene", "entities": []}
+
+
+def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -> None:
+    import tgfx
+    from termin.materials import TcMaterial
+    from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
+
+    project = tmp_path / "LiveResourceGame"
+    project.mkdir()
+    mesh_uuid = "live-mesh-uuid"
+    material_uuid = "live-material-uuid"
+    shader_uuid = "live-shader-uuid"
+
+    layout = TcVertexLayout()
+    layout.add("position", 3, TcAttribType.FLOAT32, 0)
+    layout.add("color", 3, TcAttribType.FLOAT32, 1)
+    vertices = np.array(
+        [
+            0.0, 0.5, 0.0, 1.0, 0.0, 0.0,
+            -0.5, -0.5, 0.0, 0.0, 1.0, 0.0,
+            0.5, -0.5, 0.0, 0.0, 0.0, 1.0,
+        ],
+        dtype=np.float32,
+    )
+    indices = np.array([0, 1, 2], dtype=np.uint32)
+    mesh = TcMesh.from_interleaved(
+        vertices,
+        3,
+        indices,
+        layout,
+        "Live Triangle",
+        mesh_uuid,
+        TcDrawMode.TRIANGLES,
+    )
+    assert mesh.is_valid
+
+    material = TcMaterial.create("Live Material", material_uuid)
+    phase = material.add_phase_from_sources(
+        "#version 450\nlayout(location=0) in vec3 in_position;\nvoid main(){gl_Position=vec4(in_position,1.0);}\n",
+        "#version 450\nlayout(location=0) out vec4 out_color;\nvoid main(){out_color=vec4(1.0);}\n",
+        "",
+        "LiveShader",
+        "opaque",
+        7,
+        shader_uuid=shader_uuid,
+    )
+    assert phase is not None
+
+    _write_json(
+        project / "Main.scene",
+        {
+            "uuid": "scene-uuid",
+            "entities": [
+                {
+                    "uuid": "entity-uuid",
+                    "components": [
+                        {
+                            "type": "MeshRenderer",
+                            "data": {
+                                "mesh": {
+                                    "uuid": mesh_uuid,
+                                    "name": "Live Triangle",
+                                    "type": "uuid",
+                                },
+                                "material": {
+                                    "uuid": material_uuid,
+                                    "name": "Live Material",
+                                    "type": "uuid",
+                                },
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    compiler = tmp_path / "fake_termin_shaderc.py"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import pathlib, sys\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "out.parent.mkdir(parents=True, exist_ok=True)\n"
+        "out.write_bytes(b'SPIRV')\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "android" / "LiveResourceGame" / "package",
+        shader_compiler=compiler,
+    )
+
+    mesh_data = json.loads((result.package_dir / "meshes" / f"{mesh_uuid}.tmesh.json").read_text(encoding="utf-8"))
+    material_data = json.loads((result.package_dir / "materials" / f"{material_uuid}.tmat.json").read_text(encoding="utf-8"))
+    shader_data = json.loads((result.package_dir / "shaders" / f"{shader_uuid}.shader.json").read_text(encoding="utf-8"))
+
+    assert mesh_data["vertices"] == vertices.astype(float).tolist()
+    assert mesh_data["indices"] == [0, 1, 2]
+    assert mesh_data["layout"] == [
+        {"name": "position", "location": 0, "components": 3, "type": "float32"},
+        {"name": "color", "location": 1, "components": 3, "type": "float32"},
+    ]
+    assert material_data["phases"] == [
+        {"mark": "opaque", "shader": shader_uuid, "priority": 7},
+    ]
+    assert shader_data["uuid"] == shader_uuid
+    assert (result.package_dir / "shaders" / "vulkan" / f"{shader_uuid}.vert.spv").read_bytes() == b"SPIRV"
+    assert (result.package_dir / "shaders" / "vulkan" / f"{shader_uuid}.frag.spv").read_bytes() == b"SPIRV"
+    assert result.diagnostics == []
 
 
 def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path) -> None:

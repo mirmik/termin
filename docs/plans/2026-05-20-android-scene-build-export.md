@@ -23,21 +23,22 @@ copied to:
 <project>/dist/android/<project>/apk/<project>-debug.apk
 ```
 
-## Temporary Limitations
+## Current Limitations
 
-Mesh and material resources are currently emitted as diagnostic placeholders.
-This is deliberate for the first end-to-end build path: package export, APK
-assembly, install, and runtime loading can be verified before the real resource
-graph is complete.
+Mesh and material resources are exported from the live runtime registries when
+the exporter can resolve their UUIDs. If a referenced registry entry is missing,
+the exporter emits a warning and writes a fallback artifact so the end-to-end
+Android build remains installable.
 
-The next migration step is replacing placeholders with actual exported
-resources:
+The next migration step is replacing these registry-only assumptions with a
+proper build resource graph:
 
-- collect mesh/material/shader refs from the live scene and saved assets;
-- serialize real `TcMesh` data into runtime mesh artifacts;
-- serialize `TcMaterial` phases/properties into runtime material artifacts;
-- collect shader variants from drawable/material usage;
-- compile/copy matching SPIR-V artifacts into the runtime package.
+- load or build missing mesh/material assets from project files;
+- collect shader variants from drawable/material usage rather than only material
+  phases currently present in memory;
+- export texture bindings and material uniform values;
+- report missing resources as build errors once the editor-side asset graph is
+  reliable enough.
 
 ## Editor Integration
 

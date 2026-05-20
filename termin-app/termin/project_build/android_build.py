@@ -31,6 +31,7 @@ def build_android_project(
     termin_root: str | Path | None = None,
     build_script: str | Path | None = None,
     gradle: str | Path | None = None,
+    shader_compiler: str | Path | None = None,
     abi: str = "arm64-v8a",
     platform: str = "android-26",
 ) -> AndroidBuildResult:
@@ -47,6 +48,7 @@ def build_android_project(
         project_root=project_root_path,
         entry_scene=entry_scene,
         output_dir=package_dir,
+        shader_compiler=shader_compiler,
     )
 
     termin_root_path = _resolve_termin_root(termin_root)
