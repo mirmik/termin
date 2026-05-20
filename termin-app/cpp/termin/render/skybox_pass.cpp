@@ -26,6 +26,8 @@ extern "C" {
 
 namespace termin {
 
+constexpr const char* SKYBOX_ENGINE_SHADER_UUID = "termin-engine-skybox";
+
 // ============================================================================
 // Shader source
 // ============================================================================
@@ -192,9 +194,9 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
 
     // Process-lifetime engine shader — hash-dedup keeps one handle
     // across pass re-creations, compiled VkShaderModule stays cached.
-    skybox_shader_handle_ = tc_shader_register_static(
+    skybox_shader_handle_ = tc_shader_register_static_uuid(
         vs_it->second.source.c_str(), fs_it->second.source.c_str(),
-        nullptr, "SkyboxEngineVSFS");
+        nullptr, "SkyboxEngineVSFS", SKYBOX_ENGINE_SHADER_UUID);
 
     tgfx::BufferDesc vbo_desc;
     vbo_desc.size = sizeof(CUBE_VERTICES);

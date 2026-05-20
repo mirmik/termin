@@ -29,6 +29,8 @@ extern "C" {
 
 namespace termin {
 
+constexpr const char* SHADOW_ENGINE_SHADER_UUID = "termin-engine-shadow";
+
 namespace {
 
 // PerFrame UBO (binding 0): view + projection. Uploaded ONCE per
@@ -127,10 +129,11 @@ void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
         // Process-lifetime engine shader: never destroyed (transient
         // TcShader wrappers from material phases / Python bindings
         // can't bounce ref_count through zero and take it down).
-        shadow_shader_handle_ = tc_shader_register_static(
+        shadow_shader_handle_ = tc_shader_register_static_uuid(
             SHADOW_VS_UBO, SHADOW_FS_UBO,
             /*geometry=*/nullptr,
-            /*name=*/"ShadowEngineVSFS");
+            /*name=*/"ShadowEngineVSFS",
+            /*uuid=*/SHADOW_ENGINE_SHADER_UUID);
     }
 }
 

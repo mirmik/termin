@@ -23,6 +23,11 @@ extern "C" {
 
 namespace termin {
 
+constexpr const char* BLOOM_BRIGHT_SHADER_UUID = "termin-engine-bloom-bright";
+constexpr const char* BLOOM_DOWNSAMPLE_SHADER_UUID = "termin-engine-bloom-downsample";
+constexpr const char* BLOOM_UPSAMPLE_SHADER_UUID = "termin-engine-bloom-upsample";
+constexpr const char* BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composite";
+
 // ================================================================
 // tgfx2 GLSL shader sources
 //
@@ -235,20 +240,20 @@ void BloomPass::ensure_tgfx2_shaders() {
     // across pass re-creations — see ShadowPass for the matching
     // pattern on VS+FS passes, and GrayscalePass for the FS-only variant.
     if (tc_shader_handle_is_invalid(bright_shader_handle_)) {
-        bright_shader_handle_ = tc_shader_register_static(
-            nullptr, BRIGHT_FRAG_UBO, nullptr, "BloomBrightFS");
+        bright_shader_handle_ = tc_shader_register_static_uuid(
+            nullptr, BRIGHT_FRAG_UBO, nullptr, "BloomBrightFS", BLOOM_BRIGHT_SHADER_UUID);
     }
     if (tc_shader_handle_is_invalid(downsample_shader_handle_)) {
-        downsample_shader_handle_ = tc_shader_register_static(
-            nullptr, DOWNSAMPLE_FRAG_UBO, nullptr, "BloomDownsampleFS");
+        downsample_shader_handle_ = tc_shader_register_static_uuid(
+            nullptr, DOWNSAMPLE_FRAG_UBO, nullptr, "BloomDownsampleFS", BLOOM_DOWNSAMPLE_SHADER_UUID);
     }
     if (tc_shader_handle_is_invalid(upsample_shader_handle_)) {
-        upsample_shader_handle_ = tc_shader_register_static(
-            nullptr, UPSAMPLE_FRAG_UBO, nullptr, "BloomUpsampleFS");
+        upsample_shader_handle_ = tc_shader_register_static_uuid(
+            nullptr, UPSAMPLE_FRAG_UBO, nullptr, "BloomUpsampleFS", BLOOM_UPSAMPLE_SHADER_UUID);
     }
     if (tc_shader_handle_is_invalid(composite_shader_handle_)) {
-        composite_shader_handle_ = tc_shader_register_static(
-            nullptr, COMPOSITE_FRAG_UBO, nullptr, "BloomCompositeFS");
+        composite_shader_handle_ = tc_shader_register_static_uuid(
+            nullptr, COMPOSITE_FRAG_UBO, nullptr, "BloomCompositeFS", BLOOM_COMPOSITE_SHADER_UUID);
     }
 
     auto make_ubo = [&](uint64_t size) -> tgfx::BufferHandle {
