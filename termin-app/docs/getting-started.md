@@ -1,75 +1,37 @@
 # Установка и начало работы
 
-> Status: stale. This page contains an old package/install model and an old example API.
->
-> For the current repository workflow use the root [build system documentation](../../docs/build-system.md) and [documentation system](../../docs/documentation-system.md). For editor structure use [editor architecture](editor-architecture.md).
-
 ## Требования
 
-- Python 3.10+
-- CMake 3.20+
-- Компилятор C++17 (GCC, Clang, MSVC)
+- Python/CMake/C++ toolchain, совместимый с корневым SDK build.
+- Для разработки Python-кода используйте venv, создаваемый `setup-test-venv.sh`.
 
 ## Установка
 
-### Из исходников (разработка)
+### Первичная сборка SDK
 
 ```bash
-git clone https://github.com/mirmik/termin.git
-cd termin
-pip install -e .
+./build-sdk.sh
+./setup-test-venv.sh
 ```
 
-### Проверка установки
+`setup-test-venv.sh` ставит Python-пакеты в editable-режиме, поэтому изменения
+в Python-исходниках видны без переустановки.
 
-```python
-import termin
-print(termin.__version__)
+### Ежедневная проверка Python
+
+```bash
+bash run-tests-python.sh
 ```
 
-## Первый пример
+Скрипт сам активирует `.venv/` и выставляет `TERMIN_SDK`.
 
-Создадим простую сцену с кубом:
+## Редактор
 
-```python
-from termin import Scene
-from termin.graphics import Viewport
-from termin.mesh import cube
-
-# Инициализация
-scene = Scene()
-viewport = Viewport(width=800, height=600)
-
-# Создаём куб
-entity = scene.create_entity("cube")
-entity.mesh = cube(size=1.0)
-entity.position = (0, 0, -5)
-
-# Рендер-луп
-while not viewport.should_close():
-    viewport.poll_events()
-
-    entity.rotation.y += 0.01  # Вращение
-
-    scene.update(dt=0.016)
-    viewport.render(scene)
-```
-
-## Структура проекта
-
-```
-termin/
-├── termin/          # Python пакет
-│   ├── __init__.py
-│   ├── graphics/    # Рендеринг
-│   ├── physics/     # Физика
-│   └── _native/     # C++ биндинги
-├── cpp/             # C++ исходники
-├── core_c/          # C ядро
-└── examples/        # Примеры
-```
+Основная версия редактора — tcgui. Архитектура слоев и правила добавления
+операций описаны в [editor-architecture](editor-architecture.md).
 
 ## Следующие шаги
 
-- {doc}`concepts` — основные концепции библиотеки
-- {doc}`api/index` — справочник API
+- [Build System](../../docs/build-system.md) — текущий SDK workflow.
+- [Documentation System](../../docs/documentation-system.md) — где держать разные типы документов.
+- [Editor Architecture](editor-architecture.md) — структура editor-core, Qt/tcgui views и controllers.

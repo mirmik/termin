@@ -28,4 +28,4 @@
 ## Рабочие заметки
 
 - [Plans](docs/plans/index.md) - временные планы и миграционные заметки.
-- [Architecture TODO](docs/architecture/2026-03-16-architecture-todo.md) - исторический список архитектурных задач.
+- [Architecture TODO](docs/architecture/2026-03-16-architecture-todo.md) - открытые архитектурные вопросы.

@@ -102,26 +102,20 @@ Do not add new compatibility wrappers. When a domain moves, replace imports with
 
 Preferred staged migration:
 
-1. Create `termin-materials` CMake/Python package. **Done: initial package exists.**
-2. Move shader-format code from `termin-app` into `termin-materials`: **Partially done for parser/preprocessor.**
+1. Continue moving shader-format code from `termin-app` into `termin-materials`:
    - shader parser;
    - GLSL preprocessor;
    - include bank;
    - material UBO layout synthesis.
-3. Move Python bindings for material API into `termin-materials`:
-   - `TcRenderState`; **Done.**
-   - `TcMaterialPhase`; **Done.**
-   - `TcMaterial`; **Done.**
-   - material registry info functions. **Done.**
-4. Replace Python imports from `termin._native.render` to the new canonical material package.
-5. Keep app/resource-manager conveniences outside the core material binding:
+2. Replace Python imports from `termin._native.render` to the new canonical material package.
+3. Keep app/resource-manager conveniences outside the core material binding:
    - default white/normal texture lookup;
    - resource-manager based material resolution;
    - editor-only inspection widgets.
-6. Decide whether the low-level C material storage moves out of `termin-graphics`:
+4. Decide whether the low-level C material storage moves out of `termin-graphics`:
    - short term: `termin-materials` can own the high-level API while using C storage still exported by `termin-graphics`;
    - long term: move `tc_material.h`, `tc_material_registry.h`, and `tgfx_material_handle.hpp` into `termin-materials` if dependency graph allows it cleanly.
-7. After material ownership is clean, revisit concrete render passes and create `termin-passes`.
+5. After material ownership is clean, revisit concrete render passes and create `termin-passes`.
 
 ## Open Questions
 
