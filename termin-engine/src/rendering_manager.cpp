@@ -11,6 +11,7 @@
 
 extern "C" {
 #include <tcbase/tc_log.h>
+#include "tc_profiler.h"
 #include "core/tc_light_capability.h"
 #include "core/tc_camera_capability.h"
 #include <tgfx/tc_gpu.h>
@@ -1180,9 +1181,14 @@ void RenderingManager::unregister_managed_render_target(tc_render_target_handle 
 // ============================================================================
 
 void RenderingManager::render_all(bool present) {
+    bool profile = tc_profiler_enabled();
+    if (profile) tc_profiler_begin_section("RenderAll Offscreen");
     render_all_offscreen();
+    if (profile) tc_profiler_end_section();
     if (present) {
+        if (profile) tc_profiler_begin_section("RenderAll Present");
         present_all();
+        if (profile) tc_profiler_end_section();
     }
 }
 
@@ -1257,14 +1263,70 @@ void RenderingManager::render_all_offscreen() {
     // 0. Sync dynamic-resolution render targets from their attached viewport.
     sync_viewport_resolutions();
 
-    // 1. Render managed render targets first (managed list, not pool scan).
+    auto append_unique_rt = [](std::vector<tc_render_target_handle>& targets, tc_render_target_handle rt) {
+        if (!tc_render_target_handle_valid(rt)) return;
+        auto it = std::find_if(
+            targets.begin(),
+            targets.end(),
+            [rt](tc_render_target_handle candidate) {
+                return tc_render_target_handle_eq(candidate, rt);
+            }
+        );
+        if (it == targets.end()) {
+            targets.push_back(rt);
+        }
+    };
+
+    auto contains_rt = [](const std::vector<tc_render_target_handle>& targets, tc_render_target_handle rt) {
+        return std::find_if(
+            targets.begin(),
+            targets.end(),
+            [rt](tc_render_target_handle candidate) {
+                return tc_render_target_handle_eq(candidate, rt);
+            }
+        ) != targets.end();
+    };
+
+    std::vector<tc_render_target_handle> viewport_render_targets;
+    std::vector<tc_render_target_handle> scene_pipeline_render_targets;
+    std::vector<tc_viewport_handle> rt_viewports;
+
+    auto collect_viewport_render_targets = [&](const std::vector<tc_display*>& disp_list) {
+        for (tc_display* display : disp_list) {
+            if (!tc_display_get_enabled(display)) continue;
+
+            tc_viewport_handle vp = tc_display_get_first_viewport(display);
+            while (tc_viewport_handle_valid(vp)) {
+                if (tc_viewport_get_enabled(vp)) {
+                    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+                    if (tc_render_target_handle_valid(rt)) {
+                        append_unique_rt(viewport_render_targets, rt);
+                        const char* managed_by = tc_viewport_get_managed_by(vp);
+                        if (managed_by && managed_by[0] != '\0') {
+                            append_unique_rt(scene_pipeline_render_targets, rt);
+                        } else if (!contains_rt(scene_pipeline_render_targets, rt)) {
+                            rt_viewports.push_back(vp);
+                        }
+                    }
+                }
+                vp = tc_viewport_get_display_next(vp);
+            }
+        }
+    };
+    collect_viewport_render_targets(displays_);
+    collect_viewport_render_targets(editor_displays_);
+
+    // 1. Render standalone managed render targets first. RTs attached to
+    // viewports are intentionally delayed because we do not yet have a
+    // dependency graph between render targets.
     for (tc_render_target_handle rt : managed_render_targets_) {
-        if (tc_render_target_handle_valid(rt)) {
+        if (tc_render_target_handle_valid(rt) && !contains_rt(viewport_render_targets, rt)) {
             render_render_target_offscreen(rt);
         }
     }
 
-    // 2. Execute scene pipelines (can span multiple displays)
+    // 2. Execute scene pipelines (can span multiple displays). These render
+    // their viewport-bound render targets as a batch.
     for (tc_scene_handle scene : attached_scenes_) {
         if (!tc_scene_alive(scene)) continue;
 
@@ -1277,7 +1339,20 @@ void RenderingManager::render_all_offscreen() {
         }
     }
 
-    // 3. Render unmanaged viewports (scene and editor displays)
+    // 3. Render viewport-bound render targets not owned by a scene pipeline.
+    // Dedupe by RenderTarget: multiple viewports may display the same target,
+    // but rendering it twice in one frame would race the same output textures.
+    std::vector<tc_render_target_handle> rendered_viewport_targets = scene_pipeline_render_targets;
+    for (tc_viewport_handle vp : rt_viewports) {
+        tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+        if (!tc_render_target_handle_valid(rt)) continue;
+        if (contains_rt(rendered_viewport_targets, rt)) continue;
+        render_viewport_offscreen(vp);
+        append_unique_rt(rendered_viewport_targets, rt);
+    }
+
+    // 4. Render legacy viewports without render targets. RT-backed viewports
+    // are presentation-only after the target render passes above.
     auto render_unmanaged = [this](const std::vector<tc_display*>& disp_list) {
         for (tc_display* display : disp_list) {
             if (!tc_display_get_enabled(display)) continue;
@@ -1286,7 +1361,8 @@ void RenderingManager::render_all_offscreen() {
             while (tc_viewport_handle_valid(vp)) {
                 if (tc_viewport_get_enabled(vp)) {
                     const char* managed_by = tc_viewport_get_managed_by(vp);
-                    if (!managed_by || managed_by[0] == '\0') {
+                    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+                    if ((!managed_by || managed_by[0] == '\0') && !tc_render_target_handle_valid(rt)) {
                         render_viewport_offscreen(vp);
                     }
                 }
@@ -1333,6 +1409,14 @@ void RenderingManager::render_scene_pipeline_offscreen(
         }
 
         tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+        if (!tc_render_target_handle_valid(rt)) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has no render target", vp_name.c_str());
+            continue;
+        }
+        if (!tc_render_target_get_enabled(rt)) {
+            continue;
+        }
+
         tc_component* camera_comp = tc_render_target_get_camera(rt);
         if (!camera_comp) {
             tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has no camera", vp_name.c_str());
@@ -1656,10 +1740,13 @@ void RenderingManager::present_all() {
 
 void RenderingManager::present_display(tc_display* display) {
     if (!display) return;
+    bool profile = tc_profiler_enabled();
+    if (profile) tc_profiler_begin_section("Present Display");
 
     tc_render_surface* surface = tc_display_get_surface(display);
     if (!surface) {
         tc_log(TC_LOG_WARN, "[RenderingManager] present_display: surface is null");
+        if (profile) tc_profiler_end_section();
         return;
     }
 
@@ -1681,7 +1768,10 @@ void RenderingManager::present_display(tc_display* display) {
 
     int width, height;
     tc_render_surface_get_size(surface, &width, &height);
-    if (width <= 0 || height <= 0) return;
+    if (width <= 0 || height <= 0) {
+        if (profile) tc_profiler_end_section();
+        return;
+    }
 
     uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
     // Backend-neutral composite target: when the surface exposes a
@@ -1698,9 +1788,11 @@ void RenderingManager::present_display(tc_display* display) {
     tgfx::IRenderDevice* dev = engine ? engine->tgfx2_device() : nullptr;
     if (!dev) {
         tc_log(TC_LOG_WARN, "[RenderingManager] present_display: tgfx2 device not available");
+        if (profile) tc_profiler_end_section();
         return;
     }
 
+    if (profile) tc_profiler_begin_section("Present Clear");
     if (display_color_tex) {
         dev->clear_texture(
             display_color_tex,
@@ -1715,8 +1807,10 @@ void RenderingManager::present_display(tc_display* display) {
             0, 0, width, height
         );
     }
+    if (profile) tc_profiler_end_section();
 
     // Collect viewports sorted by depth
+    if (profile) tc_profiler_begin_section("Present Collect Viewports");
     std::vector<tc_viewport_handle> viewports;
     tc_viewport_handle vp = tc_display_get_first_viewport(display);
     while (tc_viewport_handle_valid(vp)) {
@@ -1728,8 +1822,10 @@ void RenderingManager::present_display(tc_display* display) {
     std::sort(viewports.begin(), viewports.end(), [](tc_viewport_handle a, tc_viewport_handle b) {
         return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
     });
+    if (profile) tc_profiler_end_section();
 
     // Blit viewports
+    if (profile) tc_profiler_begin_section("Present Blit Viewports");
     for (tc_viewport_handle viewport : viewports) {
         tc_viewport_update_pixel_rect(viewport, width, height);
 
@@ -1739,6 +1835,9 @@ void RenderingManager::present_display(tc_display* display) {
         int src_w = 0, src_h = 0;
 
         if (tc_render_target_handle_valid(rt)) {
+            if (!tc_render_target_get_enabled(rt)) {
+                continue;
+            }
             // RT-owned tc_texture (Phase 4). The render path has already
             // ensure_textures'd these and rendered into them; here we
             // just wrap them into a tgfx2 handle for the blit.
@@ -1781,9 +1880,13 @@ void RenderingManager::present_display(tc_display* display) {
             );
         }
     }
+    if (profile) tc_profiler_end_section();
 
     // Swap buffers
+    if (profile) tc_profiler_begin_section("Present Swap Buffers");
     tc_render_surface_swap_buffers(surface);
+    if (profile) tc_profiler_end_section();
+    if (profile) tc_profiler_end_section();
 }
 
 // ============================================================================

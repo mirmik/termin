@@ -18,9 +18,6 @@ from termin.visualization.core.camera import CameraComponent, OrbitCameraControl
 from termin.visualization.core.viewport_hint import ViewportHintComponent
 from termin.visualization.ui.widgets.component import UIComponent
 
-# Import to register component in ComponentRegistry
-from termin.editor_core.editor_camera_ui_controller import EditorCameraUIController  # noqa: F401
-
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
 
@@ -128,10 +125,9 @@ class EditorCameraManager:
         # Add EditorCameraUIController if available (loaded from stdlib)
         from termin.assets.resources import ResourceManager
         rm = ResourceManager.instance()
-        #controller_cls = rm.get_component("EditorCameraUIController")
-        #if controller_cls is not None:
-        #    ui_entity.add_component(controller_cls())
-        ui_entity.add_component_by_name("EditorCameraUIController")
+        controller_cls = rm.get_component("EditorCameraUIController")
+        if controller_cls is not None:
+            ui_entity.add_component(controller_cls())
 
         # Link UI entity as child of camera
         camera_entity.transform.link(ui_entity.transform)
