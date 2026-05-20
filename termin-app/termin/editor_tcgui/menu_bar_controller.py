@@ -72,9 +72,6 @@ class MenuBarControllerTcgui:
         on_show_scene_manager_viewer: Callable,
         on_toggle_surface_edge_debug_tool: Callable,
         is_surface_edge_debug_tool_enabled: Callable[[], bool],
-        # Utils
-        on_import_rfmeas: Callable,
-        on_export_rfmeas: Callable,
         # State getters
         can_undo: Callable[[], bool],
         can_redo: Callable[[], bool],
@@ -144,8 +141,6 @@ class MenuBarControllerTcgui:
             on_show_scene_manager_viewer=on_show_scene_manager_viewer,
             on_toggle_surface_edge_debug_tool=on_toggle_surface_edge_debug_tool,
             is_surface_edge_debug_tool_enabled=is_surface_edge_debug_tool_enabled,
-            on_import_rfmeas=on_import_rfmeas,
-            on_export_rfmeas=on_export_rfmeas,
             # Handle setters — direct assignment, no reflection
             set_undo_handle=self._set_undo_handle,
             set_redo_handle=self._set_redo_handle,

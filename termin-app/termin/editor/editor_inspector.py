@@ -137,7 +137,6 @@ class ComponentsPanel(QWidget):
         # Import native modules to trigger static component registration
         import termin.render_components  # noqa: F401 - registers MeshRenderer, etc.
         import termin.skeleton._components_skeleton_native  # noqa: F401 - registers SkeletonController
-        import termin.components.rfmeas_axis_binding  # noqa: F401 - registers RfmeasAxisBinding
         return ComponentRegistry.instance().list_all()
 
     def _show_add_component_menu(self) -> None:
