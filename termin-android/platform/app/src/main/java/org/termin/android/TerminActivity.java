@@ -90,6 +90,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         Log.i(TAG, "surfaceChanged format=" + format + " size=" + width + "x" + height);
+        stopRenderLoop();
         nativeSurfaceChanged(width, height);
         startRenderLoop();
     }
