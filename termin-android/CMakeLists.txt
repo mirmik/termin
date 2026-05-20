@@ -47,6 +47,11 @@ else()
     find_package(termin_engine REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_runtime termin_runtime::termin_runtime)
+else()
+    find_package(termin_runtime REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
 else()
     find_package(termin_components_mesh REQUIRED)
@@ -109,6 +114,7 @@ target_link_libraries(termin_android
         termin_render::termin_render
         termin_display::termin_display
         termin_engine::termin_engine
+        termin_runtime::termin_runtime
         termin_components_mesh::termin_components_mesh
         termin_components_render::termin_components_render
     PRIVATE

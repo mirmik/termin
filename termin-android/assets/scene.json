@@ -1,0 +1,58 @@
+{
+  "uuid": "android-runtime-scene",
+  "name": "Android Runtime Scene",
+  "entities": [
+    {
+      "uuid": "android-triangle-entity",
+      "name": "Triangle",
+      "components": [
+        {
+          "type": "MeshComponent",
+          "data": {
+            "uuid": "android-triangle-mesh"
+          }
+        },
+        {
+          "type": "MeshRenderer",
+          "data": {
+            "mesh": {
+              "uuid": "android-triangle-mesh"
+            },
+            "material": {
+              "uuid": "android-triangle-material"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "uuid": "android-camera-entity",
+      "name": "MainCamera",
+      "position": [0.0, -3.2, 0.0],
+      "components": [
+        {
+          "type": "CameraComponent",
+          "data": {
+            "near_clip": 0.1,
+            "far_clip": 50.0,
+            "fov_y_degrees": 55.0
+          }
+        }
+      ]
+    },
+    {
+      "uuid": "android-light-entity",
+      "name": "KeyLight",
+      "components": [
+        {
+          "type": "LightComponent",
+          "data": {
+            "light_type": "directional",
+            "intensity": 1.0,
+            "color": [1.0, 1.0, 1.0]
+          }
+        }
+      ]
+    }
+  ]
+}

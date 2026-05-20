@@ -1,0 +1,33 @@
+#pragma once
+
+#include <string>
+
+#include <termin/runtime/termin_runtime_api.h>
+#include <termin/tc_scene.hpp>
+
+namespace termin::runtime {
+
+struct RuntimePackageLoadOptions {
+    bool allow_fallback_scene = false;
+};
+
+struct RuntimePackageLoadResult {
+    bool ok = false;
+    std::string message;
+    TcSceneRef scene;
+};
+
+class TERMIN_RUNTIME_API RuntimePackageLoader {
+public:
+    RuntimePackageLoadResult load(
+        const std::string& root_path,
+        const RuntimePackageLoadOptions& options = {}
+    );
+};
+
+TERMIN_RUNTIME_API RuntimePackageLoadResult load_runtime_package(
+    const std::string& root_path,
+    const RuntimePackageLoadOptions& options = {}
+);
+
+} // namespace termin::runtime

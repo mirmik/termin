@@ -1,0 +1,25 @@
+{
+  "uuid": "android-triangle-mesh",
+  "name": "Android Triangle",
+  "draw_mode": "triangles",
+  "layout": [
+    {
+      "name": "position",
+      "location": 0,
+      "components": 3,
+      "type": "float32"
+    },
+    {
+      "name": "color",
+      "location": 1,
+      "components": 3,
+      "type": "float32"
+    }
+  ],
+  "vertices": [
+    -1.0, 0.0, -0.8, 0.0, 1.0, 0.15,
+     1.0, 0.0, -0.8, 0.1, 0.35, 1.0,
+     0.0, 0.0,  1.0, 1.0, 0.1, 0.05
+  ],
+  "indices": [0, 1, 2]
+}

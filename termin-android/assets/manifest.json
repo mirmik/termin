@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "shader_artifact_root": ".",
+  "resources": [
+    {
+      "type": "shader",
+      "uuid": "termin-android-scene-color",
+      "path": "shaders/termin-android-scene-color.shader.json"
+    },
+    {
+      "type": "material",
+      "uuid": "android-triangle-material",
+      "path": "materials/android-triangle.tmat.json"
+    },
+    {
+      "type": "mesh",
+      "uuid": "android-triangle-mesh",
+      "path": "meshes/android-triangle.tmesh.json"
+    }
+  ],
+  "scene": "scene.json"
+}
