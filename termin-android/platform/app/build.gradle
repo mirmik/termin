@@ -21,6 +21,12 @@ def terminQuestOpenXr = providers.gradleProperty("terminQuestOpenXr")
 def terminAndroidAssetsDir = providers.gradleProperty("terminAndroidAssetsDir")
         .orElse(providers.environmentVariable("TERMIN_ANDROID_ASSETS_DIR"))
         .orElse(new File(terminRoot, "termin-android/assets").absolutePath)
+def terminAndroidApplicationId = providers.gradleProperty("terminAndroidApplicationId")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_APPLICATION_ID"))
+        .orElse("org.termin.android")
+def terminAndroidAppLabel = providers.gradleProperty("terminAndroidAppLabel")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_APP_LABEL"))
+        .orElse("Termin Android")
 
 android {
     namespace "org.termin.android"
@@ -28,13 +34,13 @@ android {
     ndkVersion terminAndroidNdkVersion.get()
 
     defaultConfig {
-        applicationId "org.termin.android"
+        applicationId terminAndroidApplicationId.get()
         minSdk 26
         targetSdk 35
         versionCode 1
         versionName "0.1.0"
         manifestPlaceholders = [
-                terminOpenXrActivityEnabled: terminQuestOpenXr.get()
+                terminAndroidAppLabel: terminAndroidAppLabel.get()
         ]
 
         ndk {
@@ -69,6 +75,10 @@ android {
 
     sourceSets {
         main {
+            if (terminQuestOpenXr.get().toBoolean()) {
+                manifest.srcFile "src/openxr/AndroidManifest.xml"
+                java.srcDir "src/openxr/java"
+            }
             jniLibs.srcDir layout.buildDirectory.dir("generated/terminJniLibs").get().asFile
             assets.srcDir file(terminAndroidAssetsDir.get())
         }
@@ -79,6 +89,9 @@ tasks.register("copyTerminAndroidLibraries", Copy) {
     def sdkLibDir = new File(new File(terminAndroidSdkRoot.get(), terminAndroidAbi.get()), "lib")
     from(sdkLibDir) {
         include "*.so"
+        if (!terminQuestOpenXr.get().toBoolean()) {
+            exclude "libtermin_openxr.so"
+        }
     }
     into(layout.buildDirectory.dir("generated/terminJniLibs/${terminAndroidAbi.get()}"))
     doFirst {
@@ -89,6 +102,7 @@ tasks.register("copyTerminAndroidLibraries", Copy) {
                     "or pass -PterminAndroidSdkRoot=/path/to/sdk/android"
             )
         }
+        delete(layout.buildDirectory.dir("generated/terminJniLibs/${terminAndroidAbi.get()}"))
     }
 }
 

@@ -4,7 +4,9 @@
 #include <android/log.h>
 
 #include <termin/android/bootstrap.h>
+#ifdef TERMIN_QUEST_OPENXR
 #include <termin/openxr/openxr_runtime.hpp>
+#endif
 
 namespace {
 
@@ -45,20 +47,6 @@ Java_org_termin_android_TerminActivity_nativeInitialize(
         asset_root_chars ? asset_root_chars : "",
         native_lib_dir_chars ? native_lib_dir_chars : ""
     );
-    termin::openxr::OpenXRBuildInfo xr_info = termin::openxr::build_info();
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kLogTag,
-        "OpenXR setup: headers=%d api=%u.%u.%u android='%s' vulkan='%s' vulkan2='%s'",
-        xr_info.has_openxr_headers ? 1 : 0,
-        static_cast<unsigned>(xr_info.api_version_major),
-        static_cast<unsigned>(xr_info.api_version_minor),
-        static_cast<unsigned>(xr_info.api_version_patch),
-        xr_info.android_create_instance_extension,
-        xr_info.vulkan_enable_extension,
-        xr_info.vulkan_enable2_extension
-    );
-
     termin_android_config config{};
     config.app_data_dir = app_data_dir_chars;
     config.asset_root = asset_root_chars;
@@ -133,6 +121,7 @@ Java_org_termin_android_TerminActivity_nativeRenderFrame(JNIEnv*, jclass) {
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
+#ifdef TERMIN_QUEST_OPENXR
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_termin_android_TerminOpenXRActivity_nativeOpenXRProbe(JNIEnv* env, jclass, jobject activity) {
     JavaVM* vm = nullptr;
@@ -159,3 +148,4 @@ Java_org_termin_android_TerminOpenXRActivity_nativeOpenXRProbe(JNIEnv* env, jcla
 
     return result.system_found ? JNI_TRUE : JNI_FALSE;
 }
+#endif
