@@ -4,21 +4,19 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <any>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include <inspect/tc_kind_cpp.hpp>
 #include <tcbase/tc_log.h>
 #include <tcbase/trent/json.h>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
-#include <termin/camera/camera_component.hpp>
-#include <termin/entity/entity.hpp>
-#include <termin/lighting/light_component.hpp>
-#include <termin/render/mesh_renderer.hpp>
 
 namespace termin::runtime {
 namespace {
@@ -65,69 +63,6 @@ std::filesystem::path package_path(const std::filesystem::path& root, const std:
         throw std::runtime_error("runtime package paths must be relative: " + rel);
     }
     return root / p;
-}
-
-bool list3(const nos::trent& t, double out[3]) {
-    if (!t.is_list() || t.as_list().size() < 3) {
-        return false;
-    }
-    const auto& list = t.as_list();
-    for (int i = 0; i < 3; ++i) {
-        if (!list[static_cast<size_t>(i)].is_numer()) {
-            return false;
-        }
-        out[i] = static_cast<double>(list[static_cast<size_t>(i)].as_numer());
-    }
-    return true;
-}
-
-bool list4(const nos::trent& t, double out[4]) {
-    if (!t.is_list() || t.as_list().size() < 4) {
-        return false;
-    }
-    const auto& list = t.as_list();
-    for (int i = 0; i < 4; ++i) {
-        if (!list[static_cast<size_t>(i)].is_numer()) {
-            return false;
-        }
-        out[i] = static_cast<double>(list[static_cast<size_t>(i)].as_numer());
-    }
-    return true;
-}
-
-void apply_transform(Entity& entity, const nos::trent& spec) {
-    if (const nos::trent* pos = dict_get(spec, "position")) {
-        double xyz[3];
-        if (list3(*pos, xyz)) {
-            entity.set_local_position(xyz);
-        }
-    }
-    if (const nos::trent* rot = dict_get(spec, "rotation")) {
-        double xyzw[4];
-        if (list4(*rot, xyzw)) {
-            entity.set_local_rotation(xyzw);
-        }
-    }
-    if (const nos::trent* scale = dict_get(spec, "scale")) {
-        double xyz[3];
-        if (list3(*scale, xyz)) {
-            entity.set_local_scale(xyz);
-        }
-    }
-}
-
-std::string resource_ref_uuid(const nos::trent& value) {
-    if (value.is_string()) {
-        return value.as_string();
-    }
-    if (value.is_dict()) {
-        if (const nos::trent* uuid = value._get("uuid")) {
-            if (uuid->is_string()) {
-                return uuid->as_string();
-            }
-        }
-    }
-    return "";
 }
 
 bool load_shader_resource(const std::filesystem::path& root, const nos::trent& spec) {
@@ -330,148 +265,42 @@ bool load_resource(const std::filesystem::path& root, const nos::trent& entry) {
     return false;
 }
 
-CameraComponent* add_camera_component(Entity& entity, const nos::trent& data) {
-    auto* camera = new CameraComponent();
-    camera->near_clip = number_field(data, "near_clip", camera->near_clip);
-    camera->far_clip = number_field(data, "far_clip", camera->far_clip);
-    if (const nos::trent* fov = dict_get(data, "fov_y_degrees")) {
-        if (fov->is_numer()) {
-            camera->set_fov_y_degrees(static_cast<double>(fov->as_numer()));
-            camera->set_fov_mode_str("FixVertical");
+template<typename H>
+void register_runtime_handle_kind(const std::string& kind_name) {
+    tc::KindRegistryCpp::instance().register_kind(
+        kind_name,
+        [](const std::any& value) -> tc_value {
+            const H& handle = std::any_cast<const H&>(value);
+            return handle.serialize_to_value();
+        },
+        [](const tc_value* value, void* context) -> std::any {
+            H handle;
+            handle.deserialize_from(value, context);
+            return handle;
         }
-    }
-    camera->aspect = number_field(data, "aspect", camera->aspect);
-    entity.add_component(camera);
-    return camera;
+    );
 }
 
-bool add_mesh_component(Entity& entity, const nos::trent& data) {
-    const std::string mesh_uuid = resource_ref_uuid(data);
-    TcMesh mesh = TcMesh::from_uuid(mesh_uuid);
-    if (!mesh.is_valid()) {
-        tc_log_error("RuntimePackageLoader: MeshComponent references missing mesh '%s'", mesh_uuid.c_str());
-        return false;
+void register_runtime_kinds() {
+    static bool registered = false;
+    if (registered) {
+        return;
     }
-    auto* component = new MeshComponent();
-    component->set_mesh(mesh);
-    entity.add_component(component);
-    return true;
-}
-
-bool add_mesh_renderer(Entity& entity, const nos::trent& data) {
-    auto* renderer = new MeshRenderer();
-    if (const nos::trent* mesh_value = dict_get(data, "mesh")) {
-        const std::string mesh_uuid = resource_ref_uuid(*mesh_value);
-        TcMesh mesh = TcMesh::from_uuid(mesh_uuid);
-        if (!mesh.is_valid()) {
-            tc_log_error("RuntimePackageLoader: MeshRenderer references missing mesh '%s'", mesh_uuid.c_str());
-            delete renderer;
-            return false;
-        }
-        renderer->set_mesh(mesh);
-    }
-    if (const nos::trent* material_value = dict_get(data, "material")) {
-        const std::string material_uuid = resource_ref_uuid(*material_value);
-        TcMaterial material = TcMaterial::from_uuid(material_uuid);
-        if (!material.is_valid()) {
-            tc_log_error(
-                "RuntimePackageLoader: MeshRenderer references missing material '%s'",
-                material_uuid.c_str()
-            );
-            delete renderer;
-            return false;
-        }
-        renderer->set_material(material);
-    }
-    entity.add_component(renderer);
-    return true;
-}
-
-bool add_light_component(Entity& entity, const nos::trent& data) {
-    auto* light = new LightComponent();
-    const std::string type = string_field(data, "light_type");
-    if (!type.empty()) {
-        light->set_light_type_str(type);
-    }
-    light->intensity = number_field(data, "intensity", light->intensity);
-    if (const nos::trent* color = dict_get(data, "color")) {
-        double rgb[3];
-        if (list3(*color, rgb)) {
-            light->color = Vec3(rgb[0], rgb[1], rgb[2]);
-        }
-    }
-    entity.add_component(light);
-    return true;
-}
-
-bool add_component_from_spec(Entity& entity, const nos::trent& component_spec, CameraComponent** out_camera) {
-    const std::string type = string_field(component_spec, "type");
-    const nos::trent* data = dict_get(component_spec, "data");
-    const nos::trent empty_data;
-    const nos::trent& component_data = data ? *data : empty_data;
-
-    if (type == "MeshComponent") {
-        return add_mesh_component(entity, component_data);
-    }
-    if (type == "MeshRenderer") {
-        return add_mesh_renderer(entity, component_data);
-    }
-    if (type == "CameraComponent") {
-        CameraComponent* camera = add_camera_component(entity, component_data);
-        if (out_camera && !*out_camera) {
-            *out_camera = camera;
-        }
-        return true;
-    }
-    if (type == "LightComponent") {
-        return add_light_component(entity, component_data);
-    }
-
-    tc_log_error("RuntimePackageLoader: unsupported runtime scene component '%s'", type.c_str());
-    return false;
+    registered = true;
+    register_runtime_handle_kind<TcMesh>("tc_mesh");
+    register_runtime_handle_kind<TcMaterial>("tc_material");
 }
 
 TcSceneRef load_runtime_scene(const std::filesystem::path& root, const std::string& rel_path) {
-    const nos::trent scene_spec = nos::json::parse(read_text_file(package_path(root, rel_path)));
-    const std::string name = string_field(scene_spec, "name", "runtime-scene");
-    const std::string uuid = string_field(scene_spec, "uuid");
-    TcSceneRef scene = TcSceneRef::create(name, uuid);
+    register_runtime_kinds();
+
+    const std::filesystem::path scene_path = package_path(root, rel_path);
+    TcSceneRef scene = TcSceneRef::create("runtime-scene");
     if (!scene.valid()) {
         throw std::runtime_error("failed to create runtime scene");
     }
-    scene.set_source_path(package_path(root, rel_path).string());
-
-    CameraComponent* first_camera = nullptr;
-    const nos::trent* entities = dict_get(scene_spec, "entities");
-    if (!entities || !entities->is_list()) {
-        throw std::runtime_error("runtime scene has no entities list: " + rel_path);
-    }
-
-    for (const nos::trent& entity_spec : entities->as_list()) {
-        const std::string entity_name = string_field(entity_spec, "name", "Entity");
-        const std::string entity_uuid = string_field(entity_spec, "uuid");
-        Entity entity = entity_uuid.empty()
-            ? scene.create_entity(entity_name)
-            : Entity::create_with_uuid(scene.entity_pool(), entity_name, entity_uuid);
-        if (!entity.valid()) {
-            throw std::runtime_error("failed to create entity: " + entity_name);
-        }
-        apply_transform(entity, entity_spec);
-
-        const nos::trent* components = dict_get(entity_spec, "components");
-        if (!components || !components->is_list()) {
-            continue;
-        }
-        for (const nos::trent& component_spec : components->as_list()) {
-            if (!add_component_from_spec(entity, component_spec, &first_camera)) {
-                throw std::runtime_error("failed to add component to entity: " + entity_name);
-            }
-        }
-    }
-
-    if (!first_camera) {
-        tc_log_error("RuntimePackageLoader: scene '%s' has no CameraComponent", rel_path.c_str());
-    }
+    scene.set_source_path(scene_path.string());
+    scene.from_json_string(read_text_file(scene_path));
     return scene;
 }
 
