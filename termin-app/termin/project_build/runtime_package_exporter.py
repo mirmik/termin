@@ -9,15 +9,17 @@ The exporter writes the package contract consumed by termin-runtime:
     shaders/*.shader.json
     shaders/vulkan/*.spv
 
-This first implementation intentionally prefers an end-to-end package over
-perfect resource fidelity. Real mesh/material extraction will replace the
-diagnostic placeholder artifacts incrementally.
+When a referenced mesh/material exists in the current runtime registries, the
+exporter writes real runtime artifacts. Missing registry entries are reported
+and receive a fallback artifact so early Android builds remain installable.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -94,6 +96,7 @@ def export_runtime_package(
     project_root: str | Path,
     entry_scene: str | Path,
     output_dir: str | Path,
+    shader_compiler: str | Path | None = None,
 ) -> RuntimePackageExportResult:
     project_root_path = Path(project_root).resolve()
     entry_scene_path = _resolve_entry_scene(project_root_path, Path(entry_scene))
@@ -108,9 +111,21 @@ def export_runtime_package(
     _write_json(scene_path, scene_data)
 
     resources: list[dict[str, str]] = []
-    _write_default_shader(output_dir_path, resources)
-    _write_placeholder_meshes(output_dir_path, refs.meshes, resources, diagnostics)
-    _write_placeholder_materials(output_dir_path, refs.materials, resources, diagnostics)
+    shaders: dict[str, _ShaderSpec] = {}
+    _write_meshes(output_dir_path, refs.meshes, resources, diagnostics)
+    _write_materials(output_dir_path, refs.materials, resources, diagnostics, shaders)
+    if not shaders:
+        shaders[DEFAULT_SHADER_UUID] = _ShaderSpec(
+            uuid=DEFAULT_SHADER_UUID,
+            name=DEFAULT_SHADER_NAME,
+            source_path="termin-runtime/default-color",
+            vertex_source=DEFAULT_VERTEX_SOURCE,
+            fragment_source=DEFAULT_FRAGMENT_SOURCE,
+            geometry_source="",
+            allow_precompiled_default=True,
+        )
+    _write_shaders(output_dir_path, shaders, resources, diagnostics, shader_compiler)
+    resources.sort(key=_resource_sort_key)
 
     manifest = {
         "version": 1,
@@ -134,6 +149,17 @@ def export_runtime_package(
 class _RuntimeRefs:
     meshes: dict[str, str] = field(default_factory=dict)
     materials: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class _ShaderSpec:
+    uuid: str
+    name: str
+    source_path: str
+    vertex_source: str
+    fragment_source: str
+    geometry_source: str = ""
+    allow_precompiled_default: bool = False
 
 
 def _resolve_entry_scene(project_root: Path, entry_scene: Path) -> Path:
@@ -240,42 +266,96 @@ def _write_clean_package_dir(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
 
-def _write_default_shader(package_dir: Path, resources: list[dict[str, str]]) -> None:
+def _write_shaders(
+    package_dir: Path,
+    shaders: dict[str, _ShaderSpec],
+    resources: list[dict[str, str]],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    shader_compiler: str | Path | None,
+) -> None:
+    compiler = _resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
+    for shader in sorted(shaders.values(), key=lambda item: item.uuid):
+        _write_shader(package_dir, resources, diagnostics, shader, compiler)
+
+
+def _write_shader(
+    package_dir: Path,
+    resources: list[dict[str, str]],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    shader: _ShaderSpec,
+    compiler: Path | None,
+) -> None:
     shader_dir = package_dir / "shaders"
     vulkan_dir = shader_dir / "vulkan"
     shader_dir.mkdir(parents=True, exist_ok=True)
     vulkan_dir.mkdir(parents=True, exist_ok=True)
 
-    vertex_source_path = vulkan_dir / f"{DEFAULT_SHADER_UUID}.vert.glsl"
-    fragment_source_path = vulkan_dir / f"{DEFAULT_SHADER_UUID}.frag.glsl"
-    vertex_source_path.write_text(DEFAULT_VERTEX_SOURCE, encoding="utf-8")
-    fragment_source_path.write_text(DEFAULT_FRAGMENT_SOURCE, encoding="utf-8")
+    vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.glsl"
+    fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.glsl"
+    vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
+    fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
 
-    _copy_default_spirv(
-        package_dir / "shaders" / "vulkan" / f"{DEFAULT_SHADER_UUID}.vert.spv",
-        "termin-android-scene-color.vert.spv",
-    )
-    _copy_default_spirv(
-        package_dir / "shaders" / "vulkan" / f"{DEFAULT_SHADER_UUID}.frag.spv",
-        "termin-android-scene-color.frag.spv",
-    )
+    geometry_source_path = None
+    if shader.geometry_source != "":
+        geometry_source_path = vulkan_dir / f"{shader.uuid}.geom.glsl"
+        geometry_source_path.write_text(shader.geometry_source, encoding="utf-8")
 
-    shader_spec_path = shader_dir / f"{DEFAULT_SHADER_UUID}.shader.json"
-    _write_json(
-        shader_spec_path,
-        {
-            "uuid": DEFAULT_SHADER_UUID,
-            "name": DEFAULT_SHADER_NAME,
-            "vertex_source_path": f"shaders/vulkan/{DEFAULT_SHADER_UUID}.vert.glsl",
-            "fragment_source_path": f"shaders/vulkan/{DEFAULT_SHADER_UUID}.frag.glsl",
-            "source_path": "termin-runtime/default-color",
-        },
-    )
+    if compiler is None and shader.allow_precompiled_default:
+        _copy_default_spirv(vulkan_dir / f"{shader.uuid}.vert.spv", "termin-android-scene-color.vert.spv")
+        _copy_default_spirv(vulkan_dir / f"{shader.uuid}.frag.spv", "termin-android-scene-color.frag.spv")
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                level="warning",
+                path=f"shaders/{shader.uuid}.shader.json",
+                message="Runtime exporter reused built-in default SPIR-V artifacts",
+            )
+        )
+    else:
+        if compiler is None:
+            raise FileNotFoundError(
+                "Shader compiler 'termin_shaderc' was not found. "
+                "Pass shader_compiler=..., add it to PATH, or set TERMIN_SDK."
+            )
+        _compile_shader_stage(
+            compiler,
+            "vertex",
+            vertex_source_path,
+            vulkan_dir / f"{shader.uuid}.vert.spv",
+            f"{shader.name or shader.uuid}:vertex",
+        )
+        _compile_shader_stage(
+            compiler,
+            "fragment",
+            fragment_source_path,
+            vulkan_dir / f"{shader.uuid}.frag.spv",
+            f"{shader.name or shader.uuid}:fragment",
+        )
+        if geometry_source_path is not None:
+            _compile_shader_stage(
+                compiler,
+                "geometry",
+                geometry_source_path,
+                vulkan_dir / f"{shader.uuid}.geom.spv",
+                f"{shader.name or shader.uuid}:geometry",
+            )
+
+    shader_spec: dict[str, Any] = {
+        "uuid": shader.uuid,
+        "name": shader.name or shader.uuid,
+        "vertex_source_path": f"shaders/vulkan/{shader.uuid}.vert.glsl",
+        "fragment_source_path": f"shaders/vulkan/{shader.uuid}.frag.glsl",
+        "source_path": shader.source_path,
+    }
+    if geometry_source_path is not None:
+        shader_spec["geometry_source_path"] = f"shaders/vulkan/{shader.uuid}.geom.glsl"
+
+    shader_spec_path = shader_dir / f"{shader.uuid}.shader.json"
+    _write_json(shader_spec_path, shader_spec)
     resources.append(
         {
             "type": "shader",
-            "uuid": DEFAULT_SHADER_UUID,
-            "path": f"shaders/{DEFAULT_SHADER_UUID}.shader.json",
+            "uuid": shader.uuid,
+            "path": f"shaders/{shader.uuid}.shader.json",
         }
     )
 
@@ -294,7 +374,17 @@ def _copy_default_spirv(target_path: Path, source_name: str) -> None:
     shutil.copy2(source_path, target_path)
 
 
-def _write_placeholder_meshes(
+def _resource_sort_key(resource: dict[str, str]) -> tuple[int, str]:
+    type_order = {
+        "shader": 0,
+        "mesh": 1,
+        "material": 2,
+    }
+    resource_type = resource["type"]
+    return (type_order.get(resource_type, 100), resource["path"])
+
+
+def _write_meshes(
     package_dir: Path,
     meshes: dict[str, str],
     resources: list[dict[str, str]],
@@ -305,30 +395,8 @@ def _write_placeholder_meshes(
 
     for uuid_value, name in sorted(meshes.items()):
         path = mesh_dir / f"{uuid_value}.tmesh.json"
-        _write_json(
-            path,
-            {
-                "uuid": uuid_value,
-                "name": name,
-                "draw_mode": "triangles",
-                "layout": [
-                    {
-                        "name": "position",
-                        "location": 0,
-                        "components": 3,
-                        "type": "float32",
-                    },
-                    {
-                        "name": "color",
-                        "location": 1,
-                        "components": 3,
-                        "type": "float32",
-                    },
-                ],
-                "vertices": PLACEHOLDER_MESH_VERTICES,
-                "indices": [0, 1, 2],
-            },
-        )
+        mesh_spec = _export_mesh_spec(uuid_value, name, diagnostics)
+        _write_json(path, mesh_spec)
         resources.append(
             {
                 "type": "mesh",
@@ -336,40 +404,22 @@ def _write_placeholder_meshes(
                 "path": f"meshes/{uuid_value}.tmesh.json",
             }
         )
-        diagnostics.append(
-            RuntimePackageExportDiagnostic(
-                level="warning",
-                path=f"meshes/{uuid_value}.tmesh.json",
-                message="Runtime exporter used placeholder mesh geometry",
-            )
-        )
 
 
-def _write_placeholder_materials(
+def _write_materials(
     package_dir: Path,
     materials: dict[str, str],
     resources: list[dict[str, str]],
     diagnostics: list[RuntimePackageExportDiagnostic],
+    shaders: dict[str, _ShaderSpec],
 ) -> None:
     material_dir = package_dir / "materials"
     material_dir.mkdir(parents=True, exist_ok=True)
 
     for uuid_value, name in sorted(materials.items()):
         path = material_dir / f"{uuid_value}.tmat.json"
-        _write_json(
-            path,
-            {
-                "uuid": uuid_value,
-                "name": name,
-                "phases": [
-                    {
-                        "mark": "opaque",
-                        "shader": DEFAULT_SHADER_UUID,
-                        "priority": 0,
-                    }
-                ],
-            },
-        )
+        material_spec = _export_material_spec(uuid_value, name, diagnostics, shaders)
+        _write_json(path, material_spec)
         resources.append(
             {
                 "type": "material",
@@ -377,13 +427,289 @@ def _write_placeholder_materials(
                 "path": f"materials/{uuid_value}.tmat.json",
             }
         )
+
+
+def _export_mesh_spec(
+    uuid_value: str,
+    name: str,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> dict[str, Any]:
+    try:
+        from tmesh import TcMesh
+
+        mesh = TcMesh.from_uuid(uuid_value)
+        if mesh.is_valid:
+            return _mesh_to_spec(mesh)
+    except Exception as exc:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                level="warning",
+                path=f"meshes/{uuid_value}.tmesh.json",
+                message=f"Runtime exporter failed to read mesh registry entry: {exc}",
+            )
+        )
+
+    diagnostics.append(
+        RuntimePackageExportDiagnostic(
+            level="warning",
+            path=f"meshes/{uuid_value}.tmesh.json",
+            message="Runtime exporter used fallback mesh because registry entry is unavailable",
+        )
+    )
+    return _fallback_mesh_spec(uuid_value, name)
+
+
+def _mesh_to_spec(mesh: Any) -> dict[str, Any]:
+    vertices_buffer = mesh.get_vertices_buffer()
+    indices_buffer = mesh.get_indices_buffer()
+    if vertices_buffer is None or indices_buffer is None:
+        raise ValueError(f"Mesh '{mesh.uuid}' has no vertex or index data")
+
+    return {
+        "uuid": mesh.uuid,
+        "name": mesh.name or mesh.uuid,
+        "draw_mode": _draw_mode_to_json(mesh.draw_mode),
+        "layout": _mesh_layout_to_json(mesh),
+        "vertices": _flat_number_list(vertices_buffer, float),
+        "indices": _flat_number_list(indices_buffer, int),
+        "vertex_count": int(mesh.vertex_count),
+        "stride": int(mesh.stride),
+    }
+
+
+def _mesh_layout_to_json(mesh: Any) -> list[dict[str, Any]]:
+    layout_obj = mesh.mesh.layout
+    attributes: list[dict[str, Any]] = []
+    for attr_name in ("position", "normal", "uv", "color", "tangent", "joints", "weights"):
+        attr = layout_obj.find(attr_name)
+        if attr is None:
+            continue
+        attr_type = _attrib_type_to_json(attr["type"])
+        if attr_type != "float32":
+            raise ValueError(
+                f"Mesh '{mesh.uuid}' has unsupported runtime attribute type: {attr_name}={attr_type}"
+            )
+        attributes.append(
+            {
+                "name": str(attr["name"]),
+                "location": int(attr["location"]),
+                "components": int(attr["size"]),
+                "type": attr_type,
+            }
+        )
+    if not attributes:
+        raise ValueError(f"Mesh '{mesh.uuid}' has no exportable vertex attributes")
+    attributes.sort(key=lambda item: item["location"])
+    return attributes
+
+
+def _fallback_mesh_spec(uuid_value: str, name: str) -> dict[str, Any]:
+    return {
+        "uuid": uuid_value,
+        "name": name,
+        "draw_mode": "triangles",
+        "layout": [
+            {
+                "name": "position",
+                "location": 0,
+                "components": 3,
+                "type": "float32",
+            },
+            {
+                "name": "color",
+                "location": 1,
+                "components": 3,
+                "type": "float32",
+            },
+        ],
+        "vertices": PLACEHOLDER_MESH_VERTICES,
+        "indices": [0, 1, 2],
+    }
+
+
+def _export_material_spec(
+    uuid_value: str,
+    name: str,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    shaders: dict[str, _ShaderSpec],
+) -> dict[str, Any]:
+    try:
+        from termin.materials import TcMaterial
+
+        material = TcMaterial.from_uuid(uuid_value)
+        if material.is_valid:
+            return _material_to_spec(material, shaders)
+    except Exception as exc:
         diagnostics.append(
             RuntimePackageExportDiagnostic(
                 level="warning",
                 path=f"materials/{uuid_value}.tmat.json",
-                message="Runtime exporter used placeholder material",
+                message=f"Runtime exporter failed to read material registry entry: {exc}",
             )
         )
+
+    diagnostics.append(
+        RuntimePackageExportDiagnostic(
+            level="warning",
+            path=f"materials/{uuid_value}.tmat.json",
+            message="Runtime exporter used fallback material because registry entry is unavailable",
+        )
+    )
+    shaders[DEFAULT_SHADER_UUID] = _ShaderSpec(
+        uuid=DEFAULT_SHADER_UUID,
+        name=DEFAULT_SHADER_NAME,
+        source_path="termin-runtime/default-color",
+        vertex_source=DEFAULT_VERTEX_SOURCE,
+        fragment_source=DEFAULT_FRAGMENT_SOURCE,
+        geometry_source="",
+        allow_precompiled_default=True,
+    )
+    return _fallback_material_spec(uuid_value, name)
+
+
+def _material_to_spec(material: Any, shaders: dict[str, _ShaderSpec]) -> dict[str, Any]:
+    import tgfx  # Registers TcShader before TcMaterialPhase.shader casts it.
+
+    phases: list[dict[str, Any]] = []
+    for phase in material.phases:
+        shader = phase.shader
+        if not shader.is_valid:
+            raise ValueError(f"Material '{material.uuid}' has a phase with invalid shader")
+        shaders[shader.uuid] = _shader_to_spec(shader)
+        phases.append(
+            {
+                "mark": phase.phase_mark or "opaque",
+                "shader": shader.uuid,
+                "priority": int(phase.priority),
+            }
+        )
+
+    if not phases:
+        raise ValueError(f"Material '{material.uuid}' has no phases")
+
+    return {
+        "uuid": material.uuid,
+        "name": material.name or material.uuid,
+        "phases": phases,
+    }
+
+
+def _fallback_material_spec(uuid_value: str, name: str) -> dict[str, Any]:
+    return {
+        "uuid": uuid_value,
+        "name": name,
+        "phases": [
+            {
+                "mark": "opaque",
+                "shader": DEFAULT_SHADER_UUID,
+                "priority": 0,
+            }
+        ],
+    }
+
+
+def _shader_to_spec(shader: Any) -> _ShaderSpec:
+    if shader.fragment_source == "":
+        raise ValueError(f"Shader '{shader.uuid}' has no fragment source")
+    return _ShaderSpec(
+        uuid=shader.uuid,
+        name=shader.name or shader.uuid,
+        source_path=shader.source_path or "runtime-registry",
+        vertex_source=shader.vertex_source,
+        fragment_source=shader.fragment_source,
+        geometry_source=shader.geometry_source,
+    )
+
+
+def _resolve_shader_compiler(shader_compiler: Path | None) -> Path | None:
+    if shader_compiler is not None:
+        compiler = shader_compiler.resolve()
+        if not compiler.exists():
+            raise FileNotFoundError(f"Shader compiler does not exist: {compiler}")
+        return compiler
+
+    found = shutil.which("termin_shaderc")
+    if found is not None:
+        return Path(found).resolve()
+
+    sdk_env = os.environ.get("TERMIN_SDK")
+    if sdk_env is not None and sdk_env != "":
+        sdk_compiler = Path(sdk_env).resolve() / "bin" / "termin_shaderc"
+        if sdk_compiler.exists():
+            return sdk_compiler
+
+    local_sdk_compiler = Path(__file__).resolve().parents[3] / "sdk" / "bin" / "termin_shaderc"
+    if local_sdk_compiler.exists():
+        return local_sdk_compiler
+
+    return None
+
+
+def _compile_shader_stage(
+    compiler: Path,
+    stage: str,
+    input_path: Path,
+    output_path: Path,
+    debug_name: str,
+) -> None:
+    cmd = [
+        str(compiler),
+        "compile",
+        "--target",
+        "vulkan",
+        "--stage",
+        stage,
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+        "--entry",
+        "main",
+        "--debug-name",
+        debug_name,
+    ]
+    result = subprocess.run(cmd, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(f"Shader compilation failed for {input_path.name}: {message}")
+    if not output_path.exists():
+        raise RuntimeError(f"Shader compiler did not produce expected output: {output_path}")
+
+
+def _flat_number_list(values: Any, converter: Any) -> list[Any]:
+    import numpy as np
+
+    values = np.asarray(values).reshape(-1).tolist()
+    result: list[Any] = []
+    for value in values:
+        result.append(converter(value))
+    return result
+
+
+def _draw_mode_to_json(value: Any) -> str:
+    text = str(value)
+    if text.endswith(".LINES"):
+        return "lines"
+    return "triangles"
+
+
+def _attrib_type_to_json(value: Any) -> str:
+    text = str(value)
+    if text.endswith(".FLOAT32"):
+        return "float32"
+    if text.endswith(".INT32"):
+        return "int32"
+    if text.endswith(".UINT32"):
+        return "uint32"
+    if text.endswith(".INT16"):
+        return "int16"
+    if text.endswith(".UINT16"):
+        return "uint16"
+    if text.endswith(".INT8"):
+        return "int8"
+    if text.endswith(".UINT8"):
+        return "uint8"
+    raise ValueError(f"Unsupported vertex attribute type: {value}")
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
