@@ -1,6 +1,6 @@
 // tc_registry_utils.h - Utility macros for resource registries
-#ifndef TC_REGISTRY_UTILS_H
-#define TC_REGISTRY_UTILS_H
+#ifndef TCBASE_TC_REGISTRY_UTILS_H
+#define TCBASE_TC_REGISTRY_UTILS_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -35,7 +35,7 @@ static inline bool tc_has_index(void* ptr) {
 // Generates UUID with given prefix: "prefix-0000000000000001"
 
 static inline void tc_generate_prefixed_uuid(char* out_uuid, size_t out_size,
-                                              const char* prefix, uint64_t* counter) {
+                                             const char* prefix, uint64_t* counter) {
     snprintf(out_uuid, out_size, "%s-%016llx", prefix, (unsigned long long)(*counter)++);
 }
 
@@ -70,4 +70,4 @@ static inline void tc_generate_prefixed_uuid(char* out_uuid, size_t out_size,
 }
 #endif
 
-#endif // TC_REGISTRY_UTILS_H
+#endif // TCBASE_TC_REGISTRY_UTILS_H
