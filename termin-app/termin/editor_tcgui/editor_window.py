@@ -48,6 +48,7 @@ from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
 from termin.editor_tcgui.default_component_editor_extensions import (
     register_default_component_editor_extensions,
 )
+from termin.editor_tcgui.editor_camera_ui_controller import EditorCameraUIController
 
 SceneMode = engine_scene.SceneMode
 default_scene_extensions = engine_scene.default_scene_extensions
@@ -88,6 +89,10 @@ class EditorWindowTcgui:
         self.resource_manager.register_builtin_components()
         self.resource_manager.register_builtin_frame_passes()
         self.resource_manager.register_builtin_post_effects()
+        self.resource_manager.register_component(
+            "EditorCameraUIController",
+            EditorCameraUIController,
+        )
         register_default_component_editor_extensions()
 
         # Scene manager

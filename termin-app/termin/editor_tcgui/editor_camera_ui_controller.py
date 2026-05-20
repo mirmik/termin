@@ -218,7 +218,7 @@ class EditorCameraUIController(PythonComponent):
         self.wireframe_enabled = not self.wireframe_enabled
 
         color_pass = self._find_pass_by_name("Color").to_python()
-        transparent_pass = self._find_pass_by_name("Transparent").to_python() 
+        transparent_pass = self._find_pass_by_name("Transparent").to_python()
 
         if color_pass is not None:
             color_pass.wireframe = self.wireframe_enabled

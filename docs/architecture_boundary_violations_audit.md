@@ -3,6 +3,15 @@
 **Дата:** 2026-05-20  
 **Статус:** Research report — не исправлять автоматически
 
+## Исправления
+
+### 2026-05-21
+
+- **3.7 закрыто:** `termin.engine` и `termin.inspect` теперь вызывают `preload_sdk_libs(...)` перед импортом native modules.
+- **3.6 закрыто частично по публичной поверхности:** приватные C-interop функции больше не входят в `termin.display.__all__`. Сами underscored imports оставлены для существующих внутренних call sites до появления публичного adapter API.
+- **1.3 частично:** `EditorCameraUIController` перенесён из `termin.editor_core` в `termin.editor_tcgui`, а `EditorCameraManager` добавляет его только если компонент зарегистрирован frontend-слоем. В `editor_core` остаётся Qt-зависимость `SpaceMouseController` и более широкая проблема `termin.visualization/ui/widgets -> tcgui`.
+- **2.1 частично:** прямые include paths на `termin-render/include` удалены из `termin-display` и `termin-components-render`, где уже есть CMake target dependency. Широкий `termin-app/cpp/termin` include в `termin-components-render` заменён точечным include path на `entity_helpers.hpp`. Прямые пути на `termin-app/core_c` оставлены как часть отдельной проблемы 1.2/ownership `core_c`.
+
 ---
 
 ## Оглавление
@@ -73,7 +82,7 @@ set(TERMIN_ENGINE_SOURCES
 
 | Файл | Нарушение |
 |------|-----------|
-| `termin-app/termin/editor_core/editor_camera_ui_controller.py:22` | `from tcgui.widgets.basic import IconButton` |
+| `termin-app/termin/editor_tcgui/editor_camera_ui_controller.py` | **Исправлено 2026-05-21:** файл перенесён из `editor_core` в tcgui frontend |
 | `termin-app/termin/editor_core/spacemouse_controller.py:160` | `from PyQt6.QtCore import QSocketNotifier` |
 | `termin-app/termin/visualization/platform/backends/sdl_embedded.py` | Импортирует PyQt6 (строки 39, 80, 264) |
 | `termin-app/termin/visualization/render/texture.py:113` | `from PyQt6.QtGui import QImage, QPixmap` |
@@ -81,6 +90,8 @@ set(TERMIN_ENGINE_SOURCES
 | `termin-app/termin/visualization/ui/widgets/component.py` | `UIComponent` наследуется от `InputComponent` + импортирует `tcgui.widgets.ui.UI` |
 
 **Проблема:** `editor_core` декларирует себя как UI-agnostic слой, но содержит прямые зависимости от tcgui и PyQt6. `termin/visualization/` позиционируется как SDK-уровневый модуль, но содержит зависимости от обоих GUI-фреймворков.
+
+**Статус 2026-05-21:** частично исправлено. Прямой tcgui-контроллер камеры убран из `editor_core`; оставшиеся пункты требуют отдельного adapter/API решения.
 
 ---
 
@@ -114,27 +125,19 @@ from termin._native.render import _input_manager_on_key
 
 | Файл | Строки | Проблема |
 |------|--------|----------|
-| `termin-display/CMakeLists.txt` | 103-111 | Прямой путь к `../termin-render/include`, хотя termin_render уже в зависимостях |
-| `termin-components/termin-components-render/CMakeLists.txt` | 58-60 | Путь к `../../termin-app/cpp/termin` и `../../termin-app/core_c/include` без объявления зависимости |
+| `termin-display/CMakeLists.txt` | 103-111 | **Исправлено 2026-05-21:** прямой путь к `../termin-render/include` удалён, используется target dependency |
+| `termin-components/termin-components-render/CMakeLists.txt` | 58-60 | **Частично исправлено 2026-05-21:** широкий путь к `../../termin-app/cpp/termin` удалён; остались точечный путь к `entity_helpers.hpp` для bindings и `../../termin-app/core_c/include` |
 
 ```cmake
-# termin-display/CMakeLists.txt
-target_include_directories(termin_display
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin-render/include>
-    PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/../termin-render/include
-)
-
-# termin-components-render/CMakeLists.txt
+# termin-components-render/CMakeLists.txt — оставшаяся app/core_c часть
 target_include_directories(termin_components_render PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/../../termin-render/include
-    ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/cpp/termin
     ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/core_c/include
 )
 ```
 
 **Проблема:** Жёсткая привязка к структуре репозитория. При сборке из пакетов или изменении структуры это сломается.
+
+**Статус 2026-05-21:** частично исправлено. Bypass include paths на `termin-render/include` удалены из library и Python binding targets; `termin-app/cpp/termin` также удалён из `termin-components-render`, потому что перекрывал публичные render headers старой app-копией. App/core_c пути остаются до решения 1.2.
 
 ---
 
@@ -319,19 +322,23 @@ static void ensure_builtin_scene_extensions_registered() {
 ### 3.6 termin-display экспортирует приватные C-interop функции
 
 **Где смотреть:**
-- `termin-display/python/termin_display/__init__.py`
+- `termin-display/python/termin/display/__init__.py`
 
 Экспортирует 20+ приватных C-interop функций через `__all__`. Утечка низкой абстракции.
+
+**Статус 2026-05-21:** закрыто по `__all__`. Приватные функции больше не экспортируются wildcard-импортом из `termin.display`, но остаются импортируемыми по имени для существующего внутреннего кода.
 
 ---
 
 ### 3.7 termin-engine и termin-inspect пропускают preload_sdk_libs()
 
 **Где смотреть:**
-- `termin-engine/python/termin_engine/__init__.py`
-- `termin-inspect/python/termin_inspect/__init__.py`
+- `termin-engine/python/termin/engine/__init__.py`
+- `termin-inspect/python/termin/inspect/__init__.py`
 
 Не вызывают `preload_sdk_libs()`, что делает их хрупкими при отсутствии RPATH.
+
+**Статус 2026-05-21:** исправлено. Актуальные пакеты `termin.engine` и `termin.inspect` вызывают `preload_sdk_libs("termin_engine")` и `preload_sdk_libs("termin_inspect")`.
 
 ---
 
@@ -471,9 +478,9 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
 |---|----------|--------|------|-------------|
 | 1.1 | RenderingManager God Object + дублирование PullRM | termin-engine | rendering_manager.cpp | 🔴 Критическая |
 | 1.2 | termin-engine компилирует .cpp из termin-app | termin-engine | CMakeLists.txt | 🔴 Критическая |
-| 1.3 | Утечка GUI в editor_core | termin-app | editor_camera_ui_controller.py, spacemouse_controller.py | 🔴 Критическая |
+| 1.3 | Утечка GUI в editor_core | termin-app | editor_camera_ui_controller.py, spacemouse_controller.py | 🔴 Частично исправлено |
 | 1.4 | termin-gui Viewport3D → SDK internals | termin-gui | viewport3d.py | 🔴 Критическая |
-| 2.1 | Прямые пути к include в CMake | termin-display, termin-components-render | CMakeLists.txt | 🟠 Высокая |
+| 2.1 | Прямые пути к include в CMake | termin-display, termin-components-render | CMakeLists.txt | 🟠 Частично исправлено |
 | 2.2 | Утечка tgfx типов в публичном API | termin-render | render_pipeline.hpp, drawable.hpp (+ 30 хедеров) | 🟠 Высокая |
 | 2.3 | Бизнес-логика в биндингах + hasattr/setattr | termin-* python bindings | tc_pass_bindings.cpp и др. | 🟠 Высокая |
 | 2.4 | Дублирование биндингов | termin-base, termin-app | geom/, tc_pass_bindings.cpp | 🟠 Высокая |
@@ -484,8 +491,8 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
 | 3.3 | termin-skeleton → termin_graphics для 2 хедеров | termin-skeleton | CMakeLists.txt | 🟡 Средняя |
 | 3.4 | Неявные зависимости Python пакетов | termin-* python | install_requires | 🟡 Средняя |
 | 3.5 | termin-csg — перегруженный пакет | termin-csg | cad_app.py, procedural_document.py | 🟡 Средняя |
-| 3.6 | termin-display экспортирует приватные функции | termin-display | __init__.py | 🟡 Средняя |
-| 3.7 | Пропуск preload_sdk_libs() | termin-engine, termin-inspect | __init__.py | 🟡 Средняя |
+| 3.6 | termin-display экспортирует приватные функции | termin-display | __init__.py | ✅ Исправлено |
+| 3.7 | Пропуск preload_sdk_libs() | termin-engine, termin-inspect | __init__.py | ✅ Исправлено |
 | 3.8 | Дублирование project management | termin-app | editor/ vs editor_tcgui/ | 🟡 Средняя |
 | 3.9 | Расхождение Qt vs tcgui функциональности | termin-app | 28 vs 10 файлов | 🟡 Средняя |
 | 3.10 | EditorWindow God Object | termin-app | editor_window.py (2000-2500 строк) | 🟡 Средняя |
