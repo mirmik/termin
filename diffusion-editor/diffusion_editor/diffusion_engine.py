@@ -1,15 +1,8 @@
 import gc
 import os
 import threading
-import torch
 from PIL import Image
 from tcbase import log
-from diffusers import (
-    StableDiffusionXLPipeline,
-    StableDiffusionXLImg2ImgPipeline,
-    StableDiffusionXLInpaintPipeline,
-    DPMSolverMultistepScheduler,
-)
 
 # Filename hints for v-prediction models
 _VPRED_HINTS = ("vpred", "v-pred", "v_pred", "vprediction", "v-prediction", "v_prediction")
@@ -22,6 +15,29 @@ def _guess_prediction_type(path: str) -> str | None:
         if hint in name:
             return "v_prediction"
     return None
+
+
+def _import_torch():
+    import torch
+    return torch
+
+
+def _import_sdxl_loaders():
+    from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
+    return StableDiffusionXLPipeline, DPMSolverMultistepScheduler
+
+
+def _import_sdxl_mode_pipelines():
+    from diffusers import (
+        StableDiffusionXLPipeline,
+        StableDiffusionXLImg2ImgPipeline,
+        StableDiffusionXLInpaintPipeline,
+    )
+    return (
+        StableDiffusionXLPipeline,
+        StableDiffusionXLImg2ImgPipeline,
+        StableDiffusionXLInpaintPipeline,
+    )
 
 
 class DiffusionEngine:
@@ -51,6 +67,9 @@ class DiffusionEngine:
         return self._model_path
 
     def load_model(self, safetensors_path: str, prediction_type: str | None = None):
+        torch = _import_torch()
+        StableDiffusionXLPipeline, DPMSolverMultistepScheduler = _import_sdxl_loaders()
+
         self.unload()
 
         guessed = _guess_prediction_type(safetensors_path)
@@ -106,6 +125,7 @@ class DiffusionEngine:
 
     def unload(self):
         if self._pipe is not None:
+            torch = _import_torch()
             del self._pipe
             self._pipe = None
             torch.cuda.empty_cache()
@@ -114,6 +134,12 @@ class DiffusionEngine:
         self._ip_adapter_loaded = False
 
     def _ensure_pipeline(self, mode: str):
+        (
+            StableDiffusionXLPipeline,
+            StableDiffusionXLImg2ImgPipeline,
+            StableDiffusionXLInpaintPipeline,
+        ) = _import_sdxl_mode_pipelines()
+
         if self._pipe is None:
             raise RuntimeError("No model loaded")
         if self._pipe_mode == mode:
@@ -159,6 +185,7 @@ class DiffusionEngine:
         if (w8, h8) != (w, h):
             image = image.resize((w8, h8), Image.LANCZOS)
 
+        torch = _import_torch()
         if seed == -1:
             seed = torch.randint(0, 2**32, (1,)).item()
         generator = torch.Generator(device="cpu").manual_seed(seed)
@@ -232,6 +259,7 @@ class DiffusionEngine:
                 img_arr = (gray * mask_3d + img_arr * (1 - mask_3d)).astype(np.uint8)
             image = Image.fromarray(img_arr, "RGB")
 
+        torch = _import_torch()
         if seed == -1:
             seed = torch.randint(0, 2**32, (1,)).item()
         generator = torch.Generator(device="cpu").manual_seed(seed)
@@ -281,6 +309,7 @@ class DiffusionEngine:
         w8 = (width // 8) * 8
         h8 = (height // 8) * 8
 
+        torch = _import_torch()
         if seed == -1:
             seed = torch.randint(0, 2**32, (1,)).item()
         generator = torch.Generator(device="cpu").manual_seed(seed)

@@ -1,7 +1,11 @@
 import threading
-import torch
 from PIL import Image
 from tcbase import log
+
+
+def _import_torch():
+    import torch
+    return torch
 
 
 class InstructEngine:
@@ -23,6 +27,7 @@ class InstructEngine:
         return self._busy
 
     def load_model(self):
+        torch = _import_torch()
         from diffusers import StableDiffusionInstructPix2PixPipeline, EulerAncestralDiscreteScheduler
         self._pipe = StableDiffusionInstructPix2PixPipeline.from_pretrained(
             "timbrooks/instruct-pix2pix",
@@ -37,6 +42,7 @@ class InstructEngine:
 
     def unload(self):
         if self._pipe is not None:
+            torch = _import_torch()
             del self._pipe
             self._pipe = None
             torch.cuda.empty_cache()
@@ -91,6 +97,7 @@ class InstructEngine:
 
             image = image.convert("RGB")
 
+            torch = _import_torch()
             if seed == -1:
                 seed = torch.randint(0, 2**32, (1,)).item()
             generator = torch.Generator(device="cpu").manual_seed(seed)

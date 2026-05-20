@@ -6,7 +6,6 @@ import threading
 import time
 
 import numpy as np
-import torch
 from tcbase import log
 
 from tcgui.widgets.checkbox import Checkbox
@@ -41,6 +40,11 @@ _sam2_model = None
 _sam2_proc = None
 _sam2_model_id: str | None = None
 _sam2_device: str | None = None
+
+
+def _import_torch():
+    import torch
+    return torch
 
 
 class GroundingDialog:
@@ -204,6 +208,7 @@ class GroundingDialog:
 
         # ── GPU ─────────────────────────────────────────────────────────
 
+        torch = _import_torch()
         self._gpu_checkbox = Checkbox()
         self._gpu_checkbox.text = "Use GPU"
         self._gpu_checkbox.checked = torch.cuda.is_available()
@@ -466,6 +471,7 @@ def _run_grounding(
     log.info(f"Grounding: inputs prepared in {time.time() - t_prep:.1f}s")
 
     t_infer = time.time()
+    torch = _import_torch()
     with torch.no_grad():
         outputs = model(**inputs)
     log.info(f"Grounding: model forward pass in {time.time() - t_infer:.1f}s")
@@ -579,6 +585,7 @@ def _run_sam2(
              f"({len(boxes)} boxes)")
 
     t_infer = time.time()
+    torch = _import_torch()
     with torch.no_grad():
         outputs = model(**inputs, multimask_output=multimask)
     log.info(f"SAM 2.1: forward pass in {time.time() - t_infer:.1f}s")
