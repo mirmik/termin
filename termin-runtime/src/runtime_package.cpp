@@ -8,6 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <inspect/tc_kind_cpp.hpp>
@@ -65,17 +66,30 @@ std::filesystem::path package_path(const std::filesystem::path& root, const std:
     return root / p;
 }
 
-bool load_shader_resource(const std::filesystem::path& root, const nos::trent& spec) {
+struct RuntimeResourceKeepalive {
+    std::vector<TcShader> shaders;
+    std::vector<TcMaterial> materials;
+    std::vector<TcMesh> meshes;
+};
+
+bool load_shader_resource(
+    const std::filesystem::path& root,
+    const nos::trent& spec,
+    RuntimeResourceKeepalive& keepalive,
+    std::string& error
+) {
     const std::string uuid = string_field(spec, "uuid");
     if (uuid.empty()) {
-        tc_log_error("RuntimePackageLoader: shader resource has no uuid");
+        error = "shader resource has no uuid";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
     const std::string vertex_rel = string_field(spec, "vertex_source_path");
     const std::string fragment_rel = string_field(spec, "fragment_source_path");
     if (fragment_rel.empty()) {
-        tc_log_error("RuntimePackageLoader: shader '%s' has no fragment_source_path", uuid.c_str());
+        error = "shader '" + uuid + "' has no fragment_source_path";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
@@ -90,7 +104,8 @@ bool load_shader_resource(const std::filesystem::path& root, const nos::trent& s
 
     TcShader shader = TcShader::get_or_create(uuid);
     if (!shader.is_valid()) {
-        tc_log_error("RuntimePackageLoader: failed to create shader '%s'", uuid.c_str());
+        error = "failed to create shader '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
@@ -99,55 +114,64 @@ bool load_shader_resource(const std::filesystem::path& root, const nos::trent& s
     shader.set_sources(vertex_source, fragment_source, geometry_source, name, source_path);
     tc_shader* raw = shader.get();
     if (!raw || !raw->fragment_source) {
-        tc_log_error("RuntimePackageLoader: shader '%s' has no registered fragment source", uuid.c_str());
+        error = "shader '" + uuid + "' has no registered fragment source";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
+    keepalive.shaders.push_back(std::move(shader));
     return true;
 }
 
-bool load_material_resource(const nos::trent& spec) {
+bool load_material_resource(
+    const nos::trent& spec,
+    RuntimeResourceKeepalive& keepalive,
+    std::string& error
+) {
     const std::string uuid = string_field(spec, "uuid");
     const std::string name = string_field(spec, "name", uuid);
     if (uuid.empty() || name.empty()) {
-        tc_log_error("RuntimePackageLoader: material resource requires uuid and name");
+        error = "material resource requires uuid and name";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
     TcMaterial material = TcMaterial::get_or_create(uuid, name);
     if (!material.is_valid()) {
-        tc_log_error("RuntimePackageLoader: failed to create material '%s'", uuid.c_str());
+        error = "failed to create material '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
     material.clear_phases();
     const nos::trent* phases = dict_get(spec, "phases");
     if (!phases || !phases->is_list()) {
-        tc_log_error("RuntimePackageLoader: material '%s' has no phases list", uuid.c_str());
+        error = "material '" + uuid + "' has no phases list";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
     for (const nos::trent& phase_spec : phases->as_list()) {
         const std::string shader_uuid = string_field(phase_spec, "shader");
         if (shader_uuid.empty()) {
-            tc_log_error("RuntimePackageLoader: material '%s' phase has no shader", uuid.c_str());
+            error = "material '" + uuid + "' phase has no shader";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }
         TcShader shader = TcShader::from_uuid(shader_uuid);
         if (!shader.is_valid()) {
-            tc_log_error(
-                "RuntimePackageLoader: material '%s' references missing shader '%s'",
-                uuid.c_str(),
-                shader_uuid.c_str()
-            );
+            error = "material '" + uuid + "' references missing shader '" + shader_uuid + "'";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }
         const std::string mark = string_field(phase_spec, "mark", "opaque");
         const int priority = static_cast<int>(number_field(phase_spec, "priority", 0.0));
         if (!material.add_phase(shader, mark.c_str(), priority)) {
-            tc_log_error("RuntimePackageLoader: failed to add phase to material '%s'", uuid.c_str());
+            error = "failed to add phase '" + mark + "' to material '" + uuid + "'";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }
     }
+    keepalive.materials.push_back(std::move(material));
     return true;
 }
 
@@ -158,11 +182,16 @@ tc_draw_mode parse_draw_mode(const std::string& value) {
     return TC_DRAW_TRIANGLES;
 }
 
-bool load_mesh_resource(const nos::trent& spec) {
+bool load_mesh_resource(
+    const nos::trent& spec,
+    RuntimeResourceKeepalive& keepalive,
+    std::string& error
+) {
     const std::string uuid = string_field(spec, "uuid");
     const std::string name = string_field(spec, "name", uuid);
     if (uuid.empty() || name.empty()) {
-        tc_log_error("RuntimePackageLoader: mesh resource requires uuid and name");
+        error = "mesh resource requires uuid and name";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
@@ -172,7 +201,8 @@ bool load_mesh_resource(const nos::trent& spec) {
     if (!layout_spec || !layout_spec->is_list() ||
         !vertex_spec || !vertex_spec->is_list() ||
         !index_spec || !index_spec->is_list()) {
-        tc_log_error("RuntimePackageLoader: mesh '%s' requires layout, vertices and indices", uuid.c_str());
+        error = "mesh '" + uuid + "' requires layout, vertices and indices";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
@@ -185,14 +215,16 @@ bool load_mesh_resource(const nos::trent& spec) {
         const int components = static_cast<int>(number_field(attrib, "components", 0.0));
         const int location = static_cast<int>(number_field(attrib, "location", 0.0));
         if (attr_name.empty() || attr_type != "float32" || components <= 0) {
-            tc_log_error("RuntimePackageLoader: mesh '%s' has unsupported vertex layout", uuid.c_str());
+            error = "mesh '" + uuid + "' has unsupported vertex layout";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }
         tc_vertex_layout_add(&layout, attr_name.c_str(), components, TC_ATTRIB_FLOAT32, static_cast<uint8_t>(location));
         floats_per_vertex += static_cast<size_t>(components);
     }
     if (floats_per_vertex == 0) {
-        tc_log_error("RuntimePackageLoader: mesh '%s' has empty vertex layout", uuid.c_str());
+        error = "mesh '" + uuid + "' has empty vertex layout";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
@@ -200,13 +232,15 @@ bool load_mesh_resource(const nos::trent& spec) {
     vertices.reserve(vertex_spec->as_list().size());
     for (const nos::trent& v : vertex_spec->as_list()) {
         if (!v.is_numer()) {
-            tc_log_error("RuntimePackageLoader: mesh '%s' has non-numeric vertex data", uuid.c_str());
+            error = "mesh '" + uuid + "' has non-numeric vertex data";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }
         vertices.push_back(static_cast<float>(v.as_numer()));
     }
     if (vertices.size() % floats_per_vertex != 0) {
-        tc_log_error("RuntimePackageLoader: mesh '%s' vertex data does not match layout", uuid.c_str());
+        error = "mesh '" + uuid + "' vertex data does not match layout";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
@@ -214,13 +248,15 @@ bool load_mesh_resource(const nos::trent& spec) {
     indices.reserve(index_spec->as_list().size());
     for (const nos::trent& idx : index_spec->as_list()) {
         if (!idx.is_numer() || idx.as_numer() < 0) {
-            tc_log_error("RuntimePackageLoader: mesh '%s' has invalid index data", uuid.c_str());
+            error = "mesh '" + uuid + "' has invalid index data";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
             return false;
         }
         indices.push_back(static_cast<uint32_t>(idx.as_numer()));
     }
     if (indices.empty()) {
-        tc_log_error("RuntimePackageLoader: mesh '%s' has no indices", uuid.c_str());
+        error = "mesh '" + uuid + "' has no indices";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
@@ -236,33 +272,48 @@ bool load_mesh_resource(const nos::trent& spec) {
         parse_draw_mode(string_field(spec, "draw_mode", "triangles"))
     );
     if (!mesh.is_valid()) {
-        tc_log_error("RuntimePackageLoader: failed to create mesh '%s'", uuid.c_str());
+        error = "failed to create mesh '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
+    keepalive.meshes.push_back(std::move(mesh));
     return true;
 }
 
-bool load_resource(const std::filesystem::path& root, const nos::trent& entry) {
+bool load_resource(
+    const std::filesystem::path& root,
+    const nos::trent& entry,
+    RuntimeResourceKeepalive& keepalive,
+    std::string& error
+) {
     const std::string type = string_field(entry, "type");
     const std::string rel_path = string_field(entry, "path");
     if (type.empty() || rel_path.empty()) {
-        tc_log_error("RuntimePackageLoader: resource entry requires type and path");
+        error = "resource entry requires type and path";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
 
     const nos::trent spec = nos::json::parse(read_text_file(package_path(root, rel_path)));
     if (type == "shader") {
-        return load_shader_resource(root, spec);
+        return load_shader_resource(root, spec, keepalive, error);
     }
     if (type == "material") {
-        return load_material_resource(spec);
+        return load_material_resource(spec, keepalive, error);
     }
     if (type == "mesh") {
-        return load_mesh_resource(spec);
+        return load_mesh_resource(spec, keepalive, error);
     }
 
-    tc_log_error("RuntimePackageLoader: unsupported resource type '%s'", type.c_str());
+    error = "unsupported resource type '" + type + "'";
+    tc_log_error("RuntimePackageLoader: %s", error.c_str());
     return false;
+}
+
+std::string resource_label(const nos::trent& entry) {
+    const std::string type = string_field(entry, "type", "<missing-type>");
+    const std::string path = string_field(entry, "path", "<missing-path>");
+    return type + ":" + path;
 }
 
 template<typename H>
@@ -331,9 +382,15 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
+        RuntimeResourceKeepalive keepalive;
         for (const nos::trent& resource : resources->as_list()) {
-            if (!load_resource(root, resource)) {
-                result.message = "failed to load resource";
+            std::string resource_error;
+            if (!load_resource(root, resource, keepalive, resource_error)) {
+                result.message = "failed to load resource " + resource_label(resource);
+                if (!resource_error.empty()) {
+                    result.message += ": " + resource_error;
+                }
+                tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
                 return result;
             }
         }
