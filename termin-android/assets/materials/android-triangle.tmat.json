@@ -1,0 +1,11 @@
+{
+  "uuid": "android-triangle-material",
+  "name": "Android Triangle Material",
+  "phases": [
+    {
+      "mark": "opaque",
+      "shader": "termin-android-scene-color",
+      "priority": 0
+    }
+  ]
+}

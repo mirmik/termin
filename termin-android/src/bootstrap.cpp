@@ -33,6 +33,7 @@
 #include <termin/render/render_pipeline.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/runtime/runtime_package.hpp>
 #include <termin/tc_scene.hpp>
 
 extern "C" {
@@ -328,6 +329,31 @@ void android_log_error(const char*, ...) {}
 #ifdef __ANDROID__
 bool create_smoke_renderer_locked();
 void destroy_smoke_renderer_locked();
+
+termin::CameraComponent* find_player_camera(termin::TcSceneRef scene) {
+    tc_component* raw = tc_scene_first_component_of_type(scene.handle(), "CameraComponent");
+    if (!raw) {
+        return nullptr;
+    }
+    termin::CxxComponent* cxx = termin::CxxComponent::from_tc(raw);
+    return dynamic_cast<termin::CameraComponent*>(cxx);
+}
+
+bool ensure_android_scene_pipeline_locked() {
+    if (g_state.player_pipeline.is_valid()) {
+        return true;
+    }
+
+    tc_pipeline_handle pipeline_handle = tc_pipeline_create("AndroidScenePipeline");
+    if (!tc_pipeline_handle_valid(pipeline_handle)) {
+        android_log_error("player: failed to create render pipeline");
+        return false;
+    }
+    g_state.player_pipeline = termin::RenderPipeline(pipeline_handle);
+    auto* pass = new AndroidScenePass();
+    g_state.player_pipeline.add_pass(pass->tc_pass_ptr());
+    return true;
+}
 
 void reset_smoke_resources_locked() {
     g_state.smoke_vertex_shader = {};
@@ -716,15 +742,52 @@ bool ensure_player_scene_locked() {
         }
     }
 
+    if (!g_state.asset_root.empty()) {
+        const std::filesystem::path manifest_path =
+            std::filesystem::path(g_state.asset_root) / "manifest.json";
+        if (std::filesystem::is_regular_file(manifest_path)) {
+            termin::runtime::RuntimePackageLoader loader;
+            termin::runtime::RuntimePackageLoadResult package =
+                loader.load(g_state.asset_root);
+            if (package.ok && package.scene.valid()) {
+                termin::CameraComponent* camera = find_player_camera(package.scene);
+                if (!camera) {
+                    android_log_error("player: runtime package loaded but has no CameraComponent");
+                    package.scene.destroy();
+                    return false;
+                }
+                if (!ensure_android_scene_pipeline_locked()) {
+                    package.scene.destroy();
+                    return false;
+                }
+                g_state.player_scene = package.scene;
+                g_state.player_camera = camera;
+                android_log_info(
+                    "player: runtime package loaded entities=%zu pipeline_passes=%zu",
+                    g_state.player_scene.entity_count(),
+                    g_state.player_pipeline.pass_count()
+                );
+                return true;
+            }
+            android_log_error("player: runtime package load failed: %s", package.message.c_str());
+        } else {
+            android_log_info("player: no runtime manifest at '%s', using built-in scene fallback", manifest_path.c_str());
+        }
+    }
+
     termin::TcShader shader = termin::TcShader::get_or_create(kAndroidSceneShaderUuid);
-    if (!shader.is_valid() ||
-        !shader.set_sources(
-            kAndroidSceneVertexSource,
-            kAndroidSceneFragmentSource,
-            "",
-            "AndroidSceneColor",
-            "termin-android/generated")) {
+    if (!shader.is_valid()) {
         android_log_error("player: failed to create scene shader");
+        return false;
+    }
+    shader.set_sources(
+        kAndroidSceneVertexSource,
+        kAndroidSceneFragmentSource,
+        "",
+        "AndroidSceneColor",
+        "termin-android/generated");
+    if (!shader.get() || !shader.get()->fragment_source) {
+        android_log_error("player: failed to set scene shader sources");
         return false;
     }
 
@@ -804,14 +867,9 @@ bool ensure_player_scene_locked() {
     auto* light = new termin::LightComponent();
     light_entity.add_component(light);
 
-    tc_pipeline_handle pipeline_handle = tc_pipeline_create("AndroidScenePipeline");
-    if (!tc_pipeline_handle_valid(pipeline_handle)) {
-        android_log_error("player: failed to create render pipeline");
+    if (!ensure_android_scene_pipeline_locked()) {
         return false;
     }
-    g_state.player_pipeline = termin::RenderPipeline(pipeline_handle);
-    auto* pass = new AndroidScenePass();
-    g_state.player_pipeline.add_pass(pass->tc_pass_ptr());
 
     android_log_info(
         "player: tc_scene created entities=%zu mesh_vertices=%zu pipeline_passes=%zu",

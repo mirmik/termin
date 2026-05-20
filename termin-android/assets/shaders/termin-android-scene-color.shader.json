@@ -1,0 +1,7 @@
+{
+  "uuid": "termin-android-scene-color",
+  "name": "AndroidSceneColor",
+  "vertex_source_path": "shaders/vulkan/termin-android-scene-color.vert.glsl",
+  "fragment_source_path": "shaders/vulkan/termin-android-scene-color.frag.glsl",
+  "source_path": "runtime-package/shaders/termin-android-scene-color"
+}
