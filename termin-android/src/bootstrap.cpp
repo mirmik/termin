@@ -16,6 +16,8 @@
 #include <android/log.h>
 #endif
 
+#include <inspect/tc_inspect_init.h>
+#include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.h>
 #include <tgfx2/tc_shader_bridge.hpp>
 #include <tgfx/tgfx2_interop.h>
@@ -26,11 +28,11 @@
 #include <termin/engine/engine_core.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/lighting/light_component.hpp>
-#include <termin/render/drawable.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/render_engine.hpp>
 #include <termin/render/render_pipeline.hpp>
+#include <termin/render/rendering_manager.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/runtime/runtime_package.hpp>
@@ -38,7 +40,6 @@
 
 extern "C" {
 #include "core/tc_component.h"
-#include "core/tc_scene_drawable.h"
 #include "render/tc_pipeline.h"
 }
 
@@ -57,102 +58,57 @@ extern "C" {
 
 namespace {
 
-constexpr const char* kAndroidSceneShaderUuid = "termin-android-scene-color";
-
-constexpr const char* kAndroidSceneVertexSource = R"GLSL(
-#version 450
-
-layout(push_constant) uniform PushConstants {
-    mat4 u_mvp;
-} pc;
-
-layout(location = 0) in vec3 in_pos;
-layout(location = 1) in vec3 in_color;
-layout(location = 0) out vec3 v_color;
-
-void main() {
-    v_color = in_color;
-    gl_Position = pc.u_mvp * vec4(in_pos, 1.0);
-}
-)GLSL";
-
-constexpr const char* kAndroidSceneFragmentSource = R"GLSL(
-#version 450
-
-layout(location = 0) in vec3 v_color;
-layout(location = 0) out vec4 out_color;
-
-void main() {
-    out_color = vec4(v_color, 1.0);
-}
-)GLSL";
-
-class AndroidScenePass final : public termin::CxxFramePass {
+class UIWidgetPass final : public termin::CxxFramePass {
 public:
-    std::string output_res = "OUTPUT";
+    std::string input_res = "color";
+    std::string output_res = "color+widgets";
 
-    AndroidScenePass() {
-        pass_name_set("AndroidScenePass");
+    INSPECT_FIELD(UIWidgetPass, input_res, "Input Resource", "string")
+    INSPECT_FIELD(UIWidgetPass, output_res, "Output Resource", "string")
+    INSPECT_TYPE_METADATA(UIWidgetPass, graph, termin::make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {{"output_res", "fbo"}},
+        {{"input_res", "output_res"}}
+    ))
+
+    UIWidgetPass() {
+        pass_name_set("UIWidgets");
+        link_to_type_registry("UIWidgetPass");
+    }
+
+    std::set<const char*> compute_reads() const override {
+        return {input_res.c_str()};
     }
 
     std::set<const char*> compute_writes() const override {
         return {output_res.c_str()};
     }
 
-    void execute(termin::ExecuteContext& ctx) override;
-};
-
-struct AndroidSceneDrawCall {
-    termin::Entity entity;
-    tc_component* component = nullptr;
-    tc_material_phase* phase = nullptr;
-    tc_shader_handle final_shader = tc_shader_handle_invalid();
-    int geometry_id = 0;
-};
-
-struct AndroidSceneCollectData {
-    std::vector<AndroidSceneDrawCall>* calls = nullptr;
-    const char* phase_mark = "opaque";
-};
-
-bool collect_android_scene_draw_call(tc_component* component, void* user_data) {
-    auto* data = static_cast<AndroidSceneCollectData*>(user_data);
-    if (!component || !data || !data->calls) {
-        return true;
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+        return {{input_res, output_res}};
     }
 
-    const char* phase_mark = data->phase_mark ? data->phase_mark : "";
-    if (phase_mark[0] != '\0' && !tc_component_has_phase(component, phase_mark)) {
-        return true;
-    }
-
-    void* draws_ptr = tc_component_get_geometry_draws(component, phase_mark);
-    if (!draws_ptr) {
-        return true;
-    }
-
-    auto* draws = static_cast<std::vector<termin::GeometryDrawCall>*>(draws_ptr);
-    for (const termin::GeometryDrawCall& draw : *draws) {
-        if (!draw.phase) {
-            continue;
+    void execute(termin::ExecuteContext& ctx) override {
+        if (!ctx.ctx2) {
+            tc_log_error("[UIWidgetPass/android] ctx2 is null");
+            return;
         }
-        tc_shader_handle final_shader = tc_component_override_shader(
-            component,
-            phase_mark,
-            draw.geometry_id,
-            draw.phase->shader
-        );
-        data->calls->push_back(AndroidSceneDrawCall{
-            termin::Entity(component->owner),
-            component,
-            draw.phase,
-            final_shader,
-            draw.geometry_id
-        });
+        auto in_it = ctx.tex2_reads.find(input_res);
+        auto out_it = ctx.tex2_writes.find(output_res);
+        if (in_it == ctx.tex2_reads.end() || !in_it->second ||
+                out_it == ctx.tex2_writes.end() || !out_it->second) {
+            tc_log_warn(
+                "[UIWidgetPass/android] missing tgfx2 resources input='%s' output='%s'",
+                input_res.c_str(),
+                output_res.c_str()
+            );
+            return;
+        }
+        ctx.ctx2->blit(in_it->second, out_it->second);
     }
+};
 
-    return true;
-}
+TC_REGISTER_FRAME_PASS(UIWidgetPass);
 
 struct AndroidBootstrapState {
     std::string app_data_dir;
@@ -190,109 +146,6 @@ struct AndroidBootstrapState {
 std::mutex g_state_mutex;
 AndroidBootstrapState g_state;
 
-void AndroidScenePass::execute(termin::ExecuteContext& ctx) {
-    if (!ctx.ctx2) {
-        tc_log_error("AndroidScenePass: ctx2 is null");
-        return;
-    }
-    if (!ctx.scene.valid()) {
-        tc_log_error("AndroidScenePass: scene is invalid");
-        return;
-    }
-    if (!ctx.camera) {
-        tc_log_error("AndroidScenePass: camera is missing");
-        return;
-    }
-
-    auto color_it = ctx.tex2_writes.find(output_res);
-    if (color_it == ctx.tex2_writes.end() || !color_it->second) {
-        tc_log_error("AndroidScenePass: output texture '%s' is missing", output_res.c_str());
-        return;
-    }
-
-    tgfx::TextureHandle color = color_it->second;
-    tgfx::TextureHandle depth;
-    auto depth_it = ctx.tex2_depth_writes.find(output_res);
-    if (depth_it != ctx.tex2_depth_writes.end()) {
-        depth = depth_it->second;
-    }
-
-    auto& ctx2 = *ctx.ctx2;
-    auto& device = ctx2.device();
-
-    const float clear_color[4] = {0.02f, 0.025f, 0.035f, 1.0f};
-    ctx2.begin_pass(color, depth, clear_color, 1.0f, true);
-    ctx2.set_viewport(0, 0, ctx.render_rect.width, ctx.render_rect.height);
-    ctx2.set_depth_test(true);
-    ctx2.set_depth_write(true);
-    ctx2.set_blend(false);
-    ctx2.set_cull(tgfx::CullMode::Back);
-    ctx2.set_polygon_mode(tgfx::PolygonMode::Fill);
-
-    std::vector<AndroidSceneDrawCall> calls;
-    AndroidSceneCollectData collect{&calls, "opaque"};
-    tc_scene_foreach_drawable(
-        ctx.scene.handle(),
-        collect_android_scene_draw_call,
-        &collect,
-        TC_SCENE_FILTER_NONE,
-        ctx.layer_mask
-    );
-
-    const termin::Mat44f view = ctx.camera->get_view_matrix().to_float();
-    const termin::Mat44f projection = ctx.camera->get_projection_matrix().to_float();
-
-    for (const AndroidSceneDrawCall& call : calls) {
-        if (!call.phase || tc_shader_handle_is_invalid(call.final_shader)) {
-            continue;
-        }
-
-        auto* raw_shader = tc_shader_get(call.final_shader);
-        if (!raw_shader) {
-            continue;
-        }
-
-        tgfx::ShaderHandle vs;
-        tgfx::ShaderHandle fs;
-        if (!termin::tc_shader_ensure_tgfx2(raw_shader, &device, &vs, &fs)) {
-            tc_log_error(
-                "AndroidScenePass: tc_shader_ensure_tgfx2 failed for '%s'",
-                raw_shader->name ? raw_shader->name : raw_shader->uuid
-            );
-            continue;
-        }
-
-        termin::Drawable* drawable = nullptr;
-        if (tc_component_get_drawable_vtable(call.component) ==
-            &termin::Drawable::cxx_drawable_vtable()) {
-            drawable = static_cast<termin::Drawable*>(
-                tc_component_get_drawable_userdata(call.component));
-        }
-        if (!drawable) {
-            continue;
-        }
-
-        tc_mesh* mesh = drawable->get_mesh_for_phase("opaque", call.geometry_id);
-        if (!mesh) {
-            continue;
-        }
-
-        ctx2.bind_shader(vs, fs);
-
-        const termin::Mat44f model = drawable->get_model_matrix(call.entity);
-        const termin::Mat44f mvp = projection * view * model;
-        struct PushConstants {
-            float u_mvp[16];
-        } push{};
-        std::memcpy(push.u_mvp, mvp.data, sizeof(push.u_mvp));
-        ctx2.set_push_constants(&push, sizeof(push));
-
-        termin::draw_tc_mesh(ctx2, mesh, {0, 1});
-    }
-
-    ctx2.end_pass();
-}
-
 std::string infer_shader_artifact_root(const std::string& asset_root) {
     if (asset_root.empty()) {
         return "";
@@ -307,6 +160,25 @@ std::string infer_shader_artifact_root(const std::string& asset_root) {
 
 #ifdef __ANDROID__
 constexpr const char* kAndroidLogTag = "TerminAndroid";
+constexpr const char* kTcLogTag = "TerminTcLog";
+
+int tc_log_android_priority(tc_log_level level) {
+    switch (level) {
+        case TC_LOG_DEBUG:
+            return ANDROID_LOG_DEBUG;
+        case TC_LOG_INFO:
+            return ANDROID_LOG_INFO;
+        case TC_LOG_WARN:
+            return ANDROID_LOG_WARN;
+        case TC_LOG_ERROR:
+            return ANDROID_LOG_ERROR;
+    }
+    return ANDROID_LOG_INFO;
+}
+
+void tc_log_android_callback(tc_log_level level, const char* message) {
+    __android_log_write(tc_log_android_priority(level), kTcLogTag, message ? message : "");
+}
 
 void android_log_info(const char* fmt, ...) {
     va_list args;
@@ -329,6 +201,7 @@ void android_log_error(const char*, ...) {}
 #ifdef __ANDROID__
 bool create_smoke_renderer_locked();
 void destroy_smoke_renderer_locked();
+bool resize_smoke_renderer_locked(uint32_t width, uint32_t height);
 
 termin::CameraComponent* find_player_camera(termin::TcSceneRef scene) {
     tc_component* raw = tc_scene_first_component_of_type(scene.handle(), "CameraComponent");
@@ -339,19 +212,261 @@ termin::CameraComponent* find_player_camera(termin::TcSceneRef scene) {
     return dynamic_cast<termin::CameraComponent*>(cxx);
 }
 
+double value_to_double(const tc_value* value, double fallback = 0.0) {
+    if (!value) {
+        return fallback;
+    }
+    if (value->type == TC_VALUE_DOUBLE) {
+        return value->data.d;
+    }
+    if (value->type == TC_VALUE_FLOAT) {
+        return static_cast<double>(value->data.f);
+    }
+    if (value->type == TC_VALUE_INT) {
+        return static_cast<double>(value->data.i);
+    }
+    return fallback;
+}
+
+void register_camera_runtime_fields(tc::InspectRegistry& inspect) {
+    inspect.set_type_parent("CameraComponent", "CxxComponent");
+    if (!inspect.find_field("CameraComponent", "near_clip")) {
+        inspect.add<termin::CameraComponent, double>(
+            "CameraComponent", &termin::CameraComponent::near_clip, "near_clip", "Near Clip", "double");
+    }
+    if (!inspect.find_field("CameraComponent", "far_clip")) {
+        inspect.add<termin::CameraComponent, double>(
+            "CameraComponent", &termin::CameraComponent::far_clip, "far_clip", "Far Clip", "double");
+    }
+    if (!inspect.find_field("CameraComponent", "ortho_size")) {
+        inspect.add<termin::CameraComponent, double>(
+            "CameraComponent", &termin::CameraComponent::ortho_size, "ortho_size", "Ortho Size", "double");
+    }
+    if (!inspect.find_field("CameraComponent", "fov_x_degrees")) {
+        inspect.add_with_accessors<termin::CameraComponent, double>(
+            "CameraComponent",
+            "fov_x_degrees",
+            "Horizontal FOV",
+            "double",
+            [](termin::CameraComponent* camera) { return camera ? camera->get_fov_x_degrees() : 0.0; },
+            [](termin::CameraComponent* camera, double value) {
+                if (camera) {
+                    camera->set_fov_x_degrees(value);
+                }
+            }
+        );
+    }
+    if (!inspect.find_field("CameraComponent", "fov_y_degrees")) {
+        inspect.add_with_accessors<termin::CameraComponent, double>(
+            "CameraComponent",
+            "fov_y_degrees",
+            "Vertical FOV",
+            "double",
+            [](termin::CameraComponent* camera) { return camera ? camera->get_fov_y_degrees() : 0.0; },
+            [](termin::CameraComponent* camera, double value) {
+                if (camera) {
+                    camera->set_fov_y_degrees(value);
+                }
+            }
+        );
+    }
+    if (!inspect.find_field("CameraComponent", "fov_mode")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "CameraComponent";
+        info.path = "fov_mode";
+        info.label = "FOV Mode";
+        info.kind = "string";
+        info.getter = [](void* obj) -> tc_value {
+            return tc_value_string(static_cast<termin::CameraComponent*>(obj)->get_fov_mode_str().c_str());
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* camera = static_cast<termin::CameraComponent*>(obj);
+            if (camera && value.type == TC_VALUE_STRING && value.data.s) {
+                camera->set_fov_mode_str(value.data.s);
+            }
+        };
+        inspect.add_field_with_choices("CameraComponent", std::move(info));
+    }
+    if (!inspect.find_field("CameraComponent", "layer_mask")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "CameraComponent";
+        info.path = "layer_mask";
+        info.label = "Layers";
+        info.kind = "layer_mask";
+        info.getter = [](void* obj) -> tc_value {
+            auto* camera = static_cast<termin::CameraComponent*>(obj);
+            char buf[32];
+            snprintf(buf, sizeof(buf), "0x%llx", static_cast<unsigned long long>(camera->layer_mask));
+            return tc_value_string(buf);
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* camera = static_cast<termin::CameraComponent*>(obj);
+            if (!camera) {
+                return;
+            }
+            if (value.type == TC_VALUE_STRING && value.data.s) {
+                camera->layer_mask = strtoull(value.data.s, nullptr, 0);
+            } else if (value.type == TC_VALUE_INT) {
+                camera->layer_mask = static_cast<uint64_t>(value.data.i);
+            }
+        };
+        inspect.add_field_with_choices("CameraComponent", std::move(info));
+    }
+}
+
+void register_light_runtime_fields(tc::InspectRegistry& inspect) {
+    inspect.set_type_parent("LightComponent", "CxxComponent");
+    if (!inspect.find_field("LightComponent", "light_type")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "LightComponent";
+        info.path = "light_type";
+        info.label = "Light Type";
+        info.kind = "string";
+        info.getter = [](void* obj) -> tc_value {
+            return tc_value_string(static_cast<termin::LightComponent*>(obj)->get_light_type_str().c_str());
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* light = static_cast<termin::LightComponent*>(obj);
+            if (light && value.type == TC_VALUE_STRING && value.data.s) {
+                light->set_light_type_str(value.data.s);
+            }
+        };
+        inspect.add_field_with_choices("LightComponent", std::move(info));
+    }
+    if (!inspect.find_field("LightComponent", "color")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "LightComponent";
+        info.path = "color";
+        info.label = "Color";
+        info.kind = "color";
+        info.getter = [](void* obj) -> tc_value {
+            auto* light = static_cast<termin::LightComponent*>(obj);
+            tc_value list = tc_value_list_new();
+            tc_value_list_push(&list, tc_value_double(light->color.x));
+            tc_value_list_push(&list, tc_value_double(light->color.y));
+            tc_value_list_push(&list, tc_value_double(light->color.z));
+            return list;
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* light = static_cast<termin::LightComponent*>(obj);
+            if (light && value.type == TC_VALUE_LIST && tc_value_list_size(&value) >= 3) {
+                light->color = termin::Vec3(
+                    value_to_double(tc_value_list_get(&value, 0), 1.0),
+                    value_to_double(tc_value_list_get(&value, 1), 1.0),
+                    value_to_double(tc_value_list_get(&value, 2), 1.0)
+                );
+            }
+        };
+        inspect.add_field_with_choices("LightComponent", std::move(info));
+    }
+    if (!inspect.find_field("LightComponent", "intensity")) {
+        inspect.add<termin::LightComponent, double>(
+            "LightComponent", &termin::LightComponent::intensity, "intensity", "Intensity", "double");
+    }
+}
+
+void register_android_runtime_inspect_fields() {
+    static bool registered = false;
+    if (registered) {
+        return;
+    }
+    registered = true;
+
+    tc_inspect_kind_core_init();
+    tc::KindRegistryCpp::instance();
+    termin::MeshComponent::register_type();
+
+    auto& inspect = tc::InspectRegistry::instance();
+    inspect.set_type_parent("MeshRenderer", "Component");
+    if (!inspect.find_field("MeshRenderer", "mesh")) {
+        inspect.add<termin::MeshRenderer, termin::TcMesh>(
+            "MeshRenderer", &termin::MeshRenderer::mesh, "mesh", "Mesh", "tc_mesh");
+    }
+    if (!inspect.find_field("MeshRenderer", "material")) {
+        inspect.add<termin::MeshRenderer, termin::TcMaterial>(
+            "MeshRenderer", &termin::MeshRenderer::material, "material", "Material", "tc_material");
+    }
+    if (!inspect.find_field("MeshRenderer", "cast_shadow")) {
+        inspect.add<termin::MeshRenderer, bool>(
+            "MeshRenderer", &termin::MeshRenderer::cast_shadow, "cast_shadow", "Cast Shadow", "bool");
+    }
+    if (!inspect.find_field("MeshRenderer", "mesh_offset_enabled")) {
+        inspect.add<termin::MeshRenderer, bool>(
+            "MeshRenderer", &termin::MeshRenderer::mesh_offset_enabled, "mesh_offset_enabled", "Mesh Offset", "bool");
+    }
+    if (!inspect.find_field("MeshRenderer", "mesh_offset_position")) {
+        inspect.add<termin::MeshRenderer, tc_vec3>(
+            "MeshRenderer", &termin::MeshRenderer::mesh_offset_position, "mesh_offset_position", "Offset Position", "vec3");
+    }
+    if (!inspect.find_field("MeshRenderer", "mesh_offset_euler")) {
+        inspect.add<termin::MeshRenderer, tc_vec3>(
+            "MeshRenderer", &termin::MeshRenderer::mesh_offset_euler, "mesh_offset_euler", "Offset Rotation", "vec3");
+    }
+    if (!inspect.find_field("MeshRenderer", "mesh_offset_scale")) {
+        inspect.add<termin::MeshRenderer, tc_vec3>(
+            "MeshRenderer", &termin::MeshRenderer::mesh_offset_scale, "mesh_offset_scale", "Offset Scale", "vec3");
+    }
+    if (!inspect.find_field("MeshRenderer", "_override_material")) {
+        inspect.add_with_accessors<termin::MeshRenderer, bool>(
+            "MeshRenderer",
+            "_override_material",
+            "Override Material",
+            "bool",
+            [](termin::MeshRenderer* renderer) { return renderer ? renderer->override_material() : false; },
+            [](termin::MeshRenderer* renderer, bool value) {
+                if (renderer) {
+                    renderer->set_override_material(value);
+                }
+            }
+        );
+    }
+    if (!inspect.find_field("MeshRenderer", "_overridden_material_data")) {
+        tc::InspectFieldInfo info;
+        info.type_name = "MeshRenderer";
+        info.path = "_overridden_material_data";
+        info.label = "";
+        info.kind = "";
+        info.is_inspectable = false;
+        info.is_serializable = true;
+        info.getter = [](void* obj) -> tc_value {
+            return static_cast<termin::MeshRenderer*>(obj)->get_override_data();
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            static_cast<termin::MeshRenderer*>(obj)->set_override_data(&value);
+        };
+        inspect.add_serializable_field("MeshRenderer", std::move(info));
+    }
+
+    register_camera_runtime_fields(inspect);
+    register_light_runtime_fields(inspect);
+
+    tc_log_info(
+        "termin_android_player: runtime inspect fields registered mesh=%zu renderer=%zu camera=%zu light=%zu",
+        tc_inspect_field_count("MeshComponent"),
+        tc_inspect_field_count("MeshRenderer"),
+        tc_inspect_field_count("CameraComponent"),
+        tc_inspect_field_count("LightComponent")
+    );
+}
+
 bool ensure_android_scene_pipeline_locked() {
     if (g_state.player_pipeline.is_valid()) {
         return true;
     }
 
-    tc_pipeline_handle pipeline_handle = tc_pipeline_create("AndroidScenePipeline");
+    tc_pipeline_handle pipeline_handle =
+        g_state.player_engine
+            ? g_state.player_engine->rendering_manager.create_pipeline("Default")
+            : termin::RenderingManager::make_default_pipeline();
     if (!tc_pipeline_handle_valid(pipeline_handle)) {
-        android_log_error("player: failed to create render pipeline");
+        android_log_error("player: failed to create Default render pipeline");
         return false;
     }
     g_state.player_pipeline = termin::RenderPipeline(pipeline_handle);
-    auto* pass = new AndroidScenePass();
-    g_state.player_pipeline.add_pass(pass->tc_pass_ptr());
+    android_log_info(
+        "player: Default render pipeline created passes=%zu",
+        g_state.player_pipeline.pass_count()
+    );
     return true;
 }
 
@@ -727,6 +842,8 @@ bool ensure_player_scene_locked() {
         g_state.player_engine = std::make_unique<termin::EngineCore>();
     }
 
+    register_android_runtime_inspect_fields();
+
     const char* required_components[] = {
         "MeshComponent",
         "MeshRenderer",
@@ -742,139 +859,45 @@ bool ensure_player_scene_locked() {
         }
     }
 
-    if (!g_state.asset_root.empty()) {
-        const std::filesystem::path manifest_path =
-            std::filesystem::path(g_state.asset_root) / "manifest.json";
-        if (std::filesystem::is_regular_file(manifest_path)) {
-            termin::runtime::RuntimePackageLoader loader;
-            termin::runtime::RuntimePackageLoadResult package =
-                loader.load(g_state.asset_root);
-            if (package.ok && package.scene.valid()) {
-                termin::CameraComponent* camera = find_player_camera(package.scene);
-                if (!camera) {
-                    android_log_error("player: runtime package loaded but has no CameraComponent");
-                    package.scene.destroy();
-                    return false;
-                }
-                if (!ensure_android_scene_pipeline_locked()) {
-                    package.scene.destroy();
-                    return false;
-                }
-                g_state.player_scene = package.scene;
-                g_state.player_camera = camera;
-                android_log_info(
-                    "player: runtime package loaded entities=%zu pipeline_passes=%zu",
-                    g_state.player_scene.entity_count(),
-                    g_state.player_pipeline.pass_count()
-                );
-                return true;
-            }
-            android_log_error("player: runtime package load failed: %s", package.message.c_str());
-        } else {
-            android_log_info("player: no runtime manifest at '%s', using built-in scene fallback", manifest_path.c_str());
-        }
-    }
-
-    termin::TcShader shader = termin::TcShader::get_or_create(kAndroidSceneShaderUuid);
-    if (!shader.is_valid()) {
-        android_log_error("player: failed to create scene shader");
-        return false;
-    }
-    shader.set_sources(
-        kAndroidSceneVertexSource,
-        kAndroidSceneFragmentSource,
-        "",
-        "AndroidSceneColor",
-        "termin-android/generated");
-    if (!shader.get() || !shader.get()->fragment_source) {
-        android_log_error("player: failed to set scene shader sources");
+    if (g_state.asset_root.empty()) {
+        android_log_error("player: asset_root is empty; runtime package cannot be loaded");
+        tc_log_error("termin_android_player: asset_root is empty; runtime package cannot be loaded");
         return false;
     }
 
-    termin::TcMaterial material =
-        termin::TcMaterial::create("AndroidSceneMaterial", "termin-android-scene-material");
-    if (!material.is_valid()) {
-        android_log_error("player: failed to create scene material");
-        return false;
-    }
-    material.clear_phases();
-    if (!material.add_phase(shader, "opaque", 0)) {
-        android_log_error("player: failed to add material phase");
+    const std::filesystem::path manifest_path =
+        std::filesystem::path(g_state.asset_root) / "manifest.json";
+    if (!std::filesystem::is_regular_file(manifest_path)) {
+        android_log_error("player: runtime manifest not found at '%s'", manifest_path.c_str());
+        tc_log_error("termin_android_player: runtime manifest not found at '%s'", manifest_path.c_str());
         return false;
     }
 
-    struct Vertex {
-        float position[3];
-        float color[3];
-    };
-    const Vertex vertices[] = {
-        {{-1.0f, 0.0f, -0.8f}, {0.0f, 1.0f, 0.15f}},
-        {{ 1.0f, 0.0f, -0.8f}, {0.1f, 0.35f, 1.0f}},
-        {{ 0.0f, 0.0f,  1.0f}, {1.0f, 0.1f, 0.05f}},
-    };
-    const uint32_t indices[] = {0, 1, 2};
-    tc_vertex_layout layout;
-    tc_vertex_layout_init(&layout);
-    tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
-    tc_vertex_layout_add(&layout, "color", 3, TC_ATTRIB_FLOAT32, 1);
-
-    termin::TcMesh mesh = termin::TcMesh::from_interleaved(
-        vertices,
-        3,
-        indices,
-        3,
-        layout,
-        "AndroidSceneTriangle",
-        "termin-android-scene-triangle",
-        TC_DRAW_TRIANGLES
-    );
-    if (!mesh.is_valid()) {
-        android_log_error("player: failed to create triangle mesh");
+    termin::runtime::RuntimePackageLoader loader;
+    termin::runtime::RuntimePackageLoadResult package =
+        loader.load(g_state.asset_root);
+    if (!package.ok || !package.scene.valid()) {
+        android_log_error("player: runtime package load failed: %s", package.message.c_str());
+        tc_log_error("termin_android_player: runtime package load failed: %s", package.message.c_str());
         return false;
     }
 
-    g_state.player_scene = termin::TcSceneRef::create("android-player-scene");
-    if (!g_state.player_scene.valid()) {
-        android_log_error("player: failed to create tc_scene");
+    termin::CameraComponent* camera = find_player_camera(package.scene);
+    if (!camera) {
+        android_log_error("player: runtime package loaded but has no CameraComponent");
+        tc_log_error("termin_android_player: runtime package loaded but has no CameraComponent");
+        package.scene.destroy();
         return false;
     }
-
-    termin::Entity triangle = g_state.player_scene.create_entity("Triangle");
-    auto* mesh_component = new termin::MeshComponent();
-    mesh_component->set_mesh(mesh);
-    triangle.add_component(mesh_component);
-    auto* mesh_renderer = new termin::MeshRenderer();
-    mesh_renderer->set_mesh(mesh);
-    mesh_renderer->set_material(material);
-    triangle.add_component(mesh_renderer);
-
-    termin::Entity camera_entity = g_state.player_scene.create_entity("MainCamera");
-    double camera_pos[3] = {0.0, -3.2, 0.0};
-    camera_entity.set_local_position(camera_pos);
-    auto* camera = new termin::CameraComponent();
-    camera->near_clip = 0.1;
-    camera->far_clip = 50.0;
-    camera->set_fov_y_degrees(55.0);
-    camera->set_aspect(
-        g_state.smoke_height == 0
-            ? 1.0
-            : static_cast<double>(g_state.smoke_width) / static_cast<double>(g_state.smoke_height)
-    );
-    camera_entity.add_component(camera);
-    g_state.player_camera = camera;
-
-    termin::Entity light_entity = g_state.player_scene.create_entity("KeyLight");
-    auto* light = new termin::LightComponent();
-    light_entity.add_component(light);
-
     if (!ensure_android_scene_pipeline_locked()) {
+        package.scene.destroy();
         return false;
     }
-
+    g_state.player_scene = package.scene;
+    g_state.player_camera = camera;
     android_log_info(
-        "player: tc_scene created entities=%zu mesh_vertices=%zu pipeline_passes=%zu",
+        "player: runtime package loaded entities=%zu pipeline_passes=%zu",
         g_state.player_scene.entity_count(),
-        mesh.vertex_count(),
         g_state.player_pipeline.pass_count()
     );
     return true;
@@ -917,8 +940,13 @@ int render_player_frame_locked() {
         };
         target.output_color_tex = g_state.player_color_target;
         target.output_depth_tex = g_state.player_depth_target;
-        target.clear_color_enabled = false;
-        target.clear_depth_enabled = false;
+        target.clear_color_enabled = true;
+        target.clear_color[0] = 0.0f;
+        target.clear_color[1] = 0.0f;
+        target.clear_color[2] = 0.0f;
+        target.clear_color[3] = 1.0f;
+        target.clear_depth_enabled = true;
+        target.clear_depth = 1.0f;
         target.camera = termin::make_render_camera(
             *g_state.player_camera,
             target.render_rect.height == 0
@@ -950,7 +978,10 @@ int render_player_frame_locked() {
             );
         }
         if (recreate) {
-            destroy_smoke_renderer_locked();
+            resize_smoke_renderer_locked(
+                static_cast<uint32_t>(g_state.surface_width),
+                static_cast<uint32_t>(g_state.surface_height)
+            );
         }
         return 1;
     } catch (const std::exception& e) {
@@ -966,16 +997,18 @@ int render_player_frame_locked() {
 
 void destroy_smoke_renderer_locked() {
 #ifdef __ANDROID__
-    destroy_player_scene_locked();
     if (g_state.smoke_device) {
         android_log_info("smoke: destroy renderer");
         try {
-            destroy_smoke_resources_locked();
             g_state.smoke_device->wait_idle();
+            destroy_player_scene_locked();
+            destroy_smoke_resources_locked();
         } catch (const std::exception& e) {
             android_log_error("smoke: destroy failed: %s", e.what());
             tc_log_error("termin_android_smoke: destroy failed: %s", e.what());
         }
+    } else {
+        destroy_player_scene_locked();
     }
     g_state.smoke_device.reset();
     reset_smoke_resources_locked();
@@ -985,6 +1018,47 @@ void destroy_smoke_renderer_locked() {
     tgfx2_interop_set_device(nullptr);
 #endif
 }
+
+#ifdef __ANDROID__
+bool resize_smoke_renderer_locked(uint32_t width, uint32_t height) {
+    if (!g_state.smoke_device || !g_state.smoke_device->swapchain()) {
+        return false;
+    }
+    if (width == 0 || height == 0) {
+        android_log_error("smoke: invalid resize %ux%u", width, height);
+        tc_log_error("termin_android_smoke: invalid resize %ux%u", width, height);
+        destroy_smoke_renderer_locked();
+        return false;
+    }
+
+    try {
+        android_log_info("smoke: recreate swapchain size=%ux%u", width, height);
+        tc_log_info("termin_android_smoke: recreate swapchain size=%ux%u", width, height);
+        g_state.smoke_device->swapchain()->recreate(width, height);
+        g_state.smoke_width = g_state.smoke_device->swapchain()->width();
+        g_state.smoke_height = g_state.smoke_device->swapchain()->height();
+        destroy_player_targets_locked();
+        android_log_info(
+            "smoke: swapchain recreated %ux%u images=%u",
+            g_state.smoke_width,
+            g_state.smoke_height,
+            g_state.smoke_device->swapchain()->image_count()
+        );
+        tc_log_info(
+            "termin_android_smoke: swapchain recreated %ux%u images=%u",
+            g_state.smoke_width,
+            g_state.smoke_height,
+            g_state.smoke_device->swapchain()->image_count()
+        );
+        return true;
+    } catch (const std::exception& e) {
+        android_log_error("smoke: swapchain recreate failed: %s", e.what());
+        tc_log_error("termin_android_smoke: swapchain recreate failed: %s", e.what());
+        destroy_smoke_renderer_locked();
+        return false;
+    }
+}
+#endif
 
 void release_window_locked() {
     destroy_smoke_renderer_locked();
@@ -1102,6 +1176,10 @@ int render_smoke_frame_locked() {
 
 extern "C" int termin_android_initialize(const termin_android_config* config) {
     std::lock_guard<std::mutex> lock(g_state_mutex);
+#ifdef __ANDROID__
+    tc_log_set_callback(tc_log_android_callback);
+    tc_log_set_level(TC_LOG_DEBUG);
+#endif
     if (!config) {
         android_log_error("initialize: config is NULL");
         tc_log_error("termin_android_initialize: config is NULL");
@@ -1116,22 +1194,6 @@ extern "C" int termin_android_initialize(const termin_android_config* config) {
     std::string shader_artifact_root = infer_shader_artifact_root(g_state.asset_root);
     termin::tgfx2_set_shader_artifact_root(
         shader_artifact_root.empty() ? nullptr : shader_artifact_root.c_str());
-    std::filesystem::path scene_vertex_spv =
-        std::filesystem::path(shader_artifact_root) / "shaders" / "vulkan" /
-        (std::string(kAndroidSceneShaderUuid) + ".vert.spv");
-    std::filesystem::path scene_fragment_spv =
-        std::filesystem::path(shader_artifact_root) / "shaders" / "vulkan" /
-        (std::string(kAndroidSceneShaderUuid) + ".frag.spv");
-    if (!std::filesystem::is_regular_file(scene_vertex_spv) ||
-        !std::filesystem::is_regular_file(scene_fragment_spv)) {
-        android_log_error(
-            "initialize: missing Android scene shader artifacts: vert='%s' exists=%d frag='%s' exists=%d",
-            scene_vertex_spv.string().c_str(),
-            std::filesystem::is_regular_file(scene_vertex_spv) ? 1 : 0,
-            scene_fragment_spv.string().c_str(),
-            std::filesystem::is_regular_file(scene_fragment_spv) ? 1 : 0
-        );
-    }
 
     android_log_info(
         "initialize: app_data_dir='%s', asset_root='%s', shader_artifact_root='%s', native_lib_dir='%s'",
@@ -1160,6 +1222,9 @@ extern "C" void termin_android_shutdown(void) {
     termin::tgfx2_set_shader_artifact_root(nullptr);
     android_log_info("shutdown");
     tc_log_info("termin_android_shutdown");
+#ifdef __ANDROID__
+    tc_log_set_callback(nullptr);
+#endif
 }
 
 extern "C" void termin_android_set_shader_artifact_root(const char* root) {
@@ -1221,10 +1286,26 @@ extern "C" void termin_android_on_surface_changed(int32_t width, int32_t height)
         static_cast<int>(width),
         static_cast<int>(height)
     );
-    if (size_changed) {
-        destroy_smoke_renderer_locked();
+    if (size_changed && g_state.smoke_device) {
+        if (width <= 0 || height <= 0) {
+            android_log_error(
+                "surface_changed: invalid resize %dx%d",
+                static_cast<int>(width),
+                static_cast<int>(height)
+            );
+            tc_log_error(
+                "termin_android_on_surface_changed: invalid resize %dx%d",
+                static_cast<int>(width),
+                static_cast<int>(height)
+            );
+            destroy_smoke_renderer_locked();
+            return;
+        }
+        resize_smoke_renderer_locked(
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height)
+        );
     }
-    render_smoke_frame_locked();
 }
 
 extern "C" void termin_android_on_surface_destroyed(void) {
