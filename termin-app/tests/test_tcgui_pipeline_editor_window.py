@@ -70,7 +70,7 @@ def test_pipeline_graph_load_handles_native_pass_metadata_without_python_fields(
 def test_material_pass_loads_texture_inputs_from_material_shader():
     from termin._native.render import TcMaterial
     from termin.assets.resources import ResourceManager
-    from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm, parse_shader_text
+    from termin.materials import ShaderMultyPhaseProgramm, parse_shader_text
 
     shader_text = """
 @program TestMaterialPassDynamicInputs

@@ -139,18 +139,27 @@ if ($TargetDir) {
     Write-Host ""
     Write-Host "Install mode: --target $TargetDir (single pip invocation, no-deps)"
 
-    # Pre-install termin-build-tools into the current Python environment
-    # so termin_build.cmake_ext is importable when pip processes setup.py
-    # metadata for other packages.
-    & python -m pip install --no-build-isolation (Join-Path $ScriptDir "termin-build-tools")
-    if ($LASTEXITCODE -ne 0) { throw "pip install termin-build-tools failed" }
-
     $pipArgs = @("install", "--no-build-isolation", "--no-deps", "--upgrade", "--target", $TargetDir) + $ForceFlags
     foreach ($pkg in $Packages) {
         $pipArgs += (Join-Path $ScriptDir $pkg)
     }
-    & python -m pip @pipArgs
-    if ($LASTEXITCODE -ne 0) { throw "pip install --target failed" }
+
+    # Make termin_build.cmake_ext importable while pip prepares metadata for
+    # packages that use it, without installing build tools into user Python.
+    $oldPythonPath = $env:PYTHONPATH
+    $buildToolsPath = Join-Path $ScriptDir "termin-build-tools"
+    if ($oldPythonPath) {
+        $env:PYTHONPATH = "$buildToolsPath$([IO.Path]::PathSeparator)$oldPythonPath"
+    } else {
+        $env:PYTHONPATH = $buildToolsPath
+    }
+    try {
+        & python -m pip @pipArgs
+        if ($LASTEXITCODE -ne 0) { throw "pip install --target failed" }
+    }
+    finally {
+        $env:PYTHONPATH = $oldPythonPath
+    }
 } else {
     # Host-env mode: sequential installs so errors are attributed to a
     # specific package and intermediate state is inspectable.

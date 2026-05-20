@@ -11,7 +11,7 @@ from tcbase import log
 from tgfx import TcShader
 
 if TYPE_CHECKING:
-    from termin.visualization.render.shader_parser import ShaderMultyPhaseProgramm
+    from termin.materials import ShaderMultyPhaseProgramm
 
 
 def make_phase_uuid(shader_uuid: str, phase_mark: str) -> str:
@@ -39,7 +39,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
         shader_name: Shader name
         shader_uuid: Shader asset UUID
     """
-    from termin._native.render import TcRenderState
+    from termin.materials import TcRenderState
     from termin.assets.material_asset import _build_render_state, _apply_uniform_defaults, _apply_texture_defaults
     from termin.assets.resources import ResourceManager
 
@@ -158,7 +158,7 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
 
     def _parse_content(self, content: str) -> "ShaderMultyPhaseProgramm | None":
         """Parse shader source text into ShaderMultyPhaseProgramm."""
-        from termin.visualization.render.shader_parser import (
+        from termin.materials import (
             parse_shader_text,
             ShaderMultyPhaseProgramm,
         )
@@ -229,7 +229,7 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
     @classmethod
     def from_file(cls, path: str | Path, name: str | None = None) -> "ShaderAsset":
         """Create ShaderAsset from .shader file."""
-        from termin.visualization.render.shader_parser import (
+        from termin.materials import (
             parse_shader_text,
             ShaderMultyPhaseProgramm,
         )

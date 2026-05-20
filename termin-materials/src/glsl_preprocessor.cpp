@@ -1,5 +1,5 @@
 // glsl_preprocessor.cpp - Global GLSL preprocessor instance
-#include "glsl_preprocessor.hpp"
+#include <termin/materials/glsl_preprocessor.hpp>
 
 namespace termin {
 

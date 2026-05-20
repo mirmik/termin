@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from termin._native.render import TcMaterial
+from termin.materials import TcMaterial
 
 # Матрицы работают в однородных координатах: gl_Position = P * V * M * [x, y, z, 1]^T
 DEFAULT_VERT = """#version 330 core
@@ -241,11 +241,20 @@ def create_default_material(
     Returns:
         TcMaterial с одной фазой "opaque".
     """
-    from termin.visualization.render.shader_parser import parse_shader_text
+    from termin.materials import create_material_from_parsed, parse_shader_text
+    from termin.visualization.core.texture_handle import (
+        get_normal_texture_handle,
+        get_white_texture_handle,
+    )
 
-    mat = TcMaterial.from_parsed(
+    white_tex = get_white_texture_handle().get()
+    normal_tex = get_normal_texture_handle().get()
+
+    mat = create_material_from_parsed(
         parse_shader_text(DEFAULT_SHADER_TEXT),
         name=name,
+        default_white_texture=white_tex,
+        default_normal_texture=normal_tex,
     )
 
     phase = mat.default_phase()

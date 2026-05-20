@@ -60,7 +60,6 @@ nanobind_add_module(_native NB_SHARED
     termin/editor/editor_interaction_system.cpp
     termin/navmesh/off_mesh_link_editor_visual.cpp
     termin/bindings/modules/term_modules_integration_bindings.cpp
-    termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
@@ -81,7 +80,6 @@ nanobind_add_module(_native NB_SHARED
     termin/tc_scene_lighting_bindings.cpp
 )
 target_link_libraries(_native PRIVATE
-    OpenGL::GL
     trent
     entity_lib
     termin_inspect::termin_inspect_python
@@ -90,6 +88,9 @@ target_link_libraries(_native PRIVATE
     render_lib
     tgfx::termin_graphics
 )
+if(TGFX2_ENABLE_OPENGL)
+    target_link_libraries(_native PRIVATE OpenGL::GL)
+endif()
 if(TERMIN_HAS_RECAST)
     target_link_libraries(_native PRIVATE navmesh_lib)
 endif()

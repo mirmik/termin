@@ -13,7 +13,7 @@
 #include <termin/material/tc_material_handle.hpp>
 #include <termin/mesh/tc_mesh_handle.hpp>
 #include <termin/render/drawable.hpp>
-#include <termin/render/shader_parser.hpp>
+#include <termin/materials/shader_parser.hpp>
 #include <tc_log.h>
 
 namespace termin {

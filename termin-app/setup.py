@@ -43,6 +43,7 @@ if __name__ == "__main__":
                 "termin.display", "termin.display.*",           # termin-display
                 "termin.viewport", "termin.viewport.*",         # termin-display
                 "termin.geombase", "termin.geombase.*",         # tcbase
+                "termin.materials", "termin.materials.*",       # termin-materials
                 "termin.scene", "termin.scene.*",               # termin-scene
                 "termin.input", "termin.input.*",               # termin-input
                 "termin.inspect", "termin.inspect.*",           # termin-inspect
@@ -91,6 +92,7 @@ if __name__ == "__main__":
         install_requires=[
             "tcbase",
             "termin-assets",
+            "termin-materials",
             "termin-nanobind",
             "numpy",
             "PyOpenGL>=3.1",

@@ -3,7 +3,7 @@
 TcMaterial is the C-based material system.
 Material and MaterialPhase are now aliases to TcMaterial/TcMaterialPhase.
 """
-from termin._native.render import (
+from termin.materials import (
     TcMaterial,
     TcMaterialPhase,
     TcRenderState,
