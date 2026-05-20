@@ -192,15 +192,7 @@ vertex_3d = centroid + u_coord * basis_u + v_coord * basis_v
 
 ---
 
-## TODO
+## Оставшиеся задачи
 
-- [x] Шаг 1: Сбор поверхностных вокселей (список нормалей на воксель)
-- [x] Шаг 2: Region Growing
-- [x] Шаг 2.5: Расширение регионов (Region Expansion)
-- [x] Шаг 3-4: Плоскость + проекция с сшивкой
-- [x] Шаг 5-7: 2D → Alpha Shape → 3D
-- [x] Шаг 8: Извлечение контуров
-- [x] Шаг 9: Douglas-Peucker
-- [x] Шаг 10: Ear Clipping
 - [ ] Граф связности регионов
 - [ ] Перенос Delaunay на C++

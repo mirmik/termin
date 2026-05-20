@@ -117,20 +117,24 @@ RT_COLOR: rgba16f
 RT_DEPTH: depth32f
 ```
 
-## Progress
+## Current State
 
-- Done: compiler parses `render_target_input` and `pipeline_output` graph-boundary nodes.
-- Done: `RenderTargetInput.color` resolves to external `RT_COLOR`; `RenderTargetInput.depth` resolves to external
-  `RT_DEPTH`.
-- Done: runtime skips `FBOPool` allocation for `RT_COLOR`/`RT_DEPTH` and binds them to the current render target
-  textures.
-- Done: tcgui pipeline editor can load, save, and create explicit render target input/output nodes.
-- Done: Framegraph Debugger queries actual render target texture info for `OUTPUT`, `DISPLAY`, `RT_COLOR`, and
-  `RT_DEPTH` before consulting internal FBO aliases.
-- Done: graph compiler initializes the C++ inspect dispatcher before applying socket/param fields, so compiled passes
-  receive `input_res`/`output_res` instead of keeping constructor defaults.
-- Done: `/home/mirmik/project/chronosquad-termin/Assets/Pipelines/FovPipeline.pipeline` migrated to
-  `RenderTargetInput` + `PipelineOutput`; `DepthPass.output_res` resolves to `RT_COLOR`, while the internal FBO remains
-  `fbo_1`.
-- Still pending: rewrite built-in Default/Editor pipelines to the explicit input/output model.
-- Still pending: migrate remaining project pipeline assets.
+Compiler/runtime support for explicit graph-boundary nodes is implemented:
+`render_target_input` resolves to external `RT_COLOR`/`RT_DEPTH`, those
+resources bypass `FBOPool`, and runtime binds them to the active render target
+textures. tcgui can load, save, and create the explicit input/output nodes.
+
+Framegraph Debugger queries actual render target texture info for `OUTPUT`,
+`DISPLAY`, `RT_COLOR`, and `RT_DEPTH` before consulting internal FBO aliases.
+The graph compiler initializes the C++ inspect dispatcher before applying
+socket/param fields, so compiled passes receive `input_res`/`output_res` values
+instead of keeping constructor defaults.
+
+`/home/mirmik/project/chronosquad-termin/Assets/Pipelines/FovPipeline.pipeline`
+already uses `RenderTargetInput` + `PipelineOutput`; `DepthPass.output_res`
+resolves to `RT_COLOR`, while the internal FBO remains `fbo_1`.
+
+Remaining work:
+
+- Rewrite built-in Default/Editor pipelines to the explicit input/output model.
+- Migrate remaining project pipeline assets.

@@ -1,16 +1,15 @@
 # Termin
 
-> Status: stale. This page is not a reliable API reference.
->
-> Актуальные документы по редактору:
->
-> - [Архитектура редактора](editor-architecture.md)
-> - [Исторический план миграции на tcgui](../../docs/plans/2026-03-09-termin-app-tcgui-migration.md)
-> - [Project build manifest](project-build-manifest.md)
-
 `termin-app` — основной application/editor слой монорепозитория Termin. Здесь живут редактор, project tooling и интеграция engine/domain-модулей в пользовательское приложение.
 
-Старое описание публичного `Scene`/`Entity` API удалено с этой страницы, потому что оно не отражало текущую реализацию.
+tcgui является primary UI. Qt поддерживается по возможности, но новые editor-flow и архитектурные решения должны сначала проходить через tcgui.
+
+## Актуальные документы
+
+- [Архитектура редактора](editor-architecture.md)
+- [Project build manifest](project-build-manifest.md)
+- [Плоская модель Viewport / RenderTarget](rendering-flat-viewport-target-model.md)
+- [Scene extensions architecture](scene_extensions_architecture.md)
 
 ## Содержание
 
@@ -19,6 +18,9 @@
 
 getting-started
 concepts
-    scene_extensions_architecture
-    api/index
+editor-architecture
+project-build-manifest
+rendering-flat-viewport-target-model
+scene_extensions_architecture
+api/index
 ```
