@@ -826,8 +826,6 @@ class EditorWindowTcgui:
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
             on_toggle_surface_edge_debug_tool=self._toggle_surface_edge_debug_tool,
             is_surface_edge_debug_tool_enabled=self._is_surface_edge_debug_tool_enabled,
-            on_import_rfmeas=self._import_rfmeas,
-            on_export_rfmeas=self._export_rfmeas,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._is_fullscreen,
@@ -1881,18 +1879,6 @@ class EditorWindowTcgui:
             self._log_to_console("[SpaceMouse] Device connected")
         else:
             self._spacemouse = None
-
-    # ------------------------------------------------------------------
-    # Utils (rfmeas) — not yet implemented for tcgui
-    # ------------------------------------------------------------------
-
-    def _import_rfmeas(self) -> None:
-        from tcbase import log
-        log.warn("rfmeas import is not yet available in tcgui editor")
-
-    def _export_rfmeas(self) -> None:
-        from tcbase import log
-        log.warn("rfmeas export is not yet available in tcgui editor")
 
     def _show_resource_manager_viewer(self) -> None:
         if self._ui is None:

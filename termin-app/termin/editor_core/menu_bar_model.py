@@ -65,9 +65,6 @@ def build_editor_menu_spec(
     on_show_inspect_registry_viewer: Callable[[], None],
     on_show_navmesh_registry_viewer: Callable[[], None],
     on_show_scene_manager_viewer: Callable[[], None],
-    # Utils
-    on_import_rfmeas: Callable[[], None],
-    on_export_rfmeas: Callable[[], None],
     # Handle setters (called by the controller with native widget handles)
     set_undo_handle: Callable[[object], None],
     set_redo_handle: Callable[[object], None],
@@ -203,13 +200,5 @@ def build_editor_menu_spec(
         MenuSpec(
             name="Debug",
             items=debug_items,
-        ),
-        # ── Utils ──────────────────────────────────────────────────────
-        MenuSpec(
-            name="Utils",
-            items=[
-                MenuItemSpec("Import rfmeas model...", on_import_rfmeas),
-                MenuItemSpec("Export rfmeas model...", on_export_rfmeas),
-            ],
         ),
     ]

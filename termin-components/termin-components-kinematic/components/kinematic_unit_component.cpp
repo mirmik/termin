@@ -87,7 +87,7 @@ void KinematicUnitComponent::register_type() {
                 c->max_coordinate = tc::tc_value_to_double(&value.data.list.items[2]);
                 c->set_coordinate(tc::tc_value_to_double(&value.data.list.items[0]));
             } else {
-                // Backward compat: plain scalar (e.g. from rfmeas scenes)
+                // Backward compat: plain scalar serialized values.
                 double v = 0.0;
                 if (value.type == TC_VALUE_DOUBLE) v = value.data.d;
                 else if (value.type == TC_VALUE_FLOAT) v = value.data.f;

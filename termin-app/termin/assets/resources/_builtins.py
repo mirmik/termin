@@ -52,8 +52,6 @@ BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.components.teleport_component", "TeleportComponent"),
     # Tween
     ("termin.tween.component", "TweenManagerComponent"),
-    # Rfmeas
-    ("termin.components.rfmeas_axis_binding", "RfmeasAxisBinding"),
 ]
 
 # Список встроенных FramePass'ов для предрегистрации.

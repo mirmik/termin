@@ -74,9 +74,6 @@ class MenuBarController:
         on_show_inspect_registry_viewer: Callable,
         on_show_navmesh_registry_viewer: Callable,
         on_show_scene_manager_viewer: Callable,
-        # Utils
-        on_import_rfmeas: Callable,
-        on_export_rfmeas: Callable,
         # State getters
         can_undo: Callable[[], bool],
         can_redo: Callable[[], bool],
@@ -142,8 +139,6 @@ class MenuBarController:
             on_show_inspect_registry_viewer=on_show_inspect_registry_viewer,
             on_show_navmesh_registry_viewer=on_show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=on_show_scene_manager_viewer,
-            on_import_rfmeas=on_import_rfmeas,
-            on_export_rfmeas=on_export_rfmeas,
             # Handle setters — direct assignment, no reflection
             set_undo_handle=self._set_undo_handle,
             set_redo_handle=self._set_redo_handle,
