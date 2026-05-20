@@ -20,11 +20,14 @@ if(NOT EXISTS "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_android/termin_andr
 endif()
 
 list(APPEND CMAKE_PREFIX_PATH "${TERMIN_ANDROID_SDK_PREFIX}")
-set(termin_base_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_base")
-set(termin_mesh_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_mesh")
-set(termin_graphics_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_graphics")
-set(termin_openxr_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_openxr")
-set(termin_android_DIR "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_android")
+file(GLOB TERMIN_ANDROID_CMAKE_PACKAGE_DIRS
+    LIST_DIRECTORIES true
+    "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_*"
+)
+foreach(TERMIN_ANDROID_CMAKE_PACKAGE_DIR IN LISTS TERMIN_ANDROID_CMAKE_PACKAGE_DIRS)
+    get_filename_component(TERMIN_ANDROID_CMAKE_PACKAGE "${TERMIN_ANDROID_CMAKE_PACKAGE_DIR}" NAME)
+    set("${TERMIN_ANDROID_CMAKE_PACKAGE}_DIR" "${TERMIN_ANDROID_CMAKE_PACKAGE_DIR}")
+endforeach()
 
 find_package(termin_openxr REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
 find_package(termin_android REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)

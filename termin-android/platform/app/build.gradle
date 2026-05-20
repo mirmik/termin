@@ -18,6 +18,9 @@ def terminAndroidNdkVersion = providers.gradleProperty("terminAndroidNdkVersion"
 def terminQuestOpenXr = providers.gradleProperty("terminQuestOpenXr")
         .orElse(providers.environmentVariable("TERMIN_QUEST_OPENXR"))
         .orElse("false")
+def terminAndroidAssetsDir = providers.gradleProperty("terminAndroidAssetsDir")
+        .orElse(providers.environmentVariable("TERMIN_ANDROID_ASSETS_DIR"))
+        .orElse(new File(terminRoot, "termin-android/assets").absolutePath)
 
 android {
     namespace "org.termin.android"
@@ -67,7 +70,7 @@ android {
     sourceSets {
         main {
             jniLibs.srcDir layout.buildDirectory.dir("generated/terminJniLibs").get().asFile
-            assets.srcDir new File(terminRoot, "termin-android/assets")
+            assets.srcDir file(terminAndroidAssetsDir.get())
         }
     }
 }

@@ -26,19 +26,24 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     private SurfaceView surfaceView;
     private boolean surfaceAlive = false;
     private boolean renderLoopRunning = false;
-    private int smokeFrameLogCounter = 0;
+    private int renderFrameLogCounter = 0;
 
-    private final Choreographer.FrameCallback smokeRenderFrameCallback = new Choreographer.FrameCallback() {
+    private final Choreographer.FrameCallback renderFrameCallback = new Choreographer.FrameCallback() {
         @Override
         public void doFrame(long frameTimeNanos) {
             if (!surfaceAlive || !renderLoopRunning) {
                 renderLoopRunning = false;
                 return;
             }
-            boolean ok = nativeSmokeRender();
-            smokeFrameLogCounter += 1;
-            if (!ok || smokeFrameLogCounter % 60 == 0) {
-                Log.i(TAG, "smokeRender frame result=" + ok + " frame=" + smokeFrameLogCounter);
+            boolean ok = nativeRenderFrame();
+            renderFrameLogCounter += 1;
+            if (!ok || renderFrameLogCounter % 60 == 0) {
+                Log.i(TAG, "renderFrame result=" + ok + " frame=" + renderFrameLogCounter);
+            }
+            if (!ok) {
+                renderLoopRunning = false;
+                Log.e(TAG, "renderLoop stopped after renderFrame failure");
+                return;
             }
             Choreographer.getInstance().postFrameCallback(this);
         }
@@ -48,7 +53,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.i(TAG, "onCreate");
-        copyAssetTree("shaders", new File(getFilesDir(), "shaders"));
+        copyAssetTree("", getFilesDir());
         nativeInitialize(
                 getFilesDir().getAbsolutePath(),
                 getFilesDir().getAbsolutePath(),
@@ -102,16 +107,16 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
     private static native void nativeSurfaceCreated(Surface surface);
     private static native void nativeSurfaceChanged(int width, int height);
     private static native void nativeSurfaceDestroyed();
-    private static native boolean nativeSmokeRender();
+    private static native boolean nativeRenderFrame();
 
     private void startRenderLoop() {
         if (renderLoopRunning) {
             return;
         }
         renderLoopRunning = true;
-        smokeFrameLogCounter = 0;
+        renderFrameLogCounter = 0;
         Log.i(TAG, "renderLoop start");
-        Choreographer.getInstance().postFrameCallback(smokeRenderFrameCallback);
+        Choreographer.getInstance().postFrameCallback(renderFrameCallback);
     }
 
     private void stopRenderLoop() {
@@ -119,7 +124,7 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
             return;
         }
         renderLoopRunning = false;
-        Choreographer.getInstance().removeFrameCallback(smokeRenderFrameCallback);
+        Choreographer.getInstance().removeFrameCallback(renderFrameCallback);
         Log.i(TAG, "renderLoop stop");
     }
 
@@ -127,6 +132,9 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
         try {
             String[] children = getAssets().list(assetPath);
             if (children == null || children.length == 0) {
+                if (assetPath.isEmpty()) {
+                    return;
+                }
                 copyAssetFile(assetPath, target);
                 return;
             }
@@ -135,7 +143,8 @@ public final class TerminActivity extends Activity implements SurfaceHolder.Call
                 return;
             }
             for (String child : children) {
-                copyAssetTree(assetPath + "/" + child, new File(target, child));
+                String childAssetPath = assetPath.isEmpty() ? child : assetPath + "/" + child;
+                copyAssetTree(childAssetPath, new File(target, child));
             }
         } catch (IOException e) {
             Log.e(TAG, "failed to copy asset tree '" + assetPath + "' to " + target, e);

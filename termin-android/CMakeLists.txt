@@ -21,6 +21,41 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_graphics REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_scene termin_scene::termin_scene)
+else()
+    find_package(termin_scene REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_mesh tmesh::termin_mesh)
+else()
+    find_package(termin_mesh REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_render termin_render::termin_render)
+else()
+    find_package(termin_render REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_display termin_display::termin_display)
+else()
+    find_package(termin_display REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_engine termin_engine::termin_engine)
+else()
+    find_package(termin_engine REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
+else()
+    find_package(termin_components_mesh REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_render termin_components_render::termin_components_render)
+else()
+    find_package(termin_components_render REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -69,6 +104,13 @@ target_link_libraries(termin_android
     PUBLIC
         tcbase::termin_base
         tgfx::termin_graphics2
+        termin_scene::termin_scene
+        tmesh::termin_mesh
+        termin_render::termin_render
+        termin_display::termin_display
+        termin_engine::termin_engine
+        termin_components_mesh::termin_components_mesh
+        termin_components_render::termin_components_render
     PRIVATE
         ${ANDROID_LOG_LIB}
         ${ANDROID_NATIVE_LIB}

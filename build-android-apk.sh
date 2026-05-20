@@ -11,6 +11,7 @@ ANDROID_ABI_VALUE="${ANDROID_ABI:-arm64-v8a}"
 ANDROID_PLATFORM_VALUE="${ANDROID_PLATFORM:-android-26}"
 ANDROID_SDK_ROOT_VALUE="${TERMIN_ANDROID_SDK_ROOT:-$SCRIPT_DIR/sdk/android}"
 ANDROID_NDK_VERSION_VALUE="${TERMIN_ANDROID_NDK_VERSION:-27.2.12479018}"
+ANDROID_ASSETS_DIR_VALUE="${TERMIN_ANDROID_ASSETS_DIR:-$SCRIPT_DIR/termin-android/assets}"
 GRADLE_BIN_VALUE="${GRADLE_BIN:-gradle}"
 GRADLE_TASK="assembleDebug"
 
@@ -51,6 +52,13 @@ while [[ $# -gt 0 ]]; do
         --gradle=*)
             GRADLE_BIN_VALUE="${1#--gradle=}"
             ;;
+        --assets-dir)
+            ANDROID_ASSETS_DIR_VALUE="$2"
+            shift
+            ;;
+        --assets-dir=*)
+            ANDROID_ASSETS_DIR_VALUE="${1#--assets-dir=}"
+            ;;
         --task)
             GRADLE_TASK="$2"
             shift
@@ -66,6 +74,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --platform API        Android platform (default: android-26)"
             echo "  --sdk-root DIR        Termin Android SDK root (default: ./sdk/android)"
             echo "  --ndk-version VER     Android NDK version for Gradle (default: 27.2.12479018)"
+            echo "  --assets-dir DIR      APK assets directory (default: ./termin-android/assets)"
             echo "  --gradle PATH         Gradle executable (default: \$GRADLE_BIN or gradle)"
             echo "  --task TASK           Gradle task (default: assembleDebug)"
             echo "  --help, -h            Show this help"
@@ -77,6 +86,8 @@ while [[ $# -gt 0 ]]; do
             echo "                        Termin Android SDK root if --sdk-root is omitted"
             echo "  TERMIN_ANDROID_NDK_VERSION"
             echo "                        NDK version if --ndk-version is omitted"
+            echo "  TERMIN_ANDROID_ASSETS_DIR"
+            echo "                        APK assets directory if --assets-dir is omitted"
             exit 0
             ;;
         *)
@@ -119,6 +130,7 @@ echo "Termin SDK root: $ANDROID_SDK_ROOT_VALUE"
 echo "ABI:             $ANDROID_ABI_VALUE"
 echo "Platform:        $ANDROID_PLATFORM_VALUE"
 echo "NDK version:     $ANDROID_NDK_VERSION_VALUE"
+echo "Assets dir:      $ANDROID_ASSETS_DIR_VALUE"
 echo ""
 
 cd "$PLATFORM_DIR"
@@ -127,7 +139,8 @@ cd "$PLATFORM_DIR"
     -PterminAndroidSdkRoot="$ANDROID_SDK_ROOT_VALUE" \
     -PterminAndroidAbi="$ANDROID_ABI_VALUE" \
     -PterminAndroidPlatform="$ANDROID_PLATFORM_VALUE" \
-    -PterminAndroidNdkVersion="$ANDROID_NDK_VERSION_VALUE"
+    -PterminAndroidNdkVersion="$ANDROID_NDK_VERSION_VALUE" \
+    -PterminAndroidAssetsDir="$ANDROID_ASSETS_DIR_VALUE"
 
 rm -rf "$PLATFORM_DIR/.gradle" "$PLATFORM_DIR/app/.cxx" "$PLATFORM_DIR/app/build"
 
