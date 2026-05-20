@@ -9,17 +9,25 @@
         {
           "type": "MeshComponent",
           "data": {
-            "uuid": "android-triangle-mesh"
+            "mesh": {
+              "uuid": "android-triangle-mesh",
+              "name": "Android Triangle",
+              "type": "uuid"
+            }
           }
         },
         {
           "type": "MeshRenderer",
           "data": {
             "mesh": {
-              "uuid": "android-triangle-mesh"
+              "uuid": "android-triangle-mesh",
+              "name": "Android Triangle",
+              "type": "uuid"
             },
             "material": {
-              "uuid": "android-triangle-material"
+              "uuid": "android-triangle-material",
+              "name": "Android Triangle Material",
+              "type": "uuid"
             }
           }
         }
@@ -28,7 +36,10 @@
     {
       "uuid": "android-camera-entity",
       "name": "MainCamera",
-      "position": [0.0, -3.2, 0.0],
+      "pose": {
+        "position": [0.0, -3.2, 0.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
       "components": [
         {
           "type": "CameraComponent",
