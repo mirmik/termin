@@ -1,5 +1,5 @@
 #include <nanobind/nanobind.h>
-#include "guard/guard.h"
+#include "guard_main.h"
 
 namespace nb = nanobind;
 

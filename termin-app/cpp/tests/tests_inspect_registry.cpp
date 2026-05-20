@@ -1,4 +1,4 @@
-#include "guard/guard.h"
+#include "guard_main.h"
 #include "tc_inspect_cpp.hpp"
 
 namespace {

@@ -568,6 +568,7 @@ if(BUILD_TESTS)
     target_include_directories(termin_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
     )
     target_link_libraries(termin_tests PRIVATE entity_lib render_lib)
     target_compile_options(termin_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)

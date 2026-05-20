@@ -124,7 +124,7 @@ if(TERMIN_COLLISION_BUILD_TESTS)
     )
     target_include_directories(termin_collision_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
-        ${CMAKE_CURRENT_SOURCE_DIR}/tests/guard
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
     )
     target_link_libraries(termin_collision_tests PRIVATE termin_collision)
     add_test(NAME termin_collision_tests COMMAND termin_collision_tests)
