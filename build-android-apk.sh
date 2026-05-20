@@ -12,6 +12,8 @@ ANDROID_PLATFORM_VALUE="${ANDROID_PLATFORM:-android-26}"
 ANDROID_SDK_ROOT_VALUE="${TERMIN_ANDROID_SDK_ROOT:-$SCRIPT_DIR/sdk/android}"
 ANDROID_NDK_VERSION_VALUE="${TERMIN_ANDROID_NDK_VERSION:-27.2.12479018}"
 ANDROID_ASSETS_DIR_VALUE="${TERMIN_ANDROID_ASSETS_DIR:-$SCRIPT_DIR/termin-android/assets}"
+ANDROID_APPLICATION_ID_VALUE="${TERMIN_ANDROID_APPLICATION_ID:-org.termin.android}"
+ANDROID_APP_LABEL_VALUE="${TERMIN_ANDROID_APP_LABEL:-Termin Android}"
 GRADLE_BIN_VALUE="${GRADLE_BIN:-gradle}"
 GRADLE_TASK="assembleDebug"
 
@@ -59,6 +61,20 @@ while [[ $# -gt 0 ]]; do
         --assets-dir=*)
             ANDROID_ASSETS_DIR_VALUE="${1#--assets-dir=}"
             ;;
+        --application-id)
+            ANDROID_APPLICATION_ID_VALUE="$2"
+            shift
+            ;;
+        --application-id=*)
+            ANDROID_APPLICATION_ID_VALUE="${1#--application-id=}"
+            ;;
+        --app-label)
+            ANDROID_APP_LABEL_VALUE="$2"
+            shift
+            ;;
+        --app-label=*)
+            ANDROID_APP_LABEL_VALUE="${1#--app-label=}"
+            ;;
         --task)
             GRADLE_TASK="$2"
             shift
@@ -75,6 +91,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --sdk-root DIR        Termin Android SDK root (default: ./sdk/android)"
             echo "  --ndk-version VER     Android NDK version for Gradle (default: 27.2.12479018)"
             echo "  --assets-dir DIR      APK assets directory (default: ./termin-android/assets)"
+            echo "  --application-id ID   Android applicationId (default: org.termin.android)"
+            echo "  --app-label LABEL     Android launcher label (default: Termin Android)"
             echo "  --gradle PATH         Gradle executable (default: \$GRADLE_BIN or gradle)"
             echo "  --task TASK           Gradle task (default: assembleDebug)"
             echo "  --help, -h            Show this help"
@@ -88,6 +106,10 @@ while [[ $# -gt 0 ]]; do
             echo "                        NDK version if --ndk-version is omitted"
             echo "  TERMIN_ANDROID_ASSETS_DIR"
             echo "                        APK assets directory if --assets-dir is omitted"
+            echo "  TERMIN_ANDROID_APPLICATION_ID"
+            echo "                        Android applicationId if --application-id is omitted"
+            echo "  TERMIN_ANDROID_APP_LABEL"
+            echo "                        Android launcher label if --app-label is omitted"
             exit 0
             ;;
         *)
@@ -131,6 +153,8 @@ echo "ABI:             $ANDROID_ABI_VALUE"
 echo "Platform:        $ANDROID_PLATFORM_VALUE"
 echo "NDK version:     $ANDROID_NDK_VERSION_VALUE"
 echo "Assets dir:      $ANDROID_ASSETS_DIR_VALUE"
+echo "Application ID:  $ANDROID_APPLICATION_ID_VALUE"
+echo "App label:       $ANDROID_APP_LABEL_VALUE"
 echo ""
 
 cd "$PLATFORM_DIR"
@@ -140,7 +164,9 @@ cd "$PLATFORM_DIR"
     -PterminAndroidAbi="$ANDROID_ABI_VALUE" \
     -PterminAndroidPlatform="$ANDROID_PLATFORM_VALUE" \
     -PterminAndroidNdkVersion="$ANDROID_NDK_VERSION_VALUE" \
-    -PterminAndroidAssetsDir="$ANDROID_ASSETS_DIR_VALUE"
+    -PterminAndroidAssetsDir="$ANDROID_ASSETS_DIR_VALUE" \
+    -PterminAndroidApplicationId="$ANDROID_APPLICATION_ID_VALUE" \
+    -PterminAndroidAppLabel="$ANDROID_APP_LABEL_VALUE"
 
 rm -rf "$PLATFORM_DIR/.gradle" "$PLATFORM_DIR/app/.cxx" "$PLATFORM_DIR/app/build"
 

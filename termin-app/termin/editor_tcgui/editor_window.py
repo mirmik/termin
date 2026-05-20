@@ -812,6 +812,7 @@ class EditorWindowTcgui:
             on_show_navmesh_areas=self._show_navmesh_areas,
             on_toggle_game_mode=self._toggle_game_mode,
             on_build_project=self._build_project,
+            on_build_android=self._build_android,
             on_run_build=self._run_build,
             on_run_standalone=self._run_standalone,
             on_toggle_profiler=self._toggle_profiler,
@@ -2052,6 +2053,53 @@ class EditorWindowTcgui:
 
     def _build_project(self) -> None:
         self._build_project_to_default_dist()
+
+    def _build_android(self) -> None:
+        if self._current_project_path is None:
+            self._log_to_console("No project open - cannot build Android APK.")
+            return
+
+        self._save_scene()
+
+        scene_name = self._editor_scene_name
+        scene_path = self.scene_manager.get_scene_path(scene_name) if scene_name else None
+        if scene_path is None:
+            self._log_to_console("No saved scene - cannot build Android APK.")
+            return
+
+        project_root = Path(self._current_project_path).resolve()
+        scene_path_obj = Path(scene_path).resolve()
+        try:
+            scene_rel_path = scene_path_obj.relative_to(project_root)
+        except ValueError:
+            self._log_to_console("Android build entry scene must be inside the current project.")
+            return
+
+        from termin.project.settings import ProjectSettingsManager
+        build_output_dir = ProjectSettingsManager.instance().settings.build_output_dir
+        output_dir = project_root / build_output_dir / "android" / project_root.name
+
+        self._log_to_console(f"Android build started: {scene_rel_path}")
+        try:
+            from termin.project_build import build_android_project
+
+            result = build_android_project(
+                project_root=project_root,
+                entry_scene=scene_rel_path,
+                output_dir=output_dir,
+            )
+        except Exception as e:
+            log.error(f"Android build failed: {e}", exc_info=True)
+            self._log_to_console(f"Android build failed: {e}")
+            return
+
+        self._log_to_console(f"Android APK: {result.apk_path}")
+        self._log_to_console(f"Android applicationId: {result.application_id}")
+        self._log_to_console(f"Android launch: {result.application_id}/{result.launch_activity}")
+        self._log_to_console(f"Android package: {result.package_result.package_dir}")
+        self._log_to_console(f"Android build log: {result.log_path}")
+        for diagnostic in result.diagnostics:
+            self._log_to_console(f"Android build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
 
     def _build_project_to_default_dist(self):
         if self._current_project_path is None:

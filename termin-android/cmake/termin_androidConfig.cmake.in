@@ -9,6 +9,7 @@ find_dependency(termin_render REQUIRED)
 find_dependency(termin_display REQUIRED)
 find_dependency(termin_engine REQUIRED)
 find_dependency(termin_runtime REQUIRED)
+find_dependency(termin_materials REQUIRED)
 find_dependency(termin_components_mesh REQUIRED)
 find_dependency(termin_components_render REQUIRED)
 

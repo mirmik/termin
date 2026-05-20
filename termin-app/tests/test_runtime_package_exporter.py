@@ -261,7 +261,13 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path) ->
 
     assert result.apk_path == project / "dist" / "android" / "AndroidGame" / "apk" / "AndroidGame-debug.apk"
     assert result.apk_path.read_bytes() == b"APK"
+    assert result.application_id == "org.termin.builds.androidgame"
+    assert result.launch_activity == "org.termin.android.TerminActivity"
     assert result.package_result.manifest_path.exists()
     log_text = result.log_path.read_text(encoding="utf-8")
     assert "--assets-dir" in log_text
     assert str(result.package_result.package_dir) in log_text
+    assert "--application-id" in log_text
+    assert "org.termin.builds.androidgame" in log_text
+    assert "--app-label" in log_text
+    assert "AndroidGame" in log_text

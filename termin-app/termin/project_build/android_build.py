@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -21,6 +23,8 @@ class AndroidBuildResult:
     package_result: RuntimePackageExportResult
     apk_path: Path
     log_path: Path
+    application_id: str
+    launch_activity: str
     diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
 
 
@@ -44,6 +48,8 @@ def build_android_project(
     apk_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
+    _preload_project_resources(project_root_path)
+
     package_result = export_runtime_package(
         project_root=project_root_path,
         entry_scene=entry_scene,
@@ -53,14 +59,18 @@ def build_android_project(
 
     termin_root_path = _resolve_termin_root(termin_root)
     build_script_path = _resolve_build_script(termin_root_path, build_script)
+    application_id = _android_application_id_from_project_name(project_name)
+    launch_activity = "org.termin.android.TerminActivity"
     log_path = logs_dir / "android-build.log"
     _run_android_build_script(
         build_script=build_script_path,
         package_dir=package_result.package_dir,
         log_path=log_path,
-        gradle=Path(gradle) if gradle is not None else None,
+        gradle=_resolve_gradle(gradle),
         abi=abi,
         platform=platform,
+        application_id=application_id,
+        app_label=project_name,
     )
 
     source_apk = termin_root_path / "build" / "android-gradle" / "app" / "outputs" / "apk" / "debug" / "app-debug.apk"
@@ -75,8 +85,47 @@ def build_android_project(
         package_result=package_result,
         apk_path=apk_path,
         log_path=log_path,
+        application_id=application_id,
+        launch_activity=launch_activity,
         diagnostics=list(package_result.diagnostics),
     )
+
+
+def _preload_project_resources(project_root: Path) -> None:
+    """Load project resources into runtime registries for non-editor builds."""
+    try:
+        from termin.assets.resources import ResourceManager
+        from termin.editor_core.default_preloaders import create_default_preloaders
+
+        resource_manager = ResourceManager.instance()
+        processors = create_default_preloaders(resource_manager)
+        by_extension = {
+            extension: processor
+            for processor in processors
+            for extension in processor.extensions
+        }
+        pending: list[tuple[int, str]] = []
+        for root, dirs, files in os.walk(project_root):
+            dirs[:] = [
+                directory
+                for directory in dirs
+                if not directory.startswith((".", "__"))
+                and directory not in {"build", "dist"}
+            ]
+            for filename in files:
+                if filename.startswith("."):
+                    continue
+                path = Path(root) / filename
+                extension = path.suffix.lower()
+                processor = by_extension.get(extension)
+                if processor is not None:
+                    pending.append((processor.priority, str(path)))
+
+        for _priority, path in sorted(pending, key=lambda item: (item[0], item[1])):
+            by_extension[Path(path).suffix.lower()].on_file_added(path)
+    except Exception:
+        from tcbase import log
+        log.error("[AndroidBuild] Failed to preload project resources", exc_info=True)
 
 
 def _resolve_dist_dir(project_root: Path, project_name: str, output_dir: str | Path | None) -> Path:
@@ -88,11 +137,43 @@ def _resolve_dist_dir(project_root: Path, project_name: str, output_dir: str | P
 def _resolve_termin_root(termin_root: str | Path | None) -> Path:
     if termin_root is not None:
         root = Path(termin_root).resolve()
-    else:
-        root = Path(__file__).resolve().parents[3]
-    if not (root / "build-android-apk.sh").exists():
+        if (root / "build-android-apk.sh").exists():
+            return root
         raise FileNotFoundError(f"Termin root has no build-android-apk.sh: {root}")
-    return root
+
+    for candidate in _termin_root_candidates():
+        if (candidate / "build-android-apk.sh").exists():
+            return candidate
+
+    candidates = ", ".join(str(path) for path in _termin_root_candidates())
+    raise FileNotFoundError(
+        "Termin root has no build-android-apk.sh. "
+        "Set TERMIN_ROOT or pass termin_root explicitly. "
+        f"Checked: {candidates}"
+    )
+
+
+def _termin_root_candidates() -> list[Path]:
+    candidates: list[Path] = []
+
+    env_root = os.environ.get("TERMIN_ROOT")
+    if env_root:
+        candidates.append(Path(env_root).resolve())
+
+    cwd = Path.cwd().resolve()
+    candidates.extend([cwd, *cwd.parents])
+
+    package_path = Path(__file__).resolve()
+    candidates.extend(package_path.parents)
+
+    unique_candidates: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        unique_candidates.append(candidate)
+    return unique_candidates
 
 
 def _resolve_build_script(termin_root: Path, build_script: str | Path | None) -> Path:
@@ -105,6 +186,25 @@ def _resolve_build_script(termin_root: Path, build_script: str | Path | None) ->
     return script
 
 
+def _resolve_gradle(gradle: str | Path | None) -> Path | None:
+    if gradle is not None:
+        return Path(gradle).expanduser().resolve()
+
+    env_gradle = os.environ.get("GRADLE_BIN")
+    if env_gradle:
+        return Path(env_gradle).expanduser().resolve()
+
+    home = Path.home()
+    for candidate in [
+        home / "soft" / "gradle-8" / "bin" / "gradle",
+        home / "soft" / "gradle-8.10.2" / "bin" / "gradle",
+    ]:
+        if candidate.exists():
+            return candidate.resolve()
+
+    return None
+
+
 def _run_android_build_script(
     build_script: Path,
     package_dir: Path,
@@ -112,6 +212,8 @@ def _run_android_build_script(
     gradle: Path | None,
     abi: str,
     platform: str,
+    application_id: str,
+    app_label: str,
 ) -> None:
     cmd = [
         str(build_script),
@@ -121,6 +223,10 @@ def _run_android_build_script(
         abi,
         "--platform",
         platform,
+        "--application-id",
+        application_id,
+        "--app-label",
+        app_label,
     ]
     if gradle is not None:
         cmd.extend(["--gradle", str(gradle)])
@@ -137,9 +243,38 @@ def _run_android_build_script(
         encoding="utf-8",
     )
     if result.returncode != 0:
+        log_tail = _read_log_tail(log_path)
         raise RuntimeError(
-            f"Android build failed with exit code {result.returncode}; see {log_path}"
+            f"Android build failed with exit code {result.returncode}; see {log_path}\n{log_tail}"
         )
+
+
+def _android_application_id_from_project_name(project_name: str) -> str:
+    slug = project_name.strip().lower()
+    slug = re.sub(r"[^a-z0-9_]+", ".", slug)
+    slug = re.sub(r"\.+", ".", slug).strip(".")
+    parts = []
+    for part in slug.split("."):
+        if part == "":
+            continue
+        if part[0].isdigit():
+            parts.append(f"p{part}")
+        else:
+            parts.append(part)
+    if not parts:
+        parts = ["project"]
+    return "org.termin.builds." + ".".join(parts)
+
+
+def _read_log_tail(log_path: Path, max_lines: int = 40) -> str:
+    try:
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception as exc:
+        return f"Failed to read Android build log tail: {exc}"
+    tail = lines[-max_lines:]
+    if not tail:
+        return "Android build log is empty."
+    return "\n".join(tail)
 
 
 def _read_project_name(project_root: Path) -> str:
