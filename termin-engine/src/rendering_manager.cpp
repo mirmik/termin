@@ -1538,6 +1538,9 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     if (!tc_render_target_handle_valid(rt)) {
         return;
     }
+    if (!tc_render_target_get_enabled(rt)) {
+        return;
+    }
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_render_target_get_camera(rt);
