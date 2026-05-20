@@ -11,6 +11,8 @@
 - **3.6 закрыто частично по публичной поверхности:** приватные C-interop функции больше не входят в `termin.display.__all__`. Сами underscored imports оставлены для существующих внутренних call sites до появления публичного adapter API.
 - **1.3 частично:** `EditorCameraUIController` перенесён из `termin.editor_core` в `termin.editor_tcgui`, а `EditorCameraManager` добавляет его только если компонент зарегистрирован frontend-слоем. В `editor_core` остаётся Qt-зависимость `SpaceMouseController` и более широкая проблема `termin.visualization/ui/widgets -> tcgui`.
 - **2.1 частично:** прямые include paths на `termin-render/include` удалены из `termin-display` и `termin-components-render`, где уже есть CMake target dependency. Широкий `termin-app/cpp/termin` include в `termin-components-render` заменён точечным include path на `entity_helpers.hpp`. Прямые пути на `termin-app/core_c` оставлены как часть отдельной проблемы 1.2/ownership `core_c`.
+- **4.1 закрыто:** дублирующийся `tc_registry_utils.h` вынесен в `termin-base/include/tcbase/tc_registry_utils.h`; копии из `termin-graphics` и `termin-mesh` удалены.
+- **3.3 закрыто:** `tc_registry_utils.h`, `tc_resource.h` и generic handle include вынесены на `termin-base`; `termin-skeleton` больше не зависит от `termin_graphics`, старые resource includes в `termin-render` переведены на `tcbase`.
 
 ---
 
@@ -290,10 +292,12 @@ static void ensure_builtin_scene_extensions_registered() {
 
 **Где смотреть:**
 - `termin-skeleton/CMakeLists.txt` (строки 42-44)
-- `termin-skeleton/src/tc_skeleton_registry.c:10` — `#include <tgfx/tc_registry_utils.h>`
+- `termin-skeleton/src/tc_skeleton_registry.c:10` — **Исправлено 2026-05-21:** теперь `#include <tcbase/tc_registry_utils.h>`
 - `termin-skeleton/include/termin/skeleton/tc_skeleton_handle.hpp:12` — `#include <tcbase/tgfx_intern_string.h>`
 
-`tgfx_intern_string.h` лежит в termin-base (уже зависит). `tc_registry_utils.h` дублируется в termin-graphics и termin-mesh. termin-skeleton может зависеть от termin_mesh вместо termin_graphics.
+`tgfx_intern_string.h` лежит в termin-base (уже зависит). `tc_registry_utils.h` и `tc_resource.h` были продублированы в termin-graphics и termin-mesh.
+
+**Статус 2026-05-21:** исправлено. `tc_registry_utils.h` и `tc_resource.h` вынесены в `termin-base/include/tcbase/`, `tc_skeleton.h`/`tc_animation.h` и `termin-render/include/core/tc_scene_pipeline_template.h` используют `tcbase/tc_binding_types.h`, старые resource includes в `termin-render` переведены на `tcbase`, а `termin-skeleton` больше не линкуется с `termin_graphics`.
 
 ---
 
@@ -397,10 +401,13 @@ static void ensure_builtin_scene_extensions_registered() {
 ### 4.1 Дублирование tc_registry_utils.h
 
 **Где смотреть:**
-- `termin-graphics/include/tgfx/tc_registry_utils.h`
-- `termin-mesh/include/tgfx/tc_registry_utils.h`
+- `termin-base/include/tcbase/tc_registry_utils.h`
+- `termin-graphics/include/tgfx/tc_registry_utils.h` — **удалён 2026-05-21**
+- `termin-mesh/include/tgfx/tc_registry_utils.h` — **удалён 2026-05-21**
 
 Полностью идентичные файлы (byte-for-byte). Утилиты для индексного пакинга, генерации UUID и guard-макросов. Оба модуля зависят от termin_base — логичное место вынести туда.
+
+**Статус 2026-05-21:** исправлено. Общий заголовок живёт в `termin-base`, потребители используют `<tcbase/tc_registry_utils.h>`.
 
 ---
 
@@ -430,7 +437,7 @@ termin_modules       → termin_base
 termin_graphics      → termin_base, termin_mesh
 termin_csg           → termin_base
 termin_collision     → termin_base, termin_inspect, termin_scene
-termin_skeleton      → termin_base, termin_scene, termin_graphics
+termin_skeleton      → termin_base, termin_scene
 termin_animation     → termin_base, termin_inspect, termin_skeleton
 termin_physics       → termin_base, termin_collision
 termin_render        → termin_base, termin_graphics, termin_scene, termin_inspect, termin_lighting
@@ -488,7 +495,7 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
 | 2.6 | termin_core дублирует termin-engine | termin-app/core_c | CMakeLists.txt | 🟠 Высокая |
 | 3.1 | Внутренние include из нижних уровней | termin-engine | rendering_manager.cpp | 🟡 Средняя |
 | 3.2 | EngineCore жёстко знает о extensions | termin-engine | engine_core.cpp | 🟡 Средняя |
-| 3.3 | termin-skeleton → termin_graphics для 2 хедеров | termin-skeleton | CMakeLists.txt | 🟡 Средняя |
+| 3.3 | termin-skeleton → termin_graphics для 2 хедеров | termin-skeleton | CMakeLists.txt | ✅ Исправлено |
 | 3.4 | Неявные зависимости Python пакетов | termin-* python | install_requires | 🟡 Средняя |
 | 3.5 | termin-csg — перегруженный пакет | termin-csg | cad_app.py, procedural_document.py | 🟡 Средняя |
 | 3.6 | termin-display экспортирует приватные функции | termin-display | __init__.py | ✅ Исправлено |
@@ -496,5 +503,5 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
 | 3.8 | Дублирование project management | termin-app | editor/ vs editor_tcgui/ | 🟡 Средняя |
 | 3.9 | Расхождение Qt vs tcgui функциональности | termin-app | 28 vs 10 файлов | 🟡 Средняя |
 | 3.10 | EditorWindow God Object | termin-app | editor_window.py (2000-2500 строк) | 🟡 Средняя |
-| 4.1 | Дублирование tc_registry_utils.h | termin-graphics, termin-mesh | tc_registry_utils.h | 🟢 Низкая |
+| 4.1 | Дублирование tc_registry_utils.h | termin-graphics, termin-mesh | tc_registry_utils.h | ✅ Исправлено |
 | 4.2 | C# биндинги — аналогичные паттерны | termin-csharp | termin.i, CSharpComponentRuntime.cs | 🟢 Низкая |

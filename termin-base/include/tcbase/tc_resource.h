@@ -1,7 +1,6 @@
 // tc_resource.h - Common resource header for mesh, texture, etc.
 #pragma once
 
-#include "tgfx/tgfx_api.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
