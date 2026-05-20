@@ -565,6 +565,15 @@ void ColorPass::execute_with_data(
             continue;
         }
 
+        // Every material draw owns its descriptor set. Material textures are
+        // optional at runtime; if one is missing, the Vulkan backend fills
+        // that slot with its default texture. Without this reset, a missing
+        // slot kept the previous draw/pass texture bound and produced
+        // striped materials after resize/post-processing passes.
+        ctx2->clear_resource_bindings();
+        bind_engine_per_frame_uniforms(*ctx2, pf);
+        ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING, &sb, sizeof(sb));
+
         // Render state from the material phase.
         RenderState state = convert_render_state(dc.phase->state);
         if (wireframe) state.polygon_mode = PolygonMode::Line;
