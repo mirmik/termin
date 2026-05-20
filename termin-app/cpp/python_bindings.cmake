@@ -60,7 +60,6 @@ nanobind_add_module(_native NB_SHARED
     termin/editor/editor_interaction_system.cpp
     termin/navmesh/off_mesh_link_editor_visual.cpp
     termin/bindings/modules/term_modules_integration_bindings.cpp
-    termin/tc_component_python.cpp
     termin/tc_component_python_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp

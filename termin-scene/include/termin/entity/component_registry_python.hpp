@@ -9,7 +9,7 @@ namespace termin {
 
 // Python extension for ComponentRegistry.
 // Provides Python component registration and creation.
-class ENTITY_API ComponentRegistryPython {
+class ComponentRegistryPython {
 public:
     // Register a Python component class
     static void register_python(const std::string& name, nb::object cls, const char* parent = nullptr);
