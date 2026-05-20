@@ -13,3 +13,4 @@
 - [Android build and embedded Python runtime](2026-05-19-android-python-runtime.md)
 - [Quest OpenXR foundation](2026-05-20-quest-openxr-foundation.md)
 - [termin-runtime package loader](2026-05-20-termin-runtime-package-loader.md)
+- [Android scene build export](2026-05-20-android-scene-build-export.md)
