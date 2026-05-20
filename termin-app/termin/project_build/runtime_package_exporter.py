@@ -63,6 +63,266 @@ void main() {
 """
 
 
+ENGINE_SKYBOX_SHADER_UUID = "termin-engine-skybox"
+ENGINE_FSQ_SHADER_UUID = "termin-engine-fsq"
+ENGINE_SHADOW_SHADER_UUID = "termin-engine-shadow"
+ENGINE_BLOOM_BRIGHT_SHADER_UUID = "termin-engine-bloom-bright"
+ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID = "termin-engine-bloom-downsample"
+ENGINE_BLOOM_UPSAMPLE_SHADER_UUID = "termin-engine-bloom-upsample"
+ENGINE_BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composite"
+ENGINE_TONEMAP_SHADER_UUID = "termin-engine-tonemap"
+
+
+ENGINE_SKYBOX_SHADER_TEXT = """
+@program Skybox
+
+@phase opaque
+@priority 0
+@glDepthTest true
+@glDepthMask false
+@glCull false
+
+@property Mat4  u_view
+@property Mat4  u_projection
+@property Int   u_skybox_type
+@property Color u_skybox_color        = Color(0.5, 0.5, 0.5, 1.0)
+@property Color u_skybox_top_color    = Color(0.3, 0.5, 1.0, 1.0)
+@property Color u_skybox_bottom_color = Color(0.1, 0.1, 0.3, 1.0)
+
+@stage vertex
+#version 450 core
+layout(location = 0) in vec3 a_position;
+
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+layout(location = 0) out vec3 v_dir;
+
+void main() {
+    mat4 view_no_translation = mat4(mat3(u_view));
+    v_dir = a_position;
+    gl_Position = u_projection * view_no_translation * vec4(a_position, 1.0);
+}
+@endstage
+
+@stage fragment
+#version 450 core
+
+layout(location = 0) in vec3 v_dir;
+layout(location = 0) out vec4 FragColor;
+
+uniform int  u_skybox_type;
+uniform vec4 u_skybox_color;
+uniform vec4 u_skybox_top_color;
+uniform vec4 u_skybox_bottom_color;
+
+void main() {
+    if (u_skybox_type == 1) {
+        FragColor = vec4(u_skybox_color.rgb, 1.0);
+    } else {
+        float t = normalize(v_dir).z * 0.5 + 0.5;
+        vec3 c = mix(u_skybox_bottom_color.rgb, u_skybox_top_color.rgb, t);
+        FragColor = vec4(c, 1.0);
+    }
+}
+@endstage
+
+@endphase
+"""
+
+
+ENGINE_FSQ_VERTEX_SOURCE = """#version 450 core
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in vec2 aUV;
+layout(location = 0) out vec2 vUV;
+void main() {
+    gl_Position = vec4(aPos, 0.0, 1.0);
+    vUV = aUV;
+}
+"""
+
+
+ENGINE_SHADOW_VERTEX_SOURCE = """#version 450 core
+layout(location = 0) in vec3 a_position;
+
+layout(std140, binding = 0) uniform PerFrame {
+    mat4 u_view;
+    mat4 u_projection;
+};
+
+struct ShadowPushData {
+    mat4 u_model;
+};
+#ifdef VULKAN
+layout(push_constant) uniform ShadowPushBlock { ShadowPushData pc; };
+#else
+layout(std140, binding = 14) uniform ShadowPushBlock { ShadowPushData pc; };
+#endif
+
+void main() {
+    gl_Position = u_projection * u_view * pc.u_model * vec4(a_position, 1.0);
+}
+"""
+
+
+ENGINE_SHADOW_FRAGMENT_SOURCE = """#version 450 core
+void main() {
+}
+"""
+
+
+ENGINE_BLOOM_BRIGHT_FRAGMENT_SOURCE = """#version 450 core
+layout(location = 0) in vec2 vUV;
+
+layout(std140, binding = 0) uniform BloomBrightParams {
+    float u_threshold;
+    float u_soft_threshold;
+};
+
+layout(binding = 4) uniform sampler2D u_texture;
+
+layout(location = 0) out vec4 FragColor;
+
+void main() {
+    vec3 color = texture(u_texture, vUV).rgb;
+    float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    float knee = u_threshold * u_soft_threshold;
+    float soft = brightness - u_threshold + knee;
+    soft = clamp(soft, 0.0, 2.0 * knee);
+    soft = soft * soft / (4.0 * knee + 0.00001);
+    float contribution = max(soft, brightness - u_threshold) / max(brightness, 0.00001);
+    contribution = max(contribution, 0.0);
+    FragColor = vec4(color * contribution, 1.0);
+}
+"""
+
+
+ENGINE_BLOOM_DOWNSAMPLE_FRAGMENT_SOURCE = """#version 450 core
+layout(location = 0) in vec2 vUV;
+
+layout(std140, binding = 0) uniform BloomDownsampleParams {
+    vec2 u_texel_size;
+};
+
+layout(binding = 4) uniform sampler2D u_texture;
+
+layout(location = 0) out vec4 FragColor;
+
+void main() {
+    vec2 ts = u_texel_size;
+    vec3 a = texture(u_texture, vUV + vec2(-2.0, -2.0) * ts).rgb;
+    vec3 b = texture(u_texture, vUV + vec2( 0.0, -2.0) * ts).rgb;
+    vec3 c = texture(u_texture, vUV + vec2( 2.0, -2.0) * ts).rgb;
+    vec3 d = texture(u_texture, vUV + vec2(-2.0,  0.0) * ts).rgb;
+    vec3 e = texture(u_texture, vUV + vec2( 0.0,  0.0) * ts).rgb;
+    vec3 f = texture(u_texture, vUV + vec2( 2.0,  0.0) * ts).rgb;
+    vec3 g = texture(u_texture, vUV + vec2(-2.0,  2.0) * ts).rgb;
+    vec3 h = texture(u_texture, vUV + vec2( 0.0,  2.0) * ts).rgb;
+    vec3 i = texture(u_texture, vUV + vec2( 2.0,  2.0) * ts).rgb;
+    vec3 j = texture(u_texture, vUV + vec2(-1.0, -1.0) * ts).rgb;
+    vec3 k = texture(u_texture, vUV + vec2( 1.0, -1.0) * ts).rgb;
+    vec3 l = texture(u_texture, vUV + vec2(-1.0,  1.0) * ts).rgb;
+    vec3 m = texture(u_texture, vUV + vec2( 1.0,  1.0) * ts).rgb;
+    vec3 result = e * 0.125;
+    result += (a + c + g + i) * 0.03125;
+    result += (b + d + f + h) * 0.0625;
+    result += (j + k + l + m) * 0.125;
+    FragColor = vec4(result, 1.0);
+}
+"""
+
+
+ENGINE_BLOOM_UPSAMPLE_FRAGMENT_SOURCE = """#version 450 core
+layout(location = 0) in vec2 vUV;
+
+layout(std140, binding = 0) uniform BloomUpsampleParams {
+    vec2 u_texel_size;
+    float u_blend_factor;
+};
+
+layout(binding = 4) uniform sampler2D u_texture;
+
+layout(location = 0) out vec4 FragColor;
+
+void main() {
+    vec2 ts = u_texel_size;
+    vec3 a = texture(u_texture, vUV + vec2(-1.0, -1.0) * ts).rgb;
+    vec3 b = texture(u_texture, vUV + vec2( 0.0, -1.0) * ts).rgb;
+    vec3 c = texture(u_texture, vUV + vec2( 1.0, -1.0) * ts).rgb;
+    vec3 d = texture(u_texture, vUV + vec2(-1.0,  0.0) * ts).rgb;
+    vec3 e = texture(u_texture, vUV + vec2( 0.0,  0.0) * ts).rgb;
+    vec3 f = texture(u_texture, vUV + vec2( 1.0,  0.0) * ts).rgb;
+    vec3 g = texture(u_texture, vUV + vec2(-1.0,  1.0) * ts).rgb;
+    vec3 h = texture(u_texture, vUV + vec2( 0.0,  1.0) * ts).rgb;
+    vec3 i = texture(u_texture, vUV + vec2( 1.0,  1.0) * ts).rgb;
+    vec3 upsampled = e * 4.0;
+    upsampled += (b + d + f + h) * 2.0;
+    upsampled += (a + c + g + i);
+    upsampled /= 16.0;
+    FragColor = vec4(upsampled * u_blend_factor, 1.0);
+}
+"""
+
+
+ENGINE_BLOOM_COMPOSITE_FRAGMENT_SOURCE = """#version 450 core
+layout(location = 0) in vec2 vUV;
+
+layout(std140, binding = 0) uniform BloomCompositeParams {
+    float u_intensity;
+};
+
+layout(binding = 4) uniform sampler2D u_original;
+layout(binding = 5) uniform sampler2D u_bloom;
+
+layout(location = 0) out vec4 FragColor;
+
+void main() {
+    vec3 original = texture(u_original, vUV).rgb;
+    vec3 bloom = texture(u_bloom, vUV).rgb;
+    vec3 result = original + bloom * u_intensity;
+    FragColor = vec4(result, 1.0);
+}
+"""
+
+
+ENGINE_TONEMAP_FRAGMENT_SOURCE = """#version 450 core
+layout(location=0) in vec2 vUV;
+
+layout(std140, binding = 0) uniform TonemapParams {
+    float u_exposure;
+    int u_method;
+};
+
+layout(binding = 4) uniform sampler2D u_input;
+
+layout(location=0) out vec4 FragColor;
+
+vec3 aces_tonemap(vec3 x) {
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+vec3 reinhard_tonemap(vec3 x) {
+    return x / (x + vec3(1.0));
+}
+
+void main() {
+    vec3 color = texture(u_input, vUV).rgb;
+    color *= u_exposure;
+    if (u_method == 0) {
+        color = aces_tonemap(color);
+    } else if (u_method == 1) {
+        color = reinhard_tonemap(color);
+    }
+    FragColor = vec4(color, 1.0);
+}
+"""
+
+
 PLACEHOLDER_MESH_VERTICES = [
     0.0, 0.65, 0.0, 1.0, 0.05, 0.05,
     -0.75, -0.55, 0.0, 0.05, 1.0, 0.05,
@@ -125,6 +385,7 @@ def export_runtime_package(
             allow_precompiled_default=True,
         )
     _write_shaders(output_dir_path, shaders, resources, diagnostics, shader_compiler)
+    _write_default_pipeline_shader_artifacts(output_dir_path, diagnostics, shader_compiler)
     resources.sort(key=_resource_sort_key)
 
     manifest = {
@@ -357,6 +618,127 @@ def _write_shader(
             "uuid": shader.uuid,
             "path": f"shaders/{shader.uuid}.shader.json",
         }
+    )
+
+
+@dataclass(frozen=True)
+class _EngineShaderArtifact:
+    uuid: str
+    name: str
+    vertex_source: str = ""
+    fragment_source: str = ""
+
+
+def _write_default_pipeline_shader_artifacts(
+    package_dir: Path,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    shader_compiler: str | Path | None,
+) -> None:
+    compiler = _resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
+    if compiler is None:
+        raise FileNotFoundError(
+            "Shader compiler 'termin_shaderc' was not found. "
+            "Default pipeline shaders require precompiled SPIR-V for Android."
+        )
+
+    for shader in _default_pipeline_engine_shaders():
+        _write_engine_shader_artifact(package_dir, diagnostics, shader, compiler)
+
+
+def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
+    skybox_vertex, skybox_fragment = _parse_skybox_engine_shader()
+    return [
+        _EngineShaderArtifact(
+            uuid=ENGINE_FSQ_SHADER_UUID,
+            name="FullscreenQuadEngineVS",
+            vertex_source=ENGINE_FSQ_VERTEX_SOURCE,
+        ),
+        _EngineShaderArtifact(
+            uuid=ENGINE_SKYBOX_SHADER_UUID,
+            name="SkyboxEngineVSFS",
+            vertex_source=skybox_vertex,
+            fragment_source=skybox_fragment,
+        ),
+        _EngineShaderArtifact(
+            uuid=ENGINE_SHADOW_SHADER_UUID,
+            name="ShadowEngineVSFS",
+            vertex_source=ENGINE_SHADOW_VERTEX_SOURCE,
+            fragment_source=ENGINE_SHADOW_FRAGMENT_SOURCE,
+        ),
+        _EngineShaderArtifact(
+            uuid=ENGINE_BLOOM_BRIGHT_SHADER_UUID,
+            name="BloomBrightFS",
+            fragment_source=ENGINE_BLOOM_BRIGHT_FRAGMENT_SOURCE,
+        ),
+        _EngineShaderArtifact(
+            uuid=ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID,
+            name="BloomDownsampleFS",
+            fragment_source=ENGINE_BLOOM_DOWNSAMPLE_FRAGMENT_SOURCE,
+        ),
+        _EngineShaderArtifact(
+            uuid=ENGINE_BLOOM_UPSAMPLE_SHADER_UUID,
+            name="BloomUpsampleFS",
+            fragment_source=ENGINE_BLOOM_UPSAMPLE_FRAGMENT_SOURCE,
+        ),
+        _EngineShaderArtifact(
+            uuid=ENGINE_BLOOM_COMPOSITE_SHADER_UUID,
+            name="BloomCompositeFS",
+            fragment_source=ENGINE_BLOOM_COMPOSITE_FRAGMENT_SOURCE,
+        ),
+        _EngineShaderArtifact(
+            uuid=ENGINE_TONEMAP_SHADER_UUID,
+            name="TonemapEngineFS",
+            fragment_source=ENGINE_TONEMAP_FRAGMENT_SOURCE,
+        ),
+    ]
+
+
+def _parse_skybox_engine_shader() -> tuple[str, str]:
+    from termin.materials import parse_shader_text
+
+    program = parse_shader_text(ENGINE_SKYBOX_SHADER_TEXT)
+    if len(program.phases) == 0:
+        raise RuntimeError("Default pipeline skybox shader parser returned no phases")
+    phase = program.phases[0]
+    vertex_stage = phase.stages.get("vertex")
+    fragment_stage = phase.stages.get("fragment")
+    if vertex_stage is None or fragment_stage is None:
+        raise RuntimeError("Default pipeline skybox shader parser returned incomplete stages")
+    return vertex_stage.source, fragment_stage.source
+
+
+def _write_engine_shader_artifact(
+    package_dir: Path,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    shader: _EngineShaderArtifact,
+    compiler: Path,
+) -> None:
+    del diagnostics
+    vulkan_dir = package_dir / "shaders" / "vulkan"
+    vulkan_dir.mkdir(parents=True, exist_ok=True)
+
+    if shader.vertex_source != "":
+        vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.glsl"
+        vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
+        _compile_shader_stage(
+            compiler,
+            "vertex",
+            vertex_source_path,
+            vulkan_dir / f"{shader.uuid}.vert.spv",
+            f"{shader.name}:vertex",
+        )
+
+    if shader.fragment_source == "":
+        return
+
+    fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.glsl"
+    fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
+    _compile_shader_stage(
+        compiler,
+        "fragment",
+        fragment_source_path,
+        vulkan_dir / f"{shader.uuid}.frag.spv",
+        f"{shader.name}:fragment",
     )
 
 
