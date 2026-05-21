@@ -16,9 +16,8 @@ namespace termin {
 
 // Solid primitive renderer using pre-built GPU meshes.
 // Rendered through tgfx::RenderContext2 end-to-end.
-// All geometry is created once at initialization via tgfx2 buffers,
-// drawing sets model matrices and colors per-primitive via ctx2's
-// transitional plain-uniform setters.
+// All geometry is created once at initialization via tgfx2 buffers;
+// drawing sets model matrices and colors per-primitive through push constants.
 class SolidPrimitiveRenderer {
 public:
     // Mesh parameters
