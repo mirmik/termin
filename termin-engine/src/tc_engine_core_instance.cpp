@@ -1,9 +1,8 @@
 // tc_engine_core_instance.cpp - EngineCore singleton storage
-// Compiled into entity_lib (SHARED) to ensure single instance across all DLLs
+// Compiled into termin_engine to keep one process-wide EngineCore instance.
 
 #include "engine/tc_engine_core.h"
 
-// Global instance pointer
 static tc_engine_core* g_engine_core_instance = nullptr;
 
 extern "C" {

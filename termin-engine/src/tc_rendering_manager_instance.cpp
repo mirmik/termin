@@ -1,9 +1,8 @@
 // tc_rendering_manager_instance.cpp - RenderingManager singleton storage
-// This file is compiled into entity_lib (SHARED) to ensure single instance across all DLLs
+// Compiled into termin_engine to keep one process-wide RenderingManager instance.
 
 #include "render/tc_rendering_manager.h"
 
-// Global instance pointer - stored in entity_lib (SHARED)
 static tc_rendering_manager* g_rendering_manager_instance = nullptr;
 
 extern "C" {

@@ -14,6 +14,7 @@
 - **4.1 закрыто:** дублирующийся `tc_registry_utils.h` вынесен в `termin-base/include/tcbase/tc_registry_utils.h`; копии из `termin-graphics` и `termin-mesh` удалены.
 - **3.3 закрыто:** `tc_registry_utils.h`, `tc_resource.h` и generic handle include вынесены на `termin-base`; `termin-skeleton` больше не зависит от `termin_graphics`, старые resource includes в `termin-render` переведены на `tcbase`.
 - **3.4 частично:** `install_requires` приведены к фактическим импортам для `termin-render`, `termin-input`, `termin-animation`, `termin-components-mesh`; `termin-navmesh` оставлен как отдельная задача разделения core/editor/visual слоёв.
+- **1.2 частично:** singleton storage `.cpp` для `EngineCore`, `SceneManager`, `RenderingManager` перенесены из `termin-app/core_c/src` в `termin-engine/src`; `termin-engine` больше не компилирует исходники из `termin-app` и не добавляет `termin-app/core_c/include`.
 
 ---
 
@@ -62,20 +63,16 @@
 ### 1.2 termin-engine компилирует .cpp из termin-app
 
 **Где смотреть:**
-- `termin-engine/CMakeLists.txt` (строки 37-39)
+- `termin-engine/CMakeLists.txt` — **Исправлено 2026-05-21:** больше не ссылается на `../termin-app/core_c/src`.
+- `termin-engine/src/tc_scene_manager_instance.cpp` — **перенесено из `termin-app/core_c/src`**
+- `termin-engine/src/tc_rendering_manager_instance.cpp` — **перенесено из `termin-app/core_c/src`**
+- `termin-engine/src/tc_engine_core_instance.cpp` — **перенесено из `termin-app/core_c/src`**
 
-```cmake
-set(TERMIN_ENGINE_SOURCES
-    ...
-    ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/src/tc_scene_manager_instance.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/src/tc_rendering_manager_instance.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/src/tc_engine_core_instance.cpp
-)
-```
+**Было:** SDK-модуль `termin-engine` не мог быть собран без наличия `termin-app` в репозитории, потому что компилировал `.cpp` из `termin-app/core_c/src`.
 
-**Проблема:** SDK-модуль `termin-engine` не может быть собран без наличия `termin-app` в репозитории. Это нарушает границы дистрибуции — SDK должен быть самодостаточным.
+**Статус 2026-05-21:** engine-часть исправлена. Singleton storage принадлежит `termin-engine`, а `termin-engine` больше не добавляет include path на `termin-app/core_c/include`.
 
-Аналогично `termin-display` и `termin-animation` используют include пути к `../termin-app/core_c/include`.
+Остаток проблемы: `termin-display` и `termin-animation` всё ещё используют include/install пути к `../termin-app/core_c/include`; это уже не блокирует самодостаточность `termin-engine`, но остаётся частью задачи ownership/migration `core_c`.
 
 ---
 
@@ -451,7 +448,11 @@ termin_render        → termin_base, termin_graphics, termin_scene, termin_insp
 termin_display       → termin_base, termin_graphics, termin_scene, termin_input, termin_render
 termin_materials     → termin_base, termin_graphics
 termin_engine        → termin_base, termin_graphics, termin_scene, termin_render,
-                       termin_display, termin_input, termin_collision
+                       termin_display, termin_input
+termin_android       → termin_base, termin_graphics, termin_scene, termin_mesh,
+                       termin_render, termin_display, termin_engine,
+                       termin_collision, termin_runtime, termin_materials,
+                       termin_components_mesh, termin_components_render
 termin_core (app)    → termin_base, termin_graphics, termin_scene, termin_input,
                        termin_inspect, termin_render, termin_display,
                        termin_skeleton, termin_animation
@@ -491,7 +492,7 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
 | # | Проблема | Модуль | Файл | Серьёзность |
 |---|----------|--------|------|-------------|
 | 1.1 | RenderingManager God Object + дублирование PullRM | termin-engine | rendering_manager.cpp | 🔴 Критическая |
-| 1.2 | termin-engine компилирует .cpp из termin-app | termin-engine | CMakeLists.txt | 🔴 Критическая |
+| 1.2 | termin-engine компилирует .cpp из termin-app | termin-engine | CMakeLists.txt | 🟠 Частично исправлено |
 | 1.3 | Утечка GUI в editor_core | termin-app | editor_camera_ui_controller.py, spacemouse_controller.py | 🔴 Частично исправлено |
 | 1.4 | termin-gui Viewport3D → SDK internals | termin-gui | viewport3d.py | 🔴 Критическая |
 | 2.1 | Прямые пути к include в CMake | termin-display, termin-components-render | CMakeLists.txt | 🟠 Частично исправлено |
