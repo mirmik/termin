@@ -273,6 +273,12 @@ bool EditorInteractionSystem::_snap_transform_gizmo_target(
 // ============================================================================
 
 void EditorInteractionSystem::after_render() {
+    if (_async_release_pick.valid) {
+        _poll_async_release_pick();
+    }
+    if (_async_hover_pick.valid) {
+        _poll_async_hover_pick();
+    }
     if (_pending_press.valid) {
         _process_pending_press();
         _pending_press.valid = false;
@@ -336,6 +342,15 @@ void EditorInteractionSystem::_process_pending_release() {
         _has_press = false;
     }
 
+    if (_async_release_pick.valid) {
+        _request_update();
+        return;
+    }
+    if (_start_async_surface_pick(x, y, vp, display)) {
+        _request_update();
+        return;
+    }
+
     SurfacePickResult pick = pick_surface_at(x, y, vp, display);
     if (on_entity_click && on_entity_click(
             pick.entity, x, y, pick.has_world_point,
@@ -373,8 +388,148 @@ void EditorInteractionSystem::_process_pending_hover() {
     }
 
     // Pick entity for hover highlight
+    if (_async_hover_pick.valid) {
+        _request_update();
+        return;
+    }
+    if (_start_async_entity_pick(x, y, vp, display)) {
+        _request_update();
+        return;
+    }
+
     Entity ent = pick_entity_at(x, y, vp, display);
     selection.hover(ent);
+}
+
+bool EditorInteractionSystem::_start_async_entity_pick(
+    float x, float y, tc_viewport_handle vp, tc_display* display)
+{
+    if (_async_hover_pick.valid || !tc_viewport_handle_valid(vp)) return false;
+
+    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+    tc_pipeline_handle pipeline_h = tc_render_target_get_pipeline(rt);
+    if (!tc_pipeline_pool_alive(pipeline_h)) return false;
+    RenderPipeline pipeline(pipeline_h);
+
+    tgfx::TextureHandle id_tex = pipeline.get_color_tex2("id");
+    if (!id_tex) return false;
+    auto* dev = pipeline.tex2_device();
+    if (!dev) return false;
+
+    int fx = 0;
+    int fy = 0;
+    if (!_window_to_fbo_coords(x, y, vp, display, fx, fy)) return false;
+
+    uint64_t color_request = dev->request_pixel_rgba8(id_tex, fx, fy);
+    if (color_request == 0) return false;
+
+    _async_hover_pick.event = {x, y, vp, display, true};
+    _async_hover_pick.fx = fx;
+    _async_hover_pick.fy = fy;
+    _async_hover_pick.color_request = color_request;
+    _async_hover_pick.valid = true;
+    return true;
+}
+
+bool EditorInteractionSystem::_start_async_surface_pick(
+    float x, float y, tc_viewport_handle vp, tc_display* display)
+{
+    if (_async_release_pick.valid || !tc_viewport_handle_valid(vp)) return false;
+
+    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+    tc_pipeline_handle pipeline_h = tc_render_target_get_pipeline(rt);
+    if (!tc_pipeline_pool_alive(pipeline_h)) return false;
+    RenderPipeline pipeline(pipeline_h);
+
+    tgfx::TextureHandle id_tex = pipeline.get_color_tex2("id");
+    tgfx::TextureHandle depth_tex = pipeline.get_depth_tex2("id");
+    if (!id_tex || !depth_tex) return false;
+    auto* dev = pipeline.tex2_device();
+    if (!dev) return false;
+
+    int fx = 0;
+    int fy = 0;
+    if (!_window_to_fbo_coords(x, y, vp, display, fx, fy)) return false;
+
+    uint64_t color_request = dev->request_pixel_rgba8(id_tex, fx, fy);
+    uint64_t depth_request = dev->request_pixel_depth_float(depth_tex, fx, fy);
+    if (color_request == 0 || depth_request == 0) return false;
+
+    _async_release_pick.event = {x, y, vp, display, true};
+    _async_release_pick.fx = fx;
+    _async_release_pick.fy = fy;
+    _async_release_pick.color_request = color_request;
+    _async_release_pick.depth_request = depth_request;
+    _async_release_pick.valid = true;
+    return true;
+}
+
+void EditorInteractionSystem::_poll_async_hover_pick() {
+    float color[4] = {0, 0, 0, 0};
+    tc_render_target_handle rt = tc_viewport_get_render_target(_async_hover_pick.event.vp);
+    tc_pipeline_handle pipeline_h = tc_render_target_get_pipeline(rt);
+    if (!tc_pipeline_pool_alive(pipeline_h)) {
+        _async_hover_pick.valid = false;
+        return;
+    }
+    RenderPipeline pipeline(pipeline_h);
+    auto* dev = pipeline.tex2_device();
+    if (!dev) {
+        _async_hover_pick.valid = false;
+        return;
+    }
+    if (!dev->poll_pixel_rgba8(_async_hover_pick.color_request, color)) {
+        _request_update();
+        return;
+    }
+
+    Entity ent = _entity_from_pick_color(color, _async_hover_pick.event.vp);
+    selection.hover(ent);
+    _async_hover_pick.valid = false;
+}
+
+void EditorInteractionSystem::_poll_async_release_pick() {
+    float color[4] = {0, 0, 0, 0};
+    float depth = 1.0f;
+    tc_render_target_handle rt = tc_viewport_get_render_target(_async_release_pick.event.vp);
+    tc_pipeline_handle pipeline_h = tc_render_target_get_pipeline(rt);
+    if (!tc_pipeline_pool_alive(pipeline_h)) {
+        _async_release_pick.valid = false;
+        return;
+    }
+    RenderPipeline pipeline(pipeline_h);
+    auto* dev = pipeline.tex2_device();
+    if (!dev) {
+        _async_release_pick.valid = false;
+        return;
+    }
+    if (!dev->poll_pixel_rgba8(_async_release_pick.color_request, color) ||
+        !dev->poll_pixel_depth_float(_async_release_pick.depth_request, &depth)) {
+        _request_update();
+        return;
+    }
+
+    const PendingEvent event = _async_release_pick.event;
+    SurfacePickResult pick = _surface_from_pick_color_depth(
+        color, depth, _async_release_pick.fx, _async_release_pick.fy, event.vp);
+    _async_release_pick.valid = false;
+
+    if (on_entity_click && on_entity_click(
+            pick.entity, event.x, event.y, pick.has_world_point,
+            pick.world_point[0], pick.world_point[1], pick.world_point[2],
+            pick.depth, pick.view_depth,
+            pick.reproject_screen_error, pick.reproject_depth_error,
+            pick.has_mesh_hit,
+            pick.mesh_point[0], pick.mesh_point[1], pick.mesh_point[2],
+            pick.mesh_normal[0], pick.mesh_normal[1], pick.mesh_normal[2],
+            pick.mesh_triangle_index,
+            pick.mesh_indices[0], pick.mesh_indices[1], pick.mesh_indices[2])) {
+        _request_update();
+        return;
+    }
+
+    selection.select(pick.entity);
+    _request_update();
 }
 
 // ============================================================================
@@ -435,6 +590,12 @@ Entity EditorInteractionSystem::pick_entity_at(
     float color[4] = {0, 0, 0, 0};
     if (!dev->read_pixel_rgba8(id_tex, fx, fy, color)) return Entity();
 
+    return _entity_from_pick_color(color, viewport);
+}
+
+Entity EditorInteractionSystem::_entity_from_pick_color(
+    const float color[4], tc_viewport_handle viewport)
+{
     int r = (int)std::round(color[0] * 255.0f);
     int g = (int)std::round(color[1] * 255.0f);
     int b = (int)std::round(color[2] * 255.0f);
@@ -506,8 +667,41 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
 
     float depth = 1.0f;
     if (!dev->read_pixel_depth_float(depth_tex, fx, fy, &depth)) return result;
+    return _surface_from_pick_color_depth(color, depth, fx, fy, viewport);
+}
+
+SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
+    const float color[4], float depth, int fx, int fy, tc_viewport_handle viewport)
+{
+    SurfacePickResult result;
+
+    int r = (int)std::round(color[0] * 255.0f);
+    int g = (int)std::round(color[1] * 255.0f);
+    int b = (int)std::round(color[2] * 255.0f);
+    int pick_id = tc_picking_rgb_to_id(r, g, b);
+    if (pick_id == 0) return result;
+
+    tc_scene_handle scene = tc_viewport_get_scene(viewport);
+    if (!tc_scene_handle_valid(scene)) return result;
+
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    if (!pool) return result;
+
+    tc_entity_id eid = tc_entity_pool_find_by_pick_id(pool, pick_id);
+    if (!tc_entity_id_valid(eid)) return result;
+
+    result.entity = Entity(pool, eid);
     result.depth = depth;
     if (depth >= 1.0f) return result;
+
+    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+    tc_pipeline_handle pipeline_h = tc_render_target_get_pipeline(rt);
+    if (!tc_pipeline_pool_alive(pipeline_h)) return result;
+    RenderPipeline pipeline(pipeline_h);
+    tgfx::TextureHandle id_tex = pipeline.get_color_tex2("id");
+    if (!id_tex) return result;
+    auto* dev = pipeline.tex2_device();
+    if (!dev) return result;
 
     tc_component* cam_comp = tc_render_target_get_camera(rt);
     if (!cam_comp) return result;
