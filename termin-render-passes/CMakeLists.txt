@@ -59,12 +59,14 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/color_pass.cpp
     src/debug_triangle_pass.cpp
     src/grayscale_pass.cpp
+    src/id_pass.cpp
     src/material_ubo_apply.cpp
     src/present_pass.cpp
     src/shader_skinning.cpp
     src/shadow_camera.cpp
     src/shadow_pass.cpp
     src/skybox_pass.cpp
+    src/tc_picking.c
     src/tonemap_pass.cpp
 )
 
@@ -77,6 +79,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/color_pass.hpp
     include/termin/render/debug_triangle_pass.hpp
     include/termin/render/grayscale_pass.hpp
+    include/termin/render/id_pass.hpp
     include/termin/render/material_ubo_apply.hpp
     include/termin/render/present_pass.hpp
     include/termin/render/shader_skinning.hpp
@@ -84,6 +87,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/shadow_pass.hpp
     include/termin/render/skybox_pass.hpp
     include/termin/render/tonemap_pass.hpp
+    include/tc_picking.h
 )
 
 if(TERMIN_RENDER_PASSES_BUILD_SHARED)

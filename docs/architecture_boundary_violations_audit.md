@@ -74,7 +74,7 @@
 
 **Статус 2026-05-21:** engine-часть исправлена. Singleton storage принадлежит `termin-engine`, а `termin-engine` больше не добавляет include path на `termin-app/core_c/include`.
 
-Остаток проблемы: `termin-app/cpp` всё ещё экспортирует `core_c/include` как app compatibility surface (`termin_core.h`, `tc_picking.h`, `tc_opengl.h`, editor/render leftovers). После cleanup 2026-05-21 независимые SDK-модули `termin-engine`, `termin-display`, `termin-skeleton`, `termin-animation`, `termin-components-render` больше не добавляют `termin-app/core_c/include`.
+Остаток проблемы: `termin-app/cpp` всё ещё экспортирует `core_c/include` как app compatibility surface (`termin_core.h`, `tc_opengl.h`, editor/render leftovers). После cleanup 2026-05-21 независимые SDK-модули `termin-engine`, `termin-display`, `termin-skeleton`, `termin-animation`, `termin-components-render` больше не добавляют `termin-app/core_c/include`, а `tc_picking.h` принадлежит `termin-render-passes`.
 
 ---
 

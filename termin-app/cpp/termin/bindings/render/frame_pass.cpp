@@ -9,7 +9,6 @@ extern "C" {
 
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/render.hpp"
-#include "termin/render/id_pass.hpp"
 #include "termin/render/collider_gizmo_pass.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/lighting/shadow.hpp"
@@ -51,31 +50,6 @@ void init_pass_from_python(T* self, const char* type_name) {
 }
 
 void bind_frame_pass(nb::module_& m) {
-    nb::class_<IdPass, CxxFramePass>(m, "IdPass")
-        .def("__init__", [](IdPass* self, const std::string& input_res, const std::string& output_res, const std::string& pass_name) {
-            new (self) IdPass(input_res, output_res, pass_name);
-            init_pass_from_python(self, "IdPass");
-        }, nb::arg("input_res") = "empty", nb::arg("output_res") = "id", nb::arg("pass_name") = "IdPass")
-        .def_rw("input_res", &IdPass::input_res)
-        .def_rw("output_res", &IdPass::output_res)
-        .def_rw("camera_name", &IdPass::camera_name)
-        .def("get_internal_symbols", &IdPass::get_internal_symbols)
-        .def_prop_ro("reads", &IdPass::compute_reads)
-        .def_prop_ro("writes", &IdPass::compute_writes)
-        .def("destroy", &IdPass::destroy);
-
-    {
-        nb::dict visibility;
-        nb::dict camera_cond;
-        camera_cond["_outside_viewport"] = true;
-        visibility["camera_name"] = camera_cond;
-        m.attr("IdPass").attr("node_param_visibility") = visibility;
-        m.attr("IdPass").attr("category") = "Render";
-        m.attr("IdPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "fbo"));
-        m.attr("IdPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "fbo"));
-        m.attr("IdPass").attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("input_res", "output_res"));
-    }
-
     nb::class_<ColliderGizmoPass, CxxFramePass>(m, "ColliderGizmoPass")
         .def("__init__", [](ColliderGizmoPass* self,
                             const std::string& input_res,

@@ -9,6 +9,7 @@
 
 extern "C" {
 #include "render/tc_pass.h"
+#include "tc_picking.h"
 }
 
 #include <termin/render/bloom_pass.hpp>
@@ -16,6 +17,7 @@ extern "C" {
 #include <termin/render/debug_triangle_pass.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/grayscale_pass.hpp>
+#include <termin/render/id_pass.hpp>
 #include <termin/render/present_pass.hpp>
 #include <termin/render/shadow_pass.hpp>
 #include <termin/render/skybox_pass.hpp>
@@ -109,6 +111,31 @@ void bind_render_passes(nb::module_& m) {
         nb::make_tuple("input_res", "fbo")
     );
     m.attr("PresentToScreenPass").attr("node_outputs") = nb::make_tuple();
+
+    nb::class_<IdPass, CxxFramePass>(m, "IdPass")
+        .def("__init__", [](IdPass* self, const std::string& input_res, const std::string& output_res, const std::string& pass_name) {
+            new (self) IdPass(input_res, output_res, pass_name);
+            init_pass_from_python(self, "IdPass");
+        }, nb::arg("input_res") = "empty", nb::arg("output_res") = "id", nb::arg("pass_name") = "IdPass")
+        .def_rw("input_res", &IdPass::input_res)
+        .def_rw("output_res", &IdPass::output_res)
+        .def_rw("camera_name", &IdPass::camera_name)
+        .def("get_internal_symbols", &IdPass::get_internal_symbols)
+        .def_prop_ro("reads", &IdPass::compute_reads)
+        .def_prop_ro("writes", &IdPass::compute_writes)
+        .def("destroy", &IdPass::destroy);
+
+    {
+        nb::dict visibility;
+        nb::dict camera_cond;
+        camera_cond["_outside_viewport"] = true;
+        visibility["camera_name"] = camera_cond;
+        m.attr("IdPass").attr("node_param_visibility") = visibility;
+        m.attr("IdPass").attr("category") = "Render";
+        m.attr("IdPass").attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "fbo"));
+        m.attr("IdPass").attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "fbo"));
+        m.attr("IdPass").attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("input_res", "output_res"));
+    }
 
     nb::class_<ShadowMapArrayEntry>(m, "ShadowMapArrayEntry")
         .def(nb::init<>())
@@ -411,6 +438,18 @@ void bind_render_passes(nb::module_& m) {
     m.attr("TONEMAP_ACES") = 0;
     m.attr("TONEMAP_REINHARD") = 1;
     m.attr("TONEMAP_NONE") = 2;
+
+    m.def("tc_picking_id_to_rgb", [](int id) {
+        int r, g, b;
+        tc_picking_id_to_rgb(id, &r, &g, &b);
+        return std::make_tuple(r, g, b);
+    }, "Convert entity pick ID to RGB (0-255 range), caches for reverse lookup");
+
+    m.def("tc_picking_rgb_to_id", &tc_picking_rgb_to_id,
+        "Convert RGB (0-255) back to entity pick ID, returns 0 if not cached");
+
+    m.def("tc_picking_cache_clear", &tc_picking_cache_clear,
+        "Clear the picking cache");
 }
 
 } // namespace termin

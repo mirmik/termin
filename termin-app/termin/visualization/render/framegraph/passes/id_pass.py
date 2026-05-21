@@ -2,6 +2,6 @@
 
 Re-exports C++ IdPass.
 """
-from termin._native.render import IdPass
+from termin.render_passes import IdPass
 
 __all__ = ["IdPass"]

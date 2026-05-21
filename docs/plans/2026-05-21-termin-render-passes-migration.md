@@ -387,6 +387,8 @@ Verification:
 - picking import smoke
 - `rg "tc_picking" termin-app/core_c termin-app/cpp`
 
+Status 2026-05-21: done. `IdPass` and the single `tc_picking` RGB/pick-id cache moved into `termin-render-passes`. App Python re-export for `IdPass` and `termin.visualization.core.picking` now import from `termin.render_passes`; app C++ still calls the same `tc_picking_*` symbols through the linked render-passes library for compatibility.
+
 ### Phase 9: decide debug/editor pass ownership
 
 Goal: handle `GroundGridPass`, `ColliderGizmoPass`, and `ImmediateRenderer` intentionally.

@@ -9,6 +9,7 @@ from termin.render_passes._render_passes_native import (
     ColorPass,
     DebugTrianglePass,
     GrayscalePass,
+    IdPass,
     PresentToScreenPass,
     ShadowMapArrayEntry,
     ShadowMapArrayResource,
@@ -19,6 +20,9 @@ from termin.render_passes._render_passes_native import (
     TONEMAP_NONE,
     TONEMAP_REINHARD,
     TonemapPass,
+    tc_picking_cache_clear,
+    tc_picking_id_to_rgb,
+    tc_picking_rgb_to_id,
 )
 
 __all__ = [
@@ -26,6 +30,7 @@ __all__ = [
     "ColorPass",
     "DebugTrianglePass",
     "GrayscalePass",
+    "IdPass",
     "PresentToScreenPass",
     "ShadowMapArrayEntry",
     "ShadowMapArrayResource",
@@ -36,4 +41,7 @@ __all__ = [
     "TONEMAP_NONE",
     "TONEMAP_REINHARD",
     "TonemapPass",
+    "tc_picking_cache_clear",
+    "tc_picking_id_to_rgb",
+    "tc_picking_rgb_to_id",
 ]

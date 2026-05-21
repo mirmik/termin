@@ -11,7 +11,7 @@ input locations, and push constants across all engine passes.
 - `termin-render/include/termin/render/frame_uniforms.hpp` — `EnginePerFrameStd140`.
 - `termin-render-passes/src/color_pass.cpp` — `ShadowBlockStd140`.
 - `termin-app/cpp/termin/render/shader_parser.cpp` — generated `MaterialParams` + `ColorPushBlock`.
-- `termin-render-passes/src/shadow_pass.cpp`, `termin-app/cpp/termin/render/id_pass.cpp`,
+- `termin-render-passes/src/{shadow,id}_pass.cpp`,
   `termin-components/termin-components-render/src/{depth,normal}_pass.cpp` —
   per-pass `PerFrame` + `PushStd140` variants.
 - `termin-render-passes/src/shader_skinning.cpp` + `termin-app/cpp/termin/render/skinned_mesh_renderer.cpp` —
