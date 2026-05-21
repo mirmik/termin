@@ -15,7 +15,6 @@ option(TC_USE_EXTERNAL_INSPECT "Use external termin_inspect package for inspect/
 # Collision APIs live in termin-collision.
 set(TC_SOURCES
     src/tc_core.c
-    src/tc_picking.c
 )
 
 if(NOT TC_USE_EXTERNAL_INSPECT)
@@ -34,7 +33,6 @@ message(STATUS "termin_core: using external termin_inspect package")
 set(TC_HEADERS
     include/inspect/tc_inspect_init.h
     include/inspect/tc_inspect_component_adapter.h
-    include/tc_picking.h
     include/core/tc_scene_registry.h
     include/tc_opengl.h
     include/termin_core.h

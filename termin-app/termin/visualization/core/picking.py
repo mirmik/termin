@@ -1,7 +1,7 @@
 # picking.py - Entity picking utilities
 # Uses C API for id<->rgb conversion to ensure consistency with C++ rendering
 
-from termin._native import tc_picking_id_to_rgb, tc_picking_rgb_to_id, tc_picking_cache_clear
+from termin.render_passes import tc_picking_id_to_rgb, tc_picking_rgb_to_id, tc_picking_cache_clear
 
 def id_to_rgb(in_pid: int):
     """Convert entity pick ID to RGB tuple (0.0-1.0 range).
