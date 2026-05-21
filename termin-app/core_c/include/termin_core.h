@@ -21,7 +21,7 @@
 #define TERMIN_CORE_H
 
 #include "tc_version.h"
-#include "tc_types.h"
+#include <tcbase/tc_types.h>
 #include "geom/tc_vec3.h"
 #include "geom/tc_quat.h"
 #include "geom/tc_pose.h"

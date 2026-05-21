@@ -2,7 +2,7 @@
 #ifndef TC_INPUT_EVENT_H
 #define TC_INPUT_EVENT_H
 
-#include "tc_types.h"
+#include <tcbase/tc_types.h>
 #include "render/tc_viewport_pool.h"
 #include <stdint.h>
 

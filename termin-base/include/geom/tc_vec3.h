@@ -4,7 +4,7 @@
 #ifndef TC_VEC3_H
 #define TC_VEC3_H
 
-#include "tc_types.h"
+#include <tcbase/tc_types.h>
 #include <math.h>
 
 // C/C++ compatible struct initialization

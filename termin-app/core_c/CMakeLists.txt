@@ -12,9 +12,7 @@ option(TC_BUILD_TESTS "Build tests" ON)
 option(TC_USE_EXTERNAL_INSPECT "Use external termin_inspect package for inspect/kind core" ON)
 
 # Source files (only .c)
-# Note: tc_collision.c is NOT included here because collision detection
-# requires C++ CollisionWorld from termin.dll. The C API is implemented
-# in cpp/termin/tc_collision_c_api.cpp instead.
+# Collision APIs live in termin-collision.
 set(TC_SOURCES
     src/tc_core.c
     src/tc_picking.c
@@ -34,20 +32,11 @@ message(STATUS "termin_core: using external termin_inspect package")
 
 # Header files (only .h, for IDE integration)
 set(TC_HEADERS
-    include/geom/tc_pose.h
-    include/geom/tc_vec3.h
-    include/geom/tc_quat.h
     include/inspect/tc_inspect_init.h
-    include/inspect/tc_inspect_context.h
     include/inspect/tc_inspect_component_adapter.h
-    include/resources/tc_animation.h
-    include/resources/tc_animation_registry.h
-    include/physics/tc_collision.h
     include/tc_picking.h
-    include/resources/tc_skeleton.h
-    include/resources/tc_skeleton_registry.h
     include/core/tc_scene_registry.h
-    include/tc_types.h
+    include/tc_opengl.h
     include/termin_core.h
 )
 

@@ -1,7 +1,7 @@
 // tc_animation.h - Animation clip data structures
 #pragma once
 
-#include "tc_types.h"
+#include <tcbase/tc_types.h>
 #include <tcbase/tc_binding_types.h>
 #include <tcbase/tc_resource.h>
 #include <stdlib.h>

@@ -6,7 +6,6 @@
 #include "termin_core.h"
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_render_state.h"
-#include "physics/tc_collision_world.h"
 #include <tcbase/tc_resource_map.h>
 
 #define TEST_ASSERT(cond, msg) \

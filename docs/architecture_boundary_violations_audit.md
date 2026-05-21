@@ -15,6 +15,7 @@
 - **3.3 закрыто:** `tc_registry_utils.h`, `tc_resource.h` и generic handle include вынесены на `termin-base`; `termin-skeleton` больше не зависит от `termin_graphics`, старые resource includes в `termin-render` переведены на `tcbase`.
 - **3.4 частично:** `install_requires` приведены к фактическим импортам для `termin-render`, `termin-input`, `termin-animation`, `termin-components-mesh`; `termin-navmesh` оставлен как отдельная задача разделения core/editor/visual слоёв.
 - **1.2 частично:** singleton storage `.cpp` для `EngineCore`, `SceneManager`, `RenderingManager` перенесены из `termin-app/core_c/src` в `termin-engine/src`; `termin-engine` больше не компилирует исходники из `termin-app` и не добавляет `termin-app/core_c/include`.
+- **core_c cleanup частично:** C geometry headers перенесены в `termin-base/include/geom`; skeleton/animation resource C headers перенесены в `termin-skeleton/include/resources` и `termin-animation/include/resources`; collision C headers/obsolete C impl удалены из `core_c`, актуальный владелец — `termin-collision`; `tc_input_event.h` перенесён в `termin-display`.
 
 ---
 
@@ -72,7 +73,7 @@
 
 **Статус 2026-05-21:** engine-часть исправлена. Singleton storage принадлежит `termin-engine`, а `termin-engine` больше не добавляет include path на `termin-app/core_c/include`.
 
-Остаток проблемы: `termin-display` и `termin-animation` всё ещё используют include/install пути к `../termin-app/core_c/include`; это уже не блокирует самодостаточность `termin-engine`, но остаётся частью задачи ownership/migration `core_c`.
+Остаток проблемы: `termin-app/cpp` всё ещё экспортирует `core_c/include` как app compatibility surface (`termin_core.h`, `tc_picking.h`, `tc_opengl.h`, editor/render leftovers). После cleanup 2026-05-21 независимые SDK-модули `termin-engine`, `termin-display`, `termin-skeleton`, `termin-animation`, `termin-components-render` больше не добавляют `termin-app/core_c/include`.
 
 ---
 
@@ -126,18 +127,11 @@ from termin._native.render import _input_manager_on_key
 | Файл | Строки | Проблема |
 |------|--------|----------|
 | `termin-display/CMakeLists.txt` | 103-111 | **Исправлено 2026-05-21:** прямой путь к `../termin-render/include` удалён, используется target dependency |
-| `termin-components/termin-components-render/CMakeLists.txt` | 58-60 | **Частично исправлено 2026-05-21:** широкий путь к `../../termin-app/cpp/termin` удалён; остались точечный путь к `entity_helpers.hpp` для bindings и `../../termin-app/core_c/include` |
-
-```cmake
-# termin-components-render/CMakeLists.txt — оставшаяся app/core_c часть
-target_include_directories(termin_components_render PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/core_c/include
-)
-```
+| `termin-components/termin-components-render/CMakeLists.txt` | 58-60 | **Исправлено 2026-05-21:** широкий путь к `../../termin-app/cpp/termin` удалён; путь к `../../termin-app/core_c/include` также удалён |
 
 **Проблема:** Жёсткая привязка к структуре репозитория. При сборке из пакетов или изменении структуры это сломается.
 
-**Статус 2026-05-21:** частично исправлено. Bypass include paths на `termin-render/include` удалены из library и Python binding targets; `termin-app/cpp/termin` также удалён из `termin-components-render`, потому что перекрывал публичные render headers старой app-копией. App/core_c пути остаются до решения 1.2.
+**Статус 2026-05-21:** исправлено для перечисленных SDK targets. Bypass include paths на `termin-render/include` удалены из library и Python binding targets; `termin-app/cpp/termin` также удалён из `termin-components-render`, потому что перекрывал публичные render headers старой app-копией; app/core_c путь удалён после переноса оставшихся headers к владельцам.
 
 ---
 
@@ -293,7 +287,7 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 
 `tgfx_intern_string.h` лежит в termin-base (уже зависит). `tc_registry_utils.h` и `tc_resource.h` были продублированы в termin-graphics и termin-mesh.
 
-**Статус 2026-05-21:** исправлено. `tc_registry_utils.h` и `tc_resource.h` вынесены в `termin-base/include/tcbase/`, `tc_skeleton.h`/`tc_animation.h` и `termin-render/include/core/tc_scene_pipeline_template.h` используют `tcbase/tc_binding_types.h`, старые resource includes в `termin-render` переведены на `tcbase`, а `termin-skeleton` больше не линкуется с `termin_graphics`.
+**Статус 2026-05-21:** исправлено. `tc_registry_utils.h` и `tc_resource.h` вынесены в `termin-base/include/tcbase/`, C geometry headers перенесены в `termin-base/include/geom`, `tc_skeleton.h`/`tc_animation.h` принадлежат `termin-skeleton`/`termin-animation` и используют `tcbase/tc_binding_types.h`, старые resource includes в `termin-render` переведены на `tcbase`, а `termin-skeleton` больше не линкуется с `termin_graphics`.
 
 ---
 
@@ -495,7 +489,7 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
 | 1.2 | termin-engine компилирует .cpp из termin-app | termin-engine | CMakeLists.txt | 🟠 Частично исправлено |
 | 1.3 | Утечка GUI в editor_core | termin-app | editor_camera_ui_controller.py, spacemouse_controller.py | 🔴 Частично исправлено |
 | 1.4 | termin-gui Viewport3D → SDK internals | termin-gui | viewport3d.py | 🔴 Критическая |
-| 2.1 | Прямые пути к include в CMake | termin-display, termin-components-render | CMakeLists.txt | 🟠 Частично исправлено |
+| 2.1 | Прямые пути к include в CMake | termin-display, termin-components-render | CMakeLists.txt | ✅ Исправлено |
 | 2.2 | Утечка tgfx типов в публичном API | termin-render | render_pipeline.hpp, drawable.hpp (+ 30 хедеров) | 🟠 Высокая |
 | 2.3 | Бизнес-логика в биндингах + hasattr/setattr | termin-* python bindings | tc_pass_bindings.cpp и др. | 🟠 Высокая |
 | 2.4 | Дублирование биндингов | termin-base, termin-app | geom/, tc_pass_bindings.cpp | 🟠 Высокая |

@@ -1,7 +1,7 @@
 // tc_opengl.h - OpenGL backend initialization for C API
 #pragma once
 
-#include "tc_types.h"
+#include <tcbase/tc_types.h>
 
 #ifdef __cplusplus
 extern "C" {

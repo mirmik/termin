@@ -2,7 +2,7 @@
 // This header is deprecated, use tc_scene_pool.h directly
 #pragma once
 
-#include "tc_types.h"
+#include <tcbase/tc_types.h>
 #include "core/tc_scene_pool.h"
 
 #ifdef __cplusplus

@@ -2,7 +2,7 @@
 #ifndef TC_INSPECT_INIT_H
 #define TC_INSPECT_INIT_H
 
-#include "tc_value.h"
+#include <tcbase/tc_value.h>
 
 #ifdef _WIN32
     #ifdef TERMIN_INSPECT_EXPORTS

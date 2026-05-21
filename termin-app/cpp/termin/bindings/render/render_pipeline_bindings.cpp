@@ -10,7 +10,7 @@
 #include <iostream>
 
 extern "C" {
-#include "inspect/tc_binding.h"
+#include <tcbase/tc_binding_types.h>
 }
 
 #include "termin/render/render_pipeline.hpp"
