@@ -1225,7 +1225,6 @@ void main() {{
         from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
         from termin.visualization.render.framegraph.passes.color import ColorPass
         from termin.visualization.render.framegraph.passes.present import PresentToScreenPass
-        from termin.visualization.render.postprocess import PostProcessPass
 
         pipeline = RenderPipeline(
             name=name,
@@ -1242,14 +1241,8 @@ void main() {{
                     phase_mark="opaque",
                     pass_name="Color",
                 ),
-                PostProcessPass(
-                    effects=[],
-                    input_res="color",
-                    output_res="color_pp",
-                    pass_name="PostFX",
-                ),
                 PresentToScreenPass(
-                    input_res="color_pp",
+                    input_res="color",
                     output_res="DISPLAY",
                     pass_name="Present",
                 ),

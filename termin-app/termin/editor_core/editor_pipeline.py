@@ -5,7 +5,7 @@ from termin.visualization.render.framegraph import RenderPipeline
 
 def make_editor_pipeline() -> RenderPipeline:
     """
-    Create editor pipeline with gizmo, id pass, highlight effects.
+    Create editor pipeline with gizmo, id pass, and highlight passes.
 
     Returns:
         RenderPipeline configured for editor use.
@@ -21,14 +21,13 @@ def make_editor_pipeline() -> RenderPipeline:
     from termin.visualization.render.framegraph.passes.unified_gizmo import UnifiedGizmoPass
     from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
     from termin.visualization.render.framegraph.passes.immediate_depth import ImmediateDepthPass
-    from termin.visualization.render.postprocess import PostProcessPass
-    from termin.visualization.render.posteffects.highlight import HighlightEffect
     from termin.visualization.render.framegraph.passes.depth import DepthPass
     from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
     from termin.visualization.render.framegraph.passes.shadow import ShadowPass
     from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
     from termin.visualization.render.framegraph.passes.tonemap import TonemapPass
     from termin.visualization.render.framegraph.passes.bloom_pass import BloomPass
+    from termin.visualization.render.framegraph.passes.highlight import HighlightPass
 
     def get_gizmo_manager():
         sys = EditorInteractionSystem.instance()
@@ -42,19 +41,29 @@ def make_editor_pipeline() -> RenderPipeline:
         sys = EditorInteractionSystem.instance()
         return sys.selection.hovered_pick_id if sys else 0
 
-    # MSAA resolve before postprocessing
+    # MSAA resolve before fullscreen effects
     resolve_pass = ResolvePass(
         input_res="color",
         output_res="color_resolved",
         pass_name="Resolve",
     )
 
-    postprocess = PostProcessPass(
-        effects=[],
+    hover_highlight_pass = HighlightPass(
+        get_hovered_pick_id,
+        color=(0.3, 0.8, 1.0, 1.0),
         input_res="color_resolved",
-        output_res="color_pp",
-        pass_name="PostFX",
-        internal_format="rgba16f",
+        id_res="id",
+        output_res="color_hover_highlight",
+        pass_name="HoverHighlight",
+    )
+
+    selected_highlight_pass = HighlightPass(
+        get_selected_pick_id,
+        color=(1.0, 0.9, 0.1, 1.0),
+        input_res="color_hover_highlight",
+        id_res="id",
+        output_res="color_highlight",
+        pass_name="SelectedHighlight",
     )
 
     depth_pass = DepthPass(input_res="empty_depth", output_res="depth", pass_name="Depth")
@@ -137,7 +146,7 @@ def make_editor_pipeline() -> RenderPipeline:
     )
 
     bloom_pass = BloomPass(
-        input_res="color_pp",
+        input_res="color_highlight",
         output_res="color_bloom",
     )
 
@@ -155,7 +164,8 @@ def make_editor_pipeline() -> RenderPipeline:
         depth_pass,
         IdPass(input_res="empty_id", output_res="id", pass_name="Id"),
         resolve_pass,
-        postprocess,
+        hover_highlight_pass,
+        selected_highlight_pass,
         bloom_pass,
         tonemap_pass,
         UIWidgetPass(
@@ -168,19 +178,6 @@ def make_editor_pipeline() -> RenderPipeline:
             pass_name="Present",
         ),
     ]
-
-    postprocess.add_effect(
-        HighlightEffect(
-            get_hovered_pick_id,
-            color=(0.3, 0.8, 1.0, 1.0),
-        )
-    )
-    postprocess.add_effect(
-        HighlightEffect(
-            get_selected_pick_id,
-            color=(1.0, 0.9, 0.1, 1.0),
-        )
-    )
 
     msaa_samples = 4
     color_fbo_format = "render_target"
@@ -233,7 +230,11 @@ def make_editor_pipeline() -> RenderPipeline:
             format=color_fbo_format,
         ),
         ResourceSpec(
-            resource="color_pp",
+            resource="color_hover_highlight",
+            format=color_fbo_format,
+        ),
+        ResourceSpec(
+            resource="color_highlight",
             format=color_fbo_format,
         ),
         ResourceSpec(

@@ -15,7 +15,6 @@ from termin.inspect import InspectField
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.pipeline import RenderPipeline
     from termin.visualization.render.framegraph import FramePass
-    from termin.visualization.render.postprocess import PostEffect, PostProcessPass
 
 
 class ViewportHintComponent(PythonComponent):
@@ -29,8 +28,8 @@ class ViewportHintComponent(PythonComponent):
     When a viewport uses a camera with ViewportHintComponent,
     the viewport inspector shows "Controlled by ViewportHint".
 
-    Also provides methods to access pipeline, passes, and effects
-    programmatically from other scene components.
+    Also provides methods to access pipeline and passes programmatically
+    from other scene components.
     """
 
     inspect_fields = {
@@ -69,7 +68,7 @@ class ViewportHintComponent(PythonComponent):
         Get a pass from the pipeline by name.
 
         Args:
-            pass_name: Name of the pass (e.g., "Color", "PostProcess").
+            pass_name: Name of the pass (e.g., "Color", "Tonemap").
 
         Returns:
             FramePass or None if not found.
@@ -83,62 +82,3 @@ class ViewportHintComponent(PythonComponent):
                 return p
 
         return None
-
-    def get_postprocess_pass(self, pass_name: str = "PostProcess") -> Optional["PostProcessPass"]:
-        """
-        Get a PostProcessPass from the pipeline by name.
-
-        Args:
-            pass_name: Name of the PostProcessPass.
-
-        Returns:
-            PostProcessPass or None if not found or not a PostProcessPass.
-        """
-        from termin.visualization.render.postprocess import PostProcessPass
-
-        p = self.get_pass(pass_name)
-        if isinstance(p, PostProcessPass):
-            return p
-
-        return None
-
-    def get_effect(
-        self,
-        effect_name: str,
-        pass_name: str = "PostProcess",
-    ) -> Optional["PostEffect"]:
-        """
-        Get a post effect by name from a PostProcessPass.
-
-        Args:
-            effect_name: Name of the effect.
-            pass_name: Name of the PostProcessPass containing the effect.
-
-        Returns:
-            PostEffect or None if not found.
-        """
-        pp = self.get_postprocess_pass(pass_name)
-        if pp is None:
-            return None
-
-        for eff in pp.effects:
-            if eff.name == effect_name:
-                return eff
-
-        return None
-
-    def get_effects(self, pass_name: str = "PostProcess") -> list["PostEffect"]:
-        """
-        Get all effects from a PostProcessPass.
-
-        Args:
-            pass_name: Name of the PostProcessPass.
-
-        Returns:
-            List of PostEffect objects (empty if pass not found).
-        """
-        pp = self.get_postprocess_pass(pass_name)
-        if pp is None:
-            return []
-
-        return list(pp.effects)

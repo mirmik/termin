@@ -1,17 +1,17 @@
-"""Components, FramePasses, and PostEffects mixin for ResourceManager."""
+"""Components and FramePasses mixin for ResourceManager."""
 
 from __future__ import annotations
 
 from typing import List, Optional, TYPE_CHECKING
 
-from ._builtins import BUILTIN_COMPONENTS, BUILTIN_FRAME_PASSES, BUILTIN_POST_EFFECTS
+from ._builtins import BUILTIN_COMPONENTS, BUILTIN_FRAME_PASSES
 
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Component
 
 
 class ComponentsMixin:
-    """Mixin for component, frame pass, and post effect management."""
+    """Mixin for component and frame pass management."""
 
     # --------- Компоненты ---------
     def register_component(self, name: str, cls: type["Component"]):
@@ -122,44 +122,3 @@ class ComponentsMixin:
         from termin.visualization.core.plugin_loader import scan_for_subclasses
         from termin.render_framework.python_pass import PythonFramePass
         return scan_for_subclasses(paths, PythonFramePass, self.frame_passes, "_dynamic_frame_passes_")
-
-    # --------- PostEffect'ы ---------
-    def register_post_effect(self, name: str, cls: type):
-        """Регистрирует класс PostEffect по имени."""
-        self.post_effects[name] = cls
-
-    def get_post_effect(self, name: str) -> Optional[type]:
-        """Получить класс PostEffect по имени."""
-        return self.post_effects.get(name)
-
-    def list_post_effect_names(self) -> list[str]:
-        """Список имён всех зарегистрированных PostEffect'ов."""
-        return sorted(self.post_effects.keys())
-
-    def register_builtin_post_effects(self) -> List[str]:
-        """
-        Регистрирует все встроенные PostEffect'ы из BUILTIN_POST_EFFECTS.
-
-        Returns:
-            Список имён успешно зарегистрированных PostEffect'ов.
-        """
-        import importlib
-        from tcbase import log
-
-        registered = []
-
-        for module_name, class_name in BUILTIN_POST_EFFECTS:
-            if class_name in self.post_effects:
-                registered.append(class_name)
-                continue
-
-            try:
-                module = importlib.import_module(module_name)
-                cls = getattr(module, class_name, None)
-                if cls is not None:
-                    self.post_effects[class_name] = cls
-                    registered.append(class_name)
-            except Exception as e:
-                log.warning(f"Failed to register post effect {class_name} from {module_name}: {e}")
-
-        return registered

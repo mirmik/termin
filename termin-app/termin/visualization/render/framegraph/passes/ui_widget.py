@@ -20,7 +20,7 @@ class UIWidgetPass(PythonFramePass):
 
     Usage in pipeline:
         UIWidgetPass(
-            input_res="color_pp",
+            input_res="color_tonemapped",
             output_res="color+widgets",
             pass_name="UIWidgets",
         )

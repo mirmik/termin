@@ -159,14 +159,9 @@ class PipelineGraphEditor(QMainWindow):
         color.setPos(0, -80)
         self._graph_scene.add_node(color)
 
-        # PostProcess
-        postfx = create_node("pass", "PostProcess")
-        postfx.setPos(200, -80)
-        self._graph_scene.add_node(postfx)
-
         # Present (final output inside viewport)
         present = create_node("pass", "Present")
-        present.setPos(400, -80)
+        present.setPos(200, -80)
         self._graph_scene.add_node(present)
 
         # Create connections
@@ -183,17 +178,11 @@ class PipelineGraphEditor(QMainWindow):
         conn2.set_end_socket(color.input_sockets[0])
         self._graph_scene.add_connection(conn2)
 
-        # Color -> PostProcess
+        # Color -> Present
         conn3 = NodeConnection()
         conn3.set_start_socket(color.output_sockets[0])
-        conn3.set_end_socket(postfx.input_sockets[0])
+        conn3.set_end_socket(present.input_sockets[0])
         self._graph_scene.add_connection(conn3)
-
-        # PostProcess -> Present
-        conn4 = NodeConnection()
-        conn4.set_start_socket(postfx.output_sockets[0])
-        conn4.set_end_socket(present.input_sockets[0])
-        self._graph_scene.add_connection(conn4)
 
         self._status_bar.showMessage("Demo graph created. Nodes inside blue frame use viewport resolution.")
 

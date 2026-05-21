@@ -19,7 +19,6 @@ from tcgui.widgets.input_dialog import show_input_dialog
 
 _TITLE_TO_PASS_CLASS = {
     "SkyboxPass": "SkyBoxPass",
-    "PostProcess": "PostProcessPass",
     "Present": "PresentToScreenPass",
 }
 _PASS_CLASS_TO_TITLE = {v: k for k, v in _TITLE_TO_PASS_CLASS.items()}
@@ -841,7 +840,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
             rm = ResourceManager.instance()
             rm.register_builtin_frame_passes()
             pass_names = sorted(rm.frame_passes.keys())
-            effect_classes = {"BloomPass", "GrayscalePass", "MaterialPass", "TonemapPass", "PostProcessPass"}
+            effect_classes = {"BloomPass", "GrayscalePass", "HighlightPass", "MaterialPass", "TonemapPass"}
             for cls_name in pass_names:
                 cls = rm.get_frame_pass(cls_name)
                 category = cls.category if cls is not None else "Other"

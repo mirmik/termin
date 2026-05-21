@@ -67,7 +67,6 @@ class EditorWindow(QMainWindow):
         self.resource_manager = ResourceManager.instance()
         self.resource_manager.register_builtin_components()
         self.resource_manager.register_builtin_frame_passes()
-        self.resource_manager.register_builtin_post_effects()
 
         # --- SceneManager - получаем от EngineCore ---
         self.scene_manager = scene_manager
@@ -266,7 +265,7 @@ class EditorWindow(QMainWindow):
 
         # --- Debug features (from former EditorViewportFeatures) ---
         self._framegraph_debugger = None
-        self._debug_source_res: str = "color_pp"
+        self._debug_source_res: str = "color_highlight"
         self._debug_paused: bool = False
 
         self.scene_manager.set_on_after_render(self._after_render)

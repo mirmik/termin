@@ -47,7 +47,6 @@ class PipelineInspectorTcgui(VStack):
         self._pipeline = None
         self._pipeline_name = ""
         self._source_path: str | None = None
-        self._selected_postprocess = None
         self._selected_spec_index = -1
         self._updating = False
         self._updating_spec = False
@@ -189,69 +188,6 @@ class PipelineInspectorTcgui(VStack):
         self._pass_fields = InspectFieldPanel(self._rm)
         self._pass_fields.on_field_changed = self._on_pass_field_changed
         self._details.add_child(self._pass_fields)
-
-        # Effects (for PostProcessPass only)
-        self._details.add_child(Separator())
-        self._effects_title = Label()
-        self._effects_title.text = "Post Effects"
-        self._details.add_child(self._effects_title)
-
-        effects_row = HStack()
-        effects_row.spacing = 4
-        effects_row.preferred_height = px(100)
-
-        self._effects_list = ListWidget()
-        self._effects_list.item_height = 22
-        self._effects_list.item_spacing = 1
-        self._effects_list.stretch = True
-        self._effects_list.on_select = self._on_effect_selected
-        effects_row.add_child(self._effects_list)
-
-        eff_btns = VStack()
-        eff_btns.spacing = 4
-
-        self._effect_add = Button()
-        self._effect_add.text = "+"
-        self._effect_add.preferred_width = px(24)
-        self._effect_add.on_click = self._on_add_effect
-        eff_btns.add_child(self._effect_add)
-
-        self._effect_remove = Button()
-        self._effect_remove.text = "-"
-        self._effect_remove.preferred_width = px(24)
-        self._effect_remove.on_click = self._on_remove_effect
-        eff_btns.add_child(self._effect_remove)
-
-        self._effect_up = Button()
-        self._effect_up.text = "▲"
-        self._effect_up.preferred_width = px(24)
-        self._effect_up.on_click = self._on_move_effect_up
-        eff_btns.add_child(self._effect_up)
-
-        self._effect_down = Button()
-        self._effect_down.text = "▼"
-        self._effect_down.preferred_width = px(24)
-        self._effect_down.on_click = self._on_move_effect_down
-        eff_btns.add_child(self._effect_down)
-
-        effects_row.add_child(eff_btns)
-        self._details.add_child(effects_row)
-
-        eff_name_row = HStack()
-        eff_name_row.spacing = 6
-        eff_name_lbl = Label()
-        eff_name_lbl.text = "Effect name:"
-        eff_name_lbl.preferred_width = px(96)
-        eff_name_row.add_child(eff_name_lbl)
-        self._effect_name = TextInput()
-        self._effect_name.on_submit = self._on_effect_name_submitted
-        self._effect_name.stretch = True
-        eff_name_row.add_child(self._effect_name)
-        self._details.add_child(eff_name_row)
-
-        self._effect_fields = InspectFieldPanel(self._rm)
-        self._effect_fields.on_field_changed = self._on_effect_field_changed
-        self._details.add_child(self._effect_fields)
 
         # Resource specs
         self._details.add_child(Separator())
@@ -486,18 +422,6 @@ class PipelineInspectorTcgui(VStack):
         self._pass_fields.visible = has_pipeline
         self._pass_fields.enabled = not is_file
 
-        effects_visible = has_pipeline and self._selected_postprocess is not None
-        self._effects_title.visible = effects_visible
-        self._effects_list.visible = effects_visible
-        self._effect_add.visible = effects_visible and not is_file
-        self._effect_remove.visible = effects_visible and not is_file
-        self._effect_up.visible = effects_visible and not is_file
-        self._effect_down.visible = effects_visible and not is_file
-        self._effect_name.visible = effects_visible
-        self._effect_name.enabled = not is_file
-        self._effect_fields.visible = effects_visible
-        self._effect_fields.enabled = not is_file
-
         self._specs_list.visible = has_pipeline
         self._spec_add.visible = has_pipeline and not is_file
         self._spec_remove.visible = has_pipeline and not is_file
@@ -511,16 +435,12 @@ class PipelineInspectorTcgui(VStack):
     def _rebuild_all(self) -> None:
         self._updating = True
         try:
-            self._selected_postprocess = None
             self._selected_spec_index = -1
 
             self._passes_list.set_items([])
-            self._effects_list.set_items([])
             self._specs_list.set_items([])
             self._pass_fields.set_target(None)
-            self._effect_fields.set_target(None)
             self._pass_name.text = ""
-            self._effect_name.text = ""
             self._pass_enabled.checked = False
 
             if self._pipeline is None:
@@ -545,16 +465,6 @@ class PipelineInspectorTcgui(VStack):
             mark = "[x]" if p.enabled else "[ ]"
             items.append({"text": f"{mark} {p.pass_name}", "subtitle": p.__class__.__name__})
         self._passes_list.set_items(items)
-
-    def _rebuild_effects(self) -> None:
-        if self._selected_postprocess is None:
-            self._effects_list.set_items([])
-            return
-        items = []
-        for eff in self._selected_postprocess.effects:
-            name = eff.name
-            items.append({"text": name, "subtitle": eff.__class__.__name__})
-        self._effects_list.set_items(items)
 
     def _rebuild_specs(self) -> None:
         if self._pipeline is None:
@@ -591,24 +501,10 @@ class PipelineInspectorTcgui(VStack):
                 self._pass_name.text = ""
                 self._pass_enabled.checked = False
                 self._pass_fields.set_target(None)
-                self._selected_postprocess = None
-                self._rebuild_effects()
-                self._effect_fields.set_target(None)
-                self._effect_name.text = ""
             else:
                 self._pass_name.text = p.pass_name or ""
                 self._pass_enabled.checked = bool(p.enabled)
                 self._pass_fields.set_target(p)
-
-                from termin.visualization.render.postprocess import PostProcessPass
-                if isinstance(p, PostProcessPass):
-                    self._selected_postprocess = p
-                    self._rebuild_effects()
-                else:
-                    self._selected_postprocess = None
-                    self._rebuild_effects()
-                    self._effect_fields.set_target(None)
-                    self._effect_name.text = ""
         finally:
             self._updating = False
             self._set_visible_state(self._pipeline is not None)
@@ -743,137 +639,6 @@ class PipelineInspectorTcgui(VStack):
         self._rebuild_passes()
         self._passes_list.selected_index = idx + 1
         self._on_pass_selected(idx + 1, {})
-        self._emit_changed()
-
-    # ------------------------------------------------------------------
-    # Effects
-    # ------------------------------------------------------------------
-
-    def _current_effect_index(self) -> int:
-        return self._effects_list.selected_index
-
-    def _current_effect(self):
-        if self._selected_postprocess is None:
-            return None
-        idx = self._current_effect_index()
-        if idx < 0 or idx >= len(self._selected_postprocess.effects):
-            return None
-        return self._selected_postprocess.effects[idx]
-
-    def _on_effect_selected(self, _index: int, _item: dict) -> None:
-        if self._updating:
-            return
-        eff = self._current_effect()
-        if eff is None:
-            self._effect_fields.set_target(None)
-            self._effect_name.text = ""
-        else:
-            self._effect_fields.set_target(eff)
-            self._effect_name.text = eff.name
-        self._update_buttons()
-
-    def _on_add_effect(self) -> None:
-        if self._selected_postprocess is None or self._ui is None:
-            return
-        names = self._rm.list_post_effect_names()
-        if not names:
-            MessageBox.warning(self._ui, "No Effects", "No PostEffect types registered.")
-            return
-
-        menu = Menu()
-        menu.items = [MenuItem(name, on_click=lambda n=name: self._create_effect_of_type(n)) for name in names]
-        x = self._effect_add.x + self._effect_add.width
-        y = self._effect_add.y
-        menu.show(self._ui, x, y)
-
-    def _create_effect_of_type(self, effect_type: str) -> None:
-        if self._selected_postprocess is None or self._ops is None:
-            return
-        effect_cls = self._rm.get_post_effect(effect_type)
-        if effect_cls is None:
-            log.error(f"[PipelineInspectorTcgui] post effect class not found: {effect_type}")
-            return
-        try:
-            effect = effect_cls()
-        except Exception as e:
-            log.error(f"[PipelineInspectorTcgui] failed to create effect {effect_type}: {e}")
-            if self._ui is not None:
-                MessageBox.error(self._ui, "Create Effect Failed", str(e))
-            return
-
-        self._ops.add_effect(self._selected_postprocess, effect)
-        self._rebuild_effects()
-        idx = len(self._selected_postprocess.effects) - 1
-        self._effects_list.selected_index = idx
-        self._on_effect_selected(idx, {})
-        self._emit_changed()
-
-    def _on_remove_effect(self) -> None:
-        if self._selected_postprocess is None or self._ui is None or self._ops is None:
-            return
-        idx = self._current_effect_index()
-        eff = self._current_effect()
-        if eff is None:
-            return
-        name = eff.name
-
-        def _on_result(btn: str) -> None:
-            if btn != "Yes":
-                return
-            self._ops.remove_effect(self._selected_postprocess, idx)
-            self._rebuild_effects()
-            if self._selected_postprocess.effects:
-                idx2 = max(0, min(idx, len(self._selected_postprocess.effects) - 1))
-                self._effects_list.selected_index = idx2
-                self._on_effect_selected(idx2, {})
-            else:
-                self._on_effect_selected(-1, {})
-            self._emit_changed()
-
-        MessageBox.question(
-            self._ui,
-            "Remove Effect",
-            f"Remove effect '{name}'?",
-            on_result=_on_result,
-        )
-
-    def _on_move_effect_up(self) -> None:
-        if self._selected_postprocess is None or self._ops is None:
-            return
-        idx = self._current_effect_index()
-        if idx <= 0:
-            return
-        self._ops.move_effect(self._selected_postprocess, idx, idx - 1)
-        self._rebuild_effects()
-        self._effects_list.selected_index = idx - 1
-        self._on_effect_selected(idx - 1, {})
-        self._emit_changed()
-
-    def _on_move_effect_down(self) -> None:
-        if self._selected_postprocess is None or self._ops is None:
-            return
-        idx = self._current_effect_index()
-        effects = self._selected_postprocess.effects
-        if idx < 0 or idx >= len(effects) - 1:
-            return
-        self._ops.move_effect(self._selected_postprocess, idx, idx + 1)
-        self._rebuild_effects()
-        self._effects_list.selected_index = idx + 1
-        self._on_effect_selected(idx + 1, {})
-        self._emit_changed()
-
-    def _on_effect_name_submitted(self, text: str) -> None:
-        if self._ops is None:
-            return
-        eff = self._current_effect()
-        if eff is None:
-            return
-        if not self._ops.rename_effect(eff, text):
-            return
-        self._rebuild_effects()
-        self._emit_changed()
-
-    def _on_effect_field_changed(self, _key, _old, _new) -> None:
         self._emit_changed()
 
     # ------------------------------------------------------------------
@@ -1079,15 +844,6 @@ class PipelineInspectorTcgui(VStack):
         self._pass_up.enabled = has_pipeline and pass_idx > 0
         self._pass_down.enabled = has_pipeline and 0 <= pass_idx < pass_count - 1
         self._save_button.enabled = has_pipeline and self._source_path is not None
-
-        eff_idx = self._current_effect_index()
-        eff_count = len(self._selected_postprocess.effects) if self._selected_postprocess is not None else 0
-        has_effects = self._selected_postprocess is not None
-
-        self._effect_add.enabled = has_effects
-        self._effect_remove.enabled = has_effects and eff_idx >= 0
-        self._effect_up.enabled = has_effects and eff_idx > 0
-        self._effect_down.enabled = has_effects and 0 <= eff_idx < eff_count - 1
 
         spec_idx = self._selected_spec_index
         spec_count = len(self._pipeline.pipeline_specs) if has_pipeline else 0
