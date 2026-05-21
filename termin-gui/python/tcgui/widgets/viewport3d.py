@@ -81,7 +81,7 @@ class Viewport3D(Widget):
     def _connect_input(self, display) -> None:
         """Получить input_manager_ptr от Display."""
         try:
-            from termin._native.render import (
+            from termin.display import (
                 _display_get_surface_ptr,
                 _render_surface_get_input_manager,
             )
@@ -165,7 +165,7 @@ class Viewport3D(Widget):
         from tcbase import log
         if self._input_manager_ptr:
             try:
-                from termin._native.render import _input_manager_on_mouse_move
+                from termin.display import _input_manager_on_mouse_move
                 _input_manager_on_mouse_move(
                     self._input_manager_ptr,
                     float(event.x - self.x), float(event.y - self.y),
@@ -177,7 +177,7 @@ class Viewport3D(Widget):
         from tcbase import log
         if self._input_manager_ptr:
             try:
-                from termin._native.render import _input_manager_on_scroll
+                from termin.display import _input_manager_on_scroll
                 _input_manager_on_scroll(
                     self._input_manager_ptr,
                     float(event.dx), float(event.dy), event.mods,
@@ -205,7 +205,7 @@ class Viewport3D(Widget):
         }
         btn_id = btn_map.get(button, 0)
         try:
-            from termin._native.render import _input_manager_on_mouse_button
+            from termin.display import _input_manager_on_mouse_button
             _input_manager_on_mouse_button(self._input_manager_ptr, btn_id, action, mods)
         except Exception as e:
             log.error(f"Viewport3D._dispatch_mouse_button: {e}")
@@ -227,7 +227,7 @@ class Viewport3D(Widget):
     def _dispatch_key(self, event: KeyEvent, action: int) -> None:
         from tcbase import log
         try:
-            from termin._native.render import _input_manager_on_key
+            from termin.display import _input_manager_on_key
             _input_manager_on_key(
                 self._input_manager_ptr,
                 event.key.value, 0, action, event.mods,

@@ -80,7 +80,7 @@ if(TERMIN_BUILD_PYTHON)
     find_package(nanobind CONFIG REQUIRED)
 
     nanobind_add_module(_components_skeleton_native NB_SHARED
-        ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/cpp/termin/bindings/skeleton/skeleton_component_module.cpp
+        cpp/bindings/skeleton_component_module.cpp
     )
     target_include_directories(_components_skeleton_native PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include

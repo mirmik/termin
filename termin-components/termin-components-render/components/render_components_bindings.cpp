@@ -9,7 +9,7 @@
 
 #include <tgfx/tgfx_material_handle.hpp>
 
-#include <entity_helpers.hpp>
+#include <termin/bindings/entity_helpers.hpp>
 #include <termin/camera/camera_component.hpp>
 #include <termin/lighting/light_component.hpp>
 #include <termin/render/depth_pass.hpp>

@@ -106,9 +106,6 @@ if(TERMIN_BUILD_PYTHON)
         components/render_components_bindings.cpp
     )
     target_link_libraries(_components_render_native PRIVATE termin_components_render)
-    target_include_directories(_components_render_native PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/../../termin-app/cpp/termin/bindings/entity
-    )
 
     if(TERMIN_COMPONENTS_RENDER_PYTHON_PREFIX)
         set(_py_dest ${TERMIN_COMPONENTS_RENDER_PYTHON_PREFIX}/render_components)
