@@ -1,9 +1,8 @@
 // tc_scene_manager_instance.cpp - SceneManager singleton storage
-// Compiled into entity_lib (SHARED) to ensure single instance across all DLLs
+// Compiled into termin_engine to keep one process-wide SceneManager instance.
 
 #include "scene/tc_scene_manager.h"
 
-// Global instance pointer
 static tc_scene_manager* g_scene_manager_instance = nullptr;
 
 extern "C" {
