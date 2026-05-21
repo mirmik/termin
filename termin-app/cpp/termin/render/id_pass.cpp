@@ -308,7 +308,7 @@ void IdPass::execute_with_data_tgfx2(
 void IdPass::execute(ExecuteContext& ctx) {
     tc_scene_handle scene = ctx.scene.handle();
     const RenderCamera* camera = ctx.camera;
-    Rect4i rect = ctx.rect;
+    Rect4i rect = ctx.render_rect;
     std::optional<RenderCamera> named_camera_snapshot;
 
     if (!camera_name.empty()) {
@@ -324,7 +324,7 @@ void IdPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    // Override rect with output texture size (may differ from ctx.rect if
+    // Override rect with output texture size (may differ from ctx.render_rect if
     // the pipeline routes to a non-default-sized target).
     if (ctx.ctx2) {
         auto it = ctx.tex2_writes.find(output_res);

@@ -82,12 +82,6 @@ include(TerminRpath)
 
 set(TERMIN_ANDROID_SOURCES
     src/bootstrap.cpp
-    ../termin-app/cpp/termin/render/color_pass.cpp
-    ../termin-app/cpp/termin/render/material_ubo_apply.cpp
-    ../termin-app/cpp/termin/render/shadow_camera.cpp
-    ../termin-app/cpp/termin/render/shadow_pass.cpp
-    ../termin-app/cpp/termin/render/shader_skinning.cpp
-    ../termin-app/cpp/termin/render/skybox_pass.cpp
 )
 
 set(TERMIN_ANDROID_HEADERS
@@ -97,17 +91,6 @@ set(TERMIN_ANDROID_HEADERS
 
 add_library(termin_android SHARED ${TERMIN_ANDROID_SOURCES} ${TERMIN_ANDROID_HEADERS})
 add_library(termin_android::termin_android ALIAS termin_android)
-
-set_source_files_properties(
-    ../termin-app/cpp/termin/render/color_pass.cpp
-    ../termin-app/cpp/termin/render/material_ubo_apply.cpp
-    ../termin-app/cpp/termin/render/shadow_camera.cpp
-    ../termin-app/cpp/termin/render/shadow_pass.cpp
-    ../termin-app/cpp/termin/render/shader_skinning.cpp
-    ../termin-app/cpp/termin/render/skybox_pass.cpp
-    PROPERTIES
-        INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../termin-app/cpp"
-)
 
 set_target_properties(termin_android PROPERTIES
     POSITION_INDEPENDENT_CODE ON

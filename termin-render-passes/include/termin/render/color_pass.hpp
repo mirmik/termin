@@ -26,7 +26,6 @@ class RenderContext2;
 #include <termin/geom/mat44.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/entity/component.hpp>
-#include "termin/entity/cmp_ref.hpp"
 #include "tc_inspect_cpp.hpp"
 #include "core/tc_scene.h"
 #include "core/tc_scene_pool.h"
@@ -167,7 +166,7 @@ public:
     /**
      * Get inplace aliases (input->output pairs that share the same FBO).
      */
-    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const;
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
 
     /**
      * Add extra texture resource.
@@ -206,9 +205,6 @@ private:
      */
     CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name);
 
-    // Cached camera lookup (CmpRef validates entity liveness)
-    std::string cached_camera_name_;
-    CmpRef<CameraComponent> cached_camera_;
     // Last GPU time in ms (from detailed profiling mode)
     double last_gpu_time_ms_ = 0.0;
 

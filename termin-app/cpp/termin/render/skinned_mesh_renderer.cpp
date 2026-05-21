@@ -1,6 +1,6 @@
 #include "skinned_mesh_renderer.hpp"
 #include <termin/render/skeleton_controller.hpp>
-#include "shader_skinning.hpp"
+#include <termin/render/shader_skinning.hpp>
 #include <termin/entity/entity.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tgfx2/render_context.hpp>

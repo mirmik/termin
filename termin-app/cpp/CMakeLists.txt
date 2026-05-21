@@ -335,15 +335,9 @@ set(RENDER_LIB_SOURCES
     # Render extension for TcSceneRef (uses RenderingManager)
     termin/tc_scene_render_ext.cpp
     termin/render/immediate_renderer.cpp
-    termin/render/color_pass.cpp
     termin/render/id_pass.cpp
     termin/render/collider_gizmo_pass.cpp
     termin/render/ground_grid_pass.cpp
-    termin/render/shadow_pass.cpp
-    termin/render/material_ubo_apply.cpp
-    termin/render/skybox_pass.cpp
-    termin/render/shadow_camera.cpp
-    termin/render/shader_skinning.cpp
     termin/modules/term_modules_integration.cpp
     termin/camera/camera_viewport_component.cpp
     termin/viewport_config.cpp

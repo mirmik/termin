@@ -2,6 +2,6 @@
 
 Re-exports C++ ShadowPass.
 """
-from termin._native.render import ShadowPass
+from termin.render_passes import ShadowPass
 
 __all__ = ["ShadowPass"]

@@ -39,6 +39,16 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_components_render REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
+else()
+    find_package(termin_components_mesh REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_lighting termin_lighting::termin_lighting)
+else()
+    find_package(termin_lighting REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -46,19 +56,33 @@ include(TerminRpath)
 set(TERMIN_RENDER_PASSES_SOURCES
     src/termin_render_passes_version.c
     src/bloom_pass.cpp
+    src/color_pass.cpp
     src/debug_triangle_pass.cpp
     src/grayscale_pass.cpp
+    src/material_ubo_apply.cpp
     src/present_pass.cpp
+    src/shader_skinning.cpp
+    src/shadow_camera.cpp
+    src/shadow_pass.cpp
+    src/skybox_pass.cpp
     src/tonemap_pass.cpp
 )
 
 set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render_passes/termin_render_passes.h
     include/termin/render_passes/version.h
+    include/termin/lighting/lighting_ubo.hpp
+    include/termin/lighting/lighting_upload.hpp
     include/termin/render/bloom_pass.hpp
+    include/termin/render/color_pass.hpp
     include/termin/render/debug_triangle_pass.hpp
     include/termin/render/grayscale_pass.hpp
+    include/termin/render/material_ubo_apply.hpp
     include/termin/render/present_pass.hpp
+    include/termin/render/shader_skinning.hpp
+    include/termin/render/shadow_camera.hpp
+    include/termin/render/shadow_pass.hpp
+    include/termin/render/skybox_pass.hpp
     include/termin/render/tonemap_pass.hpp
 )
 
@@ -94,6 +118,8 @@ target_link_libraries(termin_render_passes PUBLIC
     termin_render::termin_render
     termin_materials::termin_materials
     termin_components_render::termin_components_render
+    termin_components_mesh::termin_components_mesh
+    termin_lighting::termin_lighting
 )
 target_compile_definitions(termin_render_passes PRIVATE TERMIN_RENDER_EXPORTS TC_EXPORTS)
 

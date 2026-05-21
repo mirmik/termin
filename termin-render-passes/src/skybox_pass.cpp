@@ -1,5 +1,5 @@
 // skybox_pass.cpp - Skybox rendered fully through RenderContext2 + material UBO.
-#include "skybox_pass.hpp"
+#include "termin/render/skybox_pass.hpp"
 
 #include "termin/render/execute_context.hpp"
 #include "termin/render/material_ubo_apply.hpp"

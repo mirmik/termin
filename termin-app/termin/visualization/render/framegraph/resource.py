@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from termin._native.render import (
+from termin.render_passes import (
     ShadowMapArrayEntry,
     ShadowMapArrayResource,
 )
