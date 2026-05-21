@@ -39,11 +39,6 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_input REQUIRED)
 endif()
-if(COMMAND termin_require_package)
-    termin_require_package(termin_collision termin_collision::termin_collision)
-else()
-    find_package(termin_collision REQUIRED)
-endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -98,7 +93,6 @@ target_link_libraries(termin_engine
         termin_render::termin_render
         termin_display::termin_display
         termin_input::termin_input
-        termin_collision::termin_collision
 )
 
 if(UNIX AND NOT APPLE)

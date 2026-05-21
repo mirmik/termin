@@ -351,6 +351,9 @@ class PlayerRuntime:
             return True
 
         try:
+            from termin._native import register_default_scene_extensions
+
+            register_default_scene_extensions()
             self._engine = EngineCore()
         except TypeError as e:
             log.error(

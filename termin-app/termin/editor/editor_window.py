@@ -28,6 +28,7 @@ from termin.editor_core.default_preloaders import register_default_preloaders
 from termin.editor.spacemouse_controller import SpaceMouseController
 from termin.editor.profiler import ProfilerPanel
 from termin.editor.modules_panel import ModulesPanel
+from termin.visualization.core.scene import default_scene_extensions
 
 from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.entity import Entity
@@ -40,7 +41,6 @@ from termin.editor.project_controller import EditorProjectController
 from termin.editor.editor_ui_builder import EditorUIBuilder
 
 SceneMode = engine_scene.SceneMode
-default_scene_extensions = engine_scene.default_scene_extensions
 
 
 class EditorWindow(QMainWindow):

@@ -251,8 +251,8 @@ class PrefabEditController:
         """
         from termin.editor_core.prefab_persistence import PrefabPersistence
         from termin.engine import scene as engine_scene
+        from termin.visualization.core.scene import default_scene_extensions
         SceneMode = engine_scene.SceneMode
-        default_scene_extensions = engine_scene.default_scene_extensions
 
         # Load prefab entity
         persistence = PrefabPersistence(self._resource_manager)
