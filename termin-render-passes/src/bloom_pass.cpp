@@ -32,14 +32,14 @@ constexpr const char* BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composi
 // tgfx2 GLSL shader sources
 //
 // Paired with RenderContext2's built-in FSQ vertex shader → varying
-// name is `vUV` (not `v_uv` — mismatches silently drop the connection).
+// name is `v_uv` — mismatches silently drop the connection.
 // Multi-sampler shaders use `layout(binding = N)` with the
 // GL_ARB_shading_language_420pack extension so explicit texture-unit
 // binding works without a post-link glUniform1i.
 // ================================================================
 
 static const char* BRIGHT_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in vec2 vUV;
+layout(location = 0) in vec2 v_uv;
 
 layout(std140, binding = 0) uniform BloomBrightParams {
     float u_threshold;
@@ -51,7 +51,7 @@ layout(binding = 4) uniform sampler2D u_texture;
 layout(location = 0) out vec4 FragColor;
 
 void main() {
-    vec3 color = texture(u_texture, vUV).rgb;
+    vec3 color = texture(u_texture, v_uv).rgb;
     float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
     float knee = u_threshold * u_soft_threshold;
     float soft = brightness - u_threshold + knee;
@@ -64,7 +64,7 @@ void main() {
 )";
 
 static const char* DOWNSAMPLE_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in vec2 vUV;
+layout(location = 0) in vec2 v_uv;
 
 layout(std140, binding = 0) uniform BloomDownsampleParams {
     vec2 u_texel_size;
@@ -76,19 +76,19 @@ layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec2 ts = u_texel_size;
-    vec3 a = texture(u_texture, vUV + vec2(-2.0, -2.0) * ts).rgb;
-    vec3 b = texture(u_texture, vUV + vec2( 0.0, -2.0) * ts).rgb;
-    vec3 c = texture(u_texture, vUV + vec2( 2.0, -2.0) * ts).rgb;
-    vec3 d = texture(u_texture, vUV + vec2(-2.0,  0.0) * ts).rgb;
-    vec3 e = texture(u_texture, vUV + vec2( 0.0,  0.0) * ts).rgb;
-    vec3 f = texture(u_texture, vUV + vec2( 2.0,  0.0) * ts).rgb;
-    vec3 g = texture(u_texture, vUV + vec2(-2.0,  2.0) * ts).rgb;
-    vec3 h = texture(u_texture, vUV + vec2( 0.0,  2.0) * ts).rgb;
-    vec3 i = texture(u_texture, vUV + vec2( 2.0,  2.0) * ts).rgb;
-    vec3 j = texture(u_texture, vUV + vec2(-1.0, -1.0) * ts).rgb;
-    vec3 k = texture(u_texture, vUV + vec2( 1.0, -1.0) * ts).rgb;
-    vec3 l = texture(u_texture, vUV + vec2(-1.0,  1.0) * ts).rgb;
-    vec3 m = texture(u_texture, vUV + vec2( 1.0,  1.0) * ts).rgb;
+    vec3 a = texture(u_texture, v_uv + vec2(-2.0, -2.0) * ts).rgb;
+    vec3 b = texture(u_texture, v_uv + vec2( 0.0, -2.0) * ts).rgb;
+    vec3 c = texture(u_texture, v_uv + vec2( 2.0, -2.0) * ts).rgb;
+    vec3 d = texture(u_texture, v_uv + vec2(-2.0,  0.0) * ts).rgb;
+    vec3 e = texture(u_texture, v_uv + vec2( 0.0,  0.0) * ts).rgb;
+    vec3 f = texture(u_texture, v_uv + vec2( 2.0,  0.0) * ts).rgb;
+    vec3 g = texture(u_texture, v_uv + vec2(-2.0,  2.0) * ts).rgb;
+    vec3 h = texture(u_texture, v_uv + vec2( 0.0,  2.0) * ts).rgb;
+    vec3 i = texture(u_texture, v_uv + vec2( 2.0,  2.0) * ts).rgb;
+    vec3 j = texture(u_texture, v_uv + vec2(-1.0, -1.0) * ts).rgb;
+    vec3 k = texture(u_texture, v_uv + vec2( 1.0, -1.0) * ts).rgb;
+    vec3 l = texture(u_texture, v_uv + vec2(-1.0,  1.0) * ts).rgb;
+    vec3 m = texture(u_texture, v_uv + vec2( 1.0,  1.0) * ts).rgb;
     vec3 result = e * 0.125;
     result += (a + c + g + i) * 0.03125;
     result += (b + d + f + h) * 0.0625;
@@ -102,7 +102,7 @@ void main() {
 // mip[i] content is preserved and summed in the framebuffer — avoids
 // the self-sampling feedback loop that Vulkan forbids inside a render pass.
 static const char* UPSAMPLE_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in vec2 vUV;
+layout(location = 0) in vec2 v_uv;
 
 layout(std140, binding = 0) uniform BloomUpsampleParams {
     vec2 u_texel_size;
@@ -115,15 +115,15 @@ layout(location = 0) out vec4 FragColor;
 
 void main() {
     vec2 ts = u_texel_size;
-    vec3 a = texture(u_texture, vUV + vec2(-1.0, -1.0) * ts).rgb;
-    vec3 b = texture(u_texture, vUV + vec2( 0.0, -1.0) * ts).rgb;
-    vec3 c = texture(u_texture, vUV + vec2( 1.0, -1.0) * ts).rgb;
-    vec3 d = texture(u_texture, vUV + vec2(-1.0,  0.0) * ts).rgb;
-    vec3 e = texture(u_texture, vUV + vec2( 0.0,  0.0) * ts).rgb;
-    vec3 f = texture(u_texture, vUV + vec2( 1.0,  0.0) * ts).rgb;
-    vec3 g = texture(u_texture, vUV + vec2(-1.0,  1.0) * ts).rgb;
-    vec3 h = texture(u_texture, vUV + vec2( 0.0,  1.0) * ts).rgb;
-    vec3 i = texture(u_texture, vUV + vec2( 1.0,  1.0) * ts).rgb;
+    vec3 a = texture(u_texture, v_uv + vec2(-1.0, -1.0) * ts).rgb;
+    vec3 b = texture(u_texture, v_uv + vec2( 0.0, -1.0) * ts).rgb;
+    vec3 c = texture(u_texture, v_uv + vec2( 1.0, -1.0) * ts).rgb;
+    vec3 d = texture(u_texture, v_uv + vec2(-1.0,  0.0) * ts).rgb;
+    vec3 e = texture(u_texture, v_uv + vec2( 0.0,  0.0) * ts).rgb;
+    vec3 f = texture(u_texture, v_uv + vec2( 1.0,  0.0) * ts).rgb;
+    vec3 g = texture(u_texture, v_uv + vec2(-1.0,  1.0) * ts).rgb;
+    vec3 h = texture(u_texture, v_uv + vec2( 0.0,  1.0) * ts).rgb;
+    vec3 i = texture(u_texture, v_uv + vec2( 1.0,  1.0) * ts).rgb;
     vec3 upsampled = e * 4.0;
     upsampled += (b + d + f + h) * 2.0;
     upsampled += (a + c + g + i);
@@ -133,7 +133,7 @@ void main() {
 )";
 
 static const char* COMPOSITE_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in vec2 vUV;
+layout(location = 0) in vec2 v_uv;
 
 layout(std140, binding = 0) uniform BloomCompositeParams {
     float u_intensity;
@@ -145,8 +145,8 @@ layout(binding = 5) uniform sampler2D u_bloom;
 layout(location = 0) out vec4 FragColor;
 
 void main() {
-    vec3 original = texture(u_original, vUV).rgb;
-    vec3 bloom = texture(u_bloom, vUV).rgb;
+    vec3 original = texture(u_original, v_uv).rgb;
+    vec3 bloom = texture(u_bloom, v_uv).rgb;
     vec3 result = original + bloom * u_intensity;
     FragColor = vec4(result, 1.0);
 }

@@ -162,23 +162,23 @@ void main() {
 
 constexpr const char* DEPTH_TO_COLOR_FRAG = R"(
 #version 330 core
-in vec2 vUV;
+in vec2 v_uv;
 layout(binding = 9) uniform sampler2D u_depth_tex;
 out vec4 FragColor;
 
 void main() {
-    float d = texture(u_depth_tex, vUV).r;
+    float d = texture(u_depth_tex, v_uv).r;
     FragColor = vec4(vec3(d), 1.0);
 }
 )";
 
 constexpr const char* COLOR_TO_DEPTH_FRAG = R"(
 #version 330 core
-in vec2 vUV;
+in vec2 v_uv;
 layout(binding = 9) uniform sampler2D u_color_tex;
 
 void main() {
-    float d = texture(u_color_tex, vUV).r;
+    float d = texture(u_color_tex, v_uv).r;
     gl_FragDepth = clamp(d, 0.0, 1.0);
 }
 )";

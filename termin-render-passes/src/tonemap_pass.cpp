@@ -27,12 +27,12 @@ constexpr const char* TONEMAP_ENGINE_SHADER_UUID = "termin-engine-tonemap";
 // Backend-neutral: `#version 450 core` compiles directly on GL 4.3+ and
 // via shaderc for Vulkan. UBO at binding 0, sampler at binding 4 — matches
 // the shared descriptor set layout (UBO 0-3, COMBINED_IMAGE_SAMPLER 4-7).
-// Varying name `vUV` matches the built-in FSQ vertex shader from
+// Varying name `v_uv` matches the built-in FSQ vertex shader from
 // RenderContext2 — mismatch silently drops the connection and produces
 // a solid-color result.
 static const char* TONEMAP_FRAG_UBO = R"(
 #version 450 core
-layout(location=0) in vec2 vUV;
+layout(location=0) in vec2 v_uv;
 
 layout(std140, binding = 0) uniform TonemapParams {
     float u_exposure;
@@ -57,7 +57,7 @@ vec3 reinhard_tonemap(vec3 x) {
 }
 
 void main() {
-    vec3 color = texture(u_input, vUV).rgb;
+    vec3 color = texture(u_input, v_uv).rgb;
     color *= u_exposure;
     if (u_method == 0) {
         color = aces_tonemap(color);
