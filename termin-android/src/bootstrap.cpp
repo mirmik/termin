@@ -37,9 +37,12 @@
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/tc_scene.hpp>
+#include <termin_collision/termin_collision.h>
 
 extern "C" {
 #include "core/tc_component.h"
+#include "core/tc_scene_render_mount.h"
+#include "core/tc_scene_render_state.h"
 #include "render/tc_pipeline.h"
 }
 
@@ -140,6 +143,7 @@ struct AndroidBootstrapState {
     uint32_t player_width = 0;
     uint32_t player_height = 0;
     uint32_t player_frame = 0;
+    bool scene_extensions_registered = false;
 #endif
 };
 
@@ -197,6 +201,21 @@ void android_log_error(const char* fmt, ...) {
 void android_log_info(const char*, ...) {}
 void android_log_error(const char*, ...) {}
 #endif
+
+void register_android_scene_extensions_locked() {
+#ifdef __ANDROID__
+    if (g_state.scene_extensions_registered) {
+        return;
+    }
+
+    tc_scene_render_mount_extension_init();
+    tc_scene_render_state_extension_init();
+    termin_collision_runtime_init();
+    g_state.scene_extensions_registered = true;
+    android_log_info("scene extensions registered");
+    tc_log_info("termin_android: scene extensions registered");
+#endif
+}
 
 #ifdef __ANDROID__
 bool create_smoke_renderer_locked();
@@ -839,6 +858,7 @@ bool ensure_player_scene_locked() {
     }
 
     if (!g_state.player_engine) {
+        register_android_scene_extensions_locked();
         g_state.player_engine = std::make_unique<termin::EngineCore>();
     }
 
@@ -1220,6 +1240,12 @@ extern "C" void termin_android_shutdown(void) {
     g_state.native_lib_dir.clear();
     g_state.initialized = false;
     termin::tgfx2_set_shader_artifact_root(nullptr);
+#ifdef __ANDROID__
+    if (g_state.scene_extensions_registered) {
+        termin_collision_runtime_shutdown();
+        g_state.scene_extensions_registered = false;
+    }
+#endif
     android_log_info("shutdown");
     tc_log_info("termin_android_shutdown");
 #ifdef __ANDROID__

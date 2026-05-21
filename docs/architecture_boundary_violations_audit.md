@@ -275,17 +275,15 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 ### 3.2 EngineCore жёстко знает о scene extensions
 
 **Где смотреть:**
-- `termin-engine/src/engine_core.cpp` (строки 17-20)
+- `termin-engine/src/engine_core.cpp` — **Исправлено 2026-05-21:** EngineCore больше не регистрирует конкретные scene extensions и не инициализирует `termin_collision`.
+- `termin-engine/bindings/scene_manager_bindings.cpp` — **Исправлено 2026-05-21:** из engine bindings убраны конкретные ids расширений и `default_scene_extensions`.
+- `termin-app/cpp/app/main_minimal.cpp` — прикладной composition root регистрирует нужные расширения до создания `EngineCore`.
+- `termin-app/cpp/termin/bindings.cpp` / `termin-app/termin/visualization/core/scene/__init__.py` — прикладной Python API предоставляет `default_scene_extensions` на уровне `termin-app`, а не `termin-engine`.
+- `termin-android/src/bootstrap.cpp` — Android composition root регистрирует нужные расширения до создания Android `EngineCore`.
 
-```cpp
-static void ensure_builtin_scene_extensions_registered() {
-    tc_scene_render_mount_extension_init();    // termin-render
-    tc_scene_render_state_extension_init();    // termin-render
-    tc_collision_world_extension_init();       // termin-collision
-}
-```
+**Было:** EngineCore напрямую инициализировал scene extensions из termin-render и termin-collision. Если появлялось новое расширение (например, termin-physics), EngineCore нужно было менять.
 
-**Проблема:** EngineCore напрямую инициализирует scene extensions из termin-render и termin-collision. Если появится новое расширение (например, termin-physics), EngineCore нужно будет менять.
+**Статус 2026-05-21:** частично исправлено. В `termin-engine` больше нет default scene extension profile и прямой зависимости от `termin_collision`; выбор и регистрация конкретных расширений вынесены в `termin-app`. Остаточный запах: `termin-engine/src/rendering_manager.cpp` всё ещё работает напрямую с render-specific scene extension (`tc_scene_render_mount`), это отдельная архитектурная задача для следующего прохода.
 
 ---
 
@@ -503,7 +501,7 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
 | 2.5 | Экспозиция внутренних типов через биндинги | termin-* python bindings | uintptr_t handles, tc_* типы | 🟠 Высокая |
 | 2.6 | termin_core дублирует termin-engine | termin-app/core_c | CMakeLists.txt | 🟠 Высокая |
 | 3.1 | Внутренние include из нижних уровней | termin-engine | rendering_manager.cpp | 🟡 Средняя |
-| 3.2 | EngineCore жёстко знает о extensions | termin-engine | engine_core.cpp | 🟡 Средняя |
+| 3.2 | EngineCore жёстко знает о extensions | termin-engine | engine_core.cpp | 🟠 Частично исправлено |
 | 3.3 | termin-skeleton → termin_graphics для 2 хедеров | termin-skeleton | CMakeLists.txt | ✅ Исправлено |
 | 3.4 | Неявные зависимости Python пакетов | termin-* python | install_requires | 🟡 Частично исправлено |
 | 3.5 | termin-csg — перегруженный пакет | termin-csg | cad_app.py, procedural_document.py | 🟡 Средняя |

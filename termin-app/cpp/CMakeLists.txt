@@ -484,7 +484,12 @@ if(BUILD_EDITOR_MINIMAL)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${Python_INCLUDE_DIRS}
     )
-    target_link_libraries(termin_editor PRIVATE Python::Python termin_engine::termin_engine)
+    target_link_libraries(termin_editor PRIVATE
+        Python::Python
+        termin_engine::termin_engine
+        termin_render::termin_render
+        termin_collision::termin_collision
+    )
     target_compile_options(termin_editor PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     target_compile_definitions(termin_editor PRIVATE TERMIN_HOST_PYTHON_PATHS="${TERMIN_HOST_PYTHON_PATHS_STR}")
     set_target_properties(termin_editor PROPERTIES

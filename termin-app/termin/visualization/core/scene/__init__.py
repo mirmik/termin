@@ -11,16 +11,14 @@ from termin._native import (
     scene_ext_attached_names,
     SceneRenderState,
     SceneRenderMount,
+    default_scene_extensions,
+    SCENE_EXT_TYPE_RENDER_MOUNT,
+    SCENE_EXT_TYPE_RENDER_STATE,
+    SCENE_EXT_TYPE_COLLISION_WORLD,
 )
-from termin.engine import scene as engine_scene
 from termin.lighting import ShadowSettings
 
 from ._helpers import find_component, find_components, dispatch_input
-
-default_scene_extensions = engine_scene.default_scene_extensions
-SCENE_EXT_TYPE_RENDER_MOUNT = engine_scene.SCENE_EXT_TYPE_RENDER_MOUNT
-SCENE_EXT_TYPE_RENDER_STATE = engine_scene.SCENE_EXT_TYPE_RENDER_STATE
-SCENE_EXT_TYPE_COLLISION_WORLD = engine_scene.SCENE_EXT_TYPE_COLLISION_WORLD
 
 __all__ = [
     "Scene",

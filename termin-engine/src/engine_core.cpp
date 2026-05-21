@@ -7,25 +7,13 @@
 extern "C" {
 #include <tcbase/tc_log.h>
 #include "tc_profiler.h"
-#include "core/tc_scene_render_mount.h"
-#include "core/tc_scene_render_state.h"
 #include <termin_scene/termin_scene.h>
-#include <termin_collision/termin_collision.h>
-#include "physics/tc_collision_world.h"
 }
 
 namespace termin {
 
-static void ensure_builtin_scene_extensions_registered() {
-    tc_scene_render_mount_extension_init();
-    tc_scene_render_state_extension_init();
-    tc_collision_world_extension_init();
-}
-
 EngineCore::EngineCore() {
     termin_scene_runtime_init();
-    termin_collision_runtime_init();
-    ensure_builtin_scene_extensions_registered();
     tc_engine_core_set_instance(reinterpret_cast<tc_engine_core*>(this));
     tc_log(TC_LOG_INFO, "[EngineCore] Created");
 }
@@ -34,7 +22,6 @@ EngineCore::~EngineCore() {
     if (tc_engine_core_instance() == reinterpret_cast<tc_engine_core*>(this)) {
         tc_engine_core_set_instance(nullptr);
     }
-    termin_collision_runtime_shutdown();
     termin_scene_runtime_shutdown();
     tc_log(TC_LOG_INFO, "[EngineCore] Destroyed");
 }

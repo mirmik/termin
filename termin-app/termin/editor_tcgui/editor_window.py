@@ -39,6 +39,7 @@ from termin.editor_core.settings import EditorSettings
 from termin.editor_core.signal import Signal
 from termin.assets.resources import ResourceManager
 from termin.visualization.platform.backends.fbo_backend import FBOSurface
+from termin.visualization.core.scene import default_scene_extensions
 
 from termin.editor_core.editor_state_io import EditorStateIO
 from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
@@ -51,7 +52,6 @@ from termin.editor_tcgui.default_component_editor_extensions import (
 from termin.editor_tcgui.editor_camera_ui_controller import EditorCameraUIController
 
 SceneMode = engine_scene.SceneMode
-default_scene_extensions = engine_scene.default_scene_extensions
 
 
 class EditorWindowTcgui:
