@@ -10,7 +10,6 @@
 #include "termin/skeleton/skeleton_instance.hpp"
 #include "termin/skeleton/tc_skeleton_handle.hpp"
 #include "termin/inspect/tc_kind.hpp"
-#include "../../../trent/trent.h"
 #include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;

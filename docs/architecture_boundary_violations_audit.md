@@ -3,6 +3,8 @@
 **Дата:** 2026-05-20  
 **Статус:** Research report — не исправлять автоматически
 
+**Актуализировано:** 2026-05-21 — сверено с текущими путями и статусами после частичных cleanup-правок.
+
 ## Исправления
 
 ### 2026-05-21
@@ -17,6 +19,7 @@
 - **3.4 частично:** `install_requires` приведены к фактическим импортам для `termin-render`, `termin-input`, `termin-animation`, `termin-components-mesh`; `termin-navmesh` оставлен как отдельная задача разделения core/editor/visual слоёв.
 - **1.2 частично:** singleton storage `.cpp` для `EngineCore`, `SceneManager`, `RenderingManager` перенесены из `termin-app/core_c/src` в `termin-engine/src`; `termin-engine` больше не компилирует исходники из `termin-app` и не добавляет `termin-app/core_c/include`.
 - **core_c cleanup частично:** C geometry headers перенесены в `termin-base/include/geom`; skeleton/animation resource C headers перенесены в `termin-skeleton/include/resources` и `termin-animation/include/resources`; collision C headers/obsolete C impl удалены из `core_c`, актуальный владелец — `termin-collision`; `tc_input_event.h` перенесён в `termin-display`.
+- **component binding ownership закрыто для skeleton/animation/render-components:** `_skeleton_native`, `_animation_native`, `_components_skeleton_native`, `_components_animation_native` больше не компилируют `.cpp` из `termin-app/cpp/termin/bindings`; source-файлы перенесены к владельцам. `_components_render_native` больше не добавляет include path на app binding helpers и использует `termin-scene/include/termin/bindings/entity_helpers.hpp`.
 
 ---
 
@@ -26,13 +29,14 @@
 2. [Высокий приоритет](#2-высокий-приоритет)
 3. [Средний приоритет](#3-средний-приоритет)
 4. [Низкий приоритет](#4-низкий-приоритет)
-5. [Карта зависимостей](#5-карта-зависимостей)
+5. [Что выглядит несложно поправить](#5-что-выглядит-несложно-поправить)
+6. [Карта зависимостей](#6-карта-зависимостей)
 
 ---
 
 ## 1. Критические нарушения
 
-### 1.1 RenderingManager — God Object (2040 строк)
+### 1.1 RenderingManager — God Object (2145 строк)
 
 **Где смотреть:**
 - `termin-engine/src/rendering_manager.cpp`
@@ -103,19 +107,19 @@
 - `termin-gui/python/tcgui/widgets/viewport3d.py` (строки 84, 168, 180, 208, 230)
 
 ```python
-from termin._native.render import (
+from termin.display import (
     _display_get_surface_ptr,
     _render_surface_get_input_manager,
 )
-from termin._native.render import _input_manager_on_mouse_move
-from termin._native.render import _input_manager_on_scroll
-from termin._native.render import _input_manager_on_mouse_button
-from termin._native.render import _input_manager_on_key
+from termin.display import _input_manager_on_mouse_move
+from termin.display import _input_manager_on_scroll
+from termin.display import _input_manager_on_mouse_button
+from termin.display import _input_manager_on_key
 ```
 
 Также `FBOSurface` импортируется из `termin.visualization.platform.backends.fbo_backend` (строка 25, TYPE_CHECKING).
 
-**Проблема:** Виджет GUI-фреймворка напрямую вызывает C++ функции рендер-системы SDK. GUI-библиотека не должна знать о внутренней реализации SDK. Нарушено направление зависимостей.
+**Статус 2026-05-21:** частично исправлено. `Viewport3D` больше не использует app compatibility re-export `termin._native.render`, а импортирует функции напрямую из владельца `termin.display`. Остаточная проблема: виджет GUI-фреймворка всё ещё вызывает приватные underscored C-interop функции вместо публичного input adapter API.
 
 ---
 
@@ -176,13 +180,13 @@ virtual tc_mesh* get_mesh_for_phase(
 
 | Файл | Размер | Проблема |
 |------|--------|----------|
-| `termin-render/python/bindings/tc_pass_bindings.cpp` | 1031 строк | Полноценный Python/C++ interop runtime, а не binding layer |
-| `termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp` | — | Дублированный файл с аналогичными паттернами |
-| `termin-scene/python/bindings/scene_manager_bindings.cpp` | 300+ строк | JSON I/O, scene copy, entity enumeration |
-| `termin-render/python/bindings/tc_render_target_bindings.cpp` | 250+ строк | Dynamic module imports, format parsing |
-| `termin-inspect/python/bindings/inspect_module.cpp` | 300+ строк | Pluggable extractors, tc_value конвертация |
+| `termin-render/python/tc_pass_bindings.cpp` | 1030 строк | Полноценный Python/C++ interop runtime, а не binding layer |
+| `termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp` | 1101 строк | Дублированный файл с аналогичными паттернами |
+| `termin-engine/bindings/scene_manager_bindings.cpp` | 364 строки | JSON I/O, scene copy, entity enumeration |
+| `termin-render/python/tc_render_target_bindings.cpp` | 323 строки | Dynamic module imports, format parsing |
+| `termin-inspect/python/bindings/inspect_module.cpp` | 369 строк | Pluggable extractors, tc_value конвертация |
 
-**Массовое hasattr/setattr/getattr** (~67 вхождений в биндингах):
+**Массовое hasattr/setattr/getattr** (~69 вхождений в проверенных биндингах):
 - `tc_pass_bindings.cpp` — 24 использования
 - `render_pipeline_bindings.cpp` — 8
 - Используется как duck-typing fallback — если Python объект не имеет атрибута, C++ молча пропускает
@@ -190,8 +194,8 @@ virtual tc_mesh* get_mesh_for_phase(
 **Python обёртки с бизнес-логикой:**
 | Файл | Проблема |
 |------|----------|
-| `termin-csg/python/termin_csg/cad_app.py` | Полноценное CAD-приложение в биндингах CSG |
-| `termin-csg/python/termin_csg/procedural_document.py` | Document model (~280 строк) |
+| `termin-csg/python/termin/csg/cad_app.py` | Полноценное CAD-приложение в биндингах CSG |
+| `termin-csg/python/termin/csg/procedural_document.py` | Document model (~336 строк) |
 | `termin-app/termin/components/python_component.py` | Python Component base class (~250 строк) |
 
 ---
@@ -200,8 +204,10 @@ virtual tc_mesh* get_mesh_for_phase(
 
 **Где смотреть:**
 - `termin-base/python/bindings/geom/` vs `termin-app/cpp/termin/bindings/geom/` — одинаковые биндинги геометрии
-- `termin-render/python/bindings/tc_pass_bindings.cpp` vs `termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp` — идентичные файлы pass bindings
+- `termin-render/python/tc_pass_bindings.cpp` vs `termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp` — не byte-for-byte идентичны, но сохраняют общий крупный interop/runtime паттерн и требуют разведения владельца
 - Смешанная стратегия: `Pose3` — C++ native, `Pose2` — чистый Python numpy
+
+**Новая проверка 2026-05-21:** app/render pass bindings имеют разные хэши, поэтому прежняя формулировка "идентичные файлы" устарела. Проблема остаётся как архитектурное дублирование и расхождение двух реализаций.
 
 ---
 
@@ -311,14 +317,18 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 
 `termin-navmesh` не исправлен простым добавлением зависимостей: пакет смешивает навигационное ядро, editor/visual components, voxel/cache/render integration и требует отдельного разбиения.
 
+**Новая проверка 2026-05-21:** `termin-navmesh/setup.py` всё ещё содержит только `install_requires=["termin-nanobind"]`, при этом код импортирует `termin.visualization.*`, `termin.voxels.*` и `termin.cache`. Самые крупные смешанные файлы: `builder_component.py` (~1355 строк), `pathfinding_world_component.py` (~1282 строки), `display_component.py` (~412 строк).
+
 ---
 
 ### 3.5 termin-csg — самый проблемный Python пакет
 
 **Где смотреть:**
-- `termin-csg/python/termin_csg/` — содержит CSG-биндинги, документный API, полноценное GUI-приложение (`cad_app.py`), вьюпорт и камеру
+- `termin-csg/python/termin/csg/` — содержит CSG-биндинги, документный API, полноценное GUI-приложение (`cad_app.py`), вьюпорт и камеру
 
 **Проблема:** Требует разделения минимум на 2-3 пакета: чистые CSG-биндинги, документный API, GUI-приложение.
+
+**Новая проверка 2026-05-21:** актуальный package path — `termin-csg/python/termin/csg/`, не `termin_csg`. Помимо `cad_app.py` и `procedural_document.py`, GUI/viewport слой заметно сидит в `cad_viewer.py` (~511 строк) и `viewer_camera.py`.
 
 ---
 
@@ -420,9 +430,60 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 
 ---
 
-## 5. Карта зависимостей
+## 5. Что выглядит несложно поправить
 
-### 5.1 C++ модули (из CMake target_link_libraries)
+Эти пункты не решают всю архитектуру, но дают локальный прогресс без распила `RenderingManager` или публичного render API.
+
+### 5.1 Добавить публичный input adapter для `Viewport3D`
+
+**Где смотреть:** `termin-gui/python/tcgui/widgets/viewport3d.py`
+
+`Viewport3D` уже переключен с app compatibility `termin._native.render` на владельца символов `termin.display`. Но он всё ещё вызывает `_display_get_surface_ptr`, `_render_surface_get_input_manager`, `_input_manager_on_mouse_move`, `_input_manager_on_scroll`, `_input_manager_on_mouse_button`, `_input_manager_on_key` как приватные underscored functions.
+
+Следующий небольшой правильный шаг: добавить публичный adapter в `termin.display` или `termin.visualization.platform.input_manager`, который принимает display/input-manager handle и предоставляет методы `mouse_move`, `scroll`, `mouse_button`, `key`. После этого `Viewport3D` перестанет знать о native symbol names. Это не уберёт весь interop, но перенесёт его в слой-владелец display/input.
+
+### 5.2 Component binding targets больше не завязаны на `termin-app/cpp/termin/bindings`
+
+**Где смотреть:**
+- `termin-components/termin-components-animation/CMakeLists.txt`
+- `termin-components/termin-components-skeleton/CMakeLists.txt`
+- `termin-components/termin-components-render/CMakeLists.txt`
+- `termin-animation/CMakeLists.txt`
+- `termin-skeleton/CMakeLists.txt`
+
+**Статус 2026-05-21:** локальная ownership-проблема закрыта. Binding source files для skeleton/animation перенесены к владельцам:
+- `termin-skeleton/cpp/bindings/skeleton_module.cpp`
+- `termin-animation/cpp/bindings/animation_module.cpp`
+- `termin-components/termin-components-skeleton/cpp/bindings/skeleton_component_module.cpp`
+- `termin-components/termin-components-animation/cpp/bindings/animation_component_module.cpp`
+
+`termin-components-render` переключён с app-local `entity_helpers.hpp` на публичный helper из `termin-scene`.
+
+### 5.3 Обновить `termin-navmesh` packaging metadata после выбора границы пакета
+
+**Где смотреть:** `termin-navmesh/setup.py`
+
+Простое добавление всех импортируемых зависимостей в `install_requires` технически лёгкое, но архитектурно спорное: оно закрепит смешение navmesh core, editor/visual и voxel/cache интеграций. Более чистый небольшой шаг — сначала разделить `termin.navmesh` exports на core-only и visual/editor submodules, а потом добавить metadata только для реально публичной поверхности пакета.
+
+### 5.4 Вынести app/render pass binding дублирование в одного владельца
+
+**Где смотреть:**
+- `termin-render/python/tc_pass_bindings.cpp`
+- `termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp`
+
+Файлы уже не идентичны, поэтому механический delete рискован. Но можно начать с инвентаризации отличий и вынести общий C++ helper для Python pass interop в `termin-render`, оставив app-слою только re-export или app-specific glue.
+
+### 5.5 Уточнить публичную поверхность `termin.display`
+
+**Где смотреть:** `termin-display/python/termin/display/__init__.py`
+
+`__all__` уже очищен, но приватные underscored функции импортируются в module namespace для внутренних call sites. Небольшой следующий шаг — перенести эти imports в отдельный внутренний модуль, например `termin.display._interop`, и постепенно переключать внутренний код на него. Это уменьшит случайную доступность приватных символов без немедленного удаления совместимости.
+
+---
+
+## 6. Карта зависимостей
+
+### 6.1 C++ модули (из CMake target_link_libraries)
 
 ```
 termin_base          (корень, 0 зависимостей)
@@ -453,11 +514,11 @@ termin_core (app)    → termin_base, termin_graphics, termin_scene, termin_inpu
                        termin_skeleton, termin_animation
 ```
 
-### 5.2 Нарушения направления зависимостей
+### 6.2 Нарушения направления зависимостей
 
 ```
 termin-gui/ (GUI framework)
-    ↓ НАРУШЕНИЕ: Viewport3D → termin._native.render (SDK internals)
+    ↓ НАРУШЕНИЕ: Viewport3D → termin.display underscored C-interop functions
 termin/visualization/ (SDK-level, но в termin-app)
     ↓ НАРУШЕНИЕ: sdl_embedded.py → PyQt6
     ↓ НАРУШЕНИЕ: render/texture.py → PyQt6
@@ -471,7 +532,7 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
     ↓ РАСХОЖДЕНИЕ: 28 файлов только в Qt, 10 только в tcgui
 ```
 
-### 5.3 Правильные абстракции (положительные примеры)
+### 6.3 Правильные абстракции (положительные примеры)
 
 | Файл | Что сделано правильно |
 |------|----------------------|
@@ -489,18 +550,18 @@ termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
 | 1.1 | RenderingManager God Object + дублирование PullRM | termin-engine | rendering_manager.cpp | 🔴 Критическая |
 | 1.2 | termin-engine компилирует .cpp из termin-app | termin-engine | CMakeLists.txt | 🟠 Частично исправлено |
 | 1.3 | Утечка GUI в editor_core | termin-app | editor_camera_ui_controller.py, spacemouse_controller.py | 🔴 Частично исправлено |
-| 1.4 | termin-gui Viewport3D → SDK internals | termin-gui | viewport3d.py | 🔴 Критическая |
+| 1.4 | termin-gui Viewport3D → SDK internals | termin-gui | viewport3d.py | 🔴 Частично исправлено |
 | 2.1 | Прямые пути к include в CMake | termin-display, termin-components-render | CMakeLists.txt | ✅ Исправлено |
 | 2.2 | Утечка tgfx типов в публичном API | termin-render | render_pipeline.hpp, drawable.hpp (+ 30 хедеров) | 🟠 Высокая |
 | 2.3 | Бизнес-логика в биндингах + hasattr/setattr | termin-* python bindings | tc_pass_bindings.cpp и др. | 🟠 Высокая |
-| 2.4 | Дублирование биндингов | termin-base, termin-app | geom/, tc_pass_bindings.cpp | 🟠 Высокая |
+| 2.4 | Дублирование/расхождение биндингов | termin-render, termin-app | tc_pass_bindings.cpp, geom/ | 🟠 Высокая |
 | 2.5 | Экспозиция внутренних типов через биндинги | termin-* python bindings | uintptr_t handles, tc_* типы | 🟠 Высокая |
 | 2.6 | termin_core дублирует termin-engine | termin-app/core_c | CMakeLists.txt | 🟠 Высокая |
 | 3.1 | Внутренние include из нижних уровней | termin-engine | rendering_manager.cpp | 🟡 Средняя |
 | 3.2 | EngineCore жёстко знает о extensions | termin-engine | engine_core.cpp | 🟠 Частично исправлено |
 | 3.3 | termin-skeleton → termin_graphics для 2 хедеров | termin-skeleton | CMakeLists.txt | ✅ Исправлено |
 | 3.4 | Неявные зависимости Python пакетов | termin-* python | install_requires | 🟡 Частично исправлено |
-| 3.5 | termin-csg — перегруженный пакет | termin-csg | cad_app.py, procedural_document.py | 🟡 Средняя |
+| 3.5 | termin-csg — перегруженный пакет | termin-csg | cad_app.py, procedural_document.py, cad_viewer.py | 🟡 Средняя |
 | 3.6 | termin-display экспортирует приватные функции | termin-display | __init__.py | ✅ Исправлено |
 | 3.7 | Пропуск preload_sdk_libs() | termin-engine, termin-inspect | __init__.py | ✅ Исправлено |
 | 3.8 | Дублирование project management | termin-app | editor/ vs editor_tcgui/ | 🟡 Средняя |
