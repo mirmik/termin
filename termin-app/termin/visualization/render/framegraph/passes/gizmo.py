@@ -4,6 +4,8 @@ from typing import List, Optional, Set, Tuple
 
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from tgfx import TcShader
 from termin.render_framework.python_pass import PythonFramePass
 from termin.inspect import InspectField
@@ -12,26 +14,40 @@ if TYPE_CHECKING:
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
 
 GIZMO_MASK_VERT = """
-#version 330 core
+#version 450 core
 layout(location = 0) in vec3 a_position;
 
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
+struct GizmoPushData {
+    mat4 u_mvp;
+    vec4 u_color;
+};
+#ifdef VULKAN
+layout(push_constant) uniform GizmoPushBlock { GizmoPushData pc; };
+#else
+layout(std140, binding = 14) uniform GizmoPushBlock { GizmoPushData pc; };
+#endif
 
 void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+    gl_Position = pc.u_mvp * vec4(a_position, 1.0);
 }
 """
 
 GIZMO_MASK_FRAG = """
-#version 330 core
-out vec4 fragColor;
-uniform vec4 u_color;
+#version 450 core
+struct GizmoPushData {
+    mat4 u_mvp;
+    vec4 u_color;
+};
+#ifdef VULKAN
+layout(push_constant) uniform GizmoPushBlock { GizmoPushData pc; };
+#else
+layout(std140, binding = 14) uniform GizmoPushBlock { GizmoPushData pc; };
+#endif
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     // RGB нам не важен, только альфа
-    fragColor = vec4(0.0, 0.0, 0.0, u_color.a);
+    fragColor = vec4(0.0, 0.0, 0.0, pc.u_color.a);
 }
 """
 
@@ -121,9 +137,6 @@ class GizmoPass(PythonFramePass):
         ctx2.set_color_mask(False, False, False, True)
         ctx2.bind_shader(pair.vs, pair.fs)
 
-        ctx2.set_uniform_mat4("u_view", list(view.data), False)
-        ctx2.set_uniform_mat4("u_projection", list(proj.data), False)
-
         from termin.render_components import MeshRenderer
 
         gizmo_entities = self._get_gizmo_entities()
@@ -139,9 +152,12 @@ class GizmoPass(PythonFramePass):
 
             # alpha < 1.0 для гизмо, alpha=1.0 зарезервирована для обычных объектов
             alpha = index * 1.0 / (maxindex + 1)
-            ctx2.set_uniform_vec4("u_color", 0.0, 0.0, 0.0, alpha)
             model = ent.model_matrix()
-            ctx2.set_uniform_mat4("u_model", list(model.data), False)
+            mvp = proj * view * model
+            mvp_data = np.asarray(list(mvp.data), dtype=np.float32)
+            color_data = np.asarray([0.0, 0.0, 0.0, alpha], dtype=np.float32)
+            push_data = np.concatenate((mvp_data, color_data)).view(np.uint8)
+            ctx2.set_push_constants(np.ascontiguousarray(push_data, dtype=np.uint8))
 
             tc_mesh = mr.mesh
             if tc_mesh is not None and tc_mesh.is_valid:

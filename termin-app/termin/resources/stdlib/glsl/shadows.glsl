@@ -34,10 +34,8 @@
 // Shadow metadata. Packed by ColorPass into ShadowBlockStd140. std140
 // forces each scalar-in-array element to a 16-byte stride, which is
 // exactly how the C++ side lays the memory out — the GLSL side reads
-// only the leading component of each padded slot. Matching binding on
-// OpenGL comes from the `set_block_binding("ShadowBlock", 3)` call in
-// ColorPass after bind_shader; on Vulkan the explicit binding is baked
-// into SPIR-V.
+// only the leading component of each padded slot. OpenGL and Vulkan both
+// use the explicit binding qualifier below.
 layout(std140, binding = 3) uniform ShadowBlock {
     int  u_shadow_map_count;
     mat4 u_light_space_matrix[MAX_SHADOW_MAPS];

@@ -209,12 +209,10 @@ void MaterialPass::execute(ExecuteContext& ctx) {
 
     ctx2->bind_shader(vs2, fs2);
     bind_engine_per_frame_uniforms(*ctx2, ctx);
-    ctx2->set_block_binding("PerFrame", ENGINE_PER_FRAME_UBO_BINDING);
 
     constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
     constexpr uint32_t EXTRA_TEX_SLOT_BASE = 9;
     uint32_t graph_tex_slot = EXTRA_TEX_SLOT_BASE;
-    std::set<std::string> bound_uniforms;
 
     auto material_texture_slot = [&](const std::string& uniform_name) -> std::optional<uint32_t> {
         for (size_t i = 0; i < phase->texture_count; ++i) {
@@ -230,7 +228,8 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         auto res_it = ctx.tex2_reads.find(res_name);
         if (res_it != ctx.tex2_reads.end() && res_it->second) {
             uint32_t slot = graph_tex_slot;
-            if (auto material_slot = material_texture_slot(uniform_name)) {
+            std::optional<uint32_t> material_slot = material_texture_slot(uniform_name);
+            if (material_slot.has_value()) {
                 slot = *material_slot;
             } else {
                 if (graph_tex_slot > 15) {
@@ -241,8 +240,9 @@ void MaterialPass::execute(ExecuteContext& ctx) {
                 graph_tex_slot++;
             }
             ctx2->bind_sampled_texture(slot, res_it->second);
-            ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(slot));
-            bound_uniforms.insert(uniform_name);
+            if (!material_slot.has_value()) {
+                ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(slot));
+            }
         } else {
             tc::Log::warn("[MaterialPass] '%s': tgfx2 input texture for '%s' not available",
                 get_pass_name().c_str(), res_name.c_str());
@@ -250,15 +250,13 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     };
 
     if (shader->material_ubo_block_size > 0) {
-        if (apply_material_phase_ubo_runtime(
-                phase,
-                shader,
-                TC_MATERIAL_UBO_BINDING_SLOT,
-                MATERIAL_TEX_SLOT_BASE,
-                device,
-                *ctx2)) {
-            ctx2->set_block_binding("MaterialParams", TC_MATERIAL_UBO_BINDING_SLOT);
-        }
+        apply_material_phase_ubo_runtime(
+            phase,
+            shader,
+            TC_MATERIAL_UBO_BINDING_SLOT,
+            MATERIAL_TEX_SLOT_BASE,
+            device,
+            *ctx2);
     }
 
     // extra_resources: pull tgfx2 color textures directly from ctx.tex2_reads.
@@ -271,51 +269,9 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         bind_graph_texture(res_name, uniform_name);
     }
 
-    ctx2->set_uniform_vec2("u_resolution",
-                           static_cast<float>(w), static_cast<float>(h));
-
-    // Legacy plain-uniform uploads for non-@property uniforms (e.g.
-    // u_resolution, per-pass state that hasn't moved to a UBO). These
-    // run through ctx2->set_uniform_* which flush_pipeline's the tgfx2
-    // program before raw glUniform*. phase->uniforms[] whose names also
-    // appear in the material UBO layout are stripped from the GLSL so
-    // glGetUniformLocation returns -1 and the call silently no-ops.
-    for (size_t i = 0; i < phase->uniform_count; i++) {
-        const tc_uniform_value* uniform = &phase->uniforms[i];
-        if (bound_uniforms.count(uniform->name) > 0) continue;
-
-        switch (uniform->type) {
-            case TC_UNIFORM_BOOL:
-            case TC_UNIFORM_INT:
-                ctx2->set_uniform_int(uniform->name, uniform->data.i);
-                break;
-            case TC_UNIFORM_FLOAT:
-                ctx2->set_uniform_float(uniform->name, uniform->data.f);
-                break;
-            case TC_UNIFORM_VEC2:
-                ctx2->set_uniform_vec2(uniform->name,
-                                       uniform->data.v2[0], uniform->data.v2[1]);
-                break;
-            case TC_UNIFORM_VEC3:
-                ctx2->set_uniform_vec3(uniform->name,
-                                       uniform->data.v3[0], uniform->data.v3[1],
-                                       uniform->data.v3[2]);
-                break;
-            case TC_UNIFORM_VEC4:
-                ctx2->set_uniform_vec4(uniform->name,
-                                       uniform->data.v4[0], uniform->data.v4[1],
-                                       uniform->data.v4[2], uniform->data.v4[3]);
-                break;
-            case TC_UNIFORM_MAT4:
-                ctx2->set_uniform_mat4(uniform->name, uniform->data.m4, false);
-                break;
-            default:
-                break;
-        }
-    }
-
     // Built-in fullscreen quad VBO with layout (vec2 pos, vec2 uv) at
-    // locations 0 and 1 — matches the canonical post-process VS.
+    // locations 0 and 1; shader stages must agree with the canonical
+    // fullscreen varying contract.
     ctx2->draw_fullscreen_quad();
 
     ctx2->end_pass();

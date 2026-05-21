@@ -33,7 +33,7 @@ def _generate_action(component) -> None:
 
 def _request_render_update() -> None:
     try:
-        from termin._native.render import RenderingManager
+        from termin.engine import RenderingManager
 
         RenderingManager.instance().request_render_update()
     except Exception as e:

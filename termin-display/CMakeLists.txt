@@ -254,6 +254,11 @@ install(TARGETS termin_display
 )
 
 install(FILES
+    ${CMAKE_CURRENT_LIST_DIR}/include/tc_input_event.h
+    DESTINATION include
+)
+
+install(FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/render/termin_display_api.h
     ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_viewport.h
     ${CMAKE_CURRENT_LIST_DIR}/include/render/tc_viewport_pool.h
