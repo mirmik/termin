@@ -241,7 +241,12 @@ void MaterialPass::execute(ExecuteContext& ctx) {
             }
             ctx2->bind_sampled_texture(slot, res_it->second);
             if (!material_slot.has_value()) {
-                ctx2->set_uniform_int(uniform_name.c_str(), static_cast<int>(slot));
+                tc::Log::error(
+                    "[MaterialPass] '%s': texture uniform '%s' is not a material Texture2D property; "
+                    "cannot bind it backend-neutrally. Add an @property Texture2D with this name "
+                    "so shader_parser assigns an explicit descriptor binding.",
+                    get_pass_name().c_str(),
+                    uniform_name.c_str());
             }
         } else {
             tc::Log::warn("[MaterialPass] '%s': tgfx2 input texture for '%s' not available",

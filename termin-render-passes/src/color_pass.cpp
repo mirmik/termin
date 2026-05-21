@@ -333,11 +333,9 @@ void ColorPass::sort_draw_calls() {
 // ----------------------------------------------------------------------------
 //
 // Uses ctx2 end-to-end for pass boundary, shader binding, resource set
-// (material UBO + textures), mesh draws, and state. Legacy plain-uniform
-// declarations in existing .shader files (u_view, u_projection, u_model,
-// shadow sampler ints and matrices) are routed through RenderContext2's
-// transitional set_uniform_* helpers — clearly marked as migration debt
-// until all shaders move to UBO/push-constant based per-frame data.
+// (material UBO + textures), mesh draws, and state. Engine uniforms from
+// legacy-looking shader source are rewritten by shader_parser into PerFrame
+// UBOs, push constants, and explicit sampler bindings before tgfx2 sees them.
 //
 // Intentionally skipped for now:
 //   - non-MeshRenderer drawables (get_mesh_for_phase returns null)
