@@ -40,7 +40,6 @@ class ResourceManagerBase:
         self.skeletons: Dict[str, "TcSkeleton"] = {}
         self.components: Dict[str, type["Component"]] = {}
         self.frame_passes: Dict[str, type] = {}
-        self.post_effects: Dict[str, type] = {}
 
         # Assets by UUID (for lookup during loading)
         from termin.assets.asset import Asset

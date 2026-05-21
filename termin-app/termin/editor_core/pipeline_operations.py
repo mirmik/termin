@@ -88,39 +88,6 @@ class PipelineOperations:
         return True
 
     # ------------------------------------------------------------------
-    # PostEffect operations (on a PostProcessPass)
-    # ------------------------------------------------------------------
-
-    def add_effect(self, postprocess_pass, effect_obj) -> None:
-        postprocess_pass.effects.append(effect_obj)
-        self.pipeline_changed.emit()
-
-    def remove_effect(self, postprocess_pass, effect_idx: int) -> None:
-        effects = postprocess_pass.effects
-        if not (0 <= effect_idx < len(effects)):
-            return
-        del effects[effect_idx]
-        self.pipeline_changed.emit()
-
-    def move_effect(self, postprocess_pass, from_idx: int, to_idx: int) -> None:
-        effects = postprocess_pass.effects
-        if not (0 <= from_idx < len(effects)) or not (0 <= to_idx < len(effects)):
-            return
-        if from_idx == to_idx:
-            return
-        eff = effects.pop(from_idx)
-        effects.insert(to_idx, eff)
-        self.pipeline_changed.emit()
-
-    def rename_effect(self, effect_obj, new_name: str) -> bool:
-        new_name = new_name.strip() if new_name else ""
-        if not new_name:
-            return False
-        effect_obj.name = new_name
-        self.pipeline_changed.emit()
-        return True
-
-    # ------------------------------------------------------------------
     # ResourceSpec operations
     # ------------------------------------------------------------------
 

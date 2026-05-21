@@ -1,4 +1,4 @@
-"""Builtin component, frame pass, and post effect lists for auto-registration."""
+"""Builtin component and frame pass lists for auto-registration."""
 
 from typing import List, Tuple
 
@@ -73,24 +73,13 @@ BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
     # ID/Picking
     ("termin.visualization.render.framegraph.passes.id_pass", "IdPass"),
     ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
-    # Post-processing (legacy)
-    ("termin.visualization.render.postprocess", "PostProcessPass"),
-    # Post-effect passes (new architecture)
+    # Post-effect passes
     ("termin.visualization.render.framegraph.passes.bloom_pass", "BloomPass"),
     ("termin.visualization.render.framegraph.passes.grayscale", "GrayscalePass"),
+    ("termin.visualization.render.framegraph.passes.highlight", "HighlightPass"),
     ("termin.visualization.render.framegraph.passes.material_pass", "MaterialPass"),
     ("termin.visualization.render.framegraph.passes.tonemap", "TonemapPass"),
     ("termin.render_framework", "GraphAliasPass"),
     # Debug
     ("termin.visualization.render.framegraph.passes.debug_triangle", "DebugTrianglePass"),
-]
-
-# Список встроенных PostEffect'ов для предрегистрации.
-# Формат: (имя_модуля, имя_класса)
-BUILTIN_POST_EFFECTS: List[Tuple[str, str]] = [
-    ("termin.visualization.render.posteffects.blur", "GaussianBlurPass"),
-    ("termin.visualization.render.posteffects.highlight", "HighlightEffect"),
-    ("termin.visualization.render.posteffects.fog", "FogEffect"),
-    ("termin.visualization.render.posteffects.gray", "GrayscaleEffect"),
-    ("termin.visualization.render.posteffects.material_effect", "MaterialPostEffect"),
 ]

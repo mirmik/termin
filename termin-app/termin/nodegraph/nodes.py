@@ -17,7 +17,6 @@ from termin.nodegraph.pass_registry import (
 # Maps node title to pass class name (when they differ)
 TITLE_TO_PASS_CLASS = {
     "SkyboxPass": "SkyBoxPass",
-    "PostProcess": "PostProcessPass",
     "Present": "PresentToScreenPass",
 }
 

@@ -378,7 +378,6 @@ class PlayerRuntime:
         rm.register_builtin_materials()
         rm.register_builtin_meshes()
         rm.register_builtin_frame_passes()
-        rm.register_builtin_post_effects()
 
     def _load_modules(self) -> None:
         """Load all project modules through termin-modules runtime."""
