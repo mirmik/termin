@@ -1,4 +1,4 @@
-# GrayscalePass - re-export from C++
-from termin._native.render import GrayscalePass
+# GrayscalePass - compatibility re-export from termin-render-passes.
+from termin.render_passes import GrayscalePass
 
 __all__ = ["GrayscalePass"]

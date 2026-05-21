@@ -2,7 +2,7 @@
 
 Дата: 2026-05-21
 
-Статус: план миграции. Не считать текущее состояние кода соответствующим этому документу, пока пункты не отмечены как выполненные в рабочей документации или changelog.
+Статус: миграция начата. Phase 1-3 first batch выполнен 2026-05-21 для `PresentToScreenPass`, `DebugTrianglePass`, `GrayscalePass`, `TonemapPass`, `BloomPass`. Остальные phase items остаются планом, пока явно не отмечены как выполненные в рабочей документации или changelog.
 
 ## Цель
 
@@ -143,6 +143,8 @@ Verification:
 
 Goal: establish the module skeleton without moving behavior.
 
+Status 2026-05-21: done. Module skeleton, CMake package config, thin pip package, docs stub and top-level CMake wiring were added.
+
 Create:
 
 - `termin-render-passes/CMakeLists.txt`
@@ -178,6 +180,8 @@ Verification:
 
 Goal: move the lowest-risk pass set first.
 
+Status 2026-05-21: partial done. `present_pass`, `debug_triangle_pass`, `grayscale_pass`, `tonemap_pass`, and `bloom_pass` moved to `termin-render-passes`; `render_lib` links `termin_render_passes::termin_render_passes`. `material_ubo_apply` remains in app for the scene-pass phase.
+
 Move to `termin-render-passes/include/termin/render/...` and `termin-render-passes/src/`:
 
 - `present_pass.hpp/cpp`
@@ -207,6 +211,8 @@ Verification:
 ### Phase 3: add Python bindings owned by `termin-render-passes`
 
 Goal: concrete pass Python API stops depending on app native bindings.
+
+Status 2026-05-21: partial done. `_render_passes_native` and `termin.render_passes` bind/re-export the Phase 2 pass classes and tonemap constants; app compatibility modules now import from `termin.render_passes`.
 
 Create:
 
@@ -245,6 +251,8 @@ Verification:
 ### Phase 4: remove Android source-level dependency on app pass files
 
 Goal: Android links `termin-render-passes` instead of compiling `../termin-app/cpp/termin/render/*.cpp`.
+
+Status 2026-05-21: partial done. Android now links `termin_render_passes` and no longer compiles the moved `bloom_pass`, `present_pass`, or `tonemap_pass` app source files. It still compiles app-owned `color_pass`, `material_ubo_apply`, `shadow_*`, `shader_skinning`, and `skybox_pass` until those phases move.
 
 Change:
 

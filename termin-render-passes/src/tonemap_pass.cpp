@@ -4,7 +4,7 @@
 // std140 UBO for parameters via bind_uniform_buffer, input texture
 // via bind_sampled_texture. No raw GL. Legacy tgfx1 dual-path
 // removed in Stage 8.1.
-#include "tonemap_pass.hpp"
+#include <termin/render/tonemap_pass.hpp>
 #include "termin/render/execute_context.hpp"
 
 #include "tgfx2/render_context.hpp"

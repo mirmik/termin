@@ -1,4 +1,4 @@
-# DebugTrianglePass - re-export from C++
-from termin._native.render import DebugTrianglePass
+# DebugTrianglePass - compatibility re-export from termin-render-passes.
+from termin.render_passes import DebugTrianglePass
 
 __all__ = ["DebugTrianglePass"]

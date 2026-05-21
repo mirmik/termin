@@ -7,6 +7,7 @@
 
 ### 2026-05-21
 
+- **standard render passes частично вынесены из `termin-app`:** создан SDK-модуль `termin-render-passes`; `PresentToScreenPass`, `DebugTrianglePass`, `GrayscalePass`, `TonemapPass`, `BloomPass` перенесены из `termin-app/cpp/termin/render` в новый модуль, а app Python re-export переключен на `termin.render_passes`.
 - **3.7 закрыто:** `termin.engine` и `termin.inspect` теперь вызывают `preload_sdk_libs(...)` перед импортом native modules.
 - **3.6 закрыто частично по публичной поверхности:** приватные C-interop функции больше не входят в `termin.display.__all__`. Сами underscored imports оставлены для существующих внутренних call sites до появления публичного adapter API.
 - **1.3 частично:** `EditorCameraUIController` перенесён из `termin.editor_core` в `termin.editor_tcgui`, а `EditorCameraManager` добавляет его только если компонент зарегистрирован frontend-слоем. В `editor_core` остаётся Qt-зависимость `SpaceMouseController` и более широкая проблема `termin.visualization/ui/widgets -> tcgui`.

@@ -25,6 +25,7 @@ CMAKE_TARGET_TO_DIR = {
     "termin_scene": "termin-scene",
     "termin_lighting": "termin-lighting",
     "termin_render": "termin-render",
+    "termin_render_passes": "termin-render-passes",
     "termin_display": "termin-display",
     "termin_input": "termin-input",
     "termin_inspect": "termin-inspect",
@@ -64,6 +65,7 @@ PYTHON_PKG_TO_DIR = {
     "termin-nanobind": "termin-nanobind-sdk",
     "termin-csg": "termin-csg",
     "termin-lighting": "termin-lighting",
+    "termin-render-passes": "termin-render-passes",
     # "termin-entity": "termin-entity",  # удалён, мигрирован в termin-app
     "termin-navmesh": "termin-navmesh",
 }
@@ -103,6 +105,7 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.inspect": "termin-inspect",
     "termin.render_components": "termin-components-render",
     "termin.render_framework": "termin-render",
+    "termin.render_passes": "termin-render-passes",
     "termin.lighting": "termin-lighting",
     "termin.viewport": "termin-render",
     "termin.engine": "termin-engine",

@@ -204,6 +204,11 @@ else()
     find_package(termin_components_render REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_render_passes termin_render_passes::termin_render_passes)
+else()
+    find_package(termin_render_passes REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_skeleton termin_skeleton::termin_skeleton)
 else()
     find_package(termin_skeleton REQUIRED)
@@ -333,13 +338,8 @@ set(RENDER_LIB_SOURCES
     termin/render/color_pass.cpp
     termin/render/id_pass.cpp
     termin/render/collider_gizmo_pass.cpp
-    termin/render/debug_triangle_pass.cpp
     termin/render/ground_grid_pass.cpp
-    termin/render/present_pass.cpp
     termin/render/shadow_pass.cpp
-    termin/render/bloom_pass.cpp
-    termin/render/grayscale_pass.cpp
-    termin/render/tonemap_pass.cpp
     termin/render/material_ubo_apply.cpp
     termin/render/skybox_pass.cpp
     termin/render/shadow_camera.cpp
@@ -357,7 +357,7 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_link_libraries(render_lib PUBLIC entity_lib trent tgfx::termin_graphics termin_materials::termin_materials termin_render::termin_render termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
+target_link_libraries(render_lib PUBLIC entity_lib trent tgfx::termin_graphics termin_materials::termin_materials termin_render::termin_render termin_render_passes::termin_render_passes termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
 if(TGFX2_ENABLE_OPENGL)
     target_link_libraries(render_lib PUBLIC OpenGL::GL)
 endif()
@@ -652,6 +652,7 @@ set(TERMIN_SDK_PYTHON_PACKAGE_DIRS
     ${TERMIN_ROOT}/../termin-lighting/python/termin/
     ${TERMIN_ROOT}/../termin-navmesh/python/termin/
     ${TERMIN_ROOT}/../termin-physics/python/termin/
+    ${TERMIN_ROOT}/../termin-render-passes/python/termin/
     ${TERMIN_ROOT}/../termin-render/python/termin/
     ${TERMIN_ROOT}/../termin-scene/python/termin/
     ${TERMIN_ROOT}/../termin-skeleton/python/termin/

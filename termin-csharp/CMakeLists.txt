@@ -83,6 +83,11 @@ endif()
 else()
     find_package(termin_render REQUIRED)
 endif()
+    if(COMMAND termin_require_package)
+    termin_require_package(termin_render_passes termin_render_passes::termin_render_passes)
+else()
+    find_package(termin_render_passes REQUIRED)
+endif()
     find_package(tcplot REQUIRED)
 
     set(CMAKE_SWIG_OUTDIR "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Generated")
@@ -137,6 +142,7 @@ endif()
         termin_components_collision::termin_components_collision
         termin_components_kinematic::termin_components_kinematic
         termin_render::termin_render
+        termin_render_passes::termin_render_passes
         tcplot::tcplot
     )
 
@@ -164,6 +170,7 @@ endif()
         termin_animation::termin_animation
         termin_skeleton::termin_skeleton
         termin_render::termin_render
+        termin_render_passes::termin_render_passes
         tgfx::termin_graphics
         tgfx::termin_graphics2
         termin_materials::termin_materials

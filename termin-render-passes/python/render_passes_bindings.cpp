@@ -1,0 +1,242 @@
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/set.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/vector.h>
+
+extern "C" {
+#include "render/tc_pass.h"
+}
+
+#include <termin/render/bloom_pass.hpp>
+#include <termin/render/debug_triangle_pass.hpp>
+#include <termin/render/frame_pass.hpp>
+#include <termin/render/grayscale_pass.hpp>
+#include <termin/render/present_pass.hpp>
+#include <termin/render/tonemap_pass.hpp>
+
+namespace nb = nanobind;
+
+namespace termin {
+namespace {
+
+void py_cxx_pass_ref_retain(tc_pass* p) {
+    if (p && p->body) {
+        Py_INCREF(reinterpret_cast<PyObject*>(p->body));
+    }
+}
+
+void py_cxx_pass_ref_release(tc_pass* p) {
+    if (p && p->body) {
+        Py_DECREF(reinterpret_cast<PyObject*>(p->body));
+    }
+}
+
+const tc_pass_ref_vtable g_py_cxx_pass_ref_vtable = {
+    py_cxx_pass_ref_retain,
+    py_cxx_pass_ref_release,
+    nullptr,
+};
+
+template<typename T>
+void init_pass_from_python(T* self, const char* type_name) {
+    self->link_to_type_registry(type_name);
+    nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
+    self->set_python_ref(wrapper.ptr(), &g_py_cxx_pass_ref_vtable);
+    Py_INCREF(wrapper.ptr());
+}
+
+} // namespace
+
+void bind_render_passes(nb::module_& m) {
+    nb::class_<DebugTrianglePass, CxxFramePass>(m, "DebugTrianglePass")
+        .def("__init__", [](DebugTrianglePass* self,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) DebugTrianglePass(output_res, pass_name);
+            init_pass_from_python(self, "DebugTrianglePass");
+        },
+             nb::arg("output_res") = "OUTPUT",
+             nb::arg("pass_name") = "DebugTriangle")
+        .def_rw("output_res", &DebugTrianglePass::output_res)
+        .def("compute_reads", &DebugTrianglePass::compute_reads)
+        .def("compute_writes", &DebugTrianglePass::compute_writes)
+        .def("get_inplace_aliases", &DebugTrianglePass::get_inplace_aliases)
+        .def_prop_ro("reads", &DebugTrianglePass::compute_reads)
+        .def_prop_ro("writes", &DebugTrianglePass::compute_writes)
+        .def("destroy", &DebugTrianglePass::destroy)
+        .def("__repr__", [](const DebugTrianglePass& p) {
+            return "<DebugTrianglePass '" + p.get_pass_name() + "'>";
+        });
+
+    m.attr("DebugTrianglePass").attr("category") = "Debug";
+    m.attr("DebugTrianglePass").attr("node_inputs") = nb::make_tuple();
+    m.attr("DebugTrianglePass").attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo")
+    );
+
+    nb::class_<PresentToScreenPass, CxxFramePass>(m, "PresentToScreenPass")
+        .def("__init__", [](PresentToScreenPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) PresentToScreenPass(input_res, output_res);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "PresentToScreenPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "OUTPUT",
+             nb::arg("pass_name") = "PresentToScreen")
+        .def_rw("input_res", &PresentToScreenPass::input_res)
+        .def_rw("output_res", &PresentToScreenPass::output_res)
+        .def("compute_reads", &PresentToScreenPass::compute_reads)
+        .def("compute_writes", &PresentToScreenPass::compute_writes)
+        .def("get_inplace_aliases", &PresentToScreenPass::get_inplace_aliases)
+        .def_prop_ro("reads", &PresentToScreenPass::compute_reads)
+        .def_prop_ro("writes", &PresentToScreenPass::compute_writes)
+        .def("destroy", &PresentToScreenPass::destroy);
+
+    m.attr("PresentToScreenPass").attr("category") = "Output";
+    m.attr("PresentToScreenPass").attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo")
+    );
+    m.attr("PresentToScreenPass").attr("node_outputs") = nb::make_tuple();
+
+    nb::class_<BloomPass, CxxFramePass>(m, "BloomPass")
+        .def("__init__", [](BloomPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            float threshold,
+                            float soft_threshold,
+                            float intensity,
+                            int mip_levels) {
+            new (self) BloomPass(input_res, output_res, threshold, soft_threshold, intensity, mip_levels);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "BloomPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Bloom",
+             nb::arg("threshold") = 1.0f,
+             nb::arg("soft_threshold") = 0.5f,
+             nb::arg("intensity") = 1.0f,
+             nb::arg("mip_levels") = 5)
+        .def_rw("input_res", &BloomPass::input_res)
+        .def_rw("output_res", &BloomPass::output_res)
+        .def_rw("output_res_target", &BloomPass::output_res_target)
+        .def_rw("threshold", &BloomPass::threshold)
+        .def_rw("soft_threshold", &BloomPass::soft_threshold)
+        .def_rw("intensity", &BloomPass::intensity)
+        .def_rw("mip_levels", &BloomPass::mip_levels)
+        .def("compute_reads", &BloomPass::compute_reads)
+        .def("compute_writes", &BloomPass::compute_writes)
+        .def("get_inplace_aliases", &BloomPass::get_inplace_aliases)
+        .def_prop_ro("reads", &BloomPass::compute_reads)
+        .def_prop_ro("writes", &BloomPass::compute_writes)
+        .def("destroy", &BloomPass::destroy);
+
+    m.attr("BloomPass").attr("category") = "Effects";
+    m.attr("BloomPass").attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo"),
+        nb::make_tuple("output_res_target", "fbo")
+    );
+    m.attr("BloomPass").attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo")
+    );
+    m.attr("BloomPass").attr("node_inplace_pairs") = nb::make_tuple(
+        nb::make_tuple("output_res_target", "output_res")
+    );
+
+    nb::class_<GrayscalePass, CxxFramePass>(m, "GrayscalePass")
+        .def("__init__", [](GrayscalePass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            float strength) {
+            new (self) GrayscalePass(input_res, output_res, strength);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "GrayscalePass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Grayscale",
+             nb::arg("strength") = 1.0f)
+        .def_rw("input_res", &GrayscalePass::input_res)
+        .def_rw("output_res", &GrayscalePass::output_res)
+        .def_rw("strength", &GrayscalePass::strength)
+        .def("compute_reads", &GrayscalePass::compute_reads)
+        .def("compute_writes", &GrayscalePass::compute_writes)
+        .def("get_inplace_aliases", &GrayscalePass::get_inplace_aliases)
+        .def_prop_ro("reads", &GrayscalePass::compute_reads)
+        .def_prop_ro("writes", &GrayscalePass::compute_writes)
+        .def("destroy", &GrayscalePass::destroy);
+
+    m.attr("GrayscalePass").attr("category") = "Effects";
+    m.attr("GrayscalePass").attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo")
+    );
+    m.attr("GrayscalePass").attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo")
+    );
+    m.attr("GrayscalePass").attr("node_inplace_pairs") = nb::make_tuple();
+
+    nb::class_<TonemapPass, CxxFramePass>(m, "TonemapPass")
+        .def("__init__", [](TonemapPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            float exposure,
+                            int method) {
+            new (self) TonemapPass(input_res, output_res, exposure, method);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "TonemapPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "Tonemap",
+             nb::arg("exposure") = 1.0f,
+             nb::arg("method") = 0)
+        .def_rw("input_res", &TonemapPass::input_res)
+        .def_rw("output_res", &TonemapPass::output_res)
+        .def_rw("output_res_target", &TonemapPass::output_res_target)
+        .def_rw("exposure", &TonemapPass::exposure)
+        .def_rw("method", &TonemapPass::method)
+        .def("compute_reads", &TonemapPass::compute_reads)
+        .def("compute_writes", &TonemapPass::compute_writes)
+        .def("get_inplace_aliases", &TonemapPass::get_inplace_aliases)
+        .def_prop_ro("reads", &TonemapPass::compute_reads)
+        .def_prop_ro("writes", &TonemapPass::compute_writes)
+        .def("destroy", &TonemapPass::destroy);
+
+    m.attr("TonemapPass").attr("category") = "Effects";
+    m.attr("TonemapPass").attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo"),
+        nb::make_tuple("output_res_target", "fbo")
+    );
+    m.attr("TonemapPass").attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo")
+    );
+    m.attr("TonemapPass").attr("node_inplace_pairs") = nb::make_tuple(
+        nb::make_tuple("output_res_target", "output_res")
+    );
+
+    m.attr("TONEMAP_ACES") = 0;
+    m.attr("TONEMAP_REINHARD") = 1;
+    m.attr("TONEMAP_NONE") = 2;
+}
+
+} // namespace termin
+
+NB_MODULE(_render_passes_native, m) {
+    nb::module_::import_("termin.render_framework._render_framework_native");
+    termin::bind_render_passes(m);
+}

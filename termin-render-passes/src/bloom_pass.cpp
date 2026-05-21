@@ -5,7 +5,7 @@
 // mip chain allocated as tgfx2 textures, std140 UBOs for parameters,
 // bind_sampled_texture for all sampler slots. Legacy tgfx1 dual-path
 // removed in Stage 8.1.
-#include "bloom_pass.hpp"
+#include <termin/render/bloom_pass.hpp>
 #include "termin/render/execute_context.hpp"
 
 #include "tgfx2/render_context.hpp"

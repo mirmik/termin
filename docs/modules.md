@@ -56,13 +56,23 @@ Source of truth: [termin-render docs](../termin-render/docs/index.md)
 
 Отвечает за render framework поверх canonical resources: render engine, frame graph, presenter/debugger, интеграцию с application-level rendering.
 
-Здесь должны оставаться части, которые знают про frame graph, render passes, engine views и отладочную визуализацию pipeline.
+Здесь должны оставаться части, которые знают про frame graph, pass interfaces, engine views и отладочную визуализацию pipeline.
 
 Кандидаты на вынос в [termin-graphics](#termin-graphics):
 
 - generic fullscreen texture presentation;
 - generic `tc_texture` / `tc_mesh` to tgfx2 adapters;
 - общие allocation/cache helpers, не знающие о frame graph.
+
+### termin-render-passes
+
+Source of truth: [termin-render-passes docs](../termin-render-passes/docs/index.md)
+
+Отвечает за concrete render pass implementations поверх `termin-render`, `termin-graphics`, `termin-materials` и render components.
+
+На 2026-05-21 сюда перенесены первые standard/postprocess passes: `PresentToScreenPass`, `DebugTrianglePass`, `GrayscalePass`, `TonemapPass`, `BloomPass` и Python API `termin.render_passes`.
+
+Оставшийся долг миграции: `ColorPass`, `ShadowPass`, `SkyBoxPass`, `IdPass`, lighting upload helpers и picking helper всё ещё проходят через `termin-app`; `GroundGridPass`, `ColliderGizmoPass` и `ImmediateRenderer` требуют отдельного решения по debug/editor ownership.
 
 ### termin-display
 

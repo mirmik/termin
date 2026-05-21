@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+
+from setuptools import Extension, setup
+from termin_build.cmake_ext import TerminCMakeBuild, TerminCMakeBuildExt
+
+import os
+
+_DIR = os.path.dirname(os.path.realpath(__file__))
+
+
+class BuildExt(TerminCMakeBuildExt):
+    module_names = ["_render_passes_native"]
+    source_dir = _DIR
+
+
+setup(
+    name="termin-render-passes",
+    version=BuildExt.compute_local_version("0.1.0"),
+    license="MIT",
+    description="Concrete Termin render pass bindings (thin; requires termin SDK at runtime)",
+    author="mirmik",
+    author_email="mirmikns@yandex.ru",
+    python_requires=">=3.8",
+    packages=["termin.render_passes"],
+    package_dir={"termin.render_passes": "python/termin/render_passes"},
+    install_requires=[
+        "termin-nanobind",
+        "termin-render",
+        "termin-components-render",
+    ],
+    ext_modules=[
+        Extension("termin.render_passes._render_passes_native", sources=[]),
+    ],
+    cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
+    zip_safe=False,
+)

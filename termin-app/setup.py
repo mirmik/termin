@@ -40,6 +40,7 @@ if __name__ == "__main__":
                 "termin.colliders", "termin.colliders.*",       # termin-collision
                 "termin.render_framework", "termin.render_framework.*",  # termin-render
                 "termin.render", "termin.render.*",             # termin-render
+                "termin.render_passes", "termin.render_passes.*",  # termin-render-passes
                 "termin.display", "termin.display.*",           # termin-display
                 "termin.viewport", "termin.viewport.*",         # termin-display
                 "termin.geombase", "termin.geombase.*",         # tcbase
@@ -93,6 +94,7 @@ if __name__ == "__main__":
             "tcbase",
             "termin-assets",
             "termin-materials",
+            "termin-render-passes",
             "termin-nanobind",
             "numpy",
             "PyOpenGL>=3.1",
