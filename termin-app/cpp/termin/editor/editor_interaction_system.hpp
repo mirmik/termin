@@ -15,6 +15,7 @@
 #include <string>
 #include <array>
 #include <chrono>
+#include <cstdint>
 #include <vector>
 
 namespace termin {
@@ -67,6 +68,24 @@ private:
     PendingEvent _pending_release;
     PendingEvent _pending_hover;
 
+    struct PendingEntityPick {
+        PendingEvent event;
+        int fx = 0;
+        int fy = 0;
+        uint64_t color_request = 0;
+        bool valid = false;
+    };
+    struct PendingSurfacePick {
+        PendingEvent event;
+        int fx = 0;
+        int fy = 0;
+        uint64_t color_request = 0;
+        uint64_t depth_request = 0;
+        bool valid = false;
+    };
+    PendingEntityPick _async_hover_pick;
+    PendingSurfacePick _async_release_pick;
+
 public:
     // Callbacks to Python
     std::function<void()> on_request_update;
@@ -108,6 +127,10 @@ private:
     void _process_pending_press();
     void _process_pending_release();
     void _process_pending_hover();
+    bool _start_async_entity_pick(float x, float y, tc_viewport_handle vp, tc_display* display);
+    bool _start_async_surface_pick(float x, float y, tc_viewport_handle vp, tc_display* display);
+    void _poll_async_hover_pick();
+    void _poll_async_release_pick();
     void _handle_double_click(float x, float y, tc_viewport_handle vp, tc_display* display);
     void _rebuild_component_visual_gizmos(Entity entity);
     void _clear_component_visual_gizmos();
@@ -118,6 +141,10 @@ private:
 
     bool _window_to_fbo_coords(float x, float y, tc_viewport_handle vp,
                                tc_display* display, int& fx, int& fy);
+    Entity _entity_from_pick_color(const float color[4], tc_viewport_handle viewport);
+    SurfacePickResult _surface_from_pick_color_depth(const float color[4], float depth,
+                                                     int fx, int fy,
+                                                     tc_viewport_handle viewport);
 
     // Get ray from screen coordinates
     bool _screen_to_ray(float x, float y, tc_viewport_handle vp, tc_display* display,
