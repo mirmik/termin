@@ -1,7 +1,6 @@
 #pragma once
 
-// Shadow-map uniform-name tables + constants shared by C++ passes
-// (ColorPass uses them on the ctx2 path via ctx2->set_uniform_int).
+// Shadow-map uniform-name tables + constants shared by C++ passes.
 // Legacy TcShader helpers (upload_shadow_maps_to_shader,
 // init_shadow_map_samplers, bind_shadow_textures) were removed in
 // Stage 8.1 — nothing calls them any more, and the ctx2 path binds

@@ -161,7 +161,6 @@ void ColorPass::bind_extra_textures(
 
         int unit = EXTRA_TEXTURE_UNIT_START + i;
         ctx2->bind_sampled_texture(unit, it->second);
-        ctx2->set_uniform_int(uniform_name.c_str(), unit);
         extra_texture_uniforms[uniform_name] = unit;
         ++i;
     }
@@ -514,8 +513,6 @@ void ColorPass::execute_with_data(
     // backend-neutral.
     constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
 
-    tc_shader_handle last_shader_handle = tc_shader_handle_invalid();
-
     for (const auto& dc : cached_draw_calls_) {
         const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
@@ -604,16 +601,6 @@ void ColorPass::execute_with_data(
             bind_extra_textures(ctx.tex2_reads, ctx2);
         }
 
-        // GL compatibility path: explicit layout(binding=N) is the
-        // source of truth, but set the sampler uniforms too for drivers
-        // that still need the legacy uniform route. On Vulkan this is a
-        // no-op; SPIR-V gets the binding from shader_parser.
-        for (size_t i = 0; i < dc.phase->texture_count; i++) {
-            const tc_material_texture& mt = dc.phase->textures[i];
-            ctx2->set_uniform_int(mt.name,
-                                  static_cast<int>(MATERIAL_TEX_SLOT_BASE + i));
-        }
-
         // Shadow maps as elements of the sampler array at SHADOW_SLOT_BASE,
         // paired with the depth-compare sampler (sampler2DShadow needs
         // compareEnable=true on Vulkan; GL sets compare mode on the texture
@@ -666,20 +653,6 @@ void ColorPass::execute_with_data(
         std::memcpy(push.u_model, model.data, sizeof(push.u_model));
         ctx2->set_push_constants(&push, sizeof(push));
 
-        // Shader changes → link UBO block bindings once per shader.
-        bool shader_changed =
-            !tc_shader_handle_eq(dc.final_shader, last_shader_handle);
-        if (shader_changed) {
-            ctx2->set_block_binding("MaterialParams", MATERIAL_UBO_BINDING);
-            if (tc_shader_has_feature(raw_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
-                ctx2->set_block_binding("LightingBlock", LIGHTING_UBO_BINDING);
-            }
-            ctx2->set_block_binding("PerFrame",   ENGINE_PER_FRAME_UBO_BINDING);
-            ctx2->set_block_binding("ShadowBlock", SHADOW_UBO_BINDING);
-
-            last_shader_handle = dc.final_shader;
-        }
-
         // Per-draw uniforms that can't live in push-constants or the
         // material UBO yet — skinning bone matrices are the main case.
         // Default implementation is a no-op for non-skinned drawables.
@@ -726,8 +699,7 @@ void ColorPass::execute(ExecuteContext& ctx) {
     }
 
     // extra_textures are resolved inside execute_with_data after a ctx2
-    // shader is bound (bind_extra_textures needs an active pipeline to
-    // call bind_sampled_texture + set_uniform_int).
+    // shader is bound so the active pass owns the texture bindings.
 
     // Get output size from the tgfx2 color texture and update rect.
     Rect4i rect = ctx.render_rect;

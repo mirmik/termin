@@ -89,7 +89,6 @@ BUILTIN_FRAME_PASSES: List[Tuple[str, str]] = [
 # Формат: (имя_модуля, имя_класса)
 BUILTIN_POST_EFFECTS: List[Tuple[str, str]] = [
     ("termin.visualization.render.posteffects.blur", "GaussianBlurPass"),
-    ("termin.visualization.render.posteffects.bloom", "BloomEffect"),
     ("termin.visualization.render.posteffects.highlight", "HighlightEffect"),
     ("termin.visualization.render.posteffects.fog", "FogEffect"),
     ("termin.visualization.render.posteffects.gray", "GrayscaleEffect"),

@@ -492,8 +492,6 @@ def _push_draw_state(ctx, mvp, color) -> None:
     color_arr = np.ascontiguousarray(np.array(color, dtype=np.float32), dtype=np.float32)
     pc = np.concatenate((gpu_mvp.reshape(-1), color_arr)).view(np.uint8)
     ctx.set_push_constants(np.ascontiguousarray(pc, dtype=np.uint8))
-    ctx.set_uniform_mat4("u_mvp", gpu_mvp.reshape(-1).tolist(), False)
-    ctx.set_uniform_vec4("u_color", color[0], color[1], color[2], color[3])
 
 
 def _line_color(color: tuple[float, float, float, float]) -> tuple[float, float, float, float]:

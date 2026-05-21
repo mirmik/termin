@@ -797,7 +797,6 @@ void DepthToColorPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs);
     ctx.ctx2->clear_resource_bindings();
     ctx.ctx2->bind_sampled_texture(9, depth_tex);
-    ctx.ctx2->set_uniform_int("u_depth_tex", 9);
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
 }
@@ -867,7 +866,6 @@ void ColorToDepthPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs);
     ctx.ctx2->clear_resource_bindings();
     ctx.ctx2->bind_sampled_texture(9, color_tex);
-    ctx.ctx2->set_uniform_int("u_color_tex", 9);
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
 }

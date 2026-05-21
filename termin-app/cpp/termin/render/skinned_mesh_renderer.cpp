@@ -127,10 +127,6 @@ void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
     ctx2.bind_uniform_buffer_ring(BONE_BLOCK_BINDING,
                                    staging.data(),
                                    static_cast<uint32_t>(staging.size()));
-    // Redundant on Vulkan (binding is baked into the SPIR-V) but needed on
-    // GL when the driver doesn't honour explicit `layout(binding=N)` on
-    // the UBO block — glUniformBlockBinding makes the lookup match.
-    ctx2.set_block_binding("BoneBlock", BONE_BLOCK_BINDING);
 }
 
 TcShader SkinnedMeshRenderer::override_shader(

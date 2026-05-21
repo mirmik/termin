@@ -129,10 +129,8 @@ public:
     // tgfx2-only pass now. Uses ctx2->bind_shader via the
     // tc_shader_ensure_tgfx2 bridge, apply_material_phase_ubo
     // dispatcher for material UBO + textures, wrap_mesh_as_tgfx2 for
-    // per-draw vertex/index buffers, and transitional
-    // set_uniform_*/set_block_binding helpers for legacy plain
-    // uniforms in existing .shader files (u_view, u_projection,
-    // u_model, shadow samplers).
+    // per-draw vertex/index buffers, PerFrame UBOs and push constants
+    // for engine-supplied state.
     //
     // Non-MeshRenderer drawables (SolidPrimitive, Immediate, ...) are
     // currently skipped with a warning — until they expose a tc_mesh
