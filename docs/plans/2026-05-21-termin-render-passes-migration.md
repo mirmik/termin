@@ -282,6 +282,8 @@ Verification:
 
 Goal: remove reliance on app duplicate `execute_context.hpp`.
 
+Status 2026-05-21: done. App duplicate `termin-app/cpp/termin/render/execute_context.hpp` was removed and `ColorPass`/`IdPass` now use canonical `ctx.render_rect`.
+
 Change pass code to canonical fields:
 
 - `ctx.rect` -> `ctx.render_rect`
@@ -305,6 +307,8 @@ Verification:
 ### Phase 6: move lighting upload helpers
 
 Goal: unblock `ColorPass` move.
+
+Status 2026-05-21: done. `lighting_ubo.hpp` and `lighting_upload.hpp` moved to `termin-render-passes/include/termin/lighting/`.
 
 Move:
 
@@ -354,6 +358,8 @@ Verification:
 - `cmake --build build/Release --target termin_render_passes render_lib -j2`
 - editor pipeline import smoke
 - profiler/smoke scene render if practical
+
+Status 2026-05-21: done. `ColorPass`, `ShadowPass`, `SkyBoxPass`, `shadow_camera`, `shader_skinning`, and the coupled `material_ubo_apply` helper now live in `termin-render-passes`. `render_lib` and `termin-android` no longer compile these app sources directly. The Python bindings for `ColorPass`, `ShadowPass`, `SkyBoxPass`, `ShadowMapResult`, `ShadowMapArrayEntry`, and `ShadowMapArrayResource` moved to `termin.render_passes`; app modules re-export from there. During the move, the dead `ColorPass` `CmpRef` camera-name cache was removed because the lookup path is still a TODO and always returns `nullptr`.
 
 ### Phase 8: move picking helper and `IdPass`
 

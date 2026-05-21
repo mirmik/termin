@@ -1,4 +1,4 @@
-#include "shadow_camera.hpp"
+#include "termin/render/shadow_camera.hpp"
 #include <tcbase/tc_log.hpp>
 
 #include <cmath>

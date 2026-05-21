@@ -1,4 +1,4 @@
-#include "color_pass.hpp"
+#include "termin/render/color_pass.hpp"
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_ubo_apply.hpp"
@@ -172,16 +172,9 @@ CameraComponent* ColorPass::find_camera_by_name(tc_scene_handle scene, const std
         return nullptr;
     }
 
-    // Check cache - CmpRef.valid() checks entity liveness
-    if (cached_camera_name_ == name && cached_camera_.valid()) {
-        return cached_camera_.get();
-    }
-
     // Search in scene entities
     // TODO: This requires iterating scene entities and finding CameraComponent
     // For now, return nullptr - camera lookup by name needs scene iteration support
-    cached_camera_name_ = name;
-    cached_camera_.reset();
     return nullptr;
 }
 
@@ -737,7 +730,7 @@ void ColorPass::execute(ExecuteContext& ctx) {
     // call bind_sampled_texture + set_uniform_int).
 
     // Get output size from the tgfx2 color texture and update rect.
-    Rect4i rect = ctx.rect;
+    Rect4i rect = ctx.render_rect;
     if (ctx.ctx2) {
         auto it = ctx.tex2_writes.find(output_res);
         if (it != ctx.tex2_writes.end() && it->second) {

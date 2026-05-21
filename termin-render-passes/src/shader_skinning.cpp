@@ -1,6 +1,6 @@
 // shader_skinning.cpp - Shader skinning injection implementation
 
-#include "shader_skinning.hpp"
+#include "termin/render/shader_skinning.hpp"
 #include <tcbase/tc_log.hpp>
 #include <regex>
 #include <sstream>
@@ -128,18 +128,6 @@ static std::string join_lines(const std::vector<std::string>& lines) {
         oss << lines[i];
     }
     return oss.str();
-}
-
-// Find line number after last layout(...) declaration
-static int find_last_layout_line(const std::vector<std::string>& lines) {
-    int last_layout = -1;
-    std::regex layout_re(R"(\s*layout\s*\()");
-    for (size_t i = 0; i < lines.size(); ++i) {
-        if (std::regex_search(lines[i], layout_re)) {
-            last_layout = static_cast<int>(i);
-        }
-    }
-    return last_layout;
 }
 
 // Find void main() function - returns (main_decl_line, opening_brace_line)

@@ -7,14 +7,14 @@ input locations, and push constants across all engine passes.
 
 - `termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp` — `create_shared_layouts()`
   builds the universal `VkDescriptorSetLayout` / `VkPipelineLayout`.
-- `termin-app/cpp/termin/lighting/lighting_ubo.hpp` — `LightingUBOData`.
+- `termin-render-passes/include/termin/lighting/lighting_ubo.hpp` — `LightingUBOData`.
 - `termin-render/include/termin/render/frame_uniforms.hpp` — `EnginePerFrameStd140`.
-- `termin-app/cpp/termin/render/color_pass.cpp` — `ShadowBlockStd140`.
+- `termin-render-passes/src/color_pass.cpp` — `ShadowBlockStd140`.
 - `termin-app/cpp/termin/render/shader_parser.cpp` — generated `MaterialParams` + `ColorPushBlock`.
-- `termin-app/cpp/termin/render/{shadow,id}_pass.cpp`,
+- `termin-render-passes/src/shadow_pass.cpp`, `termin-app/cpp/termin/render/id_pass.cpp`,
   `termin-components/termin-components-render/src/{depth,normal}_pass.cpp` —
   per-pass `PerFrame` + `PushStd140` variants.
-- `termin-app/cpp/termin/render/shader_skinning.cpp` + `skinned_mesh_renderer.cpp` —
+- `termin-render-passes/src/shader_skinning.cpp` + `termin-app/cpp/termin/render/skinned_mesh_renderer.cpp` —
   `BoneBlock`.
 - `termin-mesh/src/tgfx_types.c` — `tgfx_vertex_layout_*`.
 

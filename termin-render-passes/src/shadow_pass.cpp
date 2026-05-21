@@ -1,4 +1,4 @@
-#include "shadow_pass.hpp"
+#include "termin/render/shadow_pass.hpp"
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 #include "termin/camera/camera_component.hpp"

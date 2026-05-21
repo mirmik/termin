@@ -6,9 +6,15 @@ preload_sdk_libs("nanobind", "termin_render", "termin_render_passes")
 
 from termin.render_passes._render_passes_native import (
     BloomPass,
+    ColorPass,
     DebugTrianglePass,
     GrayscalePass,
     PresentToScreenPass,
+    ShadowMapArrayEntry,
+    ShadowMapArrayResource,
+    ShadowMapResult,
+    ShadowPass,
+    SkyBoxPass,
     TONEMAP_ACES,
     TONEMAP_NONE,
     TONEMAP_REINHARD,
@@ -17,9 +23,15 @@ from termin.render_passes._render_passes_native import (
 
 __all__ = [
     "BloomPass",
+    "ColorPass",
     "DebugTrianglePass",
     "GrayscalePass",
     "PresentToScreenPass",
+    "ShadowMapArrayEntry",
+    "ShadowMapArrayResource",
+    "ShadowMapResult",
+    "ShadowPass",
+    "SkyBoxPass",
     "TONEMAP_ACES",
     "TONEMAP_NONE",
     "TONEMAP_REINHARD",
