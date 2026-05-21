@@ -2,7 +2,7 @@
 #ifndef TC_EDITOR_INTERACTION_H
 #define TC_EDITOR_INTERACTION_H
 
-#include "tc_types.h"
+#include <tcbase/tc_types.h>
 
 #ifdef __cplusplus
 extern "C" {

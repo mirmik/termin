@@ -2,7 +2,7 @@
 #ifndef TC_PICKING_H
 #define TC_PICKING_H
 
-#include "tc_types.h"
+#include <tcbase/tc_types.h>
 
 #ifdef __cplusplus
 extern "C" {

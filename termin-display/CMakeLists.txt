@@ -145,11 +145,9 @@ termin_set_rpath_lib(termin_display)
 target_include_directories(termin_display
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include>
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
 )
 
 if(TERMIN_DISPLAY_HAS_SDL)
@@ -201,7 +199,6 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_display_native PRIVATE termin_display)
     target_include_directories(_display_native PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
     )
     termin_set_rpath_python(_display_native)
     install(TARGETS _display_native DESTINATION lib/python/termin/display)
@@ -212,7 +209,6 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_viewport_native PRIVATE termin_display termin_scene::termin_scene)
     target_include_directories(_viewport_native PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
     )
     termin_set_rpath_python(_viewport_native)
     install(TARGETS _viewport_native DESTINATION lib/python/termin/viewport)
@@ -232,7 +228,6 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_platform_native PRIVATE termin_display)
     target_include_directories(_platform_native PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
-        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
         ${CMAKE_CURRENT_LIST_DIR}/bindings/platform
     )
     if(TERMIN_DISPLAY_HAS_SDL)

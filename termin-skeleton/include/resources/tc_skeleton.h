@@ -1,7 +1,7 @@
 // tc_skeleton.h - Skeleton data structures for skeletal animation
 #pragma once
 
-#include "tc_types.h"
+#include <tcbase/tc_types.h>
 #include <tcbase/tc_binding_types.h>
 #include <tcbase/tc_resource.h>
 
