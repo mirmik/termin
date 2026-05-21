@@ -86,6 +86,7 @@ target_link_libraries(_native PRIVATE
     termin_skeleton::termin_skeleton
     termin_components_skeleton::termin_components_skeleton
     render_lib
+    termin_render_passes::termin_render_passes
     tgfx::termin_graphics
 )
 if(TGFX2_ENABLE_OPENGL)
