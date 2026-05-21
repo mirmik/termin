@@ -4,7 +4,7 @@ from typing import Set, TYPE_CHECKING
 
 from tgfx import TcShader
 from tgfx._tgfx_native import Tgfx2ShaderStage
-from termin._native.render import PresentToScreenPass
+from termin.render_passes import PresentToScreenPass
 from termin.render_framework.python_pass import PythonFramePass
 from termin.inspect import InspectField
 
@@ -300,6 +300,6 @@ class ResolvePass(PythonFramePass):
 
 
 
-# PresentToScreenPass is now imported from C++ (termin._native.render.PresentToScreenPass)
+# PresentToScreenPass is imported from termin-render-passes.
 # Add _get_shader static method for compatibility with blit code
 PresentToScreenPass._get_shader = staticmethod(_get_blit_shader)

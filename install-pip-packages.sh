@@ -136,6 +136,7 @@ PACKAGES=(
     termin-input
     termin-collision
     termin-render
+    termin-render-passes
     termin-navmesh
     termin-physics
     termin-engine

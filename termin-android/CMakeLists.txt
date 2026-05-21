@@ -71,21 +71,23 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_components_render REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_render_passes termin_render_passes::termin_render_passes)
+else()
+    find_package(termin_render_passes REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
 set(TERMIN_ANDROID_SOURCES
     src/bootstrap.cpp
-    ../termin-app/cpp/termin/render/bloom_pass.cpp
     ../termin-app/cpp/termin/render/color_pass.cpp
     ../termin-app/cpp/termin/render/material_ubo_apply.cpp
-    ../termin-app/cpp/termin/render/present_pass.cpp
     ../termin-app/cpp/termin/render/shadow_camera.cpp
     ../termin-app/cpp/termin/render/shadow_pass.cpp
     ../termin-app/cpp/termin/render/shader_skinning.cpp
     ../termin-app/cpp/termin/render/skybox_pass.cpp
-    ../termin-app/cpp/termin/render/tonemap_pass.cpp
 )
 
 set(TERMIN_ANDROID_HEADERS
@@ -97,15 +99,12 @@ add_library(termin_android SHARED ${TERMIN_ANDROID_SOURCES} ${TERMIN_ANDROID_HEA
 add_library(termin_android::termin_android ALIAS termin_android)
 
 set_source_files_properties(
-    ../termin-app/cpp/termin/render/bloom_pass.cpp
     ../termin-app/cpp/termin/render/color_pass.cpp
     ../termin-app/cpp/termin/render/material_ubo_apply.cpp
-    ../termin-app/cpp/termin/render/present_pass.cpp
     ../termin-app/cpp/termin/render/shadow_camera.cpp
     ../termin-app/cpp/termin/render/shadow_pass.cpp
     ../termin-app/cpp/termin/render/shader_skinning.cpp
     ../termin-app/cpp/termin/render/skybox_pass.cpp
-    ../termin-app/cpp/termin/render/tonemap_pass.cpp
     PROPERTIES
         INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../termin-app/cpp"
 )
@@ -130,6 +129,8 @@ target_include_directories(termin_android
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
         $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
 )
 
 target_compile_features(termin_android PUBLIC cxx_std_20)
@@ -152,6 +153,7 @@ target_link_libraries(termin_android
         termin_materials::termin_materials
         termin_components_mesh::termin_components_mesh
         termin_components_render::termin_components_render
+        termin_render_passes::termin_render_passes
     PRIVATE
         ${ANDROID_LOG_LIB}
         ${ANDROID_NATIVE_LIB}

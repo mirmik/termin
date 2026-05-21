@@ -1,5 +1,5 @@
 // debug_triangle_pass.cpp - Built-in pass that draws a diagnostic triangle.
-#include "debug_triangle_pass.hpp"
+#include <termin/render/debug_triangle_pass.hpp>
 
 #include "termin/render/execute_context.hpp"
 #include "tgfx2/render_context.hpp"
