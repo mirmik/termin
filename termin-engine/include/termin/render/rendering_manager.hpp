@@ -31,6 +31,7 @@ extern "C" {
 
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <functional>
 #include <string>
@@ -402,6 +403,7 @@ private:
 
     // Special target providers, keyed by tc_render_target_kind.
     std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
+    std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
 
     // Helper to make key from scene handle
     static uint64_t scene_key(tc_scene_handle h) {

@@ -562,9 +562,24 @@ class RenderingControllerTcgui:
         scene = self._get_scene() if self._get_scene is not None else None
         if scene is not None:
             render_target.scene = scene
+            if kind == "xr_stereo":
+                camera = self._find_first_scene_camera(scene)
+                if camera is not None:
+                    render_target.camera = camera
+                else:
+                    log.warn("[RenderingControllerTcgui] XR render target created without camera: scene has no CameraComponent")
         self._manager.register_managed_render_target(render_target)
         self._refresh_render_targets()
         self._notify_rendering_changed()
+
+    def _find_first_scene_camera(self, scene: "Scene"):
+        from termin.visualization.core.camera import CameraComponent
+
+        for entity in scene.entities:
+            camera = entity.get_component(CameraComponent)
+            if camera is not None:
+                return camera
+        return None
 
     def _on_remove_render_target_requested(self, render_target) -> None:
         scene = self._get_scene() if self._get_scene is not None else None

@@ -137,10 +137,14 @@ class _FakeUi:
         self.layout_requests += 1
 
 
-def test_render_target_inspector_reads_camera_from_render_target_scene(monkeypatch):
+def _install_camera_component_stub(monkeypatch):
     camera_module = types.ModuleType("termin.visualization.core.camera")
     camera_module.CameraComponent = _CameraComponent
     monkeypatch.setitem(sys.modules, "termin.visualization.core.camera", camera_module)
+
+
+def test_render_target_inspector_reads_camera_from_render_target_scene(monkeypatch):
+    _install_camera_component_stub(monkeypatch)
 
     editor_camera = _CameraComponent()
     game_camera = _CameraComponent()
@@ -249,9 +253,12 @@ def test_render_target_inspector_requests_layout_when_manual_size_visibility_cha
     assert fake_ui.layout_requests > before
 
 
-def test_render_target_inspector_hides_texture_fields_for_xr_target():
-    scene = _Scene("Scene", 1, [])
-    render_target = _RenderTarget(scene, None)
+def test_render_target_inspector_hides_texture_fields_for_xr_target(monkeypatch):
+    _install_camera_component_stub(monkeypatch)
+
+    camera = _CameraComponent()
+    scene = _Scene("Scene", 1, [_Entity("Camera", camera)])
+    render_target = _RenderTarget(scene, camera)
     render_target.kind = "xr_stereo"
 
     inspector = RenderTargetInspectorTcgui(_ResourceManager())
@@ -259,7 +266,8 @@ def test_render_target_inspector_hides_texture_fields_for_xr_target():
     inspector.set_render_target(render_target, scene)
 
     assert inspector._kind_combo.selected_index == 1
-    assert inspector._camera_combo.visible is False
+    assert inspector._camera_combo.visible is True
+    assert inspector._camera_combo.selected_index == 1
     assert inspector._dynamic_resolution.visible is False
     assert inspector._color_format.visible is False
     assert inspector._depth_format.visible is False
@@ -267,6 +275,23 @@ def test_render_target_inspector_hides_texture_fields_for_xr_target():
     assert inspector._height.visible is False
     assert inspector._pipeline_combo.visible is True
     assert inspector._layer_mask_widget.visible is True
+
+
+def test_render_target_inspector_keeps_camera_when_switching_to_xr_target(monkeypatch):
+    _install_camera_component_stub(monkeypatch)
+
+    camera = _CameraComponent()
+    scene = _Scene("Scene", 1, [_Entity("Camera", camera)])
+    render_target = _RenderTarget(scene, camera)
+
+    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector.set_scene_getter(lambda: [scene])
+    inspector.set_render_target(render_target, scene)
+    inspector._on_kind_changed(1, "XR Stereo")
+
+    assert render_target.kind == "xr_stereo"
+    assert render_target.camera is camera
+    assert inspector._camera_combo.visible is True
 
 
 def test_texture_picker_with_scene_getter_includes_live_render_target_pool(monkeypatch):

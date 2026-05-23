@@ -53,11 +53,14 @@
 extern "C" {
 void tc_inspect_kind_core_init(void);
 #  include <core/tc_component.h>
+#  include <core/tc_entity_pool.h>
+#  include <core/tc_entity_pool_registry.h>
 #  include <core/tc_scene_render_mount.h>
 #  include <core/tc_scene_render_state.h>
 #  include <inspect/tc_inspect_pass_adapter.h>
 #  include <render/tc_pass.h>
 #  include <render/tc_pipeline.h>
+#  include <render/tc_render_target.h>
 #  include <termin_scene/termin_scene.h>
 #  include <tgfx/resources/tc_mesh_registry.h>
 #  include <tgfx/resources/tc_primitive_mesh.h>
@@ -702,13 +705,81 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
     return pipeline;
 }
 
-termin::CameraComponent* find_runtime_camera(termin::TcSceneRef scene) {
+const tc_render_target_config* find_xr_render_target_config(termin::TcSceneRef scene) {
+    tc_scene_render_mount* mount = tc_scene_render_mount_get(scene.handle());
+    if (!mount) {
+        return nullptr;
+    }
+    for (size_t i = 0; i < mount->render_target_config_count; ++i) {
+        const tc_render_target_config& config = mount->render_target_configs[i];
+        tc_render_target_kind kind = TC_RENDER_TARGET_TEXTURE_2D;
+        if (config.kind && tc_render_target_kind_from_string(config.kind, &kind)
+                && kind == TC_RENDER_TARGET_XR_STEREO
+                && config.enabled) {
+            return &config;
+        }
+    }
+    return nullptr;
+}
+
+termin::CameraComponent* camera_component_from_entity_uuid(termin::TcSceneRef scene, const char* uuid) {
+    if (!uuid || uuid[0] == '\0') {
+        return nullptr;
+    }
+    tc_entity_pool* pool = tc_scene_entity_pool(scene.handle());
+    if (!pool) {
+        return nullptr;
+    }
+    tc_entity_id entity_id = tc_entity_pool_find_by_uuid(pool, uuid);
+    if (!tc_entity_id_valid(entity_id)) {
+        return nullptr;
+    }
+    tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(pool);
+    termin::Entity entity(tc_entity_handle_make(pool_handle, entity_id));
+    tc_component* raw = entity.get_component_by_type_name("CameraComponent");
+    if (!raw) {
+        return nullptr;
+    }
+    termin::CxxComponent* cxx = termin::CxxComponent::from_tc(raw);
+    return dynamic_cast<termin::CameraComponent*>(cxx);
+}
+
+termin::CameraComponent* find_first_runtime_camera(termin::TcSceneRef scene) {
     tc_component* raw = tc_scene_first_component_of_type(scene.handle(), "CameraComponent");
     if (!raw) {
         return nullptr;
     }
     termin::CxxComponent* cxx = termin::CxxComponent::from_tc(raw);
     return dynamic_cast<termin::CameraComponent*>(cxx);
+}
+
+termin::CameraComponent* resolve_runtime_camera(
+    termin::TcSceneRef scene,
+    const tc_render_target_config* xr_config
+) {
+    if (xr_config) {
+        const char* target_name = xr_config->name ? xr_config->name : "XRStereoTarget";
+        if (!xr_config->camera_uuid || xr_config->camera_uuid[0] == '\0') {
+            tc_log_error("[OpenXR scene] xr_stereo render target '%s' has no camera_uuid", target_name);
+            return nullptr;
+        }
+        termin::CameraComponent* camera = camera_component_from_entity_uuid(scene, xr_config->camera_uuid);
+        if (!camera) {
+            tc_log_error(
+                "[OpenXR scene] xr_stereo render target '%s' camera_uuid '%s' does not resolve to CameraComponent",
+                target_name,
+                xr_config->camera_uuid
+            );
+            return nullptr;
+        }
+        return camera;
+    }
+
+    tc_log(
+        TC_LOG_WARN,
+        "[OpenXR scene] no xr_stereo render target config found; using first CameraComponent as XR origin"
+    );
+    return find_first_runtime_camera(scene);
 }
 
 void register_openxr_scene_runtime() {
@@ -728,10 +799,23 @@ void register_openxr_scene_runtime() {
 }
 
 struct OpenXRRuntimeScene {
+    struct EyeFrame {
+        tgfx::TextureHandle color_texture;
+        tgfx::TextureHandle depth_texture;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        tgfx::PixelFormat color_format = tgfx::PixelFormat::Undefined;
+        XrView view{};
+        uint32_t eye_index = 0;
+        bool valid = false;
+    };
+
     std::unique_ptr<termin::EngineCore> engine;
     termin::TcSceneRef scene;
     termin::RenderPipeline pipeline;
+    tc_render_target_handle xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
     termin::CameraComponent* authoring_camera = nullptr;
+    EyeFrame active_eye_frame;
     bool ready = false;
 
     bool load(const std::string& asset_root) {
@@ -779,10 +863,11 @@ struct OpenXRRuntimeScene {
             return false;
         }
 
-        authoring_camera = find_runtime_camera(package.scene);
+        const tc_render_target_config* xr_config = find_xr_render_target_config(package.scene);
+        authoring_camera = resolve_runtime_camera(package.scene, xr_config);
         if (!authoring_camera) {
-            log_error("OpenXR scene", "runtime package loaded but has no CameraComponent");
-            tc_log_error("[OpenXR scene] runtime package loaded but has no CameraComponent");
+            log_error("OpenXR scene", "runtime package loaded but has no XR camera origin");
+            tc_log_error("[OpenXR scene] runtime package loaded but has no XR camera origin");
             package.scene.destroy();
             engine.reset();
             return false;
@@ -798,6 +883,8 @@ struct OpenXRRuntimeScene {
         }
 
         scene = package.scene;
+        create_xr_render_target();
+        register_context_provider();
         ready = true;
         __android_log_print(
             ANDROID_LOG_INFO,
@@ -810,71 +897,163 @@ struct OpenXRRuntimeScene {
         return true;
     }
 
+    std::string choose_xr_render_target_name(const tc_render_target_config* config) const {
+        if (config && config->name && config->name[0] != '\0') {
+            return config->name;
+        }
+        return "XRStereoTarget";
+    }
+
+    void create_xr_render_target() {
+        const tc_render_target_config* config = find_xr_render_target_config(scene);
+        const std::string name = choose_xr_render_target_name(config);
+        xr_render_target = tc_render_target_new(name.c_str());
+        tc_render_target_set_kind(xr_render_target, TC_RENDER_TARGET_XR_STEREO);
+        tc_render_target_set_scene(xr_render_target, scene.handle());
+        tc_render_target_set_pipeline(xr_render_target, pipeline.handle());
+        tc_render_target_set_enabled(xr_render_target, true);
+        if (config) {
+            tc_render_target_set_layer_mask(xr_render_target, config->layer_mask);
+            tc_render_target_set_clear_color_enabled(xr_render_target, config->clear_color);
+            tc_render_target_set_clear_color_value(
+                xr_render_target,
+                config->clear_color_value[0],
+                config->clear_color_value[1],
+                config->clear_color_value[2],
+                config->clear_color_value[3]
+            );
+            tc_render_target_set_clear_depth_enabled(xr_render_target, config->clear_depth);
+            tc_render_target_set_clear_depth_value(xr_render_target, config->clear_depth_value);
+        } else {
+            tc_render_target_set_clear_color_enabled(xr_render_target, true);
+            tc_render_target_set_clear_color_value(xr_render_target, 0.015f, 0.018f, 0.024f, 1.0f);
+            tc_render_target_set_clear_depth_enabled(xr_render_target, true);
+            tc_render_target_set_clear_depth_value(xr_render_target, 1.0f);
+        }
+        engine->rendering_manager.register_managed_render_target(xr_render_target);
+    }
+
+    void register_context_provider() {
+        engine->rendering_manager.set_render_target_context_provider(
+            TC_RENDER_TARGET_XR_STEREO,
+            [this](
+                termin::RenderingManager&,
+                tc_render_target_handle render_target,
+                const std::string& base_context_name,
+                tc_entity_handle internal_entities,
+                std::unordered_map<std::string, termin::RenderTargetContext>& contexts,
+                std::string& default_context_name
+            ) {
+                return build_active_eye_context(
+                    render_target,
+                    base_context_name,
+                    internal_entities,
+                    contexts,
+                    default_context_name
+                );
+            }
+        );
+    }
+
+    bool build_active_eye_context(
+        tc_render_target_handle render_target,
+        const std::string& base_context_name,
+        tc_entity_handle internal_entities,
+        std::unordered_map<std::string, termin::RenderTargetContext>& contexts,
+        std::string& default_context_name
+    ) {
+        if (!tc_render_target_handle_eq(render_target, xr_render_target)) {
+            return false;
+        }
+        if (!active_eye_frame.valid || !authoring_camera) {
+            return false;
+        }
+
+        const EyeFrame& eye = active_eye_frame;
+        const std::string name =
+            (base_context_name.empty() ? "XRStereoTarget" : base_context_name) +
+            (eye.eye_index == 0 ? ".left" : ".right");
+
+        termin::RenderTargetContext target;
+        target.name = name;
+        target.render_rect = termin::Rect4i{
+            0,
+            0,
+            static_cast<int>(eye.width),
+            static_cast<int>(eye.height)
+        };
+        target.internal_entities = internal_entities;
+        target.output_color_tex = eye.color_texture;
+        target.output_depth_tex = eye.depth_texture;
+        target.output_color_format = eye.color_format;
+        target.output_depth_format = tgfx::PixelFormat::D32F;
+        target.clear_color_enabled = tc_render_target_get_clear_color_enabled(render_target);
+        tc_render_target_get_clear_color_value(render_target, target.clear_color);
+        target.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(render_target);
+        target.clear_depth = tc_render_target_get_clear_depth_value(render_target);
+        termin::Mat44 rig_view = authoring_camera->get_view_matrix();
+        termin::Mat44 scene_from_rig = rig_view.inverse();
+        termin::Vec3 eye_position_in_rig = xr_position_to_scene_position(eye.view.pose.position);
+
+        target.camera.view =
+            mat44_from_float_array(make_view_matrix_from_xr_pose(eye.view.pose)) *
+            make_scene_to_xr_matrix() *
+            rig_view;
+        target.camera.projection =
+            mat44_from_float_array(make_xr_projection_matrix_vulkan(
+                eye.view.fov,
+                static_cast<float>(authoring_camera->near_clip),
+                static_cast<float>(authoring_camera->far_clip)
+            ));
+        target.camera.position = scene_from_rig.transform_point(eye_position_in_rig);
+        target.camera.near_clip = authoring_camera->near_clip;
+        target.camera.far_clip = authoring_camera->far_clip;
+        target.layer_mask = authoring_camera->layer_mask & tc_render_target_get_layer_mask(render_target);
+
+        contexts.emplace(name, std::move(target));
+        default_context_name = name;
+        return true;
+    }
+
     void render_eye(
         tgfx::TextureHandle color_texture,
         tgfx::TextureHandle depth_texture,
         uint32_t width,
         uint32_t height,
         tgfx::PixelFormat color_format,
-        const XrView& view
+        const XrView& view,
+        uint32_t eye_index
     ) {
         if (!ready || !engine || !authoring_camera) {
             return;
         }
-
-        termin::RenderEngine* render_engine = engine->rendering_manager.render_engine();
-        if (!render_engine) {
-            tc_log_error("[OpenXR scene] RenderEngine is unavailable");
+        if (!tc_render_target_handle_valid(xr_render_target)) {
+            tc_log_error("[OpenXR scene] XR render target is unavailable");
             return;
         }
 
-        termin::RenderTargetContext target;
-        target.name = "Main";
-        target.render_rect = termin::Rect4i{
-            0,
-            0,
-            static_cast<int>(width),
-            static_cast<int>(height)
-        };
-        target.output_color_tex = color_texture;
-        target.output_depth_tex = depth_texture;
-        target.output_color_format = color_format;
-        target.output_depth_format = tgfx::PixelFormat::D32F;
-        target.clear_color_enabled = true;
-        target.clear_color[0] = 0.015f;
-        target.clear_color[1] = 0.018f;
-        target.clear_color[2] = 0.024f;
-        target.clear_color[3] = 1.0f;
-        target.clear_depth_enabled = true;
-        target.clear_depth = 1.0f;
-        target.camera.view =
-            mat44_from_float_array(make_view_matrix_from_xr_pose(view.pose)) *
-            make_scene_to_xr_matrix();
-        target.camera.projection =
-            mat44_from_float_array(make_xr_projection_matrix_vulkan(
-                view.fov,
-                static_cast<float>(authoring_camera->near_clip),
-                static_cast<float>(authoring_camera->far_clip)
-            ));
-        target.camera.position = xr_position_to_scene_position(view.pose.position);
-        target.camera.near_clip = authoring_camera->near_clip;
-        target.camera.far_clip = authoring_camera->far_clip;
-        target.layer_mask = authoring_camera->layer_mask;
-
-        std::unordered_map<std::string, termin::RenderTargetContext> targets;
-        targets.emplace(target.name, target);
-        std::vector<termin::Light> lights;
-
-        render_engine->render_scene_pipeline_offscreen(
-            pipeline,
-            scene.handle(),
-            targets,
-            lights,
-            target.name
-        );
+        active_eye_frame.color_texture = color_texture;
+        active_eye_frame.depth_texture = depth_texture;
+        active_eye_frame.width = width;
+        active_eye_frame.height = height;
+        active_eye_frame.color_format = color_format;
+        active_eye_frame.view = view;
+        active_eye_frame.eye_index = eye_index;
+        active_eye_frame.valid = true;
+        engine->rendering_manager.render_render_target_offscreen(xr_render_target);
+        active_eye_frame.valid = false;
     }
 
     void destroy() {
+        active_eye_frame = {};
+        if (engine) {
+            engine->rendering_manager.clear_render_target_context_provider(TC_RENDER_TARGET_XR_STEREO);
+            if (tc_render_target_handle_valid(xr_render_target)) {
+                engine->rendering_manager.unregister_managed_render_target(xr_render_target);
+                tc_render_target_free(xr_render_target);
+            }
+        }
+        xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
         pipeline = {};
         authoring_camera = nullptr;
         if (scene.valid()) {
@@ -1414,7 +1593,8 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                             swapchain_create_info.width,
                             swapchain_create_info.height,
                             tgfx_color_format,
-                            views[eye]
+                            views[eye],
+                            eye
                         );
                     } else {
                         auto cmd = render_device->create_command_list();
