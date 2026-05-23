@@ -81,10 +81,14 @@ if(ANDROID)
     find_library(ANDROID_LOG_LIB log REQUIRED)
     find_library(ANDROID_NATIVE_LIB android REQUIRED)
     find_library(ANDROID_VULKAN_LIB vulkan REQUIRED)
+    find_library(ANDROID_EGL_LIB EGL REQUIRED)
+    find_library(ANDROID_GLESV3_LIB GLESv3 REQUIRED)
     target_link_libraries(termin_openxr PRIVATE
         ${ANDROID_LOG_LIB}
         ${ANDROID_NATIVE_LIB}
         ${ANDROID_VULKAN_LIB}
+        ${ANDROID_EGL_LIB}
+        ${ANDROID_GLESV3_LIB}
     )
 endif()
 

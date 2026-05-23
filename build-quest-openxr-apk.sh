@@ -1,11 +1,11 @@
 #!/bin/bash
-# Build the experimental Quest/OpenXR APK entry point without changing build-android-apk.sh.
+# Build the experimental Quest/OpenXR APK entry point.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLATFORM_DIR="$SCRIPT_DIR/termin-android/platform"
-ANDROID_GRADLE_BUILD_ROOT="$SCRIPT_DIR/build/android-gradle"
+PLATFORM_DIR="$SCRIPT_DIR/termin-openxr/platform"
+ANDROID_GRADLE_BUILD_ROOT="$SCRIPT_DIR/build/android-gradle-openxr"
 
 ANDROID_ABI_VALUE="${ANDROID_ABI:-arm64-v8a}"
 ANDROID_PLATFORM_VALUE="${ANDROID_PLATFORM:-android-26}"
@@ -114,7 +114,7 @@ if [[ "$INSTALL_APK" -eq 1 ]] && ! command -v "$ADB_BIN_VALUE" >/dev/null 2>&1; 
 fi
 
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$SCRIPT_DIR/build/gradle-home}"
-GRADLE_PROJECT_CACHE_DIR="$ANDROID_GRADLE_BUILD_ROOT/project-cache-openxr"
+GRADLE_PROJECT_CACHE_DIR="$ANDROID_GRADLE_BUILD_ROOT/project-cache"
 APK_PATH="$ANDROID_GRADLE_BUILD_ROOT/app/outputs/apk/debug/app-debug.apk"
 
 echo ""
@@ -139,19 +139,18 @@ cd "$PLATFORM_DIR"
     -PterminAndroidSdkRoot="$ANDROID_SDK_ROOT_VALUE" \
     -PterminAndroidAbi="$ANDROID_ABI_VALUE" \
     -PterminAndroidPlatform="$ANDROID_PLATFORM_VALUE" \
-    -PterminAndroidNdkVersion="$ANDROID_NDK_VERSION_VALUE" \
-    -PterminQuestOpenXr=true
+    -PterminAndroidNdkVersion="$ANDROID_NDK_VERSION_VALUE"
 
 rm -rf "$PLATFORM_DIR/.gradle" "$PLATFORM_DIR/app/.cxx" "$PLATFORM_DIR/app/build"
 
 echo ""
 echo "APK: $APK_PATH"
-echo "OpenXR Activity: org.termin.android/.TerminOpenXRActivity"
+echo "OpenXR Activity: org.termin.openxr/.TerminOpenXRActivity"
 
 if [[ "$INSTALL_APK" -eq 1 ]]; then
     "$ADB_BIN_VALUE" install -r "$APK_PATH"
 fi
 
 if [[ "$LAUNCH_OPENXR" -eq 1 ]]; then
-    "$ADB_BIN_VALUE" shell am start -n org.termin.android/.TerminOpenXRActivity
+    "$ADB_BIN_VALUE" shell am start -n org.termin.openxr/.TerminOpenXRActivity
 fi
