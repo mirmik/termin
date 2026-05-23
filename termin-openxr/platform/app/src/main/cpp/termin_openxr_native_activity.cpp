@@ -1,13 +1,20 @@
 #include <android/input.h>
 #include <android/looper.h>
 #include <android/log.h>
+#include <android/asset_manager.h>
 #include <android/native_activity.h>
 #include <jni.h>
 
 #include <atomic>
 #include <chrono>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 #include <mutex>
+#include <string>
 #include <thread>
+#include <vector>
+#include <sys/stat.h>
 
 #include <termin/openxr/openxr_runtime.hpp>
 
@@ -18,6 +25,7 @@ constexpr const char* kLogTag = "TerminOpenXRActivity";
 struct NativeActivityState {
     ANativeActivity* activity = nullptr;
     jobject activity_ref = nullptr;
+    std::string asset_root;
     std::atomic<bool> resumed{false};
     std::atomic<bool> focused{false};
     std::atomic<bool> native_running{false};
@@ -40,6 +48,172 @@ JNIEnv* attach_env(JavaVM* vm) {
         return nullptr;
     }
     return env;
+}
+
+bool ensure_directory(const std::string& path) {
+    if (path.empty()) {
+        return false;
+    }
+    std::string current;
+    size_t index = 0;
+    if (path[0] == '/') {
+        current = "/";
+        index = 1;
+    }
+    while (index <= path.size()) {
+        size_t next = path.find('/', index);
+        std::string part = path.substr(index, next == std::string::npos ? std::string::npos : next - index);
+        if (!part.empty()) {
+            if (current.size() > 1) {
+                current += "/";
+            }
+            current += part;
+            if (mkdir(current.c_str(), 0700) != 0 && errno != EEXIST) {
+                __android_log_print(
+                    ANDROID_LOG_ERROR,
+                    kLogTag,
+                    "mkdir failed '%s': %s",
+                    current.c_str(),
+                    std::strerror(errno)
+                );
+                return false;
+            }
+        }
+        if (next == std::string::npos) {
+            break;
+        }
+        index = next + 1;
+    }
+    return true;
+}
+
+bool copy_asset_file(AAssetManager* assets, const std::string& asset_path, const std::string& target_path) {
+    AAsset* asset = AAssetManager_open(assets, asset_path.c_str(), AASSET_MODE_STREAMING);
+    if (!asset) {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "open asset failed '%s'", asset_path.c_str());
+        return false;
+    }
+
+    const size_t slash = target_path.find_last_of('/');
+    if (slash != std::string::npos && !ensure_directory(target_path.substr(0, slash))) {
+        AAsset_close(asset);
+        return false;
+    }
+
+    FILE* out = std::fopen(target_path.c_str(), "wb");
+    if (!out) {
+        __android_log_print(
+            ANDROID_LOG_ERROR,
+            kLogTag,
+            "open target failed '%s': %s",
+            target_path.c_str(),
+            std::strerror(errno)
+        );
+        AAsset_close(asset);
+        return false;
+    }
+
+    std::vector<char> buffer(8192);
+    int read = 0;
+    bool ok = true;
+    while ((read = AAsset_read(asset, buffer.data(), buffer.size())) > 0) {
+        if (std::fwrite(buffer.data(), 1, static_cast<size_t>(read), out) != static_cast<size_t>(read)) {
+            __android_log_print(
+                ANDROID_LOG_ERROR,
+                kLogTag,
+                "write target failed '%s': %s",
+                target_path.c_str(),
+                std::strerror(errno)
+            );
+            ok = false;
+            break;
+        }
+    }
+    if (read < 0) {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "read asset failed '%s'", asset_path.c_str());
+        ok = false;
+    }
+
+    std::fclose(out);
+    AAsset_close(asset);
+    return ok;
+}
+
+bool copy_asset_tree(AAssetManager* assets, const std::string& asset_path, const std::string& target_path) {
+    AAssetDir* dir = AAssetManager_openDir(assets, asset_path.c_str());
+    if (!dir) {
+        return copy_asset_file(assets, asset_path, target_path);
+    }
+
+    std::vector<std::string> children;
+    const char* child = nullptr;
+    while ((child = AAssetDir_getNextFileName(dir)) != nullptr) {
+        children.emplace_back(child);
+    }
+    AAssetDir_close(dir);
+
+    if (children.empty()) {
+        if (asset_path.empty()) {
+            return ensure_directory(target_path);
+        }
+        return copy_asset_file(assets, asset_path, target_path);
+    }
+
+    bool has_children = false;
+    bool ok = ensure_directory(target_path);
+    for (const std::string& child_name : children) {
+        has_children = true;
+        std::string child_asset = asset_path.empty() ? child_name : asset_path + "/" + child_name;
+        std::string child_target = target_path + "/" + child_name;
+        if (!copy_asset_tree(assets, child_asset, child_target)) {
+            ok = false;
+        }
+    }
+
+    if (!has_children && !asset_path.empty()) {
+        return copy_asset_file(assets, asset_path, target_path);
+    }
+    return ok;
+}
+
+bool read_asset_text(AAssetManager* assets, const std::string& asset_path, std::string& out) {
+    AAsset* asset = AAssetManager_open(assets, asset_path.c_str(), AASSET_MODE_BUFFER);
+    if (!asset) {
+        return false;
+    }
+    const off_t length = AAsset_getLength(asset);
+    out.resize(static_cast<size_t>(length));
+    const int read = AAsset_read(asset, out.data(), out.size());
+    AAsset_close(asset);
+    return read == length;
+}
+
+bool copy_asset_index(AAssetManager* assets, const std::string& target_root) {
+    std::string index;
+    if (!read_asset_text(assets, "termin_asset_index.txt", index)) {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "termin_asset_index.txt not found");
+        return false;
+    }
+    if (!ensure_directory(target_root)) {
+        return false;
+    }
+
+    bool ok = true;
+    size_t pos = 0;
+    while (pos < index.size()) {
+        size_t end = index.find('\n', pos);
+        if (end == std::string::npos) {
+            end = index.size();
+        }
+        std::string path = index.substr(pos, end - pos);
+        if (!path.empty() && path != "termin_asset_index.txt") {
+            if (!copy_asset_file(assets, path, target_root + "/" + path)) {
+                ok = false;
+            }
+        }
+        pos = end + 1;
+    }
+    return ok;
 }
 
 int consume_input_events(int, int, void* data) {
@@ -101,7 +275,11 @@ void schedule_start_if_ready() {
         }
 
         termin::openxr::OpenXRAndroidStartResult result =
-            termin::openxr::start_android_color_smoke(g_state.activity->vm, g_state.activity_ref);
+            termin::openxr::start_android_scene_smoke(
+                g_state.activity->vm,
+                g_state.activity_ref,
+                g_state.asset_root.c_str()
+            );
         g_state.native_running.store(result.started);
         __android_log_print(
             result.started ? ANDROID_LOG_INFO : ANDROID_LOG_ERROR,
@@ -149,6 +327,7 @@ void on_destroy(ANativeActivity* activity) {
     }
     g_state.activity = nullptr;
     g_state.activity_ref = nullptr;
+    g_state.asset_root.clear();
     g_state.resumed.store(false);
     g_state.focused.store(false);
     g_state.native_running.store(false);
@@ -217,6 +396,27 @@ extern "C" void ANativeActivity_onCreate(
     if (!g_state.activity_ref) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "NewGlobalRef(activity) failed");
         return;
+    }
+    g_state.asset_root = activity->internalDataPath
+        ? std::string(activity->internalDataPath) + "/assets"
+        : "";
+    if (g_state.asset_root.empty()) {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "internalDataPath is empty");
+    } else if (!copy_asset_index(activity->assetManager, g_state.asset_root) &&
+               !copy_asset_tree(activity->assetManager, "", g_state.asset_root)) {
+        __android_log_print(
+            ANDROID_LOG_ERROR,
+            kLogTag,
+            "asset copy failed into '%s'",
+            g_state.asset_root.c_str()
+        );
+    } else {
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kLogTag,
+            "assets copied into '%s'",
+            g_state.asset_root.c_str()
+        );
     }
 
     activity->callbacks->onStart = on_start;

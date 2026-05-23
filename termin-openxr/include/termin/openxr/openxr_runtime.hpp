@@ -37,6 +37,11 @@ TERMIN_OPENXR_API OpenXRBuildInfo build_info();
 TERMIN_OPENXR_API const char* runtime_intent();
 TERMIN_OPENXR_API OpenXRAndroidProbeResult probe_android_runtime(void* java_vm, void* activity_or_context);
 TERMIN_OPENXR_API OpenXRAndroidStartResult start_android_color_smoke(void* java_vm, void* activity_or_context);
+TERMIN_OPENXR_API OpenXRAndroidStartResult start_android_scene_smoke(
+    void* java_vm,
+    void* activity_or_context,
+    const char* asset_root
+);
 TERMIN_OPENXR_API void stop_android_color_smoke();
 
 } // namespace termin::openxr
