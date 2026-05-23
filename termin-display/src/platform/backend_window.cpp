@@ -392,17 +392,6 @@ void SDLBackendWindow::present(tgfx::TextureHandle color_tex) {
     auto [w, h] = framebuffer_size();
     if (w <= 0 || h <= 0) return;
 
-    static uint64_t s_present_calls = 0;
-    ++s_present_calls;
-    const bool trace = s_present_calls <= 40 || (s_present_calls % 120) == 0;
-    if (trace) {
-        tc_log(TC_LOG_INFO,
-               "[BackendWindow] present#%llu begin backend=%s tex=%u size=%dx%d",
-               (unsigned long long)s_present_calls,
-               impl_->backend == tgfx::BackendType::OpenGL ? "opengl" : "vulkan",
-               color_tex.id, w, h);
-    }
-
     if (impl_->backend == tgfx::BackendType::OpenGL) {
 #ifdef TGFX2_HAS_OPENGL
         // Secondary windows borrow the primary's GL context. Find it:
@@ -413,23 +402,14 @@ void SDLBackendWindow::present(tgfx::TextureHandle color_tex) {
                 ? impl_->shared_ctx_owner->impl_->gl_context
                 : nullptr);
         if (!gl_ctx) {
-            if (trace) tc_log(TC_LOG_ERROR, "[BackendWindow] present#%llu: no GL context",
-                             (unsigned long long)s_present_calls);
+            tc_log(TC_LOG_ERROR, "[BackendWindow] present: no GL context");
             return;
         }
-        if (trace) tc_log(TC_LOG_INFO, "[BackendWindow] present#%llu: SDL_GL_MakeCurrent begin",
-                          (unsigned long long)s_present_calls);
         SDL_GL_MakeCurrent(window_, gl_ctx);
-        if (trace) tc_log(TC_LOG_INFO, "[BackendWindow] present#%llu: GL blit begin",
-                          (unsigned long long)s_present_calls);
 
         auto* gl_dev = static_cast<tgfx::OpenGLRenderDevice*>(impl_->device_ref);
         gl_dev->present_to_default_framebuffer(color_tex, w, h);
-        if (trace) tc_log(TC_LOG_INFO, "[BackendWindow] present#%llu: SDL_GL_SwapWindow begin",
-                          (unsigned long long)s_present_calls);
         SDL_GL_SwapWindow(window_);
-        if (trace) tc_log(TC_LOG_INFO, "[BackendWindow] present#%llu: GL present end",
-                          (unsigned long long)s_present_calls);
 #endif
     }
 #ifdef TGFX2_HAS_VULKAN
@@ -442,8 +422,7 @@ void SDLBackendWindow::present(tgfx::TextureHandle color_tex) {
                                         ? impl_->secondary_swapchain.get()
                                         : vk_dev->swapchain();
         if (!sc) {
-            if (trace) tc_log(TC_LOG_ERROR, "[BackendWindow] present#%llu: no Vulkan swapchain",
-                             (unsigned long long)s_present_calls);
+            tc_log(TC_LOG_ERROR, "[BackendWindow] present: no Vulkan swapchain");
             return;
         }
 
@@ -451,31 +430,16 @@ void SDLBackendWindow::present(tgfx::TextureHandle color_tex) {
         // the swapchain before acquiring.
         if (sc->width() != static_cast<uint32_t>(w) ||
             sc->height() != static_cast<uint32_t>(h)) {
-            if (trace) tc_log(TC_LOG_INFO,
-                              "[BackendWindow] present#%llu: swapchain recreate begin %dx%d",
-                              (unsigned long long)s_present_calls, w, h);
             sc->recreate(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
-            if (trace) tc_log(TC_LOG_INFO,
-                              "[BackendWindow] present#%llu: swapchain recreate end",
-                              (unsigned long long)s_present_calls);
         }
 
-        if (trace) tc_log(TC_LOG_INFO,
-                          "[BackendWindow] present#%llu: compose_and_present begin",
-                          (unsigned long long)s_present_calls);
         if (sc->compose_and_present(color_tex)) {
-            if (trace) tc_log(TC_LOG_INFO,
-                              "[BackendWindow] present#%llu: compose requested recreate",
-                              (unsigned long long)s_present_calls);
             // OUT_OF_DATE / SUBOPTIMAL after present — schedule
             // recreate for next frame by resampling current size.
             int nw = 0, nh = 0;
             SDL_Vulkan_GetDrawableSize(window_, &nw, &nh);
             sc->recreate(static_cast<uint32_t>(nw), static_cast<uint32_t>(nh));
         }
-        if (trace) tc_log(TC_LOG_INFO,
-                          "[BackendWindow] present#%llu: Vulkan present end",
-                          (unsigned long long)s_present_calls);
     }
 #endif
 }

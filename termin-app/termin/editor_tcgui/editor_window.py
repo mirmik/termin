@@ -129,7 +129,6 @@ class EditorWindowTcgui:
         self._editor_attachment = None
         self._rendering_controller = None
         self._editor_viewport_input_managers: list = []
-        self._ar_logged: bool = False
         # Owns DisplayInputRouter instances that route surface events to the
         # per-viewport EditorViewportInputManagers. Populated by
         # _attach_editor_input_router() after the editor display's input
@@ -2502,9 +2501,6 @@ class EditorWindowTcgui:
         self._process_pending_scene_tree_rebuild()
 
     def _after_render(self) -> None:
-        if not self._ar_logged:
-            log.info(f"[DBG _after_render] first call, interaction_system={self._interaction_system}")
-            self._ar_logged = True
         if self._spacemouse is not None:
             self._spacemouse.poll()
         if self._interaction_system is not None:

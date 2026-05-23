@@ -30,7 +30,6 @@ from tgfx._tgfx_native import (
     CULL_NONE,
 )
 from tcbase.profiler import Profiler
-from tcbase import log
 
 _prof = Profiler.instance()
 
@@ -211,7 +210,6 @@ class UIRenderer:
         # into — either _offscreen_color_tex (standalone) or the host's
         # target_color (in-scene).
         self._current_target: Tgfx2TextureHandle | None = None
-        self._trace_frame: int = 0
 
     # ------------------------------------------------------------------
     # Font property
@@ -326,22 +324,11 @@ class UIRenderer:
         """
         self._viewport_w = int(viewport_w)
         self._viewport_h = int(viewport_h)
-        self._trace_frame += 1
-        trace = self._trace_frame <= 40 or self._trace_frame % 120 == 0
-        if trace:
-            log.info(
-                f"[UIRenderer] compose#{self._trace_frame}: begin "
-                f"size={self._viewport_w}x{self._viewport_h} "
-                f"external_target={target_color is not None}")
 
         using_external_target = target_color is not None
 
-        if trace:
-            log.info(f"[UIRenderer] compose#{self._trace_frame}: ensure_init begin")
         self._ensure_init(self._viewport_w, self._viewport_h,
                           need_offscreen=not using_external_target)
-        if trace:
-            log.info(f"[UIRenderer] compose#{self._trace_frame}: ensure_init end")
 
         ctx = self._ctx
 
@@ -352,26 +339,18 @@ class UIRenderer:
         # Track who opened it so end_compose can close symmetrically.
         self._opened_frame = not ctx.in_frame
         if self._opened_frame:
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: begin_frame begin")
             ctx.begin_frame()
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: begin_frame end")
 
         if using_external_target:
             # In-scene path: draw straight into the host's target with
             # LoadOp::Load so the previous pass' content stays visible
             # under UI-transparent regions. No depth attached — UI
             # draws with depth_test=False anyway.
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: begin_pass external begin")
             ctx.begin_pass(
                 color=target_color,
                 clear_color_enabled=False,
                 clear_depth_enabled=False,
             )
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: begin_pass external end")
             self._current_target = target_color
         else:
             # Standalone path: own offscreen cleared to background_color
@@ -383,8 +362,6 @@ class UIRenderer:
                 bg_r, bg_g, bg_b, bg_a = background_color
             else:
                 bg_r = bg_g = bg_b = bg_a = 0.0
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: begin_pass offscreen begin")
             ctx.begin_pass(
                 color=self._offscreen_color_tex,
                 depth=self._offscreen_depth_tex,
@@ -393,8 +370,6 @@ class UIRenderer:
                 clear_depth=1.0,
                 clear_depth_enabled=True,
             )
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: begin_pass offscreen end")
             self._current_target = self._offscreen_color_tex
         ctx.set_viewport(0, 0, self._viewport_w, self._viewport_h)
         ctx.set_cull(CULL_NONE)
@@ -412,11 +387,7 @@ class UIRenderer:
                            Tgfx2BlendFactor.OneMinusSrcAlpha)
 
         self._canvas.set_default_font(self.font)
-        if trace:
-            log.info(f"[UIRenderer] compose#{self._trace_frame}: canvas.begin begin")
         self._canvas.begin(self._ctx, self._viewport_w, self._viewport_h)
-        if trace:
-            log.info(f"[UIRenderer] compose#{self._trace_frame}: canvas.begin end")
         self._canvas_active = True
 
     def end(self):
@@ -438,35 +409,19 @@ class UIRenderer:
         if self._ctx is None:
             return None
 
-        trace = getattr(self, "_trace_frame", 0) <= 40 or getattr(self, "_trace_frame", 0) % 120 == 0
         if self._canvas is not None and self._canvas_active:
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: canvas.end begin")
             self._canvas.end()
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: canvas.end end")
             self._canvas_active = False
-        if trace:
-            log.info(f"[UIRenderer] compose#{self._trace_frame}: end_pass begin")
         self._ctx.end_pass()
-        if trace:
-            log.info(f"[UIRenderer] compose#{self._trace_frame}: end_pass end")
         # Match the begin_frame decision from begin(): close only the
         # frame we opened. Command list ownership belongs to whoever
         # started it.
         if self._opened_frame:
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: end_frame begin")
             self._ctx.end_frame()
-            if trace:
-                log.info(f"[UIRenderer] compose#{self._trace_frame}: end_frame end")
             self._opened_frame = False
 
         self._clip_stack.clear()
 
-        if trace:
-            log.info(
-                f"[UIRenderer] compose#{self._trace_frame}: end texture={self._offscreen_color_tex}")
         return self._offscreen_color_tex
 
     def close(self) -> None:
