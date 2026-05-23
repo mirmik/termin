@@ -25,9 +25,6 @@ inline tc_value make_mesh_renderer_inspector_metadata();
 
 class ENTITY_API MeshRenderer : public Component, public Drawable {
 public:
-    // Legacy storage kept only for migration from old scenes where MeshRenderer
-    // owned mesh data directly. New scenes store geometry in MeshComponent.
-    TcMesh mesh;
     TcMaterial material;
     bool cast_shadow = true;
     bool _override_material = false;
@@ -38,7 +35,6 @@ public:
     tc_vec3 mesh_offset_euler = {0, 0, 0};
     tc_vec3 mesh_offset_scale = {1.0, 1.0, 1.0};
 
-    INSPECT_FIELD(MeshRenderer, mesh, "Mesh", "tc_mesh")
     INSPECT_FIELD(MeshRenderer, material, "Material", "tc_material")
     INSPECT_FIELD(MeshRenderer, cast_shadow, "Cast Shadow", "bool")
     INSPECT_FIELD(MeshRenderer, mesh_offset_enabled,  "Mesh Offset",     "bool")
@@ -48,9 +44,13 @@ public:
 
 private:
     MeshComponent* _mesh_component = nullptr;
+    // Temporary bridge for constructor calls and legacy scene data before
+    // MeshComponent is reachable. Cleared as soon as migration runs.
+    TcMesh _pending_mesh_for_component;
 
     void bind_mesh_component();
     void migrate_legacy_mesh_to_component();
+    void migrate_legacy_mesh_value_to_component(const tc_value* data);
     tc_mesh* current_mesh_ptr() const;
     void ensure_override_material_ready();
     void recreate_overridden_material();
@@ -177,7 +177,6 @@ inline tc_value make_mesh_renderer_inspector_metadata() {
     tc_value_dict_set(&inspector, "fields", fields);
 
     tc_value layout = tc_value_list_new();
-    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("mesh"));
     tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("material"));
     tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("cast_shadow"));
     tc_value_list_push(&layout, make_mesh_renderer_inspector_section("Material Override"));

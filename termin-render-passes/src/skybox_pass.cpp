@@ -218,11 +218,6 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
             reinterpret_cast<const uint8_t*>(CUBE_INDICES),
             sizeof(CUBE_INDICES)));
 
-    // UBO sized from parser-computed block_size — no hand-coded duplicate.
-    tgfx::BufferDesc ubo_desc;
-    ubo_desc.size = skybox_layout_.block_size;
-    ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-    params_ubo_ = device2_->create_buffer(ubo_desc);
 }
 
 // ============================================================================
@@ -256,7 +251,7 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     if (w <= 0 || h <= 0) return;
 
     ensure_resources(ctx);
-    if (!params_ubo_ || skybox_layout_.block_size == 0) return;
+    if (skybox_layout_.block_size == 0) return;
 
     // Collect material values: variant selector + camera matrices + colors.
     // u_skybox_type matches the TC_SKYBOX_* enum (0=gradient, 1=solid); the
@@ -327,8 +322,7 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     // work back when the block was declared without an explicit binding
     // and GL reassigned it at link time, but since the move to fixed
     // bindings the slot has to match MATERIAL_UBO_BINDING.
-    bind_material_ubo(skybox_layout_, values, {}, params_ubo_,
-                      MATERIAL_UBO_BINDING, *device2_, *ctx.ctx2);
+    bind_material_ubo(skybox_layout_, values, {}, MATERIAL_UBO_BINDING, *ctx.ctx2);
 
     ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx::IndexType::Uint32);
     ctx.ctx2->end_pass();
@@ -339,7 +333,6 @@ void SkyBoxPass::destroy() {
         // skybox_shader_handle_ is static engine shader — not released.
         if (cube_vbo_)   { device2_->destroy(cube_vbo_);   cube_vbo_ = {}; }
         if (cube_ibo_)   { device2_->destroy(cube_ibo_);   cube_ibo_ = {}; }
-        if (params_ubo_) { device2_->destroy(params_ubo_); params_ubo_ = {}; }
         device2_ = nullptr;
     }
     skybox_layout_ = MaterialUboLayout{};

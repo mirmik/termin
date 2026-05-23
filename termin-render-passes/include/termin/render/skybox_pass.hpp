@@ -37,7 +37,6 @@ private:
     tc_shader_handle skybox_shader_handle_ = tc_shader_handle_invalid();
     tgfx::BufferHandle cube_vbo_;
     tgfx::BufferHandle cube_ibo_;
-    tgfx::BufferHandle params_ubo_;
 
     // Parsed from SKYBOX_SHADER_TEXT at ensure_resources time — layout
     // drives std140_pack and the UBO block_size. No hand-coded duplicate.

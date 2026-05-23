@@ -20,12 +20,12 @@ MeshRenderer::~MeshRenderer() {
 
 TcMesh& MeshRenderer::get_mesh() {
     bind_mesh_component();
-    return _mesh_component ? _mesh_component->mesh : mesh;
+    return _mesh_component ? _mesh_component->mesh : _pending_mesh_for_component;
 }
 
 const TcMesh& MeshRenderer::get_mesh() const {
     const_cast<MeshRenderer*>(this)->bind_mesh_component();
-    return _mesh_component ? _mesh_component->mesh : mesh;
+    return _mesh_component ? _mesh_component->mesh : _pending_mesh_for_component;
 }
 
 void MeshRenderer::set_mesh(const TcMesh& m) {
@@ -33,7 +33,7 @@ void MeshRenderer::set_mesh(const TcMesh& m) {
     if (_mesh_component) {
         _mesh_component->set_mesh(m);
     } else {
-        mesh = m;
+        _pending_mesh_for_component = m;
     }
 }
 
@@ -64,9 +64,9 @@ void MeshRenderer::migrate_legacy_mesh_to_component() {
     }
 
     bool migrated = false;
-    if (mesh.is_valid() && !_mesh_component->mesh.is_valid()) {
-        _mesh_component->mesh = mesh;
-        mesh = TcMesh();
+    if (_pending_mesh_for_component.is_valid() && !_mesh_component->mesh.is_valid()) {
+        _mesh_component->mesh = _pending_mesh_for_component;
+        _pending_mesh_for_component = TcMesh();
         migrated = true;
     }
 
@@ -89,12 +89,38 @@ void MeshRenderer::migrate_legacy_mesh_to_component() {
     }
 }
 
+void MeshRenderer::migrate_legacy_mesh_value_to_component(const tc_value* data) {
+    if (!data || data->type != TC_VALUE_DICT) {
+        return;
+    }
+
+    tc_value* mesh_value = tc_value_dict_get(const_cast<tc_value*>(data), "mesh");
+    if (!mesh_value) {
+        return;
+    }
+
+    TcMesh legacy_mesh;
+    legacy_mesh.deserialize_from(mesh_value, nullptr);
+    if (!legacy_mesh.is_valid()) {
+        return;
+    }
+
+    bind_mesh_component();
+    if (_mesh_component) {
+        if (!_mesh_component->mesh.is_valid()) {
+            _mesh_component->set_mesh(legacy_mesh);
+        }
+    } else {
+        _pending_mesh_for_component = legacy_mesh;
+    }
+}
+
 tc_mesh* MeshRenderer::current_mesh_ptr() const {
     const_cast<MeshRenderer*>(this)->bind_mesh_component();
     if (_mesh_component) {
         return _mesh_component->mesh.get();
     }
-    return mesh.get();
+    return _pending_mesh_for_component.get();
 }
 
 TcMaterial MeshRenderer::get_material() const {
@@ -451,8 +477,7 @@ tc_value MeshRenderer::serialize_data() const {
         if (!key || !value) {
             continue;
         }
-        if (std::strcmp(key, "mesh") == 0 ||
-            std::strcmp(key, "mesh_offset_enabled") == 0 ||
+        if (std::strcmp(key, "mesh_offset_enabled") == 0 ||
             std::strcmp(key, "mesh_offset_position") == 0 ||
             std::strcmp(key, "mesh_offset_euler") == 0 ||
             std::strcmp(key, "mesh_offset_scale") == 0) {
@@ -468,6 +493,7 @@ tc_value MeshRenderer::serialize_data() const {
 void MeshRenderer::deserialize_data(const tc_value* data, tc_scene_handle scene) {
     Component::deserialize_data(data, scene);
     bind_mesh_component();
+    migrate_legacy_mesh_value_to_component(data);
     migrate_legacy_mesh_to_component();
 }
 
