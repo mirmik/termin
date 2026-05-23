@@ -18,6 +18,7 @@
 
 #include <cstring>
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <thread>
@@ -231,22 +232,17 @@ GLuint compile_shader(GLenum type, const char* source) {
     return shader;
 }
 
-GLuint create_triangle_program() {
+GLuint create_cube_program() {
     static constexpr const char* vertex_shader = R"(#version 300 es
-layout(location = 0) in vec2 a_position;
+layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_color;
-uniform float u_eye_offset;
-uniform float u_spin;
+uniform mat4 u_projection;
+uniform mat4 u_view;
+uniform mat4 u_model;
 out vec3 v_color;
 
 void main() {
-    float c = cos(u_spin);
-    float s = sin(u_spin);
-    vec2 p = vec2(
-        a_position.x * c - a_position.y * s,
-        a_position.x * s + a_position.y * c
-    );
-    gl_Position = vec4(p.x + u_eye_offset, p.y, 0.0, 1.0);
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
     v_color = a_color;
 }
 )";
@@ -285,11 +281,94 @@ void main() {
     if (ok != GL_TRUE) {
         char log[1024]{};
         glGetProgramInfoLog(program, sizeof(log), nullptr, log);
-        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "program link failed: %s", log);
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "cube program link failed: %s", log);
         glDeleteProgram(program);
         return 0;
     }
     return program;
+}
+
+std::array<float, 16> make_identity_matrix() {
+    return {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f,
+    };
+}
+
+std::array<float, 16> make_xr_projection_matrix(const XrFovf& fov, float near_z, float far_z) {
+    const float tan_left = std::tan(fov.angleLeft);
+    const float tan_right = std::tan(fov.angleRight);
+    const float tan_down = std::tan(fov.angleDown);
+    const float tan_up = std::tan(fov.angleUp);
+    const float left = near_z * tan_left;
+    const float right = near_z * tan_right;
+    const float bottom = near_z * tan_down;
+    const float top = near_z * tan_up;
+
+    std::array<float, 16> m{};
+    m[0] = (2.0f * near_z) / (right - left);
+    m[5] = (2.0f * near_z) / (top - bottom);
+    m[8] = (right + left) / (right - left);
+    m[9] = (top + bottom) / (top - bottom);
+    m[10] = -(far_z + near_z) / (far_z - near_z);
+    m[11] = -1.0f;
+    m[14] = -(2.0f * far_z * near_z) / (far_z - near_z);
+    return m;
+}
+
+std::array<float, 16> make_view_matrix_from_xr_pose(const XrPosef& pose) {
+    const XrQuaternionf& q = pose.orientation;
+    const float x2 = q.x + q.x;
+    const float y2 = q.y + q.y;
+    const float z2 = q.z + q.z;
+    const float xx = q.x * x2;
+    const float xy = q.x * y2;
+    const float xz = q.x * z2;
+    const float yy = q.y * y2;
+    const float yz = q.y * z2;
+    const float zz = q.z * z2;
+    const float wx = q.w * x2;
+    const float wy = q.w * y2;
+    const float wz = q.w * z2;
+
+    const float r00 = 1.0f - (yy + zz);
+    const float r01 = xy - wz;
+    const float r02 = xz + wy;
+    const float r10 = xy + wz;
+    const float r11 = 1.0f - (xx + zz);
+    const float r12 = yz - wx;
+    const float r20 = xz - wy;
+    const float r21 = yz + wx;
+    const float r22 = 1.0f - (xx + yy);
+
+    const XrVector3f& p = pose.position;
+    const float tx = -(r00 * p.x + r10 * p.y + r20 * p.z);
+    const float ty = -(r01 * p.x + r11 * p.y + r21 * p.z);
+    const float tz = -(r02 * p.x + r12 * p.y + r22 * p.z);
+
+    return {
+        r00, r01, r02, 0.0f,
+        r10, r11, r12, 0.0f,
+        r20, r21, r22, 0.0f,
+        tx,  ty,  tz,  1.0f,
+    };
+}
+
+std::array<float, 16> make_spinning_cube_model_matrix(uint64_t frame_index) {
+    std::array<float, 16> m = make_identity_matrix();
+    const float angle = static_cast<float>(frame_index) * 0.012f;
+    const float c = std::cos(angle);
+    const float s = std::sin(angle);
+    m[0] = c;
+    m[2] = -s;
+    m[8] = s;
+    m[10] = c;
+    m[12] = 0.0f;
+    m[13] = 0.0f;
+    m[14] = -2.0f;
+    return m;
 }
 
 void smoke_thread_main(void* java_vm, void* activity_or_context) {
@@ -514,63 +593,92 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
     swapchain_create_info.width = view_configs[0].recommendedImageRectWidth;
     swapchain_create_info.height = view_configs[0].recommendedImageRectHeight;
     swapchain_create_info.faceCount = 1;
-    swapchain_create_info.arraySize = view_count;
+    swapchain_create_info.arraySize = 1;
     swapchain_create_info.mipCount = 1;
 
-    XrSwapchain color_swapchain = XR_NULL_HANDLE;
-    result = xr.create_swapchain(session, &swapchain_create_info, &color_swapchain);
-    if (XR_FAILED(result) || color_swapchain == XR_NULL_HANDLE) {
-        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrCreateSwapchain failed: %d", result);
-        if (app_space != XR_NULL_HANDLE) {
-            xr.destroy_space(app_space);
+    std::vector<XrSwapchain> color_swapchains(view_count, XR_NULL_HANDLE);
+    std::vector<std::vector<XrSwapchainImageOpenGLESKHR>> swapchain_images(view_count);
+    for (uint32_t eye = 0; eye < view_count; ++eye) {
+        result = xr.create_swapchain(session, &swapchain_create_info, &color_swapchains[eye]);
+        if (XR_FAILED(result) || color_swapchains[eye] == XR_NULL_HANDLE) {
+            __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrCreateSwapchain[%u] failed: %d", eye, result);
+            for (XrSwapchain swapchain : color_swapchains) {
+                if (swapchain != XR_NULL_HANDLE) {
+                    xr.destroy_swapchain(swapchain);
+                }
+            }
+            if (app_space != XR_NULL_HANDLE) {
+                xr.destroy_space(app_space);
+            }
+            xr.destroy_session(session);
+            shutdown_egl(egl);
+            xr.destroy_instance(instance);
+            g_smoke.running.store(false);
+            return;
         }
-        xr.destroy_session(session);
-        shutdown_egl(egl);
-        xr.destroy_instance(instance);
-        g_smoke.running.store(false);
-        return;
-    }
 
-    uint32_t image_count = 0;
-    xr.enumerate_swapchain_images(color_swapchain, 0, &image_count, nullptr);
-    std::vector<XrSwapchainImageOpenGLESKHR> images(image_count);
-    for (XrSwapchainImageOpenGLESKHR& image : images) {
-        image.type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR;
+        uint32_t image_count = 0;
+        xr.enumerate_swapchain_images(color_swapchains[eye], 0, &image_count, nullptr);
+        swapchain_images[eye].resize(image_count);
+        for (XrSwapchainImageOpenGLESKHR& image : swapchain_images[eye]) {
+            image.type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR;
+        }
+        xr.enumerate_swapchain_images(
+            color_swapchains[eye],
+            image_count,
+            &image_count,
+            reinterpret_cast<XrSwapchainImageBaseHeader*>(swapchain_images[eye].data())
+        );
     }
-    xr.enumerate_swapchain_images(
-        color_swapchain,
-        image_count,
-        &image_count,
-        reinterpret_cast<XrSwapchainImageBaseHeader*>(images.data())
-    );
 
     GLuint framebuffer = 0;
     glGenFramebuffers(1, &framebuffer);
-    GLuint triangle_program = create_triangle_program();
-    GLint eye_offset_uniform = triangle_program ? glGetUniformLocation(triangle_program, "u_eye_offset") : -1;
-    GLint spin_uniform = triangle_program ? glGetUniformLocation(triangle_program, "u_spin") : -1;
-    GLuint triangle_vao = 0;
-    GLuint triangle_vbo = 0;
-    const GLfloat triangle_vertices[] = {
-         0.0f,  0.42f, 1.0f, 0.1f, 0.1f,
-        -0.45f, -0.36f, 0.1f, 1.0f, 0.1f,
-         0.45f, -0.36f, 0.1f, 0.25f, 1.0f,
+    GLuint depth_renderbuffer = 0;
+    glGenRenderbuffers(1, &depth_renderbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, depth_renderbuffer);
+    glRenderbufferStorage(
+        GL_RENDERBUFFER,
+        GL_DEPTH_COMPONENT24,
+        static_cast<GLsizei>(swapchain_create_info.width),
+        static_cast<GLsizei>(swapchain_create_info.height)
+    );
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+    GLuint cube_program = create_cube_program();
+    GLint projection_uniform = cube_program ? glGetUniformLocation(cube_program, "u_projection") : -1;
+    GLint view_uniform = cube_program ? glGetUniformLocation(cube_program, "u_view") : -1;
+    GLint model_uniform = cube_program ? glGetUniformLocation(cube_program, "u_model") : -1;
+    GLuint cube_vao = 0;
+    GLuint cube_vbo = 0;
+    const GLfloat cube_vertices[] = {
+        -0.35f, -0.35f,  0.35f,  1.0f, 0.1f, 0.1f,   0.35f, -0.35f,  0.35f,  1.0f, 0.1f, 0.1f,   0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 0.1f,
+        -0.35f, -0.35f,  0.35f,  1.0f, 0.1f, 0.1f,   0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 0.1f,  -0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 0.1f,
+        -0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 0.1f,  -0.35f,  0.35f, -0.35f,  0.1f, 1.0f, 0.1f,   0.35f,  0.35f, -0.35f,  0.1f, 1.0f, 0.1f,
+        -0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 0.1f,   0.35f,  0.35f, -0.35f,  0.1f, 1.0f, 0.1f,   0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 0.1f,
+        -0.35f, -0.35f, -0.35f,  0.1f, 0.3f, 1.0f,  -0.35f, -0.35f,  0.35f,  0.1f, 0.3f, 1.0f,  -0.35f,  0.35f,  0.35f,  0.1f, 0.3f, 1.0f,
+        -0.35f, -0.35f, -0.35f,  0.1f, 0.3f, 1.0f,  -0.35f,  0.35f,  0.35f,  0.1f, 0.3f, 1.0f,  -0.35f,  0.35f, -0.35f,  0.1f, 0.3f, 1.0f,
+         0.35f, -0.35f, -0.35f,  1.0f, 1.0f, 0.1f,   0.35f,  0.35f, -0.35f,  1.0f, 1.0f, 0.1f,   0.35f,  0.35f,  0.35f,  1.0f, 1.0f, 0.1f,
+         0.35f, -0.35f, -0.35f,  1.0f, 1.0f, 0.1f,   0.35f,  0.35f,  0.35f,  1.0f, 1.0f, 0.1f,   0.35f, -0.35f,  0.35f,  1.0f, 1.0f, 0.1f,
+        -0.35f,  0.35f, -0.35f,  1.0f, 0.1f, 1.0f,  -0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 1.0f,   0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 1.0f,
+        -0.35f,  0.35f, -0.35f,  1.0f, 0.1f, 1.0f,   0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 1.0f,   0.35f,  0.35f, -0.35f,  1.0f, 0.1f, 1.0f,
+        -0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 1.0f,   0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 1.0f,   0.35f, -0.35f,  0.35f,  0.1f, 1.0f, 1.0f,
+        -0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 1.0f,   0.35f, -0.35f,  0.35f,  0.1f, 1.0f, 1.0f,  -0.35f, -0.35f,  0.35f,  0.1f, 1.0f, 1.0f,
     };
-    glGenVertexArrays(1, &triangle_vao);
-    glGenBuffers(1, &triangle_vbo);
-    glBindVertexArray(triangle_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, triangle_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(triangle_vertices), triangle_vertices, GL_STATIC_DRAW);
+    glGenVertexArrays(1, &cube_vao);
+    glGenBuffers(1, &cube_vbo);
+    glBindVertexArray(cube_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, cube_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cube_vertices), cube_vertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), nullptr);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), nullptr);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(
         1,
         3,
         GL_FLOAT,
         GL_FALSE,
-        5 * sizeof(GLfloat),
-        reinterpret_cast<const void*>(2 * sizeof(GLfloat))
+        6 * sizeof(GLfloat),
+        reinterpret_cast<const void*>(3 * sizeof(GLfloat))
     );
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -665,24 +773,30 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
                 views.data()
             );
             if (XR_SUCCEEDED(result) && located_view_count == view_count) {
-                uint32_t image_index = 0;
-                XrSwapchainImageAcquireInfo acquire_info{};
-                acquire_info.type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO;
-                xr.acquire_swapchain_image(color_swapchain, &acquire_info, &image_index);
-
-                XrSwapchainImageWaitInfo wait_swapchain_info{};
-                wait_swapchain_info.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO;
-                wait_swapchain_info.timeout = XR_INFINITE_DURATION;
-                xr.wait_swapchain_image(color_swapchain, &wait_swapchain_info);
-
                 glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+                glFramebufferRenderbuffer(
+                    GL_FRAMEBUFFER,
+                    GL_DEPTH_ATTACHMENT,
+                    GL_RENDERBUFFER,
+                    depth_renderbuffer
+                );
                 for (uint32_t eye = 0; eye < view_count; ++eye) {
-                    glFramebufferTextureLayer(
+                    uint32_t image_index = 0;
+                    XrSwapchainImageAcquireInfo acquire_info{};
+                    acquire_info.type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO;
+                    xr.acquire_swapchain_image(color_swapchains[eye], &acquire_info, &image_index);
+
+                    XrSwapchainImageWaitInfo wait_swapchain_info{};
+                    wait_swapchain_info.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO;
+                    wait_swapchain_info.timeout = XR_INFINITE_DURATION;
+                    xr.wait_swapchain_image(color_swapchains[eye], &wait_swapchain_info);
+
+                    glFramebufferTexture2D(
                         GL_FRAMEBUFFER,
                         GL_COLOR_ATTACHMENT0,
-                        images[image_index].image,
-                        0,
-                        static_cast<GLint>(eye)
+                        GL_TEXTURE_2D,
+                        swapchain_images[eye][image_index].image,
+                        0
                     );
                     glViewport(
                         0,
@@ -690,41 +804,40 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
                         static_cast<GLsizei>(swapchain_create_info.width),
                         static_cast<GLsizei>(swapchain_create_info.height)
                     );
-                    const float phase = static_cast<float>((frame_index / 60 + eye) % 3);
-                    glClearColor(
-                        phase == 0.0f ? 0.08f : 0.0f,
-                        phase == 1.0f ? 0.08f : 0.0f,
-                        phase == 2.0f ? 0.08f : 0.0f,
-                        1.0f
-                    );
-                    glClear(GL_COLOR_BUFFER_BIT);
-                    if (triangle_program && triangle_vao) {
-                        glDisable(GL_DEPTH_TEST);
-                        glUseProgram(triangle_program);
-                        glUniform1f(eye_offset_uniform, eye == 0 ? -0.08f : 0.08f);
-                        glUniform1f(spin_uniform, static_cast<float>(frame_index) * 0.018f);
-                        glBindVertexArray(triangle_vao);
-                        glDrawArrays(GL_TRIANGLES, 0, 3);
+                    glEnable(GL_DEPTH_TEST);
+                    glDepthFunc(GL_LEQUAL);
+                    glClearColor(0.015f, 0.018f, 0.024f, 1.0f);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    if (cube_program && cube_vao) {
+                        const auto projection = make_xr_projection_matrix(views[eye].fov, 0.05f, 100.0f);
+                        const auto view = make_view_matrix_from_xr_pose(views[eye].pose);
+                        const auto model = make_spinning_cube_model_matrix(frame_index);
+                        glUseProgram(cube_program);
+                        glUniformMatrix4fv(projection_uniform, 1, GL_FALSE, projection.data());
+                        glUniformMatrix4fv(view_uniform, 1, GL_FALSE, view.data());
+                        glUniformMatrix4fv(model_uniform, 1, GL_FALSE, model.data());
+                        glBindVertexArray(cube_vao);
+                        glDrawArrays(GL_TRIANGLES, 0, 36);
                         glBindVertexArray(0);
                         glUseProgram(0);
                     }
 
                     layer_views[eye].pose = views[eye].pose;
                     layer_views[eye].fov = views[eye].fov;
-                    layer_views[eye].subImage.swapchain = color_swapchain;
+                    layer_views[eye].subImage.swapchain = color_swapchains[eye];
                     layer_views[eye].subImage.imageRect.offset = {0, 0};
                     layer_views[eye].subImage.imageRect.extent = {
                         static_cast<int32_t>(swapchain_create_info.width),
                         static_cast<int32_t>(swapchain_create_info.height)
                     };
-                    layer_views[eye].subImage.imageArrayIndex = eye;
+                    layer_views[eye].subImage.imageArrayIndex = 0;
+
+                    XrSwapchainImageReleaseInfo release_info{};
+                    release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
+                    xr.release_swapchain_image(color_swapchains[eye], &release_info);
                 }
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glFlush();
-
-                XrSwapchainImageReleaseInfo release_info{};
-                release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
-                xr.release_swapchain_image(color_swapchain, &release_info);
 
                 layers[0] = reinterpret_cast<XrCompositionLayerBaseHeader*>(&projection_layer);
                 layer_count = 1;
@@ -747,17 +860,24 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
     if (session_running) {
         xr.end_session(session);
     }
-    if (triangle_vbo) {
-        glDeleteBuffers(1, &triangle_vbo);
+    if (cube_vbo) {
+        glDeleteBuffers(1, &cube_vbo);
     }
-    if (triangle_vao) {
-        glDeleteVertexArrays(1, &triangle_vao);
+    if (cube_vao) {
+        glDeleteVertexArrays(1, &cube_vao);
     }
-    if (triangle_program) {
-        glDeleteProgram(triangle_program);
+    if (cube_program) {
+        glDeleteProgram(cube_program);
+    }
+    if (depth_renderbuffer) {
+        glDeleteRenderbuffers(1, &depth_renderbuffer);
     }
     glDeleteFramebuffers(1, &framebuffer);
-    xr.destroy_swapchain(color_swapchain);
+    for (XrSwapchain swapchain : color_swapchains) {
+        if (swapchain != XR_NULL_HANDLE) {
+            xr.destroy_swapchain(swapchain);
+        }
+    }
     if (app_space != XR_NULL_HANDLE) {
         xr.destroy_space(app_space);
     }

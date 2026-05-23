@@ -22,5 +22,5 @@ will pause/stop the activity immediately after launch.
 
 The smoke app does not use the Termin render engine yet. It is an Android
 `NativeActivity` that starts an OpenXR session with OpenGL ES, creates a stereo
-color swapchain, clears each eye to a dim cycling color, draws a small spinning
-triangle, and submits the projection layer through `xrEndFrame`.
+pair of color swapchains, renders a small spinning cube with each eye's
+`xrLocateViews` pose/FOV, and submits the projection layer through `xrEndFrame`.
