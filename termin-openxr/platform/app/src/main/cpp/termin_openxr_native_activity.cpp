@@ -1,9 +1,12 @@
+#include <android/input.h>
+#include <android/looper.h>
 #include <android/log.h>
 #include <android/native_activity.h>
 #include <jni.h>
 
 #include <atomic>
 #include <chrono>
+#include <mutex>
 #include <thread>
 
 #include <termin/openxr/openxr_runtime.hpp>
@@ -19,6 +22,10 @@ struct NativeActivityState {
     std::atomic<bool> focused{false};
     std::atomic<bool> native_running{false};
     std::atomic<uint32_t> start_generation{0};
+    std::atomic<bool> input_running{false};
+    std::atomic<ALooper*> input_looper{nullptr};
+    std::thread input_thread;
+    std::mutex input_mutex;
 };
 
 NativeActivityState g_state;
@@ -33,6 +40,34 @@ JNIEnv* attach_env(JavaVM* vm) {
         return nullptr;
     }
     return env;
+}
+
+int consume_input_events(int, int, void* data) {
+    auto* queue = static_cast<AInputQueue*>(data);
+    AInputEvent* event = nullptr;
+    while (AInputQueue_getEvent(queue, &event) >= 0) {
+        if (AInputQueue_preDispatchEvent(queue, event)) {
+            continue;
+        }
+        AInputQueue_finishEvent(queue, event, 0);
+    }
+    return 1;
+}
+
+void stop_input() {
+    std::lock_guard<std::mutex> lock(g_state.input_mutex);
+    if (!g_state.input_running.exchange(false)) {
+        return;
+    }
+
+    ALooper* looper = g_state.input_looper.load();
+    if (looper) {
+        ALooper_wake(looper);
+    }
+    if (g_state.input_thread.joinable()) {
+        g_state.input_thread.join();
+    }
+    g_state.input_looper.store(nullptr);
 }
 
 void stop_native() {
@@ -104,6 +139,7 @@ void on_destroy(ANativeActivity* activity) {
     __android_log_print(ANDROID_LOG_INFO, kLogTag, "onDestroy");
     ++g_state.start_generation;
     stop_native();
+    stop_input();
 
     if (g_state.activity_ref) {
         JNIEnv* env = attach_env(activity->vm);
@@ -116,6 +152,8 @@ void on_destroy(ANativeActivity* activity) {
     g_state.resumed.store(false);
     g_state.focused.store(false);
     g_state.native_running.store(false);
+    g_state.input_running.store(false);
+    g_state.input_looper.store(nullptr);
     g_state.start_generation.store(0);
 }
 
@@ -133,6 +171,32 @@ void on_window_focus_changed(ANativeActivity*, int has_focus) {
     } else {
         ++g_state.start_generation;
     }
+}
+
+void on_input_queue_created(ANativeActivity*, AInputQueue* queue) {
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "onInputQueueCreated");
+    stop_input();
+
+    std::lock_guard<std::mutex> lock(g_state.input_mutex);
+    g_state.input_running.store(true);
+    g_state.input_thread = std::thread([queue]() {
+        ALooper* looper = ALooper_prepare(ALOOPER_PREPARE_ALLOW_NON_CALLBACKS);
+        g_state.input_looper.store(looper);
+        AInputQueue_attachLooper(queue, looper, 1, consume_input_events, queue);
+
+        while (g_state.input_running.load()) {
+            ALooper_pollOnce(-1, nullptr, nullptr, nullptr);
+        }
+
+        AInputQueue_detachLooper(queue);
+        g_state.input_looper.store(nullptr);
+        __android_log_print(ANDROID_LOG_INFO, kLogTag, "input pump stopped");
+    });
+}
+
+void on_input_queue_destroyed(ANativeActivity*, AInputQueue*) {
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "onInputQueueDestroyed");
+    stop_input();
 }
 
 } // namespace
@@ -161,4 +225,6 @@ extern "C" void ANativeActivity_onCreate(
     activity->callbacks->onStop = on_stop;
     activity->callbacks->onDestroy = on_destroy;
     activity->callbacks->onWindowFocusChanged = on_window_focus_changed;
+    activity->callbacks->onInputQueueCreated = on_input_queue_created;
+    activity->callbacks->onInputQueueDestroyed = on_input_queue_destroyed;
 }
