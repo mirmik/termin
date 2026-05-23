@@ -11,7 +11,6 @@
 extern "C" {
 #include <tcbase/tc_log.h>
 #include "core/tc_camera_capability.h"
-#include <tgfx/tc_gpu.h>
 #include "render/tc_viewport_pool.h"
 #include "render/tc_render_target.h"
 }
@@ -129,28 +128,14 @@ void PullRenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
 void PullRenderingManager::render_display(tc_display* display) {
     if (!display) return;
 
-    const char* dname = tc_display_get_name(display);
-
     tc_render_surface* surface = tc_display_get_surface(display);
     if (!surface) {
         tc_log(TC_LOG_WARN, "[PullRenderingManager] render_display: surface is null");
         return;
     }
 
-    // Make display context current and set GPUContext for per-context resource management
+    // Make display context current; tgfx2 resources are owned by IRenderDevice.
     tc_render_surface_make_current(surface);
-    if (!surface->gpu_context) {
-        {
-            uintptr_t sg_key = tc_render_surface_share_group_key(surface);
-            tc_gpu_share_group* group = tc_gpu_share_group_get_or_create(sg_key);
-            surface->gpu_context = tc_gpu_context_new(tc_render_surface_context_key(surface), group);
-            tc_gpu_share_group_unref(group);
-        }
-        char ctx_name[32];
-        snprintf(ctx_name, sizeof(ctx_name), "display:%s", dname ? dname : "?");
-        tc_gpu_context_set_name(surface->gpu_context, ctx_name);
-    }
-    tc_gpu_set_context(surface->gpu_context);
 
     int width, height;
     tc_render_surface_get_size(surface, &width, &height);

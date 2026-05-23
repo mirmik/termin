@@ -1160,7 +1160,6 @@ bool create_smoke_renderer_locked() {
 
         g_state.smoke_device = std::make_unique<tgfx::VulkanRenderDevice>(info);
         tgfx2_interop_set_device(g_state.smoke_device.get());
-        tgfx2_gpu_ops_register();
 
         g_state.smoke_width = g_state.smoke_device->swapchain()->width();
         g_state.smoke_height = g_state.smoke_device->swapchain()->height();

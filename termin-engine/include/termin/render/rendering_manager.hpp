@@ -335,8 +335,7 @@ private:
     // Callback to activate GL context before rendering
     MakeCurrentCallback make_current_callback_;
 
-    // GPU context for offscreen rendering (push model)
-    tc_gpu_context* offscreen_gpu_context_ = nullptr;
+    // Last offscreen share-group key observed by the push model.
     uintptr_t offscreen_share_group_key_ = 0;
 
     // Factory for creating displays on demand

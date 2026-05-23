@@ -9,6 +9,7 @@ render_compose / present per frame. Secondary windows created through
 
 from __future__ import annotations
 
+from tcbase import log
 from tcgui.widgets.ui import UI
 from termin.display import (
     BackendWindow,
@@ -36,6 +37,7 @@ class BackendWindowManager(_BaseManager):
         # IRenderDevice per process invariant.
         self._graphics = None
         self._presenting_entries: set[int] = set()
+        self._render_seq = 0
 
     def register_main(self, window: BackendWindow, ui: UI) -> BackendWindowEntry:  # type: ignore[override]
         entry = super().register_main(window, host_data=ui)
@@ -100,13 +102,35 @@ class BackendWindowManager(_BaseManager):
     def _render_entry(self, entry: BackendWindowEntry) -> None:
         ui: UI = entry.host_data
         vw, vh = entry.window.framebuffer_size()
+        self._render_seq += 1
+        seq = self._render_seq
+        trace = seq <= 40 or seq % 120 == 0
+        if trace:
+            log.info(
+                f"[tcgui-present] render_entry#{seq}: begin "
+                f"entry={id(entry)} size={vw}x{vh}")
         if vw <= 0 or vh <= 0:
+            if trace:
+                log.info(f"[tcgui-present] render_entry#{seq}: skip zero size")
             return
+        if trace:
+            log.info(f"[tcgui-present] render_entry#{seq}: render_compose begin")
         tex = ui.render_compose(vw, vh, background_color=self.WINDOW_BG)
+        if trace:
+            log.info(f"[tcgui-present] render_entry#{seq}: render_compose end tex={tex}")
+            log.info(f"[tcgui-present] render_entry#{seq}: process_deferred begin")
         ui.process_deferred()
+        if trace:
+            log.info(f"[tcgui-present] render_entry#{seq}: process_deferred end")
         if tex is None:
+            if trace:
+                log.info(f"[tcgui-present] render_entry#{seq}: no texture")
             return
+        if trace:
+            log.info(f"[tcgui-present] render_entry#{seq}: window.present begin")
         entry.window.present(tex)
+        if trace:
+            log.info(f"[tcgui-present] render_entry#{seq}: window.present end")
 
     def render_all(self) -> None:
         """Render every registered window's UI and present its composite."""

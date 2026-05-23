@@ -5,7 +5,6 @@
 
 #include "tc_types.h"
 #include "render/termin_display_api.h"
-#include <tgfx/tc_gpu_context.h>
 #include "render/tc_input_manager.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -102,8 +101,6 @@ struct tc_render_surface {
     // Input manager (optional, for window surfaces)
     tc_input_manager* input_manager;
 
-    // Per-context GPU resource state (lazy-created on first make_current)
-    tc_gpu_context* gpu_context;
 };
 
 // ============================================================================
@@ -119,7 +116,6 @@ static inline void tc_render_surface_init(
     s->on_resize = NULL;
     s->on_resize_userdata = NULL;
     s->input_manager = NULL;
-    s->gpu_context = NULL;
 }
 
 // Set input manager for surface

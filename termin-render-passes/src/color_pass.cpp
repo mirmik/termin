@@ -21,7 +21,6 @@ extern "C" {
 #include "core/tc_drawable_protocol.h"
 #include "core/tc_scene_drawable.h"
 #include <tgfx/resources/tc_material.h>
-#include <tgfx/tc_gpu.h>
 #include "core/tc_scene_render_state.h"
 }
 

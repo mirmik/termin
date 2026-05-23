@@ -8,10 +8,6 @@
 #include <termin/geom/mat44.hpp>
 #include <tcbase/tc_log.hpp>
 
-extern "C" {
-#include <tgfx/tc_gpu_context.h>
-}
-
 namespace termin {
 
 void bind_graphics_backend(nb::module_& m) {
