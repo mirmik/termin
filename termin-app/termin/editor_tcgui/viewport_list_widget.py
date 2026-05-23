@@ -97,8 +97,13 @@ class ViewportListWidgetTcgui(VStack):
 
         self._add_rt_btn = Button()
         self._add_rt_btn.text = "+ RT"
-        self._add_rt_btn.on_click = lambda: self.render_target_add_requested.emit()
+        self._add_rt_btn.on_click = lambda: self.render_target_add_requested.emit("texture_2d")
         toolbar.add_child(self._add_rt_btn)
+
+        self._add_xr_rt_btn = Button()
+        self._add_xr_rt_btn.text = "+ XR RT"
+        self._add_xr_rt_btn.on_click = lambda: self.render_target_add_requested.emit("xr_stereo")
+        toolbar.add_child(self._add_xr_rt_btn)
 
         self.add_child(toolbar)
 
@@ -186,7 +191,7 @@ class ViewportListWidgetTcgui(VStack):
         if self._render_targets:
             rt_group = self._make_node("Render Targets", _NodeKind.RENDER_TARGET_GROUP)
             for rt in self._render_targets:
-                rt_name = rt.name or "RenderTarget"
+                rt_name = self._render_target_label(rt)
                 rt_node = self._make_node(rt_name, _NodeKind.RENDER_TARGET, rt)
                 rt_group.add_node(rt_node)
             rt_group.expanded = True
@@ -206,6 +211,12 @@ class ViewportListWidgetTcgui(VStack):
         node = TreeNode(lbl)
         node.data = _NodePayload(kind, obj)
         return node
+
+    def _render_target_label(self, render_target) -> str:
+        name = render_target.name or "RenderTarget"
+        if render_target.kind == "xr_stereo":
+            return f"{name} [XR Stereo]"
+        return name
 
     def _add_entity_hierarchy(self, parent_node: TreeNode, entity: "Entity") -> None:
         if not entity.valid():
@@ -331,7 +342,11 @@ class ViewportListWidgetTcgui(VStack):
                 items.append(MenuItem.sep())
                 items.append(MenuItem(
                     "Add Render Target",
-                    on_click=lambda: self.render_target_add_requested.emit(),
+                    on_click=lambda: self.render_target_add_requested.emit("texture_2d"),
+                ))
+                items.append(MenuItem(
+                    "Add XR Stereo Target",
+                    on_click=lambda: self.render_target_add_requested.emit("xr_stereo"),
                 ))
 
         self._ctx_menu.items = items

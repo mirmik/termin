@@ -10,6 +10,7 @@ tc_render_target_config RenderTargetConfig::to_c() const {
     tc_render_target_config_init(&c);
 
     c.name = name.empty() ? nullptr : tgfx_intern_string(name.c_str());
+    c.kind = kind.empty() ? tgfx_intern_string("texture_2d") : tgfx_intern_string(kind.c_str());
     c.camera_uuid = camera_uuid.empty() ? nullptr : tgfx_intern_string(camera_uuid.c_str());
     c.width = width;
     c.height = height;
@@ -40,6 +41,7 @@ RenderTargetConfig RenderTargetConfig::from_c(const tc_render_target_config* c) 
     if (!c) return cfg;
 
     cfg.name = c->name ? c->name : "";
+    cfg.kind = c->kind ? c->kind : "texture_2d";
     cfg.camera_uuid = c->camera_uuid ? c->camera_uuid : "";
     cfg.width = c->width;
     cfg.height = c->height;
