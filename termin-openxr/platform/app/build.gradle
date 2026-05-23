@@ -15,30 +15,18 @@ def terminAndroidPlatform = providers.gradleProperty("terminAndroidPlatform")
 def terminAndroidNdkVersion = providers.gradleProperty("terminAndroidNdkVersion")
         .orElse(providers.environmentVariable("TERMIN_ANDROID_NDK_VERSION"))
         .orElse("27.2.12479018")
-def terminAndroidAssetsDir = providers.gradleProperty("terminAndroidAssetsDir")
-        .orElse(providers.environmentVariable("TERMIN_ANDROID_ASSETS_DIR"))
-        .orElse(new File(terminRoot, "termin-android/assets").absolutePath)
-def terminAndroidApplicationId = providers.gradleProperty("terminAndroidApplicationId")
-        .orElse(providers.environmentVariable("TERMIN_ANDROID_APPLICATION_ID"))
-        .orElse("org.termin.android")
-def terminAndroidAppLabel = providers.gradleProperty("terminAndroidAppLabel")
-        .orElse(providers.environmentVariable("TERMIN_ANDROID_APP_LABEL"))
-        .orElse("Termin Android")
 
 android {
-    namespace "org.termin.android"
+    namespace "org.termin.openxr"
     compileSdk 35
     ndkVersion terminAndroidNdkVersion.get()
 
     defaultConfig {
-        applicationId terminAndroidApplicationId.get()
+        applicationId "org.termin.openxr"
         minSdk 26
         targetSdk 35
         versionCode 1
         versionName "0.1.0"
-        manifestPlaceholders = [
-                terminAndroidAppLabel: terminAndroidAppLabel.get()
-        ]
 
         ndk {
             abiFilters terminAndroidAbi.get()
@@ -59,7 +47,7 @@ android {
     externalNativeBuild {
         cmake {
             path file("src/main/cpp/CMakeLists.txt")
-            buildStagingDirectory new File(terminRoot, "build/android-gradle/cxx/app")
+            buildStagingDirectory new File(terminRoot, "build/android-gradle-openxr/cxx/app")
             version "3.22.1"
         }
     }
@@ -72,16 +60,15 @@ android {
     sourceSets {
         main {
             jniLibs.srcDir layout.buildDirectory.dir("generated/terminJniLibs").get().asFile
-            assets.srcDir file(terminAndroidAssetsDir.get())
         }
     }
 }
 
-tasks.register("copyTerminAndroidLibraries", Copy) {
+tasks.register("copyTerminOpenXRLibraries", Copy) {
     def sdkLibDir = new File(new File(terminAndroidSdkRoot.get(), terminAndroidAbi.get()), "lib")
     from(sdkLibDir) {
-        include "*.so"
-        exclude "libtermin_openxr.so"
+        include "libtermin_base.so"
+        include "libtermin_openxr.so"
     }
     into(layout.buildDirectory.dir("generated/terminJniLibs/${terminAndroidAbi.get()}"))
     doFirst {
@@ -97,5 +84,5 @@ tasks.register("copyTerminAndroidLibraries", Copy) {
 }
 
 tasks.named("preBuild") {
-    dependsOn("copyTerminAndroidLibraries")
+    dependsOn("copyTerminOpenXRLibraries")
 }

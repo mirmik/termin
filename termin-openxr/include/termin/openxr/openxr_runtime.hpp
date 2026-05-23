@@ -14,6 +14,7 @@ struct OpenXRBuildInfo {
     const char* android_create_instance_extension = "";
     const char* vulkan_enable_extension = "";
     const char* vulkan_enable2_extension = "";
+    const char* opengles_enable_extension = "";
 };
 
 struct OpenXRAndroidProbeResult {
@@ -26,8 +27,16 @@ struct OpenXRAndroidProbeResult {
     const char* detail = "";
 };
 
+struct OpenXRAndroidStartResult {
+    bool started = false;
+    const char* stage = "";
+    const char* detail = "";
+};
+
 TERMIN_OPENXR_API OpenXRBuildInfo build_info();
 TERMIN_OPENXR_API const char* runtime_intent();
 TERMIN_OPENXR_API OpenXRAndroidProbeResult probe_android_runtime(void* java_vm, void* activity_or_context);
+TERMIN_OPENXR_API OpenXRAndroidStartResult start_android_color_smoke(void* java_vm, void* activity_or_context);
+TERMIN_OPENXR_API void stop_android_color_smoke();
 
 } // namespace termin::openxr

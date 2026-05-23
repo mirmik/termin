@@ -4,9 +4,6 @@
 #include <android/log.h>
 
 #include <termin/android/bootstrap.h>
-#ifdef TERMIN_QUEST_OPENXR
-#include <termin/openxr/openxr_runtime.hpp>
-#endif
 
 namespace {
 
@@ -120,32 +117,3 @@ Java_org_termin_android_TerminActivity_nativeRenderFrame(JNIEnv*, jclass) {
     }
     return ok ? JNI_TRUE : JNI_FALSE;
 }
-
-#ifdef TERMIN_QUEST_OPENXR
-extern "C" JNIEXPORT jboolean JNICALL
-Java_org_termin_android_TerminOpenXRActivity_nativeOpenXRProbe(JNIEnv* env, jclass, jobject activity) {
-    JavaVM* vm = nullptr;
-    if (env->GetJavaVM(&vm) != JNI_OK || !vm) {
-        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "OpenXR probe: failed to get JavaVM");
-        return JNI_FALSE;
-    }
-
-    termin::openxr::OpenXRAndroidProbeResult result =
-        termin::openxr::probe_android_runtime(vm, activity);
-
-    __android_log_print(
-        result.system_found ? ANDROID_LOG_INFO : ANDROID_LOG_ERROR,
-        kLogTag,
-        "OpenXR probe: loader=%d init=%d instance=%d system=%d stage='%s' result=%d detail='%s'",
-        result.loader_loaded ? 1 : 0,
-        result.loader_initialized ? 1 : 0,
-        result.instance_created ? 1 : 0,
-        result.system_found ? 1 : 0,
-        result.stage ? result.stage : "",
-        static_cast<int>(result.last_result),
-        result.detail ? result.detail : ""
-    );
-
-    return result.system_found ? JNI_TRUE : JNI_FALSE;
-}
-#endif

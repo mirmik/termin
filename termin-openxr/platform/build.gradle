@@ -1,0 +1,10 @@
+plugins {
+    id "com.android.application" version "8.7.3" apply false
+}
+
+def terminGradleBuildRoot = new File(rootProject.projectDir.parentFile.parentFile, "build/android-gradle-openxr")
+
+allprojects {
+    def projectBuildName = path == ":" ? "root" : path.substring(1).replace(":", "/")
+    layout.buildDirectory.set(new File(terminGradleBuildRoot, projectBuildName))
+}
