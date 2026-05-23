@@ -143,7 +143,8 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
         SDL_Vulkan_GetDrawableSize(window_, &fb_w, &fb_h);
 
         tgfx::VulkanDeviceCreateInfo info;
-        info.enable_validation = true;  // TODO: gate on TERMIN_DEBUG env-var
+        const char* validation_env = std::getenv("TGFX2_VULKAN_VALIDATION");
+        info.enable_validation = (validation_env && validation_env[0] == '1');
         info.instance_extensions = extensions;
         info.swapchain_width = static_cast<uint32_t>(fb_w);
         info.swapchain_height = static_cast<uint32_t>(fb_h);
