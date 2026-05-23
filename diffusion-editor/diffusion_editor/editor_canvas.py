@@ -10,8 +10,6 @@ from tcbase import Key, MouseButton, Mods
 from tcgui.widgets.canvas import Canvas
 from tcgui.widgets.events import KeyEvent
 
-from tgfx._tgfx_native import wrap_gl_texture_as_tgfx2, PIXEL_RGBA8
-
 from .layer_stack import LayerStack
 from .layer import Layer
 from .tool import DiffusionTool, LamaTool, InstructTool

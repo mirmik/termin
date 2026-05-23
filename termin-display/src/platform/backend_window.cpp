@@ -390,6 +390,7 @@ void SDLBackendWindow::present(tgfx::TextureHandle color_tex) {
     if (w <= 0 || h <= 0) return;
 
     if (impl_->backend == tgfx::BackendType::OpenGL) {
+#ifdef TGFX2_HAS_OPENGL
         // Secondary windows borrow the primary's GL context. Find it:
         // either we own it (primary) or the shared owner does.
         SDL_GLContext gl_ctx = impl_->gl_context
@@ -400,20 +401,10 @@ void SDLBackendWindow::present(tgfx::TextureHandle color_tex) {
         if (!gl_ctx) return;
         SDL_GL_MakeCurrent(window_, gl_ctx);
 
-        // Query src size from the tgfx2 device so partial-resolution
-        // FBOs composite correctly.
-        auto desc = impl_->device_ref->texture_desc(color_tex);
-        int src_w = static_cast<int>(desc.width);
-        int src_h = static_cast<int>(desc.height);
-        if (src_w <= 0 || src_h <= 0) { src_w = w; src_h = h; }
-
-        impl_->device_ref->blit_to_external_target(
-            /*dst=*/0,  // OpenGL default FBO = window framebuffer
-            color_tex,
-            0, 0, src_w, src_h,
-            0, 0, w, h);
-
+        auto* gl_dev = static_cast<tgfx::OpenGLRenderDevice*>(impl_->device_ref);
+        gl_dev->present_to_default_framebuffer(color_tex, w, h);
         SDL_GL_SwapWindow(window_);
+#endif
     }
 #ifdef TGFX2_HAS_VULKAN
     else if (impl_->backend == tgfx::BackendType::Vulkan) {

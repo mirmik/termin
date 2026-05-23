@@ -35,7 +35,6 @@
 | MSAA | `set_msaa_samples` / `msaa_samples` | samples | Обычно 1, 2, 4, 8 |
 | Interaction | `on_mouse_down`, `on_mouse_move`, `on_mouse_up`, `on_mouse_wheel` | координаты мыши + button/dy | Для WPF/OpenTK host |
 | Picking | `pick` | mx, my, out x/y/z/screen_dist | Поиск ближайшей точки/маркера |
-| Render | `render` | width, height, dst_gl_fbo | Рендер в текущий GL framebuffer |
 | GPU cleanup | `release_gpu` | - | Вызывать перед dispose/потерей GL контекста |
 
 Все цвета принимаются как `float` в диапазоне `0..1`.
@@ -240,30 +239,18 @@ View.set_z_label("Amplitude");
 Числовые tick labels продолжают показывать исходные значения данных, а не
 умноженные на visual scale значения.
 
-`set_msaa_samples` задается на view. Для WPF/OpenGL хоста практичные значения:
-`1`, `2`, `4`, `8`. Чем выше значение, тем дороже рендер.
+`set_msaa_samples` задается на view. Практичные значения: `1`, `2`, `4`, `8`.
+Чем выше значение, тем дороже рендер.
 
 ---
 
-## Минимальный WPF/OpenTK host
+## WPF/OpenTK host
 
-Схема такая же, как в `PlotDemoApp`:
-
-```csharp
-TerminCore.InitFull();
-
-var host = Tgfx2Host.Acquire(ttfPath);
-var view = new PlotView3D(host);
-
-GlControl.Render += _ =>
-{
-    GL.GetInteger(GetPName.DrawFramebufferBinding, out int dstFbo);
-    view.render(
-        Math.Max(1, (int)GlControl.ActualWidth),
-        Math.Max(1, (int)GlControl.ActualHeight),
-        (uint)dstFbo);
-};
-```
+Старый вывод напрямую в GL framebuffer удален. C# view вызывает
+`render_to_texture_id(width, height)`, а показ выполняет platform helper из
+`Termin.Wpf`, который принимает tgfx2 texture handle id и композитит его через
+interop/present слой. GL plumbing не должен находиться в `PlotView*` или в
+прикладных controls.
 
 Mouse events надо пробросить в view:
 

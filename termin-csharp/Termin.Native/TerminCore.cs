@@ -10,6 +10,7 @@ public static class TerminCore
 {
     const string DLL = "termin_core";
     const string MESH_DLL = "termin_mesh";
+    const string TGFX2_DLL = "termin_graphics2";
 
     // ========================================================================
     // Library Initialization
@@ -29,6 +30,28 @@ public static class TerminCore
 
     [DllImport(DLL, EntryPoint = "tc_shutdown")]
     public static extern void Shutdown();
+
+    // ========================================================================
+    // tgfx2 interop
+    // ========================================================================
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_register_external_gl_texture")]
+    public static extern uint Tgfx2RegisterExternalGlTexture(
+        uint glTextureId,
+        uint width,
+        uint height,
+        int format,
+        uint usage);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_destroy_texture_handle")]
+    public static extern void Tgfx2DestroyTextureHandle(uint handleId);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_blit_texture")]
+    public static extern void Tgfx2BlitTexture(
+        uint srcHandleId,
+        uint dstHandleId,
+        int width,
+        int height);
 
     // ========================================================================
     // Scene (handle-based API)

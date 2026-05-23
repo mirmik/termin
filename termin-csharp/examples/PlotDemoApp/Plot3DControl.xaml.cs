@@ -3,20 +3,21 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using OpenTK.Graphics.OpenGL4;
 using OpenTK.Wpf;
 using Termin.Native;
+using Termin.Wpf;
 
 namespace PlotDemoApp;
 
 // Thin WPF host for a tcplot PlotView3D. Tgfx2Host owns the shared
 // tgfx2 runtime; PlotView3D owns only its offscreen target and plot
 // engine. This class only:
-//   - forwards the Render tick by calling PlotView3D.render(w, h, fb_id),
+//   - renders PlotView3D into a tgfx2 texture and hands it to the WPF presenter,
 //   - translates WPF mouse events into engine calls.
 public partial class Plot3DControl : UserControl, IDisposable
 {
     private PlotView3D? _view;
+    private Tgfx2GlWpfTexturePresenter? _presenter;
     private bool _initialized;
     private bool _disposed;
     private bool _hostLeaseHeld;
@@ -138,6 +139,7 @@ public partial class Plot3DControl : UserControl, IDisposable
         try
         {
             _view = new PlotView3D(host);
+            _presenter = new Tgfx2GlWpfTexturePresenter();
             _hostLeaseHeld = true;
         }
         catch
@@ -182,9 +184,8 @@ public partial class Plot3DControl : UserControl, IDisposable
 
         var w = Math.Max(1, (int)GlControl.ActualWidth);
         var h = Math.Max(1, (int)GlControl.ActualHeight);
-
-        GL.GetInteger(GetPName.DrawFramebufferBinding, out int dstFbo);
-        _view.render(w, h, (uint)dstFbo);
+        uint colorTex = _view.render_to_texture_id(w, h);
+        _presenter?.Present(colorTex, w, h);
     }
 
     // MouseButton int values match tcbase::MouseButton: LEFT=0, RIGHT=1, MIDDLE=2.
@@ -236,6 +237,8 @@ public partial class Plot3DControl : UserControl, IDisposable
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;
+        _presenter?.Dispose();
+        _presenter = null;
         if (_hostLeaseHeld)
         {
             Tgfx2Host.Release();

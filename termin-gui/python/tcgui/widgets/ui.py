@@ -285,22 +285,21 @@ class UI:
         viewport_h: int,
         background_color: tuple[float, float, float, float] | None = None,
     ):
-        """Render the UI and publish the result to the default GL FBO.
+        """Render the UI and return the composite TextureHandle.
 
-        Legacy path used by GL-only hosts (raw SDL / GLFW examples)
-        that issue their own SwapWindow after this call returns.
-        BackendWindow-hosted hosts call ``render_compose`` instead — it
-        returns the composite texture so ``win.present(tex)`` can
-        publish it on both OpenGL and Vulkan without touching the
-        default FBO.
+        Hosts should present the returned texture through their
+        platform window/surface layer. ``render_compose`` is the
+        explicit spelling for new code; this method is kept as a
+        convenience alias for callers that do not need a target texture.
 
         ``background_color`` — if given, the UI's offscreen target is
         cleared to this colour so transparent areas show it after the
         final composite. ``None`` leaves those areas transparent
         (useful when the UI is overlaid on top of other rendering).
         """
-        self._compose(viewport_w, viewport_h, background_color)
-        self._renderer.end()
+        if not self._compose(viewport_w, viewport_h, background_color):
+            return None
+        return self._renderer.end()
 
     def render_compose(
         self,

@@ -569,10 +569,7 @@ def run():
         return
 
     # Route the window through BackendWindow so the launcher runs on
-    # whichever backend TERMIN_BACKEND selects (OpenGL or Vulkan). The
-    # raw SDL GL context + SwapWindow path used to work only on GL —
-    # on Vulkan UIRenderer.end() routes through blit_to_external_fbo
-    # which has no meaningful analogue.
+    # whichever backend TERMIN_BACKEND selects (OpenGL or Vulkan).
     from termin.display._platform_native import SDLBackendWindow
     from tgfx import Tgfx2Context
 
