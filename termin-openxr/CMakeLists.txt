@@ -11,6 +11,26 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_base REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_scene termin_scene::termin_scene)
+else()
+    find_package(termin_scene REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_mesh tmesh::termin_mesh)
+else()
+    find_package(termin_mesh REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
+else()
+    find_package(termin_components_mesh REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_graphics tgfx::termin_graphics2)
+else()
+    find_package(termin_graphics REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -70,25 +90,28 @@ if(TERMIN_OPENXR_HAS_HEADERS)
 endif()
 
 target_compile_definitions(termin_openxr PRIVATE TERMIN_OPENXR_EXPORTS)
+if(ANDROID)
+    target_compile_definitions(termin_openxr PRIVATE TGFX2_HAS_VULKAN)
+endif()
 target_compile_features(termin_openxr PUBLIC cxx_std_20)
 
 target_link_libraries(termin_openxr
     PUBLIC
         tcbase::termin_base
+        termin_scene::termin_scene
+        tmesh::termin_mesh
+        termin_components_mesh::termin_components_mesh
+        tgfx::termin_graphics2
 )
 
 if(ANDROID)
     find_library(ANDROID_LOG_LIB log REQUIRED)
     find_library(ANDROID_NATIVE_LIB android REQUIRED)
     find_library(ANDROID_VULKAN_LIB vulkan REQUIRED)
-    find_library(ANDROID_EGL_LIB EGL REQUIRED)
-    find_library(ANDROID_GLESV3_LIB GLESv3 REQUIRED)
     target_link_libraries(termin_openxr PRIVATE
         ${ANDROID_LOG_LIB}
         ${ANDROID_NATIVE_LIB}
         ${ANDROID_VULKAN_LIB}
-        ${ANDROID_EGL_LIB}
-        ${ANDROID_GLESV3_LIB}
     )
 endif()
 

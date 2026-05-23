@@ -4,13 +4,9 @@
 #  if defined(__ANDROID__)
 #    include <jni.h>
 #    define XR_USE_PLATFORM_ANDROID
-#    define XR_USE_PLATFORM_EGL
 #    include <dlfcn.h>
 #  endif
 #  define XR_USE_GRAPHICS_API_VULKAN
-#  define XR_USE_GRAPHICS_API_OPENGL_ES
-#  include <EGL/egl.h>
-#  include <GLES3/gl3.h>
 #  include <vulkan/vulkan.h>
 #  include <openxr/openxr.h>
 #  include <openxr/openxr_platform.h>
@@ -21,8 +17,29 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <memory>
+#include <span>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
+
+#include <components/mesh_component.hpp>
+#include <termin/entity/entity.hpp>
+#include <termin/geom/vec3.hpp>
+#include <termin/tc_scene.hpp>
+#include <tgfx/tgfx_mesh_handle.hpp>
+#include <tgfx2/descriptors.hpp>
+#include <tgfx2/i_command_list.hpp>
+#include <tgfx2/render_state.hpp>
+#include <tgfx2/vulkan/vulkan_render_device.hpp>
+
+extern "C" {
+#  include <termin_scene/termin_scene.h>
+#  include <tgfx/resources/tc_mesh_registry.h>
+#  include <tgfx/resources/tc_primitive_mesh.h>
+}
 
 #if defined(__ANDROID__)
 #  include <android/log.h>
@@ -48,6 +65,128 @@ void log_error(const char* stage, const char* detail) {
         detail ? detail : ""
     );
 }
+
+const unsigned char kSmokeVertexSpv[] = {
+  0x03, 0x02, 0x23, 0x07, 0x00, 0x05, 0x01, 0x00, 0x0b, 0x00, 0x0d, 0x00,
+  0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x06, 0x00, 0x01, 0x00, 0x00, 0x00,
+  0x47, 0x4c, 0x53, 0x4c, 0x2e, 0x73, 0x74, 0x64, 0x2e, 0x34, 0x35, 0x30,
+  0x00, 0x00, 0x00, 0x00, 0x0e, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x04, 0x00, 0x00, 0x00, 0x6d, 0x61, 0x69, 0x6e, 0x00, 0x00, 0x00, 0x00,
+  0x09, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x00,
+  0x19, 0x00, 0x00, 0x00, 0x1d, 0x00, 0x00, 0x00, 0x47, 0x00, 0x04, 0x00,
+  0x09, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x47, 0x00, 0x04, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x48, 0x00, 0x05, 0x00, 0x11, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x48, 0x00, 0x05, 0x00, 0x11, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+  0x0b, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x48, 0x00, 0x05, 0x00,
+  0x11, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00,
+  0x03, 0x00, 0x00, 0x00, 0x48, 0x00, 0x05, 0x00, 0x11, 0x00, 0x00, 0x00,
+  0x03, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+  0x47, 0x00, 0x03, 0x00, 0x11, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+  0x48, 0x00, 0x04, 0x00, 0x17, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x05, 0x00, 0x00, 0x00, 0x48, 0x00, 0x05, 0x00, 0x17, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x48, 0x00, 0x05, 0x00, 0x17, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x07, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x47, 0x00, 0x03, 0x00,
+  0x17, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x47, 0x00, 0x04, 0x00,
+  0x1d, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x13, 0x00, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00, 0x21, 0x00, 0x03, 0x00,
+  0x03, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x16, 0x00, 0x03, 0x00,
+  0x06, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x17, 0x00, 0x04, 0x00,
+  0x07, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
+  0x20, 0x00, 0x04, 0x00, 0x08, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
+  0x07, 0x00, 0x00, 0x00, 0x3b, 0x00, 0x04, 0x00, 0x08, 0x00, 0x00, 0x00,
+  0x09, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x20, 0x00, 0x04, 0x00,
+  0x0a, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00,
+  0x3b, 0x00, 0x04, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x17, 0x00, 0x04, 0x00, 0x0d, 0x00, 0x00, 0x00,
+  0x06, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x15, 0x00, 0x04, 0x00,
+  0x0e, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x2b, 0x00, 0x04, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x04, 0x00, 0x10, 0x00, 0x00, 0x00,
+  0x06, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x06, 0x00,
+  0x11, 0x00, 0x00, 0x00, 0x0d, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00,
+  0x10, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x20, 0x00, 0x04, 0x00,
+  0x12, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00,
+  0x3b, 0x00, 0x04, 0x00, 0x12, 0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x00,
+  0x03, 0x00, 0x00, 0x00, 0x15, 0x00, 0x04, 0x00, 0x14, 0x00, 0x00, 0x00,
+  0x20, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x2b, 0x00, 0x04, 0x00,
+  0x14, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x18, 0x00, 0x04, 0x00, 0x16, 0x00, 0x00, 0x00, 0x0d, 0x00, 0x00, 0x00,
+  0x04, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x03, 0x00, 0x17, 0x00, 0x00, 0x00,
+  0x16, 0x00, 0x00, 0x00, 0x20, 0x00, 0x04, 0x00, 0x18, 0x00, 0x00, 0x00,
+  0x09, 0x00, 0x00, 0x00, 0x17, 0x00, 0x00, 0x00, 0x3b, 0x00, 0x04, 0x00,
+  0x18, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00,
+  0x20, 0x00, 0x04, 0x00, 0x1a, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00,
+  0x16, 0x00, 0x00, 0x00, 0x3b, 0x00, 0x04, 0x00, 0x0a, 0x00, 0x00, 0x00,
+  0x1d, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x2b, 0x00, 0x04, 0x00,
+  0x06, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3f,
+  0x20, 0x00, 0x04, 0x00, 0x25, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
+  0x0d, 0x00, 0x00, 0x00, 0x36, 0x00, 0x05, 0x00, 0x02, 0x00, 0x00, 0x00,
+  0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
+  0xf8, 0x00, 0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x3d, 0x00, 0x04, 0x00,
+  0x07, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x00, 0x00,
+  0x3e, 0x00, 0x03, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00,
+  0x41, 0x00, 0x05, 0x00, 0x1a, 0x00, 0x00, 0x00, 0x1b, 0x00, 0x00, 0x00,
+  0x19, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00, 0x3d, 0x00, 0x04, 0x00,
+  0x16, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x1b, 0x00, 0x00, 0x00,
+  0x3d, 0x00, 0x04, 0x00, 0x07, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00,
+  0x1d, 0x00, 0x00, 0x00, 0x51, 0x00, 0x05, 0x00, 0x06, 0x00, 0x00, 0x00,
+  0x20, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x51, 0x00, 0x05, 0x00, 0x06, 0x00, 0x00, 0x00, 0x21, 0x00, 0x00, 0x00,
+  0x1e, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x51, 0x00, 0x05, 0x00,
+  0x06, 0x00, 0x00, 0x00, 0x22, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00,
+  0x02, 0x00, 0x00, 0x00, 0x50, 0x00, 0x07, 0x00, 0x0d, 0x00, 0x00, 0x00,
+  0x23, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x21, 0x00, 0x00, 0x00,
+  0x22, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00, 0x91, 0x00, 0x05, 0x00,
+  0x0d, 0x00, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00,
+  0x23, 0x00, 0x00, 0x00, 0x41, 0x00, 0x05, 0x00, 0x25, 0x00, 0x00, 0x00,
+  0x26, 0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00, 0x00,
+  0x3e, 0x00, 0x03, 0x00, 0x26, 0x00, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00,
+  0xfd, 0x00, 0x01, 0x00, 0x38, 0x00, 0x01, 0x00
+};
+
+const unsigned char kSmokeFragmentSpv[] = {
+  0x03, 0x02, 0x23, 0x07, 0x00, 0x05, 0x01, 0x00, 0x0b, 0x00, 0x0d, 0x00,
+  0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x06, 0x00, 0x01, 0x00, 0x00, 0x00,
+  0x47, 0x4c, 0x53, 0x4c, 0x2e, 0x73, 0x74, 0x64, 0x2e, 0x34, 0x35, 0x30,
+  0x00, 0x00, 0x00, 0x00, 0x0e, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x07, 0x00, 0x04, 0x00, 0x00, 0x00,
+  0x04, 0x00, 0x00, 0x00, 0x6d, 0x61, 0x69, 0x6e, 0x00, 0x00, 0x00, 0x00,
+  0x09, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x10, 0x00, 0x03, 0x00,
+  0x04, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x47, 0x00, 0x04, 0x00,
+  0x09, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x47, 0x00, 0x04, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x13, 0x00, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00,
+  0x21, 0x00, 0x03, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+  0x16, 0x00, 0x03, 0x00, 0x06, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00,
+  0x17, 0x00, 0x04, 0x00, 0x07, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00,
+  0x04, 0x00, 0x00, 0x00, 0x20, 0x00, 0x04, 0x00, 0x08, 0x00, 0x00, 0x00,
+  0x03, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x3b, 0x00, 0x04, 0x00,
+  0x08, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
+  0x17, 0x00, 0x04, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00,
+  0x03, 0x00, 0x00, 0x00, 0x20, 0x00, 0x04, 0x00, 0x0b, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x3b, 0x00, 0x04, 0x00,
+  0x0b, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+  0x2b, 0x00, 0x04, 0x00, 0x06, 0x00, 0x00, 0x00, 0x0e, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x80, 0x3f, 0x36, 0x00, 0x05, 0x00, 0x02, 0x00, 0x00, 0x00,
+  0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
+  0xf8, 0x00, 0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x3d, 0x00, 0x04, 0x00,
+  0x0a, 0x00, 0x00, 0x00, 0x0d, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00,
+  0x51, 0x00, 0x05, 0x00, 0x06, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00,
+  0x0d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x51, 0x00, 0x05, 0x00,
+  0x06, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x0d, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x51, 0x00, 0x05, 0x00, 0x06, 0x00, 0x00, 0x00,
+  0x11, 0x00, 0x00, 0x00, 0x0d, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+  0x50, 0x00, 0x07, 0x00, 0x07, 0x00, 0x00, 0x00, 0x12, 0x00, 0x00, 0x00,
+  0x0f, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00,
+  0x0e, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x03, 0x00, 0x09, 0x00, 0x00, 0x00,
+  0x12, 0x00, 0x00, 0x00, 0xfd, 0x00, 0x01, 0x00, 0x38, 0x00, 0x01, 0x00
+};
 
 struct OpenXRDispatch {
     PFN_xrGetInstanceProcAddr get_instance_proc_addr = nullptr;
@@ -75,14 +214,10 @@ struct OpenXRDispatch {
     PFN_xrBeginFrame begin_frame = nullptr;
     PFN_xrEndFrame end_frame = nullptr;
     PFN_xrLocateViews locate_views = nullptr;
-    PFN_xrGetOpenGLESGraphicsRequirementsKHR get_gles_requirements = nullptr;
-};
-
-struct EGLState {
-    EGLDisplay display = EGL_NO_DISPLAY;
-    EGLConfig config = nullptr;
-    EGLContext context = EGL_NO_CONTEXT;
-    EGLSurface surface = EGL_NO_SURFACE;
+    PFN_xrGetVulkanInstanceExtensionsKHR get_vulkan_instance_extensions = nullptr;
+    PFN_xrGetVulkanDeviceExtensionsKHR get_vulkan_device_extensions = nullptr;
+    PFN_xrGetVulkanGraphicsDeviceKHR get_vulkan_graphics_device = nullptr;
+    PFN_xrGetVulkanGraphicsRequirementsKHR get_vulkan_requirements = nullptr;
 };
 
 struct SmokeControl {
@@ -91,6 +226,174 @@ struct SmokeControl {
 };
 
 SmokeControl g_smoke;
+
+struct ScenePrimitiveSmoke {
+    termin::TcSceneRef scene;
+    termin::Entity primitive;
+    tgfx::BufferHandle vbo;
+    tgfx::BufferHandle ebo;
+    tgfx::ShaderHandle vertex_shader;
+    tgfx::ShaderHandle fragment_shader;
+    tgfx::PipelineHandle pipeline;
+    uint32_t index_count = 0;
+    bool initialized = false;
+
+    bool init(tgfx::IRenderDevice& device, tgfx::PixelFormat color_format, uint32_t sample_count) {
+        if (initialized) {
+            return true;
+        }
+
+        termin_scene_runtime_init();
+        termin::MeshComponent::register_type();
+
+        scene = termin::TcSceneRef::create("OpenXR tc_scene smoke", "openxr-tc-scene-smoke");
+        if (!scene.valid()) {
+            log_error("tc_scene", "failed to create scene");
+            return false;
+        }
+
+        primitive = scene.create_entity("tc_scene sphere");
+        primitive.transform().set_local_position(termin::Vec3{0.0, 2.0, 0.0});
+
+        auto* mesh_component = new termin::MeshComponent();
+        const tc_mesh_handle mesh_handle = tc_primitive_unit_sphere();
+        if (!tc_mesh_is_valid(mesh_handle) || !tc_mesh_ensure_loaded(mesh_handle)) {
+            log_error("tc_scene", "failed to create/load unit sphere mesh");
+            delete mesh_component;
+            scene.destroy();
+            scene = {};
+            primitive = {};
+            return false;
+        }
+        mesh_component->set_mesh(termin::TcMesh(mesh_handle));
+        primitive.add_component(mesh_component);
+
+        const tc_mesh* mesh = tc_mesh_get(mesh_handle);
+        if (!mesh || !mesh->vertices || !mesh->indices || mesh->vertex_count == 0 || mesh->index_count == 0) {
+            log_error("tc_scene", "unit sphere mesh has no CPU geometry");
+            scene.destroy();
+            scene = {};
+            primitive = {};
+            return false;
+        }
+
+        const tc_vertex_attrib* position_attr = tc_vertex_layout_find(&mesh->layout, "position");
+        const tc_vertex_attrib* normal_attr = tc_vertex_layout_find(&mesh->layout, "normal");
+        if (!position_attr || !normal_attr) {
+            log_error("tc_scene", "unit sphere mesh is missing position/normal attributes");
+            destroy();
+            return false;
+        }
+
+        index_count = static_cast<uint32_t>(mesh->index_count);
+
+        tgfx::BufferDesc vbo_desc{};
+        vbo_desc.size = mesh->vertex_count * mesh->layout.stride;
+        vbo_desc.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
+        vbo = device.create_buffer(vbo_desc);
+        device.upload_buffer(
+            vbo,
+            std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(mesh->vertices),
+                static_cast<size_t>(vbo_desc.size)
+            )
+        );
+
+        tgfx::BufferDesc ebo_desc{};
+        ebo_desc.size = mesh->index_count * sizeof(uint32_t);
+        ebo_desc.usage = tgfx::BufferUsage::Index | tgfx::BufferUsage::CopyDst;
+        ebo = device.create_buffer(ebo_desc);
+        device.upload_buffer(
+            ebo,
+            std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(mesh->indices),
+                static_cast<size_t>(ebo_desc.size)
+            )
+        );
+
+        tgfx::ShaderDesc vs_desc{};
+        vs_desc.stage = tgfx::ShaderStage::Vertex;
+        vs_desc.bytecode.assign(kSmokeVertexSpv, kSmokeVertexSpv + sizeof(kSmokeVertexSpv));
+        vs_desc.debug_name = "openxr tc_scene sphere vs";
+        vertex_shader = device.create_shader(vs_desc);
+
+        tgfx::ShaderDesc fs_desc{};
+        fs_desc.stage = tgfx::ShaderStage::Fragment;
+        fs_desc.bytecode.assign(kSmokeFragmentSpv, kSmokeFragmentSpv + sizeof(kSmokeFragmentSpv));
+        fs_desc.debug_name = "openxr tc_scene sphere fs";
+        fragment_shader = device.create_shader(fs_desc);
+
+        tgfx::VertexBufferLayout vertex_layout{};
+        vertex_layout.stride = static_cast<uint32_t>(mesh->layout.stride);
+        vertex_layout.attributes.push_back({
+            0,
+            tgfx::VertexFormat::Float3,
+            static_cast<uint32_t>(position_attr->offset)
+        });
+        vertex_layout.attributes.push_back({
+            1,
+            tgfx::VertexFormat::Float3,
+            static_cast<uint32_t>(normal_attr->offset)
+        });
+
+        tgfx::PipelineDesc pipeline_desc{};
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.vertex_layouts.push_back(std::move(vertex_layout));
+        pipeline_desc.color_formats.push_back(color_format);
+        pipeline_desc.depth_format = tgfx::PixelFormat::D32F;
+        pipeline_desc.sample_count = sample_count;
+        pipeline_desc.depth_stencil.depth_test = true;
+        pipeline_desc.depth_stencil.depth_write = true;
+        pipeline_desc.depth_stencil.depth_compare = tgfx::CompareOp::LessEqual;
+        pipeline_desc.raster.cull = tgfx::CullMode::Back;
+        pipeline = device.create_pipeline(pipeline_desc);
+
+        initialized = true;
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kLogTag,
+            "tc_scene sphere ready: vertices=%zu indices=%zu stride=%u",
+            mesh->vertex_count,
+            mesh->index_count,
+            static_cast<unsigned>(mesh->layout.stride)
+        );
+        return true;
+    }
+
+    void destroy(tgfx::IRenderDevice* device = nullptr) {
+        if (device) {
+            if (pipeline) {
+                device->destroy(pipeline);
+            }
+            if (fragment_shader) {
+                device->destroy(fragment_shader);
+            }
+            if (vertex_shader) {
+                device->destroy(vertex_shader);
+            }
+            if (ebo) {
+                device->destroy(ebo);
+            }
+            if (vbo) {
+                device->destroy(vbo);
+            }
+        }
+        pipeline = {};
+        fragment_shader = {};
+        vertex_shader = {};
+        ebo = {};
+        vbo = {};
+        index_count = 0;
+        initialized = false;
+
+        if (scene.valid()) {
+            scene.destroy();
+        }
+        scene = {};
+        primitive = {};
+    }
+};
 
 const char* session_state_name(XrSessionState state) {
     switch (state) {
@@ -127,165 +430,76 @@ bool load_instance_proc(
     return true;
 }
 
-bool init_egl(EGLState& egl) {
-    egl.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    if (egl.display == EGL_NO_DISPLAY) {
-        log_error("EGL", "eglGetDisplay failed");
-        return false;
+std::vector<std::string> split_openxr_extension_string(const std::string& text) {
+    std::vector<std::string> result;
+    std::istringstream stream(text);
+    std::string item;
+    while (stream >> item) {
+        result.push_back(item);
     }
-    if (!eglInitialize(egl.display, nullptr, nullptr)) {
-        log_error("EGL", "eglInitialize failed");
-        return false;
-    }
+    return result;
+}
 
-    const EGLint config_attribs[] = {
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-        EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_DEPTH_SIZE, 0,
-        EGL_STENCIL_SIZE, 0,
-        EGL_NONE
-    };
-    EGLint config_count = 0;
-    if (!eglChooseConfig(egl.display, config_attribs, &egl.config, 1, &config_count) ||
-        config_count < 1) {
-        log_error("EGL", "eglChooseConfig failed");
-        return false;
+std::vector<const char*> extension_cstrs(const std::vector<std::string>& extensions) {
+    std::vector<const char*> result;
+    result.reserve(extensions.size());
+    for (const std::string& extension : extensions) {
+        result.push_back(extension.c_str());
     }
+    return result;
+}
 
-    const EGLint context_attribs[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 3,
-        EGL_NONE
-    };
-    egl.context = eglCreateContext(egl.display, egl.config, EGL_NO_CONTEXT, context_attribs);
-    if (egl.context == EGL_NO_CONTEXT) {
-        log_error("EGL", "eglCreateContext failed");
+bool query_openxr_vulkan_extensions(
+    PFN_xrGetVulkanInstanceExtensionsKHR query,
+    XrInstance instance,
+    XrSystemId system_id,
+    std::vector<std::string>& out
+) {
+    uint32_t size = 0;
+    XrResult result = query(instance, system_id, 0, &size, nullptr);
+    if (XR_FAILED(result)) {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrGetVulkan*ExtensionsKHR size failed: %d", result);
         return false;
     }
-
-    const EGLint surface_attribs[] = {
-        EGL_WIDTH, 16,
-        EGL_HEIGHT, 16,
-        EGL_NONE
-    };
-    egl.surface = eglCreatePbufferSurface(egl.display, egl.config, surface_attribs);
-    if (egl.surface == EGL_NO_SURFACE) {
-        log_error("EGL", "eglCreatePbufferSurface failed");
+    std::string buffer(size, '\0');
+    result = query(instance, system_id, size, &size, buffer.data());
+    if (XR_FAILED(result)) {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrGetVulkan*ExtensionsKHR failed: %d", result);
         return false;
     }
-    if (!eglMakeCurrent(egl.display, egl.surface, egl.surface, egl.context)) {
-        log_error("EGL", "eglMakeCurrent failed");
-        return false;
-    }
+    out = split_openxr_extension_string(buffer.c_str());
     return true;
 }
 
-void shutdown_egl(EGLState& egl) {
-    if (egl.display != EGL_NO_DISPLAY) {
-        eglMakeCurrent(egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-        if (egl.context != EGL_NO_CONTEXT) {
-            eglDestroyContext(egl.display, egl.context);
-        }
-        if (egl.surface != EGL_NO_SURFACE) {
-            eglDestroySurface(egl.display, egl.surface);
-        }
-        eglTerminate(egl.display);
+tgfx::PixelFormat pixel_format_from_vk_format(VkFormat format) {
+    switch (format) {
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_R8G8B8A8_SRGB:
+            return tgfx::PixelFormat::RGBA8_UNorm;
+        case VK_FORMAT_B8G8R8A8_UNORM:
+        case VK_FORMAT_B8G8R8A8_SRGB:
+            return tgfx::PixelFormat::BGRA8_UNorm;
+        default:
+            return tgfx::PixelFormat::Undefined;
     }
-    egl = {};
 }
 
-bool is_supported_format(int64_t format) {
-    return format == GL_RGBA8 || format == GL_SRGB8_ALPHA8;
+bool is_supported_vulkan_color_format(int64_t format) {
+    return pixel_format_from_vk_format(static_cast<VkFormat>(format)) != tgfx::PixelFormat::Undefined;
 }
 
-int64_t choose_swapchain_format(const std::vector<int64_t>& formats) {
+int64_t choose_vulkan_swapchain_format(const std::vector<int64_t>& formats) {
     for (int64_t format : formats) {
-        if (format == GL_RGBA8) {
+        if (format == VK_FORMAT_R8G8B8A8_UNORM || format == VK_FORMAT_B8G8R8A8_UNORM) {
             return format;
         }
     }
     for (int64_t format : formats) {
-        if (is_supported_format(format)) {
+        if (is_supported_vulkan_color_format(format)) {
             return format;
         }
     }
     return formats.empty() ? 0 : formats.front();
-}
-
-GLuint compile_shader(GLenum type, const char* source) {
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    GLint ok = GL_FALSE;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
-    if (ok != GL_TRUE) {
-        char log[1024]{};
-        glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
-        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "shader compile failed: %s", log);
-        glDeleteShader(shader);
-        return 0;
-    }
-    return shader;
-}
-
-GLuint create_cube_program() {
-    static constexpr const char* vertex_shader = R"(#version 300 es
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_color;
-uniform mat4 u_projection;
-uniform mat4 u_view;
-uniform mat4 u_model;
-out vec3 v_color;
-
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-    v_color = a_color;
-}
-)";
-
-    static constexpr const char* fragment_shader = R"(#version 300 es
-precision mediump float;
-in vec3 v_color;
-out vec4 o_color;
-
-void main() {
-    o_color = vec4(v_color, 1.0);
-}
-)";
-
-    GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_shader);
-    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_shader);
-    if (!vs || !fs) {
-        if (vs) {
-            glDeleteShader(vs);
-        }
-        if (fs) {
-            glDeleteShader(fs);
-        }
-        return 0;
-    }
-
-    GLuint program = glCreateProgram();
-    glAttachShader(program, vs);
-    glAttachShader(program, fs);
-    glLinkProgram(program);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-
-    GLint ok = GL_FALSE;
-    glGetProgramiv(program, GL_LINK_STATUS, &ok);
-    if (ok != GL_TRUE) {
-        char log[1024]{};
-        glGetProgramInfoLog(program, sizeof(log), nullptr, log);
-        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "cube program link failed: %s", log);
-        glDeleteProgram(program);
-        return 0;
-    }
-    return program;
 }
 
 std::array<float, 16> make_identity_matrix() {
@@ -297,25 +511,40 @@ std::array<float, 16> make_identity_matrix() {
     };
 }
 
-std::array<float, 16> make_xr_projection_matrix(const XrFovf& fov, float near_z, float far_z) {
+std::array<float, 16> make_xr_projection_matrix_vulkan(const XrFovf& fov, float near_z, float far_z) {
     const float tan_left = std::tan(fov.angleLeft);
     const float tan_right = std::tan(fov.angleRight);
     const float tan_down = std::tan(fov.angleDown);
     const float tan_up = std::tan(fov.angleUp);
-    const float left = near_z * tan_left;
-    const float right = near_z * tan_right;
-    const float bottom = near_z * tan_down;
-    const float top = near_z * tan_up;
+    const float tan_width = tan_right - tan_left;
+    const float tan_height = tan_down - tan_up;
 
     std::array<float, 16> m{};
-    m[0] = (2.0f * near_z) / (right - left);
-    m[5] = (2.0f * near_z) / (top - bottom);
-    m[8] = (right + left) / (right - left);
-    m[9] = (top + bottom) / (top - bottom);
-    m[10] = -(far_z + near_z) / (far_z - near_z);
+    m[0] = 2.0f / tan_width;
+    m[5] = 2.0f / tan_height;
+    m[8] = (tan_right + tan_left) / tan_width;
+    m[9] = (tan_up + tan_down) / tan_height;
+    m[10] = far_z / (near_z - far_z);
     m[11] = -1.0f;
-    m[14] = -(2.0f * far_z * near_z) / (far_z - near_z);
+    m[14] = (far_z * near_z) / (near_z - far_z);
     return m;
+}
+
+std::array<float, 16> multiply_matrix(
+    const std::array<float, 16>& a,
+    const std::array<float, 16>& b
+) {
+    std::array<float, 16> out{};
+    for (int col = 0; col < 4; ++col) {
+        for (int row = 0; row < 4; ++row) {
+            out[col * 4 + row] =
+                a[0 * 4 + row] * b[col * 4 + 0] +
+                a[1 * 4 + row] * b[col * 4 + 1] +
+                a[2 * 4 + row] * b[col * 4 + 2] +
+                a[3 * 4 + row] * b[col * 4 + 3];
+        }
+    }
+    return out;
 }
 
 std::array<float, 16> make_view_matrix_from_xr_pose(const XrPosef& pose) {
@@ -356,18 +585,33 @@ std::array<float, 16> make_view_matrix_from_xr_pose(const XrPosef& pose) {
     };
 }
 
-std::array<float, 16> make_spinning_cube_model_matrix(uint64_t frame_index) {
+std::array<float, 16> make_scene_primitive_model_matrix(
+    const termin::Entity& primitive,
+    uint64_t frame_index
+) {
     std::array<float, 16> m = make_identity_matrix();
     const float angle = static_cast<float>(frame_index) * 0.012f;
     const float c = std::cos(angle);
     const float s = std::sin(angle);
+
+    termin::Vec3 p = primitive.valid()
+        ? primitive.transform().local_position()
+        : termin::Vec3{0.0, 2.0, 0.0};
+
+    // Termin scene space is X-right, Y-forward, Z-up. OpenXR view space
+    // here uses X-right, Y-up, -Z-forward.
     m[0] = c;
+    m[1] = 0.0f;
     m[2] = -s;
-    m[8] = s;
-    m[10] = c;
-    m[12] = 0.0f;
-    m[13] = 0.0f;
-    m[14] = -2.0f;
+    m[4] = -s;
+    m[5] = 0.0f;
+    m[6] = -c;
+    m[8] = 0.0f;
+    m[9] = 1.0f;
+    m[10] = 0.0f;
+    m[12] = static_cast<float>(p.x);
+    m[13] = static_cast<float>(p.z);
+    m[14] = static_cast<float>(-p.y);
     return m;
 }
 
@@ -412,7 +656,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
 
     const char* enabled_extensions[] = {
         XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
-        XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME,
+        XR_KHR_VULKAN_ENABLE_EXTENSION_NAME,
     };
 
     XrInstanceCreateInfoAndroidKHR android_create_info{};
@@ -476,7 +720,10 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
     load_instance_proc(xr, instance, "xrBeginFrame", reinterpret_cast<PFN_xrVoidFunction*>(&xr.begin_frame));
     load_instance_proc(xr, instance, "xrEndFrame", reinterpret_cast<PFN_xrVoidFunction*>(&xr.end_frame));
     load_instance_proc(xr, instance, "xrLocateViews", reinterpret_cast<PFN_xrVoidFunction*>(&xr.locate_views));
-    load_instance_proc(xr, instance, "xrGetOpenGLESGraphicsRequirementsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_gles_requirements));
+    load_instance_proc(xr, instance, "xrGetVulkanInstanceExtensionsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_instance_extensions));
+    load_instance_proc(xr, instance, "xrGetVulkanDeviceExtensionsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_device_extensions));
+    load_instance_proc(xr, instance, "xrGetVulkanGraphicsDeviceKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_graphics_device));
+    load_instance_proc(xr, instance, "xrGetVulkanGraphicsRequirementsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_requirements));
 
     XrSystemGetInfo system_info{};
     system_info.type = XR_TYPE_SYSTEM_GET_INFO;
@@ -490,29 +737,75 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
         return;
     }
 
-    EGLState egl{};
-    if (!init_egl(egl)) {
-        xr.destroy_instance(instance);
-        g_smoke.running.store(false);
-        return;
-    }
-
-    XrGraphicsRequirementsOpenGLESKHR gles_requirements{};
-    gles_requirements.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR;
-    result = xr.get_gles_requirements(instance, system_id, &gles_requirements);
+    XrGraphicsRequirementsVulkanKHR vulkan_requirements{};
+    vulkan_requirements.type = XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN_KHR;
+    result = xr.get_vulkan_requirements(instance, system_id, &vulkan_requirements);
     if (XR_FAILED(result)) {
-        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrGetOpenGLESGraphicsRequirementsKHR failed: %d", result);
-        shutdown_egl(egl);
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrGetVulkanGraphicsRequirementsKHR failed: %d", result);
         xr.destroy_instance(instance);
         g_smoke.running.store(false);
         return;
     }
 
-    XrGraphicsBindingOpenGLESAndroidKHR graphics_binding{};
-    graphics_binding.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR;
-    graphics_binding.display = egl.display;
-    graphics_binding.config = egl.config;
-    graphics_binding.context = egl.context;
+    std::vector<std::string> instance_extension_storage;
+    std::vector<std::string> device_extension_storage;
+    if (!query_openxr_vulkan_extensions(
+            xr.get_vulkan_instance_extensions,
+            instance,
+            system_id,
+            instance_extension_storage) ||
+        !query_openxr_vulkan_extensions(
+            xr.get_vulkan_device_extensions,
+            instance,
+            system_id,
+            device_extension_storage)) {
+        xr.destroy_instance(instance);
+        g_smoke.running.store(false);
+        return;
+    }
+    std::vector<const char*> instance_extensions = extension_cstrs(instance_extension_storage);
+    std::vector<const char*> device_extensions = extension_cstrs(device_extension_storage);
+
+    std::unique_ptr<tgfx::VulkanRenderDevice> render_device;
+    try {
+        tgfx::VulkanDeviceCreateInfo device_info{};
+        device_info.enable_validation = false;
+        device_info.instance_extensions = instance_extensions;
+        device_info.device_extensions = device_extensions;
+        device_info.physical_device_selector = [&](VkInstance vk_instance) -> VkPhysicalDevice {
+            VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+            XrResult select_result = xr.get_vulkan_graphics_device(
+                instance,
+                system_id,
+                vk_instance,
+                &physical_device
+            );
+            if (XR_FAILED(select_result)) {
+                __android_log_print(
+                    ANDROID_LOG_ERROR,
+                    kLogTag,
+                    "xrGetVulkanGraphicsDeviceKHR failed: %d",
+                    select_result
+                );
+                return VK_NULL_HANDLE;
+            }
+            return physical_device;
+        };
+        render_device = std::make_unique<tgfx::VulkanRenderDevice>(device_info);
+    } catch (const std::exception& e) {
+        log_error("tgfx2 Vulkan", e.what());
+        xr.destroy_instance(instance);
+        g_smoke.running.store(false);
+        return;
+    }
+
+    XrGraphicsBindingVulkanKHR graphics_binding{};
+    graphics_binding.type = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR;
+    graphics_binding.instance = render_device->instance();
+    graphics_binding.physicalDevice = render_device->physical_device();
+    graphics_binding.device = render_device->device();
+    graphics_binding.queueFamilyIndex = render_device->graphics_queue_family();
+    graphics_binding.queueIndex = 0;
 
     XrSessionCreateInfo session_create_info{};
     session_create_info.type = XR_TYPE_SESSION_CREATE_INFO;
@@ -523,7 +816,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
     result = xr.create_session(instance, &session_create_info, &session);
     if (XR_FAILED(result) || session == XR_NULL_HANDLE) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrCreateSession failed: %d", result);
-        shutdown_egl(egl);
+        render_device.reset();
         xr.destroy_instance(instance);
         g_smoke.running.store(false);
         return;
@@ -559,7 +852,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
             xr.destroy_space(app_space);
         }
         xr.destroy_session(session);
-        shutdown_egl(egl);
+        render_device.reset();
         xr.destroy_instance(instance);
         g_smoke.running.store(false);
         return;
@@ -582,7 +875,19 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
     xr.enumerate_swapchain_formats(session, 0, &format_count, nullptr);
     std::vector<int64_t> formats(format_count);
     xr.enumerate_swapchain_formats(session, format_count, &format_count, formats.data());
-    int64_t color_format = choose_swapchain_format(formats);
+    int64_t color_format = choose_vulkan_swapchain_format(formats);
+    tgfx::PixelFormat tgfx_color_format = pixel_format_from_vk_format(static_cast<VkFormat>(color_format));
+    if (tgfx_color_format == tgfx::PixelFormat::Undefined) {
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "unsupported Vulkan swapchain format: 0x%llx", static_cast<long long>(color_format));
+        if (app_space != XR_NULL_HANDLE) {
+            xr.destroy_space(app_space);
+        }
+        xr.destroy_session(session);
+        render_device.reset();
+        xr.destroy_instance(instance);
+        g_smoke.running.store(false);
+        return;
+    }
     __android_log_print(ANDROID_LOG_INFO, kLogTag, "OpenXR smoke color format: 0x%llx", static_cast<long long>(color_format));
 
     XrSwapchainCreateInfo swapchain_create_info{};
@@ -597,7 +902,15 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
     swapchain_create_info.mipCount = 1;
 
     std::vector<XrSwapchain> color_swapchains(view_count, XR_NULL_HANDLE);
-    std::vector<std::vector<XrSwapchainImageOpenGLESKHR>> swapchain_images(view_count);
+    std::vector<std::vector<XrSwapchainImageVulkanKHR>> swapchain_images(view_count);
+    std::vector<std::vector<tgfx::TextureHandle>> swapchain_textures(view_count);
+    tgfx::TextureDesc color_desc{};
+    color_desc.width = swapchain_create_info.width;
+    color_desc.height = swapchain_create_info.height;
+    color_desc.mip_levels = 1;
+    color_desc.sample_count = swapchain_create_info.sampleCount;
+    color_desc.format = tgfx_color_format;
+    color_desc.usage = tgfx::TextureUsage::ColorAttachment;
     for (uint32_t eye = 0; eye < view_count; ++eye) {
         result = xr.create_swapchain(session, &swapchain_create_info, &color_swapchains[eye]);
         if (XR_FAILED(result) || color_swapchains[eye] == XR_NULL_HANDLE) {
@@ -611,7 +924,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
                 xr.destroy_space(app_space);
             }
             xr.destroy_session(session);
-            shutdown_egl(egl);
+            render_device.reset();
             xr.destroy_instance(instance);
             g_smoke.running.store(false);
             return;
@@ -620,8 +933,8 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
         uint32_t image_count = 0;
         xr.enumerate_swapchain_images(color_swapchains[eye], 0, &image_count, nullptr);
         swapchain_images[eye].resize(image_count);
-        for (XrSwapchainImageOpenGLESKHR& image : swapchain_images[eye]) {
-            image.type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR;
+        for (XrSwapchainImageVulkanKHR& image : swapchain_images[eye]) {
+            image.type = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
         }
         xr.enumerate_swapchain_images(
             color_swapchains[eye],
@@ -629,59 +942,32 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
             &image_count,
             reinterpret_cast<XrSwapchainImageBaseHeader*>(swapchain_images[eye].data())
         );
+        swapchain_textures[eye].reserve(image_count);
+        for (const XrSwapchainImageVulkanKHR& image : swapchain_images[eye]) {
+            swapchain_textures[eye].push_back(
+                render_device->register_external_texture(
+                    reinterpret_cast<uintptr_t>(image.image),
+                    color_desc
+                )
+            );
+        }
     }
 
-    GLuint framebuffer = 0;
-    glGenFramebuffers(1, &framebuffer);
-    GLuint depth_renderbuffer = 0;
-    glGenRenderbuffers(1, &depth_renderbuffer);
-    glBindRenderbuffer(GL_RENDERBUFFER, depth_renderbuffer);
-    glRenderbufferStorage(
-        GL_RENDERBUFFER,
-        GL_DEPTH_COMPONENT24,
-        static_cast<GLsizei>(swapchain_create_info.width),
-        static_cast<GLsizei>(swapchain_create_info.height)
-    );
-    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    tgfx::TextureDesc depth_desc{};
+    depth_desc.width = swapchain_create_info.width;
+    depth_desc.height = swapchain_create_info.height;
+    depth_desc.mip_levels = 1;
+    depth_desc.sample_count = swapchain_create_info.sampleCount;
+    depth_desc.format = tgfx::PixelFormat::D32F;
+    depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment;
+    tgfx::TextureHandle depth_texture = render_device->create_texture(depth_desc);
 
-    GLuint cube_program = create_cube_program();
-    GLint projection_uniform = cube_program ? glGetUniformLocation(cube_program, "u_projection") : -1;
-    GLint view_uniform = cube_program ? glGetUniformLocation(cube_program, "u_view") : -1;
-    GLint model_uniform = cube_program ? glGetUniformLocation(cube_program, "u_model") : -1;
-    GLuint cube_vao = 0;
-    GLuint cube_vbo = 0;
-    const GLfloat cube_vertices[] = {
-        -0.35f, -0.35f,  0.35f,  1.0f, 0.1f, 0.1f,   0.35f, -0.35f,  0.35f,  1.0f, 0.1f, 0.1f,   0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 0.1f,
-        -0.35f, -0.35f,  0.35f,  1.0f, 0.1f, 0.1f,   0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 0.1f,  -0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 0.1f,
-        -0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 0.1f,  -0.35f,  0.35f, -0.35f,  0.1f, 1.0f, 0.1f,   0.35f,  0.35f, -0.35f,  0.1f, 1.0f, 0.1f,
-        -0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 0.1f,   0.35f,  0.35f, -0.35f,  0.1f, 1.0f, 0.1f,   0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 0.1f,
-        -0.35f, -0.35f, -0.35f,  0.1f, 0.3f, 1.0f,  -0.35f, -0.35f,  0.35f,  0.1f, 0.3f, 1.0f,  -0.35f,  0.35f,  0.35f,  0.1f, 0.3f, 1.0f,
-        -0.35f, -0.35f, -0.35f,  0.1f, 0.3f, 1.0f,  -0.35f,  0.35f,  0.35f,  0.1f, 0.3f, 1.0f,  -0.35f,  0.35f, -0.35f,  0.1f, 0.3f, 1.0f,
-         0.35f, -0.35f, -0.35f,  1.0f, 1.0f, 0.1f,   0.35f,  0.35f, -0.35f,  1.0f, 1.0f, 0.1f,   0.35f,  0.35f,  0.35f,  1.0f, 1.0f, 0.1f,
-         0.35f, -0.35f, -0.35f,  1.0f, 1.0f, 0.1f,   0.35f,  0.35f,  0.35f,  1.0f, 1.0f, 0.1f,   0.35f, -0.35f,  0.35f,  1.0f, 1.0f, 0.1f,
-        -0.35f,  0.35f, -0.35f,  1.0f, 0.1f, 1.0f,  -0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 1.0f,   0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 1.0f,
-        -0.35f,  0.35f, -0.35f,  1.0f, 0.1f, 1.0f,   0.35f,  0.35f,  0.35f,  1.0f, 0.1f, 1.0f,   0.35f,  0.35f, -0.35f,  1.0f, 0.1f, 1.0f,
-        -0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 1.0f,   0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 1.0f,   0.35f, -0.35f,  0.35f,  0.1f, 1.0f, 1.0f,
-        -0.35f, -0.35f, -0.35f,  0.1f, 1.0f, 1.0f,   0.35f, -0.35f,  0.35f,  0.1f, 1.0f, 1.0f,  -0.35f, -0.35f,  0.35f,  0.1f, 1.0f, 1.0f,
-    };
-    glGenVertexArrays(1, &cube_vao);
-    glGenBuffers(1, &cube_vbo);
-    glBindVertexArray(cube_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, cube_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cube_vertices), cube_vertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), nullptr);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(
-        1,
-        3,
-        GL_FLOAT,
-        GL_FALSE,
-        6 * sizeof(GLfloat),
-        reinterpret_cast<const void*>(3 * sizeof(GLfloat))
+    ScenePrimitiveSmoke scene_primitive;
+    const bool scene_primitive_ready = scene_primitive.init(
+        *render_device,
+        tgfx_color_format,
+        swapchain_create_info.sampleCount
     );
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     std::vector<XrView> views(view_count);
     for (XrView& view : views) {
@@ -773,54 +1059,82 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
                 views.data()
             );
             if (XR_SUCCEEDED(result) && located_view_count == view_count) {
-                glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-                glFramebufferRenderbuffer(
-                    GL_FRAMEBUFFER,
-                    GL_DEPTH_ATTACHMENT,
-                    GL_RENDERBUFFER,
-                    depth_renderbuffer
-                );
                 for (uint32_t eye = 0; eye < view_count; ++eye) {
                     uint32_t image_index = 0;
                     XrSwapchainImageAcquireInfo acquire_info{};
                     acquire_info.type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO;
-                    xr.acquire_swapchain_image(color_swapchains[eye], &acquire_info, &image_index);
+                    result = xr.acquire_swapchain_image(color_swapchains[eye], &acquire_info, &image_index);
+                    if (XR_FAILED(result)) {
+                        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrAcquireSwapchainImage[%u] failed: %d", eye, result);
+                        continue;
+                    }
 
                     XrSwapchainImageWaitInfo wait_swapchain_info{};
                     wait_swapchain_info.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO;
                     wait_swapchain_info.timeout = XR_INFINITE_DURATION;
-                    xr.wait_swapchain_image(color_swapchains[eye], &wait_swapchain_info);
-
-                    glFramebufferTexture2D(
-                        GL_FRAMEBUFFER,
-                        GL_COLOR_ATTACHMENT0,
-                        GL_TEXTURE_2D,
-                        swapchain_images[eye][image_index].image,
-                        0
-                    );
-                    glViewport(
-                        0,
-                        0,
-                        static_cast<GLsizei>(swapchain_create_info.width),
-                        static_cast<GLsizei>(swapchain_create_info.height)
-                    );
-                    glEnable(GL_DEPTH_TEST);
-                    glDepthFunc(GL_LEQUAL);
-                    glClearColor(0.015f, 0.018f, 0.024f, 1.0f);
-                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                    if (cube_program && cube_vao) {
-                        const auto projection = make_xr_projection_matrix(views[eye].fov, 0.05f, 100.0f);
-                        const auto view = make_view_matrix_from_xr_pose(views[eye].pose);
-                        const auto model = make_spinning_cube_model_matrix(frame_index);
-                        glUseProgram(cube_program);
-                        glUniformMatrix4fv(projection_uniform, 1, GL_FALSE, projection.data());
-                        glUniformMatrix4fv(view_uniform, 1, GL_FALSE, view.data());
-                        glUniformMatrix4fv(model_uniform, 1, GL_FALSE, model.data());
-                        glBindVertexArray(cube_vao);
-                        glDrawArrays(GL_TRIANGLES, 0, 36);
-                        glBindVertexArray(0);
-                        glUseProgram(0);
+                    result = xr.wait_swapchain_image(color_swapchains[eye], &wait_swapchain_info);
+                    if (XR_FAILED(result)) {
+                        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrWaitSwapchainImage[%u] failed: %d", eye, result);
+                        continue;
                     }
+
+                    const tgfx::TextureHandle color_texture = swapchain_textures[eye][image_index];
+                    if (auto* color_resource = render_device->get_texture(color_texture)) {
+                        color_resource->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+                    }
+                    if (auto* depth_resource = render_device->get_texture(depth_texture)) {
+                        depth_resource->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+                    }
+
+                    auto cmd = render_device->create_command_list();
+                    cmd->begin();
+                    tgfx::RenderPassDesc pass{};
+                    tgfx::ColorAttachmentDesc color_attachment{};
+                    color_attachment.texture = color_texture;
+                    color_attachment.load = tgfx::LoadOp::Clear;
+                    color_attachment.store = tgfx::StoreOp::Store;
+                    color_attachment.clear_color[0] = 0.015f;
+                    color_attachment.clear_color[1] = 0.018f;
+                    color_attachment.clear_color[2] = 0.024f;
+                    color_attachment.clear_color[3] = 1.0f;
+                    pass.colors.push_back(color_attachment);
+                    pass.has_depth = true;
+                    pass.depth.texture = depth_texture;
+                    pass.depth.load = tgfx::LoadOp::Clear;
+                    pass.depth.store = tgfx::StoreOp::DontCare;
+                    pass.depth.clear_depth = 1.0f;
+                    cmd->begin_render_pass(pass);
+                    cmd->set_viewport(
+                        0,
+                        0,
+                        static_cast<int>(swapchain_create_info.width),
+                        static_cast<int>(swapchain_create_info.height)
+                    );
+                    cmd->set_scissor(
+                        0,
+                        0,
+                        static_cast<int>(swapchain_create_info.width),
+                        static_cast<int>(swapchain_create_info.height)
+                    );
+                    if (scene_primitive_ready) {
+                        const auto projection = make_xr_projection_matrix_vulkan(views[eye].fov, 0.05f, 100.0f);
+                        const auto view = make_view_matrix_from_xr_pose(views[eye].pose);
+                        const auto model = make_scene_primitive_model_matrix(
+                            scene_primitive.primitive,
+                            frame_index
+                        );
+                        const std::array<float, 16> push =
+                            multiply_matrix(projection, multiply_matrix(view, model));
+                        cmd->bind_pipeline(scene_primitive.pipeline);
+                        cmd->set_push_constants(push.data(), static_cast<uint32_t>(push.size() * sizeof(float)));
+                        cmd->bind_vertex_buffer(0, scene_primitive.vbo);
+                        cmd->bind_index_buffer(scene_primitive.ebo, tgfx::IndexType::Uint32);
+                        cmd->draw_indexed(scene_primitive.index_count);
+                    }
+                    cmd->end_render_pass();
+                    cmd->end();
+                    render_device->submit(*cmd);
+                    render_device->wait_idle();
 
                     layer_views[eye].pose = views[eye].pose;
                     layer_views[eye].fov = views[eye].fov;
@@ -836,8 +1150,6 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
                     release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
                     xr.release_swapchain_image(color_swapchains[eye], &release_info);
                 }
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                glFlush();
 
                 layers[0] = reinterpret_cast<XrCompositionLayerBaseHeader*>(&projection_layer);
                 layer_count = 1;
@@ -860,19 +1172,18 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
     if (session_running) {
         xr.end_session(session);
     }
-    if (cube_vbo) {
-        glDeleteBuffers(1, &cube_vbo);
+    scene_primitive.destroy(render_device.get());
+    if (depth_texture) {
+        render_device->destroy(depth_texture);
     }
-    if (cube_vao) {
-        glDeleteVertexArrays(1, &cube_vao);
+    for (const std::vector<tgfx::TextureHandle>& eye_textures : swapchain_textures) {
+        for (tgfx::TextureHandle texture : eye_textures) {
+            if (texture) {
+                render_device->destroy(texture);
+            }
+        }
     }
-    if (cube_program) {
-        glDeleteProgram(cube_program);
-    }
-    if (depth_renderbuffer) {
-        glDeleteRenderbuffers(1, &depth_renderbuffer);
-    }
-    glDeleteFramebuffers(1, &framebuffer);
+    render_device->wait_idle();
     for (XrSwapchain swapchain : color_swapchains) {
         if (swapchain != XR_NULL_HANDLE) {
             xr.destroy_swapchain(swapchain);
@@ -882,7 +1193,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
         xr.destroy_space(app_space);
     }
     xr.destroy_session(session);
-    shutdown_egl(egl);
+    render_device.reset();
     xr.destroy_instance(instance);
     log_info("OpenXR color smoke thread stop");
 }

@@ -45,6 +45,7 @@ fi
     -s \
     TerminActivity:I \
     TerminOpenXRActivity:I \
+    TerminOpenXR:I \
     TerminAndroidJNI:I \
     TerminAndroid:I \
     TerminTcLog:I \
