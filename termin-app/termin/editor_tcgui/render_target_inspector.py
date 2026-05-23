@@ -34,6 +34,11 @@ _DEPTH_FORMATS = [
     ("depth24", "Depth 24"),
 ]
 
+_TARGET_KINDS = [
+    ("texture_2d", "Texture 2D"),
+    ("xr_stereo", "XR Stereo"),
+]
+
 
 class RenderTargetInspectorTcgui(VStack):
     """Inspector panel for RenderTarget properties."""
@@ -47,6 +52,7 @@ class RenderTargetInspectorTcgui(VStack):
         self._scene = None
         self._scenes = []
         self._cameras = []
+        self._target_kind_values = [value for value, _label in _TARGET_KINDS]
         self._color_format_values = [value for value, _label in _COLOR_FORMATS]
         self._depth_format_values = [value for value, _label in _DEPTH_FORMATS]
         self._updating = False
@@ -69,24 +75,28 @@ class RenderTargetInspectorTcgui(VStack):
         self.add_child(grid)
 
         enabled_lbl = Label(); enabled_lbl.text = "Enabled:"; enabled_lbl.preferred_width = px(96)
+        self._enabled_lbl = enabled_lbl
         self._enabled = Checkbox()
         self._enabled.on_changed = self._on_enabled_changed
         grid.add(enabled_lbl, 0, 0)
         grid.add(self._enabled, 0, 1)
 
         scene_lbl = Label(); scene_lbl.text = "Scene:"; scene_lbl.preferred_width = px(96)
+        self._scene_lbl = scene_lbl
         self._scene_combo = ComboBox()
         self._scene_combo.on_changed = self._on_scene_changed
         grid.add(scene_lbl, 1, 0)
         grid.add(self._scene_combo, 1, 1)
 
         cam_lbl = Label(); cam_lbl.text = "Camera:"; cam_lbl.preferred_width = px(96)
+        self._camera_lbl = cam_lbl
         self._camera_combo = ComboBox()
         self._camera_combo.on_changed = self._on_camera_changed
         grid.add(cam_lbl, 2, 0)
         grid.add(self._camera_combo, 2, 1)
 
         pipe_lbl = Label(); pipe_lbl.text = "Pipeline:"; pipe_lbl.preferred_width = px(96)
+        self._pipeline_lbl = pipe_lbl
         self._pipeline_combo = ComboBox()
         self._pipeline_combo.on_changed = self._on_pipeline_changed
         grid.add(pipe_lbl, 3, 0)
@@ -180,12 +190,20 @@ class RenderTargetInspectorTcgui(VStack):
         grid.add(self._height_lbl, 15, 0)
         grid.add(self._height, 15, 1)
 
+        kind_lbl = Label(); kind_lbl.text = "Type:"; kind_lbl.preferred_width = px(96)
+        self._kind_lbl = kind_lbl
+        self._kind_combo = ComboBox()
+        self._kind_combo.items = [label for _value, label in _TARGET_KINDS]
+        self._kind_combo.on_changed = self._on_kind_changed
+        grid.add(self._kind_lbl, 16, 0)
+        grid.add(self._kind_combo, 16, 1)
+
         mask_lbl = Label(); mask_lbl.text = "Layer Mask:"; mask_lbl.preferred_width = px(96)
         self._mask_lbl = mask_lbl
         self._layer_mask_widget = LayerMaskFieldWidget()
         self._layer_mask_widget.on_value_changed = self._on_layer_mask_changed
-        grid.add(self._mask_lbl, 16, 0)
-        grid.add(self._layer_mask_widget, 16, 1)
+        grid.add(self._mask_lbl, 17, 0)
+        grid.add(self._layer_mask_widget, 17, 1)
 
         self._pipeline_params_sep = Separator()
         self._pipeline_params_sep.visible = False
@@ -236,9 +254,11 @@ class RenderTargetInspectorTcgui(VStack):
 
             self._set_visible_state(True)
             rt_name = render_target.name or "<unnamed>"
-            self._subtitle.text = f"Render Target: {rt_name}"
+            kind_label = self._target_kind_label(render_target.kind)
+            self._subtitle.text = f"Render Target: {rt_name} [{kind_label}]"
 
             self._enabled.checked = bool(render_target.enabled)
+            self._select_combo_value(self._kind_combo, self._target_kind_values, render_target.kind)
 
             self._refresh_scene_combo()
             self._select_current_scene()
@@ -259,17 +279,23 @@ class RenderTargetInspectorTcgui(VStack):
             self._height.value = render_target.height
             self._layer_mask_widget.set_value(render_target.layer_mask)
             self._refresh_pipeline_params()
-            self._update_size_visibility()
+            self._update_kind_visibility()
         finally:
             self._updating = False
             if self._ui is not None:
                 self._ui.request_layout()
 
     def _set_visible_state(self, has_target: bool) -> None:
+        self._enabled_lbl.visible = has_target
         self._enabled.visible = has_target
+        self._scene_lbl.visible = has_target
         self._scene_combo.visible = has_target
+        self._camera_lbl.visible = has_target
         self._camera_combo.visible = has_target
+        self._pipeline_lbl.visible = has_target
         self._pipeline_combo.visible = has_target
+        self._kind_lbl.visible = has_target
+        self._kind_combo.visible = has_target
         self._dynamic_lbl.visible = has_target
         self._dynamic_resolution.visible = has_target
         self._color_format_lbl.visible = has_target
@@ -290,6 +316,7 @@ class RenderTargetInspectorTcgui(VStack):
         self._layer_mask_widget.visible = has_target
         self._update_size_visibility()
         self._empty.visible = not has_target
+        self._update_kind_visibility()
 
     def _refresh_scene_combo(self) -> None:
         old = self._scene_combo.on_changed
@@ -398,6 +425,19 @@ class RenderTargetInspectorTcgui(VStack):
         if self._updating or self._render_target is None:
             return
         self._render_target.enabled = bool(checked)
+        self._emit_changed()
+
+    def _on_kind_changed(self, index: int, _text: str) -> None:
+        if self._updating or self._render_target is None:
+            return
+        if index < 0 or index >= len(self._target_kind_values):
+            log.error(f"[RenderTargetInspector] invalid render target kind index: {index}")
+            return
+        kind = self._target_kind_values[index]
+        self._render_target.kind = kind
+        if kind == "xr_stereo":
+            self._render_target.camera = None
+        self._update_kind_visibility()
         self._emit_changed()
 
     def _on_camera_changed(self, index: int, _text: str) -> None:
@@ -621,13 +661,35 @@ class RenderTargetInspectorTcgui(VStack):
         return "file:" + name
 
     def _update_size_visibility(self) -> None:
-        manual = self._render_target is not None and not bool(self._dynamic_resolution.checked)
+        texture_target = self._is_texture_target()
+        manual = texture_target and not bool(self._dynamic_resolution.checked)
         self._width_lbl.visible = manual
         self._width.visible = manual
         self._height_lbl.visible = manual
         self._height.visible = manual
         if self._ui is not None:
             self._ui.request_layout()
+
+    def _update_kind_visibility(self) -> None:
+        has_target = self._render_target is not None
+        texture_target = self._is_texture_target()
+        xr_target = self._is_xr_target()
+
+        self._camera_lbl.visible = has_target and not xr_target
+        self._camera_combo.visible = has_target and not xr_target
+        self._dynamic_lbl.visible = texture_target
+        self._dynamic_resolution.visible = texture_target
+        self._color_format_lbl.visible = texture_target
+        self._color_format.visible = texture_target
+        self._depth_format_lbl.visible = texture_target
+        self._depth_format.visible = texture_target
+        self._update_size_visibility()
+
+    def _is_texture_target(self) -> bool:
+        return self._render_target is not None and self._render_target.kind == "texture_2d"
+
+    def _is_xr_target(self) -> bool:
+        return self._render_target is not None and self._render_target.kind == "xr_stereo"
 
     def _emit_changed(self) -> None:
         if self.on_changed is not None:
@@ -640,3 +702,11 @@ class RenderTargetInspectorTcgui(VStack):
             return
         log.warn(f"[RenderTargetInspector] unknown render target format: {value}")
         combo.selected_index = 0
+
+    @staticmethod
+    def _target_kind_label(kind: str) -> str:
+        for value, label in _TARGET_KINDS:
+            if value == kind:
+                return label
+        log.warn(f"[RenderTargetInspector] unknown render target kind: {kind}")
+        return "Texture 2D"

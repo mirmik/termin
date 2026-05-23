@@ -79,6 +79,7 @@ class _Mount:
 class _RenderTargetConfig:
     def __init__(self):
         self.name = "Custom"
+        self.kind = "texture_2d"
         self.camera_uuid = ""
         self.width = 320
         self.height = 200
@@ -123,6 +124,7 @@ class _RenderTarget:
 
     def __init__(self, name, pool):
         self.name = name
+        self.kind = "texture_2d"
         self._pool = pool
         self.index = _RenderTarget._next_index
         _RenderTarget._next_index += 1
@@ -360,6 +362,25 @@ def test_sync_render_target_configs_preserves_pipeline_params(monkeypatch):
     }
 
 
+def test_sync_render_target_configs_preserves_kind(monkeypatch):
+    pool = []
+    _install_native_stubs(monkeypatch, pool)
+
+    scene = _Scene(_Mount([]))
+    manager = _Manager()
+    model = RenderingModel(manager)
+
+    render_target = _RenderTarget("XrTarget", pool)
+    render_target.kind = "xr_stereo"
+    render_target.scene = scene
+    manager.managed_render_targets.append(render_target)
+
+    model.sync_render_target_configs_to_scene(scene)
+
+    assert len(scene._mount.render_target_configs) == 1
+    assert scene._mount.render_target_configs[0].kind == "xr_stereo"
+
+
 def test_sync_render_target_configs_preserves_clear_settings(monkeypatch):
     pool = []
     _install_native_stubs(monkeypatch, pool)
@@ -441,6 +462,20 @@ def test_render_target_config_dict_serialization_preserves_clear_settings(monkey
     assert restored.clear_color_value == (0.1, 0.2, 0.3, 1.0)
     assert restored.clear_depth is True
     assert restored.clear_depth_value == 0.5
+
+
+def test_render_target_config_dict_serialization_preserves_kind(monkeypatch):
+    module = _load_render_target_config_module(monkeypatch)
+
+    config = _RenderTargetConfig()
+    config.kind = "xr_stereo"
+
+    serialized = module.serialize_render_target_config(config)
+
+    assert serialized["kind"] == "xr_stereo"
+
+    restored = module.deserialize_render_target_config(serialized)
+    assert restored.kind == "xr_stereo"
 
 
 def test_sync_render_target_configs_only_includes_standalone_targets(monkeypatch):

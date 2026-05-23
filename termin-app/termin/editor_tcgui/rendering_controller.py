@@ -554,9 +554,11 @@ class RenderingControllerTcgui:
         self._request_update()
         self._notify_rendering_changed()
 
-    def _on_add_render_target_requested(self) -> None:
+    def _on_add_render_target_requested(self, kind: str = "texture_2d") -> None:
         from termin.render_framework._render_framework_native import render_target_new
-        render_target = render_target_new("RenderTarget")
+        name = "XRStereoTarget" if kind == "xr_stereo" else "RenderTarget"
+        render_target = render_target_new(name)
+        render_target.kind = kind
         scene = self._get_scene() if self._get_scene is not None else None
         if scene is not None:
             render_target.scene = scene

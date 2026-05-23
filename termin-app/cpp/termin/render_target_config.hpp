@@ -14,6 +14,7 @@ namespace termin {
 class RenderTargetConfig {
 public:
     std::string name;
+    std::string kind = "texture_2d";
     std::string camera_uuid;
     int width = 512;
     int height = 512;

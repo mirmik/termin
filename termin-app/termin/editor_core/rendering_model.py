@@ -494,6 +494,7 @@ class RenderingModel:
 
             config = RenderTargetConfig()
             config.name = rt.name or ""
+            config.kind = rt.kind
             config.camera_uuid = camera_uuid
             config.width = rt.width
             config.height = rt.height

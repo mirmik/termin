@@ -309,6 +309,21 @@ void RenderingManager::request_render_update() {
     }
 }
 
+void RenderingManager::set_render_target_context_provider(
+    tc_render_target_kind kind,
+    RenderTargetContextProvider provider
+) {
+    if (!provider) {
+        clear_render_target_context_provider(kind);
+        return;
+    }
+    render_target_context_providers_[(int)kind] = std::move(provider);
+}
+
+void RenderingManager::clear_render_target_context_provider(tc_render_target_kind kind) {
+    render_target_context_providers_.erase((int)kind);
+}
+
 tc_pipeline_handle RenderingManager::create_pipeline(const std::string& name) {
     if (name == "(Default)" || name == "Default" || name.empty()) {
         return make_default_pipeline();
@@ -837,6 +852,14 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
 
         tc_render_target_handle rt = tc_render_target_new(rt_name.c_str());
         tc_render_target_set_scene(rt, scene);
+        if (rtc->kind && rtc->kind[0] != '\0') {
+            tc_render_target_kind kind;
+            if (tc_render_target_kind_from_string(rtc->kind, &kind)) {
+                tc_render_target_set_kind(rt, kind);
+            } else {
+                tc_log(TC_LOG_WARN, "[RenderingManager] unknown render target kind '%s'", rtc->kind);
+            }
+        }
         tc_render_target_set_dynamic_resolution(rt, rtc->dynamic_resolution);
         if (!rtc->dynamic_resolution) {
             tc_render_target_set_width(rt, rtc->width);
@@ -1402,16 +1425,6 @@ void RenderingManager::render_scene_pipeline_offscreen(
             continue;
         }
 
-        tc_component* camera_comp = tc_render_target_get_camera(rt);
-        if (!camera_comp) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' has no camera", vp_name.c_str());
-            continue;
-        }
-
-        if (first_viewport_name.empty()) {
-            first_viewport_name = vp_name;
-        }
-
         // Get pixel rect
         int px, py, pw, ph;
         tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
@@ -1425,70 +1438,19 @@ void RenderingManager::render_scene_pipeline_offscreen(
         int rh = ph;
         resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
 
-        double aspect = static_cast<double>(rw) / std::max(1, rh);
-        RenderCamera render_cam;
-        uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
-        if (!get_render_camera(camera_comp, aspect, &render_cam, &camera_layer_mask)) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' camera has no camera capability", vp_name.c_str());
-            continue;
-        }
-
-        // Resolve the viewport's color + depth output. Two paths:
-        //   - Render-target-backed viewport: tc_render_target owns the
-        //     tc_textures (Phase 3); we just ensure they exist and wrap
-        //     them as tgfx2 handles via the bridge.
-        //   - Plain viewport (no RT): legacy ViewportRenderState owns
-        //     the tgfx2 textures directly. Stays as-is until the
-        //     non-RT path is also migrated.
-        RenderEngine* vp_engine = render_engine();
-        if (vp_engine) vp_engine->ensure_tgfx2();
-        tgfx::IRenderDevice* vp_device = vp_engine ? vp_engine->tgfx2_device() : nullptr;
-        if (!vp_device) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] tgfx2 device unavailable for viewport '%s'",
-                   vp_name.c_str());
-            continue;
-        }
-
-        tgfx::TextureHandle out_color{}, out_depth{};
-        if (tc_render_target_handle_valid(rt)) {
-            tc_render_target_ensure_textures(rt);
-            out_color = wrap_tc_texture_as_tgfx2(*vp_device,
-                tc_render_target_get_color_texture(rt));
-            out_depth = wrap_tc_texture_as_tgfx2(*vp_device,
-                tc_render_target_get_depth_texture(rt));
-        } else {
-            ViewportRenderState* state = get_or_create_viewport_state(viewport);
-            state->ensure_output_textures(*vp_device, rw, rh);
-            out_color = state->output_color_tex;
-            out_depth = state->output_depth_tex;
-        }
-
-        // Create render target context. Its render_rect is the render target
-        // extent, not the viewport's screen rectangle unless dynamic resolution
-        // explicitly copied the viewport size into the render target above.
-        RenderTargetContext ctx;
-        ctx.name = vp_name;
-        ctx.camera = render_cam;
-        ctx.render_rect = {0, 0, rw, rh};
-        ctx.internal_entities = tc_viewport_get_internal_entities(viewport);
-        ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
-        ctx.output_color_tex = out_color;
-        ctx.output_depth_tex = out_depth;
-        if (tc_render_target_handle_valid(rt)) {
-            ctx.output_color_format = render_target_format_to_tgfx2(
-                tc_render_target_get_color_format(rt));
-            ctx.output_depth_format = render_target_format_to_tgfx2(
-                tc_render_target_get_depth_format(rt));
-            fill_external_textures_from_render_target(ctx, rt, *vp_device, managed_render_targets_);
-            fill_render_target_clear_settings(ctx, rt);
-        } else {
-            ViewportRenderState* state = get_viewport_state(viewport);
-            if (state) {
-                ctx.output_color_format = state->output_color_format;
-                ctx.output_depth_format = state->output_depth_format;
+        std::string default_context;
+        if (build_render_target_contexts(
+                rt,
+                vp_name,
+                tc_viewport_get_internal_entities(viewport),
+                rw,
+                rh,
+                contexts,
+                default_context)) {
+            if (first_viewport_name.empty()) {
+                first_viewport_name = default_context.empty() ? vp_name : default_context;
             }
         }
-        contexts[vp_name] = std::move(ctx);
     }
 
     if (contexts.empty()) {
@@ -1510,6 +1472,120 @@ void RenderingManager::render_scene_pipeline_offscreen(
     );
 }
 
+bool RenderingManager::build_render_target_contexts(
+    tc_render_target_handle rt,
+    const std::string& base_context_name,
+    tc_entity_handle internal_entities,
+    int render_width,
+    int render_height,
+    std::unordered_map<std::string, RenderTargetContext>& contexts,
+    std::string& default_context_name
+) {
+    if (!tc_render_target_handle_valid(rt)) {
+        return false;
+    }
+    if (!tc_render_target_get_enabled(rt)) {
+        return false;
+    }
+
+    const tc_render_target_kind kind = tc_render_target_get_kind(rt);
+    if (kind != TC_RENDER_TARGET_TEXTURE_2D) {
+        auto it = render_target_context_providers_.find((int)kind);
+        if (it == render_target_context_providers_.end() || !it->second) {
+            const char* rt_name = tc_render_target_get_name(rt);
+            tc_log(
+                TC_LOG_WARN,
+                "[RenderingManager] render target '%s' kind '%s' has no context provider",
+                rt_name ? rt_name : "(unnamed)",
+                tc_render_target_kind_to_string(kind)
+            );
+            return false;
+        }
+        const bool ok = it->second(
+            *this,
+            rt,
+            base_context_name,
+            internal_entities,
+            contexts,
+            default_context_name
+        );
+        if (ok && default_context_name.empty() && !contexts.empty()) {
+            default_context_name = contexts.begin()->first;
+        }
+        return ok;
+    }
+
+    const char* rt_name = tc_render_target_get_name(rt);
+    tc_component* camera_comp = tc_render_target_get_camera(rt);
+    if (!camera_comp) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': no camera", rt_name ? rt_name : "?");
+        return false;
+    }
+
+    if (render_width <= 0 || render_height <= 0) {
+        tc_log(
+            TC_LOG_WARN,
+            "[RenderingManager] RT '%s': invalid size %dx%d",
+            rt_name ? rt_name : "?",
+            render_width,
+            render_height
+        );
+        return false;
+    }
+
+    double aspect = static_cast<double>(render_width) / std::max(1, render_height);
+    RenderCamera render_camera;
+    uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+    if (!get_render_camera(camera_comp, aspect, &render_camera, &camera_layer_mask)) {
+        tc_log(
+            TC_LOG_WARN,
+            "[RenderingManager] render target '%s': no camera capability",
+            rt_name ? rt_name : "(null)"
+        );
+        return false;
+    }
+
+    RenderEngine* engine = render_engine();
+    if (engine) engine->ensure_tgfx2();
+    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    if (!device) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable",
+               rt_name ? rt_name : "?");
+        return false;
+    }
+
+    tc_render_target_ensure_textures(rt);
+    tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
+        *device, tc_render_target_get_color_texture(rt));
+    tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
+        *device, tc_render_target_get_depth_texture(rt));
+
+    const std::string context_name = base_context_name.empty()
+        ? (rt_name ? rt_name : "")
+        : base_context_name;
+
+    RenderTargetContext ctx;
+    ctx.name = context_name;
+    ctx.camera = render_camera;
+    ctx.render_rect = {0, 0, render_width, render_height};
+    ctx.internal_entities = internal_entities;
+    ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
+    ctx.output_color_tex = out_color;
+    ctx.output_depth_tex = out_depth;
+    ctx.output_color_format = render_target_format_to_tgfx2(
+        tc_render_target_get_color_format(rt));
+    ctx.output_depth_format = render_target_format_to_tgfx2(
+        tc_render_target_get_depth_format(rt));
+    fill_render_target_clear_settings(ctx, rt);
+    fill_external_textures_from_render_target(ctx, rt, *device, managed_render_targets_);
+    contexts[context_name] = std::move(ctx);
+
+    if (default_context_name.empty()) {
+        default_context_name = context_name;
+    }
+    return true;
+}
+
 void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     const char* vp_name = tc_viewport_get_name(viewport);
 
@@ -1528,15 +1604,9 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     }
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
-    tc_component* camera_comp = tc_render_target_get_camera(rt);
     tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
 
     if (!tc_scene_handle_valid(scene)) {
-        return;
-    }
-    if (!camera_comp) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): no camera",
-               vp_name ? vp_name : "(null)");
         return;
     }
     if (!tc_pipeline_handle_valid(pipeline)) {
@@ -1557,53 +1627,27 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
     int rh = ph;
     resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
 
-    double aspect = static_cast<double>(rw) / std::max(1, rh);
-    RenderCamera render_camera;
-    uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
-    if (!get_render_camera(camera_comp, aspect, &render_camera, &camera_layer_mask)) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): no camera capability",
-               vp_name ? vp_name : "(null)");
-        return;
-    }
-
-    // Output textures are owned by the render target itself (Phase 3).
-    RenderEngine* engine = render_engine();
-    if (engine) engine->ensure_tgfx2();
-    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
-    if (!device) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): tgfx2 device unavailable",
-               vp_name ? vp_name : "(null)");
-        return;
-    }
-    tc_render_target_ensure_textures(rt);
-    tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_color_texture(rt));
-    tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_depth_texture(rt));
-
     // Collect lights
     std::vector<Light> lights = collect_lights(scene);
 
-    // Build a single render target context and run scene pipeline.
+    // Build one or more render target contexts and run scene pipeline.
     tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
     std::unordered_map<std::string, RenderTargetContext> contexts;
-    RenderTargetContext ctx;
-    ctx.name = vp_name ? vp_name : "";
-    ctx.camera = render_camera;
-    ctx.render_rect = {0, 0, rw, rh};
-    ctx.internal_entities = internal_entities;
-    ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
-    ctx.output_color_tex = out_color;
-    ctx.output_depth_tex = out_depth;
-    ctx.output_color_format = render_target_format_to_tgfx2(
-        tc_render_target_get_color_format(rt));
-    ctx.output_depth_format = render_target_format_to_tgfx2(
-        tc_render_target_get_depth_format(rt));
-    fill_render_target_clear_settings(ctx, rt);
-    fill_external_textures_from_render_target(ctx, rt, *device, managed_render_targets_);
-    contexts[ctx.name] = std::move(ctx);
+    std::string default_context;
+    if (!build_render_target_contexts(
+            rt,
+            vp_name ? vp_name : "",
+            internal_entities,
+            rw,
+            rh,
+            contexts,
+            default_context)) {
+        return;
+    }
+
+    RenderEngine* engine = render_engine();
     engine->render_scene_pipeline_offscreen(
-        render_pipeline, scene, contexts, lights, vp_name ? vp_name : ""
+        render_pipeline, scene, contexts, lights, default_context
     );
 }
 
@@ -1616,7 +1660,8 @@ void RenderingManager::sync_viewport_resolutions() {
             while (tc_viewport_handle_valid(vp)) {
                 tc_render_target_handle rt = tc_viewport_get_render_target(vp);
                 if (tc_render_target_handle_valid(rt)) {
-                    if (tc_render_target_get_dynamic_resolution(rt)) {
+                    if (tc_render_target_get_kind(rt) == TC_RENDER_TARGET_TEXTURE_2D
+                            && tc_render_target_get_dynamic_resolution(rt)) {
                         int px, py, pw, ph;
                         tc_viewport_get_pixel_rect(vp, &px, &py, &pw, &ph);
                         if (pw > 0 && ph > 0) {
@@ -1640,15 +1685,10 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
     const char* rt_name = tc_render_target_get_name(rt);
 
     tc_scene_handle scene = tc_render_target_get_scene(rt);
-    tc_component* camera_comp = tc_render_target_get_camera(rt);
     tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
 
     if (!tc_scene_handle_valid(scene)) {
         tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': no scene", rt_name ? rt_name : "?");
-        return;
-    }
-    if (!camera_comp) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': no camera", rt_name ? rt_name : "?");
         return;
     }
     if (!tc_pipeline_handle_valid(pipeline)) {
@@ -1658,58 +1698,32 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
 
     int w = tc_render_target_get_width(rt);
     int h = tc_render_target_get_height(rt);
-    if (w <= 0 || h <= 0) {
+    if (tc_render_target_get_kind(rt) == TC_RENDER_TARGET_TEXTURE_2D && (w <= 0 || h <= 0)) {
         tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': invalid size %dx%d", rt_name ? rt_name : "?", w, h);
-        return;
-    }
-
-    double aspect = static_cast<double>(w) / std::max(1, h);
-    RenderCamera render_camera;
-    uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
-    if (!get_render_camera(camera_comp, aspect, &render_camera, &camera_layer_mask)) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_render_target_offscreen('%s'): no camera capability",
-               rt_name ? rt_name : "(null)");
         return;
     }
 
     RenderPipeline render_pipeline(pipeline);
 
-    RenderEngine* engine = render_engine();
-    if (engine) engine->ensure_tgfx2();
-    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
-    if (!device) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable",
-               rt_name ? rt_name : "?");
-        return;
-    }
-    // Output textures are owned by the render target (Phase 3).
-    tc_render_target_ensure_textures(rt);
-    tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_color_texture(rt));
-    tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_depth_texture(rt));
-
     std::vector<Light> lights = collect_lights(scene);
 
     std::string name = rt_name ? rt_name : "";
     std::unordered_map<std::string, RenderTargetContext> contexts;
-    RenderTargetContext ctx;
-    ctx.name = name;
-    ctx.camera = render_camera;
-    ctx.render_rect = {0, 0, w, h};
-    ctx.internal_entities = TC_ENTITY_HANDLE_INVALID;
-    ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
-    ctx.output_color_tex = out_color;
-    ctx.output_depth_tex = out_depth;
-    ctx.output_color_format = render_target_format_to_tgfx2(
-        tc_render_target_get_color_format(rt));
-    ctx.output_depth_format = render_target_format_to_tgfx2(
-        tc_render_target_get_depth_format(rt));
-    fill_render_target_clear_settings(ctx, rt);
-    fill_external_textures_from_render_target(ctx, rt, *device, managed_render_targets_);
-    contexts[name] = std::move(ctx);
+    std::string default_context;
+    if (!build_render_target_contexts(
+            rt,
+            name,
+            TC_ENTITY_HANDLE_INVALID,
+            w,
+            h,
+            contexts,
+            default_context)) {
+        return;
+    }
+
+    RenderEngine* engine = render_engine();
     engine->render_scene_pipeline_offscreen(
-        render_pipeline, scene, contexts, lights, name
+        render_pipeline, scene, contexts, lights, default_context
     );
 }
 
@@ -1807,6 +1821,9 @@ void RenderingManager::present_display(tc_display* display) {
 
         if (tc_render_target_handle_valid(rt)) {
             if (!tc_render_target_get_enabled(rt)) {
+                continue;
+            }
+            if (tc_render_target_get_kind(rt) != TC_RENDER_TARGET_TEXTURE_2D) {
                 continue;
             }
             // RT-owned tc_texture (Phase 4). The render path has already

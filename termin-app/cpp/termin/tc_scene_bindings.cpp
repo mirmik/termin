@@ -159,6 +159,7 @@ void bind_tc_scene(nb::module_& m) {
     nb::class_<RenderTargetConfig>(m, "RenderTargetConfig")
         .def(nb::init<>())
         .def_rw("name", &RenderTargetConfig::name)
+        .def_rw("kind", &RenderTargetConfig::kind)
         .def_rw("camera_uuid", &RenderTargetConfig::camera_uuid)
         .def_rw("width", &RenderTargetConfig::width)
         .def_rw("height", &RenderTargetConfig::height)

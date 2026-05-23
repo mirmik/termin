@@ -37,12 +37,22 @@ extern "C" {
 
 namespace termin {
 
+class RenderingManager;
+
 // Factory callback types
 using DisplayFactory = std::function<tc_display*(const std::string& name)>;
 using PipelineFactory = std::function<tc_pipeline_handle(const std::string& name)>;
 using MakeCurrentCallback = std::function<void()>;
 using DisplayRemovedCallback = std::function<void(tc_display*)>;
 using RenderRequestCallback = std::function<void()>;
+using RenderTargetContextProvider = std::function<bool(
+    RenderingManager& manager,
+    tc_render_target_handle render_target,
+    const std::string& base_context_name,
+    tc_entity_handle internal_entities,
+    std::unordered_map<std::string, RenderTargetContext>& contexts,
+    std::string& default_context_name
+)>;
 
 // RenderingManager - manages displays and rendering
 //
@@ -87,6 +97,15 @@ public:
     // event path and a pull-mode host must render another frame.
     void set_render_request_callback(RenderRequestCallback callback);
     void request_render_update();
+
+    // Register a provider for special render target kinds. Texture targets
+    // are built internally; XR stereo targets use this hook to supply per-eye
+    // RenderTargetContext objects for the current runtime frame.
+    void set_render_target_context_provider(
+        tc_render_target_kind kind,
+        RenderTargetContextProvider provider
+    );
+    void clear_render_target_context_provider(tc_render_target_kind kind);
 
     // Create pipeline by name (uses C++ factory for "(Default)"/"Default", Python factory for rest)
     tc_pipeline_handle create_pipeline(const std::string& name);
@@ -306,6 +325,16 @@ private:
         tc_pipeline_handle pipeline
     );
 
+    bool build_render_target_contexts(
+        tc_render_target_handle rt,
+        const std::string& base_context_name,
+        tc_entity_handle internal_entities,
+        int render_width,
+        int render_height,
+        std::unordered_map<std::string, RenderTargetContext>& contexts,
+        std::string& default_context_name
+    );
+
     // Collect lights from scene (simplified - returns empty for now)
     std::vector<Light> collect_lights(tc_scene_handle scene);
 
@@ -370,6 +399,9 @@ private:
 
     // Render target states (key = render_target handle as uint64)
     std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> render_target_states_;
+
+    // Special target providers, keyed by tc_render_target_kind.
+    std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
 
     // Helper to make key from scene handle
     static uint64_t scene_key(tc_scene_handle h) {

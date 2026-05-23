@@ -274,6 +274,8 @@ class TexturePickerWidget(HStack):
                     f"{len(configs)} render_target_config(s)"
                 )
                 for rt in configs:
+                    if rt.kind != "texture_2d":
+                        continue
                     name = rt.name
                     if not name:
                         log.warn(f"[TexturePickerWidget] skipped unnamed render_target_config in scene '{scene_name}'")
@@ -299,6 +301,8 @@ class TexturePickerWidget(HStack):
             for h in pool:
                 if not h.alive:
                     log.warn(f"[TexturePickerWidget] skipped dead RT handle {h.index}:{h.generation}")
+                    continue
+                if h.kind != "texture_2d":
                     continue
                 name = h.name
                 if not name:

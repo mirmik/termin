@@ -62,6 +62,7 @@ class _Scene:
 class _RenderTarget:
     def __init__(self, scene, camera):
         self.name = "Target"
+        self.kind = "texture_2d"
         self.enabled = True
         self.locked = False
         self.scene = scene
@@ -248,12 +249,32 @@ def test_render_target_inspector_requests_layout_when_manual_size_visibility_cha
     assert fake_ui.layout_requests > before
 
 
+def test_render_target_inspector_hides_texture_fields_for_xr_target():
+    scene = _Scene("Scene", 1, [])
+    render_target = _RenderTarget(scene, None)
+    render_target.kind = "xr_stereo"
+
+    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector.set_scene_getter(lambda: [scene])
+    inspector.set_render_target(render_target, scene)
+
+    assert inspector._kind_combo.selected_index == 1
+    assert inspector._camera_combo.visible is False
+    assert inspector._dynamic_resolution.visible is False
+    assert inspector._color_format.visible is False
+    assert inspector._depth_format.visible is False
+    assert inspector._width.visible is False
+    assert inspector._height.visible is False
+    assert inspector._pipeline_combo.visible is True
+    assert inspector._layer_mask_widget.visible is True
+
+
 def test_texture_picker_with_scene_getter_includes_live_render_target_pool(monkeypatch):
     scene_mount_module = types.ModuleType("termin.visualization.core.scene")
     scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
     monkeypatch.setitem(sys.modules, "termin.visualization.core.scene", scene_mount_module)
 
-    live_rt = types.SimpleNamespace(alive=True, name="LiveRT", index=1, generation=1)
+    live_rt = types.SimpleNamespace(alive=True, name="LiveRT", kind="texture_2d", index=1, generation=1)
     render_framework_module = types.ModuleType("termin.render_framework")
     render_framework_module.render_target_pool_list = lambda: [live_rt]
     monkeypatch.setitem(sys.modules, "termin.render_framework", render_framework_module)
@@ -275,7 +296,7 @@ def test_texture_picker_lists_render_targets_before_file_textures(monkeypatch):
     scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
     monkeypatch.setitem(sys.modules, "termin.visualization.core.scene", scene_mount_module)
 
-    live_rt = types.SimpleNamespace(alive=True, name="LiveRT", index=1, generation=1)
+    live_rt = types.SimpleNamespace(alive=True, name="LiveRT", kind="texture_2d", index=1, generation=1)
     render_framework_module = types.ModuleType("termin.render_framework")
     render_framework_module.render_target_pool_list = lambda: [live_rt]
     monkeypatch.setitem(sys.modules, "termin.render_framework", render_framework_module)
@@ -294,6 +315,27 @@ def test_texture_picker_lists_render_targets_before_file_textures(monkeypatch):
 
     assert picker._item_tags[:4] == ["default", "rt_color", "rt_depth", "file"]
     assert picker._item_values[1:3] == ["LiveRT", "LiveRT"]
+
+
+def test_texture_picker_skips_xr_render_targets(monkeypatch):
+    scene_mount_module = types.ModuleType("termin.visualization.core.scene")
+    scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
+    monkeypatch.setitem(sys.modules, "termin.visualization.core.scene", scene_mount_module)
+
+    xr_rt = types.SimpleNamespace(alive=True, name="XrRT", kind="xr_stereo", index=1, generation=1)
+    render_framework_module = types.ModuleType("termin.render_framework")
+    render_framework_module.render_target_pool_list = lambda: [xr_rt]
+    monkeypatch.setitem(sys.modules, "termin.render_framework", render_framework_module)
+
+    picker = TexturePickerWidget(
+        _ResourceManager(),
+        on_changed=lambda _tag, _value: None,
+        scene_getter=lambda: [types.SimpleNamespace(name="Scene", uuid="scene")],
+        show_preview=False,
+    )
+    picker.set_value("", "default")
+
+    assert "XrRT" not in picker._item_values
 
 
 def test_render_target_inspector_saves_file_pipeline_param_by_uuid(monkeypatch):
