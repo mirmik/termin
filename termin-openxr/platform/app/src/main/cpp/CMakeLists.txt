@@ -55,13 +55,16 @@ endif()
 
 find_library(ANDROID_LOG_LIB log REQUIRED)
 
-add_library(termin_openxr_smoke_jni SHARED termin_openxr_smoke_jni.cpp)
-target_link_libraries(termin_openxr_smoke_jni
+find_library(ANDROID_NATIVE_LIB android REQUIRED)
+
+add_library(termin_openxr_native_activity SHARED termin_openxr_native_activity.cpp)
+target_link_libraries(termin_openxr_native_activity
     PRIVATE
         termin_openxr::termin_openxr
         ${ANDROID_LOG_LIB}
+        ${ANDROID_NATIVE_LIB}
 )
 if(TARGET OpenXR::openxr_loader)
-    target_link_libraries(termin_openxr_smoke_jni PRIVATE OpenXR::openxr_loader)
+    target_link_libraries(termin_openxr_native_activity PRIVATE OpenXR::openxr_loader)
 endif()
-target_compile_options(termin_openxr_smoke_jni PRIVATE -Wall -Wextra)
+target_compile_options(termin_openxr_native_activity PRIVATE -Wall -Wextra)
