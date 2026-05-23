@@ -68,7 +68,13 @@ tasks.register("copyTerminOpenXRLibraries", Copy) {
     def sdkLibDir = new File(new File(terminAndroidSdkRoot.get(), terminAndroidAbi.get()), "lib")
     from(sdkLibDir) {
         include "libtermin_base.so"
+        include "libtermin_components_mesh.so"
+        include "libtermin_graphics.so"
+        include "libtermin_graphics2.so"
+        include "libtermin_inspect.so"
+        include "libtermin_mesh.so"
         include "libtermin_openxr.so"
+        include "libtermin_scene.so"
     }
     into(layout.buildDirectory.dir("generated/terminJniLibs/${terminAndroidAbi.get()}"))
     doFirst {
