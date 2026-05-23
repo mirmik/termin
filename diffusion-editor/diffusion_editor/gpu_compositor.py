@@ -237,21 +237,11 @@ class GPUCompositor:
         ctx.end_frame()
         self._dirty = False
 
-    def get_display_gl_id(self) -> int:
-        """Legacy raw-GL-id path. Returns 0 when the compositor shares
-        a device with the UIRenderer (the ``ctx=`` constructor arg).
-        Prefer ``display_tex`` which works on both OpenGL and Vulkan.
-        """
-        if self._display_tex is None or self._graphics is None:
-            return 0
-        return int(self._graphics.get_gl_id(self._display_tex))
-
     @property
     def display_tex(self):
         """tgfx2 TextureHandle of the composited image. Valid in the
         renderer's device because the compositor was constructed with
-        a borrowed context. Use this instead of ``get_display_gl_id``
-        whenever the host wires the compositor onto the shared device.
+        a borrowed context.
         """
         return self._display_tex
 

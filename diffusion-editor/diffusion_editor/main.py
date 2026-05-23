@@ -123,8 +123,7 @@ def main():
     log.set_level(log.Level.INFO)
 
     # SDLBackendWindow owns the device + SDL window; backend picked from
-    # TERMIN_BACKEND env-var (default: opengl). Vulkan is an opt-in:
-    # `TERMIN_BACKEND=vulkan ./run.sh`.
+    # TERMIN_BACKEND env-var.
     window = SDLBackendWindow("Diffusion Editor", 1280, 800)
     tgfx2_ctx = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
     log.info("[main] Window created")

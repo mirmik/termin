@@ -2,15 +2,16 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using OpenTK.Graphics.OpenGL4;
 using OpenTK.Wpf;
 using Termin.Native;
+using Termin.Wpf;
 
 namespace PlotDemoApp;
 
 public partial class Plot2DControl : UserControl, IDisposable
 {
     private PlotView2D? _view;
+    private Tgfx2GlWpfTexturePresenter? _presenter;
     private bool _initialized;
     private bool _disposed;
     private bool _hostLeaseHeld;
@@ -97,6 +98,7 @@ public partial class Plot2DControl : UserControl, IDisposable
         try
         {
             _view = new PlotView2D(host);
+            _presenter = new Tgfx2GlWpfTexturePresenter();
             _hostLeaseHeld = true;
         }
         catch
@@ -114,9 +116,8 @@ public partial class Plot2DControl : UserControl, IDisposable
 
         var w = Math.Max(1, (int)GlControl.ActualWidth);
         var h = Math.Max(1, (int)GlControl.ActualHeight);
-
-        GL.GetInteger(GetPName.DrawFramebufferBinding, out int dstFbo);
-        _view.render(w, h, (uint)dstFbo);
+        uint colorTex = _view.render_to_texture_id(w, h);
+        _presenter?.Present(colorTex, w, h);
     }
 
     private static int ToTcbaseButton(System.Windows.Input.MouseButton b) => b switch
@@ -167,6 +168,8 @@ public partial class Plot2DControl : UserControl, IDisposable
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;
+        _presenter?.Dispose();
+        _presenter = null;
         if (_hostLeaseHeld)
         {
             Tgfx2Host.Release();

@@ -3,9 +3,9 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using OpenTK.Graphics.OpenGL4;
 using OpenTK.Wpf;
 using Termin.Native;
+using Termin.Wpf;
 
 namespace PlotDemoApp;
 
@@ -15,6 +15,7 @@ namespace PlotDemoApp;
 public partial class MultiPlot2DControl : UserControl, IDisposable
 {
     private PlotView2DMulti? _view;
+    private Tgfx2GlWpfTexturePresenter? _presenter;
     private bool _initialized;
     private bool _disposed;
     private bool _hostLeaseHeld;
@@ -182,6 +183,7 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         try
         {
             _view = new PlotView2DMulti(host, PanelCount);
+            _presenter = new Tgfx2GlWpfTexturePresenter();
             _hostLeaseHeld = true;
         }
         catch
@@ -215,8 +217,8 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
             _hasPendingPan = false;
         }
 
-        GL.GetInteger(GetPName.DrawFramebufferBinding, out int dstFbo);
-        _view.render(w, h, (uint)dstFbo);
+        uint colorTex = _view.render_to_texture_id(w, h);
+        _presenter?.Present(colorTex, w, h);
     }
 
     private static int ToTcbaseButton(System.Windows.Input.MouseButton b) => b switch
@@ -324,6 +326,8 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;
+        _presenter?.Dispose();
+        _presenter = null;
         if (_hostLeaseHeld)
         {
             Tgfx2Host.Release();

@@ -262,20 +262,6 @@ public class GlWpfBackend
 
     #endregion
 
-    #region Rendering
-
-    /// <summary>
-    /// Получает текущий FBO ID от WPF контрола.
-    /// Вызывать ДО render_to_screen(), т.к. пайплайн меняет биндинг.
-    /// </summary>
-    public int GetCurrentFboId()
-    {
-        GL.GetInteger(GetPName.FramebufferBinding, out int fboId);
-        return fboId;
-    }
-
-    #endregion
-
     /// <summary>
     /// Отписывается от событий WPF.
     /// </summary>

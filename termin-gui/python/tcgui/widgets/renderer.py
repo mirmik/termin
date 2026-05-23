@@ -7,12 +7,11 @@
 
 Internally the renderer drives a ``Tgfx2Context`` (created lazily on
 first ``begin()``) and keeps an offscreen native tgfx2 color+depth
-texture pair as its draw target. At ``end()`` it blits the offscreen
-color to the default framebuffer via
-``RenderContext2::blit_to_external_fbo``. Common 2D primitives,
-simple textures and text are delegated to the C++ ``Canvas2DRenderer``.
-The local UI shader remains for image preview modes that need channel
-selection or HDR highlighting.
+texture pair as its draw target. ``end_compose()`` returns that color
+texture to the host presenter. Common 2D primitives, simple textures
+and text are delegated to the C++ ``Canvas2DRenderer``. The local UI
+shader remains for image preview modes that need channel selection or
+HDR highlighting.
 """
 
 from __future__ import annotations
@@ -21,16 +20,14 @@ import math
 
 import numpy as np
 
-from tgfx import Canvas2DRenderer, TcShader, GPUTextureHandle
+from tgfx import Canvas2DRenderer, TcShader
 from tgfx.font import FontTextureAtlas, get_default_font
 from tgfx._tgfx_native import (
     Tgfx2Context,
     Tgfx2TextureHandle,
     Tgfx2ShaderStage,
     tc_shader_ensure_tgfx2,
-    wrap_gl_texture_as_tgfx2,
     CULL_NONE,
-    PIXEL_RGBA8,
 )
 from tcbase.profiler import Profiler
 
@@ -395,24 +392,14 @@ class UIRenderer:
         self._canvas.begin(self._ctx, self._viewport_w, self._viewport_h)
         self._canvas_active = True
 
-    def end(self) -> None:
-        """End UI rendering pass, composite offscreen → default GL FBO.
+    def end(self):
+        """End UI rendering pass and return the composite texture.
 
-        Legacy path for GL-only hosts that drive their own window with
-        raw SDL / GLFW and expect the result on FBO 0 before their
-        own SwapWindow call. BackendWindow-hosted editors call
-        ``end_compose()`` instead — it returns the offscreen tex so
-        ``win.present(tex)`` can publish it on both OpenGL and Vulkan.
+        Raw default-framebuffer presentation is not part of UIRenderer.
+        Hosts must present the returned TextureHandle through their
+        platform window/surface layer.
         """
-        tex = self.end_compose()
-        if tex is None or self._ctx is None:
-            return
-
-        self._ctx.blit_to_external_fbo(
-            0, tex,
-            0, 0, self._viewport_w, self._viewport_h,
-            0, 0, self._viewport_w, self._viewport_h,
-        )
+        return self.end_compose()
 
     def end_compose(self):
         """End the UI pass and return the offscreen composite texture.
@@ -720,40 +707,22 @@ class UIRenderer:
     ) -> None:
         """Draw an RGBA texture at pixel coordinates, multiplied by ``tint``.
 
-        ``texture_handle`` is a ``Tgfx2TextureHandle`` (from
-        ``upload_texture`` / ``load_image``) or a legacy
-        ``GPUTextureHandle`` (e.g. from a diffusion compositor).
-        Legacy handles are wrapped into a non-owning tgfx2 handle
-        for the duration of this draw call.
+        ``texture_handle`` is a ``Tgfx2TextureHandle`` from
+        ``upload_texture`` / ``load_image``.
         """
         if w <= 0 or h <= 0 or texture_handle is None:
             return
 
         ctx = self._ctx
 
-        tex2 = texture_handle
-        wrapped = None
-        if isinstance(texture_handle, GPUTextureHandle):
-            wrapped = wrap_gl_texture_as_tgfx2(
-                self._graphics,
-                texture_handle.get_id(),
-                int(texture_handle.get_width()),
-                int(texture_handle.get_height()),
-                PIXEL_RGBA8,
-            )
-            tex2 = wrapped
-
-        if wrapped is None and self._canvas is not None and self._canvas_active:
-            self._canvas.draw_texture(tex2, x, y, w, h, tint)
+        if self._canvas is not None and self._canvas_active:
+            self._canvas.draw_texture(texture_handle, x, y, w, h, tint)
         else:
             self._push_ui_state(tint, 2)
-            ctx.bind_sampled_texture(4, tex2)
+            ctx.bind_sampled_texture(4, texture_handle)
             verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
             ctx.draw_immediate_triangles(verts, 6)
             self._resume_canvas_after_legacy_draw()
-
-        if wrapped is not None:
-            self._graphics.destroy_texture(wrapped)
 
     def upload_texture(self, data: np.ndarray) -> Tgfx2TextureHandle:
         """Upload a numpy RGBA array as a new GPU texture.
@@ -829,9 +798,7 @@ class UIRenderer:
         objects must share the same ``Tgfx2Context``. That invariant
         holds by construction in a BackendWindow-hosted editor where
         every renderer borrows one process-global context. Use this
-        path instead of ``draw_external_gl_texture`` for new code: it
-        works on both OpenGL and Vulkan, while the GL-id version is
-        GL-only.
+        works on both OpenGL and Vulkan.
 
         ``flip_v=True`` samples the texture with V axis inverted —
         use this for GL-native render targets where texel (0, 0) is
@@ -854,48 +821,6 @@ class UIRenderer:
             verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
         ctx.draw_immediate_triangles(verts, 6)
         self._resume_canvas_after_legacy_draw()
-
-    def draw_external_gl_texture(
-        self, x: float, y: float, w: float, h: float,
-        gl_tex_id: int, tex_w: int, tex_h: int,
-        *,
-        flip_v: bool = False,
-        tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
-    ) -> None:
-        """Draw a raw GL RGBA texture id as a subregion of the current
-        UI pass.
-
-        Used by Viewport3D to composite an external 3D engine's
-        shared color texture onto the UI offscreen. The texture id
-        must be valid in the current GL context (typically via a
-        shared GL context / share group).
-
-        ``flip_v=True`` samples the texture with V axis inverted —
-        use this for GL-native render targets where texel (0, 0) is
-        the bottom-left corner.
-        """
-        if w <= 0 or h <= 0 or gl_tex_id == 0 or self._ctx is None:
-            return
-
-        tex2 = wrap_gl_texture_as_tgfx2(
-            self._graphics, int(gl_tex_id),
-            int(tex_w), int(tex_h), PIXEL_RGBA8,
-        )
-        try:
-            ctx = self._ctx
-            self._push_ui_state(tint, 2)
-            ctx.bind_sampled_texture(4, tex2)
-
-            if flip_v:
-                verts = self._emit_quad(x, y, x + w, y + h, 0.0, 1.0, 1.0, 0.0)
-            else:
-                verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
-            ctx.draw_immediate_triangles(verts, 6)
-            self._resume_canvas_after_legacy_draw()
-        finally:
-            # Non-owning wrapper: release the HandlePool entry but
-            # leave the underlying GL texture alone.
-            self._graphics.destroy_texture(tex2)
 
     def load_image(self, path: str) -> Tgfx2TextureHandle:
         """Load an image file and upload it as a GPU texture."""

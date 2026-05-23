@@ -654,23 +654,6 @@ public:
 class RenderEngine {
 public:
     RenderEngine();
-
-    // Render to screen (default FBO)
-    void render_to_screen(
-        RenderPipeline& pipeline,
-        int width,
-        int height,
-        tc_scene_handle scene,
-        const RenderCamera& camera
-    );
-
-    // Present pipeline's color FBO to screen (blit)
-    void present_to_screen(
-        RenderPipeline& pipeline,
-        int width,
-        int height,
-        const std::string& resource_name = "color"
-    );
 };
 
 // ============================================================================
@@ -1247,7 +1230,7 @@ public:
     void set_msaa_samples(int samples);
     int  msaa_samples() const;
 
-    void render(int width, int height, unsigned int dst_gl_fbo);
+    unsigned int render_to_texture_id(int width, int height);
     void release_gpu();
 };
 
@@ -1297,7 +1280,7 @@ public:
     void set_msaa_samples(int samples);
     int  msaa_samples() const;
 
-    void render(int width, int height, unsigned int dst_gl_fbo);
+    unsigned int render_to_texture_id(int width, int height);
     void release_gpu();
 };
 
@@ -1388,7 +1371,7 @@ public:
     void set_panel_margins  (int left, int right, int top, int bottom);
     void set_title_pad      (float pad);
 
-    void render(int width, int height, unsigned int dst_gl_fbo);
+    unsigned int render_to_texture_id(int width, int height);
     void release_gpu();
 
     bool on_mouse_down(float x, float y, int button);

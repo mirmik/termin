@@ -494,15 +494,11 @@ class FramegraphDebugDialog(QtWidgets.QDialog):
             src_w = self._core.capture.width
             src_h = self._core.capture.height
 
-            # Qt-editor framegraph debugger is deprecated (Phase 17 cleanup).
-            # Blit the capture texture into the SDL debug window's
-            # default framebuffer (GL id = 0). Channel_mode /
-            # highlight_hdr are not supported on this fallback path.
-            ctx2.blit_to_external_fbo(
-                0, capture_tex,
-                0, 0, src_w, src_h,
-                0, 0, dst_w, dst_h,
+            log.error(
+                "[FramegraphDebugger] SDL debug-window presentation via raw GL FBO "
+                "was removed; use the tcgui framegraph debugger surface path"
             )
+            return
 
             self._sdl_window.swap_buffers()
 

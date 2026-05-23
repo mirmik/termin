@@ -1,19 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <RootNamespace>PlotDemoApp</RootNamespace>
-    <AssemblyName>PlotDemoApp</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Termin.Native\Termin.Native.csproj" />
-    <ProjectReference Include="..\..\Termin.Wpf\Termin.Wpf.csproj" />
+    <ProjectReference Include="..\Termin.Native\Termin.Native.csproj" />
   </ItemGroup>
 
   <ItemGroup>

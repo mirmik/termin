@@ -31,14 +31,15 @@ tgfx2 — двухбэкендный графический слой с абст
 
 ### 1. Наследие OpenGL в абстрактном интерфейсе
 
-`IRenderDevice` содержит методы, имеющие смысл только для OpenGL:
+Удалено из `IRenderDevice`:
 
 - `blit_to_external_target(uintptr_t)` — `uintptr_t` это `GLuint` FBO, на Vulkan нет аналога
 - `clear_external_target(uintptr_t)` — аналогично
 - `native_texture_handle()` — возвращает `GLuint`, на Vulkan отсутствует
-- `last_gl_error()` — на Vulkan всегда возвращает `0`
+- `last_gl_error()` — backend-specific diagnostic
 
-Vulkan обходит это через отдельные методы (`blit_to_texture(TextureHandle)`, `clear_texture(TextureHandle)`), но API несимметричен.
+Presentation теперь идёт через `TextureHandle` (`blit_to_texture` / `clear_texture`).
+Surfaces, которые не отдают tgfx2 color target, считаются немигрированными и логируют ошибку вместо raw-FBO fallback.
 
 ### 2. Push constants эмулируются по-разному
 
@@ -82,14 +83,13 @@ Vulkan имеет `request_pixel_rgba8`/`poll_pixel_rgba8` (async через sta
 | `upload_texture_region` | Полная (`glTexSubImage2D`) | Есть (`vkCmdCopyBufferToImage` через staging buffer) |
 | `read_texture_rgba_float` | Есть | Есть (staging + CPU convert) |
 | `read_texture_depth_float` | Есть | Есть для `D32F` |
-| `blit_to_external_target` | Есть (с `uintptr_t` FBO id) | **Нет** (заменён на `blit_to_texture`) |
-| `clear_external_target` | Есть | **Нет** (заменён на `clear_texture`) |
-| `native_texture_handle` | Есть (возвращает `GLuint`) | **Нет** |
+| Raw external FBO present | Удалён из tgfx2 API | Не поддерживается |
+| Raw native texture handle | Удалён из tgfx2 API | Удалён из tgfx2 API |
 | Push constants ring | Полная (UBO ring, 256KB) | Ring UBO, **другой API** |
 | Transient vertex ring | Полная (stream VBO ring) | Есть (mapped double-buffered VBO ring) |
 | FBO cache | Есть | **Нет** |
 | Shader compilation | `glCreateShader` + `glCompileShader` | Требует **shaderc** (GLSL→SPIR-V) |
-| `last_gl_error` | `glGetError()` | Всегда `0` |
+| `last_gl_error` | Удалён из tgfx2 API | Удалён из tgfx2 API |
 | Swapchain / Present | Нет (SDL/GLFW surface) | `VulkanSwapchain` с acquire/present |
 | Асинхронные readback | **Нет** | Есть (`request_pixel_rgba8`) |
 | Deferred destroy | `glDelete*` сразу | Fence-based pending destroy |
@@ -119,7 +119,7 @@ Vulkan имеет `request_pixel_rgba8`/`poll_pixel_rgba8` (async через sta
 
 ## Итоговая оценка
 
-**OpenGL бэкенд всё ещё имеет больше legacy interop-поверхности** — FBO cache, raw GL handle interop и external target API. Vulkan более объёмный по коду (3045 vs 1215 строк), но имеет незавершённые области:
+**OpenGL бэкенд всё ещё имеет больше legacy interop-поверхности** внутри concrete backend-а, но raw GL FBO/native handle операции больше не являются частью `IRenderDevice`. Vulkan более объёмный по коду (3045 vs 1215 строк), но имеет незавершённые области:
 
 1. Без shaderc Vulkan не может компилировать шейдеры из GLSL-источника
 
@@ -133,3 +133,4 @@ API несимметричен — OpenGL-специфичные методы в
 - Vulkan upload/render-pass exit больше не переводит несэмплируемые image в `SHADER_READ_ONLY_OPTIMAL`; это убирает validation error для render targets, созданных только как `ColorAttachment | CopySrc`.
 - Vulkan `read_texture_rgba_float` и `read_texture_depth_float` добавлены в backend; smoke-тест проверяет full RGBA8 readback и full D32F depth readback.
 - Vulkan transient vertex ring добавлен; smoke-тест рисует треугольник через `transient_vertex_write()` / `transient_vertex_buffer()`.
+- Raw external FBO/native texture handle helpers удалены из `IRenderDevice` и Python tgfx2 bindings. Legacy present paths теперь требуют surface `TextureHandle`; при отсутствии target-а логируется ошибка вместо fallback в raw FBO.

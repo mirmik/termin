@@ -1776,13 +1776,18 @@ void RenderingManager::present_display(tc_display* display) {
         return;
     }
 
-    uint32_t display_fbo = tc_render_surface_get_framebuffer(surface);
-    // Backend-neutral composite target: when the surface exposes a
-    // tgfx2 TextureHandle we route through blit_to_texture / clear_texture
-    // (works on both OpenGL and Vulkan). Zero = legacy FBO path (GL only).
+    // Backend-neutral composite target. Surfaces must expose a tgfx2
+    // TextureHandle; raw FBO presentation is intentionally not supported
+    // through tgfx2 anymore.
     tgfx::TextureHandle display_color_tex{
         tc_render_surface_get_tgfx_color_tex_id(surface)
     };
+    if (!display_color_tex) {
+        tc_log(TC_LOG_ERROR,
+               "[RenderingManager] present_display: render surface has no tgfx2 color texture target");
+        if (profile) tc_profiler_end_section();
+        return;
+    }
 
     RenderEngine* engine = render_engine();
     if (engine) {
@@ -1796,20 +1801,11 @@ void RenderingManager::present_display(tc_display* display) {
     }
 
     if (profile) tc_profiler_begin_section("Present Clear");
-    if (display_color_tex) {
-        dev->clear_texture(
-            display_color_tex,
-            0.1f, 0.1f, 0.1f, 1.0f,
-            0, 0, width, height
-        );
-    } else {
-        dev->clear_external_target(
-            static_cast<uintptr_t>(display_fbo),
-            0.1f, 0.1f, 0.1f, 1.0f,
-            1.0f,
-            0, 0, width, height
-        );
-    }
+    dev->clear_texture(
+        display_color_tex,
+        0.1f, 0.1f, 0.1f, 1.0f,
+        0, 0, width, height
+    );
     if (profile) tc_profiler_end_section();
 
     // Collect viewports sorted by depth
@@ -1868,20 +1864,12 @@ void RenderingManager::present_display(tc_display* display) {
         int px, py, pw, ph;
         tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
 
-        // Blit the viewport's native color texture to display target.
-        if (display_color_tex) {
-            dev->blit_to_texture(
-                display_color_tex, src_color,
-                0, 0, src_w, src_h,
-                px, py, pw, ph
-            );
-        } else {
-            dev->blit_to_external_target(
-                static_cast<uintptr_t>(display_fbo), src_color,
-                0, 0, src_w, src_h,
-                px, py, pw, ph
-            );
-        }
+        // Blit the viewport's color texture to the surface texture target.
+        dev->blit_to_texture(
+            display_color_tex, src_color,
+            0, 0, src_w, src_h,
+            px, py, pw, ph
+        );
     }
     if (profile) tc_profiler_end_section();
 

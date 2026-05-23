@@ -14,8 +14,7 @@ namespace termin {
 class TERMIN_DISPLAY_API SDLBackendWindow : public BackendWindow {
 public:
     // Create a window + backend device. Throws std::runtime_error on
-    // SDL / device failure. The selected render backend is TERMIN_BACKEND
-    // (defaults to OpenGL).
+    // SDL / device failure. The selected render backend is TERMIN_BACKEND.
     SDLBackendWindow(const std::string& title, int width, int height);
 
     // Secondary-window constructor. Uses the IRenderDevice owned by

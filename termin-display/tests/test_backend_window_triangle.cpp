@@ -1,7 +1,7 @@
 // test_backend_window_triangle.cpp - Backend-neutral triangle smoke.
 //
 // One binary, one API, both backends. Pick via TERMIN_BACKEND env-var:
-//   TERMIN_BACKEND=opengl ./backend_window_triangle  (default)
+//   TERMIN_BACKEND=opengl ./backend_window_triangle
 //   TERMIN_BACKEND=vulkan ./backend_window_triangle
 //
 // The app code below has zero mention of GL vs Vulkan. All backend
@@ -22,7 +22,7 @@
 int main() {
 try {
     const char* backend_env = std::getenv("TERMIN_BACKEND");
-    printf("TERMIN_BACKEND=%s\n", backend_env ? backend_env : "(unset, using opengl)");
+    printf("TERMIN_BACKEND=%s\n", backend_env ? backend_env : "(unset, using library default)");
 
     double max_seconds = 3.0;
     if (const char* max_seconds_env = std::getenv("TERMIN_TEST_MAX_SECONDS")) {
