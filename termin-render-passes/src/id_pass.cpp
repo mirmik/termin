@@ -136,8 +136,8 @@ void IdPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
 
     // Engine-shader cache via TcShader registry (see ShadowPass for the
     // rationale): hash-based dedup keeps the same handle across pass
-    // re-creations, tc_shader_ensure_tgfx2 parks compiled VkShaderModules
-    // on the tc_gpu_slot for zero-compile subsequent binds.
+    // re-creations, and the render device cache keeps compiled shader
+    // modules live for zero-compile subsequent binds.
     if (tc_shader_handle_is_invalid(id_shader_handle_)) {
         id_shader_handle_ = tc_shader_register_static(
             ID_PASS_VERT_UBO, ID_PASS_FRAG_UBO,
