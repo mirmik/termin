@@ -294,11 +294,6 @@ NB_MODULE(_components_render_native, m) {
             if (!mesh_arg.is_none()) {
                 if (nb::isinstance<TcMesh>(mesh_arg)) {
                     cpp->set_mesh(nb::cast<TcMesh>(mesh_arg));
-                } else if (nb::hasattr(mesh_arg, "mesh_data")) {
-                    nb::object res = mesh_arg.attr("mesh_data");
-                    if (nb::isinstance<TcMesh>(res)) {
-                        cpp->set_mesh(nb::cast<TcMesh>(res));
-                    }
                 } else if (nb::isinstance<nb::str>(mesh_arg)) {
                     cpp->set_mesh_by_name(nb::cast<std::string>(mesh_arg));
                 }
