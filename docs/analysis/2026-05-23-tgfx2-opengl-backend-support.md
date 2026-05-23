@@ -50,21 +50,22 @@ Vulkan обходит это через отдельные методы (`blit_t
 
 Данные передаются через один C++ struct, но механизм и вызовы отличаются. Шейдеры содержат `#ifdef VULKAN` для выбора пути между push_constant и UBO.
 
-### 3. Transient vertex buffer — только OpenGL
+### 3. Transient vertex buffer
 
-OpenGL имеет 1MB VBO ring для immediate draw. Vulkan **не реализован**:
-- `transient_vertex_buffer()` возвращает `{}`
-- `transient_vertex_write()` возвращает `UINT64_MAX`
+OpenGL имеет stream VBO ring для immediate draw. Vulkan реализует
+double-buffered mapped vertex ring: один слот может читаться GPU, второй
+заполняется CPU на следующем кадре. `RenderContext2::draw_immediate_*`
+использует общий API `transient_vertex_write()` / `transient_vertex_buffer()`.
 
-Immediate drawing на Vulkan создаёт/уничтожает буфер на каждый draw, что даёт GC-давление и фрагментацию descriptor pool.
-
-### 4. Readback текстур — только OpenGL
+### 4. Readback текстур
 
 OpenGL реализует:
 - `read_texture_rgba_float` через FBO + `glReadPixels`
 - `read_texture_depth_float` через FBO + `glReadPixels`
 
-Vulkan **не имеет** этих методов.
+Vulkan реализует синхронный full-texture readback через staging buffer +
+`vkCmdCopyImageToBuffer`. Color path конвертирует поддержанные форматы в
+RGBA float на CPU, depth path поддерживает `D32F`.
 
 ### 5. FBO cache — только OpenGL
 
@@ -79,13 +80,13 @@ Vulkan имеет `request_pixel_rgba8`/`poll_pixel_rgba8` (async через sta
 | Функциональность | OpenGL | Vulkan |
 |-----------------|--------|--------|
 | `upload_texture_region` | Полная (`glTexSubImage2D`) | Есть (`vkCmdCopyBufferToImage` через staging buffer) |
-| `read_texture_rgba_float` | Есть | **Отсутствует** |
-| `read_texture_depth_float` | Есть | **Отсутствует** |
+| `read_texture_rgba_float` | Есть | Есть (staging + CPU convert) |
+| `read_texture_depth_float` | Есть | Есть для `D32F` |
 | `blit_to_external_target` | Есть (с `uintptr_t` FBO id) | **Нет** (заменён на `blit_to_texture`) |
 | `clear_external_target` | Есть | **Нет** (заменён на `clear_texture`) |
 | `native_texture_handle` | Есть (возвращает `GLuint`) | **Нет** |
 | Push constants ring | Полная (UBO ring, 256KB) | Ring UBO, **другой API** |
-| Transient vertex ring | Полная (1MB VBO ring) | **Отсутствует** |
+| Transient vertex ring | Полная (stream VBO ring) | Есть (mapped double-buffered VBO ring) |
 | FBO cache | Есть | **Нет** |
 | Shader compilation | `glCreateShader` + `glCompileShader` | Требует **shaderc** (GLSL→SPIR-V) |
 | `last_gl_error` | `glGetError()` | Всегда `0` |
@@ -118,11 +119,9 @@ Vulkan имеет `request_pixel_rgba8`/`poll_pixel_rgba8` (async через sta
 
 ## Итоговая оценка
 
-**OpenGL бэкенд более зрелый и полный** — у него реализованы transient vertex ring, readback текстур, FBO cache, native handle interop. Vulkan более объёмный по коду (3045 vs 1215 строк), но имеет незавершённые области:
+**OpenGL бэкенд всё ещё имеет больше legacy interop-поверхности** — FBO cache, raw GL handle interop и external target API. Vulkan более объёмный по коду (3045 vs 1215 строк), но имеет незавершённые области:
 
-1. `read_texture_*` — отсутствует на Vulkan
-2. Transient vertex buffer — отсутствует на Vulkan (GC-давление при immediate draw)
-3. Без shaderc Vulkan не может компилировать шейдеры из GLSL-источника
+1. Без shaderc Vulkan не может компилировать шейдеры из GLSL-источника
 
 API несимметричен — OpenGL-специфичные методы в `IRenderDevice` создают путаницу. Шейдеры зависят от `#ifdef VULKAN`, что усложняет поддержку.
 
@@ -132,3 +131,5 @@ API несимметричен — OpenGL-специфичные методы в
 - `tgfx2_vulkan_smoke` теперь явно компилируется с `TGFX2_HAS_VULKAN`; раньше при включённом Vulkan target мог собираться как skip-тест из-за приватного compile define библиотеки.
 - Smoke-тест расширен проверкой частичной загрузки RGBA8-региона и синхронизирован после immediate copy перед CPU readback.
 - Vulkan upload/render-pass exit больше не переводит несэмплируемые image в `SHADER_READ_ONLY_OPTIMAL`; это убирает validation error для render targets, созданных только как `ColorAttachment | CopySrc`.
+- Vulkan `read_texture_rgba_float` и `read_texture_depth_float` добавлены в backend; smoke-тест проверяет full RGBA8 readback и full D32F depth readback.
+- Vulkan transient vertex ring добавлен; smoke-тест рисует треугольник через `transient_vertex_write()` / `transient_vertex_buffer()`.
