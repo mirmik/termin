@@ -283,8 +283,8 @@ void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
 void DepthPass::release_tgfx2_resources() {
     if (!device2_) return;
     // depth_shader_handle_ NOT released — static engine shader, outlives
-    // pass teardown so the compiled VkShaderModule stays cached on the
-    // tc_gpu_slot across Play/Stop. See tc_shader_register_static docs.
+    // pass teardown so the render-device shader cache can reuse compiled
+    // modules across Play/Stop. See tc_shader_register_static docs.
     device2_ = nullptr;
 }
 

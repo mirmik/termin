@@ -148,8 +148,8 @@ MaterialUboLayout layout_from_tc_shader(const tc_shader* shader) {
 // The phase owns a tgfx::BufferHandle (stored as uint32_t) plus a back
 // pointer to the IRenderDevice that minted it. On phase destroy, the C
 // layer calls us to invoke IRenderDevice::destroy on the handle. This
-// mirrors the tgfx2_shader_device back-pointer on tc_gpu_slot from
-// Stage 5.A.
+// is still a legacy C-side lifetime bridge; shader handles have already
+// moved to the render-device cache.
 extern "C" void material_phase_release_ubo_cb(tc_material_phase* phase) {
     if (!phase || phase->ubo_id == 0 || !phase->ubo_device) return;
     auto* device = static_cast<tgfx::IRenderDevice*>(phase->ubo_device);

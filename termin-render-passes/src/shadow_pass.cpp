@@ -139,10 +139,9 @@ void ShadowPass::release_tgfx2_resources() {
     // shadow_shader_handle_ intentionally NOT released here. The +1 ref
     // we took in ensure_tgfx2_resources is an intentional process-
     // lifetime hold: engine shaders need to survive ShadowPass teardown
-    // on Play/Stop (frame-graph rebuild) so the compiled VkShaderModule
-    // stays cached on the tc_gpu_slot — dropping the ref would evict
-    // the shader from the registry and force shaderc to recompile on
-    // the next pass creation, reintroducing the ~700 ms Play/Stop lag.
+    // on Play/Stop (frame-graph rebuild) so the render-device shader
+    // cache can reuse compiled modules instead of forcing shaderc to
+    // recompile on the next pass creation.
     device2_ = nullptr;
 }
 
