@@ -271,17 +271,12 @@ bool apply_material_phase_ubo(
     // Build the layout view on the tc_shader C-side entries.
     MaterialUboLayout layout = layout_from_tc_shader(shader);
 
-    // Wrap each phase texture as a tgfx::TextureHandle. OpenGL wraps the
-    // share-group texture as a non-owning external handle — that handle
-    // is single-frame and must be defer-destroyed at ctx.end_frame().
-    // Vulkan uploads pixel data into a cached per-(texture, device)
-    // tgfx2 texture and returns the cached handle — it MUST NOT be
-    // destroyed (see release_texture_binding / wrap_tc_texture_as_tgfx2
-    // contract). Sampler slots start at tex_slot_start and increment in
-    // declaration order; shader_parser emits matching layout(binding=N)
+    // Wrap each phase texture as a tgfx::TextureHandle. The active
+    // IRenderDevice owns the bridge cache; callers must not defer-destroy
+    // these handles. Sampler slots start at tex_slot_start and increment
+    // in declaration order; shader_parser emits matching layout(binding=N)
     // qualifiers for .shader @property Texture entries.
     std::vector<MaterialTextureBinding> textures;
-    bool is_gl = device.backend_type() == tgfx::BackendType::OpenGL;
     textures.reserve(phase->texture_count);
     uint32_t slot = tex_slot_start;
     for (size_t i = 0; i < phase->texture_count; i++) {
@@ -297,9 +292,6 @@ bool apply_material_phase_ubo(
             b.slot = slot;
             b.texture = tex2;
             textures.push_back(b);
-            if (is_gl) {
-                ctx.defer_destroy(tex2);
-            }
         }
         slot++;
     }
