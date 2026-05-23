@@ -19,6 +19,7 @@
 #include <cmath>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <sstream>
 #include <stdexcept>
@@ -76,6 +77,36 @@ namespace {
 
 #if defined(TERMIN_OPENXR_HAS_HEADERS) && defined(__ANDROID__)
 constexpr const char* kLogTag = "TerminOpenXR";
+
+int android_log_priority(tc_log_level level) {
+    switch (level) {
+        case TC_LOG_DEBUG:
+            return ANDROID_LOG_DEBUG;
+        case TC_LOG_INFO:
+            return ANDROID_LOG_INFO;
+        case TC_LOG_WARN:
+            return ANDROID_LOG_WARN;
+        case TC_LOG_ERROR:
+            return ANDROID_LOG_ERROR;
+    }
+    return ANDROID_LOG_INFO;
+}
+
+void android_tc_log_callback(tc_log_level level, const char* message) {
+    __android_log_print(
+        android_log_priority(level),
+        kLogTag,
+        "%s",
+        message ? message : ""
+    );
+}
+
+void install_android_tc_log_callback_once() {
+    static std::once_flag once;
+    std::call_once(once, []() {
+        tc_log_set_callback(android_tc_log_callback);
+    });
+}
 
 void log_info(const char* message) {
     __android_log_print(ANDROID_LOG_INFO, kLogTag, "%s", message ? message : "");
@@ -663,6 +694,24 @@ tc_pass* create_scene_pass(
     return pass;
 }
 
+void set_pass_float(tc_pass* pass, const char* field, float value) {
+    if (!pass || !field) {
+        return;
+    }
+    tc_value field_value = tc_value_float(value);
+    tc_pass_inspect_set(pass, field, field_value, nullptr);
+    tc_value_free(&field_value);
+}
+
+void set_pass_int(tc_pass* pass, const char* field, int value) {
+    if (!pass || !field) {
+        return;
+    }
+    tc_value field_value = tc_value_int(value);
+    tc_pass_inspect_set(pass, field, field_value, nullptr);
+    tc_value_free(&field_value);
+}
+
 termin::RenderPipeline make_openxr_scene_pipeline() {
     tc_pipeline_handle ph = tc_pipeline_create("OpenXRScene");
     termin::RenderPipeline pipeline(ph);
@@ -681,11 +730,19 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
             {"shadow_res", ""},
             {"phase_mark", "transparent"},
             {"sort_mode", "far_to_near"}
+    })) {
+        tc_pipeline_add_pass(ph, p);
+    }
+    if (tc_pass* p = create_scene_pass("TonemapPass", "Tonemap", {
+            {"input_res", "color"},
+            {"output_res", "color_ldr"},
         })) {
+        set_pass_float(p, "exposure", 1.0f);
+        set_pass_int(p, "method", 0);
         tc_pipeline_add_pass(ph, p);
     }
     if (tc_pass* p = create_scene_pass("PresentToScreenPass", "Present", {
-            {"input_res", "color"},
+            {"input_res", "color_ldr"},
             {"output_res", "OUTPUT"}
         })) {
         tc_pipeline_add_pass(ph, p);
@@ -695,11 +752,19 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
         "empty",
         "color_opaque",
         "color",
+        "color_ldr",
     };
     for (const char* resource : color_resources) {
         termin::ResourceSpec spec;
         spec.resource = resource;
-        spec.format = "render_target";
+        spec.format =
+            (std::strcmp(resource, "color_ldr") == 0)
+                ? "render_target"
+                : "rgba16f";
+        if (std::strcmp(resource, "empty") == 0) {
+            spec.clear_color = std::array<double, 4>{0.015, 0.018, 0.024, 1.0};
+            spec.clear_depth = 1.0f;
+        }
         pipeline.add_spec(spec);
     }
     return pipeline;
@@ -1096,6 +1161,7 @@ std::array<float, 16> make_scene_primitive_model_matrix(
 }
 
 void smoke_thread_main(void* java_vm, void* activity_or_context, std::string asset_root) {
+    install_android_tc_log_callback_once();
     log_info("OpenXR color smoke thread start");
 
     OpenXRDispatch xr{};
@@ -1906,6 +1972,7 @@ OpenXRAndroidStartResult start_android_scene_smoke(
     result.detail = "OpenXR color smoke is only available in Android builds with OpenXR headers";
 
 #if defined(TERMIN_OPENXR_HAS_HEADERS) && defined(__ANDROID__)
+    install_android_tc_log_callback_once();
     if (!java_vm || !activity_or_context) {
         result.stage = "input";
         result.detail = "JavaVM or Android activity/context is null";
