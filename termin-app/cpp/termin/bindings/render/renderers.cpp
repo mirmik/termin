@@ -33,12 +33,6 @@ void bind_renderers(nb::module_& m) {
                 // Try TcMesh first
                 if (nb::isinstance<TcMesh>(mesh_arg)) {
                     cpp->set_mesh(nb::cast<TcMesh>(mesh_arg));
-                } else if (nb::hasattr(mesh_arg, "mesh_data")) {
-                    // MeshAsset - get mesh_data (TcMesh)
-                    nb::object res = mesh_arg.attr("mesh_data");
-                    if (nb::isinstance<TcMesh>(res)) {
-                        cpp->set_mesh(nb::cast<TcMesh>(res));
-                    }
                 } else if (nb::isinstance<nb::str>(mesh_arg)) {
                     // String - lookup by name
                     std::string name = nb::cast<std::string>(mesh_arg);
