@@ -318,10 +318,12 @@ void RenderingManager::set_render_target_context_provider(
         return;
     }
     render_target_context_providers_[(int)kind] = std::move(provider);
+    missing_render_target_provider_warnings_.clear();
 }
 
 void RenderingManager::clear_render_target_context_provider(tc_render_target_kind kind) {
     render_target_context_providers_.erase((int)kind);
+    missing_render_target_provider_warnings_.clear();
 }
 
 tc_pipeline_handle RenderingManager::create_pipeline(const std::string& name) {
@@ -1493,12 +1495,15 @@ bool RenderingManager::build_render_target_contexts(
         auto it = render_target_context_providers_.find((int)kind);
         if (it == render_target_context_providers_.end() || !it->second) {
             const char* rt_name = tc_render_target_get_name(rt);
-            tc_log(
-                TC_LOG_WARN,
-                "[RenderingManager] render target '%s' kind '%s' has no context provider",
-                rt_name ? rt_name : "(unnamed)",
-                tc_render_target_kind_to_string(kind)
-            );
+            const uint64_t warning_key = render_target_key(rt);
+            if (missing_render_target_provider_warnings_.insert(warning_key).second) {
+                tc_log(
+                    TC_LOG_WARN,
+                    "[RenderingManager] render target '%s' kind '%s' has no context provider",
+                    rt_name ? rt_name : "(unnamed)",
+                    tc_render_target_kind_to_string(kind)
+                );
+            }
             return false;
         }
         const bool ok = it->second(

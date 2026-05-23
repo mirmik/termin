@@ -435,8 +435,6 @@ class RenderTargetInspectorTcgui(VStack):
             return
         kind = self._target_kind_values[index]
         self._render_target.kind = kind
-        if kind == "xr_stereo":
-            self._render_target.camera = None
         self._update_kind_visibility()
         self._emit_changed()
 
@@ -673,10 +671,8 @@ class RenderTargetInspectorTcgui(VStack):
     def _update_kind_visibility(self) -> None:
         has_target = self._render_target is not None
         texture_target = self._is_texture_target()
-        xr_target = self._is_xr_target()
-
-        self._camera_lbl.visible = has_target and not xr_target
-        self._camera_combo.visible = has_target and not xr_target
+        self._camera_lbl.visible = has_target
+        self._camera_combo.visible = has_target
         self._dynamic_lbl.visible = texture_target
         self._dynamic_resolution.visible = texture_target
         self._color_format_lbl.visible = texture_target
@@ -687,9 +683,6 @@ class RenderTargetInspectorTcgui(VStack):
 
     def _is_texture_target(self) -> bool:
         return self._render_target is not None and self._render_target.kind == "texture_2d"
-
-    def _is_xr_target(self) -> bool:
-        return self._render_target is not None and self._render_target.kind == "xr_stereo"
 
     def _emit_changed(self) -> None:
         if self.on_changed is not None:
