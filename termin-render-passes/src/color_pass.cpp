@@ -601,9 +601,8 @@ void ColorPass::execute_with_data(
 
         // Shadow maps as elements of the sampler array at SHADOW_SLOT_BASE,
         // paired with the depth-compare sampler (sampler2DShadow needs
-        // compareEnable=true on Vulkan; GL sets compare mode on the texture
-        // itself and ignores the sampler, so the shared sampler is
-        // backend-safe). Created lazily once per device.
+        // compareEnable=true on Vulkan and GL_TEXTURE_COMPARE_MODE on
+        // OpenGL's bound sampler object). Created lazily once per device.
         if (!shadow_sampler_) {
             tgfx::SamplerDesc sd;
             sd.min_filter = tgfx::FilterMode::Linear;
@@ -618,8 +617,6 @@ void ColorPass::execute_with_data(
             sd.address_v = tgfx::AddressMode::ClampToEdge;
             sd.address_w = tgfx::AddressMode::ClampToEdge;
             sd.compare_enable = true;
-            // Match GL_TEXTURE_COMPARE_FUNC=GL_LEQUAL set by
-            // ShadowPass::create_shadow_depth_texture on the GL path.
             sd.compare_op = tgfx::CompareOp::LessEqual;
             shadow_sampler_ = device.create_sampler(sd);
         }
