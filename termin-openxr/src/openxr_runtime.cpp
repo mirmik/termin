@@ -19,6 +19,7 @@
 #include <cstring>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <thread>
 #include <vector>
 
@@ -89,6 +90,21 @@ struct SmokeControl {
 };
 
 SmokeControl g_smoke;
+
+const char* session_state_name(XrSessionState state) {
+    switch (state) {
+        case XR_SESSION_STATE_UNKNOWN: return "UNKNOWN";
+        case XR_SESSION_STATE_IDLE: return "IDLE";
+        case XR_SESSION_STATE_READY: return "READY";
+        case XR_SESSION_STATE_SYNCHRONIZED: return "SYNCHRONIZED";
+        case XR_SESSION_STATE_VISIBLE: return "VISIBLE";
+        case XR_SESSION_STATE_FOCUSED: return "FOCUSED";
+        case XR_SESSION_STATE_STOPPING: return "STOPPING";
+        case XR_SESSION_STATE_LOSS_PENDING: return "LOSS_PENDING";
+        case XR_SESSION_STATE_EXITING: return "EXITING";
+        default: return "UNRECOGNIZED";
+    }
+}
 
 bool load_instance_proc(
     const OpenXRDispatch& dispatch,
@@ -196,6 +212,84 @@ int64_t choose_swapchain_format(const std::vector<int64_t>& formats) {
         }
     }
     return formats.empty() ? 0 : formats.front();
+}
+
+GLuint compile_shader(GLenum type, const char* source) {
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, nullptr);
+    glCompileShader(shader);
+
+    GLint ok = GL_FALSE;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    if (ok != GL_TRUE) {
+        char log[1024]{};
+        glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "shader compile failed: %s", log);
+        glDeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+
+GLuint create_triangle_program() {
+    static constexpr const char* vertex_shader = R"(#version 300 es
+layout(location = 0) in vec2 a_position;
+layout(location = 1) in vec3 a_color;
+uniform float u_eye_offset;
+uniform float u_spin;
+out vec3 v_color;
+
+void main() {
+    float c = cos(u_spin);
+    float s = sin(u_spin);
+    vec2 p = vec2(
+        a_position.x * c - a_position.y * s,
+        a_position.x * s + a_position.y * c
+    );
+    gl_Position = vec4(p.x + u_eye_offset, p.y, 0.0, 1.0);
+    v_color = a_color;
+}
+)";
+
+    static constexpr const char* fragment_shader = R"(#version 300 es
+precision mediump float;
+in vec3 v_color;
+out vec4 o_color;
+
+void main() {
+    o_color = vec4(v_color, 1.0);
+}
+)";
+
+    GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_shader);
+    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_shader);
+    if (!vs || !fs) {
+        if (vs) {
+            glDeleteShader(vs);
+        }
+        if (fs) {
+            glDeleteShader(fs);
+        }
+        return 0;
+    }
+
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vs);
+    glAttachShader(program, fs);
+    glLinkProgram(program);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    GLint ok = GL_FALSE;
+    glGetProgramiv(program, GL_LINK_STATUS, &ok);
+    if (ok != GL_TRUE) {
+        char log[1024]{};
+        glGetProgramInfoLog(program, sizeof(log), nullptr, log);
+        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "program link failed: %s", log);
+        glDeleteProgram(program);
+        return 0;
+    }
+    return program;
 }
 
 void smoke_thread_main(void* java_vm, void* activity_or_context) {
@@ -452,6 +546,34 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
 
     GLuint framebuffer = 0;
     glGenFramebuffers(1, &framebuffer);
+    GLuint triangle_program = create_triangle_program();
+    GLint eye_offset_uniform = triangle_program ? glGetUniformLocation(triangle_program, "u_eye_offset") : -1;
+    GLint spin_uniform = triangle_program ? glGetUniformLocation(triangle_program, "u_spin") : -1;
+    GLuint triangle_vao = 0;
+    GLuint triangle_vbo = 0;
+    const GLfloat triangle_vertices[] = {
+         0.0f,  0.42f, 1.0f, 0.1f, 0.1f,
+        -0.45f, -0.36f, 0.1f, 1.0f, 0.1f,
+         0.45f, -0.36f, 0.1f, 0.25f, 1.0f,
+    };
+    glGenVertexArrays(1, &triangle_vao);
+    glGenBuffers(1, &triangle_vbo);
+    glBindVertexArray(triangle_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, triangle_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(triangle_vertices), triangle_vertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), nullptr);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(
+        1,
+        3,
+        GL_FLOAT,
+        GL_FALSE,
+        5 * sizeof(GLfloat),
+        reinterpret_cast<const void*>(2 * sizeof(GLfloat))
+    );
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     std::vector<XrView> views(view_count);
     for (XrView& view : views) {
@@ -471,6 +593,12 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
         while (xr.poll_event(instance, &event) == XR_SUCCESS) {
             if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
                 const auto* state_event = reinterpret_cast<const XrEventDataSessionStateChanged*>(&event);
+                __android_log_print(
+                    ANDROID_LOG_INFO,
+                    kLogTag,
+                    "session state: %s",
+                    session_state_name(state_event->state)
+                );
                 if (state_event->state == XR_SESSION_STATE_READY) {
                     XrSessionBeginInfo begin_info{};
                     begin_info.type = XR_TYPE_SESSION_BEGIN_INFO;
@@ -563,8 +691,23 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
                         static_cast<GLsizei>(swapchain_create_info.height)
                     );
                     const float phase = static_cast<float>((frame_index / 60 + eye) % 3);
-                    glClearColor(phase == 0.0f ? 1.0f : 0.0f, phase == 1.0f ? 1.0f : 0.0f, phase == 2.0f ? 1.0f : 0.0f, 1.0f);
+                    glClearColor(
+                        phase == 0.0f ? 0.08f : 0.0f,
+                        phase == 1.0f ? 0.08f : 0.0f,
+                        phase == 2.0f ? 0.08f : 0.0f,
+                        1.0f
+                    );
                     glClear(GL_COLOR_BUFFER_BIT);
+                    if (triangle_program && triangle_vao) {
+                        glDisable(GL_DEPTH_TEST);
+                        glUseProgram(triangle_program);
+                        glUniform1f(eye_offset_uniform, eye == 0 ? -0.08f : 0.08f);
+                        glUniform1f(spin_uniform, static_cast<float>(frame_index) * 0.018f);
+                        glBindVertexArray(triangle_vao);
+                        glDrawArrays(GL_TRIANGLES, 0, 3);
+                        glBindVertexArray(0);
+                        glUseProgram(0);
+                    }
 
                     layer_views[eye].pose = views[eye].pose;
                     layer_views[eye].fov = views[eye].fov;
@@ -603,6 +746,15 @@ void smoke_thread_main(void* java_vm, void* activity_or_context) {
 
     if (session_running) {
         xr.end_session(session);
+    }
+    if (triangle_vbo) {
+        glDeleteBuffers(1, &triangle_vbo);
+    }
+    if (triangle_vao) {
+        glDeleteVertexArrays(1, &triangle_vao);
+    }
+    if (triangle_program) {
+        glDeleteProgram(triangle_program);
     }
     glDeleteFramebuffers(1, &framebuffer);
     xr.destroy_swapchain(color_swapchain);

@@ -16,6 +16,11 @@ Install and launch on a connected headset:
 ./build-quest-openxr-apk.sh --gradle /path/to/gradle-8.x/bin/gradle --launch
 ```
 
-The smoke app does not use the Termin render engine yet. It starts an OpenXR
-session with OpenGL ES, creates a stereo color swapchain, clears each eye to a
-cycling color, and submits the projection layer through `xrEndFrame`.
+`--launch` wakes the device through ADB before sending the launcher intent. The
+Quest proximity sensor still has to keep the headset active; otherwise Android
+will pause/stop the activity immediately after launch.
+
+The smoke app does not use the Termin render engine yet. It is an Android
+`NativeActivity` that starts an OpenXR session with OpenGL ES, creates a stereo
+color swapchain, clears each eye to a dim cycling color, draws a small spinning
+triangle, and submits the projection layer through `xrEndFrame`.

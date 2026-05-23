@@ -79,7 +79,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --gradle PATH         Gradle executable (default: \$GRADLE_BIN or gradle)"
             echo "  --adb PATH            adb executable (default: \$ADB or adb)"
             echo "  --install             Install the APK with adb after build"
-            echo "  --launch              Install and launch TerminOpenXRActivity"
+            echo "  --launch              Install and launch the OpenXR NativeActivity"
             echo "  --help, -h            Show this help"
             echo ""
             echo "This script intentionally does not call or modify ./build-android-apk.sh."
@@ -145,12 +145,13 @@ rm -rf "$PLATFORM_DIR/.gradle" "$PLATFORM_DIR/app/.cxx" "$PLATFORM_DIR/app/build
 
 echo ""
 echo "APK: $APK_PATH"
-echo "OpenXR Activity: org.termin.openxr/.TerminOpenXRActivity"
+echo "OpenXR Activity: org.termin.openxr/android.app.NativeActivity"
 
 if [[ "$INSTALL_APK" -eq 1 ]]; then
     "$ADB_BIN_VALUE" install -r "$APK_PATH"
 fi
 
 if [[ "$LAUNCH_OPENXR" -eq 1 ]]; then
-    "$ADB_BIN_VALUE" shell am start -n org.termin.openxr/.TerminOpenXRActivity
+    "$ADB_BIN_VALUE" shell input keyevent KEYCODE_WAKEUP
+    "$ADB_BIN_VALUE" shell monkey -p org.termin.openxr 1
 fi
