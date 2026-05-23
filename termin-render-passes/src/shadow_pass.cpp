@@ -8,9 +8,6 @@
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_render_device.hpp"
-#ifdef TGFX2_HAS_OPENGL
-#include "tgfx2/opengl/opengl_render_device.hpp"
-#endif
 #include "tgfx2/tc_shader_bridge.hpp"
 
 extern "C" {
@@ -186,14 +183,9 @@ tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
     // Resolution changed or slot missing — recreate.
     if (it != depth_pool_.end()) {
         if (it->second.tex) device.destroy(it->second.tex);
-        // Reusing the same gl_id for a new texture of a different
-        // size invalidates any FBO the device cached on the old id.
-#ifdef TGFX2_HAS_OPENGL
-        if (auto* gl_dev =
-                dynamic_cast<tgfx::OpenGLRenderDevice*>(&device)) {
-            gl_dev->invalidate_fbo_cache();
-        }
-#endif
+        // Reusing backend-native texture storage for a new size invalidates
+        // cached render targets keyed on the old attachment identity.
+        device.invalidate_render_target_cache();
         depth_pool_.erase(it);
     }
 
@@ -217,29 +209,6 @@ tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
                        resolution);
         return {};
     }
-
-    // Configure the GL texture object for hardware shadow sampling:
-    // CLAMP_TO_BORDER with white border (outside-frustum = not in shadow),
-    // and REF_TO_TEXTURE compare mode so sampler2DShadow / textureShadow
-    // in the fragment shader does PCF. These parameters are intrinsic to
-    // the texture rather than the sampler, so setting them here is the
-    // right place. Legacy OpenGLShadowFramebufferHandle::create() does
-    // the equivalent setup.
-#ifdef TGFX2_HAS_OPENGL
-    if (auto* gl_dev = dynamic_cast<tgfx::OpenGLRenderDevice*>(&device)) {
-        auto* gl_tex = gl_dev->get_texture(tex);
-        if (gl_tex) {
-            glBindTexture(gl_tex->target, gl_tex->gl_id);
-            glTexParameteri(gl_tex->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-            glTexParameteri(gl_tex->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-            float border[] = {1.0f, 1.0f, 1.0f, 1.0f};
-            glTexParameterfv(gl_tex->target, GL_TEXTURE_BORDER_COLOR, border);
-            glTexParameteri(gl_tex->target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-            glTexParameteri(gl_tex->target, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
-            glBindTexture(gl_tex->target, 0);
-        }
-    }
-#endif
 
     depth_pool_[index] = ShadowDepthSlot{tex, resolution};
     return tex;
@@ -337,15 +306,10 @@ ShadowCameraParams ShadowPass::build_shadow_params(
 // tgfx2 path — Stage 5.B.
 // ----------------------------------------------------------------------------
 //
-// Draws shadow casters through RenderContext2. The shadow FBO itself is
-// still allocated via the legacy FBOPool; its depth texture is wrapped as
-// a non-owning tgfx2 handle per frame, the pass opens a depth-only render
-// pass on it, and each drawable is drawn via ctx.ctx2->draw(vbo, ibo, ...)
-// with per-draw UBO updates. Drawables that can't expose a tc_mesh* (i.e.
-// SkinnedMeshRenderer and friends) fall back to the legacy draw_geometry
-// call inside the same FBO — the OpenGL backend of ctx2 has already bound
-// the same GL FBO via its fbo_cache_ so legacy glDraw calls land in the
-// right place.
+// Draws shadow casters through RenderContext2. The pass owns tgfx2 depth
+// textures, opens a depth-only render pass for each cascade, and draws
+// mesh-backed drawables through the backend-neutral tc_mesh bridge.
+// Drawables that cannot expose a tc_mesh* simply do not cast shadows here.
 std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
     ExecuteContext& ctx,
     tc_scene_handle scene,
