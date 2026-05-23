@@ -71,10 +71,8 @@ class TextureAsset(DataAsset[TcTexture]):
     # --- GPU resources ---
 
     def delete_gpu(self) -> None:
-        """Delete GPU resources."""
-        data = self.data
-        if data is not None and data.is_valid:
-            data.delete_gpu()
+        """Legacy compatibility hook. tgfx2 owns GPU texture lifetimes."""
+        return None
 
     # --- Spec parsing ---
 

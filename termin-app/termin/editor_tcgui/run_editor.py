@@ -118,7 +118,7 @@ def _get_event_window_id(event) -> int | None:
     return None
 
 
-def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
+def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None, trace: bool = False) -> bool:
     """Pump SDL events, forward to the UI of the window each event is for.
 
     We poll SDL directly (bypassing BackendWindow.poll_events) because
@@ -132,7 +132,13 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
     """
     event = sdl2.SDL_Event()
     main_id = bw.window_id()
+    total = 0
+    routed = 0
+    mouse = 0
+    keys = 0
+    window_events = 0
     while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
+        total += 1
         etype = event.type
 
         if etype == sdl2.SDL_QUIT:
@@ -140,6 +146,7 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
             return False
 
         if etype == sdl2.SDL_WINDOWEVENT:
+            window_events += 1
             if event.window.event == video.SDL_WINDOWEVENT_CLOSE:
                 wid = event.window.windowID
                 if wm is not None and wm.handle_window_close(wid):
@@ -160,16 +167,36 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
                 target_ui = matched.host_data
 
         if etype == sdl2.SDL_MOUSEMOTION:
+            mouse += 1
+            routed += 1
+            if trace:
+                log.info(
+                    f"[tcgui-events] mouse_motion wid={wid} target={id(target_ui)} "
+                    f"x={event.motion.x} y={event.motion.y}")
             target_ui.mouse_move(float(event.motion.x), float(event.motion.y))
         elif etype == sdl2.SDL_MOUSEBUTTONDOWN:
+            mouse += 1
+            routed += 1
             btn = _BTN_MAP.get(event.button.button, MouseButton.LEFT)
             mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+            if trace:
+                log.info(
+                    f"[tcgui-events] mouse_down wid={wid} target={id(target_ui)} "
+                    f"button={event.button.button} x={event.button.x} y={event.button.y}")
             target_ui.mouse_down(float(event.button.x), float(event.button.y), btn, mods)
         elif etype == sdl2.SDL_MOUSEBUTTONUP:
+            mouse += 1
+            routed += 1
             btn = _BTN_MAP.get(event.button.button, MouseButton.LEFT)
             mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+            if trace:
+                log.info(
+                    f"[tcgui-events] mouse_up wid={wid} target={id(target_ui)} "
+                    f"button={event.button.button} x={event.button.x} y={event.button.y}")
             target_ui.mouse_up(float(event.button.x), float(event.button.y), btn, mods)
         elif etype == sdl2.SDL_MOUSEWHEEL:
+            mouse += 1
+            routed += 1
             mx = ctypes.c_int()
             my = ctypes.c_int()
             sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
@@ -177,6 +204,8 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
             target_ui.mouse_wheel(float(event.wheel.x), float(event.wheel.y),
                                   float(mx.value), float(my.value), mods)
         elif etype == sdl2.SDL_KEYDOWN:
+            keys += 1
+            routed += 1
             key = _translate_sdl_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)
             target_ui.key_down(key, mods)
@@ -189,11 +218,18 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> bool:
                     bw.set_should_close(True)
                     return False
         elif etype == sdl2.SDL_KEYUP:
-            pass
+            keys += 1
         elif etype == sdl2.SDL_TEXTINPUT:
+            keys += 1
+            routed += 1
             text = event.text.text.decode("utf-8", errors="replace")
             target_ui.text_input(text)
 
+    if trace or total > 0:
+        log.info(
+            f"[tcgui-events] poll total={total} routed={routed} "
+            f"mouse={mouse} keys={keys} window={window_events} main_id={main_id}")
+    _dispatch_sdl_events.last_routed = routed
     return True
 
 
@@ -208,20 +244,28 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     """
     from termin.engine import EngineCore
 
+    log.info("[tcgui-startup] init_editor_tcgui: begin")
     engine = EngineCore.instance()
     if engine is None:
         raise RuntimeError("EngineCore not created. Must be called from C++ entry point.")
+    log.info("[tcgui-startup] EngineCore acquired")
 
     # BackendWindow inits SDL and creates its own window + tgfx2 device
     # based on TERMIN_BACKEND. No manual SDL_Init / SDL_GL_CreateContext.
     main_window = SDLBackendWindow("Termin Editor", 1280, 720)
+    log.info(
+        f"[tcgui-startup] main window created "
+        f"fb={main_window.framebuffer_size()} "
+        f"window_id={main_window.window_id()}")
     main_window.maximize()
+    log.info(f"[tcgui-startup] main window maximized fb={main_window.framebuffer_size()}")
 
     # Process-global tgfx2 context owned by the window. Every renderer
     # (UIRenderer, FBOSurface, RenderEngine) wraps the same device+ctx
     # through it.
     tgfx2_ctx = Tgfx2Context.from_window(
         main_window.device_ptr(), main_window.context_ptr())
+    log.info("[tcgui-startup] Tgfx2Context.from_window done")
 
     # Create world and scene
     from termin.visualization.core.world import World
@@ -233,11 +277,14 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     else:
         initial_scene = create_scene(name="default")
         world.add_scene(initial_scene)
+    log.info(f"[tcgui-startup] world/scene ready no_scene={no_scene}")
 
     ui = UI(graphics=tgfx2_ctx)
+    log.info("[tcgui-startup] UI created")
 
     wm = BackendWindowManager()
     wm.register_main(main_window, ui)
+    log.info("[tcgui-startup] BackendWindowManager registered main")
 
     # Apply font size settings before widget tree is built.
     # Widgets read from current_theme in __init__, so this must happen before build().
@@ -257,27 +304,48 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         ctx=tgfx2_ctx,
         main_window=main_window,
     )
+    log.info("[tcgui-startup] EditorWindowTcgui constructed")
     win.build(ui)
+    log.info("[tcgui-startup] UI build done")
 
     # First render
     engine.scene_manager.request_render()
+    log.info("[tcgui-startup] first tick_and_render: begin")
     engine.tick_and_render(0.016)
+    log.info("[tcgui-startup] first tick_and_render: end")
+    log.info("[tcgui-startup] first wm.render_all: begin")
     wm.render_all()
+    log.info("[tcgui-startup] first wm.render_all: end")
 
     sdl2.SDL_StartTextInput()
 
     from termin.core.profiler import Profiler
     profiler = Profiler.instance()
 
+    poll_frame = 0
+
     def poll_events() -> None:
+        nonlocal poll_frame
+        poll_frame += 1
+        trace = poll_frame <= 20 or poll_frame % 120 == 0
+        if trace:
+            log.info(f"[tcgui-loop] frame={poll_frame}: poll begin")
         with profiler.section("Events"):
-            if not _dispatch_sdl_events(main_window, ui, wm):
+            if not _dispatch_sdl_events(main_window, ui, wm, trace=trace):
                 win.close()
                 return
+            if getattr(_dispatch_sdl_events, "last_routed", 0) > 0:
+                engine.scene_manager.request_render()
             win.poll_file_watcher()
+        if trace:
+            log.info(f"[tcgui-loop] frame={poll_frame}: events end")
 
         with profiler.section("Render Compose"):
+            if trace:
+                log.info(f"[tcgui-loop] frame={poll_frame}: wm.render_all begin")
             wm.render_all()
+            if trace:
+                log.info(f"[tcgui-loop] frame={poll_frame}: wm.render_all end")
 
     def should_continue() -> bool:
         return not (win.should_close() or main_window.should_close())
@@ -286,9 +354,23 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         wm.destroy_all()
         sdl2.SDL_Quit()
 
+    log.info(
+        "[tcgui-startup] configuring EngineCore callbacks "
+        f"engine={engine} type={type(engine)}")
+    log.info(
+        "[tcgui-startup] callback attrs "
+        f"poll={getattr(engine, 'set_poll_events_callback', None)} "
+        f"continue={getattr(engine, 'set_should_continue_callback', None)} "
+        f"shutdown={getattr(engine, 'set_on_shutdown_callback', None)}")
+    log.info("[tcgui-startup] set_poll_events_callback begin")
     engine.set_poll_events_callback(poll_events)
+    log.info("[tcgui-startup] set_poll_events_callback end")
+    log.info("[tcgui-startup] set_should_continue_callback begin")
     engine.set_should_continue_callback(should_continue)
+    log.info("[tcgui-startup] set_should_continue_callback end")
+    log.info("[tcgui-startup] set_on_shutdown_callback begin")
     engine.set_on_shutdown_callback(on_shutdown)
+    log.info("[tcgui-startup] set_on_shutdown_callback end")
 
 
 def run_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False) -> None:

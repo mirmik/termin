@@ -14,7 +14,6 @@ extern "C" {
 #include "tc_profiler.h"
 #include "core/tc_light_capability.h"
 #include "core/tc_camera_capability.h"
-#include <tgfx/tc_gpu.h>
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_pool.h"
@@ -1115,12 +1114,9 @@ void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
     uint64_t key = viewport_key(viewport);
     auto it = viewport_states_.find(key);
     if (it != viewport_states_.end()) {
-        // Ensure GL context is current before deleting GPU resources
+        // Ensure the host context is current before deleting device resources.
         if (make_current_callback_) {
             make_current_callback_();
-        }
-        if (offscreen_gpu_context_) {
-            tc_gpu_set_context(offscreen_gpu_context_);
         }
         it->second->clear_all();
         viewport_states_.erase(it);
@@ -1193,10 +1189,29 @@ void RenderingManager::render_all(bool present) {
 }
 
 void RenderingManager::render_all_offscreen() {
+    static uint64_t s_offscreen_calls = 0;
+    ++s_offscreen_calls;
+    const bool trace = s_offscreen_calls <= 40 || (s_offscreen_calls % 120) == 0;
+    if (trace) {
+        tc_log(TC_LOG_INFO,
+               "[RenderingManager] render_all_offscreen#%llu begin displays=%zu editor_displays=%zu",
+               (unsigned long long)s_offscreen_calls,
+               displays_.size(), editor_displays_.size());
+    }
 
     // Activate GL context via callback
     if (make_current_callback_) {
+        if (trace) {
+            tc_log(TC_LOG_INFO,
+                   "[RenderingManager] render_all_offscreen#%llu make_current begin",
+                   (unsigned long long)s_offscreen_calls);
+        }
         make_current_callback_();
+        if (trace) {
+            tc_log(TC_LOG_INFO,
+                   "[RenderingManager] render_all_offscreen#%llu make_current end",
+                   (unsigned long long)s_offscreen_calls);
+        }
     }
 
     // Set offscreen GPU context (lazy-create). OpenGL tc_texture wrapping
@@ -1220,22 +1235,17 @@ void RenderingManager::render_all_offscreen() {
             }
         }
     }
-    if (!offscreen_gpu_context_ || offscreen_share_group_key_ != share_group_key) {
-        if (offscreen_gpu_context_) {
-            tc_gpu_context_free(offscreen_gpu_context_);
-        }
-        tc_gpu_share_group* group = tc_gpu_share_group_get_or_create(share_group_key);
-        offscreen_gpu_context_ = tc_gpu_context_new(0, group);
-        tc_gpu_share_group_unref(group);
-        tc_gpu_context_set_name(offscreen_gpu_context_, "offscreen");
-        offscreen_share_group_key_ = share_group_key;
-    }
-    tc_gpu_set_context(offscreen_gpu_context_);
+    offscreen_share_group_key_ = share_group_key;
 
     RenderEngine* engine = render_engine();
     if (!engine) {
         tc_log(TC_LOG_WARN, "[RenderingManager] render_all_offscreen: no render engine");
         return;
+    }
+    if (trace) {
+        tc_log(TC_LOG_INFO,
+               "[RenderingManager] render_all_offscreen#%llu engine=%p",
+               (unsigned long long)s_offscreen_calls, (void*)engine);
     }
 
     auto update_viewport_rects = [](const std::vector<tc_display*>& disp_list) {
@@ -1315,6 +1325,14 @@ void RenderingManager::render_all_offscreen() {
     };
     collect_viewport_render_targets(displays_);
     collect_viewport_render_targets(editor_displays_);
+    if (trace) {
+        tc_log(TC_LOG_INFO,
+               "[RenderingManager] render_all_offscreen#%llu collected viewport_targets=%zu pipeline_targets=%zu rt_viewports=%zu",
+               (unsigned long long)s_offscreen_calls,
+               viewport_render_targets.size(),
+               scene_pipeline_render_targets.size(),
+               rt_viewports.size());
+    }
 
     // 1. Render standalone managed render targets first. RTs attached to
     // viewports are intentionally delayed because we do not yet have a
@@ -1372,6 +1390,11 @@ void RenderingManager::render_all_offscreen() {
     };
     render_unmanaged(displays_);
     render_unmanaged(editor_displays_);
+    if (trace) {
+        tc_log(TC_LOG_INFO,
+               "[RenderingManager] render_all_offscreen#%llu end",
+               (unsigned long long)s_offscreen_calls);
+    }
 }
 
 void RenderingManager::render_scene_pipeline_offscreen(
@@ -1743,6 +1766,13 @@ void RenderingManager::present_all() {
 
 void RenderingManager::present_display(tc_display* display) {
     if (!display) return;
+    static uint64_t s_present_calls = 0;
+    ++s_present_calls;
+    const bool trace = s_present_calls <= 40 || (s_present_calls % 120) == 0;
+    if (trace) {
+        tc_log(TC_LOG_INFO, "[RenderingManager] present_display#%llu begin display=%p",
+               (unsigned long long)s_present_calls, (void*)display);
+    }
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("Present Display");
 
@@ -1753,21 +1783,16 @@ void RenderingManager::present_display(tc_display* display) {
         return;
     }
 
-    // Make display context current and set GPUContext
-    tc_render_surface_make_current(surface);
-    if (!surface->gpu_context) {
-        {
-            uintptr_t sg_key = tc_render_surface_share_group_key(surface);
-            tc_gpu_share_group* group = tc_gpu_share_group_get_or_create(sg_key);
-            surface->gpu_context = tc_gpu_context_new(tc_render_surface_context_key(surface), group);
-            tc_gpu_share_group_unref(group);
-        }
-        const char* dname = tc_display_get_name(display);
-        char ctx_name[32];
-        snprintf(ctx_name, sizeof(ctx_name), "display:%s", dname ? dname : "?");
-        tc_gpu_context_set_name(surface->gpu_context, ctx_name);
+    // Make display context current; tgfx2 resources are owned by IRenderDevice.
+    if (trace) {
+        tc_log(TC_LOG_INFO, "[RenderingManager] present_display#%llu make_current begin",
+               (unsigned long long)s_present_calls);
     }
-    tc_gpu_set_context(surface->gpu_context);
+    tc_render_surface_make_current(surface);
+    if (trace) {
+        tc_log(TC_LOG_INFO, "[RenderingManager] present_display#%llu make_current end",
+               (unsigned long long)s_present_calls);
+    }
 
     int width, height;
     tc_render_surface_get_size(surface, &width, &height);
@@ -1782,6 +1807,12 @@ void RenderingManager::present_display(tc_display* display) {
     tgfx::TextureHandle display_color_tex{
         tc_render_surface_get_tgfx_color_tex_id(surface)
     };
+    if (trace) {
+        tc_log(TC_LOG_INFO,
+               "[RenderingManager] present_display#%llu size=%dx%d color_tex=%u",
+               (unsigned long long)s_present_calls,
+               width, height, display_color_tex.id);
+    }
     if (!display_color_tex) {
         tc_log(TC_LOG_ERROR,
                "[RenderingManager] present_display: render surface has no tgfx2 color texture target");
@@ -1791,7 +1822,17 @@ void RenderingManager::present_display(tc_display* display) {
 
     RenderEngine* engine = render_engine();
     if (engine) {
+        if (trace) {
+            tc_log(TC_LOG_INFO,
+                   "[RenderingManager] present_display#%llu ensure_tgfx2 begin",
+                   (unsigned long long)s_present_calls);
+        }
         engine->ensure_tgfx2();
+        if (trace) {
+            tc_log(TC_LOG_INFO,
+                   "[RenderingManager] present_display#%llu ensure_tgfx2 end",
+                   (unsigned long long)s_present_calls);
+        }
     }
     tgfx::IRenderDevice* dev = engine ? engine->tgfx2_device() : nullptr;
     if (!dev) {
@@ -2034,12 +2075,9 @@ void RenderingManager::clear_all_scene_pipelines() {
 // ============================================================================
 
 void RenderingManager::shutdown() {
-    // Ensure GL context is current before deleting GPU resources
+    // Ensure the host context is current before deleting device resources.
     if (make_current_callback_) {
         make_current_callback_();
-    }
-    if (offscreen_gpu_context_) {
-        tc_gpu_set_context(offscreen_gpu_context_);
     }
 
     // Clear viewport states
@@ -2064,11 +2102,7 @@ void RenderingManager::shutdown() {
     displays_.clear();
     editor_displays_.clear();
 
-    // Free offscreen GPU context
-    if (offscreen_gpu_context_) {
-        tc_gpu_context_free(offscreen_gpu_context_);
-        offscreen_gpu_context_ = nullptr;
-    }
+    offscreen_share_group_key_ = 0;
 
     // Clear callbacks
     make_current_callback_ = nullptr;

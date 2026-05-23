@@ -61,13 +61,13 @@ public:
 
     // --- Callbacks ---
     // Called each frame to process UI/input events (Qt, SDL)
-    void set_poll_events_callback(std::function<void()> cb) { _poll_events_callback = std::move(cb); }
+    void set_poll_events_callback(std::function<void()> cb);
 
     // Called each frame to check if loop should continue
-    void set_should_continue_callback(std::function<bool()> cb) { _should_continue_callback = std::move(cb); }
+    void set_should_continue_callback(std::function<bool()> cb);
 
     // Called after main loop ends (for cleanup)
-    void set_on_shutdown_callback(std::function<void()> cb) { _on_shutdown_callback = std::move(cb); }
+    void set_on_shutdown_callback(std::function<void()> cb);
 
     // --- Main loop ---
     // Run one frame: scene tick, before_render, RenderingManager render, after_render callback.

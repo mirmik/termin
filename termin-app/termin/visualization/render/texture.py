@@ -80,17 +80,11 @@ class Texture:
         asset = self._handle.get_asset()
         if asset is not None:
             asset.reload()
-        texture_data = self._handle.get()
-        if texture_data is not None:
-            texture_data.delete_gpu()
         self._preview_pixmap = None
 
     def bind(self, unit: int = 0) -> None:
-        """Bind texture to specified unit."""
-        texture_data = self._handle.get()
-        if texture_data is None:
-            return
-        texture_data.bind_gpu(unit)
+        """Legacy immediate-GL bind hook. Rendering now binds through tgfx2."""
+        _ = unit
 
     def get_preview_pixmap(self, max_size: int = 200) -> Optional["QPixmap"]:
         """

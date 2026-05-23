@@ -1,6 +1,5 @@
 // tc_display.c - Display implementation
 #include "render/tc_display.h"
-#include <tgfx/tc_gpu.h>
 #include <tcbase/tc_log.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -175,22 +174,6 @@ void tc_display_get_cursor_pos(const tc_display* display, double* x, double* y) 
 void tc_display_make_current(tc_display* display) {
     if (display && display->surface) {
         tc_render_surface_make_current(display->surface);
-
-        // Lazy-create GPUContext for this surface
-        tc_render_surface* s = display->surface;
-        if (!s->gpu_context) {
-            uintptr_t ctx_key = tc_render_surface_context_key(s);
-            uintptr_t sg_key = tc_render_surface_share_group_key(s);
-            tc_gpu_share_group* group = tc_gpu_share_group_get_or_create(sg_key);
-            s->gpu_context = tc_gpu_context_new(ctx_key, group);
-            tc_gpu_share_group_unref(group);
-            char ctx_name[32];
-            snprintf(ctx_name, sizeof(ctx_name), "display:%s",
-                     display->name ? display->name : "?");
-            tc_gpu_context_set_name(s->gpu_context, ctx_name);
-        }
-
-        tc_gpu_set_context(s->gpu_context);
     }
 }
 

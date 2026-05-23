@@ -52,10 +52,6 @@ OffscreenRenderSurface::OffscreenRenderSurface(tgfx::IRenderDevice* device, int 
 }
 
 OffscreenRenderSurface::~OffscreenRenderSurface() {
-    if (surface_.gpu_context) {
-        tc_gpu_context_free(surface_.gpu_context);
-        surface_.gpu_context = nullptr;
-    }
     release_textures();
 }
 
