@@ -217,7 +217,6 @@ class EditorWindow:
             document_service=self._document,
         )
         self._agent_chat_panel.preferred_width = px(320)
-        self._agent_chat_panel.preferred_height = pct(100)
         main_area.add_child(Splitter(target=self._agent_chat_panel, side="left"))
         main_area.add_child(self._agent_chat_panel)
 
