@@ -27,9 +27,44 @@ else()
     find_package(termin_components_mesh REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_inspect termin_inspect::termin_inspect)
+else()
+    find_package(termin_inspect REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_render termin_components_render::termin_components_render)
+else()
+    find_package(termin_components_render REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_graphics tgfx::termin_graphics2)
 else()
     find_package(termin_graphics REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_render termin_render::termin_render)
+else()
+    find_package(termin_render REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_render_passes termin_render_passes::termin_render_passes)
+else()
+    find_package(termin_render_passes REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_engine termin_engine::termin_engine)
+else()
+    find_package(termin_engine REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_runtime termin_runtime::termin_runtime)
+else()
+    find_package(termin_runtime REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_collision termin_collision::termin_collision)
+else()
+    find_package(termin_collision REQUIRED)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
@@ -101,7 +136,14 @@ target_link_libraries(termin_openxr
         termin_scene::termin_scene
         tmesh::termin_mesh
         termin_components_mesh::termin_components_mesh
+        termin_inspect::termin_inspect
+        termin_components_render::termin_components_render
         tgfx::termin_graphics2
+        termin_render::termin_render
+        termin_render_passes::termin_render_passes
+        termin_engine::termin_engine
+        termin_runtime::termin_runtime
+        termin_collision::termin_collision
 )
 
 if(ANDROID)

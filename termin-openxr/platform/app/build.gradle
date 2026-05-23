@@ -15,6 +15,9 @@ def terminAndroidPlatform = providers.gradleProperty("terminAndroidPlatform")
 def terminAndroidNdkVersion = providers.gradleProperty("terminAndroidNdkVersion")
         .orElse(providers.environmentVariable("TERMIN_ANDROID_NDK_VERSION"))
         .orElse("27.2.12479018")
+def terminOpenXRAssetsDir = providers.gradleProperty("terminOpenXRAssetsDir")
+        .orElse(providers.environmentVariable("TERMIN_OPENXR_ASSETS_DIR"))
+        .orElse(new File(terminRoot, "termin-android/assets").absolutePath)
 
 android {
     namespace "org.termin.openxr"
@@ -60,21 +63,37 @@ android {
     sourceSets {
         main {
             jniLibs.srcDir layout.buildDirectory.dir("generated/terminJniLibs").get().asFile
+            assets.srcDir file(terminOpenXRAssetsDir.get())
+            assets.srcDir layout.buildDirectory.dir("generated/terminOpenXRAssetIndex").get().asFile
         }
+    }
+}
+
+tasks.register("generateTerminOpenXRAssetIndex") {
+    def assetsDir = file(terminOpenXRAssetsDir.get())
+    def outputDir = layout.buildDirectory.dir("generated/terminOpenXRAssetIndex")
+    outputs.file(outputDir.map { it.file("termin_asset_index.txt") })
+    inputs.dir(assetsDir)
+    doLast {
+        def outDir = outputDir.get().asFile
+        outDir.mkdirs()
+        def indexFile = new File(outDir, "termin_asset_index.txt")
+        if (!assetsDir.isDirectory()) {
+            throw new GradleException("Termin OpenXR assets dir not found: ${assetsDir}")
+        }
+        def files = fileTree(assetsDir).matching {
+            include "**/*"
+        }.files.findAll { it.isFile() }.collect {
+            assetsDir.toPath().relativize(it.toPath()).toString().replace(File.separator, "/")
+        }.sort()
+        indexFile.text = files.join("\n") + "\n"
     }
 }
 
 tasks.register("copyTerminOpenXRLibraries", Copy) {
     def sdkLibDir = new File(new File(terminAndroidSdkRoot.get(), terminAndroidAbi.get()), "lib")
     from(sdkLibDir) {
-        include "libtermin_base.so"
-        include "libtermin_components_mesh.so"
-        include "libtermin_graphics.so"
-        include "libtermin_graphics2.so"
-        include "libtermin_inspect.so"
-        include "libtermin_mesh.so"
-        include "libtermin_openxr.so"
-        include "libtermin_scene.so"
+        include "*.so"
     }
     into(layout.buildDirectory.dir("generated/terminJniLibs/${terminAndroidAbi.get()}"))
     doFirst {
@@ -90,5 +109,6 @@ tasks.register("copyTerminOpenXRLibraries", Copy) {
 }
 
 tasks.named("preBuild") {
+    dependsOn("generateTerminOpenXRAssetIndex")
     dependsOn("copyTerminOpenXRLibraries")
 }
