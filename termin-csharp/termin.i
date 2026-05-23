@@ -528,7 +528,6 @@ namespace termin {
 
 %ignore termin::RenderEngine::render_scene_pipeline_offscreen;
 
-%ignore termin::MeshRenderer::mesh;
 %ignore termin::MeshRenderer::material;
 %ignore termin::MeshRenderer::_overridden_material;
 %ignore termin::MeshRenderer::_pending_override_data;

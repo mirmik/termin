@@ -397,10 +397,6 @@ void register_android_runtime_inspect_fields() {
 
     auto& inspect = tc::InspectRegistry::instance();
     inspect.set_type_parent("MeshRenderer", "Component");
-    if (!inspect.find_field("MeshRenderer", "mesh")) {
-        inspect.add<termin::MeshRenderer, termin::TcMesh>(
-            "MeshRenderer", &termin::MeshRenderer::mesh, "mesh", "Mesh", "tc_mesh");
-    }
     if (!inspect.find_field("MeshRenderer", "material")) {
         inspect.add<termin::MeshRenderer, termin::TcMaterial>(
             "MeshRenderer", &termin::MeshRenderer::material, "material", "Material", "tc_material");
