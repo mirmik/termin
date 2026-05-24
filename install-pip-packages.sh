@@ -1,16 +1,16 @@
 #!/bin/bash
 # Install termin Python packages.
 #
-# Pip packages are THIN: they ship only nanobind binding .so files plus
-# Python wrappers. The shared C++ libraries live in $TERMIN_SDK (default:
-# ./sdk). build-sdk-cpp.sh + build-sdk-bindings.sh must be run first to
-# produce the SDK.
+# Pip packages copy pre-built nanobind binding modules from
+# $TERMIN_BINDINGS_DIR (normally build/<config>/bin). For normal pip installs
+# they also bundle the shared C++ libraries from $TERMIN_SDK/lib into each
+# package's local lib/ directory so the package can run without an SDK.
 #
 # By default, packages are installed into the current pip environment.
 # With --target DIR, packages are installed directly into DIR (via
 # `pip install --target`), skipping dependency resolution. This mode is
 # used by build-sdk.sh to populate the bundled Python site-packages in
-# sdk/lib/python3.10/site-packages/ without going through a second Python
+# sdk/lib/python3.*/site-packages/ without going through a second Python
 # interpreter.
 #
 # Usage:
@@ -19,14 +19,10 @@
 #   ./install-pip-packages.sh --target DIR                # Install into DIR (no deps)
 #   ./install-pip-packages.sh --force                     # Force-reinstall, bypass pip cache
 #
-# When the SDK changes in an ABI-breaking way (namespace rename, virtual
-# table layout, enum re-ordering, ...) the nanobind .so files that pip
-# copies out of $TERMIN_SDK change, but pip's wheel cache may still serve
-# an old build. `compute_local_version()` mitigates this by embedding the
-# SDK mtime into the package version, but if a wheel is already cached
-# under that version string — or worse, a package is not in the list
-# below and was installed ad-hoc — pip stays happy with the stale install.
-# --force trades rebuild time for guaranteed-fresh bindings.
+# When native artifacts change, pip's wheel cache may still serve an old build.
+# `compute_local_version()` mitigates this by embedding native artifact mtimes
+# into the package version. --force trades rebuild time for guaranteed-fresh
+# bindings.
 
 set -e
 
@@ -71,19 +67,17 @@ if [[ -n "$TARGET_DIR" && $EDITABLE -eq 1 ]]; then
     exit 1
 fi
 
-# Locate termin SDK so thin pip packages can copy their pre-built bindings.
-# Used both at install time (TerminCMakeBuildExt copies _X_native.so from
-# $TERMIN_SDK/lib/python/termin/) and at runtime (preload_sdk_libs).
+# Locate termin SDK so pip packages can bundle shared libraries when needed.
 #
 # Discovery order mirrors termin_nanobind.runtime.find_sdk():
 #   1. $TERMIN_SDK environment variable (if set and valid)
 #   2. $SCRIPT_DIR/sdk (in-tree build via build-sdk-bindings.sh)
 #   3. /opt/termin (system-wide install via install-to-opt.sh)
-_sdk_valid() { [[ -d "$1/lib/python/termin" ]]; }
+_sdk_valid() { [[ -d "$1/lib" ]]; }
 
 if [[ -n "$TERMIN_SDK" ]]; then
     if ! _sdk_valid "$TERMIN_SDK"; then
-        echo "ERROR: TERMIN_SDK=$TERMIN_SDK is set but does not contain lib/python/termin" >&2
+        echo "ERROR: TERMIN_SDK=$TERMIN_SDK is set but does not contain lib/" >&2
         exit 1
     fi
 elif _sdk_valid "$SCRIPT_DIR/sdk"; then
@@ -97,6 +91,36 @@ else
     exit 1
 fi
 echo "Using TERMIN_SDK=$TERMIN_SDK"
+
+if [[ -z "${TERMIN_BINDINGS_DIR:-}" ]]; then
+    if [[ -n "${BUILD_DIR:-}" && -d "$BUILD_DIR/bin" ]]; then
+        export TERMIN_BINDINGS_DIR="$BUILD_DIR/bin"
+    elif [[ -d "$SCRIPT_DIR/build/Release/bin" ]]; then
+        export TERMIN_BINDINGS_DIR="$SCRIPT_DIR/build/Release/bin"
+    elif [[ -d "$SCRIPT_DIR/build/Debug/bin" ]]; then
+        export TERMIN_BINDINGS_DIR="$SCRIPT_DIR/build/Debug/bin"
+    fi
+fi
+if [[ -n "${TERMIN_BINDINGS_DIR:-}" ]]; then
+    echo "Using TERMIN_BINDINGS_DIR=$TERMIN_BINDINGS_DIR"
+fi
+
+if [[ -z "${TERMIN_PIP_BUNDLE_LIBS:-}" ]]; then
+    if [[ -n "$TARGET_DIR" || $EDITABLE -eq 1 ]]; then
+        export TERMIN_PIP_BUNDLE_LIBS=0
+    else
+        export TERMIN_PIP_BUNDLE_LIBS=1
+    fi
+fi
+if [[ -z "${TERMIN_PIP_COPY_TO_SOURCE:-}" ]]; then
+    if [[ $EDITABLE -eq 1 ]]; then
+        export TERMIN_PIP_COPY_TO_SOURCE=1
+    else
+        export TERMIN_PIP_COPY_TO_SOURCE=0
+    fi
+fi
+echo "TERMIN_PIP_BUNDLE_LIBS=$TERMIN_PIP_BUNDLE_LIBS"
+echo "TERMIN_PIP_COPY_TO_SOURCE=$TERMIN_PIP_COPY_TO_SOURCE"
 
 if [[ -n "$TARGET_DIR" ]]; then
     mkdir -p "$TARGET_DIR"
@@ -150,7 +174,7 @@ PACKAGES=(
 )
 
 # When --force is set, nuke each package's build cache and egg-info so
-# setuptools re-runs the CMake copy step from $TERMIN_SDK instead of
+# setuptools re-runs the native artifact copy step from TERMIN_BINDINGS_DIR instead of
 # reusing a cached wheel. This is the only reliable way to recover from
 # an ABI-breaking SDK change — compute_local_version() fails when pip
 # has already cached a wheel under the matching +sdkNNN suffix.

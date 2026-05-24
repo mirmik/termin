@@ -150,7 +150,8 @@ PYTHON_DEST="$INSTALL_DIR/lib/python"
 
 # Module definitions: project_dir | python_subdir | so_pattern | py_source_dir
 #
-# Mirrors which subproject contributes what to sdk/lib/python/termin/<subdir>/.
+# Mirrors which subproject contributes what to the local install
+# lib/python/termin/<subdir>/ tree used by this legacy app build script.
 # Each entry either brings an .so binding, a .py source tree, or both.
 # When multiple subprojects target the same python_subdir (e.g. termin.colliders
 # from both termin-collision and termin-components-collision), they are listed

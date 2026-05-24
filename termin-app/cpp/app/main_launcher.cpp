@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 
     if (!python_stdlib.empty()) {
         bundled_python = true;
-        termin_path = install_root / "lib" / "python" / "termin";
+        termin_path = python_stdlib / "site-packages" / "termin";
 
         std::cout << "Using bundled Python: " << python_stdlib << std::endl;
 
@@ -151,7 +151,6 @@ int main(int argc, char* argv[]) {
         fs::path site_packages = python_stdlib / "site-packages";
         path_code =
             "import sys\n"
-            "sys.path.insert(0, r'" + termin_path.parent_path().string() + "')\n"
             "sys.path.insert(0, r'" + site_packages.string() + "')\n";
     } else if (sdk_python_tree) {
         path_code =

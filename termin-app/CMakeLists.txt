@@ -15,8 +15,7 @@
 #     bin/termin_editor
 #     lib/
 #       libpython3.10.so      (bundled Python, if BUNDLE_PYTHON=ON)
-#       python3.10/           (stdlib + site-packages)
-#       python/termin/        (our modules + native extensions)
+#       python3.10/           (stdlib + site-packages with termin packages)
 
 cmake_minimum_required(VERSION 3.16)
 project(termin VERSION 0.1.0 LANGUAGES C CXX)
@@ -51,7 +50,7 @@ add_subdirectory(cpp)
 # Native modules (.so/.dll) are already installed by cpp/CMakeLists.txt
 # This copies Python source files alongside them
 install(DIRECTORY ${TERMIN_ROOT}/termin/
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/python/termin
+    DESTINATION lib/python/termin
     PATTERN "__pycache__" EXCLUDE
     PATTERN "*.pyc" EXCLUDE
     PATTERN "*.pyo" EXCLUDE
@@ -96,33 +95,33 @@ if(BUNDLE_PYTHON)
     if(NOT WIN32)
         # Linux: Install libpython shared library
         install(DIRECTORY ${PYTHON_LIBDIR}/
-            DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+            DESTINATION lib
             FILES_MATCHING
             PATTERN "libpython${PYTHON_VERSION}*.so*"
             PATTERN "python${PYTHON_VERSION}" EXCLUDE
         )
-        set(STDLIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION}")
+        set(STDLIB_INSTALL_DIR "lib/python${PYTHON_VERSION}")
         set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")
     else()
         # Windows: Install python3xx.dll to bin/
         file(GLOB PYTHON_DLLS "${PYTHON_PREFIX}/python*.dll")
         install(FILES ${PYTHON_DLLS}
-            DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
+            DESTINATION bin
         )
         # Windows: Install DLLs/ directory (C extension modules)
         if(EXISTS "${PYTHON_PREFIX}/DLLs")
             install(DIRECTORY "${PYTHON_PREFIX}/DLLs"
-                DESTINATION ${CMAKE_INSTALL_PREFIX}
+                DESTINATION .
             )
         endif()
         # Windows: Install Tcl/Tk runtime for tkinter dialogs
         if(EXISTS "${PYTHON_PREFIX}/tcl")
             install(DIRECTORY "${PYTHON_PREFIX}/tcl"
-                DESTINATION ${CMAKE_INSTALL_PREFIX}
+                DESTINATION .
             )
         endif()
         # Windows expects stdlib in {prefix}/Lib/ (capital L, no version)
-        set(STDLIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/Lib")
+        set(STDLIB_INSTALL_DIR "Lib")
         set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")
     endif()
 
@@ -189,7 +188,7 @@ if(BUNDLE_PYTHON)
         "termin_modules | ${ENV_DIR}/termin-modules/python/termin_modules"
     )
 
-    set(LOCAL_PYTHON_DIR "${CMAKE_INSTALL_PREFIX}/lib/python")
+    set(LOCAL_PYTHON_DIR "lib/python")
     foreach(entry ${BUNDLE_PACKAGES_LOCAL})
         string(REPLACE "|" ";" parts "${entry}")
         list(GET parts 0 pkg)

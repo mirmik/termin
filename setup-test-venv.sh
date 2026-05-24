@@ -60,11 +60,11 @@ pip install numpy scipy Pillow pytest PyYAML pysdl2 pysdl2-dll
 pip install --only-binary :all: PyQt6
 
 # 5. Locate and export TERMIN_SDK
-_sdk_valid() { [[ -d "$1/lib/python/termin" ]]; }
+_sdk_valid() { [[ -d "$1/lib" ]]; }
 
 if [[ -n "$TERMIN_SDK" ]]; then
     if ! _sdk_valid "$TERMIN_SDK"; then
-        echo "WARNING: TERMIN_SDK=$TERMIN_SDK does not contain lib/python/termin" >&2
+        echo "WARNING: TERMIN_SDK=$TERMIN_SDK does not contain lib/" >&2
     fi
 elif _sdk_valid "$SCRIPT_DIR/sdk"; then
     export TERMIN_SDK="$SCRIPT_DIR/sdk"
