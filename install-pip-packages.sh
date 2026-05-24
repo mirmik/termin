@@ -170,17 +170,17 @@ PACKAGES=(
     termin-components/termin-components-kinematic
     termin-scene
     termin-lighting
+    termin-components/termin-components-mesh
     termin-input
     termin-collision
     termin-render
+    termin-components/termin-components-render
     termin-render-passes
     termin-navmesh
     termin-physics
     termin-engine
     termin-skeleton
     termin-animation
-    termin-components/termin-components-render
-    termin-components/termin-components-mesh
     termin-nodegraph
     termin-app
     tcplot
