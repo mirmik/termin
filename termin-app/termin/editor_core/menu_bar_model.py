@@ -51,6 +51,7 @@ def build_editor_menu_spec(
     on_toggle_game_mode: Callable[[], None],
     on_build_project: Callable[[], None],
     on_build_android: Callable[[], None],
+    on_build_quest_openxr: Callable[[], None],
     on_run_build: Callable[[], None],
     on_run_standalone: Callable[[], None],
     # Debug
@@ -194,6 +195,7 @@ def build_editor_menu_spec(
                 ),
                 MenuItemSpec("Build Project...", on_build_project),
                 MenuItemSpec("Build Android APK...", on_build_android),
+                MenuItemSpec("Quest/OpenXR Build...", on_build_quest_openxr),
                 MenuItemSpec("Run Build...", on_run_build),
                 MenuItemSpec("Run Standalone...", on_run_standalone, shortcut="F6"),
             ],

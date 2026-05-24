@@ -317,6 +317,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
     const std::vector<Light>& lights,
     const Mat44f& camera_view,
     const Mat44f& camera_projection,
+    float camera_near,
+    float camera_far,
     uint64_t layer_mask
 ) {
     std::vector<ShadowMapResult> results;
@@ -360,23 +362,21 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         }
     }
 
-    // Extract camera near plane from the engine's Vulkan-native Y-forward
-    // perspective matrix:
-    //   m(1, 2) = far / (far - near)
-    //   m(3, 2) = -far * near / (far - near)
-    float camera_near = 0.1f;
-    float proj_12 = camera_projection(1, 2);
-    float proj_32 = camera_projection(3, 2);
-    if (std::abs(proj_12) > 0.001f && std::abs(proj_32) > 0.001f) {
-        camera_near = -proj_32 / proj_12;
-        if (camera_near < 0.01f) camera_near = 0.1f;
+    if (camera_near < 0.001f) {
+        camera_near = 0.1f;
+    }
+    if (camera_far <= camera_near + 0.001f) {
+        camera_far = camera_near + 100.0f;
     }
 
     int fbo_index = 0;
     for (auto [light_index, light] : shadow_lights) {
         int resolution = light->shadows.map_resolution;
         int cascade_count = std::max(1, std::min(4, light->shadows.cascade_count));
-        float max_distance = light->shadows.max_distance;
+        float max_distance = std::min(light->shadows.max_distance, camera_far);
+        if (max_distance <= camera_near + 0.001f) {
+            max_distance = camera_far;
+        }
         float split_lambda = light->shadows.split_lambda;
         float depth_bias_slope = static_cast<float>(light->shadows.normal_bias);
 
@@ -398,7 +398,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             }
 
             ShadowCameraParams params = fit_shadow_frustum_for_cascade(
-                camera_view, camera_projection, light_dir,
+                camera_view, camera_projection, camera_near, camera_far, light_dir,
                 cascade_near, cascade_far, resolution, caster_offset
             );
             Mat44f view_matrix = build_shadow_view_matrix(params);
@@ -570,6 +570,8 @@ void ShadowPass::execute(ExecuteContext& ctx) {
     Mat44 proj_d = ctx.camera->get_projection_matrix();
     Mat44f camera_view = view_d.to_float();
     Mat44f camera_projection = proj_d.to_float();
+    float camera_near = static_cast<float>(ctx.camera->near_clip);
+    float camera_far = static_cast<float>(ctx.camera->far_clip);
 
     if (!ctx.ctx2) {
         tc::Log::error("[ShadowPass] ctx.ctx2 is null — ShadowPass is tgfx2-only");
@@ -583,6 +585,8 @@ void ShadowPass::execute(ExecuteContext& ctx) {
         ctx.lights,
         camera_view,
         camera_projection,
+        camera_near,
+        camera_far,
         ctx.layer_mask
     );
 
