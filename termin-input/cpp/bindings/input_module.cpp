@@ -1,5 +1,8 @@
 // input_module.cpp - Python bindings for termin-input
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+
+#include <termin/input/xr_input.hpp>
 
 extern "C" {
 #include "core/tc_input_capability.h"
@@ -11,6 +14,58 @@ extern "C" {
 namespace nb = nanobind;
 
 NB_MODULE(_input_native, m) {
+    nb::enum_<termin::xr::XrHand>(m, "XrHand")
+        .value("Left", termin::xr::XrHand::Left)
+        .value("Right", termin::xr::XrHand::Right);
+
+    nb::class_<termin::xr::XrRigInputState>(m, "XrRigInputState")
+        .def_prop_ro("id", [](const termin::xr::XrRigInputState& state) {
+            return state.id;
+        })
+        .def_prop_ro("frame_index", [](const termin::xr::XrRigInputState& state) {
+            return state.frame_index;
+        })
+        .def_prop_ro("head_axes_active", [](const termin::xr::XrRigInputState& state) {
+            return state.head_axes_active;
+        })
+        .def("thumbstick", [](const termin::xr::XrRigInputState& state, termin::xr::XrHand hand) {
+            const termin::xr::XrAxis2State& axis = state.hand(hand).thumbstick;
+            return nb::make_tuple(axis.value.x, axis.value.y, axis.active);
+        }, nb::arg("hand"))
+        .def("head_forward_in_origin", [](const termin::xr::XrRigInputState& state) {
+            return nb::make_tuple(
+                state.head_forward_in_origin.x,
+                state.head_forward_in_origin.y,
+                state.head_forward_in_origin.z
+            );
+        })
+        .def("head_right_in_origin", [](const termin::xr::XrRigInputState& state) {
+            return nb::make_tuple(
+                state.head_right_in_origin.x,
+                state.head_right_in_origin.y,
+                state.head_right_in_origin.z
+            );
+        });
+
+    nb::class_<termin::xr::XrInput>(m, "XrInput")
+        .def_static("get_state", [](const std::string& id) -> nb::object {
+            termin::xr::XrRigInputState* state = termin::xr::XrInput::get_state(id);
+            if (!state) {
+                return nb::none();
+            }
+            return nb::cast(state, nb::rv_policy::reference);
+        }, nb::arg("id"))
+        .def_static("current", []() -> nb::object {
+            termin::xr::XrRigInputState* state = termin::xr::XrInput::current();
+            if (!state) {
+                return nb::none();
+            }
+            return nb::cast(state, nb::rv_policy::reference);
+        });
+
+    m.def("xr_hand_to_string", &termin::xr::xr_hand_to_string, nb::arg("hand"));
+    m.def("xr_hand_from_string", &termin::xr::xr_hand_from_string, nb::arg("value"));
+
     m.def("input_capability_id", []() {
         return tc_input_capability_id();
     }, "Get the input capability ID");

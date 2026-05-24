@@ -61,6 +61,22 @@ void XrOriginComponent::set_reference_space_str(const std::string& value) {
     reference_space = XrReferenceSpace::Local;
 }
 
+std::string XrOriginComponent::get_reference_alignment_str() const {
+    switch (reference_alignment) {
+        case XrReferenceAlignment::StageAxes: return "stage_axes";
+        case XrReferenceAlignment::InitialHeadYaw: return "initial_head_yaw";
+    }
+    return "initial_head_yaw";
+}
+
+void XrOriginComponent::set_reference_alignment_str(const std::string& value) {
+    if (value == "stage_axes") {
+        reference_alignment = XrReferenceAlignment::StageAxes;
+        return;
+    }
+    reference_alignment = XrReferenceAlignment::InitialHeadYaw;
+}
+
 REGISTER_COMPONENT(XrOriginComponent, CxxComponent);
 
 static struct _XrOriginReferenceSpaceFieldRegistrar {
@@ -85,6 +101,29 @@ static struct _XrOriginReferenceSpaceFieldRegistrar {
         tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
     }
 } _xr_origin_reference_space_registrar;
+
+static struct _XrOriginReferenceAlignmentFieldRegistrar {
+    _XrOriginReferenceAlignmentFieldRegistrar() {
+        tc::InspectFieldInfo info;
+        info.type_name = "XrOriginComponent";
+        info.path = "reference_alignment";
+        info.label = "Reference Alignment";
+        info.kind = "string";
+        info.choices.push_back({"initial_head_yaw", "Initial Head Yaw"});
+        info.choices.push_back({"stage_axes", "Stage Axes"});
+        info.getter = [](void* obj) -> tc_value {
+            auto* c = static_cast<XrOriginComponent*>(obj);
+            return tc_value_string(c->get_reference_alignment_str().c_str());
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            auto* c = static_cast<XrOriginComponent*>(obj);
+            if (value.type == TC_VALUE_STRING && value.data.s) {
+                c->set_reference_alignment_str(value.data.s);
+            }
+        };
+        tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
+    }
+} _xr_origin_reference_alignment_registrar;
 
 static struct _XrOriginLayerMaskFieldRegistrar {
     _XrOriginLayerMaskFieldRegistrar() {

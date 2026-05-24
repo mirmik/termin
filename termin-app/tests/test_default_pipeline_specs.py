@@ -33,3 +33,12 @@ def test_builtin_default_pipeline_resolves_msaa_before_postfx():
 
     assert "ResolvePass" in pass_types
     assert pass_names.index("Resolve") < pass_names.index("Bloom")
+
+
+def test_resolve_pass_strategy_deserializes_as_string_choice():
+    frame_pass = ResolvePass()
+
+    frame_pass._tc_pass.deserialize_data({"strategy": "min"})
+
+    assert frame_pass.strategy == "min"
+    assert frame_pass._tc_pass.serialize_data()["strategy"] == "min"

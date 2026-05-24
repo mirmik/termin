@@ -32,6 +32,11 @@ else()
     find_package(termin_scene REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_input termin_input::termin_input)
+else()
+    find_package(termin_input REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_render termin_render::termin_render)
 else()
     find_package(termin_render REQUIRED)
@@ -57,6 +62,7 @@ termin_add_module(
         src/geometry_pass_base.cpp
         src/light_component.cpp
         src/xr_origin_component.cpp
+        src/xr_thumbstick_locomotion_component.cpp
         src/mesh_renderer.cpp
         src/material_pass.cpp
         src/depth_pass.cpp
@@ -67,6 +73,7 @@ termin_add_module(
         tgfx::termin_graphics
         termin_inspect::termin_inspect
         termin_scene::termin_scene
+        termin_input::termin_input
         termin_render::termin_render
         termin_display::termin_display
         termin_components_mesh::termin_components_mesh
@@ -76,6 +83,7 @@ termin_add_module(
         termin_graphics
         termin_inspect
         termin_scene
+        termin_input
         termin_render
         termin_display
         termin_components_mesh
