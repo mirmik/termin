@@ -245,6 +245,12 @@ struct Vec3 {
     static Vec3 unit_x();
     static Vec3 unit_y();
     static Vec3 unit_z();
+    static Vec3 right();
+    static Vec3 left();
+    static Vec3 forward();
+    static Vec3 backward();
+    static Vec3 up();
+    static Vec3 down();
 };
 
 // Quat

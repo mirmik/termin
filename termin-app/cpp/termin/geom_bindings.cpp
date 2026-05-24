@@ -100,6 +100,12 @@ NB_MODULE(_geom_native, m) {
         .def_static("unit_x", &Vec3::unit_x)
         .def_static("unit_y", &Vec3::unit_y)
         .def_static("unit_z", &Vec3::unit_z)
+        .def_static("right", &Vec3::right)
+        .def_static("left", &Vec3::left)
+        .def_static("forward", &Vec3::forward)
+        .def_static("backward", &Vec3::backward)
+        .def_static("up", &Vec3::up)
+        .def_static("down", &Vec3::down)
         .def("to_numpy", &vec3_to_numpy)
         .def("tolist", [](const Vec3& v) {
             nb::list lst;

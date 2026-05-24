@@ -7,6 +7,16 @@ using termin::GeneralPose3;
 using termin::Quat;
 using termin::Vec3;
 
+TEST_CASE("Vec3 named directions follow Termin axes")
+{
+    CHECK(Vec3::right() == Vec3::unit_x());
+    CHECK(Vec3::left() == -Vec3::unit_x());
+    CHECK(Vec3::forward() == Vec3::unit_y());
+    CHECK(Vec3::backward() == -Vec3::unit_y());
+    CHECK(Vec3::up() == Vec3::unit_z());
+    CHECK(Vec3::down() == -Vec3::unit_z());
+}
+
 TEST_CASE("GeneralPose3 identity and inverse")
 {
     GeneralPose3 id = GeneralPose3::identity();
