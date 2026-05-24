@@ -1571,6 +1571,49 @@ struct OpenXRRuntimeScene {
         active_eye_frame.valid = false;
     }
 
+    bool begin_render_frame() {
+        if (!ready || !engine) {
+            return false;
+        }
+        termin::RenderEngine* render_engine = engine->rendering_manager.render_engine();
+        if (!render_engine) {
+            tc_log_error("[OpenXR scene] render engine is unavailable");
+            return false;
+        }
+        render_engine->ensure_tgfx2();
+        tgfx::RenderContext2* ctx = render_engine->tgfx2_ctx();
+        if (!ctx) {
+            tc_log_error("[OpenXR scene] tgfx2 render context is unavailable");
+            return false;
+        }
+        if (ctx->in_frame()) {
+            return false;
+        }
+        ctx->begin_frame();
+        return true;
+    }
+
+    void end_render_frame() {
+        if (!ready || !engine) {
+            return;
+        }
+        termin::RenderEngine* render_engine = engine->rendering_manager.render_engine();
+        if (!render_engine) {
+            tc_log_error("[OpenXR scene] render engine is unavailable while ending frame");
+            return;
+        }
+        tgfx::RenderContext2* ctx = render_engine->tgfx2_ctx();
+        if (!ctx) {
+            tc_log_error("[OpenXR scene] tgfx2 render context is unavailable while ending frame");
+            return;
+        }
+        if (!ctx->in_frame()) {
+            tc_log_error("[OpenXR scene] tgfx2 render frame was not open while ending frame");
+            return;
+        }
+        ctx->end_frame();
+    }
+
     void destroy() {
         active_eye_frame = {};
         if (engine) {
@@ -2065,11 +2108,22 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
     uint64_t fps_window_rendered_frames = 0;
     uint64_t fps_window_should_skip_frames = 0;
     double fps_window_wait_frame_ms = 0.0;
+    double fps_window_wait_frame_min_ms = -1.0;
+    double fps_window_wait_frame_max_ms = 0.0;
     double fps_window_swapchain_wait_ms = 0.0;
     double fps_window_render_ms = 0.0;
     double fps_window_frame_cpu_ms = 0.0;
+    double fps_window_predicted_period_ms = 0.0;
+    double fps_window_predicted_delta_ms = 0.0;
+    double fps_window_predicted_delta_min_ms = -1.0;
+    double fps_window_predicted_delta_max_ms = 0.0;
+    uint64_t fps_window_predicted_delta_count = 0;
+    XrTime last_predicted_display_time = 0;
     auto millis_between = [](FrameClock::time_point begin, FrameClock::time_point end) {
         return std::chrono::duration<double, std::milli>(end - begin).count();
+    };
+    auto xr_duration_to_ms = [](XrDuration duration) {
+        return static_cast<double>(duration) * 1e-6;
     };
 
     log_info("OpenXR color smoke loop ready");
@@ -2125,14 +2179,41 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         const auto wait_frame_begin = FrameClock::now();
         result = xr.wait_frame(session, &wait_info, &frame_state);
         frame_wait_frame_ms = millis_between(wait_frame_begin, FrameClock::now());
+        if (fps_window_wait_frame_min_ms < 0.0 || frame_wait_frame_ms < fps_window_wait_frame_min_ms) {
+            fps_window_wait_frame_min_ms = frame_wait_frame_ms;
+        }
+        if (frame_wait_frame_ms > fps_window_wait_frame_max_ms) {
+            fps_window_wait_frame_max_ms = frame_wait_frame_ms;
+        }
         if (XR_FAILED(result)) {
             __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrWaitFrame failed: %d", result);
             continue;
         }
 
+        fps_window_predicted_period_ms += xr_duration_to_ms(frame_state.predictedDisplayPeriod);
+        if (last_predicted_display_time != 0 &&
+            frame_state.predictedDisplayTime > last_predicted_display_time) {
+            const double predicted_delta_ms =
+                static_cast<double>(frame_state.predictedDisplayTime - last_predicted_display_time) * 1e-6;
+            fps_window_predicted_delta_ms += predicted_delta_ms;
+            ++fps_window_predicted_delta_count;
+            if (fps_window_predicted_delta_min_ms < 0.0 ||
+                predicted_delta_ms < fps_window_predicted_delta_min_ms) {
+                fps_window_predicted_delta_min_ms = predicted_delta_ms;
+            }
+            if (predicted_delta_ms > fps_window_predicted_delta_max_ms) {
+                fps_window_predicted_delta_max_ms = predicted_delta_ms;
+            }
+        }
+        last_predicted_display_time = frame_state.predictedDisplayTime;
+
         XrFrameBeginInfo begin_frame_info{};
         begin_frame_info.type = XR_TYPE_FRAME_BEGIN_INFO;
-        xr.begin_frame(session, &begin_frame_info);
+        result = xr.begin_frame(session, &begin_frame_info);
+        if (XR_FAILED(result)) {
+            __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrBeginFrame failed: %d", result);
+            continue;
+        }
 
         XrCompositionLayerBaseHeader* layers[1] = {};
         uint32_t layer_count = 0;
@@ -2162,6 +2243,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
             if (XR_SUCCEEDED(result) && located_view_count == view_count) {
                 std::vector<XrSwapchain> swapchains_to_release;
                 swapchains_to_release.reserve(view_count);
+                const bool runtime_scene_frame_open = runtime_scene_ready && runtime_scene.begin_render_frame();
                 for (uint32_t eye = 0; eye < view_count; ++eye) {
                     uint32_t image_index = 0;
                     XrSwapchainImageAcquireInfo acquire_info{};
@@ -2266,6 +2348,12 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                     layer_views[eye].subImage.imageArrayIndex = 0;
                 }
 
+                if (runtime_scene_frame_open) {
+                    const auto render_submit_begin = FrameClock::now();
+                    runtime_scene.end_render_frame();
+                    frame_render_ms += millis_between(render_submit_begin, FrameClock::now());
+                }
+
                 for (XrSwapchain swapchain : swapchains_to_release) {
                     XrSwapchainImageReleaseInfo release_info{};
                     release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
@@ -2324,18 +2412,30 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                 }
             }
             const double inv_frames = 1.0 / static_cast<double>(fps_window_frames);
+            const double inv_predicted_delta =
+                fps_window_predicted_delta_count > 0
+                    ? 1.0 / static_cast<double>(fps_window_predicted_delta_count)
+                    : 0.0;
             __android_log_print(
                 ANDROID_LOG_INFO,
                 kLogTag,
-                "XR FPS: state=%s wall=%.1f rendered=%.1f predictedHz=%.1f avgMs{frame=%.2f waitFrame=%.2f swapWait=%.2f render=%.2f} frames=%llu renderedFrames=%llu shouldSkip=%llu",
+                "XR FPS: state=%s wall=%.1f rendered=%.1f predictedHz=%.1f "
+                "avgMs{frame=%.2f waitFrame=%.2f waitMin=%.2f waitMax=%.2f swapWait=%.2f render=%.2f period=%.2f predDelta=%.2f predDeltaMin=%.2f predDeltaMax=%.2f} "
+                "frames=%llu renderedFrames=%llu shouldSkip=%llu",
                 session_state_name(current_session_state),
                 wall_fps,
                 rendered_fps,
                 predicted_hz,
                 fps_window_frame_cpu_ms * inv_frames,
                 fps_window_wait_frame_ms * inv_frames,
+                fps_window_wait_frame_min_ms < 0.0 ? 0.0 : fps_window_wait_frame_min_ms,
+                fps_window_wait_frame_max_ms,
                 fps_window_swapchain_wait_ms * inv_frames,
                 fps_window_render_ms * inv_frames,
+                fps_window_predicted_period_ms * inv_frames,
+                fps_window_predicted_delta_ms * inv_predicted_delta,
+                fps_window_predicted_delta_min_ms < 0.0 ? 0.0 : fps_window_predicted_delta_min_ms,
+                fps_window_predicted_delta_max_ms,
                 static_cast<unsigned long long>(fps_window_frames),
                 static_cast<unsigned long long>(fps_window_rendered_frames),
                 static_cast<unsigned long long>(fps_window_should_skip_frames)
@@ -2348,9 +2448,16 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
             fps_window_rendered_frames = 0;
             fps_window_should_skip_frames = 0;
             fps_window_wait_frame_ms = 0.0;
+            fps_window_wait_frame_min_ms = -1.0;
+            fps_window_wait_frame_max_ms = 0.0;
             fps_window_swapchain_wait_ms = 0.0;
             fps_window_render_ms = 0.0;
             fps_window_frame_cpu_ms = 0.0;
+            fps_window_predicted_period_ms = 0.0;
+            fps_window_predicted_delta_ms = 0.0;
+            fps_window_predicted_delta_min_ms = -1.0;
+            fps_window_predicted_delta_max_ms = 0.0;
+            fps_window_predicted_delta_count = 0;
         }
     }
 
