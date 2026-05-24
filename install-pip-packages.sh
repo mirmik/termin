@@ -122,6 +122,19 @@ fi
 echo "TERMIN_PIP_BUNDLE_LIBS=$TERMIN_PIP_BUNDLE_LIBS"
 echo "TERMIN_PIP_COPY_TO_SOURCE=$TERMIN_PIP_COPY_TO_SOURCE"
 
+if [[ -z "${PYTHON_BIN:-}" ]]; then
+    PYTHON_LAUNCHER="$(command -v python3 || command -v python || true)"
+    if [[ -n "$PYTHON_LAUNCHER" ]]; then
+        PYTHON_BIN="$("$PYTHON_LAUNCHER" -c 'import sys; print(sys.executable)' 2>/dev/null || true)"
+    fi
+fi
+if [[ -z "$PYTHON_BIN" ]]; then
+    echo "ERROR: python3 not found" >&2
+    exit 1
+fi
+PIP_CMD=("$PYTHON_BIN" -m pip)
+echo "Using pip: ${PIP_CMD[*]}"
+
 if [[ -n "$TARGET_DIR" ]]; then
     mkdir -p "$TARGET_DIR"
     TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
@@ -230,7 +243,7 @@ if [[ -n "$TARGET_DIR" ]]; then
     echo "  Installing ${#PACKAGES[@]} packages into $TARGET_DIR"
     echo "========================================"
     echo ""
-    pip install "${PIP_ARGS[@]}"
+    "${PIP_CMD[@]}" install "${PIP_ARGS[@]}"
 else
     # Host-env mode: sequential installs so errors are attributed to a
     # specific package and intermediate state is inspectable.
@@ -254,7 +267,7 @@ else
         echo "  Installing $pkg$mode"
         echo "========================================"
         echo ""
-        pip install --no-build-isolation "${FORCE_FLAGS[@]}" "${NODEPS_FLAG[@]}" "${EDITABLE_FLAG[@]}" "$SCRIPT_DIR/$pkg"
+        "${PIP_CMD[@]}" install --no-build-isolation "${FORCE_FLAGS[@]}" "${NODEPS_FLAG[@]}" "${EDITABLE_FLAG[@]}" "$SCRIPT_DIR/$pkg"
     done
 fi
 

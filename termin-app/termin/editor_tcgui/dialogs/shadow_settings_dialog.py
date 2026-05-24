@@ -1,4 +1,4 @@
-"""Shadow settings dialog — configure shadow method, softness, bias."""
+"""Shadow settings dialog - configure shadow method, softness, receiver bias."""
 
 from __future__ import annotations
 
@@ -59,18 +59,20 @@ def show_shadow_settings_dialog(
     softness_row.add_child(softness_spin)
     content.add_child(softness_row)
 
-    # Bias
+    # Receiver bias
     bias_row = HStack()
     bias_row.spacing = 8
     bias_lbl = Label()
-    bias_lbl.text = "Bias (world):"
+    bias_lbl.text = "Receiver Bias:"
+    bias_lbl.tooltip = "World-space depth compare offset used while sampling shadow maps."
     bias_row.add_child(bias_lbl)
     bias_spin = SpinBox()
     bias_spin.value = ss.bias
     bias_spin.min_value = 0.0
-    bias_spin.max_value = 1.0
-    bias_spin.step = 0.005
-    bias_spin.decimals = 4
+    bias_spin.max_value = 0.05
+    bias_spin.step = 0.0001
+    bias_spin.decimals = 5
+    bias_spin.tooltip = "Increase slightly to reduce self-shadow acne; too much detaches shadows."
     bias_row.add_child(bias_spin)
     content.add_child(bias_row)
 
