@@ -491,7 +491,7 @@ if(BUILD_EDITOR_MINIMAL)
     if(WIN32)
         set_target_properties(termin_editor PROPERTIES WIN32_EXECUTABLE FALSE)
     endif()
-    install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+    install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     set_target_properties(termin_editor PROPERTIES
         INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/python/termin;$ORIGIN"
         BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
@@ -519,7 +519,7 @@ if(BUILD_LAUNCHER)
     if(WIN32)
         set_target_properties(termin_launcher PROPERTIES WIN32_EXECUTABLE FALSE)
     endif()
-    install(TARGETS termin_launcher RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+    install(TARGETS termin_launcher RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     set_target_properties(termin_launcher PROPERTIES
         INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/python/termin;$ORIGIN"
         BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
@@ -560,7 +560,7 @@ if(BUILD_EDITOR_EXE)
     if(WIN32)
         set_target_properties(termin_editor_qt PROPERTIES WIN32_EXECUTABLE FALSE)
     endif()
-    install(TARGETS termin_editor_qt RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX})
+    install(TARGETS termin_editor_qt RUNTIME DESTINATION .)
 endif()
 
 # ============== Tests ==============
@@ -690,26 +690,26 @@ install(DIRECTORY ${TERMIN_ROOT}/../termin-nodegraph/python/tcnodegraph
 
 # Install headers
 install(DIRECTORY ${TERMIN_ROOT}/core_c/include/
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/core_c
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/core_c
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include/cpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cpp
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "bindings" EXCLUDE
 )
 if(TERMIN_HAS_RECAST)
     install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Recast/Include/
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/recastnavigation
         FILES_MATCHING PATTERN "*.h"
     )
     install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Detour/Include/
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/include/recastnavigation
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/recastnavigation
         FILES_MATCHING PATTERN "*.h"
     )
 endif()
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/trent
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 

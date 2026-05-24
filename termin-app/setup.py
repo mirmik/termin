@@ -12,10 +12,10 @@ class BuildExt(TerminCMakeBuildExt):
     #   _native          — monolithic render/editor/scene/skeleton/inspect kernel
     #   _voxels_native   — VoxelGrid + voxelization (termin.voxels)
     #
-    # These are NOT yet extracted into standalone pip subprojects. Thin-mode
-    # cmake_ext copies their pre-built .so files from
-    # $TERMIN_SDK/lib/python/termin/ into the wheel. The actual CMake build is
-    # driven by termin/build.sh and build-sdk-bindings.sh, not by pip.
+    # These are NOT yet extracted into standalone pip subprojects. cmake_ext
+    # copies their pre-built .so files from TERMIN_BINDINGS_DIR/build/.../bin
+    # into the wheel. The actual CMake build is driven by termin/build.sh and
+    # build-sdk-bindings.sh, not by pip.
     module_names = ["_native", "_voxels_native"]
     source_dir = _DIR
 
