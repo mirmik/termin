@@ -181,6 +181,50 @@ static struct _LightShadowFieldsRegistrar {
         {
             tc::InspectFieldInfo info;
             info.type_name = "LightComponent";
+            info.path = "shadows_bias";
+            info.label = "Shadow Bias";
+            info.kind = "double";
+            info.min = 0.0;
+            info.max = 1.0;
+            info.step = 0.0005;
+            info.getter = [](void* obj) -> tc_value {
+                auto* c = static_cast<LightComponent*>(obj);
+                return tc_value_double(c->shadows.bias);
+            };
+            info.setter = [](void* obj, tc_value value, void*) {
+                auto* c = static_cast<LightComponent*>(obj);
+                if (value.type == TC_VALUE_DOUBLE) c->shadows.bias = value.data.d;
+                if (value.type == TC_VALUE_FLOAT) c->shadows.bias = static_cast<double>(value.data.f);
+                if (value.type == TC_VALUE_INT) c->shadows.bias = static_cast<double>(value.data.i);
+            };
+            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+        }
+
+        {
+            tc::InspectFieldInfo info;
+            info.type_name = "LightComponent";
+            info.path = "shadows_normal_bias";
+            info.label = "Shadow Slope Bias";
+            info.kind = "double";
+            info.min = 0.0;
+            info.max = 10.0;
+            info.step = 0.05;
+            info.getter = [](void* obj) -> tc_value {
+                auto* c = static_cast<LightComponent*>(obj);
+                return tc_value_double(c->shadows.normal_bias);
+            };
+            info.setter = [](void* obj, tc_value value, void*) {
+                auto* c = static_cast<LightComponent*>(obj);
+                if (value.type == TC_VALUE_DOUBLE) c->shadows.normal_bias = value.data.d;
+                if (value.type == TC_VALUE_FLOAT) c->shadows.normal_bias = static_cast<double>(value.data.f);
+                if (value.type == TC_VALUE_INT) c->shadows.normal_bias = static_cast<double>(value.data.i);
+            };
+            tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
+        }
+
+        {
+            tc::InspectFieldInfo info;
+            info.type_name = "LightComponent";
             info.path = "shadows_map_resolution";
             info.label = "Shadow Resolution";
             info.kind = "int";

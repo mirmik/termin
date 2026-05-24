@@ -37,6 +37,7 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/lighting/light_component.hpp>
+#include <termin/render/execute_context.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/render_engine.hpp>
 #include <termin/render/render_pipeline.hpp>
@@ -48,6 +49,7 @@
 #include <tgfx/tgfx2_interop.h>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/i_command_list.hpp>
+#include <tgfx2/render_context.hpp>
 #include <tgfx2/render_state.hpp>
 #include <tgfx2/vulkan/vulkan_render_device.hpp>
 
@@ -712,6 +714,60 @@ void set_pass_int(tc_pass* pass, const char* field, int value) {
     tc_value_free(&field_value);
 }
 
+class UIWidgetPass : public termin::CxxFramePass {
+public:
+    std::string input_res = "color";
+    std::string output_res = "color+widgets";
+
+public:
+    INSPECT_FIELD(UIWidgetPass, input_res, "Input Resource", "string")
+    INSPECT_FIELD(UIWidgetPass, output_res, "Output Resource", "string")
+    INSPECT_TYPE_METADATA(UIWidgetPass, graph, termin::make_pass_graph_metadata(
+        {{"input_res", "fbo"}},
+        {{"output_res", "fbo"}},
+        {}
+    ))
+
+    UIWidgetPass() {
+        pass_name_set("UIWidgets");
+        link_to_type_registry("UIWidgetPass");
+    }
+
+    std::set<const char*> compute_reads() const override {
+        return {input_res.c_str()};
+    }
+
+    std::set<const char*> compute_writes() const override {
+        return {output_res.c_str()};
+    }
+
+    std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+        return {};
+    }
+
+    void execute(termin::ExecuteContext& ctx) override {
+        if (!ctx.ctx2) {
+            tc_log_error("[OpenXR UIWidgetPass] ctx.ctx2 is null");
+            return;
+        }
+
+        auto in_it = ctx.tex2_reads.find(input_res);
+        if (in_it == ctx.tex2_reads.end() || !in_it->second) {
+            tc_log_warn("[OpenXR UIWidgetPass] missing tgfx2 input '%s'", input_res.c_str());
+            return;
+        }
+        auto out_it = ctx.tex2_writes.find(output_res);
+        if (out_it == ctx.tex2_writes.end() || !out_it->second) {
+            tc_log_warn("[OpenXR UIWidgetPass] missing tgfx2 output '%s'", output_res.c_str());
+            return;
+        }
+
+        ctx.ctx2->blit(in_it->second, out_it->second);
+    }
+};
+
+TC_REGISTER_FRAME_PASS(UIWidgetPass);
+
 termin::RenderPipeline make_openxr_scene_pipeline() {
     tc_pipeline_handle ph = tc_pipeline_create("OpenXRScene");
     termin::RenderPipeline pipeline(ph);
@@ -768,6 +824,52 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
         pipeline.add_spec(spec);
     }
     return pipeline;
+}
+
+bool cstr_nonempty(const char* value) {
+    return value && value[0] != '\0';
+}
+
+std::string normalized_pipeline_name(const char* value) {
+    if (!cstr_nonempty(value) || std::strcmp(value, "(Default)") == 0) {
+        return "Default";
+    }
+    return value;
+}
+
+termin::RenderPipeline make_pipeline_for_xr_render_target(
+    termin::EngineCore& engine,
+    const tc_render_target_config* config
+) {
+    if (config && cstr_nonempty(config->pipeline_uuid)) {
+        tc_log_warn(
+            "[OpenXR scene] render target pipeline_uuid '%s' is ignored: "
+            "runtime package pipeline assets are not supported without Python factory yet",
+            config->pipeline_uuid
+        );
+    }
+
+    if (config && cstr_nonempty(config->pipeline_name)) {
+        const std::string pipeline_name = normalized_pipeline_name(config->pipeline_name);
+        tc_pipeline_handle handle = engine.rendering_manager.create_pipeline(pipeline_name);
+        if (tc_pipeline_handle_valid(handle)) {
+            termin::RenderPipeline pipeline(handle);
+            tc_log_info(
+                "[OpenXR scene] using render target pipeline '%s' passes=%zu",
+                pipeline_name.c_str(),
+                pipeline.pass_count()
+            );
+            return pipeline;
+        }
+
+        tc_log_error(
+            "[OpenXR scene] failed to create render target pipeline '%s'",
+            pipeline_name.c_str()
+        );
+    }
+
+    tc_log_warn("[OpenXR scene] using built-in OpenXRScene fallback pipeline");
+    return make_openxr_scene_pipeline();
 }
 
 const tc_render_target_config* find_xr_render_target_config(termin::TcSceneRef scene) {
@@ -938,7 +1040,7 @@ struct OpenXRRuntimeScene {
             return false;
         }
 
-        pipeline = make_openxr_scene_pipeline();
+        pipeline = make_pipeline_for_xr_render_target(*engine, xr_config);
         if (!pipeline.is_valid() || pipeline.pass_count() == 0) {
             log_error("OpenXR scene", "failed to create render pipeline");
             tc_log_error("[OpenXR scene] failed to create render pipeline");

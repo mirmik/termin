@@ -369,6 +369,12 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_rw("shadows_enabled",
             &LightComponent::get_shadows_enabled,
             &LightComponent::set_shadows_enabled)
+        .def_prop_rw("shadows_bias",
+            &LightComponent::get_shadows_bias,
+            &LightComponent::set_shadows_bias)
+        .def_prop_rw("shadows_normal_bias",
+            &LightComponent::get_shadows_normal_bias,
+            &LightComponent::set_shadows_normal_bias)
         .def_prop_rw("shadows_map_resolution",
             &LightComponent::get_shadows_map_resolution,
             &LightComponent::set_shadows_map_resolution)
