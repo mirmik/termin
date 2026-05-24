@@ -1715,9 +1715,30 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
     }
     bool session_running = false;
     uint64_t frame_index = 0;
+    using FrameClock = std::chrono::steady_clock;
+    auto fps_window_start = FrameClock::now();
+    XrTime fps_window_first_display_time = 0;
+    XrTime fps_window_last_display_time = 0;
+    uint64_t fps_window_frames = 0;
+    uint64_t fps_window_rendered_frames = 0;
+    double fps_window_wait_frame_ms = 0.0;
+    double fps_window_swapchain_wait_ms = 0.0;
+    double fps_window_render_ms = 0.0;
+    double fps_window_gpu_idle_ms = 0.0;
+    double fps_window_frame_cpu_ms = 0.0;
+    auto millis_between = [](FrameClock::time_point begin, FrameClock::time_point end) {
+        return std::chrono::duration<double, std::milli>(end - begin).count();
+    };
 
     log_info("OpenXR color smoke loop ready");
     while (g_smoke.running.load()) {
+        const auto frame_cpu_start = FrameClock::now();
+        double frame_wait_frame_ms = 0.0;
+        double frame_swapchain_wait_ms = 0.0;
+        double frame_render_ms = 0.0;
+        double frame_gpu_idle_ms = 0.0;
+        bool frame_rendered = false;
+
         XrEventDataBuffer event{};
         event.type = XR_TYPE_EVENT_DATA_BUFFER;
         while (xr.poll_event(instance, &event) == XR_SUCCESS) {
@@ -1759,7 +1780,9 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         wait_info.type = XR_TYPE_FRAME_WAIT_INFO;
         XrFrameState frame_state{};
         frame_state.type = XR_TYPE_FRAME_STATE;
+        const auto wait_frame_begin = FrameClock::now();
         result = xr.wait_frame(session, &wait_info, &frame_state);
+        frame_wait_frame_ms = millis_between(wait_frame_begin, FrameClock::now());
         if (XR_FAILED(result)) {
             __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrWaitFrame failed: %d", result);
             continue;
@@ -1795,6 +1818,8 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                 views.data()
             );
             if (XR_SUCCEEDED(result) && located_view_count == view_count) {
+                std::vector<XrSwapchain> swapchains_to_release;
+                swapchains_to_release.reserve(view_count);
                 for (uint32_t eye = 0; eye < view_count; ++eye) {
                     uint32_t image_index = 0;
                     XrSwapchainImageAcquireInfo acquire_info{};
@@ -1808,11 +1833,14 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                     XrSwapchainImageWaitInfo wait_swapchain_info{};
                     wait_swapchain_info.type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO;
                     wait_swapchain_info.timeout = XR_INFINITE_DURATION;
+                    const auto wait_swapchain_begin = FrameClock::now();
                     result = xr.wait_swapchain_image(color_swapchains[eye], &wait_swapchain_info);
+                    frame_swapchain_wait_ms += millis_between(wait_swapchain_begin, FrameClock::now());
                     if (XR_FAILED(result)) {
                         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrWaitSwapchainImage[%u] failed: %d", eye, result);
                         continue;
                     }
+                    swapchains_to_release.push_back(color_swapchains[eye]);
 
                     const tgfx::TextureHandle color_texture = swapchain_textures[eye][image_index];
                     if (auto* color_resource = render_device->get_texture(color_texture)) {
@@ -1822,6 +1850,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                         depth_resource->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
                     }
 
+                    const auto render_begin = FrameClock::now();
                     if (runtime_scene_ready) {
                         runtime_scene.render_eye(
                             color_texture,
@@ -1882,7 +1911,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                         cmd->end();
                         render_device->submit(*cmd);
                     }
-                    render_device->wait_idle();
+                    frame_render_ms += millis_between(render_begin, FrameClock::now());
 
                     layer_views[eye].pose = views[eye].pose;
                     layer_views[eye].fov = views[eye].fov;
@@ -1893,15 +1922,21 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                         static_cast<int32_t>(swapchain_create_info.height)
                     };
                     layer_views[eye].subImage.imageArrayIndex = 0;
+                }
 
+                for (XrSwapchain swapchain : swapchains_to_release) {
                     XrSwapchainImageReleaseInfo release_info{};
                     release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
-                    xr.release_swapchain_image(color_swapchains[eye], &release_info);
+                    result = xr.release_swapchain_image(swapchain, &release_info);
+                    if (XR_FAILED(result)) {
+                        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrReleaseSwapchainImage failed: %d", result);
+                    }
                 }
 
                 layers[0] = reinterpret_cast<XrCompositionLayerBaseHeader*>(&projection_layer);
                 layer_count = 1;
                 ++frame_index;
+                frame_rendered = true;
             }
         }
 
@@ -1914,6 +1949,64 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         result = xr.end_frame(session, &end_info);
         if (XR_FAILED(result)) {
             __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrEndFrame failed: %d", result);
+        }
+
+        const auto frame_cpu_end = FrameClock::now();
+        ++fps_window_frames;
+        if (frame_rendered) {
+            ++fps_window_rendered_frames;
+        }
+        if (fps_window_first_display_time == 0) {
+            fps_window_first_display_time = frame_state.predictedDisplayTime;
+        }
+        fps_window_last_display_time = frame_state.predictedDisplayTime;
+        fps_window_wait_frame_ms += frame_wait_frame_ms;
+        fps_window_swapchain_wait_ms += frame_swapchain_wait_ms;
+        fps_window_render_ms += frame_render_ms;
+        fps_window_gpu_idle_ms += frame_gpu_idle_ms;
+        fps_window_frame_cpu_ms += millis_between(frame_cpu_start, frame_cpu_end);
+
+        const double wall_seconds =
+            std::chrono::duration<double>(frame_cpu_end - fps_window_start).count();
+        if (wall_seconds >= 2.0 && fps_window_frames > 0) {
+            const double wall_fps = static_cast<double>(fps_window_frames) / wall_seconds;
+            const double rendered_fps = static_cast<double>(fps_window_rendered_frames) / wall_seconds;
+            double predicted_hz = 0.0;
+            if (fps_window_last_display_time > fps_window_first_display_time) {
+                const double predicted_seconds =
+                    static_cast<double>(fps_window_last_display_time - fps_window_first_display_time) * 1e-9;
+                if (predicted_seconds > 0.0) {
+                    predicted_hz =
+                        static_cast<double>(fps_window_frames - 1) / predicted_seconds;
+                }
+            }
+            const double inv_frames = 1.0 / static_cast<double>(fps_window_frames);
+            __android_log_print(
+                ANDROID_LOG_INFO,
+                kLogTag,
+                "XR FPS: wall=%.1f rendered=%.1f predictedHz=%.1f avgMs{frame=%.2f waitFrame=%.2f swapWait=%.2f render=%.2f gpuIdle=%.2f} frames=%llu renderedFrames=%llu",
+                wall_fps,
+                rendered_fps,
+                predicted_hz,
+                fps_window_frame_cpu_ms * inv_frames,
+                fps_window_wait_frame_ms * inv_frames,
+                fps_window_swapchain_wait_ms * inv_frames,
+                fps_window_render_ms * inv_frames,
+                fps_window_gpu_idle_ms * inv_frames,
+                static_cast<unsigned long long>(fps_window_frames),
+                static_cast<unsigned long long>(fps_window_rendered_frames)
+            );
+
+            fps_window_start = frame_cpu_end;
+            fps_window_first_display_time = 0;
+            fps_window_last_display_time = 0;
+            fps_window_frames = 0;
+            fps_window_rendered_frames = 0;
+            fps_window_wait_frame_ms = 0.0;
+            fps_window_swapchain_wait_ms = 0.0;
+            fps_window_render_ms = 0.0;
+            fps_window_gpu_idle_ms = 0.0;
+            fps_window_frame_cpu_ms = 0.0;
         }
     }
 
