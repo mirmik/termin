@@ -707,6 +707,17 @@ termin::Mat44 make_xr_to_scene_matrix() {
     return m;
 }
 
+termin::Mat44 make_xr_origin_forward_alignment_matrix() {
+    // XrOriginComponent is an authoring-space transform: its local +Y is
+    // player forward, matching the rest of the engine. The OpenXR reference
+    // space is inserted under that origin with an extra yaw so the neutral HMD
+    // facing direction lands on +Y rather than the opposite scene direction.
+    termin::Mat44 m = termin::Mat44::identity();
+    m(0, 0) = -1.0;
+    m(1, 1) = -1.0;
+    return m;
+}
+
 termin::Vec3 xr_position_to_scene_position(const XrVector3f& p) {
     return termin::Vec3{
         static_cast<double>(p.x),
@@ -1204,7 +1215,9 @@ struct OpenXRRuntimeScene {
         target.clear_depth = tc_render_target_get_clear_depth_value(render_target);
         termin::GeneralPose3 origin_pose = xr_origin->entity().transform().global_pose();
         termin::Pose3 origin_pose3(origin_pose.ang, origin_pose.lin);
-        termin::Mat44 origin_view = origin_pose3.inverse().as_mat44();
+        termin::Mat44 origin_view =
+            make_xr_origin_forward_alignment_matrix() *
+            origin_pose3.inverse().as_mat44();
         termin::Mat44 scene_from_origin = origin_view.inverse();
         termin::Vec3 eye_position_in_origin = xr_position_to_scene_position(eye.view.pose.position);
 
