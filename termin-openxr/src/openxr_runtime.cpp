@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -30,6 +31,7 @@
 
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.h>
+#include <tcbase/trent/json.h>
 #include <components/mesh_component.hpp>
 #include <termin/engine/engine_core.hpp>
 #include <termin/entity/entity.hpp>
@@ -37,6 +39,7 @@
 #include <termin/geom/vec3.hpp>
 #include <termin/lighting/light_component.hpp>
 #include <termin/render/execute_context.hpp>
+#include <termin/render/graph_compiler.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/render_engine.hpp>
 #include <termin/render/render_pipeline.hpp>
@@ -1038,6 +1041,45 @@ bool cstr_nonempty(const char* value) {
     return value && value[0] != '\0';
 }
 
+std::string read_runtime_text_file(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        throw std::runtime_error("failed to open file: " + path.string());
+    }
+    std::ostringstream out;
+    out << in.rdbuf();
+    if (!in.good() && !in.eof()) {
+        throw std::runtime_error("failed to read file: " + path.string());
+    }
+    return out.str();
+}
+
+const nos::trent* trent_dict_get(const nos::trent& t, const char* key) {
+    if (!t.is_dict()) {
+        return nullptr;
+    }
+    return t._get(key);
+}
+
+std::string trent_string_field(const nos::trent& t, const char* key) {
+    const nos::trent* value = trent_dict_get(t, key);
+    if (!value || !value->is_string()) {
+        return "";
+    }
+    return value->as_string();
+}
+
+std::filesystem::path runtime_package_path(
+    const std::filesystem::path& root,
+    const std::string& rel
+) {
+    std::filesystem::path path(rel);
+    if (path.is_absolute()) {
+        throw std::runtime_error("runtime package path must be relative: " + rel);
+    }
+    return root / path;
+}
+
 std::string normalized_pipeline_name(const char* value) {
     if (!cstr_nonempty(value) || std::strcmp(value, "(Default)") == 0) {
         return "Default";
@@ -1050,10 +1092,22 @@ termin::RenderPipeline make_pipeline_for_xr_render_target(
     const tc_render_target_config* config
 ) {
     if (config && cstr_nonempty(config->pipeline_uuid)) {
+        const std::string pipeline_uuid = config->pipeline_uuid;
+        tc_pipeline_handle handle = engine.rendering_manager.create_pipeline(pipeline_uuid);
+        if (tc_pipeline_handle_valid(handle)) {
+            termin::RenderPipeline pipeline(handle);
+            tc_log_info(
+                "[OpenXR scene] using render target pipeline uuid='%s' name='%s' passes=%zu",
+                pipeline_uuid.c_str(),
+                cstr_nonempty(config->pipeline_name) ? config->pipeline_name : "",
+                pipeline.pass_count()
+            );
+            return pipeline;
+        }
+
         tc_log_warn(
-            "[OpenXR scene] render target pipeline_uuid '%s' is ignored: "
-            "runtime package pipeline assets are not supported without Python factory yet",
-            config->pipeline_uuid
+            "[OpenXR scene] failed to create render target pipeline uuid='%s'; trying pipeline_name",
+            pipeline_uuid.c_str()
         );
     }
 
@@ -1192,7 +1246,98 @@ struct OpenXRRuntimeScene {
     tc_render_target_handle xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
     termin::XrOriginComponent* xr_origin = nullptr;
     EyeFrame active_eye_frame;
+    std::unordered_map<std::string, std::filesystem::path> runtime_pipeline_paths;
     bool ready = false;
+
+    void install_runtime_pipeline_factory(const std::string& asset_root) {
+        runtime_pipeline_paths.clear();
+        const std::filesystem::path root(asset_root);
+        const std::filesystem::path manifest_path = root / "manifest.json";
+        if (!std::filesystem::is_regular_file(manifest_path)) {
+            return;
+        }
+
+        try {
+            nos::trent manifest = nos::json::parse(read_runtime_text_file(manifest_path));
+            const nos::trent* resources = trent_dict_get(manifest, "resources");
+            if (!resources || !resources->is_list()) {
+                return;
+            }
+
+            for (const nos::trent& resource : resources->as_list()) {
+                if (!resource.is_dict()) {
+                    continue;
+                }
+                if (trent_string_field(resource, "type") != "pipeline") {
+                    continue;
+                }
+
+                const std::string path = trent_string_field(resource, "path");
+                if (path.empty()) {
+                    tc_log_warn("[OpenXR scene] runtime pipeline resource has no path");
+                    continue;
+                }
+
+                const std::filesystem::path full_path = runtime_package_path(root, path);
+                const std::string uuid = trent_string_field(resource, "uuid");
+                const std::string name = trent_string_field(resource, "name");
+                if (!uuid.empty()) {
+                    runtime_pipeline_paths[uuid] = full_path;
+                }
+                if (!name.empty()) {
+                    runtime_pipeline_paths[name] = full_path;
+                }
+                tc_log_info(
+                    "[OpenXR scene] registered runtime pipeline asset name='%s' uuid='%s' path='%s'",
+                    name.empty() ? "(unnamed)" : name.c_str(),
+                    uuid.empty() ? "(none)" : uuid.c_str(),
+                    path.c_str()
+                );
+            }
+        } catch (const std::exception& e) {
+            tc_log_error("[OpenXR scene] failed to read runtime pipeline assets: %s", e.what());
+            return;
+        }
+
+        if (runtime_pipeline_paths.empty()) {
+            return;
+        }
+
+        engine->rendering_manager.set_pipeline_factory(
+            [this](const std::string& key) -> tc_pipeline_handle {
+                auto it = runtime_pipeline_paths.find(key);
+                if (it == runtime_pipeline_paths.end()) {
+                    tc_log_error("[OpenXR scene] runtime pipeline asset '%s' was not found", key.c_str());
+                    return TC_PIPELINE_HANDLE_INVALID;
+                }
+
+                try {
+                    std::unique_ptr<termin::RenderPipeline> compiled(
+                        tc::compile_graph(read_runtime_text_file(it->second))
+                    );
+                    if (!compiled || !compiled->is_valid()) {
+                        tc_log_error("[OpenXR scene] failed to compile runtime pipeline '%s'", key.c_str());
+                        return TC_PIPELINE_HANDLE_INVALID;
+                    }
+                    compiled->set_name(key);
+                    tc_pipeline_handle handle = compiled->handle();
+                    tc_log_info(
+                        "[OpenXR scene] compiled runtime pipeline '%s' passes=%zu",
+                        key.c_str(),
+                        compiled->pass_count()
+                    );
+                    return handle;
+                } catch (const std::exception& e) {
+                    tc_log_error(
+                        "[OpenXR scene] runtime pipeline '%s' compile failed: %s",
+                        key.c_str(),
+                        e.what()
+                    );
+                    return TC_PIPELINE_HANDLE_INVALID;
+                }
+            }
+        );
+    }
 
     bool load(const std::string& asset_root) {
         if (ready) {
@@ -1240,6 +1385,7 @@ struct OpenXRRuntimeScene {
         }
 
         const tc_render_target_config* xr_config = find_xr_render_target_config(package.scene);
+        install_runtime_pipeline_factory(asset_root);
         xr_origin = resolve_runtime_xr_origin(package.scene, xr_config);
         if (!xr_origin) {
             log_error("OpenXR scene", "runtime package loaded but has no XR camera origin");

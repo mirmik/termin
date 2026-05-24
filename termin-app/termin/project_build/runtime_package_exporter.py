@@ -4,6 +4,7 @@ The exporter writes the package contract consumed by termin-runtime:
 
     manifest.json
     scene.json
+    pipelines/*.pipeline.json
     meshes/*.tmesh.json
     materials/*.tmat.json
     shaders/*.shader.json
@@ -374,6 +375,7 @@ def export_runtime_package(
     shaders: dict[str, _ShaderSpec] = {}
     _write_meshes(output_dir_path, refs.meshes, resources, diagnostics)
     _write_materials(output_dir_path, refs.materials, resources, diagnostics, shaders)
+    _write_pipelines(project_root_path, output_dir_path, refs.pipelines, resources, diagnostics)
     if not shaders:
         shaders[DEFAULT_SHADER_UUID] = _ShaderSpec(
             uuid=DEFAULT_SHADER_UUID,
@@ -410,6 +412,7 @@ def export_runtime_package(
 class _RuntimeRefs:
     meshes: dict[str, str] = field(default_factory=dict)
     materials: dict[str, str] = field(default_factory=dict)
+    pipelines: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -469,6 +472,7 @@ def _collect_runtime_refs(scene_data: dict[str, Any]) -> _RuntimeRefs:
 
 def _collect_refs_recursive(value: Any, refs: _RuntimeRefs, field_name: str) -> None:
     if isinstance(value, dict):
+        _collect_pipeline_refs(value, refs)
         _collect_typed_ref(value, refs, field_name)
         for key, child in value.items():
             _collect_refs_recursive(child, refs, key)
@@ -493,6 +497,14 @@ def _collect_typed_ref(value: dict[str, Any], refs: _RuntimeRefs, field_name: st
         refs.meshes[uuid_value] = name
     if _looks_like_material_ref(value, field_name):
         refs.materials[uuid_value] = name
+
+
+def _collect_pipeline_refs(value: dict[str, Any], refs: _RuntimeRefs) -> None:
+    pipeline_uuid = value.get("pipeline_uuid")
+    pipeline_name = value.get("pipeline_name")
+    if isinstance(pipeline_uuid, str) and pipeline_uuid != "":
+        name = pipeline_name if isinstance(pipeline_name, str) and pipeline_name != "" else pipeline_uuid
+        refs.pipelines[pipeline_uuid] = name
 
 
 def _looks_like_mesh_ref(value: dict[str, Any], field_name: str) -> bool:
@@ -759,11 +771,124 @@ def _copy_default_spirv(target_path: Path, source_name: str) -> None:
 def _resource_sort_key(resource: dict[str, str]) -> tuple[int, str]:
     type_order = {
         "shader": 0,
-        "mesh": 1,
-        "material": 2,
+        "pipeline": 1,
+        "mesh": 2,
+        "material": 3,
     }
     resource_type = resource["type"]
     return (type_order.get(resource_type, 100), resource["path"])
+
+
+def _write_pipelines(
+    project_root: Path,
+    package_dir: Path,
+    pipelines: dict[str, str],
+    resources: list[dict[str, str]],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    if not pipelines:
+        return
+
+    pipeline_dir = package_dir / "pipelines"
+    pipeline_dir.mkdir(parents=True, exist_ok=True)
+
+    for uuid_value, name in sorted(pipelines.items()):
+        source = _find_pipeline_source(project_root, uuid_value, name)
+        if source is None:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="error",
+                    path=f"pipelines/{uuid_value}.pipeline.json",
+                    message=(
+                        f"Runtime exporter could not find pipeline asset "
+                        f"'{name}' ({uuid_value})"
+                    ),
+                )
+            )
+            continue
+
+        try:
+            with open(source, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("pipeline JSON root must be an object")
+        except Exception as exc:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="error",
+                    path=str(source.relative_to(project_root)),
+                    message=f"Runtime exporter failed to read pipeline asset: {exc}",
+                )
+            )
+            continue
+
+        data.setdefault("uuid", uuid_value)
+        data.setdefault("name", name)
+
+        target_name = _safe_package_stem(uuid_value or name)
+        target = pipeline_dir / f"{target_name}.pipeline.json"
+        _write_json(target, data)
+        resources.append(
+            {
+                "type": "pipeline",
+                "uuid": uuid_value,
+                "name": name,
+                "path": f"pipelines/{target_name}.pipeline.json",
+            }
+        )
+
+
+def _safe_package_stem(value: str) -> str:
+    result = []
+    for ch in value:
+        if ch.isalnum() or ch in ("-", "_", "."):
+            result.append(ch)
+        else:
+            result.append("_")
+    stem = "".join(result).strip("._")
+    return stem or "pipeline"
+
+
+def _find_pipeline_source(project_root: Path, uuid_value: str, name: str) -> Path | None:
+    pipeline_paths = list(_iter_project_pipeline_paths(project_root))
+
+    if uuid_value:
+        for path in pipeline_paths:
+            meta_path = path.with_suffix(path.suffix + ".meta")
+            if meta_path.exists():
+                try:
+                    with open(meta_path, "r", encoding="utf-8") as f:
+                        meta = json.load(f)
+                    if isinstance(meta, dict) and meta.get("uuid") == uuid_value:
+                        return path
+                except Exception:
+                    pass
+
+        for path in pipeline_paths:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict) and data.get("uuid") == uuid_value:
+                    return path
+            except Exception:
+                pass
+
+    if name:
+        expected = f"{name}.pipeline"
+        for path in pipeline_paths:
+            if path.name == expected:
+                return path
+
+    return None
+
+
+def _iter_project_pipeline_paths(project_root: Path):
+    ignored_parts = {".git", "__pycache__", "build", "dist"}
+    for path in project_root.rglob("*.pipeline"):
+        rel = path.relative_to(project_root)
+        if any(part in ignored_parts for part in rel.parts):
+            continue
+        yield path
 
 
 def _write_meshes(

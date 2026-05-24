@@ -1,14 +1,7 @@
 from __future__ import annotations
 
-from typing import Set, TYPE_CHECKING
-
 from tgfx import TcShader
-from termin.render_passes import PresentToScreenPass, ResolvePass
-from termin.render_framework.python_pass import PythonFramePass
-from termin.inspect import InspectField
-
-if TYPE_CHECKING:
-    from termin.visualization.render.framegraph.execute_context import ExecuteContext
+from termin.render_passes import BlitPass, PresentToScreenPass, ResolvePass
 
 # Re-export C++ PresentToScreenPass
 __all__ = ["PresentToScreenPass", "BlitPass", "ResolvePass"]
@@ -48,63 +41,6 @@ def _get_blit_shader() -> TcShader:
     if _blit_shader is None:
         _blit_shader = TcShader.from_sources(FSQ_VERT, FSQ_FRAG, "", "BlitShader")
     return _blit_shader
-
-
-class BlitPass(PythonFramePass):
-    """
-    Копирует color-текстуру из одного FBO в другой через tgfx2 blit.
-    """
-
-    category = "Output"
-
-    node_inputs = [("input_res", "fbo"), ("output_res_target", "fbo")]
-    node_outputs = [("output_res", "fbo")]
-    node_inplace_pairs = [("output_res_target", "output_res")]
-
-    inspect_fields = {
-        "input_res": InspectField(path="input_res", label="Input Resource", kind="string"),
-        "output_res": InspectField(path="output_res", label="Output Resource", kind="string"),
-        "output_res_target": InspectField(path="output_res_target", label="Output Target", kind="string"),
-    }
-
-    def __init__(
-        self,
-        input_res: str = "color",
-        output_res: str = "debug",
-        pass_name: str = "Blit",
-    ):
-        super().__init__(pass_name=pass_name)
-        self.input_res = input_res
-        self.output_res = output_res
-        self.output_res_target = ""
-
-    def compute_reads(self) -> Set[str]:
-        reads = {self.input_res}
-        if self.output_res_target:
-            reads.add(self.output_res_target)
-        return reads
-
-    def compute_writes(self) -> Set[str]:
-        return {self.output_res}
-
-    def get_inplace_aliases(self) -> list[tuple[str, str]]:
-        if not self.output_res_target:
-            return []
-        return [(self.output_res_target, self.output_res)]
-
-    def required_resources(self) -> set[str]:
-        return set(self.reads) | set(self.writes)
-
-    def execute(self, ctx: "ExecuteContext") -> None:
-        if ctx.ctx2 is None:
-            return
-
-        tex_in = ctx.tex2_reads.get(self.input_res)
-        tex_out = ctx.tex2_writes.get(self.output_res)
-        if not tex_in or not tex_out:
-            return
-
-        ctx.ctx2.blit(tex_in, tex_out)
 
 
 # PresentToScreenPass is imported from termin-render-passes.

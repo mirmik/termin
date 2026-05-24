@@ -558,6 +558,10 @@ bool load_resource(
         return false;
     }
 
+    if (type == "pipeline") {
+        return true;
+    }
+
     const nos::trent spec = nos::json::parse(read_text_file(package_path(root, rel_path)));
     if (type == "shader") {
         return load_shader_resource(root, spec, keepalive, error);

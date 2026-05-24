@@ -1562,7 +1562,6 @@ bool RenderingManager::build_render_target_contexts(
     const char* rt_name = tc_render_target_get_name(rt);
     tc_component* camera_comp = tc_render_target_get_camera(rt);
     if (!camera_comp) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': no camera", rt_name ? rt_name : "?");
         return false;
     }
 
@@ -1654,8 +1653,6 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
         return;
     }
     if (!tc_pipeline_handle_valid(pipeline)) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] render_viewport_offscreen('%s'): invalid pipeline handle",
-               vp_name ? vp_name : "(null)");
         return;
     }
 
@@ -1736,7 +1733,6 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
         return;
     }
     if (!tc_pipeline_handle_valid(pipeline)) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': no pipeline", rt_name ? rt_name : "?");
         return;
     }
 

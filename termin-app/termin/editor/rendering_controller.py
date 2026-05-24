@@ -804,9 +804,6 @@ class RenderingController:
                 camera = cam
                 break
 
-        if camera is None:
-            return
-
         # Create viewport
         viewport = display.create_viewport(
             scene=scene,

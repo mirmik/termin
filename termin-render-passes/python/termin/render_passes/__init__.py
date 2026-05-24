@@ -5,6 +5,7 @@ from termin_nanobind.runtime import preload_sdk_libs
 preload_sdk_libs("nanobind", "termin_render", "termin_render_passes")
 
 from termin.render_passes._render_passes_native import (
+    BlitPass,
     BloomPass,
     ColorPass,
     DebugTrianglePass,
@@ -27,6 +28,7 @@ from termin.render_passes._render_passes_native import (
 )
 
 __all__ = [
+    "BlitPass",
     "BloomPass",
     "ColorPass",
     "DebugTrianglePass",
