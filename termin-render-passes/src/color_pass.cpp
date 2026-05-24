@@ -437,6 +437,7 @@ void ColorPass::execute_with_data(
                      /*clear_depth=*/1.0f,
                      /*clear_depth_enabled=*/clear_depth);
     ctx2->set_viewport(0, 0, rect.width, rect.height);
+    ctx2->set_depth_bias(false);
 
     // Bind per-frame / shadow-block UBOs after the pass is open —
     // ResourceSet bindings are attached to the next pipeline flush
@@ -743,7 +744,10 @@ void ColorPass::execute(ExecuteContext& ctx) {
             ambient_intensity = lighting->ambient_intensity;
             shadow_settings.method = lighting->shadow_method;
             shadow_settings.softness = lighting->shadow_softness;
-            shadow_settings.bias = lighting->shadow_bias;
+            // Global shadow_bias is now applied caster-side in ShadowPass.
+            // Keeping an additional receiver-side compare offset makes
+            // lit/shadowed coverage change almost linearly with the UI bias.
+            shadow_settings.bias = 0.0f;
         }
     }
 

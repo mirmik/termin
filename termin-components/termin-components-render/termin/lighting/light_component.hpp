@@ -23,6 +23,12 @@ public:
     bool get_shadows_enabled() const { return shadows.enabled; }
     void set_shadows_enabled(bool v) { shadows.enabled = v; }
 
+    double get_shadows_bias() const { return shadows.bias; }
+    void set_shadows_bias(double v) { shadows.bias = v; }
+
+    double get_shadows_normal_bias() const { return shadows.normal_bias; }
+    void set_shadows_normal_bias(double v) { shadows.normal_bias = v; }
+
     int get_shadows_map_resolution() const { return shadows.map_resolution; }
     void set_shadows_map_resolution(int v) { shadows.map_resolution = v; }
 

@@ -15,6 +15,7 @@ extern "C" {
 #include "tc_profiler.h"
 #include "core/tc_drawable_protocol.h"
 #include "core/tc_scene_drawable.h"
+#include "core/tc_scene_render_state.h"
 }
 
 #include <cmath>
@@ -46,9 +47,10 @@ static_assert(sizeof(ShadowPerFrameStd140) == 128,
 // TGFX2_PUSH_CONSTANTS_MAX_BYTES (128 byte) Vulkan-compat cap.
 struct ShadowPushStd140 {
     float u_model[16];
+    float u_shadow_offset[4];
 };
-static_assert(sizeof(ShadowPushStd140) == 64,
-              "ShadowPushStd140 must be exactly one mat4");
+static_assert(sizeof(ShadowPushStd140) == 80,
+              "ShadowPushStd140 must be mat4 + vec4");
 
 // Per-frame view+proj on binding 0 (UBO set from ctx2 per cascade).
 // Per-object model matrix rides push_constants on Vulkan / std140 UBO at
@@ -64,6 +66,7 @@ layout(std140, binding = 0) uniform PerFrame {
 
 struct ShadowPushData {
     mat4 u_model;
+    vec4 u_shadow_offset;
 };
 #ifdef VULKAN
 layout(push_constant) uniform ShadowPushBlock { ShadowPushData pc; };
@@ -72,7 +75,9 @@ layout(std140, binding = 14) uniform ShadowPushBlock { ShadowPushData pc; };
 #endif
 
 void main() {
-    gl_Position = u_projection * u_view * pc.u_model * vec4(a_position, 1.0);
+    vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
+    world_pos.xyz += pc.u_shadow_offset.xyz;
+    gl_Position = u_projection * u_view * world_pos;
 }
 )";
 
@@ -371,12 +376,23 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
     }
 
     int fbo_index = 0;
+    float scene_shadow_bias = 0.0f;
+    if (tc_scene_handle_valid(scene)) {
+        tc_scene_render_state* render_state = tc_scene_render_state_get(scene);
+        if (render_state) {
+            scene_shadow_bias = render_state->lighting.shadow_bias;
+        }
+    }
 
     for (auto [light_index, light] : shadow_lights) {
         int resolution = light->shadows.map_resolution;
         int cascade_count = std::max(1, std::min(4, light->shadows.cascade_count));
         float max_distance = light->shadows.max_distance;
         float split_lambda = light->shadows.split_lambda;
+        float shadow_bias_world = scene_shadow_bias != 0.0f
+            ? scene_shadow_bias
+            : static_cast<float>(light->shadows.bias);
+        float depth_bias_slope = static_cast<float>(light->shadows.normal_bias);
 
         std::vector<float> splits = compute_cascade_splits(
             camera_near, max_distance, cascade_count, split_lambda);
@@ -415,6 +431,15 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ctx.ctx2->set_depth_write(true);
             ctx.ctx2->set_blend(false);
             ctx.ctx2->set_cull(tgfx::CullMode::Back);
+            ctx.ctx2->set_depth_bias(depth_bias_slope != 0.0f,
+                                     0.0f,
+                                     depth_bias_slope,
+                                     0.0f);
+
+            auto end_shadow_pass = [&]() {
+                ctx.ctx2->end_pass();
+                ctx.ctx2->set_depth_bias(false);
+            };
 
             // Fetch cached VkShaderModule handles from the tc_shader slot.
             // First call on a fresh device compiles via shaderc; every
@@ -426,13 +451,13 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     tc::Log::error("ShadowPass: shadow_shader_handle_ stale (index=%u gen=%u)",
                                    shadow_shader_handle_.index,
                                    shadow_shader_handle_.generation);
-                    ctx.ctx2->end_pass();
+                    end_shadow_pass();
                     continue;
                 }
                 if (!tc_shader_ensure_tgfx2(raw, &device, &shadow_vs2, &shadow_fs2)) {
                     tc::Log::error("ShadowPass: tc_shader_ensure_tgfx2 failed for '%s'",
                                    raw->name ? raw->name : raw->uuid);
-                    ctx.ctx2->end_pass();
+                    end_shadow_pass();
                     continue;
                 }
             }
@@ -449,7 +474,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
 
             if (cached_draw_calls_.empty()) {
-                ctx.ctx2->end_pass();
+                end_shadow_pass();
                 results.emplace_back(depth_tex2, resolution, resolution,
                                      light_space_matrix, light_index,
                                      c, cascade_near, cascade_far);
@@ -477,9 +502,14 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                 // Both paths share the same push_constants + PerFrame UBO
                 // layout (the skinned variant is just SHADOW_VS_UBO with
-                // injected BoneBlock). Push u_model once up-front.
+                // injected BoneBlock). Push model matrix and the caster-side
+                // world-space bias once up-front.
                 ShadowPushStd140 push{};
                 std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+                push.u_shadow_offset[0] = static_cast<float>(light_dir.x) * shadow_bias_world;
+                push.u_shadow_offset[1] = static_cast<float>(light_dir.y) * shadow_bias_world;
+                push.u_shadow_offset[2] = static_cast<float>(light_dir.z) * shadow_bias_world;
+                push.u_shadow_offset[3] = 0.0f;
                 ctx.ctx2->set_push_constants(&push, sizeof(push));
 
                 if (override_is_base) {
@@ -514,7 +544,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             }
             (void)last_shader;
 
-            ctx.ctx2->end_pass();
+            end_shadow_pass();
 
             results.emplace_back(depth_tex2, resolution, resolution,
                                  light_space_matrix, light_index,
