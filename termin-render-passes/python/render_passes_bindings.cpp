@@ -19,6 +19,7 @@ extern "C" {
 #include <termin/render/grayscale_pass.hpp>
 #include <termin/render/id_pass.hpp>
 #include <termin/render/present_pass.hpp>
+#include <termin/render/resolve_pass.hpp>
 #include <termin/render/shadow_pass.hpp>
 #include <termin/render/skybox_pass.hpp>
 #include <termin/render/tonemap_pass.hpp>
@@ -112,6 +113,44 @@ void bind_render_passes(nb::module_& m) {
     );
     m.attr("PresentToScreenPass").attr("node_outputs") = nb::make_tuple();
 
+    nb::class_<ResolvePass, CxxFramePass>(m, "ResolvePass")
+        .def("__init__", [](ResolvePass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            const std::string& strategy) {
+            new (self) ResolvePass(input_res, output_res, strategy);
+            if (!pass_name.empty()) {
+                self->set_pass_name(pass_name);
+            }
+            init_pass_from_python(self, "ResolvePass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "resolved",
+             nb::arg("pass_name") = "Resolve",
+             nb::arg("strategy") = "average")
+        .def_rw("input_res", &ResolvePass::input_res)
+        .def_rw("output_res", &ResolvePass::output_res)
+        .def_rw("output_res_target", &ResolvePass::output_res_target)
+        .def_rw("strategy", &ResolvePass::strategy)
+        .def("compute_reads", &ResolvePass::compute_reads)
+        .def("compute_writes", &ResolvePass::compute_writes)
+        .def("get_inplace_aliases", &ResolvePass::get_inplace_aliases)
+        .def_prop_ro("reads", &ResolvePass::compute_reads)
+        .def_prop_ro("writes", &ResolvePass::compute_writes)
+        .def("destroy", &ResolvePass::destroy);
+
+    m.attr("ResolvePass").attr("category") = "Output";
+    m.attr("ResolvePass").attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo"),
+        nb::make_tuple("output_res_target", "fbo")
+    );
+    m.attr("ResolvePass").attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo")
+    );
+    m.attr("ResolvePass").attr("node_inplace_pairs") = nb::make_tuple(
+        nb::make_tuple("output_res_target", "output_res")
+    );
     nb::class_<IdPass, CxxFramePass>(m, "IdPass")
         .def("__init__", [](IdPass* self, const std::string& input_res, const std::string& output_res, const std::string& pass_name) {
             new (self) IdPass(input_res, output_res, pass_name);

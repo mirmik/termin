@@ -547,8 +547,15 @@ tc_pipeline_handle RenderingManager::make_default_pipeline() {
         tc_pipeline_add_pass(ph, p);
     }
 
-    if (tc_pass* p = create_and_configure_pass("BloomPass", "Bloom", {
+    if (tc_pass* p = create_and_configure_pass("ResolvePass", "Resolve", {
         {"input_res", "color"},
+        {"output_res", "color_resolved"},
+    })) {
+        tc_pipeline_add_pass(ph, p);
+    }
+
+    if (tc_pass* p = create_and_configure_pass("BloomPass", "Bloom", {
+        {"input_res", "color_resolved"},
         {"output_res", "color_bloom"},
     })) {
         tc_pipeline_add_pass(ph, p);
@@ -574,6 +581,7 @@ tc_pipeline_handle RenderingManager::make_default_pipeline() {
         "skybox",
         "color_opaque",
         "color",
+        "color_resolved",
         "color_bloom",
         "color+widgets",
     };
@@ -581,6 +589,12 @@ tc_pipeline_handle RenderingManager::make_default_pipeline() {
         ResourceSpec spec;
         spec.resource = resource;
         spec.format = "render_target";
+        if (std::string(resource) == "empty" ||
+            std::string(resource) == "skybox" ||
+            std::string(resource) == "color_opaque" ||
+            std::string(resource) == "color") {
+            spec.samples = 4;
+        }
         pipeline.add_spec(spec);
     }
 

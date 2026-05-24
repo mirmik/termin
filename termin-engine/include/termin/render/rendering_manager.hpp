@@ -125,7 +125,7 @@ public:
         const std::string& asset_uuid
     );
 
-    // Create default render pipeline (Shadow, Skybox, Color, Transparent, PostFX, UIWidgets, Present)
+    // Create default render pipeline (Shadow, Skybox, Color, Transparent, Resolve, PostFX, UIWidgets, Present)
     static tc_pipeline_handle make_default_pipeline();
 
     // Set callback called when a display is removed (for cleanup in editor)
