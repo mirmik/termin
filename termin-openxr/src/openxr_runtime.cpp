@@ -1921,7 +1921,6 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
     double fps_window_wait_frame_ms = 0.0;
     double fps_window_swapchain_wait_ms = 0.0;
     double fps_window_render_ms = 0.0;
-    double fps_window_gpu_idle_ms = 0.0;
     double fps_window_frame_cpu_ms = 0.0;
     auto millis_between = [](FrameClock::time_point begin, FrameClock::time_point end) {
         return std::chrono::duration<double, std::milli>(end - begin).count();
@@ -1933,7 +1932,6 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         double frame_wait_frame_ms = 0.0;
         double frame_swapchain_wait_ms = 0.0;
         double frame_render_ms = 0.0;
-        double frame_gpu_idle_ms = 0.0;
         bool frame_rendered = false;
 
         XrEventDataBuffer event{};
@@ -2122,10 +2120,6 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                     layer_views[eye].subImage.imageArrayIndex = 0;
                 }
 
-                const auto wait_submitted_begin = FrameClock::now();
-                render_device->wait_for_submitted_work();
-                frame_gpu_idle_ms += millis_between(wait_submitted_begin, FrameClock::now());
-
                 for (XrSwapchain swapchain : swapchains_to_release) {
                     XrSwapchainImageReleaseInfo release_info{};
                     release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
@@ -2167,7 +2161,6 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         fps_window_wait_frame_ms += frame_wait_frame_ms;
         fps_window_swapchain_wait_ms += frame_swapchain_wait_ms;
         fps_window_render_ms += frame_render_ms;
-        fps_window_gpu_idle_ms += frame_gpu_idle_ms;
         fps_window_frame_cpu_ms += millis_between(frame_cpu_start, frame_cpu_end);
 
         const double wall_seconds =
@@ -2188,7 +2181,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
             __android_log_print(
                 ANDROID_LOG_INFO,
                 kLogTag,
-                "XR FPS: state=%s wall=%.1f rendered=%.1f predictedHz=%.1f avgMs{frame=%.2f waitFrame=%.2f swapWait=%.2f render=%.2f gpuIdle=%.2f} frames=%llu renderedFrames=%llu shouldSkip=%llu",
+                "XR FPS: state=%s wall=%.1f rendered=%.1f predictedHz=%.1f avgMs{frame=%.2f waitFrame=%.2f swapWait=%.2f render=%.2f} frames=%llu renderedFrames=%llu shouldSkip=%llu",
                 session_state_name(current_session_state),
                 wall_fps,
                 rendered_fps,
@@ -2197,7 +2190,6 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                 fps_window_wait_frame_ms * inv_frames,
                 fps_window_swapchain_wait_ms * inv_frames,
                 fps_window_render_ms * inv_frames,
-                fps_window_gpu_idle_ms * inv_frames,
                 static_cast<unsigned long long>(fps_window_frames),
                 static_cast<unsigned long long>(fps_window_rendered_frames),
                 static_cast<unsigned long long>(fps_window_should_skip_frames)
@@ -2212,7 +2204,6 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
             fps_window_wait_frame_ms = 0.0;
             fps_window_swapchain_wait_ms = 0.0;
             fps_window_render_ms = 0.0;
-            fps_window_gpu_idle_ms = 0.0;
             fps_window_frame_cpu_ms = 0.0;
         }
     }
