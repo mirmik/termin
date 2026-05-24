@@ -602,11 +602,13 @@ void ColorPass::execute_with_data(
         // Shadow maps as elements of the sampler array at SHADOW_SLOT_BASE,
         // paired with the depth-compare sampler (sampler2DShadow needs
         // compareEnable=true on Vulkan and GL_TEXTURE_COMPARE_MODE on
-        // OpenGL's bound sampler object). Created lazily once per device.
+        // OpenGL's bound sampler object). Filtering is explicit in
+        // shadows.glsl; keep the sampler point-filtered so PCF/Poisson do
+        // not get an extra hardware PCF pass underneath.
         if (!shadow_sampler_) {
             tgfx::SamplerDesc sd;
-            sd.min_filter = tgfx::FilterMode::Linear;
-            sd.mag_filter = tgfx::FilterMode::Linear;
+            sd.min_filter = tgfx::FilterMode::Nearest;
+            sd.mag_filter = tgfx::FilterMode::Nearest;
             sd.mip_filter = tgfx::FilterMode::Nearest;
             // ClampToEdge + clear-depth 1.0 gives the same "outside
             // frustum = not in shadow" behaviour as GL's ClampToBorder
@@ -744,10 +746,7 @@ void ColorPass::execute(ExecuteContext& ctx) {
             ambient_intensity = lighting->ambient_intensity;
             shadow_settings.method = lighting->shadow_method;
             shadow_settings.softness = lighting->shadow_softness;
-            // Global shadow_bias is now applied caster-side in ShadowPass.
-            // Keeping an additional receiver-side compare offset makes
-            // lit/shadowed coverage change almost linearly with the UI bias.
-            shadow_settings.bias = 0.0f;
+            shadow_settings.bias = lighting->shadow_bias;
         }
     }
 
