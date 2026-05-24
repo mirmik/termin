@@ -113,6 +113,39 @@ void bind_render_passes(nb::module_& m) {
     );
     m.attr("PresentToScreenPass").attr("node_outputs") = nb::make_tuple();
 
+    nb::class_<BlitPass, CxxFramePass>(m, "BlitPass")
+        .def("__init__", [](BlitPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name) {
+            new (self) BlitPass(input_res, output_res, pass_name);
+            init_pass_from_python(self, "BlitPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "blit",
+             nb::arg("pass_name") = "Blit")
+        .def_rw("input_res", &BlitPass::input_res)
+        .def_rw("output_res", &BlitPass::output_res)
+        .def_rw("output_res_target", &BlitPass::output_res_target)
+        .def("compute_reads", &BlitPass::compute_reads)
+        .def("compute_writes", &BlitPass::compute_writes)
+        .def("get_inplace_aliases", &BlitPass::get_inplace_aliases)
+        .def_prop_ro("reads", &BlitPass::compute_reads)
+        .def_prop_ro("writes", &BlitPass::compute_writes)
+        .def("destroy", &BlitPass::destroy);
+
+    m.attr("BlitPass").attr("category") = "Output";
+    m.attr("BlitPass").attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo"),
+        nb::make_tuple("output_res_target", "fbo")
+    );
+    m.attr("BlitPass").attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo")
+    );
+    m.attr("BlitPass").attr("node_inplace_pairs") = nb::make_tuple(
+        nb::make_tuple("output_res_target", "output_res")
+    );
+
     nb::class_<ResolvePass, CxxFramePass>(m, "ResolvePass")
         .def("__init__", [](ResolvePass* self,
                             const std::string& input_res,

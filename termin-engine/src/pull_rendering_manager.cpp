@@ -221,7 +221,6 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
 
     if (!tc_scene_handle_valid(scene) || !camera_comp || !tc_pipeline_handle_valid(pipeline)) {
-        tc_log(TC_LOG_WARN, "[PullRM] viewport missing scene/camera/pipeline");
         return;
     }
 

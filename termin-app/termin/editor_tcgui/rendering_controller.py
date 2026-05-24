@@ -518,18 +518,7 @@ class RenderingControllerTcgui:
         if scene is None:
             return
 
-        from termin.visualization.core.camera import CameraComponent
-
-        camera = None
-        for entity in scene.entities:
-            cam = entity.get_component(CameraComponent)
-            if cam is not None:
-                camera = cam
-                break
-        if camera is None:
-            log.warn("No camera in scene — cannot create viewport")
-            return
-
+        camera = self._find_first_scene_camera(scene)
         viewport = display.create_viewport(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
         self._ensure_viewport_input_manager(viewport)
         self._viewport_list.refresh()

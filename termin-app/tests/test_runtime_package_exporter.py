@@ -120,6 +120,64 @@ def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
     assert scene_data == {"uuid": "root-scene", "entities": []}
 
 
+def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Path) -> None:
+    project = tmp_path / "PipelineGame"
+    project.mkdir()
+    pipeline_uuid = "pipeline-uuid"
+
+    _write_json(
+        project / "Main.scene",
+        {
+            "scene": {
+                "uuid": "scene-uuid",
+                "entities": [],
+                "render_mount": {
+                    "render_target_configs": [
+                        {
+                            "name": "XRStereoTarget",
+                            "kind": "xr_stereo",
+                            "pipeline_uuid": pipeline_uuid,
+                            "pipeline_name": "VrPipeline",
+                            "enabled": True,
+                        }
+                    ],
+                },
+            },
+        },
+    )
+    _write_json(
+        project / "VrPipeline.pipeline",
+        {
+            "name": "graph_pipeline",
+            "nodes": [
+                {"type": "PipelineOutput", "node_type": "pipeline_output"},
+            ],
+            "connections": [],
+        },
+    )
+    _write_json(project / "VrPipeline.pipeline.meta", {"uuid": pipeline_uuid})
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "quest_openxr" / "PipelineGame" / "package",
+    )
+
+    pipeline_path = result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline.json"
+    assert pipeline_path.exists()
+    pipeline_data = json.loads(pipeline_path.read_text(encoding="utf-8"))
+    assert pipeline_data["uuid"] == pipeline_uuid
+    assert pipeline_data["name"] == "graph_pipeline"
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert {
+        "type": "pipeline",
+        "uuid": pipeline_uuid,
+        "name": "VrPipeline",
+        "path": f"pipelines/{pipeline_uuid}.pipeline.json",
+    } in manifest["resources"]
+
+
 def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -> None:
     import tgfx
     from termin.materials import TcMaterial
