@@ -36,6 +36,7 @@
 #include <termin/engine/engine_core.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/entity/component_registry.hpp>
+#include <termin/geom/mat44.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/lighting/light_component.hpp>
 #include <termin/render/execute_context.hpp>
@@ -46,7 +47,9 @@
 #include <termin/render/rendering_manager.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/tc_scene.hpp>
+#include <termin/input/xr_input.hpp>
 #include <termin/xr/xr_origin_component.hpp>
+#include <termin/xr/xr_thumbstick_locomotion_component.hpp>
 #include <termin_collision/termin_collision.h>
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <tgfx/tgfx2_interop.h>
@@ -276,6 +279,15 @@ struct OpenXRDispatch {
     PFN_xrBeginFrame begin_frame = nullptr;
     PFN_xrEndFrame end_frame = nullptr;
     PFN_xrLocateViews locate_views = nullptr;
+    PFN_xrStringToPath string_to_path = nullptr;
+    PFN_xrCreateActionSet create_action_set = nullptr;
+    PFN_xrDestroyActionSet destroy_action_set = nullptr;
+    PFN_xrCreateAction create_action = nullptr;
+    PFN_xrDestroyAction destroy_action = nullptr;
+    PFN_xrSuggestInteractionProfileBindings suggest_interaction_profile_bindings = nullptr;
+    PFN_xrAttachSessionActionSets attach_session_action_sets = nullptr;
+    PFN_xrSyncActions sync_actions = nullptr;
+    PFN_xrGetActionStateVector2f get_action_state_vector2f = nullptr;
     PFN_xrGetVulkanInstanceExtensionsKHR get_vulkan_instance_extensions = nullptr;
     PFN_xrGetVulkanDeviceExtensionsKHR get_vulkan_device_extensions = nullptr;
     PFN_xrGetVulkanGraphicsDeviceKHR get_vulkan_graphics_device = nullptr;
@@ -646,6 +658,254 @@ void configure_display_refresh_rate(OpenXRDispatch& xr, XrSession session) {
     }
 }
 
+bool xr_string_to_path(
+    OpenXRDispatch& xr,
+    XrInstance instance,
+    const char* path_text,
+    XrPath& out
+) {
+    out = XR_NULL_PATH;
+    if (!xr.string_to_path) {
+        tc_log_error("[OpenXR input] xrStringToPath is unavailable");
+        return false;
+    }
+
+    XrResult result = xr.string_to_path(instance, path_text, &out);
+    if (XR_FAILED(result) || out == XR_NULL_PATH) {
+        tc_log_error("[OpenXR input] xrStringToPath('%s') failed: %d", path_text, result);
+        return false;
+    }
+    return true;
+}
+
+XrVector3f rotate_xr_vector(const XrQuaternionf& q, const XrVector3f& v) {
+    const float tx = 2.0f * (q.y * v.z - q.z * v.y);
+    const float ty = 2.0f * (q.z * v.x - q.x * v.z);
+    const float tz = 2.0f * (q.x * v.y - q.y * v.x);
+
+    return XrVector3f{
+        v.x + q.w * tx + q.y * tz - q.z * ty,
+        v.y + q.w * ty + q.z * tx - q.x * tz,
+        v.z + q.w * tz + q.x * ty - q.y * tx
+    };
+}
+
+termin::Vec3 xr_direction_to_scene_direction(const XrVector3f& p) {
+    return termin::Vec3{
+        static_cast<double>(p.x),
+        static_cast<double>(-p.z),
+        static_cast<double>(p.y)
+    };
+}
+
+struct XrControllerActions {
+    OpenXRDispatch* xr = nullptr;
+    XrInstance instance = XR_NULL_HANDLE;
+    XrActionSet action_set = XR_NULL_HANDLE;
+    XrAction thumbstick_axis = XR_NULL_HANDLE;
+    XrPath left_hand = XR_NULL_PATH;
+    XrPath right_hand = XR_NULL_PATH;
+    termin::xr::XrRigInputState rig_state;
+    bool initialized = false;
+    bool attached = false;
+    bool registered = false;
+
+    bool init(OpenXRDispatch& dispatch, XrInstance xr_instance) {
+        xr = &dispatch;
+        instance = xr_instance;
+
+        if (!xr->create_action_set ||
+            !xr->create_action ||
+            !xr->suggest_interaction_profile_bindings ||
+            !xr->string_to_path) {
+            tc_log_error("[OpenXR input] required action functions are unavailable");
+            return false;
+        }
+
+        if (!xr_string_to_path(*xr, instance, "/user/hand/left", left_hand) ||
+            !xr_string_to_path(*xr, instance, "/user/hand/right", right_hand)) {
+            return false;
+        }
+
+        XrActionSetCreateInfo action_set_info{};
+        action_set_info.type = XR_TYPE_ACTION_SET_CREATE_INFO;
+        std::strncpy(action_set_info.actionSetName, "termin_xr_controllers", XR_MAX_ACTION_SET_NAME_SIZE - 1);
+        std::strncpy(action_set_info.localizedActionSetName, "Termin XR Controllers", XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE - 1);
+        action_set_info.priority = 0;
+
+        XrResult result = xr->create_action_set(instance, &action_set_info, &action_set);
+        if (XR_FAILED(result) || action_set == XR_NULL_HANDLE) {
+            tc_log_error("[OpenXR input] xrCreateActionSet failed: %d", result);
+            return false;
+        }
+
+        XrPath subaction_paths[2] = {left_hand, right_hand};
+        XrActionCreateInfo action_info{};
+        action_info.type = XR_TYPE_ACTION_CREATE_INFO;
+        action_info.actionType = XR_ACTION_TYPE_VECTOR2F_INPUT;
+        action_info.countSubactionPaths = 2;
+        action_info.subactionPaths = subaction_paths;
+        std::strncpy(action_info.actionName, "thumbstick_axis", XR_MAX_ACTION_NAME_SIZE - 1);
+        std::strncpy(action_info.localizedActionName, "Thumbstick Axis", XR_MAX_LOCALIZED_ACTION_NAME_SIZE - 1);
+
+        result = xr->create_action(action_set, &action_info, &thumbstick_axis);
+        if (XR_FAILED(result) || thumbstick_axis == XR_NULL_HANDLE) {
+            tc_log_error("[OpenXR input] xrCreateAction thumbstick_axis failed: %d", result);
+            return false;
+        }
+
+        XrPath oculus_touch_profile = XR_NULL_PATH;
+        XrPath left_thumbstick = XR_NULL_PATH;
+        XrPath right_thumbstick = XR_NULL_PATH;
+        if (!xr_string_to_path(*xr, instance, "/interaction_profiles/oculus/touch_controller", oculus_touch_profile) ||
+            !xr_string_to_path(*xr, instance, "/user/hand/left/input/thumbstick", left_thumbstick) ||
+            !xr_string_to_path(*xr, instance, "/user/hand/right/input/thumbstick", right_thumbstick)) {
+            return false;
+        }
+
+        XrActionSuggestedBinding suggested_bindings[2]{};
+        suggested_bindings[0].action = thumbstick_axis;
+        suggested_bindings[0].binding = left_thumbstick;
+        suggested_bindings[1].action = thumbstick_axis;
+        suggested_bindings[1].binding = right_thumbstick;
+
+        XrInteractionProfileSuggestedBinding suggested_binding_info{};
+        suggested_binding_info.type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING;
+        suggested_binding_info.interactionProfile = oculus_touch_profile;
+        suggested_binding_info.countSuggestedBindings = 2;
+        suggested_binding_info.suggestedBindings = suggested_bindings;
+
+        result = xr->suggest_interaction_profile_bindings(instance, &suggested_binding_info);
+        if (XR_FAILED(result)) {
+            tc_log_error("[OpenXR input] xrSuggestInteractionProfileBindings failed: %d", result);
+            return false;
+        }
+
+        rig_state.id = "xr";
+        termin::xr::XrInput::register_state(rig_state.id, &rig_state);
+        registered = true;
+        initialized = true;
+        tc_log_info("[OpenXR input] XR controller action set initialized");
+        return true;
+    }
+
+    bool attach(XrSession session) {
+        if (!initialized || !xr || !xr->attach_session_action_sets || attached) {
+            return initialized && attached;
+        }
+
+        XrSessionActionSetsAttachInfo attach_info{};
+        attach_info.type = XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO;
+        attach_info.countActionSets = 1;
+        attach_info.actionSets = &action_set;
+
+        XrResult result = xr->attach_session_action_sets(session, &attach_info);
+        if (XR_FAILED(result)) {
+            tc_log_error("[OpenXR input] xrAttachSessionActionSets failed: %d", result);
+            return false;
+        }
+        attached = true;
+        tc_log_info("[OpenXR input] XR controller action set attached");
+        return true;
+    }
+
+    void update_head_axes(
+        const XrView& view,
+        const termin::Mat44& origin_from_xr_reference,
+        bool orientation_valid
+    ) {
+        if (!orientation_valid) {
+            rig_state.head_axes_active = false;
+            return;
+        }
+
+        const XrQuaternionf& q = view.pose.orientation;
+        const termin::Vec3 forward_in_reference = xr_direction_to_scene_direction(
+            rotate_xr_vector(q, XrVector3f{0.0f, 0.0f, -1.0f})
+        );
+        const termin::Vec3 right_in_reference = xr_direction_to_scene_direction(
+            rotate_xr_vector(q, XrVector3f{1.0f, 0.0f, 0.0f})
+        );
+        rig_state.head_forward_in_origin =
+            origin_from_xr_reference.transform_direction(forward_in_reference).normalized();
+        rig_state.head_right_in_origin =
+            origin_from_xr_reference.transform_direction(right_in_reference).normalized();
+        rig_state.head_axes_active = true;
+    }
+
+    void sync(XrSession session, uint64_t frame_index) {
+        if (!initialized || !attached || !xr || !xr->sync_actions || !xr->get_action_state_vector2f) {
+            return;
+        }
+
+        XrActiveActionSet active_action_set{};
+        active_action_set.actionSet = action_set;
+        active_action_set.subactionPath = XR_NULL_PATH;
+
+        XrActionsSyncInfo sync_info{};
+        sync_info.type = XR_TYPE_ACTIONS_SYNC_INFO;
+        sync_info.countActiveActionSets = 1;
+        sync_info.activeActionSets = &active_action_set;
+
+        XrResult result = xr->sync_actions(session, &sync_info);
+        if (XR_FAILED(result)) {
+            tc_log_error("[OpenXR input] xrSyncActions failed: %d", result);
+            rig_state.left.thumbstick.active = false;
+            rig_state.right.thumbstick.active = false;
+            return;
+        }
+
+        update_thumbstick(session, left_hand, rig_state.left.thumbstick);
+        update_thumbstick(session, right_hand, rig_state.right.thumbstick);
+        rig_state.frame_index = frame_index;
+    }
+
+    void update_thumbstick(
+        XrSession session,
+        XrPath subaction_path,
+        termin::xr::XrAxis2State& out
+    ) {
+        XrActionStateGetInfo get_info{};
+        get_info.type = XR_TYPE_ACTION_STATE_GET_INFO;
+        get_info.action = thumbstick_axis;
+        get_info.subactionPath = subaction_path;
+
+        XrActionStateVector2f state{};
+        state.type = XR_TYPE_ACTION_STATE_VECTOR2F;
+        XrResult result = xr->get_action_state_vector2f(session, &get_info, &state);
+        if (XR_FAILED(result)) {
+            tc_log_error("[OpenXR input] xrGetActionStateVector2f failed: %d", result);
+            out.active = false;
+            out.value = termin::Vec2::zero();
+            return;
+        }
+
+        out.active = state.isActive == XR_TRUE;
+        out.changed_since_last_sync = state.changedSinceLastSync == XR_TRUE;
+        out.value = termin::Vec2{
+            static_cast<double>(state.currentState.x),
+            static_cast<double>(state.currentState.y)
+        };
+    }
+
+    void destroy() {
+        if (registered) {
+            termin::xr::XrInput::unregister_state(rig_state.id);
+            registered = false;
+        }
+        if (xr && thumbstick_axis != XR_NULL_HANDLE && xr->destroy_action) {
+            xr->destroy_action(thumbstick_axis);
+        }
+        if (xr && action_set != XR_NULL_HANDLE && xr->destroy_action_set) {
+            xr->destroy_action_set(action_set);
+        }
+        thumbstick_axis = XR_NULL_HANDLE;
+        action_set = XR_NULL_HANDLE;
+        initialized = false;
+        attached = false;
+    }
+};
+
 std::vector<std::string> split_openxr_extension_string(const std::string& text) {
     std::vector<std::string> result;
     std::istringstream stream(text);
@@ -862,17 +1122,6 @@ termin::Mat44 make_xr_to_scene_matrix() {
     m.data[8] = 0.0;
     m.data[9] = -1.0;
     m.data[10] = 0.0;
-    return m;
-}
-
-termin::Mat44 make_xr_origin_forward_alignment_matrix() {
-    // XrOriginComponent is an authoring-space transform: its local +Y is
-    // player forward, matching the rest of the engine. The OpenXR reference
-    // space is inserted under that origin with an extra yaw so the neutral HMD
-    // facing direction lands on +Y rather than the opposite scene direction.
-    termin::Mat44 m = termin::Mat44::identity();
-    m(0, 0) = -1.0;
-    m(1, 1) = -1.0;
     return m;
 }
 
@@ -1226,6 +1475,7 @@ void register_openxr_scene_runtime() {
     tc::KindRegistryCpp::instance();
     termin::MeshComponent::register_type();
     termin::XrOriginComponent::register_type();
+    termin::XrThumbstickLocomotionComponent::register_type();
 }
 
 struct OpenXRRuntimeScene {
@@ -1245,9 +1495,63 @@ struct OpenXRRuntimeScene {
     termin::RenderPipeline pipeline;
     tc_render_target_handle xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
     termin::XrOriginComponent* xr_origin = nullptr;
+    termin::Mat44 origin_from_xr_reference = termin::Mat44::identity();
     EyeFrame active_eye_frame;
     std::unordered_map<std::string, std::filesystem::path> runtime_pipeline_paths;
+    bool reference_alignment_initialized = false;
     bool ready = false;
+
+    void reset_reference_alignment() {
+        origin_from_xr_reference = termin::Mat44::identity();
+        reference_alignment_initialized = false;
+    }
+
+    bool update_reference_alignment(const XrView& view, XrViewStateFlags view_state_flags) {
+        if (reference_alignment_initialized) {
+            return true;
+        }
+        if (!xr_origin) {
+            return false;
+        }
+
+        if (xr_origin->reference_alignment == termin::XrReferenceAlignment::StageAxes) {
+            origin_from_xr_reference = termin::Mat44::identity();
+            reference_alignment_initialized = true;
+            tc_log_info("[OpenXR scene] XR reference alignment initialized mode=stage_axes yaw_degrees=0");
+            return true;
+        }
+
+        if ((view_state_flags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) == 0) {
+            return false;
+        }
+
+        termin::Vec3 forward = xr_direction_to_scene_direction(
+            rotate_xr_vector(view.pose.orientation, XrVector3f{0.0f, 0.0f, -1.0f})
+        );
+        forward.z = 0.0;
+        const double len = forward.norm();
+        if (len < 1e-6) {
+            tc_log_warn("[OpenXR scene] cannot initialize XR reference alignment: head forward is vertical");
+            return false;
+        }
+        forward = forward / len;
+
+        const double yaw = std::atan2(forward.x, forward.y);
+        origin_from_xr_reference =
+            termin::Mat44::rotation_axis_angle(termin::Vec3{0.0, 0.0, 1.0}, yaw);
+        reference_alignment_initialized = true;
+
+        constexpr double kRadToDeg = 180.0 / 3.14159265358979323846;
+        tc_log_info(
+            "[OpenXR scene] XR reference alignment initialized mode=initial_head_yaw "
+            "yaw_degrees=%.3f initial_forward=(%.3f, %.3f, %.3f)",
+            yaw * kRadToDeg,
+            forward.x,
+            forward.y,
+            forward.z
+        );
+        return true;
+    }
 
     void install_runtime_pipeline_factory(const std::string& asset_root) {
         runtime_pipeline_paths.clear();
@@ -1355,6 +1659,7 @@ struct OpenXRRuntimeScene {
             "MeshComponent",
             "MeshRenderer",
             "XrOriginComponent",
+            "XrThumbstickLocomotionComponent",
             "LightComponent",
             "UnknownComponent",
         };
@@ -1394,6 +1699,7 @@ struct OpenXRRuntimeScene {
             engine.reset();
             return false;
         }
+        reset_reference_alignment();
 
         pipeline = make_pipeline_for_xr_render_target(*engine, xr_config);
         if (!pipeline.is_valid() || pipeline.pass_count() == 0) {
@@ -1516,17 +1822,23 @@ struct OpenXRRuntimeScene {
         target.clear_depth = tc_render_target_get_clear_depth_value(render_target);
         termin::GeneralPose3 origin_pose = xr_origin->entity().transform().global_pose();
         termin::Pose3 origin_pose3(origin_pose.ang, origin_pose.lin);
-        termin::Mat44 origin_view =
-            make_xr_origin_forward_alignment_matrix() *
-            origin_pose3.inverse().as_mat44();
-        termin::Mat44 scene_from_origin = origin_view.inverse();
-        termin::Vec3 eye_position_in_origin = xr_position_to_scene_position(eye.view.pose.position);
+        // XrOriginComponent uses engine authoring axes: +X right, +Y forward,
+        // +Z up. OpenXR reference poses are first converted from +X right, +Y
+        // up, -Z forward into that engine basis, then optionally yaw-aligned
+        // under the origin by XrOriginComponent::reference_alignment.
+        termin::Mat44 scene_to_origin = origin_pose3.inverse().as_mat44();
+        termin::Mat44 scene_from_origin = scene_to_origin.inverse();
+        termin::Mat44 reference_to_origin = origin_from_xr_reference.inverse();
+        termin::Vec3 eye_position_in_reference = xr_position_to_scene_position(eye.view.pose.position);
+        termin::Vec3 eye_position_in_origin =
+            origin_from_xr_reference.transform_point(eye_position_in_reference);
 
         target.camera.view =
             make_xr_to_scene_matrix() *
             mat44_from_float_array(make_view_matrix_from_xr_pose(eye.view.pose)) *
             make_scene_to_xr_matrix() *
-            origin_view;
+            reference_to_origin *
+            scene_to_origin;
         target.camera.projection = make_engine_projection_from_xr_fov(
             eye.view.fov,
             static_cast<float>(xr_origin->near_clip),
@@ -1569,6 +1881,13 @@ struct OpenXRRuntimeScene {
         active_eye_frame.valid = true;
         engine->rendering_manager.render_render_target_offscreen(xr_render_target);
         active_eye_frame.valid = false;
+    }
+
+    void update(double dt) {
+        if (!ready || !scene.valid()) {
+            return;
+        }
+        scene.update(dt);
     }
 
     bool begin_render_frame() {
@@ -1794,6 +2113,15 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
     load_instance_proc(xr, instance, "xrBeginFrame", reinterpret_cast<PFN_xrVoidFunction*>(&xr.begin_frame));
     load_instance_proc(xr, instance, "xrEndFrame", reinterpret_cast<PFN_xrVoidFunction*>(&xr.end_frame));
     load_instance_proc(xr, instance, "xrLocateViews", reinterpret_cast<PFN_xrVoidFunction*>(&xr.locate_views));
+    load_instance_proc(xr, instance, "xrStringToPath", reinterpret_cast<PFN_xrVoidFunction*>(&xr.string_to_path));
+    load_instance_proc(xr, instance, "xrCreateActionSet", reinterpret_cast<PFN_xrVoidFunction*>(&xr.create_action_set));
+    load_instance_proc(xr, instance, "xrDestroyActionSet", reinterpret_cast<PFN_xrVoidFunction*>(&xr.destroy_action_set));
+    load_instance_proc(xr, instance, "xrCreateAction", reinterpret_cast<PFN_xrVoidFunction*>(&xr.create_action));
+    load_instance_proc(xr, instance, "xrDestroyAction", reinterpret_cast<PFN_xrVoidFunction*>(&xr.destroy_action));
+    load_instance_proc(xr, instance, "xrSuggestInteractionProfileBindings", reinterpret_cast<PFN_xrVoidFunction*>(&xr.suggest_interaction_profile_bindings));
+    load_instance_proc(xr, instance, "xrAttachSessionActionSets", reinterpret_cast<PFN_xrVoidFunction*>(&xr.attach_session_action_sets));
+    load_instance_proc(xr, instance, "xrSyncActions", reinterpret_cast<PFN_xrVoidFunction*>(&xr.sync_actions));
+    load_instance_proc(xr, instance, "xrGetActionStateVector2f", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_action_state_vector2f));
     load_instance_proc(xr, instance, "xrGetVulkanInstanceExtensionsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_instance_extensions));
     load_instance_proc(xr, instance, "xrGetVulkanDeviceExtensionsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_device_extensions));
     load_instance_proc(xr, instance, "xrGetVulkanGraphicsDeviceKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_graphics_device));
@@ -2089,6 +2417,13 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         );
     }
 
+    XrControllerActions controller_actions;
+    if (controller_actions.init(xr, instance)) {
+        controller_actions.attach(session);
+    } else {
+        tc_log_error("[OpenXR input] XR controller actions are disabled");
+    }
+
     std::vector<XrView> views(view_count);
     for (XrView& view : views) {
         view.type = XR_TYPE_VIEW;
@@ -2241,6 +2576,27 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                 views.data()
             );
             if (XR_SUCCEEDED(result) && located_view_count == view_count) {
+                const bool head_orientation_valid =
+                    (view_state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) != 0;
+                if (located_view_count > 0) {
+                    if (runtime_scene_ready) {
+                        runtime_scene.update_reference_alignment(views[0], view_state.viewStateFlags);
+                    }
+                    controller_actions.update_head_axes(
+                        views[0],
+                        runtime_scene_ready
+                            ? runtime_scene.origin_from_xr_reference
+                            : termin::Mat44::identity(),
+                        head_orientation_valid
+                    );
+                }
+                controller_actions.sync(session, frame_index);
+                if (runtime_scene_ready) {
+                    const double frame_dt =
+                        std::max(1e-6, static_cast<double>(frame_state.predictedDisplayPeriod) * 1e-9);
+                    runtime_scene.update(frame_dt);
+                }
+
                 std::vector<XrSwapchain> swapchains_to_release;
                 swapchains_to_release.reserve(view_count);
                 const bool runtime_scene_frame_open = runtime_scene_ready && runtime_scene.begin_render_frame();
@@ -2485,6 +2841,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
     if (app_space != XR_NULL_HANDLE) {
         xr.destroy_space(app_space);
     }
+    controller_actions.destroy();
     xr.destroy_session(session);
     if (tgfx2_interop_get_device() == render_device.get()) {
         tgfx2_interop_set_device(nullptr);

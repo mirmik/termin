@@ -18,6 +18,7 @@
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/normal_pass.hpp>
 #include <termin/xr/xr_origin_component.hpp>
+#include <termin/xr/xr_thumbstick_locomotion_component.hpp>
 #include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
@@ -290,6 +291,9 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_rw("reference_space",
             &XrOriginComponent::get_reference_space_str,
             &XrOriginComponent::set_reference_space_str)
+        .def_prop_rw("reference_alignment",
+            &XrOriginComponent::get_reference_alignment_str,
+            &XrOriginComponent::set_reference_alignment_str)
         .def_rw("near", &XrOriginComponent::near_clip)
         .def_rw("far", &XrOriginComponent::far_clip)
         .def_prop_rw("near_clip",
@@ -330,6 +334,64 @@ NB_MODULE(_components_render_native, m) {
                 return nb::none();
             }
             auto* cxx = reinterpret_cast<XrOriginComponent*>(ptr);
+            return nb::cast(cxx, nb::rv_policy::reference);
+        });
+
+    nb::class_<XrThumbstickLocomotionComponent, CxxComponent>(m, "XrThumbstickLocomotionComponent")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<XrThumbstickLocomotionComponent>(self);
+        })
+        .def_rw("input_device_id", &XrThumbstickLocomotionComponent::input_device_id)
+        .def_prop_rw("move_hand",
+            &XrThumbstickLocomotionComponent::get_move_hand_str,
+            &XrThumbstickLocomotionComponent::set_move_hand_str)
+        .def_prop_rw("move_frame",
+            &XrThumbstickLocomotionComponent::get_move_frame_str,
+            &XrThumbstickLocomotionComponent::set_move_frame_str)
+        .def_rw("move_speed", &XrThumbstickLocomotionComponent::move_speed)
+        .def_rw("speed_multiplier", &XrThumbstickLocomotionComponent::speed_multiplier)
+        .def_rw("deadzone", &XrThumbstickLocomotionComponent::deadzone)
+        .def_rw("normalize_diagonal", &XrThumbstickLocomotionComponent::normalize_diagonal)
+        .def_rw("scale_after_deadzone", &XrThumbstickLocomotionComponent::scale_after_deadzone)
+        .def_rw("invert_x", &XrThumbstickLocomotionComponent::invert_x)
+        .def_rw("invert_y", &XrThumbstickLocomotionComponent::invert_y)
+        .def_rw("continuous_turn_enabled", &XrThumbstickLocomotionComponent::continuous_turn_enabled)
+        .def_prop_rw("turn_hand",
+            &XrThumbstickLocomotionComponent::get_turn_hand_str,
+            &XrThumbstickLocomotionComponent::set_turn_hand_str)
+        .def_rw("turn_speed_degrees", &XrThumbstickLocomotionComponent::turn_speed_degrees)
+        .def_rw("turn_deadzone", &XrThumbstickLocomotionComponent::turn_deadzone)
+        .def("c_component_ptr", [](XrThumbstickLocomotionComponent& c) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(c.c_component());
+        })
+        .def("_cxx_component_ptr", [](XrThumbstickLocomotionComponent& c) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(&c);
+        })
+        .def_static("_from_c_component_ptr", [](uintptr_t ptr) -> nb::object {
+            if (ptr == 0) {
+                return nb::none();
+            }
+
+            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+            if (tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
+                return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(tc->body));
+            }
+            if (tc->kind != TC_CXX_COMPONENT) {
+                return nb::none();
+            }
+
+            CxxComponent* cxx = CxxComponent::from_tc(tc);
+            if (!cxx) {
+                return nb::none();
+            }
+
+            return nb::cast(static_cast<XrThumbstickLocomotionComponent*>(cxx), nb::rv_policy::reference);
+        })
+        .def_static("_from_cxx_component_ptr", [](uintptr_t ptr) -> nb::object {
+            if (ptr == 0) {
+                return nb::none();
+            }
+            auto* cxx = reinterpret_cast<XrThumbstickLocomotionComponent*>(ptr);
             return nb::cast(cxx, nb::rv_policy::reference);
         });
 

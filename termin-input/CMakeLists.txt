@@ -32,6 +32,8 @@ set(TERMIN_INPUT_SOURCES
 )
 
 set(TERMIN_INPUT_CXX_SOURCES
+    src/input_device_registry.cpp
+    src/xr_input.cpp
     cpp/entity/input_handler.cpp
 )
 

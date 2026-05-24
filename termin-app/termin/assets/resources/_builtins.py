@@ -10,6 +10,8 @@ BUILTIN_COMPONENTS: List[Tuple[str, str]] = [
     ("termin.render_components.skinned_mesh_renderer", "SkinnedMeshRenderer"),
     ("termin.render_components.line_renderer", "LineRenderer"),
     ("termin.render_components", "LightComponent"),
+    ("termin.render_components", "XrOriginComponent"),
+    ("termin.render_components", "XrThumbstickLocomotionComponent"),
     # Камера
     ("termin.visualization.core.camera", "CameraComponent"),
     ("termin.visualization.core.camera", "CameraController"),

@@ -66,6 +66,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_collision REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_input termin_input::termin_input)
+else()
+    find_package(termin_input REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -144,6 +149,7 @@ target_link_libraries(termin_openxr
         termin_engine::termin_engine
         termin_runtime::termin_runtime
         termin_collision::termin_collision
+        termin_input::termin_input
 )
 
 if(ANDROID)

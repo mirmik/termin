@@ -73,6 +73,29 @@ tgfx2 `TextureHandle` suitable for color/depth attachments.
 6. Replace the cube with a small exported scene/render pipeline path.
 7. Add OpenXR action input for Quest controllers.
 
+## XR controller input model
+
+OpenXR controller input is handled as frame state, not as desktop viewport
+events. The current mouse/key/scroll input protocol remains for PC/editor
+surfaces. OpenXR runtime creates a physical `thumbstick_axis` action with
+left/right hand subaction paths and updates `termin::xr::XrRigInputState`
+once per XR frame after `xrSyncActions`.
+
+`termin-input` provides the shared device registry (`xr`, future `gamepad0`,
+...) and the editor-visible `termin::xr::XrInput` state API. It does not rename
+physical controls to semantic actions. Scene behavior lives in components.
+`XrThumbstickLocomotionComponent` lives with the XR render components, reads
+`XrInput::get_state("xr")`, selects a hand thumbstick, and moves the entity that
+owns `XrOriginComponent`.
+
+Coordinate conversion is split into two explicit layers. The OpenXR runner
+performs the fixed basis conversion from OpenXR's `+X right, +Y up, -Z forward`
+reference poses into Termin's `+X right, +Y forward, +Z up` engine basis.
+`XrOriginComponent.reference_alignment` then controls authored reference
+alignment under the origin: `initial_head_yaw` rotates the reference yaw once so
+the initial HMD forward maps to origin `+Y`, while `stage_axes` preserves the
+runtime stage/local axes after the fixed basis conversion.
+
 ## Known risks
 
 - The local `openxr-sdk` checkout is not pinned as a submodule yet.
