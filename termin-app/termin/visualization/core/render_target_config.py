@@ -16,6 +16,8 @@ def serialize_render_target_config(config: RenderTargetConfig) -> dict:
         result["kind"] = config.kind
     if config.camera_uuid:
         result["camera_uuid"] = config.camera_uuid
+    if config.xr_origin_uuid:
+        result["xr_origin_uuid"] = config.xr_origin_uuid
     if config.dynamic_resolution:
         result["dynamic_resolution"] = True
     else:
@@ -48,6 +50,7 @@ def deserialize_render_target_config(data: dict) -> RenderTargetConfig:
     config.name = data.get("name", "")
     config.kind = data.get("kind", "texture_2d")
     config.camera_uuid = data.get("camera_uuid", "")
+    config.xr_origin_uuid = data.get("xr_origin_uuid", "")
     config.width = data.get("width", 512)
     config.height = data.get("height", 512)
     config.dynamic_resolution = data.get("dynamic_resolution", False)

@@ -32,14 +32,23 @@ class _CameraComponent:
     pass
 
 
+class _XrOriginComponent:
+    pass
+
+
 class _Entity:
-    def __init__(self, name, camera):
+    def __init__(self, name, camera=None, xr_origin=None):
         self.name = name
         self.uuid = name
         self._camera = camera
+        self._xr_origin = xr_origin
 
     def get_component(self, component_type):
-        assert component_type is _CameraComponent
+        if component_type is _CameraComponent:
+            return self._camera
+        if component_type is _XrOriginComponent:
+            return self._xr_origin
+        raise AssertionError(component_type)
         return self._camera
 
 
@@ -67,6 +76,7 @@ class _RenderTarget:
         self.locked = False
         self.scene = scene
         self.camera = camera
+        self.xr_origin = None
         self.pipeline = None
         self.dynamic_resolution = True
         self.width = 320
@@ -141,6 +151,12 @@ def _install_camera_component_stub(monkeypatch):
     camera_module = types.ModuleType("termin.visualization.core.camera")
     camera_module.CameraComponent = _CameraComponent
     monkeypatch.setitem(sys.modules, "termin.visualization.core.camera", camera_module)
+
+
+def _install_xr_origin_component_stub(monkeypatch):
+    render_components_module = types.ModuleType("termin.render_components")
+    render_components_module.XrOriginComponent = _XrOriginComponent
+    monkeypatch.setitem(sys.modules, "termin.render_components", render_components_module)
 
 
 def test_render_target_inspector_reads_camera_from_render_target_scene(monkeypatch):
@@ -254,18 +270,20 @@ def test_render_target_inspector_requests_layout_when_manual_size_visibility_cha
 
 
 def test_render_target_inspector_hides_texture_fields_for_xr_target(monkeypatch):
-    _install_camera_component_stub(monkeypatch)
+    _install_xr_origin_component_stub(monkeypatch)
 
-    camera = _CameraComponent()
-    scene = _Scene("Scene", 1, [_Entity("Camera", camera)])
-    render_target = _RenderTarget(scene, camera)
+    xr_origin = _XrOriginComponent()
+    scene = _Scene("Scene", 1, [_Entity("PlayerOrigin", xr_origin=xr_origin)])
+    render_target = _RenderTarget(scene, None)
     render_target.kind = "xr_stereo"
+    render_target.xr_origin = xr_origin
 
     inspector = RenderTargetInspectorTcgui(_ResourceManager())
     inspector.set_scene_getter(lambda: [scene])
     inspector.set_render_target(render_target, scene)
 
     assert inspector._kind_combo.selected_index == 1
+    assert inspector._camera_lbl.text == "XR Origin:"
     assert inspector._camera_combo.visible is True
     assert inspector._camera_combo.selected_index == 1
     assert inspector._dynamic_resolution.visible is False
@@ -277,12 +295,18 @@ def test_render_target_inspector_hides_texture_fields_for_xr_target(monkeypatch)
     assert inspector._layer_mask_widget.visible is True
 
 
-def test_render_target_inspector_keeps_camera_when_switching_to_xr_target(monkeypatch):
+def test_render_target_inspector_uses_xr_origin_when_switching_to_xr_target(monkeypatch):
     _install_camera_component_stub(monkeypatch)
+    _install_xr_origin_component_stub(monkeypatch)
 
     camera = _CameraComponent()
-    scene = _Scene("Scene", 1, [_Entity("Camera", camera)])
+    xr_origin = _XrOriginComponent()
+    scene = _Scene("Scene", 1, [
+        _Entity("Camera", camera=camera),
+        _Entity("PlayerOrigin", xr_origin=xr_origin),
+    ])
     render_target = _RenderTarget(scene, camera)
+    render_target.xr_origin = xr_origin
 
     inspector = RenderTargetInspectorTcgui(_ResourceManager())
     inspector.set_scene_getter(lambda: [scene])
@@ -291,7 +315,10 @@ def test_render_target_inspector_keeps_camera_when_switching_to_xr_target(monkey
 
     assert render_target.kind == "xr_stereo"
     assert render_target.camera is camera
+    assert render_target.xr_origin is xr_origin
+    assert inspector._camera_lbl.text == "XR Origin:"
     assert inspector._camera_combo.visible is True
+    assert inspector._camera_combo.selected_index == 1
 
 
 def test_texture_picker_with_scene_getter_includes_live_render_target_pool(monkeypatch):

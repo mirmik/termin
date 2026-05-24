@@ -81,6 +81,7 @@ class _RenderTargetConfig:
         self.name = "Custom"
         self.kind = "texture_2d"
         self.camera_uuid = ""
+        self.xr_origin_uuid = ""
         self.width = 320
         self.height = 200
         self.dynamic_resolution = False
@@ -132,6 +133,7 @@ class _RenderTarget:
         self.locked = False
         self.scene = None
         self.camera = None
+        self.xr_origin = None
         self.width = 0
         self.height = 0
         self.dynamic_resolution = False
