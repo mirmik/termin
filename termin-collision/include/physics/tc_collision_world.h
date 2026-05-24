@@ -39,6 +39,9 @@ TERMIN_COLLISION_API void tc_collision_world_extension_init(void);
 TERMIN_COLLISION_API tc_collision_world* tc_collision_world_get_scene(tc_scene_handle scene);
 TERMIN_COLLISION_API bool tc_collision_world_set_scene(tc_scene_handle scene, tc_collision_world* cw);
 
+// Refresh broad-phase data for all colliders after entity transforms changed.
+TERMIN_COLLISION_API void tc_collision_world_update_all(tc_collision_world* cw);
+
 #ifdef __cplusplus
 }
 #endif
