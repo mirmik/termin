@@ -217,10 +217,10 @@ if [[ -n "$TARGET_DIR" ]]; then
     # packages (numpy, nanobind, …) into the SDK — those are provided
     # separately by BUNDLE_PACKAGES_EXTERNAL in termin/CMakeLists.txt.
     #
-    # Pre-install termin-build-tools into the current Python environment
-    # so that termin_build.cmake_ext is importable when pip processes
-    # setup.py of other packages during metadata preparation.
-    pip install --no-build-isolation "$SCRIPT_DIR/termin-build-tools"
+    # Make termin_build.cmake_ext importable while pip prepares metadata for
+    # sibling packages. Do not install into the host Python environment here:
+    # build-sdk.sh uses --target specifically to keep the SDK self-contained.
+    export PYTHONPATH="$SCRIPT_DIR/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}"
     PIP_ARGS=(--no-build-isolation --no-deps --upgrade --target "$TARGET_DIR" "${FORCE_FLAGS[@]}")
     for pkg in "${PACKAGES[@]}"; do
         PIP_ARGS+=("$SCRIPT_DIR/$pkg")

@@ -1,24 +1,34 @@
 #!/usr/bin/env python3
 
 from setuptools import setup, Extension
+from pathlib import Path
 from termin_build.cmake_ext import TerminCMakeBuild, TerminCMakeBuildExt, _find_sdk
 
 import os
 _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
-def _sdk_has_module(pkg_dotted_path, module_name):
-    """Return True if a pre-built binding module exists in the SDK."""
-    sdk = _find_sdk()
-    if sdk is None:
-        return False
+def _has_prebuilt_module(pkg_dotted_path, module_name):
+    """Return True if an optional pre-built binding module exists."""
     pkg_fs_path = pkg_dotted_path.replace(".", "/")
-    search_dir = sdk / "lib" / "python" / pkg_fs_path
-    if not search_dir.is_dir():
-        return False
+    roots = []
+    bindings_dir = os.environ.get("TERMIN_BINDINGS_DIR")
+    if bindings_dir:
+        roots.append(Path(bindings_dir))
+
+    source_dir = Path(_DIR)
+    for parent in (source_dir, *source_dir.parents):
+        roots.append(parent / "build" / "Release" / "bin")
+        roots.append(parent / "build" / "Debug" / "bin")
+
+    sdk = _find_sdk()
+    if sdk is not None:
+        roots.append(sdk / "lib" / "python")
+
     for pat in [f"{module_name}.*.so", f"{module_name}.*.pyd", f"{module_name}.pyd"]:
-        if list(search_dir.glob(pat)):
-            return True
+        for root in roots:
+            if list(root.glob(pat)) or list((root / pkg_fs_path).glob(pat)):
+                return True
     return False
 
 
@@ -32,7 +42,7 @@ ext_modules = [
     Extension("termin.viewport._viewport_native", sources=[]),
 ]
 
-if _sdk_has_module("termin.display", "_platform_native"):
+if _has_prebuilt_module("termin.display", "_platform_native"):
     ext_modules.append(
         Extension("termin.display._platform_native", sources=[])
     )
