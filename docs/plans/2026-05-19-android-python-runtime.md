@@ -117,7 +117,6 @@ cmake -S . -B build/no-opengl-editor \
   -DTERMIN_BUILD_PYTHON=OFF \
   -DTERMIN_BUILD_TESTS=OFF \
   -DTERMIN_BUILD_EDITOR_MINIMAL=ON \
-  -DTERMIN_BUILD_EDITOR_EXE=OFF \
   -DTERMIN_BUILD_LAUNCHER=ON \
   -DTERMIN_BUNDLE_PYTHON=ON
 
@@ -133,7 +132,7 @@ This builds `termin_editor` and keeps `libvulkan.so.1` / `libshaderc.so.1` depen
 - SDL2 ищется как desktop/system package через `find_package(SDL2)` или `pkg-config`; Android-профиль сейчас собирает `termin-display` без SDL.
 - Vulkan path на Android собран через NDK `libvulkan.so`, но runtime GLSL compilation отключен без `shaderc`.
 - Python-пакеты устанавливаются через host `pip` и предполагают `$TERMIN_SDK`.
-- `termin-app` содержит desktop/editor код, включая Qt, SDL desktop backend, PyQt6 imports и tooling.
+- `termin-app` содержит desktop/editor код, включая SDL desktop backend и tooling.
 
 Это означает, что следующий слой должен быть не очередным desktop executable, а отдельный Android wrapper/lifecycle/surface profile.
 
@@ -149,7 +148,6 @@ option(TERMIN_PLATFORM_ANDROID "Build Termin for Android" OFF)
 
 - `TERMIN_BUILD_PYTHON=OFF` для первого native smoke build.
 - `TERMIN_BUILD_TESTS=OFF`.
-- `TERMIN_BUILD_EDITOR_EXE=OFF`.
 - `TERMIN_BUILD_EDITOR_MINIMAL=OFF`.
 - `TERMIN_BUILD_LAUNCHER=OFF`.
 - `TERMIN_BUNDLE_PYTHON=OFF` на первом шаге.
@@ -168,7 +166,6 @@ cmake -S . -B build/android/arm64-v8a \
   -DTERMIN_PLATFORM_ANDROID=ON \
   -DTERMIN_BUILD_PYTHON=OFF \
   -DTERMIN_BUILD_TESTS=OFF \
-  -DTERMIN_BUILD_EDITOR_EXE=OFF \
   -DTERMIN_BUILD_EDITOR_MINIMAL=OFF \
   -DTERMIN_BUILD_LAUNCHER=OFF \
   -DTERMIN_BUNDLE_PYTHON=OFF
@@ -459,7 +456,6 @@ C++/Android должны управлять:
 
 Исключить из Android runtime:
 
-- `PyQt6`;
 - desktop editor modules;
 - desktop SDL backends;
 - `pysdl2` как обязательную runtime-зависимость;
@@ -484,7 +480,6 @@ termin-runtime-android:
     tcgui core, если нужен in-game UI
   exclude:
     termin.editor
-    PyQt6
     desktop SDL backend
     desktop launchers
     heavy tooling

@@ -1,12 +1,10 @@
 """DialogService — UI-agnostic dialog interface.
 
 Models and controllers in `editor_core` ask for user input through this
-interface. Qt and tcgui provide concrete implementations in their own
-packages.
+interface. The tcgui frontend provides the concrete implementation.
 
-All methods are callback-based so both sync (Qt `exec()`) and async (tcgui
-modal overlay) backends can satisfy the contract uniformly. Callbacks
-receive ``None`` when the user cancels.
+All methods are callback-based so the modal overlay can satisfy the contract
+uniformly. Callbacks receive ``None`` when the user cancels.
 """
 from __future__ import annotations
 

@@ -1,24 +1,16 @@
-"""SDL2 backend for embedding into Qt widgets.
-
-Creates a standalone SDL+OpenGL window and embeds it into Qt layout
-using QWindow.fromWinId() + QWidget.createWindowContainer().
-"""
+"""SDL2 backend for standalone OpenGL windows."""
 
 from __future__ import annotations
 
 import ctypes
 import sys
-from typing import Any, Callable, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Optional, Tuple
 
 import sdl2
 from sdl2 import video
 
 from tcbase import Action, Key, MouseButton
 from tgfx.window import BackendWindow, WindowBackend
-
-if TYPE_CHECKING:
-    from PyQt6.QtWidgets import QWidget
-
 
 # --- tc_render_surface support ---
 
@@ -32,144 +24,6 @@ def _create_tc_render_surface(surface: "SDLEmbeddedWindowHandle") -> int:
     """Create tc_render_surface for SDLEmbeddedWindowHandle."""
     from termin.display import _render_surface_new_from_python
     return _render_surface_new_from_python(surface)
-
-
-def _translate_qt_key(qt_key: int) -> Key:
-    """Translate Qt key code to our Key enum."""
-    from PyQt6.QtCore import Qt
-    mapping = {
-        # Special keys
-        Qt.Key.Key_Escape: Key.ESCAPE,
-        Qt.Key.Key_Space: Key.SPACE,
-        Qt.Key.Key_Return: Key.ENTER,
-        Qt.Key.Key_Enter: Key.ENTER,
-        Qt.Key.Key_Tab: Key.TAB,
-        Qt.Key.Key_Backspace: Key.BACKSPACE,
-        Qt.Key.Key_Delete: Key.DELETE,
-        Qt.Key.Key_Left: Key.LEFT,
-        Qt.Key.Key_Right: Key.RIGHT,
-        Qt.Key.Key_Up: Key.UP,
-        Qt.Key.Key_Down: Key.DOWN,
-        # Function keys
-        Qt.Key.Key_F1: Key.F1,
-        Qt.Key.Key_F2: Key.F2,
-        Qt.Key.Key_F3: Key.F3,
-        Qt.Key.Key_F4: Key.F4,
-        Qt.Key.Key_F5: Key.F5,
-        Qt.Key.Key_F6: Key.F6,
-        Qt.Key.Key_F7: Key.F7,
-        Qt.Key.Key_F8: Key.F8,
-        Qt.Key.Key_F9: Key.F9,
-        Qt.Key.Key_F10: Key.F10,
-        Qt.Key.Key_F11: Key.F11,
-        Qt.Key.Key_F12: Key.F12,
-    }
-    if qt_key in mapping:
-        return mapping[qt_key]
-    # For ASCII keys (A-Z, 0-9, etc.) - Qt uses ASCII values
-    if 0 <= qt_key < 128:
-        try:
-            return Key(qt_key)
-        except ValueError:
-            pass
-    return Key.UNKNOWN
-
-
-def _translate_qt_mods(qt_mods) -> int:
-    """Translate Qt modifiers to GLFW-compatible flags."""
-    from PyQt6.QtCore import Qt
-    result = 0
-    if qt_mods & Qt.KeyboardModifier.ShiftModifier:
-        result |= 0x0001  # MOD_SHIFT
-    if qt_mods & Qt.KeyboardModifier.ControlModifier:
-        result |= 0x0002  # MOD_CONTROL
-    if qt_mods & Qt.KeyboardModifier.AltModifier:
-        result |= 0x0004  # MOD_ALT
-    return result
-
-
-class QtKeyEventFilter:
-    """Event filter that forwards Qt keyboard events to SDL callbacks."""
-
-    def __init__(self, backend_window: "SDLEmbeddedWindowHandle"):
-        from PyQt6.QtCore import QObject, QEvent
-
-        self._backend_window = backend_window
-        self._filter = _QtEventFilterImpl(self)
-
-    def install(self, widget: "QWidget") -> None:
-        """Install filter on widget."""
-        widget.installEventFilter(self._filter._impl)
-
-    def handle_key_event(self, event) -> bool:
-        """Handle Qt key event, forward to SDL callback."""
-        from PyQt6.QtCore import QEvent, Qt
-
-        is_press = event.type() == QEvent.Type.KeyPress
-        is_release = event.type() == QEvent.Type.KeyRelease
-
-        if not (is_press or is_release):
-            return False
-
-        qt_key = event.key()
-        key = _translate_qt_key(qt_key)
-        scancode = event.nativeScanCode()
-
-        # Track modifier keys state
-        if qt_key in (Qt.Key.Key_Shift, Qt.Key.Key_Meta):
-            self._backend_window._shift_pressed = is_press
-        elif qt_key in (Qt.Key.Key_Control,):
-            self._backend_window._ctrl_pressed = is_press
-        elif qt_key in (Qt.Key.Key_Alt,):
-            self._backend_window._alt_pressed = is_press
-
-        # Build mods from our tracked state
-        mods = self._backend_window.get_tracked_mods()
-
-        if is_press:
-            action = Action.REPEAT if event.isAutoRepeat() else Action.PRESS
-        else:
-            action = Action.RELEASE
-
-        if self._backend_window._input_manager_ptr:
-            from termin.display import _input_manager_on_key
-            _input_manager_on_key(
-                self._backend_window._input_manager_ptr,
-                key.value, scancode, action.value, mods
-            )
-            return True
-
-        if self._backend_window._key_callback is not None:
-            self._backend_window._key_callback(
-                self._backend_window, key, scancode, action, mods
-            )
-            return True
-
-        return False
-
-
-class _QtEventFilterImpl:
-    """QObject-based event filter implementation."""
-
-    def __init__(self, handler: QtKeyEventFilter):
-        from PyQt6.QtCore import QObject
-
-        class Filter(QObject):
-            def __init__(self, h):
-                super().__init__()
-                self._handler = h
-
-            def eventFilter(self, obj, event):
-                from PyQt6.QtCore import QEvent
-                if event.type() in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
-                    if self._handler.handle_key_event(event):
-                        return True
-                return super().eventFilter(obj, event)
-
-        self._impl = Filter(handler)
-
-    def __getattr__(self, name):
-        return getattr(self._impl, name)
 
 
 _sdl_initialized = False
@@ -257,26 +111,6 @@ def _translate_sdl_mods(sdl_mods: int) -> int:
     return result
 
 
-def _get_qt_keyboard_mods() -> int:
-    """Get keyboard modifiers from Qt (since SDL doesn't receive key events when embedded)."""
-    try:
-        from PyQt6.QtWidgets import QApplication
-        from PyQt6.QtCore import Qt
-        qt_mods = QApplication.keyboardModifiers()
-        result = 0
-        if qt_mods & Qt.KeyboardModifier.ShiftModifier:
-            result |= 0x0001  # MOD_SHIFT
-        if qt_mods & Qt.KeyboardModifier.ControlModifier:
-            result |= 0x0002  # MOD_CONTROL
-        if qt_mods & Qt.KeyboardModifier.AltModifier:
-            result |= 0x0004  # MOD_ALT
-        return result
-    except Exception as e:
-        from tcbase import log
-        log.warn(f"[sdl_embedded] _get_qt_keyboard_mods failed: {e}")
-        return 0
-
-
 def _get_native_window_handle(sdl_window) -> int:
     """Get native window handle from SDL window (HWND on Windows, Window on X11)."""
     wm_info = sdl2.SDL_SysWMinfo()
@@ -296,7 +130,7 @@ def _get_native_window_handle(sdl_window) -> int:
 
 
 class SDLEmbeddedWindowHandle(BackendWindow):
-    """SDL2 window with OpenGL context, embeddable into Qt."""
+    """SDL2 window with OpenGL context."""
 
     def __init__(
         self,
@@ -373,7 +207,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             from tcbase import log
             log.warn(f"[SDL] Failed to set SwapInterval=0: {sdl2.SDL_GetError()}")
 
-        # Get native handle for Qt embedding
+        # Get native OS window handle.
         self._native_handle = _get_native_window_handle(self._window)
 
         # Callbacks
@@ -384,7 +218,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
         self._key_callback: Optional[Callable] = None
         self._focus_callback: Optional[Callable] = None
 
-        # Track modifier keys state (since Qt modifiers lag by one frame)
+        # Track modifier keys state.
         self._shift_pressed = False
         self._ctrl_pressed = False
         self._alt_pressed = False
@@ -423,7 +257,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
     @property
     def native_handle(self) -> int:
-        """Native window handle for Qt embedding."""
+        """Native OS window handle."""
         return self._native_handle
 
     def show(self) -> None:
@@ -534,11 +368,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
             mods |= 0x0004  # MOD_ALT
         return mods
 
-    def install_qt_key_filter(self, widget: "QWidget") -> None:
-        """Install Qt event filter to forward keyboard events to this window."""
-        self._qt_key_filter = QtKeyEventFilter(self)
-        self._qt_key_filter.install(widget)
-
     def drives_render(self) -> bool:
         # Pull model - we control rendering explicitly
         return False
@@ -614,7 +443,6 @@ class SDLEmbeddedWindowHandle(BackendWindow):
                 )
 
         elif event_type == sdl2.SDL_MOUSEBUTTONDOWN:
-            # Request focus from Qt when clicking on SDL window
             if self._focus_callback is not None:
                 self._focus_callback()
             button = _translate_mouse_button(event.button.button)
@@ -659,7 +487,7 @@ class SDLEmbeddedWindowHandle(BackendWindow):
 
 
 class SDLEmbeddedWindowBackend(WindowBackend):
-    """SDL2 backend for creating windows embeddable in Qt."""
+    """SDL2 backend for creating standalone OpenGL windows."""
 
     def __init__(
         self,
@@ -703,8 +531,6 @@ class SDLEmbeddedWindowBackend(WindowBackend):
     ) -> SDLEmbeddedWindowHandle:
         """
         Create SDL window with OpenGL context.
-
-        Returns window that can be embedded into Qt via its native_handle property.
 
         Context sharing priority:
         1. External share_context (from OffscreenContext) if set
@@ -788,4 +614,3 @@ class SDLEmbeddedWindowBackend(WindowBackend):
         for win in list(self._windows.values()):
             win.close()
         self._windows.clear()
-        # Don't call SDL_Quit here - Qt might still need the display

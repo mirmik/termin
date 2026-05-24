@@ -3,7 +3,7 @@ EditorStateIO — UI-independent editor state save/restore.
 
 Handles collecting, applying, and extracting editor state
 (camera position, selection, expanded entities, displays)
-from scene files. Used by both Qt and tcgui editors.
+from scene files. Used by the tcgui editor.
 """
 
 from __future__ import annotations

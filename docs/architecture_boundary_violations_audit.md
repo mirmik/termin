@@ -3,7 +3,7 @@
 **Дата:** 2026-05-20  
 **Статус:** Research report — не исправлять автоматически
 
-**Актуализировано:** 2026-05-21 — сверено с текущими путями и статусами после частичных cleanup-правок.
+**Актуализировано:** 2026-05-24 — Qt/PyQt frontend удалён; часть старых пунктов закрыта.
 
 ## Исправления
 
@@ -20,6 +20,12 @@
 - **1.2 частично:** singleton storage `.cpp` для `EngineCore`, `SceneManager`, `RenderingManager` перенесены из `termin-app/core_c/src` в `termin-engine/src`; `termin-engine` больше не компилирует исходники из `termin-app` и не добавляет `termin-app/core_c/include`.
 - **core_c cleanup частично:** C geometry headers перенесены в `termin-base/include/geom`; skeleton/animation resource C headers перенесены в `termin-skeleton/include/resources` и `termin-animation/include/resources`; collision C headers/obsolete C impl удалены из `core_c`, актуальный владелец — `termin-collision`; `tc_input_event.h` перенесён в `termin-display`.
 - **component binding ownership закрыто для skeleton/animation/render-components:** `_skeleton_native`, `_animation_native`, `_components_skeleton_native`, `_components_animation_native` больше не компилируют `.cpp` из `termin-app/cpp/termin/bindings`; source-файлы перенесены к владельцам. `_components_render_native` больше не добавляет include path на app binding helpers и использует `termin-scene/include/termin/bindings/entity_helpers.hpp`.
+
+### 2026-05-24
+
+- **Qt/PyQt frontend удалён:** `termin/editor/` оставлен только как compatibility entrypoint на tcgui, старые PyQt views/widgets и PyQt nodegraph удалены.
+- **1.3 PyQt-пункты закрыты:** `SpaceMouseController` работает polling-only, `sdl_embedded.py` больше не содержит Qt embedding hooks, `Texture` больше не создаёт Qt preview objects.
+- **3.9 закрыто как миграционная проблема:** расхождение Qt/tcgui больше не поддерживается; единственный frontend редактора — tcgui.
 
 ---
 
@@ -89,13 +95,13 @@
 | Файл | Нарушение |
 |------|-----------|
 | `termin-app/termin/editor_tcgui/editor_camera_ui_controller.py` | **Исправлено 2026-05-21:** файл перенесён из `editor_core` в tcgui frontend |
-| `termin-app/termin/editor_core/spacemouse_controller.py:160` | `from PyQt6.QtCore import QSocketNotifier` |
-| `termin-app/termin/visualization/platform/backends/sdl_embedded.py` | Импортирует PyQt6 (строки 39, 80, 264) |
-| `termin-app/termin/visualization/render/texture.py:113` | `from PyQt6.QtGui import QImage, QPixmap` |
+| `termin-app/termin/editor_core/spacemouse_controller.py` | **Исправлено 2026-05-24:** Qt notifier удалён, остался polling |
+| `termin-app/termin/visualization/platform/backends/sdl_embedded.py` | **Исправлено 2026-05-24:** PyQt embedding hooks удалены |
+| `termin-app/termin/visualization/render/texture.py` | **Исправлено 2026-05-24:** Qt preview удалён вместе с Qt editor |
 | `termin-app/termin/visualization/ui/widgets/__init__.py` | Full re-export tcgui.widgets (иллюзия абстракции) |
 | `termin-app/termin/visualization/ui/widgets/component.py` | `UIComponent` наследуется от `InputComponent` + импортирует `tcgui.widgets.ui.UI` |
 
-**Проблема:** `editor_core` декларирует себя как UI-agnostic слой, но содержит прямые зависимости от tcgui и PyQt6. `termin/visualization/` позиционируется как SDK-уровневый модуль, но содержит зависимости от обоих GUI-фреймворков.
+**Проблема:** `editor_core` декларирует себя как UI-agnostic слой. PyQt-зависимости закрыты; остаточная проблема — `termin/visualization/ui/widgets` как tcgui re-export внутри app/SDK boundary.
 
 **Статус 2026-05-21:** частично исправлено. Прямой tcgui-контроллер камеры убран из `editor_core`; оставшиеся пункты требуют отдельного adapter/API решения.
 
@@ -372,21 +378,7 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 
 ### 3.9 Расхождение функциональности Qt vs tcgui
 
-**Файлы только в Qt (`termin/editor/`) — 28 штук:**
-`agent_types_dialog`, `audio_debugger`, `color_dialog`, `core_registry_viewer`, `dialog_manager`, `drag_drop`, `editor_mode_controller`, `editor_tree`, `editor_ui_builder`, `framegraph_debugger`, `inspect_registry_viewer`, `layers_dialog`, `navmesh_areas_dialog`, `navmesh_registry_viewer`, `prefab_edit_controller`, `project_controller`, `project_settings_dialog`, `qt_dialog_service`, `resource_manager_viewer`, `scene_file_controller`, `scene_inspector`, `scene_manager_viewer`, `settings_dialog`, `shadow_settings_dialog`, `spacemouse_controller`, `spacemouse_settings_dialog`, `undo_stack_viewer`, `__main__`
-
-**Файлы только в tcgui (`termin/editor_tcgui/`) — 10 штук:**
-`backend_window_manager`, `component_editor_extension`, `default_component_editor_extensions`, `object_inspector`, `pipeline_editor_window`, `procedural_mesh_editor_extension`, `profiler_panel`, `surface_edge_debug_tool`, `tcgui_dialog_service`, `window_manager`
-
-**Widget-слои — дублирование:**
-| Qt (`editor/widgets/`) | tcgui (`editor_tcgui/widgets/`) |
-|------------------------|----------------------------------|
-| `field_widgets.py` (711+ строк) | `field_widgets.py` (686+ строк) |
-| `layer_mask_widget.py` | `layer_mask_widget.py` |
-| `texture_picker` | есть, Qt: нет |
-| `audio_clip_widget` | Qt: есть, tcgui: нет |
-| `entity_list_widget` | Qt: есть, tcgui: нет |
-| `material_properties_editor` | Qt: есть, tcgui: нет |
+**Статус 2026-05-24:** закрыто удалением Qt/PyQt frontend. `termin/editor/` больше не является view-слоем, там остался только compatibility entrypoint на tcgui.
 
 ---
 
@@ -520,16 +512,11 @@ termin_core (app)    → termin_base, termin_graphics, termin_scene, termin_inpu
 termin-gui/ (GUI framework)
     ↓ НАРУШЕНИЕ: Viewport3D → termin.display underscored C-interop functions
 termin/visualization/ (SDK-level, но в termin-app)
-    ↓ НАРУШЕНИЕ: sdl_embedded.py → PyQt6
-    ↓ НАРУШЕНИЕ: render/texture.py → PyQt6
     ↓ НАРУШЕНИЕ: ui/widgets/ → tcgui (re-export, не абстракция)
     ↓ НАРУШЕНИЕ: ui/widgets/component.py → tcgui
 termin/editor_core/ (декларирует UI-agnostic)
     ↓ НАРУШЕНИЕ: editor_camera_ui_controller.py → tcgui
-    ↓ НАРУШЕНИЕ: spacemouse_controller.py → PyQt6 (conditional)
-termin/editor/ (Qt)     termin/editor_tcgui/ (tcgui)
-    ↓ ДУБЛИРОВАНИЕ: project management, scene file I/O
-    ↓ РАСХОЖДЕНИЕ: 28 файлов только в Qt, 10 только в tcgui
+termin/editor_tcgui/ (tcgui)
 ```
 
 ### 6.3 Правильные абстракции (положительные примеры)

@@ -1,10 +1,9 @@
 """GameModeModel — UI-agnostic Play/Stop/Pause orchestration.
 
 Encapsulates the scene-copy + rendering detach/attach + scene_manager mode
-transitions that happen when the user toggles Game Mode. Both Qt
-(``editor_mode_controller.py``) and tcgui (inline in ``editor_window.py``)
-delegate to this model. Views react to ``state_changed`` signal to update
-buttons / status bar / menu actions.
+transitions that happen when the user toggles Game Mode. The tcgui editor
+delegates to this model and reacts to ``state_changed`` to update buttons /
+status bar / menu actions.
 """
 from __future__ import annotations
 

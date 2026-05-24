@@ -1,7 +1,6 @@
 """FramegraphDebuggerModel — UI-agnostic state and business logic for the framegraph debugger.
 
-Both Qt (``editor/framegraph_debugger.py``) and tcgui (``editor_tcgui/dialogs/framegraph_debugger.py``)
-views subscribe to this model and convert its state snapshots into their own
+The tcgui view subscribes to this model and converts its state snapshots into
 widget updates. Pipeline connection (``FrameDebugCapturePass`` lifecycle, per-pass
 ``set_debug_internal_point``) is owned here; views never touch the pipeline
 directly.
@@ -268,7 +267,7 @@ class FramegraphDebuggerModel:
     def get_passes(self) -> list[tuple[str, bool]]:
         """List of (pass_name, has_internal_symbols) from current pipeline,
         with the debugger pass filtered out. ShadowPass is treated as having
-        no symbols (matches Qt behaviour)."""
+        no symbols."""
         pipeline = self.get_current_pipeline()
         if pipeline is None:
             return []

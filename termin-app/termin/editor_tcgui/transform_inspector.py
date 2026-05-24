@@ -166,7 +166,7 @@ class TransformInspector(VStack):
             self.on_transform_changed()
 
     # ------------------------------------------------------------------
-    # Math helpers (same as Qt version)
+    # Math helpers
     # ------------------------------------------------------------------
 
     def _euler_zyx_to_quat(self, zyx: np.ndarray) -> np.ndarray:

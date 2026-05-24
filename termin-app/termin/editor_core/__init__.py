@@ -1,9 +1,9 @@
 """UI-agnostic editor core.
 
 This package holds editor business logic that is independent from any UI
-framework. Qt and tcgui views both delegate to these models and services.
+framework. The tcgui frontend delegates to these models and services.
 
-No module in this package may import Qt, tcgui, or any other UI framework.
+No module in this package may import tcgui or any other UI framework.
 """
 
 from pathlib import Path

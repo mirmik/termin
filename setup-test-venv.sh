@@ -56,8 +56,6 @@ pip install --upgrade pip setuptools wheel nanobind
 echo ""
 echo "--- installing runtime and test dependencies ---"
 pip install numpy scipy Pillow pytest PyYAML pysdl2 pysdl2-dll
-# PyQt6 must be installed from binary wheels (no source build)
-pip install --only-binary :all: PyQt6
 
 # 5. Locate and export TERMIN_SDK
 _sdk_valid() { [[ -d "$1/lib" ]]; }

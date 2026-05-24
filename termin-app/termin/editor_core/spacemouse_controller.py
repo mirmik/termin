@@ -2,8 +2,7 @@
 SpaceMouseController — 3DConnexion SpaceMouse support via libspnav.
 
 Uses spacenavd daemon + libspnav (ctypes) for 6DOF input. The controller is
-UI-toolkit neutral: tcgui polls it from the render loop, while the legacy Qt
-editor can opt into QSocketNotifier integration.
+UI-toolkit neutral: tcgui polls it from the render loop.
 
 Install: sudo apt install spacenavd libspnav-dev
 """
@@ -92,17 +91,14 @@ class SpaceMouseController:
     """
     Controller for 3DConnexion SpaceMouse via libspnav/spacenavd.
 
-    Supports orbit mode (default) and fly mode.
-    Uses polling by default. Pass ``use_qt_notifier=True`` for legacy Qt
-    event-driven input.
+    Supports orbit mode (default) and fly mode. Uses polling from the editor
+    render loop.
     """
 
-    def __init__(self, use_qt_notifier: bool = False):
+    def __init__(self):
         self._is_open: bool = False
         self._editor_attachment = None
         self._request_update: Callable[[], None] | None = None
-        self._use_qt_notifier: bool = use_qt_notifier
-        self._notifier = None
 
         # Mode
         self.fly_mode: bool = True
@@ -153,28 +149,12 @@ class SpaceMouseController:
         self._request_update = request_update
         self._is_open = True
 
-        if self._use_qt_notifier:
-            fd = _libspnav.spnav_fd()
-            if fd >= 0:
-                try:
-                    from PyQt6.QtCore import QSocketNotifier
-                    self._notifier = QSocketNotifier(fd, QSocketNotifier.Type.Read)
-                    self._notifier.activated.connect(self._on_data_ready)
-                except Exception as e:
-                    log.error(f"[SpaceMouse] failed to install Qt notifier: {e}")
-            else:
-                log.error(f"[SpaceMouse] spnav_fd() returned invalid fd={fd}")
-
         return True
 
     def close(self) -> None:
         """Close SpaceMouse device."""
         if not self._is_open:
             return
-
-        if self._notifier is not None:
-            self._notifier.setEnabled(False)
-            self._notifier = None
 
         if _libspnav is not None:
             _libspnav.spnav_close()
@@ -215,10 +195,6 @@ class SpaceMouseController:
 
         if moved and self._request_update is not None:
             self._request_update()
-
-    def _on_data_ready(self, _socket=None) -> None:
-        """Called by QSocketNotifier when the legacy Qt editor is active."""
-        self.poll()
 
     def _apply_deadzone(self, value: int) -> float:
         """Apply deadzone and return float."""

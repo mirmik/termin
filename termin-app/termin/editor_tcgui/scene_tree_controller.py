@@ -24,7 +24,7 @@ class SceneTreeControllerTcgui:
     - drag-drop dispatch into EntityOperations.reparent_entity
 
     Business logic (create/delete/rename/reparent/duplicate/drops) lives in
-    EntityOperations and is shared with the Qt editor.
+    EntityOperations.
     """
 
     def __init__(

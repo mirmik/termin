@@ -1,8 +1,8 @@
 """Menu specification data types — UI-framework agnostic.
 
 These classes describe *what* menus and items exist, without depending on any
-widget toolkit.  Qt and tcgui controllers each render a ``MenuSpec`` into their
-own native menu widgets.
+widget toolkit. The tcgui controller renders a ``MenuSpec`` into native menu
+widgets.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ class MenuItemSpec:
     state_getter: Callable[[], bool] | None = None
     """Called to read the current checked state (only when ``is_checkable``)."""
     handle_getter: Callable[[object], None] | None = None
-    """Called once with the created toolkit-specific handle (QAction / MenuItem).
+    """Called once with the created toolkit-specific menu item handle.
 
     The controller uses this so the outer code can hold a reference for later
     state updates (e.g. enabling/disabling Undo, toggling Play/Stop label).

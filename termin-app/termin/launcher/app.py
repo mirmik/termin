@@ -132,10 +132,9 @@ class LauncherApp:
     _BTN_NORMAL_PRESSED = (0.18, 0.18, 0.22, 1.0)
     _BTN_DISABLED = (0.18, 0.18, 0.2, 0.6)
 
-    def __init__(self, graphics, ui_backend: str = "tcgui"):
+    def __init__(self, graphics):
         self.ui = UI(graphics=graphics)
         self.recent = RecentProjects()
-        self._ui_backend = ui_backend
         self._bg_image_path = os.path.join(os.path.dirname(__file__), "back.png")
         self.should_quit: bool = False
 
@@ -477,12 +476,12 @@ class LauncherApp:
         write_launch_project(project_path)
         self.recent.add(project_path)
 
-        log.info(f"Launching editor: {editor_exe} for project {project_path} (ui={self._ui_backend})")
+        log.info(f"Launching editor: {editor_exe} for project {project_path}")
         env = os.environ.copy()
         lib_dir = os.path.normpath(os.path.join(os.path.dirname(editor_exe), "..", "lib"))
         prev = env.get("LD_LIBRARY_PATH", "")
         env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
-        subprocess.Popen([editor_exe, f"--ui={self._ui_backend}"], env=env)
+        subprocess.Popen([editor_exe], env=env)
         self.should_quit = True
 
     def _on_open_project(self) -> None:
@@ -499,9 +498,8 @@ class LauncherApp:
 def _parse_launcher_args() -> tuple[str | None, str | None]:
     """Parse command-line arguments.
 
-    Returns (project_path_or_sentinel, ui_backend_or_None).
+    Returns (project_path_or_sentinel, accepted_ui_arg_or_None).
     project is None for UI mode, "__help__"/"__error__" for early exit.
-    ui_backend is None if not specified on command line.
     """
     import sys
     from termin.launcher.recent import resolve_project_path
@@ -519,7 +517,7 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
         print("Without PROJECT, opens the launcher UI.")
         print()
         print("Options:")
-        print("  --ui=qt|tcgui   UI backend to use (overrides saved setting)")
+        print("  --ui=tcgui      Accepted for compatibility; tcgui is the only editor UI")
         print("  -h, --help      Show this help message and exit")
         return "__help__", None
 
@@ -528,6 +526,9 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
     for a in args:
         if a.startswith('--ui='):
             ui_backend = a.split('=', 1)[1]
+            if ui_backend != "tcgui":
+                print(f"Error: unsupported UI backend '{ui_backend}'. Only tcgui is available.", flush=True)
+                return "__error__", None
         elif not a.startswith('-'):
             positional.append(a)
 
@@ -544,13 +545,11 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
 
 def run():
     """Entry point: create window, build UI, run event loop."""
-    project, cli_ui_backend = _parse_launcher_args()
+    project, _accepted_ui_arg = _parse_launcher_args()
     if project == "__help__":
         return
     if project == "__error__":
         return
-
-    ui_backend = cli_ui_backend if cli_ui_backend is not None else "tcgui"
 
     if project is not None:
         # Direct launch: skip UI, open editor with given project
@@ -560,12 +559,12 @@ def run():
         if editor_exe is None:
             log.error("Cannot find termin_editor executable")
             return
-        log.info(f"Launching editor: {editor_exe} for project {project} (ui={ui_backend})")
+        log.info(f"Launching editor: {editor_exe} for project {project}")
         env = os.environ.copy()
         lib_dir = os.path.normpath(os.path.join(os.path.dirname(editor_exe), "..", "lib"))
         prev = env.get("LD_LIBRARY_PATH", "")
         env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
-        subprocess.Popen([editor_exe, f"--ui={ui_backend}"], env=env)
+        subprocess.Popen([editor_exe], env=env)
         return
 
     # Route the window through BackendWindow so the launcher runs on
@@ -576,7 +575,7 @@ def run():
     window = SDLBackendWindow("Termin Launcher", 1024, 640)
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
-    app = LauncherApp(graphics=graphics, ui_backend=ui_backend)
+    app = LauncherApp(graphics=graphics)
     presenting = False
 
     def present_ui() -> None:
