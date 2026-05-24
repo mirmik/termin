@@ -249,6 +249,7 @@ const unsigned char kSmokeFragmentSpv[] = {
 struct OpenXRDispatch {
     PFN_xrGetInstanceProcAddr get_instance_proc_addr = nullptr;
     PFN_xrInitializeLoaderKHR initialize_loader = nullptr;
+    PFN_xrEnumerateInstanceExtensionProperties enumerate_instance_extension_properties = nullptr;
     PFN_xrCreateInstance create_instance = nullptr;
     PFN_xrDestroyInstance destroy_instance = nullptr;
     PFN_xrGetSystem get_system = nullptr;
@@ -276,6 +277,9 @@ struct OpenXRDispatch {
     PFN_xrGetVulkanDeviceExtensionsKHR get_vulkan_device_extensions = nullptr;
     PFN_xrGetVulkanGraphicsDeviceKHR get_vulkan_graphics_device = nullptr;
     PFN_xrGetVulkanGraphicsRequirementsKHR get_vulkan_requirements = nullptr;
+    PFN_xrEnumerateDisplayRefreshRatesFB enumerate_display_refresh_rates = nullptr;
+    PFN_xrGetDisplayRefreshRateFB get_display_refresh_rate = nullptr;
+    PFN_xrRequestDisplayRefreshRateFB request_display_refresh_rate = nullptr;
 };
 
 struct SmokeControl {
@@ -486,6 +490,157 @@ bool load_instance_proc(
         return false;
     }
     return true;
+}
+
+bool openxr_instance_extension_available(OpenXRDispatch& xr, const char* extension_name) {
+    if (!xr.enumerate_instance_extension_properties || !extension_name) {
+        return false;
+    }
+
+    uint32_t extension_count = 0;
+    XrResult result = xr.enumerate_instance_extension_properties(
+        nullptr,
+        0,
+        &extension_count,
+        nullptr
+    );
+    if (XR_FAILED(result)) {
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            kLogTag,
+            "xrEnumerateInstanceExtensionProperties count failed: %d",
+            result
+        );
+        return false;
+    }
+
+    std::vector<XrExtensionProperties> extensions(extension_count);
+    for (XrExtensionProperties& extension : extensions) {
+        extension.type = XR_TYPE_EXTENSION_PROPERTIES;
+    }
+    result = xr.enumerate_instance_extension_properties(
+        nullptr,
+        extension_count,
+        &extension_count,
+        extensions.data()
+    );
+    if (XR_FAILED(result)) {
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            kLogTag,
+            "xrEnumerateInstanceExtensionProperties list failed: %d",
+            result
+        );
+        return false;
+    }
+
+    for (const XrExtensionProperties& extension : extensions) {
+        if (std::strcmp(extension.extensionName, extension_name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string format_refresh_rates(const std::vector<float>& rates) {
+    std::ostringstream out;
+    for (size_t i = 0; i < rates.size(); ++i) {
+        if (i > 0) {
+            out << ", ";
+        }
+        out << rates[i];
+    }
+    return out.str();
+}
+
+void configure_display_refresh_rate(OpenXRDispatch& xr, XrSession session) {
+    if (!xr.enumerate_display_refresh_rates ||
+        !xr.get_display_refresh_rate ||
+        !xr.request_display_refresh_rate) {
+        return;
+    }
+
+    uint32_t rate_count = 0;
+    XrResult result = xr.enumerate_display_refresh_rates(session, 0, &rate_count, nullptr);
+    if (XR_FAILED(result) || rate_count == 0) {
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            kLogTag,
+            "xrEnumerateDisplayRefreshRatesFB count failed: %d count=%u",
+            result,
+            rate_count
+        );
+        return;
+    }
+
+    std::vector<float> rates(rate_count);
+    result = xr.enumerate_display_refresh_rates(session, rate_count, &rate_count, rates.data());
+    if (XR_FAILED(result)) {
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            kLogTag,
+            "xrEnumerateDisplayRefreshRatesFB list failed: %d",
+            result
+        );
+        return;
+    }
+    rates.resize(rate_count);
+
+    float current_rate = 0.0f;
+    result = xr.get_display_refresh_rate(session, &current_rate);
+    if (XR_SUCCEEDED(result)) {
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kLogTag,
+            "OpenXR display refresh current=%.1f supported=[%s]",
+            current_rate,
+            format_refresh_rates(rates).c_str()
+        );
+    } else {
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            kLogTag,
+            "xrGetDisplayRefreshRateFB failed: %d supported=[%s]",
+            result,
+            format_refresh_rates(rates).c_str()
+        );
+    }
+
+    float requested_rate = 0.0f;
+    for (float rate : rates) {
+        if (std::fabs(rate - 72.0f) < 0.25f) {
+            requested_rate = rate;
+            break;
+        }
+    }
+    if (requested_rate == 0.0f) {
+        for (float rate : rates) {
+            if (rate > requested_rate) {
+                requested_rate = rate;
+            }
+        }
+    }
+    if (requested_rate == 0.0f) {
+        return;
+    }
+
+    result = xr.request_display_refresh_rate(session, requested_rate);
+    if (XR_SUCCEEDED(result)) {
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kLogTag,
+            "OpenXR requested display refresh %.1f Hz",
+            requested_rate
+        );
+    } else {
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            kLogTag,
+            "xrRequestDisplayRefreshRateFB %.1f Hz failed: %d",
+            requested_rate,
+            result
+        );
+    }
 }
 
 std::vector<std::string> split_openxr_extension_string(const std::string& text) {
@@ -1347,6 +1502,11 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         g_smoke.running.store(false);
         return;
     }
+    if (!load_instance_proc(xr, XR_NULL_HANDLE, "xrEnumerateInstanceExtensionProperties",
+            reinterpret_cast<PFN_xrVoidFunction*>(&xr.enumerate_instance_extension_properties))) {
+        g_smoke.running.store(false);
+        return;
+    }
 
     XrLoaderInitInfoAndroidKHR loader_init{};
     loader_init.type = XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR;
@@ -1361,10 +1521,28 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         return;
     }
 
-    const char* enabled_extensions[] = {
+    std::vector<const char*> enabled_extensions = {
         XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
         XR_KHR_VULKAN_ENABLE_EXTENSION_NAME,
     };
+    const bool display_refresh_rate_available =
+        openxr_instance_extension_available(xr, XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
+    if (display_refresh_rate_available) {
+        enabled_extensions.push_back(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kLogTag,
+            "OpenXR extension enabled: %s",
+            XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME
+        );
+    } else {
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kLogTag,
+            "OpenXR extension unavailable: %s",
+            XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME
+        );
+    }
 
     XrInstanceCreateInfoAndroidKHR android_create_info{};
     android_create_info.type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR;
@@ -1388,8 +1566,8 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
     instance_create_info.applicationInfo.engineVersion = 1;
     instance_create_info.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
     instance_create_info.enabledExtensionCount =
-        static_cast<uint32_t>(sizeof(enabled_extensions) / sizeof(enabled_extensions[0]));
-    instance_create_info.enabledExtensionNames = enabled_extensions;
+        static_cast<uint32_t>(enabled_extensions.size());
+    instance_create_info.enabledExtensionNames = enabled_extensions.data();
 
     if (!load_instance_proc(xr, XR_NULL_HANDLE, "xrCreateInstance",
             reinterpret_cast<PFN_xrVoidFunction*>(&xr.create_instance))) {
@@ -1431,6 +1609,11 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
     load_instance_proc(xr, instance, "xrGetVulkanDeviceExtensionsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_device_extensions));
     load_instance_proc(xr, instance, "xrGetVulkanGraphicsDeviceKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_graphics_device));
     load_instance_proc(xr, instance, "xrGetVulkanGraphicsRequirementsKHR", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_vulkan_requirements));
+    if (display_refresh_rate_available) {
+        load_instance_proc(xr, instance, "xrEnumerateDisplayRefreshRatesFB", reinterpret_cast<PFN_xrVoidFunction*>(&xr.enumerate_display_refresh_rates));
+        load_instance_proc(xr, instance, "xrGetDisplayRefreshRateFB", reinterpret_cast<PFN_xrVoidFunction*>(&xr.get_display_refresh_rate));
+        load_instance_proc(xr, instance, "xrRequestDisplayRefreshRateFB", reinterpret_cast<PFN_xrVoidFunction*>(&xr.request_display_refresh_rate));
+    }
 
     XrSystemGetInfo system_info{};
     system_info.type = XR_TYPE_SYSTEM_GET_INFO;
@@ -1529,6 +1712,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         g_smoke.running.store(false);
         return;
     }
+    configure_display_refresh_rate(xr, session);
 
     OpenXRRuntimeScene runtime_scene;
     const bool runtime_scene_requested = !asset_root.empty();
@@ -1622,6 +1806,17 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
     swapchain_create_info.faceCount = 1;
     swapchain_create_info.arraySize = 1;
     swapchain_create_info.mipCount = 1;
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kLogTag,
+        "OpenXR swapchain: views=%u size=%ux%u samples=%u recommendedSamples=%u maxSamples=%u",
+        view_count,
+        swapchain_create_info.width,
+        swapchain_create_info.height,
+        swapchain_create_info.sampleCount,
+        view_configs[0].recommendedSwapchainSampleCount,
+        view_configs[0].maxSwapchainSampleCount
+    );
 
     std::vector<XrSwapchain> color_swapchains(view_count, XR_NULL_HANDLE);
     std::vector<std::vector<XrSwapchainImageVulkanKHR>> swapchain_images(view_count);
@@ -1714,6 +1909,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         layer_view.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
     }
     bool session_running = false;
+    XrSessionState current_session_state = XR_SESSION_STATE_UNKNOWN;
     uint64_t frame_index = 0;
     using FrameClock = std::chrono::steady_clock;
     auto fps_window_start = FrameClock::now();
@@ -1721,6 +1917,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
     XrTime fps_window_last_display_time = 0;
     uint64_t fps_window_frames = 0;
     uint64_t fps_window_rendered_frames = 0;
+    uint64_t fps_window_should_skip_frames = 0;
     double fps_window_wait_frame_ms = 0.0;
     double fps_window_swapchain_wait_ms = 0.0;
     double fps_window_render_ms = 0.0;
@@ -1744,6 +1941,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
         while (xr.poll_event(instance, &event) == XR_SUCCESS) {
             if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
                 const auto* state_event = reinterpret_cast<const XrEventDataSessionStateChanged*>(&event);
+                current_session_state = state_event->state;
                 __android_log_print(
                     ANDROID_LOG_INFO,
                     kLogTag,
@@ -1924,6 +2122,10 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                     layer_views[eye].subImage.imageArrayIndex = 0;
                 }
 
+                const auto wait_submitted_begin = FrameClock::now();
+                render_device->wait_for_submitted_work();
+                frame_gpu_idle_ms += millis_between(wait_submitted_begin, FrameClock::now());
+
                 for (XrSwapchain swapchain : swapchains_to_release) {
                     XrSwapchainImageReleaseInfo release_info{};
                     release_info.type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO;
@@ -1938,6 +2140,8 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                 ++frame_index;
                 frame_rendered = true;
             }
+        } else {
+            ++fps_window_should_skip_frames;
         }
 
         XrFrameEndInfo end_info{};
@@ -1984,7 +2188,8 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
             __android_log_print(
                 ANDROID_LOG_INFO,
                 kLogTag,
-                "XR FPS: wall=%.1f rendered=%.1f predictedHz=%.1f avgMs{frame=%.2f waitFrame=%.2f swapWait=%.2f render=%.2f gpuIdle=%.2f} frames=%llu renderedFrames=%llu",
+                "XR FPS: state=%s wall=%.1f rendered=%.1f predictedHz=%.1f avgMs{frame=%.2f waitFrame=%.2f swapWait=%.2f render=%.2f gpuIdle=%.2f} frames=%llu renderedFrames=%llu shouldSkip=%llu",
+                session_state_name(current_session_state),
                 wall_fps,
                 rendered_fps,
                 predicted_hz,
@@ -1994,7 +2199,8 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
                 fps_window_render_ms * inv_frames,
                 fps_window_gpu_idle_ms * inv_frames,
                 static_cast<unsigned long long>(fps_window_frames),
-                static_cast<unsigned long long>(fps_window_rendered_frames)
+                static_cast<unsigned long long>(fps_window_rendered_frames),
+                static_cast<unsigned long long>(fps_window_should_skip_frames)
             );
 
             fps_window_start = frame_cpu_end;
@@ -2002,6 +2208,7 @@ void smoke_thread_main(void* java_vm, void* activity_or_context, std::string ass
             fps_window_last_display_time = 0;
             fps_window_frames = 0;
             fps_window_rendered_frames = 0;
+            fps_window_should_skip_frames = 0;
             fps_window_wait_frame_ms = 0.0;
             fps_window_swapchain_wait_ms = 0.0;
             fps_window_render_ms = 0.0;
