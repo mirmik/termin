@@ -125,6 +125,8 @@ public:
         const std::vector<Light>& lights,
         const Mat44f& camera_view,
         const Mat44f& camera_projection,
+        float camera_near,
+        float camera_far,
         uint64_t layer_mask = 0
     );
 

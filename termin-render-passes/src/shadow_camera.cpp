@@ -18,6 +18,34 @@ Vec3 safe_normalize(const Vec3& v, const Vec3& fallback = Vec3{0, 1, 0}) {
     return v / len;
 }
 
+std::array<Vec3, 8> slice_frustum_corners(
+    const std::array<Vec3, 8>& full_frustum_corners,
+    float camera_near,
+    float camera_far,
+    float slice_near,
+    float slice_far
+) {
+    float depth_range = camera_far - camera_near;
+    if (depth_range < 1e-6f) {
+        depth_range = 1.0f;
+    }
+
+    float near_t = (slice_near - camera_near) / depth_range;
+    float far_t = (slice_far - camera_near) / depth_range;
+    near_t = std::clamp(near_t, 0.0f, 1.0f);
+    far_t = std::clamp(far_t, near_t, 1.0f);
+
+    std::array<Vec3, 8> slice_corners;
+    for (int i = 0; i < 4; ++i) {
+        const Vec3& near_corner = full_frustum_corners[i];
+        const Vec3& far_corner = full_frustum_corners[i + 4];
+        const Vec3 ray = far_corner - near_corner;
+        slice_corners[i] = near_corner + ray * near_t;
+        slice_corners[i + 4] = near_corner + ray * far_t;
+    }
+    return slice_corners;
+}
+
 } // anonymous namespace
 
 
@@ -353,6 +381,8 @@ std::vector<float> compute_cascade_splits(
 ShadowCameraParams fit_shadow_frustum_for_cascade(
     const Mat44f& view_matrix,
     const Mat44f& projection_matrix,
+    float camera_near,
+    float camera_far,
     const Vec3& light_direction,
     float cascade_near,
     float cascade_far,
@@ -361,38 +391,18 @@ ShadowCameraParams fit_shadow_frustum_for_cascade(
 ) {
     Vec3 light_dir = safe_normalize(light_direction, Vec3{0, 1, 0});
 
-    // Extract FOV and aspect from the Vulkan-native Y-forward perspective
-    // matrix (see Mat44f::perspective in termin-base/geom/mat44.hpp):
-    //   m(0, 0) = f / aspect         (X -> clip X)
-    //   m(2, 1) = -f                 (view Z up  -> clip -Y, Y-flipped)
-    //   m(1, 2) = far / (far - near) (view Y fwd -> clip Z, Z in [0, 1])
-    //   m(3, 2) = -far*near/(far-near)
-    //   m(1, 3) = 1                  (w = view.y, Y-forward)
-    //
-    // The matrix is the one built by CameraComponent::compute_projection_matrix
-    // on both OpenGL and Vulkan — Z stays in [0, 1], Y is flipped in clip
-    // space, everyone consumes it identically via glClipControl/Vulkan-native.
-    float f = -projection_matrix(2, 1);  // stored as -f, negate to recover
-    if (f < 0.001f) f = 1.0f;  // Fallback for degenerate matrices
-
-    float aspect = 1.0f;
-    if (std::abs(projection_matrix(0, 0)) > 0.001f) {
-        aspect = f / projection_matrix(0, 0);
-    }
-
-    // Rebuild the cascade's projection in the same Vulkan-native layout so
-    // compute_frustum_corners() (which feeds NDC cube with Z in [0, 1]) can
-    // correctly unproject corners back to world space. Any other convention
-    // here produces a bogus world frustum — and a bogus shadow ortho fit.
-    Mat44f cascade_projection = Mat44f::zero();
-    cascade_projection(0, 0) = f / aspect;
-    cascade_projection(2, 1) = -f;
-    cascade_projection(1, 2) = cascade_far / (cascade_far - cascade_near);
-    cascade_projection(3, 2) = -(cascade_far * cascade_near) / (cascade_far - cascade_near);
-    cascade_projection(1, 3) = 1.0f;
-
-    // Get cascade frustum corners
-    std::array<Vec3, 8> frustum_corners = compute_frustum_corners(view_matrix, cascade_projection);
+    // Use the real camera frustum and slice it along its rays. Rebuilding a
+    // symmetric projection from FOV/aspect loses asymmetric XR projection
+    // offsets and clips visible shadow coverage near the view edges.
+    std::array<Vec3, 8> full_frustum_corners =
+        compute_frustum_corners(view_matrix, projection_matrix);
+    std::array<Vec3, 8> frustum_corners = slice_frustum_corners(
+        full_frustum_corners,
+        camera_near,
+        camera_far,
+        cascade_near,
+        cascade_far
+    );
 
     // Compute frustum center
     Vec3 center{0, 0, 0};

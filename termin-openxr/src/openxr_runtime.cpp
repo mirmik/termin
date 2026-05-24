@@ -588,6 +588,34 @@ std::array<float, 16> make_xr_projection_matrix_vulkan(const XrFovf& fov, float 
     return m;
 }
 
+termin::Mat44 make_engine_projection_from_xr_fov(const XrFovf& fov, float near_z, float far_z) {
+    constexpr double kPi = 3.14159265358979323846;
+    const double tan_left = std::tan(static_cast<double>(fov.angleLeft));
+    const double tan_right = std::tan(static_cast<double>(fov.angleRight));
+    const double tan_down = std::tan(static_cast<double>(fov.angleDown));
+    const double tan_up = std::tan(static_cast<double>(fov.angleUp));
+    const double tan_width = tan_right - tan_left;
+    const double tan_height = tan_up - tan_down;
+
+    termin::Mat44 m = termin::Mat44::zero();
+    if (std::abs(tan_width) < 1e-9 || std::abs(tan_height) < 1e-9 || far_z <= near_z) {
+        return termin::Mat44::perspective(90.0 * kPi / 180.0, 1.0, near_z, far_z);
+    }
+
+    // Engine camera space is X-right, Y-forward, Z-up. OpenXR FOV angles
+    // describe the same physical eye frustum in X-right, Y-up, -Z-forward.
+    // Convert only the projection coefficients; keep the resulting matrix in
+    // engine semantics so shaders may safely use view_pos.y as linear depth.
+    m(0, 0) = 2.0 / tan_width;
+    m(1, 0) = -(tan_right + tan_left) / tan_width;
+    m(2, 1) = -2.0 / tan_height;
+    m(1, 1) = (tan_up + tan_down) / tan_height;
+    m(1, 2) = far_z / (far_z - near_z);
+    m(3, 2) = -(far_z * near_z) / (far_z - near_z);
+    m(1, 3) = 1.0;
+    return m;
+}
+
 std::array<float, 16> multiply_matrix(
     const std::array<float, 16>& a,
     const std::array<float, 16>& b
@@ -661,6 +689,20 @@ termin::Mat44 make_scene_to_xr_matrix() {
     m.data[6] = -1.0;
     m.data[8] = 0.0;
     m.data[9] = 1.0;
+    m.data[10] = 0.0;
+    return m;
+}
+
+termin::Mat44 make_xr_to_scene_matrix() {
+    termin::Mat44 m = termin::Mat44::identity();
+    m.data[0] = 1.0;
+    m.data[1] = 0.0;
+    m.data[2] = 0.0;
+    m.data[4] = 0.0;
+    m.data[5] = 0.0;
+    m.data[6] = 1.0;
+    m.data[8] = 0.0;
+    m.data[9] = -1.0;
     m.data[10] = 0.0;
     return m;
 }
@@ -1163,15 +1205,15 @@ struct OpenXRRuntimeScene {
         termin::Vec3 eye_position_in_rig = xr_position_to_scene_position(eye.view.pose.position);
 
         target.camera.view =
+            make_xr_to_scene_matrix() *
             mat44_from_float_array(make_view_matrix_from_xr_pose(eye.view.pose)) *
             make_scene_to_xr_matrix() *
             rig_view;
-        target.camera.projection =
-            mat44_from_float_array(make_xr_projection_matrix_vulkan(
-                eye.view.fov,
-                static_cast<float>(authoring_camera->near_clip),
-                static_cast<float>(authoring_camera->far_clip)
-            ));
+        target.camera.projection = make_engine_projection_from_xr_fov(
+            eye.view.fov,
+            static_cast<float>(authoring_camera->near_clip),
+            static_cast<float>(authoring_camera->far_clip)
+        );
         target.camera.position = scene_from_rig.transform_point(eye_position_in_rig);
         target.camera.near_clip = authoring_camera->near_clip;
         target.camera.far_clip = authoring_camera->far_clip;

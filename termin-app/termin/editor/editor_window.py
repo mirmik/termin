@@ -392,6 +392,7 @@ class EditorWindow(QMainWindow):
             on_toggle_game_mode=self._mode_controller.toggle_game_mode,
             on_build_project=self._build_project,
             on_build_android=self._build_android,
+            on_build_quest_openxr=self._show_quest_openxr_build_dialog,
             on_run_build=self._run_build,
             on_run_standalone=self._run_standalone,
             on_toggle_profiler=self._toggle_profiler,
@@ -1730,6 +1731,51 @@ class EditorWindow(QMainWindow):
             f"Launch:\n{result.application_id}/{result.launch_activity}\n\n"
             f"Log:\n{result.log_path}",
         )
+
+    def _show_quest_openxr_build_dialog(self) -> None:
+        """Open Quest/OpenXR build and deploy dialog."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        project_path = self._get_project_path()
+        if project_path is None:
+            QMessageBox.warning(self, "No Project", "Please open a project first.")
+            return
+
+        if self._editor_scene_name is None:
+            QMessageBox.warning(self, "No Scene", "Please attach an editor scene first.")
+            return
+
+        scene_path = self.scene_manager.get_scene_path(self._editor_scene_name)
+        if scene_path is None:
+            QMessageBox.warning(self, "No Scene", "Please save the scene first.")
+            return
+
+        self._save_scene()
+
+        project_root = Path(project_path).resolve()
+        scene_path_obj = Path(scene_path).resolve()
+        try:
+            scene_rel_path = scene_path_obj.relative_to(project_root)
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                "Scene Outside Project",
+                "Quest/OpenXR build entry scene must be inside the current project.",
+            )
+            return
+
+        from termin.project.settings import ProjectSettingsManager
+        build_output_dir = ProjectSettingsManager.instance().settings.build_output_dir
+        output_dir = project_root / build_output_dir / "quest_openxr" / project_root.name
+
+        from termin.editor.quest_openxr_build_dialog import QuestOpenXRBuildDialog
+        dialog = QuestOpenXRBuildDialog(
+            project_root=project_root,
+            entry_scene=scene_rel_path,
+            output_dir=output_dir,
+            parent=self,
+        )
+        dialog.exec()
 
     def _build_project_to_default_dist(self):
         from pathlib import Path

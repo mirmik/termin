@@ -122,6 +122,44 @@ if [[ "$INSTALL_APK" -eq 1 ]] && ! command -v "$ADB_BIN_VALUE" >/dev/null 2>&1; 
     exit 1
 fi
 
+TERMIN_ANDROID_SDK_PREFIX="$ANDROID_SDK_ROOT_VALUE/$ANDROID_ABI_VALUE"
+TERMIN_ANDROID_SDK_LIB_DIR="$TERMIN_ANDROID_SDK_PREFIX/lib"
+TERMIN_OPENXR_CONFIG="$TERMIN_ANDROID_SDK_LIB_DIR/cmake/termin_openxr/termin_openxrConfig.cmake"
+
+if [[ ! -d "$ANDROID_SDK_ROOT_VALUE" ]]; then
+    echo "ERROR: Termin Android SDK is not installed." >&2
+    echo "  Expected SDK root: $ANDROID_SDK_ROOT_VALUE" >&2
+    echo "  Build and install it first:" >&2
+    echo "    $SCRIPT_DIR/build-sdk-android.sh --abi $ANDROID_ABI_VALUE --platform $ANDROID_PLATFORM_VALUE" >&2
+    echo "  Or pass --sdk-root /path/to/sdk/android." >&2
+    exit 1
+fi
+
+if [[ ! -d "$TERMIN_ANDROID_SDK_PREFIX" ]]; then
+    echo "ERROR: Termin Android SDK is missing the requested ABI." >&2
+    echo "  Expected ABI prefix: $TERMIN_ANDROID_SDK_PREFIX" >&2
+    echo "  Build and install it first:" >&2
+    echo "    $SCRIPT_DIR/build-sdk-android.sh --abi $ANDROID_ABI_VALUE --platform $ANDROID_PLATFORM_VALUE" >&2
+    echo "  Or choose an ABI that exists in the Termin Android SDK." >&2
+    exit 1
+fi
+
+if [[ ! -d "$TERMIN_ANDROID_SDK_LIB_DIR" ]]; then
+    echo "ERROR: Termin Android SDK ABI prefix is incomplete: lib directory is missing." >&2
+    echo "  Expected lib directory: $TERMIN_ANDROID_SDK_LIB_DIR" >&2
+    echo "  Rebuild and reinstall the Android SDK:" >&2
+    echo "    $SCRIPT_DIR/build-sdk-android.sh --abi $ANDROID_ABI_VALUE --platform $ANDROID_PLATFORM_VALUE" >&2
+    exit 1
+fi
+
+if [[ ! -f "$TERMIN_OPENXR_CONFIG" ]]; then
+    echo "ERROR: Termin Android SDK is installed, but OpenXR support is missing." >&2
+    echo "  Expected CMake package: $TERMIN_OPENXR_CONFIG" >&2
+    echo "  Rebuild and reinstall the Android SDK with termin-openxr enabled:" >&2
+    echo "    $SCRIPT_DIR/build-sdk-android.sh --abi $ANDROID_ABI_VALUE --platform $ANDROID_PLATFORM_VALUE" >&2
+    exit 1
+fi
+
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$SCRIPT_DIR/build/gradle-home}"
 GRADLE_PROJECT_CACHE_DIR="$ANDROID_GRADLE_BUILD_ROOT/project-cache"
 APK_PATH="$ANDROID_GRADLE_BUILD_ROOT/app/outputs/apk/debug/app-debug.apk"

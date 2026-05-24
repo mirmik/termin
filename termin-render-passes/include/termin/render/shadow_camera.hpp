@@ -158,6 +158,8 @@ std::vector<float> compute_cascade_splits(
  *
  * @param view_matrix Camera view matrix
  * @param projection_matrix Camera projection matrix
+ * @param camera_near Camera near plane distance
+ * @param camera_far Camera far plane distance represented by projection_matrix
  * @param light_direction Normalized light direction
  * @param cascade_near Near split distance (view-space Z)
  * @param cascade_far Far split distance (view-space Z)
@@ -168,6 +170,8 @@ std::vector<float> compute_cascade_splits(
 ShadowCameraParams fit_shadow_frustum_for_cascade(
     const Mat44f& view_matrix,
     const Mat44f& projection_matrix,
+    float camera_near,
+    float camera_far,
     const Vec3& light_direction,
     float cascade_near,
     float cascade_far,

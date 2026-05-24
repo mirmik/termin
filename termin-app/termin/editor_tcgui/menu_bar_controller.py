@@ -58,6 +58,7 @@ class MenuBarControllerTcgui:
         on_toggle_game_mode: Callable,
         on_build_project: Callable,
         on_build_android: Callable,
+        on_build_quest_openxr: Callable,
         on_run_build: Callable,
         on_run_standalone: Callable,
         # Debug
@@ -127,6 +128,7 @@ class MenuBarControllerTcgui:
             on_toggle_game_mode=on_toggle_game_mode,
             on_build_project=on_build_project,
             on_build_android=on_build_android,
+            on_build_quest_openxr=on_build_quest_openxr,
             on_run_build=on_run_build,
             on_run_standalone=on_run_standalone,
             on_toggle_profiler=on_toggle_profiler,
