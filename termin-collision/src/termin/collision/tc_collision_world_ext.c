@@ -47,12 +47,27 @@ static void collision_world_ext_destroy(void* ext, void* type_userdata) {
     free(inst);
 }
 
+static void collision_world_ext_on_scene_update(void* ext, double dt, void* type_userdata) {
+    (void)dt;
+    (void)type_userdata;
+    if (!ext) return;
+
+    tc_collision_world_ext_instance* inst = (tc_collision_world_ext_instance*)ext;
+    if (!inst->world) {
+        tc_log_warn("[tc_collision_world] scene update skipped: world is NULL");
+        return;
+    }
+
+    tc_collision_world_update_all(inst->world);
+}
+
 void tc_collision_world_extension_init(void) {
     if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD)) return;
 
     tc_scene_ext_vtable vtable = {
         .create = collision_world_ext_create,
         .destroy = collision_world_ext_destroy,
+        .on_scene_update = collision_world_ext_on_scene_update,
     };
 
     if (!tc_scene_ext_register(
