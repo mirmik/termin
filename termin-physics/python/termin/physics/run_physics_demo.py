@@ -1,10 +1,6 @@
-"""Physics demo: drop cubes in the editor."""
+"""Physics scene builder used by editor/runtime demos."""
 
-import sys
 import numpy as np
-from PyQt6.QtGui import QPalette, QColor
-from PyQt6.QtWidgets import QApplication
-from PyQt6 import QtCore
 
 from termin.geombase import Pose3
 from termin.geombase import GeneralPose3
@@ -14,7 +10,6 @@ from termin.visualization.core.entity import Entity
 from termin.visualization.core.material import Material
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.scene import create_scene
-from termin.visualization.core.world import VisualizationWorld
 from termin.render_components import LightComponent, MeshRenderer
 from termin.lighting import LightType, LightShadowParams
 
@@ -108,49 +103,15 @@ def build_physics_scene(world):
     return scene
 
 
-def apply_dark_palette(app: QApplication):
-    app.setStyle("Fusion")
-    palette = QPalette()
-
-    bg = QColor(30, 30, 30)
-    window = QColor(37, 37, 38)
-    base = QColor(45, 45, 48)
-    text = QColor(220, 220, 220)
-    disabled_text = QColor(128, 128, 128)
-    highlight = QColor(0, 120, 215)
-
-    palette.setColor(QPalette.ColorRole.Window, window)
-    palette.setColor(QPalette.ColorRole.WindowText, text)
-    palette.setColor(QPalette.ColorRole.Base, base)
-    palette.setColor(QPalette.ColorRole.AlternateBase, bg)
-    palette.setColor(QPalette.ColorRole.ToolTipBase, base)
-    palette.setColor(QPalette.ColorRole.ToolTipText, text)
-    palette.setColor(QPalette.ColorRole.Text, text)
-    palette.setColor(QPalette.ColorRole.Button, window)
-    palette.setColor(QPalette.ColorRole.ButtonText, text)
-    palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 0, 0))
-    palette.setColor(QPalette.ColorRole.Highlight, highlight)
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, disabled_text)
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, disabled_text)
-    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, disabled_text)
-
-    app.setPalette(palette)
-
-
 def run_physics_demo():
-    QApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
-    app = QApplication(sys.argv)
+    from tcbase import log
 
-    world = VisualizationWorld()
-    scene = build_physics_scene(world)
-
-    apply_dark_palette(app)
-
-    from termin.editor.editor_window import EditorWindow
-    win = EditorWindow(world, scene)
-    win.show()
-    app.exec()
+    message = (
+        "run_physics_demo() used the removed Qt editor. "
+        "Open the tcgui editor and load a physics scene through the project workflow instead."
+    )
+    log.error(message)
+    raise RuntimeError(message)
 
 
 if __name__ == "__main__":

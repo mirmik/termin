@@ -1,9 +1,8 @@
-"""tcgui-версии виджетов редактирования полей для инспекторов.
+"""tcgui widgets for inspector field editing.
 
-Аналог termin/editor/widgets/field_widgets.py, но без зависимости на PyQt6.
 Все виджеты компонуются из tcgui-примитивов.
 
-Интерфейс намеренно повторяет Qt-версию:
+Интерфейс:
     widget = FloatFieldWidget(min_val=0, max_val=1)
     widget.bind_field(key, field, target)
     widget.load_from_target()

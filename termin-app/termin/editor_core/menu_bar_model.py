@@ -1,7 +1,7 @@
 """Canonical editor menu-bar definition.
 
-Returns a list of ``MenuSpec`` describing every menu the editor needs.  Both Qt
-and tcgui controllers render this same specification into their native widgets.
+Returns a list of ``MenuSpec`` describing every menu the editor needs. The
+tcgui controller renders this specification into native widgets.
 
 The returned specs contain ``handle_getter`` callbacks for items whose state
 changes at runtime (Undo/Redo enabled, Play/Stop label, checkable toggles).

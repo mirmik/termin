@@ -1,7 +1,7 @@
 """Scene entity operations — UI-agnostic business logic.
 
-All create/delete/rename/reparent/duplicate/drop flows live here. Both Qt
-and tcgui scene-tree controllers delegate to an EntityOperations instance.
+All create/delete/rename/reparent/duplicate/drop flows live here. The tcgui
+scene-tree controller delegates to an EntityOperations instance.
 
 The view provides a small surface:
     - add_entity(entity)

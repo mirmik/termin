@@ -6,8 +6,7 @@ Owns:
   for its main viewport)
 - the offscreen GL context (needed before destroying GPU resources)
 
-Provides UI-agnostic operations that were previously duplicated between
-Qt and tcgui rendering controllers:
+Provides UI-agnostic operations used by the tcgui rendering controller:
 - ``remove_viewports_for_scene`` — scoped cleanup on scene unload
 - ``sync_viewport_configs_to_scene`` / ``sync_render_target_configs_to_scene``
   — snapshot current state into Scene before save
@@ -131,8 +130,8 @@ class RenderingModel:
           it in the GC-anchor dict, and points the surface at its
           ``tc_input_manager_ptr``.
         - ``"editor"``: view handles it. The optional ``on_editor_mode``
-          callback (``(display) -> None``) is invoked so hosts like the
-          Qt editor can wire up editor-specific input.
+          callback (``(display) -> None``) is invoked so the editor frontend
+          can wire up editor-specific input.
 
         ``surface`` comes from the view — the model doesn't look it up
         itself because the Python `Display` subclass isn't always what

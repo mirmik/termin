@@ -11,7 +11,7 @@ from tcbase import Action, Key, MouseButton
 from tgfx.window import BackendWindow, WindowBackend
 
 # SDL backend using C++ implementation (embedded-mode only; used by
-# the Qt editor to host an SDL viewport inside a QWidget).
+# legacy standalone SDL viewport paths).
 from termin.visualization.platform.backends.sdl_embedded import (
     SDLEmbeddedWindowBackend,
 )

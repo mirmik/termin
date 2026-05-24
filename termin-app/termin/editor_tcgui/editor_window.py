@@ -58,7 +58,7 @@ class EditorWindowTcgui:
     """Main editor window for the tcgui frontend.
 
     Does not inherit from any UI framework class — the UI is built in ``build(ui)``.
-    Domain logic is identical to the Qt version.
+    Domain logic lives in editor_core where possible.
     """
 
     def __init__(
@@ -98,7 +98,7 @@ class EditorWindowTcgui:
         self.scene_manager = scene_manager
         self.scene_manager.set_on_before_scene_close(self._on_before_scene_close)
         # Pump EditorInteractionSystem's pending press / release / hover at the
-        # exact moment the render finishes — matches the Qt editor. Without
+        # exact moment the render finishes. Without
         # this hook the press/hover events that reach EditorViewportInput-
         # Manager just queue in _pending_* and never get processed, so
         # picking / selection / gizmo hover all silently no-op.
@@ -569,8 +569,7 @@ class EditorWindowTcgui:
             self._interaction_system.selection.on_hover_changed = self._on_hover_changed
             self._interaction_system.on_request_update = self._request_viewport_update
             self._interaction_system.on_entity_click = self._on_editor_viewport_click
-            # Transform gizmo drag-end → push an undo command, same as the
-            # Qt editor (editor_window.py::_on_transform_end).
+            # Transform gizmo drag-end -> push an undo command.
             self._interaction_system.on_transform_end = self._on_transform_end
 
         self._on_rendering_changed()
@@ -1196,8 +1195,7 @@ class EditorWindowTcgui:
         # The C++ UnifiedGizmoPass pulls its draw target from
         # EditorInteractionSystem::transform_gizmo, which is empty until
         # set_gizmo_target is called. Without this line the gizmo stays
-        # invisible even after a successful selection (Qt editor does the
-        # same in editor_window.py::_on_selection_changed).
+        # invisible even after a successful selection.
         sys = self._interaction_system
         if sys is not None:
             sys.set_gizmo_target(entity)

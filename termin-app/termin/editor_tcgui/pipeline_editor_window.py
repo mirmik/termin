@@ -222,7 +222,7 @@ def _node_title(node_type: str, graph_type: str, instance_name: str) -> str:
 
 
 def _extract_pass_socket_info(pass_class_name: str) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
-    from termin.nodegraph.pass_registry import get_pass_inplace_pairs, get_pass_sockets
+    from termin.editor_core.pipeline_pass_registry import get_pass_inplace_pairs, get_pass_sockets
 
     inputs, outputs = get_pass_sockets(pass_class_name)
     inplace_pairs = get_pass_inplace_pairs(pass_class_name)

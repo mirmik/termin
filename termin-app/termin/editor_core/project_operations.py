@@ -2,11 +2,11 @@
 
 Wraps directory / file creation, deletion, FBX/GLB extraction, and the
 set of "new asset" templates (material / shader / component / pipeline /
-prefab). Dialogs go through :class:`DialogService`; both Qt and tcgui
-project browsers delegate here.
+prefab). Dialogs go through :class:`DialogService`; the tcgui project browser
+delegates here.
 
 ``sync_stdlib`` lives at module scope because it's a pure filesystem
-operation called at open-project time from both editors.
+operation called at open-project time.
 """
 from __future__ import annotations
 

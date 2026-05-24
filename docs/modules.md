@@ -205,7 +205,7 @@ C# bindings/runtime packaging for Termin native libraries.
 
 Source of truth: [termin-app docs](../termin-app/docs/index.md), [editor architecture](../termin-app/docs/editor-architecture.md), [flat viewport target model](../termin-app/docs/rendering-flat-viewport-target-model.md).
 
-Основное приложение/редактор. tcgui является primary UI. Qt поддерживается по возможности, но не должен быть основным направлением новых архитектурных решений.
+Основное приложение/редактор. tcgui является единственным поддерживаемым UI редактора; Qt/PyQt-версия удалена.
 
 Application-level code не должен протекать вниз в graphics/render/scene.
 

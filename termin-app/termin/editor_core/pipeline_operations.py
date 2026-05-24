@@ -1,9 +1,8 @@
 """PipelineOperations — UI-agnostic mutations on a RenderPipeline.
 
-Shared by both Qt and tcgui pipeline inspectors. Holds the currently-edited
-pipeline reference, exposes pure data methods (add/remove/move/rename/etc.),
-and emits ``pipeline_changed`` so views can re-render. Error messages go
-through the supplied :class:`DialogService`.
+Holds the currently-edited pipeline reference, exposes pure data methods
+(add/remove/move/rename/etc.), and emits ``pipeline_changed`` so views can
+re-render. Error messages go through the supplied :class:`DialogService`.
 """
 from __future__ import annotations
 

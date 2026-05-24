@@ -55,7 +55,7 @@ public:
     // tick_and_render. When false, tick_and_render owns its own frame scope
     // and UI time stays outside the profile — same behaviour the profiler
     // had historically, useful for apples-to-apples comparison with other
-    // hosts (e.g. the Qt editor).
+    // hosts.
     void set_profile_ui(bool v) { _profile_ui = v; }
     bool profile_ui() const { return _profile_ui; }
 

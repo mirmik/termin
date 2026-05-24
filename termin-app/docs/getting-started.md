@@ -34,4 +34,4 @@ bash run-tests-python.sh
 
 - [Build System](../../docs/build-system.md) — текущий SDK workflow.
 - [Documentation System](../../docs/documentation-system.md) — где держать разные типы документов.
-- [Editor Architecture](editor-architecture.md) — структура editor-core, Qt/tcgui views и controllers.
+- [Editor Architecture](editor-architecture.md) — структура editor-core, tcgui views и controllers.

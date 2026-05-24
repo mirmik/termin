@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 import numpy as np
 
 from termin.visualization.core.texture_handle import TextureHandle
 from termin.assets.texture_asset import TextureAsset
-
-if TYPE_CHECKING:
-    from PyQt6.QtGui import QPixmap
-
 
 class Texture:
     """
@@ -23,7 +19,6 @@ class Texture:
 
     def __init__(self, path: Optional[str | Path] = None):
         self._handle: TextureHandle = TextureHandle()
-        self._preview_pixmap: Optional["QPixmap"] = None
         if path is not None:
             self.load(path)
 
@@ -69,7 +64,6 @@ class Texture:
         """Load texture from file."""
         asset = TextureAsset.from_file(path)
         self._handle = TextureHandle.from_asset(asset)
-        self._preview_pixmap = None
 
     def invalidate(self) -> None:
         """
@@ -80,68 +74,10 @@ class Texture:
         asset = self._handle.get_asset()
         if asset is not None:
             asset.reload()
-        self._preview_pixmap = None
 
     def bind(self, unit: int = 0) -> None:
         """Legacy immediate-GL bind hook. Rendering now binds through tgfx2."""
         _ = unit
-
-    def get_preview_pixmap(self, max_size: int = 200) -> Optional["QPixmap"]:
-        """
-        Get cached preview pixmap for this texture.
-
-        Args:
-            max_size: Maximum width/height of the preview.
-
-        Returns:
-            QPixmap or None if texture has no data.
-        """
-        if self._preview_pixmap is not None:
-            return self._preview_pixmap
-
-        texture_data = self._handle.get()
-        if texture_data is None:
-            return None
-
-        from PyQt6.QtGui import QImage, QPixmap
-        from PyQt6.QtCore import Qt
-
-        width = texture_data.width
-        height = texture_data.height
-        data = texture_data.data
-
-        if data is None:
-            texture_data.sync_to_cpu()
-            data = texture_data.data
-
-        if data is None:
-            return None
-
-        # Create QImage from RGBA data (no flip needed - data is original orientation)
-        if len(data.shape) == 3 and data.shape[2] == 4:
-            qimage = QImage(
-                data.data,
-                width,
-                height,
-                width * 4,
-                QImage.Format.Format_RGBA8888,
-            )
-        else:
-            return None
-
-        pixmap = QPixmap.fromImage(qimage)
-
-        # Scale to fit max_size
-        if pixmap.width() > max_size or pixmap.height() > max_size:
-            pixmap = pixmap.scaled(
-                max_size,
-                max_size,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-
-        self._preview_pixmap = pixmap
-        return self._preview_pixmap
 
     @classmethod
     def from_file(cls, path: str | Path) -> "Texture":

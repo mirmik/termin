@@ -1,6 +1,6 @@
 // Termin Editor - C++ entry point with EngineCore
 //
-// Creates EngineCore in C++, initializes Python/Qt/SDL via Python,
+// Creates EngineCore in C++, initializes Python/tcgui/SDL via Python,
 // runs main loop in C++ (EngineCore.run()).
 
 #define PY_SSIZE_T_CLEAN
@@ -204,7 +204,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Initialize editor (creates Qt app, SDL, EditorWindow, sets up callbacks)
+    // Initialize editor (creates tcgui app, SDL, EditorWindow, sets up callbacks)
     const char* init_code = R"(
 from termin.editor.run_editor import init_editor
 init_editor()

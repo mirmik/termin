@@ -102,7 +102,6 @@ if __name__ == "__main__":
             "Pillow>=9.0",
             "pyassimp",
             "scipy",
-            "PyQt6>=6.4",
         ],
         ext_modules=[
             Extension("termin._native", sources=[]),

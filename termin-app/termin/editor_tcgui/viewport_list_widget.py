@@ -46,9 +46,8 @@ class _NodePayload:
 class ViewportListWidgetTcgui(VStack):
     """Displays a Display → Viewport → Entity tree plus a Render Targets section.
 
-    Public API mirrors the Qt ViewportListWidget so RenderingController can
-    wire selection / add / remove signals identically. Signals are
-    editor_core.Signal instances (connect/emit) rather than pyqtSignal.
+    RenderingController wires selection / add / remove signals through
+    editor_core.Signal instances.
     """
 
     def __init__(self):

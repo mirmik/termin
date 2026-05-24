@@ -4,11 +4,9 @@ Holds the currently active inspector kind and its target. Views subscribe
 to ``changed`` and translate the model snapshot into their own widget
 stack.
 
-Resource resolution (name → material, name → mesh, etc.) lives here so
-both Qt and tcgui controllers dispatch identically. File-path variants
-don't pre-load: they attach ``file_path`` to ``extras`` and let the view
-do the actual loading via its panel, since Qt and tcgui panels expose
-different loader methods.
+Resource resolution (name -> material, name -> mesh, etc.) lives here. File-path
+variants don't pre-load: they attach ``file_path`` to ``extras`` and let the
+view do the actual loading via its panel.
 """
 from __future__ import annotations
 

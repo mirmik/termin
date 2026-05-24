@@ -73,7 +73,7 @@ PYTHON_PKG_TO_DIR = {
 # External deps to skip
 EXTERNAL_PKGS = {
     "numpy", "scipy", "Pillow", "PyOpenGL", "glfw", "pyassimp",
-    "PyQt6", "PyYAML", "sdl2", "pysdl2-dll",
+    "PyYAML", "sdl2", "pysdl2-dll",
 }
 
 # Map Python import paths to directory names.

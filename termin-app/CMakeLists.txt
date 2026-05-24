@@ -21,8 +21,7 @@ cmake_minimum_required(VERSION 3.16)
 project(termin VERSION 0.1.0 LANGUAGES C CXX)
 
 # Options (passed to cpp/CMakeLists.txt)
-option(BUILD_EDITOR_MINIMAL "Build minimal editor (embedded Python, PyQt6)" ON)
-option(BUILD_EDITOR_EXE "Build Qt C++ editor (requires Qt SDK)" OFF)
+option(BUILD_EDITOR_MINIMAL "Build minimal editor (embedded Python, tcgui)" ON)
 option(BUILD_TESTS "Build C++ tests" OFF)
 option(BUNDLE_PYTHON "Bundle Python runtime for standalone distribution" OFF)
 
@@ -144,7 +143,6 @@ if(BUNDLE_PYTHON)
     # External packages: copied from system site-packages
     set(BUNDLE_PACKAGES_EXTERNAL
         numpy
-        PyQt6
         sip
         sipbuild
         PIL
@@ -208,7 +206,7 @@ if(BUNDLE_PYTHON)
     endforeach()
 
     if(NOT WIN32)
-        # Linux: Copy standalone .so files (like PyQt6_sip)
+        # Linux: Copy standalone Python extension .so files.
         file(GLOB STANDALONE_SOS "${PYTHON_SITEPACKAGES}/*.so")
         install(FILES ${STANDALONE_SOS}
             DESTINATION ${SITEPACKAGES_INSTALL_DIR}
