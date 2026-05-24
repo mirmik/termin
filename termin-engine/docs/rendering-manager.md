@@ -58,6 +58,11 @@ Display      = поверхность презентации
 Pipeline     = как рендерим
 ```
 
+Обычный `texture_2d` render target получает одну `CameraComponent` и строит один
+`RenderTargetContext`. `xr_stereo` target не переиспользует camera slot как
+скрытый rig: он ссылается на `XrOriginComponent`, а OpenXR runtime каждый кадр
+создает per-eye `RenderCamera` из transform этого origin и позы OpenXR view.
+
 Viewport ссылается на render target; он не является доменным владельцем этого render target.
 
 ## Отключение сцены

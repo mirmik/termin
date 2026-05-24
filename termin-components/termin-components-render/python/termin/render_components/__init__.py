@@ -19,6 +19,7 @@ from termin.render_components._components_render_native import (
     OrthographicCameraComponent,
     PerspectiveCameraComponent,
     NormalPass,
+    XrOriginComponent,
 )
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "OrthographicCameraComponent",
     "PerspectiveCameraComponent",
     "NormalPass",
+    "XrOriginComponent",
 ]

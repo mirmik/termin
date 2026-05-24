@@ -563,11 +563,14 @@ class RenderingControllerTcgui:
         if scene is not None:
             render_target.scene = scene
             if kind == "xr_stereo":
-                camera = self._find_first_scene_camera(scene)
-                if camera is not None:
-                    render_target.camera = camera
+                xr_origin = self._find_first_scene_xr_origin(scene)
+                if xr_origin is not None:
+                    render_target.xr_origin = xr_origin
                 else:
-                    log.warn("[RenderingControllerTcgui] XR render target created without camera: scene has no CameraComponent")
+                    log.warn(
+                        "[RenderingControllerTcgui] XR render target created without origin: "
+                        "scene has no XrOriginComponent"
+                    )
         self._manager.register_managed_render_target(render_target)
         self._refresh_render_targets()
         self._notify_rendering_changed()
@@ -579,6 +582,15 @@ class RenderingControllerTcgui:
             camera = entity.get_component(CameraComponent)
             if camera is not None:
                 return camera
+        return None
+
+    def _find_first_scene_xr_origin(self, scene: "Scene"):
+        from termin.render_components import XrOriginComponent
+
+        for entity in scene.entities:
+            xr_origin = entity.get_component(XrOriginComponent)
+            if xr_origin is not None:
+                return xr_origin
         return None
 
     def _on_remove_render_target_requested(self, render_target) -> None:

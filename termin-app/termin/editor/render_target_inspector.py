@@ -86,9 +86,10 @@ class RenderTargetInspector(QWidget):
         self._scene_combo.currentIndexChanged.connect(self._on_scene_changed)
         form.addRow("Scene:", self._scene_combo)
 
+        self._camera_label = QLabel("Camera:")
         self._camera_combo = QComboBox()
         self._camera_combo.currentIndexChanged.connect(self._on_camera_changed)
-        form.addRow("Camera:", self._camera_combo)
+        form.addRow(self._camera_label, self._camera_combo)
 
         self._pipeline_combo = QComboBox()
         self._pipeline_combo.currentIndexChanged.connect(self._on_pipeline_changed)
@@ -159,6 +160,7 @@ class RenderTargetInspector(QWidget):
 
             self._refresh_scene_combo()
             self._select_current_scene()
+            self._camera_label.setText("XR Origin:" if self._is_xr_target() else "Camera:")
             self._refresh_camera_combo()
             self._select_current_camera()
             self._refresh_pipeline_combo()
@@ -226,16 +228,27 @@ class RenderTargetInspector(QWidget):
         scene = self._camera_source_scene()
         if scene is not None:
             try:
-                from termin.visualization.core.camera import CameraComponent
-                for ent in scene.entities:
-                    cam = ent.get_component(CameraComponent)
-                    if cam is None:
-                        continue
-                    label = ent.name or ent.uuid or "Camera"
-                    self._cameras.append(cam)
-                    self._camera_combo.addItem(label)
+                entities = scene.entities
+                if self._is_xr_target():
+                    from termin.render_components import XrOriginComponent
+                    for ent in entities:
+                        origin = ent.get_component(XrOriginComponent)
+                        if origin is None:
+                            continue
+                        label = ent.name or ent.uuid or "XR Origin"
+                        self._cameras.append(origin)
+                        self._camera_combo.addItem(label)
+                else:
+                    from termin.visualization.core.camera import CameraComponent
+                    for ent in entities:
+                        cam = ent.get_component(CameraComponent)
+                        if cam is None:
+                            continue
+                        label = ent.name or ent.uuid or "Camera"
+                        self._cameras.append(cam)
+                        self._camera_combo.addItem(label)
             except Exception as e:
-                log.error(f"[RenderTargetInspector] camera scan failed: {e}")
+                log.error(f"[RenderTargetInspector] render source scan failed: {e}")
 
         self._camera_combo.blockSignals(False)
 
@@ -245,11 +258,15 @@ class RenderTargetInspector(QWidget):
         return self._scene
 
     def _select_current_camera(self) -> None:
-        if self._render_target is None or self._render_target.camera is None:
+        if self._render_target is None:
             self._camera_combo.setCurrentIndex(0)
             return
-        for i, cam in enumerate(self._cameras):
-            if cam is self._render_target.camera:
+        current = self._render_target.xr_origin if self._is_xr_target() else self._render_target.camera
+        if current is None:
+            self._camera_combo.setCurrentIndex(0)
+            return
+        for i, source in enumerate(self._cameras):
+            if source is current:
                 self._camera_combo.setCurrentIndex(i + 1)
                 return
         self._camera_combo.setCurrentIndex(0)
@@ -295,12 +312,18 @@ class RenderTargetInspector(QWidget):
         if self._updating or self._render_target is None:
             return
         if index <= 0:
-            self._render_target.camera = None
+            if self._is_xr_target():
+                self._render_target.xr_origin = None
+            else:
+                self._render_target.camera = None
             self.camera_changed.emit(None)
             return
         idx = index - 1
         if 0 <= idx < len(self._cameras):
-            self._render_target.camera = self._cameras[idx]
+            if self._is_xr_target():
+                self._render_target.xr_origin = self._cameras[idx]
+            else:
+                self._render_target.camera = self._cameras[idx]
             self.camera_changed.emit(self._cameras[idx])
 
     def _on_pipeline_changed(self, index: int) -> None:
@@ -364,6 +387,9 @@ class RenderTargetInspector(QWidget):
         manual = self._render_target is not None and not self._dynamic_check.isChecked()
         self._width_spin.setEnabled(manual)
         self._height_spin.setEnabled(manual)
+
+    def _is_xr_target(self) -> bool:
+        return self._render_target is not None and self._render_target.kind == "xr_stereo"
 
     @staticmethod
     def _select_combo_value(combo: QComboBox, values: list[str], value: str) -> None:

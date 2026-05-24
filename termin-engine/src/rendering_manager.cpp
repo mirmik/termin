@@ -906,6 +906,31 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
                 }
             }
         }
+        if (rtc->xr_origin_uuid && rtc->xr_origin_uuid[0] != '\0' && pool) {
+            tc_entity_id eid = tc_entity_pool_find_by_uuid(pool, rtc->xr_origin_uuid);
+            if (tc_entity_id_valid(eid)) {
+                tc_entity_handle eh = tc_entity_handle_make(pool_handle, eid);
+                Entity entity(eh);
+                tc_component* xr_origin = entity.get_component_by_type_name("XrOriginComponent");
+                if (xr_origin) {
+                    tc_render_target_set_xr_origin(rt, xr_origin);
+                } else {
+                    tc_log(
+                        TC_LOG_ERROR,
+                        "[RenderingManager] render target '%s' xr_origin_uuid '%s' has no XrOriginComponent",
+                        rt_name.c_str(),
+                        rtc->xr_origin_uuid
+                    );
+                }
+            } else {
+                tc_log(
+                    TC_LOG_ERROR,
+                    "[RenderingManager] render target '%s' xr_origin_uuid '%s' was not found",
+                    rt_name.c_str(),
+                    rtc->xr_origin_uuid
+                );
+            }
+        }
 
         tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
         if (rtc->pipeline_uuid && rtc->pipeline_uuid[0] != '\0' && pipeline_factory_) {

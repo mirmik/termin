@@ -372,16 +372,30 @@ class RenderTargetInspectorTcgui(VStack):
         scene = self._camera_source_scene()
         if scene is not None:
             try:
-                from termin.visualization.core.camera import CameraComponent
-                for ent in scene.entities:
-                    cam = ent.get_component(CameraComponent)
-                    if cam is None:
-                        continue
-                    label = ent.name or ent.uuid or "Camera"
-                    self._cameras.append(cam)
-                    self._camera_combo.add_item(label)
+                entities = scene.entities
+                if not entities:
+                    self._camera_combo.on_changed = old
+                    return
+                if self._is_xr_target():
+                    from termin.render_components import XrOriginComponent
+                    for ent in entities:
+                        origin = ent.get_component(XrOriginComponent)
+                        if origin is None:
+                            continue
+                        label = ent.name or ent.uuid or "XR Origin"
+                        self._cameras.append(origin)
+                        self._camera_combo.add_item(label)
+                else:
+                    from termin.visualization.core.camera import CameraComponent
+                    for ent in entities:
+                        cam = ent.get_component(CameraComponent)
+                        if cam is None:
+                            continue
+                        label = ent.name or ent.uuid or "Camera"
+                        self._cameras.append(cam)
+                        self._camera_combo.add_item(label)
             except Exception as e:
-                log.error(f"[RenderTargetInspector] camera scan failed: {e}")
+                log.error(f"[RenderTargetInspector] render source scan failed: {e}")
 
         self._camera_combo.on_changed = old
 
@@ -391,11 +405,15 @@ class RenderTargetInspectorTcgui(VStack):
         return self._scene
 
     def _select_current_camera(self) -> None:
-        if self._render_target is None or self._render_target.camera is None:
+        if self._render_target is None:
             self._camera_combo.selected_index = 0
             return
-        for i, cam in enumerate(self._cameras):
-            if cam is self._render_target.camera:
+        current = self._render_target.xr_origin if self._is_xr_target() else self._render_target.camera
+        if current is None:
+            self._camera_combo.selected_index = 0
+            return
+        for i, source in enumerate(self._cameras):
+            if source is current:
                 self._camera_combo.selected_index = i + 1
                 return
         self._camera_combo.selected_index = 0
@@ -435,6 +453,8 @@ class RenderTargetInspectorTcgui(VStack):
             return
         kind = self._target_kind_values[index]
         self._render_target.kind = kind
+        self._refresh_camera_combo()
+        self._select_current_camera()
         self._update_kind_visibility()
         self._emit_changed()
 
@@ -442,12 +462,18 @@ class RenderTargetInspectorTcgui(VStack):
         if self._updating or self._render_target is None:
             return
         if index <= 0:
-            self._render_target.camera = None
+            if self._is_xr_target():
+                self._render_target.xr_origin = None
+            else:
+                self._render_target.camera = None
             self._emit_changed()
             return
         idx = index - 1
         if 0 <= idx < len(self._cameras):
-            self._render_target.camera = self._cameras[idx]
+            if self._is_xr_target():
+                self._render_target.xr_origin = self._cameras[idx]
+            else:
+                self._render_target.camera = self._cameras[idx]
             self._emit_changed()
 
     def _on_pipeline_changed(self, index: int, text: str) -> None:
@@ -671,6 +697,7 @@ class RenderTargetInspectorTcgui(VStack):
     def _update_kind_visibility(self) -> None:
         has_target = self._render_target is not None
         texture_target = self._is_texture_target()
+        self._camera_lbl.text = "Camera:" if texture_target else "XR Origin:"
         self._camera_lbl.visible = has_target
         self._camera_combo.visible = has_target
         self._dynamic_lbl.visible = texture_target
@@ -683,6 +710,9 @@ class RenderTargetInspectorTcgui(VStack):
 
     def _is_texture_target(self) -> bool:
         return self._render_target is not None and self._render_target.kind == "texture_2d"
+
+    def _is_xr_target(self) -> bool:
+        return self._render_target is not None and self._render_target.kind == "xr_stereo"
 
     def _emit_changed(self) -> None:
         if self.on_changed is not None:

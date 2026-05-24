@@ -12,6 +12,7 @@ tc_render_target_config RenderTargetConfig::to_c() const {
     c.name = name.empty() ? nullptr : tgfx_intern_string(name.c_str());
     c.kind = kind.empty() ? tgfx_intern_string("texture_2d") : tgfx_intern_string(kind.c_str());
     c.camera_uuid = camera_uuid.empty() ? nullptr : tgfx_intern_string(camera_uuid.c_str());
+    c.xr_origin_uuid = xr_origin_uuid.empty() ? nullptr : tgfx_intern_string(xr_origin_uuid.c_str());
     c.width = width;
     c.height = height;
     c.dynamic_resolution = dynamic_resolution;
@@ -43,6 +44,7 @@ RenderTargetConfig RenderTargetConfig::from_c(const tc_render_target_config* c) 
     cfg.name = c->name ? c->name : "";
     cfg.kind = c->kind ? c->kind : "texture_2d";
     cfg.camera_uuid = c->camera_uuid ? c->camera_uuid : "";
+    cfg.xr_origin_uuid = c->xr_origin_uuid ? c->xr_origin_uuid : "";
     cfg.width = c->width;
     cfg.height = c->height;
     cfg.dynamic_resolution = c->dynamic_resolution;

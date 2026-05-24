@@ -481,8 +481,12 @@ class RenderingModel:
                 continue
 
             camera_uuid = ""
-            if rt.camera is not None and rt.camera.entity is not None:
+            if rt.kind == "texture_2d" and rt.camera is not None and rt.camera.entity is not None:
                 camera_uuid = rt.camera.entity.uuid
+
+            xr_origin_uuid = ""
+            if rt.kind == "xr_stereo" and rt.xr_origin is not None and rt.xr_origin.entity is not None:
+                xr_origin_uuid = rt.xr_origin.entity.uuid
 
             pipeline_uuid = ""
             pipeline_name = ""
@@ -496,6 +500,7 @@ class RenderingModel:
             config.name = rt.name or ""
             config.kind = rt.kind
             config.camera_uuid = camera_uuid
+            config.xr_origin_uuid = xr_origin_uuid
             config.width = rt.width
             config.height = rt.height
             config.dynamic_resolution = bool(rt.dynamic_resolution)

@@ -17,6 +17,7 @@
 #include <termin/render/material_pass.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/normal_pass.hpp>
+#include <termin/xr/xr_origin_component.hpp>
 #include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
@@ -281,6 +282,56 @@ NB_MODULE(_components_render_native, m) {
     nb::arg("near") = 0.1,
     nb::arg("far") = 100.0,
     nb::rv_policy::take_ownership);
+
+    nb::class_<XrOriginComponent, CxxComponent>(m, "XrOriginComponent")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<XrOriginComponent>(self);
+        })
+        .def_prop_rw("reference_space",
+            &XrOriginComponent::get_reference_space_str,
+            &XrOriginComponent::set_reference_space_str)
+        .def_rw("near", &XrOriginComponent::near_clip)
+        .def_rw("far", &XrOriginComponent::far_clip)
+        .def_prop_rw("near_clip",
+            [](XrOriginComponent& c) { return c.near_clip; },
+            [](XrOriginComponent& c, double v) { c.near_clip = v; })
+        .def_prop_rw("far_clip",
+            [](XrOriginComponent& c) { return c.far_clip; },
+            [](XrOriginComponent& c, double v) { c.far_clip = v; })
+        .def_rw("layer_mask", &XrOriginComponent::layer_mask)
+        .def("c_component_ptr", [](XrOriginComponent& c) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(c.c_component());
+        })
+        .def("_cxx_component_ptr", [](XrOriginComponent& c) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(&c);
+        })
+        .def_static("_from_c_component_ptr", [](uintptr_t ptr) -> nb::object {
+            if (ptr == 0) {
+                return nb::none();
+            }
+
+            tc_component* tc = reinterpret_cast<tc_component*>(ptr);
+            if (tc->native_language == TC_LANGUAGE_PYTHON && tc->body) {
+                return nb::borrow<nb::object>(reinterpret_cast<PyObject*>(tc->body));
+            }
+            if (tc->kind != TC_CXX_COMPONENT) {
+                return nb::none();
+            }
+
+            CxxComponent* cxx = CxxComponent::from_tc(tc);
+            if (!cxx) {
+                return nb::none();
+            }
+
+            return nb::cast(static_cast<XrOriginComponent*>(cxx), nb::rv_policy::reference);
+        })
+        .def_static("_from_cxx_component_ptr", [](uintptr_t ptr) -> nb::object {
+            if (ptr == 0) {
+                return nb::none();
+            }
+            auto* cxx = reinterpret_cast<XrOriginComponent*>(ptr);
+            return nb::cast(cxx, nb::rv_policy::reference);
+        });
 
     nb::class_<MeshRenderer, Component>(m, "MeshRenderer")
         .def("__init__", [](nb::handle self) {
