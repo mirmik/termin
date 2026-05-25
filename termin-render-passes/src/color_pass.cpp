@@ -528,7 +528,40 @@ void ColorPass::execute_with_data(
 
         tc_mesh* mesh = drawable->get_mesh_for_phase(phase_mark, dc.geometry_id);
         if (!mesh) {
-            // Non-mesh drawables (immediate gizmos, NavMesh debug,
+            RenderState state = convert_render_state(dc.phase->state);
+            if (wireframe) state.polygon_mode = PolygonMode::Line;
+
+            ctx2->clear_resource_bindings();
+            bind_engine_per_frame_uniforms(*ctx2, pf);
+            ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING, &sb, sizeof(sb));
+
+            ctx2->set_depth_test(state.depth_test);
+            ctx2->set_depth_write(state.depth_write);
+            ctx2->set_blend(state.blend);
+            ctx2->set_blend_func(convert_blend_factor_tgfx2(state.blend_src),
+                                 convert_blend_factor_tgfx2(state.blend_dst));
+            ctx2->set_cull(state.cull ? tgfx::CullMode::Back : tgfx::CullMode::None);
+            ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
+                                   ? tgfx::PolygonMode::Line
+                                   : tgfx::PolygonMode::Fill);
+
+            RenderContext direct_context;
+            direct_context.view = view;
+            direct_context.projection = projection;
+            direct_context.model = drawable->get_model_matrix(dc.entity);
+            direct_context.phase = phase_mark;
+            direct_context.current_tc_shader = TcShader(dc.final_shader);
+            direct_context.layer_mask = layer_mask;
+            direct_context.camera_position = camera_position;
+            direct_context.viewport_width = rect.width;
+            direct_context.viewport_height = rect.height;
+            direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
+
+            if (drawable->draw_tgfx2(*ctx2, direct_context, phase_mark, dc.phase, dc.geometry_id)) {
+                continue;
+            }
+
+            // Other non-mesh drawables (immediate gizmos, NavMesh debug,
             // solid primitive helpers) belong in their own dedicated
             // passes (UnifiedGizmoPass, ColliderGizmoPass, ...), not
             // in ColorPass. Stage 8.1 removed the legacy fallback

@@ -1,9 +1,14 @@
 #include <termin/render/line_renderer.hpp>
 
 #include <algorithm>
+#include <array>
+#include <cstring>
 
 #include <tcbase/tc_log.hpp>
 #include <tgfx2/line_mesh_builder.hpp>
+#include <tgfx2/render_context.hpp>
+#include <tgfx2/screen_space_line_renderer.hpp>
+#include <tgfx2/world_space_line_renderer.hpp>
 
 namespace termin {
 namespace {
@@ -76,6 +81,27 @@ tgfx::LinePoint3 to_line_point(const tc_vec3& point) {
     };
 }
 
+tgfx::LinePoint3 transform_line_point(const Mat44f& model, const tc_vec3& point) {
+    Vec3 world = model.transform_point(Vec3{point.x, point.y, point.z});
+    return {
+        static_cast<float>(world.x),
+        static_cast<float>(world.y),
+        static_cast<float>(world.z),
+    };
+}
+
+std::array<float, 16> to_tgfx_matrix(const Mat44f& matrix) {
+    std::array<float, 16> result{};
+    std::memcpy(result.data(), matrix.data, sizeof(matrix.data));
+    return result;
+}
+
+std::array<float, 4> phase_color(const tc_material_phase* phase) {
+    std::array<float, 4> color{1.0f, 1.0f, 1.0f, 1.0f};
+    tc_material_phase_get_color(phase, &color[0], &color[1], &color[2], &color[3]);
+    return color;
+}
+
 } // namespace
 
 LineRenderer::LineRenderer(const char* type_name)
@@ -83,6 +109,8 @@ LineRenderer::LineRenderer(const char* type_name)
 {
     install_drawable_vtable(&_c);
 }
+
+LineRenderer::~LineRenderer() = default;
 
 TcMaterial LineRenderer::default_material() {
     static TcMaterial mat;
@@ -122,6 +150,22 @@ TcMaterial LineRenderer::effective_material() const {
     return default_material();
 }
 
+LineRenderMode LineRenderer::effective_render_mode() const {
+    if (raw_lines) {
+        return LineRenderMode::RawLines;
+    }
+    switch (render_mode) {
+        case LineRenderMode::WorldBillboard:
+        case LineRenderMode::ScreenSpace:
+        case LineRenderMode::WorldMesh:
+        case LineRenderMode::RawLines:
+            return render_mode;
+    }
+    tc::Log::error("[LineRenderer] invalid render mode %d; falling back to WorldBillboard",
+                   static_cast<int>(render_mode));
+    return LineRenderMode::WorldBillboard;
+}
+
 void LineRenderer::set_points(const std::vector<tc_vec3>& points) {
     points_ = points;
     dirty_ = true;
@@ -144,6 +188,11 @@ void LineRenderer::add_point(const tc_vec3& point) {
 
 void LineRenderer::set_width(float value) {
     width = value;
+    dirty_ = true;
+}
+
+void LineRenderer::set_render_mode(LineRenderMode value) {
+    render_mode = value;
     dirty_ = true;
 }
 
@@ -179,8 +228,14 @@ void LineRenderer::rebuild_geometry() {
     }
 
     tc_vertex_layout layout = tc_vertex_layout_pos();
+    LineRenderMode mode = effective_render_mode();
 
-    if (raw_lines) {
+    if (mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::ScreenSpace) {
+        dirty_ = false;
+        return;
+    }
+
+    if (mode == LineRenderMode::RawLines) {
         std::vector<float> vertices;
         vertices.reserve(points_.size() * 3);
         for (const tc_vec3& point : points_) {
@@ -317,17 +372,97 @@ void LineRenderer::draw_geometry(const RenderContext& context, int geometry_id) 
     tc_mesh_draw_gpu(mesh);
 }
 
+bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
+                              const RenderContext& context,
+                              const std::string& phase_mark,
+                              tc_material_phase* phase,
+                              int geometry_id) {
+    (void)phase_mark;
+    (void)geometry_id;
+
+    LineRenderMode mode = effective_render_mode();
+    if (mode != LineRenderMode::WorldBillboard && mode != LineRenderMode::ScreenSpace) {
+        return false;
+    }
+    if (points_.size() < 2) {
+        return true;
+    }
+
+    std::vector<tgfx::LinePoint3> world_points;
+    world_points.reserve(points_.size());
+    for (const tc_vec3& point : points_) {
+        world_points.push_back(transform_line_point(context.model, point));
+    }
+
+    Mat44f view_projection = context.projection * context.view;
+    std::array<float, 4> color = phase_color(phase);
+
+    if (mode == LineRenderMode::WorldBillboard) {
+        if (!world_space_renderer_) {
+            world_space_renderer_ = std::make_unique<tgfx::WorldSpaceLineRenderer>();
+        }
+        tgfx::WorldSpaceLineStyle style;
+        style.width = std::max(width, 0.0f);
+        style.color = color;
+        style.cap = tgfx::LineCapStyle::Round;
+        style.join = tgfx::LineJoinStyle::Round;
+        style.round_segments = 12;
+
+        tgfx::WorldSpaceLineParams params;
+        params.view_projection = to_tgfx_matrix(view_projection);
+        params.camera_position = {
+            static_cast<float>(context.camera_position.x),
+            static_cast<float>(context.camera_position.y),
+            static_cast<float>(context.camera_position.z),
+        };
+
+        ctx2.set_cull(tgfx::CullMode::None);
+        world_space_renderer_->draw_polyline(ctx2, world_points, style, params);
+        return true;
+    }
+
+    if (!screen_space_renderer_) {
+        screen_space_renderer_ = std::make_unique<tgfx::ScreenSpaceLineRenderer>();
+    }
+    tgfx::ScreenSpaceLineStyle style;
+    style.width_px = std::max(width, 0.0f);
+    style.color = color;
+    style.cap = tgfx::LineCapStyle::Round;
+    style.join = tgfx::LineJoinStyle::Round;
+    style.round_segments = 12;
+
+    tgfx::ScreenSpaceLineParams params;
+    params.view_projection = to_tgfx_matrix(view_projection);
+    params.viewport_width = static_cast<float>(std::max(context.viewport_width, 1));
+    params.viewport_height = static_cast<float>(std::max(context.viewport_height, 1));
+
+    ctx2.set_cull(tgfx::CullMode::None);
+    screen_space_renderer_->draw_polyline(ctx2, world_points, style, params);
+    return true;
+}
+
 tc_mesh* LineRenderer::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
     (void)phase_mark;
     (void)geometry_id;
+    LineRenderMode mode = effective_render_mode();
+    if (mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::ScreenSpace) {
+        return nullptr;
+    }
     return current_mesh_ptr();
 }
 
 std::vector<GeometryDrawCall> LineRenderer::get_geometry_draws(const std::string* phase_mark) {
     std::vector<GeometryDrawCall> draws;
-    tc_mesh* mesh = current_mesh_ptr();
-    if (!mesh) {
+    if (points_.size() < 2) {
         return draws;
+    }
+
+    LineRenderMode mode = effective_render_mode();
+    if (mode == LineRenderMode::WorldMesh || mode == LineRenderMode::RawLines) {
+        tc_mesh* mesh = current_mesh_ptr();
+        if (!mesh) {
+            return draws;
+        }
     }
 
     TcMaterial mat = effective_material();
