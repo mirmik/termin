@@ -48,6 +48,11 @@ else()
     find_package(termin_components_collision REQUIRED)
 endif()
     if(COMMAND termin_require_package)
+    termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
+else()
+    find_package(termin_components_mesh REQUIRED)
+endif()
+    if(COMMAND termin_require_package)
     termin_require_package(termin_components_kinematic termin_components_kinematic::termin_components_kinematic)
 else()
     find_package(termin_components_kinematic REQUIRED)
@@ -163,6 +168,7 @@ endif()
         termin_input::termin_input
         termin_collision::termin_collision
         termin_components_collision::termin_components_collision
+        termin_components_mesh::termin_components_mesh
         termin_components_kinematic::termin_components_kinematic
         termin_components_render::termin_components_render
         termin_engine::termin_engine

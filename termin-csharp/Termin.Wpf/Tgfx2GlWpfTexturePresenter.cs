@@ -18,7 +18,7 @@ public sealed class Tgfx2GlWpfTexturePresenter : IDisposable
     private uint _targetTextureHandle;
     private bool _disposed;
 
-    public void Present(uint sourceTextureHandle, int width, int height)
+    public void Present(uint sourceTextureHandle, int width, int height, int destinationFramebuffer = 0)
     {
         if (sourceTextureHandle == 0 || width <= 0 || height <= 0) return;
 
@@ -26,7 +26,7 @@ public sealed class Tgfx2GlWpfTexturePresenter : IDisposable
         if (_targetTextureHandle == 0) return;
 
         TerminCore.Tgfx2BlitTexture(sourceTextureHandle, _targetTextureHandle, width, height);
-        BlitTargetTextureToCurrentFramebuffer(width, height);
+        BlitTargetTextureToFramebuffer(width, height, destinationFramebuffer);
     }
 
     private void EnsureTarget(int width, int height)
@@ -57,11 +57,16 @@ public sealed class Tgfx2GlWpfTexturePresenter : IDisposable
         _height = height;
     }
 
-    private void BlitTargetTextureToCurrentFramebuffer(int width, int height)
+    private void BlitTargetTextureToFramebuffer(int width, int height, int destinationFramebuffer)
     {
         GL.GetInteger(GetPName.ReadFramebufferBinding, out int prevReadFbo);
         GL.GetInteger(GetPName.DrawFramebufferBinding, out int prevDrawFbo);
+        var prevViewport = new int[4];
+        GL.GetInteger(GetPName.Viewport, prevViewport);
+        bool scissorWasEnabled = GL.IsEnabled(EnableCap.ScissorTest);
 
+        GL.Disable(EnableCap.ScissorTest);
+        GL.Viewport(0, 0, width, height);
         GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _readFbo);
         GL.FramebufferTexture2D(FramebufferTarget.ReadFramebuffer,
                                 FramebufferAttachment.ColorAttachment0,
@@ -69,7 +74,8 @@ public sealed class Tgfx2GlWpfTexturePresenter : IDisposable
                                 _textureId,
                                 0);
         GL.ReadBuffer(ReadBufferMode.ColorAttachment0);
-        GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, prevDrawFbo);
+        int drawFbo = destinationFramebuffer != 0 ? destinationFramebuffer : prevDrawFbo;
+        GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, drawFbo);
         GL.BlitFramebuffer(0, 0, width, height,
                            0, 0, width, height,
                            ClearBufferMask.ColorBufferBit,
@@ -77,6 +83,11 @@ public sealed class Tgfx2GlWpfTexturePresenter : IDisposable
 
         GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, prevReadFbo);
         GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, prevDrawFbo);
+        GL.Viewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+        if (scissorWasEnabled)
+        {
+            GL.Enable(EnableCap.ScissorTest);
+        }
     }
 
     private void ReleaseTarget()
