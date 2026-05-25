@@ -154,9 +154,16 @@ platform helper `Termin.Wpf.Tgfx2GlWpfTexturePresenter`.
 Минимальный render tick:
 
 ```csharp
+int width = Math.Max(1, GlControl.FrameBufferWidth);
+int height = Math.Max(1, GlControl.FrameBufferHeight);
 uint colorTex = View.render_to_texture_id(width, height);
-_presenter.Present(colorTex, width, height);
+_presenter.Present(colorTex, width, height, GlControl.Framebuffer);
 ```
+
+Для `OpenTK.Wpf.GLWpfControl` важно использовать `FrameBufferWidth`,
+`FrameBufferHeight` и `Framebuffer`, а не WPF `ActualWidth` / `ActualHeight` и
+не default framebuffer `0`. GLWpf показывает собственный FBO; запись в другой
+framebuffer дает черный или искаженный контрол.
 
 Для этого потребитель SDK должен иметь ссылку не только на `Termin.Native`, но и
 на сборку `Termin.Wpf`, где лежит presenter.

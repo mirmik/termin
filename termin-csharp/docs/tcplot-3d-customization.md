@@ -257,9 +257,16 @@ interop/present слой. GL plumbing не должен находиться в 
 Минимальный render tick:
 
 ```csharp
+int width = Math.Max(1, GlControl.FrameBufferWidth);
+int height = Math.Max(1, GlControl.FrameBufferHeight);
 uint colorTex = view.render_to_texture_id(width, height);
-_presenter.Present(colorTex, width, height);
+_presenter.Present(colorTex, width, height, GlControl.Framebuffer);
 ```
+
+Для `OpenTK.Wpf.GLWpfControl` нужно брать именно `FrameBufferWidth`,
+`FrameBufferHeight` и `Framebuffer`. WPF `ActualWidth` / `ActualHeight` измерены
+в DIPs, а GLWpf выводит изображение через свой FBO; blit в default framebuffer
+не попадает в отображаемую картинку.
 
 Mouse events надо пробросить в view:
 

@@ -20,15 +20,11 @@ public partial class Plot2DControl : UserControl, IDisposable
     {
         InitializeComponent();
 
-        var settings = new GLWpfControlSettings
-        {
-            MajorVersion = 4,
-            MinorVersion = 5,
-        };
+        var settings = GlWpfSharedContext.CreateSettings();
         GlControl.Start(settings);
+        GlWpfSharedContext.CaptureIfFirst(GlControl);
         GlControl.Render += OnGlRender;
 
-        Loaded   += (_, _) => InitializeNative();
         Unloaded += (_, _) => Dispose();
 
         GlControl.MouseDown  += OnMouseDownGl;
@@ -112,12 +108,16 @@ public partial class Plot2DControl : UserControl, IDisposable
 
     private void OnGlRender(TimeSpan delta)
     {
+        if (!_initialized)
+        {
+            InitializeNative();
+        }
         if (!_initialized || _view == null) return;
 
-        var w = Math.Max(1, (int)GlControl.ActualWidth);
-        var h = Math.Max(1, (int)GlControl.ActualHeight);
+        var w = Math.Max(1, GlControl.FrameBufferWidth);
+        var h = Math.Max(1, GlControl.FrameBufferHeight);
         uint colorTex = _view.render_to_texture_id(w, h);
-        _presenter?.Present(colorTex, w, h);
+        _presenter?.Present(colorTex, w, h, GlControl.Framebuffer);
     }
 
     private static int ToTcbaseButton(System.Windows.Input.MouseButton b) => b switch
