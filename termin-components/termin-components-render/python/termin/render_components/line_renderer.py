@@ -1,5 +1,5 @@
 """LineRenderer re-export."""
 
-from termin.render_components import LineRenderer
+from termin.render_components import LineRenderer, LineRenderMode
 
-__all__ = ["LineRenderer"]
+__all__ = ["LineRenderer", "LineRenderMode"]

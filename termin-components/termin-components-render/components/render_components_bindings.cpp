@@ -494,17 +494,30 @@ NB_MODULE(_components_render_native, m) {
             return self.get_geometry_draws(&pm);
         }, nb::arg("phase_mark") = nb::none());
 
+    nb::enum_<LineRenderMode>(m, "LineRenderMode")
+        .value("WorldBillboard", LineRenderMode::WorldBillboard)
+        .value("ScreenSpace", LineRenderMode::ScreenSpace)
+        .value("WorldMesh", LineRenderMode::WorldMesh)
+        .value("RawLines", LineRenderMode::RawLines)
+        .export_values();
+
     nb::class_<LineRenderer, Component>(m, "LineRenderer")
         .def("__init__", [](nb::handle self) {
             cxx_component_init<LineRenderer>(self);
         })
-        .def("__init__", [](nb::handle self, nb::object points, float width, bool raw_lines, nb::object material_arg) {
+        .def("__init__", [](nb::handle self,
+                            nb::object points,
+                            float width,
+                            bool raw_lines,
+                            nb::object material_arg,
+                            LineRenderMode render_mode) {
             cxx_component_init<LineRenderer>(self);
             auto* cpp = nb::inst_ptr<LineRenderer>(self);
             if (!points.is_none()) {
                 cpp->set_points(tc_vec3_list_from_python(points));
             }
             cpp->set_width(width);
+            cpp->set_render_mode(render_mode);
             cpp->set_raw_lines(raw_lines);
             if (!material_arg.is_none()) {
                 if (nb::isinstance<TcMaterial>(material_arg)) {
@@ -517,13 +530,17 @@ NB_MODULE(_components_render_native, m) {
         nb::arg("points") = nb::none(),
         nb::arg("width") = 0.1f,
         nb::arg("raw_lines") = false,
-        nb::arg("material") = nb::none())
+        nb::arg("material") = nb::none(),
+        nb::arg("render_mode") = LineRenderMode::WorldBillboard)
         .def_prop_rw("points",
             [](LineRenderer& self) { return tc_vec3_list_to_python(self.points()); },
             [](LineRenderer& self, nb::object value) {
                 self.set_points(tc_vec3_list_from_python(value));
             })
         .def_prop_rw("width", [](LineRenderer& self) { return self.width; }, &LineRenderer::set_width)
+        .def_prop_rw("render_mode",
+            [](LineRenderer& self) { return self.render_mode; },
+            &LineRenderer::set_render_mode)
         .def_prop_rw("raw_lines", [](LineRenderer& self) { return self.raw_lines; }, &LineRenderer::set_raw_lines)
         .def_prop_rw("material",
             [](LineRenderer& self) -> TcMaterial& { return self.material; },
@@ -545,6 +562,7 @@ NB_MODULE(_components_render_native, m) {
             self.add_point(tc_vec3_from_python(value));
         })
         .def("set_width", &LineRenderer::set_width)
+        .def("set_render_mode", &LineRenderer::set_render_mode)
         .def("set_raw_lines", &LineRenderer::set_raw_lines)
         .def("set_material", &LineRenderer::set_material)
         .def("set_material_by_name", &LineRenderer::set_material_by_name)

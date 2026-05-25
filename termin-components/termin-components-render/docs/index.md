@@ -20,4 +20,11 @@ Component-level render API is installed through this package and participates in
 ## LineRenderer
 
 `LineRenderer` is implemented in C++ and re-exported from `termin.render_components`.
-Thick-line geometry is built by `tgfx2::build_line_mesh` in `termin-graphics`, so the line tessellation rules can be covered by graphics-level tests instead of living inside the component.
+By default it now draws through the tgfx2 GPU line path instead of baking a
+`tc_mesh`: `LineRenderMode.WorldBillboard` expands camera-facing thick line
+quads in `termin-graphics` and uses round caps/joins. `LineRenderMode.ScreenSpace`
+uses the same renderer family for pixel-width lines.
+
+The old CPU mesh path is still available as `LineRenderMode.WorldMesh`, and
+the legacy `raw_lines` flag remains supported for compatibility. Those modes
+continue to expose a mesh through `get_mesh()`.
