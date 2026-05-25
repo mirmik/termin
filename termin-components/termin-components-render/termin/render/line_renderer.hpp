@@ -1,0 +1,83 @@
+#pragma once
+
+#include <set>
+#include <string>
+#include <vector>
+
+#include <tc_value.h>
+#include <termin/entity/component.hpp>
+#include <termin/entity/component_registry.hpp>
+#include <termin/render/drawable.hpp>
+#include <tgfx/tgfx_material_handle.hpp>
+#include <tgfx/tgfx_mesh_handle.hpp>
+
+namespace termin {
+
+class ENTITY_API LineRenderer : public Component, public Drawable {
+public:
+    TcMaterial material;
+    float width = 0.1f;
+    bool raw_lines = false;
+    tc_vec3 up_hint = {0.0, 1.0, 0.0};
+
+private:
+    std::vector<tc_vec3> points_;
+    TcMesh mesh_;
+    bool dirty_ = true;
+
+    static TcMaterial default_material();
+    TcMaterial effective_material() const;
+    void rebuild_geometry();
+    void ensure_geometry();
+    tc_mesh* current_mesh_ptr() const;
+
+public:
+    explicit LineRenderer(const char* type_name = "LineRenderer");
+    ~LineRenderer() override = default;
+
+    const std::vector<tc_vec3>& points() const { return points_; }
+    void set_points(const std::vector<tc_vec3>& points);
+    void set_points(std::vector<tc_vec3>&& points);
+    void clear_points();
+    void add_point(const tc_vec3& point);
+    void set_width(float value);
+    void set_raw_lines(bool value);
+    void set_up_hint(const tc_vec3& value);
+    void set_material(const TcMaterial& value);
+    void set_material_by_name(const std::string& name);
+
+    tc_value serialize_points() const;
+    void deserialize_points(const tc_value* value);
+    tc_value serialize_data() const override;
+    void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
+
+    std::set<std::string> get_phase_marks() const override;
+    std::set<std::string> phase_marks() const { return get_phase_marks(); }
+    void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
+    tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override;
+    std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
+    TcMesh get_mesh();
+};
+
+INSPECT_FIELD_CALLBACK(LineRenderer, TcMaterial, material, "Material", "tc_material",
+    [](LineRenderer* self) -> TcMaterial& { return self->material; },
+    [](LineRenderer* self, const TcMaterial& value) { self->set_material(value); })
+
+INSPECT_FIELD_CALLBACK(LineRenderer, float, width, "Width", "float",
+    [](LineRenderer* self) -> float& { return self->width; },
+    [](LineRenderer* self, const float& value) { self->set_width(value); },
+    0.001, 10.0, 0.01)
+
+INSPECT_FIELD_CALLBACK(LineRenderer, bool, raw_lines, "Raw Lines", "bool",
+    [](LineRenderer* self) -> bool& { return self->raw_lines; },
+    [](LineRenderer* self, const bool& value) { self->set_raw_lines(value); })
+
+INSPECT_FIELD_CALLBACK(LineRenderer, tc_vec3, up_hint, "Up Hint", "vec3",
+    [](LineRenderer* self) -> tc_vec3& { return self->up_hint; },
+    [](LineRenderer* self, const tc_vec3& value) { self->set_up_hint(value); })
+
+SERIALIZABLE_FIELD(LineRenderer, points, serialize_points(), deserialize_points(val))
+
+REGISTER_COMPONENT(LineRenderer, Component);
+
+} // namespace termin

@@ -14,6 +14,7 @@
 #include <termin/lighting/light_component.hpp>
 #include <termin/render/depth_pass.hpp>
 #include <termin/render/frame_pass.hpp>
+#include <termin/render/line_renderer.hpp>
 #include <termin/render/material_pass.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/normal_pass.hpp>
@@ -120,6 +121,32 @@ static void set_material_from_python(MaterialPass& pass, nb::object material_obj
     }
 }
 
+static tc_vec3 tc_vec3_from_python(nb::handle value) {
+    nb::object obj = nb::borrow<nb::object>(value);
+    return tc_vec3{
+        nb::cast<double>(obj[0]),
+        nb::cast<double>(obj[1]),
+        nb::cast<double>(obj[2]),
+    };
+}
+
+static std::vector<tc_vec3> tc_vec3_list_from_python(nb::handle value) {
+    std::vector<tc_vec3> result;
+    nb::iterable iterable = nb::cast<nb::iterable>(value);
+    for (nb::handle item : iterable) {
+        result.push_back(tc_vec3_from_python(item));
+    }
+    return result;
+}
+
+static nb::list tc_vec3_list_to_python(const std::vector<tc_vec3>& points) {
+    nb::list result;
+    for (const tc_vec3& point : points) {
+        result.append(nb::make_tuple(point.x, point.y, point.z));
+    }
+    return result;
+}
+
 } // namespace termin
 
 using namespace termin;
@@ -128,6 +155,7 @@ NB_MODULE(_components_render_native, m) {
     m.doc() = "Native render components bindings";
 
     nb::module_::import_("tgfx._tgfx_native");
+    nb::module_::import_("tmesh._tmesh_native");
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.lighting._lighting_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
@@ -459,6 +487,79 @@ NB_MODULE(_components_render_native, m) {
         .def("draw_geometry", &MeshRenderer::draw_geometry, nb::arg("context"), nb::arg("geometry_id") = 0)
         .def("get_phases_for_mark", &MeshRenderer::get_phases_for_mark, nb::arg("phase_mark"))
         .def("get_geometry_draws", [](MeshRenderer& self, nb::object phase_mark) {
+            if (phase_mark.is_none()) {
+                return self.get_geometry_draws(nullptr);
+            }
+            std::string pm = nb::cast<std::string>(phase_mark);
+            return self.get_geometry_draws(&pm);
+        }, nb::arg("phase_mark") = nb::none());
+
+    nb::class_<LineRenderer, Component>(m, "LineRenderer")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<LineRenderer>(self);
+        })
+        .def("__init__", [](nb::handle self, nb::object points, float width, bool raw_lines, nb::object material_arg) {
+            cxx_component_init<LineRenderer>(self);
+            auto* cpp = nb::inst_ptr<LineRenderer>(self);
+            if (!points.is_none()) {
+                cpp->set_points(tc_vec3_list_from_python(points));
+            }
+            cpp->set_width(width);
+            cpp->set_raw_lines(raw_lines);
+            if (!material_arg.is_none()) {
+                if (nb::isinstance<TcMaterial>(material_arg)) {
+                    cpp->set_material(nb::cast<TcMaterial>(material_arg));
+                } else if (nb::isinstance<nb::str>(material_arg)) {
+                    cpp->set_material_by_name(nb::cast<std::string>(material_arg));
+                }
+            }
+        },
+        nb::arg("points") = nb::none(),
+        nb::arg("width") = 0.1f,
+        nb::arg("raw_lines") = false,
+        nb::arg("material") = nb::none())
+        .def_prop_rw("points",
+            [](LineRenderer& self) { return tc_vec3_list_to_python(self.points()); },
+            [](LineRenderer& self, nb::object value) {
+                self.set_points(tc_vec3_list_from_python(value));
+            })
+        .def_prop_rw("width", [](LineRenderer& self) { return self.width; }, &LineRenderer::set_width)
+        .def_prop_rw("raw_lines", [](LineRenderer& self) { return self.raw_lines; }, &LineRenderer::set_raw_lines)
+        .def_prop_rw("material",
+            [](LineRenderer& self) -> TcMaterial& { return self.material; },
+            [](LineRenderer& self, const TcMaterial& value) { self.set_material(value); },
+            nb::rv_policy::reference_internal)
+        .def_prop_rw("up_hint",
+            [](LineRenderer& self) {
+                return nb::make_tuple(self.up_hint.x, self.up_hint.y, self.up_hint.z);
+            },
+            [](LineRenderer& self, nb::object value) {
+                self.set_up_hint(tc_vec3_from_python(value));
+            })
+        .def_prop_ro("is_drawable", [](LineRenderer&) { return true; })
+        .def("set_points", [](LineRenderer& self, nb::object value) {
+            self.set_points(tc_vec3_list_from_python(value));
+        })
+        .def("clear_points", &LineRenderer::clear_points)
+        .def("add_point", [](LineRenderer& self, nb::object value) {
+            self.add_point(tc_vec3_from_python(value));
+        })
+        .def("set_width", &LineRenderer::set_width)
+        .def("set_raw_lines", &LineRenderer::set_raw_lines)
+        .def("set_material", &LineRenderer::set_material)
+        .def("set_material_by_name", &LineRenderer::set_material_by_name)
+        .def("get_material", [](LineRenderer& self) { return self.material; })
+        .def("get_mesh", &LineRenderer::get_mesh)
+        .def("_get_mesh", &LineRenderer::get_mesh)
+        .def_prop_ro("phase_marks", [](LineRenderer& self) {
+            nb::set marks;
+            for (const auto& mark : self.phase_marks()) {
+                marks.add(nb::str(mark.c_str()));
+            }
+            return marks;
+        })
+        .def("draw_geometry", &LineRenderer::draw_geometry, nb::arg("context"), nb::arg("geometry_id") = 0)
+        .def("get_geometry_draws", [](LineRenderer& self, nb::object phase_mark) {
             if (phase_mark.is_none()) {
                 return self.get_geometry_draws(nullptr);
             }

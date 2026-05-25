@@ -8,13 +8,13 @@ converted to TcMesh and rendered through termin-graphics draw_tc_mesh().
 from __future__ import annotations
 
 import ctypes
-import math
 import uuid
 
 import numpy as np
 import sdl2
 
 from termin.csg import Solid, to_mesh3, to_tc_mesh
+from termin.csg.viewer_camera import OrbitCamera
 from termin.display import SDLBackendWindow
 from tgfx import (
     CULL_NONE,
@@ -80,41 +80,6 @@ _COLORS = (
 )
 
 
-def _normalize(v):
-    n = float(np.linalg.norm(v))
-    if n <= 1.0e-8:
-        return v
-    return v / n
-
-
-def _look_at(eye, target, up):
-    f = _normalize(target - eye)
-    r = _normalize(np.cross(f, up))
-    u = np.cross(r, f)
-    m = np.identity(4, dtype=np.float32)
-    m[0, 0:3] = r
-    m[1, 0:3] = u
-    m[2, 0:3] = -f
-    m[0, 3] = -float(np.dot(r, eye))
-    m[1, 3] = -float(np.dot(u, eye))
-    m[2, 3] = float(np.dot(f, eye))
-    return m
-
-
-def _perspective(fovy, aspect, near, far):
-    f = 1.0 / math.tan(fovy * 0.5)
-    fn = far - near
-    m = np.zeros((4, 4), dtype=np.float32)
-    m[0, 0] = f / aspect
-    # Termin/tgfx2 use Vulkan-style clip coordinates: Y points down and
-    # hardware depth is in [0, 1]. This matches tcplot's orbit camera.
-    m[1, 1] = -f
-    m[2, 2] = -far / fn
-    m[2, 3] = -(far * near) / fn
-    m[3, 2] = -1.0
-    return m
-
-
 def _mesh_bounds(meshes):
     lo = np.array((0.0, 0.0, 0.0), dtype=np.float32)
     hi = np.array((0.0, 0.0, 0.0), dtype=np.float32)
@@ -131,43 +96,6 @@ def _mesh_bounds(meshes):
             hi = vertices.max(axis=0)
             have_any = True
     return lo, hi
-
-
-class _Camera:
-    def __init__(self, meshes):
-        lo, hi = _mesh_bounds(meshes)
-        center = (lo + hi) * 0.5
-        extent = hi - lo
-        radius = max(float(np.linalg.norm(extent)) * 0.65, 1.0)
-        self.target = center.astype(np.float32)
-        self.distance = radius * 2.6
-        self.yaw = math.radians(45.0)
-        self.pitch = math.radians(28.0)
-
-    def orbit(self, dx, dy):
-        self.yaw += float(dx) * 0.01
-        self.pitch += float(dy) * 0.01
-        limit = math.radians(86.0)
-        self.pitch = max(-limit, min(limit, self.pitch))
-
-    def zoom(self, delta):
-        factor = 1.0 - float(delta) * 0.10
-        self.distance = max(0.05, self.distance * max(0.15, factor))
-
-    def view_projection(self, width, height):
-        cp = math.cos(self.pitch)
-        eye = self.target + np.array(
-            (
-                math.sin(self.yaw) * cp,
-                math.cos(self.yaw) * cp,
-                math.sin(self.pitch),
-            ),
-            dtype=np.float32,
-        ) * self.distance
-        view = _look_at(eye, self.target, np.array((0.0, 0.0, 1.0), dtype=np.float32))
-        aspect = max(float(width) / max(float(height), 1.0), 0.001)
-        proj = _perspective(math.radians(45.0), aspect, 0.01, max(self.distance * 20.0, 100.0))
-        return proj @ view
 
 
 def _build_line_mesh(mesh, name):
@@ -313,7 +241,9 @@ def _dispatch_event(window, camera, state, ev):
 def draw_solids(*solids, title="termin-csg", show_wireframe=True, size=(1000, 760)):
     """Open an interactive preview window and render CSG solids or contours."""
     preview_meshes = _items_to_preview_meshes(solids)
-    camera = _Camera([m.cpu_mesh for m in preview_meshes])
+    camera = OrbitCamera()
+    lo, hi = _mesh_bounds([m.cpu_mesh for m in preview_meshes])
+    camera.fit_bounds(lo, hi)
 
     window = SDLBackendWindow(title, int(size[0]), int(size[1]))
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())

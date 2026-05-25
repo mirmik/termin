@@ -63,6 +63,7 @@ termin_add_module(
         src/light_component.cpp
         src/xr_origin_component.cpp
         src/xr_thumbstick_locomotion_component.cpp
+        src/line_renderer.cpp
         src/mesh_renderer.cpp
         src/material_pass.cpp
         src/depth_pass.cpp
@@ -71,6 +72,7 @@ termin_add_module(
         tcbase::termin_base
         tmesh::termin_mesh
         tgfx::termin_graphics
+        tgfx::termin_graphics2
         termin_inspect::termin_inspect
         termin_scene::termin_scene
         termin_input::termin_input
