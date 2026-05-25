@@ -32,7 +32,7 @@ struct XrHandInputState {
     XrPoseState grip_pose;
 };
 
-struct XrRigInputState {
+struct TERMIN_INPUT_API XrRigInputState {
     std::string id = "xr";
     uint64_t frame_index = 0;
     XrHandInputState left;

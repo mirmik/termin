@@ -184,7 +184,7 @@ int main(int argc, char* argv[]) {
     } else if (sdk_python_tree) {
         path_code =
             "import sys, types\n"
-            "host_paths = [p for p in r'" TERMIN_HOST_PYTHON_PATHS "'.split(':') if p]\n"
+            "host_paths = [p for p in r'" TERMIN_HOST_PYTHON_PATHS "'.split('|') if p]\n"
             "for p in reversed(host_paths):\n"
             "    if p and p not in sys.path:\n"
             "        sys.path.insert(0, p)\n"
