@@ -16,3 +16,8 @@ Render component package for attaching rendering data to entities/scenes.
 ## Публичный API
 
 Component-level render API is installed through this package and participates in the canonical `termin.render_components` namespace.
+
+## LineRenderer
+
+`LineRenderer` is implemented in C++ and re-exported from `termin.render_components`.
+Thick-line geometry is built by `tgfx2::build_line_mesh` in `termin-graphics`, so the line tessellation rules can be covered by graphics-level tests instead of living inside the component.

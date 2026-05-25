@@ -6,6 +6,8 @@ import math
 
 import numpy as np
 
+from termin.geombase import OrbitCamera as _NativeOrbitCamera
+
 
 def normalize(v):
     n = float(np.linalg.norm(v))
@@ -42,28 +44,85 @@ def perspective(fovy, aspect, near, far):
 
 class OrbitCamera:
     def __init__(self) -> None:
-        self.target = np.array((0.0, 0.0, 0.0), dtype=np.float32)
-        self.distance = 8.0
+        self._camera = _NativeOrbitCamera()
+        self._camera.distance = 8.0
         self.yaw = math.radians(45.0)
         self.pitch = math.radians(28.0)
-        self.fov_y = math.radians(45.0)
-        self.near = 0.01
-        self.far = 100.0
+        self._camera.fov_y = math.radians(45.0)
+        self._camera.near = 0.01
+        self._camera.far = 100.0
+
+    @property
+    def target(self):
+        return np.asarray(self._camera.target, dtype=np.float32)
+
+    @target.setter
+    def target(self, value) -> None:
+        v = np.asarray(value, dtype=np.float32).reshape(3)
+        self._camera.target = (float(v[0]), float(v[1]), float(v[2]))
+
+    @property
+    def distance(self) -> float:
+        return float(self._camera.distance)
+
+    @distance.setter
+    def distance(self, value: float) -> None:
+        self._camera.distance = float(value)
+
+    @property
+    def yaw(self) -> float:
+        return math.pi - float(self._camera.azimuth)
+
+    @yaw.setter
+    def yaw(self, value: float) -> None:
+        self._camera.azimuth = math.pi - float(value)
+
+    @property
+    def pitch(self) -> float:
+        return float(self._camera.elevation)
+
+    @pitch.setter
+    def pitch(self, value: float) -> None:
+        self._camera.elevation = float(value)
+
+    @property
+    def fov_y(self) -> float:
+        return float(self._camera.fov_y)
+
+    @fov_y.setter
+    def fov_y(self, value: float) -> None:
+        self._camera.fov_y = float(value)
+
+    @property
+    def near(self) -> float:
+        return float(self._camera.near)
+
+    @near.setter
+    def near(self, value: float) -> None:
+        self._camera.near = float(value)
+
+    @property
+    def far(self) -> float:
+        return float(self._camera.far)
+
+    @far.setter
+    def far(self, value: float) -> None:
+        self._camera.far = float(value)
 
     def orbit(self, dx, dy) -> None:
-        self.yaw += float(dx) * 0.01
-        self.pitch += float(dy) * 0.01
+        self._camera.orbit(-float(dx) * 0.01, float(dy) * 0.01)
         limit = math.radians(86.0)
         self.pitch = max(-limit, min(limit, self.pitch))
 
     def zoom(self, delta) -> None:
         factor = 1.0 - float(delta) * 0.10
-        self.distance = max(0.05, self.distance * max(0.15, factor))
+        self._camera.zoom(max(0.15, factor))
+        self.distance = max(0.05, self.distance)
+        self.far = max(self.distance * 20.0, 100.0)
+        self.near = 0.01
 
     def pan(self, dx, dy) -> None:
-        right, up = self.screen_axes()
-        scale = self.distance * 0.002
-        self.target = self.target + right * float(dx) * scale + up * float(dy) * scale
+        self._camera.pan(float(dx), float(dy))
 
     def screen_axes(self):
         eye = self.eye()
@@ -79,52 +138,32 @@ class OrbitCamera:
         radius = max(float(np.linalg.norm(extent)) * 0.65, 1.0)
         self.target = center.astype(np.float32)
         self.distance = radius * 2.6
+        self._camera.fitted_radius = radius
         self.far = max(self.distance * 20.0, 100.0)
+        self.near = 0.01
 
     def eye(self):
-        cp = math.cos(self.pitch)
-        return self.target + np.array(
-            (
-                math.sin(self.yaw) * cp,
-                math.cos(self.yaw) * cp,
-                math.sin(self.pitch),
-            ),
-            dtype=np.float32,
-        ) * self.distance
+        return np.asarray(self._camera.eye, dtype=np.float32)
 
     def view_projection(self, width, height):
-        view = look_at(self.eye(), self.target, np.array((0.0, 0.0, 1.0), dtype=np.float32))
         aspect = max(float(width) / max(float(height), 1.0), 0.001)
-        proj = perspective(self.fov_y, aspect, self.near, self.far)
-        return proj @ view
+        flat = np.asarray(self._camera.mvp(aspect), dtype=np.float32)
+        return flat.reshape((4, 4), order="F")
 
     def screen_ray(self, screen_x, screen_y, width, height):
-        vp = self.view_projection(width, height)
-        inv_vp = np.linalg.inv(vp)
-        ndc_x = float(screen_x) / max(float(width), 1.0) * 2.0 - 1.0
-        ndc_y = float(screen_y) / max(float(height), 1.0) * 2.0 - 1.0
-        near = inv_vp @ np.array((ndc_x, ndc_y, 0.0, 1.0), dtype=np.float32)
-        far = inv_vp @ np.array((ndc_x, ndc_y, 1.0, 1.0), dtype=np.float32)
-        near = near[:3] / near[3]
-        far = far[:3] / far[3]
-        direction = normalize(far - near)
+        near, direction = self._camera.screen_ray(
+            float(screen_x), float(screen_y), float(width), float(height))
         return (
             (float(near[0]), float(near[1]), float(near[2])),
             (float(direction[0]), float(direction[1]), float(direction[2])),
         )
 
     def world_point_on_z_plane(self, screen_x, screen_y, width, height, z=0.0):
-        near, direction = self.screen_ray(screen_x, screen_y, width, height)
-        if abs(float(direction[2])) < 1.0e-8:
+        point = self._camera.world_point_on_z_plane(
+            float(screen_x), float(screen_y), float(width), float(height), float(z))
+        if point is None:
             return None
-        t = (float(z) - near[2]) / direction[2]
-        if t < 0.0:
-            return None
-        return (
-            near[0] + direction[0] * t,
-            near[1] + direction[1] * t,
-            near[2] + direction[2] * t,
-        )
+        return (float(point[0]), float(point[1]), float(point[2]))
 
 
 __all__ = [
