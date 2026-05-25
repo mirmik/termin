@@ -1,6 +1,6 @@
 # tcplot — кастомизация графиков (C# / `PlotView2DMulti`)
 
-Справочник по тому, что можно менять в рантайме через `Termin.Native.PlotView2DMulti` без пересборки нативной части. Все методы — обычные snake_case из SWIG-обёртки; при вызове применяются ко всем панелям сразу (broadcast-семантика).
+Справочник по основным runtime-настройкам `Termin.Native.PlotView2DMulti` без пересборки нативной части. Методы ниже — обычные snake_case из SWIG-обёртки; styling-вызовы применяются ко всем панелям сразу (broadcast-семантика).
 
 ---
 
@@ -141,6 +141,25 @@ View.set_panel_y_label(1, "В²/Гц");
 ```
 
 X-подпись одна на весь `PlotView2DMulti` (общая ось X между панелями). Заголовок и Y-подпись — per-panel.
+
+---
+
+## WPF/OpenTK host
+
+Старый вывод напрямую в GL framebuffer через `render(width, height, dst_gl_fbo)`
+удален из текущего C# API. `PlotView2D` и `PlotView2DMulti` рендерят в tgfx2
+texture handle через `render_to_texture_id(width, height)`, а показ выполняет
+platform helper `Termin.Wpf.Tgfx2GlWpfTexturePresenter`.
+
+Минимальный render tick:
+
+```csharp
+uint colorTex = View.render_to_texture_id(width, height);
+_presenter.Present(colorTex, width, height);
+```
+
+Для этого потребитель SDK должен иметь ссылку не только на `Termin.Native`, но и
+на сборку `Termin.Wpf`, где лежит presenter.
 
 ---
 
