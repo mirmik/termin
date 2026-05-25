@@ -6,7 +6,9 @@
 
 `PlotView3D` не владеет общим GPU runtime. В WPF-хосте нужно брать shared host
 через `Tgfx2Host.Acquire(...)`, создавать `PlotView3D(host)`, а при dispose
-вызывать `release_gpu()` и `Tgfx2Host.Release()`.
+вызывать `release_gpu()` и `Tgfx2Host.Release()`. Для показа результата в WPF
+потребителю SDK нужна сборка `Termin.Wpf`: в ней лежит
+`Tgfx2GlWpfTexturePresenter`.
 
 ---
 
@@ -251,6 +253,13 @@ View.set_z_label("Amplitude");
 `Termin.Wpf`, который принимает tgfx2 texture handle id и композитит его через
 interop/present слой. GL plumbing не должен находиться в `PlotView*` или в
 прикладных controls.
+
+Минимальный render tick:
+
+```csharp
+uint colorTex = view.render_to_texture_id(width, height);
+_presenter.Present(colorTex, width, height);
+```
 
 Mouse events надо пробросить в view:
 
