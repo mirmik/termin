@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import struct
+import base64
+import mimetypes
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -169,10 +171,62 @@ TYPE_NUM_COMPONENTS = {
 }
 
 
-def _read_accessor(gltf: dict, bin_data: bytes, accessor_index: int) -> np.ndarray:
+def _read_data_uri(uri: str) -> tuple[bytes, str | None]:
+    """Read a data URI payload."""
+    if not uri.startswith("data:"):
+        raise ValueError("URI is not a data URI")
+
+    header, encoded = uri.split(",", 1)
+    mime_type = header[5:].split(";", 1)[0] or None
+    if ";base64" in header:
+        return base64.b64decode(encoded), mime_type
+    return encoded.encode("utf-8"), mime_type
+
+
+def _read_uri_bytes(uri: str, base_path: Path) -> tuple[bytes, str | None]:
+    """Read bytes from a glTF URI."""
+    if uri.startswith("data:"):
+        return _read_data_uri(uri)
+
+    path = base_path / uri
+    try:
+        return path.read_bytes(), mimetypes.guess_type(path.name)[0]
+    except Exception:
+        log.error(f"[glb_loader] Failed to read glTF external URI: {path}", exc_info=True)
+        raise
+
+
+def _load_gltf_buffers(gltf: dict, base_path: Path) -> list[bytes]:
+    """Load all buffers referenced by a JSON .gltf file."""
+    buffers: list[bytes] = []
+    for index, buffer in enumerate(gltf.get("buffers", [])):
+        uri = buffer.get("uri")
+        if uri is None:
+            raise ValueError(f"glTF buffer {index} has no URI")
+        data, _ = _read_uri_bytes(uri, base_path)
+        expected_length = buffer.get("byteLength")
+        if expected_length is not None and len(data) < int(expected_length):
+            raise ValueError(
+                f"glTF buffer {index} is shorter than byteLength: "
+                f"{len(data)} < {expected_length}"
+            )
+        buffers.append(data)
+    return buffers
+
+
+def _get_buffer_view_bytes(buffers: list[bytes], buffer_view: dict) -> bytes:
+    """Return the raw bytes for a bufferView."""
+    buffer_index = int(buffer_view.get("buffer", 0))
+    if buffer_index < 0 or buffer_index >= len(buffers):
+        raise ValueError(f"bufferView references missing buffer {buffer_index}")
+    return buffers[buffer_index]
+
+
+def _read_accessor(gltf: dict, buffers: list[bytes], accessor_index: int) -> np.ndarray:
     """Read data from an accessor."""
     accessor = gltf["accessors"][accessor_index]
     buffer_view = gltf["bufferViews"][accessor["bufferView"]]
+    bin_data = _get_buffer_view_bytes(buffers, buffer_view)
 
     component_type = accessor["componentType"]
     accessor_type = accessor["type"]
@@ -208,7 +262,7 @@ def _read_accessor(gltf: dict, bin_data: bytes, accessor_index: int) -> np.ndarr
 
 # ---------- PARSING FUNCTIONS ----------
 
-def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
+def _parse_meshes(gltf: dict, buffers: list[bytes], scene_data: GLBSceneData):
     """Parse all meshes from glTF."""
     for mesh_idx, mesh in enumerate(gltf.get("meshes", [])):
         mesh_name = mesh.get("name", f"Mesh_{mesh_idx}")
@@ -220,34 +274,34 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             # Vertices (required)
             if "POSITION" not in attributes:
                 continue
-            vertices = _read_accessor(gltf, bin_data, attributes["POSITION"])
+            vertices = _read_accessor(gltf, buffers, attributes["POSITION"])
 
             # Normals (optional)
             normals = None
             if "NORMAL" in attributes:
-                normals = _read_accessor(gltf, bin_data, attributes["NORMAL"])
+                normals = _read_accessor(gltf, buffers, attributes["NORMAL"])
 
             # UVs (optional)
             uvs = None
             if "TEXCOORD_0" in attributes:
-                uvs = _read_accessor(gltf, bin_data, attributes["TEXCOORD_0"])
+                uvs = _read_accessor(gltf, buffers, attributes["TEXCOORD_0"])
 
             # Tangents (optional) - vec4 with w = handedness
             tangents = None
             if "TANGENT" in attributes:
-                tangents = _read_accessor(gltf, bin_data, attributes["TANGENT"])
+                tangents = _read_accessor(gltf, buffers, attributes["TANGENT"])
 
             # Skinning data (optional)
             joint_indices = None
             joint_weights = None
             if "JOINTS_0" in attributes:
-                joint_indices = _read_accessor(gltf, bin_data, attributes["JOINTS_0"])
+                joint_indices = _read_accessor(gltf, buffers, attributes["JOINTS_0"])
             if "WEIGHTS_0" in attributes:
-                joint_weights = _read_accessor(gltf, bin_data, attributes["WEIGHTS_0"])
+                joint_weights = _read_accessor(gltf, buffers, attributes["WEIGHTS_0"])
 
             # Indices
             if "indices" in primitive:
-                indices = _read_accessor(gltf, bin_data, primitive["indices"]).astype(np.uint32)
+                indices = _read_accessor(gltf, buffers, primitive["indices"]).astype(np.uint32)
                 if indices.ndim > 1:
                     indices = indices.flatten()
             else:
@@ -304,7 +358,12 @@ def _parse_materials(gltf: dict, scene_data: GLBSceneData):
         ))
 
 
-def _parse_textures(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
+def _parse_textures(
+    gltf: dict,
+    buffers: list[bytes],
+    scene_data: GLBSceneData,
+    base_path: Path | None = None,
+):
     """Parse all textures/images from glTF."""
     images = gltf.get("images", [])
 
@@ -321,12 +380,14 @@ def _parse_textures(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
         data = None
         if "bufferView" in image:
             bv = gltf["bufferViews"][image["bufferView"]]
+            bin_data = _get_buffer_view_bytes(buffers, bv)
             offset = bv.get("byteOffset", 0)
             length = bv["byteLength"]
             data = bin_data[offset:offset + length]
         elif "uri" in image:
-            # External or data URI - skip for now
-            continue
+            data, uri_mime_type = _read_uri_bytes(image["uri"], base_path or Path("."))
+            if uri_mime_type is not None:
+                mime_type = uri_mime_type
 
         if data:
             scene_data.textures.append(GLBTcTexture(
@@ -371,7 +432,7 @@ def _parse_nodes(gltf: dict, scene_data: GLBSceneData):
         scene_data.root_nodes = scenes[default_scene].get("nodes", [])
 
 
-def _parse_skins(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
+def _parse_skins(gltf: dict, buffers: list[bytes], scene_data: GLBSceneData):
     """Parse skins (skeletons) from glTF."""
     for skin_idx, skin in enumerate(gltf.get("skins", [])):
         name = skin.get("name", f"Skin_{skin_idx}")
@@ -382,7 +443,7 @@ def _parse_skins(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
         inverse_bind_matrices = None
         if "inverseBindMatrices" in skin:
             ibm_accessor_idx = skin["inverseBindMatrices"]
-            ibm_data = _read_accessor(gltf, bin_data, ibm_accessor_idx)
+            ibm_data = _read_accessor(gltf, buffers, ibm_accessor_idx)
             # Reshape to (N, 4, 4) matrices
             # glTF stores matrices in column-major order, so transpose each one
             inverse_bind_matrices = ibm_data.reshape(-1, 4, 4).astype(np.float32)
@@ -402,7 +463,7 @@ def _parse_skins(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
         ))
 
 
-def _parse_animations(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
+def _parse_animations(gltf: dict, buffers: list[bytes], scene_data: GLBSceneData):
     """Parse animations from glTF."""
     nodes = gltf.get("nodes", [])
 
@@ -424,8 +485,8 @@ def _parse_animations(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
                 continue
 
             # Read input (times) and output (values)
-            times = _read_accessor(gltf, bin_data, sampler["input"])
-            values = _read_accessor(gltf, bin_data, sampler["output"])
+            times = _read_accessor(gltf, buffers, sampler["input"])
+            values = _read_accessor(gltf, buffers, sampler["output"])
 
             if times.ndim > 1:
                 times = times.flatten()
@@ -483,11 +544,25 @@ def _parse_animations(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
 
 # ---------- PUBLIC API ----------
 
+def _build_scene_data(gltf: dict, buffers: list[bytes], base_path: Path | None = None) -> GLBSceneData:
+    """Parse glTF JSON and buffers into scene data."""
+    scene_data = GLBSceneData()
+
+    _parse_nodes(gltf, scene_data)
+    _parse_materials(gltf, scene_data)
+    _parse_textures(gltf, buffers, scene_data, base_path)
+    _parse_meshes(gltf, buffers, scene_data)
+    _parse_skins(gltf, buffers, scene_data)
+    _parse_animations(gltf, buffers, scene_data)
+
+    return scene_data
+
+
 def load_glb_file(path: str | Path) -> GLBSceneData:
-    """Load a GLB file and return scene data.
+    """Load a GLB or JSON glTF file and return scene data.
 
     Args:
-        path: Path to .glb file
+        path: Path to .glb or .gltf file
 
     Returns:
         GLBSceneData containing meshes, materials, textures, animations, nodes
@@ -503,7 +578,11 @@ def load_glb_file(path: str | Path) -> GLBSceneData:
 
     magic = data[0:4]
     if magic != b"glTF":
-        raise ValueError(f"Invalid GLB magic: {magic}")
+        if path.suffix.lower() != ".gltf":
+            raise ValueError(f"Invalid GLB magic: {magic}")
+        gltf = json.loads(data.decode("utf-8"))
+        buffers = _load_gltf_buffers(gltf, path.parent)
+        return _build_scene_data(gltf, buffers, path.parent)
 
     version, length = struct.unpack("<II", data[4:12])
     if version != 2:
@@ -534,19 +613,9 @@ def load_glb_file(path: str | Path) -> GLBSceneData:
         raise ValueError("No JSON chunk found in GLB")
 
     gltf = json.loads(json_data)
-    bin_data = bin_data or b""
+    buffers = [bin_data or b""]
 
-    # Parse scene
-    scene_data = GLBSceneData()
-
-    _parse_nodes(gltf, scene_data)
-    _parse_materials(gltf, scene_data)
-    _parse_textures(gltf, bin_data, scene_data)
-    _parse_meshes(gltf, bin_data, scene_data)
-    _parse_skins(gltf, bin_data, scene_data)
-    _parse_animations(gltf, bin_data, scene_data)
-
-    return scene_data
+    return _build_scene_data(gltf, buffers, path.parent)
 
 
 def convert_y_up_to_z_up(scene_data: GLBSceneData) -> None:
@@ -891,17 +960,9 @@ def load_glb_file_from_buffer(
         raise ValueError("No JSON chunk found in GLB")
 
     gltf = json.loads(json_data)
-    bin_data = bin_data or b""
+    buffers = [bin_data or b""]
 
-    # Parse scene
-    scene_data = GLBSceneData()
-
-    _parse_nodes(gltf, scene_data)
-    _parse_materials(gltf, scene_data)
-    _parse_textures(gltf, bin_data, scene_data)
-    _parse_meshes(gltf, bin_data, scene_data)
-    _parse_skins(gltf, bin_data, scene_data)
-    _parse_animations(gltf, bin_data, scene_data)
+    scene_data = _build_scene_data(gltf, buffers)
 
     # Coordinate conversion first (before scale normalization)
     if convert_to_z_up:

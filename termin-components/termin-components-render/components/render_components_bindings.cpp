@@ -93,6 +93,44 @@ static void set_material_from_python(MaterialPass& pass, nb::object material_obj
         return;
     }
 
+    if (nb::isinstance<nb::dict>(material_obj)) {
+        nb::dict material_ref = nb::cast<nb::dict>(material_obj);
+        std::string uuid;
+        std::string name;
+
+        if (material_ref.contains("uuid")) {
+            nb::object uuid_obj = nb::borrow<nb::object>(material_ref["uuid"]);
+            if (nb::isinstance<nb::str>(uuid_obj)) {
+                uuid = nb::cast<std::string>(uuid_obj);
+                TcMaterial material = TcMaterial::from_uuid(uuid);
+                if (material.is_valid()) {
+                    pass.material = material;
+                    return;
+                }
+            }
+        }
+
+        if (material_ref.contains("name")) {
+            nb::object name_obj = nb::borrow<nb::object>(material_ref["name"]);
+            if (nb::isinstance<nb::str>(name_obj)) {
+                name = nb::cast<std::string>(name_obj);
+                TcMaterial material = TcMaterial::from_name(name);
+                if (material.is_valid()) {
+                    pass.material = material;
+                    return;
+                }
+            }
+        }
+
+        tc::Log::error(
+            "[render_components] Material reference not found: uuid=%s name=%s",
+            uuid.c_str(),
+            name.c_str()
+        );
+        pass.material = TcMaterial();
+        return;
+    }
+
     if (nb::isinstance<nb::str>(material_obj)) {
         try {
             nb::module_ rm_mod = nb::module_::import_("termin.visualization.core.resources");

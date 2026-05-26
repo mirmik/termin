@@ -147,7 +147,7 @@ class AssetRegistry(Generic[AssetT, DataT]):
         """
         asset._name = name
         if source_path:
-            asset._source_path = source_path
+            asset.source_path = source_path
         if uuid is not None:
             asset._uuid = uuid
             asset._runtime_id = hash(uuid) & 0xFFFFFFFFFFFFFFFF
