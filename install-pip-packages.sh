@@ -178,6 +178,7 @@ PACKAGES=(
     termin-render-passes
     termin-navmesh
     termin-qopt
+    termin-pga
     termin-physics
     termin-engine
     termin-skeleton
@@ -253,8 +254,7 @@ else
     if [[ $EDITABLE -eq 1 ]]; then
         # Editable installs pre-suppose all external dependencies are already
         # installed in the environment (see setup-test-venv.sh). --no-deps
-        # avoids pip trying to resolve heavy/unavailable packages like pyassimp
-        # during the editable loop.
+        # avoids pip trying to resolve dependencies during the editable loop.
         EDITABLE_FLAG=(-e)
         NODEPS_FLAG=(--no-deps)
     fi
