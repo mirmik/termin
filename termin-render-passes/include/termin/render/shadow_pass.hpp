@@ -32,6 +32,7 @@ namespace termin {
 struct ShadowDrawCall {
     Entity entity;
     tc_component* component = nullptr;
+    tc_material_phase* phase = nullptr;
     tc_shader_handle final_shader;  // Shader after override (skinning, alpha-test, etc.)
     int geometry_id = 0;
 };

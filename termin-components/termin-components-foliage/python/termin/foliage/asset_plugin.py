@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from tcbase import log
 from termin_assets import AssetRecord, PreLoadResult, read_spec_file, write_spec_file
 
 if TYPE_CHECKING:
@@ -76,6 +77,11 @@ class FoliageDataRuntimePlugin:
 
     def register(self, context, result: PreLoadResult) -> None:
         if not result.uuid:
+            log.error(f"[FoliageDataRuntimePlugin] cannot register foliage asset without uuid: {result.path}")
+            return
+        handle = _declare_native_foliage_data(result.uuid, context.name, result.path)
+        if not handle.is_valid:
+            log.error(f"[FoliageDataRuntimePlugin] failed to declare native foliage asset: {result.uuid}")
             return
         context.resource_manager.external_assets.upsert(
             AssetRecord(
@@ -89,6 +95,12 @@ class FoliageDataRuntimePlugin:
 
     def reload(self, context, result: PreLoadResult) -> None:
         self.register(context, result)
+
+
+def _declare_native_foliage_data(uuid: str, name: str, path: str):
+    from termin.foliage import TcFoliageData
+
+    return TcFoliageData.declare(uuid, name, path)
 
 
 def create_import_plugin() -> FoliageDataImportPlugin:

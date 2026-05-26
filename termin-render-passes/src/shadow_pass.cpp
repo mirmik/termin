@@ -243,7 +243,7 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
         tc_shader_handle final_shader = tc_component_override_shader(
             tc, "shadow", gd.geometry_id, data->base_shader
         );
-        data->draw_calls->push_back(ShadowDrawCall{ent, tc, final_shader, gd.geometry_id});
+        data->draw_calls->push_back(ShadowDrawCall{ent, tc, gd.phase, final_shader, gd.geometry_id});
     }
 
     return true;
@@ -310,7 +310,8 @@ ShadowCameraParams ShadowPass::build_shadow_params(
 // Draws shadow casters through RenderContext2. The pass owns tgfx2 depth
 // textures, opens a depth-only render pass for each cascade, and draws
 // mesh-backed drawables through the backend-neutral tc_mesh bridge.
-// Drawables that cannot expose a tc_mesh* simply do not cast shadows here.
+// Drawables that cannot expose a tc_mesh* may still cast shadows through
+// Drawable::draw_tgfx2(), using the pass' shadow shader contract.
 std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
     ExecuteContext& ctx,
     tc_scene_handle scene,
@@ -483,7 +484,22 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 if (!drawable) continue;
 
                 tc_mesh* mesh = drawable->get_mesh_for_phase("shadow", dc.geometry_id);
-                if (!mesh) continue;  // non-mesh drawables don't cast shadows
+                if (!mesh) {
+                    RenderContext direct_context;
+                    direct_context.view = view_matrix;
+                    direct_context.projection = proj_matrix;
+                    direct_context.model = drawable->get_model_matrix(dc.entity);
+                    direct_context.phase = "shadow";
+                    direct_context.current_tc_shader = TcShader(dc.final_shader);
+                    direct_context.layer_mask = layer_mask;
+                    direct_context.viewport_width = resolution;
+                    direct_context.viewport_height = resolution;
+
+                    if (drawable->draw_tgfx2(*ctx.ctx2, direct_context, "shadow", dc.phase, dc.geometry_id)) {
+                        ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
+                    }
+                    continue;
+                }
 
                 Mat44f model = drawable->get_model_matrix(dc.entity);
 

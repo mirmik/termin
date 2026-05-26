@@ -1,0 +1,11 @@
+{
+  "uuid": "00000000-0005-0000-0002-000000000001",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.10, 0.42, 0.12, 1.0],
+    "u_metallic": 0.0,
+    "u_roughness": 0.92,
+    "u_subsurface": 0.25,
+    "u_diffuse_mul": 1.8
+  }
+}
