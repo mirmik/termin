@@ -132,6 +132,8 @@ class Theme:
             widget.selected_text_color = self.text_primary
             widget.font_size = self.font_size
             widget.border_radius = self.border_radius + 1
+            widget.scrollbar_color = self.scrollbar
+            widget.scrollbar_hover_color = self.scrollbar_hover
 
         elif cls_name == "FileGridWidget":
             widget.background_color = self.bg_input
@@ -178,6 +180,8 @@ class Theme:
             widget.selected_background = self.selected
             widget.hover_background = self.hover_subtle
             widget.toggle_color = self.text_secondary
+            widget.scrollbar_color = self.scrollbar
+            widget.scrollbar_hover_color = self.scrollbar_hover
 
         elif cls_name == "TabBar":
             widget.tab_color = self.bg_surface

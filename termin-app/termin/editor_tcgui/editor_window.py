@@ -418,6 +418,7 @@ class EditorWindowTcgui:
 
         project_file_list = FileGridWidget()
         project_file_list.stretch = True
+        project_file_list.preferred_height = pxu(0)
         project_file_list.empty_text = "Select a directory"
 
         project_file_column = VStackInner()

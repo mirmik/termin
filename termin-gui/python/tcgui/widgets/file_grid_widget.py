@@ -38,6 +38,10 @@ class FileGridWidget(Widget):
         self.selected_text_color: tuple[float, float, float, float] = _t.text_primary
         self.empty_text: str = "No items"
         self.empty_color: tuple[float, float, float, float] = _t.text_muted
+        self.show_scrollbar: bool = True
+        self.scrollbar_width: float = 8.0
+        self.scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
+        self.scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
 
         self.on_select: Callable[[int, dict], None] | None = None
         self.on_activate: Callable[[int, dict], None] | None = None
@@ -48,6 +52,10 @@ class FileGridWidget(Widget):
         self.icon_provider = None
 
         self._scroll_offset: float = 0.0
+        self._scrollbar_hovered: bool = False
+        self._dragging_scrollbar: bool = False
+        self._drag_start_y: float = 0.0
+        self._drag_start_scroll: float = 0.0
         self._hovered_index: int = -1
         self._drag_start_index: int = -1
         self._last_click_index: int = -1
@@ -83,6 +91,32 @@ class FileGridWidget(Widget):
         cols = self._column_count()
         rows = int(math.ceil(len(self._items) / cols))
         return self.padding * 2.0 + rows * self.tile_height + max(0, rows - 1) * self.tile_spacing
+
+    def _max_scroll(self) -> float:
+        return max(0.0, self._content_height() - self.height)
+
+    def _set_scroll_offset(self, value: float) -> None:
+        self._scroll_offset = max(0.0, min(value, self._max_scroll()))
+
+    def _has_scrollbar(self) -> bool:
+        return self.show_scrollbar and self._max_scroll() > 0.0
+
+    def _scrollbar_thumb_rect(self) -> tuple[float, float, float, float]:
+        content_h = max(self._content_height(), self.height)
+        viewport_ratio = self.height / content_h
+        thumb_h = max(20.0, self.height * viewport_ratio)
+        track_h = self.height - thumb_h
+        max_scroll = self._max_scroll()
+        thumb_y = self.y
+        if max_scroll > 0.0:
+            thumb_y += track_h * (self._scroll_offset / max_scroll)
+        return (self.x + self.width - self.scrollbar_width, thumb_y, self.scrollbar_width, thumb_h)
+
+    def _is_scrollbar_hit(self, x: float, y: float) -> bool:
+        if not self._has_scrollbar():
+            return False
+        sb_x = self.x + self.width - self.scrollbar_width
+        return x >= sb_x and self.y <= y < self.y + self.height
 
     def _item_rect(self, index: int) -> tuple[float, float, float, float]:
         cols = self._column_count()
@@ -123,8 +157,7 @@ class FileGridWidget(Widget):
     def layout(self, x: float, y: float, width: float, height: float,
                viewport_w: float, viewport_h: float):
         super().layout(x, y, width, height, viewport_w, viewport_h)
-        max_scroll = max(0.0, self._content_height() - self.height)
-        self._scroll_offset = max(0.0, min(self._scroll_offset, max_scroll))
+        self._set_scroll_offset(self._scroll_offset)
 
     def render(self, renderer: 'UIRenderer'):
         renderer.draw_rect(
@@ -178,6 +211,15 @@ class FileGridWidget(Widget):
 
         renderer.end_clip()
 
+        if self._has_scrollbar():
+            sb_x, thumb_y, sb_w, thumb_h = self._scrollbar_thumb_rect()
+            color = (
+                self.scrollbar_hover_color
+                if self._scrollbar_hovered or self._dragging_scrollbar
+                else self.scrollbar_color
+            )
+            renderer.draw_rect(sb_x, thumb_y, sb_w, thumb_h, color, sb_w / 2)
+
     def _draw_centered_elided(
         self,
         renderer: 'UIRenderer',
@@ -204,20 +246,40 @@ class FileGridWidget(Widget):
     def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
         if not self._items:
             return False
-        max_scroll = max(0.0, self._content_height() - self.height)
+        max_scroll = self._max_scroll()
         if max_scroll <= 0:
             return False
-        self._scroll_offset -= event.dy * 30.0
-        self._scroll_offset = max(0.0, min(self._scroll_offset, max_scroll))
+        self._set_scroll_offset(self._scroll_offset - event.dy * 30.0)
         return True
 
     def on_mouse_move(self, event: MouseEvent):
+        if self._dragging_scrollbar:
+            _thumb_x, _thumb_y, _thumb_w, thumb_h = self._scrollbar_thumb_rect()
+            track_h = self.height - thumb_h
+            if track_h > 0.0:
+                delta_y = event.y - self._drag_start_y
+                self._set_scroll_offset(
+                    self._drag_start_scroll + delta_y * (self._max_scroll() / track_h)
+                )
+            return
+        self._scrollbar_hovered = self._is_scrollbar_hit(event.x, event.y)
+        if self._scrollbar_hovered:
+            self._hovered_index = -1
+            return
         self._hovered_index = self._index_at(event.x, event.y)
 
     def on_mouse_leave(self):
         self._hovered_index = -1
+        self._scrollbar_hovered = False
 
     def on_mouse_down(self, event: MouseEvent) -> bool:
+        if event.button == MouseButton.LEFT and self._is_scrollbar_hit(event.x, event.y):
+            self._dragging_scrollbar = True
+            self._drag_start_y = event.y
+            self._drag_start_scroll = self._scroll_offset
+            self._drag_start_index = -1
+            return True
+
         idx = self._index_at(event.x, event.y)
         if event.button == MouseButton.RIGHT:
             if self.on_context_menu is not None:
@@ -256,9 +318,14 @@ class FileGridWidget(Widget):
         return True
 
     def on_mouse_up(self, event: MouseEvent):
+        if self._dragging_scrollbar:
+            self._dragging_scrollbar = False
+            return
         self._drag_start_index = -1
 
     def make_drag_payload(self, event: MouseEvent) -> DragPayload | None:
+        if self._dragging_scrollbar:
+            return None
         if not self.drag_enabled:
             return None
         if self._drag_start_index < 0 or self._drag_start_index >= len(self._items):
