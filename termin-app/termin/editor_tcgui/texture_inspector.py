@@ -138,6 +138,9 @@ class TextureInspectorTcgui(VStack):
         self._set_visible_state(False)
 
     def set_texture(self, texture, name: str = "") -> None:
+        from tgfx import TcTexture
+        from termin.visualization.render.texture import Texture
+
         self._texture = texture
         self._name = name
 
@@ -154,20 +157,62 @@ class TextureInspectorTcgui(VStack):
             self._name_v.text = name or "-"
 
             asset = self._rm.get_texture_asset(name) if name else None
+            if asset is None and isinstance(texture, Texture):
+                asset = texture.asset
             self._uuid_v.text = asset.uuid if asset is not None else "-"
 
-            if texture._size is not None:
-                self._res_v.text = f"{texture._size[0]} x {texture._size[1]}"
+            image_data = None
+            src = ""
+            width = 0
+            height = 0
+            channels = 0
+            flip_x = False
+            flip_y = True
+            transpose = False
+
+            if asset is not None:
+                if asset.source_path is not None:
+                    src = str(asset.source_path)
+                flip_x = asset.flip_x
+                flip_y = asset.flip_y
+                transpose = asset.transpose
+
+            if isinstance(texture, Texture):
+                size = texture._size
+                if size is not None:
+                    width, height = size
+                image_data = texture._image_data
+                if not src and texture.source_path is not None:
+                    src = texture.source_path
+                if asset is None:
+                    flip_x = texture.flip_x
+                    flip_y = texture.flip_y
+                    transpose = texture.transpose
+            elif isinstance(texture, TcTexture):
+                width = texture.width
+                height = texture.height
+                channels = texture.channels
+                image_data = texture.data
+                if not src:
+                    src = texture.source_path
+                if asset is None:
+                    flip_x = texture.flip_x
+                    flip_y = texture.flip_y
+                    transpose = texture.transpose
+
+            if width > 0 and height > 0:
+                self._res_v.text = f"{width} x {height}"
             else:
                 self._res_v.text = "-"
 
-            if texture._image_data is not None and len(texture._image_data.shape) == 3:
-                self._channels_v.text = str(texture._image_data.shape[2])
+            if image_data is not None and len(image_data.shape) == 3:
+                self._channels_v.text = str(image_data.shape[2])
+            elif channels > 0:
+                self._channels_v.text = str(channels)
             else:
                 self._channels_v.text = "-"
 
-            src = texture.source_path
-            self._file_path = src or ""
+            self._file_path = src
             if src and os.path.exists(src):
                 self._size_v.text = self._format_size(os.path.getsize(src))
                 self._path_v.text = src
@@ -175,11 +220,17 @@ class TextureInspectorTcgui(VStack):
                 self._size_v.text = "-"
                 self._path_v.text = src or "-"
 
-            self._flip_x.checked = bool(texture.flip_x)
-            self._flip_y.checked = bool(texture.flip_y)
-            self._transpose.checked = bool(texture.transpose)
+            if asset is None and src:
+                spec = TextureSpec.for_texture_file(src)
+                flip_x = spec.flip_x
+                flip_y = spec.flip_y
+                transpose = spec.transpose
 
-            self._preview.set_image(texture._image_data)
+            self._flip_x.checked = bool(flip_x)
+            self._flip_y.checked = bool(flip_y)
+            self._transpose.checked = bool(transpose)
+
+            self._preview.set_image(image_data)
         finally:
             self._updating = False
             if self._ui is not None:
