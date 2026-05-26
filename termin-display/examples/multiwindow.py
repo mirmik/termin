@@ -145,10 +145,7 @@ def pump_events(wm: BackendWindowManager, ctx: Tgfx2Context) -> bool:
 
         if etype == sdl2.SDL_KEYDOWN:
             sc = event.key.keysym.scancode
-            if sc == sdl2.SDL_SCANCODE_ESCAPE:
-                if wm.handle_window_close(event.key.windowID):
-                    return False
-            elif sc == sdl2.SDL_SCANCODE_N:
+            if sc == sdl2.SDL_SCANCODE_N:
                 open_secondary(wm, ctx)
 
     return True

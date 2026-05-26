@@ -375,10 +375,6 @@ void SDLBackendWindow::poll_events() {
                  ev.window.windowID == SDL_GetWindowID(window_)) {
             should_close_ = true;
         }
-        else if (ev.type == SDL_KEYDOWN &&
-                 ev.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-            should_close_ = true;
-        }
     }
 }
 
