@@ -12,6 +12,10 @@ import numpy as np
 
 from tcbase import log
 
+DEFAULT_AXIS_X = "x"
+DEFAULT_AXIS_Y = "z"
+DEFAULT_AXIS_Z = "y"
+
 
 @dataclass
 class MeshSpec:
@@ -24,11 +28,13 @@ class MeshSpec:
     # Scale factor applied to all vertices
     scale: float = 1.0
 
-    # Axis mapping: which source axis maps to X, Y, Z
+    # Axis mapping: which source axis maps to engine X, Y, Z.
+    # Defaults convert common Unity-style assets (X right, Y up, Z forward)
+    # to Termin coordinates (X right, Y forward, Z up).
     # Values: "x", "y", "z", "-x", "-y", "-z"
-    axis_x: str = "x"
-    axis_y: str = "y"
-    axis_z: str = "z"
+    axis_x: str = DEFAULT_AXIS_X
+    axis_y: str = DEFAULT_AXIS_Y
+    axis_z: str = DEFAULT_AXIS_Z
 
     # UV transformations
     flip_uv_v: bool = False  # Flip V coordinate (v = 1 - v)
@@ -45,9 +51,9 @@ class MeshSpec:
                 data = json.load(f)
             return cls(
                 scale=data.get("scale", 1.0),
-                axis_x=data.get("axis_x", "x"),
-                axis_y=data.get("axis_y", "y"),
-                axis_z=data.get("axis_z", "z"),
+                axis_x=data.get("axis_x", DEFAULT_AXIS_X),
+                axis_y=data.get("axis_y", DEFAULT_AXIS_Y),
+                axis_z=data.get("axis_z", DEFAULT_AXIS_Z),
                 flip_uv_v=data.get("flip_uv_v", False),
             )
         except Exception:

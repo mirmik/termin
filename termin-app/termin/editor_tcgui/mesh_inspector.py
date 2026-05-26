@@ -18,7 +18,7 @@ from tcgui.widgets.button import Button
 from tcgui.widgets.separator import Separator
 from tcgui.widgets.units import px
 
-from termin.loaders.mesh_spec import MeshSpec
+from termin.loaders.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z, MeshSpec
 
 
 class MeshInspectorTcgui(VStack):
@@ -74,6 +74,9 @@ class MeshInspectorTcgui(VStack):
             self._axis_z.add_item(item)
 
         self._flip_uv_v = Checkbox()
+        self._defaults = Button()
+        self._defaults.text = "Set Defaults"
+        self._defaults.on_click = self._on_set_defaults
         self._apply = Button(); self._apply.text = "Apply && Save"; self._apply.on_click = self._on_apply
 
         def row(label_text: str, widget):
@@ -88,7 +91,12 @@ class MeshInspectorTcgui(VStack):
         row("Axis Y:", self._axis_y)
         row("Axis Z:", self._axis_z)
         row("Flip UV V:", self._flip_uv_v)
-        self.add_child(self._apply)
+        actions = HStack()
+        actions.spacing = 6
+        actions.add_child(self._defaults)
+        actions.add_child(self._apply)
+        spacer = Label(); spacer.stretch = True; actions.add_child(spacer)
+        self.add_child(actions)
 
         self._empty = Label(); self._empty.text = "No mesh selected."; self._empty.color = (0.52, 0.56, 0.62, 1.0)
         self.add_child(self._empty)
@@ -148,6 +156,7 @@ class MeshInspectorTcgui(VStack):
         self._axis_y.visible = has_mesh
         self._axis_z.visible = has_mesh
         self._flip_uv_v.visible = has_mesh
+        self._defaults.visible = has_mesh
         self._apply.visible = has_mesh
         self._empty.visible = not has_mesh
 
@@ -161,9 +170,9 @@ class MeshInspectorTcgui(VStack):
 
     def _reset_spec(self) -> None:
         self._scale.value = 1.0
-        self._select_axis(self._axis_x, "x")
-        self._select_axis(self._axis_y, "y")
-        self._select_axis(self._axis_z, "z")
+        self._select_axis(self._axis_x, DEFAULT_AXIS_X)
+        self._select_axis(self._axis_y, DEFAULT_AXIS_Y)
+        self._select_axis(self._axis_z, DEFAULT_AXIS_Z)
         self._flip_uv_v.checked = False
 
     def _select_axis(self, combo: ComboBox, value: str) -> None:
@@ -173,14 +182,21 @@ class MeshInspectorTcgui(VStack):
                 combo.selected_index = i
                 return
 
+    def _on_set_defaults(self) -> None:
+        if self._updating:
+            return
+        self._reset_spec()
+        if self._ui is not None:
+            self._ui.request_layout()
+
     def _on_apply(self) -> None:
         if self._updating or not self._file_path:
             return
         spec = MeshSpec(
             scale=float(self._scale.value),
-            axis_x=self._axis_x.selected_text or "x",
-            axis_y=self._axis_y.selected_text or "y",
-            axis_z=self._axis_z.selected_text or "z",
+            axis_x=self._axis_x.selected_text or DEFAULT_AXIS_X,
+            axis_y=self._axis_y.selected_text or DEFAULT_AXIS_Y,
+            axis_z=self._axis_z.selected_text or DEFAULT_AXIS_Z,
             flip_uv_v=bool(self._flip_uv_v.checked),
         )
         try:
