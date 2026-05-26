@@ -242,7 +242,7 @@ def create_default_material(
         TcMaterial с одной фазой "opaque".
     """
     from termin.materials import create_material_from_parsed, parse_shader_text
-    from termin.visualization.core.texture_handle import (
+    from termin.assets.texture_handle import (
         get_normal_texture_handle,
         get_white_texture_handle,
     )

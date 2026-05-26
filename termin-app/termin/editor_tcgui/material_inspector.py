@@ -317,7 +317,7 @@ class MaterialInspectorTcgui(VStack):
     def _set_texture_all_phases(self, uniform_name: str, tag: str, texture_name: str, default_tex: str = "white") -> None:
         if self._material is None:
             return
-        from termin.visualization.core.texture_handle import (
+        from termin.assets.texture_handle import (
             get_white_texture_handle,
             get_normal_texture_handle,
         )
