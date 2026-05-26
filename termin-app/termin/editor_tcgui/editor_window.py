@@ -1787,7 +1787,7 @@ class EditorWindowTcgui:
         if ext in (".png", ".jpg", ".jpeg", ".bmp", ".hdr", ".exr"):
             self._inspector_controller.show_texture_inspector_for_file(path)
             return
-        if ext in (".obj", ".fbx"):
+        if ext == ".obj":
             self._inspector_controller.show_mesh_inspector_for_file(path)
             return
         if ext in (".glb", ".gltf"):

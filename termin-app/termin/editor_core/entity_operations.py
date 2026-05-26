@@ -234,22 +234,6 @@ class EntityOperations:
         self._view.add_entity_hierarchy(entity)
         self._notify_viewport()
 
-    def drop_fbx(self, fbx_path: str, parent: Entity | None) -> None:
-        from termin.loaders.fbx_instantiator import instantiate_fbx
-
-        try:
-            entity = instantiate_fbx(Path(fbx_path))
-        except Exception as e:
-            log.error(f"Failed to load FBX: {e}")
-            self._dialog.show_error("FBX", f"Failed to load FBX: {e}")
-            return
-
-        parent_transform = parent.transform if parent else None
-        cmd = AddEntityCommand(self._scene, entity, parent_transform=parent_transform)
-        self._undo_handler(cmd, False)
-        self._view.add_entity_hierarchy(entity)
-        self._notify_viewport()
-
     def drop_glb(
         self,
         glb_path: str,

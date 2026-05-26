@@ -40,7 +40,6 @@ _KNOWN_EXTENSIONS = {
     ".hdr": "HDR",
     ".exr": "EXR",
     ".obj": "Mesh",
-    ".fbx": "Mesh",
     ".wav": "Audio",
     ".ogg": "Audio",
     ".mp3": "Audio",
@@ -345,8 +344,6 @@ class ProjectBrowserTcgui:
 
         if has_file and path is not None:
             items.append(MenuItem("Open", on_click=lambda p=path: self._open_file(p)))
-            if path.suffix.lower() == ".fbx":
-                items.append(MenuItem("Extract FBX...", on_click=lambda p=path: self._extract_fbx(p)))
             if path.suffix.lower() == ".glb":
                 items.append(MenuItem("Extract GLB...", on_click=lambda p=path: self._extract_glb(p)))
             items.append(MenuItem.sep())
@@ -453,9 +450,6 @@ class ProjectBrowserTcgui:
 
     def _rename_item(self, path: Path) -> None:
         self._ops.rename_item(path, self.refresh)
-
-    def _extract_fbx(self, fbx_path: Path) -> None:
-        self._ops.extract_fbx(fbx_path, self.refresh)
 
     def _extract_glb(self, glb_path: Path) -> None:
         self._ops.extract_glb(glb_path, self.refresh)

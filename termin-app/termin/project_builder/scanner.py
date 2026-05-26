@@ -28,7 +28,6 @@ RESOURCE_EXTENSIONS: dict[str, str] = {
     ".hdr": "texture",
     ".obj": "mesh",
     ".stl": "mesh",
-    ".fbx": "model",
     ".glb": "model",
     ".gltf": "model",
     ".prefab": "prefab",
