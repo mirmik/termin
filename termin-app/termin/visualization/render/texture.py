@@ -41,6 +41,24 @@ class Texture:
         return None
 
     @property
+    def flip_x(self) -> bool:
+        """Texture horizontal flip import flag."""
+        td = self._handle.get()
+        return bool(td.flip_x) if td is not None else False
+
+    @property
+    def flip_y(self) -> bool:
+        """Texture vertical flip import flag."""
+        td = self._handle.get()
+        return bool(td.flip_y) if td is not None else True
+
+    @property
+    def transpose(self) -> bool:
+        """Texture transpose import flag."""
+        td = self._handle.get()
+        return bool(td.transpose) if td is not None else False
+
+    @property
     def _size(self) -> tuple[int, int] | None:
         """Size of the texture (width, height)."""
         td = self._handle.get()

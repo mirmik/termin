@@ -68,6 +68,21 @@ class TextureAsset(DataAsset[TcTexture]):
         data = self.data
         return data.channels if data and data.is_valid else 0
 
+    @property
+    def flip_x(self) -> bool:
+        """Texture horizontal flip import flag."""
+        return self._flip_x
+
+    @property
+    def flip_y(self) -> bool:
+        """Texture vertical flip import flag."""
+        return self._flip_y
+
+    @property
+    def transpose(self) -> bool:
+        """Texture transpose import flag."""
+        return self._transpose
+
     # --- GPU resources ---
 
     def delete_gpu(self) -> None:
@@ -127,8 +142,10 @@ class TextureAsset(DataAsset[TcTexture]):
         """Create TextureAsset from image file."""
         import numpy as np
         from PIL import Image
+        from termin.loaders.texture_spec import TextureSpec
 
         path = Path(path)
+        spec = TextureSpec.for_texture_file(path)
         image = Image.open(path).convert("RGBA")
         data = np.array(image, dtype=np.uint8)
         width, height = image.size
@@ -139,14 +156,17 @@ class TextureAsset(DataAsset[TcTexture]):
             name=texture_name,
             source_path=path,
         )
+        asset._flip_x = spec.flip_x
+        asset._flip_y = spec.flip_y
+        asset._transpose = spec.transpose
         texture_data = TcTexture.from_data(
             data=data,
             width=width,
             height=height,
             channels=4,
-            flip_x=False,
-            flip_y=True,
-            transpose=False,
+            flip_x=spec.flip_x,
+            flip_y=spec.flip_y,
+            transpose=spec.transpose,
             name=texture_name,
             source_path=str(path),
             uuid=asset.uuid,
