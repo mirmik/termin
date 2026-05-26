@@ -104,6 +104,7 @@ def test_load_gltf_with_external_bin_and_texture(tmp_path):
     assert len(scene_data.textures) == 1
     assert scene_data.textures[0].index == 0
     assert scene_data.textures[0].name == "Texture_0"
+    assert scene_data.textures[0].source_path == gltf_path.parent / "triangle.png"
     assert scene_data.textures[0].data.startswith(b"\x89PNG")
     assert len(scene_data.materials) == 1
     material = scene_data.materials[0]

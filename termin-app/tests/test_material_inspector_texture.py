@@ -4,6 +4,7 @@ from termin.editor_tcgui.material_inspector import MaterialInspectorTcgui
 class _Phase:
     def __init__(self) -> None:
         self.assigned: list[tuple[str, object]] = []
+        self.textures = {"u_albedo_texture": None}
 
     def set_texture(self, uniform_name: str, texture) -> None:
         self.assigned.append((uniform_name, texture))
@@ -11,6 +12,7 @@ class _Phase:
 
 class _Material:
     def __init__(self) -> None:
+        self.name = "TestMaterial"
         self.phases = [_Phase()]
 
 
