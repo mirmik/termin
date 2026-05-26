@@ -53,6 +53,7 @@ class FoliageLayerEditorExtension:
         self._radius_label = Label()
         self._count_label = Label()
         self._last_hit: _BrushHit | None = None
+        self._tool_active = False
 
     def attach(self, editor, entity, component_ref) -> None:
         self._editor = editor
@@ -68,6 +69,7 @@ class FoliageLayerEditorExtension:
 
     def detach(self) -> None:
         editor = self._editor
+        self._set_tool_active(False)
         if editor is not None:
             editor.remove_viewport_click_interceptor(self._on_viewport_click)
             editor.remove_viewport_key_handler(self._on_key)
@@ -130,9 +132,23 @@ class FoliageLayerEditorExtension:
 
     def _set_mode(self, mode: str) -> None:
         self._mode = mode
+        self._set_tool_active(mode != "idle")
         self._refresh_panel()
         self._request_viewport_update()
         log.info(f"[FoliageLayerEditor] mode={mode}")
+
+    def _set_tool_active(self, active: bool) -> None:
+        if self._tool_active == active:
+            return
+        editor = self._editor
+        if editor is None:
+            self._tool_active = active
+            return
+        if active:
+            editor.begin_viewport_tool()
+        else:
+            editor.end_viewport_tool()
+        self._tool_active = active
 
     def _change_radius(self, delta: float) -> None:
         self._radius = max(0.05, min(10.0, self._radius + delta))

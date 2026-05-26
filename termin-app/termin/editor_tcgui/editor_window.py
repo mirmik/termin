@@ -192,6 +192,7 @@ class EditorWindowTcgui:
         self._viewport_click_interceptors: list[Callable] = []
         self._viewport_key_handlers: list[Callable[[object], bool]] = []
         self._viewport_overlay_drawers: list[Callable[[], None]] = []
+        self._active_viewport_tool_count: int = 0
         self._active_component_editor_extension = None
 
         # Setup ResourceLoader and ProjectFileWatcher
@@ -910,6 +911,38 @@ class EditorWindowTcgui:
         self._viewport_overlay_drawers = kept
         self._request_viewport_update()
 
+    def begin_viewport_tool(self) -> None:
+        self._active_viewport_tool_count += 1
+        if self._active_viewport_tool_count == 1:
+            self._sync_gizmo_target()
+
+    def end_viewport_tool(self) -> None:
+        if self._active_viewport_tool_count <= 0:
+            log.error("[EditorWindowTcgui] viewport tool release without matching begin")
+            self._active_viewport_tool_count = 0
+            return
+        self._active_viewport_tool_count -= 1
+        if self._active_viewport_tool_count == 0:
+            self._sync_gizmo_target()
+
+    def _sync_gizmo_target(self) -> None:
+        sys = self._interaction_system
+        if sys is None:
+            return
+
+        if self._active_viewport_tool_count > 0:
+            sys.set_gizmo_target(None)
+            self._request_viewport_update()
+            return
+
+        selected = sys.selection.selected
+        if selected is not None and selected.valid():
+            sys.set_gizmo_target(selected)
+            self._update_gizmo_screen_scale()
+        else:
+            sys.set_gizmo_target(None)
+        self._request_viewport_update()
+
     def _on_inspector_component_selected(self, entity, component_ref) -> None:
         self._clear_component_editor_extension()
         type_name = component_ref.type_name
@@ -1211,11 +1244,7 @@ class EditorWindowTcgui:
         # EditorInteractionSystem::transform_gizmo, which is empty until
         # set_gizmo_target is called. Without this line the gizmo stays
         # invisible even after a successful selection.
-        sys = self._interaction_system
-        if sys is not None:
-            sys.set_gizmo_target(entity)
-            self._update_gizmo_screen_scale()
-        self._request_viewport_update()
+        self._sync_gizmo_target()
         if self.scene_tree_controller is not None and entity and entity.valid():
             self.scene_tree_controller.select_object(entity)
         if self._inspector_controller is not None:

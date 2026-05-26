@@ -545,6 +545,34 @@ void ColorPass::execute_with_data(
                                    ? tgfx::PolygonMode::Line
                                    : tgfx::PolygonMode::Fill);
 
+            tc_shader* direct_shader = tc_shader_get(dc.final_shader);
+            if (lighting_ubo_tgfx2 && direct_shader &&
+                tc_shader_has_feature(direct_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
+                ctx2->bind_uniform_buffer(LIGHTING_UBO_BINDING, lighting_ubo_tgfx2);
+            }
+
+            if (!shadow_sampler_) {
+                tgfx::SamplerDesc sd;
+                sd.min_filter = tgfx::FilterMode::Nearest;
+                sd.mag_filter = tgfx::FilterMode::Nearest;
+                sd.mip_filter = tgfx::FilterMode::Nearest;
+                sd.address_u = tgfx::AddressMode::ClampToEdge;
+                sd.address_v = tgfx::AddressMode::ClampToEdge;
+                sd.address_w = tgfx::AddressMode::ClampToEdge;
+                sd.compare_enable = true;
+                sd.compare_op = tgfx::CompareOp::LessEqual;
+                shadow_sampler_ = device.create_sampler(sd);
+            }
+            for (size_t i = 0; i < shadow_tex2s.size() && i < MAX_SHADOW_MAPS; i++) {
+                if (!shadow_tex2s[i]) continue;
+                ctx2->bind_sampled_texture_array_element(
+                    SHADOW_SLOT_BASE,
+                    static_cast<uint32_t>(i),
+                    shadow_tex2s[i],
+                    shadow_sampler_
+                );
+            }
+
             RenderContext direct_context;
             direct_context.view = view;
             direct_context.projection = projection;

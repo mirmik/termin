@@ -4,17 +4,23 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <span>
+#include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/geom/general_pose3.hpp>
+#include <termin/render/material_ubo_runtime.hpp>
 #include <inspect/tc_kind_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <tc_inspect_cpp.hpp>
 #include <tgfx/resources/tc_mesh.h>
 #include <tgfx/resources/tc_shader.h>
+#include <tgfx/resources/tc_shader_registry.h>
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/i_render_device.hpp>
@@ -27,8 +33,8 @@ namespace {
 
 constexpr int FOLIAGE_GEOMETRY_ID = 0;
 
-const char* FOLIAGE_INSTANCED_VERT = R"(
-#version 450 core
+const char* FOLIAGE_VARIANT_VERT = R"(
+#version 330 core
 
 layout(std140, binding = 2) uniform PerFrame {
     mat4 u_view;
@@ -53,14 +59,20 @@ layout(std140, binding = 14) uniform FoliagePushBlock { FoliagePushData pc; };
 #endif
 
 layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec2 a_uv;
 
 layout(location = 8) in vec3 i_position;
 layout(location = 9) in float i_yaw;
 layout(location = 10) in vec3 i_normal;
 layout(location = 11) in float i_seed;
 
-out float v_light;
-out float v_seed;
+out vec3 v_world_pos;
+out vec3 v_normal;
+out vec2 v_uv;
+out mat3 v_TBN;
+out vec3 v_tangent;
+out float v_foliage_seed;
 
 void main() {
     vec3 up = normalize(i_normal);
@@ -77,30 +89,24 @@ void main() {
         yaw_forward * a_position.y +
         up * a_position.z;
 
-    vec3 local_normal = normalize(yaw_right * 0.35 + up);
+    vec3 source_normal = length(a_normal) > 0.0001 ? normalize(a_normal) : vec3(0.0, 0.0, 1.0);
+    vec3 local_normal = normalize(
+        yaw_right * source_normal.x +
+        yaw_forward * source_normal.y +
+        up * source_normal.z
+    );
     vec3 world_pos =
         (pc.u_position_model * vec4(i_position, 1.0)).xyz +
         (pc.u_vector_model * vec4(local_offset, 0.0)).xyz;
     vec3 world_normal = normalize((pc.u_vector_model * vec4(local_normal, 0.0)).xyz);
-    vec3 light_dir = normalize(vec3(-0.35, 0.45, 0.82));
-    v_light = 0.55 + 0.45 * max(dot(world_normal, light_dir), 0.0);
-    v_seed = fract(i_seed * 0.61803398875);
 
+    v_world_pos = world_pos;
+    v_normal = world_normal;
+    v_uv = a_uv;
+    v_TBN = mat3(0.0);
+    v_tangent = vec3(0.0);
+    v_foliage_seed = fract(i_seed * 0.61803398875);
     gl_Position = u_view_projection * vec4(world_pos, 1.0);
-}
-)";
-
-const char* FOLIAGE_INSTANCED_FRAG = R"(
-#version 450 core
-
-in float v_light;
-in float v_seed;
-
-out vec4 FragColor;
-
-void main() {
-    vec3 base = mix(vec3(0.20, 0.42, 0.14), vec3(0.36, 0.64, 0.22), v_seed);
-    FragColor = vec4(base * v_light, 1.0);
 }
 )";
 
@@ -116,23 +122,106 @@ struct UploadedVertexStream {
     uint64_t offset = 0;
 };
 
-TcShader& foliage_instanced_shader() {
-    static TcShader shader;
-    if (!shader.is_valid()) {
-        shader = TcShader::from_sources(
-            FOLIAGE_INSTANCED_VERT,
-            FOLIAGE_INSTANCED_FRAG,
-            "",
-            "FoliageInstancedShader"
-        );
-        if (!shader.is_valid()) {
-            tc::Log::error("[FoliageLayerComponent] failed to create instanced shader");
-        }
+struct TcShaderHash {
+    size_t operator()(const TcShader& shader) const {
+        return std::hash<uint32_t>()(shader.handle.index)
+            ^ (std::hash<uint32_t>()(shader.handle.generation) << 1);
     }
-    return shader;
+};
+
+struct TcShaderEqual {
+    bool operator()(const TcShader& a, const TcShader& b) const {
+        return a.handle.index == b.handle.index
+            && a.handle.generation == b.handle.generation;
+    }
+};
+
+std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& foliage_shader_cache() {
+    static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
+    return cache;
 }
 
-bool convert_position_layout(const tc_mesh* mesh, tgfx::VertexBufferLayout& out) {
+TcShader get_foliage_instanced_shader(TcShader original_shader) {
+    if (!original_shader.is_valid()) {
+        return TcShader();
+    }
+    if (original_shader.variant_op() == TC_SHADER_VARIANT_FOLIAGE) {
+        return original_shader;
+    }
+
+    auto& cache = foliage_shader_cache();
+    auto it = cache.find(original_shader);
+    if (it != cache.end()) {
+        TcShader& cached = it->second;
+        if (!cached.variant_is_stale()) {
+            return cached;
+        }
+        cache.erase(it);
+    }
+
+    const char* fragment_source = original_shader.fragment_source();
+    if (!fragment_source || fragment_source[0] == '\0') {
+        tc::Log::error(
+            "[FoliageLayerComponent] cannot create foliage shader variant for '%s': fragment source is empty",
+            original_shader.name()
+        );
+        return TcShader();
+    }
+
+    const char* geometry_source = original_shader.geometry_source();
+    if (geometry_source && geometry_source[0] != '\0') {
+        tc::Log::error(
+            "[FoliageLayerComponent] cannot create foliage shader variant for '%s': geometry shaders are not supported yet",
+            original_shader.name()
+        );
+        return TcShader();
+    }
+
+    std::string variant_name = std::string(original_shader.name()) + "_Foliage";
+    char variant_uuid[40];
+    tc_shader_make_variant_uuid(
+        variant_uuid,
+        sizeof(variant_uuid),
+        original_shader.uuid(),
+        TC_SHADER_VARIANT_FOLIAGE
+    );
+
+    tc_shader_handle handle = tc_shader_from_sources(
+        FOLIAGE_VARIANT_VERT,
+        fragment_source,
+        nullptr,
+        variant_name.c_str(),
+        original_shader.source_path(),
+        variant_uuid
+    );
+    if (tc_shader_handle_is_invalid(handle)) {
+        tc::Log::error(
+            "[FoliageLayerComponent] failed to create foliage shader variant for '%s'",
+            original_shader.name()
+        );
+        return TcShader();
+    }
+
+    TcShader variant(handle);
+    variant.set_features(original_shader.features());
+
+    tc_shader* original_raw = original_shader.get();
+    tc_shader* variant_raw = variant.get();
+    if (original_raw && variant_raw) {
+        tc_shader_set_material_ubo_layout(
+            variant_raw,
+            original_raw->material_ubo_entries,
+            original_raw->material_ubo_entry_count,
+            original_raw->material_ubo_block_size
+        );
+    }
+
+    variant.set_variant_info(original_shader, TC_SHADER_VARIANT_FOLIAGE);
+    cache[original_shader] = variant;
+    return variant;
+}
+
+bool convert_foliage_vertex_layout(const tc_mesh* mesh, tgfx::VertexBufferLayout& out) {
     if (!mesh || mesh->layout.stride == 0) {
         return false;
     }
@@ -140,14 +229,16 @@ bool convert_position_layout(const tc_mesh* mesh, tgfx::VertexBufferLayout& out)
     out.stride = mesh->layout.stride;
     out.per_instance = false;
     out.attributes.clear();
+    bool has_position = false;
     for (uint8_t i = 0; i < mesh->layout.attrib_count; i++) {
         const tgfx_vertex_attrib& attr = mesh->layout.attribs[i];
-        if (attr.location != 0) {
+        if (attr.location > 2) {
             continue;
         }
         if (static_cast<tgfx_attrib_type>(attr.type) != TGFX_ATTRIB_FLOAT32) {
             tc::Log::error(
-                "[FoliageLayerComponent] prototype mesh position attribute must be float, got type=%u",
+                "[FoliageLayerComponent] prototype mesh attribute location=%u must be float, got type=%u",
+                unsigned(attr.location),
                 unsigned(attr.type)
             );
             return false;
@@ -167,12 +258,17 @@ bool convert_position_layout(const tc_mesh* mesh, tgfx::VertexBufferLayout& out)
                 return false;
         }
 
-        out.attributes.push_back({0, format, attr.offset});
-        return true;
+        out.attributes.push_back({attr.location, format, attr.offset});
+        if (attr.location == 0) {
+            has_position = true;
+        }
     }
 
-    tc::Log::error("[FoliageLayerComponent] prototype mesh has no position attribute at location 0");
-    return false;
+    if (!has_position) {
+        tc::Log::error("[FoliageLayerComponent] prototype mesh has no position attribute at location 0");
+        return false;
+    }
+    return true;
 }
 
 tgfx::VertexBufferLayout foliage_instance_layout() {
@@ -451,6 +547,45 @@ tc_mesh* FoliageLayerComponent::get_mesh_for_phase(const std::string& phase_mark
     return nullptr;
 }
 
+TcShader FoliageLayerComponent::override_shader(
+    const std::string& phase_mark,
+    int geometry_id,
+    TcShader original_shader
+) {
+    (void)phase_mark;
+    if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
+        return original_shader;
+    }
+
+    TcShader variant = get_foliage_instanced_shader(original_shader);
+    if (!variant.is_valid()) {
+        tc::Log::error(
+            "[FoliageLayerComponent] failed to create foliage shader variant for '%s'",
+            original_shader.name()
+        );
+        return TcShader();
+    }
+    return variant;
+}
+
+void FoliageLayerComponent::collect_shader_usages(
+    const std::string& phase_mark,
+    int geometry_id,
+    TcShader original_shader,
+    const std::function<void(TcShader)>& emit
+) {
+    (void)phase_mark;
+    emit(original_shader);
+    if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
+        return;
+    }
+
+    TcShader variant = get_foliage_instanced_shader(original_shader);
+    if (variant.is_valid()) {
+        emit(variant);
+    }
+}
+
 bool FoliageLayerComponent::draw_tgfx2(
     tgfx::RenderContext2& ctx2,
     const RenderContext& context,
@@ -458,8 +593,7 @@ bool FoliageLayerComponent::draw_tgfx2(
     tc_material_phase* phase,
     int geometry_id
 ) {
-    (void)context;
-    (void)phase;
+    (void)phase_mark;
     if (!enabled || geometry_id != FOLIAGE_GEOMETRY_ID) {
         return false;
     }
@@ -478,8 +612,8 @@ bool FoliageLayerComponent::draw_tgfx2(
         tc::Log::error("[FoliageLayerComponent] cannot draw foliage: material is missing");
         return false;
     }
-    tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
-    if (tc_material_get_phases_for_mark(mat, phase_mark.c_str(), phases, TC_MATERIAL_MAX_PHASES) == 0) {
+    if (!phase) {
+        tc::Log::error("[FoliageLayerComponent] cannot draw foliage: material phase is missing");
         return false;
     }
 
@@ -511,7 +645,7 @@ bool FoliageLayerComponent::draw_tgfx2(
     }
 
     tgfx::VertexBufferLayout vertex_layout;
-    if (!convert_position_layout(mesh, vertex_layout)) {
+    if (!convert_foliage_vertex_layout(mesh, vertex_layout)) {
         return false;
     }
     if (!mesh->indices || mesh->index_count == 0) {
@@ -544,8 +678,14 @@ bool FoliageLayerComponent::draw_tgfx2(
         return false;
     }
 
-    TcShader& shader = foliage_instanced_shader();
+    TcShader shader = context.current_tc_shader;
     if (!shader.is_valid()) {
+        shader = get_foliage_instanced_shader(TcShader(phase->shader));
+    } else if (shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE) {
+        shader = get_foliage_instanced_shader(shader);
+    }
+    if (!shader.is_valid()) {
+        tc::Log::error("[FoliageLayerComponent] cannot draw foliage: shader variant is invalid");
         return false;
     }
     tc_shader* raw_shader = tc_shader_get(shader.handle);
@@ -567,6 +707,14 @@ bool FoliageLayerComponent::draw_tgfx2(
     std::memcpy(push.u_vector_model, vector_model.data, sizeof(push.u_vector_model));
 
     ctx2.bind_shader(vs2, fs2);
+    apply_material_phase_ubo_runtime(
+        phase,
+        raw_shader,
+        TC_MATERIAL_UBO_BINDING_SLOT,
+        4,
+        ctx2.device(),
+        ctx2
+    );
     ctx2.set_push_constants(&push, sizeof(push));
     ctx2.set_topology(mesh->draw_mode == TC_DRAW_LINES
         ? tgfx::PrimitiveTopology::LineList
