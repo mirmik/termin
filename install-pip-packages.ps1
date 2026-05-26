@@ -1,15 +1,20 @@
 #!/usr/bin/env pwsh
-# Install termin Python packages into the current pip environment.
+# Install termin Python packages.
 #
-# Pip packages are THIN: they ship only nanobind binding .pyd files plus
-# Python wrappers. The shared C++ libraries live in $env:TERMIN_SDK
-# (default: .\sdk). build-sdk-cpp.ps1 + build-sdk-bindings.ps1 must be run
-# first to produce the SDK.
+# Pip packages copy pre-built nanobind binding modules from
+# $env:TERMIN_BINDINGS_DIR (normally build\<config>\bin). For normal pip
+# installs they also bundle shared C++ libraries from $env:TERMIN_SDK\lib when
+# supported. Editable and --target installs keep using the SDK in place.
+#
+# Usage:
+#   .\install-pip-packages.ps1
+#   .\install-pip-packages.ps1 --editable
+#   .\install-pip-packages.ps1 --target DIR
+#   .\install-pip-packages.ps1 --force
 
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$SdkPrefix = if ($env:SDK_PREFIX) { $env:SDK_PREFIX } else { Join-Path $ScriptDir "sdk" }
 $Editable = $false
 $TargetDir = ""
 $Force = $false
@@ -17,15 +22,32 @@ $Force = $false
 # Parse arguments
 $i = 0
 while ($i -lt $args.Count) {
-    switch ($args[$i]) {
-        "--editable" { $Editable = $true }
-        "-e"         { $Editable = $true }
-        "--target"   { $i++; $TargetDir = $args[$i] }
-        "--force"    { $Force = $true }
-        "-f"         { $Force = $true }
-        "--help"     { Write-Host "Usage: .\install-pip-packages.ps1 [--editable] [--target DIR] [--force]"; exit 0 }
-        "-h"         { Write-Host "Usage: .\install-pip-packages.ps1 [--editable] [--target DIR] [--force]"; exit 0 }
-        default      { Write-Error "Unknown option: $($args[$i])"; exit 1 }
+    $arg = $args[$i]
+    if ($arg -eq "--editable" -or $arg -eq "-e") {
+        $Editable = $true
+    } elseif ($arg -eq "--target") {
+        $i++
+        if ($i -ge $args.Count) {
+            Write-Error "--target requires a directory"
+            exit 1
+        }
+        $TargetDir = $args[$i]
+    } elseif ($arg.StartsWith("--target=")) {
+        $TargetDir = $arg.Substring("--target=".Length)
+    } elseif ($arg -eq "--force" -or $arg -eq "-f") {
+        $Force = $true
+    } elseif ($arg -eq "--help" -or $arg -eq "-h") {
+        Write-Host "Usage: .\install-pip-packages.ps1 [OPTIONS]"
+        Write-Host ""
+        Write-Host "Options:"
+        Write-Host "  --editable, -e   Install termin in editable mode (host env only)"
+        Write-Host "  --force, -f      Force-reinstall all packages, bypass pip cache"
+        Write-Host "  --target DIR     Install into DIR (typically bundled Python's site-packages)"
+        Write-Host "  --help, -h       Show this help"
+        exit 0
+    } else {
+        Write-Error "Unknown option: $arg"
+        exit 1
     }
     $i++
 }
@@ -35,16 +57,16 @@ if ($TargetDir -and $Editable) {
     exit 1
 }
 
-# Locate termin SDK so thin pip packages can copy their pre-built bindings.
+# Locate termin SDK so pip packages can bundle/load shared libraries.
 # Discovery order mirrors termin_nanobind.runtime.find_sdk():
 #   1. $env:TERMIN_SDK (if set and valid)
 #   2. $ScriptDir\sdk (in-tree build via build-sdk-bindings.ps1)
 #   3. $env:LOCALAPPDATA\termin-sdk (system-wide install)
-function Test-TerminSdk { param($Path) Test-Path (Join-Path $Path "lib\python\termin") }
+function Test-TerminSdk { param($Path) Test-Path (Join-Path $Path "lib") }
 
 if ($env:TERMIN_SDK) {
     if (-not (Test-TerminSdk $env:TERMIN_SDK)) {
-        Write-Error "TERMIN_SDK=$($env:TERMIN_SDK) is set but does not contain lib\python\termin"
+        Write-Error "TERMIN_SDK=$($env:TERMIN_SDK) is set but does not contain lib\"
         exit 1
     }
 } elseif (Test-TerminSdk (Join-Path $ScriptDir "sdk")) {
@@ -59,6 +81,51 @@ if ($env:TERMIN_SDK) {
     }
 }
 Write-Host "Using TERMIN_SDK=$($env:TERMIN_SDK)"
+
+if (-not $env:TERMIN_BINDINGS_DIR) {
+    if ($env:BUILD_DIR -and (Test-Path (Join-Path $env:BUILD_DIR "bin"))) {
+        $env:TERMIN_BINDINGS_DIR = Join-Path $env:BUILD_DIR "bin"
+    } elseif (Test-Path (Join-Path $ScriptDir "build\Release\bin")) {
+        $env:TERMIN_BINDINGS_DIR = Join-Path $ScriptDir "build\Release\bin"
+    } elseif (Test-Path (Join-Path $ScriptDir "build\Debug\bin")) {
+        $env:TERMIN_BINDINGS_DIR = Join-Path $ScriptDir "build\Debug\bin"
+    }
+}
+if ($env:TERMIN_BINDINGS_DIR) {
+    Write-Host "Using TERMIN_BINDINGS_DIR=$($env:TERMIN_BINDINGS_DIR)"
+}
+
+if (-not $env:TERMIN_PIP_BUNDLE_LIBS) {
+    if ($TargetDir -or $Editable) {
+        $env:TERMIN_PIP_BUNDLE_LIBS = "0"
+    } else {
+        $env:TERMIN_PIP_BUNDLE_LIBS = "1"
+    }
+}
+if (-not $env:TERMIN_PIP_COPY_TO_SOURCE) {
+    if ($Editable) {
+        $env:TERMIN_PIP_COPY_TO_SOURCE = "1"
+    } else {
+        $env:TERMIN_PIP_COPY_TO_SOURCE = "0"
+    }
+}
+Write-Host "TERMIN_PIP_BUNDLE_LIBS=$($env:TERMIN_PIP_BUNDLE_LIBS)"
+Write-Host "TERMIN_PIP_COPY_TO_SOURCE=$($env:TERMIN_PIP_COPY_TO_SOURCE)"
+
+if ($env:PYTHON_BIN) {
+    $PythonBin = $env:PYTHON_BIN
+} else {
+    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $pythonCommand) {
+        $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
+    }
+    if (-not $pythonCommand) {
+        Write-Error "python not found"
+        exit 1
+    }
+    $PythonBin = $pythonCommand.Source
+}
+Write-Host "Using pip: $PythonBin -m pip"
 
 # List of termin packages to install, in topological dependency order.
 # Each entry is a path relative to ScriptDir.
@@ -76,31 +143,31 @@ $Packages = @(
     "termin-base",
     "termin-assets",
     "termin-mesh",
-    "termin-csg",
     "termin-graphics",
+    "termin-materials",
+    "termin-gui",
+    "termin-display",
+    "termin-csg",
     "termin-modules",
     "termin-inspect",
     "termin-components/termin-components-kinematic",
     "termin-scene",
     "termin-lighting",
+    "termin-components/termin-components-mesh",
     "termin-input",
     "termin-collision",
     "termin-render",
-    "termin-display",
+    "termin-components/termin-components-render",
+    "termin-render-passes",
     "termin-navmesh",
     "termin-physics",
     "termin-engine",
     "termin-skeleton",
     "termin-animation",
-    "termin-components/termin-components-render",
-    "termin-components/termin-components-mesh",
-    "termin-gui",
     "termin-nodegraph",
     "termin-app",
     "tcplot"
 )
-
-$env:CMAKE_PREFIX_PATH = $SdkPrefix
 
 if ($Force) {
     Write-Host "--force: clearing per-package pip build caches before install"
@@ -154,7 +221,7 @@ if ($TargetDir) {
         $env:PYTHONPATH = $buildToolsPath
     }
     try {
-        & python -m pip @pipArgs
+        & $PythonBin -m pip @pipArgs
         if ($LASTEXITCODE -ne 0) { throw "pip install --target failed" }
     }
     finally {
@@ -179,7 +246,7 @@ if ($TargetDir) {
         Write-Host "========================================"
         Write-Host ""
 
-        & python -m pip install --no-build-isolation @ForceFlags @NoDepsFlag @EditableFlag (Join-Path $ScriptDir $pkg)
+        & $PythonBin -m pip install --no-build-isolation @ForceFlags @NoDepsFlag @EditableFlag (Join-Path $ScriptDir $pkg)
         if ($LASTEXITCODE -ne 0) { throw "pip install $pkg failed" }
     }
 }
