@@ -22,7 +22,7 @@ setup(
     python_requires=">=3.8",
     packages=["termin.physics"],
     package_dir={"termin.physics": "python/termin/physics"},
-    install_requires=["termin-nanobind"],
+    install_requires=["termin-nanobind", "termin-qopt"],
     ext_modules=[
         Extension("termin.physics._physics_native", sources=[]),
     ],

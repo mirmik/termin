@@ -57,6 +57,9 @@ if __name__ == "__main__":
                 "termin.lighting", "termin.lighting.*",         # termin-lighting
                 "termin.render_components", "termin.render_components.*",  # termin-components-render
                 "termin.kinematic", "termin.kinematic.*",       # termin-components-kinematic
+                "termin.fem", "termin.fem.*",                   # termin-qopt
+                "termin.linalg", "termin.linalg.*",             # termin-qopt
+                "termin.robot", "termin.robot.*",               # termin-qopt
             ],
         ),
         python_requires='>3.10.0',
