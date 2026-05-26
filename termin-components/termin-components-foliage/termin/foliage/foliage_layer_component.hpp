@@ -45,6 +45,13 @@ public:
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
     tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override;
+    bool draw_tgfx2(
+        tgfx::RenderContext2& ctx2,
+        const RenderContext& context,
+        const std::string& phase_mark,
+        tc_material_phase* phase,
+        int geometry_id
+    ) override;
 };
 
 } // namespace termin

@@ -27,8 +27,8 @@ public:
     float py = 0.0f;
     float pz = 0.0f;
     float nx = 0.0f;
-    float ny = 1.0f;
-    float nz = 0.0f;
+    float ny = 0.0f;
+    float nz = 1.0f;
     float yaw = 0.0f;
     float scale = 1.0f;
     uint32_t variant = 0;
