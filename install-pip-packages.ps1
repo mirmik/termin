@@ -160,6 +160,7 @@ $Packages = @(
     "termin-components/termin-components-render",
     "termin-render-passes",
     "termin-navmesh",
+    "termin-qopt",
     "termin-physics",
     "termin-engine",
     "termin-skeleton",
