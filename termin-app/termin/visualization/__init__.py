@@ -20,17 +20,14 @@ from termin.visualization.core.camera import (
     OrthographicCameraComponent,
     OrbitCameraController,
 )
-from termin.visualization.core.mesh import MeshDrawable
 from termin.render_components import MeshRenderer
-from termin.visualization.core.material import Material
+from termin.materials import TcMaterial as Material
 from tgfx import TcShader
 from tgfx.window import WindowBackend
 from tcbase import MouseButton, Key, Action
 from termin.visualization.render.texture import Texture
-from termin.visualization.core.world import VisualizationWorld, Visualization
 
 __all__ = [
-    "Renderer",
     "Scene",
     "Entity",
     "Component",
@@ -44,13 +41,10 @@ __all__ = [
     "PerspectiveCameraComponent",
     "OrthographicCameraComponent",
     "OrbitCameraController",
-    "MeshDrawable",
     "MeshRenderer",
     "Material",
     "TcShader",
     "Texture",
-    "Visualization",
-    "VisualizationWorld",
     "WindowBackend",
     "MouseButton",
     "Key",

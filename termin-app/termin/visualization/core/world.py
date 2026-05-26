@@ -7,7 +7,6 @@ from typing import List, Optional
 
 from termin.visualization.core.scene import Scene
 from termin.assets.resources import ResourceManager
-from tcbase import log
 
 
 class World:
@@ -106,35 +105,3 @@ class World:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return cls.deserialize(data)
-
-
-# ===========================================================================
-# DEAD CODE: Visualization / VisualizationWorld
-#
-# This class is broken and unused. Problems:
-# - create_window() passes wrong parameter name (window_backend vs backend)
-# - run() accesses non-existent .handle and .render_surface properties
-# - Nobody uses it: editor uses C++ EngineCore, player uses RenderingManager
-#
-# For working Qt examples, use Display + RenderEngine directly.
-# See examples/visual/qt_embed.py and mesh_preview_widget.py.
-# ===========================================================================
-
-
-class Visualization:
-    """DEAD CODE. Kept for import compatibility. Do not use.
-
-    Use Display + RenderEngine directly instead.
-    """
-
-    def __init__(self, **kwargs):
-        log.warn("[Visualization] DEAD CODE instantiated. Use Display + RenderEngine directly.")
-
-    def __getattr__(self, name):
-        raise NotImplementedError(
-            f"Visualization.{name}: this class is dead code. "
-            "Use Display + RenderEngine directly."
-        )
-
-
-VisualizationWorld = Visualization

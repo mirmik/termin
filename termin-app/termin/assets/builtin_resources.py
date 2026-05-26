@@ -143,7 +143,7 @@ def register_builtin_textures(rm: "ResourceManager") -> None:
 def register_builtin_materials(rm: "ResourceManager") -> None:
     """Register built-in materials."""
     from termin.materials import create_material_from_parsed
-    from termin.visualization.core.texture_handle import (
+    from termin.assets.texture_handle import (
         get_normal_texture_handle,
         get_white_texture_handle,
     )
@@ -212,7 +212,7 @@ def register_builtin_meshes(rm: "ResourceManager") -> List[str]:
     Returns:
         List of registered mesh names.
     """
-    from termin.visualization.core.mesh_asset import MeshAsset
+    from termin.assets.mesh_asset import MeshAsset
     from termin.mesh.mesh import (
         TexturedCubeMesh,
         UVSphereMesh,
