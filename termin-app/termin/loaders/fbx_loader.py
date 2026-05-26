@@ -42,7 +42,6 @@ UFBX QUIRKS AND LIMITATIONS (discovered 2025-12):
    Use index access in a loop instead.
 
 7. ALTERNATIVE LIBRARIES
-   - pyassimp: Also crashes on complex FBX files with bones (NULL pointer access)
    - trimesh: Doesn't support FBX directly
    - Consider converting FBX to glTF externally for more reliable loading
 

@@ -1,6 +1,9 @@
 # termin-app
 
-Termin editor, launcher, player, and project build tooling.
+Termin 3D editor for computer games and physical simulation.
+
+This package contains the tcgui editor, launcher, player, asset workflow, and
+project build tooling.
 
 Current architecture notes live in:
 

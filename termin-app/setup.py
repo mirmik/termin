@@ -60,12 +60,14 @@ if __name__ == "__main__":
                 "termin.fem", "termin.fem.*",                   # termin-qopt
                 "termin.linalg", "termin.linalg.*",             # termin-qopt
                 "termin.robot", "termin.robot.*",               # termin-qopt
+                "termin.ga201", "termin.ga201.*",               # termin-pga
+                "termin.geomalgo", "termin.geomalgo.*",         # termin-pga
             ],
         ),
         python_requires='>3.10.0',
         version=BuildExt.compute_local_version("0.0.0"),
         license="MIT",
-        description="Projective geometry library",
+        description="3D editor for computer games and physical simulation",
         author="mirmik",
         author_email="mirmikns@yandex.ru",
         url="https://github.com/mirmik/termin",
@@ -103,7 +105,6 @@ if __name__ == "__main__":
             "PyOpenGL>=3.1",
             "glfw>=2.5.0",
             "Pillow>=9.0",
-            "pyassimp",
             "scipy",
         ],
         ext_modules=[

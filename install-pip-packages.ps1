@@ -161,6 +161,7 @@ $Packages = @(
     "termin-render-passes",
     "termin-navmesh",
     "termin-qopt",
+    "termin-pga",
     "termin-physics",
     "termin-engine",
     "termin-skeleton",
