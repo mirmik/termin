@@ -102,6 +102,10 @@ class TreeWidget(Widget):
         self.selected_background: tuple[float, float, float, float] = _t.selected
         self.hover_background: tuple[float, float, float, float] = _t.hover_subtle
         self.toggle_color: tuple[float, float, float, float] = _t.text_secondary
+        self.show_scrollbar: bool = True
+        self.scrollbar_width: float = 8.0
+        self.scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
+        self.scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
 
         # Callbacks
         self.on_select: Callable[[TreeNode], None] | None = None
@@ -123,6 +127,10 @@ class TreeWidget(Widget):
         self._visible_nodes: list[TreeNode] = []
         self._hovered_node: TreeNode | None = None
         self._scroll_offset: float = 0.0
+        self._scrollbar_hovered: bool = False
+        self._dragging_scrollbar: bool = False
+        self._drag_start_y: float = 0.0
+        self._drag_start_scroll: float = 0.0
         self._dirty: bool = True
 
         # Cached viewport for re-layout on dirty
@@ -230,6 +238,37 @@ class TreeWidget(Widget):
             self._scroll_offset = node_top
         elif node_bottom > self._scroll_offset + self.height:
             self._scroll_offset = node_bottom - self.height
+        self._set_scroll_offset(self._scroll_offset)
+
+    def _content_height(self) -> float:
+        stride = self.row_height + self.row_spacing
+        return len(self._visible_nodes) * stride
+
+    def _max_scroll(self) -> float:
+        return max(0.0, self._content_height() - self.height)
+
+    def _set_scroll_offset(self, value: float) -> None:
+        self._scroll_offset = max(0.0, min(value, self._max_scroll()))
+
+    def _has_scrollbar(self) -> bool:
+        return self.show_scrollbar and self._max_scroll() > 0.0
+
+    def _scrollbar_thumb_rect(self) -> tuple[float, float, float, float]:
+        content_h = max(self._content_height(), self.height)
+        viewport_ratio = self.height / content_h
+        thumb_h = max(20.0, self.height * viewport_ratio)
+        track_h = self.height - thumb_h
+        max_scroll = self._max_scroll()
+        thumb_y = self.y
+        if max_scroll > 0.0:
+            thumb_y += track_h * (self._scroll_offset / max_scroll)
+        return (self.x + self.width - self.scrollbar_width, thumb_y, self.scrollbar_width, thumb_h)
+
+    def _is_scrollbar_hit(self, x: float, y: float) -> bool:
+        if not self._has_scrollbar():
+            return False
+        sb_x = self.x + self.width - self.scrollbar_width
+        return x >= sb_x and self.y <= y < self.y + self.height
 
     def _find_parent(self, target: TreeNode) -> TreeNode | None:
         """Find the parent TreeNode of target."""
@@ -269,6 +308,7 @@ class TreeWidget(Widget):
         if self._dirty:
             self._rebuild_visible()
 
+        self._set_scroll_offset(self._scroll_offset)
         self._layout_nodes()
 
     def _layout_nodes(self):
@@ -283,10 +323,11 @@ class TreeWidget(Widget):
             if node._content is not None:
                 indent = node._depth * self.indent_size + self.toggle_size
                 cw, ch = node._content.compute_size(self._viewport_w, self._viewport_h)
+                scrollbar_pad = self.scrollbar_width if self._has_scrollbar() else 0.0
                 node._content.layout(
                     node.x + indent,
                     node.y + (node.height - ch) / 2,
-                    node.width - indent, ch,
+                    max(0.0, node.width - indent - scrollbar_pad), ch,
                     self._viewport_w, self._viewport_h,
                 )
 
@@ -357,11 +398,22 @@ class TreeWidget(Widget):
 
         renderer.end_clip()
 
+        if self._has_scrollbar():
+            sb_x, thumb_y, sb_w, thumb_h = self._scrollbar_thumb_rect()
+            color = (
+                self.scrollbar_hover_color
+                if self._scrollbar_hovered or self._dragging_scrollbar
+                else self.scrollbar_color
+            )
+            renderer.draw_rect(sb_x, thumb_y, sb_w, thumb_h, color, sb_w / 2)
+
     def hit_test(self, px: float, py: float) -> Widget | None:
         if not self.visible:
             return None
         if not self.contains(px, py):
             return None
+        if self._is_scrollbar_hit(px, py):
+            return self
 
         # Check content widgets of visible nodes for interactive children
         # (e.g. checkboxes). Only return hits that are deeper than the
@@ -379,17 +431,32 @@ class TreeWidget(Widget):
 
     def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
         """Scroll tree view with mouse wheel."""
-        stride = self.row_height + self.row_spacing
-        total_content = len(self._visible_nodes) * stride
-        max_scroll = max(0.0, total_content - self.height)
+        max_scroll = self._max_scroll()
         if max_scroll <= 0:
             return False
-        self._scroll_offset -= event.dy * 30
-        self._scroll_offset = max(0.0, min(self._scroll_offset, max_scroll))
+        self._set_scroll_offset(self._scroll_offset - event.dy * 30)
         self._layout_nodes()
         return True
 
     def on_mouse_move(self, event: MouseEvent):
+        if self._dragging_scrollbar:
+            _thumb_x, _thumb_y, _thumb_w, thumb_h = self._scrollbar_thumb_rect()
+            track_h = self.height - thumb_h
+            if track_h > 0.0:
+                delta_y = event.y - self._drag_start_y
+                self._set_scroll_offset(
+                    self._drag_start_scroll + delta_y * (self._max_scroll() / track_h)
+                )
+                self._layout_nodes()
+            return
+
+        self._scrollbar_hovered = self._is_scrollbar_hit(event.x, event.y)
+        if self._scrollbar_hovered:
+            if self._hovered_node is not None:
+                self._hovered_node._hovered = False
+                self._hovered_node = None
+            return
+
         # Drag & drop handling
         if self.draggable and self._drag_node is not None:
             if not self._drag_active:
@@ -411,9 +478,16 @@ class TreeWidget(Widget):
         if self._hovered_node is not None:
             self._hovered_node._hovered = False
             self._hovered_node = None
+        self._scrollbar_hovered = False
         self._cancel_drag()
 
     def on_mouse_down(self, event: MouseEvent) -> bool:
+        if event.button == MouseButton.LEFT and self._is_scrollbar_hit(event.x, event.y):
+            self._dragging_scrollbar = True
+            self._drag_start_y = event.y
+            self._drag_start_scroll = self._scroll_offset
+            return True
+
         if event.button == MouseButton.RIGHT:
             node = self._node_at_y(event.y)
             if node is not None:
@@ -458,6 +532,9 @@ class TreeWidget(Widget):
         return True
 
     def on_mouse_up(self, event: MouseEvent):
+        if self._dragging_scrollbar:
+            self._dragging_scrollbar = False
+            return
         if self._drag_active and self._drag_node is not None:
             if self.on_drop:
                 self.on_drop(self._drag_node, self._drop_target, self._drop_position)
