@@ -47,6 +47,8 @@ class ResourceManagerBase:
 
         from termin_assets import AssetTypeRegistry
         self._asset_type_plugins = AssetTypeRegistry()
+        from termin_assets import AssetCatalog
+        self.external_assets = AssetCatalog()
 
         # Asset registries
         self._mesh_registry = self._create_mesh_registry()

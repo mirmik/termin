@@ -21,6 +21,7 @@
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tgfx/tgfx_texture_handle.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
+#include <termin/foliage/foliage_data_registry.hpp>
 
 namespace termin::runtime {
 namespace {
@@ -280,6 +281,7 @@ struct RuntimeResourceKeepalive {
     std::vector<TcShader> shaders;
     std::vector<TcMaterial> materials;
     std::vector<TcMesh> meshes;
+    std::vector<TcFoliageData> foliage_data;
 };
 
 std::vector<TcTexture>& runtime_builtin_texture_keepalive() {
@@ -544,6 +546,37 @@ bool load_mesh_resource(
     return true;
 }
 
+bool load_foliage_data_resource(
+    const std::filesystem::path& root,
+    const nos::trent& entry,
+    RuntimeResourceKeepalive& keepalive,
+    std::string& error
+) {
+    const std::string uuid = string_field(entry, "uuid");
+    const std::string rel_path = string_field(entry, "path");
+    const std::string name = string_field(entry, "name", uuid);
+    if (uuid.empty() || rel_path.empty()) {
+        error = "foliage_data resource requires uuid and path";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+
+    const std::filesystem::path asset_path = package_path(root, rel_path);
+    TcFoliageData foliage = TcFoliageData::declare(uuid, name, asset_path.string());
+    if (!foliage.is_valid()) {
+        error = "failed to declare foliage asset '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    if (!foliage.ensure_loaded()) {
+        error = "failed to load foliage asset '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    keepalive.foliage_data.push_back(std::move(foliage));
+    return true;
+}
+
 bool load_resource(
     const std::filesystem::path& root,
     const nos::trent& entry,
@@ -560,6 +593,9 @@ bool load_resource(
 
     if (type == "pipeline") {
         return true;
+    }
+    if (type == "foliage_data") {
+        return load_foliage_data_resource(root, entry, keepalive, error);
     }
 
     const nos::trent spec = nos::json::parse(read_text_file(package_path(root, rel_path)));

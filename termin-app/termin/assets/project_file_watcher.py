@@ -30,6 +30,7 @@ from termin.project.settings import ProjectSettingsManager
 
 if TYPE_CHECKING:
     from termin.assets.resources import ResourceManager
+    from termin_assets import AssetCatalog
 
 # Debounce delay in seconds
 DEBOUNCE_DELAY_S = 0.3
@@ -234,6 +235,7 @@ class ProjectFileWatcher:
         # extension -> processor
         self._processors: Dict[str, FilePreLoader] = {}
         self._on_resource_reloaded = on_resource_reloaded
+        self._external_asset_catalog = None
 
         # All project files by extension (for statistics)
         self._all_files_by_ext: Dict[str, Set[str]] = {}
@@ -248,6 +250,11 @@ class ProjectFileWatcher:
             if ext in self._processors:
                 raise ValueError(f"Extension {ext} already registered")
             self._processors[ext] = processor
+
+    def set_external_asset_catalog(self, catalog: "AssetCatalog") -> None:
+        self._external_asset_catalog = catalog
+        if self._project_path is not None:
+            catalog.set_project_root(self._project_path)
 
     def enable(self, project_path: str | None = None) -> None:
         """Enable file watching. Starts watchdog observer."""
@@ -288,6 +295,8 @@ class ProjectFileWatcher:
     def watch_directory(self, path: str) -> None:
         """Scan directory for resources and start live watching."""
         self._project_path = path
+        if self._external_asset_catalog is not None:
+            self._external_asset_catalog.set_project_root(path)
 
         if not os.path.exists(path):
             return
@@ -297,6 +306,7 @@ class ProjectFileWatcher:
 
         # Start watchdog observer for live changes
         self._start_observer(path)
+
 
     def _scan_directory(self, path: str) -> None:
         """Recursively scan directory and process resource files."""

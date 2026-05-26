@@ -17,12 +17,14 @@ class HandleAccessors:
         get_by_name: Callable[[str], Any],
         find_name: Callable[[Any], Optional[str]],
         find_uuid: Callable[[str], Optional[str]],
+        create_item: Callable[[], tuple[str, Optional[str]] | None] | None = None,
         allow_none: bool = True,
     ):
         self.list_names = list_names
         self.get_by_name = get_by_name
         self.find_name = find_name
         self.find_uuid = find_uuid
+        self.create_item = create_item
         self.allow_none = allow_none
 
     def list_items(self) -> List[Tuple[str, Optional[str]]]:

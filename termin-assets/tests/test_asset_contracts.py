@@ -2,9 +2,11 @@ from termin_assets import (
     AssetTypeRegistry,
     PreLoadResult,
     get_uuid_from_spec,
+    register_import_plugins_from_entry_points,
     read_spec_file,
     write_spec_file,
 )
+import termin_assets.plugin_discovery as plugin_discovery
 
 
 class DummyPlugin:
@@ -78,3 +80,26 @@ def test_spec_file_helpers_prefer_meta_and_migrate_legacy_spec(tmp_path) -> None
     assert write_spec_file(str(asset_path), {"uuid": "meta"})
     assert read_spec_file(str(asset_path)) == {"uuid": "meta"}
     assert not spec_path.exists()
+
+
+class _EntryPoint:
+    name = "external_dummy"
+
+    def load(self):
+        return DummyPlugin
+
+
+def test_import_plugin_entry_point_discovery(monkeypatch) -> None:
+    registry = AssetTypeRegistry()
+
+    def fake_entry_points(group: str):
+        if group == "termin.asset_import_plugins":
+            return [_EntryPoint()]
+        return []
+
+    monkeypatch.setattr(plugin_discovery, "entry_points", fake_entry_points)
+
+    register_import_plugins_from_entry_points(registry)
+
+    assert registry.get_import("dummy") is not None
+    assert registry.get_for_extension(".dummy")[0].type_id == "dummy"
