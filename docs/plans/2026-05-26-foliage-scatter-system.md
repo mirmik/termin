@@ -247,8 +247,10 @@ FoliageBrushTool
 
 Текущий MVP: `FoliageLayerEditorExtension` регистрируется для `FoliageLayerComponent`,
 перехватывает клики в режимах Paint/Erase, редактирует native `TcFoliageData` через
-binding и рисует overlay-точки/радиус кисти через `ImmediateRenderer`. Это stamp brush:
-непрерывный drag потребует отдельного mouse-move surface callback в `EditorInteractionSystem`.
+binding и рисует overlay-точки/радиус кисти через `ImmediateRenderer`. У кисти есть явный
+режим Off; `Esc` выключает активную кисть и возвращает viewport к обычному selection.
+Это stamp brush: непрерывный drag потребует отдельного mouse-move surface callback в
+`EditorInteractionSystem`.
 
 ## Generic Large Payload Pattern
 

@@ -190,6 +190,7 @@ class EditorWindowTcgui:
             bool,
         ] | None = None
         self._viewport_click_interceptors: list[Callable] = []
+        self._viewport_key_handlers: list[Callable[[object], bool]] = []
         self._viewport_overlay_drawers: list[Callable[[], None]] = []
         self._active_component_editor_extension = None
 
@@ -569,6 +570,7 @@ class EditorWindowTcgui:
             self._interaction_system.selection.on_hover_changed = self._on_hover_changed
             self._interaction_system.on_request_update = self._request_viewport_update
             self._interaction_system.on_entity_click = self._on_editor_viewport_click
+            self._interaction_system.on_key = self._on_editor_key
             # Transform gizmo drag-end -> push an undo command.
             self._interaction_system.on_transform_end = self._on_transform_end
 
@@ -879,6 +881,19 @@ class EditorWindowTcgui:
             if existing != callback:
                 kept.append(existing)
         self._viewport_click_interceptors = kept
+
+    def add_viewport_key_handler(self, callback: Callable[[object], bool]) -> None:
+        for existing in self._viewport_key_handlers:
+            if existing == callback:
+                return
+        self._viewport_key_handlers.append(callback)
+
+    def remove_viewport_key_handler(self, callback: Callable[[object], bool]) -> None:
+        kept = []
+        for existing in self._viewport_key_handlers:
+            if existing != callback:
+                kept.append(existing)
+        self._viewport_key_handlers = kept
 
     def add_viewport_overlay_drawer(self, callback: Callable[[], None]) -> None:
         for existing in self._viewport_overlay_drawers:
@@ -1257,6 +1272,17 @@ class EditorWindowTcgui:
                 log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
                 return False
         return False
+
+    def _on_editor_key(self, event) -> None:
+        handlers = list(self._viewport_key_handlers)
+        handlers.reverse()
+        for callback in handlers:
+            try:
+                if bool(callback(event)):
+                    return
+            except Exception as e:
+                log.error(f"[EditorWindowTcgui] viewport key handler failed: {e}")
+                return
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
         """C++ TransformGizmo drag-end callback — push an undo command."""
