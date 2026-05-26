@@ -15,6 +15,14 @@ class _Material:
         self.name = "TestMaterial"
         self.phases = [_Phase()]
 
+    def set_texture(self, uniform_name: str, texture) -> int:
+        applied = 0
+        for phase in self.phases:
+            if uniform_name in phase.textures:
+                phase.set_texture(uniform_name, texture)
+                applied += 1
+        return applied
+
 
 class _ResourceManager:
     def find_material_name(self, material) -> None:

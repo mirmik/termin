@@ -202,6 +202,7 @@ def test_plain_uniforms_material_ubo_not_property():
     program = parse_shader_text(shader_text)
     phase = program.phases[0]
 
+    assert [prop.name for prop in program.material_properties] == ["u_strength", "u_depth_texture"]
     assert [prop.name for prop in phase.uniforms] == ["u_strength", "u_depth_texture"]
     assert [prop.name for prop in phase.material_uniforms] == ["u_fov_view"]
     assert [entry.name for entry in phase.material_ubo_layout.entries] == ["u_strength", "u_fov_view"]
@@ -331,19 +332,20 @@ def test_parse_property_in_phase():
     parsed = parse_shader_text(shader_text)
     phase = parsed.phases[0]
 
-    assert len(phase.uniforms) == 3
+    assert len(parsed.material_properties) == 3
+    assert len(phase.uniforms) == 0
 
-    u_roughness = phase.uniforms[0]
+    u_roughness = parsed.material_properties[0]
     assert isinstance(u_roughness, MaterialProperty)
     assert u_roughness.name == "u_roughness"
     assert u_roughness.default == 0.5
 
-    u_color = phase.uniforms[1]
+    u_color = parsed.material_properties[1]
     assert u_color.name == "u_color"
     assert u_color.property_type == "Color"
     assert u_color.default == (1.0, 0.0, 0.0, 1.0)
 
-    u_metallic = phase.uniforms[2]
+    u_metallic = parsed.material_properties[2]
     assert u_metallic.name == "u_metallic"
     assert u_metallic.range_min == 0.0
     assert u_metallic.range_max == 1.0
@@ -366,12 +368,15 @@ def test_shader_phase_from_tree_with_properties():
     parsed = parse_shader_text(shader_text)
     phase = ShaderPhase.from_tree(parsed.phases[0])
 
-    assert len(phase.uniforms) == 1
-    assert phase.uniforms[0].name == "u_value"
-    assert phase.uniforms[0].default == 0.7
+    assert len(parsed.material_properties) == 1
+    assert parsed.material_properties[0].name == "u_value"
+    assert parsed.material_properties[0].default == 0.7
+    assert len(phase.uniforms) == 0
 
 
 def test_property_outside_phase_accepted():
     """@property вне @phase принимается без ошибки (глобальное свойство)."""
     result = parse_shader_text("@property Float u_value = 0.5")
     assert len(result.phases) == 0
+    assert len(result.material_properties) == 1
+    assert result.material_properties[0].name == "u_value"

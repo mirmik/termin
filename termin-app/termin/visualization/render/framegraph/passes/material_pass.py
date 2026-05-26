@@ -55,15 +55,13 @@ def get_texture_inputs_for_material(material_name: str) -> List[Tuple[str, str]]
         return []
 
     program = rm.get_shader(shader_name)
-    if program is None or not program.phases:
-        log.warn(f"[get_texture_inputs_for_material] shader '{shader_name}' not found or has no phases")
+    if program is None:
+        log.warn(f"[get_texture_inputs_for_material] shader '{shader_name}' not found")
         return []
 
-    # Collect texture uniforms from first phase. Texture @property entries are
-    # editable material fields and graph inputs for MaterialPass.
+    # Texture @property entries are material-level fields and graph inputs for MaterialPass.
     inputs = []
-    shader_uniforms = list(program.phases[0].uniforms) + list(program.phases[0].material_uniforms)
-    for prop in shader_uniforms:
+    for prop in program.material_properties:
         if prop.property_type == "Texture":
             inputs.append((prop.name, "fbo"))
 
