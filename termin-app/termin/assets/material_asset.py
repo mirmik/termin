@@ -293,9 +293,10 @@ def _parse_material_content(
     Returns:
         Tuple of (TcMaterial, uuid or None)
     """
-    from termin.materials import TcMaterial, TcRenderState
     from termin.assets.resources import ResourceManager
+    from termin.assets.texture_asset import TextureAsset
     from termin.geombase import Vec3, Vec4
+    from termin.materials import TcMaterial, TcRenderState
 
     data = json.loads(content)
 
@@ -344,9 +345,14 @@ def _parse_material_content(
     textures_data = data.get("textures", {})
     textures = {}
     for uniform_name, tex_asset_uuid in textures_data.items():
-        # Find TextureAsset by UUID
         asset = rm._assets_by_uuid.get(tex_asset_uuid)
-        if asset is not None and asset.texture_data is not None:
+        if isinstance(asset, TextureAsset):
+            if asset.texture_data is None and not asset.ensure_loaded():
+                log.warning(f"[MaterialAsset] Texture asset failed to load by UUID: {tex_asset_uuid}")
+                continue
+            if asset.texture_data is None:
+                log.warning(f"[MaterialAsset] Texture asset loaded without data: {tex_asset_uuid}")
+                continue
             textures[uniform_name] = asset.texture_data
         else:
             log.warning(f"[MaterialAsset] Texture asset not found by UUID: {tex_asset_uuid}")
@@ -548,10 +554,12 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
             # First try regular TextureAsset lookup.
             asset_uuid = None
             for asset_name, asset in rm._texture_registry.assets.items():
-                if asset.uuid and asset.texture_data is not None:
-                    if asset.texture_data.uuid == tex.uuid:
-                        asset_uuid = asset.uuid
-                        break
+                if asset.uuid and asset.uuid == tex.uuid:
+                    asset_uuid = asset.uuid
+                    break
+                if asset.texture_data is not None and asset.texture_data.uuid == tex.uuid:
+                    asset_uuid = asset.uuid
+                    break
             if asset_uuid:
                 textures_data[name] = asset_uuid
                 continue
@@ -560,6 +568,11 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
             ref = _classify_render_target_texture(tex)
             if ref is not None:
                 texture_refs_data[name] = ref
+            else:
+                log.warning(
+                    f"[MaterialAsset] Texture '{name}' was not saved: "
+                    f"no TextureAsset or render-target match for tc_uuid={tex.uuid} tc_name='{tex.name}'"
+                )
         if textures_data:
             result["textures"] = textures_data
         if texture_refs_data:

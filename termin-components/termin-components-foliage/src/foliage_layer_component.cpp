@@ -76,7 +76,9 @@ out float v_foliage_seed;
 
 void main() {
     vec3 up = normalize(i_normal);
-    vec3 helper = abs(up.z) > 0.85 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+    // Keep yaw=0 aligned with ordinary mesh rendering on flat Z-up surfaces:
+    // local X -> world X, local Y -> world Y, local Z -> world Z.
+    vec3 helper = abs(up.z) > 0.85 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
     vec3 right = normalize(cross(helper, up));
     vec3 forward = cross(up, right);
 
@@ -136,7 +138,9 @@ layout(std140, binding = 14) uniform FoliagePushBlock { FoliagePushData pc; };
 
 void main() {
     vec3 up = normalize(i_normal);
-    vec3 helper = abs(up.z) > 0.85 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+    // Keep yaw=0 aligned with ordinary mesh rendering on flat Z-up surfaces:
+    // local X -> world X, local Y -> world Y, local Z -> world Z.
+    vec3 helper = abs(up.z) > 0.85 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
     vec3 right = normalize(cross(helper, up));
     vec3 forward = cross(up, right);
 

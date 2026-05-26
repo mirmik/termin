@@ -563,9 +563,17 @@ class MaterialInspectorTcgui(VStack):
             return
         material_name = self._rm.find_material_name(self._material)
         if material_name is None:
+            log.warning(
+                f"[MaterialInspectorTcgui] material changes are runtime-only: "
+                f"material='{self._material.name}' has no registered MaterialAsset"
+            )
             return
         asset = self._rm.get_material_asset(material_name)
         if asset is None:
+            log.warning(
+                f"[MaterialInspectorTcgui] material changes are runtime-only: "
+                f"material='{self._material.name}' resolved name='{material_name}' has no MaterialAsset"
+            )
             return
         if not asset.save_to_file():
             log.error(f"[MaterialInspectorTcgui] Failed to save material asset '{material_name}'")

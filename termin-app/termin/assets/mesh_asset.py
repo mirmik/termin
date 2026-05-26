@@ -9,6 +9,7 @@ from tcbase import log
 from termin.mesh.mesh import Mesh3
 from tmesh import TcMesh
 from termin.assets.data_asset import DataAsset
+from termin.loaders.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z
 
 if TYPE_CHECKING:
     from termin.loaders.mesh_spec import MeshSpec
@@ -43,9 +44,9 @@ class MeshAsset(DataAsset[TcMesh]):
 
         # Spec settings (parsed from spec file)
         self._scale: float = 1.0
-        self._axis_x: str = "x"
-        self._axis_y: str = "y"
-        self._axis_z: str = "z"
+        self._axis_x: str = DEFAULT_AXIS_X
+        self._axis_y: str = DEFAULT_AXIS_Y
+        self._axis_z: str = DEFAULT_AXIS_Z
         self._flip_uv_v: bool = False
 
     # --- Convenience property ---
@@ -65,9 +66,9 @@ class MeshAsset(DataAsset[TcMesh]):
     def _parse_spec_fields(self, spec_data: dict) -> None:
         """Parse mesh-specific spec fields."""
         self._scale = spec_data.get("scale", 1.0)
-        self._axis_x = spec_data.get("axis_x", "x")
-        self._axis_y = spec_data.get("axis_y", "y")
-        self._axis_z = spec_data.get("axis_z", "z")
+        self._axis_x = spec_data.get("axis_x", DEFAULT_AXIS_X)
+        self._axis_y = spec_data.get("axis_y", DEFAULT_AXIS_Y)
+        self._axis_z = spec_data.get("axis_z", DEFAULT_AXIS_Z)
         self._flip_uv_v = spec_data.get("flip_uv_v", False)
 
         # Pre-register TcMesh in registry with load callback for lazy loading
@@ -81,11 +82,11 @@ class MeshAsset(DataAsset[TcMesh]):
         # Only save non-default values
         if self._scale != 1.0:
             spec["scale"] = self._scale
-        if self._axis_x != "x":
+        if self._axis_x != DEFAULT_AXIS_X:
             spec["axis_x"] = self._axis_x
-        if self._axis_y != "y":
+        if self._axis_y != DEFAULT_AXIS_Y:
             spec["axis_y"] = self._axis_y
-        if self._axis_z != "z":
+        if self._axis_z != DEFAULT_AXIS_Z:
             spec["axis_z"] = self._axis_z
         if self._flip_uv_v:
             spec["flip_uv_v"] = True
