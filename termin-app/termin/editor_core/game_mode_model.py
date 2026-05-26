@@ -112,6 +112,9 @@ class GameModeModel:
 
         self._game_scene_name = f"{editor_scene_name}(game)"
         game_scene = self._scene_manager.copy_scene(editor_scene_name, self._game_scene_name)
+        if game_scene is None:
+            self._game_scene_name = None
+            return
 
         if self._render_connector is not None:
             self._render_connector.detach_scene_from_render(
