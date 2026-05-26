@@ -11,11 +11,13 @@ RenderEngine — lives on it.
 from __future__ import annotations
 
 import ctypes
+from pathlib import Path
 
 import sdl2
 from sdl2 import video
 
 from tcbase import Key, MouseButton, log
+from tcgui.widgets.events import DragPayload
 from tcgui.widgets.ui import UI
 
 from tgfx import Tgfx2Context
@@ -115,7 +117,53 @@ def _get_event_window_id(event) -> int | None:
         return event.key.windowID
     if etype == sdl2.SDL_TEXTINPUT:
         return event.text.windowID
+    if etype == sdl2.SDL_DROPFILE:
+        return event.drop.windowID
     return None
+
+
+def _free_sdl_drop_file(event) -> None:
+    ptr_value = ctypes.c_void_p.from_address(
+        ctypes.addressof(event.drop) + sdl2.SDL_DropEvent.file.offset
+    ).value
+    if ptr_value is not None:
+        sdl2.SDL_free(ctypes.c_void_p(ptr_value))
+
+
+def _decode_sdl_drop_file(event) -> str | None:
+    raw_path = event.drop.file
+    try:
+        if raw_path is None:
+            log.error("[run_editor] SDL_DROPFILE has empty file path")
+            return None
+        if not isinstance(raw_path, bytes):
+            log.error(
+                f"[run_editor] SDL_DROPFILE path has unexpected type: {type(raw_path).__name__}"
+            )
+            return None
+        return raw_path.decode("utf-8", errors="replace")
+    finally:
+        _free_sdl_drop_file(event)
+
+
+def _dispatch_sdl_file_drop(event, target_ui: UI) -> bool:
+    path_text = _decode_sdl_drop_file(event)
+    if path_text is None:
+        return False
+    path = Path(path_text)
+    mx = ctypes.c_int()
+    my = ctypes.c_int()
+    sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
+    mods = _translate_sdl_mods(sdl2.SDL_GetModState())
+    payload = DragPayload(
+        "project_file",
+        {
+            "path": str(path),
+            "extension": path.suffix.lower(),
+            "name": path.name,
+        },
+    )
+    return target_ui.external_drop(float(mx.value), float(my.value), payload, mods)
 
 
 def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> tuple[bool, int]:
@@ -190,6 +238,9 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> tuple[bool, int]
             routed += 1
             text = event.text.text.decode("utf-8", errors="replace")
             target_ui.text_input(text)
+        elif etype == sdl2.SDL_DROPFILE:
+            routed += 1
+            _dispatch_sdl_file_drop(event, target_ui)
 
     return True, routed
 

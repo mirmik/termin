@@ -719,6 +719,20 @@ class UI:
         self._drag_hover_widget = None
         return accepted
 
+    def external_drop(
+        self,
+        x: float,
+        y: float,
+        payload: DragPayload,
+        mods: int = 0,
+    ) -> bool:
+        """Drop a host-provided payload onto the widget tree."""
+        event = DragEvent(x=x, y=y, payload=payload, source=None, mods=mods)
+        target = self._find_drag_target(self._hit_widget_for_drag(x, y), event)
+        if target is None:
+            return False
+        return bool(target.on_drag_drop(event))
+
     def mouse_wheel(self, dx: float, dy: float, x: float, y: float, mods: int = 0) -> bool:
         """Handle mouse wheel event. Bubbles up through parents."""
         if not self._root and not self._overlays:

@@ -14,6 +14,9 @@ from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.entity_operations import EntityOperations
 from termin.visualization.core.entity import Entity
 
+_GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")
+_SCENE_TREE_EXTERNAL_EXTENSIONS = _GLTF_MODEL_EXTENSIONS + (".prefab", ".tc_prefab")
+
 
 class SceneTreeControllerTcgui:
     """Manages tcgui TreeWidget for the scene.
@@ -347,7 +350,7 @@ class SceneTreeControllerTcgui:
         data = event.payload.data
         if not isinstance(data, dict):
             return False
-        return data.get("extension") in (".glb", ".prefab", ".tc_prefab")
+        return data.get("extension") in _SCENE_TREE_EXTERNAL_EXTENSIONS
 
     def _on_external_drop(self, event: DragEvent, target: TreeNode | None, position: str) -> bool:
         if not self._on_external_drag(event, target, position):
@@ -361,7 +364,7 @@ class SceneTreeControllerTcgui:
             return False
 
         parent_entity = self._drop_parent_entity(target, position)
-        if ext == ".glb":
+        if ext in _GLTF_MODEL_EXTENSIONS:
             self._ops.drop_glb(path, parent_entity)
             return True
         if ext in (".prefab", ".tc_prefab"):

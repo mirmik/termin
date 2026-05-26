@@ -53,6 +53,8 @@ from termin.editor_tcgui.editor_camera_ui_controller import EditorCameraUIContro
 
 SceneMode = engine_scene.SceneMode
 
+_GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")
+
 
 class EditorWindowTcgui:
     """Main editor window for the tcgui frontend.
@@ -1006,7 +1008,7 @@ class EditorWindowTcgui:
         data = event.payload.data
         if not isinstance(data, dict):
             return False
-        return data.get("extension") == ".glb"
+        return data.get("extension") in _GLTF_MODEL_EXTENSIONS
 
     def _on_viewport_external_drop(self, event) -> bool:
         if not self._on_viewport_external_drag(event):
@@ -1018,7 +1020,7 @@ class EditorWindowTcgui:
         if not isinstance(path, str):
             return False
         if self.scene_tree_controller is None:
-            log.error("[EditorWindowTcgui] GLB viewport drop failed: scene tree controller is not available")
+            log.error("[EditorWindowTcgui] GLTF viewport drop failed: scene tree controller is not available")
             return False
         world_pos = self._world_position_for_viewport_drop(event.x, event.y)
         self.scene_tree_controller.operations.drop_glb(path, None, world_position=world_pos)
