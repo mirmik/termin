@@ -1,0 +1,33 @@
+from termin.editor_tcgui.material_inspector import MaterialInspectorTcgui
+
+
+class _Phase:
+    def __init__(self) -> None:
+        self.assigned: list[tuple[str, object]] = []
+
+    def set_texture(self, uniform_name: str, texture) -> None:
+        self.assigned.append((uniform_name, texture))
+
+
+class _Material:
+    def __init__(self) -> None:
+        self.phases = [_Phase()]
+
+
+class _ResourceManager:
+    def find_material_name(self, material) -> None:
+        return None
+
+
+def test_material_inspector_default_texture_uses_assets_texture_handle_module() -> None:
+    inspector = MaterialInspectorTcgui.__new__(MaterialInspectorTcgui)
+    inspector._material = _Material()
+    inspector._rm = _ResourceManager()
+    inspector.on_changed = None
+
+    inspector._set_texture_all_phases("u_albedo_texture", "default", "", "white")
+
+    assigned = inspector._material.phases[0].assigned
+    assert len(assigned) == 1
+    assert assigned[0][0] == "u_albedo_texture"
+    assert assigned[0][1].is_valid
