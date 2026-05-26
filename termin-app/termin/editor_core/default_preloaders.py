@@ -29,7 +29,7 @@ def create_default_preloaders(
     resource_manager: ResourceManager,
     on_resource_reloaded: Callable[[str, str], None] | None = None,
 ) -> list[FilePreLoader]:
-    return [
+    processors: list[FilePreLoader] = [
         _create_plugin_preloader(resource_manager, "glsl", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "pipeline", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "scene_pipeline", on_resource_reloaded),
@@ -45,6 +45,13 @@ def create_default_preloaders(
         _create_plugin_preloader(resource_manager, "voxel_grid", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "ui", on_resource_reloaded),
     ]
+    registered_type_ids = {processor.resource_type for processor in processors}
+    for plugin in resource_manager.asset_type_plugins.all_import_plugins():
+        if plugin.type_id in registered_type_ids:
+            continue
+        processors.append(PluginPreLoader(plugin, resource_manager, on_resource_reloaded=on_resource_reloaded))
+        registered_type_ids.add(plugin.type_id)
+    return processors
 
 
 def register_default_preloaders(
@@ -52,5 +59,6 @@ def register_default_preloaders(
     resource_manager: ResourceManager,
     on_resource_reloaded: Callable[[str, str], None] | None = None,
 ) -> None:
+    watcher.set_external_asset_catalog(resource_manager.external_assets)
     for processor in create_default_preloaders(resource_manager, on_resource_reloaded):
         watcher.register_processor(processor)

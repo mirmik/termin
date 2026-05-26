@@ -167,20 +167,40 @@ optional compression
 
 ## Asset Layer
 
-Нужен новый asset type в `termin-app/termin/assets`, например:
+Нужен новый asset type, но не в legacy `termin-app/termin/assets`. Этот каталог сейчас
+мигрирует наружу и не должен принимать новые предметные asset-типы.
+
+Правильная граница:
 
 ```text
-FoliageDataAsset
-FoliageDataHandle
-FoliageDataPlugin
+termin-components/termin-components-foliage/
+  termin/foliage/foliage_data.hpp
+  termin/foliage/foliage_data_registry.hpp
+  termin/foliage/foliage_file.hpp
+  python/termin/foliage/asset_plugin.py
 ```
 
-Он должен читать/писать `.tfoliage` и регистрироваться через существующий asset/resource слой.
+Native C++ часть владеет `FoliageData`, registry/handle и чтением/записью `.tfoliage`.
+Python часть в `termin.foliage` должна оставаться package-side glue: import plugin,
+metadata helpers и тонкий binding к native handle для editor-команд. Она зависит от
+общего `termin-assets` contract package, но не от `termin-app`.
+
+Подключение к editor/build registry должно идти через package entry points:
+
+```text
+termin.asset_import_plugins:
+  foliage_data = termin.foliage.asset_plugin:create_import_plugin
+```
+
+`termin-app` при этом вызывает общий discovery helper из `termin-assets` для asset
+plugins. Предметный tcgui-инструмент кисти живет в `termin-app`, потому что это
+часть интерфейса редактора, а не asset package.
 
 Важно отделить:
 
 - runtime C++ компонент и renderer в `termin-components-foliage`;
-- editor/project asset integration в `termin-app`;
+- editor/project asset integration как внешний plugin/adapter, подключаемый editor-ом;
+- editor UI tools (`FoliageLayerEditorExtension`) в `termin-app/termin/editor_tcgui`;
 - сам формат файла так, чтобы C++ runtime мог читать его без Python, если потребуется standalone.
 
 ## Rendering
@@ -205,15 +225,19 @@ MVP может не поддерживать тени от травы. В тек
 
 ```text
 FoliageBrushTool
-  -> raycast viewport mouse ray
-  -> hit entity
-  -> get/add FoliageLayerComponent
-  -> load or create FoliageDataAsset
-  -> edit runtime points
-  -> mark asset dirty
+  -> viewport click interceptor after surface pick
+  -> hit mesh point + normal
+  -> selected FoliageLayerComponent
+  -> selected/created FoliageData asset
+  -> native TcFoliageData add/remove/save
 ```
 
 Сохранение проекта должно записывать `.tfoliage`, а не раздувать scene json.
+
+Текущий MVP: `FoliageLayerEditorExtension` регистрируется для `FoliageLayerComponent`,
+перехватывает клики в режимах Paint/Erase, редактирует native `TcFoliageData` через
+binding и рисует overlay-точки/радиус кисти через `ImmediateRenderer`. Это stamp brush:
+непрерывный drag потребует отдельного mouse-move surface callback в `EditorInteractionSystem`.
 
 ## Generic Large Payload Pattern
 
@@ -255,4 +279,3 @@ External payload:
 5. Добавить editor brush: Add/Erase, local-space points, min spacing.
 6. Сериализовать в scene только asset ref и настройки.
 7. Отдельно проверить и при необходимости поправить путь scene serialization для virtual `serialize_data()`.
-

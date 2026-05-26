@@ -38,6 +38,13 @@ def register_default_runtime_asset_plugins(registry: "AssetTypeRegistry") -> Non
     register_ui_runtime_plugin(registry)
     register_voxel_grid_runtime_plugin(registry)
 
+    from termin_assets import (
+        register_combined_plugins_from_entry_points,
+        register_runtime_plugins_from_entry_points,
+    )
+    register_runtime_plugins_from_entry_points(registry)
+    register_combined_plugins_from_entry_points(registry)
+
 
 def register_default_import_asset_plugins(registry: "AssetTypeRegistry") -> None:
     """Register import-side asset plugins that are safe outside editor_core."""
@@ -68,6 +75,13 @@ def register_default_import_asset_plugins(registry: "AssetTypeRegistry") -> None
     register_texture_import_plugin(registry)
     register_ui_import_plugin(registry)
     register_voxel_grid_import_plugin(registry)
+
+    from termin_assets import (
+        register_combined_plugins_from_entry_points,
+        register_import_plugins_from_entry_points,
+    )
+    register_import_plugins_from_entry_points(registry)
+    register_combined_plugins_from_entry_points(registry)
 
 
 def register_default_asset_plugins(registry: "AssetTypeRegistry") -> None:

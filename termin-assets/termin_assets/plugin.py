@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from termin_assets.preload import PreLoadResult
@@ -37,6 +37,16 @@ class AssetImportPlugin(Protocol):
     priority: int
 
     def preload(self, path: str) -> "PreLoadResult | None":
+        ...
+
+
+@runtime_checkable
+class AssetCreationPlugin(Protocol):
+    """Optional plugin capability for creating a new project asset file."""
+
+    type_id: str
+
+    def create_asset(self, project_root: str, name: str) -> "PreLoadResult":
         ...
 
 

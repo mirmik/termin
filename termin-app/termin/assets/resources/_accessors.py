@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Optional, TYPE_CHECKING
 
+from tcbase import log
+from termin_assets import AssetCreationPlugin
+
 from ._handle_accessors import HandleAccessors
 
 if TYPE_CHECKING:
@@ -91,7 +94,47 @@ class AccessorsMixin:
                 find_name=self._find_tc_mesh_name,
                 find_uuid=self._find_tc_mesh_uuid_by_name,
             )
+        if kind.endswith("_handle"):
+            type_id = kind[:-7]
+            plugin = self.asset_type_plugins.get_import(type_id)
+            if plugin is not None:
+                return HandleAccessors(
+                    list_names=lambda: self.external_assets.list_names(type_id),
+                    get_by_name=lambda name: self.external_assets.get_by_name(type_id, name),
+                    find_name=lambda record: record.name if record is not None else None,
+                    find_uuid=lambda name: self.external_assets.find_uuid_by_name(type_id, name),
+                    create_item=lambda: self._create_external_asset(type_id),
+                )
         return None
+
+    def _create_external_asset(self, type_id: str) -> tuple[str, Optional[str]] | None:
+        plugin = self.asset_type_plugins.get_import(type_id)
+        if plugin is None:
+            log.error(f"[ResourceManager] Cannot create external asset: import plugin not found: {type_id}")
+            return None
+        if not isinstance(plugin, AssetCreationPlugin):
+            log.error(f"[ResourceManager] Import plugin does not support asset creation: {type_id}")
+            return None
+        if self.external_assets.project_root is None:
+            log.error(f"[ResourceManager] Cannot create external asset without project root: {type_id}")
+            return None
+
+        base_name = type_id
+        existing = set(self.external_assets.list_names(type_id))
+        name = base_name
+        index = 1
+        while name in existing:
+            index += 1
+            name = f"{base_name}_{index:02d}"
+
+        try:
+            result = plugin.create_asset(str(self.external_assets.project_root), name)
+            self.register_file(result)
+            created_name = result.path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+            return created_name, result.uuid
+        except Exception as e:
+            log.error(f"[ResourceManager] Failed to create external asset {type_id}: {e}")
+            return None
 
     # Handle accessors for TcMaterial
     def _get_tc_material(self, name: str) -> Optional["TcMaterial"]:

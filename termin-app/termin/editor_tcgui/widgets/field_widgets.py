@@ -742,6 +742,10 @@ class HandleSelectorWidget(FieldWidget):
         self._combo = ComboBox()
         self._combo.on_changed = self._on_changed
         self.add_child(self._combo)
+        self._create_btn = Button()
+        self._create_btn.text = "+"
+        self._create_btn.on_click = self._on_create_clicked
+        self.add_child(self._create_btn)
         self._refresh_items()
 
     def set_resources(self, resources: "ResourceManager") -> None:
@@ -775,8 +779,24 @@ class HandleSelectorWidget(FieldWidget):
                 self._combo.selected_index = i
                 break
         self._combo.on_changed = old
+        self._create_btn.visible = accessors.create_item is not None
 
     def _on_changed(self, _index: int, _text: str) -> None:
+        self._emit()
+
+    def _on_create_clicked(self) -> None:
+        accessors = self._get_accessors()
+        if accessors is None or accessors.create_item is None:
+            return
+        created = accessors.create_item()
+        if created is None:
+            return
+        created_name, _created_uuid = created
+        self._refresh_items()
+        for i in range(self._combo.item_count):
+            if self._combo.item_text(i) == created_name:
+                self._combo.selected_index = i
+                break
         self._emit()
 
     def get_value(self) -> Optional[dict]:
@@ -807,6 +827,15 @@ class HandleSelectorWidget(FieldWidget):
             log.warn(f"[HandleSelectorWidget] {self._resource_kind}: '{name}' not found")
         self._combo.selected_index = 0 if self._allow_none else -1
         self._combo.on_changed = old
+
+    def layout(self, x: float, y: float, width: float, height: float,
+               viewport_w: float, viewport_h: float) -> None:
+        Widget.layout(self, x, y, width, height, viewport_w, viewport_h)
+        button_w = 26.0 if self._create_btn.visible else 0.0
+        gap = 4.0 if self._create_btn.visible else 0.0
+        self._combo.layout(x, y, max(0.0, width - button_w - gap), height, viewport_w, viewport_h)
+        if self._create_btn.visible:
+            self._create_btn.layout(x + width - button_w, y, button_w, height, viewport_w, viewport_h)
 
 
 class SerializedListFieldWidget(FieldWidget):
@@ -1069,6 +1098,7 @@ class FieldWidgetFactory:
             "skeleton_handle", "tc_skeleton",
             "voxel_grid_handle", "navmesh_handle",
             "texture_handle", "ui_handle",
+            "foliage_data_handle",
         ):
             return HandleSelectorWidget(
                 resource_kind=kind,

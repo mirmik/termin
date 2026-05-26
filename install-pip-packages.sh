@@ -175,6 +175,7 @@ PACKAGES=(
     termin-collision
     termin-render
     termin-components/termin-components-render
+    termin-components/termin-components-foliage
     termin-render-passes
     termin-navmesh
     termin-qopt
