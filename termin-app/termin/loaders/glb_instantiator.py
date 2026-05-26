@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
+import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 import numpy as np
@@ -297,29 +301,238 @@ def _populate_tc_skeleton_from_glb(tc_skel: "TcSkeleton", skin, nodes) -> bool:
 
 class _PendingSkinnedMesh:
     """Placeholder for skinned mesh that needs skeleton instance set later."""
-    def __init__(self, entity: Entity, mesh: TcMesh, material):
+    def __init__(self, entity: Entity, mesh: TcMesh, glb_mesh: "GLBMeshData"):
         self.entity = entity
         self.mesh = mesh
-        self.material = material
+        self.glb_mesh = glb_mesh
 
 
-def _decode_glb_texture(texture: "GLBTcTexture"):
-    """Decode glTF image bytes into a runtime TcTexture."""
+def _stable_glb_texture_uuid(texture: "GLBTcTexture") -> str:
+    digest = hashlib.sha256(texture.data).hexdigest()
+    key = f"termin:gltf-texture:{texture.mime_type}:{texture.name}:{digest}"
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
+
+
+def _safe_glb_texture_name(texture: "GLBTcTexture") -> str:
+    name = texture.name.strip()
+    if not name:
+        name = f"gltf_texture_{texture.index}"
+    name = re.sub(r"[^A-Za-z0-9_.:/-]+", "_", name)
+    name = name.strip("._/ ")
+    if not name:
+        name = f"gltf_texture_{texture.index}"
+    return name
+
+
+def _unique_glb_texture_name(rm, texture: "GLBTcTexture", texture_uuid: str) -> str:
+    base_name = _safe_glb_texture_name(texture)
+    asset = rm.get_texture_asset(base_name)
+    if asset is None or asset.uuid == texture_uuid:
+        return base_name
+
+    suffix = 2
+    while True:
+        candidate = f"{base_name}_{suffix}"
+        asset = rm.get_texture_asset(candidate)
+        if asset is None or asset.uuid == texture_uuid:
+            return candidate
+        suffix += 1
+
+
+def _tc_texture_from_asset_name(rm, name: str):
+    from tcbase import log
+
+    asset = rm.get_texture_asset(name)
+    if asset is None:
+        log.error(f"[glb_instantiator] Texture asset not found by name: {name}")
+        return None
+
+    handle = rm.get_texture_handle(name)
+    if handle is None:
+        log.error(f"[glb_instantiator] Texture asset handle not found: {name}")
+        return None
+
+    tc_texture = handle.get()
+    if tc_texture is None or not tc_texture.is_valid:
+        log.error(f"[glb_instantiator] Texture asset failed to load: {name}")
+        return None
+    log.info(
+        f"[glb_instantiator] resolved texture asset name='{name}' "
+        f"asset_uuid={asset.uuid} source_path={asset.source_path} "
+        f"tc_uuid={tc_texture.uuid} tc_name='{tc_texture.name}' "
+        f"size={tc_texture.width}x{tc_texture.height}"
+    )
+    return tc_texture
+
+
+def _texture_name_for_source_path(rm, source_path: Path) -> str | None:
+    from tcbase import log
+
+    target_path = source_path.resolve()
+
+    for name in rm.list_texture_names():
+        asset = rm.get_texture_asset(name)
+        if asset is None:
+            continue
+        asset_source_path = asset.source_path
+        if asset_source_path is not None and asset_source_path.resolve() == target_path:
+            log.info(
+                f"[glb_instantiator] matched glTF texture source by exact path: "
+                f"source_path={target_path} asset_name='{name}' asset_uuid={asset.uuid}"
+            )
+            return name
+
+    stem_name = source_path.stem
+    stem_asset = rm.get_texture_asset(stem_name)
+    if stem_asset is not None and _texture_asset_matches_source_content(stem_asset, source_path):
+        log.info(
+            f"[glb_instantiator] matched glTF texture source by stem/content: "
+            f"source_path={target_path} asset_name='{stem_name}' asset_uuid={stem_asset.uuid} "
+            f"asset_source_path={stem_asset.source_path}"
+        )
+        return stem_name
+    log.warning(
+        f"[glb_instantiator] no registered texture asset matched glTF source: "
+        f"source_path={target_path} stem='{stem_name}' registered_textures={len(rm.list_texture_names())}"
+    )
+    return None
+
+
+def _texture_asset_matches_source_content(asset, source_path: Path) -> bool:
+    from tcbase import log
+
+    asset_source_path = asset.source_path
+    if asset_source_path is None:
+        return True
+    left = asset_source_path.resolve()
+    right = source_path.resolve()
+    if left == right:
+        return True
+    if not left.exists() or not right.exists():
+        return False
+    try:
+        return hashlib.sha256(left.read_bytes()).digest() == hashlib.sha256(right.read_bytes()).digest()
+    except Exception:
+        log.warning(
+            f"[glb_instantiator] Failed to compare duplicate texture sources: {left} vs {right}",
+            exc_info=True,
+        )
+        return False
+
+
+def _register_external_texture_asset(rm, source_path: Path, texture: "GLBTcTexture") -> str | None:
+    from tcbase import log
+    from termin.assets.texture_asset import TextureAsset
+    from termin_assets import read_spec_file
+
+    if not source_path.exists():
+        log.error(f"[glb_instantiator] glTF external texture file does not exist: {source_path}")
+        return None
+
+    spec_data = read_spec_file(str(source_path))
+    texture_uuid = spec_data.get("uuid") if spec_data else None
+    name = source_path.stem
+    existing = rm.get_texture_asset(name)
+    if existing is not None and existing.source_path is not None:
+        if existing.source_path.resolve() != source_path.resolve():
+            name = _unique_glb_texture_name(rm, texture, texture_uuid or _stable_glb_texture_uuid(texture))
+            log.warning(
+                f"[glb_instantiator] texture name collision for external glTF texture: "
+                f"source_path={source_path.resolve()} base_name='{source_path.stem}' "
+                f"existing_source_path={existing.source_path} chosen_name='{name}'"
+            )
+
+    asset = TextureAsset(
+        texture_data=None,
+        name=name,
+        source_path=source_path,
+        uuid=texture_uuid,
+    )
+    asset.parse_spec(spec_data)
+    rm.register_texture_asset(name, asset, source_path=str(source_path), uuid=asset.uuid)
+    log.info(
+        f"[glb_instantiator] registered external glTF texture asset: "
+        f"name='{name}' uuid={asset.uuid} source_path={source_path.resolve()} "
+        f"had_meta={spec_data is not None}"
+    )
+    return name
+
+
+def _registered_glb_texture(rm, texture: "GLBTcTexture"):
+    from tcbase import log
+
+    source_path = texture.source_path
+    if source_path is None:
+        log.info(
+            f"[glb_instantiator] glTF texture index={texture.index} name='{texture.name}' "
+            f"has no external source_path; embedded/runtime path will be used"
+        )
+        return None
+
+    log.info(
+        f"[glb_instantiator] resolving glTF external texture index={texture.index} "
+        f"name='{texture.name}' source_path={source_path.resolve()} mime={texture.mime_type}"
+    )
+    name = _texture_name_for_source_path(rm, source_path)
+    if name is None:
+        name = _register_external_texture_asset(rm, source_path, texture)
+    if name is None:
+        log.error(
+            f"[glb_instantiator] failed to resolve/register glTF external texture "
+            f"index={texture.index} name='{texture.name}' source_path={source_path.resolve()}"
+        )
+        return None
+    return _tc_texture_from_asset_name(rm, name)
+
+
+def _decode_glb_texture(rm, texture: "GLBTcTexture"):
+    """Decode glTF image bytes into a registered TextureAsset."""
     import io
 
     from PIL import Image
     from termin.assets.texture_asset import TextureAsset
+    from tgfx import TcTexture
     from tcbase import log
 
+    texture_uuid = _stable_glb_texture_uuid(texture)
+    existing_asset = rm.get_texture_asset_by_uuid(texture_uuid)
+    if existing_asset is not None:
+        tc_texture = existing_asset.texture_data
+        if tc_texture is not None and tc_texture.is_valid:
+            log.info(
+                f"[glb_instantiator] reused decoded glTF texture asset: "
+                f"index={texture.index} name='{texture.name}' asset_uuid={existing_asset.uuid} "
+                f"tc_uuid={tc_texture.uuid}"
+            )
+            return tc_texture
+        log.warning(f"[glb_instantiator] Registered glTF texture asset is invalid: {texture.name} ({texture_uuid})")
+
     try:
+        texture_name = _unique_glb_texture_name(rm, texture, texture_uuid)
         image = Image.open(io.BytesIO(texture.data)).convert("RGBA")
         data = np.array(image, dtype=np.uint8)
-        asset = TextureAsset.from_data(
+        height, width = data.shape[:2]
+        asset = TextureAsset(
+            texture_data=None,
+            name=texture_name,
+            uuid=texture_uuid,
+        )
+        asset.texture_data = TcTexture.from_data(
             data,
-            name=texture.name,
+            width=width,
+            height=height,
+            channels=4,
             flip_x=False,
             flip_y=True,
             transpose=False,
+            name=texture_name,
+            uuid=texture_uuid,
+        )
+        rm.register_texture_asset(texture_name, asset, uuid=texture_uuid)
+        log.info(
+            f"[glb_instantiator] decoded glTF texture bytes into runtime asset: "
+            f"index={texture.index} name='{texture.name}' registered_name='{texture_name}' "
+            f"uuid={asset.uuid} size={asset.texture_data.width}x{asset.texture_data.height}"
         )
         return asset.texture_data
     except Exception:
@@ -327,13 +540,32 @@ def _decode_glb_texture(texture: "GLBTcTexture"):
         return None
 
 
-def _build_texture_lookup(scene_data: "GLBSceneData") -> dict[int, object]:
+def _build_texture_lookup(rm, scene_data: "GLBSceneData") -> dict[int, object]:
     """Create a glTF texture-index to TcTexture map."""
+    from tcbase import log
+
+    log.info(
+        f"[glb_instantiator] building glTF texture lookup: "
+        f"textures={len(scene_data.textures)} registered_texture_assets={len(rm.list_texture_names())}"
+    )
     textures: dict[int, object] = {}
     for texture in scene_data.textures:
-        tc_texture = _decode_glb_texture(texture)
+        tc_texture = _registered_glb_texture(rm, texture)
+        if tc_texture is None:
+            tc_texture = _decode_glb_texture(rm, texture)
         if tc_texture is not None and tc_texture.is_valid:
             textures[texture.index] = tc_texture
+            resolved_name = rm.find_texture_name(tc_texture)
+            log.info(
+                f"[glb_instantiator] glTF texture lookup entry: index={texture.index} "
+                f"glTF_name='{texture.name}' resolved_asset_name='{resolved_name}' "
+                f"tc_uuid={tc_texture.uuid} tc_name='{tc_texture.name}'"
+            )
+        else:
+            log.error(
+                f"[glb_instantiator] glTF texture lookup failed: "
+                f"index={texture.index} name='{texture.name}' source_path={texture.source_path}"
+            )
     return textures
 
 
@@ -347,26 +579,43 @@ def _texture_for_index(textures: dict[int, object], texture_index: int | None):
     return texture
 
 
-def _create_import_material(
-    glb_material: "GLBMaterialData",
-    texture_lookup: dict[int, object],
-    index: int,
-):
-    """Create a runtime material from one glTF material."""
-    from termin.assets.resources import ResourceManager
-    from termin.assets.texture_handle import (
-        get_normal_texture_handle,
-        get_white_texture_handle,
-    )
-    from termin.geombase import Vec4
-    from termin.materials import create_material_from_parsed
+def _set_phase_float_if_present(phase, name: str, value: float) -> None:
+    if name in phase.uniforms:
+        phase.set_uniform_float(name, value)
+
+
+def _set_phase_vec4_if_present(phase, name: str, value) -> None:
+    if name in phase.uniforms:
+        phase.set_uniform_vec4(name, value)
+
+
+def _set_phase_texture_if_present(phase, name: str, texture) -> None:
     from tcbase import log
 
-    rm = ResourceManager.instance()
-    shader = rm.get_shader("CookTorrancePBR")
-    if shader is None:
-        log.error("[glb_instantiator] CookTorrancePBR shader is not registered")
-        raise RuntimeError("[glb_instantiator] CookTorrancePBR shader is not registered")
+    if texture is None:
+        log.info(f"[glb_instantiator] material override texture skipped: slot='{name}' texture=None")
+        return
+    if name not in phase.textures:
+        log.warning(
+            f"[glb_instantiator] material override texture slot missing in phase: "
+            f"slot='{name}' available={list(phase.textures.keys())}"
+        )
+        return
+    phase.set_texture(name, texture)
+    log.info(
+        f"[glb_instantiator] material override texture set: "
+        f"slot='{name}' tc_uuid={texture.uuid} tc_name='{texture.name}'"
+    )
+
+
+def _apply_import_material_override(
+    renderer: MeshRenderer,
+    glb_material: "GLBMaterialData",
+    texture_lookup: dict[int, object],
+) -> None:
+    """Apply one glTF material as a MeshRenderer material override."""
+    from termin.geombase import Vec4
+    from tcbase import log
 
     base_color = glb_material.base_color
     if base_color is None:
@@ -377,70 +626,72 @@ def _create_import_material(
         emissive_factor = np.array([0.0, 0.0, 0.0], dtype=np.float32)
     emission_intensity = 1.0 if float(np.linalg.norm(emissive_factor)) > 0.0 else 0.0
 
-    textures = {}
+    color = Vec4(
+        float(base_color[0]),
+        float(base_color[1]),
+        float(base_color[2]),
+        float(base_color[3]),
+    )
+    emission_color = Vec4(
+        float(emissive_factor[0]),
+        float(emissive_factor[1]),
+        float(emissive_factor[2]),
+        1.0,
+    )
+
     base_color_texture = _texture_for_index(texture_lookup, glb_material.base_color_texture)
-    if base_color_texture is not None:
-        textures["u_albedo_texture"] = base_color_texture
     metallic_roughness_texture = _texture_for_index(
         texture_lookup,
         glb_material.metallic_roughness_texture,
     )
-    if metallic_roughness_texture is not None:
-        textures["u_metallic_roughness_texture"] = metallic_roughness_texture
     normal_texture = _texture_for_index(texture_lookup, glb_material.normal_texture)
-    if normal_texture is not None:
-        textures["u_normal_texture"] = normal_texture
     occlusion_texture = _texture_for_index(texture_lookup, glb_material.occlusion_texture)
-    if occlusion_texture is not None:
-        textures["u_occlusion_texture"] = occlusion_texture
     emissive_texture = _texture_for_index(texture_lookup, glb_material.emissive_texture)
-    if emissive_texture is not None:
-        textures["u_emissive_texture"] = emissive_texture
-
-    uniforms = {
-        "u_color": Vec4(
-            float(base_color[0]),
-            float(base_color[1]),
-            float(base_color[2]),
-            float(base_color[3]),
-        ),
-        "u_metallic": float(glb_material.metallic_factor),
-        "u_roughness": float(glb_material.roughness_factor),
-        "u_normal_strength": float(glb_material.normal_scale),
-        "u_emission_color": Vec4(
-            float(emissive_factor[0]),
-            float(emissive_factor[1]),
-            float(emissive_factor[2]),
-            1.0,
-        ),
-        "u_emission_intensity": emission_intensity,
-    }
-
-    material = create_material_from_parsed(
-        shader,
-        color=uniforms["u_color"],
-        textures=textures,
-        uniforms=uniforms,
-        name=f"glTF_{index}_{glb_material.name}",
-        default_white_texture=get_white_texture_handle().get(),
-        default_normal_texture=get_normal_texture_handle().get(),
+    log.info(
+        f"[glb_instantiator] applying glTF material override: material='{glb_material.name}' "
+        f"base_color_index={glb_material.base_color_texture} metallic_roughness_index={glb_material.metallic_roughness_texture} "
+        f"normal_index={glb_material.normal_texture} occlusion_index={glb_material.occlusion_texture} "
+        f"emissive_index={glb_material.emissive_texture}"
     )
-    material.name = glb_material.name
-    return material
+
+    renderer.set_override_material(True)
+    material = renderer.get_overridden_material()
+    if not material.is_valid:
+        log.error(f"[glb_instantiator] Failed to create material override for '{glb_material.name}'")
+        return
+    log.info(
+        f"[glb_instantiator] material override created: "
+        f"source_material='{glb_material.name}' override_name='{material.name}' phases={len(material.phases)}"
+    )
+
+    for phase in material.phases:
+        _set_phase_vec4_if_present(phase, "u_color", color)
+        _set_phase_float_if_present(phase, "u_metallic", float(glb_material.metallic_factor))
+        _set_phase_float_if_present(phase, "u_roughness", float(glb_material.roughness_factor))
+        _set_phase_float_if_present(phase, "u_normal_strength", float(glb_material.normal_scale))
+        _set_phase_vec4_if_present(phase, "u_emission_color", emission_color)
+        _set_phase_float_if_present(phase, "u_emission_intensity", emission_intensity)
+
+        _set_phase_texture_if_present(phase, "u_albedo_texture", base_color_texture)
+        _set_phase_texture_if_present(phase, "u_metallic_roughness_texture", metallic_roughness_texture)
+        _set_phase_texture_if_present(phase, "u_normal_texture", normal_texture)
+        _set_phase_texture_if_present(phase, "u_occlusion_texture", occlusion_texture)
+        _set_phase_texture_if_present(phase, "u_emissive_texture", emissive_texture)
 
 
-def _create_import_materials(scene_data: "GLBSceneData") -> list[object]:
-    texture_lookup = _build_texture_lookup(scene_data)
-    materials: list[object] = []
-    for index, glb_material in enumerate(scene_data.materials):
-        materials.append(_create_import_material(glb_material, texture_lookup, index))
-    return materials
-
-
-def _material_for_glb_mesh(glb_mesh: "GLBMeshData", materials: list[object], fallback_material):
-    if glb_mesh.material_index >= 0 and glb_mesh.material_index < len(materials):
-        return materials[glb_mesh.material_index]
-    return fallback_material
+def _apply_glb_material_override_if_present(
+    renderer: MeshRenderer,
+    glb_mesh: "GLBMeshData",
+    scene_data: "GLBSceneData",
+    texture_lookup: dict[int, object],
+) -> None:
+    if glb_mesh.material_index < 0 or glb_mesh.material_index >= len(scene_data.materials):
+        return
+    _apply_import_material_override(
+        renderer,
+        scene_data.materials[glb_mesh.material_index],
+        texture_lookup,
+    )
 
 
 def _create_entity_from_node(
@@ -448,8 +699,8 @@ def _create_entity_from_node(
     scene_data: "GLBSceneData",
     meshes: Dict[int, TcMesh],
     mesh_assets: Dict[str, "MeshAsset"],
-    materials: list[object],
-    fallback_material,
+    base_material,
+    texture_lookup: dict[int, object],
     node_to_entity: Optional[Dict[int, Entity]] = None,
     pending_skinned: Optional[List[_PendingSkinnedMesh]] = None,
     scene: Optional["Scene"] = None,
@@ -490,20 +741,20 @@ def _create_entity_from_node(
                 meshes[mesh_idx] = tc_mesh
 
             tc_mesh = meshes[mesh_idx]
-            material = _material_for_glb_mesh(glb_mesh, materials, fallback_material)
 
             if glb_mesh.is_skinned and pending_skinned is not None:
                 from tcbase import log
                 log.info(f"[glb_instantiator] pending skinned mesh={glb_mesh.name} tc_mesh.is_valid={tc_mesh.is_valid} uuid={tc_mesh.uuid}")
-                pending_skinned.append(_PendingSkinnedMesh(entity, tc_mesh, material))
+                pending_skinned.append(_PendingSkinnedMesh(entity, tc_mesh, glb_mesh))
             else:
-                renderer = MeshRenderer(mesh=tc_mesh, material=material)
+                renderer = MeshRenderer(mesh=tc_mesh, material=base_material)
+                _apply_glb_material_override_if_present(renderer, glb_mesh, scene_data, texture_lookup)
                 entity.add_component(renderer)
 
     # Recursively create children
     for child_index in node.children:
         child_entity = _create_entity_from_node(
-            child_index, scene_data, meshes, mesh_assets, materials, fallback_material,
+            child_index, scene_data, meshes, mesh_assets, base_material, texture_lookup,
             node_to_entity, pending_skinned, scene
         )
         entity.transform.add_child(child_entity.transform)
@@ -571,16 +822,17 @@ def instantiate_glb(
 
     rm = ResourceManager.instance()
 
-    # Fallback material for primitives without a glTF material.
-    default_material_asset = rm.get_material_asset("NormalizedPBR")
+    # Base material for all imported glTF primitives. Per-material glTF
+    # parameters are applied through MeshRenderer material overrides.
+    base_material = rm.get_material("NormalizedPBR")
 
-    if default_material_asset is None:
+    if base_material is None or not base_material.is_valid:
         raise RuntimeError(
             f"[glb_instantiator] Builtin materials not registered: "
-            f"NormalizedPBR(default)={default_material_asset is not None}"
+            f"NormalizedPBR(default)={base_material is not None}"
         )
 
-    materials = _create_import_materials(scene_data)
+    texture_lookup = _build_texture_lookup(rm, scene_data)
 
     meshes: Dict[int, TcMesh] = {}
     node_to_entity: Dict[int, Entity] = {}
@@ -603,8 +855,8 @@ def instantiate_glb(
                 scene_data,
                 meshes,
                 mesh_assets,
-                materials,
-                default_material_asset,
+                base_material,
+                texture_lookup,
                 node_to_entity=node_to_entity,
                 pending_skinned=pending_skinned,
                 scene=scene,
@@ -618,8 +870,8 @@ def instantiate_glb(
                     scene_data,
                     meshes,
                     mesh_assets,
-                    materials,
-                    default_material_asset,
+                    base_material,
+                    texture_lookup,
                     node_to_entity=node_to_entity,
                     pending_skinned=pending_skinned,
                     scene=scene,
@@ -639,8 +891,8 @@ def instantiate_glb(
 
             meshes[i] = tc_mesh
             mesh_entity = create_entity(glb_mesh.name)
-            material = _material_for_glb_mesh(glb_mesh, materials, default_material_asset)
-            renderer = MeshRenderer(mesh=tc_mesh, material=material)
+            renderer = MeshRenderer(mesh=tc_mesh, material=base_material)
+            _apply_glb_material_override_if_present(renderer, glb_mesh, scene_data, texture_lookup)
             mesh_entity.add_component(renderer)
             root_entity.transform.add_child(mesh_entity.transform)
 
@@ -683,9 +935,10 @@ def instantiate_glb(
             log.info(f"[glb_instantiator] creating SkinnedMeshRenderer mesh.is_valid={pending.mesh.is_valid} uuid={pending.mesh.uuid} name={pending.mesh.name}")
             renderer = SkinnedMeshRenderer(
                 mesh=pending.mesh,
-                material=pending.material,
+                material=base_material,
                 skeleton_controller=skeleton_controller,
             )
+            _apply_glb_material_override_if_present(renderer, pending.glb_mesh, scene_data, texture_lookup)
             pending.entity.add_component(renderer)
 
     # Step 4: Setup animations from GLBAsset's child assets

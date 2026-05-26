@@ -71,11 +71,19 @@ class GLBMaterialData:
 
 class GLBTcTexture:
     """Texture data extracted from GLB."""
-    def __init__(self, index: int, name: str, data: bytes, mime_type: str):
+    def __init__(
+        self,
+        index: int,
+        name: str,
+        data: bytes,
+        mime_type: str,
+        source_path: Path | None = None,
+    ):
         self.index = index
         self.name = name
         self.data = data  # Raw image bytes (PNG/JPEG)
         self.mime_type = mime_type
+        self.source_path = source_path
 
 
 class GLBAnimationChannel:
@@ -211,6 +219,13 @@ def _read_uri_bytes(uri: str, base_path: Path) -> tuple[bytes, str | None]:
     except Exception:
         log.error(f"[glb_loader] Failed to read glTF external URI: {path}", exc_info=True)
         raise
+
+
+def _external_uri_path(uri: str, base_path: Path) -> Path | None:
+    """Resolve an external glTF URI to a filesystem path."""
+    if uri.startswith("data:"):
+        return None
+    return base_path / uri
 
 
 def _load_gltf_buffers(gltf: dict, base_path: Path) -> list[bytes]:
@@ -428,6 +443,7 @@ def _parse_textures(
 
         # Get image data
         data = None
+        source_path = None
         if "bufferView" in image:
             bv = gltf["bufferViews"][image["bufferView"]]
             bin_data = _get_buffer_view_bytes(buffers, bv)
@@ -435,7 +451,10 @@ def _parse_textures(
             length = bv["byteLength"]
             data = bin_data[offset:offset + length]
         elif "uri" in image:
-            data, uri_mime_type = _read_uri_bytes(image["uri"], base_path or Path("."))
+            uri = image["uri"]
+            uri_base_path = base_path or Path(".")
+            source_path = _external_uri_path(uri, uri_base_path)
+            data, uri_mime_type = _read_uri_bytes(uri, uri_base_path)
             if uri_mime_type is not None:
                 mime_type = uri_mime_type
 
@@ -445,6 +464,7 @@ def _parse_textures(
                 name=name,
                 data=data,
                 mime_type=mime_type,
+                source_path=source_path,
             ))
 
 

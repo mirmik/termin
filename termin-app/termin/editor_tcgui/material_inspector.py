@@ -307,6 +307,45 @@ class MaterialInspectorTcgui(VStack):
             return first.uniforms[uniform_name]
         return default
 
+    def _get_texture_value(self, uniform_name: str):
+        """Return the first valid texture value from any material phase."""
+        if self._material is None or not self._material.phases:
+            return None
+
+        for phase_index, phase in enumerate(self._material.phases):
+            if uniform_name not in phase.textures:
+                log.info(
+                    f"[MaterialInspectorTcgui] texture slot absent in phase: "
+                    f"material='{self._material.name}' uniform='{uniform_name}' "
+                    f"phase_index={phase_index} available={list(phase.textures.keys())}"
+                )
+                continue
+
+            tex = phase.textures.get(uniform_name)
+            if tex is None:
+                log.info(
+                    f"[MaterialInspectorTcgui] texture slot empty in phase: "
+                    f"material='{self._material.name}' uniform='{uniform_name}' "
+                    f"phase_index={phase_index}"
+                )
+                continue
+            if not tex.is_valid:
+                log.warning(
+                    f"[MaterialInspectorTcgui] texture slot invalid in phase: "
+                    f"material='{self._material.name}' uniform='{uniform_name}' "
+                    f"phase_index={phase_index}"
+                )
+                continue
+
+            log.info(
+                f"[MaterialInspectorTcgui] texture slot found in phase: "
+                f"material='{self._material.name}' uniform='{uniform_name}' "
+                f"phase_index={phase_index} tc_uuid={tex.uuid} tc_name='{tex.name}'"
+            )
+            return tex
+
+        return None
+
     def _set_uniform_all_phases(self, uniform_name: str, value: Any) -> None:
         if self._material is None:
             return
@@ -329,8 +368,16 @@ class MaterialInspectorTcgui(VStack):
                 if tc_tex is None or not tc_tex.is_valid:
                     log.error(f"[MaterialInspectorTcgui] default texture is invalid: {default_tex}")
                     return
+                applied = 0
                 for phase in self._material.phases:
-                    phase.set_texture(uniform_name, tc_tex)
+                    if uniform_name in phase.textures:
+                        phase.set_texture(uniform_name, tc_tex)
+                        applied += 1
+                log.info(
+                    f"[MaterialInspectorTcgui] applied default texture: "
+                    f"material='{self._material.name}' uniform='{uniform_name}' "
+                    f"default='{default_tex}' phases={applied}"
+                )
             self._emit_changed()
             return
 
@@ -343,8 +390,16 @@ class MaterialInspectorTcgui(VStack):
             if tc_tex is None or not tc_tex.is_valid:
                 log.error(f"[MaterialInspectorTcgui] texture is invalid: {texture_name}")
                 return
+            applied = 0
             for phase in self._material.phases:
-                phase.set_texture(uniform_name, tc_tex)
+                if uniform_name in phase.textures:
+                    phase.set_texture(uniform_name, tc_tex)
+                    applied += 1
+            log.info(
+                f"[MaterialInspectorTcgui] applied file texture: "
+                f"material='{self._material.name}' uniform='{uniform_name}' "
+                f"texture='{texture_name}' tc_uuid={tc_tex.uuid} phases={applied}"
+            )
             self._emit_changed()
             return
 
@@ -354,8 +409,16 @@ class MaterialInspectorTcgui(VStack):
             if tc_tex is None or not tc_tex.is_valid:
                 log.error(f"[MaterialInspectorTcgui] RT texture not found: {texture_name}/{channel}")
                 return
+            applied = 0
             for phase in self._material.phases:
-                phase.set_texture(uniform_name, tc_tex)
+                if uniform_name in phase.textures:
+                    phase.set_texture(uniform_name, tc_tex)
+                    applied += 1
+            log.info(
+                f"[MaterialInspectorTcgui] applied render target texture: "
+                f"material='{self._material.name}' uniform='{uniform_name}' "
+                f"target='{texture_name}' channel='{channel}' phases={applied}"
+            )
             self._emit_changed()
             return
 
@@ -408,9 +471,15 @@ class MaterialInspectorTcgui(VStack):
             selected_name = ""
             selected_tag = "default"
             if self._material is not None and self._material.phases:
-                tex = self._material.phases[0].textures.get(name)
+                tex = self._get_texture_value(name)
                 if tex is not None and tex.is_valid:
                     tname = self._rm.find_texture_name(tex)
+                    log.info(
+                        f"[MaterialInspectorTcgui] texture slot read: "
+                        f"material='{self._material.name}' uniform='{name}' "
+                        f"tc_uuid={tex.uuid} tc_name='{tex.name}' "
+                        f"found_asset_name='{tname}' registered_textures={len(self._rm.list_texture_names())}"
+                    )
                     if tname and tname != "__white_1x1__":
                         selected_name = tname
                         selected_tag = "file"
@@ -420,6 +489,28 @@ class MaterialInspectorTcgui(VStack):
                         if ref is not None:
                             selected_tag = f"rt_{ref['channel']}"
                             selected_name = ref["target"]
+                            log.info(
+                                f"[MaterialInspectorTcgui] texture slot classified as render target: "
+                                f"material='{self._material.name}' uniform='{name}' "
+                                f"tag='{selected_tag}' name='{selected_name}'"
+                            )
+                        else:
+                            log.warning(
+                                f"[MaterialInspectorTcgui] texture slot has valid TcTexture but no asset/RT match: "
+                                f"material='{self._material.name}' uniform='{name}' "
+                                f"tc_uuid={tex.uuid} tc_name='{tex.name}'"
+                            )
+                else:
+                    log.info(
+                        f"[MaterialInspectorTcgui] texture slot empty: "
+                        f"material='{self._material.name}' uniform='{name}'"
+                    )
+            else:
+                material_name = "<none>" if self._material is None else self._material.name
+                log.warning(
+                    f"[MaterialInspectorTcgui] texture editor created without material phases: "
+                    f"material='{material_name}' uniform='{name}'"
+                )
 
             default_tex = "white"
             if isinstance(default, str) and default in ("white", "normal"):
@@ -432,6 +523,12 @@ class MaterialInspectorTcgui(VStack):
                 default_texture_kind=default_tex,
             )
             editor.set_value(selected_name, selected_tag)
+            log.info(
+                f"[MaterialInspectorTcgui] texture picker value set: "
+                f"material='{self._material.name if self._material is not None else '<none>'}' "
+                f"uniform='{name}' selected_tag='{selected_tag}' selected_name='{selected_name}' "
+                f"default='{default_tex}'"
+            )
             return editor
 
         unknown = Label()

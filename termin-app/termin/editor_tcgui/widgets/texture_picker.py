@@ -263,7 +263,13 @@ class TexturePickerWidget(HStack):
         try:
             from termin.visualization.core.scene import scene_render_mount
 
-            scenes = self._scene_getter()
+            scenes_value = self._scene_getter()
+            if scenes_value is None:
+                scenes = []
+            elif isinstance(scenes_value, (list, tuple)):
+                scenes = list(scenes_value)
+            else:
+                scenes = [scenes_value]
             log.warn(f"[TexturePickerWidget] scene_getter returned {len(scenes)} scene(s)")
             for scene in scenes:
                 mount = scene_render_mount(scene)
