@@ -21,6 +21,21 @@
 
 namespace termin {
 
+namespace {
+
+constexpr uint32_t MATERIAL_TEXTURE_BINDING_BASE = 4;
+constexpr uint32_t MATERIAL_TEXTURE_BINDING_SHADOW_SLOT = 8;
+
+uint32_t material_texture_binding_for_index(uint32_t index) {
+    uint32_t binding = MATERIAL_TEXTURE_BINDING_BASE + index;
+    if (binding >= MATERIAL_TEXTURE_BINDING_SHADOW_SLOT) {
+        binding += 1;
+    }
+    return binding;
+}
+
+} // namespace
+
 uint32_t MaterialPass::s_quad_vao = 0;
 uint32_t MaterialPass::s_quad_vbo = 0;
 
@@ -211,13 +226,13 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     bind_engine_per_frame_uniforms(*ctx2, ctx);
 
     constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
-    constexpr uint32_t EXTRA_TEX_SLOT_BASE = 9;
+    constexpr uint32_t EXTRA_TEX_SLOT_BASE = 17;
     uint32_t graph_tex_slot = EXTRA_TEX_SLOT_BASE;
 
     auto material_texture_slot = [&](const std::string& uniform_name) -> std::optional<uint32_t> {
         for (size_t i = 0; i < phase->texture_count; ++i) {
             if (uniform_name == phase->textures[i].name) {
-                return MATERIAL_TEX_SLOT_BASE + static_cast<uint32_t>(i);
+                return material_texture_binding_for_index(static_cast<uint32_t>(i));
             }
         }
         return std::nullopt;
@@ -232,7 +247,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
             if (material_slot.has_value()) {
                 slot = *material_slot;
             } else {
-                if (graph_tex_slot > 15) {
+                if (graph_tex_slot > 23) {
                     tc::Log::error("[MaterialPass] '%s': no Vulkan descriptor slot left for '%s'",
                         get_pass_name().c_str(), uniform_name.c_str());
                     return;

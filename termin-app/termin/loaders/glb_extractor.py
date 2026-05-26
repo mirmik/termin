@@ -119,7 +119,21 @@ def extract_glb(glb_path: Path, output_dir: Path = None) -> Tuple[Path, List[Pat
                 c = mat.base_color
                 lines.append(f"  Base Color: ({c[0]:.3f}, {c[1]:.3f}, {c[2]:.3f}, {c[3]:.3f})")
             if mat.base_color_texture is not None:
-                lines.append(f"  Texture Index: {mat.base_color_texture}")
+                lines.append(f"  Base Color Texture Index: {mat.base_color_texture}")
+            if mat.metallic_roughness_texture is not None:
+                lines.append(f"  Metallic/Roughness Texture Index: {mat.metallic_roughness_texture}")
+            if mat.normal_texture is not None:
+                lines.append(f"  Normal Texture Index: {mat.normal_texture}")
+            if mat.occlusion_texture is not None:
+                lines.append(f"  Occlusion Texture Index: {mat.occlusion_texture}")
+            if mat.emissive_texture is not None:
+                lines.append(f"  Emissive Texture Index: {mat.emissive_texture}")
+            lines.append(f"  Metallic Factor: {mat.metallic_factor:.3f}")
+            lines.append(f"  Roughness Factor: {mat.roughness_factor:.3f}")
+            lines.append(f"  Normal Scale: {mat.normal_scale:.3f}")
+            if mat.emissive_factor is not None:
+                e = mat.emissive_factor
+                lines.append(f"  Emissive Factor: ({e[0]:.3f}, {e[1]:.3f}, {e[2]:.3f})")
             lines.append("")
         mat_info_path.write_text("\n".join(lines), encoding="utf-8")
         created_files.append(mat_info_path)

@@ -23,8 +23,6 @@
 //   - Normal mapping with TBN matrix
 //
 // TODO: IBL - Image-Based Lighting (environment cubemap)
-// TODO: AO map (u_ao_texture) - baked ambient occlusion
-// TODO: Metallic/Roughness textures
 // TODO: Clearcoat layer
 //
 // ============================================================
@@ -45,6 +43,9 @@
 @property Float u_emission_intensity = 0.0 range(0.0, 100.0)
 @property Texture2D u_albedo_texture = "white"
 @property Texture2D u_normal_texture = "normal"
+@property Texture2D u_metallic_roughness_texture = "white"
+@property Texture2D u_occlusion_texture = "white"
+@property Texture2D u_emissive_texture = "white"
 @property Float u_normal_strength = 1.0 range(0.0, 2.0)
 
 @stage vertex
@@ -115,6 +116,9 @@ in vec3 v_tangent;
 uniform vec4 u_color;
 uniform sampler2D u_albedo_texture;
 uniform sampler2D u_normal_texture;
+uniform sampler2D u_metallic_roughness_texture;
+uniform sampler2D u_occlusion_texture;
+uniform sampler2D u_emissive_texture;
 uniform float u_normal_strength;
 uniform float u_metallic;
 uniform float u_roughness;
@@ -215,9 +219,11 @@ void main() {
     vec3 albedo = u_color.rgb * tex_color.rgb;
     float alpha = u_color.a * tex_color.a;
 
-    float metallic = u_metallic;
-    float roughness = max(u_roughness, 0.04);
+    vec4 metallic_roughness_sample = texture(u_metallic_roughness_texture, v_uv);
+    float metallic = clamp(u_metallic * metallic_roughness_sample.b, 0.0, 1.0);
+    float roughness = max(clamp(u_roughness * metallic_roughness_sample.g, 0.0, 1.0), 0.04);
     float subsurface = u_subsurface;
+    float occlusion = texture(u_occlusion_texture, v_uv).r;
 
     // F0: reflectance at normal incidence
     // Dielectrics ~0.04, metals use albedo
@@ -225,7 +231,7 @@ void main() {
 
     // Ambient term
     // TODO: Replace with IBL (irradiance map)
-    vec3 ambient = get_ambient_color() * get_ambient_intensity() * albedo * (1.0 - metallic * 0.5);
+    vec3 ambient = get_ambient_color() * get_ambient_intensity() * albedo * (1.0 - metallic * 0.5) * occlusion;
 
     vec3 Lo = vec3(0.0);
 
@@ -295,7 +301,7 @@ void main() {
     vec3 color = ambient + Lo;
 
     // Emission (HDR - will be tonemapped in post-process)
-    color += u_emission_color.rgb * u_emission_intensity;
+    color += texture(u_emissive_texture, v_uv).rgb * u_emission_color.rgb * u_emission_intensity;
 
     FragColor = vec4(color, alpha);
 }

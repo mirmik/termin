@@ -56,8 +56,13 @@ def register_pbr_shader(rm: "ResourceManager") -> None:
         uniforms=[
             MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
             MaterialProperty("u_albedo_texture", "Texture", None),
+            MaterialProperty("u_metallic_roughness_texture", "Texture", None),
+            MaterialProperty("u_occlusion_texture", "Texture", None),
+            MaterialProperty("u_emissive_texture", "Texture", None),
             MaterialProperty("u_metallic", "Float", 0.0, 0.0, 1.0),
             MaterialProperty("u_roughness", "Float", 0.5, 0.0, 1.0),
+            MaterialProperty("u_emission_color", "Color", (0.0, 0.0, 0.0, 1.0)),
+            MaterialProperty("u_emission_intensity", "Float", 0.0, 0.0, 100.0),
         ],
     )
 
@@ -161,7 +166,12 @@ def register_builtin_materials(rm: "ResourceManager") -> None:
         if shader is not None:
             mat = create_material_from_parsed(
                 shader,
-                textures={"u_albedo_texture": white_tex},
+                textures={
+                    "u_albedo_texture": white_tex,
+                    "u_metallic_roughness_texture": white_tex,
+                    "u_occlusion_texture": white_tex,
+                    "u_emissive_texture": white_tex,
+                },
                 default_white_texture=white_tex,
                 default_normal_texture=normal_tex,
             )

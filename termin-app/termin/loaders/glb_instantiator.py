@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from termin.assets.glb_asset import GLBAsset
     from termin.assets.mesh_asset import MeshAsset
     from termin.visualization.core.scene import Scene
-    from termin.loaders.glb_loader import GLBSceneData, GLBMeshData
+    from termin.loaders.glb_loader import GLBSceneData, GLBMeshData, GLBMaterialData, GLBTcTexture
 
 
 def _compute_vertex_normals(vertices: np.ndarray, indices: np.ndarray) -> np.ndarray:
@@ -303,13 +303,153 @@ class _PendingSkinnedMesh:
         self.material = material
 
 
+def _decode_glb_texture(texture: "GLBTcTexture"):
+    """Decode glTF image bytes into a runtime TcTexture."""
+    import io
+
+    from PIL import Image
+    from termin.assets.texture_asset import TextureAsset
+    from tcbase import log
+
+    try:
+        image = Image.open(io.BytesIO(texture.data)).convert("RGBA")
+        data = np.array(image, dtype=np.uint8)
+        asset = TextureAsset.from_data(
+            data,
+            name=texture.name,
+            flip_x=False,
+            flip_y=True,
+            transpose=False,
+        )
+        return asset.texture_data
+    except Exception:
+        log.error(f"[glb_instantiator] Failed to decode glTF texture '{texture.name}'", exc_info=True)
+        return None
+
+
+def _build_texture_lookup(scene_data: "GLBSceneData") -> dict[int, object]:
+    """Create a glTF texture-index to TcTexture map."""
+    textures: dict[int, object] = {}
+    for texture in scene_data.textures:
+        tc_texture = _decode_glb_texture(texture)
+        if tc_texture is not None and tc_texture.is_valid:
+            textures[texture.index] = tc_texture
+    return textures
+
+
+def _texture_for_index(textures: dict[int, object], texture_index: int | None):
+    if texture_index is None:
+        return None
+    texture = textures.get(texture_index)
+    if texture is None:
+        from tcbase import log
+        log.warning(f"[glb_instantiator] glTF material references missing texture index {texture_index}")
+    return texture
+
+
+def _create_import_material(
+    glb_material: "GLBMaterialData",
+    texture_lookup: dict[int, object],
+    index: int,
+):
+    """Create a runtime material from one glTF material."""
+    from termin.assets.resources import ResourceManager
+    from termin.assets.texture_handle import (
+        get_normal_texture_handle,
+        get_white_texture_handle,
+    )
+    from termin.geombase import Vec4
+    from termin.materials import create_material_from_parsed
+    from tcbase import log
+
+    rm = ResourceManager.instance()
+    shader = rm.get_shader("CookTorrancePBR")
+    if shader is None:
+        log.error("[glb_instantiator] CookTorrancePBR shader is not registered")
+        raise RuntimeError("[glb_instantiator] CookTorrancePBR shader is not registered")
+
+    base_color = glb_material.base_color
+    if base_color is None:
+        base_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+
+    emissive_factor = glb_material.emissive_factor
+    if emissive_factor is None:
+        emissive_factor = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+    emission_intensity = 1.0 if float(np.linalg.norm(emissive_factor)) > 0.0 else 0.0
+
+    textures = {}
+    base_color_texture = _texture_for_index(texture_lookup, glb_material.base_color_texture)
+    if base_color_texture is not None:
+        textures["u_albedo_texture"] = base_color_texture
+    metallic_roughness_texture = _texture_for_index(
+        texture_lookup,
+        glb_material.metallic_roughness_texture,
+    )
+    if metallic_roughness_texture is not None:
+        textures["u_metallic_roughness_texture"] = metallic_roughness_texture
+    normal_texture = _texture_for_index(texture_lookup, glb_material.normal_texture)
+    if normal_texture is not None:
+        textures["u_normal_texture"] = normal_texture
+    occlusion_texture = _texture_for_index(texture_lookup, glb_material.occlusion_texture)
+    if occlusion_texture is not None:
+        textures["u_occlusion_texture"] = occlusion_texture
+    emissive_texture = _texture_for_index(texture_lookup, glb_material.emissive_texture)
+    if emissive_texture is not None:
+        textures["u_emissive_texture"] = emissive_texture
+
+    uniforms = {
+        "u_color": Vec4(
+            float(base_color[0]),
+            float(base_color[1]),
+            float(base_color[2]),
+            float(base_color[3]),
+        ),
+        "u_metallic": float(glb_material.metallic_factor),
+        "u_roughness": float(glb_material.roughness_factor),
+        "u_normal_strength": float(glb_material.normal_scale),
+        "u_emission_color": Vec4(
+            float(emissive_factor[0]),
+            float(emissive_factor[1]),
+            float(emissive_factor[2]),
+            1.0,
+        ),
+        "u_emission_intensity": emission_intensity,
+    }
+
+    material = create_material_from_parsed(
+        shader,
+        color=uniforms["u_color"],
+        textures=textures,
+        uniforms=uniforms,
+        name=f"glTF_{index}_{glb_material.name}",
+        default_white_texture=get_white_texture_handle().get(),
+        default_normal_texture=get_normal_texture_handle().get(),
+    )
+    material.name = glb_material.name
+    return material
+
+
+def _create_import_materials(scene_data: "GLBSceneData") -> list[object]:
+    texture_lookup = _build_texture_lookup(scene_data)
+    materials: list[object] = []
+    for index, glb_material in enumerate(scene_data.materials):
+        materials.append(_create_import_material(glb_material, texture_lookup, index))
+    return materials
+
+
+def _material_for_glb_mesh(glb_mesh: "GLBMeshData", materials: list[object], fallback_material):
+    if glb_mesh.material_index >= 0 and glb_mesh.material_index < len(materials):
+        return materials[glb_mesh.material_index]
+    return fallback_material
+
+
 def _create_entity_from_node(
     node_index: int,
     scene_data: "GLBSceneData",
     meshes: Dict[int, TcMesh],
     mesh_assets: Dict[str, "MeshAsset"],
-    default_material,
-    skinned_material,
+    materials: list[object],
+    fallback_material,
     node_to_entity: Optional[Dict[int, Entity]] = None,
     pending_skinned: Optional[List[_PendingSkinnedMesh]] = None,
     scene: Optional["Scene"] = None,
@@ -350,19 +490,20 @@ def _create_entity_from_node(
                 meshes[mesh_idx] = tc_mesh
 
             tc_mesh = meshes[mesh_idx]
+            material = _material_for_glb_mesh(glb_mesh, materials, fallback_material)
 
             if glb_mesh.is_skinned and pending_skinned is not None:
                 from tcbase import log
                 log.info(f"[glb_instantiator] pending skinned mesh={glb_mesh.name} tc_mesh.is_valid={tc_mesh.is_valid} uuid={tc_mesh.uuid}")
-                pending_skinned.append(_PendingSkinnedMesh(entity, tc_mesh, skinned_material))
+                pending_skinned.append(_PendingSkinnedMesh(entity, tc_mesh, material))
             else:
-                renderer = MeshRenderer(mesh=tc_mesh, material=default_material)
+                renderer = MeshRenderer(mesh=tc_mesh, material=material)
                 entity.add_component(renderer)
 
     # Recursively create children
     for child_index in node.children:
         child_entity = _create_entity_from_node(
-            child_index, scene_data, meshes, mesh_assets, default_material, skinned_material,
+            child_index, scene_data, meshes, mesh_assets, materials, fallback_material,
             node_to_entity, pending_skinned, scene
         )
         entity.transform.add_child(child_entity.transform)
@@ -430,18 +571,16 @@ def instantiate_glb(
 
     rm = ResourceManager.instance()
 
-    # Get materials (as assets for proper serialization).
-    # GLB material restoration is still incomplete; use the current builtin PBR
-    # material for all imported primitives until GLB materials are mapped properly.
+    # Fallback material for primitives without a glTF material.
     default_material_asset = rm.get_material_asset("NormalizedPBR")
-    skinned_material_asset = rm.get_material_asset("NormalizedPBR")
 
-    if default_material_asset is None or skinned_material_asset is None:
+    if default_material_asset is None:
         raise RuntimeError(
             f"[glb_instantiator] Builtin materials not registered: "
-            f"NormalizedPBR(default)={default_material_asset is not None}, "
-            f"NormalizedPBR(skinned)={skinned_material_asset is not None}"
+            f"NormalizedPBR(default)={default_material_asset is not None}"
         )
+
+    materials = _create_import_materials(scene_data)
 
     meshes: Dict[int, TcMesh] = {}
     node_to_entity: Dict[int, Entity] = {}
@@ -464,8 +603,8 @@ def instantiate_glb(
                 scene_data,
                 meshes,
                 mesh_assets,
+                materials,
                 default_material_asset,
-                skinned_material_asset,
                 node_to_entity=node_to_entity,
                 pending_skinned=pending_skinned,
                 scene=scene,
@@ -479,8 +618,8 @@ def instantiate_glb(
                     scene_data,
                     meshes,
                     mesh_assets,
+                    materials,
                     default_material_asset,
-                    skinned_material_asset,
                     node_to_entity=node_to_entity,
                     pending_skinned=pending_skinned,
                     scene=scene,
@@ -500,7 +639,8 @@ def instantiate_glb(
 
             meshes[i] = tc_mesh
             mesh_entity = create_entity(glb_mesh.name)
-            renderer = MeshRenderer(mesh=tc_mesh, material=default_material_asset)
+            material = _material_for_glb_mesh(glb_mesh, materials, default_material_asset)
+            renderer = MeshRenderer(mesh=tc_mesh, material=material)
             mesh_entity.add_component(renderer)
             root_entity.transform.add_child(mesh_entity.transform)
 
