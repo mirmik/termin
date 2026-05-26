@@ -134,7 +134,7 @@ bool apply_material_phase_ubo(
     tgfx::RenderContext2& ctx)
 {
     if (!phase || !shader) return false;
-    if (shader->material_ubo_block_size == 0) return false;
+    (void)tex_slot_start;
 
     // Translate phase uniforms (C) into MaterialProperty (C++) for
     // std140_pack. Linear, tiny (≤ 32 uniforms).
@@ -154,26 +154,23 @@ bool apply_material_phase_ubo(
     // qualifiers for .shader @property Texture entries.
     std::vector<MaterialTextureBinding> textures;
     textures.reserve(phase->texture_count);
-    uint32_t slot = tex_slot_start;
     for (size_t i = 0; i < phase->texture_count; i++) {
         const tc_material_texture& mat_tex = phase->textures[i];
         if (tc_texture_handle_is_invalid(mat_tex.texture)) {
-            slot++;
             continue;
         }
         tgfx::TextureHandle tex2 =
             wrap_tc_texture_as_tgfx2(device, mat_tex.texture);
         if (tex2) {
             MaterialTextureBinding b;
-            b.slot = slot;
+            b.slot = material_texture_binding_for_index(static_cast<uint32_t>(i));
             b.texture = tex2;
             textures.push_back(b);
         }
-        slot++;
     }
 
     bind_material_ubo(layout, values, textures, ubo_slot, ctx);
-    return true;
+    return !layout.empty() || !textures.empty();
 }
 
 } // namespace termin

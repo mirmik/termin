@@ -38,8 +38,13 @@ in vec2 v_uv;
 // Material parameters
 uniform vec4 u_color;
 uniform sampler2D u_albedo_texture;
+uniform sampler2D u_metallic_roughness_texture;
+uniform sampler2D u_occlusion_texture;
+uniform sampler2D u_emissive_texture;
 uniform float u_metallic;
 uniform float u_roughness;
+uniform vec4 u_emission_color;
+uniform float u_emission_intensity;
 
 // Camera
 uniform vec3 u_camera_position;
@@ -155,12 +160,14 @@ void main() {
     vec4 tex_color = texture(u_albedo_texture, v_uv);
     vec3 albedo = u_color.rgb * tex_color.rgb;
 
-    float metallic = u_metallic;
-    float roughness = max(u_roughness, 0.04);
+    vec4 metallic_roughness_sample = texture(u_metallic_roughness_texture, v_uv);
+    float metallic = clamp(u_metallic * metallic_roughness_sample.b, 0.0, 1.0);
+    float roughness = max(clamp(u_roughness * metallic_roughness_sample.g, 0.0, 1.0), 0.04);
+    float occlusion = texture(u_occlusion_texture, v_uv).r;
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
     // Ambient
-    vec3 ambient = u_ambient_color * u_ambient_intensity * albedo * (1.0 - metallic * 0.5);
+    vec3 ambient = u_ambient_color * u_ambient_intensity * albedo * (1.0 - metallic * 0.5) * occlusion;
 
     // Single directional light (working version)
     vec3 L = normalize(-u_light_direction[0]);
@@ -184,7 +191,7 @@ void main() {
     float shadow = compute_shadow(0);
     vec3 Lo = (kD * albedo + specular) * radiance * NdotL * shadow;
 
-    vec3 color = ambient + Lo;
+    vec3 color = ambient + Lo + texture(u_emissive_texture, v_uv).rgb * u_emission_color.rgb * u_emission_intensity;
     FragColor = vec4(color, 1.0);
 }
 """
@@ -209,6 +216,7 @@ def create_pbr_material(
         TcMaterial with PBR shader.
     """
     from termin.visualization.render.texture import get_white_texture
+    from termin.geombase import Vec4
 
     mat = TcMaterial.create(name, "")
     mat.shader_name = "PBRShader"
@@ -232,11 +240,16 @@ def create_pbr_material(
         # Set PBR parameters
         phase.set_uniform_float("u_metallic", metallic)
         phase.set_uniform_float("u_roughness", roughness)
+        phase.set_uniform_vec4("u_emission_color", Vec4(0.0, 0.0, 0.0, 1.0))
+        phase.set_uniform_float("u_emission_intensity", 0.0)
 
         # Set white texture as default albedo
         white_tex = get_white_texture()
         if white_tex and white_tex.texture_data:
             phase.set_texture("u_albedo_texture", white_tex.texture_data)
+            phase.set_texture("u_metallic_roughness_texture", white_tex.texture_data)
+            phase.set_texture("u_occlusion_texture", white_tex.texture_data)
+            phase.set_texture("u_emissive_texture", white_tex.texture_data)
 
     return mat
 

@@ -213,6 +213,39 @@ def test_plain_uniforms_material_ubo_not_property():
     assert "uniform mat4 u_fov_view;" not in fragment
 
 
+def test_material_texture_bindings_skip_shadow_slot():
+    shader_text = "\n".join([
+        "@program test",
+        "@phase main",
+        "@property Texture2D u_tex0 = \"white\"",
+        "@property Texture2D u_tex1 = \"white\"",
+        "@property Texture2D u_tex2 = \"white\"",
+        "@property Texture2D u_tex3 = \"white\"",
+        "@property Texture2D u_tex4 = \"white\"",
+        "@stage fragment",
+        "#version 450 core",
+        "uniform sampler2D u_tex0;",
+        "uniform sampler2D u_tex1;",
+        "uniform sampler2D u_tex2;",
+        "uniform sampler2D u_tex3;",
+        "uniform sampler2D u_tex4;",
+        "out vec4 FragColor;",
+        "void main() { FragColor = texture(u_tex0, vec2(0.5)) + texture(u_tex1, vec2(0.5)) + texture(u_tex2, vec2(0.5)) + texture(u_tex3, vec2(0.5)) + texture(u_tex4, vec2(0.5)); }",
+        "@endstage",
+        "@endphase",
+    ])
+
+    program = parse_shader_text(shader_text)
+    fragment = program.phases[0].stages["fragment"].source
+
+    assert "layout(binding = 4) uniform sampler2D u_tex0;" in fragment
+    assert "layout(binding = 5) uniform sampler2D u_tex1;" in fragment
+    assert "layout(binding = 6) uniform sampler2D u_tex2;" in fragment
+    assert "layout(binding = 7) uniform sampler2D u_tex3;" in fragment
+    assert "layout(binding = 9) uniform sampler2D u_tex4;" in fragment
+    assert "layout(binding = 8) uniform sampler2D u_tex4;" not in fragment
+
+
 def test_shader_interface_compare_separates_source_from_inputs():
     from termin.assets.shader_interface import compare_shader_interface
 

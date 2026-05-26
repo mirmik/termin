@@ -372,13 +372,17 @@ TEST_CASE("parse_shader_text: texture properties keep declaration order in bindi
         "@property Texture2D u_input = \"white\"\n"
         "@property Texture2D u_depth = \"white\"\n"
         "@property Texture2D u_normal = \"normal\"\n"
+        "@property Texture2D u_roughness = \"white\"\n"
+        "@property Texture2D u_emissive = \"white\"\n"
         "@stage fragment\n"
         "#version 330 core\n"
         "uniform sampler2D u_input;\n"
         "uniform sampler2D u_depth;\n"
         "uniform sampler2D u_normal;\n"
+        "uniform sampler2D u_roughness;\n"
+        "uniform sampler2D u_emissive;\n"
         "out vec4 FragColor;\n"
-        "void main() { FragColor = texture(u_input, vec2(0)) + texture(u_depth, vec2(0)) + texture(u_normal, vec2(0)); }\n"
+        "void main() { FragColor = texture(u_input, vec2(0)) + texture(u_depth, vec2(0)) + texture(u_normal, vec2(0)) + texture(u_roughness, vec2(0)) + texture(u_emissive, vec2(0)); }\n"
         "@endstage\n"
         "@endphase\n";
 
@@ -387,6 +391,9 @@ TEST_CASE("parse_shader_text: texture properties keep declaration order in bindi
     CHECK(frag.find("layout(binding = 4) uniform sampler2D u_input;") != std::string::npos);
     CHECK(frag.find("layout(binding = 5) uniform sampler2D u_depth;") != std::string::npos);
     CHECK(frag.find("layout(binding = 6) uniform sampler2D u_normal;") != std::string::npos);
+    CHECK(frag.find("layout(binding = 7) uniform sampler2D u_roughness;") != std::string::npos);
+    CHECK(frag.find("layout(binding = 9) uniform sampler2D u_emissive;") != std::string::npos);
+    CHECK(frag.find("layout(binding = 8) uniform sampler2D u_emissive;") == std::string::npos);
 }
 
 // ============================================================================

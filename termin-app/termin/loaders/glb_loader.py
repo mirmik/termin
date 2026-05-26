@@ -47,15 +47,32 @@ class GLBMeshData:
 class GLBMaterialData:
     """Material data extracted from GLB."""
     def __init__(self, name: str, base_color: Optional[np.ndarray] = None,
-                 base_color_texture: Optional[int] = None):
+                 base_color_texture: Optional[int] = None,
+                 metallic_factor: float = 1.0,
+                 roughness_factor: float = 1.0,
+                 metallic_roughness_texture: Optional[int] = None,
+                 normal_texture: Optional[int] = None,
+                 normal_scale: float = 1.0,
+                 occlusion_texture: Optional[int] = None,
+                 emissive_texture: Optional[int] = None,
+                 emissive_factor: Optional[np.ndarray] = None):
         self.name = name
         self.base_color = base_color  # RGBA
         self.base_color_texture = base_color_texture  # texture index
+        self.metallic_factor = metallic_factor
+        self.roughness_factor = roughness_factor
+        self.metallic_roughness_texture = metallic_roughness_texture
+        self.normal_texture = normal_texture
+        self.normal_scale = normal_scale
+        self.occlusion_texture = occlusion_texture
+        self.emissive_texture = emissive_texture
+        self.emissive_factor = emissive_factor  # RGB
 
 
 class GLBTcTexture:
     """Texture data extracted from GLB."""
-    def __init__(self, name: str, data: bytes, mime_type: str):
+    def __init__(self, index: int, name: str, data: bytes, mime_type: str):
+        self.index = index
         self.name = name
         self.data = data  # Raw image bytes (PNG/JPEG)
         self.mime_type = mime_type
@@ -344,17 +361,50 @@ def _parse_materials(gltf: dict, scene_data: GLBSceneData):
 
         base_color = None
         base_color_texture = None
+        metallic_factor = 1.0
+        roughness_factor = 1.0
+        metallic_roughness_texture = None
+        normal_texture = None
+        normal_scale = 1.0
+        occlusion_texture = None
+        emissive_texture = None
+        emissive_factor = np.array([0.0, 0.0, 0.0], dtype=np.float32)
 
         pbr = mat.get("pbrMetallicRoughness", {})
         if "baseColorFactor" in pbr:
             base_color = np.array(pbr["baseColorFactor"], dtype=np.float32)
         if "baseColorTexture" in pbr:
             base_color_texture = pbr["baseColorTexture"].get("index")
+        if "metallicFactor" in pbr:
+            metallic_factor = float(pbr["metallicFactor"])
+        if "roughnessFactor" in pbr:
+            roughness_factor = float(pbr["roughnessFactor"])
+        if "metallicRoughnessTexture" in pbr:
+            metallic_roughness_texture = pbr["metallicRoughnessTexture"].get("index")
+        if "normalTexture" in mat:
+            normal_info = mat["normalTexture"]
+            normal_texture = normal_info.get("index")
+            if "scale" in normal_info:
+                normal_scale = float(normal_info["scale"])
+        if "occlusionTexture" in mat:
+            occlusion_texture = mat["occlusionTexture"].get("index")
+        if "emissiveTexture" in mat:
+            emissive_texture = mat["emissiveTexture"].get("index")
+        if "emissiveFactor" in mat:
+            emissive_factor = np.array(mat["emissiveFactor"], dtype=np.float32)
 
         scene_data.materials.append(GLBMaterialData(
             name=name,
             base_color=base_color,
             base_color_texture=base_color_texture,
+            metallic_factor=metallic_factor,
+            roughness_factor=roughness_factor,
+            metallic_roughness_texture=metallic_roughness_texture,
+            normal_texture=normal_texture,
+            normal_scale=normal_scale,
+            occlusion_texture=occlusion_texture,
+            emissive_texture=emissive_texture,
+            emissive_factor=emissive_factor,
         ))
 
 
@@ -391,6 +441,7 @@ def _parse_textures(
 
         if data:
             scene_data.textures.append(GLBTcTexture(
+                index=tex_idx,
                 name=name,
                 data=data,
                 mime_type=mime_type,

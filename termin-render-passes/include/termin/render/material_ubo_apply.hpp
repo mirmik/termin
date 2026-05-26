@@ -58,10 +58,11 @@ void bind_material_ubo(
 
 // Dispatch entry point: if `shader` declares a material UBO layout,
 // packs + binds the phase's uniforms at `ubo_slot`. Textures from
-// phase->textures[] are bound starting at `tex_slot_start` (one slot per
-// entry, in declared order). Returns true when the UBO path ran; false
-// when the shader has no layout and the caller should fall back to legacy
-// per-uniform dispatch.
+// phase->textures[] are bound in declared order to material sampler slots.
+// The `tex_slot_start` argument is retained for ABI compatibility; slot
+// assignment skips the shadow-map binding at 8. Returns true when the UBO
+// path ran; false when the shader has no layout and the caller should fall
+// back to legacy per-uniform dispatch.
 bool apply_material_phase_ubo(
     tc_material_phase* phase,
     const tc_shader* shader,

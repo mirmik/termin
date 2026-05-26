@@ -36,17 +36,19 @@ samplers map to texture units by the same number.
 | 1 | UBO | 1 | ALL | `MaterialParams` | Synthesized per-shader by `shader_parser.cpp` from `@property` declarations; uploaded by `material_ubo_apply.cpp` |
 | 2 | UBO | 1 | ALL | `PerFrame` | `EnginePerFrameStd140` (`frame_uniforms.hpp`) for parser-generated material shaders; per-pass layouts for standalone built-in passes |
 | 3 | UBO | 1 | ALL | `ShadowBlock` | `ColorPass::execute_with_data` |
-| 4–7 | COMBINED_IMAGE_SAMPLER | 1 each | FS | material textures (`MATERIAL_TEX_SLOT_BASE = 4`) | `ColorPass::execute_with_data` + `apply_material_phase_ubo` |
+| 4–7 | COMBINED_IMAGE_SAMPLER | 1 each | FS | material textures 0–3 (`MATERIAL_TEX_SLOT_BASE = 4`) | `ColorPass::execute_with_data` + `apply_material_phase_ubo` |
 | 8 | COMBINED_IMAGE_SAMPLER | `MAX_SHADOW_MAPS = 16` | FS | `u_shadow_map[16]` (array descriptor) | `ColorPass::execute_with_data` |
-| 9–15 | COMBINED_IMAGE_SAMPLER | 1 each | FS | extra FS samplers (debug overlays, posteffect inputs) | caller-supplied |
+| 9–15 | COMBINED_IMAGE_SAMPLER | 1 each | FS | material textures 4–10 | `ColorPass::execute_with_data` + `apply_material_phase_ubo` |
 | 16 | UBO | 1 | VS | `BoneBlock` | `SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2` |
+| 17–23 | COMBINED_IMAGE_SAMPLER | 1 each | FS | extra FS samplers (debug overlays, posteffect inputs) | caller-supplied |
 | push | push-constants | 128 B | ALL_GRAPHICS | per-pass push block | per-pass writer |
 
 **Notes:**
 
 - Binding 8 is a single **array descriptor** with `descriptorCount = 16`. In
   GLSL: `layout(binding = 8) uniform sampler2DShadow u_shadow_map[16]`. No
-  bindings 9..23 are consumed by it; 9..15 are free for extra samplers.
+  bindings 9..23 are consumed by it; 9..15 are reserved for material textures
+  and 17..23 are free for extra samplers.
 - OpenGL push constants ride a ring UBO at `TGFX2_PUSH_CONSTANTS_BINDING = 14`
   (GL's UBO binding space is disjoint from the sampler/texture-unit space,
   so reusing 14 there doesn't collide with sampler 14 on Vulkan).

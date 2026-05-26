@@ -39,9 +39,9 @@ namespace termin {
  * sorts by priority, and renders with materials and lighting.
  */
 // Starting binding for extra sampled textures. Vulkan's shared descriptor
-// layout reserves 4..7 for material samplers, 8 for the shadow-map array,
-// and 9..15 for graph/debug extras.
-constexpr int EXTRA_TEXTURE_UNIT_START = 9;
+// layout reserves 4..7 and 9..15 for material samplers, 8 for the
+// shadow-map array, 16 for BoneBlock, and 17..23 for graph/debug extras.
+constexpr int EXTRA_TEXTURE_UNIT_START = 17;
 
 class ColorPass : public CxxFramePass {
 public:

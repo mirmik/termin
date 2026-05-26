@@ -504,8 +504,9 @@ void ColorPass::execute_with_data(
     // reading from the right slot.
     constexpr uint32_t SHADOW_SLOT_BASE = 8;
     // Vulkan descriptor set layout reserves bindings 0..3 for UBOs
-    // (lighting, material, per-frame, shadow-block) and 4..7 for
-    // material samplers — see VulkanRenderDevice's shared layout.
+    // (lighting, material, per-frame, shadow-block), 4..7 and 9..15
+    // for material samplers, 8 for shadows — see VulkanRenderDevice's
+    // shared layout.
     // shader_parser writes matching layout(binding=N) qualifiers for
     // Texture @properties, so the numbered slots stay stable and
     // backend-neutral.
