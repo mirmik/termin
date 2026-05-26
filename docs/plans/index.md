@@ -15,3 +15,4 @@
 - [termin-runtime package loader](2026-05-20-termin-runtime-package-loader.md)
 - [Android scene build export](2026-05-20-android-scene-build-export.md)
 - [termin-render-passes migration](2026-05-21-termin-render-passes-migration.md)
+- [foliage / scatter system design note](2026-05-26-foliage-scatter-system.md)
