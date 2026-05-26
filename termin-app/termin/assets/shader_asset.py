@@ -46,14 +46,9 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
     if not program.phases:
         raise ValueError("Program has no phases")
 
-    # Preserve existing uniforms/textures from first phase
-    old_uniforms = {}
-    old_textures = {}
-    if material.phase_count > 0:
-        phase = material.get_phase(0)
-        if phase is not None:
-            old_uniforms = dict(phase.uniforms)
-            old_textures = dict(phase.textures)
+    # Preserve existing material-level uniforms/textures.
+    old_uniforms = dict(material.uniforms)
+    old_textures = dict(material.textures)
 
     # Clear existing phases and rebuild
     material.clear_phases()
@@ -116,7 +111,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
         # Apply texture defaults, then restore old textures
         _apply_texture_defaults(phase, shader_phase, rm)
         for key, tex in old_textures.items():
-            if tex is not None and tex.is_valid:
+            if key in phase.textures and tex is not None and tex.is_valid:
                 phase.set_texture(key, tex)
 
 

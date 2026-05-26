@@ -518,53 +518,48 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
         if has_overrides:
             result["phase_marks"] = phase_marks
 
-        # Save uniforms from default phase (phase 0)
+        # Save material-level uniforms aggregated across phases.
         uniforms_data: Dict[str, Any] = {}
-        default_phase = material.default_phase()
-        if default_phase is not None:
-            phase_uniforms = default_phase.uniforms
-            for name, value in phase_uniforms.items():
-                if isinstance(value, Vec3):
-                    uniforms_data[name] = [value.x, value.y, value.z]
-                elif isinstance(value, Vec4):
-                    uniforms_data[name] = [value.x, value.y, value.z, value.w]
-                elif isinstance(value, (int, float, bool)):
-                    uniforms_data[name] = value
-                elif isinstance(value, tuple):
-                    uniforms_data[name] = list(value)
+        for name, value in material.uniforms.items():
+            if isinstance(value, Vec3):
+                uniforms_data[name] = [value.x, value.y, value.z]
+            elif isinstance(value, Vec4):
+                uniforms_data[name] = [value.x, value.y, value.z, value.w]
+            elif isinstance(value, (int, float, bool)):
+                uniforms_data[name] = value
+            elif isinstance(value, tuple):
+                uniforms_data[name] = list(value)
         if uniforms_data:
             result["uniforms"] = uniforms_data
 
-        # Save textures from default phase. Two destinations:
+        # Save material-level textures. Two destinations:
         #   - `textures`: uniform → asset UUID (regular TextureAsset).
         #   - `texture_refs`: uniform → {kind, target, channel} for non-asset
         #     handles (currently render-target color/depth — Phase 8).
         textures_data: Dict[str, str] = {}
         texture_refs_data: Dict[str, Dict[str, str]] = {}
-        if default_phase is not None:
-            phase_textures = default_phase.textures
-            for name, tex in phase_textures.items():
-                if tex is None or not tex.is_valid:
-                    continue
-                tex_name = tex.name
-                # Skip default placeholder textures (by name)
-                if tex_name in ("__white_1x1__", "__normal_1x1__"):
-                    continue
-                # First try regular TextureAsset lookup.
-                asset_uuid = None
-                for asset_name, asset in rm._texture_registry.assets.items():
-                    if asset.uuid and asset.texture_data is not None:
-                        if asset.texture_data.uuid == tex.uuid:
-                            asset_uuid = asset.uuid
-                            break
-                if asset_uuid:
-                    textures_data[name] = asset_uuid
-                    continue
-                # Fallback: maybe it's an RT-owned texture. Walk live RTs
-                # and match on tc_texture uuid.
-                ref = _classify_render_target_texture(tex)
-                if ref is not None:
-                    texture_refs_data[name] = ref
+        for name, tex in material.textures.items():
+            if tex is None or not tex.is_valid:
+                continue
+            tex_name = tex.name
+            # Skip default placeholder textures (by name)
+            if tex_name in ("__white_1x1__", "__normal_1x1__"):
+                continue
+            # First try regular TextureAsset lookup.
+            asset_uuid = None
+            for asset_name, asset in rm._texture_registry.assets.items():
+                if asset.uuid and asset.texture_data is not None:
+                    if asset.texture_data.uuid == tex.uuid:
+                        asset_uuid = asset.uuid
+                        break
+            if asset_uuid:
+                textures_data[name] = asset_uuid
+                continue
+            # Fallback: maybe it's an RT-owned texture. Walk live RTs
+            # and match on tc_texture uuid.
+            ref = _classify_render_target_texture(tex)
+            if ref is not None:
+                texture_refs_data[name] = ref
         if textures_data:
             result["textures"] = textures_data
         if texture_refs_data:

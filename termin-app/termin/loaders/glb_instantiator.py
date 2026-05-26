@@ -579,32 +579,23 @@ def _texture_for_index(textures: dict[int, object], texture_index: int | None):
     return texture
 
 
-def _set_phase_float_if_present(phase, name: str, value: float) -> None:
-    if name in phase.uniforms:
-        phase.set_uniform_float(name, value)
-
-
-def _set_phase_vec4_if_present(phase, name: str, value) -> None:
-    if name in phase.uniforms:
-        phase.set_uniform_vec4(name, value)
-
-
-def _set_phase_texture_if_present(phase, name: str, texture) -> None:
+def _set_material_texture_if_present(material, name: str, texture) -> None:
     from tcbase import log
 
     if texture is None:
         log.info(f"[glb_instantiator] material override texture skipped: slot='{name}' texture=None")
         return
-    if name not in phase.textures:
+    applied = material.set_texture(name, texture)
+    if applied == 0:
         log.warning(
-            f"[glb_instantiator] material override texture slot missing in phase: "
-            f"slot='{name}' available={list(phase.textures.keys())}"
+            f"[glb_instantiator] material override texture slot missing: "
+            f"material='{material.name}' slot='{name}' available={list(material.textures.keys())}"
         )
         return
-    phase.set_texture(name, texture)
     log.info(
         f"[glb_instantiator] material override texture set: "
-        f"slot='{name}' tc_uuid={texture.uuid} tc_name='{texture.name}'"
+        f"material='{material.name}' slot='{name}' "
+        f"tc_uuid={texture.uuid} tc_name='{texture.name}' phases={applied}"
     )
 
 
@@ -664,19 +655,18 @@ def _apply_import_material_override(
         f"source_material='{glb_material.name}' override_name='{material.name}' phases={len(material.phases)}"
     )
 
-    for phase in material.phases:
-        _set_phase_vec4_if_present(phase, "u_color", color)
-        _set_phase_float_if_present(phase, "u_metallic", float(glb_material.metallic_factor))
-        _set_phase_float_if_present(phase, "u_roughness", float(glb_material.roughness_factor))
-        _set_phase_float_if_present(phase, "u_normal_strength", float(glb_material.normal_scale))
-        _set_phase_vec4_if_present(phase, "u_emission_color", emission_color)
-        _set_phase_float_if_present(phase, "u_emission_intensity", emission_intensity)
+    material.set_uniform_vec4("u_color", color)
+    material.set_uniform_float("u_metallic", float(glb_material.metallic_factor))
+    material.set_uniform_float("u_roughness", float(glb_material.roughness_factor))
+    material.set_uniform_float("u_normal_strength", float(glb_material.normal_scale))
+    material.set_uniform_vec4("u_emission_color", emission_color)
+    material.set_uniform_float("u_emission_intensity", emission_intensity)
 
-        _set_phase_texture_if_present(phase, "u_albedo_texture", base_color_texture)
-        _set_phase_texture_if_present(phase, "u_metallic_roughness_texture", metallic_roughness_texture)
-        _set_phase_texture_if_present(phase, "u_normal_texture", normal_texture)
-        _set_phase_texture_if_present(phase, "u_occlusion_texture", occlusion_texture)
-        _set_phase_texture_if_present(phase, "u_emissive_texture", emissive_texture)
+    _set_material_texture_if_present(material, "u_albedo_texture", base_color_texture)
+    _set_material_texture_if_present(material, "u_metallic_roughness_texture", metallic_roughness_texture)
+    _set_material_texture_if_present(material, "u_normal_texture", normal_texture)
+    _set_material_texture_if_present(material, "u_occlusion_texture", occlusion_texture)
+    _set_material_texture_if_present(material, "u_emissive_texture", emissive_texture)
 
 
 def _apply_glb_material_override_if_present(

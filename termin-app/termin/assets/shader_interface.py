@@ -49,12 +49,14 @@ def _ubo_signature(layout: Any | None) -> UboSignature:
     return (entries, layout.block_size)
 
 
-def shader_material_interface_signature(program: Any | None) -> tuple[PhaseSignature, ...]:
+def shader_material_interface_signature(program: Any | None) -> tuple[Any, ...]:
     """Return the material-facing interface signature of a shader program."""
     if program is None:
         return ()
 
-    result: list[PhaseSignature] = []
+    result: list[Any] = [
+        ("material_properties", _property_list_signature(list(program.material_properties))),
+    ]
     for phase in program.phases:
         result.append(
             (
@@ -75,13 +77,11 @@ def shader_material_interface_signature(program: Any | None) -> tuple[PhaseSigna
 
 def shader_graph_input_signature(program: Any | None) -> GraphInputSignature:
     """Return MaterialPass dynamic texture inputs exposed by the shader."""
-    if program is None or not program.phases:
+    if program is None:
         return ()
 
     inputs: list[PropertySignature] = []
-    first_phase = program.phases[0]
-    shader_uniforms = list(first_phase.uniforms) + list(first_phase.material_uniforms)
-    for prop in shader_uniforms:
+    for prop in program.material_properties:
         if prop.property_type == "Texture":
             inputs.append(_property_signature(prop))
     return tuple(inputs)
