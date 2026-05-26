@@ -257,7 +257,7 @@ def _parse_meshes(gltf: dict, bin_data: bytes, scene_data: GLBSceneData):
             # Material
             material_index = primitive.get("material", 0)
 
-            # Build expanded vertex arrays (for compatibility with FBX loader output)
+            # Build expanded vertex arrays consumed by mesh asset population.
             expanded_verts = vertices[indices]
             expanded_normals = normals[indices] if normals is not None else None
             expanded_uvs = uvs[indices] if uvs is not None else None

@@ -347,7 +347,7 @@ class SceneTreeControllerTcgui:
         data = event.payload.data
         if not isinstance(data, dict):
             return False
-        return data.get("extension") in (".glb", ".fbx", ".prefab", ".tc_prefab")
+        return data.get("extension") in (".glb", ".prefab", ".tc_prefab")
 
     def _on_external_drop(self, event: DragEvent, target: TreeNode | None, position: str) -> bool:
         if not self._on_external_drag(event, target, position):
@@ -363,9 +363,6 @@ class SceneTreeControllerTcgui:
         parent_entity = self._drop_parent_entity(target, position)
         if ext == ".glb":
             self._ops.drop_glb(path, parent_entity)
-            return True
-        if ext == ".fbx":
-            self._ops.drop_fbx(path, parent_entity)
             return True
         if ext in (".prefab", ".tc_prefab"):
             self._ops.drop_prefab(path, parent_entity)

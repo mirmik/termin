@@ -1,6 +1,6 @@
 """ProjectOperations — UI-agnostic file operations for the project browser.
 
-Wraps directory / file creation, deletion, FBX/GLB extraction, and the
+Wraps directory / file creation, deletion, GLB extraction, and the
 set of "new asset" templates (material / shader / component / pipeline /
 prefab). Dialogs go through :class:`DialogService`; the tcgui project browser
 delegates here.
@@ -134,8 +134,7 @@ class ProjectOperations:
 
     Each operation accepts an ``on_refresh`` callback so the view can
     re-scan the filesystem after a mutation. ``on_navigate`` (optional)
-    is used by extract_fbx / extract_glb to jump into the extracted
-    directory.
+    is used by extract_glb to jump into the extracted directory.
     """
 
     def __init__(self, dialog_service: DialogService):
@@ -265,48 +264,8 @@ class ProjectOperations:
         on_refresh()
 
     # ------------------------------------------------------------------
-    # Extractors (FBX / GLB)
+    # Extractors
     # ------------------------------------------------------------------
-
-    def extract_fbx(
-        self,
-        fbx_path: Path,
-        on_refresh: Callable[[], None],
-        on_navigate: Callable[[Path], None] | None = None,
-    ) -> None:
-        output_dir = fbx_path.parent / fbx_path.stem
-        if output_dir.exists():
-            self._dialog.show_choice(
-                title="Directory Exists",
-                message=f"Directory '{output_dir.name}' already exists.\nOverwrite contents?",
-                choices=["Yes", "No"],
-                default="No",
-                cancel="No",
-                on_result=lambda c: self._do_extract_fbx(fbx_path, output_dir, c, on_refresh, on_navigate),
-            )
-        else:
-            self._do_extract_fbx(fbx_path, output_dir, "Yes", on_refresh, on_navigate)
-
-    def _do_extract_fbx(
-        self,
-        fbx_path: Path,
-        output_dir: Path,
-        choice: str | None,
-        on_refresh: Callable[[], None],
-        on_navigate: Callable[[Path], None] | None,
-    ) -> None:
-        if choice != "Yes":
-            return
-        from termin.loaders.fbx_extractor import extract_fbx
-        try:
-            output_dir, _created = extract_fbx(fbx_path, output_dir)
-        except Exception as e:
-            log.error(f"[ProjectOperations] extract FBX failed: {e}")
-            self._dialog.show_error("Extract Failed", f"Failed to extract FBX:\n{e}")
-            return
-        on_refresh()
-        if on_navigate is not None:
-            on_navigate(output_dir)
 
     def extract_glb(
         self,
