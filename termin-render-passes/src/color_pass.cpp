@@ -5,7 +5,6 @@
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include <optional>
-#include <cstdlib>
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 #include "termin/lighting/lighting_upload.hpp"
@@ -196,9 +195,18 @@ struct CollectDrawCallsData {
     const char* phase_mark;
 };
 
+const char* safe_component_type(const tc_component* component) {
+    const char* type_name = component ? tc_component_type_name(component) : nullptr;
+    return type_name ? type_name : "<unknown>";
+}
+
 // Callback for tc_scene_foreach_drawable
 bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
     auto* data = static_cast<CollectDrawCallsData*>(user_data);
+    if (!tc || !data || !data->draw_calls || !data->phase_mark) {
+        tc::Log::error("[ColorPass] collect_drawable_draw_calls: invalid callback data");
+        return true;
+    }
 
     // Filter by phase_mark
     if (data->phase_mark[0] != '\0' && !tc_component_has_phase(tc, data->phase_mark)) {
@@ -213,6 +221,12 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
 
     // Build Entity from component's owner
     Entity ent(tc->owner);
+    if (!ent.valid()) {
+        tc::Log::error(
+            "[ColorPass] collect_drawable_draw_calls: drawable component '%s' has invalid owner",
+            safe_component_type(tc));
+        return true;
+    }
 
     auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
     for (const auto& gd : *geometry_draws) {
@@ -235,6 +249,52 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
     }
 
     return true;
+}
+
+bool same_shader_handle(tc_shader_handle a, tc_shader_handle b) {
+    return a.index == b.index && a.generation == b.generation;
+}
+
+struct ResolvedDrawPhase {
+    tc_material_phase* phase = nullptr;
+    tc_shader_handle final_shader = tc_shader_handle_invalid();
+};
+
+ResolvedDrawPhase resolve_draw_phase(
+    tc_component* component,
+    Drawable* drawable,
+    const std::string& phase_mark,
+    int geometry_id,
+    tc_shader_handle expected_final_shader,
+    int expected_priority
+) {
+    ResolvedDrawPhase resolved;
+    if (!component || !drawable) {
+        return resolved;
+    }
+
+    std::vector<GeometryDrawCall> geometry_draws = drawable->get_geometry_draws(&phase_mark);
+    for (const GeometryDrawCall& gd : geometry_draws) {
+        if (!gd.phase || gd.geometry_id != geometry_id) {
+            continue;
+        }
+
+        tc_shader_handle final_shader = tc_component_override_shader(
+            component,
+            phase_mark.c_str(),
+            geometry_id,
+            gd.phase->shader);
+        if (!same_shader_handle(final_shader, expected_final_shader) ||
+            gd.phase->priority != expected_priority) {
+            continue;
+        }
+
+        resolved.phase = gd.phase;
+        resolved.final_shader = final_shader;
+        return resolved;
+    }
+
+    return resolved;
 }
 
 } // anonymous namespace
@@ -512,9 +572,44 @@ void ColorPass::execute_with_data(
     // backend-neutral.
     constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
 
+    size_t draw_index = 0;
     for (const auto& dc : cached_draw_calls_) {
+        if (!dc.component) {
+            tc::Log::error(
+                "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu has null component",
+                get_pass_name().c_str(),
+                phase_mark.c_str(),
+                draw_index);
+            ++draw_index;
+            continue;
+        }
+        if (!dc.entity.valid()) {
+            tc::Log::error(
+                "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu component='%s' has invalid entity",
+                get_pass_name().c_str(),
+                phase_mark.c_str(),
+                draw_index,
+                safe_component_type(dc.component));
+            ++draw_index;
+            continue;
+        }
+        if (!dc.phase) {
+            tc::Log::error(
+                "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu entity='%s' component='%s' has null material phase",
+                get_pass_name().c_str(),
+                phase_mark.c_str(),
+                draw_index,
+                dc.entity.name() ? dc.entity.name() : "<unnamed>",
+                safe_component_type(dc.component));
+            ++draw_index;
+            continue;
+        }
+
         const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
+
+        tc_material_phase* phase = dc.phase;
+        tc_shader_handle final_shader = dc.final_shader;
 
         // Only cast the drawable userdata to Drawable* when the component
         // actually installed the C++ drawable vtable. Python drawables use
@@ -525,11 +620,43 @@ void ColorPass::execute_with_data(
         if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
             drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
         }
-        if (!drawable) continue;
+        if (!drawable) {
+            ++draw_index;
+            continue;
+        }
+
+        auto refresh_phase = [&]() -> bool {
+            ResolvedDrawPhase resolved = resolve_draw_phase(
+                dc.component,
+                drawable,
+                phase_mark,
+                dc.geometry_id,
+                dc.final_shader,
+                dc.priority);
+            if (!resolved.phase) {
+                tc::Log::error(
+                    "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu entity='%s' component='%s' geometry=%d could not resolve live material phase",
+                    get_pass_name().c_str(),
+                    phase_mark.c_str(),
+                    draw_index,
+                    ename ? ename : "<unnamed>",
+                    safe_component_type(dc.component),
+                    dc.geometry_id);
+                return false;
+            }
+            phase = resolved.phase;
+            final_shader = resolved.final_shader;
+            return true;
+        };
+
+        if (!refresh_phase()) {
+            ++draw_index;
+            continue;
+        }
 
         tc_mesh* mesh = drawable->get_mesh_for_phase(phase_mark, dc.geometry_id);
         if (!mesh) {
-            RenderState state = convert_render_state(dc.phase->state);
+            RenderState state = convert_render_state(phase->state);
             if (wireframe) state.polygon_mode = PolygonMode::Line;
 
             ctx2->clear_resource_bindings();
@@ -546,7 +673,7 @@ void ColorPass::execute_with_data(
                                    ? tgfx::PolygonMode::Line
                                    : tgfx::PolygonMode::Fill);
 
-            tc_shader* direct_shader = tc_shader_get(dc.final_shader);
+            tc_shader* direct_shader = tc_shader_get(final_shader);
             if (lighting_ubo_tgfx2 && direct_shader &&
                 tc_shader_has_feature(direct_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
                 ctx2->bind_uniform_buffer(LIGHTING_UBO_BINDING, lighting_ubo_tgfx2);
@@ -579,14 +706,15 @@ void ColorPass::execute_with_data(
             direct_context.projection = projection;
             direct_context.model = drawable->get_model_matrix(dc.entity);
             direct_context.phase = phase_mark;
-            direct_context.current_tc_shader = TcShader(dc.final_shader);
+            direct_context.current_tc_shader = TcShader(final_shader);
             direct_context.layer_mask = layer_mask;
             direct_context.camera_position = camera_position;
             direct_context.viewport_width = rect.width;
             direct_context.viewport_height = rect.height;
             direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
 
-            if (drawable->draw_tgfx2(*ctx2, direct_context, phase_mark, dc.phase, dc.geometry_id)) {
+            if (drawable->draw_tgfx2(*ctx2, direct_context, phase_mark, phase, dc.geometry_id)) {
+                ++draw_index;
                 continue;
             }
 
@@ -595,6 +723,7 @@ void ColorPass::execute_with_data(
             // passes (UnifiedGizmoPass, ColliderGizmoPass, ...), not
             // in ColorPass. Stage 8.1 removed the legacy fallback
             // that ran them through shader.use() + draw_geometry.
+            ++draw_index;
             continue;
         }
 
@@ -604,16 +733,19 @@ void ColorPass::execute_with_data(
         // This is a separate GL program from the legacy one — ctx2
         // binds it via bind_shader, legacy TcShader still has its own
         // program id which is now unused for this pass.
-        tc_shader* raw_shader = tc_shader_get(dc.final_shader);
+        tc_shader* raw_shader = tc_shader_get(final_shader);
         if (!raw_shader) {
+            ++draw_index;
             continue;
         }
         tgfx::ShaderHandle vs2, fs2;
         if (!tc_shader_ensure_tgfx2(raw_shader, &device, &vs2, &fs2)) {
             tc::Log::error("[ColorPass/tgfx2] tc_shader_ensure_tgfx2 failed for shader '%s'",
                            raw_shader->name ? raw_shader->name : raw_shader->uuid);
+            ++draw_index;
             continue;
         }
+        tc_shader_handle ensured_shader = final_shader;
 
         // Every material draw owns its descriptor set. Material textures are
         // optional at runtime; if one is missing, the Vulkan backend fills
@@ -624,8 +756,31 @@ void ColorPass::execute_with_data(
         bind_engine_per_frame_uniforms(*ctx2, pf);
         ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING, &sb, sizeof(sb));
 
+        // Material storage is handle-addressable but not pointer-stable:
+        // tc_material_create() may grow the pool and move existing materials.
+        // Resolve the phase as late as possible so a draw never dereferences
+        // a stale phase pointer captured during collection/sorting.
+        if (!refresh_phase()) {
+            ++draw_index;
+            continue;
+        }
+        if (!same_shader_handle(final_shader, ensured_shader)) {
+            raw_shader = tc_shader_get(final_shader);
+            if (!raw_shader) {
+                ++draw_index;
+                continue;
+            }
+            if (!tc_shader_ensure_tgfx2(raw_shader, &device, &vs2, &fs2)) {
+                tc::Log::error("[ColorPass/tgfx2] tc_shader_ensure_tgfx2 failed for refreshed shader '%s'",
+                               raw_shader->name ? raw_shader->name : raw_shader->uuid);
+                ++draw_index;
+                continue;
+            }
+            ensured_shader = final_shader;
+        }
+
         // Render state from the material phase.
-        RenderState state = convert_render_state(dc.phase->state);
+        RenderState state = convert_render_state(phase->state);
         if (wireframe) state.polygon_mode = PolygonMode::Line;
 
         ctx2->set_depth_test(state.depth_test);
@@ -650,7 +805,7 @@ void ColorPass::execute_with_data(
         // Material UBO + material textures through the dispatcher.
         // The C++ variant (not the _gl raw path) is used here because
         // we are inside a ctx2 pass.
-        apply_material_phase_ubo(dc.phase, raw_shader,
+        apply_material_phase_ubo(phase, raw_shader,
                                  MATERIAL_UBO_BINDING,
                                  MATERIAL_TEX_SLOT_BASE,
                                  device, *ctx2);
@@ -722,6 +877,7 @@ void ColorPass::execute_with_data(
         // current backend, submits ctx2->draw(), then releases transient
         // bindings.
         termin::draw_tc_mesh(*ctx2, mesh);
+        ++draw_index;
     }
 
     ctx2->end_pass();
