@@ -186,14 +186,6 @@ def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> tuple[bool, int]
             key = _translate_sdl_key(event.key.keysym.scancode)
             mods = _translate_sdl_mods(event.key.keysym.mod)
             target_ui.key_down(key, mods)
-            # ESC closes the event's window — not always the main one.
-            if key == Key.ESCAPE:
-                if wid is None or wid == main_id or wm is None:
-                    bw.set_should_close(True)
-                    return False, routed
-                if wm is not None and wm.handle_window_close(wid):
-                    bw.set_should_close(True)
-                    return False, routed
         elif etype == sdl2.SDL_TEXTINPUT:
             routed += 1
             text = event.text.text.decode("utf-8", errors="replace")

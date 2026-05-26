@@ -6,7 +6,7 @@ import math
 import random
 from dataclasses import dataclass
 
-from tcbase import log
+from tcbase import Action, Key, log
 from tcbase._geom_native import Vec3
 from tgfx._tgfx_native import Color4
 from tcgui.widgets.button import Button
@@ -25,6 +25,11 @@ _COLOR_INSTANCE = Color4(0.35, 1.00, 0.25, 1.00)
 _COLOR_BRUSH = Color4(0.05, 0.95, 1.00, 1.00)
 _COLOR_ERASE = Color4(1.00, 0.32, 0.20, 1.00)
 _COLOR_NORMAL = Color4(1.00, 0.90, 0.25, 1.00)
+_MODE_LABELS = {
+    "idle": "Off",
+    "paint": "Paint",
+    "erase": "Erase",
+}
 
 
 @dataclass
@@ -57,6 +62,7 @@ class FoliageLayerEditorExtension:
         if self._component is None:
             log.error("[FoliageLayerEditor] failed to resolve FoliageLayerComponent object")
         editor.add_viewport_click_interceptor(self._on_viewport_click)
+        editor.add_viewport_key_handler(self._on_key)
         editor.add_viewport_overlay_drawer(self._draw_overlay)
         log.info("[FoliageLayerEditor] extension attached")
 
@@ -64,6 +70,7 @@ class FoliageLayerEditorExtension:
         editor = self._editor
         if editor is not None:
             editor.remove_viewport_click_interceptor(self._on_viewport_click)
+            editor.remove_viewport_key_handler(self._on_key)
             editor.remove_viewport_overlay_drawer(self._draw_overlay)
         self._editor = None
         self._entity = None
@@ -91,9 +98,9 @@ class FoliageLayerEditorExtension:
         mode_row = HStack()
         mode_row.spacing = 4
         mode_row.preferred_height = px(28)
+        mode_row.add_child(self._button("Off", lambda: self._set_mode("idle")))
         mode_row.add_child(self._button("Paint", lambda: self._set_mode("paint")))
         mode_row.add_child(self._button("Erase", lambda: self._set_mode("erase")))
-        mode_row.add_child(self._button("Clear Tool", lambda: self._set_mode("idle")))
         root.add_child(mode_row)
 
         radius_row = HStack()
@@ -137,7 +144,7 @@ class FoliageLayerEditorExtension:
         self._refresh_panel()
 
     def _refresh_panel(self) -> None:
-        self._mode_label.text = f"Mode: {self._mode}"
+        self._mode_label.text = f"Mode: {_MODE_LABELS[self._mode]}"
         self._radius_label.text = f"Radius: {self._radius:.2f}"
         self._count_label.text = f"Count: {self._stamp_count}"
         handle = self._foliage_handle()
@@ -145,6 +152,14 @@ class FoliageLayerEditorExtension:
             self._asset_label.text = "Asset: <none>"
             return
         self._asset_label.text = f"Asset: {handle.name}; instances: {handle.instance_count}"
+
+    def _on_key(self, event) -> bool:
+        if self._mode == "idle":
+            return False
+        if event.key != Key.ESCAPE.value or event.action != Action.PRESS.value:
+            return False
+        self._set_mode("idle")
+        return True
 
     def _on_viewport_click(
         self,
@@ -188,16 +203,16 @@ class FoliageLayerEditorExtension:
         world_point = (float(mesh_x), float(mesh_y), float(mesh_z))
         world_normal = _normalized((float(normal_x), float(normal_y), float(normal_z)))
         local_point = self._local_point_from_world(world_point)
-        local_normal = self._local_vector_from_world(world_normal)
+        local_normal = self._local_direction_from_world(world_normal)
         if local_point is None or local_normal is None:
             return True
 
         local_normal = _normalized(local_normal)
         self._last_hit = _BrushHit(local_point, world_point, world_normal)
         if self._mode == "paint":
-            changed = self._paint(handle, local_point, local_normal)
+            changed = self._paint(handle, world_point, world_normal, local_point, local_normal)
         elif self._mode == "erase":
-            changed = self._erase(handle, local_point)
+            changed = self._erase(handle, world_point, world_normal, local_point)
         else:
             changed = False
 
@@ -210,21 +225,32 @@ class FoliageLayerEditorExtension:
     def _paint(
         self,
         handle: TcFoliageData,
+        world_point: tuple[float, float, float],
+        world_normal: tuple[float, float, float],
         local_point: tuple[float, float, float],
         local_normal: tuple[float, float, float],
     ) -> bool:
-        tangent_a, tangent_b = _basis_from_normal(local_normal)
+        world_tangent_a, world_tangent_b = _basis_from_normal(world_normal)
         rng = random.Random((handle.version + 1) * 1000003 + handle.instance_count)
         changed = False
-        for _index in range(self._stamp_count):
-            ox, oy = _random_disk(rng, self._radius)
-            px = local_point[0] + tangent_a[0] * ox + tangent_b[0] * oy
-            py = local_point[1] + tangent_a[1] * ox + tangent_b[1] * oy
-            pz = local_point[2] + tangent_a[2] * ox + tangent_b[2] * oy
+        for index in range(self._stamp_count):
+            if index == 0 and self._stamp_count == 1:
+                paint_local_point = local_point
+            else:
+                ox, oy = _random_disk(rng, self._radius)
+                paint_world_point = (
+                    world_point[0] + world_tangent_a[0] * ox + world_tangent_b[0] * oy,
+                    world_point[1] + world_tangent_a[1] * ox + world_tangent_b[1] * oy,
+                    world_point[2] + world_tangent_a[2] * ox + world_tangent_b[2] * oy,
+                )
+                converted = self._local_point_from_world(paint_world_point)
+                if converted is None:
+                    return changed
+                paint_local_point = converted
             instance = FoliageInstance()
-            instance.px = float(px)
-            instance.py = float(py)
-            instance.pz = float(pz)
+            instance.px = float(paint_local_point[0])
+            instance.py = float(paint_local_point[1])
+            instance.pz = float(paint_local_point[2])
             instance.nx = float(local_normal[0])
             instance.ny = float(local_normal[1])
             instance.nz = float(local_normal[2])
@@ -243,12 +269,19 @@ class FoliageLayerEditorExtension:
         )
         return changed
 
-    def _erase(self, handle: TcFoliageData, local_point: tuple[float, float, float]) -> bool:
+    def _erase(
+        self,
+        handle: TcFoliageData,
+        world_point: tuple[float, float, float],
+        world_normal: tuple[float, float, float],
+        local_point: tuple[float, float, float],
+    ) -> bool:
+        local_radius = self._local_radius_from_world_radius(world_point, world_normal, local_point)
         removed = handle.remove_instances_in_radius(
             float(local_point[0]),
             float(local_point[1]),
             float(local_point[2]),
-            float(self._radius),
+            float(local_radius),
         )
         log.info(f"[FoliageLayerEditor] erased foliage count={removed} total={handle.instance_count}")
         return removed > 0
@@ -302,17 +335,42 @@ class FoliageLayerEditorExtension:
         local = pose.point_to_local(Vec3(point[0], point[1], point[2]))
         return (float(local.x), float(local.y), float(local.z))
 
-    def _local_vector_from_world(
+    def _local_direction_from_world(
         self,
         vector: tuple[float, float, float],
     ) -> tuple[float, float, float] | None:
         entity = self._entity
         if entity is None or not entity.valid():
-            log.error("[FoliageLayerEditor] cannot convert vector to local space: entity is not available")
+            log.error("[FoliageLayerEditor] cannot convert direction to local space: entity is not available")
             return None
         pose = entity.transform.global_pose()
-        local = pose.vector_to_local(Vec3(vector[0], vector[1], vector[2]))
+        local = pose.ang.inverse_rotate(Vec3(vector[0], vector[1], vector[2]))
         return (float(local.x), float(local.y), float(local.z))
+
+    def _local_radius_from_world_radius(
+        self,
+        world_point: tuple[float, float, float],
+        world_normal: tuple[float, float, float],
+        local_point: tuple[float, float, float],
+    ) -> float:
+        tangent_a, tangent_b = _basis_from_normal(world_normal)
+        local_a = self._local_point_from_world(
+            (
+                world_point[0] + tangent_a[0] * self._radius,
+                world_point[1] + tangent_a[1] * self._radius,
+                world_point[2] + tangent_a[2] * self._radius,
+            )
+        )
+        local_b = self._local_point_from_world(
+            (
+                world_point[0] + tangent_b[0] * self._radius,
+                world_point[1] + tangent_b[1] * self._radius,
+                world_point[2] + tangent_b[2] * self._radius,
+            )
+        )
+        if local_a is None or local_b is None:
+            return self._radius
+        return max(_distance(local_point, local_a), _distance(local_point, local_b))
 
     def _world_point_from_local(
         self,
@@ -363,8 +421,18 @@ def _vec3(point: tuple[float, float, float]) -> Vec3:
 def _normalized(vector: tuple[float, float, float]) -> tuple[float, float, float]:
     length = math.sqrt(vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2])
     if length < 0.000001:
-        return (0.0, 1.0, 0.0)
+        return (0.0, 0.0, 1.0)
     return (vector[0] / length, vector[1] / length, vector[2] / length)
+
+
+def _distance(
+    a: tuple[float, float, float],
+    b: tuple[float, float, float],
+) -> float:
+    dx = a[0] - b[0]
+    dy = a[1] - b[1]
+    dz = a[2] - b[2]
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
 
 
 def _cross(
@@ -381,8 +449,8 @@ def _cross(
 def _basis_from_normal(
     normal: tuple[float, float, float],
 ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-    helper = (0.0, 1.0, 0.0)
-    if abs(normal[1]) > 0.92:
+    helper = (0.0, 0.0, 1.0)
+    if abs(normal[2]) > 0.92:
         helper = (1.0, 0.0, 0.0)
     tangent_a = _normalized(_cross(helper, normal))
     tangent_b = _normalized(_cross(normal, tangent_a))

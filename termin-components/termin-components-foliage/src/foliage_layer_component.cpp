@@ -43,7 +43,8 @@ layout(std140, binding = 2) uniform PerFrame {
 };
 
 struct FoliagePushData {
-    mat4 u_model;
+    mat4 u_position_model;
+    mat4 u_vector_model;
 };
 #ifdef VULKAN
 layout(push_constant) uniform FoliagePushBlock { FoliagePushData pc; };
@@ -71,19 +72,21 @@ void main() {
     float s = sin(i_yaw);
     vec3 yaw_right = right * c + forward * s;
     vec3 yaw_forward = -right * s + forward * c;
-    vec3 local_pos =
+    vec3 local_offset =
         yaw_right * a_position.x +
         yaw_forward * a_position.y +
-        up * a_position.z +
-        i_position;
+        up * a_position.z;
 
     vec3 local_normal = normalize(yaw_right * 0.35 + up);
-    vec3 world_normal = normalize((pc.u_model * vec4(local_normal, 0.0)).xyz);
+    vec3 world_pos =
+        (pc.u_position_model * vec4(i_position, 1.0)).xyz +
+        (pc.u_vector_model * vec4(local_offset, 0.0)).xyz;
+    vec3 world_normal = normalize((pc.u_vector_model * vec4(local_normal, 0.0)).xyz);
     vec3 light_dir = normalize(vec3(-0.35, 0.45, 0.82));
     v_light = 0.55 + 0.45 * max(dot(world_normal, light_dir), 0.0);
     v_seed = fract(i_seed * 0.61803398875);
 
-    gl_Position = u_view_projection * pc.u_model * vec4(local_pos, 1.0);
+    gl_Position = u_view_projection * vec4(world_pos, 1.0);
 }
 )";
 
@@ -243,6 +246,11 @@ FoliageGpuInstance make_gpu_instance(const FoliageInstance& instance) {
 Mat44f layer_model_without_scale(const Entity& entity) {
     GeneralPose3 pose = entity.transform().global_pose();
     return Mat44f::compose(pose.lin, pose.ang, Vec3(1.0, 1.0, 1.0));
+}
+
+Mat44f layer_model_with_scale(const Entity& entity) {
+    GeneralPose3 pose = entity.transform().global_pose();
+    return Mat44f::compose(pose.lin, pose.ang, pose.scale);
 }
 
 struct FoliageDataHandleKindRegistrar {
@@ -549,11 +557,14 @@ bool FoliageLayerComponent::draw_tgfx2(
     }
 
     struct ColorPushData {
-        float u_model[16];
+        float u_position_model[16];
+        float u_vector_model[16];
     };
     ColorPushData push{};
-    Mat44f model = layer_model_without_scale(entity());
-    std::memcpy(push.u_model, model.data, sizeof(push.u_model));
+    Mat44f position_model = layer_model_with_scale(entity());
+    Mat44f vector_model = layer_model_without_scale(entity());
+    std::memcpy(push.u_position_model, position_model.data, sizeof(push.u_position_model));
+    std::memcpy(push.u_vector_model, vector_model.data, sizeof(push.u_vector_model));
 
     ctx2.bind_shader(vs2, fs2);
     ctx2.set_push_constants(&push, sizeof(push));
