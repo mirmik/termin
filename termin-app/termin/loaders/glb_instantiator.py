@@ -19,8 +19,8 @@ from termin.render_components import MeshRenderer
 from termin.render_components.skinned_mesh_renderer import SkinnedMeshRenderer
 
 if TYPE_CHECKING:
+    from termin.assets.glb_asset import GLBAsset
     from termin.assets.mesh_asset import MeshAsset
-    from termin.visualization.core.glb_asset import GLBAsset
     from termin.visualization.core.scene import Scene
     from termin.loaders.glb_loader import GLBSceneData, GLBMeshData
 

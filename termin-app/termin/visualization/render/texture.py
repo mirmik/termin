@@ -7,8 +7,8 @@ from typing import Optional
 
 import numpy as np
 
-from termin.visualization.core.texture_handle import TextureHandle
 from termin.assets.texture_asset import TextureAsset
+from termin.assets.texture_handle import TextureHandle
 
 class Texture:
     """
