@@ -203,8 +203,16 @@ class GLBAsset(DataAsset["GLBSceneData"]):
     # --- Content parsing ---
 
     def _parse_content(self, content: bytes) -> "GLBSceneData | None":
-        """Parse GLB binary content."""
-        from termin.loaders.glb_loader import load_glb_file_from_buffer
+        """Parse GLB/glTF content."""
+        from termin.loaders.glb_loader import load_glb_file_from_buffer, load_glb_file_normalized
+
+        if self._source_path is not None:
+            return load_glb_file_normalized(
+                self._source_path,
+                normalize_scale=self._normalize_scale,
+                convert_to_z_up=self._convert_to_z_up,
+                blender_z_up_fix=self._blender_z_up_fix,
+            )
 
         return load_glb_file_from_buffer(
             content,

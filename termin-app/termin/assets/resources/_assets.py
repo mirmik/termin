@@ -63,7 +63,7 @@ class AssetsMixin:
         self._prefab_assets[name] = asset
         self._assets_by_uuid[asset.uuid] = asset
         if source_path:
-            asset._source_path = source_path
+            asset.source_path = source_path
 
     def list_prefab_names(self) -> list[str]:
         """List all registered prefab names."""

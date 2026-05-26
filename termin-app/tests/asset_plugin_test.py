@@ -1,14 +1,18 @@
+from pathlib import Path
+
 from termin.assets.resources import ResourceManager
 from termin.editor_core.default_preloaders import create_default_preloaders
 from termin.assets.plugin_preloader import PluginPreLoader
 from termin_assets import PreLoadResult
 
 
-def test_mesh_register_file_uses_asset_plugin() -> None:
+def test_mesh_register_file_uses_asset_plugin(tmp_path) -> None:
+    mesh_path = tmp_path / "plugin_probe.obj"
+    mesh_path.write_text("", encoding="utf-8")
     rm = ResourceManager()
     result = PreLoadResult(
         resource_type="mesh",
-        path="/tmp/plugin_probe.obj",
+        path=str(mesh_path),
         content=None,
         uuid="mesh-plugin-test-uuid",
         spec_data={"uuid": "mesh-plugin-test-uuid", "scale": 2.0},
@@ -20,7 +24,10 @@ def test_mesh_register_file_uses_asset_plugin() -> None:
     assert asset is not None
     assert asset.uuid == "mesh-plugin-test-uuid"
     assert asset.source_path is not None
-    assert str(asset.source_path) == "/tmp/plugin_probe.obj"
+    assert isinstance(asset.source_path, Path)
+    assert str(asset.source_path) == str(mesh_path)
+    asset.mark_just_saved()
+    assert not asset.should_reload_from_file()
     assert rm.get_asset_by_uuid("mesh-plugin-test-uuid") is asset
 
 
