@@ -110,6 +110,52 @@ void main() {
 }
 )";
 
+const char* FOLIAGE_SHADOW_VARIANT_VERT = R"(
+#version 450 core
+
+layout(location = 0) in vec3 a_position;
+
+layout(location = 8) in vec3 i_position;
+layout(location = 9) in float i_yaw;
+layout(location = 10) in vec3 i_normal;
+
+layout(std140, binding = 0) uniform PerFrame {
+    mat4 u_view;
+    mat4 u_projection;
+};
+
+struct FoliagePushData {
+    mat4 u_position_model;
+    mat4 u_vector_model;
+};
+#ifdef VULKAN
+layout(push_constant) uniform FoliagePushBlock { FoliagePushData pc; };
+#else
+layout(std140, binding = 14) uniform FoliagePushBlock { FoliagePushData pc; };
+#endif
+
+void main() {
+    vec3 up = normalize(i_normal);
+    vec3 helper = abs(up.z) > 0.85 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+    vec3 right = normalize(cross(helper, up));
+    vec3 forward = cross(up, right);
+
+    float c = cos(i_yaw);
+    float s = sin(i_yaw);
+    vec3 yaw_right = right * c + forward * s;
+    vec3 yaw_forward = -right * s + forward * c;
+    vec3 local_offset =
+        yaw_right * a_position.x +
+        yaw_forward * a_position.y +
+        up * a_position.z;
+
+    vec3 world_pos =
+        (pc.u_position_model * vec4(i_position, 1.0)).xyz +
+        (pc.u_vector_model * vec4(local_offset, 0.0)).xyz;
+    gl_Position = u_projection * u_view * vec4(world_pos, 1.0);
+}
+)";
+
 struct FoliageGpuInstance {
     float position[3];
     float yaw;
@@ -141,15 +187,22 @@ std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& foliage_sha
     return cache;
 }
 
-TcShader get_foliage_instanced_shader(TcShader original_shader) {
+std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& foliage_shadow_shader_cache() {
+    static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
+    return cache;
+}
+
+TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_variant = false) {
     if (!original_shader.is_valid()) {
         return TcShader();
     }
-    if (original_shader.variant_op() == TC_SHADER_VARIANT_FOLIAGE) {
+    const tc_shader_variant_op variant_op =
+        shadow_variant ? TC_SHADER_VARIANT_FOLIAGE_SHADOW : TC_SHADER_VARIANT_FOLIAGE;
+    if (original_shader.variant_op() == variant_op) {
         return original_shader;
     }
 
-    auto& cache = foliage_shader_cache();
+    auto& cache = shadow_variant ? foliage_shadow_shader_cache() : foliage_shader_cache();
     auto it = cache.find(original_shader);
     if (it != cache.end()) {
         TcShader& cached = it->second;
@@ -177,17 +230,18 @@ TcShader get_foliage_instanced_shader(TcShader original_shader) {
         return TcShader();
     }
 
-    std::string variant_name = std::string(original_shader.name()) + "_Foliage";
+    std::string variant_name = std::string(original_shader.name())
+        + (shadow_variant ? "_FoliageShadow" : "_Foliage");
     char variant_uuid[40];
     tc_shader_make_variant_uuid(
         variant_uuid,
         sizeof(variant_uuid),
         original_shader.uuid(),
-        TC_SHADER_VARIANT_FOLIAGE
+        variant_op
     );
 
     tc_shader_handle handle = tc_shader_from_sources(
-        FOLIAGE_VARIANT_VERT,
+        shadow_variant ? FOLIAGE_SHADOW_VARIANT_VERT : FOLIAGE_VARIANT_VERT,
         fragment_source,
         nullptr,
         variant_name.c_str(),
@@ -216,7 +270,7 @@ TcShader get_foliage_instanced_shader(TcShader original_shader) {
         );
     }
 
-    variant.set_variant_info(original_shader, TC_SHADER_VARIANT_FOLIAGE);
+    variant.set_variant_info(original_shader, variant_op);
     cache[original_shader] = variant;
     return variant;
 }
@@ -280,6 +334,18 @@ tgfx::VertexBufferLayout foliage_instance_layout() {
         {9, tgfx::VertexFormat::Float, static_cast<uint32_t>(offsetof(FoliageGpuInstance, yaw))},
         {10, tgfx::VertexFormat::Float3, static_cast<uint32_t>(offsetof(FoliageGpuInstance, normal))},
         {11, tgfx::VertexFormat::Float, static_cast<uint32_t>(offsetof(FoliageGpuInstance, seed))},
+    };
+    return layout;
+}
+
+tgfx::VertexBufferLayout foliage_instance_shadow_layout() {
+    tgfx::VertexBufferLayout layout;
+    layout.stride = sizeof(FoliageGpuInstance);
+    layout.per_instance = true;
+    layout.attributes = {
+        {8, tgfx::VertexFormat::Float3, static_cast<uint32_t>(offsetof(FoliageGpuInstance, position))},
+        {9, tgfx::VertexFormat::Float, static_cast<uint32_t>(offsetof(FoliageGpuInstance, yaw))},
+        {10, tgfx::VertexFormat::Float3, static_cast<uint32_t>(offsetof(FoliageGpuInstance, normal))},
     };
     return layout;
 }
@@ -552,12 +618,11 @@ TcShader FoliageLayerComponent::override_shader(
     int geometry_id,
     TcShader original_shader
 ) {
-    (void)phase_mark;
     if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
         return original_shader;
     }
 
-    TcShader variant = get_foliage_instanced_shader(original_shader);
+    TcShader variant = get_foliage_instanced_shader(original_shader, phase_mark == "shadow");
     if (!variant.is_valid()) {
         tc::Log::error(
             "[FoliageLayerComponent] failed to create foliage shader variant for '%s'",
@@ -574,13 +639,12 @@ void FoliageLayerComponent::collect_shader_usages(
     TcShader original_shader,
     const std::function<void(TcShader)>& emit
 ) {
-    (void)phase_mark;
     emit(original_shader);
     if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
         return;
     }
 
-    TcShader variant = get_foliage_instanced_shader(original_shader);
+    TcShader variant = get_foliage_instanced_shader(original_shader, phase_mark == "shadow");
     if (variant.is_valid()) {
         emit(variant);
     }
@@ -680,9 +744,10 @@ bool FoliageLayerComponent::draw_tgfx2(
 
     TcShader shader = context.current_tc_shader;
     if (!shader.is_valid()) {
-        shader = get_foliage_instanced_shader(TcShader(phase->shader));
-    } else if (shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE) {
-        shader = get_foliage_instanced_shader(shader);
+        shader = get_foliage_instanced_shader(TcShader(phase->shader), phase_mark == "shadow");
+    } else if (shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE
+        && shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE_SHADOW) {
+        shader = get_foliage_instanced_shader(shader, phase_mark == "shadow");
     }
     if (!shader.is_valid()) {
         tc::Log::error("[FoliageLayerComponent] cannot draw foliage: shader variant is invalid");
@@ -719,7 +784,10 @@ bool FoliageLayerComponent::draw_tgfx2(
     ctx2.set_topology(mesh->draw_mode == TC_DRAW_LINES
         ? tgfx::PrimitiveTopology::LineList
         : tgfx::PrimitiveTopology::TriangleList);
-    ctx2.set_vertex_layouts({vertex_layout, foliage_instance_layout()});
+    ctx2.set_vertex_layouts({
+        vertex_layout,
+        phase_mark == "shadow" ? foliage_instance_shadow_layout() : foliage_instance_layout()
+    });
     ctx2.draw_indexed_instanced(
         vertex_buffer,
         0,
