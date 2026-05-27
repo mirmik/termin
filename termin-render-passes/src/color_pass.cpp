@@ -682,6 +682,12 @@ void ColorPass::execute_with_data(
 
         tc_mesh* mesh = drawable->get_mesh_for_phase(phase_mark, dc.geometry_id);
         if (!mesh) {
+            if (!drawable->supports_direct_tgfx2_draw(
+                    phase_mark, dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
+                ++draw_index;
+                continue;
+            }
+
             RenderState state = convert_render_state(phase->state);
             if (wireframe) state.polygon_mode = PolygonMode::Line;
 

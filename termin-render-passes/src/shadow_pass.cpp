@@ -511,6 +511,11 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                 tc_mesh* mesh = drawable->get_mesh_for_phase("shadow", dc.geometry_id);
                 if (!mesh) {
+                    if (!drawable->supports_direct_tgfx2_draw(
+                            "shadow", dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
+                        continue;
+                    }
+
                     RenderContext direct_context;
                     direct_context.view = view_matrix;
                     direct_context.projection = proj_matrix;
