@@ -83,6 +83,17 @@ public:
 
     std::set<std::string> get_phase_marks() const override;
     std::set<std::string> phase_marks() const { return get_phase_marks(); }
+    TcShader override_shader(
+        const std::string& phase_mark,
+        int geometry_id,
+        TcShader original_shader
+    ) override;
+    void collect_shader_usages(
+        const std::string& phase_mark,
+        int geometry_id,
+        TcShader original_shader,
+        const std::function<void(TcShader)>& emit
+    ) override;
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
     bool draw_tgfx2(tgfx::RenderContext2& ctx2,
                     const RenderContext& context,

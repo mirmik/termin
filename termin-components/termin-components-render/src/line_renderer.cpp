@@ -3,13 +3,19 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <unordered_map>
 
 #include <tcbase/tc_log.hpp>
 #include <tgfx2/line_mesh_builder.hpp>
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/screen_space_line_renderer.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
 #include <tgfx2/world_space_line_renderer.hpp>
 #include <tgfx2/world_tube_line_renderer.hpp>
+
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace termin {
 namespace {
@@ -124,6 +130,14 @@ bool is_direct_line_mode(LineRenderMode mode) {
         || mode == LineRenderMode::WorldTube;
 }
 
+bool uses_material_fragment_variant(LineRenderMode mode, const std::string& phase_mark) {
+    if (phase_mark == "shadow" || phase_mark == "pick") {
+        return false;
+    }
+    return mode == LineRenderMode::WorldBillboard
+        || mode == LineRenderMode::WorldTube;
+}
+
 bool is_auxiliary_geometry_phase(const std::string& phase_mark) {
     return phase_mark == "shadow"
         || phase_mark == "depth"
@@ -139,6 +153,96 @@ bool accepts_phase(LineRenderMode mode, const std::string& phase_mark, bool cast
         return false;
     }
     return true;
+}
+
+struct TcShaderHash {
+    size_t operator()(const TcShader& shader) const {
+        return std::hash<uint32_t>()(shader.handle.index)
+            ^ (std::hash<uint32_t>()(shader.handle.generation) << 1);
+    }
+};
+
+struct TcShaderEqual {
+    bool operator()(const TcShader& a, const TcShader& b) const {
+        return a.handle.index == b.handle.index
+            && a.handle.generation == b.handle.generation;
+    }
+};
+
+std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_fragment_shader_cache() {
+    static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
+    return cache;
+}
+
+TcShader get_line_material_fragment_shader(TcShader original_shader) {
+    if (!original_shader.is_valid()) {
+        return TcShader();
+    }
+    if (original_shader.variant_op() == TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT) {
+        return original_shader;
+    }
+
+    auto& cache = line_fragment_shader_cache();
+    auto it = cache.find(original_shader);
+    if (it != cache.end()) {
+        TcShader& cached = it->second;
+        if (!cached.variant_is_stale()) {
+            return cached;
+        }
+        cache.erase(it);
+    }
+
+    const char* fragment_source = original_shader.fragment_source();
+    if (!fragment_source || fragment_source[0] == '\0') {
+        tc::Log::error(
+            "[LineRenderer] cannot create line material shader variant for '%s': fragment source is empty",
+            original_shader.name()
+        );
+        return TcShader();
+    }
+
+    std::string variant_name = std::string(original_shader.name()) + "_LineFragment";
+    char variant_uuid[40];
+    tc_shader_make_variant_uuid(
+        variant_uuid,
+        sizeof(variant_uuid),
+        original_shader.uuid(),
+        TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT
+    );
+
+    tc_shader_handle handle = tc_shader_from_sources(
+        nullptr,
+        fragment_source,
+        nullptr,
+        variant_name.c_str(),
+        original_shader.source_path(),
+        variant_uuid
+    );
+    if (tc_shader_handle_is_invalid(handle)) {
+        tc::Log::error(
+            "[LineRenderer] failed to create line material shader variant for '%s'",
+            original_shader.name()
+        );
+        return TcShader();
+    }
+
+    TcShader variant(handle);
+    variant.set_features(original_shader.features());
+
+    tc_shader* original_raw = original_shader.get();
+    tc_shader* variant_raw = variant.get();
+    if (original_raw && variant_raw) {
+        tc_shader_set_material_ubo_layout(
+            variant_raw,
+            original_raw->material_ubo_entries,
+            original_raw->material_ubo_entry_count,
+            original_raw->material_ubo_block_size
+        );
+    }
+
+    variant.set_variant_info(original_shader, TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT);
+    cache[original_shader] = variant;
+    return variant;
 }
 
 } // namespace
@@ -433,6 +537,42 @@ std::set<std::string> LineRenderer::get_phase_marks() const {
     return marks;
 }
 
+TcShader LineRenderer::override_shader(
+    const std::string& phase_mark,
+    int geometry_id,
+    TcShader original_shader
+) {
+    (void)geometry_id;
+    const LineRenderMode mode = effective_render_mode();
+    if (!uses_material_fragment_variant(mode, phase_mark)
+        || !accepts_phase(mode, phase_mark, cast_shadow)) {
+        return original_shader;
+    }
+
+    TcShader variant = get_line_material_fragment_shader(original_shader);
+    return variant.is_valid() ? variant : original_shader;
+}
+
+void LineRenderer::collect_shader_usages(
+    const std::string& phase_mark,
+    int geometry_id,
+    TcShader original_shader,
+    const std::function<void(TcShader)>& emit
+) {
+    (void)geometry_id;
+    emit(original_shader);
+    const LineRenderMode mode = effective_render_mode();
+    if (!uses_material_fragment_variant(mode, phase_mark)
+        || !accepts_phase(mode, phase_mark, cast_shadow)) {
+        return;
+    }
+
+    TcShader variant = get_line_material_fragment_shader(original_shader);
+    if (variant.is_valid()) {
+        emit(variant);
+    }
+}
+
 void LineRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
     (void)context;
     (void)geometry_id;
@@ -478,6 +618,23 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
         };
     }
 
+    tgfx::ShaderHandle material_fragment_shader{};
+    if (!context.has_override_color && uses_material_fragment_variant(mode, phase_mark)) {
+        tc_shader* shader = context.current_tc_shader.get();
+        if (!shader) {
+            tc::Log::error(
+                "[LineRenderer] cannot draw line with material fragment: current shader is invalid");
+            return false;
+        }
+        if (!tc_shader_ensure_tgfx2(shader, &ctx2.device(), nullptr, &material_fragment_shader)
+            || !material_fragment_shader) {
+            tc::Log::error(
+                "[LineRenderer] failed to compile material fragment shader variant for '%s'",
+                shader->name ? shader->name : shader->uuid);
+            return false;
+        }
+    }
+
     if (mode == LineRenderMode::WorldTube) {
         if (!world_tube_renderer_) {
             world_tube_renderer_ = std::make_unique<tgfx::WorldTubeLineRenderer>();
@@ -491,6 +648,7 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
         tgfx::WorldTubeLineParams params;
         params.view_projection = to_tgfx_matrix(view_projection);
         params.lighting_enabled = !context.has_override_color;
+        params.fragment_shader = material_fragment_shader;
 
         ctx2.set_cull(tgfx::CullMode::None);
         world_tube_renderer_->draw_polyline(ctx2, world_points, style, params);
@@ -516,6 +674,7 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
             static_cast<float>(context.camera_position.z),
         };
         params.lighting_enabled = !context.has_override_color;
+        params.fragment_shader = material_fragment_shader;
 
         ctx2.set_cull(tgfx::CullMode::None);
         world_space_renderer_->draw_polyline(ctx2, world_points, style, params);
