@@ -167,6 +167,7 @@ void IdPass::execute_with_data_tgfx2(
     tc_scene_handle scene,
     const Mat44f& view,
     const Mat44f& projection,
+    const Vec3& camera_position,
     uint64_t layer_mask
 ) {
     if (!ctx.ctx2) {
@@ -230,6 +231,14 @@ void IdPass::execute_with_data_tgfx2(
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
 
+    auto restore_id_raster_state = [&]() {
+        ctx.ctx2->set_depth_test(true);
+        ctx.ctx2->set_depth_write(true);
+        ctx.ctx2->set_blend(false);
+        ctx.ctx2->set_cull(tgfx::CullMode::Back);
+        ctx.ctx2->bind_shader(id_vs2, id_fs2);
+    };
+
     const std::string& debug_symbol = get_debug_internal_point();
     int current_pick_id = -1;
     float pick_r = 0.0f;
@@ -243,11 +252,6 @@ void IdPass::execute_with_data_tgfx2(
         }
         if (!drawable) continue;
 
-        tc_mesh* mesh = drawable->get_mesh_for_phase(phase_name(), dc.geometry_id);
-        if (!mesh) continue;  // non-mesh drawables not pickable here
-
-        Mat44f model = drawable->get_model_matrix(dc.entity);
-
         const char* name = dc.entity.name();
         if (name && seen_entities.insert(name).second) {
             entity_names.push_back(name);
@@ -257,6 +261,28 @@ void IdPass::execute_with_data_tgfx2(
             current_pick_id = dc.pick_id;
             id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
         }
+
+        tc_mesh* mesh = drawable->get_mesh_for_phase(phase_name(), dc.geometry_id);
+        if (!mesh) {
+            RenderContext direct_context;
+            direct_context.view = view;
+            direct_context.projection = projection;
+            direct_context.model = drawable->get_model_matrix(dc.entity);
+            direct_context.phase = phase_name();
+            direct_context.current_tc_shader = TcShader(dc.final_shader);
+            direct_context.layer_mask = layer_mask;
+            direct_context.camera_position = camera_position;
+            direct_context.viewport_width = rect.width;
+            direct_context.viewport_height = rect.height;
+            direct_context.has_override_color = true;
+            direct_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
+
+            drawable->draw_tgfx2(*ctx.ctx2, direct_context, phase_name(), nullptr, dc.geometry_id);
+            restore_id_raster_state();
+            continue;
+        }
+
+        Mat44f model = drawable->get_model_matrix(dc.entity);
 
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, id_shader_handle_);
@@ -350,6 +376,7 @@ void IdPass::execute(ExecuteContext& ctx) {
     Mat44 proj_d = camera->get_projection_matrix();
     Mat44f view = view_d.to_float();
     Mat44f projection = proj_d.to_float();
+    Vec3 camera_position = camera->get_position();
 
     if (!ctx.ctx2) {
         tc::Log::error("[IdPass] ctx.ctx2 is null — IdPass is tgfx2-only");
@@ -362,6 +389,7 @@ void IdPass::execute(ExecuteContext& ctx) {
         scene,
         view,
         projection,
+        camera_position,
         ctx.layer_mask
     );
 }

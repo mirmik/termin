@@ -439,6 +439,17 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                                      depth_bias_slope,
                                      0.0f);
 
+            auto restore_shadow_raster_state = [&]() {
+                ctx.ctx2->set_depth_test(true);
+                ctx.ctx2->set_depth_write(true);
+                ctx.ctx2->set_blend(false);
+                ctx.ctx2->set_cull(tgfx::CullMode::Front);
+                ctx.ctx2->set_depth_bias(depth_bias_slope != 0.0f,
+                                         0.0f,
+                                         depth_bias_slope,
+                                         0.0f);
+            };
+
             auto end_shadow_pass = [&]() {
                 ctx.ctx2->end_pass();
                 ctx.ctx2->set_depth_bias(false);
@@ -507,12 +518,14 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     direct_context.phase = "shadow";
                     direct_context.current_tc_shader = TcShader(dc.final_shader);
                     direct_context.layer_mask = layer_mask;
+                    direct_context.camera_position = shadow_camera_position(params);
                     direct_context.viewport_width = resolution;
                     direct_context.viewport_height = resolution;
 
-                    if (drawable->draw_tgfx2(*ctx.ctx2, direct_context, "shadow", phase, dc.geometry_id)) {
-                        ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
-                    }
+                    drawable->draw_tgfx2(
+                        *ctx.ctx2, direct_context, "shadow", phase, dc.geometry_id);
+                    restore_shadow_raster_state();
+                    ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
                     continue;
                 }
 

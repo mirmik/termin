@@ -318,6 +318,197 @@ class Vec3FieldWidget(FieldWidget):
         return self._row.hit_test(px, py)
 
 
+class Vec3ListFieldWidget(FieldWidget):
+    """Editable full-row table for list[vec3] fields."""
+
+    def __init__(
+        self,
+        min_val: float = -1e9,
+        max_val: float = 1e9,
+        step: Optional[float] = None,
+    ) -> None:
+        super().__init__()
+        self._min_val = min_val
+        self._max_val = max_val
+        self._step = step
+        self._value: list[list[float]] = []
+        self._label_prefix: str = "Positions"
+        self._point_rows: list[tuple[Label, SpinBox, SpinBox, SpinBox, Button, Button]] = []
+
+        self._header = Label()
+        self._header.color = (0.72, 0.76, 0.84, 1.0)
+        self.add_child(self._header)
+
+        self._add_btn = Button()
+        self._add_btn.text = "Add Point"
+        self._add_btn.on_click = self._add_point
+        self.add_child(self._add_btn)
+
+    def bind_field(self, key: str, field: "InspectField", target: Any) -> None:
+        super().bind_field(key, field, target)
+        self._label_prefix = field.label or key
+
+    def full_row(self) -> bool:
+        return True
+
+    def get_value(self) -> list[list[float]]:
+        return [[point[0], point[1], point[2]] for point in self._value]
+
+    def set_value(self, value: Any) -> None:
+        self._value = self._coerce_points(value)
+        self._rebuild_rows()
+
+    def _coerce_points(self, value: Any) -> list[list[float]]:
+        if value is None:
+            return []
+        if not isinstance(value, (list, tuple)):
+            try:
+                value = list(value)
+            except Exception as e:
+                log.error(f"[Vec3ListFieldWidget] invalid points value: {e}")
+                return []
+
+        points: list[list[float]] = []
+        for index, item in enumerate(value):
+            try:
+                components = list(item)
+                if len(components) < 3:
+                    log.error(
+                        "[Vec3ListFieldWidget] point "
+                        f"{index} has {len(components)} components, expected 3"
+                    )
+                    points.append([0.0, 0.0, 0.0])
+                    continue
+                points.append([
+                    float(components[0]),
+                    float(components[1]),
+                    float(components[2]),
+                ])
+            except Exception as e:
+                log.error(f"[Vec3ListFieldWidget] invalid point {index}: {e}")
+                points.append([0.0, 0.0, 0.0])
+        return points
+
+    def _make_spinbox(self, row_index: int, component_index: int, value: float) -> SpinBox:
+        spinbox = SpinBox()
+        spinbox.decimals = 4
+        spinbox.min_value = self._min_val
+        spinbox.max_value = self._max_val
+        if self._step is not None:
+            spinbox.step = self._step
+        spinbox.value = value
+        spinbox.on_changed = (
+            lambda new_value, r=row_index, c=component_index:
+                self._set_point_component(r, c, new_value)
+        )
+        return spinbox
+
+    def _rebuild_rows(self) -> None:
+        for row in self._point_rows:
+            for widget in row:
+                self.remove_child(widget)
+        self._point_rows.clear()
+
+        count = len(self._value)
+        item_label = "point" if count == 1 else "points"
+        self._header.text = f"{self._label_prefix}: {count} {item_label}"
+
+        for row_index, point in enumerate(self._value):
+            index_label = Label()
+            index_label.text = str(row_index)
+            index_label.color = (0.55, 0.60, 0.68, 1.0)
+
+            x_box = self._make_spinbox(row_index, 0, point[0])
+            y_box = self._make_spinbox(row_index, 1, point[1])
+            z_box = self._make_spinbox(row_index, 2, point[2])
+
+            insert_btn = Button()
+            insert_btn.text = "+"
+            insert_btn.tooltip = "Insert point after this row"
+            insert_btn.on_click = lambda i=row_index: self._insert_point_after(i)
+
+            remove_btn = Button()
+            remove_btn.text = "X"
+            remove_btn.tooltip = "Remove point"
+            remove_btn.on_click = lambda i=row_index: self._remove_point(i)
+
+            row = (index_label, x_box, y_box, z_box, insert_btn, remove_btn)
+            for widget in row:
+                self.add_child(widget)
+            self._point_rows.append(row)
+
+        if self._ui is not None:
+            self._ui.request_layout()
+
+    def _set_point_component(self, row_index: int, component_index: int, value: float) -> None:
+        if row_index < 0 or row_index >= len(self._value):
+            log.error(f"[Vec3ListFieldWidget] row index out of range: {row_index}")
+            return
+        if component_index < 0 or component_index >= 3:
+            log.error(f"[Vec3ListFieldWidget] component index out of range: {component_index}")
+            return
+        new_value = float(value)
+        if self._value[row_index][component_index] == new_value:
+            return
+        self._value[row_index][component_index] = new_value
+        self._emit()
+
+    def _add_point(self) -> None:
+        self._value.append([0.0, 0.0, 0.0])
+        self._rebuild_rows()
+        self._emit()
+
+    def _insert_point_after(self, row_index: int) -> None:
+        if row_index < 0 or row_index >= len(self._value):
+            log.error(f"[Vec3ListFieldWidget] insert index out of range: {row_index}")
+            return
+        self._value.insert(row_index + 1, [0.0, 0.0, 0.0])
+        self._rebuild_rows()
+        self._emit()
+
+    def _remove_point(self, row_index: int) -> None:
+        if row_index < 0 or row_index >= len(self._value):
+            log.error(f"[Vec3ListFieldWidget] remove index out of range: {row_index}")
+            return
+        del self._value[row_index]
+        self._rebuild_rows()
+        self._emit()
+
+    def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
+        return (360.0, 24.0 + len(self._value) * 28.0 + 28.0)
+
+    def layout(self, x: float, y: float, width: float, height: float,
+               viewport_w: float, viewport_h: float) -> None:
+        Widget.layout(self, x, y, width, height, viewport_w, viewport_h)
+        header_h = 20.0
+        row_h = 24.0
+        gap = 4.0
+        index_w = 34.0
+        button_w = 24.0
+        actions_w = button_w * 2.0 + gap
+        coord_w = max(48.0, (width - index_w - actions_w - gap * 5.0) / 3.0)
+
+        self._header.layout(x, y, width, header_h, viewport_w, viewport_h)
+
+        row_y = y + header_h + gap
+        for index_label, x_box, y_box, z_box, insert_btn, remove_btn in self._point_rows:
+            cursor_x = x
+            index_label.layout(cursor_x, row_y, index_w, row_h, viewport_w, viewport_h)
+            cursor_x += index_w + gap
+            x_box.layout(cursor_x, row_y, coord_w, row_h, viewport_w, viewport_h)
+            cursor_x += coord_w + gap
+            y_box.layout(cursor_x, row_y, coord_w, row_h, viewport_w, viewport_h)
+            cursor_x += coord_w + gap
+            z_box.layout(cursor_x, row_y, coord_w, row_h, viewport_w, viewport_h)
+            cursor_x += coord_w + gap
+            insert_btn.layout(cursor_x, row_y, button_w, row_h, viewport_w, viewport_h)
+            cursor_x += button_w + gap
+            remove_btn.layout(cursor_x, row_y, button_w, row_h, viewport_w, viewport_h)
+            row_y += row_h + gap
+
+        self._add_btn.layout(x, row_y, min(104.0, width), row_h, viewport_w, viewport_h)
+
+
 # ------------------------------------------------------------------
 # Slider (int)
 # ------------------------------------------------------------------
@@ -1056,6 +1247,13 @@ class FieldWidgetFactory:
 
         if kind == "vec3":
             return Vec3FieldWidget(
+                min_val=field.min if field.min is not None else -1e9,
+                max_val=field.max if field.max is not None else 1e9,
+                step=field.step,
+            )
+
+        if kind == "list[vec3]":
+            return Vec3ListFieldWidget(
                 min_val=field.min if field.min is not None else -1e9,
                 max_val=field.max if field.max is not None else 1e9,
                 step=field.step,

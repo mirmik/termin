@@ -407,10 +407,12 @@ void ColorPass::sort_draw_calls() {
 // legacy-looking shader source are rewritten by shader_parser into PerFrame
 // UBOs, push constants, and explicit sampler bindings before tgfx2 sees them.
 //
+// Direct non-mesh drawables may still participate by implementing
+// Drawable::draw_tgfx2(). They bind their own geometry shaders, while this
+// pass owns material state, lighting UBO, shadow samplers, and phase ordering.
+//
 // Intentionally skipped for now:
-//   - non-MeshRenderer drawables (get_mesh_for_phase returns null)
 //   - shader variants where tc_shader_ensure_tgfx2 fails
-//   - extra_textures (reads_fbos wrapped as sampler input)
 //   - maybe_blit_to_debugger for the selected debug symbol
 //   - GPU timing queries
 // These each get a log line when they are skipped.
@@ -539,6 +541,17 @@ void ColorPass::execute_with_data(
         if (shader && tc_shader_has_feature(shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
             any_shader_needs_ubo = true;
             break;
+        }
+        if (dc.component &&
+            tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
+            Drawable* drawable = static_cast<Drawable*>(
+                tc_component_get_drawable_userdata(dc.component));
+            if (drawable &&
+                !drawable->get_mesh_for_phase(phase_mark, dc.geometry_id) &&
+                drawable->needs_lighting_ubo_tgfx2(phase_mark, dc.geometry_id)) {
+                any_shader_needs_ubo = true;
+                break;
+            }
         }
     }
 
@@ -687,9 +700,21 @@ void ColorPass::execute_with_data(
                                    : tgfx::PolygonMode::Fill);
 
             tc_shader* direct_shader = tc_shader_get(final_shader);
-            if (lighting_ubo_tgfx2 && direct_shader &&
-                tc_shader_has_feature(direct_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
+            if (lighting_ubo_tgfx2 &&
+                (drawable->needs_lighting_ubo_tgfx2(phase_mark, dc.geometry_id) ||
+                 (direct_shader && tc_shader_has_feature(direct_shader, TC_SHADER_FEATURE_LIGHTING_UBO)))) {
                 ctx2->bind_uniform_buffer(LIGHTING_UBO_BINDING, lighting_ubo_tgfx2);
+            }
+
+            if (direct_shader) {
+                apply_material_phase_ubo(phase, direct_shader,
+                                         MATERIAL_UBO_BINDING,
+                                         MATERIAL_TEX_SLOT_BASE,
+                                         device, *ctx2);
+            }
+
+            if (!extra_textures.empty()) {
+                bind_extra_textures(ctx.tex2_reads, ctx2);
             }
 
             if (!shadow_sampler_) {
