@@ -36,6 +36,37 @@ if TYPE_CHECKING:
 class AssetsMixin:
     """Mixin for all asset type management methods."""
 
+    def get_runtime_asset(self, type_id: str, name: str):
+        """Get a registered runtime asset by plugin type id and name."""
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[ResourceManager] Runtime asset registry is not registered: {type_id}")
+            return None
+        return registry.get_asset(name)
+
+    def get_runtime_asset_by_uuid(self, type_id: str, uuid: str):
+        """Get a registered runtime asset by plugin type id and UUID."""
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[ResourceManager] Runtime asset registry is not registered: {type_id}")
+            return None
+        return registry.get_asset_by_uuid(uuid)
+
+    def register_runtime_asset(
+        self,
+        type_id: str,
+        name: str,
+        asset: "Asset",
+        source_path: str | None = None,
+        uuid: str | None = None,
+    ) -> None:
+        """Register a runtime asset through its plugin type registry."""
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[ResourceManager] Runtime asset registry is not registered: {type_id}")
+            raise KeyError(type_id)
+        registry.register(name, asset, source_path, uuid)
+
     # --------- Prefabs ---------
     def get_prefab_asset(self, name: str) -> Optional["PrefabAsset"]:
         """Get PrefabAsset by name."""

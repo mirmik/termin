@@ -39,12 +39,12 @@ class MeshRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        if name in rm._mesh_assets:
+        if rm.get_runtime_asset(self.type_id, name) is not None:
             return
 
         asset = None
         if result.uuid:
-            candidate = rm._assets_by_uuid.get(result.uuid)
+            candidate = rm.get_runtime_asset_by_uuid(self.type_id, result.uuid)
             if isinstance(candidate, MeshAsset):
                 asset = candidate
 
@@ -57,11 +57,11 @@ class MeshRuntimePlugin:
             )
 
         asset.parse_spec(result.spec_data)
-        rm._mesh_registry.register(name, asset, source_path=result.path, uuid=result.uuid)
+        rm.register_runtime_asset(self.type_id, name, asset, source_path=result.path, uuid=result.uuid)
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
-        asset = rm._mesh_assets.get(context.name)
+        asset = rm.get_runtime_asset(self.type_id, context.name)
         if asset is None:
             return
 
