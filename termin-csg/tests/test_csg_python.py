@@ -74,6 +74,7 @@ def test_procedural_document_roundtrip_evaluates_extrude_operation():
     sketch_id = document.find_sketch_id_for_contour(contour.id)
     operation = document.add_extrude_operation_for_sketch(sketch_id, height=3.0)
     assert operation is not None
+    assert operation.params["vector"] == [0.0, 0.0, 3.0]
 
     restored = ProceduralMeshDocument.from_dict(document.to_dict())
     evaluated = evaluate_document(restored)
@@ -83,6 +84,40 @@ def test_procedural_document_roundtrip_evaluates_extrude_operation():
     assert evaluated[0].contour_id == contour.id
     assert isclose(evaluated[0].solid.volume, 12.0)
     assert evaluated[0].point_transform((1.0, 1.0, 3.0)) == (1.0, 1.0, 3.0)
+
+
+def test_procedural_document_extrudes_along_oblique_and_downward_vectors():
+    document = ProceduralMeshDocument()
+    contour = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+
+    sketch_id = document.find_sketch_id_for_contour(contour.id)
+    operation = document.add_extrude_operation_for_sketch(sketch_id, vector=(0.5, 0.25, -2.0))
+    assert operation is not None
+
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+
+    result_mesh = to_mesh3(evaluated[0].solid, "oblique-extrude", "", True)
+    transformed = [
+        evaluated[0].point_transform((float(vertex[0]), float(vertex[1]), float(vertex[2])))
+        for vertex in result_mesh.vertices
+    ]
+    xs = [point[0] for point in transformed]
+    ys = [point[1] for point in transformed]
+    zs = [point[2] for point in transformed]
+
+    assert isclose(min(zs), -2.0, abs_tol=1.0e-6)
+    assert isclose(max(zs), 0.0, abs_tol=1.0e-6)
+    assert isclose(max(xs), 1.5, abs_tol=1.0e-6)
+    assert isclose(max(ys), 1.25, abs_tol=1.0e-6)
 
 
 def test_document_raycast_uses_evaluated_solids_in_document_space():
@@ -157,6 +192,37 @@ def test_cad_state_roundtrip_preserves_document_camera_and_selection(tmp_path):
     assert isclose(restored.camera.distance, 12.0)
     assert isclose(restored.camera.yaw, 0.25, abs_tol=1.0e-6)
     assert isclose(restored.camera.pitch, 0.5, abs_tol=1.0e-6)
+
+
+def test_cad_app_operation_parameter_panel_updates_extrude_vector():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    app._build_operation_params_panel()
+    contour = app.document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+
+    sketch_id = app.document.find_sketch_id_for_contour(contour.id)
+    operation = app.document.add_extrude_operation_for_sketch(sketch_id, height=1.0)
+    assert operation is not None
+
+    app.selected_node_data = ("operation", operation.id)
+    app._refresh_operation_params_panel()
+    assert app.operation_params_panel.visible is True
+    assert app.extrude_vector_inputs["z"].value == 1.0
+
+    app.extrude_vector_inputs["x"].value = 0.25
+    app.extrude_vector_inputs["z"].value = -2.0
+    app._on_extrude_vector_changed(-2.0)
+
+    assert operation.params["vector"] == [0.25, 0.0, -2.0]
 
 
 def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():

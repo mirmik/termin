@@ -59,6 +59,10 @@ def _as_vec2(value) -> Vec2Data:
     return (float(value[0]), float(value[1]))
 
 
+def _v_list(value: Vec3Data) -> list[float]:
+    return [float(value[0]), float(value[1]), float(value[2])]
+
+
 @dataclass
 class ProceduralPlane:
     origin: Vec3Data = (0.0, 0.0, 0.0)
@@ -270,18 +274,19 @@ class ProceduralMeshDocument:
         self,
         height: float = 1.0,
         contour_ids: list[str] | None = None,
+        vector: Vec3Data | None = None,
     ) -> OperationDocument | None:
         inputs = contour_ids if contour_ids is not None else self.contour_ids()
         if not inputs:
             log.error("[ProceduralMeshDocument] cannot create extrude operation: no contours")
             return None
+        extrusion_vector = (0.0, 0.0, float(height)) if vector is None else _as_vec3(vector)
         operation = OperationDocument(
             name=f"Extrude {len(self.operations) + 1}",
             kind="extrude",
             inputs=inputs[:],
             params={
-                "height": float(height),
-                "direction": "plane_normal",
+                "vector": _v_list(extrusion_vector),
                 "mode": "new_body",
             },
         )
@@ -292,6 +297,7 @@ class ProceduralMeshDocument:
         self,
         sketch_id: str,
         height: float = 1.0,
+        vector: Vec3Data | None = None,
     ) -> OperationDocument | None:
         sketch = self.find_sketch(sketch_id)
         if sketch is None:
@@ -301,7 +307,12 @@ class ProceduralMeshDocument:
         if not contour_ids:
             log.error(f"[ProceduralMeshDocument] cannot create extrude operation: sketch has no contours '{sketch_id}'")
             return None
-        operation = self.add_extrude_operation(height=height, contour_ids=contour_ids)
+        extrusion_vector = _v_mul(sketch.plane.normal, float(height)) if vector is None else _as_vec3(vector)
+        operation = self.add_extrude_operation(
+            height=height,
+            contour_ids=contour_ids,
+            vector=extrusion_vector,
+        )
         if operation is None:
             return None
         operation.params["source_sketch_id"] = sketch.id
