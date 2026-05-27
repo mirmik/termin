@@ -2,9 +2,21 @@
 
 Shared asset-system contracts for Termin.
 
-This package is intentionally small at this stage. It provides the neutral
-interfaces used by asset plugins and file preloading while the current concrete
-asset implementations still live in `termin-app`.
+This package provides the neutral asset infrastructure shared by editor, player,
+build tooling, and domain asset plugins. Concrete asset implementations still
+live in `termin-app` during the migration, but the base classes no longer do.
+
+Core infrastructure:
+
+- `Identifiable`
+- `Asset`
+- `DataAsset`
+- `AssetRegistry`
+- `ResourceHandle`
+- `PreLoadResult`
+- `AssetContext`
+- `AssetTypeRegistry`
+- `AssetCatalog`
 
 The plugin API separates two roles:
 

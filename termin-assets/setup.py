@@ -12,6 +12,6 @@ setup(
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.10",
     packages=["termin_assets"],
-    install_requires=[],
+    install_requires=["tcbase"],
     zip_safe=False,
 )

@@ -1,12 +1,25 @@
 from termin_assets import (
+    Asset,
+    AssetRegistry,
     AssetTypeRegistry,
+    DataAsset,
+    Identifiable,
     PreLoadResult,
+    ResourceHandle,
     get_uuid_from_spec,
     register_import_plugins_from_entry_points,
     read_spec_file,
     write_spec_file,
 )
 import termin_assets.plugin_discovery as plugin_discovery
+
+
+def test_asset_core_classes_are_exported() -> None:
+    assert Identifiable is not None
+    assert Asset is not None
+    assert DataAsset is not None
+    assert AssetRegistry is not None
+    assert ResourceHandle is not None
 
 
 class DummyPlugin:

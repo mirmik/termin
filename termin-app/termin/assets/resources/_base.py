@@ -42,7 +42,7 @@ class ResourceManagerBase:
         self.frame_passes: Dict[str, type] = {}
 
         # Assets by UUID (for lookup during loading)
-        from termin.assets.asset import Asset
+        from termin_assets import Asset
         self._assets_by_uuid: Dict[str, Asset] = {}
 
         from termin_assets import AssetTypeRegistry
@@ -83,7 +83,7 @@ class ResourceManagerBase:
 
     def _create_mesh_registry(self):
         """Create AssetRegistry for meshes."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
         from termin.assets.mesh_asset import MeshAsset
         from termin.mesh import TcMesh
 
@@ -109,7 +109,7 @@ class ResourceManagerBase:
 
     def _create_texture_registry(self):
         """Create AssetRegistry for textures."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
         from termin.assets.texture_asset import TextureAsset
         from termin.assets.texture_handle import TextureHandle
 
@@ -128,7 +128,7 @@ class ResourceManagerBase:
 
     def _create_voxel_grid_registry(self):
         """Create AssetRegistry for voxel grids."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
             if asset.grid is None:
@@ -154,7 +154,7 @@ class ResourceManagerBase:
 
     def _create_navmesh_registry(self):
         """Create AssetRegistry for navmeshes."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
             if asset.navmesh is None:
@@ -180,7 +180,7 @@ class ResourceManagerBase:
 
     def _create_animation_clip_registry(self):
         """Create AssetRegistry for animation clips."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
             return asset.clip
@@ -204,7 +204,7 @@ class ResourceManagerBase:
 
     def _create_skeleton_registry(self):
         """Create AssetRegistry for skeletons."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
             if asset.skeleton_data is None:
@@ -230,7 +230,7 @@ class ResourceManagerBase:
 
     def _create_glsl_registry(self):
         """Create AssetRegistry for GLSL include files."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
             if asset.source is None:
@@ -256,7 +256,7 @@ class ResourceManagerBase:
 
     def _create_audio_clip_registry(self):
         """Create AssetRegistry for audio clips."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
             from termin.assets.audio_clip_handle import AudioClipHandle
@@ -280,7 +280,7 @@ class ResourceManagerBase:
 
     def _create_ui_registry(self):
         """Create AssetRegistry for UI layouts."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
             from termin.assets.ui_handle import UIHandle
@@ -304,7 +304,7 @@ class ResourceManagerBase:
 
     def _create_pipeline_registry(self):
         """Create AssetRegistry for render pipelines."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
             if asset.pipeline is None:
@@ -330,7 +330,7 @@ class ResourceManagerBase:
 
     def _create_scene_pipeline_registry(self):
         """Create AssetRegistry for scene pipelines (.scene_pipeline files)."""
-        from termin.assets.asset_registry import AssetRegistry
+        from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
             if asset.pipeline is None:
