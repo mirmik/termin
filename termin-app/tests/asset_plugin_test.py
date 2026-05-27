@@ -39,6 +39,26 @@ def test_asset_plugin_registry_can_find_mesh_by_extension() -> None:
     assert plugins[0].type_id == "mesh"
 
 
+def test_resource_manager_runtime_asset_api_registers_mesh(tmp_path) -> None:
+    from termin.assets.mesh_asset import MeshAsset
+
+    mesh_path = tmp_path / "runtime_api_probe.obj"
+    mesh_path.write_text("", encoding="utf-8")
+    rm = ResourceManager()
+    asset = MeshAsset(
+        mesh_data=None,
+        name="runtime_api_probe",
+        source_path=mesh_path,
+        uuid="runtime-api-mesh-uuid",
+    )
+
+    rm.register_runtime_asset("mesh", "runtime_api_probe", asset, source_path=str(mesh_path), uuid=asset.uuid)
+
+    assert rm.get_runtime_asset("mesh", "runtime_api_probe") is asset
+    assert rm.get_runtime_asset_by_uuid("mesh", "runtime-api-mesh-uuid") is asset
+    assert rm.get_mesh_asset("runtime_api_probe") is asset
+
+
 def test_audio_clip_register_file_uses_asset_plugin() -> None:
     rm = ResourceManager()
     result = PreLoadResult(

@@ -69,6 +69,20 @@ class ResourceManagerBase:
         self._glb_assets: Dict[str, "GLBAsset"] = {}
         self._prefab_assets: Dict[str, "PrefabAsset"] = {}
 
+        self._runtime_asset_registries = {
+            "mesh": self._mesh_registry,
+            "texture": self._texture_registry,
+            "voxel_grid": self._voxel_grid_registry,
+            "navmesh": self._navmesh_registry,
+            "animation_clip": self._animation_clip_registry,
+            "skeleton": self._skeleton_registry,
+            "glsl": self._glsl_registry,
+            "audio_clip": self._audio_clip_registry,
+            "ui": self._ui_registry,
+            "pipeline": self._pipeline_registry,
+            "scene_pipeline": self._scene_pipeline_registry,
+        }
+
         self._register_builtin_asset_type_plugins()
 
     def _register_builtin_asset_type_plugins(self) -> None:
