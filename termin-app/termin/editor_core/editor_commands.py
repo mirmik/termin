@@ -44,10 +44,13 @@ def _clone_value(value: Any) -> Any:
     Создаёт "безопасную" копию значения для хранения в команде.
 
     Для numpy-матриц и numpy-векторов (модуль numpy)
-    делается copy(), для остальных типов возвращается как есть.
+    делается copy(); для контейнеров делается deepcopy, чтобы undo-команды
+    не держали изменяемые ссылки на значения инспектора.
     """
     if isinstance(value, np.ndarray):
         return value.copy()
+    if isinstance(value, (list, tuple, dict)):
+        return copy.deepcopy(value)
     return value
 
 

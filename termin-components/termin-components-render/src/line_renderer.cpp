@@ -9,6 +9,7 @@
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/screen_space_line_renderer.hpp>
 #include <tgfx2/world_space_line_renderer.hpp>
+#include <tgfx2/world_tube_line_renderer.hpp>
 
 namespace termin {
 namespace {
@@ -98,8 +99,46 @@ std::array<float, 16> to_tgfx_matrix(const Mat44f& matrix) {
 
 std::array<float, 4> phase_color(const tc_material_phase* phase) {
     std::array<float, 4> color{1.0f, 1.0f, 1.0f, 1.0f};
+    if (!phase) {
+        return color;
+    }
     tc_material_phase_get_color(phase, &color[0], &color[1], &color[2], &color[3]);
     return color;
+}
+
+tc_material_phase* find_phase(tc_material* material, const std::string& phase_mark) {
+    if (!material) {
+        return nullptr;
+    }
+    for (size_t i = 0; i < material->phase_count; ++i) {
+        if (phase_mark == material->phases[i].phase_mark) {
+            return &material->phases[i];
+        }
+    }
+    return nullptr;
+}
+
+bool is_direct_line_mode(LineRenderMode mode) {
+    return mode == LineRenderMode::WorldBillboard
+        || mode == LineRenderMode::ScreenSpace
+        || mode == LineRenderMode::WorldTube;
+}
+
+bool is_auxiliary_geometry_phase(const std::string& phase_mark) {
+    return phase_mark == "shadow"
+        || phase_mark == "depth"
+        || phase_mark == "normal"
+        || phase_mark == "id";
+}
+
+bool accepts_phase(LineRenderMode mode, const std::string& phase_mark, bool cast_shadow) {
+    if (phase_mark == "shadow") {
+        return cast_shadow;
+    }
+    if (is_direct_line_mode(mode) && is_auxiliary_geometry_phase(phase_mark)) {
+        return false;
+    }
+    return true;
 }
 
 } // namespace
@@ -140,6 +179,20 @@ TcMaterial LineRenderer::default_material() {
         return mat;
     }
     tc_material_phase_set_color(phase, 1.0f, 1.0f, 1.0f, 1.0f);
+
+    tc_material_phase* shadow_phase = mat.add_phase_from_sources(
+        kDefaultLineVert,
+        kDefaultLineFrag,
+        "",
+        "DefaultLineShadowShader",
+        "shadow",
+        0,
+        state);
+    if (!shadow_phase) {
+        tc::Log::error("[LineRenderer] failed to create default shadow material phase");
+        return mat;
+    }
+    tc_material_phase_set_color(shadow_phase, 1.0f, 1.0f, 1.0f, 1.0f);
     return mat;
 }
 
@@ -159,6 +212,7 @@ LineRenderMode LineRenderer::effective_render_mode() const {
         case LineRenderMode::ScreenSpace:
         case LineRenderMode::WorldMesh:
         case LineRenderMode::RawLines:
+        case LineRenderMode::WorldTube:
             return render_mode;
     }
     tc::Log::error("[LineRenderer] invalid render mode %d; falling back to WorldBillboard",
@@ -201,8 +255,17 @@ void LineRenderer::set_raw_lines(bool value) {
     dirty_ = true;
 }
 
+void LineRenderer::set_cast_shadow(bool value) {
+    cast_shadow = value;
+}
+
 void LineRenderer::set_up_hint(const tc_vec3& value) {
     up_hint = value;
+    dirty_ = true;
+}
+
+void LineRenderer::set_tube_sides(int value) {
+    tube_sides = std::clamp(value, 3, 32);
     dirty_ = true;
 }
 
@@ -230,7 +293,7 @@ void LineRenderer::rebuild_geometry() {
     tc_vertex_layout layout = tc_vertex_layout_pos();
     LineRenderMode mode = effective_render_mode();
 
-    if (mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::ScreenSpace) {
+    if (is_direct_line_mode(mode)) {
         dirty_ = false;
         return;
     }
@@ -356,8 +419,16 @@ std::set<std::string> LineRenderer::get_phase_marks() const {
     if (!raw) {
         return marks;
     }
+    const LineRenderMode mode = effective_render_mode();
     for (size_t i = 0; i < raw->phase_count; ++i) {
-        marks.insert(raw->phases[i].phase_mark);
+        const std::string phase_mark = raw->phases[i].phase_mark;
+        if (!accepts_phase(mode, phase_mark, cast_shadow)) {
+            continue;
+        }
+        marks.insert(phase_mark);
+    }
+    if (cast_shadow) {
+        marks.insert("shadow");
     }
     return marks;
 }
@@ -377,11 +448,13 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
                               const std::string& phase_mark,
                               tc_material_phase* phase,
                               int geometry_id) {
-    (void)phase_mark;
     (void)geometry_id;
 
     LineRenderMode mode = effective_render_mode();
-    if (mode != LineRenderMode::WorldBillboard && mode != LineRenderMode::ScreenSpace) {
+    if (!is_direct_line_mode(mode)) {
+        return false;
+    }
+    if (!accepts_phase(mode, phase_mark, cast_shadow)) {
         return false;
     }
     if (points_.size() < 2) {
@@ -396,6 +469,33 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
 
     Mat44f view_projection = context.projection * context.view;
     std::array<float, 4> color = phase_color(phase);
+    if (context.has_override_color) {
+        color = {
+            static_cast<float>(context.override_color.x),
+            static_cast<float>(context.override_color.y),
+            static_cast<float>(context.override_color.z),
+            static_cast<float>(context.override_color.w),
+        };
+    }
+
+    if (mode == LineRenderMode::WorldTube) {
+        if (!world_tube_renderer_) {
+            world_tube_renderer_ = std::make_unique<tgfx::WorldTubeLineRenderer>();
+        }
+        tgfx::WorldTubeLineStyle style;
+        style.width = std::max(width, 0.0f);
+        style.color = color;
+        style.up_hint = to_line_point(up_hint);
+        style.sides = std::clamp(tube_sides, 3, 32);
+
+        tgfx::WorldTubeLineParams params;
+        params.view_projection = to_tgfx_matrix(view_projection);
+        params.lighting_enabled = !context.has_override_color;
+
+        ctx2.set_cull(tgfx::CullMode::None);
+        world_tube_renderer_->draw_polyline(ctx2, world_points, style, params);
+        return true;
+    }
 
     if (mode == LineRenderMode::WorldBillboard) {
         if (!world_space_renderer_) {
@@ -415,6 +515,7 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
             static_cast<float>(context.camera_position.y),
             static_cast<float>(context.camera_position.z),
         };
+        params.lighting_enabled = !context.has_override_color;
 
         ctx2.set_cull(tgfx::CullMode::None);
         world_space_renderer_->draw_polyline(ctx2, world_points, style, params);
@@ -441,11 +542,20 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
     return true;
 }
 
+bool LineRenderer::needs_lighting_ubo_tgfx2(const std::string& phase_mark, int geometry_id) const {
+    (void)geometry_id;
+    LineRenderMode mode = effective_render_mode();
+    if (!accepts_phase(mode, phase_mark, cast_shadow)) {
+        return false;
+    }
+    return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::WorldTube;
+}
+
 tc_mesh* LineRenderer::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
     (void)phase_mark;
     (void)geometry_id;
     LineRenderMode mode = effective_render_mode();
-    if (mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::ScreenSpace) {
+    if (is_direct_line_mode(mode)) {
         return nullptr;
     }
     return current_mesh_ptr();
@@ -458,6 +568,10 @@ std::vector<GeometryDrawCall> LineRenderer::get_geometry_draws(const std::string
     }
 
     LineRenderMode mode = effective_render_mode();
+    if (phase_mark && !accepts_phase(mode, *phase_mark, cast_shadow)) {
+        return draws;
+    }
+
     if (mode == LineRenderMode::WorldMesh || mode == LineRenderMode::RawLines) {
         tc_mesh* mesh = current_mesh_ptr();
         if (!mesh) {
@@ -471,9 +585,25 @@ std::vector<GeometryDrawCall> LineRenderer::get_geometry_draws(const std::string
         return draws;
     }
 
+    bool found_shadow_phase = false;
     for (size_t i = 0; i < raw->phase_count; ++i) {
         tc_material_phase* phase = &raw->phases[i];
-        if (!phase_mark || *phase_mark == phase->phase_mark) {
+        const std::string draw_phase_mark = phase->phase_mark;
+        if (!accepts_phase(mode, draw_phase_mark, cast_shadow)) {
+            continue;
+        }
+        if (draw_phase_mark == "shadow") {
+            found_shadow_phase = true;
+        }
+        if (!phase_mark || *phase_mark == draw_phase_mark) {
+            draws.emplace_back(phase, 0);
+        }
+    }
+    if (cast_shadow
+        && (!phase_mark || *phase_mark == "shadow")
+        && !found_shadow_phase) {
+        TcMaterial fallback = default_material();
+        if (tc_material_phase* phase = find_phase(fallback.get(), "shadow")) {
             draws.emplace_back(phase, 0);
         }
     }

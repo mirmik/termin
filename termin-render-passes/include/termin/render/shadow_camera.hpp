@@ -50,6 +50,14 @@ struct ShadowCameraParams {
  */
 Mat44f build_shadow_view_matrix(const ShadowCameraParams& params);
 
+/**
+ * Compute the world-space eye position used by build_shadow_view_matrix().
+ *
+ * Direct GPU drawables that expand geometry in a vertex shader (billboard
+ * lines, impostors) need the shadow camera eye in addition to view/projection.
+ */
+Vec3 shadow_camera_position(const ShadowCameraParams& params);
+
 
 /**
  * Build orthographic projection matrix for shadow camera.

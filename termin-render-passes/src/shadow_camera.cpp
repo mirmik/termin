@@ -87,11 +87,9 @@ Mat44f build_light_rotation_matrix(const Vec3& light_direction) {
 
 Mat44f build_shadow_view_matrix(const ShadowCameraParams& params) {
     Vec3 direction = safe_normalize(params.light_direction, Vec3{0, 1, 0});
-    Vec3 center = params.center;
 
     // Position camera so scene center is roughly between near and far
-    float camera_distance = (params.near + params.far) / 2.0f;
-    Vec3 eye = center - direction * camera_distance;
+    Vec3 eye = shadow_camera_position(params);
 
     // Choose up vector orthogonal to direction
     // Coordinate system: X-right, Y-forward, Z-up
@@ -133,6 +131,12 @@ Mat44f build_shadow_view_matrix(const ShadowCameraParams& params) {
     view(3, 2) = static_cast<float>(direction.dot(eye));
 
     return view;
+}
+
+Vec3 shadow_camera_position(const ShadowCameraParams& params) {
+    Vec3 direction = safe_normalize(params.light_direction, Vec3{0, 1, 0});
+    float camera_distance = (params.near + params.far) / 2.0f;
+    return params.center - direction * camera_distance;
 }
 
 
