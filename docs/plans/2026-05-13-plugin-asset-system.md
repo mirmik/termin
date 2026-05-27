@@ -47,6 +47,12 @@ Base infrastructure:
 
 `termin-assets` should not import `termin-app`, `termin.editor`, or `termin.editor_core`.
 
+Status 2026-05-27: `Identifiable`, `Asset`, `DataAsset`, `AssetRegistry`, and
+`ResourceHandle` were moved into `termin-assets`. The old
+`termin.assets.asset`, `termin.assets.data_asset`, `termin.assets.asset_registry`,
+`termin.assets.resource_handle`, and `termin.core.identifiable` modules are now
+compatibility re-exports so existing imports keep working during the migration.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:

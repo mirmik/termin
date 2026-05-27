@@ -1,5 +1,9 @@
 """Shared asset-system contracts."""
 
+from termin_assets.asset import Asset
+from termin_assets.asset_registry import AssetRegistry
+from termin_assets.data_asset import DataAsset
+from termin_assets.identifiable import Identifiable
 from termin_assets.plugin import (
     AssetContext,
     AssetCreationPlugin,
@@ -18,6 +22,7 @@ from termin_assets.plugin_discovery import (
     register_runtime_plugins_from_entry_points,
 )
 from termin_assets.preload import PreLoadResult
+from termin_assets.resource_handle import ResourceHandle, set_resource_manager_factory
 from termin_assets.spec_file import get_uuid_from_spec, read_spec_file, write_spec_file
 
 __all__ = [
@@ -28,15 +33,21 @@ __all__ = [
     "AssetContext",
     "AssetCreationPlugin",
     "AssetImportPlugin",
+    "Asset",
+    "AssetRegistry",
     "AssetRecord",
     "AssetRuntimePlugin",
     "AssetTypePlugin",
     "AssetTypeRegistry",
+    "DataAsset",
+    "Identifiable",
     "PreLoadResult",
+    "ResourceHandle",
     "get_uuid_from_spec",
     "register_combined_plugins_from_entry_points",
     "register_import_plugins_from_entry_points",
     "register_runtime_plugins_from_entry_points",
     "read_spec_file",
+    "set_resource_manager_factory",
     "write_spec_file",
 ]
