@@ -230,21 +230,24 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
 
     auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
     for (const auto& gd : *geometry_draws) {
-        if (gd.phase) {
+        tc_material_phase* phase = gd.resolve_phase();
+        if (phase) {
             // Get final shader with overrides (skinning, etc.) applied
-            tc_shader_handle base_shader = gd.phase->shader;
+            tc_shader_handle base_shader = phase->shader;
             tc_shader_handle final_shader = tc_component_override_shader(
                 tc, data->phase_mark, gd.geometry_id, base_shader
             );
 
-            data->draw_calls->push_back(PhaseDrawCall{
-                ent,
-                tc,
-                gd.phase,
-                final_shader,
-                gd.phase->priority,
-                gd.geometry_id
-            });
+            PhaseDrawCall dc;
+            dc.entity = ent;
+            dc.component = tc;
+            dc.phase = phase;
+            dc.final_shader = final_shader;
+            dc.priority = phase->priority;
+            dc.geometry_id = gd.geometry_id;
+            dc.material = gd.material;
+            dc.phase_index = gd.phase_index;
+            data->draw_calls->push_back(dc);
         }
     }
 
@@ -265,6 +268,8 @@ ResolvedDrawPhase resolve_draw_phase(
     Drawable* drawable,
     const std::string& phase_mark,
     int geometry_id,
+    tc_material_handle expected_material,
+    size_t expected_phase_index,
     tc_shader_handle expected_final_shader,
     int expected_priority
 ) {
@@ -275,7 +280,13 @@ ResolvedDrawPhase resolve_draw_phase(
 
     std::vector<GeometryDrawCall> geometry_draws = drawable->get_geometry_draws(&phase_mark);
     for (const GeometryDrawCall& gd : geometry_draws) {
-        if (!gd.phase || gd.geometry_id != geometry_id) {
+        tc_material_phase* phase = gd.resolve_phase();
+        if (!phase || gd.geometry_id != geometry_id) {
+            continue;
+        }
+        if (!tc_material_handle_is_invalid(expected_material) &&
+            (!tc_material_handle_eq(gd.material, expected_material) ||
+             gd.phase_index != expected_phase_index)) {
             continue;
         }
 
@@ -283,13 +294,13 @@ ResolvedDrawPhase resolve_draw_phase(
             component,
             phase_mark.c_str(),
             geometry_id,
-            gd.phase->shader);
+            phase->shader);
         if (!same_shader_handle(final_shader, expected_final_shader) ||
-            gd.phase->priority != expected_priority) {
+            phase->priority != expected_priority) {
             continue;
         }
 
-        resolved.phase = gd.phase;
+        resolved.phase = phase;
         resolved.final_shader = final_shader;
         return resolved;
     }
@@ -593,7 +604,8 @@ void ColorPass::execute_with_data(
             ++draw_index;
             continue;
         }
-        if (!dc.phase) {
+        tc_material_phase* phase = dc.resolve_phase();
+        if (!phase) {
             tc::Log::error(
                 "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu entity='%s' component='%s' has null material phase",
                 get_pass_name().c_str(),
@@ -608,7 +620,6 @@ void ColorPass::execute_with_data(
         const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
 
-        tc_material_phase* phase = dc.phase;
         tc_shader_handle final_shader = dc.final_shader;
 
         // Only cast the drawable userdata to Drawable* when the component
@@ -631,6 +642,8 @@ void ColorPass::execute_with_data(
                 drawable,
                 phase_mark,
                 dc.geometry_id,
+                dc.material,
+                dc.phase_index,
                 dc.final_shader,
                 dc.priority);
             if (!resolved.phase) {

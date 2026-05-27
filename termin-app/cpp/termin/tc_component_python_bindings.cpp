@@ -79,7 +79,7 @@ static void* py_drawable_cb_get_geometry_draws(void* py_self, const char* phase_
                     nb::object phase_obj = item.attr("phase");
                     if (!phase_obj.is_none()) {
                         try {
-                            dc.phase = nb::cast<tc_material_phase*>(phase_obj);
+                            dc.bind_phase_ref(nb::cast<tc_material_phase*>(phase_obj));
                         } catch (const nb::cast_error&) {
                             continue;
                         }
