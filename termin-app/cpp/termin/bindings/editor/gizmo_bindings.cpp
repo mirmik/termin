@@ -10,7 +10,7 @@
 #include "termin/editor/gizmo_manager.hpp"
 #include "termin/editor/transform_gizmo.hpp"
 #include <termin/entity/entity.hpp>
-#include "termin/render/immediate_renderer.hpp"
+#include <tgfx2/immediate_renderer.hpp>
 #include "termin/render/solid_primitive_renderer.hpp"
 #include <tgfx2/render_context.hpp>
 

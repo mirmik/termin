@@ -2,7 +2,7 @@
 
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
-#include "termin/render/immediate_renderer.hpp"
+#include <tgfx2/immediate_renderer.hpp>
 #include <termin/geom/mat44.hpp>
 
 namespace termin {
@@ -11,14 +11,10 @@ namespace colliders { class ConvexHullCollider; }
 // Collider wireframe color (green) - defined in cpp file
 extern const Color4 COLLIDER_GIZMO_COLOR;
 
-/**
- * ColliderGizmoPass - Renders collider wireframes for editor visualization.
- *
- * Iterates over all ColliderComponent instances in the scene and draws
- * wireframe representations via ImmediateRenderer (tgfx2-native).
- *
- * Supports Box, Sphere, Capsule, and ConvexHull collider types.
- */
+// ColliderGizmoPass renders collider wireframes for editor visualization.
+// It iterates over all ColliderComponent instances in the scene and draws
+// wireframe representations via ImmediateRenderer (tgfx2-native).
+// Supports Box, Sphere, Capsule, and ConvexHull collider types.
 class ColliderGizmoPass : public CxxFramePass {
 public:
     // Configuration

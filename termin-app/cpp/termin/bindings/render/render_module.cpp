@@ -92,9 +92,6 @@ void bind_render(nb::module_& m) {
     m.attr("TC_MOD_ALT") = display_native.attr("TC_MOD_ALT");
     m.attr("TC_MOD_SUPER") = display_native.attr("TC_MOD_SUPER");
 
-    // ImmediateRenderer
-    bind_immediate(m);
-
     // FramePass, FrameGraph, RenderContext
     bind_frame_pass(m);
 

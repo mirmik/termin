@@ -335,7 +335,6 @@ endif()
 set(RENDER_LIB_SOURCES
     # Render extension for TcSceneRef (uses RenderingManager)
     termin/tc_scene_render_ext.cpp
-    termin/render/immediate_renderer.cpp
     termin/render/collider_gizmo_pass.cpp
     termin/render/ground_grid_pass.cpp
     termin/modules/term_modules_integration.cpp
@@ -351,7 +350,7 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_link_libraries(render_lib PUBLIC entity_lib trent tgfx::termin_graphics termin_materials::termin_materials termin_render::termin_render termin_render_passes::termin_render_passes termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
+target_link_libraries(render_lib PUBLIC entity_lib trent tgfx::termin_graphics tgfx::termin_graphics2 termin_materials::termin_materials termin_render::termin_render termin_render_passes::termin_render_passes termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
 if(TGFX2_ENABLE_OPENGL)
     target_link_libraries(render_lib PUBLIC OpenGL::GL)
 endif()

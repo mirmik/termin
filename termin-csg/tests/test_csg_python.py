@@ -8,8 +8,10 @@ from termin.csg import (
     to_mesh3,
 )
 from termin.csg.cad import box, circle, mesh, rect
+from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
 from termin.csg.procedural_document import ProceduralPlane
+from termin.csg.viewer_camera import OrbitCamera
 
 
 def test_native_primitives_and_extrude_are_importable_from_python():
@@ -118,3 +120,70 @@ def test_ray_plane_intersection_reports_parallel_and_behind_rays():
 
     point = ray_plane_intersection((0.0, 0.0, 1.0), (0.0, 0.0, -2.0), plane)
     assert point == (0.0, 0.0, 0.0)
+
+
+def test_cad_state_roundtrip_preserves_document_camera_and_selection(tmp_path):
+    document = ProceduralMeshDocument()
+    contour = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+
+    sketch_id = document.find_sketch_id_for_contour(contour.id)
+    operation = document.add_extrude_operation_for_sketch(sketch_id, height=2.0)
+    assert operation is not None
+
+    camera = OrbitCamera()
+    camera.target = (3.0, 4.0, 5.0)
+    camera.distance = 12.0
+    camera.yaw = 0.25
+    camera.pitch = 0.5
+
+    saved_path = save_cad_state(
+        tmp_path / "shape",
+        CadState.from_app_state(document, camera, ("operation", operation.id)),
+    )
+    restored = load_cad_state(saved_path)
+
+    assert saved_path.name == "shape.tcsg.json"
+    assert restored.document.contour_count() == 1
+    assert restored.selection == ("operation", operation.id)
+    assert restored.camera.target == (3.0, 4.0, 5.0)
+    assert isclose(restored.camera.distance, 12.0)
+    assert isclose(restored.camera.yaw, 0.25, abs_tol=1.0e-6)
+    assert isclose(restored.camera.pitch, 0.5, abs_tol=1.0e-6)
+
+
+def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():
+    from termin.csg.cad_viewer import build_document_immediate_geometry, build_reference_geometry
+
+    reference = build_reference_geometry()
+    assert len(reference.lines or []) == 45
+
+    document = ProceduralMeshDocument()
+    contour = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+
+    sketch_id = document.find_sketch_id_for_contour(contour.id)
+    operation = document.add_extrude_operation_for_sketch(sketch_id, height=1.0)
+    assert operation is not None
+
+    geometry = build_document_immediate_geometry(document, None, ("operation", operation.id))
+    vertices: list[tuple[float, float, float]] = []
+    geometry.collect_vertices(vertices)
+
+    assert len(geometry.lines or []) > 0
+    assert len(vertices) > 0
+    assert all(line.color == (0.85, 1.0, 1.0, 1.0) for line in geometry.lines or [])
