@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from termin.csg.document_eval import extrude_vector_for_operation
 from termin.csg.procedural_document import ProceduralMeshDocument
 
 
@@ -21,10 +22,10 @@ def build_document_tree(document: ProceduralMeshDocument) -> list[DocumentTreeNo
     used_sketch_ids = document.used_source_sketch_ids()
     roots: list[DocumentTreeNode] = []
     for operation in document.operations:
-        op_node = _operation_node(operation)
         source_sketch_id = str(operation.params.get("source_sketch_id", ""))
+        sketch = document.find_sketch(source_sketch_id) if source_sketch_id else None
+        op_node = _operation_node(operation, sketch)
         if source_sketch_id:
-            sketch = document.find_sketch(source_sketch_id)
             if sketch is not None:
                 op_node.children.append(_sketch_node(sketch))
         roots.append(op_node)
@@ -45,12 +46,13 @@ def document_summary(document: ProceduralMeshDocument) -> str:
     )
 
 
-def _operation_node(operation) -> DocumentTreeNode:
-    height_text = ""
-    if operation.kind == "extrude" and "height" in operation.params:
-        height_text = f" height={float(operation.params['height']):.3f}"
+def _operation_node(operation, sketch) -> DocumentTreeNode:
+    param_text = ""
+    if operation.kind == "extrude" and sketch is not None:
+        vector = extrude_vector_for_operation(sketch, operation)
+        param_text = f" vector={_format_vec3(vector)}"
     return DocumentTreeNode(
-        text=f"[Extrude] {operation.name}{height_text} inputs={len(operation.inputs)}",
+        text=f"[Extrude] {operation.name}{param_text} inputs={len(operation.inputs)}",
         kind="operation",
         item_id=operation.id,
     )

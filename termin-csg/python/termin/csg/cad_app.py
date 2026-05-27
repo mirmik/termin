@@ -15,7 +15,9 @@ from tcgui.widgets.label import Label
 from tcgui.widgets.menu import Menu, MenuItem
 from tcgui.widgets.menu_bar import MenuBar
 from tcgui.widgets.panel import Panel
+from tcgui.widgets.separator import Separator
 from tcgui.widgets.splitter import Splitter
+from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.ui import UI
 from tcgui.widgets.units import px
@@ -32,8 +34,10 @@ from termin.csg.document_edit import (
     clear_document,
     close_draft_contour,
     selected_sketch_id,
+    set_extrude_vector,
     start_sketch_draft,
 )
+from termin.csg.document_eval import extrude_vector_for_operation
 from termin.csg.document_tree_model import DocumentTreeNode, build_document_tree, document_summary
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
 from termin.csg.viewer_camera import OrbitCamera
@@ -74,6 +78,11 @@ class CadApp:
         self.selection_label = Label()
         self.status_label = Label()
         self.tree = TreeWidget()
+        self.operation_params_panel = Panel()
+        self.operation_params_title = Label()
+        self.operation_params_kind = Label()
+        self.extrude_vector_inputs: dict[str, SpinBox] = {}
+        self._syncing_operation_params = False
         self.dirty = True
         self.preview_revision = 0
 
@@ -186,6 +195,8 @@ class CadApp:
         self.status_label.color = (0.58, 0.64, 0.72, 1.0)
         root.add_child(self.status_label)
 
+        root.add_child(self._build_operation_params_panel())
+
         self.tree.row_height = 22
         self.tree.indent_size = 22
         self.tree.stretch = True
@@ -198,6 +209,63 @@ class CadApp:
         button.text = text
         button.on_click = callback
         return button
+
+    def _build_operation_params_panel(self) -> Panel:
+        for child in self.operation_params_panel.children[:]:
+            self.operation_params_panel.remove_child(child)
+        self.extrude_vector_inputs.clear()
+
+        self.operation_params_panel.padding = 8
+        self.operation_params_panel.background_color = (0.10, 0.105, 0.12, 1.0)
+        self.operation_params_panel.visible = False
+
+        body = VStack()
+        body.spacing = 5
+
+        self.operation_params_title.text = "Operation"
+        self.operation_params_title.color = (0.84, 0.88, 0.94, 1.0)
+        body.add_child(self.operation_params_title)
+
+        self.operation_params_kind.color = (0.58, 0.64, 0.72, 1.0)
+        body.add_child(self.operation_params_kind)
+
+        separator = Separator()
+        separator.orientation = "horizontal"
+        body.add_child(separator)
+
+        vector_label = Label()
+        vector_label.text = "Extrude vector"
+        vector_label.color = (0.70, 0.74, 0.80, 1.0)
+        body.add_child(vector_label)
+
+        for axis in ("x", "y", "z"):
+            body.add_child(self._build_vector_row(axis))
+
+        self.operation_params_panel.add_child(body)
+        return self.operation_params_panel
+
+    def _build_vector_row(self, axis: str) -> HStack:
+        row = HStack()
+        row.spacing = 6
+        row.preferred_height = px(26)
+
+        label = Label()
+        label.text = axis.upper()
+        label.color = (0.58, 0.64, 0.72, 1.0)
+        label.preferred_width = px(18)
+        row.add_child(label)
+
+        spin = SpinBox()
+        spin.decimals = 3
+        spin.step = 0.1
+        spin.min_value = -1000000.0
+        spin.max_value = 1000000.0
+        spin.preferred_height = px(24)
+        spin.stretch = True
+        spin.on_changed = self._on_extrude_vector_changed
+        self.extrude_vector_inputs[axis] = spin
+        row.add_child(spin)
+        return row
 
     def new_document(self) -> None:
         self.document = clear_document()
@@ -355,6 +423,7 @@ class CadApp:
             self.tree.add_root(self._to_tree_node(root))
         self._restore_tree_selection(self.tree.root_nodes)
         self._refresh_labels()
+        self._refresh_operation_params_panel()
         if self.tree._ui is not None:
             self.tree._ui.request_layout()
 
@@ -391,6 +460,7 @@ class CadApp:
     def _on_tree_select(self, node: TreeNode) -> None:
         self.selected_node_data = node.data
         self._refresh_labels()
+        self._refresh_operation_params_panel()
         self.request_preview_rebuild()
 
     def _on_scene_click(self, x: float, y: float, width: int, height: int) -> bool:
@@ -434,6 +504,70 @@ class CadApp:
                 f"Selection: {self.selected_node_data[0]} "
                 f"{self.selected_node_data[1][:10]}"
             )
+
+    def _refresh_operation_params_panel(self) -> None:
+        operation = self._selected_operation()
+        if operation is None:
+            self._set_operation_params_visible(False)
+            return
+        if operation.kind != "extrude":
+            self._set_operation_params_visible(False)
+            return
+        source_sketch_id = str(operation.params.get("source_sketch_id", ""))
+        sketch = self.document.find_sketch(source_sketch_id)
+        if sketch is None:
+            self._set_operation_params_visible(False)
+            log.error(
+                "[CsgCad] cannot show extrude parameters: "
+                f"source sketch not found '{source_sketch_id}'"
+            )
+            return
+
+        vector = extrude_vector_for_operation(sketch, operation)
+        self.operation_params_title.text = operation.name
+        self.operation_params_kind.text = f"Kind: {operation.kind}"
+        self._syncing_operation_params = True
+        self.extrude_vector_inputs["x"].value = vector[0]
+        self.extrude_vector_inputs["y"].value = vector[1]
+        self.extrude_vector_inputs["z"].value = vector[2]
+        self._syncing_operation_params = False
+        self._set_operation_params_visible(True)
+
+    def _set_operation_params_visible(self, visible: bool) -> None:
+        if self.operation_params_panel.visible == visible:
+            return
+        self.operation_params_panel.visible = visible
+        if self.ui is not None:
+            self.ui.request_layout()
+
+    def _selected_operation(self):
+        if self.selected_node_data is None:
+            return None
+        kind, item_id = self.selected_node_data
+        if kind != "operation":
+            return None
+        return self.document.find_operation(item_id)
+
+    def _on_extrude_vector_changed(self, _value: float) -> None:
+        if self._syncing_operation_params:
+            return
+        operation = self._selected_operation()
+        if operation is None:
+            log.error("[CsgCad] cannot update extrude vector: no operation is selected")
+            return
+        vector = (
+            float(self.extrude_vector_inputs["x"].value),
+            float(self.extrude_vector_inputs["y"].value),
+            float(self.extrude_vector_inputs["z"].value),
+        )
+        if not set_extrude_vector(self.document, operation.id, vector):
+            return
+        self.refresh_tree()
+        self.request_preview_rebuild()
+        log.info(
+            "[CsgCad] extrude vector changed "
+            f"operation='{operation.id}' vector=({vector[0]:.3f}, {vector[1]:.3f}, {vector[2]:.3f})"
+        )
 
     def _mode_text(self) -> str:
         return f"Mode: {self.mode}; draft points: {len(self.draft.points)}"

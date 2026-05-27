@@ -140,6 +140,25 @@ def add_extrude_for_selection(
     return DocumentEditResult(True, ("operation", operation.id), operation=operation)
 
 
+def set_extrude_vector(
+    document: ProceduralMeshDocument,
+    operation_id: str,
+    vector: Vec3Data,
+) -> bool:
+    operation = document.find_operation(operation_id)
+    if operation is None:
+        log.error(f"[CsgDocumentEdit] cannot set extrude vector: operation not found '{operation_id}'")
+        return False
+    if operation.kind != "extrude":
+        log.error(
+            "[CsgDocumentEdit] cannot set extrude vector: "
+            f"operation '{operation_id}' has kind '{operation.kind}'"
+        )
+        return False
+    operation.params["vector"] = [float(vector[0]), float(vector[1]), float(vector[2])]
+    return True
+
+
 __all__ = [
     "DocumentEditResult",
     "DrawPointResult",
@@ -150,5 +169,6 @@ __all__ = [
     "clear_document",
     "close_draft_contour",
     "selected_sketch_id",
+    "set_extrude_vector",
     "start_sketch_draft",
 ]
