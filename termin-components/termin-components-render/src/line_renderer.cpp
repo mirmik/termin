@@ -650,7 +650,6 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
         params.lighting_enabled = !context.has_override_color;
         params.fragment_shader = material_fragment_shader;
 
-        ctx2.set_cull(tgfx::CullMode::None);
         world_tube_renderer_->draw_polyline(ctx2, world_points, style, params);
         return true;
     }
