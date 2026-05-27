@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass, field
 from math import cos, sin, tau
 
 import numpy as np
 
 from tcbase import MouseButton, log
+from tcbase._geom_native import Vec3
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent
 from tcgui.widgets.widget import Widget
 from tgfx import (
+    Color4,
     CULL_NONE,
+    ImmediateRenderer,
     PIXEL_D32F,
     PIXEL_RGBA8,
     Tgfx2Context,
@@ -169,10 +173,11 @@ class CsgSceneRenderer:
         self.color_tex = None
         self.depth_tex = None
         self.size = (0, 0)
-        self.reference_meshes = build_reference_meshes()
+        self.reference_geometry = build_reference_geometry()
+        self.immediate_renderer = ImmediateRenderer()
         self._preview_key = None
         self._solid_meshes: list[TcMesh] = []
-        self._line_meshes: list[tuple[TcMesh, tuple[float, float, float, float]]] = []
+        self._immediate_geometry = ImmediateGeometry()
 
     def render_document(
         self,
@@ -203,23 +208,20 @@ class CsgSceneRenderer:
 
         self._ensure_preview_meshes(document, draft_points, selected_node_data, preview_key)
 
-        ctx.set_depth_test(False)
-        ctx.set_depth_write(False)
-        for mesh, color in self.reference_meshes:
-            _push_draw_state(ctx, mvp, color)
-            draw_tc_mesh(ctx, mesh)
-
         ctx.set_depth_test(True)
         ctx.set_depth_write(True)
         for mesh in self._solid_meshes:
             _push_draw_state(ctx, mvp, (0.12, 0.72, 0.95, 1.0))
             draw_tc_mesh(ctx, mesh)
 
-        ctx.set_depth_test(False)
-        ctx.set_depth_write(False)
-        for mesh, color in self._line_meshes:
-            _push_draw_state(ctx, mvp, _line_color(color))
-            draw_tc_mesh(ctx, mesh)
+        immediate = self.immediate_renderer
+        immediate.begin()
+        self.reference_geometry.emit(immediate)
+        self._immediate_geometry.emit(immediate)
+        view = camera.view_matrix()
+        projection = camera.projection_matrix(width, height)
+        immediate.flush(ctx, view, projection, False, True)
+        immediate.flush_depth(ctx, view, projection, True)
 
         ctx.end_pass()
         if opened_frame:
@@ -237,9 +239,9 @@ class CsgSceneRenderer:
             return
 
         solid_meshes = build_document_solid_meshes(document)
-        line_meshes = build_document_line_meshes(document, draft_points, selected_node_data)
+        immediate_geometry = build_document_immediate_geometry(document, draft_points, selected_node_data)
         self._solid_meshes = solid_meshes
-        self._line_meshes = line_meshes
+        self._immediate_geometry = immediate_geometry
         self._preview_key = preview_key
 
     def close(self) -> None:
@@ -264,6 +266,73 @@ class CsgSceneRenderer:
         self.size = (width, height)
 
 
+@dataclass
+class ImmediateLineSegment:
+    start: tuple[float, float, float]
+    end: tuple[float, float, float]
+    color: tuple[float, float, float, float]
+    depth_test: bool = False
+
+
+@dataclass
+class ImmediatePolyline:
+    points: list[tuple[float, float, float]]
+    color: tuple[float, float, float, float]
+    closed: bool = False
+    depth_test: bool = False
+
+
+@dataclass
+class ImmediatePointMarker:
+    point: tuple[float, float, float]
+    color: tuple[float, float, float, float]
+    radius: float
+    depth_test: bool = False
+
+
+@dataclass
+class ImmediateGeometry:
+    lines: list[ImmediateLineSegment] = field(default_factory=list)
+    polylines: list[ImmediatePolyline] = field(default_factory=list)
+    points: list[ImmediatePointMarker] = field(default_factory=list)
+
+    def emit(self, renderer: ImmediateRenderer) -> None:
+        for line in self.lines:
+            renderer.line(
+                _vec3(line.start),
+                _vec3(line.end),
+                _color4(line.color),
+                line.depth_test,
+            )
+        for polyline in self.polylines:
+            if len(polyline.points) < 2:
+                continue
+            renderer.polyline(
+                [_vec3(point) for point in polyline.points],
+                _color4(polyline.color),
+                polyline.closed,
+                polyline.depth_test,
+            )
+        for point in self.points:
+            center = _vec3(point.point)
+            color = _color4(point.color)
+            renderer.circle(center, Vec3(0.0, 0.0, 1.0), point.radius, color, 12, point.depth_test)
+            renderer.circle(center, Vec3(0.0, 1.0, 0.0), point.radius, color, 12, point.depth_test)
+            renderer.circle(center, Vec3(1.0, 0.0, 0.0), point.radius, color, 12, point.depth_test)
+
+    def collect_vertices(self, vertices: list[tuple[float, float, float]]) -> None:
+        for line in self.lines:
+            vertices.append(line.start)
+            vertices.append(line.end)
+        for polyline in self.polylines:
+            vertices.extend(polyline.points)
+        for point in self.points:
+            x, y, z = point.point
+            r = point.radius
+            vertices.append((x - r, y - r, z - r))
+            vertices.append((x + r, y + r, z + r))
+
+
 def build_document_solid_meshes(document: ProceduralMeshDocument) -> list[TcMesh]:
     solid_meshes: list[TcMesh] = []
     for index, evaluated in enumerate(evaluate_document(document)):
@@ -279,6 +348,55 @@ def build_document_solid_meshes(document: ProceduralMeshDocument) -> list[TcMesh
         except Exception as e:
             log.error(f"[CsgCad] failed to build solid preview mesh: {e}")
     return solid_meshes
+
+
+def build_document_immediate_geometry(
+    document: ProceduralMeshDocument,
+    draft_points: list[tuple[float, float, float]] | None,
+    selected_node_data: tuple[str, str] | None,
+) -> ImmediateGeometry:
+    lines: list[ImmediateLineSegment] = []
+    polylines: list[ImmediatePolyline] = []
+    points: list[ImmediatePointMarker] = []
+
+    for evaluated in evaluate_document(document):
+        if selected_node_data == ("operation", evaluated.operation_id):
+            edge_color = (0.85, 1.0, 1.0, 1.0)
+        else:
+            edge_color = (0.0, 0.95, 0.95, 0.85)
+        try:
+            mesh = to_mesh3(evaluated.solid, "cad-solid-wire", "", True)
+            vertices = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 3)
+            transformed = [
+                evaluated.point_transform((float(v[0]), float(v[1]), float(v[2])))
+                for v in vertices
+            ]
+            triangles = np.asarray(mesh.triangles, dtype=np.uint32).reshape(-1)
+            for start, end in _edge_segments_from_triangles(transformed, triangles):
+                lines.append(ImmediateLineSegment(start, end, edge_color, False))
+        except Exception as e:
+            log.error(f"[CsgCad] failed to build solid edge immediate preview: {e}")
+
+    visual_model = build_document_visual_model(document, draft_points, selected_node_data)
+    for polyline in visual_model.polylines:
+        polylines.append(
+            ImmediatePolyline(
+                points=polyline.points[:],
+                color=polyline.color,
+                closed=polyline.closed,
+                depth_test=polyline.depth_test,
+            )
+        )
+    for point in visual_model.points:
+        points.append(
+            ImmediatePointMarker(
+                point=point.point,
+                color=point.color,
+                radius=point.radius,
+                depth_test=point.depth_test,
+            )
+        )
+    return ImmediateGeometry(lines=lines, polylines=polylines, points=points)
 
 
 def build_document_line_meshes(
@@ -319,7 +437,29 @@ def _build_evaluated_solid_edge_mesh(evaluated, name: str) -> TcMesh | None:
         return _build_edge_mesh(transformed, triangles, name)
     except Exception as e:
         log.error(f"[CsgCad] failed to build solid edge preview mesh: {e}")
-        return None
+    return None
+
+
+def build_reference_geometry() -> ImmediateGeometry:
+    """Build persistent viewport reference grid and coordinate axes."""
+
+    lines: list[ImmediateLineSegment] = []
+    extent = 10
+    grid_color = (0.23, 0.25, 0.29, 1.0)
+    for i in range(-extent, extent + 1):
+        value = float(i)
+        lines.append(ImmediateLineSegment((-extent, value, 0.0), (extent, value, 0.0), grid_color))
+        lines.append(ImmediateLineSegment((value, -extent, 0.0), (value, extent, 0.0), grid_color))
+
+    axis_len = float(extent)
+    lines.extend(
+        [
+            ImmediateLineSegment((-axis_len, 0.0, 0.0), (axis_len, 0.0, 0.0), (0.92, 0.18, 0.18, 1.0)),
+            ImmediateLineSegment((0.0, -axis_len, 0.0), (0.0, axis_len, 0.0), (0.18, 0.82, 0.22, 1.0)),
+            ImmediateLineSegment((0.0, 0.0, 0.0), (0.0, 0.0, axis_len * 0.5), (0.25, 0.45, 1.0, 1.0)),
+        ]
+    )
+    return ImmediateGeometry(lines=lines)
 
 
 def build_document_meshes(document: ProceduralMeshDocument) -> tuple[list[TcMesh], list[TcMesh]]:
@@ -358,11 +498,11 @@ def build_reference_meshes() -> list[tuple[TcMesh, tuple[float, float, float, fl
 
 def document_bounds(document: ProceduralMeshDocument):
     vertices: list[tuple[float, float, float]] = []
-    solid_meshes, line_meshes = build_document_meshes(document)
+    solid_meshes = build_document_solid_meshes(document)
+    immediate_geometry = build_document_immediate_geometry(document, None, None)
     for solid_mesh in solid_meshes:
         _collect_mesh_vertices(solid_mesh, vertices)
-    for line_mesh in line_meshes:
-        _collect_mesh_vertices(line_mesh, vertices)
+    immediate_geometry.collect_vertices(vertices)
     if not vertices:
         vertices.append((-1.0, -1.0, -1.0))
         vertices.append((1.0, 1.0, 1.0))
@@ -410,6 +550,20 @@ def _build_edge_mesh(vertices: np.ndarray, triangles: np.ndarray, name: str) -> 
         uuid=str(uuid.uuid4()),
         draw_mode=TcDrawMode.LINES,
     )
+
+
+def _edge_segments_from_triangles(
+    vertices: list[tuple[float, float, float]],
+    triangles: np.ndarray,
+) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
+    edges = set()
+    for i in range(0, len(triangles), 3):
+        a = int(triangles[i])
+        b = int(triangles[i + 1])
+        c = int(triangles[i + 2])
+        for x, y in ((a, b), (b, c), (c, a)):
+            edges.add((min(x, y), max(x, y)))
+    return [(vertices[a], vertices[b]) for a, b in sorted(edges)]
 
 
 def _build_point_marker_mesh(point: tuple[float, float, float], radius: float, name: str) -> TcMesh:
@@ -498,9 +652,20 @@ def _line_color(color: tuple[float, float, float, float]) -> tuple[float, float,
     return (color[0], color[1], color[2], -abs(color[3]))
 
 
+def _vec3(point: tuple[float, float, float]) -> Vec3:
+    return Vec3(float(point[0]), float(point[1]), float(point[2]))
+
+
+def _color4(color: tuple[float, float, float, float]) -> Color4:
+    return Color4(float(color[0]), float(color[1]), float(color[2]), abs(float(color[3])))
+
+
 __all__ = [
     "CadViewportWidget",
     "CsgSceneRenderer",
+    "ImmediateGeometry",
+    "build_document_immediate_geometry",
+    "build_reference_geometry",
     "build_reference_meshes",
     "build_document_line_meshes",
     "build_document_meshes",

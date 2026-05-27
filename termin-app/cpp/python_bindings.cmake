@@ -42,7 +42,6 @@ nanobind_add_module(_native NB_SHARED
     termin/bindings/render/camera.cpp
     termin/bindings/render/shadow.cpp
     termin/bindings/render/resource_spec.cpp
-    termin/bindings/render/immediate.cpp
     termin/bindings/render/frame_pass.cpp
     termin/bindings/render/tc_pass_bindings.cpp
     termin/bindings/render/material.cpp
@@ -88,6 +87,7 @@ target_link_libraries(_native PRIVATE
     render_lib
     termin_render_passes::termin_render_passes
     tgfx::termin_graphics
+    tgfx::termin_graphics2
 )
 if(TGFX2_ENABLE_OPENGL)
     target_link_libraries(_native PRIVATE OpenGL::GL)

@@ -2,8 +2,9 @@
 
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/mat44.hpp>
-#include "tgfx/types.hpp"
-#include "tgfx2/handles.hpp"
+#include <tgfx/types.hpp>
+#include <tgfx2/handles.hpp>
+#include <tgfx2/tgfx2_api.h>
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 }
@@ -26,9 +27,9 @@ namespace termin {
  *     renderer.begin();
  *     renderer.line(start, end, color);
  *     renderer.circle(center, normal, radius, color);
- *     renderer.flush(graphics, view_matrix, proj_matrix);
+ *     renderer.flush(ctx2, view_matrix, proj_matrix);
  */
-class ImmediateRenderer {
+class TGFX2_API ImmediateRenderer {
 public:
     // Vertex data: x, y, z, r, g, b, a
     // No depth test (overlay)

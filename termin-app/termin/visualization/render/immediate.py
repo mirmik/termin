@@ -1,10 +1,11 @@
 """
 ImmediateRenderer - immediate mode rendering for debug visualization, gizmos, etc.
 
-Implemented in C++ for performance. This module re-exports from native.
+Implemented in C++ for performance. This module keeps the historical
+termin.visualization import path while the renderer itself lives in tgfx.
 """
 
-from termin._native.render import ImmediateRenderer as _ImmediateRenderer
+from tgfx import ImmediateRenderer as _ImmediateRenderer
 
 
 class ImmediateRenderer(_ImmediateRenderer):

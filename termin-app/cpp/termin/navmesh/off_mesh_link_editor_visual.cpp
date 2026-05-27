@@ -2,7 +2,7 @@
 #include "termin/editor/editor_snap.hpp"
 #include "termin/navmesh/detour_pathfinding_world_component.hpp"
 #include "termin/navmesh/off_mesh_link_component.hpp"
-#include "termin/render/immediate_renderer.hpp"
+#include <tgfx2/immediate_renderer.hpp>
 
 #include <memory>
 

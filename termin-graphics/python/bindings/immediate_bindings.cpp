@@ -1,8 +1,15 @@
-#include "common.hpp"
-#include "termin/render/immediate_renderer.hpp"
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/ndarray.h>
+
+#include <tgfx2/immediate_renderer.hpp>
 #include <tgfx2/render_context.hpp>
 
-namespace termin {
+namespace nb = nanobind;
+
+using namespace termin;
+
+namespace tgfx_bindings {
 
 void bind_immediate(nb::module_& m) {
     nb::class_<ImmediateRenderer>(m, "ImmediateRenderer")
@@ -149,4 +156,4 @@ void bind_immediate(nb::module_& m) {
         .def_prop_ro("triangle_count_depth", &ImmediateRenderer::triangle_count_depth);
 }
 
-} // namespace termin
+} // namespace tgfx_bindings

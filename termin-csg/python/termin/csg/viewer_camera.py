@@ -150,6 +150,15 @@ class OrbitCamera:
         flat = np.asarray(self._camera.mvp(aspect), dtype=np.float32)
         return flat.reshape((4, 4), order="F")
 
+    def view_matrix(self):
+        flat = np.asarray(self._camera.view_matrix(), dtype=np.float64)
+        return flat.reshape((4, 4), order="F")
+
+    def projection_matrix(self, width, height):
+        aspect = max(float(width) / max(float(height), 1.0), 0.001)
+        flat = np.asarray(self._camera.projection_matrix(aspect), dtype=np.float64)
+        return flat.reshape((4, 4), order="F")
+
     def screen_ray(self, screen_x, screen_y, width, height):
         near, direction = self._camera.screen_ray(
             float(screen_x), float(screen_y), float(width), float(height))

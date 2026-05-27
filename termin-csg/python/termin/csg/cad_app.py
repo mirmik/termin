@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import ctypes
+from pathlib import Path
 
 import sdl2
 
-from tcbase import MouseButton, log
+from tcbase import Key, Mods, MouseButton, log
 from tcgui.widgets.button import Button
+from tcgui.widgets.file_dialog_overlay import show_open_file_dialog, show_save_file_dialog
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
+from tcgui.widgets.menu import Menu, MenuItem
+from tcgui.widgets.menu_bar import MenuBar
 from tcgui.widgets.panel import Panel
 from tcgui.widgets.splitter import Splitter
 from tcgui.widgets.tree import TreeNode, TreeWidget
@@ -20,6 +24,7 @@ from termin.display import SDLBackendWindow
 from tgfx import Tgfx2Context
 
 from termin.csg.cad_viewer import CadViewportWidget, CsgSceneRenderer, document_bounds
+from termin.csg.cad_state import CAD_STATE_FILTER, CadState, load_cad_state, save_cad_state
 from termin.csg.document_edit import (
     SketchDraft,
     add_draft_point_from_ray,
@@ -35,32 +40,60 @@ from termin.csg.viewer_camera import OrbitCamera
 
 
 _SDL_BUTTON_MAP = {1: MouseButton.LEFT, 2: MouseButton.MIDDLE, 3: MouseButton.RIGHT}
+_KEY_MAP = {
+    sdl2.SDL_SCANCODE_BACKSPACE: Key.BACKSPACE,
+    sdl2.SDL_SCANCODE_DELETE: Key.DELETE,
+    sdl2.SDL_SCANCODE_LEFT: Key.LEFT,
+    sdl2.SDL_SCANCODE_RIGHT: Key.RIGHT,
+    sdl2.SDL_SCANCODE_UP: Key.UP,
+    sdl2.SDL_SCANCODE_DOWN: Key.DOWN,
+    sdl2.SDL_SCANCODE_HOME: Key.HOME,
+    sdl2.SDL_SCANCODE_END: Key.END,
+    sdl2.SDL_SCANCODE_RETURN: Key.ENTER,
+    sdl2.SDL_SCANCODE_ESCAPE: Key.ESCAPE,
+    sdl2.SDL_SCANCODE_TAB: Key.TAB,
+    sdl2.SDL_SCANCODE_SPACE: Key.SPACE,
+}
 
 
 class CadApp:
     def __init__(self) -> None:
+        self.ui: UI | None = None
         self.document = ProceduralMeshDocument()
         self.camera = OrbitCamera()
         self.viewport = CadViewportWidget(self.camera)
         self.mode = "idle"
         self.draft: SketchDraft = start_sketch_draft()
         self.selected_node_data: tuple[str, str] | None = None
+        self.current_path: Path | None = None
+        self.last_directory = Path.cwd()
 
         self.mode_label = Label()
+        self.file_label = Label()
         self.summary_label = Label()
         self.selection_label = Label()
+        self.status_label = Label()
         self.tree = TreeWidget()
         self.dirty = True
         self.preview_revision = 0
 
-    def build_ui(self):
-        root = HStack()
+    def build_ui(self, ui: UI):
+        self.ui = ui
+
+        root = VStack()
         root.spacing = 0
+
+        menu_bar = self._build_menu_bar()
+        root.add_child(menu_bar)
+
+        content = HStack()
+        content.spacing = 0
+        content.stretch = True
 
         self.viewport.stretch = True
         self.viewport.on_changed = self.request_render
         self.viewport.on_scene_click = self._on_scene_click
-        root.add_child(self.viewport)
+        content.add_child(self.viewport)
 
         side = Panel()
         side.preferred_width = px(360)
@@ -68,10 +101,27 @@ class CadApp:
         side.background_color = (0.14, 0.145, 0.16, 1.0)
         side.add_child(self._build_side_panel())
 
-        root.add_child(Splitter(side, "left"))
-        root.add_child(side)
+        content.add_child(Splitter(side, "left"))
+        content.add_child(side)
+        root.add_child(content)
+
+        menu_bar.register_shortcuts(ui)
         self.refresh_tree()
         return root
+
+    def _build_menu_bar(self) -> MenuBar:
+        menu_bar = MenuBar()
+
+        file_menu = Menu()
+        file_menu.items = [
+            MenuItem("New", shortcut="Ctrl+N", on_click=self.new_document),
+            MenuItem("Open...", shortcut="Ctrl+O", on_click=self.open_state_dialog),
+            MenuItem.sep(),
+            MenuItem("Save", shortcut="Ctrl+S", on_click=self.save_state),
+            MenuItem("Save As...", shortcut="Ctrl+Shift+S", on_click=self.save_state_as_dialog),
+        ]
+        menu_bar.add_menu("File", file_menu)
+        return menu_bar
 
     def render_scene(self, renderer: CsgSceneRenderer) -> None:
         width = max(int(self.viewport.width), 1)
@@ -104,6 +154,9 @@ class CadApp:
         title.text = "CSG CAD"
         root.add_child(title)
 
+        self.file_label.color = (0.58, 0.64, 0.72, 1.0)
+        root.add_child(self.file_label)
+
         self.mode_label.text = self._mode_text()
         self.mode_label.color = (0.58, 0.64, 0.72, 1.0)
         root.add_child(self.mode_label)
@@ -129,6 +182,10 @@ class CadApp:
         self.selection_label.color = (0.58, 0.64, 0.72, 1.0)
         root.add_child(self.selection_label)
 
+        self.status_label.text = "Ready"
+        self.status_label.color = (0.58, 0.64, 0.72, 1.0)
+        root.add_child(self.status_label)
+
         self.tree.row_height = 22
         self.tree.indent_size = 22
         self.tree.stretch = True
@@ -141,6 +198,105 @@ class CadApp:
         button.text = text
         button.on_click = callback
         return button
+
+    def new_document(self) -> None:
+        self.document = clear_document()
+        self.draft = start_sketch_draft()
+        self.selected_node_data = None
+        self.current_path = None
+        self.mode = "idle"
+        self.refresh_tree()
+        self.fit_camera()
+        self.request_preview_rebuild()
+        self._set_status("New document")
+        log.info("[CsgCad] new document")
+
+    def open_state_dialog(self) -> None:
+        ui = self.ui
+        if ui is None:
+            log.error("[CsgCad] cannot open file dialog: UI is not available")
+            return
+        show_open_file_dialog(
+            ui,
+            self._on_open_state_path,
+            title="Open termin-csg CAD State",
+            directory=str(self._file_dialog_directory()),
+            filter_str=CAD_STATE_FILTER,
+        )
+
+    def save_state(self) -> None:
+        if self.current_path is None:
+            self.save_state_as_dialog()
+            return
+        self.save_state_to_path(self.current_path)
+
+    def save_state_as_dialog(self) -> None:
+        ui = self.ui
+        if ui is None:
+            log.error("[CsgCad] cannot open save dialog: UI is not available")
+            return
+        show_save_file_dialog(
+            ui,
+            self._on_save_state_path,
+            title="Save termin-csg CAD State",
+            directory=str(self._file_dialog_directory()),
+            filter_str=CAD_STATE_FILTER,
+        )
+
+    def save_state_to_path(self, path: str | Path) -> bool:
+        try:
+            saved_path = save_cad_state(
+                path,
+                CadState.from_app_state(
+                    self.document,
+                    self.camera,
+                    self.selected_node_data,
+                ),
+            )
+        except Exception as e:
+            self._set_status("Save failed")
+            log.error(f"[CsgCad] failed to save state path='{path}': {e}")
+            return False
+
+        self.current_path = saved_path
+        self.last_directory = saved_path.parent
+        self._refresh_labels()
+        self._set_status(f"Saved: {saved_path.name}")
+        log.info(f"[CsgCad] state saved path='{saved_path}'")
+        return True
+
+    def load_state_from_path(self, path: str | Path) -> bool:
+        try:
+            state = load_cad_state(path)
+        except Exception as e:
+            self._set_status("Open failed")
+            log.error(f"[CsgCad] failed to load state path='{path}': {e}")
+            return False
+
+        self.document = state.document
+        state.camera.apply_to(self.camera)
+        self.selected_node_data = self._validated_selection(state.selection)
+        self.draft = start_sketch_draft()
+        self.mode = "idle"
+        self.current_path = Path(path).expanduser()
+        self.last_directory = self.current_path.parent
+        self.refresh_tree()
+        self.request_preview_rebuild()
+        self._set_status(f"Opened: {self.current_path.name}")
+        log.info(f"[CsgCad] state loaded path='{self.current_path}'")
+        return True
+
+    def _on_open_state_path(self, path: str | None) -> None:
+        if path is None:
+            self._set_status("Open cancelled")
+            return
+        self.load_state_from_path(path)
+
+    def _on_save_state_path(self, path: str | None) -> None:
+        if path is None:
+            self._set_status("Save cancelled")
+            return
+        self.save_state_to_path(path)
 
     def start_draw_sketch(self) -> None:
         self.mode = "draw_sketch"
@@ -184,9 +340,12 @@ class CadApp:
         self.document = clear_document()
         self.draft = start_sketch_draft()
         self.selected_node_data = None
+        self.current_path = None
+        self.mode = "idle"
         self.refresh_tree()
         self.fit_camera()
         self.request_preview_rebuild()
+        self._set_status("Cleared")
         log.info("[CsgCad] document cleared")
 
     def refresh_tree(self) -> None:
@@ -262,6 +421,10 @@ class CadApp:
         return True
 
     def _refresh_labels(self) -> None:
+        if self.current_path is None:
+            self.file_label.text = "File: <unsaved>"
+        else:
+            self.file_label.text = f"File: {self.current_path.name}"
         self.mode_label.text = self._mode_text()
         self.summary_label.text = document_summary(self.document)
         if self.selected_node_data is None:
@@ -275,15 +438,40 @@ class CadApp:
     def _mode_text(self) -> str:
         return f"Mode: {self.mode}; draft points: {len(self.draft.points)}"
 
+    def _set_status(self, text: str) -> None:
+        self.status_label.text = f"Status: {text}"
+
+    def _file_dialog_directory(self) -> Path:
+        if self.current_path is not None:
+            return self.current_path.parent
+        return self.last_directory
+
+    def _validated_selection(self, selection: tuple[str, str] | None) -> tuple[str, str] | None:
+        if selection is None:
+            return None
+        kind, item_id = selection
+        if kind == "sketch" and self.document.find_sketch(item_id) is not None:
+            return selection
+        if kind == "operation" and self.document.find_operation(item_id) is not None:
+            return selection
+        if kind == "contour":
+            for item in self.document.items:
+                for contour in item.contours:
+                    if contour.id == item_id:
+                        return selection
+        log.error(f"[CsgCad] saved selection is missing kind='{kind}' id='{item_id}'")
+        return None
+
 
 def run_cad_app(title: str = "termin-csg CAD", size: tuple[int, int] = (1200, 760)) -> None:
     window = SDLBackendWindow(title, int(size[0]), int(size[1]))
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
     ui = UI(graphics=graphics)
     app = CadApp()
-    ui.root = app.build_ui()
+    ui.root = app.build_ui(ui)
     scene_renderer = CsgSceneRenderer(graphics)
 
+    sdl2.SDL_StartTextInput()
     event = sdl2.SDL_Event()
     try:
         while not window.should_close():
@@ -312,8 +500,14 @@ def _dispatch_event(window, ui: UI, ev) -> None:
     if event_type == sdl2.SDL_QUIT:
         window.set_should_close(True)
     elif event_type == sdl2.SDL_KEYDOWN:
-        if ev.key.keysym.scancode == sdl2.SDL_SCANCODE_ESCAPE:
+        key = _translate_key(ev.key.keysym.scancode)
+        mods = _translate_mods(sdl2.SDL_GetModState())
+        if ui.key_down(key, mods):
+            return
+        if key == Key.ESCAPE:
             window.set_should_close(True)
+    elif event_type == sdl2.SDL_TEXTINPUT:
+        ui.text_input(ev.text.text.decode("utf-8"))
     elif event_type == sdl2.SDL_WINDOWEVENT:
         if ev.window.event == sdl2.SDL_WINDOWEVENT_CLOSE:
             window.set_should_close(True)
@@ -324,17 +518,50 @@ def _dispatch_event(window, ui: UI, ev) -> None:
             float(ev.button.x),
             float(ev.button.y),
             _SDL_BUTTON_MAP.get(ev.button.button, MouseButton.LEFT),
+            _translate_mods(sdl2.SDL_GetModState()),
         )
     elif event_type == sdl2.SDL_MOUSEBUTTONUP:
         ui.mouse_up(
             float(ev.button.x),
             float(ev.button.y),
             _SDL_BUTTON_MAP.get(ev.button.button, MouseButton.LEFT),
+            _translate_mods(sdl2.SDL_GetModState()),
         )
     elif event_type == sdl2.SDL_MOUSEWHEEL:
         mx, my = ctypes.c_int(), ctypes.c_int()
         sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
-        ui.mouse_wheel(float(ev.wheel.x), float(ev.wheel.y), float(mx.value), float(my.value))
+        ui.mouse_wheel(
+            float(ev.wheel.x),
+            float(ev.wheel.y),
+            float(mx.value),
+            float(my.value),
+            _translate_mods(sdl2.SDL_GetModState()),
+        )
+
+
+def _translate_key(scancode: int) -> Key:
+    if scancode in _KEY_MAP:
+        return _KEY_MAP[scancode]
+    keycode = sdl2.SDL_GetKeyFromScancode(scancode)
+    if ord("a") <= keycode <= ord("z"):
+        keycode -= 32
+    if 0 <= keycode < 128:
+        try:
+            return Key(keycode)
+        except ValueError:
+            return Key.UNKNOWN
+    return Key.UNKNOWN
+
+
+def _translate_mods(sdl_mods: int) -> int:
+    result = 0
+    if sdl_mods & (sdl2.KMOD_LSHIFT | sdl2.KMOD_RSHIFT):
+        result |= Mods.SHIFT.value
+    if sdl_mods & (sdl2.KMOD_LCTRL | sdl2.KMOD_RCTRL):
+        result |= Mods.CTRL.value
+    if sdl_mods & (sdl2.KMOD_LALT | sdl2.KMOD_RALT):
+        result |= Mods.ALT.value
+    return result
 
 
 __all__ = [
