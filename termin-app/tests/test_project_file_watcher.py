@@ -40,8 +40,17 @@ def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> 
     assert processor.changed == [str(shader_path)]
 
 
+class RecordingAssetCatalog:
+    def __init__(self) -> None:
+        self.removed_paths: list[str] = []
+
+    def remove_path(self, path: str) -> None:
+        self.removed_paths.append(path)
+
+
 class RecordingResourceManager:
     def __init__(self) -> None:
+        self.external_assets = RecordingAssetCatalog()
         self.registered: list[PreLoadResult] = []
         self.reloaded: list[PreLoadResult] = []
 
