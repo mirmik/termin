@@ -8,7 +8,7 @@
 
 namespace termin {
 
-class TcFoliageData {
+class ENTITY_API TcFoliageData {
 public:
     std::shared_ptr<FoliageData> ptr;
 

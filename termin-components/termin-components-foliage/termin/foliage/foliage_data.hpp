@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include <termin/export.hpp>
+
 namespace termin {
 
 struct FoliageVec3f {
@@ -35,7 +37,7 @@ public:
     uint32_t seed = 0;
 };
 
-class FoliageData {
+class ENTITY_API FoliageData {
 public:
     std::string uuid;
     std::string name;
