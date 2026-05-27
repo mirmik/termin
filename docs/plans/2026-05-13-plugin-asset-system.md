@@ -123,7 +123,11 @@ It should not contain `if result.resource_type == "material"` style dispatch.
 
 ### Hard-Coded Dispatch
 
-`termin-app/termin/assets/resources/_registration.py` currently has hard-coded dispatch for:
+Status 2026-05-27: central `register_file()` / `reload_file()` dispatch now goes through
+`AssetTypeRegistry` runtime plugins. The old per-type `_register_*_file` /
+`_reload_*_file` methods were removed from `ResourceManager`.
+
+The migrated runtime/import plugins currently cover:
 
 - `material`
 - `shader`
@@ -139,7 +143,10 @@ It should not contain `if result.resource_type == "material"` style dispatch.
 - `pipeline`
 - `scene_pipeline`
 
-This is the main place to replace with plugin dispatch.
+Remaining work is no longer central dispatch replacement. The next pressure points are
+moving concrete plugins out of `termin-app`, reducing direct plugin access to
+`ResourceManager` private registries, and deciding the long-term home for render
+asset dependency refresh.
 
 ### Typed ResourceManager API
 

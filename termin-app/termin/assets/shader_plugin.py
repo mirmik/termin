@@ -88,9 +88,14 @@ class ShaderRuntimePlugin:
         if not interface_change.material_changed:
             return
 
-        material_names = rm._refresh_loaded_materials_for_shader(name, asset.uuid, asset.program)
+        from termin.assets.pipeline_dependencies import (
+            refresh_loaded_materials_for_shader,
+            reload_pipelines_for_material_dependencies,
+        )
+
+        material_names = refresh_loaded_materials_for_shader(rm, name, asset.uuid, asset.program)
         if material_names and interface_change.graph_inputs_changed:
-            rm._reload_pipelines_for_material_dependencies(material_names)
+            reload_pipelines_for_material_dependencies(rm, material_names)
 
 
 class ShaderAssetPlugin(ShaderImportPlugin, ShaderRuntimePlugin):
