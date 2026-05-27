@@ -67,6 +67,28 @@ class AssetsMixin:
             raise KeyError(type_id)
         registry.register(name, asset, source_path, uuid)
 
+    def get_or_create_runtime_asset(
+        self,
+        type_id: str,
+        name: str,
+        source_path: str | None = None,
+        uuid: str | None = None,
+        parent: "Asset | None" = None,
+        parent_key: str | None = None,
+    ):
+        """Get or create a runtime asset through its plugin type registry."""
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[ResourceManager] Runtime asset registry is not registered: {type_id}")
+            raise KeyError(type_id)
+        return registry.get_or_create_asset(
+            name=name,
+            source_path=source_path,
+            uuid=uuid,
+            parent=parent,
+            parent_key=parent_key,
+        )
+
     # --------- Prefabs ---------
     def get_prefab_asset(self, name: str) -> Optional["PrefabAsset"]:
         """Get PrefabAsset by name."""

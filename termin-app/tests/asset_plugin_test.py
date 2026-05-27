@@ -59,6 +59,23 @@ def test_resource_manager_runtime_asset_api_registers_mesh(tmp_path) -> None:
     assert rm.get_mesh_asset("runtime_api_probe") is asset
 
 
+def test_resource_manager_runtime_asset_api_get_or_create_glsl(tmp_path) -> None:
+    glsl_path = tmp_path / "runtime_api_probe.glsl"
+    glsl_path.write_text("// probe\n", encoding="utf-8")
+    rm = ResourceManager()
+
+    asset = rm.get_or_create_runtime_asset(
+        "glsl",
+        "runtime_api_probe.glsl",
+        source_path=str(glsl_path),
+        uuid="runtime-api-glsl-uuid",
+    )
+
+    assert rm.get_runtime_asset("glsl", "runtime_api_probe.glsl") is asset
+    assert rm.get_runtime_asset_by_uuid("glsl", "runtime-api-glsl-uuid") is asset
+    assert rm.glsl.get_asset("runtime_api_probe.glsl") is asset
+
+
 def test_audio_clip_register_file_uses_asset_plugin() -> None:
     rm = ResourceManager()
     result = PreLoadResult(

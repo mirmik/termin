@@ -136,8 +136,10 @@ Status 2026-05-27: central `register_file()` / `reload_file()` dispatch now goes
 Status 2026-05-27: `ResourceManager` has the first public runtime asset API on
 top of typed registries: `get_runtime_asset(type_id, name)`,
 `get_runtime_asset_by_uuid(type_id, uuid)`, and
-`register_runtime_asset(type_id, name, asset, ...)`. The `mesh`, `texture`, and
-`audio_clip` runtime plugins use this API instead of direct access to
+`register_runtime_asset(type_id, name, asset, ...)`, plus
+`get_or_create_runtime_asset(type_id, name, ...)` for create paths. The `mesh`,
+`texture`, `audio_clip`, `navmesh`, `voxel_grid`, `ui`, `glsl`, `pipeline`, and
+`scene_pipeline` runtime plugins use this API instead of direct access to
 `_assets_by_uuid` and their private typed registries.
 
 The migrated runtime/import plugins currently cover:
