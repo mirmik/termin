@@ -90,6 +90,11 @@ public:
                     tc_material_phase* phase,
                     int geometry_id = 0) override;
     bool needs_lighting_ubo_tgfx2(const std::string& phase_mark, int geometry_id) const override;
+    bool supports_direct_tgfx2_draw(
+        const std::string& phase_mark,
+        int geometry_id,
+        DirectTgfx2DrawKind kind
+    ) const override;
     tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override;
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
     TcMesh get_mesh();

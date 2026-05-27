@@ -64,6 +64,11 @@ public:
         tc_material_phase* phase,
         int geometry_id
     ) override;
+    bool supports_direct_tgfx2_draw(
+        const std::string& phase_mark,
+        int geometry_id,
+        DirectTgfx2DrawKind kind
+    ) const override;
 };
 
 } // namespace termin

@@ -551,6 +551,17 @@ bool LineRenderer::needs_lighting_ubo_tgfx2(const std::string& phase_mark, int g
     return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::WorldTube;
 }
 
+bool LineRenderer::supports_direct_tgfx2_draw(
+    const std::string& phase_mark,
+    int geometry_id,
+    DirectTgfx2DrawKind kind
+) const {
+    (void)geometry_id;
+    (void)kind;
+    LineRenderMode mode = effective_render_mode();
+    return is_direct_line_mode(mode) && accepts_phase(mode, phase_mark, cast_shadow);
+}
+
 tc_mesh* LineRenderer::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
     (void)phase_mark;
     (void)geometry_id;

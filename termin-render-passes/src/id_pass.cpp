@@ -264,6 +264,11 @@ void IdPass::execute_with_data_tgfx2(
 
         tc_mesh* mesh = drawable->get_mesh_for_phase(phase_name(), dc.geometry_id);
         if (!mesh) {
+            if (!drawable->supports_direct_tgfx2_draw(
+                    phase_name(), dc.geometry_id, DirectTgfx2DrawKind::OverrideColor)) {
+                continue;
+            }
+
             RenderContext direct_context;
             direct_context.view = view;
             direct_context.projection = projection;

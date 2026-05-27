@@ -617,6 +617,16 @@ tc_mesh* FoliageLayerComponent::get_mesh_for_phase(const std::string& phase_mark
     return nullptr;
 }
 
+bool FoliageLayerComponent::supports_direct_tgfx2_draw(
+    const std::string& phase_mark,
+    int geometry_id,
+    DirectTgfx2DrawKind kind
+) const {
+    (void)phase_mark;
+    return geometry_id == FOLIAGE_GEOMETRY_ID
+        && kind == DirectTgfx2DrawKind::MaterialPhase;
+}
+
 TcShader FoliageLayerComponent::override_shader(
     const std::string& phase_mark,
     int geometry_id,
