@@ -239,11 +239,23 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
 
     auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
     for (const auto& gd : *geometry_draws) {
+        tc_material_phase* phase = gd.resolve_phase();
+        if (!phase) {
+            continue;
+        }
         // Get final shader with overrides (skinning, alpha-test, etc.)
         tc_shader_handle final_shader = tc_component_override_shader(
             tc, "shadow", gd.geometry_id, data->base_shader
         );
-        data->draw_calls->push_back(ShadowDrawCall{ent, tc, gd.phase, final_shader, gd.geometry_id});
+        ShadowDrawCall dc;
+        dc.entity = ent;
+        dc.component = tc;
+        dc.phase = phase;
+        dc.final_shader = final_shader;
+        dc.geometry_id = gd.geometry_id;
+        dc.material = gd.material;
+        dc.phase_index = gd.phase_index;
+        data->draw_calls->push_back(dc);
     }
 
     return true;
@@ -475,6 +487,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             tc_shader_handle last_shader = tc_shader_handle_invalid();
 
             for (const auto& dc : cached_draw_calls_) {
+                tc_material_phase* phase = dc.resolve_phase();
+                if (!phase) continue;
+
                 Drawable* drawable = nullptr;
                 if (tc_component_get_drawable_vtable(dc.component)
                     == &Drawable::cxx_drawable_vtable()) {
@@ -495,7 +510,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     direct_context.viewport_width = resolution;
                     direct_context.viewport_height = resolution;
 
-                    if (drawable->draw_tgfx2(*ctx.ctx2, direct_context, "shadow", dc.phase, dc.geometry_id)) {
+                    if (drawable->draw_tgfx2(*ctx.ctx2, direct_context, "shadow", phase, dc.geometry_id)) {
                         ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
                     }
                     continue;

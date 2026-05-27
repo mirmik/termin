@@ -35,6 +35,18 @@ struct ShadowDrawCall {
     tc_material_phase* phase = nullptr;
     tc_shader_handle final_shader;  // Shader after override (skinning, alpha-test, etc.)
     int geometry_id = 0;
+    tc_material_handle material = tc_material_handle_invalid();
+    size_t phase_index = SIZE_MAX;
+
+    tc_material_phase* resolve_phase() const {
+        if (!tc_material_handle_is_invalid(material) && phase_index != SIZE_MAX) {
+            tc_material* mat = tc_material_get(material);
+            if (mat && phase_index < mat->phase_count) {
+                return &mat->phases[phase_index];
+            }
+        }
+        return phase;
+    }
 };
 
 // Result of shadow map rendering for one light (or cascade)

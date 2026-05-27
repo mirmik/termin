@@ -314,7 +314,7 @@ void bind_tc_scene(nb::module_& m) {
         })
         .def("skybox_material", [](const SceneRenderState& self) -> TcMaterial {
             tc_scene_render_state* state = tc_scene_render_state_get(self._h);
-            tc_material* mat = state ? state->skybox.material : nullptr;
+            tc_material* mat = state ? tc_material_get(state->skybox.material) : nullptr;
             return TcMaterial(mat);
         })
         .def("ensure_skybox_material", [](SceneRenderState& self, int skybox_type) -> TcMaterial {
