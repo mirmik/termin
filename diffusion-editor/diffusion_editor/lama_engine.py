@@ -2,6 +2,8 @@ from threading import Thread
 from PIL import Image
 from tcbase import log
 
+from .generation_types import EnginePollEvent, LamaRequest, LamaResult
+
 
 class LamaEngine:
     def __init__(self):
@@ -30,6 +32,9 @@ class LamaEngine:
         self._thread.start()
         return True
 
+    def submit_request(self, request: LamaRequest):
+        return self.submit(request.image, request.mask_image)
+
     def _run(self, image: Image.Image, mask: Image.Image):
         try:
             log.debug("[LamaEngine] loading model...")
@@ -54,6 +59,19 @@ class LamaEngine:
         self._result = None
         self._error = None
         return result, error
+
+    def poll_event(self) -> EnginePollEvent | None:
+        result, error = self.poll()
+        if result is None and error is None:
+            return None
+        event_result = None
+        if result is not None:
+            event_result = LamaResult(image=result)
+        return EnginePollEvent(
+            task_type="inference",
+            result=event_result,
+            error=error,
+        )
 
     def unload(self):
         self._model = None

@@ -4,6 +4,12 @@ import threading
 from PIL import Image
 from tcbase import log
 
+from .generation_types import (
+    DiffusionInferenceResult,
+    DiffusionRequest,
+    EnginePollEvent,
+)
+
 # Filename hints for v-prediction models
 _VPRED_HINTS = ("vpred", "v-pred", "v_pred", "vprediction", "v-prediction", "v_prediction")
 
@@ -370,6 +376,25 @@ class DiffusionEngine:
         self._thread.start()
         return True
 
+    def submit_request(self, request: DiffusionRequest, meta=None):
+        return self.submit(
+            image=request.image,
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            strength=request.strength,
+            steps=request.steps,
+            guidance_scale=request.guidance_scale,
+            seed=request.seed,
+            mode=request.mode,
+            mask_image=request.mask_image,
+            masked_content=request.masked_content,
+            ip_adapter_image=request.ip_adapter_image,
+            ip_adapter_scale=request.ip_adapter_scale,
+            width=request.width,
+            height=request.height,
+            meta=meta,
+        )
+
     def _run_inference(self, image, prompt, negative_prompt, strength, steps,
                        guidance_scale, seed, mode, mask_image, masked_content,
                        ip_adapter_image, ip_adapter_scale, width, height):
@@ -481,6 +506,23 @@ class DiffusionEngine:
         self._result_meta = None
         self._task_type = None
         return task_type, result, error, meta
+
+    def poll_event(self) -> EnginePollEvent | None:
+        task_type, result, error, meta = self.poll()
+        if task_type is None:
+            return None
+        if task_type == "inference" and result is not None:
+            result_image, used_seed = result
+            result = DiffusionInferenceResult(
+                image=result_image,
+                seed=used_seed,
+            )
+        return EnginePollEvent(
+            task_type=task_type,
+            result=result,
+            error=error,
+            meta=meta,
+        )
 
     def shutdown(self, timeout: float = 1.0):
         """Best-effort engine shutdown for app exit."""

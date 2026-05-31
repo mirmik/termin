@@ -11,6 +11,7 @@ from tcbase import log
 
 from .diffusion_engine import DiffusionEngine
 from .diffusion_request_builder import DiffusionRequestBuilder
+from .generation_types import DiffusionInferenceResult
 from .layer import Layer
 from .layer_stack import LayerStack
 from .tool import DiffusionTool
@@ -120,22 +121,7 @@ class DiffusionGenerationController:
                 return DiffusionControllerEvent(status="Could not load IP-Adapter")
             return DiffusionControllerEvent(status="Loading IP-Adapter...")
 
-        submitted = self._engine.submit(
-            image=request.image,
-            prompt=request.prompt,
-            negative_prompt=request.negative_prompt,
-            strength=request.strength,
-            steps=request.steps,
-            guidance_scale=request.guidance_scale,
-            seed=request.seed,
-            mode=request.mode,
-            mask_image=request.mask_image,
-            masked_content=request.masked_content,
-            ip_adapter_image=request.ip_adapter_image,
-            ip_adapter_scale=request.ip_adapter_scale,
-            width=request.width,
-            height=request.height,
-        )
+        submitted = self._engine.submit_request(request)
         if not submitted:
             self._pending_layer = None
             return DiffusionControllerEvent()
@@ -145,42 +131,50 @@ class DiffusionGenerationController:
         )
 
     def poll(self) -> DiffusionControllerEvent | None:
-        task_type, result, error, _meta = self._engine.poll()
-        if task_type is None:
+        engine_event = self._engine.poll_event()
+        if engine_event is None:
             return None
 
         log.debug(
-            f"[DiffusionGenerationController] task_type={task_type}, "
-            f"error={error}, result_type={type(result)}"
+            f"[DiffusionGenerationController] task_type={engine_event.task_type}, "
+            f"error={engine_event.error}, result_type={type(engine_event.result)}"
         )
 
-        if task_type == "load":
-            if error:
-                log.error(f"Diffusion model load error: {error}")
+        if engine_event.task_type == "load":
+            if engine_event.error:
+                log.error(f"Diffusion model load error: {engine_event.error}")
                 self._pending_layer = None
                 return DiffusionControllerEvent(
-                    model_error=error,
-                    status=f"Model load error: {error[:80]}",
+                    model_error=engine_event.error,
+                    status=f"Model load error: {engine_event.error[:80]}",
                 )
             pending = self._pending_layer
+            model_path = None
+            if isinstance(engine_event.result, str):
+                model_path = engine_event.result
+            else:
+                log.error(
+                    "Diffusion model load returned unexpected result "
+                    f"type: {type(engine_event.result)}"
+                )
             event = DiffusionControllerEvent(
-                model_loaded_path=result,
+                model_loaded_path=model_path,
                 status="Model loaded",
             )
             if pending is not None and isinstance(pending.tool, DiffusionTool):
                 return replace(
                     self._submit_regeneration(pending),
-                    model_loaded_path=result,
+                    model_loaded_path=model_path,
                 )
             return event
 
-        if task_type == "load_ip_adapter":
-            if error:
-                log.error(f"IP-Adapter load error: {error}")
+        if engine_event.task_type == "load_ip_adapter":
+            if engine_event.error:
+                log.error(f"IP-Adapter load error: {engine_event.error}")
                 self._pending_layer = None
                 return DiffusionControllerEvent(
-                    ip_adapter_error=error,
-                    status=f"IP-Adapter error: {error[:80]}",
+                    ip_adapter_error=engine_event.error,
+                    status=f"IP-Adapter error: {engine_event.error[:80]}",
                 )
             pending = self._pending_layer
             event = DiffusionControllerEvent(
@@ -194,13 +188,13 @@ class DiffusionGenerationController:
                 )
             return event
 
-        if task_type == "inference":
-            if error:
-                log.error(f"Diffusion inference error: {error}")
+        if engine_event.task_type == "inference":
+            if engine_event.error:
+                log.error(f"Diffusion inference error: {engine_event.error}")
                 self._pending_layer = None
                 return DiffusionControllerEvent(
-                    inference_error=error,
-                    status=f"Diffusion error: {error[:80]}",
+                    inference_error=engine_event.error,
+                    status=f"Diffusion error: {engine_event.error[:80]}",
                 )
 
             pending = self._pending_layer
@@ -209,13 +203,21 @@ class DiffusionGenerationController:
                 return DiffusionControllerEvent(
                     status="Diffusion result ignored: no pending layer"
                 )
-            result_image, used_seed = result
+            result = engine_event.result
+            if not isinstance(result, DiffusionInferenceResult):
+                log.error(
+                    "Diffusion inference returned unexpected result "
+                    f"type: {type(result)}"
+                )
+                return DiffusionControllerEvent(
+                    status="Diffusion result ignored: invalid result"
+                )
             log.debug(
                 "[DiffusionGenerationController] inference OK, "
-                f"seed={used_seed}, pending={type(pending).__name__}"
+                f"seed={result.seed}, pending={type(pending).__name__}"
             )
             return DiffusionControllerEvent(
-                inference_result=(pending, result_image, used_seed)
+                inference_result=(pending, result.image, result.seed)
             )
 
         return DiffusionControllerEvent()

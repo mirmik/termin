@@ -9,7 +9,11 @@ import numpy as np
 from PIL import Image
 from tcbase import log
 
-from .generation_types import GenerationError
+from .generation_types import (
+    GenerationError,
+    InstructInferenceResult,
+    InstructRequest,
+)
 from .instruct_engine import InstructEngine
 from .layer import Layer
 from .patch_resolver import apply_patch_source_to_tool, resolve_source_patch
@@ -101,7 +105,7 @@ class InstructGenerationController:
             return InstructControllerEvent(status="No source patch for instruction")
 
         apply_patch_source_to_tool(tool, patch)
-        submitted = self._engine.submit(
+        request = InstructRequest(
             image=tool.source_patch,
             instruction=tool.instruction,
             guidance_scale=tool.guidance_scale,
@@ -109,6 +113,7 @@ class InstructGenerationController:
             steps=tool.steps,
             seed=tool.seed,
         )
+        submitted = self._engine.submit_request(request)
         if not submitted:
             self._pending_layer = None
             return InstructControllerEvent()
@@ -116,17 +121,17 @@ class InstructGenerationController:
         return InstructControllerEvent(status="Applying instruction...")
 
     def poll(self) -> InstructControllerEvent | None:
-        task_type, result, error, _meta = self._engine.poll()
-        if task_type is None:
+        engine_event = self._engine.poll_event()
+        if engine_event is None:
             return None
 
-        if task_type == "load":
-            if error:
-                log.error(f"InstructPix2Pix load error: {error}")
+        if engine_event.task_type == "load":
+            if engine_event.error:
+                log.error(f"InstructPix2Pix load error: {engine_event.error}")
                 self._pending_layer = None
                 return InstructControllerEvent(
-                    model_error=error,
-                    status=f"InstructPix2Pix load error: {error[:80]}",
+                    model_error=engine_event.error,
+                    status=f"InstructPix2Pix load error: {engine_event.error[:80]}",
                 )
             pending = self._pending_layer
             event = InstructControllerEvent(
@@ -140,13 +145,13 @@ class InstructGenerationController:
                 )
             return event
 
-        if task_type == "inference":
-            if error:
-                log.error(f"InstructPix2Pix inference error: {error}")
+        if engine_event.task_type == "inference":
+            if engine_event.error:
+                log.error(f"InstructPix2Pix inference error: {engine_event.error}")
                 self._pending_layer = None
                 return InstructControllerEvent(
-                    inference_error=error,
-                    status=f"InstructPix2Pix error: {error[:80]}",
+                    inference_error=engine_event.error,
+                    status=f"InstructPix2Pix error: {engine_event.error[:80]}",
                 )
             pending = self._pending_layer
             self._pending_layer = None
@@ -154,9 +159,17 @@ class InstructGenerationController:
                 return InstructControllerEvent(
                     status="InstructPix2Pix result ignored: no pending layer"
                 )
-            result_image, used_seed = result
+            result = engine_event.result
+            if not isinstance(result, InstructInferenceResult):
+                log.error(
+                    "InstructPix2Pix inference returned unexpected result "
+                    f"type: {type(result)}"
+                )
+                return InstructControllerEvent(
+                    status="InstructPix2Pix result ignored: invalid result"
+                )
             return InstructControllerEvent(
-                inference_result=(pending, result_image, used_seed)
+                inference_result=(pending, result.image, result.seed)
             )
 
         return InstructControllerEvent()

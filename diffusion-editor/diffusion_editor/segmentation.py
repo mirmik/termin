@@ -3,6 +3,8 @@ from threading import Thread
 from PIL import Image
 from tcbase import log
 
+from .generation_types import EnginePollEvent, SegmentationRequest, SegmentationResult
+
 
 class SegmentationEngine:
     def __init__(self):
@@ -40,6 +42,9 @@ class SegmentationEngine:
         self._thread.start()
         return True
 
+    def submit_request(self, request: SegmentationRequest):
+        return self.submit(request.image, invert=request.invert)
+
     def _run(self, image_arr, invert):
         try:
             from rembg import remove
@@ -72,6 +77,19 @@ class SegmentationEngine:
         self._result = None
         self._error = None
         return result, error
+
+    def poll_event(self) -> EnginePollEvent | None:
+        result, error = self.poll()
+        if result is None and error is None:
+            return None
+        event_result = None
+        if result is not None:
+            event_result = SegmentationResult(mask=result)
+        return EnginePollEvent(
+            task_type="segmentation",
+            result=event_result,
+            error=error,
+        )
 
     def unload(self):
         self._session = None

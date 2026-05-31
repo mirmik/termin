@@ -289,13 +289,31 @@ Success criteria:
     serialization/migration, and canvas snapshot callbacks;
   - visible direct writes in panels/windows are widget visibility, not layer
     visibility.
-- Phase 2 implemented; ready for architecture checkpoint.
+- Phase 2 implemented.
 - Added `InstructGenerationController`.
 - Added `LamaGenerationController`.
 - Moved LaMa submit/poll/pending-layer state out of `EditorWindow`.
 - Moved InstructPix2Pix load/apply/poll/pending-layer state out of
   `EditorWindow`.
 - Added controller tests with fake engines for LaMa and Instruct lifecycle.
+- Phase 3 implemented for current generation engines.
+- Added typed `InstructRequest` and `LamaRequest` DTOs next to
+  `DiffusionRequest`.
+- Added `submit_request(...)` adapters to Diffusion, InstructPix2Pix, and LaMa
+  engines.
+- Updated Diffusion, InstructPix2Pix, and LaMa controllers to submit typed
+  request objects instead of long argument lists.
+- Added typed `SegmentationRequest` and `SegmentationResult` DTOs.
+- Added `EnginePollEvent` and typed inference result DTOs for Diffusion,
+  InstructPix2Pix, LaMa, and segmentation.
+- Updated generation controllers to consume `poll_event()` instead of raw
+  engine tuples.
+- Added `SegmentationGenerationController` and moved segmentation pending-layer
+  state out of `EditorWindow`.
+- Kept legacy low-level `poll()` methods in engines for compatibility while
+  controllers use the typed event API.
+- Remaining Phase 3 cleanup: decide when to delete legacy `submit(...)`/`poll()`
+  tuple APIs after all callers are migrated.
 
 ## Architectural Smell Checklist
 

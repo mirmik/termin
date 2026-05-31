@@ -2,6 +2,12 @@ import threading
 from PIL import Image
 from tcbase import log
 
+from .generation_types import (
+    EnginePollEvent,
+    InstructInferenceResult,
+    InstructRequest,
+)
+
 
 def _import_torch():
     import torch
@@ -89,6 +95,17 @@ class InstructEngine:
         self._thread.start()
         return True
 
+    def submit_request(self, request: InstructRequest, meta=None):
+        return self.submit(
+            image=request.image,
+            instruction=request.instruction,
+            guidance_scale=request.guidance_scale,
+            image_guidance_scale=request.image_guidance_scale,
+            steps=request.steps,
+            seed=request.seed,
+            meta=meta,
+        )
+
     def _run_inference(self, image, instruction, guidance_scale,
                        image_guidance_scale, steps, seed):
         try:
@@ -141,6 +158,23 @@ class InstructEngine:
         self._result_meta = None
         self._task_type = None
         return task_type, result, error, meta
+
+    def poll_event(self) -> EnginePollEvent | None:
+        task_type, result, error, meta = self.poll()
+        if task_type is None:
+            return None
+        if task_type == "inference" and result is not None:
+            result_image, used_seed = result
+            result = InstructInferenceResult(
+                image=result_image,
+                seed=used_seed,
+            )
+        return EnginePollEvent(
+            task_type=task_type,
+            result=result,
+            error=error,
+            meta=meta,
+        )
 
     def shutdown(self, timeout: float = 1.0):
         """Best-effort engine shutdown for app exit."""

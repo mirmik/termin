@@ -4,6 +4,10 @@ from PIL import Image
 from diffusion_editor.instruct_generation_controller import (
     InstructGenerationController,
 )
+from diffusion_editor.generation_types import (
+    EnginePollEvent,
+    InstructInferenceResult,
+)
 from diffusion_editor.layer import Layer
 from diffusion_editor.layer_stack import LayerStack
 from diffusion_editor.tool import InstructTool
@@ -20,7 +24,7 @@ class _Engine:
         self.is_busy = False
         self.is_loaded = True
         self.calls = []
-        self.poll_result = (None, None, None, None)
+        self.poll_result = None
 
     def submit_load(self):
         self.calls.append(("load",))
@@ -30,9 +34,13 @@ class _Engine:
         self.calls.append(("submit", kwargs))
         return True
 
-    def poll(self):
+    def submit_request(self, request):
+        self.calls.append(("submit_request", request))
+        return True
+
+    def poll_event(self):
         result = self.poll_result
-        self.poll_result = (None, None, None, None)
+        self.poll_result = None
         return result
 
 
@@ -81,13 +89,13 @@ def test_poll_model_load_resumes_pending_instruction():
     controller.start_apply(layer)
     engine.is_loaded = True
     engine.calls.clear()
-    engine.poll_result = ("load", True, None, None)
+    engine.poll_result = EnginePollEvent(task_type="load", result=True)
 
     event = controller.poll()
 
     assert event.model_loaded is True
     assert event.status == "Applying instruction..."
-    assert engine.calls[0][0] == "submit"
+    assert engine.calls[0][0] == "submit_request"
 
 
 def test_poll_inference_returns_pending_layer_and_clears_pending():
@@ -99,7 +107,10 @@ def test_poll_inference_returns_pending_layer_and_clears_pending():
     )
     controller.start_apply(layer)
     result = Image.fromarray(_rgba(8, 8, (1, 2, 3, 255)), "RGBA")
-    engine.poll_result = ("inference", (result, 456), None, None)
+    engine.poll_result = EnginePollEvent(
+        task_type="inference",
+        result=InstructInferenceResult(image=result, seed=456),
+    )
 
     event = controller.poll()
 

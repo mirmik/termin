@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+import numpy as np
 from PIL import Image
 
 Rect = tuple[int, int, int, int]
@@ -68,3 +69,55 @@ class DiffusionRequest:
 class DiffusionRequestBuildResult:
     request: DiffusionRequest | None = None
     error: GenerationError | None = None
+
+
+@dataclass(frozen=True)
+class EnginePollEvent:
+    task_type: Literal["load", "load_ip_adapter", "inference", "segmentation"]
+    result: object | None = None
+    error: str | None = None
+    meta: object | None = None
+
+
+@dataclass(frozen=True)
+class DiffusionInferenceResult:
+    image: Image.Image
+    seed: int
+
+
+@dataclass(frozen=True)
+class InstructRequest:
+    image: Image.Image
+    instruction: str
+    guidance_scale: float
+    image_guidance_scale: float
+    steps: int
+    seed: int
+
+
+@dataclass(frozen=True)
+class InstructInferenceResult:
+    image: Image.Image
+    seed: int
+
+
+@dataclass(frozen=True)
+class LamaRequest:
+    image: Image.Image
+    mask_image: Image.Image
+
+
+@dataclass(frozen=True)
+class LamaResult:
+    image: Image.Image
+
+
+@dataclass(frozen=True)
+class SegmentationRequest:
+    image: np.ndarray
+    invert: bool = True
+
+
+@dataclass(frozen=True)
+class SegmentationResult:
+    mask: np.ndarray

@@ -46,6 +46,7 @@ from .lama_generation_controller import LamaGenerationController
 from .lama_panel import LamaPanel
 from .instruct_panel import InstructPanel
 from .selection_panel import SelectionPanel
+from .segmentation_generation_controller import SegmentationGenerationController
 from .lama_engine import LamaEngine
 from .segmentation import SegmentationEngine
 from .patch_resolver import source_patch_at_center
@@ -147,6 +148,10 @@ class EditorWindow:
         )
         self._instruct_controller = InstructGenerationController(
             engine=self._instruct_engine,
+            composite_below=lambda layer: self._canvas.get_composite_below(layer),
+        )
+        self._segmentation_controller = SegmentationGenerationController(
+            engine=self._seg_engine,
             composite_below=lambda layer: self._canvas.get_composite_below(layer),
         )
 
@@ -1166,6 +1171,7 @@ class EditorWindow:
         self._diffusion_controller.clear_pending_layer(layer)
         self._lama_controller.clear_pending_layer(layer)
         self._instruct_controller.clear_pending_layer(layer)
+        self._segmentation_controller.clear_pending_layer(layer)
         self._document.execute(DetachLayerToolCommand(layer=layer))
 
     def _tool_source_composite(self, layer: Layer) -> np.ndarray | None:
@@ -1387,13 +1393,9 @@ class EditorWindow:
         layer = self._layer_stack.active_layer
         if not isinstance(layer.tool, LamaTool):
             return
-        if self._seg_engine.is_busy:
-            return
-        composite = self._canvas.get_composite_below(layer)
-        if composite is None:
-            return
-        self._seg_engine.submit(composite, invert=True)
-        self._statusbar.text = "Segmenting background..."
+        event = self._segmentation_controller.start_select_background(layer)
+        if event.status:
+            self._statusbar.text = event.status
 
     # ------------------------------------------------------------------
     # InstructPix2Pix
@@ -1464,13 +1466,9 @@ class EditorWindow:
         layer = self._layer_stack.active_layer
         if not isinstance(layer.tool, DiffusionTool):
             return
-        if self._seg_engine.is_busy:
-            return
-        composite = self._canvas.get_composite_below(layer)
-        if composite is None:
-            return
-        self._seg_engine.submit(composite, invert=True)
-        self._statusbar.text = "Segmenting background..."
+        event = self._segmentation_controller.start_select_background(layer)
+        if event.status:
+            self._statusbar.text = event.status
 
     # ------------------------------------------------------------------
     # Polling (called every frame from SDL main loop)
@@ -1485,16 +1483,18 @@ class EditorWindow:
         self._poll_grounding()
 
     def _poll_segmentation(self):
-        seg_mask, seg_error = self._seg_engine.poll()
-        if seg_mask is not None:
-            layer = self._layer_stack.active_layer
+        event = self._segmentation_controller.poll()
+        if event is None:
+            return
+        if event.segmentation_result is not None:
+            layer, seg_mask = event.segmentation_result
             command, status = map_segmentation_result(layer, seg_mask)
             if command is not None:
                 self._document.execute(command)
             self._statusbar.text = status
-        elif seg_error is not None:
-            log.error(f"Segmentation error: {seg_error}")
-            self._statusbar.text = f"Segmentation error: {seg_error[:80]}"
+            return
+        if event.status:
+            self._statusbar.text = event.status
 
     def _poll_lama(self):
         event = self._lama_controller.poll()
