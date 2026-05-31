@@ -8,9 +8,9 @@ from typing import Callable
 import numpy as np
 from tcbase import log
 
-from .engines.grounding_engine import GroundingEngine
-from .grounding_types import GroundingParams, GroundingRequest, GroundingResult
-from .document.layer import Layer
+from ..engines.grounding_engine import GroundingEngine
+from .types import GroundingParams, GroundingRequest, GroundingResult
+from ..document.layer import Layer
 
 
 @dataclass(frozen=True)

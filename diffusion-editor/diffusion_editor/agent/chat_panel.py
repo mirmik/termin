@@ -14,11 +14,11 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.units import pct, px
 from tcgui.widgets.vstack import VStack
 
-from .app.settings import Settings
+from ..app.settings import Settings
 
 try:
     from nemor.core.session import Session
-    from .agent_runner import AgentRunner
+    from .runner import AgentRunner
 except ImportError:  # pragma: no cover - depends on optional local install
     Session = None
     AgentRunner = None

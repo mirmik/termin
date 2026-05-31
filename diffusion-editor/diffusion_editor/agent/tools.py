@@ -7,7 +7,7 @@ try:
 except ImportError:  # pragma: no cover - depends on optional local install
     ToolRegistry = None
 
-from .document.commands import (
+from ..document.commands import (
     AddLayerCommand,
     DrawGridCommand,
     DrawRectCommand,

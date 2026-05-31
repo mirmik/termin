@@ -134,9 +134,9 @@ Split Grounding into UI, engine, controller, and DTOs.
 
 Target modules:
 
-- `grounding_types.py`: request params, box/mask result DTOs, events.
+- `grounding/types.py`: request params, box/mask result DTOs, events.
 - `grounding_engine.py`: model cache, loading, DINO/SAM inference.
-- `grounding_controller.py`: async lifecycle, pending result, event mapping.
+- `grounding/controller.py`: async lifecycle, pending result, event mapping.
 - `grounding_dialog.py`: UI only.
 
 Tasks:
@@ -257,8 +257,9 @@ Current status:
   the moved UI modules.
 - `diffusion_editor/app/` now owns process entry points, application settings,
   and the `EditorWindow` composition root.
-- Agent and Grounding coordinator/DTO modules still remain flat and should be
-  considered for a follow-up feature-package pass.
+- `diffusion_editor/agent/` now owns agent chat integration, threaded runner,
+  and the editor tool registry exposed to the agent.
+- `diffusion_editor/grounding/` now owns Grounding workflow DTOs and controller.
 
 Possible final layout:
 
@@ -387,7 +388,7 @@ Success criteria:
 - Remaining Phase 3 cleanup: decide when to delete legacy `submit(...)`/`poll()`
   tuple APIs after all callers are migrated.
 - Phase 4 implemented for the current Grounding workflow.
-- Added `grounding_types.py` for model options, request params, detections,
+- Added `grounding/types.py` for model options, request params, detections,
   results, and engine events.
 - Added `GroundingEngine`; DINO/SAM model caches, loading, inference, and the
   worker thread moved out of `grounding_dialog.py`.
@@ -593,8 +594,17 @@ Success criteria:
 - Updated launch scripts to run `python -m diffusion_editor.app.main`.
 - Updated tests and agent chat settings import to use `diffusion_editor.app.*`.
 - Kept no top-level compatibility wrappers for the moved app modules.
-- Remaining Phase 7 follow-up: decide whether to make dedicated `agent/` and
-  `grounding/` packages for the remaining top-level feature modules.
+- Created `diffusion_editor/agent/` and `diffusion_editor/grounding/` as the
+  final feature-package cleanup batch.
+- Moved agent modules under `agent/`: `chat_panel.py`, `runner.py`, and
+  `tools.py`.
+- Moved Grounding workflow modules under `grounding/`: `controller.py` and
+  `types.py`.
+- Updated app, engine, generation, UI dialog, and test imports to use the new
+  feature packages.
+- Kept no top-level compatibility wrappers for the moved agent/Grounding
+  modules.
+- Phase 7 is complete for the current module set.
 
 ## Architectural Smell Checklist
 

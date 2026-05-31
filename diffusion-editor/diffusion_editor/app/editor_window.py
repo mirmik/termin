@@ -28,8 +28,8 @@ from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.units import px, pct
 from tcgui.widgets.splitter import Splitter
 
-from ..agent_chat import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPanel
-from ..agent_tools import create_editor_tool_registry
+from ..agent.chat_panel import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPanel
+from ..agent.tools import create_editor_tool_registry
 from ..document.layer_stack import LayerStack
 from ..document.mask import coerce_mask_data
 from ..document.layer import Layer
@@ -40,9 +40,9 @@ from ..ui.panels.layer_panel import LayerPanel
 from ..ui.panels.brush_panel import BrushPanel
 from ..ui.panels.diffusion_panel import DiffusionPanel
 from ..generation.diffusion_controller import DiffusionGenerationController
-from ..grounding_controller import GroundingController
+from ..grounding.controller import GroundingController
 from ..engines.grounding_engine import GroundingEngine
-from ..grounding_types import GroundingParams
+from ..grounding.types import GroundingParams
 from ..generation.instruct_controller import InstructGenerationController
 from ..ui.dialogs.ip_adapter_reference_dialog import show_ip_adapter_reference_dialog
 from ..generation.lama_controller import LamaGenerationController

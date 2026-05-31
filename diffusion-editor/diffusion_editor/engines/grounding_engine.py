@@ -9,7 +9,7 @@ import time
 import numpy as np
 from tcbase import log
 
-from ..grounding_types import (
+from ..grounding.types import (
     GroundingDetection,
     GroundingEngineEvent,
     GroundingRequest,
