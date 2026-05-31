@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image
 from tcbase import log
 
+from .generation_types import LamaRequest, LamaResult
 from .lama_engine import LamaEngine
 from .layer import Layer
 from .patch_resolver import (
@@ -63,7 +64,8 @@ class LamaGenerationController:
         apply_patch_source_to_tool(tool, patch)
 
         mask = extract_layer_mask_patch(layer, patch.canvas_rect)
-        submitted = self._engine.submit(patch.image, mask)
+        request = LamaRequest(image=patch.image, mask_image=mask)
+        submitted = self._engine.submit_request(request)
         if not submitted:
             return LamaControllerEvent()
 
@@ -71,16 +73,16 @@ class LamaGenerationController:
         return LamaControllerEvent(status="Removing objects (LaMa)...")
 
     def poll(self) -> LamaControllerEvent | None:
-        result_image, error = self._engine.poll()
-        if result_image is None and error is None:
+        engine_event = self._engine.poll_event()
+        if engine_event is None:
             return None
 
-        if error is not None:
-            log.error(f"LaMa error: {error}")
+        if engine_event.error is not None:
+            log.error(f"LaMa error: {engine_event.error}")
             self._pending_layer = None
             return LamaControllerEvent(
-                inference_error=error,
-                status=f"LaMa error: {error[:80]}",
+                inference_error=engine_event.error,
+                status=f"LaMa error: {engine_event.error[:80]}",
             )
 
         pending = self._pending_layer
@@ -89,4 +91,11 @@ class LamaGenerationController:
             return LamaControllerEvent(
                 status="LaMa result ignored: no pending layer"
             )
-        return LamaControllerEvent(inference_result=(pending, result_image))
+        result = engine_event.result
+        if not isinstance(result, LamaResult):
+            log.error(
+                "LaMa inference returned unexpected result "
+                f"type: {type(result)}"
+            )
+            return LamaControllerEvent(status="LaMa result ignored: invalid result")
+        return LamaControllerEvent(inference_result=(pending, result.image))

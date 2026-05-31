@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image
 
+from diffusion_editor.generation_types import EnginePollEvent, LamaResult
 from diffusion_editor.lama_generation_controller import LamaGenerationController
 from diffusion_editor.layer import Layer
 from diffusion_editor.layer_stack import LayerStack
@@ -17,15 +18,19 @@ class _Engine:
     def __init__(self):
         self.is_busy = False
         self.calls = []
-        self.poll_result = (None, None)
+        self.poll_result = None
 
     def submit(self, image, mask):
         self.calls.append((image, mask))
         return True
 
-    def poll(self):
+    def submit_request(self, request):
+        self.calls.append((request.image, request.mask_image))
+        return True
+
+    def poll_event(self):
         result = self.poll_result
-        self.poll_result = (None, None)
+        self.poll_result = None
         return result
 
 
@@ -69,7 +74,10 @@ def test_poll_returns_pending_lama_layer_and_clears_pending():
     )
     controller.start_remove(layer)
     result = Image.fromarray(_rgba(8, 8, (1, 2, 3, 255)), "RGBA")
-    engine.poll_result = (result, None)
+    engine.poll_result = EnginePollEvent(
+        task_type="inference",
+        result=LamaResult(image=result),
+    )
 
     event = controller.poll()
 

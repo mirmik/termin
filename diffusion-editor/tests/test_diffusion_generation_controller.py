@@ -4,6 +4,10 @@ from PIL import Image
 from diffusion_editor.diffusion_generation_controller import (
     DiffusionGenerationController,
 )
+from diffusion_editor.generation_types import (
+    DiffusionInferenceResult,
+    EnginePollEvent,
+)
 from diffusion_editor.layer import Layer
 from diffusion_editor.layer_stack import LayerStack
 from diffusion_editor.tool import DiffusionTool
@@ -33,7 +37,7 @@ class _Engine:
         self.model_path = "loaded.safetensors"
         self.model_info = {}
         self.calls = []
-        self.poll_result = (None, None, None, None)
+        self.poll_result = None
 
     def submit_load(self, path, prediction_type=None):
         self.calls.append(("load", path, prediction_type))
@@ -47,9 +51,13 @@ class _Engine:
         self.calls.append(("submit", kwargs))
         return True
 
-    def poll(self):
+    def submit_request(self, request):
+        self.calls.append(("submit_request", request))
+        return True
+
+    def poll_event(self):
         result = self.poll_result
-        self.poll_result = (None, None, None, None)
+        self.poll_result = None
         return result
 
 
@@ -90,13 +98,16 @@ def test_poll_model_load_resumes_pending_regeneration_and_reports_loaded():
     )
     controller.start_regeneration(layer)
     engine.calls.clear()
-    engine.poll_result = ("load", "loaded.safetensors", None, None)
+    engine.poll_result = EnginePollEvent(
+        task_type="load",
+        result="loaded.safetensors",
+    )
 
     event = controller.poll()
 
     assert event.model_loaded_path == "loaded.safetensors"
     assert event.status == "Regenerating (4x4)..."
-    assert engine.calls[0][0] == "submit"
+    assert engine.calls[0][0] == "submit_request"
 
 
 def test_start_regeneration_loads_ip_adapter_when_reference_is_present():
@@ -129,7 +140,10 @@ def test_poll_inference_returns_pending_layer_and_clears_pending():
     )
     controller.start_regeneration(layer)
     result_image = Image.fromarray(_rgba(4, 4, (1, 2, 3, 255)), "RGBA")
-    engine.poll_result = ("inference", (result_image, 123), None, None)
+    engine.poll_result = EnginePollEvent(
+        task_type="inference",
+        result=DiffusionInferenceResult(image=result_image, seed=123),
+    )
 
     event = controller.poll()
 
