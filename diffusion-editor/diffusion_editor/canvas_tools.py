@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .brush import BrushToolMode
+from .canvas_image_erase import erase_alpha_region, erase_dab, erase_line
 
 
 class CanvasStrokeTool:
@@ -27,12 +28,12 @@ class PaintTool(CanvasStrokeTool):
 
     def begin(self, canvas, layer, x: int, y: int):
         x, y = canvas._canvas_to_layer_point(layer, x, y)
-        canvas._begin_stroke(layer)
+        canvas._paint_stroke.begin(layer.image, tuple(canvas.brush.color))
         stroke_mask = canvas._paint_stroke.mask
         if stroke_mask is None:
             return None
         dirty = canvas.brush.dab_to_mask(stroke_mask, x, y)
-        canvas._update_stroke_region(layer, dirty)
+        self._apply_region(canvas, layer, dirty)
         return dirty
 
     def move(self, canvas, layer, last_pos, x: int, y: int):
@@ -45,11 +46,27 @@ class PaintTool(CanvasStrokeTool):
             dirty = canvas.brush.stroke_to_mask(stroke_mask, lx, ly, x, y)
         else:
             dirty = canvas.brush.dab_to_mask(stroke_mask, x, y)
-        canvas._update_stroke_region(layer, dirty)
+        self._apply_region(canvas, layer, dirty)
         return dirty
 
     def end(self, canvas, layer):
-        canvas._end_stroke()
+        dirty = canvas._paint_stroke.live_dirty_rect
+        if layer is not None and dirty is not None:
+            canvas._layer_stack.mark_layer_dirty(
+                layer,
+                layer.local_rect_to_canvas(dirty),
+            )
+        canvas._paint_stroke.clear()
+        canvas._overlay_bridge.clear()
+        canvas._update_overlay()
+
+    def _apply_region(self, canvas, layer, dirty):
+        if dirty is None or layer is None:
+            return
+        dirty = canvas._paint_stroke.apply_region(layer.image, dirty)
+        if dirty is None:
+            return
+        canvas._refresh_modified_layer_rect(layer, dirty)
 
 
 class EraserTool(CanvasStrokeTool):
@@ -58,16 +75,21 @@ class EraserTool(CanvasStrokeTool):
     target = "image"
 
     def begin(self, canvas, layer, x: int, y: int):
-        canvas._begin_stroke(layer)
+        canvas._paint_stroke.clear()
         x, y = canvas._canvas_to_layer_point(layer, x, y)
-        return canvas._erase_dab(layer, x, y)
+        dirty = erase_dab(layer.image, canvas.brush, x, y)
+        canvas._refresh_modified_layer_rect(layer, dirty)
+        return dirty
 
     def move(self, canvas, layer, last_pos, x: int, y: int):
         x, y = canvas._canvas_to_layer_point(layer, x, y)
         if last_pos:
             lx, ly = canvas._canvas_to_layer_point(layer, *last_pos)
-            return canvas._erase_stroke_line(layer, lx, ly, x, y)
-        return canvas._erase_dab(layer, x, y)
+            dirty = erase_line(layer.image, canvas.brush, lx, ly, x, y)
+        else:
+            dirty = erase_dab(layer.image, canvas.brush, x, y)
+        canvas._refresh_modified_layer_rect(layer, dirty)
+        return dirty
 
     def end(self, canvas, layer):
         if layer is not None:
@@ -85,7 +107,7 @@ class SmudgeTool(CanvasStrokeTool):
     def begin(self, canvas, layer, x: int, y: int):
         self._dirty_rect = None
         x, y = canvas._canvas_to_layer_point(layer, x, y)
-        canvas._begin_smudge(layer, x, y)
+        canvas._smudge_stroke.begin(layer.image, canvas.brush, x, y)
         return None
 
     def move(self, canvas, layer, last_pos, x: int, y: int):
@@ -93,7 +115,15 @@ class SmudgeTool(CanvasStrokeTool):
             return None
         lx, ly = canvas._canvas_to_layer_point(layer, *last_pos)
         x, y = canvas._canvas_to_layer_point(layer, x, y)
-        dirty = canvas._smudge_stroke_line(layer, lx, ly, x, y)
+        dirty = canvas._smudge_stroke.line(
+            layer.image,
+            canvas.brush,
+            lx,
+            ly,
+            x,
+            y,
+        )
+        canvas._refresh_modified_layer_rect(layer, dirty)
         self._dirty_rect = canvas._union_rect(self._dirty_rect, dirty)
         return dirty
 
@@ -102,7 +132,7 @@ class SmudgeTool(CanvasStrokeTool):
             canvas._layer_stack.mark_layer_dirty(
                 layer, layer.local_rect_to_canvas(self._dirty_rect))
         self._dirty_rect = None
-        canvas._end_smudge()
+        canvas._smudge_stroke.clear()
 
 
 class MaskPaintTool(CanvasStrokeTool):
@@ -151,7 +181,7 @@ class MaskEraserTool(CanvasStrokeTool):
 
     def begin(self, canvas, layer, x: int, y: int):
         x, y = canvas._canvas_to_layer_point(layer, x, y)
-        canvas._begin_mask_erase(layer)
+        canvas._mask_erase_stroke.begin(layer.height, layer.width)
         erase_mask = canvas._mask_erase_stroke.mask
         if erase_mask is None:
             return None
@@ -162,7 +192,7 @@ class MaskEraserTool(CanvasStrokeTool):
     def move(self, canvas, layer, last_pos, x: int, y: int):
         x, y = canvas._canvas_to_layer_point(layer, x, y)
         if canvas._mask_erase_stroke.mask is None:
-            canvas._begin_mask_erase(layer)
+            canvas._mask_erase_stroke.begin(layer.height, layer.width)
         erase_mask = canvas._mask_erase_stroke.mask
         if erase_mask is None:
             return None
@@ -189,9 +219,17 @@ class MaskEraserTool(CanvasStrokeTool):
     def end(self, canvas, layer):
         dirty = canvas._mask_erase_stroke.dirty_rect
         if layer is not None and dirty is not None:
-            erase = canvas._mask_erase_stroke.erase_region(dirty)
             canvas._mask_erase_stroke.apply_to_layer_mask(layer.mask.data)
-            canvas._erase_layer_rect(layer, dirty, erase)
+            local_rect, canvas_rect = canvas._clip_layer_local_rect(layer, dirty)
+            if local_rect is not None:
+                erase = canvas._mask_erase_stroke.erase_region(local_rect)
+                if erase is not None:
+                    erase_alpha_region(layer.image, local_rect, erase)
+                    canvas._composite_bridge.refresh_modified_layer_rect(
+                        layer,
+                        local_rect,
+                        canvas_rect,
+                    )
             canvas._update_mask_overlay_region(layer, dirty)
         canvas._mask_erase_stroke.clear()
 
