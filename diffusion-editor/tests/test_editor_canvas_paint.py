@@ -50,7 +50,7 @@ def test_smudge_interpolates_fast_mouse_move():
     before_up = stack.active_layer.image.copy()
     canvas._handle_mouse_up(32, 20)
     np.testing.assert_array_equal(stack.active_layer.image, before_up)
-    assert canvas._smudge_buffer is None
+    assert canvas._smudge_stroke.buffer is None
 
 
 def test_mask_paint_updates_overlay_before_mouse_up():

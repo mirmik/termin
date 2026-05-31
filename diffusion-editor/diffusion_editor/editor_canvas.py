@@ -25,6 +25,7 @@ from .canvas_composite import CanvasCompositeBridge
 from .canvas_edit_session import CanvasEditSession
 from .canvas_paint_stroke import PaintStrokeBuffer
 from .canvas_rect_drag import CanvasRectDrag
+from .canvas_smudge import SmudgeStrokeBuffer
 from .canvas_tools import create_canvas_tools
 from .soft_mask_stroke import SoftMaskBrush, apply_dab, apply_line
 
@@ -86,7 +87,7 @@ class EditorCanvas(Canvas):
         self._mask_overlay: np.ndarray | None = None
         self._mask_erase_stroke: np.ndarray | None = None
         self._mask_erase_dirty: tuple[int, int, int, int] | None = None
-        self._smudge_buffer: np.ndarray | None = None
+        self._smudge_stroke = SmudgeStrokeBuffer()
 
         # Callbacks
         self.on_mouse_moved: callable = None
@@ -635,38 +636,11 @@ class EditorCanvas(Canvas):
     # Smudge
     # ------------------------------------------------------------------
 
-    def _brush_rect_slices(self, layer, cx: int, cy: int):
-        stamp = self.brush._alpha_stamp
-        sh, sw = stamp.shape[:2]
-        ih, iw = layer.image.shape[:2]
-
-        x0 = cx - sw // 2
-        y0 = cy - sh // 2
-        sx0 = max(0, -x0)
-        sy0 = max(0, -y0)
-        sx1 = min(sw, iw - x0)
-        sy1 = min(sh, ih - y0)
-        dx0 = max(0, x0)
-        dy0 = max(0, y0)
-        dx1 = dx0 + (sx1 - sx0)
-        dy1 = dy0 + (sy1 - sy0)
-        if dx0 >= dx1 or dy0 >= dy1:
-            return None
-        return sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1
-
     def _begin_smudge(self, layer, x: int, y: int):
-        stamp = self.brush._alpha_stamp
-        sh, sw = stamp.shape[:2]
-        self._smudge_buffer = np.zeros((sh, sw, 4), dtype=np.float32)
-        slices = self._brush_rect_slices(layer, x, y)
-        if slices is None:
-            return
-        sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1 = slices
-        self._smudge_buffer[sy0:sy1, sx0:sx1] = (
-            layer.image[dy0:dy1, dx0:dx1].astype(np.float32))
+        self._smudge_stroke.begin(layer.image, self.brush, x, y)
 
     def _end_smudge(self):
-        self._smudge_buffer = None
+        self._smudge_stroke.clear()
 
     def _refresh_modified_layer_rect(self, layer, rect):
         local_rect, canvas_rect = self._clip_layer_local_rect(layer, rect)
@@ -682,56 +656,20 @@ class EditorCanvas(Canvas):
         self._composite_bridge.refresh_layer_transform(layer, dirty_canvas_rect)
 
     def _smudge_dab(self, layer, cx: int, cy: int):
-        if self._smudge_buffer is None:
-            self._begin_smudge(layer, cx, cy)
-        if self._smudge_buffer is None:
-            return None
-        slices = self._brush_rect_slices(layer, cx, cy)
-        if slices is None:
-            return None
-        sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1 = slices
-
-        amount = (
-            self.brush._alpha_stamp[sy0:sy1, sx0:sx1, None]
-            * self.brush.flow
-            * (self.brush.color[3] / 255.0)
-        ).astype(np.float32)
-        if not np.any(amount > 0.0):
-            return None
-
-        carry = self._smudge_buffer[sy0:sy1, sx0:sx1]
-        dst = layer.image[dy0:dy1, dx0:dx1].astype(np.float32).copy()
-        layer.image[dy0:dy1, dx0:dx1] = np.clip(
-            dst * (1.0 - amount) + carry * amount,
-            0, 255,
-        ).astype(np.uint8)
-        self._smudge_buffer[sy0:sy1, sx0:sx1] = (
-            carry * amount + dst * (1.0 - amount))
-
-        dirty = (dx0, dy0, dx1, dy1)
+        dirty = self._smudge_stroke.dab(layer.image, self.brush, cx, cy)
         self._refresh_modified_layer_rect(layer, dirty)
         return dirty
 
     def _smudge_stroke_line(self, layer, x0: int, y0: int, x1: int, y1: int):
-        dx = float(x1 - x0)
-        dy = float(y1 - y0)
-        dist = float(np.hypot(dx, dy))
-        if dist < 0.5:
-            return self._smudge_dab(layer, x1, y1)
-
-        spacing = max(1.0, self.brush.size * 0.25)
-        steps = max(1, int(np.ceil(dist / spacing)))
-        dirty = None
-        prev_x, prev_y = x0, y0
-        for i in range(1, steps + 1):
-            t = i / steps
-            cx = int(round(x0 + dx * t))
-            cy = int(round(y0 + dy * t))
-            if cx == prev_x and cy == prev_y:
-                continue
-            dab_dirty = self._smudge_dab(layer, cx, cy)
-            dirty = self._union_rect(dirty, dab_dirty)
-            prev_x, prev_y = cx, cy
+        dirty = self._smudge_stroke.line(
+            layer.image,
+            self.brush,
+            x0,
+            y0,
+            x1,
+            y1,
+        )
+        self._refresh_modified_layer_rect(layer, dirty)
         return dirty
 
     # ------------------------------------------------------------------
