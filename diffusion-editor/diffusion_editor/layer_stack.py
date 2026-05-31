@@ -218,6 +218,11 @@ class LayerStack:
         if self.on_changed:
             self.on_changed()
 
+    def set_layer_name(self, layer: Layer, name: str):
+        layer.name = name
+        if self.on_changed:
+            self.on_changed()
+
     def find_layer_by_id(self, layer_id: str) -> Layer | None:
         if not layer_id:
             return None

@@ -6,6 +6,7 @@ import numpy as np
 
 from diffusion_editor.commands import (
     MoveLayerCommand,
+    SetLayerNameCommand,
     SetLayerVisibilityCommand,
 )
 from diffusion_editor.document_service import DocumentService
@@ -38,6 +39,21 @@ def test_set_visibility_command_undo_redo():
     assert stack.layers[0].visible is True
     assert service.redo() == "Toggle Visibility"
     assert stack.layers[0].visible is False
+
+
+def test_set_layer_name_command_undo_redo():
+    stack = _base_stack()
+    layer = stack.layers[0]
+    service = _service(stack)
+
+    service.execute(SetLayerNameCommand(layer=layer, name="Reference"))
+    assert layer.name == "Reference"
+
+    assert service.undo() == "Rename Layer"
+    assert stack.layers[0].name == "Top B"
+
+    assert service.redo() == "Rename Layer"
+    assert stack.layers[0].name == "Reference"
 
 
 def test_move_layer_command_undo_redo():
