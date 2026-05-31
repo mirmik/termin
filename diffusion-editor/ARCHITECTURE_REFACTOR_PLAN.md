@@ -314,6 +314,19 @@ Success criteria:
   controllers use the typed event API.
 - Remaining Phase 3 cleanup: decide when to delete legacy `submit(...)`/`poll()`
   tuple APIs after all callers are migrated.
+- Phase 4 implemented for the current Grounding workflow.
+- Added `grounding_types.py` for model options, request params, detections,
+  results, and engine events.
+- Added `GroundingEngine`; DINO/SAM model caches, loading, inference, and the
+  worker thread moved out of `grounding_dialog.py`.
+- Added `GroundingController`; pending-layer state and request submission moved
+  out of `EditorWindow`.
+- `GroundingDialog` now only builds UI and emits typed `GroundingParams`.
+- Grounding result application now goes through `map_grounding_result(...)` and
+  document commands.
+- Preserved DINO box fallback when SAM 2.1 segmentation fails, while surfacing
+  the SAM error through status events and logs.
+- Added controller and result-mapper tests for Grounding.
 
 ## Architectural Smell Checklist
 

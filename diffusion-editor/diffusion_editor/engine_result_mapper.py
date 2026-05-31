@@ -7,9 +7,14 @@ from typing import Tuple
 import numpy as np
 from PIL import Image
 
+from .grounding_types import GroundingResult
 from .layer import Layer
 from .tool import DiffusionTool, LamaTool, InstructTool
-from .commands import ReplaceLayerMaskCommand, ApplyGeneratedResultCommand
+from .commands import (
+    ApplyGeneratedResultCommand,
+    ReplaceLayerMaskCommand,
+    SetLayerSelectionCommand,
+)
 
 
 def map_segmentation_result(layer: Layer | None, seg_mask: np.ndarray
@@ -63,3 +68,45 @@ def map_diffusion_result(layer: Layer | None, result_image: Image.Image, used_se
             f"Regenerated (seed={used_seed})",
         )
     return None, f"Regenerated (seed={used_seed})"
+
+
+def map_grounding_result(layer: Layer | None, result: GroundingResult
+                         ) -> Tuple[SetLayerSelectionCommand | None, str]:
+    """Build selection command/status for Grounding DINO/SAM output."""
+    count = len(result.detections)
+    if count == 0:
+        return None, "Grounding: nothing found"
+
+    found = ", ".join(
+        f"{item.label} ({item.score:.0%})" for item in result.detections
+    )
+    status = f"Grounding: {count} hit(s): {found}"
+    if layer is None:
+        return None, status
+
+    height, width = layer.height, layer.width
+    combined_selection = np.zeros((height, width), dtype=np.float32)
+    for item in result.detections:
+        if item.mask is not None and item.mask.any():
+            combined_selection = np.maximum(
+                combined_selection,
+                item.mask.astype(np.float32)[:height, :width],
+            )
+            continue
+
+        x0 = max(0, item.x0)
+        y0 = max(0, item.y0)
+        x1 = min(width, item.x1)
+        y1 = min(height, item.y1)
+        if x0 < x1 and y0 < y1:
+            combined_selection[y0:y1, x0:x1] = 1.0
+
+    if not combined_selection.any():
+        return None, status
+    return (
+        SetLayerSelectionCommand(
+            mask=combined_selection,
+            label="Detect Objects",
+        ),
+        status,
+    )

@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import threading
-import time
-
-import numpy as np
-from tcbase import log
+from typing import Callable
 
 from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.combo_box import ComboBox
@@ -17,41 +13,21 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.units import px
 from tcgui.widgets.vstack import VStack
 
-
-GROUNDING_MODELS = [
-    ("Tiny (fast, ~340 MB)", "IDEA-Research/grounding-dino-tiny"),
-    ("Base (balanced, ~690 MB)", "IDEA-Research/grounding-dino-base"),
-]
-
-SAM2_MODELS = [
-    ("Tiny (fast, ~82 MB)", "facebook/sam2.1-hiera-tiny"),
-    ("Small (balanced, ~184 MB)", "facebook/sam2.1-hiera-small"),
-    ("Base+ (accurate, ~322 MB)", "facebook/sam2.1-hiera-base-plus"),
-]
-
-# Global cache — DINO
-_dino_model = None
-_dino_proc = None
-_dino_model_id: str | None = None
-_dino_device: str | None = None
-
-# Global cache — SAM 2.1
-_sam2_model = None
-_sam2_proc = None
-_sam2_model_id: str | None = None
-_sam2_device: str | None = None
-
-
-def _import_torch():
-    import torch
-    return torch
+from .grounding_types import GROUNDING_MODELS, SAM2_MODELS, GroundingParams
 
 
 class GroundingDialog:
     """Modal dialog for running Grounding DINO + SAM 2.1 on the canvas."""
 
-    def __init__(self, editor):
-        self._editor = editor
+    def __init__(
+            self,
+            *,
+            ui,
+            on_submit: Callable[[GroundingParams], None],
+            gpu_available: bool):
+        self._ui = ui
+        self._on_submit = on_submit
+        self._gpu_available = gpu_available
         self._prompt_input: TextInput | None = None
         self._model_combo: ComboBox | None = None
         self._box_threshold_slider: SliderEdit | None = None
@@ -208,16 +184,15 @@ class GroundingDialog:
 
         # ── GPU ─────────────────────────────────────────────────────────
 
-        torch = _import_torch()
         self._gpu_checkbox = Checkbox()
         self._gpu_checkbox.text = "Use GPU"
-        self._gpu_checkbox.checked = torch.cuda.is_available()
-        self._gpu_checkbox.enabled = torch.cuda.is_available()
+        self._gpu_checkbox.checked = self._gpu_available
+        self._gpu_checkbox.enabled = self._gpu_available
         content.add_child(self._gpu_checkbox)
 
         dlg.content = content
         dlg.on_result = self._on_result
-        dlg.show(self._editor.ui)
+        dlg.show(self._ui)
 
     def _on_result(self, button: str) -> None:
         if button != "OK" or self._prompt_input is None:
@@ -261,356 +236,21 @@ class GroundingDialog:
             self._non_overlap_checkbox.checked if self._non_overlap_checkbox else False
         )
 
-        use_gpu = self._gpu_checkbox.checked
+        use_gpu = self._gpu_checkbox.checked if self._gpu_checkbox else False
 
-        editor = self._editor
-        active = editor._layer_stack.active_layer
-        if active is None:
-            log.warning("Grounding: no active layer")
-            editor._statusbar.text = "Grounding: no active layer"
-            return
-
-        try:
-            arr = editor._layer_stack.composite()
-        except Exception as exc:
-            log.error(f"Grounding: failed to get composite — {exc}")
-            editor._statusbar.text = "Grounding: failed to get composite"
-            return
-
-        log.info(
-            f"Grounding start: model={model_id}, prompt='{prompt}', "
-            f"box_threshold={box_threshold:.2f}, "
-            f"text_threshold={text_threshold:.2f}, "
-            f"sam2={sam2_id}, mask_channel={sam2_mask_channel}, gpu={use_gpu}, "
-            f"mask_threshold={mask_threshold:.2f}, max_hole={max_hole_area}, "
-            f"max_sprinkle={max_sprinkle_area}, multimask={multimask}, "
-            f"non_overlap={non_overlap}, "
-            f"image={arr.shape[1]}x{arr.shape[0]}",
-        )
-
-        editor._statusbar.text = "Grounding: detecting..."
-        threading.Thread(
-            target=_run_grounding_thread,
-            args=(
-                model_id,
-                box_threshold,
-                text_threshold,
-                prompt,
-                arr,
-                active,
-                use_gpu,
-                sam2_id,
-                sam2_mask_channel,
-                mask_threshold,
-                max_hole_area,
-                max_sprinkle_area,
-                multimask,
-                non_overlap,
-                editor,
-            ),
-            daemon=True,
-        ).start()
-
-
-def _run_grounding_thread(
-    model_id,
-    box_threshold,
-    text_threshold,
-    prompt,
-    arr,
-    active,
-    use_gpu,
-    sam2_id,
-    sam2_mask_channel,
-    mask_threshold,
-    max_hole_area,
-    max_sprinkle_area,
-    multimask,
-    non_overlap,
-    editor,
-):
-    """Run DINO then SAM; post result to editor."""
-    t0 = time.time()
-
-    def status(msg):
-        editor._statusbar.text = msg
-
-    try:
-        model, proc = _get_dino_model(model_id, use_gpu, status_fn=status)
-        t1 = time.time()
-        log.info(f"Grounding: model ready in {t1 - t0:.1f}s")
-
-        status("Grounding: detecting...")
-        boxes = _run_grounding(
-            proc, model, arr, prompt, box_threshold, text_threshold, use_gpu
-        )
-        t2 = time.time()
-        log.info(f"Grounding: inference done in {t2 - t1:.1f}s")
-
-    except Exception as e:
-        log.error(f"Grounding: {e}")
-        editor._statusbar.text = f"Grounding error: {e}"
-        return
-
-    if not boxes:
-        log.info(f"Grounding: nothing found for prompt='{prompt}'")
-        editor._statusbar.text = "Grounding: nothing found"
-        return
-
-    # ── SAM 2.1 ─────────────────────────────────────────────────────────
-    masks = [None] * len(boxes)
-    if sam2_id:
-        try:
-            status("SAM 2.1: segmenting...")
-            sam_model, sam_proc = _get_sam2_model(sam2_id, use_gpu, status_fn=status)
-            t_sam0 = time.time()
-            masks = _run_sam2(
-                sam_proc, sam_model, arr, boxes, sam2_mask_channel,
-                mask_threshold, max_hole_area, max_sprinkle_area,
-                multimask, non_overlap, use_gpu,
+        self._on_submit(
+            GroundingParams(
+                prompt=prompt,
+                model_id=model_id,
+                box_threshold=box_threshold,
+                text_threshold=text_threshold,
+                use_gpu=use_gpu,
+                sam2_model_id=sam2_id,
+                sam2_mask_channel=sam2_mask_channel,
+                mask_threshold=mask_threshold,
+                max_hole_area=max_hole_area,
+                max_sprinkle_area=max_sprinkle_area,
+                multimask=multimask,
+                non_overlap=non_overlap,
             )
-            t_sam1 = time.time()
-            log.info(f"SAM 2.1: {sum(1 for m in masks if m is not None)} masks "
-                     f"in {t_sam1 - t_sam0:.1f}s")
-        except Exception as e:
-            log.error(f"SAM 2.1: {e}")
-            editor._statusbar.text = f"SAM 2.1 error: {e}"
-
-    results = [
-        (label, x0, y0, x1, y1, score, mask)
-        for (label, x0, y0, x1, y1, score), mask in zip(boxes, masks)
-    ]
-    editor._pending_grounding_result = (results, active)
-
-    found = ", ".join(f"{l} ({s:.0%})" for l, _, _, _, _, s, _ in results)
-    log.info(f"Grounding: {len(results)} hit(s) — {found} (total {time.time() - t0:.1f}s)")
-    editor._statusbar.text = (
-        f"Grounding: {len(results)} hit(s): {found}"
-    )
-
-
-# ── DINO model ──────────────────────────────────────────────────────────
-
-
-def _get_dino_model(model_id: str, use_gpu: bool, status_fn=None):
-    global _dino_model, _dino_proc, _dino_model_id, _dino_device
-
-    device = "cuda" if use_gpu else "cpu"
-    log.info(f"Grounding: loading DINO model={model_id}, device={device}")
-
-    if _dino_model is not None and model_id != _dino_model_id:
-        log.info(f"Grounding: DINO model changed {_dino_model_id} -> {model_id}, resetting cache")
-        _dino_model = None
-        _dino_proc = None
-        _dino_device = None
-
-    if _dino_model is None:
-        from transformers import (
-            GroundingDinoForObjectDetection,
-            GroundingDinoProcessor,
         )
-        from huggingface_hub import try_to_load_from_cache
-
-        t_load = time.time()
-        cached = try_to_load_from_cache(model_id, "model.safetensors") is not None
-        log.info(
-            f"Grounding: DINO cache check for {model_id} -> cached={cached} "
-            f"({time.time() - t_load:.1f}s)")
-
-        if status_fn:
-            short_name = model_id.split("/")[-1]
-            if cached:
-                status_fn(f"Loading {short_name} from cache...")
-            else:
-                status_fn(f"Downloading {short_name} (this may take a few minutes)...")
-
-        _dino_proc = GroundingDinoProcessor.from_pretrained(
-            model_id, local_files_only=cached)
-        _dino_model = GroundingDinoForObjectDetection.from_pretrained(
-            model_id, local_files_only=cached)
-        _dino_model_id = model_id
-        _dino_device = None
-        log.info(f"Grounding: DINO model loaded in {time.time() - t_load:.1f}s")
-
-    if _dino_device != device:
-        t_move = time.time()
-        _dino_model.to(device)
-        _dino_model.eval()
-        log.info(f"Grounding: moved DINO model to {device} in {time.time() - t_move:.1f}s")
-        _dino_device = device
-
-    return _dino_model, _dino_proc
-
-
-def _run_grounding(
-    processor,
-    model,
-    image_array,
-    prompt: str,
-    box_threshold: float,
-    text_threshold: float,
-    use_gpu: bool,
-):
-    from PIL import Image
-
-    device = "cuda" if use_gpu else "cpu"
-
-    if isinstance(image_array, np.ndarray):
-        image = Image.fromarray(image_array, "RGBA").convert("RGB")
-    else:
-        image = image_array
-
-    log.info(
-        f"Grounding: running inference, image={image.width}x{image.height}, "
-        f"prompt='{prompt}', box_threshold={box_threshold:.2f}, "
-        f"text_threshold={text_threshold:.2f}, device={device}")
-
-    t_prep = time.time()
-    inputs = processor(images=image, text=prompt, return_tensors="pt")
-    inputs = {k: v.to(device) for k, v in inputs.items()}
-    log.info(f"Grounding: inputs prepared in {time.time() - t_prep:.1f}s")
-
-    t_infer = time.time()
-    torch = _import_torch()
-    with torch.no_grad():
-        outputs = model(**inputs)
-    log.info(f"Grounding: model forward pass in {time.time() - t_infer:.1f}s")
-
-    h, w = image.height, image.width
-    results = processor.post_process_grounded_object_detection(
-        outputs,
-        input_ids=inputs.get("input_ids"),
-        threshold=box_threshold,
-        text_threshold=text_threshold,
-        target_sizes=[(h, w)],
-    )
-
-    boxes = []
-    for result in results:
-        for score, box, label in zip(
-            result["scores"].tolist(),
-            result["boxes"].tolist(),
-            result["labels"],
-        ):
-            x0, y0, x1, y1 = [int(v) for v in box]
-            boxes.append((label, x0, y0, x1, y1, score))
-            log.info(
-                f"Grounding: detected '{label}' box=({x0},{y0},{x1},{y1}) "
-                f"score={score:.3f}")
-
-    boxes.sort(key=lambda b: b[5], reverse=True)
-    log.info(f"Grounding: post-processing done, {len(boxes)} boxes found")
-    return boxes
-
-
-# ── SAM 2.1 model ───────────────────────────────────────────────────────
-
-
-def _get_sam2_model(model_id: str, use_gpu: bool, status_fn=None):
-    global _sam2_model, _sam2_proc, _sam2_model_id, _sam2_device
-
-    device = "cuda" if use_gpu else "cpu"
-    log.info(f"SAM 2.1: loading model={model_id}, device={device}")
-
-    if _sam2_model is not None and model_id != _sam2_model_id:
-        log.info(f"SAM 2.1: model changed {_sam2_model_id} -> {model_id}, resetting cache")
-        _sam2_model = None
-        _sam2_proc = None
-        _sam2_device = None
-
-    if _sam2_model is None:
-        from transformers import Sam2Processor, Sam2Model
-        from huggingface_hub import try_to_load_from_cache
-
-        t_load = time.time()
-        cached = try_to_load_from_cache(model_id, "model.safetensors") is not None
-        log.info(
-            f"SAM 2.1: cache check for {model_id} -> cached={cached} "
-            f"({time.time() - t_load:.1f}s)")
-
-        if status_fn:
-            short_name = model_id.split("/")[-1]
-            if cached:
-                status_fn(f"Loading {short_name} from cache...")
-            else:
-                status_fn(f"Downloading {short_name} (this may take a few minutes)...")
-
-        _sam2_proc = Sam2Processor.from_pretrained(
-            model_id, local_files_only=cached)
-        _sam2_model = Sam2Model.from_pretrained(
-            model_id, local_files_only=cached)
-        _sam2_model_id = model_id
-        _sam2_device = None
-        log.info(f"SAM 2.1: model loaded in {time.time() - t_load:.1f}s")
-
-    if _sam2_device != device:
-        t_move = time.time()
-        _sam2_model.to(device)
-        _sam2_model.eval()
-        log.info(f"SAM 2.1: moved model to {device} in {time.time() - t_move:.1f}s")
-        _sam2_device = device
-
-    return _sam2_model, _sam2_proc
-
-
-def _run_sam2(
-    processor, model, image_array, boxes, mask_channel,
-    mask_threshold, max_hole_area, max_sprinkle_area,
-    multimask, non_overlap, use_gpu,
-):
-    """Run SAM 2.1 for each box; return list of mask arrays (or None)."""
-    from PIL import Image
-
-    device = "cuda" if use_gpu else "cpu"
-
-    if isinstance(image_array, np.ndarray):
-        image = Image.fromarray(image_array, "RGBA").convert("RGB")
-    else:
-        image = image_array
-
-    h, w = image.height, image.width
-    masks = []
-
-    # Prepare input boxes for all detections at once
-    input_boxes = [[[x0, y0, x1, y1] for _, x0, y0, x1, y1, _ in boxes]]
-
-    t_prep = time.time()
-    inputs = processor(
-        images=image,
-        input_boxes=input_boxes,
-        return_tensors="pt",
-    )
-    inputs = {k: v.to(device) for k, v in inputs.items()}
-    log.info(f"SAM 2.1: inputs prepared in {time.time() - t_prep:.1f}s "
-             f"({len(boxes)} boxes)")
-
-    t_infer = time.time()
-    torch = _import_torch()
-    with torch.no_grad():
-        outputs = model(**inputs, multimask_output=multimask)
-    log.info(f"SAM 2.1: forward pass in {time.time() - t_infer:.1f}s")
-
-    # Post-process masks back to original image size
-    masks_tensor = processor.post_process_masks(
-        outputs.pred_masks,
-        original_sizes=[(h, w)],
-        mask_threshold=mask_threshold,
-        max_hole_area=max_hole_area,
-        max_sprinkle_area=max_sprinkle_area,
-        apply_non_overlapping_constraints=non_overlap,
-        binarize=True,
-    )
-    # post_process_masks returns list[Tensor], one per image
-    masks_tensor = masks_tensor[0]
-
-    for i in range(len(boxes)):
-        m = masks_tensor[i]
-        if multimask and m.dim() > 2:
-            m = m[mask_channel]  # multimask channel: 0=whole, 1=part, 2=subpart
-        mask = m.cpu().numpy().astype(bool)
-        masks.append(mask)
-        log.info(
-            f"SAM 2.1: mask {i} area={mask.sum()}px "
-            f"({mask.sum() / (h * w) * 100:.1f}% of image)")
-
-    return masks
