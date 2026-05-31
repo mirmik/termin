@@ -40,20 +40,15 @@ from .layer_panel import LayerPanel
 from .brush_panel import BrushPanel
 from .diffusion_panel import DiffusionPanel
 from .diffusion_generation_controller import DiffusionGenerationController
+from .instruct_generation_controller import InstructGenerationController
 from .ip_adapter_reference_dialog import show_ip_adapter_reference_dialog
+from .lama_generation_controller import LamaGenerationController
 from .lama_panel import LamaPanel
 from .instruct_panel import InstructPanel
 from .selection_panel import SelectionPanel
 from .lama_engine import LamaEngine
 from .segmentation import SegmentationEngine
-from .generation_types import GenerationError
-from .patch_resolver import (
-    apply_patch_source_to_tool,
-    extract_layer_mask_patch,
-    resolve_source_patch,
-    source_patch_at_center,
-    source_patch_from_mask,
-)
+from .patch_resolver import source_patch_at_center
 from .file_dialog import open_file_dialog, save_file_dialog, open_directory_dialog
 from .settings import Settings
 from .history import HistoryManager
@@ -109,8 +104,6 @@ class EditorWindow:
         self._last_dir: str = self._settings.get("last_dir", "")
         self._history_memory_limit_bytes = self._load_history_memory_limit_bytes()
         self._models_dir = self._load_models_dir()
-        self._pending_lama_layer = None
-        self._pending_instruct_layer = None
         self._pending_grounding_result = None
         self._clipboard: np.ndarray | None = None  # RGBA uint8 patch
         self._clipboard_pos: tuple[int, int] | None = None
@@ -146,6 +139,14 @@ class EditorWindow:
         self._diffusion_controller = DiffusionGenerationController(
             engine=self._engine,
             layer_stack=self._layer_stack,
+            composite_below=lambda layer: self._canvas.get_composite_below(layer),
+        )
+        self._lama_controller = LamaGenerationController(
+            engine=self._lama_engine,
+            composite_below=lambda layer: self._canvas.get_composite_below(layer),
+        )
+        self._instruct_controller = InstructGenerationController(
+            engine=self._instruct_engine,
             composite_below=lambda layer: self._canvas.get_composite_below(layer),
         )
 
@@ -1163,10 +1164,8 @@ class EditorWindow:
         if layer is None or layer.tool is None:
             return
         self._diffusion_controller.clear_pending_layer(layer)
-        if self._pending_lama_layer is layer:
-            self._pending_lama_layer = None
-        if self._pending_instruct_layer is layer:
-            self._pending_instruct_layer = None
+        self._lama_controller.clear_pending_layer(layer)
+        self._instruct_controller.clear_pending_layer(layer)
         self._document.execute(DetachLayerToolCommand(layer=layer))
 
     def _tool_source_composite(self, layer: Layer) -> np.ndarray | None:
@@ -1370,25 +1369,11 @@ class EditorWindow:
 
     def _on_lama_remove(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer.tool, LamaTool):
+        if layer is None or not isinstance(layer.tool, LamaTool):
             return
-        tool = layer.tool
-        if self._lama_engine.is_busy or not layer.has_mask():
-            return
-
-        composite = self._canvas.get_composite_below(layer)
-        if composite is None:
-            return
-
-        patch = source_patch_from_mask(layer, composite)
-        if patch is None:
-            return
-        apply_patch_source_to_tool(tool, patch)
-
-        mask_pil = extract_layer_mask_patch(layer, patch.canvas_rect)
-        self._lama_engine.submit(patch.image, mask_pil)
-        self._pending_lama_layer = layer
-        self._statusbar.text = "Removing objects (LaMa)..."
+        event = self._lama_controller.start_remove(layer)
+        if event.status:
+            self._statusbar.text = event.status
 
     def _on_lama_clear_mask(self):
         layer = self._layer_stack.active_layer
@@ -1436,17 +1421,12 @@ class EditorWindow:
         )
 
     def _on_instruct_load_model(self):
-        if self._instruct_engine.is_busy:
-            return
-        self._instruct_panel.set_model_loading()
-        self._instruct_engine.submit_load()
-        self._statusbar.text = "Loading InstructPix2Pix model..."
+        event = self._instruct_controller.submit_load_model()
+        self._handle_instruct_event(event)
 
     def _on_instruct_apply(self):
         layer = self._layer_stack.active_layer
         if not isinstance(layer.tool, InstructTool):
-            return
-        if self._instruct_engine.is_busy:
             return
         tool = layer.tool
 
@@ -1456,44 +1436,8 @@ class EditorWindow:
         tool.steps = self._instruct_panel.steps
         tool.seed = self._instruct_panel.seed
 
-        if not self._instruct_engine.is_loaded:
-            self._pending_instruct_layer = layer
-            self._on_instruct_load_model()
-            return
-
-        composite = self._canvas.get_composite_below(layer)
-        if composite is None:
-            return
-
-        patch = resolve_source_patch(
-            layer,
-            composite,
-            fallback_canvas_rect=(
-                tool.patch_x,
-                tool.patch_y,
-                tool.patch_x + tool.patch_w,
-                tool.patch_y + tool.patch_h,
-            ),
-        )
-        if isinstance(patch, GenerationError):
-            log.error(patch.log_message or patch.message)
-            self._statusbar.text = patch.message
-            return
-        if patch is None:
-            self._statusbar.text = "No source patch for instruction"
-            return
-        apply_patch_source_to_tool(tool, patch)
-
-        self._instruct_engine.submit(
-            image=tool.source_patch,
-            instruction=tool.instruction,
-            guidance_scale=tool.guidance_scale,
-            image_guidance_scale=tool.image_guidance_scale,
-            steps=tool.steps,
-            seed=tool.seed,
-        )
-        self._pending_instruct_layer = layer
-        self._statusbar.text = "Applying instruction..."
+        event = self._instruct_controller.start_apply(layer)
+        self._handle_instruct_event(event)
 
     def _on_instruct_new_seed(self):
         layer = self._layer_stack.active_layer
@@ -1553,50 +1497,40 @@ class EditorWindow:
             self._statusbar.text = f"Segmentation error: {seg_error[:80]}"
 
     def _poll_lama(self):
-        result_image, lama_error = self._lama_engine.poll()
-        if result_image is not None:
-            layer = self._pending_lama_layer
+        event = self._lama_controller.poll()
+        if event is None:
+            return
+        if event.inference_result is not None:
+            layer, result_image = event.inference_result
             command, status = map_lama_result(layer, result_image)
             if command is not None:
                 self._document.execute(command)
             self._statusbar.text = status
-            self._pending_lama_layer = None
-        elif lama_error is not None:
-            log.error(f"LaMa error: {lama_error}")
-            self._statusbar.text = f"LaMa error: {lama_error[:80]}"
-            self._pending_lama_layer = None
+        elif event.status:
+            self._statusbar.text = event.status
 
     def _poll_instruct(self):
-        task_type, result, error, meta = self._instruct_engine.poll()
-        if task_type is None:
-            return
-        if task_type == "load":
-            if error:
-                log.error(f"InstructPix2Pix load error: {error}")
-                self._instruct_panel.on_model_load_error(error)
-                self._statusbar.text = f"InstructPix2Pix load error: {error[:80]}"
-                self._pending_instruct_layer = None
-            else:
-                self._instruct_panel.on_model_loaded()
-                self._statusbar.text = "InstructPix2Pix model loaded"
-                pending_layer = self._pending_instruct_layer
-                if (
-                        pending_layer is not None
-                        and isinstance(pending_layer.tool, InstructTool)):
-                    self._on_instruct_apply()
-        elif task_type == "inference":
-            if error:
-                log.error(f"InstructPix2Pix inference error: {error}")
-                self._statusbar.text = f"InstructPix2Pix error: {error[:80]}"
-                self._pending_instruct_layer = None
-                return
-            result_image, used_seed = result
-            layer = self._pending_instruct_layer
-            command, status = map_instruct_result(layer, result_image, used_seed)
+        event = self._instruct_controller.poll()
+        if event is not None:
+            self._handle_instruct_event(event)
+
+    def _handle_instruct_event(self, event):
+        if event.model_loading:
+            self._instruct_panel.set_model_loading()
+        if event.model_error is not None:
+            self._instruct_panel.on_model_load_error(event.model_error)
+        elif event.model_loaded:
+            self._instruct_panel.on_model_loaded()
+        if event.inference_result is not None:
+            layer, result_image, used_seed = event.inference_result
+            command, status = map_instruct_result(
+                layer, result_image, used_seed)
             if command is not None:
                 self._document.execute(command)
             self._statusbar.text = status
-            self._pending_instruct_layer = None
+            return
+        if event.status:
+            self._statusbar.text = event.status
 
     def _poll_diffusion(self):
         event = self._diffusion_controller.poll()

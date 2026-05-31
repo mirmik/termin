@@ -289,6 +289,13 @@ Success criteria:
     serialization/migration, and canvas snapshot callbacks;
   - visible direct writes in panels/windows are widget visibility, not layer
     visibility.
+- Phase 2 implemented; ready for architecture checkpoint.
+- Added `InstructGenerationController`.
+- Added `LamaGenerationController`.
+- Moved LaMa submit/poll/pending-layer state out of `EditorWindow`.
+- Moved InstructPix2Pix load/apply/poll/pending-layer state out of
+  `EditorWindow`.
+- Added controller tests with fake engines for LaMa and Instruct lifecycle.
 
 ## Architectural Smell Checklist
 
