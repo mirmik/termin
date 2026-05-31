@@ -39,6 +39,7 @@ class LayerPanel(VStack):
         self.on_flatten_layers: callable = None
         self.on_move_layer: callable = None  # (layer, new_parent, index)
         self.on_toggle_visibility: callable = None  # (layer, visible)
+        self.on_toggle_solo: callable = None  # (layer)
         self.on_opacity_changed: callable = None  # (layer, opacity)
 
         # Tree widget (stretch to fill remaining space)
@@ -127,7 +128,7 @@ class LayerPanel(VStack):
         else:
             tool_suffix = ""
 
-        # HStack with visibility checkbox + name label
+        # HStack with visibility checkbox + solo checkbox + name label
         row = HStack()
         row.spacing = 4
 
@@ -146,6 +147,26 @@ class LayerPanel(VStack):
             return handler
         vis_cb.on_changed = _make_vis_handler(layer)
         row.add_child(vis_cb)
+
+        solo_cb = Checkbox()
+        solo_cb.checked = layer.id == self._layer_stack.solo_layer_id
+        solo_cb.text = ""
+        solo_cb.preferred_width = px(16)
+        solo_cb.box_color = (0.55, 0.43, 0.05, 1.0)
+        solo_cb.check_color = (1.0, 0.82, 0.12, 1.0)
+        solo_cb.hover_color = (0.85, 0.68, 0.14, 1.0)
+        solo_cb.tooltip = "Solo layer"
+
+        def _make_solo_handler(ly):
+            def handler(_checked):
+                if not self._updating:
+                    if self.on_toggle_solo:
+                        self.on_toggle_solo(ly)
+                    else:
+                        self._layer_stack.toggle_solo_layer(ly)
+            return handler
+        solo_cb.on_changed = _make_solo_handler(layer)
+        row.add_child(solo_cb)
 
         name_lbl = Label()
         name_lbl.text = layer.name + tool_suffix

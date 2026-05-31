@@ -5,6 +5,7 @@ from __future__ import annotations
 from tcgui.widgets.group_box import GroupBox
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.button import Button
+from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.slider_edit import SliderEdit
 from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import px
@@ -25,6 +26,9 @@ class BrushPanel(GroupBox):
         # Callbacks
         self.on_eraser_toggled: callable = None
         self.on_tool_changed: callable = None
+        self.on_draw_patch_toggled: callable = None  # (bool)
+        self.on_show_patch_toggled: callable = None  # (bool)
+        self.on_clear_patch: callable = None
 
         # Raster tool row
         raster_row = HStack()
@@ -57,6 +61,32 @@ class BrushPanel(GroupBox):
         self._move_btn.preferred_width = px(218)
         move_row.add_child(self._move_btn)
         self.add_child(move_row)
+
+        # Patch row
+        patch_row = HStack()
+        patch_row.spacing = 4
+
+        self._draw_patch_cb = Checkbox()
+        self._draw_patch_cb.text = "Draw Patch"
+        self._draw_patch_cb.on_changed = lambda v: (
+            self.on_draw_patch_toggled and self.on_draw_patch_toggled(v))
+        patch_row.add_child(self._draw_patch_cb)
+
+        self._show_patch_cb = Checkbox()
+        self._show_patch_cb.text = "Show"
+        self._show_patch_cb.checked = True
+        self._show_patch_cb.on_changed = lambda v: (
+            self.on_show_patch_toggled and self.on_show_patch_toggled(v))
+        patch_row.add_child(self._show_patch_cb)
+
+        clear_patch_btn = Button()
+        clear_patch_btn.text = "Clear"
+        clear_patch_btn.preferred_width = px(50)
+        clear_patch_btn.on_click = lambda: (
+            self.on_clear_patch and self.on_clear_patch())
+        patch_row.add_child(clear_patch_btn)
+
+        self.add_child(patch_row)
 
         # Color row
         self._color_row = HStack()
@@ -158,6 +188,9 @@ class BrushPanel(GroupBox):
         self._sync_tool_buttons()
         if emit and self.on_tool_changed:
             self.on_tool_changed(self._tool_mode)
+
+    def set_draw_patch_checked(self, value: bool):
+        self._draw_patch_cb.checked = value
 
     def _on_size_changed(self, value: float):
         self._brush.set_size(int(value))

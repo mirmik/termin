@@ -55,7 +55,7 @@ from .commands import (
     FlattenLayersCommand, ClearLayerMaskCommand,
     AttachLayerToolCommand, DetachLayerToolCommand,
     SetIpAdapterRectCommand, ClearIpAdapterRectCommand,
-    SetManualPatchRectCommand, ClearManualPatchRectCommand,
+    SetLayerPatchRectCommand, ClearLayerPatchRectCommand,
     ClearSelectionCommand, InvertSelectionCommand, SelectAllCommand,
     SetLayerSelectionCommand,
 )
@@ -305,6 +305,9 @@ class EditorWindow:
         # Brush panel
         self._brush_panel.on_tool_changed = self._set_canvas_tool
         self._brush_panel.on_eraser_toggled = self._canvas.set_brush_eraser
+        self._brush_panel.on_draw_patch_toggled = self._canvas.set_patch_rect_mode
+        self._brush_panel.on_show_patch_toggled = self._canvas.set_show_patch_rect
+        self._brush_panel.on_clear_patch = self._on_clear_patch_rect
 
         # Selection panel
         self._selection_panel.on_edit_mode_toggled = self._canvas.set_selection_mode
@@ -326,9 +329,6 @@ class EditorWindow:
         self._diffusion_panel.on_show_rect_toggled = self._canvas.set_show_ref_rect
         self._diffusion_panel.on_clear_rect = self._on_clear_ref_rect
         self._diffusion_panel.on_select_background = self._on_select_background
-        self._diffusion_panel.on_draw_patch_toggled = self._canvas.set_patch_rect_mode
-        self._diffusion_panel.on_show_patch_toggled = self._canvas.set_show_patch_rect
-        self._diffusion_panel.on_clear_patch = self._on_clear_patch_rect
         self._canvas.on_ref_rect_drawn = self._on_ref_rect_drawn
         self._canvas.on_patch_rect_drawn = self._on_patch_rect_drawn
         self._canvas.on_selection_rect_drawn = self._on_selection_rect_drawn
@@ -341,6 +341,7 @@ class EditorWindow:
         self._layer_panel.on_flatten_layers = self._flatten_layers
         self._layer_panel.on_move_layer = self._move_layer
         self._layer_panel.on_toggle_visibility = self._set_layer_visibility
+        self._layer_panel.on_toggle_solo = self._toggle_layer_solo
         self._layer_panel.on_opacity_changed = self._set_layer_opacity
 
         # LaMa panel
@@ -359,9 +360,6 @@ class EditorWindow:
         self._instruct_panel.on_mask_brush_changed = self._set_mask_brush
         self._instruct_panel.on_mask_eraser_toggled = self._set_mask_eraser
         self._instruct_panel.on_show_mask_toggled = self._canvas.set_show_mask
-        self._instruct_panel.on_draw_patch_toggled = self._canvas.set_patch_rect_mode
-        self._instruct_panel.on_show_patch_toggled = self._canvas.set_show_patch_rect
-        self._instruct_panel.on_clear_patch = self._on_instruct_clear_patch_rect
 
     def _set_canvas_tool(self, mode: BrushToolMode | str):
         self._canvas.set_brush_tool(mode)
@@ -1018,6 +1016,11 @@ class EditorWindow:
             visible=visible,
         ))
 
+    def _toggle_layer_solo(self, layer: Layer):
+        was_solo = self._layer_stack.solo_layer_id == layer.id
+        self._layer_stack.toggle_solo_layer(layer)
+        self._statusbar.text = "Solo off" if was_solo else f"Solo: {layer.name}"
+
     def _set_layer_opacity(self, layer: Layer, opacity: float):
         self._document.execute(SetLayerOpacityCommand(
             layer=layer,
@@ -1238,8 +1241,8 @@ class EditorWindow:
             composite = self._canvas.get_composite_below(layer)
             if composite is None:
                 return
-            if tool.manual_patch_rect is not None:
-                x0, y0, x1, y1 = tool.manual_patch_rect
+            if layer.patch_rect is not None:
+                x0, y0, x1, y1 = layer.patch_rect
                 h, w = composite.shape[:2]
                 x0, y0 = max(0, x0), max(0, y0)
                 x1, y1 = min(w, x1), min(h, y1)
@@ -1368,27 +1371,20 @@ class EditorWindow:
 
     def _on_patch_rect_drawn(self, x0, y0, x1, y1):
         layer = self._layer_stack.active_layer
-        if isinstance(layer.tool, DiffusionTool):
-            self._diffusion_panel.set_draw_patch_checked(False)
-            self._document.execute(SetManualPatchRectCommand(
+        if layer is not None:
+            self._brush_panel.set_draw_patch_checked(False)
+            self._document.execute(SetLayerPatchRectCommand(
                 layer=layer,
                 rect=(x0, y0, x1, y1),
-                label="Set Diffusion Patch Rect",
-            ))
-        elif isinstance(layer.tool, InstructTool):
-            self._instruct_panel.set_draw_patch_checked(False)
-            self._document.execute(SetManualPatchRectCommand(
-                layer=layer,
-                rect=(x0, y0, x1, y1),
-                label="Set Instruct Patch Rect",
+                label="Set Patch Rect",
             ))
 
     def _on_clear_patch_rect(self):
         layer = self._layer_stack.active_layer
-        if isinstance(layer.tool, DiffusionTool):
-            self._document.execute(ClearManualPatchRectCommand(
+        if layer is not None:
+            self._document.execute(ClearLayerPatchRectCommand(
                 layer=layer,
-                label="Clear Diffusion Patch Rect",
+                label="Clear Patch Rect",
             ))
 
     def _on_selection_rect_drawn(self, x0: int, y0: int, x1: int, y1: int):
@@ -1530,8 +1526,8 @@ class EditorWindow:
         if composite is None:
             return
 
-        if tool.manual_patch_rect is not None:
-            x0, y0, x1, y1 = tool.manual_patch_rect
+        if layer.patch_rect is not None:
+            x0, y0, x1, y1 = layer.patch_rect
             h, w = composite.shape[:2]
             x0, y0 = max(0, x0), max(0, y0)
             x1, y1 = min(w, x1), min(h, y1)
@@ -1589,14 +1585,6 @@ class EditorWindow:
             self._document.execute(ClearLayerMaskCommand(
                 layer=layer,
                 label="Clear Instruct Mask",
-            ))
-
-    def _on_instruct_clear_patch_rect(self):
-        layer = self._layer_stack.active_layer
-        if isinstance(layer.tool, InstructTool):
-            self._document.execute(ClearManualPatchRectCommand(
-                layer=layer,
-                label="Clear Instruct Patch Rect",
             ))
 
     # ------------------------------------------------------------------

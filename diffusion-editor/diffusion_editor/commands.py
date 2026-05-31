@@ -310,30 +310,30 @@ class ClearIpAdapterRectCommand:
 
 
 @dataclass(frozen=True)
-class SetManualPatchRectCommand:
+class SetLayerPatchRectCommand:
     layer: Layer
     rect: tuple[int, int, int, int]
     label: str
 
     def apply(self, layer_stack: LayerStack) -> None:
-        tool = self.layer.tool
-        if tool is not None:
-            tool.manual_patch_rect = self.rect
+        self.layer.patch_rect = self.rect
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
 
 @dataclass(frozen=True)
-class ClearManualPatchRectCommand:
+class ClearLayerPatchRectCommand:
     layer: Layer
     label: str
 
     def apply(self, layer_stack: LayerStack) -> None:
-        tool = self.layer.tool
-        if tool is not None:
-            tool.manual_patch_rect = None
+        self.layer.patch_rect = None
         if layer_stack.on_changed:
             layer_stack.on_changed()
+
+
+SetManualPatchRectCommand = SetLayerPatchRectCommand
+ClearManualPatchRectCommand = ClearLayerPatchRectCommand
 
 
 @dataclass(frozen=True)

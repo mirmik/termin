@@ -413,11 +413,14 @@ class GPUCompositor:
 
     def _render_layer_tree(self, layer: Layer, target_tex: Tgfx2TextureHandle):
         """Recursively composite a layer (and its children) into *target_tex*."""
-        if not layer.visible or layer.opacity <= 0:
+        if not self._stack.is_layer_tree_visible_for_composition(layer):
             return
 
+        own_visible = self._stack.is_layer_visible_for_composition(layer)
+        if own_visible and layer.opacity <= 0:
+            return
         has_children = bool(layer.children)
-        needs_group = has_children and layer.opacity < 1.0
+        needs_group = own_visible and has_children and layer.opacity < 1.0
 
         if needs_group:
             # Open a nested pass on a temp attachment.
@@ -469,7 +472,8 @@ class GPUCompositor:
             if has_children:
                 for child in reversed(layer.children):
                     self._render_layer_tree(child, target_tex)
-            self._draw_layer_quad(layer, layer.opacity)
+            if own_visible and layer.opacity > 0:
+                self._draw_layer_quad(layer, layer.opacity)
 
     def _draw_layer_quad(self, layer: Layer, opacity: float):
         lid = id(layer)

@@ -7,3 +7,4 @@ transformers>=4.46,<5
 accelerate>=0.26,<2
 safetensors>=0.4,<1
 pysdl2>=0.9,<1
+pytest>=8,<9
