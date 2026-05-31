@@ -355,9 +355,19 @@ Success criteria:
   layers instead of duplicating compositor invalidation logic.
 - Added focused composite bridge tests for CPU refresh, move transforms, and
   GPU invalidation.
+- Added `canvas_paint_stroke.py` with `PaintStrokeBuffer` and tested paint
+  blending for live brush strokes.
+- Removed paint stroke runtime fields from `EditorCanvas`; the canvas now asks
+  the stroke buffer to apply dirty regions and only coordinates compositor
+  refresh.
+- Added `canvas_edit_session.py` with `CanvasEditSession` for transient mouse
+  edit state, dirty accumulation, last pointer position, and edit callback
+  metadata.
+- Removed the scattered `_painting`/`_last_paint_pos`/edit metadata fields from
+  `EditorCanvas` mouse handlers.
 - Remaining Phase 5 work: extract higher-level paint/mask/selection state
-  machines, then remove the compatibility surface after private callers are
-  migrated.
+  machines for mask/selection/smudge paths, then remove the compatibility
+  surface after private callers are migrated.
 
 ## Architectural Smell Checklist
 

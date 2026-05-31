@@ -24,7 +24,7 @@ def test_paint_updates_layer_before_mouse_up():
     assert stack.active_layer.image[8, 16, 3] > 0
 
     canvas._handle_mouse_up(16, 8)
-    assert canvas._stroke_mask is None
+    assert canvas._paint_stroke.mask is None
 
 
 def test_smudge_interpolates_fast_mouse_move():

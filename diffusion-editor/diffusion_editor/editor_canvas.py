@@ -22,6 +22,8 @@ from .canvas_geometry import (
     visible_layer_rect,
 )
 from .canvas_composite import CanvasCompositeBridge
+from .canvas_edit_session import CanvasEditSession
+from .canvas_paint_stroke import PaintStrokeBuffer
 from .canvas_rect_drag import CanvasRectDrag
 from .canvas_tools import create_canvas_tools
 from .soft_mask_stroke import SoftMaskBrush, apply_dab, apply_line
@@ -78,22 +80,13 @@ class EditorCanvas(Canvas):
         self._show_patch_rect = True
 
         # Stroke buffer (MAX blending during one stroke)
-        self._stroke_mask: np.ndarray | None = None
-        self._stroke_color: tuple | None = None
-        self._stroke_base_image: np.ndarray | None = None
-        self._stroke_live_dirty_rect: tuple[int, int, int, int] | None = None
-        self._stroke_is_eraser = False
+        self._paint_stroke = PaintStrokeBuffer()
 
-        self._painting = False
-        self._last_paint_pos: tuple[int, int] | None = None
+        self._edit_session = CanvasEditSession()
         self._mask_overlay: np.ndarray | None = None
         self._mask_erase_stroke: np.ndarray | None = None
         self._mask_erase_dirty: tuple[int, int, int, int] | None = None
         self._smudge_buffer: np.ndarray | None = None
-        self._stroke_dirty_rect: tuple[int, int, int, int] | None = None
-        self._edit_label: str | None = None
-        self._edit_target: str | None = None  # "image" | "mask"
-        self._edit_layer: Layer | None = None
 
         # Callbacks
         self.on_mouse_moved: callable = None
@@ -234,38 +227,11 @@ class EditorCanvas(Canvas):
 
     def _update_stroke_region(self, layer, dirty):
         """Apply current paint stroke preview into the layer dirty region."""
-        if (dirty is None
-                or layer is None
-                or self._stroke_base_image is None
-                or self._stroke_mask is None
-                or self._stroke_color is None):
+        if dirty is None or layer is None:
             return
-        x0, y0, x1, y1 = dirty
-        if x1 <= x0 or y1 <= y0:
+        dirty = self._paint_stroke.apply_region(layer.image, dirty)
+        if dirty is None:
             return
-
-        base = self._stroke_base_image[y0:y1, x0:x1]
-        mask = self._stroke_mask[y0:y1, x0:x1]
-        out = base.copy()
-        where = mask > 0
-        if np.any(where):
-            r, g, b, _a = self._stroke_color
-            sa = mask[where].astype(np.float32) / 255.0
-            da = base[where, 3].astype(np.float32) / 255.0
-            out_a = sa + da * (1.0 - sa)
-            safe_a = np.maximum(out_a, 1.0 / 255.0)
-            inv_sa = 1.0 - sa
-            for c, src_val in enumerate((r, g, b)):
-                dst_c = base[where, c].astype(np.float32)
-                out[where, c] = np.clip(
-                    (src_val * sa + dst_c * da * inv_sa) / safe_a,
-                    0, 255,
-                ).astype(np.uint8)
-            out[where, 3] = np.clip(out_a * 255.0, 0, 255).astype(np.uint8)
-
-        layer.image[y0:y1, x0:x1] = out
-        self._stroke_live_dirty_rect = self._union_rect(
-            self._stroke_live_dirty_rect, dirty)
         self._refresh_modified_layer_rect(layer, dirty)
 
     def _update_mask_overlay_region(self, layer, dirty):
@@ -572,30 +538,18 @@ class EditorCanvas(Canvas):
             layer = self._layer_stack.active_layer
         if layer is None:
             return
-        h = layer.height
-        w = layer.width
-        if h == 0 or w == 0:
+        if self._brush_eraser:
+            self._paint_stroke.clear()
             return
-        self._stroke_is_eraser = self._brush_eraser
-        self._stroke_color = tuple(self.brush.color)
-        if self._stroke_is_eraser:
-            self._stroke_mask = None
-            self._stroke_base_image = None
-            self._stroke_live_dirty_rect = None
-        else:
-            self._stroke_mask = np.zeros((h, w), dtype=np.uint8)
-            self._stroke_base_image = layer.image.copy()
-            self._stroke_live_dirty_rect = None
+        self._paint_stroke.begin(layer.image, tuple(self.brush.color))
 
     def _end_stroke(self):
         layer = self._layer_stack.active_layer
-        if layer is not None and self._stroke_live_dirty_rect is not None:
+        dirty = self._paint_stroke.live_dirty_rect
+        if layer is not None and dirty is not None:
             self._layer_stack.mark_layer_dirty(
-                layer, layer.local_rect_to_canvas(self._stroke_live_dirty_rect))
-        self._stroke_mask = None
-        self._stroke_color = None
-        self._stroke_base_image = None
-        self._stroke_live_dirty_rect = None
+                layer, layer.local_rect_to_canvas(dirty))
+        self._paint_stroke.clear()
         self._mask_overlay = None
         self._update_overlay()
 
@@ -805,17 +759,17 @@ class EditorCanvas(Canvas):
 
             # Selection painting
             if self._selection_mode:
-                self._painting = True
-                self._stroke_dirty_rect = None
-                self._edit_layer = None
-                self._edit_label = "Selection Stroke"
-                self._edit_target = "selection"
+                self._edit_session.begin(
+                    label="Selection Stroke",
+                    target="selection",
+                    layer=None,
+                    pos=(ix, iy),
+                )
                 if self.on_edit_begin:
-                    self.on_edit_begin(self._edit_label, None, self._edit_target)
+                    self.on_edit_begin("Selection Stroke", None, "selection")
                 dirty, _stamp = self._dab_selection(ix, iy)
-                self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
+                self._edit_session.add_dirty(dirty)
                 self._update_overlay()
-                self._last_paint_pos = (ix, iy)
                 return
 
             if not self._can_edit_layer(layer):
@@ -826,17 +780,17 @@ class EditorCanvas(Canvas):
                 return
 
             # Painting
-            self._painting = True
-            self._stroke_dirty_rect = None
-            self._edit_layer = layer
             tool = self._active_stroke_tool
-            self._edit_label = tool.label
-            self._edit_target = tool.target
+            self._edit_session.begin(
+                label=tool.label,
+                target=tool.target,
+                layer=layer,
+                pos=(ix, iy),
+            )
             if self.on_edit_begin:
-                self.on_edit_begin(self._edit_label, layer, self._edit_target)
+                self.on_edit_begin(tool.label, layer, tool.target)
             dirty = tool.begin(self, layer, ix, iy)
-            self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
-            self._last_paint_pos = (ix, iy)
+            self._edit_session.add_dirty(dirty)
 
     def _handle_mouse_move(self, ix: float, iy: float):
         ixi, iyi = int(ix), int(iy)
@@ -847,24 +801,24 @@ class EditorCanvas(Canvas):
         if self._patch_rect_drag.move(ixi, iyi):
             return
 
-        if self._painting:
-            if self._edit_target == "selection":
-                if self._last_paint_pos:
-                    lx, ly = self._last_paint_pos
+        if self._edit_session.active:
+            if self._edit_session.target == "selection":
+                if self._edit_session.last_pos:
+                    lx, ly = self._edit_session.last_pos
                     dirty, _stamp = self._stroke_selection_line(lx, ly, ixi, iyi)
                 else:
                     dirty, _stamp = self._dab_selection(ixi, iyi)
-                self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
+                self._edit_session.add_dirty(dirty)
                 self._update_overlay()
-                self._last_paint_pos = (ixi, iyi)
+                self._edit_session.move_to((ixi, iyi))
                 return
             layer = self._layer_stack.active_layer
             if layer is None:
                 return
             dirty = self._active_stroke_tool.move(
-                self, layer, self._last_paint_pos, ixi, iyi)
-            self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
-            self._last_paint_pos = (ixi, iyi)
+                self, layer, self._edit_session.last_pos, ixi, iyi)
+            self._edit_session.add_dirty(dirty)
+            self._edit_session.move_to((ixi, iyi))
 
         if self.on_mouse_moved:
             self.on_mouse_moved(ixi, iyi)
@@ -886,28 +840,23 @@ class EditorCanvas(Canvas):
                 self.on_patch_rect_drawn(*result.rect)
             return
 
-        if self._painting:
-            if self._edit_target == "selection":
+        if self._edit_session.active:
+            if self._edit_session.target == "selection":
                 self._update_overlay()
                 if self.on_edit_end:
-                    self.on_edit_end(None, "selection", self._stroke_dirty_rect)
-                self._stroke_dirty_rect = None
-                self._edit_label = None
-                self._edit_target = None
-                self._edit_layer = None
+                    self.on_edit_end(None, "selection", self._edit_session.dirty_rect)
             else:
                 layer = self._layer_stack.active_layer
                 self._active_stroke_tool.end(self, layer)
                 self._mask_overlay = None
                 self._update_overlay()
                 if self.on_edit_end:
-                    self.on_edit_end(self._edit_layer, self._edit_target, self._stroke_dirty_rect)
-                self._stroke_dirty_rect = None
-                self._edit_label = None
-                self._edit_target = None
-                self._edit_layer = None
-        self._painting = False
-        self._last_paint_pos = None
+                    self.on_edit_end(
+                        self._edit_session.layer,
+                        self._edit_session.target,
+                        self._edit_session.dirty_rect,
+                    )
+            self._edit_session.clear()
 
     def _pick_color(self, ix: int, iy: int):
         if self._layer_stack.width == 0 or self._layer_stack.height == 0:
