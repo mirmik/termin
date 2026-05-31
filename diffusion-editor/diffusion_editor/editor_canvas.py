@@ -24,6 +24,7 @@ from .canvas_geometry import (
 from .canvas_rect_drag import CanvasRectDrag
 from .canvas_tools import create_canvas_tools
 from .gpu_compositor import GPUCompositor
+from .soft_mask_stroke import SoftMaskBrush, apply_dab, apply_line
 
 logger = logging.getLogger(__name__)
 
@@ -459,49 +460,28 @@ class EditorCanvas(Canvas):
     # Mask painting
     # ------------------------------------------------------------------
 
+    def _mask_brush(self) -> SoftMaskBrush:
+        return SoftMaskBrush(
+            size=self._mask_brush_size,
+            hardness=self._mask_brush_hardness,
+            flow=self._mask_brush_flow,
+        )
+
+    def _selection_brush(self) -> SoftMaskBrush:
+        return SoftMaskBrush(
+            size=self._sel_brush_size,
+            hardness=self._sel_brush_hardness,
+            flow=self._sel_brush_flow,
+        )
+
     def _dab_mask(self, mask: np.ndarray, cx: int, cy: int, *, erase: bool | None = None):
         """Returns (dirty_rect, stamp) or (None, None).
 
         mask is float32 [0..1], same for returned stamp.
         """
-        d = self._mask_brush_size
-        if d < 1:
-            return None, None
-        y, x = np.ogrid[-d / 2:d / 2, -d / 2:d / 2]
-        dist = np.sqrt(x * x + y * y)
-        radius = d / 2
-
-        if self._mask_brush_hardness >= 1.0:
-            alpha_mask = (dist <= radius).astype(np.float32)
-        else:
-            inner = radius * self._mask_brush_hardness
-            alpha_mask = np.clip(
-                (radius - dist) / max(radius - inner, 0.001), 0, 1)
-
-        sh, sw = alpha_mask.shape
-        ih, iw = mask.shape
-        x0 = cx - sw // 2
-        y0 = cy - sh // 2
-        sx0 = max(0, -x0)
-        sy0 = max(0, -y0)
-        sx1 = min(sw, iw - x0)
-        sy1 = min(sh, ih - y0)
-        dx0 = max(0, x0)
-        dy0b = max(0, y0)
-        dx1 = dx0 + (sx1 - sx0)
-        dy1 = dy0b + (sy1 - sy0)
-        if dx0 >= dx1 or dy0b >= dy1:
-            return None, None
-        stamp_slice = alpha_mask[sy0:sy1, sx0:sx1] * self._mask_brush_flow
         if erase is None:
             erase = self._mask_eraser
-        if erase:
-            mask[dy0b:dy1, dx0:dx1] = np.minimum(
-                mask[dy0b:dy1, dx0:dx1], 1.0 - stamp_slice)
-        else:
-            mask[dy0b:dy1, dx0:dx1] = np.maximum(
-                mask[dy0b:dy1, dx0:dx1], stamp_slice)
-        return (dx0, dy0b, dx1, dy1), stamp_slice
+        return apply_dab(mask, cx, cy, self._mask_brush(), erase=erase)
 
     def _stroke_mask_line(self, mask: np.ndarray,
                           x0: int, y0: int, x1: int, y1: int,
@@ -510,53 +490,9 @@ class EditorCanvas(Canvas):
 
         mask is float32 [0..1], same for returned stamp.
         """
-        ih, iw = mask.shape
-        d = self._mask_brush_size
-        if d < 1:
-            return None, None
-        radius = d / 2.0
-
-        bx0 = max(0, int(min(x0, x1) - radius))
-        by0 = max(0, int(min(y0, y1) - radius))
-        bx1 = min(iw, int(max(x0, x1) + radius) + 1)
-        by1 = min(ih, int(max(y0, y1) + radius) + 1)
-        if bx0 >= bx1 or by0 >= by1:
-            return None, None
-
-        sdx = float(x1 - x0)
-        sdy = float(y1 - y0)
-        seg_len_sq = sdx * sdx + sdy * sdy
-
-        if seg_len_sq < 0.5:
-            return self._dab_mask(mask, x0, y0, erase=erase)
-
-        yy, xx = np.mgrid[by0:by1, bx0:bx1]
-        xx = xx.astype(np.float32)
-        yy = yy.astype(np.float32)
-
-        t = ((xx - x0) * sdx + (yy - y0) * sdy) / seg_len_sq
-        np.clip(t, 0.0, 1.0, out=t)
-        cx = x0 + t * sdx
-        cy = y0 + t * sdy
-        dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-
-        if self._mask_brush_hardness >= 1.0:
-            alpha = (dist <= radius).astype(np.float32)
-        else:
-            inner = radius * self._mask_brush_hardness
-            alpha = np.clip(
-                (radius - dist) / max(radius - inner, 0.001), 0, 1)
-
-        stamp = alpha * self._mask_brush_flow
         if erase is None:
             erase = self._mask_eraser
-        if erase:
-            mask[by0:by1, bx0:bx1] = np.minimum(
-                mask[by0:by1, bx0:bx1], 1.0 - stamp)
-        else:
-            mask[by0:by1, bx0:bx1] = np.maximum(
-                mask[by0:by1, bx0:bx1], stamp)
-        return (bx0, by0, bx1, by1), stamp
+        return apply_line(mask, x0, y0, x1, y1, self._mask_brush(), erase=erase)
 
     @staticmethod
     def _union_rect(a, b):
@@ -605,90 +541,31 @@ class EditorCanvas(Canvas):
         sel = self._layer_stack.selection.data
         if sel.size == 0:
             return None, None
-        y, x = np.ogrid[-d / 2:d / 2, -d / 2:d / 2]
-        dist = np.sqrt(x * x + y * y)
-        radius = d / 2
-
-        if self._sel_brush_hardness >= 1.0:
-            alpha_mask = (dist <= radius).astype(np.float32)
-        else:
-            inner = radius * self._sel_brush_hardness
-            alpha_mask = np.clip(
-                (radius - dist) / max(radius - inner, 0.001), 0, 1)
-
-        sh, sw = alpha_mask.shape
-        ih, iw = sel.shape
-        x0 = cx - sw // 2
-        y0 = cy - sh // 2
-        sx0 = max(0, -x0)
-        sy0 = max(0, -y0)
-        sx1 = min(sw, iw - x0)
-        sy1 = min(sh, ih - y0)
-        dx0 = max(0, x0)
-        dy0b = max(0, y0)
-        dx1 = dx0 + (sx1 - sx0)
-        dy1 = dy0b + (sy1 - sy0)
-        if dx0 >= dx1 or dy0b >= dy1:
-            return None, None
-        stamp_slice = alpha_mask[sy0:sy1, sx0:sx1] * self._sel_brush_flow
-        if self._selection_eraser:
-            sel[dy0b:dy1, dx0:dx1] = np.minimum(
-                sel[dy0b:dy1, dx0:dx1], 1.0 - stamp_slice)
-        else:
-            sel[dy0b:dy1, dx0:dx1] = np.maximum(
-                sel[dy0b:dy1, dx0:dx1], stamp_slice)
-        return (dx0, dy0b, dx1, dy1), stamp_slice
+        return apply_dab(
+            sel,
+            cx,
+            cy,
+            self._selection_brush(),
+            erase=self._selection_eraser,
+        )
 
     def _stroke_selection_line(self, x0: int, y0: int, x1: int, y1: int):
         """Paint a selection stroke segment. Returns (dirty_rect, stamp) or (None, None)."""
         sel = self._layer_stack.selection.data
         if sel.size == 0:
             return None, None
-        ih, iw = sel.shape
         d = self._sel_brush_size
         if d < 1:
             return None, None
-        radius = d / 2.0
-
-        bx0 = max(0, int(min(x0, x1) - radius))
-        by0 = max(0, int(min(y0, y1) - radius))
-        bx1 = min(iw, int(max(x0, x1) + radius) + 1)
-        by1 = min(ih, int(max(y0, y1) + radius) + 1)
-        if bx0 >= bx1 or by0 >= by1:
-            return None, None
-
-        sdx = float(x1 - x0)
-        sdy = float(y1 - y0)
-        seg_len_sq = sdx * sdx + sdy * sdy
-
-        if seg_len_sq < 0.5:
-            return self._dab_selection(x0, y0)
-
-        yy, xx = np.mgrid[by0:by1, bx0:bx1]
-        xx = xx.astype(np.float32)
-        yy = yy.astype(np.float32)
-
-        t = ((xx - x0) * sdx + (yy - y0) * sdy) / seg_len_sq
-        np.clip(t, 0.0, 1.0, out=t)
-        cx = x0 + t * sdx
-        cy = y0 + t * sdy
-        dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-
-        if self._sel_brush_hardness >= 1.0:
-            alpha = (dist <= radius).astype(np.float32)
-        else:
-            inner = radius * self._sel_brush_hardness
-            alpha = np.clip(
-                (radius - dist) / max(radius - inner, 0.001), 0, 1)
-
-        stamp = alpha * self._sel_brush_flow
-        if self._selection_eraser:
-            sel[by0:by1, bx0:bx1] = np.minimum(
-                sel[by0:by1, bx0:bx1], 1.0 - stamp)
-        else:
-            sel[by0:by1, bx0:bx1] = np.maximum(
-                sel[by0:by1, bx0:bx1], stamp)
-        return (bx0, by0, bx1, by1), stamp
+        return apply_line(
+            sel,
+            x0,
+            y0,
+            x1,
+            y1,
+            self._selection_brush(),
+            erase=self._selection_eraser,
+        )
 
     # ------------------------------------------------------------------
     # Mask erase (preview)
