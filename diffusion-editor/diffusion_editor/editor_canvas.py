@@ -1273,7 +1273,7 @@ class EditorCanvas(Canvas):
                     and self._patch_rect_start and self._patch_rect_end):
                 rect = self._patch_rect_start + self._patch_rect_end
             elif layer.patch_rect:
-                rect = layer.patch_rect
+                rect = layer.local_rect_to_canvas(layer.patch_rect)
             if rect:
                 ix0, iy0, ix1, iy1 = rect
                 wx0, wy0 = canvas.image_to_widget(ix0, iy0)

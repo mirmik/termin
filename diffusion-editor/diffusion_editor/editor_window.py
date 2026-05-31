@@ -1242,7 +1242,7 @@ class EditorWindow:
             if composite is None:
                 return
             if layer.patch_rect is not None:
-                x0, y0, x1, y1 = layer.patch_rect
+                x0, y0, x1, y1 = layer.local_rect_to_canvas(layer.patch_rect)
                 h, w = composite.shape[:2]
                 x0, y0 = max(0, x0), max(0, y0)
                 x1, y1 = min(w, x1), min(h, y1)
@@ -1373,9 +1373,15 @@ class EditorWindow:
         layer = self._layer_stack.active_layer
         if layer is not None:
             self._brush_panel.set_draw_patch_checked(False)
+            lx0, ly0, lx1, ly1 = layer.bounds
+            x0, y0 = max(x0, lx0), max(y0, ly0)
+            x1, y1 = min(x1, lx1), min(y1, ly1)
+            if x1 - x0 <= 2 or y1 - y0 <= 2:
+                return
+            rect = layer.canvas_rect_to_local((x0, y0, x1, y1))
             self._document.execute(SetLayerPatchRectCommand(
                 layer=layer,
-                rect=(x0, y0, x1, y1),
+                rect=rect,
                 label="Set Patch Rect",
             ))
 
@@ -1527,7 +1533,7 @@ class EditorWindow:
             return
 
         if layer.patch_rect is not None:
-            x0, y0, x1, y1 = layer.patch_rect
+            x0, y0, x1, y1 = layer.local_rect_to_canvas(layer.patch_rect)
             h, w = composite.shape[:2]
             x0, y0 = max(0, x0), max(0, y0)
             x1, y1 = min(w, x1), min(h, y1)

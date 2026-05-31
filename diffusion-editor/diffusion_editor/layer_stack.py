@@ -438,7 +438,7 @@ class LayerStack:
 
     # --- Serialization ---
 
-    FORMAT_VERSION = 7
+    FORMAT_VERSION = 8
 
     def _serialize_manifest_and_layers(self, zf: zipfile.ZipFile):
         manifest = {
@@ -476,6 +476,8 @@ class LayerStack:
         self._layers.clear()
         self._layers.extend(new_layers)
         self._ensure_unique_layer_ids()
+        if version < 8:
+            self._migrate_canvas_patch_rects_to_layer_local()
         for layer in self._layers:
             self._apply_tile_size(layer)
         self._width = manifest["canvas_width"]
@@ -562,6 +564,11 @@ class LayerStack:
             if not layer.id or layer.id in seen:
                 layer.id = new_layer_id()
             seen.add(layer.id)
+
+    def _migrate_canvas_patch_rects_to_layer_local(self) -> None:
+        for layer in self._all_layers_flat():
+            if layer.patch_rect is not None:
+                layer.patch_rect = layer.canvas_rect_to_local(layer.patch_rect)
 
     def save_project(self, path: str):
         with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:

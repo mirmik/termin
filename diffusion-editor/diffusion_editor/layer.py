@@ -81,6 +81,11 @@ class Layer:
         x0, y0, x1, y1 = rect
         return (x0 + self.x, y0 + self.y, x1 + self.x, y1 + self.y)
 
+    def canvas_rect_to_local(self, rect: tuple[int, int, int, int]
+                             ) -> tuple[int, int, int, int]:
+        x0, y0, x1, y1 = rect
+        return (x0 - self.x, y0 - self.y, x1 - self.x, y1 - self.y)
+
     def clear_mask(self):
         self.mask.clear()
 

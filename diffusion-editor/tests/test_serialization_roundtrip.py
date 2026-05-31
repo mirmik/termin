@@ -135,6 +135,7 @@ def test_tool_manual_patch_rect_migrates_to_layer_patch_rect():
 
     src = zipfile.ZipFile(io.BytesIO(original), "r")
     manifest = json.loads(src.read("manifest.json"))
+    manifest["format_version"] = 7
     diffusion_layer = manifest["layers"][0]["children"][0]
     diffusion_layer.pop("patch_rect", None)
     diffusion_layer["tool"]["manual_patch_rect"] = [4, 5, 14, 15]
@@ -152,7 +153,7 @@ def test_tool_manual_patch_rect_migrates_to_layer_patch_rect():
     restored.on_changed = lambda: None
     restored.load_state(buf.getvalue())
 
-    assert restored.active_layer.patch_rect == (4, 5, 14, 15)
+    assert restored.active_layer.patch_rect == (1, 1, 11, 11)
     assert restored.active_layer.tool.manual_patch_rect is None
 
 
