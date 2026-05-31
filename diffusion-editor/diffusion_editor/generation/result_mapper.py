@@ -7,7 +7,7 @@ from typing import Tuple
 import numpy as np
 from PIL import Image
 
-from ..grounding_types import GroundingResult
+from ..grounding.types import GroundingResult
 from ..document.layer import Layer
 from ..document.tool import DiffusionTool, LamaTool, InstructTool
 from ..document.commands import (

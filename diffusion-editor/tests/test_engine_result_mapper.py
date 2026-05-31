@@ -12,7 +12,7 @@ from diffusion_editor.generation.result_mapper import (
     map_segmentation_result, map_lama_result,
     map_instruct_result, map_diffusion_result, map_grounding_result,
 )
-from diffusion_editor.grounding_types import GroundingDetection, GroundingResult
+from diffusion_editor.grounding.types import GroundingDetection, GroundingResult
 from diffusion_editor.document.layer import Layer
 from diffusion_editor.document.tool import DiffusionTool, LamaTool, InstructTool
 

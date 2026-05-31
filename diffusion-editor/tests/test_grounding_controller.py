@@ -1,7 +1,7 @@
 import numpy as np
 
-from diffusion_editor.grounding_controller import GroundingController
-from diffusion_editor.grounding_types import (
+from diffusion_editor.grounding.controller import GroundingController
+from diffusion_editor.grounding.types import (
     GroundingDetection,
     GroundingEngineEvent,
     GroundingParams,
