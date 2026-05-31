@@ -55,7 +55,6 @@ class EditorCanvas(Canvas):
         self._brush_tool_mode = BrushToolMode.PAINT
         self._stroke_tools = create_canvas_tools()
         self._active_stroke_tool = self._stroke_tools[self._brush_tool_mode]
-        self._brush_eraser = False
         self._mask_painter = CanvasMaskPainter()
         self._overlay_bridge = CanvasOverlayBridge(
             layer_stack,
@@ -163,15 +162,6 @@ class EditorCanvas(Canvas):
     def _update_overlay(self):
         self._overlay_bridge.rebuild()
 
-    def _update_stroke_region(self, layer, dirty):
-        """Apply current paint stroke preview into the layer dirty region."""
-        if dirty is None or layer is None:
-            return
-        dirty = self._paint_stroke.apply_region(layer.image, dirty)
-        if dirty is None:
-            return
-        self._refresh_modified_layer_rect(layer, dirty)
-
     def _update_mask_overlay_region(self, layer, dirty):
         """Update mask overlay after mask painting."""
         self._overlay_bridge.update_mask_region(layer, dirty)
@@ -196,29 +186,6 @@ class EditorCanvas(Canvas):
             local_rect,
             canvas_rect,
             erase,
-        )
-
-    def _erase_layer_rect(self, layer, rect, erase):
-        """Erase layer.image alpha by erase mask within rect, update composite.
-
-        erase can be float32 [0..1] or uint8 [0..255].
-        """
-        if rect is None or erase is None:
-            return
-        local_rect, canvas_rect = self._clip_layer_local_rect(layer, rect)
-        if local_rect is None:
-            return
-        x0, y0, x1, y1 = local_rect
-        if erase.dtype == np.uint8:
-            erase = erase.astype(np.float32) / 255.0
-        la = layer.image[y0:y1, x0:x1, 3].astype(np.float32)
-        layer.image[y0:y1, x0:x1, 3] = np.clip(
-            la * (1.0 - erase), 0, 255).astype(np.uint8)
-
-        self._composite_bridge.refresh_modified_layer_rect(
-            layer,
-            local_rect,
-            canvas_rect,
         )
 
     def get_composite(self) -> np.ndarray | None:
@@ -252,7 +219,6 @@ class EditorCanvas(Canvas):
 
     def set_brush_tool(self, mode: BrushToolMode | str):
         self._brush_tool_mode = BrushToolMode(mode)
-        self._brush_eraser = self._brush_tool_mode == BrushToolMode.ERASER
         self._mask_painter.set_eraser(
             self._brush_tool_mode == BrushToolMode.MASK_ERASER)
         self._active_stroke_tool = self._stroke_tools[self._brush_tool_mode]
@@ -326,127 +292,6 @@ class EditorCanvas(Canvas):
             self._layer_stack.height,
         )
 
-    # ------------------------------------------------------------------
-    # Mask erase (preview)
-    # ------------------------------------------------------------------
-
-    def _begin_mask_erase(self, layer):
-        if layer is None:
-            return
-        self._mask_erase_stroke.begin(layer.height, layer.width)
-
-    # ------------------------------------------------------------------
-    # Stroke buffer for brush painting
-    # ------------------------------------------------------------------
-
-    def _begin_stroke(self, layer=None):
-        if layer is None:
-            layer = self._layer_stack.active_layer
-        if layer is None:
-            return
-        if self._brush_eraser:
-            self._paint_stroke.clear()
-            return
-        self._paint_stroke.begin(layer.image, tuple(self.brush.color))
-
-    def _end_stroke(self):
-        layer = self._layer_stack.active_layer
-        dirty = self._paint_stroke.live_dirty_rect
-        if layer is not None and dirty is not None:
-            self._layer_stack.mark_layer_dirty(
-                layer, layer.local_rect_to_canvas(dirty))
-        self._paint_stroke.clear()
-        self._overlay_bridge.clear()
-        self._update_overlay()
-
-    # ------------------------------------------------------------------
-    # Eraser
-    # ------------------------------------------------------------------
-
-    def _composite_rect_below(self, target_layer, dy0, dy1, dx0, dx1):
-        return self._composite_bridge.composite_rect_below(
-            target_layer, dy0, dy1, dx0, dx1)
-
-    def _erase_dab(self, layer, cx: int, cy: int):
-        stamp = self.brush._alpha_stamp
-        sh, sw = stamp.shape[:2]
-        ih, iw = layer.image.shape[:2]
-
-        x0 = cx - sw // 2
-        y0 = cy - sh // 2
-        sx0, sy0 = max(0, -x0), max(0, -y0)
-        sx1, sy1 = min(sw, iw - x0), min(sh, ih - y0)
-        dx0, dy0b = max(0, x0), max(0, y0)
-        dx1, dy1 = dx0 + (sx1 - sx0), dy0b + (sy1 - sy0)
-        if dx0 >= dx1 or dy0b >= dy1:
-            return None
-
-        erase = (stamp[sy0:sy1, sx0:sx1]
-                 * (self.brush.color[3] / 255.0)
-                 * self.brush.flow)
-        la = layer.image[dy0b:dy1, dx0:dx1, 3].astype(np.float32)
-        layer.image[dy0b:dy1, dx0:dx1, 3] = np.clip(
-            la * (1.0 - erase), 0, 255).astype(np.uint8)
-
-        dirty = (dx0, dy0b, dx1, dy1)
-        self._refresh_modified_layer_rect(layer, dirty)
-        return dirty
-
-    def _erase_stroke_line(self, layer, x0: int, y0: int, x1: int, y1: int):
-        ih, iw = layer.image.shape[:2]
-        radius = self.brush.size / 2.0
-        stamp = self.brush._alpha_stamp
-
-        bx0 = max(0, int(min(x0, x1) - radius))
-        by0 = max(0, int(min(y0, y1) - radius))
-        bx1 = min(iw, int(max(x0, x1) + radius) + 1)
-        by1 = min(ih, int(max(y0, y1) + radius) + 1)
-        if bx0 >= bx1 or by0 >= by1:
-            return None
-
-        sdx = float(x1 - x0)
-        sdy = float(y1 - y0)
-        seg_len_sq = sdx * sdx + sdy * sdy
-
-        if seg_len_sq < 0.5:
-            return self._erase_dab(layer, x0, y0)
-
-        yy, xx = np.mgrid[by0:by1, bx0:bx1]
-        xx = xx.astype(np.float32)
-        yy = yy.astype(np.float32)
-
-        t = ((xx - x0) * sdx + (yy - y0) * sdy) / seg_len_sq
-        np.clip(t, 0.0, 1.0, out=t)
-        cx = x0 + t * sdx
-        cy = y0 + t * sdy
-        dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-
-        if self.brush.hardness >= 1.0:
-            erase = (dist <= radius).astype(np.float32)
-        else:
-            inner = radius * self.brush.hardness
-            erase = np.clip(
-                (radius - dist) / max(radius - inner, 0.001), 0.0, 1.0)
-
-        erase *= (self.brush.color[3] / 255.0) * self.brush.flow
-        la = layer.image[by0:by1, bx0:bx1, 3].astype(np.float32)
-        layer.image[by0:by1, bx0:bx1, 3] = np.clip(
-            la * (1.0 - erase), 0, 255).astype(np.uint8)
-
-        dirty = (bx0, by0, bx1, by1)
-        self._refresh_modified_layer_rect(layer, dirty)
-        return dirty
-
-    # ------------------------------------------------------------------
-    # Smudge
-    # ------------------------------------------------------------------
-
-    def _begin_smudge(self, layer, x: int, y: int):
-        self._smudge_stroke.begin(layer.image, self.brush, x, y)
-
-    def _end_smudge(self):
-        self._smudge_stroke.clear()
-
     def _refresh_modified_layer_rect(self, layer, rect):
         local_rect, canvas_rect = self._clip_layer_local_rect(layer, rect)
         if local_rect is None:
@@ -459,23 +304,6 @@ class EditorCanvas(Canvas):
 
     def _refresh_layer_transform(self, layer, dirty_canvas_rect):
         self._composite_bridge.refresh_layer_transform(layer, dirty_canvas_rect)
-
-    def _smudge_dab(self, layer, cx: int, cy: int):
-        dirty = self._smudge_stroke.dab(layer.image, self.brush, cx, cy)
-        self._refresh_modified_layer_rect(layer, dirty)
-        return dirty
-
-    def _smudge_stroke_line(self, layer, x0: int, y0: int, x1: int, y1: int):
-        dirty = self._smudge_stroke.line(
-            layer.image,
-            self.brush,
-            x0,
-            y0,
-            x1,
-            y1,
-        )
-        self._refresh_modified_layer_rect(layer, dirty)
-        return dirty
 
     # ------------------------------------------------------------------
     # Mouse handlers (called from Canvas callbacks)

@@ -396,8 +396,23 @@ Success criteria:
   `_dab_mask`/`_stroke_mask_line` wrapper methods from `EditorCanvas`;
   `MaskPaintTool` and `MaskEraserTool` now delegate mask pixel edits directly
   to `CanvasMaskPainter`.
+- Moved paint stroke begin/apply/end lifecycle into `PaintTool`; removed
+  `_begin_stroke`, `_end_stroke`, `_update_stroke_region`, and the obsolete
+  `_brush_eraser` state from `EditorCanvas`.
+- Moved smudge lifecycle calls into `SmudgeTool`; removed `_begin_smudge`,
+  `_end_smudge`, `_smudge_dab`, and `_smudge_stroke_line` compatibility
+  wrappers from `EditorCanvas`.
+- Added `canvas_image_erase.py` for image-alpha erase dab/line operations and
+  alpha-region erasing used by mask erase finalization.
+- Removed image eraser pixel math, `_begin_mask_erase`, `_erase_layer_rect`,
+  and the dead `_composite_rect_below` compatibility wrapper from
+  `EditorCanvas`.
+- Mask erase finalization now clips the affected layer-local rect before
+  sampling the erase mask and refreshing the compositor, avoiding shape
+  mismatches for layers partially outside the project canvas.
 - Remaining Phase 5 work: clean up the remaining canvas tool API compatibility
-  surface after private callers are migrated.
+  surface around mask overlay preview/update helpers, layer move invalidation,
+  and direct tool access to canvas private collaborators.
 
 ## Architectural Smell Checklist
 
