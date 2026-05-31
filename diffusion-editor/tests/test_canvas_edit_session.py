@@ -1,4 +1,4 @@
-from diffusion_editor.canvas_edit_session import CanvasEditSession
+from diffusion_editor.canvas.canvas_edit_session import CanvasEditSession
 
 
 def test_edit_session_begin_records_callback_metadata():

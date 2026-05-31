@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.canvas_selection_paint import CanvasSelectionPainter
+from diffusion_editor.canvas.canvas_selection_paint import CanvasSelectionPainter
 
 
 def test_selection_painter_dab_paints_selection():

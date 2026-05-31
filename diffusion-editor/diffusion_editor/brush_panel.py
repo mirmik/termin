@@ -10,7 +10,7 @@ from tcgui.widgets.slider_edit import SliderEdit
 from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import px
 
-from .brush import Brush, BrushToolMode
+from .canvas.brush import Brush, BrushToolMode
 
 
 class BrushPanel(GroupBox):

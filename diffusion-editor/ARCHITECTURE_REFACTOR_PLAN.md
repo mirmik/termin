@@ -65,8 +65,9 @@ architecture.
 
 7. The package is flat.
 
-   Document modules now live under `diffusion_editor/document/`. Canvas,
-   generation, engine, and UI modules still remain mostly flat.
+   Document modules now live under `diffusion_editor/document/`, and canvas
+   interaction/rendering modules live under `diffusion_editor/canvas/`.
+   Generation, engine, app, and UI modules still remain mostly flat.
 
 ## Phase 1: Close Document Model Violations
 
@@ -235,7 +236,12 @@ Current status:
 - Application code and tests import document types through
   `diffusion_editor.document.*`; no top-level compatibility wrappers were kept
   for the moved document modules.
-- Canvas, generation, engine, and UI modules are still flat and should move in
+- `diffusion_editor/canvas/` now owns canvas interaction, brush settings, canvas
+  tool state, overlays, CPU/GPU composition, and pixel stroke helpers.
+- Application code and tests import canvas types through
+  `diffusion_editor.canvas.*`; no top-level compatibility wrappers were kept
+  for the moved canvas modules.
+- Generation, engine, app, and UI modules are still flat and should move in
   later batches.
 
 Possible final layout:
@@ -279,10 +285,10 @@ diffusion_editor/
 
 Tasks:
 
-- Move files in small batches. Started with the document package.
-- Update imports mechanically. Done for the document package.
-- Run full tests after each batch. Done locally for the document package; run
-  central tests before committing each batch.
+- Move files in small batches. Done for document and canvas packages.
+- Update imports mechanically. Done for document and canvas packages.
+- Run full tests after each batch. Done locally for document and canvas
+  packages; run central tests before committing each batch.
 - Avoid combining package moves with behavior changes.
 
 Success criteria:
@@ -507,8 +513,22 @@ Success criteria:
 - Kept no top-level compatibility wrappers for the moved document modules,
   because this is still active development and stale import paths should fail
   loudly.
-- Remaining Phase 7 work: move canvas modules next, then generation/controllers,
-  engines, and UI panels/dialogs in separate tested batches.
+- Created `diffusion_editor/canvas/` as the second package reorganization batch.
+- Moved canvas-owned modules under the canvas package:
+  `editor_canvas.py`, `brush.py`, `canvas_composite.py`,
+  `canvas_edit_session.py`, `canvas_geometry.py`, `canvas_image_erase.py`,
+  `canvas_mask_erase.py`, `canvas_mask_paint.py`, `canvas_overlay.py`,
+  `canvas_paint_stroke.py`, `canvas_rect_drag.py`,
+  `canvas_selection_paint.py`, `canvas_smudge.py`,
+  `canvas_tool_context.py`, `canvas_tools.py`, `gpu_compositor.py`, and
+  `soft_mask_stroke.py`.
+- Updated application and test imports to use `diffusion_editor.canvas.*`.
+- Kept `diffusion_brush.py` out of the canvas batch because it is currently a
+  generation/document image-patch helper rather than canvas interaction code.
+- Kept no top-level compatibility wrappers for the moved canvas modules, for the
+  same active-development reason as document modules.
+- Remaining Phase 7 work: move generation/controllers next, then engines, UI
+  panels/dialogs, and app composition modules in separate tested batches.
 
 ## Architectural Smell Checklist
 

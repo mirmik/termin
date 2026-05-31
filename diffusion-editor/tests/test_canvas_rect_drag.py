@@ -1,4 +1,4 @@
-from diffusion_editor.canvas_rect_drag import CanvasRectDrag, CanvasRectDragController
+from diffusion_editor.canvas.canvas_rect_drag import CanvasRectDrag, CanvasRectDragController
 
 
 def test_rect_drag_ignores_begin_when_disabled():

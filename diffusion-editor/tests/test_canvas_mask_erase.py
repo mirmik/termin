@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.canvas_mask_erase import MaskEraseStrokeBuffer
+from diffusion_editor.canvas.canvas_mask_erase import MaskEraseStrokeBuffer
 
 
 def test_mask_erase_begin_allocates_float_mask():

@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.soft_mask_stroke import SoftMaskBrush, apply_dab, apply_line
+from diffusion_editor.canvas.soft_mask_stroke import SoftMaskBrush, apply_dab, apply_line
 
 
 def test_apply_dab_paints_float_mask_with_flow():

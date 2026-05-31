@@ -7,8 +7,8 @@ from typing import Callable
 import numpy as np
 
 from .canvas_geometry import clip_layer_local_rect, visible_layer_rect
-from .document.layer import Layer
-from .document.layer_stack import LayerStack
+from ..document.layer import Layer
+from ..document.layer_stack import LayerStack
 
 Rect = tuple[int, int, int, int]
 
