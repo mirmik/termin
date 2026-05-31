@@ -40,6 +40,7 @@ from .editor_canvas import EditorCanvas
 from .layer_panel import LayerPanel
 from .brush_panel import BrushPanel
 from .diffusion_panel import DiffusionPanel
+from .diffusion_request_builder import DiffusionRequestBuilder
 from .lama_panel import LamaPanel
 from .instruct_panel import InstructPanel
 from .selection_panel import SelectionPanel
@@ -1236,38 +1237,6 @@ class EditorWindow:
         tool = layer.tool
         self._sync_panel_to_layer(tool)
 
-        if tool.mode != "txt2img":
-            composite = self._canvas.get_composite_below(layer)
-            if composite is None:
-                return
-            if layer.patch_rect is not None:
-                x0, y0, x1, y1 = layer.local_rect_to_canvas(layer.patch_rect)
-                h, w = composite.shape[:2]
-                x0, y0 = max(0, x0), max(0, y0)
-                x1, y1 = min(w, x1), min(h, y1)
-                if x1 - x0 < 1 or y1 - y0 < 1:
-                    return
-                patch_pil = Image.fromarray(composite[y0:y1, x0:x1]).convert("RGB")
-                tool.source_patch = patch_pil
-                tool.patch_x, tool.patch_y = x0, y0
-                tool.patch_w, tool.patch_h = x1 - x0, y1 - y0
-            elif layer.has_mask():
-                bbox = layer.mask_bbox()
-                center = layer.mask_center()
-                if bbox is not None and center is not None:
-                    bx0, by0, bx1, by1 = bbox
-                    ps = max(bx1 - bx0, by1 - by0)
-                    ps = max(int(ps * 1.25), 512)
-                    cx, cy = center
-                    patch_pil, ppx, ppy, pw, ph = extract_patch(
-                        composite, cx, cy, patch_size=ps)
-                    tool.source_patch = patch_pil
-                    tool.patch_x, tool.patch_y = ppx, ppy
-                    tool.patch_w, tool.patch_h = pw, ph
-
-            if tool.source_patch is None:
-                return
-
         if tool.model_path and tool.model_path != self._engine.model_path:
             self._pending_request = layer
             pred = tool.prediction_type if tool.prediction_type else None
@@ -1279,107 +1248,54 @@ class EditorWindow:
             return
         self._submit_regenerate(layer)
 
-    def _ip_adapter_reference_rect(self, layer: Layer) -> tuple[int, int, int, int] | None:
-        if layer.patch_rect is not None:
-            return layer.patch_rect
-        alpha = layer.image[:, :, 3]
-        ys, xs = np.nonzero(alpha)
-        if len(xs) > 0 and len(ys) > 0:
-            return (
-                int(xs.min()),
-                int(ys.min()),
-                int(xs.max()) + 1,
-                int(ys.max()) + 1,
-            )
-        return (0, 0, layer.width, layer.height)
-
-    def _make_ip_adapter_reference_image(self, layer: Layer) -> Image.Image | None:
-        rect = self._ip_adapter_reference_rect(layer)
-        if rect is None:
-            log.error(f"IP-Adapter reference layer has no crop rect: {layer.name}")
-            return None
-        x0, y0, x1, y1 = rect
-        x0 = max(0, min(int(x0), layer.width))
-        x1 = max(0, min(int(x1), layer.width))
-        y0 = max(0, min(int(y0), layer.height))
-        y1 = max(0, min(int(y1), layer.height))
-        if x1 <= x0 or y1 <= y0:
-            log.error(
-                f"IP-Adapter reference crop is empty for layer {layer.name}: "
-                f"{rect}"
-            )
-            return None
-        rgba = layer.image[y0:y1, x0:x1].astype(np.float32)
-        alpha = rgba[:, :, 3:4] / 255.0
-        rgb = rgba[:, :, :3] * alpha + 255.0 * (1.0 - alpha)
-        rgb = np.clip(rgb, 0, 255).astype(np.uint8)
-        return Image.fromarray(rgb, "RGB")
-
     def _submit_regenerate(self, layer: Layer):
         tool = layer.tool
         self._pending_request = layer
-        mask_image = None
-        if tool.mode == "inpaint":
-            if not layer.has_mask():
-                self._statusbar.text = "Inpaint requires a mask"
-                return
-            mask_image = extract_mask_patch(
-                layer.mask.data, tool.patch_x, tool.patch_y,
-                tool.patch_w, tool.patch_h)
 
-        ip_adapter_image = None
-        if tool.ip_adapter_layer_id is not None:
+        composite_below = None
+        if tool.mode != "txt2img":
+            composite_below = self._canvas.get_composite_below(layer)
+
+        build = DiffusionRequestBuilder(self._layer_stack).build(
+            layer,
+            composite_below,
+        )
+        if build.error is not None:
+            log.error(build.error.log_message or build.error.message)
+            self._statusbar.text = build.error.message
+            self._pending_request = None
+            return
+        request = build.request
+        if request is None:
+            log.error(f"Diffusion request builder returned no request for {layer.name}")
+            self._statusbar.text = "Could not build diffusion request"
+            self._pending_request = None
+            return
+
+        if request.ip_adapter_image is not None:
             if not self._engine.ip_adapter_loaded:
                 self._pending_request = layer
                 self._engine.submit_load_ip_adapter()
                 self._statusbar.text = "Loading IP-Adapter..."
                 return
-            ref_layer = self._layer_stack.find_layer_by_id(tool.ip_adapter_layer_id)
-            if ref_layer is None:
-                hint = tool.ip_adapter_layer_name_hint or tool.ip_adapter_layer_id
-                log.error(f"IP-Adapter reference layer not found: {hint}")
-                self._statusbar.text = f"IP-Adapter reference missing: {hint}"
-                self._pending_request = None
-                return
-            ip_adapter_image = self._make_ip_adapter_reference_image(ref_layer)
-            if ip_adapter_image is None:
-                self._statusbar.text = (
-                    f"IP-Adapter reference is empty: {ref_layer.name}"
-                )
-                self._pending_request = None
-                return
-
-        submit_image = tool.source_patch
-        submit_mask = mask_image
-        submit_w, submit_h = tool.patch_w, tool.patch_h
-        MODEL_RES = 1024
-        if tool.resize_to_model_resolution and submit_image is not None:
-            longest = max(submit_w, submit_h)
-            if longest != MODEL_RES:
-                scale = MODEL_RES / longest
-                submit_w = max(8, round(tool.patch_w * scale / 8) * 8)
-                submit_h = max(8, round(tool.patch_h * scale / 8) * 8)
-                submit_image = submit_image.resize((submit_w, submit_h), Image.LANCZOS)
-                if submit_mask is not None:
-                    submit_mask = submit_mask.resize((submit_w, submit_h), Image.NEAREST)
 
         self._engine.submit(
-            image=submit_image,
-            prompt=tool.prompt,
-            negative_prompt=tool.negative_prompt,
-            strength=tool.strength,
-            steps=tool.steps,
-            guidance_scale=tool.guidance_scale,
-            seed=tool.seed,
-            mode=tool.mode,
-            mask_image=submit_mask,
-            masked_content=tool.masked_content,
-            ip_adapter_image=ip_adapter_image,
-            ip_adapter_scale=tool.ip_adapter_scale,
-            width=submit_w,
-            height=submit_h,
+            image=request.image,
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            strength=request.strength,
+            steps=request.steps,
+            guidance_scale=request.guidance_scale,
+            seed=request.seed,
+            mode=request.mode,
+            mask_image=request.mask_image,
+            masked_content=request.masked_content,
+            ip_adapter_image=request.ip_adapter_image,
+            ip_adapter_scale=request.ip_adapter_scale,
+            width=request.width,
+            height=request.height,
         )
-        self._statusbar.text = f"Regenerating ({submit_w}x{submit_h})..."
+        self._statusbar.text = f"Regenerating ({request.width}x{request.height})..."
 
     def _on_new_seed(self):
         layer = self._layer_stack.active_layer
