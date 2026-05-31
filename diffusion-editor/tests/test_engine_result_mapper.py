@@ -3,11 +3,16 @@
 import numpy as np
 from PIL import Image
 
-from diffusion_editor.commands import ReplaceLayerMaskCommand, ApplyGeneratedResultCommand
+from diffusion_editor.commands import (
+    ApplyGeneratedResultCommand,
+    ReplaceLayerMaskCommand,
+    SetLayerSelectionCommand,
+)
 from diffusion_editor.engine_result_mapper import (
     map_segmentation_result, map_lama_result,
-    map_instruct_result, map_diffusion_result,
+    map_instruct_result, map_diffusion_result, map_grounding_result,
 )
+from diffusion_editor.grounding_types import GroundingDetection, GroundingResult
 from diffusion_editor.layer import Layer
 from diffusion_editor.tool import DiffusionTool, LamaTool, InstructTool
 
@@ -85,3 +90,48 @@ def test_map_diffusion_result():
     cmd, status = map_diffusion_result(layer, img, used_seed=321)
     assert isinstance(cmd, ApplyGeneratedResultCommand)
     assert status == "Regenerated (seed=321)"
+
+
+def test_map_grounding_result_uses_masks_when_present():
+    layer = Layer("Paint", 8, 8)
+    mask = np.zeros((8, 8), dtype=bool)
+    mask[2:4, 3:5] = True
+    result = GroundingResult(detections=(
+        GroundingDetection(
+            label="cup",
+            x0=0,
+            y0=0,
+            x1=8,
+            y1=8,
+            score=0.9,
+            mask=mask,
+        ),
+    ))
+
+    cmd, status = map_grounding_result(layer, result)
+
+    assert isinstance(cmd, SetLayerSelectionCommand)
+    assert status == "Grounding: 1 hit(s): cup (90%)"
+    assert cmd.mask[2:4, 3:5].all()
+    assert cmd.mask.sum() == 4
+
+
+def test_map_grounding_result_falls_back_to_box():
+    layer = Layer("Paint", 8, 8)
+    result = GroundingResult(detections=(
+        GroundingDetection(
+            label="face",
+            x0=1,
+            y0=2,
+            x1=4,
+            y1=6,
+            score=0.75,
+        ),
+    ))
+
+    cmd, status = map_grounding_result(layer, result)
+
+    assert isinstance(cmd, SetLayerSelectionCommand)
+    assert status == "Grounding: 1 hit(s): face (75%)"
+    assert cmd.mask[2:6, 1:4].all()
+    assert cmd.mask.sum() == 12

@@ -40,6 +40,9 @@ from .layer_panel import LayerPanel
 from .brush_panel import BrushPanel
 from .diffusion_panel import DiffusionPanel
 from .diffusion_generation_controller import DiffusionGenerationController
+from .grounding_controller import GroundingController
+from .grounding_engine import GroundingEngine
+from .grounding_types import GroundingParams
 from .instruct_generation_controller import InstructGenerationController
 from .ip_adapter_reference_dialog import show_ip_adapter_reference_dialog
 from .lama_generation_controller import LamaGenerationController
@@ -67,7 +70,7 @@ from .commands import (
 )
 from .engine_result_mapper import (
     map_segmentation_result, map_lama_result,
-    map_instruct_result, map_diffusion_result,
+    map_instruct_result, map_diffusion_result, map_grounding_result,
 )
 
 _BYTES_PER_GIB = 1024 * 1024 * 1024
@@ -105,7 +108,6 @@ class EditorWindow:
         self._last_dir: str = self._settings.get("last_dir", "")
         self._history_memory_limit_bytes = self._load_history_memory_limit_bytes()
         self._models_dir = self._load_models_dir()
-        self._pending_grounding_result = None
         self._clipboard: np.ndarray | None = None  # RGBA uint8 patch
         self._clipboard_pos: tuple[int, int] | None = None
         self._history_replaying = False
@@ -122,6 +124,7 @@ class EditorWindow:
         self._seg_engine = SegmentationEngine()
         self._lama_engine = LamaEngine()
         self._instruct_engine = InstructEngine()
+        self._grounding_engine = GroundingEngine()
         self._history = HistoryManager(
             self._apply_snapshot,
             max_memory_bytes=self._history_memory_limit_bytes,
@@ -153,6 +156,10 @@ class EditorWindow:
         self._segmentation_controller = SegmentationGenerationController(
             engine=self._seg_engine,
             composite_below=lambda layer: self._canvas.get_composite_below(layer),
+        )
+        self._grounding_controller = GroundingController(
+            engine=self._grounding_engine,
+            composite=lambda: self._layer_stack.composite(),
         )
 
         # Wire callbacks
@@ -1172,6 +1179,7 @@ class EditorWindow:
         self._lama_controller.clear_pending_layer(layer)
         self._instruct_controller.clear_pending_layer(layer)
         self._segmentation_controller.clear_pending_layer(layer)
+        self._grounding_controller.clear_pending_layer(layer)
         self._document.execute(DetachLayerToolCommand(layer=layer))
 
     def _tool_source_composite(self, layer: Layer) -> np.ndarray | None:
@@ -1565,44 +1573,35 @@ class EditorWindow:
     def _show_grounding_dialog(self) -> None:
         from .grounding_dialog import GroundingDialog
 
-        GroundingDialog(self).show()
+        GroundingDialog(
+            ui=self.ui,
+            on_submit=self._on_grounding_detect,
+            gpu_available=self._grounding_controller.gpu_available(),
+        ).show()
+
+    def _on_grounding_detect(self, params: GroundingParams) -> None:
+        active = self._layer_stack.active_layer
+        if active is None:
+            log.warning("Grounding: no active layer")
+            self._statusbar.text = "Grounding: no active layer"
+            return
+        event = self._grounding_controller.start_detection(active, params)
+        if event.status:
+            self._statusbar.text = event.status
 
     def _poll_grounding(self) -> None:
-        if self._pending_grounding_result is None:
+        event = self._grounding_controller.poll()
+        if event is None:
             return
-        results, layer = self._pending_grounding_result
-        self._pending_grounding_result = None
-
-        from .commands import SetLayerSelectionCommand
-
-        h, w = layer.height, layer.width
-        combined_selection = np.zeros((h, w), dtype=np.float32)
-        for _i, item in enumerate(results):
-            if len(item) == 7:
-                _label, x0, y0, x1, y1, _score, mask = item
-            else:
-                _label, x0, y0, x1, y1, _score = item
-                mask = None
-
-            if mask is not None and mask.any():
-                combined_selection = np.maximum(
-                    combined_selection,
-                    mask.astype(np.float32)[:h, :w],
-                )
-            else:
-                x0_c = max(0, x0)
-                y0_c = max(0, y0)
-                x1_c = min(w, x1)
-                y1_c = min(h, y1)
-                if x0_c < x1_c and y0_c < y1_c:
-                    combined_selection[y0_c:y1_c, x0_c:x1_c] = 1.0
-
-        if combined_selection.any():
-            sel_cmd = SetLayerSelectionCommand(
-                mask=combined_selection,
-                label="Detect Objects",
-            )
-            self._document.execute(sel_cmd)
+        if event.grounding_result is not None:
+            layer, result = event.grounding_result
+            command, status = map_grounding_result(layer, result)
+            if command is not None:
+                self._document.execute(command)
+            self._statusbar.text = status
+            return
+        if event.status:
+            self._statusbar.text = event.status
 
     # ------------------------------------------------------------------
     # Public: rendering
@@ -1642,3 +1641,4 @@ class EditorWindow:
         self._instruct_engine.shutdown()
         self._lama_engine.shutdown()
         self._seg_engine.shutdown()
+        self._grounding_engine.shutdown()
