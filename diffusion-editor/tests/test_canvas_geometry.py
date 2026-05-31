@@ -1,4 +1,4 @@
-from diffusion_editor.canvas_geometry import (
+from diffusion_editor.canvas.canvas_geometry import (
     canvas_to_layer_point,
     clip_canvas_rect,
     clip_layer_local_rect,

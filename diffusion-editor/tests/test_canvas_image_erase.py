@@ -1,7 +1,7 @@
 import numpy as np
 
-from diffusion_editor.brush import Brush
-from diffusion_editor.canvas_image_erase import (
+from diffusion_editor.canvas.brush import Brush
+from diffusion_editor.canvas.canvas_image_erase import (
     erase_alpha_region,
     erase_dab,
     erase_line,

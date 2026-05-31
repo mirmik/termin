@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.canvas_paint_stroke import (
+from diffusion_editor.canvas.canvas_paint_stroke import (
     PaintStrokeBuffer,
     blend_paint_region,
 )

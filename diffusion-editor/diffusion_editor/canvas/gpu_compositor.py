@@ -7,8 +7,8 @@ import struct
 import numpy as np
 from tcbase import log
 
-from .document.layer_stack import LayerStack
-from .document.layer import Layer
+from ..document.layer_stack import LayerStack
+from ..document.layer import Layer
 
 from tgfx._tgfx_native import (
     Tgfx2Context,

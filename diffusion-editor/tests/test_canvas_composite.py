@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.canvas_composite import CanvasCompositeBridge
+from diffusion_editor.canvas.canvas_composite import CanvasCompositeBridge
 from diffusion_editor.document.layer_stack import LayerStack
 
 

@@ -2,9 +2,9 @@ import numpy as np
 
 from tcbase import MouseButton, Mods
 
-from diffusion_editor.editor_canvas import EditorCanvas
+from diffusion_editor.canvas.editor_canvas import EditorCanvas
 from diffusion_editor.document.layer_stack import LayerStack
-from diffusion_editor.brush import BrushToolMode
+from diffusion_editor.canvas.brush import BrushToolMode
 
 
 def test_paint_updates_layer_before_mouse_up():

@@ -1,14 +1,14 @@
 import numpy as np
 
-from diffusion_editor.brush import Brush
-from diffusion_editor.canvas_composite import CanvasCompositeBridge
-from diffusion_editor.canvas_mask_erase import MaskEraseStrokeBuffer
-from diffusion_editor.canvas_mask_paint import CanvasMaskPainter
-from diffusion_editor.canvas_overlay import CanvasOverlayBridge
-from diffusion_editor.canvas_paint_stroke import PaintStrokeBuffer
-from diffusion_editor.canvas_selection_paint import CanvasSelectionPainter
-from diffusion_editor.canvas_smudge import SmudgeStrokeBuffer
-from diffusion_editor.canvas_tool_context import CanvasToolContext
+from diffusion_editor.canvas.brush import Brush
+from diffusion_editor.canvas.canvas_composite import CanvasCompositeBridge
+from diffusion_editor.canvas.canvas_mask_erase import MaskEraseStrokeBuffer
+from diffusion_editor.canvas.canvas_mask_paint import CanvasMaskPainter
+from diffusion_editor.canvas.canvas_overlay import CanvasOverlayBridge
+from diffusion_editor.canvas.canvas_paint_stroke import PaintStrokeBuffer
+from diffusion_editor.canvas.canvas_selection_paint import CanvasSelectionPainter
+from diffusion_editor.canvas.canvas_smudge import SmudgeStrokeBuffer
+from diffusion_editor.canvas.canvas_tool_context import CanvasToolContext
 from diffusion_editor.document.layer_stack import LayerStack
 
 

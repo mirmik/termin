@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.canvas_overlay import (
+from diffusion_editor.canvas.canvas_overlay import (
     MASK_OPACITY,
     SELECTION_OPACITY,
     CanvasOverlayBridge,

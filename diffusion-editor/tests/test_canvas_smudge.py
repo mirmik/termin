@@ -1,7 +1,7 @@
 import numpy as np
 
-from diffusion_editor.brush import Brush
-from diffusion_editor.canvas_smudge import SmudgeStrokeBuffer, brush_rect_slices
+from diffusion_editor.canvas.brush import Brush
+from diffusion_editor.canvas.canvas_smudge import SmudgeStrokeBuffer, brush_rect_slices
 
 
 def test_brush_rect_slices_clips_to_image_bounds():

@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.canvas_mask_paint import CanvasMaskPainter
+from diffusion_editor.canvas.canvas_mask_paint import CanvasMaskPainter
 
 
 def test_mask_painter_dab_paints_mask():

@@ -34,8 +34,8 @@ from .document.layer_stack import LayerStack
 from .document.mask import coerce_mask_data
 from .document.layer import Layer
 from .document.tool import DiffusionTool, LamaTool, InstructTool
-from .brush import BrushToolMode
-from .editor_canvas import EditorCanvas
+from .canvas.brush import BrushToolMode
+from .canvas.editor_canvas import EditorCanvas
 from .layer_panel import LayerPanel
 from .brush_panel import BrushPanel
 from .diffusion_panel import DiffusionPanel
@@ -259,7 +259,7 @@ class EditorWindow:
 
     def _canvas_placeholder_brush(self):
         """Temporary brush for panel construction (replaced after canvas created)."""
-        from .brush import Brush
+        from .canvas.brush import Brush
         return Brush()
 
     def _setup_menu(self):
