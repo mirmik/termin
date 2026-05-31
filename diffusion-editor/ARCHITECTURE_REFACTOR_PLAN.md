@@ -385,9 +385,14 @@ Success criteria:
   API and clears it after applying the stroke.
 - Fixed GPU render preview detection to test whether a mask erase stroke is
   active, not whether the runtime buffer object exists.
+- Added `canvas_selection_paint.py` with `CanvasSelectionPainter` for selection
+  brush settings, eraser state, dab operations, and line stroke operations.
+- Removed selection brush size/hardness/flow/eraser fields and selection paint
+  wrapper methods from `EditorCanvas`; mouse handlers now delegate selection
+  pixel edits to `CanvasSelectionPainter`.
 - Remaining Phase 5 work: extract higher-level paint/mask/selection state
-  machines for mask/selection paths, then remove the remaining compatibility
-  surface after private callers are migrated.
+  machines for the remaining layer mask paint path, then remove the remaining
+  compatibility surface after private callers are migrated.
 
 ## Architectural Smell Checklist
 

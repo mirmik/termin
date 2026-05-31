@@ -27,6 +27,7 @@ from .canvas_mask_erase import MaskEraseStrokeBuffer
 from .canvas_overlay import CanvasOverlayBridge
 from .canvas_paint_stroke import PaintStrokeBuffer
 from .canvas_rect_drag import CanvasRectDrag
+from .canvas_selection_paint import CanvasSelectionPainter
 from .canvas_smudge import SmudgeStrokeBuffer
 from .canvas_tools import create_canvas_tools
 from .soft_mask_stroke import SoftMaskBrush, apply_dab, apply_line
@@ -66,10 +67,7 @@ class EditorCanvas(Canvas):
 
         # Selection painting mode
         self._selection_mode = False
-        self._sel_brush_size = 50
-        self._sel_brush_hardness = 0.4
-        self._sel_brush_flow = 1.0
-        self._selection_eraser = False
+        self._selection_painter = CanvasSelectionPainter()
 
         # Selection rectangle mode
         self._selection_rect_drag = CanvasRectDrag(
@@ -272,12 +270,10 @@ class EditorCanvas(Canvas):
         self.cursor = "cross" if on else ""
 
     def set_selection_brush(self, size: int, hardness: float, flow: float = 1.0):
-        self._sel_brush_size = size
-        self._sel_brush_hardness = hardness
-        self._sel_brush_flow = max(0.0, min(flow, 1.0))
+        self._selection_painter.set_brush(size, hardness, flow)
 
     def set_selection_eraser(self, eraser: bool):
-        self._selection_eraser = eraser
+        self._selection_painter.set_eraser(eraser)
 
     def set_selection_rect_mode(self, on: bool):
         self._selection_rect_drag.set_enabled(on)
@@ -308,13 +304,6 @@ class EditorCanvas(Canvas):
             size=self._mask_brush_size,
             hardness=self._mask_brush_hardness,
             flow=self._mask_brush_flow,
-        )
-
-    def _selection_brush(self) -> SoftMaskBrush:
-        return SoftMaskBrush(
-            size=self._sel_brush_size,
-            hardness=self._sel_brush_hardness,
-            flow=self._sel_brush_flow,
         )
 
     def _dab_mask(self, mask: np.ndarray, cx: int, cy: int, *, erase: bool | None = None):
@@ -370,44 +359,6 @@ class EditorCanvas(Canvas):
             rect,
             self._layer_stack.width,
             self._layer_stack.height,
-        )
-
-    # ------------------------------------------------------------------
-    # Selection painting
-    # ------------------------------------------------------------------
-
-    def _dab_selection(self, cx: int, cy: int):
-        """Paint a selection dab at image coordinates. Returns (dirty_rect, stamp)."""
-        d = self._sel_brush_size
-        if d < 1:
-            return None, None
-        sel = self._layer_stack.selection.data
-        if sel.size == 0:
-            return None, None
-        return apply_dab(
-            sel,
-            cx,
-            cy,
-            self._selection_brush(),
-            erase=self._selection_eraser,
-        )
-
-    def _stroke_selection_line(self, x0: int, y0: int, x1: int, y1: int):
-        """Paint a selection stroke segment. Returns (dirty_rect, stamp) or (None, None)."""
-        sel = self._layer_stack.selection.data
-        if sel.size == 0:
-            return None, None
-        d = self._sel_brush_size
-        if d < 1:
-            return None, None
-        return apply_line(
-            sel,
-            x0,
-            y0,
-            x1,
-            y1,
-            self._selection_brush(),
-            erase=self._selection_eraser,
         )
 
     # ------------------------------------------------------------------
@@ -594,7 +545,11 @@ class EditorCanvas(Canvas):
                 )
                 if self.on_edit_begin:
                     self.on_edit_begin("Selection Stroke", None, "selection")
-                dirty, _stamp = self._dab_selection(ix, iy)
+                dirty, _stamp = self._selection_painter.dab(
+                    self._layer_stack.selection.data,
+                    ix,
+                    iy,
+                )
                 self._edit_session.add_dirty(dirty)
                 self._update_overlay()
                 return
@@ -632,9 +587,19 @@ class EditorCanvas(Canvas):
             if self._edit_session.target == "selection":
                 if self._edit_session.last_pos:
                     lx, ly = self._edit_session.last_pos
-                    dirty, _stamp = self._stroke_selection_line(lx, ly, ixi, iyi)
+                    dirty, _stamp = self._selection_painter.line(
+                        self._layer_stack.selection.data,
+                        lx,
+                        ly,
+                        ixi,
+                        iyi,
+                    )
                 else:
-                    dirty, _stamp = self._dab_selection(ixi, iyi)
+                    dirty, _stamp = self._selection_painter.dab(
+                        self._layer_stack.selection.data,
+                        ixi,
+                        iyi,
+                    )
                 self._edit_session.add_dirty(dirty)
                 self._update_overlay()
                 self._edit_session.move_to((ixi, iyi))
