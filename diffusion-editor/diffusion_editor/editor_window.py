@@ -46,7 +46,14 @@ from .instruct_panel import InstructPanel
 from .selection_panel import SelectionPanel
 from .lama_engine import LamaEngine
 from .segmentation import SegmentationEngine
-from .diffusion_brush import extract_patch, extract_mask_patch
+from .generation_types import GenerationError
+from .patch_resolver import (
+    apply_patch_source_to_tool,
+    extract_layer_mask_patch,
+    resolve_source_patch,
+    source_patch_at_center,
+    source_patch_from_mask,
+)
 from .file_dialog import open_file_dialog, save_file_dialog, open_directory_dialog
 from .settings import Settings
 from .history import HistoryManager
@@ -1188,8 +1195,11 @@ class EditorWindow:
             composite = self._tool_source_composite(layer)
             if composite is None:
                 return None
-            patch_pil, ppx, ppy, pw, ph = extract_patch(
+            patch = source_patch_at_center(
                 composite, center_x, center_y)
+            ppx, ppy, px1, py1 = patch.canvas_rect
+            patch_pil = patch.image
+            pw, ph = px1 - ppx, py1 - ppy
 
         seed = self._diffusion_panel.seed
         if seed < 0:
@@ -1387,10 +1397,11 @@ class EditorWindow:
         if composite is None:
             return None
         cx, cy = self._canvas.view_center_image()
-        patch_pil, ppx, ppy, pw, ph = extract_patch(composite, cx, cy)
+        patch = source_patch_at_center(composite, cx, cy)
+        ppx, ppy, px1, py1 = patch.canvas_rect
         return LamaTool(
-            source_patch=patch_pil,
-            patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
+            source_patch=patch.image,
+            patch_x=ppx, patch_y=ppy, patch_w=px1 - ppx, patch_h=py1 - ppy,
         )
 
     def _on_lama_remove(self):
@@ -1401,25 +1412,17 @@ class EditorWindow:
         if self._lama_engine.is_busy or not layer.has_mask():
             return
 
-        bbox = layer.mask_bbox()
-        center = layer.mask_center()
-        if bbox is None or center is None:
-            return
         composite = self._canvas.get_composite_below(layer)
         if composite is None:
             return
 
-        bx0, by0, bx1, by1 = bbox
-        ps = max(bx1 - bx0, by1 - by0)
-        ps = max(int(ps * 1.25), 512)
-        cx, cy = center
-        patch_pil, ppx, ppy, pw, ph = extract_patch(composite, cx, cy, patch_size=ps)
-        tool.source_patch = patch_pil
-        tool.patch_x, tool.patch_y = ppx, ppy
-        tool.patch_w, tool.patch_h = pw, ph
+        patch = source_patch_from_mask(layer, composite)
+        if patch is None:
+            return
+        apply_patch_source_to_tool(tool, patch)
 
-        mask_pil = extract_mask_patch(layer.mask.data, ppx, ppy, pw, ph)
-        self._lama_engine.submit(patch_pil, mask_pil)
+        mask_pil = extract_layer_mask_patch(layer, patch.canvas_rect)
+        self._lama_engine.submit(patch.image, mask_pil)
         self._pending_lama_layer = layer
         self._statusbar.text = "Removing objects (LaMa)..."
 
@@ -1452,14 +1455,15 @@ class EditorWindow:
         if composite is None:
             return None
         cx, cy = self._canvas.view_center_image()
-        patch_pil, ppx, ppy, pw, ph = extract_patch(composite, cx, cy)
+        patch = source_patch_at_center(composite, cx, cy)
+        ppx, ppy, px1, py1 = patch.canvas_rect
         seed = self._instruct_panel.seed
         if seed < 0:
             seed = random.randint(0, 2**32 - 1)
             self._instruct_panel.set_seed(seed)
         return InstructTool(
-            source_patch=patch_pil,
-            patch_x=ppx, patch_y=ppy, patch_w=pw, patch_h=ph,
+            source_patch=patch.image,
+            patch_x=ppx, patch_y=ppy, patch_w=px1 - ppx, patch_h=py1 - ppy,
             instruction=self._instruct_panel.instruction,
             image_guidance_scale=self._instruct_panel.image_guidance_scale,
             guidance_scale=self._instruct_panel.guidance_scale,
@@ -1497,38 +1501,24 @@ class EditorWindow:
         if composite is None:
             return
 
-        if layer.patch_rect is not None:
-            x0, y0, x1, y1 = layer.local_rect_to_canvas(layer.patch_rect)
-            h, w = composite.shape[:2]
-            x0, y0 = max(0, x0), max(0, y0)
-            x1, y1 = min(w, x1), min(h, y1)
-            if x1 - x0 < 1 or y1 - y0 < 1:
-                return
-            patch_pil = Image.fromarray(composite[y0:y1, x0:x1]).convert("RGB")
-            tool.source_patch = patch_pil
-            tool.patch_x, tool.patch_y = x0, y0
-            tool.patch_w, tool.patch_h = x1 - x0, y1 - y0
-        elif layer.has_mask():
-            bbox = layer.mask_bbox()
-            center = layer.mask_center()
-            if bbox is not None and center is not None:
-                bx0, by0, bx1, by1 = bbox
-                ps = max(bx1 - bx0, by1 - by0)
-                ps = max(int(ps * 1.25), 512)
-                cx, cy = center
-                patch_pil, ppx, ppy, pw, ph = extract_patch(
-                    composite, cx, cy, patch_size=ps)
-                tool.source_patch = patch_pil
-                tool.patch_x, tool.patch_y = ppx, ppy
-                tool.patch_w, tool.patch_h = pw, ph
-        else:
-            cx = tool.patch_x + tool.patch_w // 2
-            cy = tool.patch_y + tool.patch_h // 2
-            patch_pil, ppx, ppy, pw, ph = extract_patch(
-                composite, cx, cy, patch_size=max(tool.patch_w, tool.patch_h))
-            tool.source_patch = patch_pil
-            tool.patch_x, tool.patch_y = ppx, ppy
-            tool.patch_w, tool.patch_h = pw, ph
+        patch = resolve_source_patch(
+            layer,
+            composite,
+            fallback_canvas_rect=(
+                tool.patch_x,
+                tool.patch_y,
+                tool.patch_x + tool.patch_w,
+                tool.patch_y + tool.patch_h,
+            ),
+        )
+        if isinstance(patch, GenerationError):
+            log.error(patch.log_message or patch.message)
+            self._statusbar.text = patch.message
+            return
+        if patch is None:
+            self._statusbar.text = "No source patch for instruction"
+            return
+        apply_patch_source_to_tool(tool, patch)
 
         self._instruct_engine.submit(
             image=tool.source_patch,
@@ -1625,7 +1615,10 @@ class EditorWindow:
             else:
                 self._instruct_panel.on_model_loaded()
                 self._statusbar.text = "InstructPix2Pix model loaded"
-                if isinstance(self._pending_instruct_layer.tool, InstructTool):
+                pending_layer = self._pending_instruct_layer
+                if (
+                        pending_layer is not None
+                        and isinstance(pending_layer.tool, InstructTool)):
                     self._on_instruct_apply()
         elif task_type == "inference":
             if error:

@@ -150,20 +150,24 @@ This is less urgent than request building because it is UI-specific and small.
 ## Current Progress
 
 - Added typed generation DTOs.
-- Extracted source patch preparation into `patch_resolver.py`.
+- Extracted source patch and mask preparation into `patch_resolver.py`.
 - Extracted IP-Adapter reference image preparation into `reference_resolver.py`.
 - Extracted diffusion request construction into `diffusion_request_builder.py`.
 - Extracted diffusion load/inference/pending workflow into
   `diffusion_generation_controller.py`.
+- Moved Diffusion, InstructPix2Pix, and LaMa source patch preparation onto the
+  shared patch resolver.
+- Moved layer-local mask crop extraction for Diffusion inpaint and LaMa onto the
+  shared patch resolver.
 - `EditorWindow` still owns UI wiring, dialogs, status updates, and document
-  command execution, but no longer owns diffusion request construction or
-  diffusion pending task state.
+  command execution, but no longer owns diffusion request construction,
+  diffusion pending task state, or pixel-level Patch/mask extraction.
 
 ## Remaining Refactor Targets
 
-- Move InstructPix2Pix patch preparation onto `patch_resolver.py`.
-- Move LaMa patch/mask preparation onto shared generation helpers.
 - Extract IP-Adapter reference picking dialog from `EditorWindow`.
+- Consider moving InstructPix2Pix and LaMa load/inference/pending workflows into
+  controller objects matching `diffusion_generation_controller.py`.
 - Consider replacing `DiffusionEngine.submit(...)`'s long argument list with
   `submit_request(DiffusionRequest)` after the current controller boundary
   settles.
