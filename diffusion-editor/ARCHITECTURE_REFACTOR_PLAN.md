@@ -255,7 +255,10 @@ Current status:
 - Application code and tests import panels/dialogs through
   `diffusion_editor.ui.*`; no top-level compatibility wrappers were kept for
   the moved UI modules.
-- App modules are still flat and should move in the final batch.
+- `diffusion_editor/app/` now owns process entry points, application settings,
+  and the `EditorWindow` composition root.
+- Agent and Grounding coordinator/DTO modules still remain flat and should be
+  considered for a follow-up feature-package pass.
 
 Possible final layout:
 
@@ -265,6 +268,13 @@ diffusion_editor/
     editor_window.py
     main.py
     settings.py
+  agent/
+    chat_panel.py
+    runner.py
+    tools.py
+  grounding/
+    controller.py
+    types.py
   document/
     layer.py
     layer_stack.py
@@ -302,12 +312,12 @@ diffusion_editor/
 Tasks:
 
 - Move files in small batches. Done for document, canvas, generation, engine,
-  and UI packages.
+  UI, and app packages.
 - Update imports mechanically. Done for document, canvas, generation, engine,
-  and UI packages.
+  UI, and app packages.
 - Run full tests after each batch. Done locally for document, canvas,
-  generation, engine, and UI packages; run central tests before committing each
-  batch.
+  generation, engine, UI, and app packages; run central tests before committing
+  each batch.
 - Avoid combining package moves with behavior changes.
 
 Success criteria:
@@ -577,8 +587,14 @@ Success criteria:
   `ip_adapter_reference_dialog.py`.
 - Updated editor window and dialog tests to use `diffusion_editor.ui.*`.
 - Kept no top-level compatibility wrappers for the moved UI modules.
-- Remaining Phase 7 work: move app composition modules in the final tested
-  batch.
+- Created `diffusion_editor/app/` as the sixth package reorganization batch.
+- Moved app composition modules under the app package:
+  `editor_window.py`, `main.py`, and `settings.py`.
+- Updated launch scripts to run `python -m diffusion_editor.app.main`.
+- Updated tests and agent chat settings import to use `diffusion_editor.app.*`.
+- Kept no top-level compatibility wrappers for the moved app modules.
+- Remaining Phase 7 follow-up: decide whether to make dedicated `agent/` and
+  `grounding/` packages for the remaining top-level feature modules.
 
 ## Architectural Smell Checklist
 

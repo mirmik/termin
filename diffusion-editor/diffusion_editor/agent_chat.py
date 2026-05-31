@@ -14,7 +14,7 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.units import pct, px
 from tcgui.widgets.vstack import VStack
 
-from .settings import Settings
+from .app.settings import Settings
 
 try:
     from nemor.core.session import Session
