@@ -2,7 +2,7 @@ from threading import Thread
 from PIL import Image
 from tcbase import log
 
-from .generation.types import EnginePollEvent, LamaRequest, LamaResult
+from ..generation.types import EnginePollEvent, LamaRequest, LamaResult
 
 
 class LamaEngine:

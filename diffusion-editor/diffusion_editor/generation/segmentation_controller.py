@@ -10,7 +10,7 @@ from tcbase import log
 
 from .types import SegmentationRequest, SegmentationResult
 from ..document.layer import Layer
-from ..segmentation import SegmentationEngine
+from ..engines.segmentation_engine import SegmentationEngine
 
 
 @dataclass(frozen=True)

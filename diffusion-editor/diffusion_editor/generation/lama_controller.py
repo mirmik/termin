@@ -10,7 +10,7 @@ from PIL import Image
 from tcbase import log
 
 from .types import LamaRequest, LamaResult
-from ..lama_engine import LamaEngine
+from ..engines.lama_engine import LamaEngine
 from ..document.layer import Layer
 from .patch_resolver import (
     apply_patch_source_to_tool,

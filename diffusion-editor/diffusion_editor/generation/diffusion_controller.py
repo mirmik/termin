@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image
 from tcbase import log
 
-from ..diffusion_engine import DiffusionEngine
+from ..engines.diffusion_engine import DiffusionEngine
 from .diffusion_request_builder import DiffusionRequestBuilder
 from .types import DiffusionInferenceResult
 from ..document.layer import Layer

@@ -3,7 +3,7 @@ from threading import Thread
 from PIL import Image
 from tcbase import log
 
-from .generation.types import EnginePollEvent, SegmentationRequest, SegmentationResult
+from ..generation.types import EnginePollEvent, SegmentationRequest, SegmentationResult
 
 
 class SegmentationEngine:

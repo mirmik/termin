@@ -2,7 +2,7 @@ import threading
 from PIL import Image
 from tcbase import log
 
-from .generation.types import (
+from ..generation.types import (
     EnginePollEvent,
     InstructInferenceResult,
     InstructRequest,

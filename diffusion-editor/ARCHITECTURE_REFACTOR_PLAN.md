@@ -247,7 +247,11 @@ Current status:
 - Application code and tests import generation types through
   `diffusion_editor.generation.*`; no top-level compatibility wrappers were kept
   for the moved generation modules.
-- Engine, app, and UI modules are still flat and should move in later batches.
+- `diffusion_editor/engines/` now owns backend adapters for diffusion,
+  InstructPix2Pix, LaMa, segmentation, and Grounding.
+- Application code imports engines through `diffusion_editor.engines.*`; no
+  top-level compatibility wrappers were kept for the moved engine modules.
+- App and UI modules are still flat and should move in later batches.
 
 Possible final layout:
 
@@ -293,12 +297,13 @@ diffusion_editor/
 
 Tasks:
 
-- Move files in small batches. Done for document, canvas, and generation
+- Move files in small batches. Done for document, canvas, generation, and engine
   packages.
-- Update imports mechanically. Done for document, canvas, and generation
+- Update imports mechanically. Done for document, canvas, generation, and engine
   packages.
-- Run full tests after each batch. Done locally for document, canvas, and
-  generation packages; run central tests before committing each batch.
+- Run full tests after each batch. Done locally for document, canvas,
+  generation, and engine packages; run central tests before committing each
+  batch.
 - Avoid combining package moves with behavior changes.
 
 Success criteria:
@@ -549,8 +554,18 @@ Success criteria:
 - Updated engines, application code, and tests to use
   `diffusion_editor.generation.*`.
 - Kept no top-level compatibility wrappers for the moved generation modules.
-- Remaining Phase 7 work: move engines next, then UI panels/dialogs and app
-  composition modules in separate tested batches.
+- Created `diffusion_editor/engines/` as the fourth package reorganization
+  batch.
+- Moved backend adapters under the engines package:
+  `diffusion_engine.py`, `instruct_engine.py`, `lama_engine.py`,
+  `segmentation_engine.py`, and `grounding_engine.py`.
+- Renamed old `segmentation.py` to `engines/segmentation_engine.py` so the module
+  name matches its role.
+- Updated generation controllers, editor window, and engine-internal imports to
+  use `diffusion_editor.engines.*`.
+- Kept no top-level compatibility wrappers for the moved engine modules.
+- Remaining Phase 7 work: move UI panels/dialogs next, then app composition
+  modules in separate tested batches.
 
 ## Architectural Smell Checklist
 
