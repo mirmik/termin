@@ -16,8 +16,8 @@ from .canvas_overlay import CanvasOverlayBridge
 from .canvas_paint_stroke import PaintStrokeBuffer
 from .canvas_selection_paint import CanvasSelectionPainter
 from .canvas_smudge import SmudgeStrokeBuffer
-from .layer import Layer
-from .layer_stack import LayerStack
+from .document.layer import Layer
+from .document.layer_stack import LayerStack
 
 Rect = tuple[int, int, int, int]
 

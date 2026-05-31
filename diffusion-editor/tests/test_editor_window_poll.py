@@ -3,7 +3,7 @@ from PIL import Image
 
 from diffusion_editor.diffusion_generation_controller import DiffusionControllerEvent
 from diffusion_editor.editor_window import EditorWindow
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.layer_stack import LayerStack
 
 
 class _Panel:

@@ -61,14 +61,12 @@ architecture.
    document boundary.
 
    Tool dict/zip IO has been moved out of `tool.py` into
-   `tool_serialization.py`. A future document-package split should place that
-   module next to layer/project serialization rather than next to runtime tool
-   classes.
+   `document/tool_serialization.py`, next to archive serialization helpers.
 
 7. The package is flat.
 
-   This is tolerable while boundaries are being extracted, but it already makes
-   subsystem ownership harder to see.
+   Document modules now live under `diffusion_editor/document/`. Canvas,
+   generation, engine, and UI modules still remain mostly flat.
 
 ## Phase 1: Close Document Model Violations
 
@@ -190,9 +188,11 @@ Current status:
 
 - Runtime tool classes in `tool.py` no longer implement dict/zip
   serialization.
-- Tool serialization/deserialization now lives in `tool_serialization.py`.
-- Shared array/PIL zip helpers live in `archive_serialization.py`, so layer,
-  selection, and tool serialization do not depend on each other for archive IO.
+- Tool serialization/deserialization now lives in
+  `document/tool_serialization.py`.
+- Shared array/PIL zip helpers live in `document/archive_serialization.py`, so
+  layer, selection, and tool serialization do not depend on each other for
+  archive IO.
 - `Layer` and `LayerStack` call explicit serialization helpers instead of
   reaching through runtime tool methods.
 - Legacy `manual_patch_rect` is loaded as migration metadata and moved to
@@ -202,7 +202,8 @@ Tasks:
 
 - Keep runtime tool classes/dataclasses focused on current editable state. Done
   for the existing tool classes.
-- Move tool serialization/deserialization to `tool_serialization.py`. Done.
+- Move tool serialization/deserialization to `document/tool_serialization.py`.
+  Done.
 - Move legacy migration helpers out of normal runtime paths where possible.
   Done for legacy `manual_patch_rect`.
 - Add explicit migration tests for old tool formats. Done for nested mask files,
@@ -212,8 +213,7 @@ Tasks:
 
 Remaining follow-up:
 
-- When package reorganization starts, move project/layer/tool serialization into
-  a document serialization module/package.
+- Finish moving project/layer serialization into the document package.
 - If ControlNet or richer reference inputs add substantial data shape, introduce
   typed serializable settings DTOs instead of expanding ad hoc dict builders.
 
@@ -226,6 +226,17 @@ Success criteria:
 ## Phase 7: Reorganize Packages After Boundaries Exist
 
 Only move modules after earlier phases make ownership clear.
+
+Current status:
+
+- `diffusion_editor/document/` now owns the document model, document commands,
+  history, layer stack, masks, tiles, tool runtime models, layer rendering, and
+  document/archive/tool serialization.
+- Application code and tests import document types through
+  `diffusion_editor.document.*`; no top-level compatibility wrappers were kept
+  for the moved document modules.
+- Canvas, generation, engine, and UI modules are still flat and should move in
+  later batches.
 
 Possible final layout:
 
@@ -268,9 +279,10 @@ diffusion_editor/
 
 Tasks:
 
-- Move files in small batches.
-- Update imports mechanically.
-- Run full tests after each batch.
+- Move files in small batches. Started with the document package.
+- Update imports mechanically. Done for the document package.
+- Run full tests after each batch. Done locally for the document package; run
+  central tests before committing each batch.
 - Avoid combining package moves with behavior changes.
 
 Success criteria:
@@ -470,10 +482,10 @@ Success criteria:
   reduce compatibility properties in `EditorCanvas` once tests stop needing
   them, or split `CanvasToolContext` during package reorganization.
 - Phase 6 implemented for the current tool model.
-- Added `tool_serialization.py` for tool dict/zip serialization and legacy tool
-  migrations.
-- Added `archive_serialization.py` for low-level archive array/PIL helpers used
-  by layer, selection, and tool serialization.
+- Added `document/tool_serialization.py` for tool dict/zip serialization and
+  legacy tool migrations.
+- Added `document/archive_serialization.py` for low-level archive array/PIL
+  helpers used by layer, selection, and tool serialization.
 - Removed `to_dict()`, `from_dict()`, `save_assets_to_zip()`, and archive helper
   ownership from runtime tool classes in `tool.py`.
 - `Layer` and `LayerStack` now use explicit archive/tool serialization helpers
@@ -481,9 +493,22 @@ Success criteria:
 - Legacy `manual_patch_rect` now loads as `ToolLoadResult.legacy_patch_rect` and
   migrates to `Layer.patch_rect` without leaving a `manual_patch_rect` field on
   the runtime tool.
-- Remaining Phase 6 follow-up: fold project/layer/tool serialization into a
-  document serialization package during Phase 7, and consider typed settings
-  DTOs when ControlNet/multi-reference data shapes grow.
+- Remaining Phase 6 follow-up: finish folding project/layer serialization into
+  the document package during Phase 7, and consider typed settings DTOs when
+  ControlNet/multi-reference data shapes grow.
+- Phase 7 started.
+- Created `diffusion_editor/document/` as the first package reorganization
+  batch.
+- Moved document-owned modules under the document package:
+  `layer.py`, `layer_stack.py`, `commands.py`, `document_service.py`,
+  `history.py`, `mask.py`, `tiles.py`, `tool.py`, `layer_renderer.py`,
+  `archive_serialization.py`, and `tool_serialization.py`.
+- Updated application and test imports to use `diffusion_editor.document.*`.
+- Kept no top-level compatibility wrappers for the moved document modules,
+  because this is still active development and stale import paths should fail
+  loudly.
+- Remaining Phase 7 work: move canvas modules next, then generation/controllers,
+  engines, and UI panels/dialogs in separate tested batches.
 
 ## Architectural Smell Checklist
 

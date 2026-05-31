@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .layer import Layer
+from .document.layer import Layer
 
 Rect = tuple[int, int, int, int]
 

@@ -9,7 +9,7 @@ import numpy as np
 from tcbase import log
 
 from .generation_types import SegmentationRequest, SegmentationResult
-from .layer import Layer
+from .document.layer import Layer
 from .segmentation import SegmentationEngine
 
 

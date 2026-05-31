@@ -15,9 +15,9 @@ from .generation_types import (
     InstructRequest,
 )
 from .instruct_engine import InstructEngine
-from .layer import Layer
+from .document.layer import Layer
 from .patch_resolver import apply_patch_source_to_tool, resolve_source_patch
-from .tool import InstructTool
+from .document.tool import InstructTool
 
 
 @dataclass(frozen=True)

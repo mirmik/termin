@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from diffusion_editor.layer import Layer
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.layer import Layer
+from diffusion_editor.document.layer_stack import LayerStack
 from diffusion_editor.canvas_tools import MoveTool
 from diffusion_editor.canvas_geometry import union_rect
 

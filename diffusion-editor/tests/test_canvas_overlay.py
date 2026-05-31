@@ -6,7 +6,7 @@ from diffusion_editor.canvas_overlay import (
     CanvasOverlayBridge,
     compose_overlay_pixels,
 )
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.layer_stack import LayerStack
 
 
 def _rgba(width, height, color=(0, 0, 0, 0)):

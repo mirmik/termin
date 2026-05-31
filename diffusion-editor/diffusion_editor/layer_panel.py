@@ -15,9 +15,9 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.message_box import MessageBox, Buttons
 from tcgui.widgets.units import px, pct
 
-from .layer_stack import LayerStack
-from .layer import Layer
-from .tool import DiffusionTool, LamaTool, InstructTool
+from .document.layer_stack import LayerStack
+from .document.layer import Layer
+from .document.tool import DiffusionTool, LamaTool, InstructTool
 
 
 class LayerPanel(VStack):

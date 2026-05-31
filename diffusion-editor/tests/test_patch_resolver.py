@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.layer import Layer
+from diffusion_editor.document.layer import Layer
 from diffusion_editor.patch_resolver import (
     extract_layer_mask_patch,
     resolve_source_patch,

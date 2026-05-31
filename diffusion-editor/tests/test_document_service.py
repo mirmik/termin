@@ -3,20 +3,20 @@
 import numpy as np
 from PIL import Image
 
-from diffusion_editor.document_service import (
+from diffusion_editor.document.document_service import (
     CallbackCommand, CommandBus, DocumentService,
 )
-from diffusion_editor.commands import (
+from diffusion_editor.document.commands import (
     AddLayerCommand, SetLayerOpacityCommand, FlattenLayersCommand,
     SnapshotCallbackCommand, ClearLayerMaskCommand, SetLayerPatchRectCommand,
     ClearLayerPatchRectCommand, ReplaceLayerMaskCommand,
     ApplyGeneratedResultCommand, SetLayerSelectionCommand,
     AttachLayerToolCommand, DetachLayerToolCommand,
 )
-from diffusion_editor.layer import Layer
-from diffusion_editor.tool import DiffusionTool
-from diffusion_editor.history import HistoryManager
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.layer import Layer
+from diffusion_editor.document.tool import DiffusionTool
+from diffusion_editor.document.history import HistoryManager
+from diffusion_editor.document.layer_stack import LayerStack
 
 
 def _diff_layer() -> Layer:

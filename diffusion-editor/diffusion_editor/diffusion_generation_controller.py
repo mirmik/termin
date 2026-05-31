@@ -12,9 +12,9 @@ from tcbase import log
 from .diffusion_engine import DiffusionEngine
 from .diffusion_request_builder import DiffusionRequestBuilder
 from .generation_types import DiffusionInferenceResult
-from .layer import Layer
-from .layer_stack import LayerStack
-from .tool import DiffusionTool
+from .document.layer import Layer
+from .document.layer_stack import LayerStack
+from .document.tool import DiffusionTool
 
 
 @dataclass(frozen=True)

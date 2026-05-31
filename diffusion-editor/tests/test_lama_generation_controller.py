@@ -3,9 +3,9 @@ from PIL import Image
 
 from diffusion_editor.generation_types import EnginePollEvent, LamaResult
 from diffusion_editor.lama_generation_controller import LamaGenerationController
-from diffusion_editor.layer import Layer
-from diffusion_editor.layer_stack import LayerStack
-from diffusion_editor.tool import LamaTool
+from diffusion_editor.document.layer import Layer
+from diffusion_editor.document.layer_stack import LayerStack
+from diffusion_editor.document.tool import LamaTool
 
 
 def _rgba(width, height, color):

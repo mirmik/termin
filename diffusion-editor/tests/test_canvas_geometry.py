@@ -5,7 +5,7 @@ from diffusion_editor.canvas_geometry import (
     union_rect,
     visible_layer_rect,
 )
-from diffusion_editor.layer import Layer
+from diffusion_editor.document.layer import Layer
 
 
 def test_union_rect_handles_empty_inputs():

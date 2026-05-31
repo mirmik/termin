@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from diffusion_editor.commands import (
+from diffusion_editor.document.commands import (
     MoveLayerCommand,
     SetLayerNameCommand,
     SetLayerVisibilityCommand,
 )
-from diffusion_editor.document_service import DocumentService
-from diffusion_editor.history import HistoryManager
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.document_service import DocumentService
+from diffusion_editor.document.history import HistoryManager
+from diffusion_editor.document.layer_stack import LayerStack
 
 
 def _base_stack() -> LayerStack:

@@ -1,9 +1,9 @@
 import numpy as np
 
 from diffusion_editor.diffusion_request_builder import DiffusionRequestBuilder
-from diffusion_editor.layer import Layer
-from diffusion_editor.layer_stack import LayerStack
-from diffusion_editor.tool import DiffusionTool
+from diffusion_editor.document.layer import Layer
+from diffusion_editor.document.layer_stack import LayerStack
+from diffusion_editor.document.tool import DiffusionTool
 
 
 def _rgba(width, height, color):

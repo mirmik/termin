@@ -4,7 +4,7 @@ from diffusion_editor.generation_types import (
     EnginePollEvent,
     SegmentationResult,
 )
-from diffusion_editor.layer import Layer
+from diffusion_editor.document.layer import Layer
 from diffusion_editor.segmentation_generation_controller import (
     SegmentationGenerationController,
 )

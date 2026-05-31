@@ -1,6 +1,6 @@
 """Tests for history memory limits."""
 
-from diffusion_editor.history import HistoryManager
+from diffusion_editor.document.history import HistoryManager
 
 
 def _noop():
