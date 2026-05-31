@@ -40,7 +40,7 @@ from .editor_canvas import EditorCanvas
 from .layer_panel import LayerPanel
 from .brush_panel import BrushPanel
 from .diffusion_panel import DiffusionPanel
-from .diffusion_request_builder import DiffusionRequestBuilder
+from .diffusion_generation_controller import DiffusionGenerationController
 from .lama_panel import LamaPanel
 from .instruct_panel import InstructPanel
 from .selection_panel import SelectionPanel
@@ -101,7 +101,6 @@ class EditorWindow:
         self._last_dir: str = self._settings.get("last_dir", "")
         self._history_memory_limit_bytes = self._load_history_memory_limit_bytes()
         self._models_dir = self._load_models_dir()
-        self._pending_request = None
         self._pending_lama_layer = None
         self._pending_instruct_layer = None
         self._pending_grounding_result = None
@@ -136,6 +135,11 @@ class EditorWindow:
 
         # Build UI
         self._build_ui()
+        self._diffusion_controller = DiffusionGenerationController(
+            engine=self._engine,
+            layer_stack=self._layer_stack,
+            composite_below=lambda layer: self._canvas.get_composite_below(layer),
+        )
 
         # Wire callbacks
         self._wire_callbacks()
@@ -1146,8 +1150,7 @@ class EditorWindow:
     def _detach_tool_from_layer(self, layer: Layer):
         if layer is None or layer.tool is None:
             return
-        if self._pending_request is layer:
-            self._pending_request = None
+        self._diffusion_controller.clear_pending_layer(layer)
         if self._pending_lama_layer is layer:
             self._pending_lama_layer = None
         if self._pending_instruct_layer is layer:
@@ -1165,10 +1168,12 @@ class EditorWindow:
     # ------------------------------------------------------------------
 
     def _on_load_model(self, path: str, prediction_type: str):
-        if self._engine.is_busy:
-            return
-        pred = prediction_type if prediction_type else None
-        self._engine.submit_load(path, pred)
+        event = self._diffusion_controller.submit_load_model(
+            path,
+            prediction_type,
+        )
+        if event.status:
+            self._statusbar.text = event.status
 
     def _make_diffusion_tool(self, layer: Layer) -> DiffusionTool | None:
         mode = self._diffusion_panel.mode
@@ -1237,65 +1242,9 @@ class EditorWindow:
         tool = layer.tool
         self._sync_panel_to_layer(tool)
 
-        if tool.model_path and tool.model_path != self._engine.model_path:
-            self._pending_request = layer
-            pred = tool.prediction_type if tool.prediction_type else None
-            self._engine.submit_load(tool.model_path, pred)
-            self._statusbar.text = "Loading model for regeneration..."
-            return
-
-        if not self._engine.is_loaded:
-            return
-        self._submit_regenerate(layer)
-
-    def _submit_regenerate(self, layer: Layer):
-        tool = layer.tool
-        self._pending_request = layer
-
-        composite_below = None
-        if tool.mode != "txt2img":
-            composite_below = self._canvas.get_composite_below(layer)
-
-        build = DiffusionRequestBuilder(self._layer_stack).build(
-            layer,
-            composite_below,
-        )
-        if build.error is not None:
-            log.error(build.error.log_message or build.error.message)
-            self._statusbar.text = build.error.message
-            self._pending_request = None
-            return
-        request = build.request
-        if request is None:
-            log.error(f"Diffusion request builder returned no request for {layer.name}")
-            self._statusbar.text = "Could not build diffusion request"
-            self._pending_request = None
-            return
-
-        if request.ip_adapter_image is not None:
-            if not self._engine.ip_adapter_loaded:
-                self._pending_request = layer
-                self._engine.submit_load_ip_adapter()
-                self._statusbar.text = "Loading IP-Adapter..."
-                return
-
-        self._engine.submit(
-            image=request.image,
-            prompt=request.prompt,
-            negative_prompt=request.negative_prompt,
-            strength=request.strength,
-            steps=request.steps,
-            guidance_scale=request.guidance_scale,
-            seed=request.seed,
-            mode=request.mode,
-            mask_image=request.mask_image,
-            masked_content=request.masked_content,
-            ip_adapter_image=request.ip_adapter_image,
-            ip_adapter_scale=request.ip_adapter_scale,
-            width=request.width,
-            height=request.height,
-        )
-        self._statusbar.text = f"Regenerating ({request.width}x{request.height})..."
+        event = self._diffusion_controller.start_regeneration(layer)
+        if event.status:
+            self._statusbar.text = event.status
 
     def _on_new_seed(self):
         layer = self._layer_stack.active_layer
@@ -1307,10 +1256,9 @@ class EditorWindow:
         self._on_regenerate()
 
     def _on_load_ip_adapter(self):
-        if self._engine.is_busy or not self._engine.is_loaded:
-            return
-        self._engine.submit_load_ip_adapter()
-        self._statusbar.text = "Loading IP-Adapter..."
+        event = self._diffusion_controller.submit_load_ip_adapter()
+        if event.status:
+            self._statusbar.text = event.status
 
     def _ip_adapter_layer_label(self, layer: Layer) -> str:
         path = self._layer_stack.get_layer_path(layer)
@@ -1694,63 +1642,34 @@ class EditorWindow:
             self._pending_instruct_layer = None
 
     def _poll_diffusion(self):
-        task_type, result, error, meta = self._engine.poll()
-        if task_type is None:
+        event = self._diffusion_controller.poll()
+        if event is None:
             return
 
-        log.debug(
-            f"[_poll_diffusion] task_type={task_type}, error={error}, result_type={type(result)}"
-        )
-
-        if task_type == "load":
-            if error:
-                log.error(f"Diffusion model load error: {error}")
-                self._diffusion_panel.on_model_load_error(error)
-                self._statusbar.text = f"Model load error: {error[:80]}"
-                self._pending_request = None
-            else:
-                self._diffusion_panel.on_model_loaded(result, self._engine.model_info)
-                pending = self._pending_request
-                if pending is not None and isinstance(pending.tool, DiffusionTool):
-                    self._submit_regenerate(pending)
-                    return
-                self._statusbar.text = "Model loaded"
-
-        elif task_type == "load_ip_adapter":
-            if error:
-                log.error(f"IP-Adapter load error: {error}")
-                self._diffusion_panel.on_ip_adapter_load_error(error)
-                self._statusbar.text = f"IP-Adapter error: {error[:80]}"
-                self._pending_request = None
-            else:
-                self._diffusion_panel.on_ip_adapter_loaded()
-                pending = self._pending_request
-                if pending is not None and isinstance(pending.tool, DiffusionTool):
-                    self._submit_regenerate(pending)
-                    return
-                self._statusbar.text = "IP-Adapter loaded"
-
-        elif task_type == "inference":
-            if error:
-                log.error(f"Diffusion inference error: {error}")
-                self._statusbar.text = f"Diffusion error: {error[:80]}"
-                self._pending_request = None
-                return
-
-            pending = self._pending_request
-            if pending is None:
-                self._statusbar.text = "Diffusion result ignored: no pending layer"
-                return
-            result_image, used_seed = result
-            log.debug(
-                f"[_poll_diffusion] inference OK, seed={used_seed}, pending={type(pending).__name__}"
+        if event.model_error is not None:
+            self._diffusion_panel.on_model_load_error(event.model_error)
+        elif event.model_loaded_path is not None:
+            self._diffusion_panel.on_model_loaded(
+                event.model_loaded_path,
+                self._engine.model_info,
             )
+
+        if event.ip_adapter_error is not None:
+            self._diffusion_panel.on_ip_adapter_load_error(event.ip_adapter_error)
+        elif event.ip_adapter_loaded:
+            self._diffusion_panel.on_ip_adapter_loaded()
+
+        if event.inference_result is not None:
+            pending, result_image, used_seed = event.inference_result
             command, status = map_diffusion_result(
                 pending, result_image, used_seed)
             if command is not None:
                 self._document.execute(command)
             self._statusbar.text = status
-            self._pending_request = None
+            return
+
+        if event.status is not None:
+            self._statusbar.text = event.status
 
     def _show_grounding_dialog(self) -> None:
         from .grounding_dialog import GroundingDialog

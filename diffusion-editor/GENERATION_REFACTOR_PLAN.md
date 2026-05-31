@@ -146,3 +146,24 @@ This is less urgent than request building because it is UI-specific and small.
   the UI.
 - Missing/invalid reference inputs still log and surface errors.
 - Existing editor behavior and tests remain green.
+
+## Current Progress
+
+- Added typed generation DTOs.
+- Extracted source patch preparation into `patch_resolver.py`.
+- Extracted IP-Adapter reference image preparation into `reference_resolver.py`.
+- Extracted diffusion request construction into `diffusion_request_builder.py`.
+- Extracted diffusion load/inference/pending workflow into
+  `diffusion_generation_controller.py`.
+- `EditorWindow` still owns UI wiring, dialogs, status updates, and document
+  command execution, but no longer owns diffusion request construction or
+  diffusion pending task state.
+
+## Remaining Refactor Targets
+
+- Move InstructPix2Pix patch preparation onto `patch_resolver.py`.
+- Move LaMa patch/mask preparation onto shared generation helpers.
+- Extract IP-Adapter reference picking dialog from `EditorWindow`.
+- Consider replacing `DiffusionEngine.submit(...)`'s long argument list with
+  `submit_request(DiffusionRequest)` after the current controller boundary
+  settles.

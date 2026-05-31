@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image
 
+from diffusion_editor.diffusion_generation_controller import DiffusionControllerEvent
 from diffusion_editor.editor_window import EditorWindow
 from diffusion_editor.layer_stack import LayerStack
 
@@ -16,20 +17,25 @@ class _Panel:
 class _Engine:
     model_info = {"path": "model.safetensors"}
 
-    def poll(self):
-        return "load", "model.safetensors", None, None
-
 
 class _Status:
     text = ""
 
 
-def test_poll_diffusion_load_without_pending_request():
+class _DiffusionController:
+    def poll(self):
+        return DiffusionControllerEvent(
+            model_loaded_path="model.safetensors",
+            status="Model loaded",
+        )
+
+
+def test_poll_diffusion_forwards_controller_model_loaded_event():
     window = object.__new__(EditorWindow)
     window._engine = _Engine()
+    window._diffusion_controller = _DiffusionController()
     window._diffusion_panel = _Panel()
     window._statusbar = _Status()
-    window._pending_request = None
 
     window._poll_diffusion()
 
