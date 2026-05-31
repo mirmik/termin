@@ -14,6 +14,14 @@ from .layer_stack import LayerStack
 from .layer import Layer
 from .tool import LamaTool, InstructTool
 from .brush import Brush, BrushToolMode
+from .canvas_geometry import (
+    canvas_to_layer_point,
+    clip_canvas_rect,
+    clip_layer_local_rect,
+    union_rect,
+    visible_layer_rect,
+)
+from .canvas_rect_drag import CanvasRectDrag
 from .canvas_tools import create_canvas_tools
 from .gpu_compositor import GPUCompositor
 
@@ -62,16 +70,16 @@ class EditorCanvas(Canvas):
         self._selection_eraser = False
 
         # Selection rectangle mode
-        self._selection_rect_mode = False
-        self._selection_rect_dragging = False
-        self._selection_rect_start: tuple[int, int] | None = None
-        self._selection_rect_end: tuple[int, int] | None = None
+        self._selection_rect_drag = CanvasRectDrag(
+            include_end_pixel=True,
+            min_size=1,
+        )
 
         # Rectangle modes
-        self._patch_rect_mode = False
-        self._patch_rect_dragging = False
-        self._patch_rect_start: tuple[int, int] | None = None
-        self._patch_rect_end: tuple[int, int] | None = None
+        self._patch_rect_drag = CanvasRectDrag(
+            include_end_pixel=False,
+            min_size=2,
+        )
         self._show_patch_rect = True
 
         # Stroke buffer (MAX blending during one stroke)
@@ -428,10 +436,8 @@ class EditorCanvas(Canvas):
         self._selection_eraser = eraser
 
     def set_selection_rect_mode(self, on: bool):
-        self._selection_rect_mode = on
+        self._selection_rect_drag.set_enabled(on)
         self.cursor = "cross" if on else ""
-        if not on:
-            self._selection_rect_dragging = False
 
     def set_show_mask(self, show: bool):
         self._show_mask = show
@@ -443,10 +449,8 @@ class EditorCanvas(Canvas):
         self._update_overlay()
 
     def set_patch_rect_mode(self, on: bool):
-        self._patch_rect_mode = on
+        self._patch_rect_drag.set_enabled(on)
         self.cursor = "cross" if on else ""
-        if not on:
-            self._patch_rect_dragging = False
 
     def set_show_patch_rect(self, show: bool):
         self._show_patch_rect = show
@@ -556,32 +560,24 @@ class EditorCanvas(Canvas):
 
     @staticmethod
     def _union_rect(a, b):
-        if a is None:
-            return b
-        if b is None:
-            return a
-        ax0, ay0, ax1, ay1 = a
-        bx0, by0, bx1, by1 = b
-        return (min(ax0, bx0), min(ay0, by0), max(ax1, bx1), max(ay1, by1))
+        return union_rect(a, b)
 
     def _canvas_to_layer_point(self, layer, x: int, y: int) -> tuple[int, int]:
-        return int(x - layer.x), int(y - layer.y)
+        return canvas_to_layer_point(layer, x, y)
 
     def _clip_canvas_rect(self, rect):
-        x0, y0, x1, y1 = rect
-        return (
-            max(0, x0),
-            max(0, y0),
-            min(self._layer_stack.width, x1),
-            min(self._layer_stack.height, y1),
+        return clip_canvas_rect(
+            rect,
+            self._layer_stack.width,
+            self._layer_stack.height,
         )
 
     def _visible_layer_rect(self, layer):
-        cx0, cy0, cx1, cy1 = self._clip_canvas_rect(layer.bounds)
-        if cx1 <= cx0 or cy1 <= cy0:
-            return (0, 0, 0, 0)
-        return (cx0 - layer.x, cy0 - layer.y,
-                cx1 - layer.x, cy1 - layer.y)
+        return visible_layer_rect(
+            layer,
+            self._layer_stack.width,
+            self._layer_stack.height,
+        )
 
     def _can_edit_layer(self, layer) -> bool:
         return (
@@ -590,24 +586,12 @@ class EditorCanvas(Canvas):
         )
 
     def _clip_layer_local_rect(self, layer, rect):
-        if rect is None:
-            return None, None
-        x0, y0, x1, y1 = rect
-        x0 = max(0, x0)
-        y0 = max(0, y0)
-        x1 = min(layer.width, x1)
-        y1 = min(layer.height, y1)
-        if x1 <= x0 or y1 <= y0:
-            return None, None
-        canvas_rect = layer.local_rect_to_canvas((x0, y0, x1, y1))
-        cx0, cy0, cx1, cy1 = self._clip_canvas_rect(canvas_rect)
-        if cx1 <= cx0 or cy1 <= cy0:
-            return None, None
-        lx0 = cx0 - layer.x
-        ly0 = cy0 - layer.y
-        lx1 = lx0 + (cx1 - cx0)
-        ly1 = ly0 + (cy1 - cy0)
-        return (lx0, ly0, lx1, ly1), (cx0, cy0, cx1, cy1)
+        return clip_layer_local_rect(
+            layer,
+            rect,
+            self._layer_stack.width,
+            self._layer_stack.height,
+        )
 
     # ------------------------------------------------------------------
     # Selection painting
@@ -981,10 +965,7 @@ class EditorCanvas(Canvas):
                 return
 
             # Selection rect mode
-            if self._selection_rect_mode:
-                self._selection_rect_dragging = True
-                self._selection_rect_start = (ix, iy)
-                self._selection_rect_end = (ix, iy)
+            if self._selection_rect_drag.begin(ix, iy):
                 return
 
             # Selection painting
@@ -1006,10 +987,7 @@ class EditorCanvas(Canvas):
                 return
 
             # Patch rect mode
-            if self._patch_rect_mode and layer is not None:
-                self._patch_rect_dragging = True
-                self._patch_rect_start = (ix, iy)
-                self._patch_rect_end = (ix, iy)
+            if self._patch_rect_drag.begin(ix, iy):
                 return
 
             # Painting
@@ -1028,12 +1006,10 @@ class EditorCanvas(Canvas):
     def _handle_mouse_move(self, ix: float, iy: float):
         ixi, iyi = int(ix), int(iy)
 
-        if self._selection_rect_dragging:
-            self._selection_rect_end = (ixi, iyi)
+        if self._selection_rect_drag.move(ixi, iyi):
             return
 
-        if self._patch_rect_dragging:
-            self._patch_rect_end = (ixi, iyi)
+        if self._patch_rect_drag.move(ixi, iyi):
             return
 
         if self._painting:
@@ -1061,30 +1037,18 @@ class EditorCanvas(Canvas):
     def _handle_mouse_up(self, ix: float, iy: float):
         ixi, iyi = int(ix), int(iy)
 
-        if self._selection_rect_dragging:
-            sx, sy = self._selection_rect_start
-            x0, y0 = min(sx, ixi), min(sy, iyi)
-            x1, y1 = max(sx, ixi) + 1, max(sy, iyi) + 1
-            self._selection_rect_dragging = False
-            self._selection_rect_start = None
-            self._selection_rect_end = None
-            self._selection_rect_mode = False
+        if self._selection_rect_drag.dragging:
+            result = self._selection_rect_drag.finish(ixi, iyi)
             self.cursor = ""
-            if x1 - x0 > 1 and y1 - y0 > 1 and self.on_selection_rect_drawn:
-                self.on_selection_rect_drawn(x0, y0, x1, y1)
+            if result is not None and self.on_selection_rect_drawn:
+                self.on_selection_rect_drawn(*result.rect)
             return
 
-        if self._patch_rect_dragging:
-            sx, sy = self._patch_rect_start
-            x0, y0 = min(sx, ixi), min(sy, iyi)
-            x1, y1 = max(sx, ixi), max(sy, iyi)
-            self._patch_rect_dragging = False
-            self._patch_rect_start = None
-            self._patch_rect_end = None
-            self._patch_rect_mode = False
+        if self._patch_rect_drag.dragging:
+            result = self._patch_rect_drag.finish(ixi, iyi)
             self.cursor = ""
-            if x1 - x0 > 2 and y1 - y0 > 2 and self.on_patch_rect_drawn:
-                self.on_patch_rect_drawn(x0, y0, x1, y1)
+            if result is not None and self.on_patch_rect_drawn:
+                self.on_patch_rect_drawn(*result.rect)
             return
 
         if self._painting:
@@ -1198,8 +1162,8 @@ class EditorCanvas(Canvas):
                                            (1.0, 1.0, 1.0, 0.95), 1.0)
 
         # Selection rectangle (cyan)
-        if self._selection_rect_dragging and self._selection_rect_start and self._selection_rect_end:
-            rect = self._selection_rect_start + self._selection_rect_end
+        rect = self._selection_rect_drag.preview_rect()
+        if rect is not None:
             if rect:
                 ix0, iy0, ix1, iy1 = rect
                 wx0, wy0 = canvas.image_to_widget(ix0, iy0)
@@ -1211,11 +1175,8 @@ class EditorCanvas(Canvas):
 
         # Patch rectangle (green outline)
         if self._show_patch_rect and layer is not None:
-            rect = None
-            if (self._patch_rect_dragging
-                    and self._patch_rect_start and self._patch_rect_end):
-                rect = self._patch_rect_start + self._patch_rect_end
-            elif layer.patch_rect:
+            rect = self._patch_rect_drag.preview_rect()
+            if rect is None and layer.patch_rect:
                 rect = layer.local_rect_to_canvas(layer.patch_rect)
             if rect:
                 ix0, iy0, ix1, iy1 = rect

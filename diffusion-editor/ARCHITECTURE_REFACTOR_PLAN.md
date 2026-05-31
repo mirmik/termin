@@ -327,6 +327,19 @@ Success criteria:
 - Preserved DINO box fallback when SAM 2.1 segmentation fails, while surfacing
   the SAM error through status events and logs.
 - Added controller and result-mapper tests for Grounding.
+- Phase 5 started.
+- Added `canvas_geometry.py` and moved canvas/layer rectangle clipping,
+  coordinate conversion, visible layer rect calculation, and rect union helpers
+  behind pure functions.
+- Added focused geometry tests for clipped canvas/layer rectangles and offset
+  layers.
+- Added `canvas_rect_drag.py` for Selection/Patch rectangle drag state.
+- `EditorCanvas` now delegates rectangle drag begin/move/finish/preview logic
+  to `CanvasRectDrag` while preserving the existing Selection/Patch final rect
+  semantics.
+- Added focused rect drag tests.
+- Remaining Phase 5 work: extract larger paint/mask/selection stroke behavior
+  and isolate GPU invalidation/update paths.
 
 ## Architectural Smell Checklist
 
