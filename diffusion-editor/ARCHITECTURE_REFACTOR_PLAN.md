@@ -410,9 +410,19 @@ Success criteria:
 - Mask erase finalization now clips the affected layer-local rect before
   sampling the erase mask and refreshing the compositor, avoiding shape
   mismatches for layers partially outside the project canvas.
-- Remaining Phase 5 work: clean up the remaining canvas tool API compatibility
-  surface around mask overlay preview/update helpers, layer move invalidation,
-  and direct tool access to canvas private collaborators.
+- Added `canvas_tool_context.py` with `CanvasToolContext`, an explicit runtime
+  host API for brush-like canvas tools.
+- `EditorCanvas` now calls active tools through `CanvasToolContext`; tools no
+  longer receive the canvas object or reach into `EditorCanvas` private fields.
+- Moved paint/smudge/mask overlay/mask erase preview/finalization/move
+  invalidation coordination behind the tool context.
+- Removed stale geometry/invalidation compatibility helpers from `EditorCanvas`
+  after tool callers migrated to `CanvasToolContext`.
+- Added focused coverage for mask erase finalization on a partially off-canvas
+  layer.
+- Remaining Phase 5 work: split selection painting and rectangle drag mouse
+  paths out of `EditorCanvas`, then decide whether the tool context should be
+  decomposed into smaller image/mask/transform hosts before package moves.
 
 ## Architectural Smell Checklist
 

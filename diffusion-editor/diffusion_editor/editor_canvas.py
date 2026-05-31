@@ -14,15 +14,9 @@ from .layer_stack import LayerStack
 from .layer import Layer
 from .tool import LamaTool, InstructTool
 from .brush import Brush, BrushToolMode
-from .canvas_geometry import (
-    canvas_to_layer_point,
-    clip_canvas_rect,
-    clip_layer_local_rect,
-    union_rect,
-    visible_layer_rect,
-)
 from .canvas_composite import CanvasCompositeBridge
 from .canvas_edit_session import CanvasEditSession
+from .canvas_tool_context import CanvasToolContext
 from .canvas_mask_erase import MaskEraseStrokeBuffer
 from .canvas_mask_paint import CanvasMaskPainter
 from .canvas_overlay import CanvasOverlayBridge
@@ -53,8 +47,6 @@ class EditorCanvas(Canvas):
 
         self.brush = Brush()
         self._brush_tool_mode = BrushToolMode.PAINT
-        self._stroke_tools = create_canvas_tools()
-        self._active_stroke_tool = self._stroke_tools[self._brush_tool_mode]
         self._mask_painter = CanvasMaskPainter()
         self._overlay_bridge = CanvasOverlayBridge(
             layer_stack,
@@ -84,6 +76,18 @@ class EditorCanvas(Canvas):
         self._edit_session = CanvasEditSession()
         self._mask_erase_stroke = MaskEraseStrokeBuffer()
         self._smudge_stroke = SmudgeStrokeBuffer()
+        self._tool_context = CanvasToolContext(
+            layer_stack,
+            self.brush,
+            self._composite_bridge,
+            self._overlay_bridge,
+            self._paint_stroke,
+            self._mask_painter,
+            self._mask_erase_stroke,
+            self._smudge_stroke,
+        )
+        self._stroke_tools = create_canvas_tools()
+        self._active_stroke_tool = self._stroke_tools[self._brush_tool_mode]
 
         # Callbacks
         self.on_mouse_moved: callable = None
@@ -162,32 +166,6 @@ class EditorCanvas(Canvas):
     def _update_overlay(self):
         self._overlay_bridge.rebuild()
 
-    def _update_mask_overlay_region(self, layer, dirty):
-        """Update mask overlay after mask painting."""
-        self._overlay_bridge.update_mask_region(layer, dirty)
-
-    def _update_mask_overlay_region_preview(self, layer, dirty, preview_mask):
-        """Update overlay alpha from a provided mask preview region."""
-        self._overlay_bridge.update_mask_region_preview(layer, dirty, preview_mask)
-
-    def _preview_mask_erase_region(self, layer, dirty):
-        """Preview erase on composite without modifying layer.image."""
-        if dirty is None:
-            return
-        local_rect, canvas_rect = self._clip_layer_local_rect(layer, dirty)
-        if local_rect is None:
-            return
-        x0, y0, x1, y1 = local_rect
-        erase = self._mask_erase_stroke.erase_region(local_rect)
-        if erase is None:
-            return
-        self._composite_bridge.preview_erased_layer_rect(
-            layer,
-            local_rect,
-            canvas_rect,
-            erase,
-        )
-
     def get_composite(self) -> np.ndarray | None:
         return self._composite_bridge.get_composite()
 
@@ -257,53 +235,11 @@ class EditorCanvas(Canvas):
     def set_show_patch_rect(self, show: bool):
         self._show_patch_rect = show
 
-    @staticmethod
-    def _union_rect(a, b):
-        return union_rect(a, b)
-
-    def _canvas_to_layer_point(self, layer, x: int, y: int) -> tuple[int, int]:
-        return canvas_to_layer_point(layer, x, y)
-
-    def _clip_canvas_rect(self, rect):
-        return clip_canvas_rect(
-            rect,
-            self._layer_stack.width,
-            self._layer_stack.height,
-        )
-
-    def _visible_layer_rect(self, layer):
-        return visible_layer_rect(
-            layer,
-            self._layer_stack.width,
-            self._layer_stack.height,
-        )
-
     def _can_edit_layer(self, layer) -> bool:
         return (
             layer is not None
             and self._layer_stack.is_layer_visible_for_composition(layer)
         )
-
-    def _clip_layer_local_rect(self, layer, rect):
-        return clip_layer_local_rect(
-            layer,
-            rect,
-            self._layer_stack.width,
-            self._layer_stack.height,
-        )
-
-    def _refresh_modified_layer_rect(self, layer, rect):
-        local_rect, canvas_rect = self._clip_layer_local_rect(layer, rect)
-        if local_rect is None:
-            return
-        self._composite_bridge.refresh_modified_layer_rect(
-            layer,
-            local_rect,
-            canvas_rect,
-        )
-
-    def _refresh_layer_transform(self, layer, dirty_canvas_rect):
-        self._composite_bridge.refresh_layer_transform(layer, dirty_canvas_rect)
 
     # ------------------------------------------------------------------
     # Mouse handlers (called from Canvas callbacks)
@@ -364,7 +300,7 @@ class EditorCanvas(Canvas):
             )
             if self.on_edit_begin:
                 self.on_edit_begin(tool.label, layer, tool.target)
-            dirty = tool.begin(self, layer, ix, iy)
+            dirty = tool.begin(self._tool_context, layer, ix, iy)
             self._edit_session.add_dirty(dirty)
 
     def _handle_mouse_move(self, ix: float, iy: float):
@@ -401,7 +337,7 @@ class EditorCanvas(Canvas):
             if layer is None:
                 return
             dirty = self._active_stroke_tool.move(
-                self, layer, self._edit_session.last_pos, ixi, iyi)
+                self._tool_context, layer, self._edit_session.last_pos, ixi, iyi)
             self._edit_session.add_dirty(dirty)
             self._edit_session.move_to((ixi, iyi))
 
@@ -432,7 +368,7 @@ class EditorCanvas(Canvas):
                     self.on_edit_end(None, "selection", self._edit_session.dirty_rect)
             else:
                 layer = self._layer_stack.active_layer
-                self._active_stroke_tool.end(self, layer)
+                self._active_stroke_tool.end(self._tool_context, layer)
                 self._overlay_bridge.clear()
                 self._update_overlay()
                 if self.on_edit_end:
@@ -467,10 +403,9 @@ class EditorCanvas(Canvas):
         # both backends.
         borrowed_display_tex = None
         if self._composite_bridge.using_gpu:
-            # During mask erase preview, _preview_mask_erase_region
-            # modifies self._composite on CPU and calls set_image() —
-            # let base Canvas handle that upload instead of overriding
-            # with the GPU display tex.
+            # During mask erase preview, CanvasToolContext modifies the CPU
+            # preview composite and calls set_image(); let base Canvas upload
+            # it instead of overriding with the GPU display tex.
             in_mask_erase_preview = self._mask_erase_stroke.mask is not None
 
             if not in_mask_erase_preview:

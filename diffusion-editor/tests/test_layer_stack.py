@@ -261,23 +261,20 @@ class TestStructuralOps:
         assert result[0, 0, 2] == 255
 
     def test_move_tool_changes_offset_not_pixels(self):
-        class FakeCanvas:
-            _gpu_compositing = False
-            _gpu_compositor = None
-
+        class FakeToolContext:
             def __init__(self, stack):
                 self._layer_stack = stack
                 self._composite = None
                 self.image_set = False
 
             @staticmethod
-            def _union_rect(a, b):
+            def union_rect(a, b):
                 return LayerStack._union_rect(a, b)
 
             def set_image(self, image):
                 self.image_set = True
 
-            def _refresh_layer_transform(self, layer, dirty):
+            def refresh_layer_transform(self, layer, dirty):
                 self._layer_stack.mark_layer_dirty(layer, dirty)
                 self._composite = np.ascontiguousarray(
                     self._layer_stack.composite())
@@ -290,11 +287,11 @@ class TestStructuralOps:
         layer = Layer("patch", 4, 4, image, x=2, y=3)
         stack.insert_layer(layer)
         before = layer.image.copy()
-        canvas = FakeCanvas(stack)
+        context = FakeToolContext(stack)
         tool = MoveTool()
 
-        dirty0 = tool.begin(canvas, layer, 10, 10)
-        dirty1 = tool.move(canvas, layer, (10, 10), 13, 8)
+        dirty0 = tool.begin(context, layer, 10, 10)
+        dirty1 = tool.move(context, layer, (10, 10), 13, 8)
 
         assert dirty0 == (2, 3, 6, 7)
         assert dirty1 == (2, 1, 9, 7)
