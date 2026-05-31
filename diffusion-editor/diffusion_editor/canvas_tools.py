@@ -60,26 +60,18 @@ class EraserTool(CanvasStrokeTool):
     def begin(self, canvas, layer, x: int, y: int):
         canvas._begin_stroke(layer)
         x, y = canvas._canvas_to_layer_point(layer, x, y)
-        dirty = canvas._erase_dab(layer, x, y)
-        if not canvas._gpu_compositing:
-            canvas.set_image(canvas._composite)
-        return dirty
+        return canvas._erase_dab(layer, x, y)
 
     def move(self, canvas, layer, last_pos, x: int, y: int):
         x, y = canvas._canvas_to_layer_point(layer, x, y)
         if last_pos:
             lx, ly = canvas._canvas_to_layer_point(layer, *last_pos)
             return canvas._erase_stroke_line(layer, lx, ly, x, y)
-        dirty = canvas._erase_dab(layer, x, y)
-        if not canvas._gpu_compositing:
-            canvas.set_image(canvas._composite)
-        return dirty
+        return canvas._erase_dab(layer, x, y)
 
     def end(self, canvas, layer):
         if layer is not None:
             canvas._layer_stack.mark_layer_dirty(layer)
-        if not canvas._gpu_compositing:
-            canvas.set_image(canvas._composite)
 
 
 class SmudgeTool(CanvasStrokeTool):
@@ -215,15 +207,7 @@ class MoveTool(CanvasStrokeTool):
         layer.x = self._layer_start_x + dx
         layer.y = self._layer_start_y + dy
         dirty = canvas._union_rect(old_bounds, layer.bounds)
-        canvas._layer_stack.mark_layer_dirty(layer, dirty)
-        if canvas._gpu_compositing and canvas._gpu_compositor:
-            canvas._gpu_compositor.mark_dirty(layer)
-            canvas._gpu_compositor.composite()
-            canvas._composite_stale = True
-        else:
-            canvas._composite = np.ascontiguousarray(
-                canvas._layer_stack.composite())
-            canvas.set_image(canvas._composite)
+        canvas._refresh_layer_transform(layer, dirty)
         return dirty
 
     def end(self, canvas, layer):
