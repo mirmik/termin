@@ -14,6 +14,7 @@ class LayerStack:
     def __init__(self, tile_size: int = 256):
         self._layers: list[Layer] = []  # root-level layers
         self._active_layer: Layer | None = None
+        self.solo_layer_id: str | None = None
         self._width = 0
         self._height = 0
         self._tile_size = tile_size
@@ -92,6 +93,7 @@ class LayerStack:
 
     def init_from_image(self, image: np.ndarray):
         self._layers.clear()
+        self.solo_layer_id = None
         h, w = image.shape[:2]
         self._width = w
         self._height = h
@@ -160,6 +162,8 @@ class LayerStack:
         all_layers = self._all_layers_flat()
         if len(all_layers) <= 1:
             return
+        removed_ids = {layer.id}
+        removed_ids.update(child.id for child in layer.all_descendants())
         if layer.parent is not None:
             parent = layer.parent
             idx = parent.children.index(layer)
@@ -176,6 +180,8 @@ class LayerStack:
                 self._active_layer = self._layers[min(idx, len(self._layers) - 1)]
             else:
                 self._active_layer = None
+        if self.solo_layer_id in removed_ids:
+            self.solo_layer_id = None
         self._rebuild_caches()
         if self.on_changed:
             self.on_changed()
@@ -207,6 +213,57 @@ class LayerStack:
         self.mark_layer_dirty(layer)
         if self.on_changed:
             self.on_changed()
+
+    def find_layer_by_id(self, layer_id: str) -> Layer | None:
+        if not layer_id:
+            return None
+        for layer in self._all_layers_flat():
+            if layer.id == layer_id:
+                return layer
+        return None
+
+    def solo_layer(self) -> Layer | None:
+        if self.solo_layer_id is None:
+            return None
+        layer = self.find_layer_by_id(self.solo_layer_id)
+        if layer is None:
+            self.solo_layer_id = None
+        return layer
+
+    def set_solo_layer(self, layer: Layer | None) -> None:
+        next_id = layer.id if layer is not None else None
+        if self.solo_layer_id == next_id:
+            return
+        self.solo_layer_id = next_id
+        self._rebuild_caches()
+        if self.on_changed:
+            self.on_changed()
+
+    def toggle_solo_layer(self, layer: Layer) -> None:
+        if self.solo_layer_id == layer.id:
+            self.set_solo_layer(None)
+        else:
+            self.set_solo_layer(layer)
+
+    def is_layer_visible_for_composition(self, layer: Layer) -> bool:
+        solo = self.solo_layer()
+        if solo is not None:
+            return layer is solo
+        return layer.visible
+
+    def is_layer_tree_visible_for_composition(self, layer: Layer) -> bool:
+        solo = self.solo_layer()
+        if solo is None:
+            return layer.visible
+        if layer is solo:
+            return True
+        return self._layer_contains(layer, solo)
+
+    def _layer_contains(self, root: Layer, target: Layer) -> bool:
+        for child in root.children:
+            if child is target or self._layer_contains(child, target):
+                return True
+        return False
 
     def set_layer_offset(self, layer: Layer, x: int, y: int,
                          old_bounds: tuple[int, int, int, int] | None = None):
@@ -326,7 +383,7 @@ class LayerStack:
     # --- Compositing ---
 
     def composite(self, exclude_layer: Layer | None = None) -> np.ndarray:
-        """Composite visible layers.
+        """Composite layers visible in the current composition state.
 
         If exclude_layer is set, returns prefix of that layer (everything below it).
         """
@@ -418,6 +475,7 @@ class LayerStack:
 
         self._layers.clear()
         self._layers.extend(new_layers)
+        self._ensure_unique_layer_ids()
         for layer in self._layers:
             self._apply_tile_size(layer)
         self._width = manifest["canvas_width"]
@@ -446,6 +504,7 @@ class LayerStack:
 
         if self._active_layer is None and self._layers:
             self._active_layer = self._layers[0]
+        self.solo_layer()
         self._rebuild_caches()
         if self.on_changed:
             self.on_changed()
@@ -494,6 +553,15 @@ class LayerStack:
 
     def get_layer_by_path(self, path: str) -> Layer | None:
         return self._find_layer_by_path(path)
+
+    def _ensure_unique_layer_ids(self) -> None:
+        from .layer import new_layer_id
+
+        seen: set[str] = set()
+        for layer in self._all_layers_flat():
+            if not layer.id or layer.id in seen:
+                layer.id = new_layer_id()
+            seen.add(layer.id)
 
     def save_project(self, path: str):
         with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:

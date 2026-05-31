@@ -30,9 +30,6 @@ class InstructPanel(ScrollArea):
         self.on_mask_brush_changed: callable = None  # (size, hardness, flow)
         self.on_mask_eraser_toggled: callable = None  # (bool)
         self.on_show_mask_toggled: callable = None  # (bool)
-        self.on_draw_patch_toggled: callable = None  # (bool)
-        self.on_clear_patch: callable = None
-        self.on_show_patch_toggled: callable = None  # (bool)
 
         content = VStack()
         content.spacing = 8
@@ -206,29 +203,6 @@ class InstructPanel(ScrollArea):
         clear_mask_btn.on_click = lambda: (self.on_clear_mask and self.on_clear_mask())
         self._layer_group.add_child(clear_mask_btn)
 
-        patch_row = HStack()
-        patch_row.spacing = 4
-
-        self._draw_patch_cb = Checkbox()
-        self._draw_patch_cb.text = "Draw Patch"
-        self._draw_patch_cb.on_changed = lambda v: (
-            self.on_draw_patch_toggled and self.on_draw_patch_toggled(v))
-        patch_row.add_child(self._draw_patch_cb)
-
-        self._show_patch_cb = Checkbox()
-        self._show_patch_cb.text = "Show"
-        self._show_patch_cb.checked = True
-        self._show_patch_cb.on_changed = lambda v: (
-            self.on_show_patch_toggled and self.on_show_patch_toggled(v))
-        patch_row.add_child(self._show_patch_cb)
-
-        clear_patch_btn = Button()
-        clear_patch_btn.text = "Clear Patch"
-        clear_patch_btn.preferred_width = px(80)
-        clear_patch_btn.on_click = lambda: (self.on_clear_patch and self.on_clear_patch())
-        patch_row.add_child(clear_patch_btn)
-
-        self._layer_group.add_child(patch_row)
         content.add_child(self._layer_group)
 
         self.add_child(content)
@@ -286,9 +260,6 @@ class InstructPanel(ScrollArea):
     def on_model_load_error(self, error: str):
         self._model_status.text = f"Error: {error[:60]}"
 
-    def set_draw_patch_checked(self, value: bool):
-        self._draw_patch_cb.checked = value
-
     def show_instruct_layer(self, layer):
         tool = layer.tool
         self._layer_group.visible = True
@@ -299,8 +270,8 @@ class InstructPanel(ScrollArea):
         self._seed_edit.text = str(tool.seed)
 
         mask_status = "has mask" if layer.has_mask() else "no mask"
-        if tool.manual_patch_rect:
-            r = tool.manual_patch_rect
+        if layer.patch_rect:
+            r = layer.patch_rect
             pw, ph = r[2] - r[0], r[3] - r[1]
             patch_info = f"manual {pw}x{ph}"
         else:

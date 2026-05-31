@@ -599,6 +599,12 @@ class EditorCanvas(Canvas):
         return (cx0 - layer.x, cy0 - layer.y,
                 cx1 - layer.x, cy1 - layer.y)
 
+    def _can_edit_layer(self, layer) -> bool:
+        return (
+            layer is not None
+            and self._layer_stack.is_layer_visible_for_composition(layer)
+        )
+
     def _clip_layer_local_rect(self, layer, rect):
         if rect is None:
             return None, None
@@ -888,6 +894,13 @@ class EditorCanvas(Canvas):
         local_rect, canvas_rect = self._clip_layer_local_rect(layer, rect)
         if local_rect is None:
             return
+        if not self._layer_stack.is_layer_visible_for_composition(layer):
+            self._layer_stack.mark_layer_dirty(layer, canvas_rect)
+            if not self._gpu_compositing:
+                self._composite = np.ascontiguousarray(
+                    self._layer_stack.composite())
+                self.set_image(self._composite)
+            return
         x0, y0, x1, y1 = local_rect
         cx0, cy0, cx1, cy1 = canvas_rect
         if self._gpu_compositing and self._gpu_compositor:
@@ -990,21 +1003,6 @@ class EditorCanvas(Canvas):
                 self._selection_rect_end = (ix, iy)
                 return
 
-            # Patch rect mode
-            if (self._patch_rect_mode and layer is not None
-                    and layer.tool is not None):
-                self._patch_rect_dragging = True
-                self._patch_rect_start = (ix, iy)
-                self._patch_rect_end = (ix, iy)
-                return
-
-            # Ref rect mode
-            if self._ref_rect_mode and isinstance(layer.tool, DiffusionTool):
-                self._ref_rect_dragging = True
-                self._ref_rect_start = (ix, iy)
-                self._ref_rect_end = (ix, iy)
-                return
-
             # Selection painting
             if self._selection_mode:
                 self._painting = True
@@ -1018,6 +1016,23 @@ class EditorCanvas(Canvas):
                 self._stroke_dirty_rect = self._union_rect(self._stroke_dirty_rect, dirty)
                 self._update_overlay()
                 self._last_paint_pos = (ix, iy)
+                return
+
+            if not self._can_edit_layer(layer):
+                return
+
+            # Patch rect mode
+            if self._patch_rect_mode and layer is not None:
+                self._patch_rect_dragging = True
+                self._patch_rect_start = (ix, iy)
+                self._patch_rect_end = (ix, iy)
+                return
+
+            # Ref rect mode
+            if self._ref_rect_mode and isinstance(layer.tool, DiffusionTool):
+                self._ref_rect_dragging = True
+                self._ref_rect_start = (ix, iy)
+                self._ref_rect_end = (ix, iy)
                 return
 
             # Painting
@@ -1251,15 +1266,14 @@ class EditorCanvas(Canvas):
                 renderer.draw_rect_outline(wx0, wy0, wx1 - wx0, wy1 - wy0,
                                            (0.0, 0.8, 1.0, 0.7), 2.0)
 
-        # Manual patch rectangle (green outline)
-        if (self._show_patch_rect and layer is not None
-                and layer.tool is not None):
+        # Patch rectangle (green outline)
+        if self._show_patch_rect and layer is not None:
             rect = None
             if (self._patch_rect_dragging
                     and self._patch_rect_start and self._patch_rect_end):
                 rect = self._patch_rect_start + self._patch_rect_end
-            elif layer.tool.manual_patch_rect:
-                rect = layer.tool.manual_patch_rect
+            elif layer.patch_rect:
+                rect = layer.patch_rect
             if rect:
                 ix0, iy0, ix1, iy1 = rect
                 wx0, wy0 = canvas.image_to_widget(ix0, iy0)

@@ -8,8 +8,8 @@ from diffusion_editor.document_service import (
 )
 from diffusion_editor.commands import (
     AddLayerCommand, SetLayerOpacityCommand, FlattenLayersCommand,
-    SnapshotCallbackCommand, ClearLayerMaskCommand, SetManualPatchRectCommand,
-    ClearManualPatchRectCommand, ReplaceLayerMaskCommand,
+    SnapshotCallbackCommand, ClearLayerMaskCommand, SetLayerPatchRectCommand,
+    ClearLayerPatchRectCommand, ReplaceLayerMaskCommand,
     ApplyGeneratedResultCommand, SetLayerSelectionCommand,
     AttachLayerToolCommand, DetachLayerToolCommand,
 )
@@ -198,7 +198,7 @@ def test_document_service_clear_layer_mask_command():
     assert restored.has_mask()
 
 
-def test_document_service_manual_patch_rect_commands():
+def test_document_service_layer_patch_rect_commands():
     stack = LayerStack()
     stack.on_changed = lambda: None
     stack.init_from_image(np.full((8, 8, 4), 255, dtype=np.uint8))
@@ -207,19 +207,19 @@ def test_document_service_manual_patch_rect_commands():
     history = HistoryManager(stack.load_state)
     service = DocumentService(stack, history, stack.load_state)
 
-    service.execute(SetManualPatchRectCommand(
+    service.execute(SetLayerPatchRectCommand(
         layer=layer,
         rect=(1, 2, 5, 6),
         label="Set Rect",
     ))
-    assert layer.tool.manual_patch_rect == (1, 2, 5, 6)
+    assert layer.patch_rect == (1, 2, 5, 6)
 
-    service.execute(ClearManualPatchRectCommand(layer=layer, label="Clear Rect"))
-    assert layer.tool.manual_patch_rect is None
+    service.execute(ClearLayerPatchRectCommand(layer=layer, label="Clear Rect"))
+    assert layer.patch_rect is None
 
     assert service.undo() == "Clear Rect"
     assert stack.active_layer is not None
-    assert stack.active_layer.tool.manual_patch_rect == (1, 2, 5, 6)
+    assert stack.active_layer.patch_rect == (1, 2, 5, 6)
 
 
 def test_document_service_replace_layer_mask_command():

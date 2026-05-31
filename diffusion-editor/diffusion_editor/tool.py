@@ -1,7 +1,8 @@
 """Tool — attached auto-drawer with persistent settings for a Layer.
 
 Tools hold AI-generation config (prompt, steps, seed, etc.).
-Mask is owned by Layer, not by Tool — tools access it via the layer reference.
+Mask and Patch are owned by Layer, not by Tool — tools access them via
+the layer reference.
 """
 
 from __future__ import annotations
@@ -110,7 +111,6 @@ class DiffusionTool(Tool):
             "ip_adapter_rect": list(self.ip_adapter_rect) if self.ip_adapter_rect else None,
             "ip_adapter_scale": self.ip_adapter_scale,
             "masked_content": self.masked_content,
-            "manual_patch_rect": list(self.manual_patch_rect) if self.manual_patch_rect else None,
             "resize_to_model_resolution": self.resize_to_model_resolution,
         }
 
@@ -228,7 +228,6 @@ class InstructTool(Tool):
             "guidance_scale": self.guidance_scale,
             "steps": self.steps,
             "seed": self.seed,
-            "manual_patch_rect": list(self.manual_patch_rect) if self.manual_patch_rect else None,
         }
 
     def save_assets_to_zip(self, zf: zipfile.ZipFile, file_key: str):

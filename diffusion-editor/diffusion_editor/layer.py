@@ -1,6 +1,7 @@
 import io
 import json
 import logging
+import uuid
 import zipfile
 
 import numpy as np
@@ -16,10 +17,15 @@ from .tool import (
 logger = logging.getLogger(__name__)
 
 
+def new_layer_id() -> str:
+    return f"layer_{uuid.uuid4().hex}"
+
+
 class Layer:
     def __init__(self, name: str, width: int, height: int,
                  image: np.ndarray = None, tile_size: int = 256,
-                 x: int = 0, y: int = 0):
+                 x: int = 0, y: int = 0, layer_id: str | None = None):
+        self.id = layer_id or new_layer_id()
         self.name = name
         self.visible = True
         self.opacity = 1.0
@@ -27,6 +33,7 @@ class Layer:
         self.y = int(y)
         self.children: list['Layer'] = []
         self.parent: 'Layer | None' = None
+        self.patch_rect: tuple[int, int, int, int] | None = None
         if image is not None:
             arr = np.ascontiguousarray(image.astype(np.uint8))
         else:
@@ -97,11 +104,13 @@ class Layer:
         d = {
             "path": path,
             "type": "layer",
+            "id": self.id,
             "name": self.name,
             "visible": self.visible,
             "opacity": self.opacity,
             "x": self.x,
             "y": self.y,
+            "patch_rect": list(self.patch_rect) if self.patch_rect else None,
             "image_file": f"layers/{file_key}_image.npy",
             "children": [],
         }
@@ -130,11 +139,14 @@ class Layer:
         """Shared base deserialization for all layer types."""
         arr = _load_array_from_zip(zf, d["image_file"], mode="RGBA")
         layer = cls.__new__(cls)
+        layer.id = d.get("id") or new_layer_id()
         layer.name = d["name"]
         layer.visible = d["visible"]
         layer.opacity = d["opacity"]
         layer.x = int(d.get("x", 0))
         layer.y = int(d.get("y", 0))
+        patch_rect = d.get("patch_rect")
+        layer.patch_rect = tuple(patch_rect) if patch_rect else None
         layer.content = DenseTileGrid.from_array(arr, tile_size=tile_size)
         layer.image = layer.content.array
         layer.children = []
@@ -157,6 +169,10 @@ class Layer:
         layer.tool = None
         if "tool" in d:
             layer.tool = tool_from_dict(d["tool"], zf)
+            if layer.patch_rect is None and isinstance(
+                    layer.tool, (DiffusionTool, InstructTool)):
+                layer.patch_rect = layer.tool.manual_patch_rect
+                layer.tool.manual_patch_rect = None
 
         for child_dict in d.get("children", []):
             child = _layer_from_dict(child_dict, zf, tile_size=tile_size)

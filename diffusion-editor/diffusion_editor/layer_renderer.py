@@ -78,20 +78,28 @@ class LayerRenderer:
         # Scratch buffers reused across layers to avoid repeated allocation
         tmp = np.empty((h, w, 4), dtype=np.float32)
         for layer in reversed(siblings):  # bottom to top
-            if not layer.visible or layer.opacity <= 0:
+            if not self._stack.is_layer_tree_visible_for_composition(layer):
+                continue
+            own_visible = self._stack.is_layer_visible_for_composition(layer)
+            if own_visible and layer.opacity <= 0:
                 continue
             if layer.opacity >= 1.0 and not layer.children:
-                self._blend_image(layer.image, 1.0, result)
+                if own_visible:
+                    self._blend_image(layer.image, 1.0, result)
             else:
                 subtree = np.zeros((h, w, 4), dtype=np.float32)
                 if layer.children:
                     child_comp = self._composite_siblings_direct(
                         layer.children, h, w)
                     subtree[:] = child_comp
-                self._blend_image(layer.image, 1.0, subtree)
-                np.clip(subtree, 0, 255, out=tmp)
-                subtree_u8 = tmp.astype(np.uint8)
-                self._blend_buffer(subtree_u8, layer.opacity, result)
+                if own_visible:
+                    self._blend_image(layer.image, 1.0, subtree)
+                    np.clip(subtree, 0, 255, out=tmp)
+                    subtree_u8 = tmp.astype(np.uint8)
+                    self._blend_buffer(subtree_u8, layer.opacity, result)
+                else:
+                    np.clip(subtree, 0, 255, out=tmp)
+                    self._blend_buffer(tmp.astype(np.uint8), 1.0, result)
         np.clip(result, 0, 255, out=result)
         return result.astype(np.uint8)
 
@@ -170,7 +178,9 @@ class LayerRenderer:
         if key in self._composite_cache:
             return self._composite_cache[key]
 
-        if not layer.visible or layer.opacity <= 0:
+        tree_visible = self._stack.is_layer_tree_visible_for_composition(layer)
+        own_visible = self._stack.is_layer_visible_for_composition(layer)
+        if not tree_visible:
             siblings = self._stack.comp_order_siblings(layer)
             idx = siblings.index(layer)
             if idx > 0:
@@ -180,8 +190,29 @@ class LayerRenderer:
             self._composite_cache[key] = result
             return result
 
+        if own_visible and layer.opacity <= 0:
+            siblings = self._stack.comp_order_siblings(layer)
+            idx = siblings.index(layer)
+            result = self._composite_of(siblings[idx - 1], tx, ty) if idx > 0 else None
+            self._composite_cache[key] = result
+            return result
+
         prefix = self._prefix_of(layer, tx, ty)
         own = self._layer_canvas_tile(layer, tx, ty)
+        if not own_visible:
+            nested = self._nested_of(layer, tx, ty)
+            if prefix is None and nested is None:
+                self._composite_cache[key] = None
+                return None
+            result = self._blank_float(tx, ty)
+            if prefix is not None:
+                result[:, :, :] = prefix.astype(np.float32)
+            if nested is not None:
+                self._blend_buffer(nested, 1.0, result)
+            out = np.clip(result, 0, 255).astype(np.uint8)
+            self._composite_cache[key] = out
+            return out
+
         if layer.opacity >= 1.0:
             if prefix is None and (own is None or not np.any(own[:, :, 3])):
                 self._composite_cache[key] = None
