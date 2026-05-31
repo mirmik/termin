@@ -290,7 +290,7 @@ class LayerPanel(VStack):
                 self._layer_stack.move_layer(dragged_layer, target_layer, 0)
         elif position == "above" and target_layer is not None:
             parent = target_layer.parent
-            siblings = parent.children if parent else self._layer_stack._layers
+            siblings = parent.children if parent else self._layer_stack.layers
             idx = siblings.index(target_layer) if target_layer in siblings else 0
             if self.on_move_layer:
                 self.on_move_layer(dragged_layer, parent, idx)
@@ -298,7 +298,7 @@ class LayerPanel(VStack):
                 self._layer_stack.move_layer(dragged_layer, parent, idx)
         elif position == "below" and target_layer is not None:
             parent = target_layer.parent
-            siblings = parent.children if parent else self._layer_stack._layers
+            siblings = parent.children if parent else self._layer_stack.layers
             idx = siblings.index(target_layer) + 1 if target_layer in siblings else len(siblings)
             if self.on_move_layer:
                 self.on_move_layer(dragged_layer, parent, idx)
@@ -306,7 +306,7 @@ class LayerPanel(VStack):
                 self._layer_stack.move_layer(dragged_layer, parent, idx)
         else:
             # root
-            n = len(self._layer_stack._layers)
+            n = len(self._layer_stack.layers)
             if self.on_move_layer:
                 self.on_move_layer(dragged_layer, None, n)
             else:

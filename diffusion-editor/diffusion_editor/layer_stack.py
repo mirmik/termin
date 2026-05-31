@@ -80,6 +80,9 @@ class LayerStack:
         x0, y0, x1, y1 = self.tile_bounds(tx, ty)
         return (y1 - y0, x1 - x0)
 
+    def cache_memory_bytes(self) -> int:
+        return self._renderer.cache_memory_bytes()
+
     @property
     def layers(self):
         return self._layers

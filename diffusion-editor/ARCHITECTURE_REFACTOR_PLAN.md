@@ -431,9 +431,19 @@ Success criteria:
 - `EditorCanvas` no longer owns separate selection/patch drag state or branches
   mouse-up handling by drag type; it dispatches the controller result to the
   relevant callback.
-- Remaining Phase 5 work: decide whether `CanvasToolContext` should be
-  decomposed into smaller image/mask/selection/transform hosts before package
-  moves, and do a final pass over `EditorCanvas` for non-canvas responsibilities.
+- Phase 5 final pass completed for current scope.
+- Kept `CanvasToolContext` as a single facade for now. Splitting it into
+  image/mask/selection/transform hosts is deferred until package moves or new
+  tool families create clearer pressure; splitting now would mostly add wiring
+  without reducing current tool complexity.
+- Removed remaining direct `EditorWindow`/`LayerPanel` access to private
+  `LayerStack` internals for layer offset dirty rects, root layer lists, and
+  renderer cache memory.
+- Added `LayerStack.cache_memory_bytes()` as the public cache-memory diagnostic
+  used by the status bar.
+- Remaining Phase 5 work: no required blocker before Phase 6. Optional cleanup:
+  reduce compatibility properties in `EditorCanvas` once tests stop needing
+  them, or split `CanvasToolContext` during package reorganization.
 
 ## Architectural Smell Checklist
 
