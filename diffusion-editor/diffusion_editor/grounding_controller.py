@@ -8,7 +8,7 @@ from typing import Callable
 import numpy as np
 from tcbase import log
 
-from .grounding_engine import GroundingEngine
+from .engines.grounding_engine import GroundingEngine
 from .grounding_types import GroundingParams, GroundingRequest, GroundingResult
 from .document.layer import Layer
 

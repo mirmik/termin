@@ -14,7 +14,7 @@ from .types import (
     InstructInferenceResult,
     InstructRequest,
 )
-from ..instruct_engine import InstructEngine
+from ..engines.instruct_engine import InstructEngine
 from ..document.layer import Layer
 from .patch_resolver import apply_patch_source_to_tool, resolve_source_patch
 from ..document.tool import InstructTool

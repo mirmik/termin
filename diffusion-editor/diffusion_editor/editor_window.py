@@ -41,7 +41,7 @@ from .brush_panel import BrushPanel
 from .diffusion_panel import DiffusionPanel
 from .generation.diffusion_controller import DiffusionGenerationController
 from .grounding_controller import GroundingController
-from .grounding_engine import GroundingEngine
+from .engines.grounding_engine import GroundingEngine
 from .grounding_types import GroundingParams
 from .generation.instruct_controller import InstructGenerationController
 from .ip_adapter_reference_dialog import show_ip_adapter_reference_dialog
@@ -50,8 +50,8 @@ from .lama_panel import LamaPanel
 from .instruct_panel import InstructPanel
 from .selection_panel import SelectionPanel
 from .generation.segmentation_controller import SegmentationGenerationController
-from .lama_engine import LamaEngine
-from .segmentation import SegmentationEngine
+from .engines.lama_engine import LamaEngine
+from .engines.segmentation_engine import SegmentationEngine
 from .generation.patch_resolver import source_patch_at_center
 from .file_dialog import open_file_dialog, save_file_dialog, open_directory_dialog
 from .settings import Settings
@@ -117,8 +117,8 @@ class EditorWindow:
         self._layer_stack = LayerStack()
 
         # Engines
-        from .diffusion_engine import DiffusionEngine
-        from .instruct_engine import InstructEngine
+        from .engines.diffusion_engine import DiffusionEngine
+        from .engines.instruct_engine import InstructEngine
 
         self._engine = DiffusionEngine()
         self._seg_engine = SegmentationEngine()
