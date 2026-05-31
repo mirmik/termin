@@ -23,6 +23,7 @@ from .canvas_geometry import (
 )
 from .canvas_composite import CanvasCompositeBridge
 from .canvas_edit_session import CanvasEditSession
+from .canvas_overlay import CanvasOverlayBridge
 from .canvas_paint_stroke import PaintStrokeBuffer
 from .canvas_rect_drag import CanvasRectDrag
 from .canvas_smudge import SmudgeStrokeBuffer
@@ -57,8 +58,10 @@ class EditorCanvas(Canvas):
         self._mask_brush_hardness = 0.4
         self._mask_brush_flow = 1.0
         self._mask_eraser = False
-        self._show_mask = True
-        self._show_selection = True
+        self._overlay_bridge = CanvasOverlayBridge(
+            layer_stack,
+            set_overlay=self.set_overlay,
+        )
 
         # Selection painting mode
         self._selection_mode = False
@@ -84,7 +87,6 @@ class EditorCanvas(Canvas):
         self._paint_stroke = PaintStrokeBuffer()
 
         self._edit_session = CanvasEditSession()
-        self._mask_overlay: np.ndarray | None = None
         self._mask_erase_stroke: np.ndarray | None = None
         self._mask_erase_dirty: tuple[int, int, int, int] | None = None
         self._smudge_stroke = SmudgeStrokeBuffer()
@@ -142,6 +144,10 @@ class EditorCanvas(Canvas):
     def _composite_stale(self, stale: bool) -> None:
         self._composite_bridge.composite_stale = stale
 
+    @property
+    def _show_mask(self) -> bool:
+        return self._overlay_bridge.show_mask
+
     def _on_stack_changed(self):
         self._composite_bridge.rebuild()
         self._update_composite()
@@ -156,75 +162,11 @@ class EditorCanvas(Canvas):
                     self._image_data = np.empty((h, w, 4), dtype=np.uint8)
             else:
                 self._image_data = None
-        self._mask_overlay = None
+        self._overlay_bridge.clear()
         self._update_overlay()
 
     def _update_overlay(self):
-        """Rebuild overlay combining selection + mask."""
-        layer = self._layer_stack.active_layer
-        h, w = (self._layer_stack.height, self._layer_stack.width)
-        if h == 0 or w == 0:
-            self.set_overlay(None)
-            return
-
-        has_mask = (layer is not None
-                    and self._show_mask
-                    and layer.has_mask())
-        has_sel = (self._show_selection
-                   and not self._layer_stack.selection.is_empty)
-
-        if not has_mask and not has_sel:
-            self.set_overlay(None)
-            return
-
-        overlay = np.zeros((h, w, 4), dtype=np.uint8)
-
-        # Base: selection (blue) then mask (red) composited over it
-        has_base = False
-        if has_sel:
-            sel_alpha = (
-                self._layer_stack.selection.data * 255.0 * 0.3
-            ).astype(np.float32)
-            sa = sel_alpha / 255.0
-            inv = 1.0 - sa
-            overlay[:, :, 0] = (50.0 * sa).astype(np.uint8)
-            overlay[:, :, 1] = (50.0 * sa).astype(np.uint8)
-            overlay[:, :, 2] = (255.0 * sa).astype(np.uint8)
-            overlay[:, :, 3] = sel_alpha.astype(np.uint8)
-            has_base = True
-
-        if has_mask:
-            mask_alpha = np.zeros((h, w), dtype=np.float32)
-            lx0, ly0, lx1, ly1 = self._visible_layer_rect(layer)
-            if lx1 > lx0 and ly1 > ly0:
-                dx0, dy0 = layer.x + lx0, layer.y + ly0
-                dx1, dy1 = layer.x + lx1, layer.y + ly1
-                mask_alpha[dy0:dy1, dx0:dx1] = (
-                    layer.mask.data[ly0:ly1, lx0:lx1] * 255.0 * 0.4)
-            ma = mask_alpha / 255.0
-            inv = 1.0 - ma
-            if has_base:
-                overlay[:, :, 0] = (
-                    255.0 * ma + overlay[:, :, 0].astype(np.float32) * inv
-                ).astype(np.uint8)
-                overlay[:, :, 1] = (
-                    50.0 * ma + overlay[:, :, 1].astype(np.float32) * inv
-                ).astype(np.uint8)
-                overlay[:, :, 2] = (
-                    50.0 * ma + overlay[:, :, 2].astype(np.float32) * inv
-                ).astype(np.uint8)
-                overlay[:, :, 3] = np.clip(
-                    mask_alpha + overlay[:, :, 3].astype(np.float32) * inv,
-                    0, 255,
-                ).astype(np.uint8)
-            else:
-                overlay[:, :, 0] = 255
-                overlay[:, :, 1] = 50
-                overlay[:, :, 2] = 50
-                overlay[:, :, 3] = mask_alpha.astype(np.uint8)
-            has_base = True
-
-        self.set_overlay(overlay)
+        self._overlay_bridge.rebuild()
 
     def _update_stroke_region(self, layer, dirty):
         """Apply current paint stroke preview into the layer dirty region."""
@@ -237,62 +179,11 @@ class EditorCanvas(Canvas):
 
     def _update_mask_overlay_region(self, layer, dirty):
         """Update mask overlay after mask painting."""
-        if dirty is None:
-            return
-        x0, y0, x1, y1 = dirty
-        canvas_rect = layer.local_rect_to_canvas(dirty)
-        cx0, cy0, cx1, cy1 = self._clip_canvas_rect(canvas_rect)
-        if cx1 <= cx0 or cy1 <= cy0:
-            return
-        if self._mask_overlay is None:
-            h, w = self._layer_stack.height, self._layer_stack.width
-            self._mask_overlay = np.zeros((h, w, 4), dtype=np.uint8)
-            self._mask_overlay[:, :, 0] = 255
-            self._mask_overlay[:, :, 1] = 50
-            self._mask_overlay[:, :, 2] = 50
-            lx0, ly0, lx1, ly1 = self._visible_layer_rect(layer)
-            if lx1 > lx0 and ly1 > ly0:
-                dx0, dy0 = layer.x + lx0, layer.y + ly0
-                dx1, dy1 = layer.x + lx1, layer.y + ly1
-                self._mask_overlay[dy0:dy1, dx0:dx1, 3] = (
-                    layer.mask.data[ly0:ly1, lx0:lx1] * 255.0 * 0.4
-                ).astype(np.uint8)
-            self.set_overlay(self._mask_overlay)
-            return
-        lx0 = cx0 - layer.x
-        ly0 = cy0 - layer.y
-        lx1 = lx0 + (cx1 - cx0)
-        ly1 = ly0 + (cy1 - cy0)
-        self._mask_overlay[cy0:cy1, cx0:cx1, 3] = (
-            layer.mask.data[ly0:ly1, lx0:lx1] * 255.0 * 0.4).astype(np.uint8)
-        self.set_overlay(self._mask_overlay)
+        self._overlay_bridge.update_mask_region(layer, dirty)
 
     def _update_mask_overlay_region_preview(self, layer, dirty, preview_mask):
         """Update overlay alpha from a provided mask preview region."""
-        if dirty is None or preview_mask is None:
-            return
-        x0, y0, x1, y1 = dirty
-        canvas_rect = layer.local_rect_to_canvas(dirty)
-        cx0, cy0, cx1, cy1 = self._clip_canvas_rect(canvas_rect)
-        if cx1 <= cx0 or cy1 <= cy0:
-            return
-        if self._mask_overlay is None:
-            h, w = self._layer_stack.height, self._layer_stack.width
-            self._mask_overlay = np.zeros((h, w, 4), dtype=np.uint8)
-            self._mask_overlay[:, :, 0] = 255
-            self._mask_overlay[:, :, 1] = 50
-            self._mask_overlay[:, :, 2] = 50
-        lx0 = cx0 - layer.x
-        ly0 = cy0 - layer.y
-        lx1 = lx0 + (cx1 - cx0)
-        ly1 = ly0 + (cy1 - cy0)
-        px0 = lx0 - x0
-        py0 = ly0 - y0
-        px1 = px0 + (lx1 - lx0)
-        py1 = py0 + (ly1 - ly0)
-        self._mask_overlay[cy0:cy1, cx0:cx1, 3] = (
-            preview_mask[py0:py1, px0:px1] * 255.0 * 0.4).astype(np.uint8)
-        self.set_overlay(self._mask_overlay)
+        self._overlay_bridge.update_mask_region_preview(layer, dirty, preview_mask)
 
     def _preview_mask_erase_region(self, layer, dirty):
         """Preview erase on composite without modifying layer.image."""
@@ -391,12 +282,12 @@ class EditorCanvas(Canvas):
         self.cursor = "cross" if on else ""
 
     def set_show_mask(self, show: bool):
-        self._show_mask = show
-        self._mask_overlay = None
+        self._overlay_bridge.show_mask = show
+        self._overlay_bridge.clear()
         self._update_overlay()
 
     def set_show_selection(self, show: bool):
-        self._show_selection = show
+        self._overlay_bridge.show_selection = show
         self._update_overlay()
 
     def set_patch_rect_mode(self, on: bool):
@@ -551,7 +442,7 @@ class EditorCanvas(Canvas):
             self._layer_stack.mark_layer_dirty(
                 layer, layer.local_rect_to_canvas(dirty))
         self._paint_stroke.clear()
-        self._mask_overlay = None
+        self._overlay_bridge.clear()
         self._update_overlay()
 
     # ------------------------------------------------------------------
@@ -786,7 +677,7 @@ class EditorCanvas(Canvas):
             else:
                 layer = self._layer_stack.active_layer
                 self._active_stroke_tool.end(self, layer)
-                self._mask_overlay = None
+                self._overlay_bridge.clear()
                 self._update_overlay()
                 if self.on_edit_end:
                     self.on_edit_end(
