@@ -72,6 +72,26 @@ def test_mask_paint_updates_overlay_before_mouse_up():
     assert canvas._overlay_data[8, 16, 3] > 0
 
 
+def test_mask_eraser_updates_mask_and_clears_preview_state():
+    image = np.zeros((32, 32, 4), dtype=np.uint8)
+    image[:, :, 3] = 255
+    stack = LayerStack(tile_size=16)
+    stack.init_from_image(image)
+    stack.active_layer.mask.data[:, :] = 1.0
+    canvas = EditorCanvas(stack, gpu_compositing=False)
+    canvas._update_composite()
+    canvas.set_brush_tool(BrushToolMode.MASK_ERASER)
+    canvas.set_show_mask(True)
+    canvas.set_mask_brush(5, 1.0, 1.0)
+
+    canvas._handle_mouse_down(8, 8, MouseButton.LEFT)
+    assert canvas._mask_erase_stroke.mask is not None
+    canvas._handle_mouse_up(8, 8)
+
+    assert stack.active_layer.mask.data[8, 8] < 1.0
+    assert canvas._mask_erase_stroke.mask is None
+
+
 def test_move_tool_updates_cpu_composite_before_mouse_up():
     image = np.zeros((16, 16, 4), dtype=np.uint8)
     image[4, 4] = (255, 0, 0, 255)

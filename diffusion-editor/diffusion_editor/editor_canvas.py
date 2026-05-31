@@ -23,6 +23,7 @@ from .canvas_geometry import (
 )
 from .canvas_composite import CanvasCompositeBridge
 from .canvas_edit_session import CanvasEditSession
+from .canvas_mask_erase import MaskEraseStrokeBuffer
 from .canvas_overlay import CanvasOverlayBridge
 from .canvas_paint_stroke import PaintStrokeBuffer
 from .canvas_rect_drag import CanvasRectDrag
@@ -87,8 +88,7 @@ class EditorCanvas(Canvas):
         self._paint_stroke = PaintStrokeBuffer()
 
         self._edit_session = CanvasEditSession()
-        self._mask_erase_stroke: np.ndarray | None = None
-        self._mask_erase_dirty: tuple[int, int, int, int] | None = None
+        self._mask_erase_stroke = MaskEraseStrokeBuffer()
         self._smudge_stroke = SmudgeStrokeBuffer()
 
         # Callbacks
@@ -187,13 +187,15 @@ class EditorCanvas(Canvas):
 
     def _preview_mask_erase_region(self, layer, dirty):
         """Preview erase on composite without modifying layer.image."""
-        if dirty is None or self._mask_erase_stroke is None:
+        if dirty is None:
             return
         local_rect, canvas_rect = self._clip_layer_local_rect(layer, dirty)
         if local_rect is None:
             return
         x0, y0, x1, y1 = local_rect
-        erase = self._mask_erase_stroke[y0:y1, x0:x1]
+        erase = self._mask_erase_stroke.erase_region(local_rect)
+        if erase is None:
+            return
         self._composite_bridge.preview_erased_layer_rect(
             layer,
             local_rect,
@@ -415,11 +417,7 @@ class EditorCanvas(Canvas):
     def _begin_mask_erase(self, layer):
         if layer is None:
             return
-        h, w = layer.height, layer.width
-        if h == 0 or w == 0:
-            return
-        self._mask_erase_stroke = np.zeros((h, w), dtype=np.float32)
-        self._mask_erase_dirty = None
+        self._mask_erase_stroke.begin(layer.height, layer.width)
 
     # ------------------------------------------------------------------
     # Stroke buffer for brush painting
@@ -715,7 +713,7 @@ class EditorCanvas(Canvas):
             # modifies self._composite on CPU and calls set_image() —
             # let base Canvas handle that upload instead of overriding
             # with the GPU display tex.
-            in_mask_erase_preview = self._mask_erase_stroke is not None
+            in_mask_erase_preview = self._mask_erase_stroke.mask is not None
 
             if not in_mask_erase_preview:
                 tex = self._composite_bridge.display_tex

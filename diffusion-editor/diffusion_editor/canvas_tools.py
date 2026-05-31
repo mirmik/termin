@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
-
 from .brush import BrushToolMode
 
 
@@ -138,50 +136,48 @@ class MaskEraserTool(CanvasStrokeTool):
     def begin(self, canvas, layer, x: int, y: int):
         x, y = canvas._canvas_to_layer_point(layer, x, y)
         canvas._begin_mask_erase(layer)
-        if canvas._mask_erase_stroke is None:
+        erase_mask = canvas._mask_erase_stroke.mask
+        if erase_mask is None:
             return None
-        dirty, _stamp = canvas._dab_mask(canvas._mask_erase_stroke, x, y, erase=False)
+        dirty, _stamp = canvas._dab_mask(erase_mask, x, y, erase=False)
         self._preview(canvas, layer, dirty)
         return dirty
 
     def move(self, canvas, layer, last_pos, x: int, y: int):
         x, y = canvas._canvas_to_layer_point(layer, x, y)
-        if canvas._mask_erase_stroke is None:
+        if canvas._mask_erase_stroke.mask is None:
             canvas._begin_mask_erase(layer)
-        if canvas._mask_erase_stroke is None:
+        erase_mask = canvas._mask_erase_stroke.mask
+        if erase_mask is None:
             return None
         if last_pos:
             lx, ly = canvas._canvas_to_layer_point(layer, *last_pos)
             dirty, _stamp = canvas._stroke_mask_line(
-                canvas._mask_erase_stroke, lx, ly, x, y, erase=False)
+                erase_mask, lx, ly, x, y, erase=False)
         else:
             dirty, _stamp = canvas._dab_mask(
-                canvas._mask_erase_stroke, x, y, erase=False)
+                erase_mask, x, y, erase=False)
         self._preview(canvas, layer, dirty)
         return dirty
 
     def end(self, canvas, layer):
-        dirty = canvas._mask_erase_dirty
+        dirty = canvas._mask_erase_stroke.dirty_rect
         if layer is not None and dirty is not None:
-            x0, y0, x1, y1 = dirty
-            layer.mask.data[y0:y1, x0:x1] = np.minimum(
-                layer.mask.data[y0:y1, x0:x1],
-                1.0 - canvas._mask_erase_stroke[y0:y1, x0:x1])
-            canvas._erase_layer_rect(
-                layer, dirty, canvas._mask_erase_stroke[y0:y1, x0:x1])
+            erase = canvas._mask_erase_stroke.erase_region(dirty)
+            canvas._mask_erase_stroke.apply_to_layer_mask(layer.mask.data)
+            canvas._erase_layer_rect(layer, dirty, erase)
             canvas._update_mask_overlay_region(layer, dirty)
-        canvas._mask_erase_stroke = None
-        canvas._mask_erase_dirty = None
+        canvas._mask_erase_stroke.clear()
 
     def _preview(self, canvas, layer, dirty):
-        canvas._mask_erase_dirty = canvas._union_rect(canvas._mask_erase_dirty, dirty)
+        canvas._mask_erase_stroke.add_dirty(dirty)
         if dirty is None:
             return
         if canvas._show_mask:
-            x0, y0, x1, y1 = dirty
-            preview = np.minimum(
-                layer.mask.data[y0:y1, x0:x1],
-                1.0 - canvas._mask_erase_stroke[y0:y1, x0:x1])
+            preview = canvas._mask_erase_stroke.preview_region(
+                layer.mask.data,
+                dirty,
+            )
             canvas._update_mask_overlay_region_preview(layer, dirty, preview)
         canvas._preview_mask_erase_region(layer, dirty)
 

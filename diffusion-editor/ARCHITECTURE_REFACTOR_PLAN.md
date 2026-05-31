@@ -377,6 +377,14 @@ Success criteria:
 - Removed mask/selection overlay buffer ownership and full overlay composition
   logic from `EditorCanvas`; the canvas now delegates overlay rebuilds and
   incremental mask-preview updates.
+- Added `canvas_mask_erase.py` with `MaskEraseStrokeBuffer` for mask erase
+  preview mask ownership, dirty accumulation, preview region calculation, and
+  final mask application.
+- Removed direct `_mask_erase_stroke` array and `_mask_erase_dirty` ownership
+  from `EditorCanvas`/`MaskEraserTool`; the tool now uses the runtime buffer
+  API and clears it after applying the stroke.
+- Fixed GPU render preview detection to test whether a mask erase stroke is
+  active, not whether the runtime buffer object exists.
 - Remaining Phase 5 work: extract higher-level paint/mask/selection state
   machines for mask/selection paths, then remove the remaining compatibility
   surface after private callers are migrated.
