@@ -21,7 +21,7 @@ from .canvas_mask_erase import MaskEraseStrokeBuffer
 from .canvas_mask_paint import CanvasMaskPainter
 from .canvas_overlay import CanvasOverlayBridge
 from .canvas_paint_stroke import PaintStrokeBuffer
-from .canvas_rect_drag import CanvasRectDrag
+from .canvas_rect_drag import CanvasRectDragController
 from .canvas_selection_paint import CanvasSelectionPainter
 from .canvas_smudge import SmudgeStrokeBuffer
 from .canvas_tools import SelectionPaintTool, create_canvas_tools
@@ -57,18 +57,7 @@ class EditorCanvas(Canvas):
         self._selection_mode = False
         self._selection_painter = CanvasSelectionPainter()
 
-        # Selection rectangle mode
-        self._selection_rect_drag = CanvasRectDrag(
-            include_end_pixel=True,
-            min_size=1,
-        )
-
-        # Rectangle modes
-        self._patch_rect_drag = CanvasRectDrag(
-            include_end_pixel=False,
-            min_size=2,
-        )
-        self._show_patch_rect = True
+        self._rect_drags = CanvasRectDragController()
 
         # Stroke buffer (MAX blending during one stroke)
         self._paint_stroke = PaintStrokeBuffer()
@@ -219,7 +208,7 @@ class EditorCanvas(Canvas):
         self._selection_painter.set_eraser(eraser)
 
     def set_selection_rect_mode(self, on: bool):
-        self._selection_rect_drag.set_enabled(on)
+        self._rect_drags.set_selection_rect_mode(on)
         self.cursor = "cross" if on else ""
 
     def set_show_mask(self, show: bool):
@@ -232,11 +221,11 @@ class EditorCanvas(Canvas):
         self._update_overlay()
 
     def set_patch_rect_mode(self, on: bool):
-        self._patch_rect_drag.set_enabled(on)
+        self._rect_drags.set_patch_rect_mode(on)
         self.cursor = "cross" if on else ""
 
     def set_show_patch_rect(self, show: bool):
-        self._show_patch_rect = show
+        self._rect_drags.set_show_patch_rect(show)
 
     def _can_edit_layer(self, layer) -> bool:
         return (
@@ -263,8 +252,7 @@ class EditorCanvas(Canvas):
             if layer is None:
                 return
 
-            # Selection rect mode
-            if self._selection_rect_drag.begin(ix, iy):
+            if self._rect_drags.begin_selection_rect(ix, iy):
                 return
 
             # Selection painting
@@ -275,8 +263,7 @@ class EditorCanvas(Canvas):
             if not self._can_edit_layer(layer):
                 return
 
-            # Patch rect mode
-            if self._patch_rect_drag.begin(ix, iy):
+            if self._rect_drags.begin_patch_rect(ix, iy):
                 return
 
             # Painting
@@ -285,10 +272,7 @@ class EditorCanvas(Canvas):
     def _handle_mouse_move(self, ix: float, iy: float):
         ixi, iyi = int(ix), int(iy)
 
-        if self._selection_rect_drag.move(ixi, iyi):
-            return
-
-        if self._patch_rect_drag.move(ixi, iyi):
+        if self._rect_drags.move(ixi, iyi):
             return
 
         if self._edit_session.active:
@@ -300,18 +284,16 @@ class EditorCanvas(Canvas):
     def _handle_mouse_up(self, ix: float, iy: float):
         ixi, iyi = int(ix), int(iy)
 
-        if self._selection_rect_drag.dragging:
-            result = self._selection_rect_drag.finish(ixi, iyi)
+        rect_result = self._rect_drags.finish(ixi, iyi)
+        if rect_result.handled:
             self.cursor = ""
-            if result is not None and self.on_selection_rect_drawn:
-                self.on_selection_rect_drawn(*result.rect)
-            return
-
-        if self._patch_rect_drag.dragging:
-            result = self._patch_rect_drag.finish(ixi, iyi)
-            self.cursor = ""
-            if result is not None and self.on_patch_rect_drawn:
-                self.on_patch_rect_drawn(*result.rect)
+            if rect_result.rect is not None:
+                if (
+                        rect_result.target == "selection"
+                        and self.on_selection_rect_drawn):
+                    self.on_selection_rect_drawn(*rect_result.rect)
+                elif rect_result.target == "patch" and self.on_patch_rect_drawn:
+                    self.on_patch_rect_drawn(*rect_result.rect)
             return
 
         if self._edit_session.active:
@@ -455,7 +437,7 @@ class EditorCanvas(Canvas):
                                            (1.0, 1.0, 1.0, 0.95), 1.0)
 
         # Selection rectangle (cyan)
-        rect = self._selection_rect_drag.preview_rect()
+        rect = self._rect_drags.selection_preview_rect()
         if rect is not None:
             if rect:
                 ix0, iy0, ix1, iy1 = rect
@@ -467,16 +449,13 @@ class EditorCanvas(Canvas):
                                            (0.0, 0.8, 1.0, 0.7), 2.0)
 
         # Patch rectangle (green outline)
-        if self._show_patch_rect and layer is not None:
-            rect = self._patch_rect_drag.preview_rect()
-            if rect is None and layer.patch_rect:
-                rect = layer.local_rect_to_canvas(layer.patch_rect)
-            if rect:
-                ix0, iy0, ix1, iy1 = rect
-                wx0, wy0 = canvas.image_to_widget(ix0, iy0)
-                wx1, wy1 = canvas.image_to_widget(ix1, iy1)
-                renderer.draw_rect_outline(wx0, wy0, wx1 - wx0, wy1 - wy0,
-                                           (0.2, 0.78, 0.31, 0.8), 2.0)
+        rect = self._rect_drags.patch_preview_rect(layer)
+        if rect:
+            ix0, iy0, ix1, iy1 = rect
+            wx0, wy0 = canvas.image_to_widget(ix0, iy0)
+            wx1, wy1 = canvas.image_to_widget(ix1, iy1)
+            renderer.draw_rect_outline(wx0, wy0, wx1 - wx0, wy1 - wy0,
+                                       (0.2, 0.78, 0.31, 0.8), 2.0)
 
     def dispose(self):
         """Release GPU resources held by the canvas compositor."""

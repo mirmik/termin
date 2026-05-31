@@ -12,6 +12,13 @@ class CanvasRectDragResult:
     rect: Rect
 
 
+@dataclass(frozen=True)
+class CanvasRectDragFinish:
+    handled: bool
+    target: str | None = None
+    rect: Rect | None = None
+
+
 class CanvasRectDrag:
     def __init__(self, *, include_end_pixel: bool, min_size: int):
         self._include_end_pixel = include_end_pixel
@@ -79,3 +86,67 @@ class CanvasRectDrag:
             x1 += 1
             y1 += 1
         return x0, y0, x1, y1
+
+
+class CanvasRectDragController:
+    def __init__(self):
+        self._selection_rect_drag = CanvasRectDrag(
+            include_end_pixel=True,
+            min_size=1,
+        )
+        self._patch_rect_drag = CanvasRectDrag(
+            include_end_pixel=False,
+            min_size=2,
+        )
+        self._show_patch_rect = True
+
+    def set_selection_rect_mode(self, enabled: bool) -> None:
+        self._selection_rect_drag.set_enabled(enabled)
+
+    def set_patch_rect_mode(self, enabled: bool) -> None:
+        self._patch_rect_drag.set_enabled(enabled)
+
+    def set_show_patch_rect(self, show: bool) -> None:
+        self._show_patch_rect = show
+
+    def begin_selection_rect(self, x: int, y: int) -> bool:
+        return self._selection_rect_drag.begin(x, y)
+
+    def begin_patch_rect(self, x: int, y: int) -> bool:
+        return self._patch_rect_drag.begin(x, y)
+
+    def move(self, x: int, y: int) -> bool:
+        return (
+            self._selection_rect_drag.move(x, y)
+            or self._patch_rect_drag.move(x, y)
+        )
+
+    def finish(self, x: int, y: int) -> CanvasRectDragFinish:
+        if self._selection_rect_drag.dragging:
+            result = self._selection_rect_drag.finish(x, y)
+            return CanvasRectDragFinish(
+                handled=True,
+                target="selection",
+                rect=result.rect if result is not None else None,
+            )
+
+        if self._patch_rect_drag.dragging:
+            result = self._patch_rect_drag.finish(x, y)
+            return CanvasRectDragFinish(
+                handled=True,
+                target="patch",
+                rect=result.rect if result is not None else None,
+            )
+
+        return CanvasRectDragFinish(handled=False)
+
+    def selection_preview_rect(self) -> Rect | None:
+        return self._selection_rect_drag.preview_rect()
+
+    def patch_preview_rect(self, layer) -> Rect | None:
+        if not self._show_patch_rect or layer is None:
+            return None
+        rect = self._patch_rect_drag.preview_rect()
+        if rect is None and layer.patch_rect:
+            rect = layer.local_rect_to_canvas(layer.patch_rect)
+        return rect

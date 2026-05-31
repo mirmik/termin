@@ -1,4 +1,4 @@
-from diffusion_editor.canvas_rect_drag import CanvasRectDrag
+from diffusion_editor.canvas_rect_drag import CanvasRectDrag, CanvasRectDragController
 
 
 def test_rect_drag_ignores_begin_when_disabled():
@@ -61,3 +61,40 @@ def test_disabling_rect_drag_cancels_active_drag():
 
     assert drag.preview_rect() is None
     assert drag.dragging is False
+
+
+def test_rect_drag_controller_routes_selection_finish():
+    controller = CanvasRectDragController()
+    controller.set_selection_rect_mode(True)
+
+    assert controller.begin_selection_rect(1, 2) is True
+    assert controller.move(4, 5) is True
+    result = controller.finish(4, 5)
+
+    assert result.handled is True
+    assert result.target == "selection"
+    assert result.rect == (1, 2, 5, 6)
+
+
+def test_rect_drag_controller_routes_patch_finish():
+    controller = CanvasRectDragController()
+    controller.set_patch_rect_mode(True)
+
+    assert controller.begin_patch_rect(5, 6) is True
+    result = controller.finish(1, 2)
+
+    assert result.handled is True
+    assert result.target == "patch"
+    assert result.rect == (1, 2, 5, 6)
+
+
+def test_rect_drag_controller_handles_rejected_rect_without_result_rect():
+    controller = CanvasRectDragController()
+    controller.set_patch_rect_mode(True)
+
+    assert controller.begin_patch_rect(5, 5) is True
+    result = controller.finish(6, 6)
+
+    assert result.handled is True
+    assert result.target == "patch"
+    assert result.rect is None
