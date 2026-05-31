@@ -365,9 +365,15 @@ Success criteria:
   metadata.
 - Removed the scattered `_painting`/`_last_paint_pos`/edit metadata fields from
   `EditorCanvas` mouse handlers.
+- Added `canvas_smudge.py` with `SmudgeStrokeBuffer` and brush-rect clipping
+  helpers for smudge carry-buffer state, dab application, and line
+  interpolation.
+- Removed smudge carry-buffer ownership and smudge pixel math from
+  `EditorCanvas`; the canvas now delegates smudge operations and refreshes the
+  returned dirty region.
 - Remaining Phase 5 work: extract higher-level paint/mask/selection state
-  machines for mask/selection/smudge paths, then remove the compatibility
-  surface after private callers are migrated.
+  machines for mask/selection paths, then remove the compatibility surface
+  after private callers are migrated.
 
 ## Architectural Smell Checklist
 
