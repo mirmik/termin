@@ -116,6 +116,24 @@ class SmudgeTool(CanvasStrokeTool):
         context.clear_smudge()
 
 
+class SelectionPaintTool(CanvasStrokeTool):
+    mode = None
+    label = "Selection Stroke"
+    target = "selection"
+
+    def begin(self, context, layer, x: int, y: int):
+        return context.selection_dab(x, y)
+
+    def move(self, context, layer, last_pos, x: int, y: int):
+        if last_pos:
+            lx, ly = last_pos
+            return context.selection_line(lx, ly, x, y)
+        return context.selection_dab(x, y)
+
+    def end(self, context, layer):
+        context.rebuild_overlay()
+
+
 class MaskPaintTool(CanvasStrokeTool):
     mode = BrushToolMode.MASK
     label = "Mask Stroke"

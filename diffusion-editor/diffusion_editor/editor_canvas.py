@@ -24,7 +24,7 @@ from .canvas_paint_stroke import PaintStrokeBuffer
 from .canvas_rect_drag import CanvasRectDrag
 from .canvas_selection_paint import CanvasSelectionPainter
 from .canvas_smudge import SmudgeStrokeBuffer
-from .canvas_tools import create_canvas_tools
+from .canvas_tools import SelectionPaintTool, create_canvas_tools
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +82,15 @@ class EditorCanvas(Canvas):
             self._composite_bridge,
             self._overlay_bridge,
             self._paint_stroke,
+            self._selection_painter,
             self._mask_painter,
             self._mask_erase_stroke,
             self._smudge_stroke,
         )
         self._stroke_tools = create_canvas_tools()
         self._active_stroke_tool = self._stroke_tools[self._brush_tool_mode]
+        self._selection_tool = SelectionPaintTool()
+        self._edit_tool = None
 
         # Callbacks
         self.on_mouse_moved: callable = None
@@ -266,21 +269,7 @@ class EditorCanvas(Canvas):
 
             # Selection painting
             if self._selection_mode:
-                self._edit_session.begin(
-                    label="Selection Stroke",
-                    target="selection",
-                    layer=None,
-                    pos=(ix, iy),
-                )
-                if self.on_edit_begin:
-                    self.on_edit_begin("Selection Stroke", None, "selection")
-                dirty, _stamp = self._selection_painter.dab(
-                    self._layer_stack.selection.data,
-                    ix,
-                    iy,
-                )
-                self._edit_session.add_dirty(dirty)
-                self._update_overlay()
+                self._begin_tool_edit(self._selection_tool, None, ix, iy)
                 return
 
             if not self._can_edit_layer(layer):
@@ -291,17 +280,7 @@ class EditorCanvas(Canvas):
                 return
 
             # Painting
-            tool = self._active_stroke_tool
-            self._edit_session.begin(
-                label=tool.label,
-                target=tool.target,
-                layer=layer,
-                pos=(ix, iy),
-            )
-            if self.on_edit_begin:
-                self.on_edit_begin(tool.label, layer, tool.target)
-            dirty = tool.begin(self._tool_context, layer, ix, iy)
-            self._edit_session.add_dirty(dirty)
+            self._begin_tool_edit(self._active_stroke_tool, layer, ix, iy)
 
     def _handle_mouse_move(self, ix: float, iy: float):
         ixi, iyi = int(ix), int(iy)
@@ -313,33 +292,7 @@ class EditorCanvas(Canvas):
             return
 
         if self._edit_session.active:
-            if self._edit_session.target == "selection":
-                if self._edit_session.last_pos:
-                    lx, ly = self._edit_session.last_pos
-                    dirty, _stamp = self._selection_painter.line(
-                        self._layer_stack.selection.data,
-                        lx,
-                        ly,
-                        ixi,
-                        iyi,
-                    )
-                else:
-                    dirty, _stamp = self._selection_painter.dab(
-                        self._layer_stack.selection.data,
-                        ixi,
-                        iyi,
-                    )
-                self._edit_session.add_dirty(dirty)
-                self._update_overlay()
-                self._edit_session.move_to((ixi, iyi))
-                return
-            layer = self._layer_stack.active_layer
-            if layer is None:
-                return
-            dirty = self._active_stroke_tool.move(
-                self._tool_context, layer, self._edit_session.last_pos, ixi, iyi)
-            self._edit_session.add_dirty(dirty)
-            self._edit_session.move_to((ixi, iyi))
+            self._move_tool_edit(ixi, iyi)
 
         if self.on_mouse_moved:
             self.on_mouse_moved(ixi, iyi)
@@ -362,22 +315,58 @@ class EditorCanvas(Canvas):
             return
 
         if self._edit_session.active:
-            if self._edit_session.target == "selection":
-                self._update_overlay()
-                if self.on_edit_end:
-                    self.on_edit_end(None, "selection", self._edit_session.dirty_rect)
-            else:
-                layer = self._layer_stack.active_layer
-                self._active_stroke_tool.end(self._tool_context, layer)
-                self._overlay_bridge.clear()
-                self._update_overlay()
-                if self.on_edit_end:
-                    self.on_edit_end(
-                        self._edit_session.layer,
-                        self._edit_session.target,
-                        self._edit_session.dirty_rect,
-                    )
-            self._edit_session.clear()
+            self._finish_tool_edit()
+
+    def _begin_tool_edit(self, tool, layer, ix: int, iy: int):
+        self._edit_tool = tool
+        self._edit_session.begin(
+            label=tool.label,
+            target=tool.target,
+            layer=layer,
+            pos=(ix, iy),
+        )
+        if self.on_edit_begin:
+            self.on_edit_begin(tool.label, layer, tool.target)
+        dirty = tool.begin(self._tool_context, layer, ix, iy)
+        self._edit_session.add_dirty(dirty)
+
+    def _move_tool_edit(self, ix: int, iy: int):
+        tool = self._edit_tool
+        if tool is None:
+            return
+        layer = None
+        if self._edit_session.target != "selection":
+            layer = self._layer_stack.active_layer
+            if layer is None:
+                return
+        dirty = tool.move(
+            self._tool_context,
+            layer,
+            self._edit_session.last_pos,
+            ix,
+            iy,
+        )
+        self._edit_session.add_dirty(dirty)
+        self._edit_session.move_to((ix, iy))
+
+    def _finish_tool_edit(self):
+        tool = self._edit_tool
+        layer = None
+        if self._edit_session.target != "selection":
+            layer = self._layer_stack.active_layer
+        if tool is not None:
+            tool.end(self._tool_context, layer)
+        if self._edit_session.target != "selection":
+            self._overlay_bridge.clear()
+            self._update_overlay()
+        if self.on_edit_end:
+            self.on_edit_end(
+                self._edit_session.layer,
+                self._edit_session.target,
+                self._edit_session.dirty_rect,
+            )
+        self._edit_tool = None
+        self._edit_session.clear()
 
     def _pick_color(self, ix: int, iy: int):
         if self._layer_stack.width == 0 or self._layer_stack.height == 0:
