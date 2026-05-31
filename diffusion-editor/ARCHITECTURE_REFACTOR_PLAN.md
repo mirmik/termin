@@ -371,9 +371,15 @@ Success criteria:
 - Removed smudge carry-buffer ownership and smudge pixel math from
   `EditorCanvas`; the canvas now delegates smudge operations and refreshes the
   returned dirty region.
+- Added `canvas_overlay.py` with `CanvasOverlayBridge` and tested overlay pixel
+  composition for selection, layer masks, offset layers, region updates, and
+  mask erase previews.
+- Removed mask/selection overlay buffer ownership and full overlay composition
+  logic from `EditorCanvas`; the canvas now delegates overlay rebuilds and
+  incremental mask-preview updates.
 - Remaining Phase 5 work: extract higher-level paint/mask/selection state
-  machines for mask/selection paths, then remove the compatibility surface
-  after private callers are migrated.
+  machines for mask/selection paths, then remove the remaining compatibility
+  surface after private callers are migrated.
 
 ## Architectural Smell Checklist
 
