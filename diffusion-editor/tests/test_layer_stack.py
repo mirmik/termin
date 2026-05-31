@@ -6,6 +6,7 @@ import pytest
 from diffusion_editor.layer import Layer
 from diffusion_editor.layer_stack import LayerStack
 from diffusion_editor.canvas_tools import MoveTool
+from diffusion_editor.canvas_geometry import union_rect
 
 
 def _solid_image(w, h, r, g, b, a):
@@ -269,7 +270,7 @@ class TestStructuralOps:
 
             @staticmethod
             def union_rect(a, b):
-                return LayerStack._union_rect(a, b)
+                return union_rect(a, b)
 
             def set_image(self, image):
                 self.image_set = True
@@ -533,3 +534,11 @@ class TestPrefixBelowRect:
         top = stack.layers[0]
         rect = stack.get_prefix_below_rect(top, -10, -10, 70, 70)
         assert rect.shape == (64, 64, 4)
+
+
+def test_cache_memory_bytes_reports_renderer_cache_size():
+    stack = _make_stack(2, w=16, h=16)
+    stack.composite()
+
+    assert isinstance(stack.cache_memory_bytes(), int)
+    assert stack.cache_memory_bytes() >= 0

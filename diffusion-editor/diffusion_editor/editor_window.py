@@ -663,7 +663,7 @@ class EditorWindow:
 
     def _memory_status(self) -> str:
         hist = self._document.memory_bytes()
-        cache = self._layer_stack._renderer.cache_memory_bytes()
+        cache = self._layer_stack.cache_memory_bytes()
         return f"Hist:{self._fmt_bytes(hist)} Cache:{self._fmt_bytes(cache)}"
 
     def _on_mouse_moved(self, x, y):
@@ -820,11 +820,12 @@ class EditorWindow:
                 if target_layer is None:
                     return
                 old_bounds = target_layer.bounds
-                target_layer.x, target_layer.y = offset
-                dirty = self._layer_stack._union_rect(old_bounds, target_layer.bounds)
-                self._layer_stack.mark_layer_dirty(target_layer, dirty)
-                if self._layer_stack.on_changed:
-                    self._layer_stack.on_changed()
+                self._layer_stack.set_layer_offset(
+                    target_layer,
+                    offset[0],
+                    offset[1],
+                    old_bounds=old_bounds,
+                )
 
             self._document.push_callbacks(
                 label=label,
