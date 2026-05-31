@@ -283,28 +283,31 @@ class ClearLayerMaskCommand:
 
 
 @dataclass(frozen=True)
-class SetIpAdapterRectCommand:
+class SetIpAdapterReferenceLayerCommand:
     layer: Layer
-    rect: tuple[int, int, int, int]
-    label: str = "Set IP-Adapter Rect"
+    reference_layer_id: str
+    reference_layer_name_hint: str
+    label: str = "Set IP-Adapter Reference Layer"
 
     def apply(self, layer_stack: LayerStack) -> None:
         tool = self.layer.tool
         if isinstance(tool, DiffusionTool):
-            tool.ip_adapter_rect = self.rect
+            tool.ip_adapter_layer_id = self.reference_layer_id
+            tool.ip_adapter_layer_name_hint = self.reference_layer_name_hint
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
 
 @dataclass(frozen=True)
-class ClearIpAdapterRectCommand:
+class ClearIpAdapterReferenceLayerCommand:
     layer: Layer
-    label: str = "Clear IP-Adapter Rect"
+    label: str = "Clear IP-Adapter Reference Layer"
 
     def apply(self, layer_stack: LayerStack) -> None:
         tool = self.layer.tool
         if isinstance(tool, DiffusionTool):
-            tool.ip_adapter_rect = None
+            tool.ip_adapter_layer_id = None
+            tool.ip_adapter_layer_name_hint = ""
         if layer_stack.on_changed:
             layer_stack.on_changed()
 
