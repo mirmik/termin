@@ -390,9 +390,14 @@ Success criteria:
 - Removed selection brush size/hardness/flow/eraser fields and selection paint
   wrapper methods from `EditorCanvas`; mouse handlers now delegate selection
   pixel edits to `CanvasSelectionPainter`.
-- Remaining Phase 5 work: extract higher-level paint/mask/selection state
-  machines for the remaining layer mask paint path, then remove the remaining
-  compatibility surface after private callers are migrated.
+- Added `canvas_mask_paint.py` with `CanvasMaskPainter` for layer-mask brush
+  settings, eraser state, dab operations, and line stroke operations.
+- Removed layer-mask brush size/hardness/flow/eraser fields and
+  `_dab_mask`/`_stroke_mask_line` wrapper methods from `EditorCanvas`;
+  `MaskPaintTool` and `MaskEraserTool` now delegate mask pixel edits directly
+  to `CanvasMaskPainter`.
+- Remaining Phase 5 work: clean up the remaining canvas tool API compatibility
+  surface after private callers are migrated.
 
 ## Architectural Smell Checklist
 

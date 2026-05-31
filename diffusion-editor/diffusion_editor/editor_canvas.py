@@ -24,13 +24,13 @@ from .canvas_geometry import (
 from .canvas_composite import CanvasCompositeBridge
 from .canvas_edit_session import CanvasEditSession
 from .canvas_mask_erase import MaskEraseStrokeBuffer
+from .canvas_mask_paint import CanvasMaskPainter
 from .canvas_overlay import CanvasOverlayBridge
 from .canvas_paint_stroke import PaintStrokeBuffer
 from .canvas_rect_drag import CanvasRectDrag
 from .canvas_selection_paint import CanvasSelectionPainter
 from .canvas_smudge import SmudgeStrokeBuffer
 from .canvas_tools import create_canvas_tools
-from .soft_mask_stroke import SoftMaskBrush, apply_dab, apply_line
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +56,7 @@ class EditorCanvas(Canvas):
         self._stroke_tools = create_canvas_tools()
         self._active_stroke_tool = self._stroke_tools[self._brush_tool_mode]
         self._brush_eraser = False
-        self._mask_brush_size = 50
-        self._mask_brush_hardness = 0.4
-        self._mask_brush_flow = 1.0
-        self._mask_eraser = False
+        self._mask_painter = CanvasMaskPainter()
         self._overlay_bridge = CanvasOverlayBridge(
             layer_stack,
             set_overlay=self.set_overlay,
@@ -241,14 +238,12 @@ class EditorCanvas(Canvas):
     # ------------------------------------------------------------------
 
     def set_mask_brush(self, size: int, hardness: float, flow: float = 1.0):
-        self._mask_brush_size = size
-        self._mask_brush_hardness = hardness
-        self._mask_brush_flow = max(0.0, min(flow, 1.0))
+        self._mask_painter.set_brush(size, hardness, flow)
         if self._brush_tool_mode not in (BrushToolMode.MASK, BrushToolMode.MASK_ERASER):
             self.set_brush_tool(BrushToolMode.MASK)
 
     def set_mask_eraser(self, eraser: bool):
-        self._mask_eraser = eraser
+        self._mask_painter.set_eraser(eraser)
         self.set_brush_tool(
             BrushToolMode.MASK_ERASER if eraser else BrushToolMode.MASK)
 
@@ -258,7 +253,8 @@ class EditorCanvas(Canvas):
     def set_brush_tool(self, mode: BrushToolMode | str):
         self._brush_tool_mode = BrushToolMode(mode)
         self._brush_eraser = self._brush_tool_mode == BrushToolMode.ERASER
-        self._mask_eraser = self._brush_tool_mode == BrushToolMode.MASK_ERASER
+        self._mask_painter.set_eraser(
+            self._brush_tool_mode == BrushToolMode.MASK_ERASER)
         self._active_stroke_tool = self._stroke_tools[self._brush_tool_mode]
 
     @property
@@ -294,37 +290,6 @@ class EditorCanvas(Canvas):
 
     def set_show_patch_rect(self, show: bool):
         self._show_patch_rect = show
-
-    # ------------------------------------------------------------------
-    # Mask painting
-    # ------------------------------------------------------------------
-
-    def _mask_brush(self) -> SoftMaskBrush:
-        return SoftMaskBrush(
-            size=self._mask_brush_size,
-            hardness=self._mask_brush_hardness,
-            flow=self._mask_brush_flow,
-        )
-
-    def _dab_mask(self, mask: np.ndarray, cx: int, cy: int, *, erase: bool | None = None):
-        """Returns (dirty_rect, stamp) or (None, None).
-
-        mask is float32 [0..1], same for returned stamp.
-        """
-        if erase is None:
-            erase = self._mask_eraser
-        return apply_dab(mask, cx, cy, self._mask_brush(), erase=erase)
-
-    def _stroke_mask_line(self, mask: np.ndarray,
-                          x0: int, y0: int, x1: int, y1: int,
-                          *, erase: bool | None = None):
-        """Draw smooth mask stroke segment. Returns (dirty_rect, stamp) or (None, None).
-
-        mask is float32 [0..1], same for returned stamp.
-        """
-        if erase is None:
-            erase = self._mask_eraser
-        return apply_line(mask, x0, y0, x1, y1, self._mask_brush(), erase=erase)
 
     @staticmethod
     def _union_rect(a, b):
