@@ -21,9 +21,9 @@ from .canvas_geometry import (
     union_rect,
     visible_layer_rect,
 )
+from .canvas_composite import CanvasCompositeBridge
 from .canvas_rect_drag import CanvasRectDrag
 from .canvas_tools import create_canvas_tools
-from .gpu_compositor import GPUCompositor
 from .soft_mask_stroke import SoftMaskBrush, apply_dab, apply_line
 
 logger = logging.getLogger(__name__)
@@ -38,18 +38,12 @@ class EditorCanvas(Canvas):
         super().__init__()
         self.background_color = (0.08, 0.08, 0.10, 1.0)
         self._layer_stack = layer_stack
-        self._composite: np.ndarray | None = None
-
-        # GPU compositing runs through the tgfx2 native compositor. The
-        # host (EditorWindow) threads the process-global Tgfx2Context
-        # down so the compositor's textures live on the same IRenderDevice
-        # as the UI shader — required under Vulkan (no cross-device
-        # handle resolution) and harmless on OpenGL.
-        self._gpu_compositing = gpu_compositing
-        self._gpu_compositor: GPUCompositor | None = (
-            GPUCompositor(layer_stack, graphics=ctx)
-            if self._gpu_compositing else None)
-        self._composite_stale = True  # CPU readback needed
+        self._composite_bridge = CanvasCompositeBridge(
+            layer_stack,
+            gpu_compositing=gpu_compositing,
+            graphics=ctx,
+            set_image=self.set_image,
+        )
 
         self.brush = Brush()
         self._brush_tool_mode = BrushToolMode.PAINT
@@ -122,15 +116,45 @@ class EditorCanvas(Canvas):
     # Layer stack integration
     # ------------------------------------------------------------------
 
+    @property
+    def _composite(self) -> np.ndarray | None:
+        return self._composite_bridge.composite
+
+    @_composite.setter
+    def _composite(self, composite: np.ndarray | None) -> None:
+        self._composite_bridge.composite = composite
+
+    @property
+    def _gpu_compositing(self) -> bool:
+        return self._composite_bridge.gpu_compositing
+
+    @_gpu_compositing.setter
+    def _gpu_compositing(self, enabled: bool) -> None:
+        self._composite_bridge.gpu_compositing = enabled
+
+    @property
+    def _gpu_compositor(self):
+        return self._composite_bridge.gpu_compositor
+
+    @_gpu_compositor.setter
+    def _gpu_compositor(self, compositor) -> None:
+        self._composite_bridge.gpu_compositor = compositor
+
+    @property
+    def _composite_stale(self) -> bool:
+        return self._composite_bridge.composite_stale
+
+    @_composite_stale.setter
+    def _composite_stale(self, stale: bool) -> None:
+        self._composite_bridge.composite_stale = stale
+
     def _on_stack_changed(self):
-        if self._gpu_compositor:
-            self._gpu_compositor.rebuild()
+        self._composite_bridge.rebuild()
         self._update_composite()
 
     def _update_composite(self):
-        if self._gpu_compositing and self._gpu_compositor:
-            self._gpu_compositor.composite()
-            self._composite_stale = True
+        composite = self._composite_bridge.update_composite()
+        if composite is None and self._composite_bridge.using_gpu:
             # Keep Canvas.image_size in sync for fit/zoom math in GPU path.
             w, h = self._layer_stack.width, self._layer_stack.height
             if w > 0 and h > 0:
@@ -138,10 +162,6 @@ class EditorCanvas(Canvas):
                     self._image_data = np.empty((h, w, 4), dtype=np.uint8)
             else:
                 self._image_data = None
-        else:
-            self._composite = np.ascontiguousarray(
-                self._layer_stack.composite())
-            self.set_image(self._composite)
         self._mask_overlay = None
         self._update_overlay()
 
@@ -311,33 +331,17 @@ class EditorCanvas(Canvas):
         """Preview erase on composite without modifying layer.image."""
         if dirty is None or self._mask_erase_stroke is None:
             return
-        # Ensure CPU composite is available for preview manipulation
-        if self._gpu_compositing and self._composite_stale:
-            self._composite = self._gpu_compositor.readback()
-            self._composite_stale = False
-        if self._composite is None:
-            return
         local_rect, canvas_rect = self._clip_layer_local_rect(layer, dirty)
         if local_rect is None:
             return
         x0, y0, x1, y1 = local_rect
-        cx0, cy0, cx1, cy1 = canvas_rect
-        below = self._composite_rect_below(layer, cy0, cy1, cx0, cx1)
-        above = layer.image[y0:y1, x0:x1].astype(np.float32)
         erase = self._mask_erase_stroke[y0:y1, x0:x1]
-        # Reduce alpha for preview only
-        above[:, :, 3] = np.clip(above[:, :, 3] * (1.0 - erase), 0, 255)
-        sa = above[:, :, 3:4] / 255.0
-        inv_sa = 1.0 - sa
-        da = below[:, :, 3:4] / 255.0
-        out_a = sa + da * inv_sa
-        safe_a = np.maximum(out_a, 1.0 / 255.0)
-        out_rgb = (above[:, :, :3] * sa + below[:, :, :3] * da * inv_sa) / safe_a
-        self._composite[cy0:cy1, cx0:cx1, :3] = np.clip(
-            out_rgb, 0, 255).astype(np.uint8)
-        self._composite[cy0:cy1, cx0:cx1, 3:4] = np.clip(
-            out_a * 255.0, 0, 255).astype(np.uint8)
-        self.set_image(self._composite)
+        self._composite_bridge.preview_erased_layer_rect(
+            layer,
+            local_rect,
+            canvas_rect,
+            erase,
+        )
 
     def _erase_layer_rect(self, layer, rect, erase):
         """Erase layer.image alpha by erase mask within rect, update composite.
@@ -350,44 +354,23 @@ class EditorCanvas(Canvas):
         if local_rect is None:
             return
         x0, y0, x1, y1 = local_rect
-        cx0, cy0, cx1, cy1 = canvas_rect
         if erase.dtype == np.uint8:
             erase = erase.astype(np.float32) / 255.0
         la = layer.image[y0:y1, x0:x1, 3].astype(np.float32)
         layer.image[y0:y1, x0:x1, 3] = np.clip(
             la * (1.0 - erase), 0, 255).astype(np.uint8)
 
-        if self._gpu_compositing and self._gpu_compositor:
-            self._gpu_compositor.mark_dirty(layer)
-            self._gpu_compositor.composite()
-            self._composite_stale = True
-        elif self._composite is not None:
-            below = self._composite_rect_below(layer, cy0, cy1, cx0, cx1)
-            above = layer.image[y0:y1, x0:x1].astype(np.float32)
-            sa = above[:, :, 3:4] / 255.0
-            inv_sa = 1.0 - sa
-            da = below[:, :, 3:4] / 255.0
-            out_a = sa + da * inv_sa
-            safe_a = np.maximum(out_a, 1.0 / 255.0)
-            out_rgb = (above[:, :, :3] * sa + below[:, :, :3] * da * inv_sa) / safe_a
-            self._composite[cy0:cy1, cx0:cx1, :3] = np.clip(
-                out_rgb, 0, 255).astype(np.uint8)
-            self._composite[cy0:cy1, cx0:cx1, 3:4] = np.clip(
-                out_a * 255.0, 0, 255).astype(np.uint8)
-            self.set_image(self._composite)
-
-        self._layer_stack.mark_layer_dirty(layer, canvas_rect)
+        self._composite_bridge.refresh_modified_layer_rect(
+            layer,
+            local_rect,
+            canvas_rect,
+        )
 
     def get_composite(self) -> np.ndarray | None:
-        if self._gpu_compositing and self._composite_stale:
-            if self._gpu_compositor:
-                self._composite = self._gpu_compositor.readback()
-                self._composite_stale = False
-        return self._composite
+        return self._composite_bridge.get_composite()
 
     def get_composite_below(self, layer: Layer) -> np.ndarray | None:
-        return np.ascontiguousarray(
-            self._layer_stack.composite(exclude_layer=layer))
+        return self._composite_bridge.get_composite_below(layer)
 
     def view_center_image(self) -> tuple[int, int]:
         cx = self.x + self.width / 2
@@ -621,9 +604,8 @@ class EditorCanvas(Canvas):
     # ------------------------------------------------------------------
 
     def _composite_rect_below(self, target_layer, dy0, dy1, dx0, dx1):
-        cache = self._layer_stack.get_prefix_below_rect(
-            target_layer, dx0, dy0, dx1, dy1)
-        return cache.astype(np.float32)
+        return self._composite_bridge.composite_rect_below(
+            target_layer, dy0, dy1, dx0, dx1)
 
     def _erase_dab(self, layer, cx: int, cy: int):
         stamp = self.brush._alpha_stamp
@@ -667,10 +649,7 @@ class EditorCanvas(Canvas):
         seg_len_sq = sdx * sdx + sdy * sdy
 
         if seg_len_sq < 0.5:
-            dirty = self._erase_dab(layer, x0, y0)
-            if not self._gpu_compositing:
-                self.set_image(self._composite)
-            return dirty
+            return self._erase_dab(layer, x0, y0)
 
         yy, xx = np.mgrid[by0:by1, bx0:bx1]
         xx = xx.astype(np.float32)
@@ -739,35 +718,14 @@ class EditorCanvas(Canvas):
         local_rect, canvas_rect = self._clip_layer_local_rect(layer, rect)
         if local_rect is None:
             return
-        if not self._layer_stack.is_layer_visible_for_composition(layer):
-            self._layer_stack.mark_layer_dirty(layer, canvas_rect)
-            if not self._gpu_compositing:
-                self._composite = np.ascontiguousarray(
-                    self._layer_stack.composite())
-                self.set_image(self._composite)
-            return
-        x0, y0, x1, y1 = local_rect
-        cx0, cy0, cx1, cy1 = canvas_rect
-        if self._gpu_compositing and self._gpu_compositor:
-            self._gpu_compositor.mark_dirty(layer)
-            self._gpu_compositor.composite()
-            self._composite_stale = True
-            return
-        if self._composite is None:
-            return
-        below = self._composite_rect_below(layer, cy0, cy1, cx0, cx1)
-        above = layer.image[y0:y1, x0:x1].astype(np.float32)
-        sa = above[:, :, 3:4] / 255.0
-        inv_sa = 1.0 - sa
-        da = below[:, :, 3:4] / 255.0
-        out_a = sa + da * inv_sa
-        safe_a = np.maximum(out_a, 1.0 / 255.0)
-        out_rgb = (above[:, :, :3] * sa + below[:, :, :3] * da * inv_sa) / safe_a
-        self._composite[cy0:cy1, cx0:cx1, :3] = np.clip(
-            out_rgb, 0, 255).astype(np.uint8)
-        self._composite[cy0:cy1, cx0:cx1, 3:4] = np.clip(
-            out_a * 255.0, 0, 255).astype(np.uint8)
-        self.set_image(self._composite)
+        self._composite_bridge.refresh_modified_layer_rect(
+            layer,
+            local_rect,
+            canvas_rect,
+        )
+
+    def _refresh_layer_transform(self, layer, dirty_canvas_rect):
+        self._composite_bridge.refresh_layer_transform(layer, dirty_canvas_rect)
 
     def _smudge_dab(self, layer, cx: int, cy: int):
         if self._smudge_buffer is None:
@@ -974,7 +932,7 @@ class EditorCanvas(Canvas):
         # canvas black; this shared-device path draws a real image on
         # both backends.
         borrowed_display_tex = None
-        if self._gpu_compositing and self._gpu_compositor:
+        if self._composite_bridge.using_gpu:
             # During mask erase preview, _preview_mask_erase_region
             # modifies self._composite on CPU and calls set_image() —
             # let base Canvas handle that upload instead of overriding
@@ -982,8 +940,8 @@ class EditorCanvas(Canvas):
             in_mask_erase_preview = self._mask_erase_stroke is not None
 
             if not in_mask_erase_preview:
-                tex = self._gpu_compositor.display_tex
-                w, h = self._gpu_compositor.display_size()
+                tex = self._composite_bridge.display_tex
+                w, h = self._composite_bridge.display_size()
                 if tex is not None and w > 0 and h > 0:
                     if self._image_texture is not None and self._image_tex_size is not None:
                         renderer.destroy_texture(self._image_texture)
@@ -1064,6 +1022,4 @@ class EditorCanvas(Canvas):
 
     def dispose(self):
         """Release GPU resources held by the canvas compositor."""
-        if self._gpu_compositor is not None:
-            self._gpu_compositor.dispose()
-            self._gpu_compositor = None
+        self._composite_bridge.dispose()

@@ -277,6 +277,12 @@ class TestStructuralOps:
             def set_image(self, image):
                 self.image_set = True
 
+            def _refresh_layer_transform(self, layer, dirty):
+                self._layer_stack.mark_layer_dirty(layer, dirty)
+                self._composite = np.ascontiguousarray(
+                    self._layer_stack.composite())
+                self.set_image(self._composite)
+
         stack = LayerStack(tile_size=8)
         stack.on_changed = lambda: None
         stack.init_from_image(_solid_image(16, 16, 0, 0, 0, 0))

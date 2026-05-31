@@ -344,8 +344,20 @@ Success criteria:
   layer masks, mask erase previews, and selection painting instead of carrying
   duplicated pixel math.
 - Added focused soft mask stroke tests.
+- Added `canvas_composite.py` with `CanvasCompositeBridge`.
+- Moved CPU/GPU composite ownership, stale GPU readback, dirty layer refresh,
+  move-transform refresh, and mask-erase preview composition out of
+  `EditorCanvas`.
+- `EditorCanvas` keeps compatibility properties for the remaining private
+  callers/tests, but delegates composite updates and GPU compositor lifecycle to
+  `CanvasCompositeBridge`.
+- `CanvasStrokeTool` implementations now ask the canvas to refresh transformed
+  layers instead of duplicating compositor invalidation logic.
+- Added focused composite bridge tests for CPU refresh, move transforms, and
+  GPU invalidation.
 - Remaining Phase 5 work: extract higher-level paint/mask/selection state
-  machines and isolate GPU invalidation/update paths.
+  machines, then remove the compatibility surface after private callers are
+  migrated.
 
 ## Architectural Smell Checklist
 
