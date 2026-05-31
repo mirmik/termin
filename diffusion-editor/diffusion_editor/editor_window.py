@@ -25,7 +25,6 @@ from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.checkbox import Checkbox
-from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.units import px, pct
 from tcgui.widgets.splitter import Splitter
 
@@ -41,6 +40,7 @@ from .layer_panel import LayerPanel
 from .brush_panel import BrushPanel
 from .diffusion_panel import DiffusionPanel
 from .diffusion_generation_controller import DiffusionGenerationController
+from .ip_adapter_reference_dialog import show_ip_adapter_reference_dialog
 from .lama_panel import LamaPanel
 from .instruct_panel import InstructPanel
 from .selection_panel import SelectionPanel
@@ -1270,61 +1270,12 @@ class EditorWindow:
         if event.status:
             self._statusbar.text = event.status
 
-    def _ip_adapter_layer_label(self, layer: Layer) -> str:
-        path = self._layer_stack.get_layer_path(layer)
-        prefix = path if path is not None else "?"
-        marks = []
-        if not layer.visible:
-            marks.append("hidden")
-        if layer.patch_rect is not None:
-            marks.append("patch")
-        suffix = f" [{', '.join(marks)}]" if marks else ""
-        return f"{prefix}: {layer.name}{suffix}"
-
     def _on_pick_ip_adapter_layer(self):
         layer = self._layer_stack.active_layer
         if layer is None or not isinstance(layer.tool, DiffusionTool):
             return
-        candidates = [
-            candidate for candidate in self._layer_stack.all_layers()
-            if candidate is not layer
-        ]
-        if not candidates:
-            self._statusbar.text = "No reference layers available"
-            return
 
-        dlg = Dialog()
-        dlg.title = "Pick IP-Adapter Reference Layer"
-        dlg.buttons = ["OK", "Cancel"]
-
-        content = VStack()
-        content.spacing = 8
-
-        label = Label()
-        label.text = "Reference layer"
-        label.font_size = 12
-        content.add_child(label)
-
-        combo = ComboBox()
-        combo.items = [self._ip_adapter_layer_label(candidate) for candidate in candidates]
-        combo.selected_index = 0
-        if layer.tool.ip_adapter_layer_id is not None:
-            for i, candidate in enumerate(candidates):
-                if candidate.id == layer.tool.ip_adapter_layer_id:
-                    combo.selected_index = i
-                    break
-        combo.preferred_width = px(320)
-        content.add_child(combo)
-
-        dlg.content = content
-
-        def _apply(result: str):
-            if result != "OK":
-                return
-            idx = combo.selected_index
-            if idx < 0 or idx >= len(candidates):
-                return
-            reference_layer = candidates[idx]
+        def _apply(reference_layer: Layer) -> None:
             self._document.execute(SetIpAdapterReferenceLayerCommand(
                 layer=layer,
                 reference_layer_id=reference_layer.id,
@@ -1334,9 +1285,17 @@ class EditorWindow:
                 f"IP-Adapter reference: {reference_layer.name}"
             )
 
-        dlg.on_result = _apply
-        dlg.show(self.ui)
-        self.ui.set_focus(combo)
+        if self.ui is None:
+            return
+        shown = show_ip_adapter_reference_dialog(
+            self.ui,
+            self._layer_stack,
+            layer,
+            layer.tool.ip_adapter_layer_id,
+            _apply,
+        )
+        if not shown:
+            self._statusbar.text = "No reference layers available"
 
     def _on_clear_ip_adapter_layer(self):
         layer = self._layer_stack.active_layer

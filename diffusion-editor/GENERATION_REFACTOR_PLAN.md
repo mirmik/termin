@@ -159,13 +159,15 @@ This is less urgent than request building because it is UI-specific and small.
   shared patch resolver.
 - Moved layer-local mask crop extraction for Diffusion inpaint and LaMa onto the
   shared patch resolver.
+- Extracted IP-Adapter reference layer picking into
+  `ip_adapter_reference_dialog.py`.
 - `EditorWindow` still owns UI wiring, dialogs, status updates, and document
   command execution, but no longer owns diffusion request construction,
-  diffusion pending task state, or pixel-level Patch/mask extraction.
+  diffusion pending task state, pixel-level Patch/mask extraction, or
+  IP-Adapter reference dialog construction.
 
 ## Remaining Refactor Targets
 
-- Extract IP-Adapter reference picking dialog from `EditorWindow`.
 - Consider moving InstructPix2Pix and LaMa load/inference/pending workflows into
   controller objects matching `diffusion_generation_controller.py`.
 - Consider replacing `DiffusionEngine.submit(...)`'s long argument list with
