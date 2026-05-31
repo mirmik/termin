@@ -1,12 +1,12 @@
 import numpy as np
 
-from diffusion_editor.layer import Layer
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.layer import Layer
+from diffusion_editor.document.layer_stack import LayerStack
 from diffusion_editor.reference_resolver import (
     layer_reference_image,
     resolve_ip_adapter_reference,
 )
-from diffusion_editor.tool import DiffusionTool
+from diffusion_editor.document.tool import DiffusionTool
 
 
 def _rgba(width, height, color):

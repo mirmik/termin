@@ -30,10 +30,10 @@ from tcgui.widgets.splitter import Splitter
 
 from .agent_chat import DEFAULT_AGENT_BASE_URL, DEFAULT_AGENT_MODEL, AgentChatPanel
 from .agent_tools import create_editor_tool_registry
-from .layer_stack import LayerStack
-from .mask import coerce_mask_data
-from .layer import Layer
-from .tool import DiffusionTool, LamaTool, InstructTool
+from .document.layer_stack import LayerStack
+from .document.mask import coerce_mask_data
+from .document.layer import Layer
+from .document.tool import DiffusionTool, LamaTool, InstructTool
 from .brush import BrushToolMode
 from .editor_canvas import EditorCanvas
 from .layer_panel import LayerPanel
@@ -55,9 +55,9 @@ from .segmentation import SegmentationEngine
 from .patch_resolver import source_patch_at_center
 from .file_dialog import open_file_dialog, save_file_dialog, open_directory_dialog
 from .settings import Settings
-from .history import HistoryManager
-from .document_service import DocumentService
-from .commands import (
+from .document.history import HistoryManager
+from .document.document_service import DocumentService
+from .document.commands import (
     AddLayerCommand, RemoveLayerCommand,
     MoveLayerCommand, SetLayerVisibilityCommand, SetLayerOpacityCommand,
     SetLayerNameCommand,

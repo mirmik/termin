@@ -11,9 +11,9 @@ from .generation_types import (
     ReferenceResolveResult,
     Rect,
 )
-from .layer import Layer
-from .layer_stack import LayerStack
-from .tool import DiffusionTool
+from .document.layer import Layer
+from .document.layer_stack import LayerStack
+from .document.tool import DiffusionTool
 
 
 def _clip_local_rect(layer: Layer, rect: Rect) -> Rect:

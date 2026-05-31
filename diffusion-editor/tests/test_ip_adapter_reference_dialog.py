@@ -5,8 +5,8 @@ from diffusion_editor.ip_adapter_reference_dialog import (
     ip_adapter_reference_layer_label,
     selected_reference_index,
 )
-from diffusion_editor.layer import Layer
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.layer import Layer
+from diffusion_editor.document.layer_stack import LayerStack
 
 
 def _rgba(width, height, color):

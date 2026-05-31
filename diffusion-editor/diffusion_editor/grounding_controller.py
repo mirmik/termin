@@ -10,7 +10,7 @@ from tcbase import log
 
 from .grounding_engine import GroundingEngine
 from .grounding_types import GroundingParams, GroundingRequest, GroundingResult
-from .layer import Layer
+from .document.layer import Layer
 
 
 @dataclass(frozen=True)

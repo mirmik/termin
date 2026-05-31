@@ -8,9 +8,9 @@ import numpy as np
 from PIL import Image
 
 from .grounding_types import GroundingResult
-from .layer import Layer
-from .tool import DiffusionTool, LamaTool, InstructTool
-from .commands import (
+from .document.layer import Layer
+from .document.tool import DiffusionTool, LamaTool, InstructTool
+from .document.commands import (
     ApplyGeneratedResultCommand,
     ReplaceLayerMaskCommand,
     SetLayerSelectionCommand,

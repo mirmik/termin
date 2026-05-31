@@ -8,9 +8,9 @@ from diffusion_editor.generation_types import (
     DiffusionInferenceResult,
     EnginePollEvent,
 )
-from diffusion_editor.layer import Layer
-from diffusion_editor.layer_stack import LayerStack
-from diffusion_editor.tool import DiffusionTool
+from diffusion_editor.document.layer import Layer
+from diffusion_editor.document.layer_stack import LayerStack
+from diffusion_editor.document.tool import DiffusionTool
 
 
 def _rgba(width, height, color):

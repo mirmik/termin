@@ -10,9 +10,9 @@ from tcbase import Key, MouseButton, Mods
 from tcgui.widgets.canvas import Canvas
 from tcgui.widgets.events import KeyEvent
 
-from .layer_stack import LayerStack
-from .layer import Layer
-from .tool import LamaTool, InstructTool
+from .document.layer_stack import LayerStack
+from .document.layer import Layer
+from .document.tool import LamaTool, InstructTool
 from .brush import Brush, BrushToolMode
 from .canvas_composite import CanvasCompositeBridge
 from .canvas_edit_session import CanvasEditSession

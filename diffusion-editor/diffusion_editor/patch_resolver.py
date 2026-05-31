@@ -9,8 +9,8 @@ from PIL import Image
 
 from .diffusion_brush import extract_patch
 from .generation_types import GenerationError, PatchSource, Rect
-from .layer import Layer
-from .tool import DiffusionTool, InstructTool, LamaTool
+from .document.layer import Layer
+from .document.tool import DiffusionTool, InstructTool, LamaTool
 
 
 def clip_rect_to_array(rect: Rect, image: np.ndarray) -> Rect:

@@ -9,7 +9,7 @@ from diffusion_editor.canvas_paint_stroke import PaintStrokeBuffer
 from diffusion_editor.canvas_selection_paint import CanvasSelectionPainter
 from diffusion_editor.canvas_smudge import SmudgeStrokeBuffer
 from diffusion_editor.canvas_tool_context import CanvasToolContext
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.layer_stack import LayerStack
 
 
 def _rgba(width, height, color=(0, 0, 0, 0)):

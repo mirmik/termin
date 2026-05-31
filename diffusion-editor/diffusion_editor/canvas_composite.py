@@ -7,8 +7,8 @@ from typing import Callable
 import numpy as np
 
 from .gpu_compositor import GPUCompositor
-from .layer import Layer
-from .layer_stack import LayerStack
+from .document.layer import Layer
+from .document.layer_stack import LayerStack
 
 Rect = tuple[int, int, int, int]
 

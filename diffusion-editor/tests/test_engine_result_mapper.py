@@ -3,7 +3,7 @@
 import numpy as np
 from PIL import Image
 
-from diffusion_editor.commands import (
+from diffusion_editor.document.commands import (
     ApplyGeneratedResultCommand,
     ReplaceLayerMaskCommand,
     SetLayerSelectionCommand,
@@ -13,8 +13,8 @@ from diffusion_editor.engine_result_mapper import (
     map_instruct_result, map_diffusion_result, map_grounding_result,
 )
 from diffusion_editor.grounding_types import GroundingDetection, GroundingResult
-from diffusion_editor.layer import Layer
-from diffusion_editor.tool import DiffusionTool, LamaTool, InstructTool
+from diffusion_editor.document.layer import Layer
+from diffusion_editor.document.tool import DiffusionTool, LamaTool, InstructTool
 
 
 def _diff_layer() -> Layer:

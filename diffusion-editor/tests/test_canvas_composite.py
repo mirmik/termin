@@ -1,7 +1,7 @@
 import numpy as np
 
 from diffusion_editor.canvas_composite import CanvasCompositeBridge
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.layer_stack import LayerStack
 
 
 def _rgba(width, height, color=(0, 0, 0, 0)):

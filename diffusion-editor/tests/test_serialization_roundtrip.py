@@ -8,9 +8,9 @@ import zipfile
 
 import numpy as np
 
-from diffusion_editor.layer import Layer
-from diffusion_editor.tool import DiffusionTool
-from diffusion_editor.layer_stack import LayerStack
+from diffusion_editor.document.layer import Layer
+from diffusion_editor.document.tool import DiffusionTool
+from diffusion_editor.document.layer_stack import LayerStack
 
 
 def _solid_rgba(w: int, h: int, rgba: tuple[int, int, int, int]) -> np.ndarray:

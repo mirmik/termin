@@ -7,7 +7,7 @@ from diffusion_editor.grounding_types import (
     GroundingParams,
     GroundingResult,
 )
-from diffusion_editor.layer import Layer
+from diffusion_editor.document.layer import Layer
 
 
 def _params():
