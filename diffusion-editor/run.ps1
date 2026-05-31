@@ -1,2 +1,2 @@
 Set-Location $PSScriptRoot
-python -m diffusion_editor.main @args
+python -m diffusion_editor.app.main @args

@@ -2,7 +2,7 @@ import numpy as np
 from PIL import Image
 
 from diffusion_editor.generation.diffusion_controller import DiffusionControllerEvent
-from diffusion_editor.editor_window import EditorWindow
+from diffusion_editor.app.editor_window import EditorWindow
 from diffusion_editor.document.layer_stack import LayerStack
 
 
