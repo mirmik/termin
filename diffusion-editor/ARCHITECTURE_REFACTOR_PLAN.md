@@ -426,9 +426,14 @@ Success criteria:
 - `EditorCanvas` now uses common `_begin_tool_edit`, `_move_tool_edit`, and
   `_finish_tool_edit` helpers for active stroke tools instead of carrying a
   separate selection-paint branch inside mouse move/up.
-- Remaining Phase 5 work: split rectangle drag mouse paths out of
-  `EditorCanvas`, then decide whether the tool context should be decomposed
-  into smaller image/mask/selection/transform hosts before package moves.
+- Added `CanvasRectDragController` to coordinate Selection and Patch rectangle
+  drags through one begin/move/finish path.
+- `EditorCanvas` no longer owns separate selection/patch drag state or branches
+  mouse-up handling by drag type; it dispatches the controller result to the
+  relevant callback.
+- Remaining Phase 5 work: decide whether `CanvasToolContext` should be
+  decomposed into smaller image/mask/selection/transform hosts before package
+  moves, and do a final pass over `EditorCanvas` for non-canvas responsibilities.
 
 ## Architectural Smell Checklist
 
