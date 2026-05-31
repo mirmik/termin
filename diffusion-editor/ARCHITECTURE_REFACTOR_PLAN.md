@@ -57,10 +57,13 @@ architecture.
    `DiffusionEngine.submit(...)` has a long argument list. Other engines have
    their own ad hoc request/poll shapes.
 
-6. Tool runtime state, serialization, and legacy migration are coupled.
+6. Tool runtime state is cleaner, but serialization still belongs to the
+   document boundary.
 
-   `tool.py` is still acceptable, but it will become a pressure point when
-   ControlNet, multi-reference inputs, and richer generation settings arrive.
+   Tool dict/zip IO has been moved out of `tool.py` into
+   `tool_serialization.py`. A future document-package split should place that
+   module next to layer/project serialization rather than next to runtime tool
+   classes.
 
 7. The package is flat.
 
@@ -183,14 +186,36 @@ Success criteria:
 
 Prepare tool data for ControlNet and multi-reference inputs.
 
+Current status:
+
+- Runtime tool classes in `tool.py` no longer implement dict/zip
+  serialization.
+- Tool serialization/deserialization now lives in `tool_serialization.py`.
+- Shared array/PIL zip helpers live in `archive_serialization.py`, so layer,
+  selection, and tool serialization do not depend on each other for archive IO.
+- `Layer` and `LayerStack` call explicit serialization helpers instead of
+  reaching through runtime tool methods.
+- Legacy `manual_patch_rect` is loaded as migration metadata and moved to
+  `Layer.patch_rect`; it no longer becomes runtime tool state.
+
 Tasks:
 
-- Keep runtime tool classes/dataclasses focused on current editable state.
-- Move tool serialization/deserialization to `tool_serialization.py`.
+- Keep runtime tool classes/dataclasses focused on current editable state. Done
+  for the existing tool classes.
+- Move tool serialization/deserialization to `tool_serialization.py`. Done.
 - Move legacy migration helpers out of normal runtime paths where possible.
-- Add explicit migration tests for old tool formats.
+  Done for legacy `manual_patch_rect`.
+- Add explicit migration tests for old tool formats. Done for nested mask files,
+  manual patch rects, and missing legacy layer ids.
 - Avoid indefinite fallback compatibility during active development when a
   clean migration is better.
+
+Remaining follow-up:
+
+- When package reorganization starts, move project/layer/tool serialization into
+  a document serialization module/package.
+- If ControlNet or richer reference inputs add substantial data shape, introduce
+  typed serializable settings DTOs instead of expanding ad hoc dict builders.
 
 Success criteria:
 
@@ -444,6 +469,21 @@ Success criteria:
 - Remaining Phase 5 work: no required blocker before Phase 6. Optional cleanup:
   reduce compatibility properties in `EditorCanvas` once tests stop needing
   them, or split `CanvasToolContext` during package reorganization.
+- Phase 6 implemented for the current tool model.
+- Added `tool_serialization.py` for tool dict/zip serialization and legacy tool
+  migrations.
+- Added `archive_serialization.py` for low-level archive array/PIL helpers used
+  by layer, selection, and tool serialization.
+- Removed `to_dict()`, `from_dict()`, `save_assets_to_zip()`, and archive helper
+  ownership from runtime tool classes in `tool.py`.
+- `Layer` and `LayerStack` now use explicit archive/tool serialization helpers
+  instead of depending on runtime tool methods.
+- Legacy `manual_patch_rect` now loads as `ToolLoadResult.legacy_patch_rect` and
+  migrates to `Layer.patch_rect` without leaving a `manual_patch_rect` field on
+  the runtime tool.
+- Remaining Phase 6 follow-up: fold project/layer/tool serialization into a
+  document serialization package during Phase 7, and consider typed settings
+  DTOs when ControlNet/multi-reference data shapes grow.
 
 ## Architectural Smell Checklist
 
