@@ -5,7 +5,8 @@ import zipfile
 
 import numpy as np
 
-from .layer import Layer, _layer_from_dict, _save_array_to_zip, _load_array_from_zip
+from .archive_serialization import load_array_from_zip, save_array_to_zip
+from .layer import Layer, _layer_from_dict
 from .layer_renderer import LayerRenderer
 from .mask import Selection
 
@@ -467,7 +468,7 @@ class LayerStack:
             manifest["layers"].append(layer.to_dict(layer_path))
             layer.save_images_to_zip(zf, layer_path)
         if not self.selection.is_empty:
-            _save_array_to_zip(zf, "selection.npy", self.selection.data)
+            save_array_to_zip(zf, "selection.npy", self.selection.data)
         zf.writestr("manifest.json",
                     json.dumps(manifest, indent=2, ensure_ascii=False))
 
@@ -498,7 +499,7 @@ class LayerStack:
         # Restore selection (v6+) or initialize empty
         selection_file = manifest.get("selection_file")
         if selection_file and selection_file in zf.namelist():
-            sel_arr = _load_array_from_zip(zf, selection_file)
+            sel_arr = load_array_from_zip(zf, selection_file)
             if sel_arr.dtype == np.uint8:
                 sel_arr = sel_arr.astype(np.float32) / 255.0
             self.selection = Selection(sel_arr)

@@ -158,7 +158,7 @@ def test_tool_manual_patch_rect_migrates_to_layer_patch_rect():
     restored.load_state(buf.getvalue())
 
     assert restored.active_layer.patch_rect == (1, 1, 11, 11)
-    assert restored.active_layer.tool.manual_patch_rect is None
+    assert "manual_patch_rect" not in restored.active_layer.tool.__dict__
 
 
 def test_legacy_project_without_layer_ids_gets_unique_ids():
