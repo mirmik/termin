@@ -85,7 +85,8 @@ class DiffusionTool(Tool):
         self.seed = seed
         self.model_path = model_path
         self.prediction_type = prediction_type
-        self.ip_adapter_rect: tuple[int, int, int, int] | None = None
+        self.ip_adapter_layer_id: str | None = None
+        self.ip_adapter_layer_name_hint: str = ""
         self.ip_adapter_scale: float = 0.6
         self.masked_content: str = "original"
         self.manual_patch_rect: tuple[int, int, int, int] | None = None
@@ -108,7 +109,8 @@ class DiffusionTool(Tool):
             "seed": self.seed,
             "model_path": self.model_path,
             "prediction_type": self.prediction_type,
-            "ip_adapter_rect": list(self.ip_adapter_rect) if self.ip_adapter_rect else None,
+            "ip_adapter_layer_id": self.ip_adapter_layer_id,
+            "ip_adapter_layer_name_hint": self.ip_adapter_layer_name_hint,
             "ip_adapter_scale": self.ip_adapter_scale,
             "masked_content": self.masked_content,
             "resize_to_model_resolution": self.resize_to_model_resolution,
@@ -140,8 +142,8 @@ class DiffusionTool(Tool):
         tool.model_path = d.get("model_path", "")
         tool.prediction_type = d.get("prediction_type", "")
         tool.mode = d.get("mode", "inpaint")
-        rect = d.get("ip_adapter_rect")
-        tool.ip_adapter_rect = tuple(rect) if rect else None
+        tool.ip_adapter_layer_id = d.get("ip_adapter_layer_id")
+        tool.ip_adapter_layer_name_hint = d.get("ip_adapter_layer_name_hint", "")
         tool.ip_adapter_scale = d.get("ip_adapter_scale", 0.6)
         tool.masked_content = d.get("masked_content", "original")
         mpr = d.get("manual_patch_rect")

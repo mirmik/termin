@@ -36,9 +36,8 @@ class DiffusionPanel(ScrollArea):
         self.on_clear_mask: callable = None
         self.on_mask_brush_changed: callable = None  # (size, hardness, flow)
         self.on_load_ip_adapter: callable = None
-        self.on_draw_rect_toggled: callable = None  # (bool)
-        self.on_show_rect_toggled: callable = None  # (bool)
-        self.on_clear_rect: callable = None
+        self.on_pick_ip_adapter_layer: callable = None
+        self.on_clear_ip_adapter_layer: callable = None
         self.on_select_background: callable = None
         self.on_mask_eraser_toggled: callable = None  # (bool)
         self.on_show_mask_toggled: callable = None  # (bool)
@@ -282,30 +281,30 @@ class DiffusionPanel(ScrollArea):
         self._ip_scale_slider.decimals = 2
         ip_group.add_child(self._ip_scale_slider)
 
-        ip_btn_row = HStack()
-        ip_btn_row.spacing = 4
+        self._ip_reference = Label()
+        self._ip_reference.text = "Reference: none"
+        self._ip_reference.font_size = 11
+        self._ip_reference.color = (0.5, 0.5, 0.5, 1.0)
+        ip_group.add_child(self._ip_reference)
 
-        self._draw_rect_cb = Checkbox()
-        self._draw_rect_cb.text = "Draw Rect"
-        self._draw_rect_cb.on_changed = lambda v: (
-            self.on_draw_rect_toggled and self.on_draw_rect_toggled(v))
-        ip_btn_row.add_child(self._draw_rect_cb)
+        ip_ref_row = HStack()
+        ip_ref_row.spacing = 4
 
-        self._show_rect_cb = Checkbox()
-        self._show_rect_cb.text = "Show Rect"
-        self._show_rect_cb.checked = True
-        self._show_rect_cb.on_changed = lambda v: (
-            self.on_show_rect_toggled and self.on_show_rect_toggled(v))
-        ip_btn_row.add_child(self._show_rect_cb)
+        pick_ref_btn = Button()
+        pick_ref_btn.text = "Pick Layer"
+        pick_ref_btn.preferred_width = px(105)
+        pick_ref_btn.on_click = lambda: (
+            self.on_pick_ip_adapter_layer and self.on_pick_ip_adapter_layer())
+        ip_ref_row.add_child(pick_ref_btn)
 
-        clear_rect_btn = Button()
-        clear_rect_btn.text = "Clear"
-        clear_rect_btn.preferred_width = px(50)
-        clear_rect_btn.on_click = lambda: (
-            self.on_clear_rect and self.on_clear_rect())
-        ip_btn_row.add_child(clear_rect_btn)
+        clear_ref_btn = Button()
+        clear_ref_btn.text = "Clear"
+        clear_ref_btn.preferred_width = px(60)
+        clear_ref_btn.on_click = lambda: (
+            self.on_clear_ip_adapter_layer and self.on_clear_ip_adapter_layer())
+        ip_ref_row.add_child(clear_ref_btn)
 
-        ip_group.add_child(ip_btn_row)
+        ip_group.add_child(ip_ref_row)
         content.add_child(ip_group)
 
         # --- Diffusion Layer ---
@@ -510,12 +509,16 @@ class DiffusionPanel(ScrollArea):
 
         self._ip_scale_slider.value = tool.ip_adapter_scale
         self._resize_cb.checked = tool.resize_to_model_resolution
+        if tool.ip_adapter_layer_id:
+            name = tool.ip_adapter_layer_name_hint or tool.ip_adapter_layer_id
+            self._ip_reference.text = f"Reference: {name}"
+        else:
+            self._ip_reference.text = "Reference: none"
 
         model_name = os.path.basename(tool.model_path) if tool.model_path else "?"
         mask_status = "has mask" if layer.has_mask() else "no mask"
-        if tool.ip_adapter_rect:
-            r = tool.ip_adapter_rect
-            ip_info = f"rect ({r[0]},{r[1]})-({r[2]},{r[3]})"
+        if tool.ip_adapter_layer_id:
+            ip_info = tool.ip_adapter_layer_name_hint or tool.ip_adapter_layer_id
         else:
             ip_info = "none"
         if layer.patch_rect:

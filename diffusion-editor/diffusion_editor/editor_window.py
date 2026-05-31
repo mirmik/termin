@@ -25,6 +25,7 @@ from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.checkbox import Checkbox
+from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.units import px, pct
 from tcgui.widgets.splitter import Splitter
 
@@ -54,7 +55,7 @@ from .commands import (
     MoveLayerCommand, SetLayerVisibilityCommand, SetLayerOpacityCommand,
     FlattenLayersCommand, ClearLayerMaskCommand,
     AttachLayerToolCommand, DetachLayerToolCommand,
-    SetIpAdapterRectCommand, ClearIpAdapterRectCommand,
+    SetIpAdapterReferenceLayerCommand, ClearIpAdapterReferenceLayerCommand,
     SetLayerPatchRectCommand, ClearLayerPatchRectCommand,
     ClearSelectionCommand, InvertSelectionCommand, SelectAllCommand,
     SetLayerSelectionCommand,
@@ -325,11 +326,9 @@ class EditorWindow:
         self._diffusion_panel.on_mask_eraser_toggled = self._set_mask_eraser
         self._diffusion_panel.on_show_mask_toggled = self._canvas.set_show_mask
         self._diffusion_panel.on_load_ip_adapter = self._on_load_ip_adapter
-        self._diffusion_panel.on_draw_rect_toggled = self._canvas.set_ref_rect_mode
-        self._diffusion_panel.on_show_rect_toggled = self._canvas.set_show_ref_rect
-        self._diffusion_panel.on_clear_rect = self._on_clear_ref_rect
+        self._diffusion_panel.on_pick_ip_adapter_layer = self._on_pick_ip_adapter_layer
+        self._diffusion_panel.on_clear_ip_adapter_layer = self._on_clear_ip_adapter_layer
         self._diffusion_panel.on_select_background = self._on_select_background
-        self._canvas.on_ref_rect_drawn = self._on_ref_rect_drawn
         self._canvas.on_patch_rect_drawn = self._on_patch_rect_drawn
         self._canvas.on_selection_rect_drawn = self._on_selection_rect_drawn
 
@@ -1230,7 +1229,7 @@ class EditorWindow:
 
     def _on_regenerate(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer.tool, DiffusionTool):
+        if layer is None or not isinstance(layer.tool, DiffusionTool):
             return
         if self._engine.is_busy:
             return
@@ -1280,6 +1279,42 @@ class EditorWindow:
             return
         self._submit_regenerate(layer)
 
+    def _ip_adapter_reference_rect(self, layer: Layer) -> tuple[int, int, int, int] | None:
+        if layer.patch_rect is not None:
+            return layer.patch_rect
+        alpha = layer.image[:, :, 3]
+        ys, xs = np.nonzero(alpha)
+        if len(xs) > 0 and len(ys) > 0:
+            return (
+                int(xs.min()),
+                int(ys.min()),
+                int(xs.max()) + 1,
+                int(ys.max()) + 1,
+            )
+        return (0, 0, layer.width, layer.height)
+
+    def _make_ip_adapter_reference_image(self, layer: Layer) -> Image.Image | None:
+        rect = self._ip_adapter_reference_rect(layer)
+        if rect is None:
+            log.error(f"IP-Adapter reference layer has no crop rect: {layer.name}")
+            return None
+        x0, y0, x1, y1 = rect
+        x0 = max(0, min(int(x0), layer.width))
+        x1 = max(0, min(int(x1), layer.width))
+        y0 = max(0, min(int(y0), layer.height))
+        y1 = max(0, min(int(y1), layer.height))
+        if x1 <= x0 or y1 <= y0:
+            log.error(
+                f"IP-Adapter reference crop is empty for layer {layer.name}: "
+                f"{rect}"
+            )
+            return None
+        rgba = layer.image[y0:y1, x0:x1].astype(np.float32)
+        alpha = rgba[:, :, 3:4] / 255.0
+        rgb = rgba[:, :, :3] * alpha + 255.0 * (1.0 - alpha)
+        rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+        return Image.fromarray(rgb, "RGB")
+
     def _submit_regenerate(self, layer: Layer):
         tool = layer.tool
         self._pending_request = layer
@@ -1293,21 +1328,26 @@ class EditorWindow:
                 tool.patch_w, tool.patch_h)
 
         ip_adapter_image = None
-        if tool.ip_adapter_rect is not None:
+        if tool.ip_adapter_layer_id is not None:
             if not self._engine.ip_adapter_loaded:
                 self._pending_request = layer
                 self._engine.submit_load_ip_adapter()
                 self._statusbar.text = "Loading IP-Adapter..."
                 return
-            composite = self._canvas.get_composite_below(layer)
-            if composite is not None:
-                x0, y0, x1, y1 = tool.ip_adapter_rect
-                h, w = composite.shape[:2]
-                x0, x1 = max(0, min(x0, w)), max(0, min(x1, w))
-                y0, y1 = max(0, min(y0, h)), max(0, min(y1, h))
-                if x1 > x0 and y1 > y0:
-                    crop = composite[y0:y1, x0:x1, :3]
-                    ip_adapter_image = Image.fromarray(crop, "RGB")
+            ref_layer = self._layer_stack.find_layer_by_id(tool.ip_adapter_layer_id)
+            if ref_layer is None:
+                hint = tool.ip_adapter_layer_name_hint or tool.ip_adapter_layer_id
+                log.error(f"IP-Adapter reference layer not found: {hint}")
+                self._statusbar.text = f"IP-Adapter reference missing: {hint}"
+                self._pending_request = None
+                return
+            ip_adapter_image = self._make_ip_adapter_reference_image(ref_layer)
+            if ip_adapter_image is None:
+                self._statusbar.text = (
+                    f"IP-Adapter reference is empty: {ref_layer.name}"
+                )
+                self._pending_request = None
+                return
 
         submit_image = tool.source_patch
         submit_mask = mask_image
@@ -1343,7 +1383,7 @@ class EditorWindow:
 
     def _on_new_seed(self):
         layer = self._layer_stack.active_layer
-        if not isinstance(layer.tool, DiffusionTool):
+        if layer is None or not isinstance(layer.tool, DiffusionTool):
             return
         new_seed = random.randint(0, 2**32 - 1)
         layer.tool.seed = new_seed
@@ -1356,18 +1396,79 @@ class EditorWindow:
         self._engine.submit_load_ip_adapter()
         self._statusbar.text = "Loading IP-Adapter..."
 
-    def _on_ref_rect_drawn(self, x0, y0, x1, y1):
-        layer = self._layer_stack.active_layer
-        if isinstance(layer.tool, DiffusionTool):
-            self._document.execute(SetIpAdapterRectCommand(
-                layer=layer,
-                rect=(x0, y0, x1, y1),
-            ))
+    def _ip_adapter_layer_label(self, layer: Layer) -> str:
+        path = self._layer_stack.get_layer_path(layer)
+        prefix = path if path is not None else "?"
+        marks = []
+        if not layer.visible:
+            marks.append("hidden")
+        if layer.patch_rect is not None:
+            marks.append("patch")
+        suffix = f" [{', '.join(marks)}]" if marks else ""
+        return f"{prefix}: {layer.name}{suffix}"
 
-    def _on_clear_ref_rect(self):
+    def _on_pick_ip_adapter_layer(self):
         layer = self._layer_stack.active_layer
-        if isinstance(layer.tool, DiffusionTool):
-            self._document.execute(ClearIpAdapterRectCommand(layer=layer))
+        if layer is None or not isinstance(layer.tool, DiffusionTool):
+            return
+        candidates = [
+            candidate for candidate in self._layer_stack.all_layers()
+            if candidate is not layer
+        ]
+        if not candidates:
+            self._statusbar.text = "No reference layers available"
+            return
+
+        dlg = Dialog()
+        dlg.title = "Pick IP-Adapter Reference Layer"
+        dlg.buttons = ["OK", "Cancel"]
+
+        content = VStack()
+        content.spacing = 8
+
+        label = Label()
+        label.text = "Reference layer"
+        label.font_size = 12
+        content.add_child(label)
+
+        combo = ComboBox()
+        combo.items = [self._ip_adapter_layer_label(candidate) for candidate in candidates]
+        combo.selected_index = 0
+        if layer.tool.ip_adapter_layer_id is not None:
+            for i, candidate in enumerate(candidates):
+                if candidate.id == layer.tool.ip_adapter_layer_id:
+                    combo.selected_index = i
+                    break
+        combo.preferred_width = px(320)
+        content.add_child(combo)
+
+        dlg.content = content
+
+        def _apply(result: str):
+            if result != "OK":
+                return
+            idx = combo.selected_index
+            if idx < 0 or idx >= len(candidates):
+                return
+            reference_layer = candidates[idx]
+            self._document.execute(SetIpAdapterReferenceLayerCommand(
+                layer=layer,
+                reference_layer_id=reference_layer.id,
+                reference_layer_name_hint=reference_layer.name,
+            ))
+            self._statusbar.text = (
+                f"IP-Adapter reference: {reference_layer.name}"
+            )
+
+        dlg.on_result = _apply
+        dlg.show(self.ui)
+        self.ui.set_focus(combo)
+
+    def _on_clear_ip_adapter_layer(self):
+        layer = self._layer_stack.active_layer
+        if layer is not None and isinstance(layer.tool, DiffusionTool):
+            self._document.execute(ClearIpAdapterReferenceLayerCommand(layer=layer))
+            self._statusbar.text = "IP-Adapter reference cleared"
 
     def _on_patch_rect_drawn(self, x0, y0, x1, y1):
         layer = self._layer_stack.active_layer

@@ -32,6 +32,10 @@ class LayerStack:
             result.extend(layer.all_descendants())
         return result
 
+    def all_layers(self) -> list[Layer]:
+        """All layers in depth-first order (index 0 = topmost)."""
+        return self._all_layers_flat()
+
     def next_name(self, prefix: str) -> str:
         pattern = re.compile(rf'^{re.escape(prefix)} (\d+)$')
         max_n = -1

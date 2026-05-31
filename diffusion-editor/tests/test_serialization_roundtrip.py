@@ -36,9 +36,11 @@ def _build_stack() -> tuple[LayerStack, Layer]:
     diff.x = 3
     diff.y = 4
     diff.patch_rect = (2, 3, 12, 10)
-    diff.tool = tool
     diff.mask.data[3:6, 4:8] = 1.0
     top = stack.layers[0]
+    tool.ip_adapter_layer_id = top.id
+    tool.ip_adapter_layer_name_hint = top.name
+    diff.tool = tool
     top.add_child(diff)
     stack.mark_layer_dirty(top)
     stack.active_layer = diff
@@ -68,6 +70,8 @@ def test_snapshot_roundtrip_restores_active_layer_and_content():
     assert active.x == 3
     assert active.y == 4
     assert active.patch_rect == (2, 3, 12, 10)
+    assert active.tool.ip_adapter_layer_id == restored.layers[0].id
+    assert active.tool.ip_adapter_layer_name_hint == "Paint"
     assert active.has_mask()
 
 

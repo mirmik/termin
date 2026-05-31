@@ -12,7 +12,7 @@ from tcgui.widgets.events import KeyEvent
 
 from .layer_stack import LayerStack
 from .layer import Layer
-from .tool import DiffusionTool, LamaTool, InstructTool
+from .tool import LamaTool, InstructTool
 from .brush import Brush, BrushToolMode
 from .canvas_tools import create_canvas_tools
 from .gpu_compositor import GPUCompositor
@@ -68,12 +68,6 @@ class EditorCanvas(Canvas):
         self._selection_rect_end: tuple[int, int] | None = None
 
         # Rectangle modes
-        self._ref_rect_mode = False
-        self._ref_rect_dragging = False
-        self._ref_rect_start: tuple[int, int] | None = None
-        self._ref_rect_end: tuple[int, int] | None = None
-        self._show_ref_rect = True
-
         self._patch_rect_mode = False
         self._patch_rect_dragging = False
         self._patch_rect_start: tuple[int, int] | None = None
@@ -101,7 +95,6 @@ class EditorCanvas(Canvas):
         # Callbacks
         self.on_mouse_moved: callable = None
         self.on_color_picked: callable = None
-        self.on_ref_rect_drawn: callable = None
         self.on_patch_rect_drawn: callable = None
         self.on_selection_rect_drawn: callable = None
         self.on_edit_begin: callable = None  # (label: str, layer: Layer, target: str)
@@ -448,15 +441,6 @@ class EditorCanvas(Canvas):
     def set_show_selection(self, show: bool):
         self._show_selection = show
         self._update_overlay()
-
-    def set_ref_rect_mode(self, on: bool):
-        self._ref_rect_mode = on
-        self.cursor = "cross" if on else ""
-        if not on:
-            self._ref_rect_dragging = False
-
-    def set_show_ref_rect(self, show: bool):
-        self._show_ref_rect = show
 
     def set_patch_rect_mode(self, on: bool):
         self._patch_rect_mode = on
@@ -1028,13 +1012,6 @@ class EditorCanvas(Canvas):
                 self._patch_rect_end = (ix, iy)
                 return
 
-            # Ref rect mode
-            if self._ref_rect_mode and isinstance(layer.tool, DiffusionTool):
-                self._ref_rect_dragging = True
-                self._ref_rect_start = (ix, iy)
-                self._ref_rect_end = (ix, iy)
-                return
-
             # Painting
             self._painting = True
             self._stroke_dirty_rect = None
@@ -1057,10 +1034,6 @@ class EditorCanvas(Canvas):
 
         if self._patch_rect_dragging:
             self._patch_rect_end = (ixi, iyi)
-            return
-
-        if self._ref_rect_dragging:
-            self._ref_rect_end = (ixi, iyi)
             return
 
         if self._painting:
@@ -1112,19 +1085,6 @@ class EditorCanvas(Canvas):
             self.cursor = ""
             if x1 - x0 > 2 and y1 - y0 > 2 and self.on_patch_rect_drawn:
                 self.on_patch_rect_drawn(x0, y0, x1, y1)
-            return
-
-        if self._ref_rect_dragging:
-            sx, sy = self._ref_rect_start
-            x0, y0 = min(sx, ixi), min(sy, iyi)
-            x1, y1 = max(sx, ixi), max(sy, iyi)
-            self._ref_rect_dragging = False
-            self._ref_rect_start = None
-            self._ref_rect_end = None
-            self._ref_rect_mode = False
-            self.cursor = ""
-            if x1 - x0 > 2 and y1 - y0 > 2 and self.on_ref_rect_drawn:
-                self.on_ref_rect_drawn(x0, y0, x1, y1)
             return
 
         if self._painting:
@@ -1236,23 +1196,6 @@ class EditorCanvas(Canvas):
                                            (0.0, 0.0, 0.0, 0.85), 3.0)
                 renderer.draw_rect_outline(wx0, wy0, w, h,
                                            (1.0, 1.0, 1.0, 0.95), 1.0)
-
-        # IP-Adapter reference rectangle (blue)
-        if self._show_ref_rect and layer is not None and isinstance(layer.tool, DiffusionTool):
-            rect = None
-            if (self._ref_rect_dragging
-                    and self._ref_rect_start and self._ref_rect_end):
-                rect = self._ref_rect_start + self._ref_rect_end
-            elif layer.tool.ip_adapter_rect:
-                rect = layer.tool.ip_adapter_rect
-            if rect:
-                ix0, iy0, ix1, iy1 = rect
-                wx0, wy0 = canvas.image_to_widget(ix0, iy0)
-                wx1, wy1 = canvas.image_to_widget(ix1, iy1)
-                renderer.draw_rect(wx0, wy0, wx1 - wx0, wy1 - wy0,
-                                   (0.2, 0.47, 1.0, 0.15))
-                renderer.draw_rect_outline(wx0, wy0, wx1 - wx0, wy1 - wy0,
-                                           (0.2, 0.47, 1.0, 0.8), 2.0)
 
         # Selection rectangle (cyan)
         if self._selection_rect_dragging and self._selection_rect_start and self._selection_rect_end:
