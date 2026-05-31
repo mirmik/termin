@@ -338,8 +338,14 @@ Success criteria:
   to `CanvasRectDrag` while preserving the existing Selection/Patch final rect
   semantics.
 - Added focused rect drag tests.
-- Remaining Phase 5 work: extract larger paint/mask/selection stroke behavior
-  and isolate GPU invalidation/update paths.
+- Added `soft_mask_stroke.py` for pure soft-brush dab/line operations on float
+  masks.
+- `EditorCanvas` now reuses the same tested soft-stroke implementation for
+  layer masks, mask erase previews, and selection painting instead of carrying
+  duplicated pixel math.
+- Added focused soft mask stroke tests.
+- Remaining Phase 5 work: extract higher-level paint/mask/selection state
+  machines and isolate GPU invalidation/update paths.
 
 ## Architectural Smell Checklist
 
