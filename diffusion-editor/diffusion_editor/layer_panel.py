@@ -41,6 +41,7 @@ class LayerPanel(VStack):
         self.on_toggle_visibility: callable = None  # (layer, visible)
         self.on_toggle_solo: callable = None  # (layer)
         self.on_opacity_changed: callable = None  # (layer, opacity)
+        self.on_rename_layer: callable = None  # (layer, name)
 
         # Tree widget (stretch to fill remaining space)
         self._tree = TreeWidget()
@@ -382,9 +383,10 @@ class LayerPanel(VStack):
             new_name = input_box.text.strip()
             if not new_name:
                 return
-            layer.name = new_name
-            if self._layer_stack.on_changed:
-                self._layer_stack.on_changed()
+            if self.on_rename_layer:
+                self.on_rename_layer(layer, new_name)
+            else:
+                self._layer_stack.set_layer_name(layer, new_name)
 
         dlg.on_result = _apply
         dlg.show(self._ui)

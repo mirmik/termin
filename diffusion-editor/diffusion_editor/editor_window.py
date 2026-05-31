@@ -61,6 +61,7 @@ from .document_service import DocumentService
 from .commands import (
     AddLayerCommand, RemoveLayerCommand,
     MoveLayerCommand, SetLayerVisibilityCommand, SetLayerOpacityCommand,
+    SetLayerNameCommand,
     FlattenLayersCommand, ClearLayerMaskCommand,
     AttachLayerToolCommand, DetachLayerToolCommand,
     SetIpAdapterReferenceLayerCommand, ClearIpAdapterReferenceLayerCommand,
@@ -354,6 +355,7 @@ class EditorWindow:
         self._layer_panel.on_toggle_visibility = self._set_layer_visibility
         self._layer_panel.on_toggle_solo = self._toggle_layer_solo
         self._layer_panel.on_opacity_changed = self._set_layer_opacity
+        self._layer_panel.on_rename_layer = self._rename_layer
 
         # LaMa panel
         self._lama_panel.on_remove = self._on_lama_remove
@@ -1037,6 +1039,9 @@ class EditorWindow:
             layer=layer,
             opacity=opacity,
         ))
+
+    def _rename_layer(self, layer: Layer, name: str):
+        self._document.execute(SetLayerNameCommand(layer=layer, name=name))
 
     def save_file(self):
         if self._project_path:

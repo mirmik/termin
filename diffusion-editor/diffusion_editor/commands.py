@@ -91,6 +91,16 @@ class SetLayerOpacityCommand:
 
 
 @dataclass(frozen=True)
+class SetLayerNameCommand:
+    layer: Layer
+    name: str
+    label: str = "Rename Layer"
+
+    def apply(self, layer_stack: LayerStack) -> None:
+        layer_stack.set_layer_name(self.layer, self.name)
+
+
+@dataclass(frozen=True)
 class AttachLayerToolCommand:
     layer: Layer
     tool: Tool
