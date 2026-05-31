@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.ip_adapter_reference_dialog import (
+from diffusion_editor.ui.dialogs.ip_adapter_reference_dialog import (
     ip_adapter_reference_candidates,
     ip_adapter_reference_layer_label,
     selected_reference_index,
