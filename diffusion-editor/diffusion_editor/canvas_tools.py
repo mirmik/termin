@@ -112,7 +112,12 @@ class MaskPaintTool(CanvasStrokeTool):
 
     def begin(self, canvas, layer, x: int, y: int):
         x, y = canvas._canvas_to_layer_point(layer, x, y)
-        dirty, _stamp = canvas._dab_mask(layer.mask.data, x, y, erase=False)
+        dirty, _stamp = canvas._mask_painter.dab(
+            layer.mask.data,
+            x,
+            y,
+            erase=False,
+        )
         canvas._update_mask_overlay_region(layer, dirty)
         return dirty
 
@@ -120,10 +125,21 @@ class MaskPaintTool(CanvasStrokeTool):
         x, y = canvas._canvas_to_layer_point(layer, x, y)
         if last_pos:
             lx, ly = canvas._canvas_to_layer_point(layer, *last_pos)
-            dirty, _stamp = canvas._stroke_mask_line(
-                layer.mask.data, lx, ly, x, y, erase=False)
+            dirty, _stamp = canvas._mask_painter.line(
+                layer.mask.data,
+                lx,
+                ly,
+                x,
+                y,
+                erase=False,
+            )
         else:
-            dirty, _stamp = canvas._dab_mask(layer.mask.data, x, y, erase=False)
+            dirty, _stamp = canvas._mask_painter.dab(
+                layer.mask.data,
+                x,
+                y,
+                erase=False,
+            )
         canvas._update_mask_overlay_region(layer, dirty)
         return dirty
 
@@ -139,7 +155,7 @@ class MaskEraserTool(CanvasStrokeTool):
         erase_mask = canvas._mask_erase_stroke.mask
         if erase_mask is None:
             return None
-        dirty, _stamp = canvas._dab_mask(erase_mask, x, y, erase=False)
+        dirty, _stamp = canvas._mask_painter.dab(erase_mask, x, y, erase=False)
         self._preview(canvas, layer, dirty)
         return dirty
 
@@ -152,11 +168,21 @@ class MaskEraserTool(CanvasStrokeTool):
             return None
         if last_pos:
             lx, ly = canvas._canvas_to_layer_point(layer, *last_pos)
-            dirty, _stamp = canvas._stroke_mask_line(
-                erase_mask, lx, ly, x, y, erase=False)
+            dirty, _stamp = canvas._mask_painter.line(
+                erase_mask,
+                lx,
+                ly,
+                x,
+                y,
+                erase=False,
+            )
         else:
-            dirty, _stamp = canvas._dab_mask(
-                erase_mask, x, y, erase=False)
+            dirty, _stamp = canvas._mask_painter.dab(
+                erase_mask,
+                x,
+                y,
+                erase=False,
+            )
         self._preview(canvas, layer, dirty)
         return dirty
 
