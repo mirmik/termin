@@ -6,6 +6,7 @@ from diffusion_editor.canvas_mask_erase import MaskEraseStrokeBuffer
 from diffusion_editor.canvas_mask_paint import CanvasMaskPainter
 from diffusion_editor.canvas_overlay import CanvasOverlayBridge
 from diffusion_editor.canvas_paint_stroke import PaintStrokeBuffer
+from diffusion_editor.canvas_selection_paint import CanvasSelectionPainter
 from diffusion_editor.canvas_smudge import SmudgeStrokeBuffer
 from diffusion_editor.canvas_tool_context import CanvasToolContext
 from diffusion_editor.layer_stack import LayerStack
@@ -34,6 +35,7 @@ def _context(stack, brush, mask_painter):
         composite,
         overlay,
         PaintStrokeBuffer(),
+        CanvasSelectionPainter(),
         mask_painter,
         MaskEraseStrokeBuffer(),
         SmudgeStrokeBuffer(),

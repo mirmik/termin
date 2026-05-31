@@ -420,9 +420,15 @@ Success criteria:
   after tool callers migrated to `CanvasToolContext`.
 - Added focused coverage for mask erase finalization on a partially off-canvas
   layer.
-- Remaining Phase 5 work: split selection painting and rectangle drag mouse
-  paths out of `EditorCanvas`, then decide whether the tool context should be
-  decomposed into smaller image/mask/transform hosts before package moves.
+- Added `SelectionPaintTool` and moved selection brush strokes into the same
+  begin/move/end tool lifecycle used by image, mask, smudge, erase, and move
+  tools.
+- `EditorCanvas` now uses common `_begin_tool_edit`, `_move_tool_edit`, and
+  `_finish_tool_edit` helpers for active stroke tools instead of carrying a
+  separate selection-paint branch inside mouse move/up.
+- Remaining Phase 5 work: split rectangle drag mouse paths out of
+  `EditorCanvas`, then decide whether the tool context should be decomposed
+  into smaller image/mask/selection/transform hosts before package moves.
 
 ## Architectural Smell Checklist
 

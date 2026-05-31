@@ -14,6 +14,7 @@ from .canvas_mask_erase import MaskEraseStrokeBuffer
 from .canvas_mask_paint import CanvasMaskPainter
 from .canvas_overlay import CanvasOverlayBridge
 from .canvas_paint_stroke import PaintStrokeBuffer
+from .canvas_selection_paint import CanvasSelectionPainter
 from .canvas_smudge import SmudgeStrokeBuffer
 from .layer import Layer
 from .layer_stack import LayerStack
@@ -36,6 +37,7 @@ class CanvasToolContext:
             composite_bridge: CanvasCompositeBridge,
             overlay_bridge: CanvasOverlayBridge,
             paint_stroke: PaintStrokeBuffer,
+            selection_painter: CanvasSelectionPainter,
             mask_painter: CanvasMaskPainter,
             mask_erase_stroke: MaskEraseStrokeBuffer,
             smudge_stroke: SmudgeStrokeBuffer):
@@ -44,6 +46,7 @@ class CanvasToolContext:
         self._composite_bridge = composite_bridge
         self._overlay_bridge = overlay_bridge
         self._paint_stroke = paint_stroke
+        self._selection_painter = selection_painter
         self._mask_painter = mask_painter
         self._mask_erase_stroke = mask_erase_stroke
         self._smudge_stroke = smudge_stroke
@@ -141,6 +144,31 @@ class CanvasToolContext:
 
     def clear_smudge(self) -> None:
         self._smudge_stroke.clear()
+
+    def selection_dab(self, x: int, y: int) -> Rect | None:
+        dirty, _stamp = self._selection_painter.dab(
+            self._layer_stack.selection.data,
+            x,
+            y,
+        )
+        self._overlay_bridge.rebuild()
+        return dirty
+
+    def selection_line(
+            self,
+            x0: int,
+            y0: int,
+            x1: int,
+            y1: int) -> Rect | None:
+        dirty, _stamp = self._selection_painter.line(
+            self._layer_stack.selection.data,
+            x0,
+            y0,
+            x1,
+            y1,
+        )
+        self._overlay_bridge.rebuild()
+        return dirty
 
     def mask_dab(
             self,
