@@ -9,15 +9,15 @@ import numpy as np
 from PIL import Image
 from tcbase import log
 
-from .generation_types import (
+from .types import (
     GenerationError,
     InstructInferenceResult,
     InstructRequest,
 )
-from .instruct_engine import InstructEngine
-from .document.layer import Layer
+from ..instruct_engine import InstructEngine
+from ..document.layer import Layer
 from .patch_resolver import apply_patch_source_to_tool, resolve_source_patch
-from .document.tool import InstructTool
+from ..document.tool import InstructTool
 
 
 @dataclass(frozen=True)

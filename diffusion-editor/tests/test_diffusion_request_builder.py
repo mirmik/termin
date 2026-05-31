@@ -1,6 +1,6 @@
 import numpy as np
 
-from diffusion_editor.diffusion_request_builder import DiffusionRequestBuilder
+from diffusion_editor.generation.diffusion_request_builder import DiffusionRequestBuilder
 from diffusion_editor.document.layer import Layer
 from diffusion_editor.document.layer_stack import LayerStack
 from diffusion_editor.document.tool import DiffusionTool

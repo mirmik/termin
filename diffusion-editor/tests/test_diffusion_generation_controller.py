@@ -1,10 +1,10 @@
 import numpy as np
 from PIL import Image
 
-from diffusion_editor.diffusion_generation_controller import (
+from diffusion_editor.generation.diffusion_controller import (
     DiffusionGenerationController,
 )
-from diffusion_editor.generation_types import (
+from diffusion_editor.generation.types import (
     DiffusionInferenceResult,
     EnginePollEvent,
 )
