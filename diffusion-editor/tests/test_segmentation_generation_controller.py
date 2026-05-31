@@ -1,11 +1,11 @@
 import numpy as np
 
-from diffusion_editor.generation_types import (
+from diffusion_editor.generation.types import (
     EnginePollEvent,
     SegmentationResult,
 )
 from diffusion_editor.document.layer import Layer
-from diffusion_editor.segmentation_generation_controller import (
+from diffusion_editor.generation.segmentation_controller import (
     SegmentationGenerationController,
 )
 

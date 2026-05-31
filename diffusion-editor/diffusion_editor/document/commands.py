@@ -11,7 +11,7 @@ from PIL import Image, ImageFilter
 from .layer import Layer
 from .tool import Tool, DiffusionTool
 from .layer_stack import LayerStack
-from ..diffusion_brush import paste_result
+from .result_paste import paste_result
 from .mask import Selection, coerce_mask_data
 
 

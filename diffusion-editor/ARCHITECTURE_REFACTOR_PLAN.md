@@ -241,8 +241,13 @@ Current status:
 - Application code and tests import canvas types through
   `diffusion_editor.canvas.*`; no top-level compatibility wrappers were kept
   for the moved canvas modules.
-- Generation, engine, app, and UI modules are still flat and should move in
-  later batches.
+- `diffusion_editor/generation/` now owns generation DTOs, request building,
+  source/reference resolution, generation controllers, patch extraction helpers,
+  and result-to-command mapping.
+- Application code and tests import generation types through
+  `diffusion_editor.generation.*`; no top-level compatibility wrappers were kept
+  for the moved generation modules.
+- Engine, app, and UI modules are still flat and should move in later batches.
 
 Possible final layout:
 
@@ -266,12 +271,15 @@ diffusion_editor/
     gpu_compositor.py
   generation/
     types.py
+    patch_image.py
     patch_resolver.py
     reference_resolver.py
     diffusion_request_builder.py
     diffusion_controller.py
     instruct_controller.py
     lama_controller.py
+    segmentation_controller.py
+    result_mapper.py
   engines/
     diffusion_engine.py
     instruct_engine.py
@@ -285,10 +293,12 @@ diffusion_editor/
 
 Tasks:
 
-- Move files in small batches. Done for document and canvas packages.
-- Update imports mechanically. Done for document and canvas packages.
-- Run full tests after each batch. Done locally for document and canvas
-  packages; run central tests before committing each batch.
+- Move files in small batches. Done for document, canvas, and generation
+  packages.
+- Update imports mechanically. Done for document, canvas, and generation
+  packages.
+- Run full tests after each batch. Done locally for document, canvas, and
+  generation packages; run central tests before committing each batch.
 - Avoid combining package moves with behavior changes.
 
 Success criteria:
@@ -523,12 +533,24 @@ Success criteria:
   `canvas_tool_context.py`, `canvas_tools.py`, `gpu_compositor.py`, and
   `soft_mask_stroke.py`.
 - Updated application and test imports to use `diffusion_editor.canvas.*`.
-- Kept `diffusion_brush.py` out of the canvas batch because it is currently a
-  generation/document image-patch helper rather than canvas interaction code.
 - Kept no top-level compatibility wrappers for the moved canvas modules, for the
   same active-development reason as document modules.
-- Remaining Phase 7 work: move generation/controllers next, then engines, UI
-  panels/dialogs, and app composition modules in separate tested batches.
+- Created `diffusion_editor/generation/` as the third package reorganization
+  batch.
+- Moved generation-owned modules under the generation package:
+  `types.py`, `diffusion_controller.py`, `instruct_controller.py`,
+  `lama_controller.py`, `segmentation_controller.py`,
+  `diffusion_request_builder.py`, `patch_resolver.py`,
+  `reference_resolver.py`, and `result_mapper.py`.
+- Split the old mixed `diffusion_brush.py`:
+  `generation/patch_image.py` now owns source patch extraction helpers, while
+  `document/result_paste.py` owns applying generated image patches to layer
+  pixels.
+- Updated engines, application code, and tests to use
+  `diffusion_editor.generation.*`.
+- Kept no top-level compatibility wrappers for the moved generation modules.
+- Remaining Phase 7 work: move engines next, then UI panels/dialogs and app
+  composition modules in separate tested batches.
 
 ## Architectural Smell Checklist
 

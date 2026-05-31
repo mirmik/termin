@@ -8,7 +8,7 @@ from diffusion_editor.document.commands import (
     ReplaceLayerMaskCommand,
     SetLayerSelectionCommand,
 )
-from diffusion_editor.engine_result_mapper import (
+from diffusion_editor.generation.result_mapper import (
     map_segmentation_result, map_lama_result,
     map_instruct_result, map_diffusion_result, map_grounding_result,
 )

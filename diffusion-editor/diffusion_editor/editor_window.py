@@ -39,20 +39,20 @@ from .canvas.editor_canvas import EditorCanvas
 from .layer_panel import LayerPanel
 from .brush_panel import BrushPanel
 from .diffusion_panel import DiffusionPanel
-from .diffusion_generation_controller import DiffusionGenerationController
+from .generation.diffusion_controller import DiffusionGenerationController
 from .grounding_controller import GroundingController
 from .grounding_engine import GroundingEngine
 from .grounding_types import GroundingParams
-from .instruct_generation_controller import InstructGenerationController
+from .generation.instruct_controller import InstructGenerationController
 from .ip_adapter_reference_dialog import show_ip_adapter_reference_dialog
-from .lama_generation_controller import LamaGenerationController
+from .generation.lama_controller import LamaGenerationController
 from .lama_panel import LamaPanel
 from .instruct_panel import InstructPanel
 from .selection_panel import SelectionPanel
-from .segmentation_generation_controller import SegmentationGenerationController
+from .generation.segmentation_controller import SegmentationGenerationController
 from .lama_engine import LamaEngine
 from .segmentation import SegmentationEngine
-from .patch_resolver import source_patch_at_center
+from .generation.patch_resolver import source_patch_at_center
 from .file_dialog import open_file_dialog, save_file_dialog, open_directory_dialog
 from .settings import Settings
 from .document.history import HistoryManager
@@ -68,7 +68,7 @@ from .document.commands import (
     ClearSelectionCommand, InvertSelectionCommand, SelectAllCommand,
     SetLayerSelectionCommand,
 )
-from .engine_result_mapper import (
+from .generation.result_mapper import (
     map_segmentation_result, map_lama_result,
     map_instruct_result, map_diffusion_result, map_grounding_result,
 )

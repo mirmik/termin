@@ -9,15 +9,15 @@ import numpy as np
 from PIL import Image
 from tcbase import log
 
-from .generation_types import LamaRequest, LamaResult
-from .lama_engine import LamaEngine
-from .document.layer import Layer
+from .types import LamaRequest, LamaResult
+from ..lama_engine import LamaEngine
+from ..document.layer import Layer
 from .patch_resolver import (
     apply_patch_source_to_tool,
     extract_layer_mask_patch,
     source_patch_from_mask,
 )
-from .document.tool import LamaTool
+from ..document.tool import LamaTool
 
 
 @dataclass(frozen=True)

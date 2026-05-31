@@ -8,9 +8,9 @@ from typing import Callable
 import numpy as np
 from tcbase import log
 
-from .generation_types import SegmentationRequest, SegmentationResult
-from .document.layer import Layer
-from .segmentation import SegmentationEngine
+from .types import SegmentationRequest, SegmentationResult
+from ..document.layer import Layer
+from ..segmentation import SegmentationEngine
 
 
 @dataclass(frozen=True)

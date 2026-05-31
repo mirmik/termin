@@ -7,10 +7,10 @@ from typing import Literal
 import numpy as np
 from PIL import Image
 
-from .diffusion_brush import extract_patch
-from .generation_types import GenerationError, PatchSource, Rect
-from .document.layer import Layer
-from .document.tool import DiffusionTool, InstructTool, LamaTool
+from .patch_image import extract_patch
+from .types import GenerationError, PatchSource, Rect
+from ..document.layer import Layer
+from ..document.tool import DiffusionTool, InstructTool, LamaTool
 
 
 def clip_rect_to_array(rect: Rect, image: np.ndarray) -> Rect:

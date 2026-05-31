@@ -4,20 +4,20 @@ from __future__ import annotations
 
 from PIL import Image
 
-from .generation_types import (
+from .types import (
     DiffusionRequest,
     DiffusionRequestBuildResult,
     GenerationError,
 )
-from .document.layer import Layer
-from .document.layer_stack import LayerStack
+from ..document.layer import Layer
+from ..document.layer_stack import LayerStack
 from .patch_resolver import (
     apply_patch_source_to_tool,
     extract_layer_mask_patch,
     resolve_source_patch,
 )
 from .reference_resolver import resolve_ip_adapter_reference
-from .document.tool import DiffusionTool
+from ..document.tool import DiffusionTool
 
 MODEL_RESOLUTION = 1024
 

@@ -9,12 +9,12 @@ import numpy as np
 from PIL import Image
 from tcbase import log
 
-from .diffusion_engine import DiffusionEngine
+from ..diffusion_engine import DiffusionEngine
 from .diffusion_request_builder import DiffusionRequestBuilder
-from .generation_types import DiffusionInferenceResult
-from .document.layer import Layer
-from .document.layer_stack import LayerStack
-from .document.tool import DiffusionTool
+from .types import DiffusionInferenceResult
+from ..document.layer import Layer
+from ..document.layer_stack import LayerStack
+from ..document.tool import DiffusionTool
 
 
 @dataclass(frozen=True)
