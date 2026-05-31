@@ -251,7 +251,11 @@ Current status:
   InstructPix2Pix, LaMa, segmentation, and Grounding.
 - Application code imports engines through `diffusion_editor.engines.*`; no
   top-level compatibility wrappers were kept for the moved engine modules.
-- App and UI modules are still flat and should move in later batches.
+- `diffusion_editor/ui/` now owns editor panels and dialogs.
+- Application code and tests import panels/dialogs through
+  `diffusion_editor.ui.*`; no top-level compatibility wrappers were kept for
+  the moved UI modules.
+- App modules are still flat and should move in the final batch.
 
 Possible final layout:
 
@@ -297,12 +301,12 @@ diffusion_editor/
 
 Tasks:
 
-- Move files in small batches. Done for document, canvas, generation, and engine
-  packages.
-- Update imports mechanically. Done for document, canvas, generation, and engine
-  packages.
+- Move files in small batches. Done for document, canvas, generation, engine,
+  and UI packages.
+- Update imports mechanically. Done for document, canvas, generation, engine,
+  and UI packages.
 - Run full tests after each batch. Done locally for document, canvas,
-  generation, and engine packages; run central tests before committing each
+  generation, engine, and UI packages; run central tests before committing each
   batch.
 - Avoid combining package moves with behavior changes.
 
@@ -564,8 +568,17 @@ Success criteria:
 - Updated generation controllers, editor window, and engine-internal imports to
   use `diffusion_editor.engines.*`.
 - Kept no top-level compatibility wrappers for the moved engine modules.
-- Remaining Phase 7 work: move UI panels/dialogs next, then app composition
-  modules in separate tested batches.
+- Created `diffusion_editor/ui/` as the fifth package reorganization batch.
+- Moved editor panels under `ui/panels/`:
+  `brush_panel.py`, `diffusion_panel.py`, `instruct_panel.py`,
+  `lama_panel.py`, `layer_panel.py`, and `selection_panel.py`.
+- Moved dialogs and dialog helpers under `ui/dialogs/`:
+  `file_dialog.py`, `grounding_dialog.py`, and
+  `ip_adapter_reference_dialog.py`.
+- Updated editor window and dialog tests to use `diffusion_editor.ui.*`.
+- Kept no top-level compatibility wrappers for the moved UI modules.
+- Remaining Phase 7 work: move app composition modules in the final tested
+  batch.
 
 ## Architectural Smell Checklist
 

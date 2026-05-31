@@ -13,7 +13,7 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.units import px
 from tcgui.widgets.vstack import VStack
 
-from .grounding_types import GROUNDING_MODELS, SAM2_MODELS, GroundingParams
+from ...grounding_types import GROUNDING_MODELS, SAM2_MODELS, GroundingParams
 
 
 class GroundingDialog:

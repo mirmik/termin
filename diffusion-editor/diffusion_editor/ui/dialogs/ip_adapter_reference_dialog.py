@@ -11,8 +11,8 @@ from tcgui.widgets.units import px
 from tcgui.widgets.ui import UI
 from tcgui.widgets.vstack import VStack
 
-from .document.layer import Layer
-from .document.layer_stack import LayerStack
+from ...document.layer import Layer
+from ...document.layer_stack import LayerStack
 
 
 def ip_adapter_reference_candidates(

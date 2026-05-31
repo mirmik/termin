@@ -36,24 +36,24 @@ from .document.layer import Layer
 from .document.tool import DiffusionTool, LamaTool, InstructTool
 from .canvas.brush import BrushToolMode
 from .canvas.editor_canvas import EditorCanvas
-from .layer_panel import LayerPanel
-from .brush_panel import BrushPanel
-from .diffusion_panel import DiffusionPanel
+from .ui.panels.layer_panel import LayerPanel
+from .ui.panels.brush_panel import BrushPanel
+from .ui.panels.diffusion_panel import DiffusionPanel
 from .generation.diffusion_controller import DiffusionGenerationController
 from .grounding_controller import GroundingController
 from .engines.grounding_engine import GroundingEngine
 from .grounding_types import GroundingParams
 from .generation.instruct_controller import InstructGenerationController
-from .ip_adapter_reference_dialog import show_ip_adapter_reference_dialog
+from .ui.dialogs.ip_adapter_reference_dialog import show_ip_adapter_reference_dialog
 from .generation.lama_controller import LamaGenerationController
-from .lama_panel import LamaPanel
-from .instruct_panel import InstructPanel
-from .selection_panel import SelectionPanel
+from .ui.panels.lama_panel import LamaPanel
+from .ui.panels.instruct_panel import InstructPanel
+from .ui.panels.selection_panel import SelectionPanel
 from .generation.segmentation_controller import SegmentationGenerationController
 from .engines.lama_engine import LamaEngine
 from .engines.segmentation_engine import SegmentationEngine
 from .generation.patch_resolver import source_patch_at_center
-from .file_dialog import open_file_dialog, save_file_dialog, open_directory_dialog
+from .ui.dialogs.file_dialog import open_file_dialog, save_file_dialog, open_directory_dialog
 from .settings import Settings
 from .document.history import HistoryManager
 from .document.document_service import DocumentService
@@ -1572,7 +1572,7 @@ class EditorWindow:
             self._statusbar.text = event.status
 
     def _show_grounding_dialog(self) -> None:
-        from .grounding_dialog import GroundingDialog
+        from .ui.dialogs.grounding_dialog import GroundingDialog
 
         GroundingDialog(
             ui=self.ui,
