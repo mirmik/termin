@@ -117,7 +117,7 @@ Tasks:
 
 - Add `DiffusionEngine.submit_request(DiffusionRequest)`.
 - Replace the long `DiffusionEngine.submit(...)` call path after
-  `submit_request` is stable.
+  `submit_request` is stable. Done; the legacy public method was removed.
 - Add request/result dataclasses for Instruct, LaMa, and segmentation.
 - Standardize poll output into typed events instead of ad hoc tuples.
 - Keep logging inside engines for failures and important lifecycle events.
@@ -372,8 +372,8 @@ Success criteria:
 - Phase 3 implemented for current generation engines.
 - Added typed `InstructRequest` and `LamaRequest` DTOs next to
   `DiffusionRequest`.
-- Added `submit_request(...)` adapters to Diffusion, InstructPix2Pix, and LaMa
-  engines.
+- Added `submit_request(...)` methods to Diffusion, InstructPix2Pix, LaMa, and
+  segmentation engines.
 - Updated Diffusion, InstructPix2Pix, and LaMa controllers to submit typed
   request objects instead of long argument lists.
 - Added typed `SegmentationRequest` and `SegmentationResult` DTOs.
@@ -383,10 +383,8 @@ Success criteria:
   engine tuples.
 - Added `SegmentationGenerationController` and moved segmentation pending-layer
   state out of `EditorWindow`.
-- Kept legacy low-level `poll()` methods in engines for compatibility while
-  controllers use the typed event API.
-- Remaining Phase 3 cleanup: decide when to delete legacy `submit(...)`/`poll()`
-  tuple APIs after all callers are migrated.
+- Removed legacy low-level `submit(...)` and tuple `poll()` methods from
+  generation engines after all callers migrated to typed request/event APIs.
 - Phase 4 implemented for the current Grounding workflow.
 - Added `grounding/types.py` for model options, request params, detections,
   results, and engine events.

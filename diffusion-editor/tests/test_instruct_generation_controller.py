@@ -30,10 +30,6 @@ class _Engine:
         self.calls.append(("load",))
         return True
 
-    def submit(self, **kwargs):
-        self.calls.append(("submit", kwargs))
-        return True
-
     def submit_request(self, request):
         self.calls.append(("submit_request", request))
         return True

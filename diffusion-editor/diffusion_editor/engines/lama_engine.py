@@ -22,18 +22,19 @@ class LamaEngine:
             from simple_lama_inpainting import SimpleLama
             self._model = SimpleLama()
 
-    def submit(self, image: Image.Image, mask: Image.Image):
+    def submit_request(self, request: LamaRequest):
         if self._busy:
             return False
         self._busy = True
         self._result = None
         self._error = None
-        self._thread = Thread(target=self._run, args=(image, mask), daemon=True)
+        self._thread = Thread(
+            target=self._run,
+            args=(request.image, request.mask_image),
+            daemon=True,
+        )
         self._thread.start()
         return True
-
-    def submit_request(self, request: LamaRequest):
-        return self.submit(request.image, request.mask_image)
 
     def _run(self, image: Image.Image, mask: Image.Image):
         try:
@@ -50,20 +51,14 @@ class LamaEngine:
             self._error = str(e)
         self._busy = False
 
-    def poll(self) -> tuple[Image.Image | None, str | None]:
+    def poll_event(self) -> EnginePollEvent | None:
         if self._busy:
-            return None, None
+            return None
         result, error = self._result, self._error
         if result is None and error is None:
-            return None, None
+            return None
         self._result = None
         self._error = None
-        return result, error
-
-    def poll_event(self) -> EnginePollEvent | None:
-        result, error = self.poll()
-        if result is None and error is None:
-            return None
         event_result = None
         if result is not None:
             event_result = LamaResult(image=result)
