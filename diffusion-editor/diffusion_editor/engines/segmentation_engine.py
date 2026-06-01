@@ -28,22 +28,19 @@ class SegmentationEngine:
             from rembg import new_session
             self._session = new_session("u2net")
 
-    def submit(self, image: np.ndarray, invert: bool = True):
-        """Запускает сегментацию в фоновом потоке.
-        image: RGBA или RGB np.ndarray (H, W, 3/4).
-        invert=True → маска фона, False → маска объекта.
-        """
+    def submit_request(self, request: SegmentationRequest):
         if self._busy:
             return False
         self._busy = True
         self._result = None
         self._error = None
-        self._thread = Thread(target=self._run, args=(image, invert), daemon=True)
+        self._thread = Thread(
+            target=self._run,
+            args=(request.image, request.invert),
+            daemon=True,
+        )
         self._thread.start()
         return True
-
-    def submit_request(self, request: SegmentationRequest):
-        return self.submit(request.image, invert=request.invert)
 
     def _run(self, image_arr, invert):
         try:
@@ -68,20 +65,14 @@ class SegmentationEngine:
             self._error = str(e)
         self._busy = False
 
-    def poll(self) -> tuple[np.ndarray | None, str | None]:
+    def poll_event(self) -> EnginePollEvent | None:
         if self._busy:
-            return None, None
+            return None
         result, error = self._result, self._error
         if result is None and error is None:
-            return None, None
+            return None
         self._result = None
         self._error = None
-        return result, error
-
-    def poll_event(self) -> EnginePollEvent | None:
-        result, error = self.poll()
-        if result is None and error is None:
-            return None
         event_result = None
         if result is not None:
             event_result = SegmentationResult(mask=result)

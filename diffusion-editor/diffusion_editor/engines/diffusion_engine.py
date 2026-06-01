@@ -350,15 +350,7 @@ class DiffusionEngine:
         log.debug(f"[DiffusionEngine] _txt2img done, result size: {result.size}")
         return result, seed
 
-    def submit(self, image: Image.Image, prompt: str, negative_prompt: str,
-               strength: float, steps: int, guidance_scale: float,
-               seed: int = -1, mode: str = "img2img",
-               mask_image: Image.Image = None,
-               masked_content: str = "original",
-               ip_adapter_image: Image.Image = None,
-               ip_adapter_scale: float = 0.6,
-               width: int = 1024, height: int = 1024,
-               meta=None):
+    def submit_request(self, request: DiffusionRequest, meta=None):
         if self._busy:
             return False
         self._busy = True
@@ -368,32 +360,26 @@ class DiffusionEngine:
         self._task_type = "inference"
         self._thread = threading.Thread(
             target=self._run_inference,
-            args=(image, prompt, negative_prompt, strength, steps,
-                  guidance_scale, seed, mode, mask_image, masked_content,
-                  ip_adapter_image, ip_adapter_scale, width, height),
+            args=(
+                request.image,
+                request.prompt,
+                request.negative_prompt,
+                request.strength,
+                request.steps,
+                request.guidance_scale,
+                request.seed,
+                request.mode,
+                request.mask_image,
+                request.masked_content,
+                request.ip_adapter_image,
+                request.ip_adapter_scale,
+                request.width,
+                request.height,
+            ),
             daemon=True,
         )
         self._thread.start()
         return True
-
-    def submit_request(self, request: DiffusionRequest, meta=None):
-        return self.submit(
-            image=request.image,
-            prompt=request.prompt,
-            negative_prompt=request.negative_prompt,
-            strength=request.strength,
-            steps=request.steps,
-            guidance_scale=request.guidance_scale,
-            seed=request.seed,
-            mode=request.mode,
-            mask_image=request.mask_image,
-            masked_content=request.masked_content,
-            ip_adapter_image=request.ip_adapter_image,
-            ip_adapter_scale=request.ip_adapter_scale,
-            width=request.width,
-            height=request.height,
-            meta=meta,
-        )
 
     def _run_inference(self, image, prompt, negative_prompt, strength, steps,
                        guidance_scale, seed, mode, mask_image, masked_content,
@@ -484,14 +470,9 @@ class DiffusionEngine:
             gc.enable()
         self._busy = False
 
-    def poll(self):
-        """Check if background task is done.
-
-        Returns (task_type, result_or_none, error_or_none, meta).
-        Returns (None, None, None, None) if still busy or no pending result.
-        """
+    def poll_event(self) -> EnginePollEvent | None:
         if self._busy:
-            return None, None, None, None
+            return None
 
         task_type = self._task_type
         result = self._result
@@ -499,18 +480,12 @@ class DiffusionEngine:
         meta = self._result_meta
 
         if result is None and error is None:
-            return None, None, None, None
+            return None
 
         self._result = None
         self._error = None
         self._result_meta = None
         self._task_type = None
-        return task_type, result, error, meta
-
-    def poll_event(self) -> EnginePollEvent | None:
-        task_type, result, error, meta = self.poll()
-        if task_type is None:
-            return None
         if task_type == "inference" and result is not None:
             result_image, used_seed = result
             result = DiffusionInferenceResult(

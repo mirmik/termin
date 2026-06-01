@@ -20,10 +20,6 @@ class _Engine:
         self.calls = []
         self.poll_result = None
 
-    def submit(self, image, mask):
-        self.calls.append((image, mask))
-        return True
-
     def submit_request(self, request):
         self.calls.append((request.image, request.mask_image))
         return True

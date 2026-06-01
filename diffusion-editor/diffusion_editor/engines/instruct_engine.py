@@ -74,11 +74,7 @@ class InstructEngine:
             self._error = str(e)
         self._busy = False
 
-    def submit(self, image: Image.Image, instruction: str,
-               guidance_scale: float = 7.0,
-               image_guidance_scale: float = 1.5,
-               steps: int = 20, seed: int = -1,
-               meta=None):
+    def submit_request(self, request: InstructRequest, meta=None):
         if self._busy:
             return False
         self._busy = True
@@ -88,23 +84,18 @@ class InstructEngine:
         self._task_type = "inference"
         self._thread = threading.Thread(
             target=self._run_inference,
-            args=(image, instruction, guidance_scale, image_guidance_scale,
-                  steps, seed),
+            args=(
+                request.image,
+                request.instruction,
+                request.guidance_scale,
+                request.image_guidance_scale,
+                request.steps,
+                request.seed,
+            ),
             daemon=True,
         )
         self._thread.start()
         return True
-
-    def submit_request(self, request: InstructRequest, meta=None):
-        return self.submit(
-            image=request.image,
-            instruction=request.instruction,
-            guidance_scale=request.guidance_scale,
-            image_guidance_scale=request.image_guidance_scale,
-            steps=request.steps,
-            seed=request.seed,
-            meta=meta,
-        )
 
     def _run_inference(self, image, instruction, guidance_scale,
                        image_guidance_scale, steps, seed):
@@ -140,10 +131,9 @@ class InstructEngine:
             self._error = str(e)
         self._busy = False
 
-    def poll(self):
-        """Returns (task_type, result, error, meta)."""
+    def poll_event(self) -> EnginePollEvent | None:
         if self._busy:
-            return None, None, None, None
+            return None
 
         task_type = self._task_type
         result = self._result
@@ -151,18 +141,12 @@ class InstructEngine:
         meta = self._result_meta
 
         if result is None and error is None:
-            return None, None, None, None
+            return None
 
         self._result = None
         self._error = None
         self._result_meta = None
         self._task_type = None
-        return task_type, result, error, meta
-
-    def poll_event(self) -> EnginePollEvent | None:
-        task_type, result, error, meta = self.poll()
-        if task_type is None:
-            return None
         if task_type == "inference" and result is not None:
             result_image, used_seed = result
             result = InstructInferenceResult(
