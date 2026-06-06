@@ -12,6 +12,8 @@ from termin.csg.document_raycast import (
     sketch_plane_from_hit,
 )
 from termin.csg.procedural_document import (
+    CONTOUR_ROLE_OUTER,
+    PRIMITIVE_OPERATION_KIND,
     ContourDocument,
     OperationDocument,
     ProceduralMeshDocument,
@@ -27,6 +29,9 @@ SelectionData = tuple[str, str]
 class SketchDraft:
     points: list[Vec3Data] = field(default_factory=list)
     plane: ProceduralPlane | None = None
+    sketch_id: str = ""
+    contour_role: str = CONTOUR_ROLE_OUTER
+    parent_contour_id: str | None = None
 
 
 @dataclass
@@ -44,8 +49,18 @@ class DocumentEditResult:
     operation: OperationDocument | None = None
 
 
-def start_sketch_draft() -> SketchDraft:
-    return SketchDraft()
+def start_sketch_draft(
+    sketch_id: str = "",
+    plane: ProceduralPlane | None = None,
+    contour_role: str = CONTOUR_ROLE_OUTER,
+    parent_contour_id: str | None = None,
+) -> SketchDraft:
+    return SketchDraft(
+        plane=plane,
+        sketch_id=str(sketch_id),
+        contour_role=str(contour_role),
+        parent_contour_id=parent_contour_id,
+    )
 
 
 def clear_document() -> ProceduralMeshDocument:
@@ -61,6 +76,14 @@ def add_draft_point_from_ray(
     fallback_plane: ProceduralPlane | None = None,
     fallback_kind: str = "fallback",
 ) -> DrawPointResult:
+    if not draft.points and draft.plane is not None:
+        point = ray_plane_intersection(ray_origin, ray_direction, draft.plane)
+        if point is None:
+            log.error("[CsgDocumentEdit] cannot add draft point: ray does not hit active sketch plane")
+            return DrawPointResult(False)
+        draft.points.append(point)
+        return DrawPointResult(True, point, "plane")
+
     if draft.points:
         if draft.plane is None:
             log.error("[CsgDocumentEdit] cannot add draft point: active sketch plane is not available")
@@ -100,13 +123,26 @@ def close_draft_contour(
     plane = draft.plane
     if plane is None:
         plane = ProceduralPlane.from_points(draft.points)
-    contour = document.add_contour_on_plane_from_points(draft.points[:], plane)
+    if draft.sketch_id:
+        contour = document.add_contour_to_sketch_from_points(
+            draft.sketch_id,
+            draft.points[:],
+            role=draft.contour_role,
+            parent_contour_id=draft.parent_contour_id,
+        )
+        selection = ("contour", contour.id) if contour is not None else None
+    else:
+        contour = document.add_contour_on_plane_from_points(draft.points[:], plane)
+        sketch_id = document.find_sketch_id_for_contour(contour.id) if contour is not None else ""
+        selection = ("sketch", sketch_id) if sketch_id else None
     if contour is None:
         return DocumentEditResult(False)
-    sketch_id = document.find_sketch_id_for_contour(contour.id)
     draft.points = []
     draft.plane = None
-    return DocumentEditResult(True, ("sketch", sketch_id), contour=contour)
+    draft.sketch_id = ""
+    draft.parent_contour_id = None
+    draft.contour_role = CONTOUR_ROLE_OUTER
+    return DocumentEditResult(True, selection, contour=contour)
 
 
 def selected_sketch_id(
@@ -119,6 +155,8 @@ def selected_sketch_id(
         return ""
     if selection[0] == "sketch":
         return selection[1]
+    if selection[0] == "contour":
+        return document.find_sketch_id_for_contour(selection[1])
     if selection[0] == "operation":
         operation = document.find_operation(selection[1])
         if operation is not None:
@@ -131,10 +169,10 @@ def add_extrude_for_selection(
     selection: SelectionData | None,
     height: float = 1.0,
 ) -> DocumentEditResult:
-    sketch_id = selected_sketch_id(document, selection)
-    if not sketch_id:
+    if selection is None or selection[0] != "sketch":
         log.error("[CsgDocumentEdit] cannot extrude: select a sketch")
         return DocumentEditResult(False)
+    sketch_id = selection[1]
     operation = document.add_extrude_operation_for_sketch(sketch_id, height=height)
     if operation is None:
         return DocumentEditResult(False)
@@ -168,6 +206,16 @@ def add_boolean_for_selection(
     return DocumentEditResult(True, ("operation", operation.id), operation=operation)
 
 
+def add_primitive_operation(
+    document: ProceduralMeshDocument,
+    kind: str,
+) -> DocumentEditResult:
+    operation = document.add_primitive_operation(kind)
+    if operation is None:
+        return DocumentEditResult(False)
+    return DocumentEditResult(True, ("operation", operation.id), operation=operation)
+
+
 def set_extrude_vector(
     document: ProceduralMeshDocument,
     operation_id: str,
@@ -184,6 +232,25 @@ def set_extrude_vector(
         )
         return False
     operation.params["vector"] = [float(vector[0]), float(vector[1]), float(vector[2])]
+    return True
+
+
+def set_primitive_params(
+    document: ProceduralMeshDocument,
+    operation_id: str,
+    params: dict,
+) -> bool:
+    operation = document.find_operation(operation_id)
+    if operation is None:
+        log.error(f"[CsgDocumentEdit] cannot set primitive params: operation not found '{operation_id}'")
+        return False
+    if operation.kind != PRIMITIVE_OPERATION_KIND:
+        log.error(
+            "[CsgDocumentEdit] cannot set primitive params: "
+            f"operation '{operation_id}' has kind '{operation.kind}'"
+        )
+        return False
+    operation.params.update(dict(params))
     return True
 
 
@@ -278,12 +345,14 @@ __all__ = [
     "add_boolean_for_selection",
     "add_draft_point_from_ray",
     "add_extrude_for_selection",
+    "add_primitive_operation",
     "clear_document",
     "close_draft_contour",
     "selected_sketch_id",
     "selected_operation_id",
     "set_contour_point",
     "set_extrude_vector",
+    "set_primitive_params",
     "set_sketch_plane",
     "start_sketch_draft",
 ]

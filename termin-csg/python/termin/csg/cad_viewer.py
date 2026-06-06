@@ -87,6 +87,9 @@ class CadViewportWidget(Widget):
         self.texture = None
         self.texture_size = (0, 0)
         self.on_changed = None
+        self.on_scene_mouse_down = None
+        self.on_scene_mouse_move = None
+        self.on_scene_mouse_up = None
         self.on_scene_click = None
         self._drag_mode = ""
         self._drag_x = 0.0
@@ -110,13 +113,18 @@ class CadViewportWidget(Widget):
 
     def on_mouse_down(self, event: MouseEvent) -> bool:
         if event.button == MouseButton.LEFT:
+            scene_x = float(event.x - self.x)
+            scene_y = float(event.y - self.y)
+            scene_width = max(int(self.width), 1)
+            scene_height = max(int(self.height), 1)
+            if self.on_scene_mouse_down is not None:
+                handled = self.on_scene_mouse_down(scene_x, scene_y, scene_width, scene_height)
+                if handled:
+                    self._begin_drag("scene", event)
+                    self._notify_changed()
+                    return True
             if self.on_scene_click is not None:
-                handled = self.on_scene_click(
-                    float(event.x - self.x),
-                    float(event.y - self.y),
-                    max(int(self.width), 1),
-                    max(int(self.height), 1),
-                )
+                handled = self.on_scene_click(scene_x, scene_y, scene_width, scene_height)
                 if handled:
                     self._notify_changed()
                     return True
@@ -135,6 +143,18 @@ class CadViewportWidget(Widget):
         self._drag_y = float(event.y)
 
     def on_mouse_up(self, event: MouseEvent) -> None:
+        if self._drag_mode == "scene":
+            if self.on_scene_mouse_up is not None:
+                handled = self.on_scene_mouse_up(
+                    float(event.x - self.x),
+                    float(event.y - self.y),
+                    max(int(self.width), 1),
+                    max(int(self.height), 1),
+                )
+                if handled:
+                    self._notify_changed()
+            self._drag_mode = ""
+            return
         self._drag_mode = ""
 
     def on_mouse_move(self, event: MouseEvent) -> None:
@@ -142,6 +162,17 @@ class CadViewportWidget(Widget):
             return
         x = float(event.x)
         y = float(event.y)
+        if self._drag_mode == "scene":
+            if self.on_scene_mouse_move is not None:
+                handled = self.on_scene_mouse_move(
+                    float(x - self.x),
+                    float(y - self.y),
+                    max(int(self.width), 1),
+                    max(int(self.height), 1),
+                )
+                if handled:
+                    self._notify_changed()
+            return
         dx = x - self._drag_x
         dy = y - self._drag_y
         if self._drag_mode == "orbit":

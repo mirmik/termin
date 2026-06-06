@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import ctypes
+from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import sdl2
 
 from tcbase import Key, Mods, MouseButton, log
@@ -33,17 +35,26 @@ from termin.csg.document_edit import (
     add_boolean_for_selection,
     add_draft_point_from_ray,
     add_extrude_for_selection,
+    add_primitive_operation,
     clear_document,
     close_draft_contour,
     selected_sketch_id,
     set_contour_point,
     set_extrude_vector,
+    set_primitive_params,
     set_sketch_plane,
     start_sketch_draft,
 )
 from termin.csg.document_eval import extrude_vector_for_operation
+from termin.csg.document_raycast import ray_plane_intersection
 from termin.csg.document_tree_model import DocumentTreeNode, build_document_tree, document_summary
-from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
+from termin.csg.procedural_document import (
+    CONTOUR_ROLE_HOLE,
+    CONTOUR_ROLE_OUTER,
+    PRIMITIVE_OPERATION_KIND,
+    ProceduralMeshDocument,
+    ProceduralPlane,
+)
 from termin.csg.viewer_camera import OrbitCamera
 
 
@@ -63,6 +74,14 @@ _KEY_MAP = {
     sdl2.SDL_SCANCODE_SPACE: Key.SPACE,
 }
 
+_CONTOUR_POINT_HIT_RADIUS_PX = 14.0
+
+
+@dataclass
+class ContourPointDrag:
+    contour_id: str
+    point_index: int
+
 
 class CadApp:
     def __init__(self) -> None:
@@ -76,6 +95,7 @@ class CadApp:
         self.current_path: Path | None = None
         self.last_directory = Path.cwd()
         self.show_wireframe = True
+        self._contour_point_drag: ContourPointDrag | None = None
 
         self.mode_label = Label()
         self.file_label = Label()
@@ -84,11 +104,17 @@ class CadApp:
         self.status_label = Label()
         self.wireframe_checkbox = Checkbox()
         self.tree = TreeWidget()
+        self.context_actions_panel = Panel()
         self.operation_params_panel = Panel()
         self.operation_params_title = Label()
         self.operation_params_kind = Label()
         self.extrude_vector_inputs: dict[str, SpinBox] = {}
         self._syncing_operation_params = False
+        self.primitive_params_panel = Panel()
+        self.primitive_params_title = Label()
+        self.primitive_param_inputs: dict[str, SpinBox] = {}
+        self.primitive_bool_inputs: dict[str, Checkbox] = {}
+        self._syncing_primitive_params = False
         self.plane_params_panel = Panel()
         self.plane_params_title = Label()
         self.plane_inputs: dict[str, SpinBox] = {}
@@ -114,6 +140,9 @@ class CadApp:
 
         self.viewport.stretch = True
         self.viewport.on_changed = self.request_render
+        self.viewport.on_scene_mouse_down = self._on_scene_mouse_down
+        self.viewport.on_scene_mouse_move = self._on_scene_mouse_move
+        self.viewport.on_scene_mouse_up = self._on_scene_mouse_up
         self.viewport.on_scene_click = self._on_scene_click
 
         tree_panel = Panel()
@@ -207,7 +236,6 @@ class CadApp:
         row2 = HStack()
         row2.spacing = 4
         row2.preferred_height = px(28)
-        row2.add_child(self._button("Extrude", self.extrude_selected))
         row2.add_child(self._button("Fit", self.fit_camera))
         row2.add_child(self._button("Clear", self.clear_document))
         root.add_child(row2)
@@ -219,6 +247,15 @@ class CadApp:
         row3.add_child(self._button("Subtract", lambda: self.add_boolean_operation("subtract")))
         row3.add_child(self._button("Intersect", lambda: self.add_boolean_operation("intersect")))
         root.add_child(row3)
+
+        primitive_row = HStack()
+        primitive_row.spacing = 4
+        primitive_row.preferred_height = px(28)
+        primitive_row.add_child(self._button("Box", lambda: self.add_primitive("box")))
+        primitive_row.add_child(self._button("Sphere", lambda: self.add_primitive("sphere")))
+        primitive_row.add_child(self._button("Cylinder", lambda: self.add_primitive("cylinder")))
+        primitive_row.add_child(self._button("Cone", lambda: self.add_primitive("cone")))
+        root.add_child(primitive_row)
 
         view_row = HStack()
         view_row.spacing = 4
@@ -239,7 +276,9 @@ class CadApp:
         self.status_label.color = (0.58, 0.64, 0.72, 1.0)
         root.add_child(self.status_label)
 
+        root.add_child(self._build_context_actions_panel())
         root.add_child(self._build_operation_params_panel())
+        root.add_child(self._build_primitive_params_panel())
         root.add_child(self._build_plane_params_panel())
         root.add_child(self._build_contour_params_panel())
 
@@ -300,6 +339,62 @@ class CadApp:
         self.operation_params_panel.add_child(body)
         return self.operation_params_panel
 
+    def _build_context_actions_panel(self) -> Panel:
+        for child in self.context_actions_panel.children[:]:
+            self.context_actions_panel.remove_child(child)
+
+        self.context_actions_panel.padding = 8
+        self.context_actions_panel.background_color = (0.10, 0.105, 0.12, 1.0)
+        self.context_actions_panel.visible = False
+        return self.context_actions_panel
+
+    def _rebuild_context_actions_panel(self) -> None:
+        for child in self.context_actions_panel.children[:]:
+            self.context_actions_panel.remove_child(child)
+
+        actions = self._context_actions()
+        if not actions:
+            self._set_context_actions_visible(False)
+            return
+
+        body = VStack()
+        body.spacing = 5
+
+        title = Label()
+        title.text = "Actions"
+        title.color = (0.84, 0.88, 0.94, 1.0)
+        body.add_child(title)
+
+        for label, callback in actions:
+            row = HStack()
+            row.spacing = 4
+            row.preferred_height = px(28)
+            row.add_child(self._button(label, callback))
+            body.add_child(row)
+
+        self.context_actions_panel.add_child(body)
+        self._set_context_actions_visible(True)
+
+    def _context_actions(self):
+        if self.selected_node_data is None:
+            return []
+        kind, item_id = self.selected_node_data
+        if kind == "sketch":
+            if self.document.find_sketch(item_id) is None:
+                return []
+            return [
+                ("Add Outer Contour", self.start_add_outer_contour),
+                ("Extrude Sketch", self.extrude_selected),
+            ]
+        if kind == "contour":
+            contour_ref = self._contour_ref_by_id(item_id)
+            if contour_ref is None:
+                return []
+            _sketch, contour = contour_ref
+            if contour.role == CONTOUR_ROLE_OUTER:
+                return [("Add Hole", self.start_add_hole_contour)]
+        return []
+
     def _build_vector_row(self, axis: str) -> HStack:
         row = HStack()
         row.spacing = 6
@@ -322,6 +417,171 @@ class CadApp:
         self.extrude_vector_inputs[axis] = spin
         row.add_child(spin)
         return row
+
+    def _build_primitive_params_panel(self) -> Panel:
+        for child in self.primitive_params_panel.children[:]:
+            self.primitive_params_panel.remove_child(child)
+        self.primitive_param_inputs.clear()
+        self.primitive_bool_inputs.clear()
+
+        self.primitive_params_panel.padding = 8
+        self.primitive_params_panel.background_color = (0.10, 0.105, 0.12, 1.0)
+        self.primitive_params_panel.visible = False
+        return self.primitive_params_panel
+
+    def _rebuild_primitive_params_panel(self, operation) -> None:
+        for child in self.primitive_params_panel.children[:]:
+            self.primitive_params_panel.remove_child(child)
+        self.primitive_param_inputs.clear()
+        self.primitive_bool_inputs.clear()
+
+        body = VStack()
+        body.spacing = 5
+
+        primitive_kind = str(operation.params.get("primitive_kind", ""))
+        self.primitive_params_title.text = f"{_primitive_kind_label(primitive_kind)}: {operation.name}"
+        self.primitive_params_title.color = (0.84, 0.88, 0.94, 1.0)
+        body.add_child(self.primitive_params_title)
+
+        separator = Separator()
+        separator.orientation = "horizontal"
+        body.add_child(separator)
+
+        self._syncing_primitive_params = True
+        self._append_primitive_kind_rows(body, primitive_kind, operation.params)
+        self._append_primitive_vector_rows(body, "center", "Center", operation.params, (0.0, 0.0, 0.0))
+        self._append_primitive_vector_rows(body, "rotation", "Rotation", operation.params, (0.0, 0.0, 0.0))
+        self._syncing_primitive_params = False
+
+        self.primitive_params_panel.add_child(body)
+
+    def _append_primitive_kind_rows(self, body: VStack, primitive_kind: str, params: dict) -> None:
+        if primitive_kind == "box":
+            self._append_primitive_vector_rows(body, "size", "Size", params, (1.0, 1.0, 1.0), min_value=0.001)
+            self._append_primitive_bool_row(body, "centered", "Centered", params, True)
+            return
+        if primitive_kind == "sphere":
+            body.add_child(self._build_primitive_number_row("radius", "Radius", params, 0.5, min_value=0.001))
+            body.add_child(
+                self._build_primitive_number_row(
+                    "circular_segments",
+                    "Segments",
+                    params,
+                    32.0,
+                    decimals=0,
+                    step=1.0,
+                    min_value=3.0,
+                    max_value=256.0,
+                )
+            )
+            return
+        if primitive_kind == "cylinder":
+            body.add_child(self._build_primitive_number_row("radius", "Radius", params, 0.5, min_value=0.001))
+            body.add_child(self._build_primitive_number_row("height", "Height", params, 1.0, min_value=0.001))
+            body.add_child(
+                self._build_primitive_number_row(
+                    "circular_segments",
+                    "Segments",
+                    params,
+                    32.0,
+                    decimals=0,
+                    step=1.0,
+                    min_value=3.0,
+                    max_value=256.0,
+                )
+            )
+            self._append_primitive_bool_row(body, "centered", "Centered", params, True)
+            return
+        if primitive_kind == "cone":
+            body.add_child(self._build_primitive_number_row("radius_low", "Radius low", params, 0.5, min_value=0.001))
+            body.add_child(self._build_primitive_number_row("radius_high", "Radius high", params, 0.0, min_value=0.0))
+            body.add_child(self._build_primitive_number_row("height", "Height", params, 1.0, min_value=0.001))
+            body.add_child(
+                self._build_primitive_number_row(
+                    "circular_segments",
+                    "Segments",
+                    params,
+                    32.0,
+                    decimals=0,
+                    step=1.0,
+                    min_value=3.0,
+                    max_value=256.0,
+                )
+            )
+            self._append_primitive_bool_row(body, "centered", "Centered", params, True)
+
+    def _append_primitive_vector_rows(
+        self,
+        body: VStack,
+        group: str,
+        label_text: str,
+        params: dict,
+        default: tuple[float, float, float],
+        min_value: float = -1000000.0,
+    ) -> None:
+        label = Label()
+        label.text = label_text
+        label.color = (0.70, 0.74, 0.80, 1.0)
+        body.add_child(label)
+        value = _param_vec3(params, group, default)
+        for index, axis in enumerate(("x", "y", "z")):
+            key = f"{group}.{axis}"
+            row = self._build_primitive_number_row(
+                key,
+                axis.upper(),
+                {},
+                value[index],
+                min_value=min_value,
+                label_width=18,
+            )
+            body.add_child(row)
+
+    def _build_primitive_number_row(
+        self,
+        key: str,
+        label_text: str,
+        params: dict,
+        default: float,
+        decimals: int = 3,
+        step: float = 0.1,
+        min_value: float = -1000000.0,
+        max_value: float = 1000000.0,
+        label_width: int = 82,
+    ) -> HStack:
+        row = HStack()
+        row.spacing = 6
+        row.preferred_height = px(26)
+
+        label = Label()
+        label.text = label_text
+        label.color = (0.58, 0.64, 0.72, 1.0)
+        label.preferred_width = px(label_width)
+        row.add_child(label)
+
+        spin = SpinBox()
+        spin.decimals = decimals
+        spin.step = step
+        spin.min_value = min_value
+        spin.max_value = max_value
+        spin.preferred_height = px(24)
+        spin.stretch = True
+        spin.value = float(params.get(key, default))
+        spin.on_changed = self._on_primitive_param_changed
+        self.primitive_param_inputs[key] = spin
+        row.add_child(spin)
+        return row
+
+    def _append_primitive_bool_row(self, body: VStack, key: str, label_text: str, params: dict, default: bool) -> None:
+        row = HStack()
+        row.spacing = 4
+        row.preferred_height = px(24)
+        checkbox = Checkbox()
+        checkbox.text = label_text
+        checkbox.checked = bool(params.get(key, default))
+        checkbox.on_changed = self._on_primitive_bool_changed
+        self.primitive_bool_inputs[key] = checkbox
+        row.add_child(checkbox)
+        body.add_child(row)
 
     def _build_plane_params_panel(self) -> Panel:
         for child in self.plane_params_panel.children[:]:
@@ -400,9 +660,14 @@ class CadApp:
         body.spacing = 5
 
         title = Label()
-        title.text = f"Contour: {contour.name}"
+        title.text = f"{_contour_role_label(contour.role)}: {contour.name}"
         title.color = (0.84, 0.88, 0.94, 1.0)
         body.add_child(title)
+
+        role_label = Label()
+        role_label.text = self._contour_role_text(contour)
+        role_label.color = (0.58, 0.64, 0.72, 1.0)
+        body.add_child(role_label)
 
         hint = Label()
         hint.text = "Local points"
@@ -559,10 +824,48 @@ class CadApp:
         self.request_preview_rebuild()
         log.info("[CsgCad] mode=draw_sketch")
 
+    def start_add_outer_contour(self) -> None:
+        sketch = self._selected_sketch()
+        if sketch is None:
+            log.error("[CsgCad] cannot add outer contour: select a sketch")
+            return
+        self.mode = "draw_sketch"
+        self.draft = start_sketch_draft(
+            sketch_id=sketch.id,
+            plane=sketch.plane,
+            contour_role=CONTOUR_ROLE_OUTER,
+        )
+        self._refresh_labels()
+        self.request_preview_rebuild()
+        self._set_status(f"Adding outer contour to {sketch.name}")
+        log.info(f"[CsgCad] add outer contour started sketch='{sketch.id}'")
+
+    def start_add_hole_contour(self) -> None:
+        contour_ref = self._selected_contour_ref()
+        if contour_ref is None:
+            log.error("[CsgCad] cannot add hole contour: select an outer contour")
+            return
+        sketch, contour = contour_ref
+        if contour.role != CONTOUR_ROLE_OUTER:
+            log.error(f"[CsgCad] cannot add hole contour: selected contour is not outer '{contour.id}'")
+            return
+        self.mode = "draw_sketch"
+        self.draft = start_sketch_draft(
+            sketch_id=sketch.id,
+            plane=sketch.plane,
+            contour_role=CONTOUR_ROLE_HOLE,
+            parent_contour_id=contour.id,
+        )
+        self._refresh_labels()
+        self.request_preview_rebuild()
+        self._set_status(f"Adding hole to {contour.name}")
+        log.info(f"[CsgCad] add hole contour started sketch='{sketch.id}' outer='{contour.id}'")
+
     def close_contour(self) -> None:
         result = close_draft_contour(self.document, self.draft)
         if not result.success:
             return
+        self.mode = "idle"
         self.selected_node_data = result.selection
         self.refresh_tree()
         self.request_preview_rebuild()
@@ -599,6 +902,20 @@ class CadApp:
         self._set_status(f"{kind.capitalize()} added")
         log.info(f"[CsgCad] boolean added kind='{kind}' id='{operation_id}'")
 
+    def add_primitive(self, kind: str) -> None:
+        result = add_primitive_operation(self.document, kind)
+        if not result.success:
+            return
+        self.selected_node_data = result.selection
+        self.refresh_tree()
+        self.fit_camera()
+        self.request_preview_rebuild()
+        operation_id = ""
+        if result.operation is not None:
+            operation_id = result.operation.id
+        self._set_status(f"{_primitive_kind_label(kind)} added")
+        log.info(f"[CsgCad] primitive added kind='{kind}' id='{operation_id}'")
+
     def fit_camera(self) -> None:
         lo, hi = document_bounds(self.document)
         self.camera.fit_bounds(lo, hi)
@@ -623,7 +940,9 @@ class CadApp:
             self.tree.add_root(self._to_tree_node(root))
         self._restore_tree_selection(self.tree.root_nodes)
         self._refresh_labels()
+        self._rebuild_context_actions_panel()
         self._refresh_operation_params_panel()
+        self._refresh_primitive_params_panel()
         self._refresh_plane_params_panel()
         self._refresh_contour_params_panel()
         if self.tree._ui is not None:
@@ -662,10 +981,42 @@ class CadApp:
     def _on_tree_select(self, node: TreeNode) -> None:
         self.selected_node_data = node.data
         self._refresh_labels()
+        self._rebuild_context_actions_panel()
         self._refresh_operation_params_panel()
+        self._refresh_primitive_params_panel()
         self._refresh_plane_params_panel()
         self._refresh_contour_params_panel()
         self.request_preview_rebuild()
+
+    def _on_scene_mouse_down(self, x: float, y: float, width: int, height: int) -> bool:
+        drag = self._pick_selected_contour_point(x, y, width, height)
+        if drag is None:
+            return False
+        self._contour_point_drag = drag
+        self._set_status(f"Dragging contour point P{drag.point_index}")
+        log.info(
+            "[CsgCad] contour point drag started "
+            f"contour='{drag.contour_id}' index={drag.point_index}"
+        )
+        return True
+
+    def _on_scene_mouse_move(self, x: float, y: float, width: int, height: int) -> bool:
+        if self._contour_point_drag is None:
+            return False
+        return self._drag_contour_point_to_screen(x, y, width, height)
+
+    def _on_scene_mouse_up(self, x: float, y: float, width: int, height: int) -> bool:
+        drag = self._contour_point_drag
+        if drag is None:
+            return False
+        self._drag_contour_point_to_screen(x, y, width, height)
+        self._contour_point_drag = None
+        self._set_status(f"Contour point P{drag.point_index} moved")
+        log.info(
+            "[CsgCad] contour point drag finished "
+            f"contour='{drag.contour_id}' index={drag.point_index}"
+        )
+        return True
 
     def _on_scene_click(self, x: float, y: float, width: int, height: int) -> bool:
         if self.mode != "draw_sketch":
@@ -693,6 +1044,75 @@ class CadApp:
             f"count={len(self.draft.points)}"
         )
         return True
+
+    def _pick_selected_contour_point(
+        self,
+        x: float,
+        y: float,
+        width: int,
+        height: int,
+    ) -> ContourPointDrag | None:
+        contour_ref = self._selected_contour_ref()
+        if contour_ref is None:
+            return None
+        sketch, contour = contour_ref
+        best_index = -1
+        best_distance_sq = _CONTOUR_POINT_HIT_RADIUS_PX * _CONTOUR_POINT_HIT_RADIUS_PX
+        for index, point in enumerate(sketch.contour_points(contour)):
+            screen_point = self._project_world_to_screen(point, width, height)
+            if screen_point is None:
+                continue
+            dx = screen_point[0] - float(x)
+            dy = screen_point[1] - float(y)
+            distance_sq = dx * dx + dy * dy
+            if distance_sq <= best_distance_sq:
+                best_distance_sq = distance_sq
+                best_index = index
+        if best_index < 0:
+            return None
+        return ContourPointDrag(contour.id, best_index)
+
+    def _drag_contour_point_to_screen(self, x: float, y: float, width: int, height: int) -> bool:
+        drag = self._contour_point_drag
+        if drag is None:
+            return False
+        contour_ref = self._contour_ref_by_id(drag.contour_id)
+        if contour_ref is None:
+            log.error(f"[CsgCad] cannot drag contour point: contour not found '{drag.contour_id}'")
+            self._contour_point_drag = None
+            return True
+        sketch, contour = contour_ref
+        ray_origin, ray_direction = self.camera.screen_ray(x, y, width, height)
+        point = ray_plane_intersection(ray_origin, ray_direction, sketch.plane)
+        if point is None:
+            log.error(
+                "[CsgCad] cannot drag contour point: "
+                f"ray does not hit sketch plane contour='{contour.id}' index={drag.point_index}"
+            )
+            return True
+        local_point = sketch.plane.project(point)
+        if not set_contour_point(self.document, contour.id, drag.point_index, local_point):
+            return True
+        self._sync_contour_point_inputs(drag.point_index, local_point)
+        self.request_preview_rebuild()
+        return True
+
+    def _project_world_to_screen(
+        self,
+        point: tuple[float, float, float],
+        width: int,
+        height: int,
+    ) -> tuple[float, float] | None:
+        mvp = self.camera.view_projection(width, height)
+        clip = mvp @ np.array((point[0], point[1], point[2], 1.0), dtype=np.float32)
+        w = float(clip[3])
+        if w <= 1.0e-8:
+            return None
+        ndc = clip[:3] / w
+        return (
+            float((ndc[0] + 1.0) * 0.5 * float(width)),
+            float((ndc[1] + 1.0) * 0.5 * float(height)),
+        )
 
     def _refresh_labels(self) -> None:
         if self.current_path is None:
@@ -737,6 +1157,14 @@ class CadApp:
         self._syncing_operation_params = False
         self._set_operation_params_visible(True)
 
+    def _refresh_primitive_params_panel(self) -> None:
+        operation = self._selected_primitive_operation()
+        if operation is None:
+            self._set_primitive_params_visible(False)
+            return
+        self._rebuild_primitive_params_panel(operation)
+        self._set_primitive_params_visible(True)
+
     def _refresh_plane_params_panel(self) -> None:
         sketch = self._selected_plane_sketch()
         if sketch is None:
@@ -760,10 +1188,26 @@ class CadApp:
         self._rebuild_contour_params_panel(contour)
         self._set_contour_params_visible(True)
 
+    def _contour_role_text(self, contour) -> str:
+        if contour.role != CONTOUR_ROLE_HOLE:
+            return "Role: Outer"
+        parent_ref = self._contour_ref_by_id(str(contour.parent_contour_id or ""))
+        if parent_ref is None:
+            return f"Role: Hole; parent: <missing {contour.parent_contour_id}>"
+        _sketch, parent = parent_ref
+        return f"Role: Hole; parent: {parent.name}"
+
     def _set_operation_params_visible(self, visible: bool) -> None:
         if self.operation_params_panel.visible == visible:
             return
         self.operation_params_panel.visible = visible
+        if self.ui is not None:
+            self.ui.request_layout()
+
+    def _set_primitive_params_visible(self, visible: bool) -> None:
+        if self.primitive_params_panel.visible == visible:
+            return
+        self.primitive_params_panel.visible = visible
         if self.ui is not None:
             self.ui.request_layout()
 
@@ -781,6 +1225,13 @@ class CadApp:
         if self.ui is not None:
             self.ui.request_layout()
 
+    def _set_context_actions_visible(self, visible: bool) -> None:
+        if self.context_actions_panel.visible == visible:
+            return
+        self.context_actions_panel.visible = visible
+        if self.ui is not None:
+            self.ui.request_layout()
+
     def _selected_operation(self):
         if self.selected_node_data is None:
             return None
@@ -788,6 +1239,20 @@ class CadApp:
         if kind != "operation":
             return None
         return self.document.find_operation(item_id)
+
+    def _selected_primitive_operation(self):
+        operation = self._selected_operation()
+        if operation is None or operation.kind != PRIMITIVE_OPERATION_KIND:
+            return None
+        return operation
+
+    def _selected_sketch(self):
+        if self.selected_node_data is None:
+            return None
+        kind, item_id = self.selected_node_data
+        if kind != "sketch":
+            return None
+        return self.document.find_sketch(item_id)
 
     def _selected_plane_sketch(self):
         if self.selected_node_data is None:
@@ -803,9 +1268,12 @@ class CadApp:
         kind, item_id = self.selected_node_data
         if kind != "contour":
             return None
+        return self._contour_ref_by_id(item_id)
+
+    def _contour_ref_by_id(self, contour_id: str):
         for sketch in self.document.items:
             for contour in sketch.contours:
-                if contour.id == item_id:
+                if contour.id == contour_id:
                     return (sketch, contour)
         return None
 
@@ -829,6 +1297,48 @@ class CadApp:
             "[CsgCad] extrude vector changed "
             f"operation='{operation.id}' vector=({vector[0]:.3f}, {vector[1]:.3f}, {vector[2]:.3f})"
         )
+
+    def _on_primitive_param_changed(self, _value: float) -> None:
+        if self._syncing_primitive_params:
+            return
+        self._apply_primitive_params_from_inputs()
+
+    def _on_primitive_bool_changed(self, _checked: bool) -> None:
+        if self._syncing_primitive_params:
+            return
+        self._apply_primitive_params_from_inputs()
+
+    def _apply_primitive_params_from_inputs(self) -> None:
+        operation = self._selected_primitive_operation()
+        if operation is None:
+            log.error("[CsgCad] cannot update primitive params: no primitive operation is selected")
+            return
+        params: dict = {}
+        for key, spin in self.primitive_param_inputs.items():
+            if "." in key:
+                continue
+            value = float(spin.value)
+            if key == "circular_segments":
+                params[key] = int(round(value))
+            else:
+                params[key] = value
+        for group in ("size", "center", "rotation"):
+            x_key = f"{group}.x"
+            y_key = f"{group}.y"
+            z_key = f"{group}.z"
+            if x_key in self.primitive_param_inputs and y_key in self.primitive_param_inputs and z_key in self.primitive_param_inputs:
+                params[group] = [
+                    float(self.primitive_param_inputs[x_key].value),
+                    float(self.primitive_param_inputs[y_key].value),
+                    float(self.primitive_param_inputs[z_key].value),
+                ]
+        for key, checkbox in self.primitive_bool_inputs.items():
+            params[key] = bool(checkbox.checked)
+        if not set_primitive_params(self.document, operation.id, params):
+            return
+        self.refresh_tree()
+        self.request_preview_rebuild()
+        log.info(f"[CsgCad] primitive params changed operation='{operation.id}' params={params}")
 
     def _on_plane_param_changed(self, _value: float) -> None:
         if self._syncing_plane_params:
@@ -878,6 +1388,18 @@ class CadApp:
             "[CsgCad] contour point changed "
             f"contour='{contour.id}' index={point_index} point=({point[0]:.3f}, {point[1]:.3f})"
         )
+
+    def _sync_contour_point_inputs(self, point_index: int, point: tuple[float, float]) -> None:
+        x_key = (point_index, "x")
+        y_key = (point_index, "y")
+        if x_key not in self.contour_point_inputs or y_key not in self.contour_point_inputs:
+            return
+        self._syncing_contour_params = True
+        try:
+            self.contour_point_inputs[x_key].value = point[0]
+            self.contour_point_inputs[y_key].value = point[1]
+        finally:
+            self._syncing_contour_params = False
 
     def _set_plane_input_vec(self, group: str, value: tuple[float, float, float]) -> None:
         self.plane_inputs[f"{group}.x"].value = value[0]
@@ -1010,6 +1532,32 @@ def _translate_key(scancode: int) -> Key:
         except ValueError:
             return Key.UNKNOWN
     return Key.UNKNOWN
+
+
+def _contour_role_label(role: str) -> str:
+    if role == CONTOUR_ROLE_HOLE:
+        return "Hole"
+    return "Outer"
+
+
+def _primitive_kind_label(kind: str) -> str:
+    if kind == "box":
+        return "Box"
+    if kind == "sphere":
+        return "Sphere"
+    if kind == "cylinder":
+        return "Cylinder"
+    if kind == "cone":
+        return "Cone"
+    return "Primitive"
+
+
+def _param_vec3(params: dict, key: str, default: tuple[float, float, float]) -> tuple[float, float, float]:
+    value = params.get(key, default)
+    try:
+        return (float(value[0]), float(value[1]), float(value[2]))
+    except Exception:
+        return default
 
 
 def _translate_mods(sdl_mods: int) -> int:

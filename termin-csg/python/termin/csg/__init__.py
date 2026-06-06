@@ -20,8 +20,13 @@ from termin.csg._csg_native import (  # noqa: E402
 )
 from termin.csg._csg_native import _extrude_pairs, _extrude_points  # noqa: E402
 from termin.csg.procedural_document import (  # noqa: E402
+    CONTOUR_ROLE_HOLE,
+    CONTOUR_ROLE_OUTER,
+    CONTOUR_ROLES,
     ContourDocument,
     OperationDocument,
+    PRIMITIVE_KINDS,
+    PRIMITIVE_OPERATION_KIND,
     ProceduralMeshDocument,
     ProceduralPlane,
     SketchItemDocument,
@@ -63,7 +68,12 @@ def extrude(outer, height, holes=None):
 __all__ = [
     "Point2",
     "ContourDocument",
+    "CONTOUR_ROLE_HOLE",
+    "CONTOUR_ROLE_OUTER",
+    "CONTOUR_ROLES",
     "OperationDocument",
+    "PRIMITIVE_KINDS",
+    "PRIMITIVE_OPERATION_KIND",
     "ProceduralMeshDocument",
     "ProceduralPlane",
     "SketchItemDocument",

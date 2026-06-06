@@ -11,6 +11,11 @@ from tcbase import log
 Vec2Data = tuple[float, float]
 Vec3Data = tuple[float, float, float]
 BOOLEAN_OPERATION_KINDS = {"union", "subtract", "intersect"}
+CONTOUR_ROLE_OUTER = "outer"
+CONTOUR_ROLE_HOLE = "hole"
+CONTOUR_ROLES = {CONTOUR_ROLE_OUTER, CONTOUR_ROLE_HOLE}
+PRIMITIVE_OPERATION_KIND = "primitive"
+PRIMITIVE_KINDS = {"box", "sphere", "cylinder", "cone"}
 
 
 def _new_id(prefix: str) -> str:
@@ -62,6 +67,75 @@ def _as_vec2(value) -> Vec2Data:
 
 def _v_list(value: Vec3Data) -> list[float]:
     return [float(value[0]), float(value[1]), float(value[2])]
+
+
+def _validated_contour_role(role: str) -> str:
+    contour_role = str(role)
+    if contour_role not in CONTOUR_ROLES:
+        log.error(f"[ProceduralMeshDocument] invalid contour role '{role}', using outer")
+        return CONTOUR_ROLE_OUTER
+    return contour_role
+
+
+def _validated_primitive_kind(kind: str) -> str:
+    primitive_kind = str(kind)
+    if primitive_kind not in PRIMITIVE_KINDS:
+        log.error(f"[ProceduralMeshDocument] invalid primitive kind '{kind}'")
+        return ""
+    return primitive_kind
+
+
+def _primitive_defaults(kind: str) -> dict:
+    transform = {
+        "center": [0.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+    }
+    if kind == "box":
+        return {
+            "primitive_kind": kind,
+            "size": [1.0, 1.0, 1.0],
+            "centered": True,
+            **transform,
+        }
+    if kind == "sphere":
+        return {
+            "primitive_kind": kind,
+            "radius": 0.5,
+            "circular_segments": 32,
+            **transform,
+        }
+    if kind == "cylinder":
+        return {
+            "primitive_kind": kind,
+            "radius": 0.5,
+            "height": 1.0,
+            "circular_segments": 32,
+            "centered": True,
+            **transform,
+        }
+    if kind == "cone":
+        return {
+            "primitive_kind": kind,
+            "radius_low": 0.5,
+            "radius_high": 0.0,
+            "height": 1.0,
+            "circular_segments": 32,
+            "centered": True,
+            **transform,
+        }
+    return {}
+
+
+def _primitive_label(kind: str) -> str:
+    if kind == "box":
+        return "Box"
+    if kind == "sphere":
+        return "Sphere"
+    if kind == "cylinder":
+        return "Cylinder"
+    if kind == "cone":
+        return "Cone"
+    return kind.capitalize()
 
 
 @dataclass
@@ -122,20 +196,32 @@ class ContourDocument:
     id: str = field(default_factory=lambda: _new_id("contour"))
     name: str = "Contour"
     points: list[Vec2Data] = field(default_factory=list)
+    role: str = CONTOUR_ROLE_OUTER
+    parent_contour_id: str | None = None
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
             "points": [[p[0], p[1]] for p in self.points],
+            "role": self.role,
+            "parent_contour_id": self.parent_contour_id,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "ContourDocument":
+        role = str(data.get("role", CONTOUR_ROLE_OUTER))
+        if role not in CONTOUR_ROLES:
+            log.error(f"[ProceduralMeshDocument] invalid contour role '{role}', using outer")
+            role = CONTOUR_ROLE_OUTER
+        parent_value = data.get("parent_contour_id")
+        parent_contour_id = None if parent_value is None else str(parent_value)
         return cls(
             id=str(data.get("id", _new_id("contour"))),
             name=str(data.get("name", "Contour")),
             points=[_as_vec2(p) for p in data.get("points", [])],
+            role=role,
+            parent_contour_id=parent_contour_id,
         )
 
 
@@ -146,19 +232,54 @@ class SketchItemDocument:
     plane: ProceduralPlane = field(default_factory=ProceduralPlane)
     contours: list[ContourDocument] = field(default_factory=list)
 
-    def add_contour_from_points(self, points: list[Vec3Data]) -> ContourDocument | None:
+    def add_contour_from_points(
+        self,
+        points: list[Vec3Data],
+        role: str = CONTOUR_ROLE_OUTER,
+        parent_contour_id: str | None = None,
+    ) -> ContourDocument | None:
         if len(points) < 3:
             log.error(f"[ProceduralMeshDocument] contour needs at least 3 points, got {len(points)}")
             return None
+        contour_role = _validated_contour_role(role)
+        if contour_role == CONTOUR_ROLE_OUTER:
+            parent_id = None
+        else:
+            parent_id = str(parent_contour_id) if parent_contour_id else ""
+            parent = self.find_contour(parent_id)
+            if parent is None or parent.role != CONTOUR_ROLE_OUTER:
+                log.error(
+                    "[ProceduralMeshDocument] cannot create hole contour: "
+                    f"outer parent not found '{parent_id}'"
+                )
+                return None
         contour = ContourDocument(
             name=f"Contour {len(self.contours) + 1}",
             points=[self.plane.project(point) for point in points],
+            role=contour_role,
+            parent_contour_id=parent_id if contour_role == CONTOUR_ROLE_HOLE else None,
         )
         self.contours.append(contour)
         return contour
 
     def contour_points(self, contour: ContourDocument) -> list[Vec3Data]:
         return [self.plane.unproject(point) for point in contour.points]
+
+    def find_contour(self, contour_id: str) -> ContourDocument | None:
+        for contour in self.contours:
+            if contour.id == contour_id:
+                return contour
+        return None
+
+    def outer_contours(self) -> list[ContourDocument]:
+        return [contour for contour in self.contours if contour.role == CONTOUR_ROLE_OUTER]
+
+    def hole_contours_for_outer(self, outer_contour_id: str) -> list[ContourDocument]:
+        return [
+            contour
+            for contour in self.contours
+            if contour.role == CONTOUR_ROLE_HOLE and contour.parent_contour_id == outer_contour_id
+        ]
 
     def to_dict(self) -> dict:
         return {
@@ -223,16 +344,31 @@ class ProceduralMeshDocument:
         self,
         points: list[Vec3Data],
         plane: ProceduralPlane,
+        role: str = CONTOUR_ROLE_OUTER,
+        parent_contour_id: str | None = None,
     ) -> ContourDocument | None:
         sketch = SketchItemDocument(
             name=f"Sketch {len(self.items) + 1}",
             plane=plane,
         )
-        contour = sketch.add_contour_from_points(points)
+        contour = sketch.add_contour_from_points(points, role=role, parent_contour_id=parent_contour_id)
         if contour is None:
             return None
         self.items.append(sketch)
         return contour
+
+    def add_contour_to_sketch_from_points(
+        self,
+        sketch_id: str,
+        points: list[Vec3Data],
+        role: str = CONTOUR_ROLE_OUTER,
+        parent_contour_id: str | None = None,
+    ) -> ContourDocument | None:
+        sketch = self.find_sketch(sketch_id)
+        if sketch is None:
+            log.error(f"[ProceduralMeshDocument] cannot add contour: sketch not found '{sketch_id}'")
+            return None
+        return sketch.add_contour_from_points(points, role=role, parent_contour_id=parent_contour_id)
 
     def find_sketch_id_for_contour(self, contour_id: str) -> str:
         for item in self.items:
@@ -240,6 +376,13 @@ class ProceduralMeshDocument:
                 if contour.id == contour_id:
                     return item.id
         return ""
+
+    def find_contour_ref(self, contour_id: str) -> tuple[SketchItemDocument, ContourDocument] | None:
+        for item in self.items:
+            for contour in item.contours:
+                if contour.id == contour_id:
+                    return (item, contour)
+        return None
 
     def contour_count(self) -> int:
         return sum(len(item.contours) for item in self.items)
@@ -315,9 +458,9 @@ class ProceduralMeshDocument:
         if sketch is None:
             log.error(f"[ProceduralMeshDocument] cannot create extrude operation: sketch not found '{sketch_id}'")
             return None
-        contour_ids = [contour.id for contour in sketch.contours]
+        contour_ids = [contour.id for contour in sketch.outer_contours()]
         if not contour_ids:
-            log.error(f"[ProceduralMeshDocument] cannot create extrude operation: sketch has no contours '{sketch_id}'")
+            log.error(f"[ProceduralMeshDocument] cannot create extrude operation: sketch has no outer contours '{sketch_id}'")
             return None
         extrusion_vector = _v_mul(sketch.plane.normal, float(height)) if vector is None else _as_vec3(vector)
         operation = self.add_extrude_operation(
@@ -328,6 +471,28 @@ class ProceduralMeshDocument:
         if operation is None:
             return None
         operation.params["source_sketch_id"] = sketch.id
+        return operation
+
+    def add_primitive_operation(
+        self,
+        kind: str,
+        params: dict | None = None,
+    ) -> OperationDocument | None:
+        primitive_kind = _validated_primitive_kind(kind)
+        if not primitive_kind:
+            return None
+        operation_params = _primitive_defaults(primitive_kind)
+        if params:
+            operation_params.update(dict(params))
+            operation_params["primitive_kind"] = primitive_kind
+        label = _primitive_label(primitive_kind)
+        operation = OperationDocument(
+            name=f"{label} {len(self.operations) + 1}",
+            kind=PRIMITIVE_OPERATION_KIND,
+            inputs=[],
+            params=operation_params,
+        )
+        self.operations.append(operation)
         return operation
 
     def add_boolean_operation(
@@ -387,7 +552,12 @@ class ProceduralMeshDocument:
 __all__ = [
     "ContourDocument",
     "BOOLEAN_OPERATION_KINDS",
+    "CONTOUR_ROLE_HOLE",
+    "CONTOUR_ROLE_OUTER",
+    "CONTOUR_ROLES",
     "OperationDocument",
+    "PRIMITIVE_KINDS",
+    "PRIMITIVE_OPERATION_KIND",
     "ProceduralMeshDocument",
     "ProceduralPlane",
     "SketchItemDocument",

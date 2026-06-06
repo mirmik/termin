@@ -9,8 +9,27 @@ import numpy as np
 from tcbase import log
 from tmesh import Mesh3
 
-from termin.csg._csg_native import Solid, _extrude_pairs, from_mesh3, intersect, subtract, to_mesh3, unite
-from termin.csg.procedural_document import BOOLEAN_OPERATION_KINDS, ProceduralMeshDocument, SketchItemDocument
+from termin.csg._csg_native import (
+    Solid,
+    _extrude_pairs,
+    from_mesh3,
+    intersect,
+    make_box,
+    make_cone,
+    make_cylinder,
+    make_sphere,
+    subtract,
+    to_mesh3,
+    unite,
+)
+from termin.csg.procedural_document import (
+    BOOLEAN_OPERATION_KINDS,
+    CONTOUR_ROLE_HOLE,
+    CONTOUR_ROLE_OUTER,
+    PRIMITIVE_OPERATION_KIND,
+    ProceduralMeshDocument,
+    SketchItemDocument,
+)
 
 Vec3Data = tuple[float, float, float]
 PointTransform = Callable[[Vec3Data], Vec3Data]
@@ -39,6 +58,8 @@ def evaluate_document(document: ProceduralMeshDocument) -> list[EvaluatedSolid]:
             continue
         if operation.kind == "extrude":
             operation_results[operation.id] = _evaluate_extrude(document, operation)
+        elif operation.kind == PRIMITIVE_OPERATION_KIND:
+            operation_results[operation.id] = _evaluate_primitive(operation)
         elif operation.kind in BOOLEAN_OPERATION_KINDS:
             operation_results[operation.id] = _evaluate_boolean(operation, operation_results)
         else:
@@ -54,6 +75,63 @@ def evaluate_document(document: ProceduralMeshDocument) -> list[EvaluatedSolid]:
             continue
         results.extend(operation_results.get(operation.id, []))
     return results
+
+
+def _evaluate_primitive(operation) -> list[EvaluatedSolid]:
+    primitive_kind = str(operation.params.get("primitive_kind", ""))
+    try:
+        if primitive_kind == "box":
+            size = _param_vec3(operation.params, "size", (1.0, 1.0, 1.0))
+            solid = make_box(size[0], size[1], size[2], _param_bool(operation.params, "centered", True))
+        elif primitive_kind == "sphere":
+            solid = make_sphere(
+                _param_float(operation.params, "radius", 0.5),
+                _param_int(operation.params, "circular_segments", 32),
+            )
+        elif primitive_kind == "cylinder":
+            solid = make_cylinder(
+                _param_float(operation.params, "radius", 0.5),
+                _param_float(operation.params, "height", 1.0),
+                _param_int(operation.params, "circular_segments", 32),
+                _param_bool(operation.params, "centered", True),
+            )
+        elif primitive_kind == "cone":
+            solid = make_cone(
+                _param_float(operation.params, "radius_low", 0.5),
+                _param_float(operation.params, "radius_high", 0.0),
+                _param_float(operation.params, "height", 1.0),
+                _param_int(operation.params, "circular_segments", 32),
+                _param_bool(operation.params, "centered", True),
+            )
+        else:
+            log.error(
+                "[ProceduralMeshDocument] cannot evaluate primitive operation: "
+                f"unknown primitive kind '{primitive_kind}' operation='{operation.id}'"
+            )
+            return []
+        rotation = _param_vec3(operation.params, "rotation", (0.0, 0.0, 0.0))
+        center = _param_vec3(operation.params, "center", (0.0, 0.0, 0.0))
+        solid = solid.rotated(rotation[0], rotation[1], rotation[2]).translated(center[0], center[1], center[2])
+    except Exception as e:
+        log.error(
+            "[ProceduralMeshDocument] failed to evaluate primitive operation "
+            f"operation='{operation.id}' kind='{primitive_kind}': {e}"
+        )
+        return []
+
+    if solid.status != "No Error":
+        log.error(
+            "[ProceduralMeshDocument] primitive operation returned invalid solid "
+            f"operation='{operation.id}' kind='{primitive_kind}' status='{solid.status}'"
+        )
+    return [
+        EvaluatedSolid(
+            operation_id=operation.id,
+            contour_id="",
+            solid=solid,
+            point_transform=_identity_point_transform,
+        )
+    ]
 
 
 def _evaluate_extrude(document: ProceduralMeshDocument, operation) -> list[EvaluatedSolid]:
@@ -78,10 +156,19 @@ def _evaluate_extrude(document: ProceduralMeshDocument, operation) -> list[Evalu
     point_transform = sketch_extrude_point_transform(sketch, extrusion_vector, extrusion_length)
     results: list[EvaluatedSolid] = []
     for contour in sketch.contours:
+        if contour.role == CONTOUR_ROLE_HOLE:
+            continue
+        if contour.role != CONTOUR_ROLE_OUTER:
+            log.error(
+                "[ProceduralMeshDocument] cannot evaluate extrude operation: "
+                f"invalid contour role '{contour.role}' contour='{contour.id}'"
+            )
+            continue
         if contour.id not in operation.inputs:
             continue
+        holes = sketch.hole_contours_for_outer(contour.id)
         try:
-            solid = _extrude_pairs(contour.points, extrusion_length, [])
+            solid = _extrude_pairs(contour.points, extrusion_length, [hole.points for hole in holes])
         except Exception as e:
             log.error(
                 "[ProceduralMeshDocument] failed to evaluate extrude "
@@ -280,6 +367,38 @@ def sketch_extrude_point_transform(
 
 def _norm(value: Vec3Data) -> float:
     return (value[0] * value[0] + value[1] * value[1] + value[2] * value[2]) ** 0.5
+
+
+def _param_float(params: dict, key: str, default: float) -> float:
+    value = params.get(key, default)
+    try:
+        return float(value)
+    except Exception as e:
+        log.error(f"[ProceduralMeshDocument] invalid float parameter '{key}' value='{value}': {e}")
+        return float(default)
+
+
+def _param_int(params: dict, key: str, default: int) -> int:
+    value = params.get(key, default)
+    try:
+        return int(value)
+    except Exception as e:
+        log.error(f"[ProceduralMeshDocument] invalid integer parameter '{key}' value='{value}': {e}")
+        return int(default)
+
+
+def _param_bool(params: dict, key: str, default: bool) -> bool:
+    value = params.get(key, default)
+    return bool(value)
+
+
+def _param_vec3(params: dict, key: str, default: Vec3Data) -> Vec3Data:
+    value = params.get(key, default)
+    try:
+        return (float(value[0]), float(value[1]), float(value[2]))
+    except Exception as e:
+        log.error(f"[ProceduralMeshDocument] invalid vec3 parameter '{key}' value='{value}': {e}")
+        return default
 
 
 __all__ = [

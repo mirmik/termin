@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from termin.csg.document_eval import extrude_vector_for_operation
-from termin.csg.procedural_document import ProceduralMeshDocument
+from termin.csg.procedural_document import (
+    CONTOUR_ROLE_HOLE,
+    CONTOUR_ROLE_OUTER,
+    PRIMITIVE_OPERATION_KIND,
+    ProceduralMeshDocument,
+)
 
 
 @dataclass
@@ -60,6 +65,15 @@ def _operation_node(document: ProceduralMeshDocument, operation, visited: set[st
             node.children.append(_sketch_node(sketch))
         return node
 
+    if operation.kind == PRIMITIVE_OPERATION_KIND:
+        primitive_kind = str(operation.params.get("primitive_kind", ""))
+        node = DocumentTreeNode(
+            text=f"[{_primitive_label(primitive_kind)}] {operation.name}{_primitive_param_text(operation)}",
+            kind="operation",
+            item_id=operation.id,
+        )
+        return node
+
     if operation.kind in ("union", "subtract", "intersect"):
         node = DocumentTreeNode(
             text=f"[{_operation_label(operation.kind)}] {operation.name} inputs={len(operation.inputs)}",
@@ -93,6 +107,39 @@ def _operation_label(kind: str) -> str:
     return kind
 
 
+def _primitive_label(kind: str) -> str:
+    if kind == "box":
+        return "Box"
+    if kind == "sphere":
+        return "Sphere"
+    if kind == "cylinder":
+        return "Cylinder"
+    if kind == "cone":
+        return "Cone"
+    return "Primitive"
+
+
+def _primitive_param_text(operation) -> str:
+    params = operation.params
+    kind = str(params.get("primitive_kind", ""))
+    if kind == "box":
+        return f" size={_format_vec3(_param_vec3(params, 'size', (1.0, 1.0, 1.0)))}"
+    if kind == "sphere":
+        return f" radius={_param_float(params, 'radius', 0.5):.2f}"
+    if kind == "cylinder":
+        return (
+            f" radius={_param_float(params, 'radius', 0.5):.2f}"
+            f" height={_param_float(params, 'height', 1.0):.2f}"
+        )
+    if kind == "cone":
+        return (
+            f" r0={_param_float(params, 'radius_low', 0.5):.2f}"
+            f" r1={_param_float(params, 'radius_high', 0.0):.2f}"
+            f" height={_param_float(params, 'height', 1.0):.2f}"
+        )
+    return ""
+
+
 def _sketch_node(sketch) -> DocumentTreeNode:
     node = DocumentTreeNode(
         text=f"[Sketch] {sketch.name} {_short_id(sketch.id)} contours={len(sketch.contours)}",
@@ -111,14 +158,47 @@ def _sketch_node(sketch) -> DocumentTreeNode:
         )
     )
     for contour in sketch.contours:
+        if contour.role == CONTOUR_ROLE_OUTER:
+            node.children.append(_contour_node(sketch, contour))
+    for contour in sketch.contours:
+        if contour.role == CONTOUR_ROLE_HOLE and _hole_parent_outer(sketch, contour) is None:
+            node.children.append(_orphan_hole_node(contour))
+    return node
+
+
+def _contour_node(sketch, contour) -> DocumentTreeNode:
+    node = DocumentTreeNode(
+        text=f"[Outer] {contour.name} {_short_id(contour.id)} points={len(contour.points)}",
+        kind="contour",
+        item_id=contour.id,
+    )
+    for hole in sketch.hole_contours_for_outer(contour.id):
         node.children.append(
             DocumentTreeNode(
-                text=f"[Contour] {contour.name} {_short_id(contour.id)} points={len(contour.points)}",
+                text=f"[Hole] {hole.name} {_short_id(hole.id)} points={len(hole.points)}",
                 kind="contour",
-                item_id=contour.id,
+                item_id=hole.id,
             )
         )
     return node
+
+
+def _orphan_hole_node(contour) -> DocumentTreeNode:
+    return DocumentTreeNode(
+        text=(
+            f"[Hole: missing outer] {contour.name} {_short_id(contour.id)} "
+            f"parent={_short_id(str(contour.parent_contour_id or ''))} points={len(contour.points)}"
+        ),
+        kind="contour",
+        item_id=contour.id,
+    )
+
+
+def _hole_parent_outer(sketch, contour):
+    parent = sketch.find_contour(str(contour.parent_contour_id or ""))
+    if parent is None or parent.role != CONTOUR_ROLE_OUTER:
+        return None
+    return parent
 
 
 def _short_id(value: str) -> str:
@@ -129,6 +209,21 @@ def _short_id(value: str) -> str:
 
 def _format_vec3(value: tuple[float, float, float]) -> str:
     return f"({value[0]:.2f},{value[1]:.2f},{value[2]:.2f})"
+
+
+def _param_float(params: dict, key: str, default: float) -> float:
+    try:
+        return float(params.get(key, default))
+    except Exception:
+        return float(default)
+
+
+def _param_vec3(params: dict, key: str, default: tuple[float, float, float]) -> tuple[float, float, float]:
+    value = params.get(key, default)
+    try:
+        return (float(value[0]), float(value[1]), float(value[2]))
+    except Exception:
+        return default
 
 
 __all__ = [
