@@ -140,6 +140,33 @@ def add_extrude_for_selection(
     return DocumentEditResult(True, ("operation", operation.id), operation=operation)
 
 
+def selected_operation_id(
+    document: ProceduralMeshDocument,
+    selection: SelectionData | None,
+) -> str:
+    if selection is not None and selection[0] == "operation":
+        return selection[1]
+    for operation in reversed(document.operations):
+        if operation.enabled:
+            return operation.id
+    return ""
+
+
+def add_boolean_for_selection(
+    document: ProceduralMeshDocument,
+    selection: SelectionData | None,
+    kind: str,
+) -> DocumentEditResult:
+    input_ids = _boolean_input_ids_for_selection(document, selection)
+    if len(input_ids) < 2:
+        log.error("[CsgDocumentEdit] cannot add boolean operation: select an operation with a previous operation")
+        return DocumentEditResult(False)
+    operation = document.add_boolean_operation(kind, input_ids)
+    if operation is None:
+        return DocumentEditResult(False)
+    return DocumentEditResult(True, ("operation", operation.id), operation=operation)
+
+
 def set_extrude_vector(
     document: ProceduralMeshDocument,
     operation_id: str,
@@ -159,16 +186,73 @@ def set_extrude_vector(
     return True
 
 
+def set_sketch_plane(
+    document: ProceduralMeshDocument,
+    sketch_id: str,
+    plane: ProceduralPlane,
+) -> bool:
+    sketch = document.find_sketch(sketch_id)
+    if sketch is None:
+        log.error(f"[CsgDocumentEdit] cannot set sketch plane: sketch not found '{sketch_id}'")
+        return False
+    normal_len = _vec_norm(_vec_cross(plane.x_axis, plane.y_axis))
+    if normal_len < 1.0e-9:
+        log.error(f"[CsgDocumentEdit] cannot set sketch plane: x_axis and y_axis are collinear sketch='{sketch_id}'")
+        return False
+    sketch.plane = plane
+    return True
+
+
+def _boolean_input_ids_for_selection(
+    document: ProceduralMeshDocument,
+    selection: SelectionData | None,
+) -> list[str]:
+    enabled_operations = [operation for operation in document.operations if operation.enabled]
+    if len(enabled_operations) < 2:
+        return []
+    selected_id = selected_operation_id(document, selection)
+    if not selected_id:
+        return [enabled_operations[-2].id, enabled_operations[-1].id]
+
+    selected_index = -1
+    for index, operation in enumerate(enabled_operations):
+        if operation.id == selected_id:
+            selected_index = index
+            break
+    if selected_index < 0:
+        log.error(f"[CsgDocumentEdit] cannot add boolean operation: selected operation not found '{selected_id}'")
+        return []
+    if selected_index == 0:
+        log.error(f"[CsgDocumentEdit] cannot add boolean operation: selected operation has no previous input '{selected_id}'")
+        return []
+    return [enabled_operations[selected_index - 1].id, selected_id]
+
+
+def _vec_cross(a: Vec3Data, b: Vec3Data) -> Vec3Data:
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def _vec_norm(value: Vec3Data) -> float:
+    return (value[0] * value[0] + value[1] * value[1] + value[2] * value[2]) ** 0.5
+
+
 __all__ = [
     "DocumentEditResult",
     "DrawPointResult",
     "SelectionData",
     "SketchDraft",
+    "add_boolean_for_selection",
     "add_draft_point_from_ray",
     "add_extrude_for_selection",
     "clear_document",
     "close_draft_contour",
     "selected_sketch_id",
+    "selected_operation_id",
     "set_extrude_vector",
+    "set_sketch_plane",
     "start_sketch_draft",
 ]

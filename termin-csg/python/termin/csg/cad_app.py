@@ -29,12 +29,14 @@ from termin.csg.cad_viewer import CadViewportWidget, CsgSceneRenderer, document_
 from termin.csg.cad_state import CAD_STATE_FILTER, CadState, load_cad_state, save_cad_state
 from termin.csg.document_edit import (
     SketchDraft,
+    add_boolean_for_selection,
     add_draft_point_from_ray,
     add_extrude_for_selection,
     clear_document,
     close_draft_contour,
     selected_sketch_id,
     set_extrude_vector,
+    set_sketch_plane,
     start_sketch_draft,
 )
 from termin.csg.document_eval import extrude_vector_for_operation
@@ -83,6 +85,10 @@ class CadApp:
         self.operation_params_kind = Label()
         self.extrude_vector_inputs: dict[str, SpinBox] = {}
         self._syncing_operation_params = False
+        self.plane_params_panel = Panel()
+        self.plane_params_title = Label()
+        self.plane_inputs: dict[str, SpinBox] = {}
+        self._syncing_plane_params = False
         self.dirty = True
         self.preview_revision = 0
 
@@ -102,14 +108,22 @@ class CadApp:
         self.viewport.stretch = True
         self.viewport.on_changed = self.request_render
         self.viewport.on_scene_click = self._on_scene_click
-        content.add_child(self.viewport)
+
+        tree_panel = Panel()
+        tree_panel.preferred_width = px(320)
+        tree_panel.padding = 10
+        tree_panel.background_color = (0.12, 0.125, 0.14, 1.0)
+        tree_panel.add_child(self._build_tree_panel())
 
         side = Panel()
-        side.preferred_width = px(360)
+        side.preferred_width = px(340)
         side.padding = 10
         side.background_color = (0.14, 0.145, 0.16, 1.0)
         side.add_child(self._build_side_panel())
 
+        content.add_child(tree_panel)
+        content.add_child(Splitter(tree_panel, "right"))
+        content.add_child(self.viewport)
         content.add_child(Splitter(side, "left"))
         content.add_child(side)
         root.add_child(content)
@@ -185,6 +199,14 @@ class CadApp:
         row2.add_child(self._button("Clear", self.clear_document))
         root.add_child(row2)
 
+        row3 = HStack()
+        row3.spacing = 4
+        row3.preferred_height = px(28)
+        row3.add_child(self._button("Union", lambda: self.add_boolean_operation("union")))
+        row3.add_child(self._button("Subtract", lambda: self.add_boolean_operation("subtract")))
+        row3.add_child(self._button("Intersect", lambda: self.add_boolean_operation("intersect")))
+        root.add_child(row3)
+
         self.summary_label.color = (0.58, 0.64, 0.72, 1.0)
         root.add_child(self.summary_label)
 
@@ -196,6 +218,17 @@ class CadApp:
         root.add_child(self.status_label)
 
         root.add_child(self._build_operation_params_panel())
+        root.add_child(self._build_plane_params_panel())
+
+        return root
+
+    def _build_tree_panel(self):
+        root = VStack()
+        root.spacing = 6
+
+        title = Label()
+        title.text = "Document Tree"
+        root.add_child(title)
 
         self.tree.row_height = 22
         self.tree.indent_size = 22
@@ -264,6 +297,64 @@ class CadApp:
         spin.stretch = True
         spin.on_changed = self._on_extrude_vector_changed
         self.extrude_vector_inputs[axis] = spin
+        row.add_child(spin)
+        return row
+
+    def _build_plane_params_panel(self) -> Panel:
+        for child in self.plane_params_panel.children[:]:
+            self.plane_params_panel.remove_child(child)
+        self.plane_inputs.clear()
+
+        self.plane_params_panel.padding = 8
+        self.plane_params_panel.background_color = (0.10, 0.105, 0.12, 1.0)
+        self.plane_params_panel.visible = False
+
+        body = VStack()
+        body.spacing = 5
+
+        self.plane_params_title.text = "Plane"
+        self.plane_params_title.color = (0.84, 0.88, 0.94, 1.0)
+        body.add_child(self.plane_params_title)
+
+        separator = Separator()
+        separator.orientation = "horizontal"
+        body.add_child(separator)
+
+        for group, label_text in (
+            ("origin", "Origin"),
+            ("x_axis", "X axis"),
+            ("y_axis", "Y axis"),
+        ):
+            label = Label()
+            label.text = label_text
+            label.color = (0.70, 0.74, 0.80, 1.0)
+            body.add_child(label)
+            for axis in ("x", "y", "z"):
+                body.add_child(self._build_plane_vector_row(group, axis))
+
+        self.plane_params_panel.add_child(body)
+        return self.plane_params_panel
+
+    def _build_plane_vector_row(self, group: str, axis: str) -> HStack:
+        row = HStack()
+        row.spacing = 6
+        row.preferred_height = px(26)
+
+        label = Label()
+        label.text = axis.upper()
+        label.color = (0.58, 0.64, 0.72, 1.0)
+        label.preferred_width = px(18)
+        row.add_child(label)
+
+        spin = SpinBox()
+        spin.decimals = 3
+        spin.step = 0.1
+        spin.min_value = -1000000.0
+        spin.max_value = 1000000.0
+        spin.preferred_height = px(24)
+        spin.stretch = True
+        spin.on_changed = self._on_plane_param_changed
+        self.plane_inputs[f"{group}.{axis}"] = spin
         row.add_child(spin)
         return row
 
@@ -399,6 +490,20 @@ class CadApp:
             operation_id = result.operation.id
         log.info(f"[CsgCad] extrude added id='{operation_id}' sketch='{sketch_id}'")
 
+    def add_boolean_operation(self, kind: str) -> None:
+        result = add_boolean_for_selection(self.document, self.selected_node_data, kind)
+        if not result.success:
+            return
+        self.selected_node_data = result.selection
+        self.refresh_tree()
+        self.fit_camera()
+        self.request_preview_rebuild()
+        operation_id = ""
+        if result.operation is not None:
+            operation_id = result.operation.id
+        self._set_status(f"{kind.capitalize()} added")
+        log.info(f"[CsgCad] boolean added kind='{kind}' id='{operation_id}'")
+
     def fit_camera(self) -> None:
         lo, hi = document_bounds(self.document)
         self.camera.fit_bounds(lo, hi)
@@ -424,6 +529,7 @@ class CadApp:
         self._restore_tree_selection(self.tree.root_nodes)
         self._refresh_labels()
         self._refresh_operation_params_panel()
+        self._refresh_plane_params_panel()
         if self.tree._ui is not None:
             self.tree._ui.request_layout()
 
@@ -461,6 +567,7 @@ class CadApp:
         self.selected_node_data = node.data
         self._refresh_labels()
         self._refresh_operation_params_panel()
+        self._refresh_plane_params_panel()
         self.request_preview_rebuild()
 
     def _on_scene_click(self, x: float, y: float, width: int, height: int) -> bool:
@@ -533,10 +640,31 @@ class CadApp:
         self._syncing_operation_params = False
         self._set_operation_params_visible(True)
 
+    def _refresh_plane_params_panel(self) -> None:
+        sketch = self._selected_plane_sketch()
+        if sketch is None:
+            self._set_plane_params_visible(False)
+            return
+
+        self.plane_params_title.text = f"Plane: {sketch.name}"
+        self._syncing_plane_params = True
+        self._set_plane_input_vec("origin", sketch.plane.origin)
+        self._set_plane_input_vec("x_axis", sketch.plane.x_axis)
+        self._set_plane_input_vec("y_axis", sketch.plane.y_axis)
+        self._syncing_plane_params = False
+        self._set_plane_params_visible(True)
+
     def _set_operation_params_visible(self, visible: bool) -> None:
         if self.operation_params_panel.visible == visible:
             return
         self.operation_params_panel.visible = visible
+        if self.ui is not None:
+            self.ui.request_layout()
+
+    def _set_plane_params_visible(self, visible: bool) -> None:
+        if self.plane_params_panel.visible == visible:
+            return
+        self.plane_params_panel.visible = visible
         if self.ui is not None:
             self.ui.request_layout()
 
@@ -547,6 +675,14 @@ class CadApp:
         if kind != "operation":
             return None
         return self.document.find_operation(item_id)
+
+    def _selected_plane_sketch(self):
+        if self.selected_node_data is None:
+            return None
+        kind, item_id = self.selected_node_data
+        if kind != "plane":
+            return None
+        return self.document.find_sketch(item_id)
 
     def _on_extrude_vector_changed(self, _value: float) -> None:
         if self._syncing_operation_params:
@@ -569,6 +705,39 @@ class CadApp:
             f"operation='{operation.id}' vector=({vector[0]:.3f}, {vector[1]:.3f}, {vector[2]:.3f})"
         )
 
+    def _on_plane_param_changed(self, _value: float) -> None:
+        if self._syncing_plane_params:
+            return
+        sketch = self._selected_plane_sketch()
+        if sketch is None:
+            log.error("[CsgCad] cannot update plane: no plane is selected")
+            return
+        plane = ProceduralPlane(
+            origin=self._plane_input_vec("origin"),
+            x_axis=self._plane_input_vec("x_axis"),
+            y_axis=self._plane_input_vec("y_axis"),
+        )
+        if not set_sketch_plane(self.document, sketch.id, plane):
+            return
+        self.refresh_tree()
+        self.request_preview_rebuild()
+        log.info(
+            "[CsgCad] plane changed "
+            f"sketch='{sketch.id}' origin={plane.origin} x_axis={plane.x_axis} y_axis={plane.y_axis}"
+        )
+
+    def _set_plane_input_vec(self, group: str, value: tuple[float, float, float]) -> None:
+        self.plane_inputs[f"{group}.x"].value = value[0]
+        self.plane_inputs[f"{group}.y"].value = value[1]
+        self.plane_inputs[f"{group}.z"].value = value[2]
+
+    def _plane_input_vec(self, group: str) -> tuple[float, float, float]:
+        return (
+            float(self.plane_inputs[f"{group}.x"].value),
+            float(self.plane_inputs[f"{group}.y"].value),
+            float(self.plane_inputs[f"{group}.z"].value),
+        )
+
     def _mode_text(self) -> str:
         return f"Mode: {self.mode}; draft points: {len(self.draft.points)}"
 
@@ -588,6 +757,8 @@ class CadApp:
             return selection
         if kind == "operation" and self.document.find_operation(item_id) is not None:
             return selection
+        if kind == "plane" and self.document.find_sketch(item_id) is not None:
+            return selection
         if kind == "contour":
             for item in self.document.items:
                 for contour in item.contours:
@@ -599,6 +770,7 @@ class CadApp:
 
 def run_cad_app(title: str = "termin-csg CAD", size: tuple[int, int] = (1200, 760)) -> None:
     window = SDLBackendWindow(title, int(size[0]), int(size[1]))
+    window.maximize()
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
     ui = UI(graphics=graphics)
     app = CadApp()

@@ -5,10 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+import numpy as np
 from tcbase import log
+from tmesh import Mesh3
 
-from termin.csg._csg_native import Solid, _extrude_pairs
-from termin.csg.procedural_document import ProceduralMeshDocument, SketchItemDocument
+from termin.csg._csg_native import Solid, _extrude_pairs, from_mesh3, intersect, subtract, to_mesh3, unite
+from termin.csg.procedural_document import BOOLEAN_OPERATION_KINDS, ProceduralMeshDocument, SketchItemDocument
 
 Vec3Data = tuple[float, float, float]
 PointTransform = Callable[[Vec3Data], Vec3Data]
@@ -31,12 +33,26 @@ def evaluate_document(document: ProceduralMeshDocument) -> list[EvaluatedSolid]:
     entity transforms after this point.
     """
 
-    results: list[EvaluatedSolid] = []
+    operation_results: dict[str, list[EvaluatedSolid]] = {}
     for operation in document.operations:
         if not operation.enabled:
             continue
         if operation.kind == "extrude":
-            results.extend(_evaluate_extrude(document, operation))
+            operation_results[operation.id] = _evaluate_extrude(document, operation)
+        elif operation.kind in BOOLEAN_OPERATION_KINDS:
+            operation_results[operation.id] = _evaluate_boolean(operation, operation_results)
+        else:
+            log.error(
+                "[ProceduralMeshDocument] cannot evaluate operation: "
+                f"unknown kind '{operation.kind}' operation='{operation.id}'"
+            )
+
+    consumed_operation_ids = document.used_input_operation_ids()
+    results: list[EvaluatedSolid] = []
+    for operation in document.operations:
+        if not operation.enabled or operation.id in consumed_operation_ids:
+            continue
+        results.extend(operation_results.get(operation.id, []))
     return results
 
 
@@ -81,6 +97,125 @@ def _evaluate_extrude(document: ProceduralMeshDocument, operation) -> list[Evalu
             )
         )
     return results
+
+
+def _evaluate_boolean(
+    operation,
+    operation_results: dict[str, list[EvaluatedSolid]],
+) -> list[EvaluatedSolid]:
+    operands: list[Solid] = []
+    for input_id in operation.inputs:
+        evaluated_items = operation_results.get(input_id)
+        if evaluated_items is None:
+            log.error(
+                "[ProceduralMeshDocument] cannot evaluate boolean operation: "
+                f"input operation not evaluated operation='{operation.id}' input='{input_id}'"
+            )
+            return []
+        operand = _combine_evaluated_solids(evaluated_items, operation.id, input_id)
+        if operand is None:
+            return []
+        operands.append(operand)
+
+    if len(operands) < 2:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate boolean operation: "
+            f"need at least 2 operands operation='{operation.id}'"
+        )
+        return []
+
+    try:
+        result = _fold_boolean(operation.kind, operands)
+    except Exception as e:
+        log.error(
+            "[ProceduralMeshDocument] failed to evaluate boolean "
+            f"operation='{operation.id}' kind='{operation.kind}': {e}"
+        )
+        return []
+
+    if result.status != "No Error":
+        log.error(
+            "[ProceduralMeshDocument] boolean operation returned invalid solid "
+            f"operation='{operation.id}' kind='{operation.kind}' status='{result.status}'"
+        )
+    return [
+        EvaluatedSolid(
+            operation_id=operation.id,
+            contour_id="",
+            solid=result,
+            point_transform=_identity_point_transform,
+        )
+    ]
+
+
+def _combine_evaluated_solids(
+    evaluated_items: list[EvaluatedSolid],
+    operation_id: str,
+    input_id: str,
+) -> Solid | None:
+    if not evaluated_items:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate boolean operation: "
+            f"input operation produced no solids operation='{operation_id}' input='{input_id}'"
+        )
+        return None
+
+    solids: list[Solid] = []
+    for evaluated in evaluated_items:
+        solid = _evaluated_solid_in_document_space(evaluated)
+        if solid is None:
+            return None
+        solids.append(solid)
+
+    result = solids[0]
+    for solid in solids[1:]:
+        result = unite(result, solid)
+    return result
+
+
+def _evaluated_solid_in_document_space(evaluated: EvaluatedSolid) -> Solid | None:
+    try:
+        mesh = to_mesh3(evaluated.solid, "csg-document-space", "", False)
+        vertices = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 3)
+        transformed = np.array(
+            [evaluated.point_transform((float(v[0]), float(v[1]), float(v[2]))) for v in vertices],
+            dtype=np.float32,
+        )
+        triangles = np.asarray(mesh.triangles, dtype=np.uint32).reshape(-1, 3)
+        return from_mesh3(
+            Mesh3(
+                name="csg-document-space",
+                vertices=np.ascontiguousarray(transformed, dtype=np.float32),
+                triangles=np.ascontiguousarray(triangles, dtype=np.uint32),
+            )
+        )
+    except Exception as e:
+        log.error(
+            "[ProceduralMeshDocument] failed to transform evaluated solid into document space "
+            f"operation='{evaluated.operation_id}' contour='{evaluated.contour_id}': {e}"
+        )
+        return None
+
+
+def _fold_boolean(kind: str, operands: list[Solid]) -> Solid:
+    result = operands[0]
+    if kind == "union":
+        for operand in operands[1:]:
+            result = unite(result, operand)
+        return result
+    if kind == "subtract":
+        for operand in operands[1:]:
+            result = subtract(result, operand)
+        return result
+    if kind == "intersect":
+        for operand in operands[1:]:
+            result = intersect(result, operand)
+        return result
+    raise ValueError(f"unsupported boolean operation kind '{kind}'")
+
+
+def _identity_point_transform(point: Vec3Data) -> Vec3Data:
+    return point
 
 
 def sketch_point_transform(sketch: SketchItemDocument):

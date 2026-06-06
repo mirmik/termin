@@ -48,6 +48,7 @@ private:
     friend Solid subtract(const Solid&, const Solid&);
     friend Solid intersect(const Solid&, const Solid&);
     friend Solid extrude(const Polygon2&, const std::vector<Polygon2>&, double);
+    friend Solid from_mesh3(const Mesh3&);
     friend Mesh3 to_mesh3(const Solid&, const std::string&, const std::string&, bool);
 };
 
@@ -58,6 +59,7 @@ Solid make_cone(double radius_low, double radius_high, double height, int circul
 Solid unite(const Solid& a, const Solid& b);
 Solid subtract(const Solid& a, const Solid& b);
 Solid intersect(const Solid& a, const Solid& b);
+Solid from_mesh3(const Mesh3& mesh);
 
 // Builds a solid by extruding a 2D contour along +Z. The outer polygon and all
 // holes are interpreted in the local XY plane. Winding does not need to be

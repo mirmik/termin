@@ -220,6 +220,23 @@ Solid intersect(const Solid& a, const Solid& b) {
     return Solid(Solid::Impl(a.impl_->manifold ^ b.impl_->manifold));
 }
 
+Solid from_mesh3(const Mesh3& mesh) {
+    manifold::MeshGL64 gl_mesh;
+    gl_mesh.numProp = 3;
+    gl_mesh.vertProperties.reserve(mesh.vertices.size() * 3);
+    for (const Vec3f& vertex : mesh.vertices) {
+        gl_mesh.vertProperties.push_back(static_cast<double>(vertex.x));
+        gl_mesh.vertProperties.push_back(static_cast<double>(vertex.y));
+        gl_mesh.vertProperties.push_back(static_cast<double>(vertex.z));
+    }
+    gl_mesh.triVerts.reserve(mesh.triangles.size());
+    for (uint32_t index : mesh.triangles) {
+        gl_mesh.triVerts.push_back(static_cast<uint64_t>(index));
+    }
+    gl_mesh.Merge();
+    return Solid(Solid::Impl(Manifold(gl_mesh)));
+}
+
 Solid extrude(const Polygon2& outer, const std::vector<Polygon2>& holes, double height) {
     CrossSection cross_section(make_polygons(outer, holes), CrossSection::FillRule::EvenOdd);
     return Solid(Solid::Impl(Manifold::Extrude(cross_section.ToPolygons(), height)));

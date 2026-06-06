@@ -119,6 +119,7 @@ NB_MODULE(_csg_native, m) {
     m.def("unite", &termin::csg::unite, nb::arg("a"), nb::arg("b"));
     m.def("subtract", &termin::csg::subtract, nb::arg("a"), nb::arg("b"));
     m.def("intersect", &termin::csg::intersect, nb::arg("a"), nb::arg("b"));
+    m.def("from_mesh3", &termin::csg::from_mesh3, nb::arg("mesh"));
     m.def("_extrude_points",
           [](const termin::csg::Polygon2& outer,
              double height,

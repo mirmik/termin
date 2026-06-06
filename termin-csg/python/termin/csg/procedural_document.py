@@ -10,6 +10,7 @@ from tcbase import log
 
 Vec2Data = tuple[float, float]
 Vec3Data = tuple[float, float, float]
+BOOLEAN_OPERATION_KINDS = {"union", "subtract", "intersect"}
 
 
 def _new_id(prefix: str) -> str:
@@ -266,8 +267,19 @@ class ProceduralMeshDocument:
         ids: set[str] = set()
         for operation in self.operations:
             source_id = operation.params.get("source_sketch_id", "")
-            if source_id:
+            if operation.enabled and source_id:
                 ids.add(str(source_id))
+        return ids
+
+    def used_input_operation_ids(self) -> set[str]:
+        ids: set[str] = set()
+        operation_ids = {operation.id for operation in self.operations}
+        for operation in self.operations:
+            if not operation.enabled or operation.kind not in BOOLEAN_OPERATION_KINDS:
+                continue
+            for input_id in operation.inputs:
+                if input_id in operation_ids:
+                    ids.add(input_id)
         return ids
 
     def add_extrude_operation(
@@ -318,6 +330,40 @@ class ProceduralMeshDocument:
         operation.params["source_sketch_id"] = sketch.id
         return operation
 
+    def add_boolean_operation(
+        self,
+        kind: str,
+        input_operation_ids: list[str],
+    ) -> OperationDocument | None:
+        operation_kind = "subtract" if kind == "substract" else str(kind)
+        if operation_kind not in BOOLEAN_OPERATION_KINDS:
+            log.error(f"[ProceduralMeshDocument] cannot create boolean operation: invalid kind '{kind}'")
+            return None
+        if len(input_operation_ids) < 2:
+            log.error(
+                "[ProceduralMeshDocument] cannot create boolean operation: "
+                f"need at least 2 operation inputs, got {len(input_operation_ids)}"
+            )
+            return None
+        existing_ids = {operation.id for operation in self.operations}
+        missing = [operation_id for operation_id in input_operation_ids if operation_id not in existing_ids]
+        if missing:
+            log.error(f"[ProceduralMeshDocument] cannot create boolean operation: missing inputs {missing}")
+            return None
+        label = {
+            "union": "Union",
+            "subtract": "Subtract",
+            "intersect": "Intersect",
+        }[operation_kind]
+        operation = OperationDocument(
+            name=f"{label} {len(self.operations) + 1}",
+            kind=operation_kind,
+            inputs=input_operation_ids[:],
+            params={},
+        )
+        self.operations.append(operation)
+        return operation
+
     def to_dict(self) -> dict:
         return {
             "version": self.version,
@@ -340,6 +386,7 @@ class ProceduralMeshDocument:
 
 __all__ = [
     "ContourDocument",
+    "BOOLEAN_OPERATION_KINDS",
     "OperationDocument",
     "ProceduralMeshDocument",
     "ProceduralPlane",
