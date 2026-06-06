@@ -328,6 +328,9 @@ class ProceduralMeshEditorExtension:
         component = self._component
         if component is not None and result.document_changed:
             component.document = self._controller.document
+            component.mark_dirty()
+            if component.auto_regenerate:
+                component.regenerate_if_needed()
         self._refresh_mode_label()
         if result.tree_changed or result.selection_changed:
             self._refresh_document_tree()

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from tcbase import log
 from termin.inspect import InspectField
+from termin.csg.document_mesh import document_to_tc_mesh
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
+from termin.mesh.mesh_component import MeshComponent
 from termin.scene.python_component import PythonComponent
 
 
@@ -22,6 +24,7 @@ def _get_document_data(component) -> dict:
 
 def _set_document_data(component, data: dict) -> None:
     component.document = ProceduralMeshDocument.from_dict(data)
+    component.mark_dirty()
 
 
 class ProceduralMeshComponent(PythonComponent):
@@ -37,6 +40,11 @@ class ProceduralMeshComponent(PythonComponent):
             path="debug_message",
             label="Debug Message",
             kind="string",
+        ),
+        "auto_regenerate": InspectField(
+            path="auto_regenerate",
+            label="Auto Regenerate",
+            kind="bool",
         ),
         "document_summary": InspectField(
             path=None,
@@ -68,11 +76,27 @@ class ProceduralMeshComponent(PythonComponent):
         self,
         document_name: str = "procedural_mesh",
         debug_message: str = "Procedural geometry placeholder",
+        auto_regenerate: bool = True,
     ):
         super().__init__(enabled=True)
         self.document_name = document_name
         self.debug_message = debug_message
+        self.auto_regenerate = auto_regenerate
         self.document = ProceduralMeshDocument()
+        self._dirty = True
+        self._last_build_key = None
+
+    def on_added(self) -> None:
+        if self.auto_regenerate:
+            self.regenerate_if_needed()
+
+    def on_editor_start(self) -> None:
+        if self.auto_regenerate:
+            self.regenerate_if_needed()
+
+    def start(self) -> None:
+        if self.auto_regenerate:
+            self.regenerate_if_needed()
 
     def serialize_data(self) -> dict:
         data = super().serialize_data()
@@ -87,13 +111,18 @@ class ProceduralMeshComponent(PythonComponent):
         super().deserialize_data(clean_data, context)
         if document_data is not None:
             self.document = ProceduralMeshDocument.from_dict(document_data)
+        self.mark_dirty()
 
     def document_summary(self) -> str:
         return (
             f"items={len(self.document.items)}, "
             f"contours={self.document.contour_count()}, "
-            f"operations={len(self.document.operations)}"
+            f"operations={len(self.document.operations)}, "
+            f"dirty={self._dirty}"
         )
+
+    def mark_dirty(self) -> None:
+        self._dirty = True
 
     def add_contour_from_points(
         self,
@@ -110,6 +139,9 @@ class ProceduralMeshComponent(PythonComponent):
             "[ProceduralMeshComponent] contour added "
             f"id='{contour.id}' points={len(contour.points)} {self.document_summary()}"
         )
+        self.mark_dirty()
+        if self.auto_regenerate:
+            self.regenerate_if_needed()
         return True
 
     def add_extrude_operation(self, height: float = 1.0) -> bool:
@@ -121,6 +153,9 @@ class ProceduralMeshComponent(PythonComponent):
             f"id='{operation.id}' inputs={len(operation.inputs)} height={height:.3f} "
             f"{self.document_summary()}"
         )
+        self.mark_dirty()
+        if self.auto_regenerate:
+            self.regenerate_if_needed()
         return True
 
     def add_extrude_operation_for_sketch(self, sketch_id: str, height: float = 1.0) -> bool:
@@ -132,13 +167,61 @@ class ProceduralMeshComponent(PythonComponent):
             f"id='{operation.id}' sketch='{sketch_id}' inputs={len(operation.inputs)} "
             f"height={height:.3f} {self.document_summary()}"
         )
+        self.mark_dirty()
+        if self.auto_regenerate:
+            self.regenerate_if_needed()
         return True
 
-    def regenerate(self) -> None:
+    def _build_key(self) -> tuple:
+        return (self.document_name, self.document.to_dict())
+
+    def regenerate_if_needed(self) -> bool:
+        key = self._build_key()
+        if not self._dirty and self._last_build_key == key:
+            return True
+        return self.regenerate()
+
+    def _mesh_component(self):
+        ent = self.entity
+        if ent is None:
+            log.error("[ProceduralMeshComponent] regenerate failed: component has no entity")
+            return None
+        comp = ent.get_component(MeshComponent)
+        if comp is not None:
+            return comp
+        try:
+            ent.add_component_by_name("MeshComponent")
+            comp = ent.get_component(MeshComponent)
+        except Exception as e:
+            log.error(f"[ProceduralMeshComponent] failed to add MeshComponent: {e}")
+            return None
+        if comp is None:
+            log.error("[ProceduralMeshComponent] failed to resolve MeshComponent after add")
+            return None
+        return comp
+
+    def regenerate(self) -> bool:
+        build_key = self._build_key()
+        tc_mesh = document_to_tc_mesh(self.document, self.document_name)
+        if tc_mesh is None:
+            log.error(
+                "[ProceduralMeshComponent] regenerate failed "
+                f"document='{self.document_name}' message='{self.debug_message}'"
+            )
+            return False
+
+        mesh_component = self._mesh_component()
+        if mesh_component is None:
+            return False
+
+        mesh_component.set_mesh(tc_mesh)
+        self._last_build_key = build_key
+        self._dirty = False
         log.info(
-            "[ProceduralMeshComponent] regenerate requested "
-            f"document='{self.document_name}' message='{self.debug_message}'"
+            "[ProceduralMeshComponent] regenerated mesh "
+            f"document='{self.document_name}' vertices={tc_mesh.vertex_count} triangles={tc_mesh.triangle_count}"
         )
+        return True
 
 
 __all__ = ["ProceduralMeshComponent"]

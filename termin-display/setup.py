@@ -63,6 +63,8 @@ setup(
     },
     install_requires=[
         "termin-nanobind",
+        "termin-scene",
+        "tgfx",
     ],
     ext_modules=ext_modules,
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},

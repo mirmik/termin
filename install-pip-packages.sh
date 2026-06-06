@@ -27,6 +27,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/scripts/termin-python-packages.sh"
 EDITABLE=0
 TARGET_DIR=""
 FORCE=0
@@ -143,51 +144,7 @@ else
     echo "Install mode: current pip environment (sequential pip install)"
 fi
 
-# List of termin packages to install, in topological dependency order.
-# Each entry is a path relative to SCRIPT_DIR.
-#
-# Note: several "components-*" C++ targets install into the same Python
-# namespace as their parent subproject (e.g. termin.colliders owns both
-# _colliders_native and _components_collision_native). Those are merged
-# into the parent pip package rather than shipped separately to avoid
-# filesystem overlap at install time.
-# Packages are ordered by dependency: each package is listed after its
-# install_requires. termin-app owns the termin namespace root and comes
-# near the end, after all subpackages that extend termin.*.
-PACKAGES=(
-    termin-build-tools
-    termin-nanobind-sdk
-    termin-base
-    termin-assets
-    termin-mesh
-    termin-graphics
-    termin-materials
-    termin-gui
-    termin-display
-    termin-csg
-    termin-modules
-    termin-inspect
-    termin-components/termin-components-kinematic
-    termin-scene
-    termin-lighting
-    termin-components/termin-components-mesh
-    termin-input
-    termin-collision
-    termin-render
-    termin-components/termin-components-render
-    termin-components/termin-components-foliage
-    termin-render-passes
-    termin-navmesh
-    termin-qopt
-    termin-pga
-    termin-physics
-    termin-engine
-    termin-skeleton
-    termin-animation
-    termin-nodegraph
-    termin-app
-    tcplot
-)
+PACKAGES=("${TERMIN_PYTHON_PACKAGES[@]}")
 
 # When --force is set, nuke each package's build cache and egg-info so
 # setuptools re-runs the native artifact copy step from TERMIN_BINDINGS_DIR instead of
@@ -202,11 +159,7 @@ if [[ $FORCE -eq 1 ]]; then
     # never needed to in the first place, pip cache lives in
     # build/lib*/ + build/bdist*/ only.
     echo "--force: clearing per-package pip build caches before install"
-    for pkg in "${PACKAGES[@]}"; do
-        rm -rf "$SCRIPT_DIR/$pkg"/build/lib.* \
-               "$SCRIPT_DIR/$pkg"/build/bdist.* \
-               "$SCRIPT_DIR/$pkg"/*.egg-info 2>/dev/null || true
-    done
+    termin_clear_python_package_build_caches "$SCRIPT_DIR"
 fi
 
 FORCE_FLAGS=()

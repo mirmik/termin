@@ -8,6 +8,7 @@
 
 - [Documentation System](./documentation-system.md) — где должны жить разные типы документов.
 - [Module Map](./modules.md) — границы ответственности модулей и правила переноса кода.
+- [SDK Python Wheelhouse](./sdk-python-wheelhouse.md) — wheels из SDK для внешних Python-проектов.
 - [Architecture Notes](./architecture/index.md) — cross-module архитектурные заметки.
 - [Plans And Migration Notes](./plans/index.md) — исторические планы и миграционные чеклисты.
 - [Главный вход Obsidian](../docs.md) — навигационная страница vault.

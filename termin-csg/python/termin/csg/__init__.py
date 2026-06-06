@@ -32,6 +32,7 @@ from termin.csg.procedural_document import (  # noqa: E402
     SketchItemDocument,
 )
 from termin.csg.document_eval import EvaluatedSolid, evaluate_document  # noqa: E402
+from termin.csg.document_mesh import document_to_mesh3, document_to_tc_mesh  # noqa: E402
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController  # noqa: E402
 from termin.csg.operation_specs import (  # noqa: E402
     OPERATION_SPECS_BY_KIND,
@@ -98,6 +99,8 @@ __all__ = [
     "PRIMITIVE_SPECS_BY_KIND",
     "PrimitiveSpec",
     "Solid",
+    "document_to_mesh3",
+    "document_to_tc_mesh",
     "evaluate_document",
     "extrude",
     "from_mesh3",
