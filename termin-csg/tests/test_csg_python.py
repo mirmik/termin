@@ -9,9 +9,16 @@ from termin.csg import (
 )
 from termin.csg.cad import box, circle, mesh, rect
 from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
+from termin.csg.cad_viewer import build_document_solid_meshes, document_bounds
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
 from termin.csg.document_tree_model import build_document_tree
-from termin.csg.document_edit import set_contour_point, set_sketch_plane
+from termin.csg.document_edit import (
+    add_boolean_input,
+    move_boolean_input,
+    remove_boolean_input,
+    set_contour_point,
+    set_sketch_plane,
+)
 from termin.csg.procedural_document import CONTOUR_ROLE_HOLE, CONTOUR_ROLE_OUTER, ProceduralPlane
 from termin.csg.viewer_camera import OrbitCamera
 
@@ -201,8 +208,61 @@ def test_procedural_document_evaluates_primitive_operations_and_booleans():
 
     roots = build_document_tree(document)
     assert roots[0].text.startswith("[Subtract]")
-    assert roots[0].children[0].text.startswith("[Box]")
-    assert roots[0].children[1].text.startswith("[Cylinder]")
+    assert roots[0].children[0].text.startswith("[Base] [Box]")
+    assert roots[0].children[1].text.startswith("[Cut] [Cylinder]")
+
+
+def test_cad_viewer_handles_empty_boolean_result_bounds():
+    document = ProceduralMeshDocument()
+    first = document.add_primitive_operation("box")
+    second = document.add_primitive_operation("box")
+    assert first is not None
+    assert second is not None
+    operation = document.add_boolean_operation("subtract", [first.id, second.id])
+    assert operation is not None
+
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert evaluated[0].solid.is_empty
+    assert build_document_solid_meshes(document) == []
+
+    lo, hi = document_bounds(document)
+    assert tuple(float(v) for v in lo) == (-1.0, -1.0, -1.0)
+    assert tuple(float(v) for v in hi) == (1.0, 1.0, 1.0)
+
+
+def test_operation_transform_moves_extrude_and_boolean_results_after_evaluation():
+    document = ProceduralMeshDocument()
+    contour = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (0.0, 2.0, 0.0),
+        ]
+    )
+    assert contour is not None
+    sketch_id = document.find_sketch_id_for_contour(contour.id)
+    extrude_operation = document.add_extrude_operation_for_sketch(sketch_id, height=1.0)
+    assert extrude_operation is not None
+    extrude_operation.params["center"] = [5.0, 0.0, 0.0]
+
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert evaluated[0].point_transform((0.0, 0.0, 0.0)) == (5.0, 0.0, 0.0)
+    assert isclose(evaluated[0].solid.volume, 4.0, abs_tol=1.0e-6)
+
+    box_operation = document.add_primitive_operation("box", {"size": [1.0, 1.0, 1.0]})
+    assert box_operation is not None
+    subtract_operation = document.add_boolean_operation("subtract", [extrude_operation.id, box_operation.id])
+    assert subtract_operation is not None
+    subtract_operation.params["center"] = [10.0, 0.0, 0.0]
+
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    mesh = to_mesh3(evaluated[0].solid, "moved-subtract")
+    xs = [float(vertex[0]) for vertex in mesh.vertices]
+    assert min(xs) > 9.0
 
 
 def test_procedural_document_boolean_operations_evaluate_as_root_operations():
@@ -286,6 +346,52 @@ def test_procedural_document_boolean_subtract_and_intersect_volumes():
     evaluated = evaluate_document(document)
     assert len(evaluated) == 1
     assert isclose(evaluated[0].solid.volume, 2.0, abs_tol=1.0e-6)
+
+
+def test_document_edit_adds_reorders_and_removes_boolean_inputs():
+    document = ProceduralMeshDocument()
+    first = document.add_primitive_operation("box")
+    second = document.add_primitive_operation("sphere")
+    third = document.add_primitive_operation("cylinder")
+    fourth = document.add_primitive_operation("cone")
+    assert first is not None
+    assert second is not None
+    assert third is not None
+    assert fourth is not None
+    operation = document.add_boolean_operation("subtract", [first.id, second.id])
+    assert operation is not None
+
+    assert add_boolean_input(document, operation.id, third.id)
+    assert operation.inputs == [first.id, second.id, third.id]
+    assert not add_boolean_input(document, operation.id, third.id)
+
+    assert move_boolean_input(document, operation.id, operation.id, third.id, 1)
+    assert operation.inputs == [first.id, third.id, second.id]
+
+    assert add_boolean_input(document, operation.id, fourth.id, 0)
+    assert operation.inputs == [fourth.id, first.id, third.id, second.id]
+
+    assert remove_boolean_input(document, operation.id, third.id)
+    assert operation.inputs == [fourth.id, first.id, second.id]
+
+
+def test_document_edit_rejects_boolean_input_cycles_and_invalid_removal():
+    document = ProceduralMeshDocument()
+    first = document.add_primitive_operation("box")
+    second = document.add_primitive_operation("sphere")
+    third = document.add_primitive_operation("cylinder")
+    assert first is not None
+    assert second is not None
+    assert third is not None
+    inner = document.add_boolean_operation("union", [first.id, second.id])
+    outer = document.add_boolean_operation("subtract", [inner.id, third.id])
+    assert inner is not None
+    assert outer is not None
+
+    assert not add_boolean_input(document, inner.id, outer.id)
+    assert inner.inputs == [first.id, second.id]
+    assert not remove_boolean_input(document, inner.id, first.id)
+    assert inner.inputs == [first.id, second.id]
 
 
 def test_procedural_document_subtracts_downward_extrude_as_cutting_tool():
@@ -478,6 +584,79 @@ def test_cad_app_operation_parameter_panel_updates_extrude_vector():
     app._on_extrude_vector_changed(-2.0)
 
     assert operation.params["vector"] == [0.25, 0.0, -2.0]
+
+
+def test_cad_app_operation_parameter_panel_updates_boolean_transform():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    app._build_operation_params_panel()
+    first = app.document.add_primitive_operation("box", {"size": [2.0, 2.0, 2.0]})
+    second = app.document.add_primitive_operation("sphere", {"radius": 0.75})
+    assert first is not None
+    assert second is not None
+    operation = app.document.add_boolean_operation("subtract", [first.id, second.id])
+    assert operation is not None
+
+    app.selected_node_data = ("operation", operation.id)
+    app._refresh_operation_params_panel()
+    assert app.operation_params_panel.visible is True
+    assert "center.x" in app.operation_transform_inputs
+    assert "rotation.z" in app.operation_transform_inputs
+    assert app.extrude_vector_inputs == {}
+
+    app.operation_transform_inputs["center.x"].value = 3.0
+    app.operation_transform_inputs["rotation.z"].value = 45.0
+    app._on_operation_transform_changed(3.0)
+
+    assert operation.params["center"] == [3.0, 0.0, 0.0]
+    assert operation.params["rotation"] == [0.0, 0.0, 45.0]
+
+
+def test_cad_app_tree_drop_adds_and_reorders_boolean_inputs():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    first = app.document.add_primitive_operation("box")
+    second = app.document.add_primitive_operation("sphere")
+    third = app.document.add_primitive_operation("cylinder")
+    assert first is not None
+    assert second is not None
+    assert third is not None
+    operation = app.document.add_boolean_operation("subtract", [first.id, second.id])
+    assert operation is not None
+    app.refresh_tree()
+
+    subtract_node = _first_tree_node(app.tree.root_nodes, ("operation", operation.id))
+    third_root_node = _first_tree_node(app.tree.root_nodes, ("operation", third.id))
+    assert subtract_node is not None
+    assert third_root_node is not None
+
+    app._on_tree_drop(third_root_node, subtract_node, "inside")
+    assert operation.inputs == [first.id, second.id, third.id]
+
+    second_node = _first_tree_node(app.tree.root_nodes, ("operation", second.id))
+    third_node = _first_tree_node(app.tree.root_nodes, ("operation", third.id))
+    assert second_node is not None
+    assert third_node is not None
+
+    app._on_tree_drop(third_node, second_node, "above")
+    assert operation.inputs == [first.id, third.id, second.id]
+
+    roots = build_document_tree(app.document)
+    assert roots[0].children[0].text.startswith("[Base]")
+    assert roots[0].children[1].text.startswith("[Cut]")
+    assert roots[0].children[2].text.startswith("[Cut]")
+
+
+def _first_tree_node(nodes, data):
+    for node in nodes:
+        if node.data == data:
+            return node
+        found = _first_tree_node(node.subnodes, data)
+        if found is not None:
+            return found
+    return None
 
 
 def test_cad_app_plane_parameter_panel_updates_sketch_plane():

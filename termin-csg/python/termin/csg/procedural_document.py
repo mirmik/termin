@@ -86,10 +86,7 @@ def _validated_primitive_kind(kind: str) -> str:
 
 
 def _primitive_defaults(kind: str) -> dict:
-    transform = {
-        "center": [0.0, 0.0, 0.0],
-        "rotation": [0.0, 0.0, 0.0],
-    }
+    transform = _operation_transform_defaults()
     if kind == "box":
         return {
             "primitive_kind": kind,
@@ -124,6 +121,13 @@ def _primitive_defaults(kind: str) -> dict:
             **transform,
         }
     return {}
+
+
+def _operation_transform_defaults() -> dict:
+    return {
+        "center": [0.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+    }
 
 
 def _primitive_label(kind: str) -> str:
@@ -443,6 +447,7 @@ class ProceduralMeshDocument:
             params={
                 "vector": _v_list(extrusion_vector),
                 "mode": "new_body",
+                **_operation_transform_defaults(),
             },
         )
         self.operations.append(operation)
@@ -524,7 +529,7 @@ class ProceduralMeshDocument:
             name=f"{label} {len(self.operations) + 1}",
             kind=operation_kind,
             inputs=input_operation_ids[:],
-            params={},
+            params=_operation_transform_defaults(),
         )
         self.operations.append(operation)
         return operation

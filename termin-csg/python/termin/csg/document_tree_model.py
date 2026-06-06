@@ -47,7 +47,12 @@ def document_summary(document: ProceduralMeshDocument) -> str:
     )
 
 
-def _operation_node(document: ProceduralMeshDocument, operation, visited: set[str]) -> DocumentTreeNode:
+def _operation_node(
+    document: ProceduralMeshDocument,
+    operation,
+    visited: set[str],
+    input_role: str = "",
+) -> DocumentTreeNode:
     visited.add(operation.id)
     if operation.kind == "extrude":
         source_sketch_id = str(operation.params.get("source_sketch_id", ""))
@@ -57,7 +62,10 @@ def _operation_node(document: ProceduralMeshDocument, operation, visited: set[st
             vector = extrude_vector_for_operation(sketch, operation)
             param_text = f" vector={_format_vec3(vector)}"
         node = DocumentTreeNode(
-            text=f"[Extrude] {operation.name}{param_text} inputs={len(operation.inputs)}",
+            text=_with_input_role(
+                f"[Extrude] {operation.name}{param_text} inputs={len(operation.inputs)}",
+                input_role,
+            ),
             kind="operation",
             item_id=operation.id,
         )
@@ -68,7 +76,10 @@ def _operation_node(document: ProceduralMeshDocument, operation, visited: set[st
     if operation.kind == PRIMITIVE_OPERATION_KIND:
         primitive_kind = str(operation.params.get("primitive_kind", ""))
         node = DocumentTreeNode(
-            text=f"[{_primitive_label(primitive_kind)}] {operation.name}{_primitive_param_text(operation)}",
+            text=_with_input_role(
+                f"[{_primitive_label(primitive_kind)}] {operation.name}{_primitive_param_text(operation)}",
+                input_role,
+            ),
             kind="operation",
             item_id=operation.id,
         )
@@ -76,22 +87,29 @@ def _operation_node(document: ProceduralMeshDocument, operation, visited: set[st
 
     if operation.kind in ("union", "subtract", "intersect"):
         node = DocumentTreeNode(
-            text=f"[{_operation_label(operation.kind)}] {operation.name} inputs={len(operation.inputs)}",
+            text=_with_input_role(
+                f"[{_operation_label(operation.kind)}] {operation.name} inputs={len(operation.inputs)}",
+                input_role,
+            ),
             kind="operation",
             item_id=operation.id,
         )
-        for input_id in operation.inputs:
+        for index, input_id in enumerate(operation.inputs):
+            child_role = _boolean_input_role(operation.kind, index)
             child = document.find_operation(input_id)
             if child is None:
-                node.children.append(DocumentTreeNode(f"[Missing Operation] {input_id}", "info", input_id))
+                node.children.append(DocumentTreeNode(f"{child_role} [Missing Operation] {input_id}", "info", input_id))
             elif child.id in visited:
-                node.children.append(DocumentTreeNode(f"[Cycle] {child.name} {_short_id(child.id)}", "info", child.id))
+                node.children.append(DocumentTreeNode(f"{child_role} [Cycle] {child.name} {_short_id(child.id)}", "info", child.id))
             else:
-                node.children.append(_operation_node(document, child, visited.copy()))
+                node.children.append(_operation_node(document, child, visited.copy(), child_role))
         return node
 
     return DocumentTreeNode(
-        text=f"[Unknown] {operation.name} kind={operation.kind} inputs={len(operation.inputs)}",
+        text=_with_input_role(
+            f"[Unknown] {operation.name} kind={operation.kind} inputs={len(operation.inputs)}",
+            input_role,
+        ),
         kind="operation",
         item_id=operation.id,
     )
@@ -105,6 +123,20 @@ def _operation_label(kind: str) -> str:
     if kind == "intersect":
         return "Intersect"
     return kind
+
+
+def _boolean_input_role(kind: str, index: int) -> str:
+    if kind == "subtract":
+        if index == 0:
+            return "[Base]"
+        return "[Cut]"
+    return "[Input]"
+
+
+def _with_input_role(text: str, input_role: str) -> str:
+    if not input_role:
+        return text
+    return f"{input_role} {text}"
 
 
 def _primitive_label(kind: str) -> str:
