@@ -1,15 +1,13 @@
-"""Standalone mini CAD application for procedural CSG documents."""
+"""Standalone mini CAD application widget tree for procedural CSG documents."""
 
 from __future__ import annotations
 
-import ctypes
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-import sdl2
 
-from tcbase import Key, Mods, MouseButton, log
+from tcbase import log
 from tcgui.widgets.button import Button
 from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.file_dialog_overlay import show_open_file_dialog, show_save_file_dialog
@@ -25,8 +23,6 @@ from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.ui import UI
 from tcgui.widgets.units import px
 from tcgui.widgets.vstack import VStack
-from termin.display import SDLBackendWindow
-from tgfx import Tgfx2Context
 
 from termin.csg.cad_viewer import CadViewportWidget, CsgSceneRenderer, document_bounds
 from termin.csg.cad_state import CAD_STATE_FILTER, CadState, load_cad_state, save_cad_state
@@ -34,7 +30,15 @@ from termin.csg.document_edit import SketchDraft
 from termin.csg.document_eval import extrude_vector_for_operation
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController
 from termin.csg.document_raycast import ray_plane_intersection
-from termin.csg.document_tree_model import DocumentTreeNode, build_document_tree, document_summary
+from termin.csg.document_tree_model import build_document_tree, document_summary
+from termin.csg.cad_tree_adapter import (
+    boolean_operation_id_for_tree_node,
+    boolean_parent_id_for_tree_node,
+    restore_tree_selection,
+    to_tree_node,
+    tree_node_data,
+    tree_node_model,
+)
 from termin.csg.operation_specs import (
     BOOLEAN_OPERATION_KINDS,
     PRIMITIVE_OPERATION_KIND,
@@ -52,22 +56,6 @@ from termin.csg.procedural_document import (
 )
 from termin.csg.viewer_camera import OrbitCamera
 
-
-_SDL_BUTTON_MAP = {1: MouseButton.LEFT, 2: MouseButton.MIDDLE, 3: MouseButton.RIGHT}
-_KEY_MAP = {
-    sdl2.SDL_SCANCODE_BACKSPACE: Key.BACKSPACE,
-    sdl2.SDL_SCANCODE_DELETE: Key.DELETE,
-    sdl2.SDL_SCANCODE_LEFT: Key.LEFT,
-    sdl2.SDL_SCANCODE_RIGHT: Key.RIGHT,
-    sdl2.SDL_SCANCODE_UP: Key.UP,
-    sdl2.SDL_SCANCODE_DOWN: Key.DOWN,
-    sdl2.SDL_SCANCODE_HOME: Key.HOME,
-    sdl2.SDL_SCANCODE_END: Key.END,
-    sdl2.SDL_SCANCODE_RETURN: Key.ENTER,
-    sdl2.SDL_SCANCODE_ESCAPE: Key.ESCAPE,
-    sdl2.SDL_SCANCODE_TAB: Key.TAB,
-    sdl2.SDL_SCANCODE_SPACE: Key.SPACE,
-}
 
 _CONTOUR_POINT_HIT_RADIUS_PX = 14.0
 
@@ -972,8 +960,8 @@ class CadApp:
         self.tree.clear()
         roots = build_document_tree(self.document)
         for root in roots:
-            self.tree.add_root(self._to_tree_node(root))
-        self._restore_tree_selection(self.tree.root_nodes)
+            self.tree.add_root(to_tree_node(root))
+        restore_tree_selection(self.tree, self.tree.root_nodes, self.selected_node_data)
         self._refresh_labels()
         self._rebuild_context_actions_panel()
         self._refresh_operation_params_panel()
@@ -982,37 +970,6 @@ class CadApp:
         self._refresh_contour_params_panel()
         if self.tree._ui is not None:
             self.tree._ui.request_layout()
-
-    def _to_tree_node(self, source: DocumentTreeNode) -> TreeNode:
-        label = Label()
-        label.text = source.text
-        label.color = (0.70, 0.74, 0.80, 1.0)
-        node = TreeNode(label)
-        node.data = (source.kind, source.item_id)
-        node.csg_document_node = source
-        node.expanded = True
-        for child in source.children:
-            node.add_node(self._to_tree_node(child))
-        return node
-
-    def _restore_tree_selection(self, roots: list[TreeNode]) -> None:
-        for root in roots:
-            selected = self._find_tree_node(root, self.selected_node_data)
-            if selected is not None:
-                self.tree.selected_node = selected
-                selected._selected = True
-                return
-
-    def _find_tree_node(self, root: TreeNode, data: tuple[str, str] | None) -> TreeNode | None:
-        if data is None:
-            return None
-        if root.data == data:
-            return root
-        for child in root.subnodes:
-            found = self._find_tree_node(child, data)
-            if found is not None:
-                return found
-        return None
 
     def _on_tree_select(self, node: TreeNode) -> None:
         self.selected_node_data = node.data
@@ -1025,7 +982,7 @@ class CadApp:
         self.request_preview_rebuild()
 
     def _on_tree_drop(self, dragged_node: TreeNode, target_node: TreeNode | None, position: str) -> None:
-        dragged_data = self._tree_node_data(dragged_node)
+        dragged_data = tree_node_data(dragged_node)
         if dragged_data is None or dragged_data[0] != "operation":
             log.error("[CsgCad] cannot drop tree node: drag an operation node")
             return
@@ -1034,7 +991,7 @@ class CadApp:
             log.error(f"[CsgCad] cannot drop tree node: operation not found '{dragged_operation_id}'")
             return
 
-        source_boolean_id = self._boolean_parent_id_for_tree_node(dragged_node)
+        source_boolean_id = boolean_parent_id_for_tree_node(self.document, dragged_node)
         if position == "root":
             if not source_boolean_id:
                 return
@@ -1047,7 +1004,7 @@ class CadApp:
             return
 
         if position == "inside":
-            target_boolean_id = self._boolean_operation_id_for_tree_node(target_node)
+            target_boolean_id = boolean_operation_id_for_tree_node(self.document, target_node)
             if not target_boolean_id:
                 log.error("[CsgCad] cannot drop tree node inside target: target is not a boolean operation")
                 return
@@ -1069,7 +1026,7 @@ class CadApp:
             log.error(f"[CsgCad] cannot drop tree node: unsupported drop position '{position}'")
             return
 
-        target_model = self._tree_node_model(target_node)
+        target_model = tree_node_model(target_node)
         if target_model is None or not target_model.accepts_drop_above_below:
             log.error("[CsgCad] cannot reorder boolean input: drop above or below an input inside a boolean operation")
             return
@@ -1097,45 +1054,6 @@ class CadApp:
         if not self._apply_controller_result(result):
             return
         log.info(f"[CsgCad] tree drop applied selection='{self.selected_node_data}' status='{result.message}'")
-
-    def _tree_node_data(self, node: TreeNode | None) -> tuple[str, str] | None:
-        if node is None:
-            return None
-        data = node.data
-        if not isinstance(data, tuple) or len(data) != 2:
-            return None
-        return (str(data[0]), str(data[1]))
-
-    def _tree_node_model(self, node: TreeNode | None) -> DocumentTreeNode | None:
-        if node is None:
-            return None
-        try:
-            model = node.csg_document_node
-        except AttributeError:
-            return None
-        if not isinstance(model, DocumentTreeNode):
-            return None
-        return model
-
-    def _boolean_operation_id_for_tree_node(self, node: TreeNode | None) -> str:
-        model = self._tree_node_model(node)
-        if model is None or not model.accepts_drop_inside:
-            return ""
-        operation = self.document.find_operation(model.item_id)
-        if operation is None or operation.kind not in BOOLEAN_OPERATION_KINDS:
-            return ""
-        return operation.id
-
-    def _boolean_parent_id_for_tree_node(self, node: TreeNode | None) -> str:
-        model = self._tree_node_model(node)
-        if model is None or not model.is_boolean_input:
-            return ""
-        parent_operation = self.document.find_operation(model.parent_operation_id)
-        if parent_operation is None:
-            return ""
-        if model.input_index < 0 or model.input_index >= len(parent_operation.inputs):
-            return ""
-        return parent_operation.id
 
     def _on_scene_mouse_down(self, x: float, y: float, width: int, height: int) -> bool:
         drag = self._pick_selected_contour_point(x, y, width, height)
@@ -1611,94 +1529,9 @@ class CadApp:
 
 
 def run_cad_app(title: str = "termin-csg CAD", size: tuple[int, int] = (1200, 760)) -> None:
-    window = SDLBackendWindow(title, int(size[0]), int(size[1]))
-    window.maximize()
-    graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
-    ui = UI(graphics=graphics)
-    app = CadApp()
-    ui.root = app.build_ui(ui)
-    scene_renderer = CsgSceneRenderer(graphics)
+    from termin.csg.cad_runtime import run_cad_app as _run_cad_app
 
-    sdl2.SDL_StartTextInput()
-    event = sdl2.SDL_Event()
-    try:
-        while not window.should_close():
-            if sdl2.SDL_WaitEventTimeout(ctypes.byref(event), 16):
-                _dispatch_event(window, ui, event)
-                while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
-                    _dispatch_event(window, ui, event)
-
-            width, height = window.framebuffer_size()
-            if width <= 0 or height <= 0:
-                continue
-            if app.dirty:
-                app.render_scene(scene_renderer)
-            texture = ui.render_compose(width, height, background_color=(0.10, 0.10, 0.12, 1.0))
-            ui.process_deferred()
-            if texture is not None:
-                window.present(texture)
-    finally:
-        scene_renderer.close()
-        window.close()
-        sdl2.SDL_Quit()
-
-
-def _dispatch_event(window, ui: UI, ev) -> None:
-    event_type = ev.type
-    if event_type == sdl2.SDL_QUIT:
-        window.set_should_close(True)
-    elif event_type == sdl2.SDL_KEYDOWN:
-        key = _translate_key(ev.key.keysym.scancode)
-        mods = _translate_mods(sdl2.SDL_GetModState())
-        if ui.key_down(key, mods):
-            return
-        if key == Key.ESCAPE:
-            window.set_should_close(True)
-    elif event_type == sdl2.SDL_TEXTINPUT:
-        ui.text_input(ev.text.text.decode("utf-8"))
-    elif event_type == sdl2.SDL_WINDOWEVENT:
-        if ev.window.event == sdl2.SDL_WINDOWEVENT_CLOSE:
-            window.set_should_close(True)
-    elif event_type == sdl2.SDL_MOUSEMOTION:
-        ui.mouse_move(float(ev.motion.x), float(ev.motion.y))
-    elif event_type == sdl2.SDL_MOUSEBUTTONDOWN:
-        ui.mouse_down(
-            float(ev.button.x),
-            float(ev.button.y),
-            _SDL_BUTTON_MAP.get(ev.button.button, MouseButton.LEFT),
-            _translate_mods(sdl2.SDL_GetModState()),
-        )
-    elif event_type == sdl2.SDL_MOUSEBUTTONUP:
-        ui.mouse_up(
-            float(ev.button.x),
-            float(ev.button.y),
-            _SDL_BUTTON_MAP.get(ev.button.button, MouseButton.LEFT),
-            _translate_mods(sdl2.SDL_GetModState()),
-        )
-    elif event_type == sdl2.SDL_MOUSEWHEEL:
-        mx, my = ctypes.c_int(), ctypes.c_int()
-        sdl2.SDL_GetMouseState(ctypes.byref(mx), ctypes.byref(my))
-        ui.mouse_wheel(
-            float(ev.wheel.x),
-            float(ev.wheel.y),
-            float(mx.value),
-            float(my.value),
-            _translate_mods(sdl2.SDL_GetModState()),
-        )
-
-
-def _translate_key(scancode: int) -> Key:
-    if scancode in _KEY_MAP:
-        return _KEY_MAP[scancode]
-    keycode = sdl2.SDL_GetKeyFromScancode(scancode)
-    if ord("a") <= keycode <= ord("z"):
-        keycode -= 32
-    if 0 <= keycode < 128:
-        try:
-            return Key(keycode)
-        except ValueError:
-            return Key.UNKNOWN
-    return Key.UNKNOWN
+    _run_cad_app(title, size)
 
 
 def _contour_role_label(role: str) -> str:
@@ -1713,17 +1546,6 @@ def _param_vec3(params: dict, key: str, default: tuple[float, float, float]) -> 
         return (float(value[0]), float(value[1]), float(value[2]))
     except Exception:
         return default
-
-
-def _translate_mods(sdl_mods: int) -> int:
-    result = 0
-    if sdl_mods & (sdl2.KMOD_LSHIFT | sdl2.KMOD_RSHIFT):
-        result |= Mods.SHIFT.value
-    if sdl_mods & (sdl2.KMOD_LCTRL | sdl2.KMOD_RCTRL):
-        result |= Mods.CTRL.value
-    if sdl_mods & (sdl2.KMOD_LALT | sdl2.KMOD_RALT):
-        result |= Mods.ALT.value
-    return result
 
 
 __all__ = [
