@@ -18,6 +18,7 @@ from termin.csg.procedural_document import (
     ProceduralPlane,
 )
 
+Vec2Data = tuple[float, float]
 Vec3Data = tuple[float, float, float]
 SelectionData = tuple[str, str]
 
@@ -203,6 +204,27 @@ def set_sketch_plane(
     return True
 
 
+def set_contour_point(
+    document: ProceduralMeshDocument,
+    contour_id: str,
+    point_index: int,
+    point: Vec2Data,
+) -> bool:
+    contour = _find_contour(document, contour_id)
+    if contour is None:
+        log.error(f"[CsgDocumentEdit] cannot set contour point: contour not found '{contour_id}'")
+        return False
+    index = int(point_index)
+    if index < 0 or index >= len(contour.points):
+        log.error(
+            "[CsgDocumentEdit] cannot set contour point: "
+            f"index out of range contour='{contour_id}' index={index} points={len(contour.points)}"
+        )
+        return False
+    contour.points[index] = (float(point[0]), float(point[1]))
+    return True
+
+
 def _boolean_input_ids_for_selection(
     document: ProceduralMeshDocument,
     selection: SelectionData | None,
@@ -226,6 +248,14 @@ def _boolean_input_ids_for_selection(
         log.error(f"[CsgDocumentEdit] cannot add boolean operation: selected operation has no previous input '{selected_id}'")
         return []
     return [enabled_operations[selected_index - 1].id, selected_id]
+
+
+def _find_contour(document: ProceduralMeshDocument, contour_id: str) -> ContourDocument | None:
+    for sketch in document.items:
+        for contour in sketch.contours:
+            if contour.id == contour_id:
+                return contour
+    return None
 
 
 def _vec_cross(a: Vec3Data, b: Vec3Data) -> Vec3Data:
@@ -252,6 +282,7 @@ __all__ = [
     "close_draft_contour",
     "selected_sketch_id",
     "selected_operation_id",
+    "set_contour_point",
     "set_extrude_vector",
     "set_sketch_plane",
     "start_sketch_draft",

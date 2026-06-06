@@ -11,7 +11,7 @@ from termin.csg.cad import box, circle, mesh, rect
 from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
 from termin.csg.document_tree_model import build_document_tree
-from termin.csg.document_edit import set_sketch_plane
+from termin.csg.document_edit import set_contour_point, set_sketch_plane
 from termin.csg.procedural_document import ProceduralPlane
 from termin.csg.viewer_camera import OrbitCamera
 
@@ -205,6 +205,46 @@ def test_procedural_document_boolean_subtract_and_intersect_volumes():
     assert isclose(evaluated[0].solid.volume, 2.0, abs_tol=1.0e-6)
 
 
+def test_procedural_document_subtracts_downward_extrude_as_cutting_tool():
+    document = ProceduralMeshDocument()
+    base = document.add_contour_from_points(
+        [
+            (-1.0, -1.0, 0.0),
+            (1.0, -1.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (-1.0, 1.0, 0.0),
+        ]
+    )
+    assert base is not None
+    base_op = document.add_extrude_operation_for_sketch(
+        document.find_sketch_id_for_contour(base.id),
+        height=1.0,
+    )
+    assert base_op is not None
+
+    cutter = document.add_contour_on_plane_from_points(
+        [
+            (-0.4, -0.4, 1.0),
+            (0.4, -0.4, 1.0),
+            (0.4, 0.4, 1.0),
+            (-0.4, 0.4, 1.0),
+        ],
+        ProceduralPlane(origin=(0.0, 0.0, 1.0)),
+    )
+    assert cutter is not None
+    cutter_op = document.add_extrude_operation_for_sketch(
+        document.find_sketch_id_for_contour(cutter.id),
+        vector=(0.0, 0.0, -0.5),
+    )
+    assert cutter_op is not None
+    subtract_op = document.add_boolean_operation("subtract", [base_op.id, cutter_op.id])
+    assert subtract_op is not None
+
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert isclose(evaluated[0].solid.volume, 3.68, abs_tol=1.0e-6)
+
+
 def test_set_sketch_plane_updates_contour_document_space_points():
     document = ProceduralMeshDocument()
     contour = document.add_contour_from_points(
@@ -232,6 +272,24 @@ def test_set_sketch_plane_updates_contour_document_space_points():
     points = sketch.contour_points(contour)
     assert points[0] == (0.0, 0.0, 2.0)
     assert points[2] == (1.0, 1.0, 2.0)
+
+
+def test_set_contour_point_updates_local_contour_coordinates():
+    document = ProceduralMeshDocument()
+    contour = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+
+    assert set_contour_point(document, contour.id, 2, (2.0, 1.5))
+    assert contour.points[2] == (2.0, 1.5)
+    assert not set_contour_point(document, contour.id, 99, (0.0, 0.0))
+    assert not set_contour_point(document, "missing", 0, (0.0, 0.0))
 
 
 def test_document_raycast_uses_evaluated_solids_in_document_space():
@@ -366,6 +424,34 @@ def test_cad_app_plane_parameter_panel_updates_sketch_plane():
     sketch = app.document.find_sketch(sketch_id)
     assert sketch is not None
     assert sketch.plane.origin == (0.0, 0.0, 2.5)
+
+
+def test_cad_app_contour_parameter_panel_updates_contour_points():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    app._build_contour_params_panel()
+    contour = app.document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+
+    app.selected_node_data = ("contour", contour.id)
+    app._refresh_contour_params_panel()
+    assert app.contour_params_panel.visible is True
+    assert app.contour_point_inputs[(2, "x")].value == 1.0
+    assert app.contour_point_inputs[(2, "y")].value == 1.0
+
+    app.contour_point_inputs[(2, "x")].value = 1.75
+    app.contour_point_inputs[(2, "y")].value = 1.25
+    app._on_contour_point_changed(2, "y", 1.25)
+
+    assert contour.points[2] == (1.75, 1.25)
 
 
 def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():

@@ -182,6 +182,8 @@ def _evaluated_solid_in_document_space(evaluated: EvaluatedSolid) -> Solid | Non
             dtype=np.float32,
         )
         triangles = np.asarray(mesh.triangles, dtype=np.uint32).reshape(-1, 3)
+        if _mesh_signed_volume(transformed, triangles) < 0.0:
+            triangles = np.ascontiguousarray(triangles[:, [0, 2, 1]], dtype=np.uint32)
         return from_mesh3(
             Mesh3(
                 name="csg-document-space",
@@ -216,6 +218,16 @@ def _fold_boolean(kind: str, operands: list[Solid]) -> Solid:
 
 def _identity_point_transform(point: Vec3Data) -> Vec3Data:
     return point
+
+
+def _mesh_signed_volume(vertices: np.ndarray, triangles: np.ndarray) -> float:
+    volume = 0.0
+    for triangle in triangles:
+        a = vertices[int(triangle[0])]
+        b = vertices[int(triangle[1])]
+        c = vertices[int(triangle[2])]
+        volume += float(np.dot(a, np.cross(b, c))) / 6.0
+    return volume
 
 
 def sketch_point_transform(sketch: SketchItemDocument):

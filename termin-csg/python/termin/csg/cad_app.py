@@ -35,6 +35,7 @@ from termin.csg.document_edit import (
     clear_document,
     close_draft_contour,
     selected_sketch_id,
+    set_contour_point,
     set_extrude_vector,
     set_sketch_plane,
     start_sketch_draft,
@@ -89,6 +90,9 @@ class CadApp:
         self.plane_params_title = Label()
         self.plane_inputs: dict[str, SpinBox] = {}
         self._syncing_plane_params = False
+        self.contour_params_panel = Panel()
+        self.contour_point_inputs: dict[tuple[int, str], SpinBox] = {}
+        self._syncing_contour_params = False
         self.dirty = True
         self.preview_revision = 0
 
@@ -219,6 +223,7 @@ class CadApp:
 
         root.add_child(self._build_operation_params_panel())
         root.add_child(self._build_plane_params_panel())
+        root.add_child(self._build_contour_params_panel())
 
         return root
 
@@ -356,6 +361,78 @@ class CadApp:
         spin.on_changed = self._on_plane_param_changed
         self.plane_inputs[f"{group}.{axis}"] = spin
         row.add_child(spin)
+        return row
+
+    def _build_contour_params_panel(self) -> Panel:
+        for child in self.contour_params_panel.children[:]:
+            self.contour_params_panel.remove_child(child)
+        self.contour_point_inputs.clear()
+
+        self.contour_params_panel.padding = 8
+        self.contour_params_panel.background_color = (0.10, 0.105, 0.12, 1.0)
+        self.contour_params_panel.visible = False
+        return self.contour_params_panel
+
+    def _rebuild_contour_params_panel(self, contour) -> None:
+        for child in self.contour_params_panel.children[:]:
+            self.contour_params_panel.remove_child(child)
+        self.contour_point_inputs.clear()
+
+        body = VStack()
+        body.spacing = 5
+
+        title = Label()
+        title.text = f"Contour: {contour.name}"
+        title.color = (0.84, 0.88, 0.94, 1.0)
+        body.add_child(title)
+
+        hint = Label()
+        hint.text = "Local points"
+        hint.color = (0.58, 0.64, 0.72, 1.0)
+        body.add_child(hint)
+
+        separator = Separator()
+        separator.orientation = "horizontal"
+        body.add_child(separator)
+
+        self._syncing_contour_params = True
+        for index, point in enumerate(contour.points):
+            row = self._build_contour_point_row(index)
+            self.contour_point_inputs[(index, "x")].value = point[0]
+            self.contour_point_inputs[(index, "y")].value = point[1]
+            body.add_child(row)
+        self._syncing_contour_params = False
+
+        self.contour_params_panel.add_child(body)
+
+    def _build_contour_point_row(self, point_index: int) -> HStack:
+        row = HStack()
+        row.spacing = 6
+        row.preferred_height = px(26)
+
+        label = Label()
+        label.text = f"P{point_index}"
+        label.color = (0.58, 0.64, 0.72, 1.0)
+        label.preferred_width = px(32)
+        row.add_child(label)
+
+        for axis in ("x", "y"):
+            axis_label = Label()
+            axis_label.text = axis.upper()
+            axis_label.color = (0.58, 0.64, 0.72, 1.0)
+            axis_label.preferred_width = px(14)
+            row.add_child(axis_label)
+
+            spin = SpinBox()
+            spin.decimals = 3
+            spin.step = 0.1
+            spin.min_value = -1000000.0
+            spin.max_value = 1000000.0
+            spin.preferred_height = px(24)
+            spin.stretch = True
+            spin.on_changed = lambda value, i=point_index, a=axis: self._on_contour_point_changed(i, a, value)
+            self.contour_point_inputs[(point_index, axis)] = spin
+            row.add_child(spin)
         return row
 
     def new_document(self) -> None:
@@ -530,6 +607,7 @@ class CadApp:
         self._refresh_labels()
         self._refresh_operation_params_panel()
         self._refresh_plane_params_panel()
+        self._refresh_contour_params_panel()
         if self.tree._ui is not None:
             self.tree._ui.request_layout()
 
@@ -568,6 +646,7 @@ class CadApp:
         self._refresh_labels()
         self._refresh_operation_params_panel()
         self._refresh_plane_params_panel()
+        self._refresh_contour_params_panel()
         self.request_preview_rebuild()
 
     def _on_scene_click(self, x: float, y: float, width: int, height: int) -> bool:
@@ -654,6 +733,15 @@ class CadApp:
         self._syncing_plane_params = False
         self._set_plane_params_visible(True)
 
+    def _refresh_contour_params_panel(self) -> None:
+        contour_ref = self._selected_contour_ref()
+        if contour_ref is None:
+            self._set_contour_params_visible(False)
+            return
+        _sketch, contour = contour_ref
+        self._rebuild_contour_params_panel(contour)
+        self._set_contour_params_visible(True)
+
     def _set_operation_params_visible(self, visible: bool) -> None:
         if self.operation_params_panel.visible == visible:
             return
@@ -665,6 +753,13 @@ class CadApp:
         if self.plane_params_panel.visible == visible:
             return
         self.plane_params_panel.visible = visible
+        if self.ui is not None:
+            self.ui.request_layout()
+
+    def _set_contour_params_visible(self, visible: bool) -> None:
+        if self.contour_params_panel.visible == visible:
+            return
+        self.contour_params_panel.visible = visible
         if self.ui is not None:
             self.ui.request_layout()
 
@@ -683,6 +778,18 @@ class CadApp:
         if kind != "plane":
             return None
         return self.document.find_sketch(item_id)
+
+    def _selected_contour_ref(self):
+        if self.selected_node_data is None:
+            return None
+        kind, item_id = self.selected_node_data
+        if kind != "contour":
+            return None
+        for sketch in self.document.items:
+            for contour in sketch.contours:
+                if contour.id == item_id:
+                    return (sketch, contour)
+        return None
 
     def _on_extrude_vector_changed(self, _value: float) -> None:
         if self._syncing_operation_params:
@@ -724,6 +831,34 @@ class CadApp:
         log.info(
             "[CsgCad] plane changed "
             f"sketch='{sketch.id}' origin={plane.origin} x_axis={plane.x_axis} y_axis={plane.y_axis}"
+        )
+
+    def _on_contour_point_changed(self, point_index: int, axis: str, _value: float) -> None:
+        if self._syncing_contour_params:
+            return
+        contour_ref = self._selected_contour_ref()
+        if contour_ref is None:
+            log.error("[CsgCad] cannot update contour point: no contour is selected")
+            return
+        _sketch, contour = contour_ref
+        x_key = (point_index, "x")
+        y_key = (point_index, "y")
+        if x_key not in self.contour_point_inputs or y_key not in self.contour_point_inputs:
+            log.error(
+                "[CsgCad] cannot update contour point: "
+                f"input widgets are missing contour='{contour.id}' index={point_index} axis='{axis}'"
+            )
+            return
+        point = (
+            float(self.contour_point_inputs[x_key].value),
+            float(self.contour_point_inputs[y_key].value),
+        )
+        if not set_contour_point(self.document, contour.id, point_index, point):
+            return
+        self.request_preview_rebuild()
+        log.info(
+            "[CsgCad] contour point changed "
+            f"contour='{contour.id}' index={point_index} point=({point[0]:.3f}, {point[1]:.3f})"
         )
 
     def _set_plane_input_vec(self, group: str, value: tuple[float, float, float]) -> None:
