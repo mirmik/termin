@@ -121,6 +121,11 @@ class CsgEditorController:
         self.draft = start_sketch_draft()
         return CsgEditorCommandResult(True, "Drawing sketch", preview_changed=True)
 
+    def cancel_current_tool(self) -> CsgEditorCommandResult:
+        self.mode = "idle"
+        self.draft = start_sketch_draft()
+        return CsgEditorCommandResult(True, "Tool cleared", preview_changed=True)
+
     def start_add_outer_contour(self) -> CsgEditorCommandResult:
         sketch = self.selected_sketch()
         if sketch is None:

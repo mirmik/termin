@@ -17,14 +17,6 @@ from tcgui.widgets.units import px
 from termin.editor_tcgui.component_editor_extension import (
     register_component_editor_extension,
 )
-from termin.csg.document_edit import (
-    SketchDraft,
-    add_draft_point_from_ray,
-    add_extrude_for_selection,
-    clear_document,
-    close_draft_contour,
-    start_sketch_draft,
-)
 from termin.csg.document_eval import evaluate_document
 from termin.csg.document_tree_model import (
     DocumentTreeNode,
@@ -32,12 +24,17 @@ from termin.csg.document_tree_model import (
     document_summary,
 )
 from termin.csg.document_visual_model import build_document_visual_model
-from termin.csg.procedural_document import ProceduralPlane
+from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController
+from termin.csg.procedural_document import BOOLEAN_OPERATION_KINDS, PRIMITIVE_KINDS, ProceduralPlane
 from termin.csg.solid_render import (
     PointTransform,
     SolidRenderStyle,
     draw_solid,
 )
+
+
+_BOOLEAN_BUTTON_ORDER = ("union", "subtract", "intersect")
+_PRIMITIVE_BUTTON_ORDER = ("box", "sphere", "cylinder", "cone")
 
 
 @dataclass
@@ -53,13 +50,11 @@ class ProceduralMeshEditorExtension:
         self._entity = None
         self._component_ref = None
         self._component = None
-        self._mode = "idle"
+        self._controller = CsgEditorController()
         self._mode_label = Label()
         self._document_summary_label = Label()
         self._selection_label = Label()
         self._document_tree = TreeWidget()
-        self._selected_node_data: tuple[str, str] | None = None
-        self._draft: SketchDraft = start_sketch_draft()
 
     def attach(self, editor, entity, component_ref) -> None:
         self._editor = editor
@@ -68,6 +63,8 @@ class ProceduralMeshEditorExtension:
         self._component = component_ref.to_python()
         if self._component is None:
             log.error("[ProceduralMeshEditor] failed to resolve ProceduralMeshComponent object")
+        else:
+            self._controller.replace_document(self._component.document)
         editor.add_viewport_click_interceptor(self._on_viewport_click)
         editor.add_viewport_overlay_drawer(self._draw_overlay)
         log.info("[ProceduralMeshEditor] extension attached")
@@ -81,8 +78,7 @@ class ProceduralMeshEditorExtension:
         self._entity = None
         self._component_ref = None
         self._component = None
-        self._mode = "idle"
-        self._draft = start_sketch_draft()
+        self._controller = CsgEditorController()
         log.info("[ProceduralMeshEditor] extension detached")
 
     def build_panel(self):
@@ -121,6 +117,32 @@ class ProceduralMeshEditorExtension:
         row2.add_child(self._make_button("Clear Tool", "idle"))
         root.add_child(row2)
 
+        primitive_row = HStack()
+        primitive_row.spacing = 4
+        primitive_row.preferred_height = px(28)
+        for kind in _PRIMITIVE_BUTTON_ORDER:
+            if kind in PRIMITIVE_KINDS:
+                primitive_row.add_child(
+                    self._make_command_button(
+                        kind.capitalize(),
+                        lambda k=kind: self._add_primitive_operation(k),
+                    )
+                )
+        root.add_child(primitive_row)
+
+        boolean_row = HStack()
+        boolean_row.spacing = 4
+        boolean_row.preferred_height = px(28)
+        for kind in _BOOLEAN_BUTTON_ORDER:
+            if kind in BOOLEAN_OPERATION_KINDS:
+                boolean_row.add_child(
+                    self._make_command_button(
+                        kind.capitalize(),
+                        lambda k=kind: self._add_boolean_operation(k),
+                    )
+                )
+        root.add_child(boolean_row)
+
         doc_title = Label()
         doc_title.text = "Document Tree"
         root.add_child(doc_title)
@@ -149,16 +171,27 @@ class ProceduralMeshEditorExtension:
         btn.on_click = lambda m=mode: self._set_mode(m)
         return btn
 
+    def _make_command_button(self, text: str, callback) -> Button:
+        btn = Button()
+        btn.text = text
+        btn.on_click = callback
+        return btn
+
     def _set_mode(self, mode: str) -> None:
-        self._mode = mode
-        self._mode_label.text = self._mode_text()
-        self._request_viewport_update()
-        log.info(f"[ProceduralMeshEditor] mode={mode}")
+        if mode == "draw_sketch":
+            result = self._controller.start_draw_sketch()
+        elif mode == "idle":
+            result = self._controller.cancel_current_tool()
+        else:
+            log.error(f"[ProceduralMeshEditor] unknown mode requested '{mode}'")
+            result = CsgEditorCommandResult.failed("Unknown mode")
+        if self._apply_controller_result(result):
+            log.info(f"[ProceduralMeshEditor] mode={self._controller.mode}")
 
     def _mode_text(self) -> str:
         return (
-            f"Mode: {self._mode}; "
-            f"draft points: {len(self._draft.points)}; "
+            f"Mode: {self._controller.mode}; "
+            f"draft points: {len(self._controller.draft.points)}; "
             f"contours: {self._document_contour_count()}"
         )
 
@@ -166,56 +199,56 @@ class ProceduralMeshEditorExtension:
         self._mode_label.text = self._mode_text()
 
     def _close_contour(self) -> None:
-        component = self._component
-        if component is None:
-            log.error("[ProceduralMeshEditor] cannot close contour: component object is not available")
+        if not self._ensure_controller_document():
             return
-        result = close_draft_contour(component.document, self._draft)
-        if not result.success:
+        result = self._controller.close_contour()
+        if not self._apply_controller_result(result):
             return
-        self._selected_node_data = result.selection
-        self._refresh_mode_label()
-        self._refresh_document_tree()
-        self._request_viewport_update()
         log.info(
             "[ProceduralMeshEditor] contour closed "
             f"contours={self._document_contour_count()}"
         )
 
     def _add_extrude_operation(self) -> None:
-        component = self._component
-        if component is None:
-            log.error("[ProceduralMeshEditor] cannot extrude: component object is not available")
+        if not self._ensure_controller_document():
             return
-        node_data = self._selected_node_data
-        if node_data is None or node_data[0] != "sketch":
-            log.error("[ProceduralMeshEditor] cannot extrude: select a sketch node first")
+        previous_selection = self._controller.selection
+        result = self._controller.extrude_selected()
+        if not self._apply_controller_result(result):
             return
-        result = add_extrude_for_selection(component.document, node_data, 1.0)
-        if not result.success:
+        log.info(f"[ProceduralMeshEditor] extrude operation added for selection='{previous_selection}'")
+
+    def _add_primitive_operation(self, kind: str) -> None:
+        if not self._ensure_controller_document():
             return
-        self._selected_node_data = result.selection
-        self._refresh_mode_label()
-        self._refresh_document_tree()
-        self._request_viewport_update()
-        log.info(f"[ProceduralMeshEditor] extrude operation added for selection='{node_data}'")
+        result = self._controller.add_primitive(kind)
+        if not self._apply_controller_result(result):
+            return
+        log.info(
+            "[ProceduralMeshEditor] primitive operation added "
+            f"kind='{kind}' selection='{self._controller.selection}'"
+        )
+
+    def _add_boolean_operation(self, kind: str) -> None:
+        if not self._ensure_controller_document():
+            return
+        result = self._controller.add_boolean_operation(kind)
+        if not self._apply_controller_result(result):
+            return
+        log.info(
+            "[ProceduralMeshEditor] boolean operation added "
+            f"kind='{kind}' selection='{self._controller.selection}'"
+        )
 
     def _clear_sketch(self) -> None:
-        component = self._component
-        if component is not None:
-            component.document = clear_document()
-        self._draft = start_sketch_draft()
-        self._selected_node_data = None
-        self._refresh_mode_label()
-        self._refresh_document_tree()
-        self._request_viewport_update()
+        if not self._ensure_controller_document():
+            return
+        result = self._controller.new_document()
+        self._apply_controller_result(result)
         log.info("[ProceduralMeshEditor] sketch cleared")
 
     def _document_contour_count(self) -> int:
-        component = self._component
-        if component is None:
-            return 0
-        return component.document.contour_count()
+        return self._controller.document.contour_count()
 
     def _refresh_document_tree(self) -> None:
         self._document_tree.clear()
@@ -225,9 +258,11 @@ class ProceduralMeshEditorExtension:
             self._selection_label.text = "Selection: <none>"
             self._document_tree.add_root(self._tree_node("No component object", ("info", "none")))
             return
+        if self._controller.document is not component.document:
+            self._controller.replace_document(component.document, self._controller.selection)
 
-        self._document_summary_label.text = document_summary(component.document)
-        roots = [self._to_tree_node(root) for root in build_document_tree(component.document)]
+        self._document_summary_label.text = document_summary(self._controller.document)
+        roots = [self._to_tree_node(root) for root in build_document_tree(self._controller.document)]
 
         for node in roots:
             self._document_tree.add_root(node)
@@ -253,7 +288,7 @@ class ProceduralMeshEditorExtension:
 
     def _restore_tree_selection(self, roots: list[TreeNode]) -> None:
         for root in roots:
-            selected = self._find_tree_node(root, self._selected_node_data)
+            selected = self._find_tree_node(root, self._controller.selection)
             if selected is not None:
                 self._document_tree.selected_node = selected
                 selected._selected = True
@@ -271,15 +306,40 @@ class ProceduralMeshEditorExtension:
         return None
 
     def _on_document_node_selected(self, node: TreeNode) -> None:
-        self._selected_node_data = node.data
-        self._refresh_selection_label()
+        self._apply_controller_result(self._controller.select_node(node.data))
 
     def _refresh_selection_label(self) -> None:
-        node_data = self._selected_node_data
+        node_data = self._controller.selection
         if node_data is None:
             self._selection_label.text = "Selection: <none>"
             return
         self._selection_label.text = f"Selection: {node_data[0]} {self._short_id(node_data[1])}"
+
+    def _ensure_controller_document(self) -> bool:
+        component = self._component
+        if component is None:
+            log.error("[ProceduralMeshEditor] component object is not available")
+            return False
+        if self._controller.document is not component.document:
+            self._controller.replace_document(component.document, self._controller.selection)
+        return True
+
+    def _apply_controller_result(self, result: CsgEditorCommandResult) -> bool:
+        if not result.success:
+            if result.message:
+                log.error(f"[ProceduralMeshEditor] command failed: {result.message}")
+            return False
+        component = self._component
+        if component is not None and result.document_changed:
+            component.document = self._controller.document
+        self._refresh_mode_label()
+        if result.tree_changed or result.selection_changed:
+            self._refresh_document_tree()
+        else:
+            self._refresh_selection_label()
+        if result.preview_changed:
+            self._request_viewport_update()
+        return True
 
     def _short_id(self, value: str) -> str:
         if len(value) <= 10:
@@ -316,11 +376,9 @@ class ProceduralMeshEditorExtension:
         index1: int,
         index2: int,
     ) -> bool:
-        if self._mode == "idle":
+        if self._controller.mode == "idle":
             return False
-        component = self._component
-        if component is None:
-            log.error("[ProceduralMeshEditor] click ignored: component object is not available")
+        if not self._ensure_controller_document():
             return True
 
         picked_name = "<none>"
@@ -348,32 +406,33 @@ class ProceduralMeshEditorExtension:
             return True
 
         ray_origin, ray_direction = local_ray
-        result = add_draft_point_from_ray(
-            component.document,
-            self._draft,
+        result = self._controller.add_draft_point_from_ray(
             ray_origin,
             ray_direction,
             fallback_point=fallback.point,
             fallback_plane=fallback.plane,
             fallback_kind=fallback.kind,
         )
-        if not result.success or result.point is None:
+        if not self._apply_controller_result(result):
             return True
-        local_point = result.point
+        if not self._controller.draft.points:
+            log.error("[ProceduralMeshEditor] click ignored: controller did not add a draft point")
+            return True
+        local_point = self._controller.draft.points[-1]
         world_point = self._world_point_from_local(local_point)
         if world_point is None:
             return True
 
-        if self._mode == "draw_sketch":
+        if self._controller.mode == "draw_sketch":
             self._refresh_mode_label()
             self._request_viewport_update()
 
         log.info(
             "[ProceduralMeshEditor] viewport click "
-            f"mode={self._mode} screen=({x:.1f}, {y:.1f}) picked='{picked_name}' "
-            f"{result.kind}_world=({world_point[0]:.3f}, {world_point[1]:.3f}, {world_point[2]:.3f}) "
+            f"mode={self._controller.mode} screen=({x:.1f}, {y:.1f}) picked='{picked_name}' "
+            f"{fallback.kind}_world=({world_point[0]:.3f}, {world_point[1]:.3f}, {world_point[2]:.3f}) "
             f"local=({local_point[0]:.3f}, {local_point[1]:.3f}, {local_point[2]:.3f}) "
-            f"tri={triangle_index} draft_points={len(self._draft.points)}"
+            f"tri={triangle_index} draft_points={len(self._controller.draft.points)}"
         )
         return True
 
@@ -491,10 +550,10 @@ class ProceduralMeshEditorExtension:
     def _draw_document_debug(self, renderer, entity_pose) -> None:
         component = self._component
         if component is not None:
-            document = component.document
+            document = self._controller.document
             evaluated_solids = evaluate_document(document)
             for operation in document.operations:
-                selected = self._selected_node_data == ("operation", operation.id)
+                selected = self._controller.selection == ("operation", operation.id)
                 style = self._solid_style(selected)
                 for evaluated in evaluated_solids:
                     if evaluated.operation_id == operation.id:
@@ -507,8 +566,8 @@ class ProceduralMeshEditorExtension:
 
             visual_model = build_document_visual_model(
                 document,
-                self._draft.points,
-                self._selected_node_data,
+                self._controller.draft.points,
+                self._controller.selection,
             )
             for polyline in visual_model.polylines:
                 self._draw_polyline(
