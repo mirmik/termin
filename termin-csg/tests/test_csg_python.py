@@ -12,7 +12,7 @@ from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
 from termin.csg.document_tree_model import build_document_tree
 from termin.csg.document_edit import set_contour_point, set_sketch_plane
-from termin.csg.procedural_document import ProceduralPlane
+from termin.csg.procedural_document import CONTOUR_ROLE_HOLE, CONTOUR_ROLE_OUTER, ProceduralPlane
 from termin.csg.viewer_camera import OrbitCamera
 
 
@@ -120,6 +120,89 @@ def test_procedural_document_extrudes_along_oblique_and_downward_vectors():
     assert isclose(max(zs), 0.0, abs_tol=1.0e-6)
     assert isclose(max(xs), 1.5, abs_tol=1.0e-6)
     assert isclose(max(ys), 1.25, abs_tol=1.0e-6)
+
+
+def test_procedural_document_extrudes_outer_contours_with_holes():
+    document = ProceduralMeshDocument()
+    outer = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (4.0, 0.0, 0.0),
+            (4.0, 4.0, 0.0),
+            (0.0, 4.0, 0.0),
+        ]
+    )
+    assert outer is not None
+
+    sketch_id = document.find_sketch_id_for_contour(outer.id)
+    hole = document.add_contour_to_sketch_from_points(
+        sketch_id,
+        [
+            (1.0, 1.0, 0.0),
+            (3.0, 1.0, 0.0),
+            (3.0, 3.0, 0.0),
+            (1.0, 3.0, 0.0),
+        ],
+        role=CONTOUR_ROLE_HOLE,
+        parent_contour_id=outer.id,
+    )
+    assert hole is not None
+    assert outer.role == CONTOUR_ROLE_OUTER
+    assert hole.parent_contour_id == outer.id
+
+    operation = document.add_extrude_operation_for_sketch(sketch_id, height=2.0)
+    assert operation is not None
+    assert operation.inputs == [outer.id]
+
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert evaluated[0].contour_id == outer.id
+    assert isclose(evaluated[0].solid.volume, 24.0, abs_tol=1.0e-6)
+
+    roots = build_document_tree(document)
+    assert len(roots) == 1
+    sketch_node = roots[0].children[0]
+    outer_node = sketch_node.children[1]
+    assert outer_node.text.startswith("[Outer]")
+    assert len(outer_node.children) == 1
+    assert outer_node.children[0].text.startswith("[Hole]")
+
+
+def test_procedural_document_evaluates_primitive_operations_and_booleans():
+    document = ProceduralMeshDocument()
+    box_operation = document.add_primitive_operation(
+        "box",
+        {
+            "size": [4.0, 4.0, 2.0],
+            "center": [0.0, 0.0, 0.0],
+        },
+    )
+    cylinder_operation = document.add_primitive_operation(
+        "cylinder",
+        {
+            "radius": 0.5,
+            "height": 4.0,
+            "center": [0.0, 0.0, 0.0],
+            "rotation": [0.0, 90.0, 0.0],
+            "circular_segments": 32,
+        },
+    )
+    assert box_operation is not None
+    assert cylinder_operation is not None
+
+    subtract = document.add_boolean_operation("subtract", [box_operation.id, cylinder_operation.id])
+    assert subtract is not None
+
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert evaluated[0].operation_id == subtract.id
+    assert evaluated[0].solid.volume < 32.0
+    assert evaluated[0].solid.volume > 28.0
+
+    roots = build_document_tree(document)
+    assert roots[0].text.startswith("[Subtract]")
+    assert roots[0].children[0].text.startswith("[Box]")
+    assert roots[0].children[1].text.startswith("[Cylinder]")
 
 
 def test_procedural_document_boolean_operations_evaluate_as_root_operations():
@@ -452,6 +535,134 @@ def test_cad_app_contour_parameter_panel_updates_contour_points():
     app._on_contour_point_changed(2, "y", 1.25)
 
     assert contour.points[2] == (1.75, 1.25)
+
+
+def test_cad_app_drags_selected_contour_point_in_viewport_without_drawing():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    app._build_contour_params_panel()
+    contour = app.document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+    sketch_id = app.document.find_sketch_id_for_contour(contour.id)
+    sketch = app.document.find_sketch(sketch_id)
+    assert sketch is not None
+
+    app.selected_node_data = ("contour", contour.id)
+    app._refresh_contour_params_panel()
+    app.mode = "draw_sketch"
+
+    width = 800
+    height = 600
+    start_screen = app._project_world_to_screen(sketch.plane.unproject(contour.points[2]), width, height)
+    target_screen = app._project_world_to_screen(sketch.plane.unproject((1.5, 1.25)), width, height)
+    assert start_screen is not None
+    assert target_screen is not None
+
+    assert app._on_scene_mouse_down(start_screen[0], start_screen[1], width, height) is True
+    assert app.draft.points == []
+    assert app._on_scene_mouse_move(target_screen[0], target_screen[1], width, height) is True
+    assert app._on_scene_mouse_up(target_screen[0], target_screen[1], width, height) is True
+
+    assert isclose(contour.points[2][0], 1.5, abs_tol=1.0e-3)
+    assert isclose(contour.points[2][1], 1.25, abs_tol=1.0e-3)
+    assert isclose(app.contour_point_inputs[(2, "x")].value, 1.5, abs_tol=1.0e-3)
+    assert isclose(app.contour_point_inputs[(2, "y")].value, 1.25, abs_tol=1.0e-3)
+    assert app.draft.points == []
+
+
+def test_cad_app_close_contour_leaves_draw_sketch_mode():
+    from termin.csg.cad_app import CadApp
+    from termin.csg.document_edit import start_sketch_draft
+
+    app = CadApp()
+    app.start_draw_sketch()
+    app.draft = start_sketch_draft()
+    app.draft.plane = ProceduralPlane()
+    app.draft.points = [
+        (0.0, 0.0, 0.0),
+        (1.0, 0.0, 0.0),
+        (1.0, 1.0, 0.0),
+    ]
+
+    app.close_contour()
+
+    assert app.mode == "idle"
+    assert app.draft.points == []
+    assert app.document.contour_count() == 1
+
+
+def test_cad_app_add_hole_action_closes_contour_inside_selected_outer():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    outer = app.document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (4.0, 0.0, 0.0),
+            (4.0, 4.0, 0.0),
+            (0.0, 4.0, 0.0),
+        ]
+    )
+    assert outer is not None
+
+    sketch_id = app.document.find_sketch_id_for_contour(outer.id)
+    app.selected_node_data = ("contour", outer.id)
+    app.start_add_hole_contour()
+    assert app.mode == "draw_sketch"
+    assert app.draft.sketch_id == sketch_id
+    assert app.draft.contour_role == CONTOUR_ROLE_HOLE
+    assert app.draft.parent_contour_id == outer.id
+
+    app.draft.points = [
+        (1.0, 1.0, 0.0),
+        (3.0, 1.0, 0.0),
+        (3.0, 3.0, 0.0),
+    ]
+    app.close_contour()
+
+    assert app.mode == "idle"
+    assert app.selected_node_data is not None
+    assert app.selected_node_data[0] == "contour"
+    contour_ref = app.document.find_contour_ref(app.selected_node_data[1])
+    assert contour_ref is not None
+    _sketch, hole = contour_ref
+    assert hole.role == CONTOUR_ROLE_HOLE
+    assert hole.parent_contour_id == outer.id
+
+
+def test_cad_app_primitive_parameter_panel_updates_operation_params():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    app._build_primitive_params_panel()
+    app.add_primitive("box")
+
+    assert app.selected_node_data is not None
+    operation = app.document.find_operation(app.selected_node_data[1])
+    assert operation is not None
+    assert operation.kind == "primitive"
+
+    app._refresh_primitive_params_panel()
+    assert app.primitive_params_panel.visible is True
+    assert app.primitive_param_inputs["size.x"].value == 1.0
+
+    app.primitive_param_inputs["size.x"].value = 2.5
+    app.primitive_param_inputs["center.z"].value = 1.25
+    app._on_primitive_param_changed(2.5)
+
+    assert operation.params["size"] == [2.5, 1.0, 1.0]
+    assert operation.params["center"] == [0.0, 0.0, 1.25]
+    evaluated = evaluate_document(app.document)
+    assert len(evaluated) == 1
+    assert isclose(evaluated[0].solid.volume, 2.5, abs_tol=1.0e-6)
 
 
 def test_cad_app_wireframe_toggle_updates_preview_state():
