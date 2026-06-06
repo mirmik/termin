@@ -11,6 +11,13 @@ from termin.csg.procedural_document import (
     PRIMITIVE_OPERATION_KIND,
     ProceduralMeshDocument,
 )
+from termin.csg.operation_specs import (
+    BOOLEAN_OPERATION_KINDS,
+    boolean_input_role,
+    boolean_operation_label,
+    primitive_label,
+    primitive_param_summary,
+)
 
 
 @dataclass
@@ -19,6 +26,12 @@ class DocumentTreeNode:
     kind: str
     item_id: str
     children: list["DocumentTreeNode"] = field(default_factory=list)
+    parent_operation_id: str = ""
+    input_index: int = -1
+    input_role: str = ""
+    is_boolean_input: bool = False
+    accepts_drop_inside: bool = False
+    accepts_drop_above_below: bool = False
 
 
 def build_document_tree(document: ProceduralMeshDocument) -> list[DocumentTreeNode]:
@@ -52,6 +65,8 @@ def _operation_node(
     operation,
     visited: set[str],
     input_role: str = "",
+    parent_operation_id: str = "",
+    input_index: int = -1,
 ) -> DocumentTreeNode:
     visited.add(operation.id)
     if operation.kind == "extrude":
@@ -68,6 +83,11 @@ def _operation_node(
             ),
             kind="operation",
             item_id=operation.id,
+            parent_operation_id=parent_operation_id,
+            input_index=input_index,
+            input_role=input_role,
+            is_boolean_input=bool(parent_operation_id),
+            accepts_drop_above_below=bool(parent_operation_id),
         )
         if sketch is not None:
             node.children.append(_sketch_node(sketch))
@@ -77,32 +97,74 @@ def _operation_node(
         primitive_kind = str(operation.params.get("primitive_kind", ""))
         node = DocumentTreeNode(
             text=_with_input_role(
-                f"[{_primitive_label(primitive_kind)}] {operation.name}{_primitive_param_text(operation)}",
+                f"[{primitive_label(primitive_kind)}] {operation.name}{primitive_param_summary(operation.params)}",
                 input_role,
             ),
             kind="operation",
             item_id=operation.id,
+            parent_operation_id=parent_operation_id,
+            input_index=input_index,
+            input_role=input_role,
+            is_boolean_input=bool(parent_operation_id),
+            accepts_drop_above_below=bool(parent_operation_id),
         )
         return node
 
-    if operation.kind in ("union", "subtract", "intersect"):
+    if operation.kind in BOOLEAN_OPERATION_KINDS:
         node = DocumentTreeNode(
             text=_with_input_role(
-                f"[{_operation_label(operation.kind)}] {operation.name} inputs={len(operation.inputs)}",
+                f"[{boolean_operation_label(operation.kind)}] {operation.name} inputs={len(operation.inputs)}",
                 input_role,
             ),
             kind="operation",
             item_id=operation.id,
+            parent_operation_id=parent_operation_id,
+            input_index=input_index,
+            input_role=input_role,
+            is_boolean_input=bool(parent_operation_id),
+            accepts_drop_inside=True,
+            accepts_drop_above_below=bool(parent_operation_id),
         )
         for index, input_id in enumerate(operation.inputs):
-            child_role = _boolean_input_role(operation.kind, index)
+            child_role = boolean_input_role(operation.kind, index)
             child = document.find_operation(input_id)
             if child is None:
-                node.children.append(DocumentTreeNode(f"{child_role} [Missing Operation] {input_id}", "info", input_id))
+                node.children.append(
+                    DocumentTreeNode(
+                        f"{child_role} [Missing Operation] {input_id}",
+                        "info",
+                        input_id,
+                        parent_operation_id=operation.id,
+                        input_index=index,
+                        input_role=child_role,
+                        is_boolean_input=True,
+                        accepts_drop_above_below=True,
+                    )
+                )
             elif child.id in visited:
-                node.children.append(DocumentTreeNode(f"{child_role} [Cycle] {child.name} {_short_id(child.id)}", "info", child.id))
+                node.children.append(
+                    DocumentTreeNode(
+                        f"{child_role} [Cycle] {child.name} {_short_id(child.id)}",
+                        "info",
+                        child.id,
+                        parent_operation_id=operation.id,
+                        input_index=index,
+                        input_role=child_role,
+                        is_boolean_input=True,
+                        accepts_drop_above_below=True,
+                    )
+                )
             else:
-                node.children.append(_operation_node(document, child, visited.copy(), child_role))
+                node.children.append(
+                    _operation_node(
+                        document,
+                        child,
+                        visited.copy(),
+                        child_role,
+                        operation.id,
+                        index,
+                    )
+                )
         return node
 
     return DocumentTreeNode(
@@ -112,64 +174,18 @@ def _operation_node(
         ),
         kind="operation",
         item_id=operation.id,
+        parent_operation_id=parent_operation_id,
+        input_index=input_index,
+        input_role=input_role,
+        is_boolean_input=bool(parent_operation_id),
+        accepts_drop_above_below=bool(parent_operation_id),
     )
-
-
-def _operation_label(kind: str) -> str:
-    if kind == "union":
-        return "Union"
-    if kind == "subtract":
-        return "Subtract"
-    if kind == "intersect":
-        return "Intersect"
-    return kind
-
-
-def _boolean_input_role(kind: str, index: int) -> str:
-    if kind == "subtract":
-        if index == 0:
-            return "[Base]"
-        return "[Cut]"
-    return "[Input]"
 
 
 def _with_input_role(text: str, input_role: str) -> str:
     if not input_role:
         return text
     return f"{input_role} {text}"
-
-
-def _primitive_label(kind: str) -> str:
-    if kind == "box":
-        return "Box"
-    if kind == "sphere":
-        return "Sphere"
-    if kind == "cylinder":
-        return "Cylinder"
-    if kind == "cone":
-        return "Cone"
-    return "Primitive"
-
-
-def _primitive_param_text(operation) -> str:
-    params = operation.params
-    kind = str(params.get("primitive_kind", ""))
-    if kind == "box":
-        return f" size={_format_vec3(_param_vec3(params, 'size', (1.0, 1.0, 1.0)))}"
-    if kind == "sphere":
-        return f" radius={_param_float(params, 'radius', 0.5):.2f}"
-    if kind == "cylinder":
-        return (
-            f" radius={_param_float(params, 'radius', 0.5):.2f}"
-            f" height={_param_float(params, 'height', 1.0):.2f}"
-        )
-    if kind == "cone":
-        return (
-            f" r0={_param_float(params, 'radius_low', 0.5):.2f}"
-            f" r1={_param_float(params, 'radius_high', 0.0):.2f}"
-            f" height={_param_float(params, 'height', 1.0):.2f}"
-        )
-    return ""
 
 
 def _sketch_node(sketch) -> DocumentTreeNode:
@@ -242,20 +258,6 @@ def _short_id(value: str) -> str:
 def _format_vec3(value: tuple[float, float, float]) -> str:
     return f"({value[0]:.2f},{value[1]:.2f},{value[2]:.2f})"
 
-
-def _param_float(params: dict, key: str, default: float) -> float:
-    try:
-        return float(params.get(key, default))
-    except Exception:
-        return float(default)
-
-
-def _param_vec3(params: dict, key: str, default: tuple[float, float, float]) -> tuple[float, float, float]:
-    value = params.get(key, default)
-    try:
-        return (float(value[0]), float(value[1]), float(value[2]))
-    except Exception:
-        return default
 
 
 __all__ = [

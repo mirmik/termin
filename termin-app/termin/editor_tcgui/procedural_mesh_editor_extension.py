@@ -25,16 +25,13 @@ from termin.csg.document_tree_model import (
 )
 from termin.csg.document_visual_model import build_document_visual_model
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController
-from termin.csg.procedural_document import BOOLEAN_OPERATION_KINDS, PRIMITIVE_KINDS, ProceduralPlane
+from termin.csg.operation_specs import ordered_boolean_operation_specs, ordered_primitive_specs
+from termin.csg.procedural_document import ProceduralPlane
 from termin.csg.solid_render import (
     PointTransform,
     SolidRenderStyle,
     draw_solid,
 )
-
-
-_BOOLEAN_BUTTON_ORDER = ("union", "subtract", "intersect")
-_PRIMITIVE_BUTTON_ORDER = ("box", "sphere", "cylinder", "cone")
 
 
 @dataclass
@@ -120,27 +117,25 @@ class ProceduralMeshEditorExtension:
         primitive_row = HStack()
         primitive_row.spacing = 4
         primitive_row.preferred_height = px(28)
-        for kind in _PRIMITIVE_BUTTON_ORDER:
-            if kind in PRIMITIVE_KINDS:
-                primitive_row.add_child(
-                    self._make_command_button(
-                        kind.capitalize(),
-                        lambda k=kind: self._add_primitive_operation(k),
-                    )
+        for spec in ordered_primitive_specs():
+            primitive_row.add_child(
+                self._make_command_button(
+                    spec.label,
+                    lambda k=spec.kind: self._add_primitive_operation(k),
                 )
+            )
         root.add_child(primitive_row)
 
         boolean_row = HStack()
         boolean_row.spacing = 4
         boolean_row.preferred_height = px(28)
-        for kind in _BOOLEAN_BUTTON_ORDER:
-            if kind in BOOLEAN_OPERATION_KINDS:
-                boolean_row.add_child(
-                    self._make_command_button(
-                        kind.capitalize(),
-                        lambda k=kind: self._add_boolean_operation(k),
-                    )
+        for spec in ordered_boolean_operation_specs():
+            boolean_row.add_child(
+                self._make_command_button(
+                    spec.label,
+                    lambda k=spec.kind: self._add_boolean_operation(k),
                 )
+            )
         root.add_child(boolean_row)
 
         doc_title = Label()
@@ -281,6 +276,7 @@ class ProceduralMeshEditorExtension:
 
     def _to_tree_node(self, source: DocumentTreeNode) -> TreeNode:
         node = self._tree_node(source.text, (source.kind, source.item_id))
+        node.csg_document_node = source
         node.expanded = True
         for child in source.children:
             node.add_node(self._to_tree_node(child))

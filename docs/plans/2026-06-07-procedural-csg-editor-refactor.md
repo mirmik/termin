@@ -8,6 +8,8 @@
 
 - 2026-06-07: Phase 1 выполнена. Добавлен `termin.csg.editor_controller`, основные workflow-команды `CadApp` переведены на общий controller.
 - 2026-06-07: Phase 2 начата. `ProceduralMeshEditorExtension` переведен на общий controller для mode/draft/selection/document commands; добавлены embedded-кнопки primitives и boolean operations через тот же controller.
+- 2026-06-07: Phase 3 начата. Добавлен `termin.csg.operation_specs`; defaults, labels, button order, primitive param schema и tree boolean roles переведены на общий registry без изменения serialized format.
+- 2026-06-07: Phase 4 начата. `DocumentTreeNode` получил metadata для boolean inputs/drop semantics; standalone CAD DnD больше не восстанавливает parent/input index через внутреннюю структуру `TreeWidget`.
 
 ## Контекст
 
