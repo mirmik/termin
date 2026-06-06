@@ -109,9 +109,7 @@ def _evaluate_primitive(operation) -> list[EvaluatedSolid]:
                 f"unknown primitive kind '{primitive_kind}' operation='{operation.id}'"
             )
             return []
-        rotation = _param_vec3(operation.params, "rotation", (0.0, 0.0, 0.0))
-        center = _param_vec3(operation.params, "center", (0.0, 0.0, 0.0))
-        solid = solid.rotated(rotation[0], rotation[1], rotation[2]).translated(center[0], center[1], center[2])
+        solid = _apply_operation_transform_to_solid(solid, operation)
     except Exception as e:
         log.error(
             "[ProceduralMeshDocument] failed to evaluate primitive operation "
@@ -153,7 +151,10 @@ def _evaluate_extrude(document: ProceduralMeshDocument, operation) -> list[Evalu
         return []
 
     extrusion_length = _norm(extrusion_vector)
-    point_transform = sketch_extrude_point_transform(sketch, extrusion_vector, extrusion_length)
+    point_transform = _compose_operation_point_transform(
+        sketch_extrude_point_transform(sketch, extrusion_vector, extrusion_length),
+        operation,
+    )
     results: list[EvaluatedSolid] = []
     for contour in sketch.contours:
         if contour.role == CONTOUR_ROLE_HOLE:
@@ -220,6 +221,7 @@ def _evaluate_boolean(
         )
         return []
 
+    result = _apply_operation_transform_to_solid(result, operation)
     if result.status != "No Error":
         log.error(
             "[ProceduralMeshDocument] boolean operation returned invalid solid "
@@ -305,6 +307,51 @@ def _fold_boolean(kind: str, operands: list[Solid]) -> Solid:
 
 def _identity_point_transform(point: Vec3Data) -> Vec3Data:
     return point
+
+
+def _apply_operation_transform_to_solid(solid: Solid, operation) -> Solid:
+    center, rotation = _operation_transform(operation)
+    return solid.rotated(rotation[0], rotation[1], rotation[2]).translated(center[0], center[1], center[2])
+
+
+def _compose_operation_point_transform(base_transform: PointTransform, operation) -> PointTransform:
+    center, rotation = _operation_transform(operation)
+    if _is_zero_vec3(center) and _is_zero_vec3(rotation):
+        return base_transform
+
+    def transform(point: Vec3Data) -> Vec3Data:
+        return _v_add(_rotate_point_xyz(base_transform(point), rotation), center)
+
+    return transform
+
+
+def _operation_transform(operation) -> tuple[Vec3Data, Vec3Data]:
+    center = _param_vec3(operation.params, "center", (0.0, 0.0, 0.0))
+    rotation = _param_vec3(operation.params, "rotation", (0.0, 0.0, 0.0))
+    return center, rotation
+
+
+def _rotate_point_xyz(point: Vec3Data, rotation_degrees: Vec3Data) -> Vec3Data:
+    rx, ry, rz = np.radians(np.asarray(rotation_degrees, dtype=np.float64))
+    x, y, z = point
+    cx = float(np.cos(rx))
+    sx = float(np.sin(rx))
+    y, z = (y * cx - z * sx, y * sx + z * cx)
+    cy = float(np.cos(ry))
+    sy = float(np.sin(ry))
+    x, z = (x * cy + z * sy, -x * sy + z * cy)
+    cz = float(np.cos(rz))
+    sz = float(np.sin(rz))
+    x, y = (x * cz - y * sz, x * sz + y * cz)
+    return (float(x), float(y), float(z))
+
+
+def _is_zero_vec3(value: Vec3Data) -> bool:
+    return abs(value[0]) < 1.0e-12 and abs(value[1]) < 1.0e-12 and abs(value[2]) < 1.0e-12
+
+
+def _v_add(a: Vec3Data, b: Vec3Data) -> Vec3Data:
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
 
 
 def _mesh_signed_volume(vertices: np.ndarray, triangles: np.ndarray) -> float:

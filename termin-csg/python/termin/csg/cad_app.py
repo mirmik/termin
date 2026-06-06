@@ -32,15 +32,19 @@ from termin.csg.cad_viewer import CadViewportWidget, CsgSceneRenderer, document_
 from termin.csg.cad_state import CAD_STATE_FILTER, CadState, load_cad_state, save_cad_state
 from termin.csg.document_edit import (
     SketchDraft,
+    add_boolean_input,
     add_boolean_for_selection,
     add_draft_point_from_ray,
     add_extrude_for_selection,
     add_primitive_operation,
     clear_document,
     close_draft_contour,
+    move_boolean_input,
+    remove_boolean_input,
     selected_sketch_id,
     set_contour_point,
     set_extrude_vector,
+    set_operation_transform,
     set_primitive_params,
     set_sketch_plane,
     start_sketch_draft,
@@ -49,6 +53,7 @@ from termin.csg.document_eval import extrude_vector_for_operation
 from termin.csg.document_raycast import ray_plane_intersection
 from termin.csg.document_tree_model import DocumentTreeNode, build_document_tree, document_summary
 from termin.csg.procedural_document import (
+    BOOLEAN_OPERATION_KINDS,
     CONTOUR_ROLE_HOLE,
     CONTOUR_ROLE_OUTER,
     PRIMITIVE_OPERATION_KIND,
@@ -109,6 +114,7 @@ class CadApp:
         self.operation_params_title = Label()
         self.operation_params_kind = Label()
         self.extrude_vector_inputs: dict[str, SpinBox] = {}
+        self.operation_transform_inputs: dict[str, SpinBox] = {}
         self._syncing_operation_params = False
         self.primitive_params_panel = Panel()
         self.primitive_params_title = Label()
@@ -295,7 +301,9 @@ class CadApp:
         self.tree.row_height = 22
         self.tree.indent_size = 22
         self.tree.stretch = True
+        self.tree.draggable = True
         self.tree.on_select = self._on_tree_select
+        self.tree.on_drop = self._on_tree_drop
         root.add_child(self.tree)
         return root
 
@@ -309,18 +317,27 @@ class CadApp:
         for child in self.operation_params_panel.children[:]:
             self.operation_params_panel.remove_child(child)
         self.extrude_vector_inputs.clear()
+        self.operation_transform_inputs.clear()
 
         self.operation_params_panel.padding = 8
         self.operation_params_panel.background_color = (0.10, 0.105, 0.12, 1.0)
         self.operation_params_panel.visible = False
+        return self.operation_params_panel
+
+    def _rebuild_operation_params_panel(self, operation) -> bool:
+        for child in self.operation_params_panel.children[:]:
+            self.operation_params_panel.remove_child(child)
+        self.extrude_vector_inputs.clear()
+        self.operation_transform_inputs.clear()
 
         body = VStack()
         body.spacing = 5
 
-        self.operation_params_title.text = "Operation"
+        self.operation_params_title.text = operation.name
         self.operation_params_title.color = (0.84, 0.88, 0.94, 1.0)
         body.add_child(self.operation_params_title)
 
+        self.operation_params_kind.text = f"Kind: {operation.kind}"
         self.operation_params_kind.color = (0.58, 0.64, 0.72, 1.0)
         body.add_child(self.operation_params_kind)
 
@@ -328,16 +345,33 @@ class CadApp:
         separator.orientation = "horizontal"
         body.add_child(separator)
 
-        vector_label = Label()
-        vector_label.text = "Extrude vector"
-        vector_label.color = (0.70, 0.74, 0.80, 1.0)
-        body.add_child(vector_label)
+        self._syncing_operation_params = True
+        if operation.kind == "extrude":
+            source_sketch_id = str(operation.params.get("source_sketch_id", ""))
+            sketch = self.document.find_sketch(source_sketch_id)
+            if sketch is None:
+                self._syncing_operation_params = False
+                log.error(
+                    "[CsgCad] cannot show extrude parameters: "
+                    f"source sketch not found '{source_sketch_id}'"
+                )
+                return False
+            vector = extrude_vector_for_operation(sketch, operation)
+            vector_label = Label()
+            vector_label.text = "Extrude vector"
+            vector_label.color = (0.70, 0.74, 0.80, 1.0)
+            body.add_child(vector_label)
+            for axis in ("x", "y", "z"):
+                row = self._build_vector_row(axis)
+                self.extrude_vector_inputs[axis].value = vector[("x", "y", "z").index(axis)]
+                body.add_child(row)
 
-        for axis in ("x", "y", "z"):
-            body.add_child(self._build_vector_row(axis))
+        self._append_operation_transform_rows(body, "center", "Center", operation.params)
+        self._append_operation_transform_rows(body, "rotation", "Rotation", operation.params)
+        self._syncing_operation_params = False
 
         self.operation_params_panel.add_child(body)
-        return self.operation_params_panel
+        return True
 
     def _build_context_actions_panel(self) -> Panel:
         for child in self.context_actions_panel.children[:]:
@@ -417,6 +451,37 @@ class CadApp:
         self.extrude_vector_inputs[axis] = spin
         row.add_child(spin)
         return row
+
+    def _append_operation_transform_rows(self, body: VStack, group: str, label_text: str, params: dict) -> None:
+        label = Label()
+        label.text = label_text
+        label.color = (0.70, 0.74, 0.80, 1.0)
+        body.add_child(label)
+        value = _param_vec3(params, group, (0.0, 0.0, 0.0))
+        for index, axis in enumerate(("x", "y", "z")):
+            key = f"{group}.{axis}"
+            row = HStack()
+            row.spacing = 6
+            row.preferred_height = px(26)
+
+            axis_label = Label()
+            axis_label.text = axis.upper()
+            axis_label.color = (0.58, 0.64, 0.72, 1.0)
+            axis_label.preferred_width = px(18)
+            row.add_child(axis_label)
+
+            spin = SpinBox()
+            spin.decimals = 3
+            spin.step = 0.1
+            spin.min_value = -1000000.0
+            spin.max_value = 1000000.0
+            spin.preferred_height = px(24)
+            spin.stretch = True
+            spin.value = value[index]
+            spin.on_changed = self._on_operation_transform_changed
+            self.operation_transform_inputs[key] = spin
+            row.add_child(spin)
+            body.add_child(row)
 
     def _build_primitive_params_panel(self) -> Panel:
         for child in self.primitive_params_panel.children[:]:
@@ -988,6 +1053,129 @@ class CadApp:
         self._refresh_contour_params_panel()
         self.request_preview_rebuild()
 
+    def _on_tree_drop(self, dragged_node: TreeNode, target_node: TreeNode | None, position: str) -> None:
+        dragged_data = self._tree_node_data(dragged_node)
+        if dragged_data is None or dragged_data[0] != "operation":
+            log.error("[CsgCad] cannot drop tree node: drag an operation node")
+            return
+        dragged_operation_id = dragged_data[1]
+        if self.document.find_operation(dragged_operation_id) is None:
+            log.error(f"[CsgCad] cannot drop tree node: operation not found '{dragged_operation_id}'")
+            return
+
+        source_boolean_id = self._boolean_parent_id_for_tree_node(dragged_node)
+        if position == "root":
+            if not source_boolean_id:
+                return
+            if not remove_boolean_input(self.document, source_boolean_id, dragged_operation_id):
+                return
+            self._finish_tree_drop(dragged_operation_id, f"Removed input from {source_boolean_id[:10]}")
+            return
+
+        if target_node is None:
+            log.error("[CsgCad] cannot drop tree node: missing drop target")
+            return
+
+        if position == "inside":
+            target_boolean_id = self._boolean_operation_id_for_tree_node(target_node)
+            if not target_boolean_id:
+                log.error("[CsgCad] cannot drop tree node inside target: target is not a boolean operation")
+                return
+            if source_boolean_id:
+                if source_boolean_id == target_boolean_id:
+                    log.error("[CsgCad] cannot drop tree node inside target: input is already in this boolean operation")
+                    return
+                if not move_boolean_input(
+                    self.document,
+                    source_boolean_id,
+                    target_boolean_id,
+                    dragged_operation_id,
+                ):
+                    return
+            elif not add_boolean_input(self.document, target_boolean_id, dragged_operation_id):
+                return
+            self._finish_tree_drop(dragged_operation_id, f"Added input to {target_boolean_id[:10]}")
+            return
+
+        if position not in ("above", "below"):
+            log.error(f"[CsgCad] cannot drop tree node: unsupported drop position '{position}'")
+            return
+
+        target_boolean_id = self._boolean_parent_id_for_tree_node(target_node)
+        if not target_boolean_id:
+            log.error("[CsgCad] cannot reorder boolean input: drop above or below an input inside a boolean operation")
+            return
+        target_data = self._tree_node_data(target_node)
+        if target_data is None:
+            log.error("[CsgCad] cannot reorder boolean input: target node has no document data")
+            return
+        target_operation_id = target_data[1]
+        target_operation = self.document.find_operation(target_boolean_id)
+        if target_operation is None:
+            log.error(f"[CsgCad] cannot reorder boolean input: boolean operation not found '{target_boolean_id}'")
+            return
+        if target_operation_id not in target_operation.inputs:
+            log.error(
+                "[CsgCad] cannot reorder boolean input: "
+                f"target input not found operation='{target_boolean_id}' input='{target_operation_id}'"
+            )
+            return
+        target_index = target_operation.inputs.index(target_operation_id)
+        insert_index = target_index + (1 if position == "below" else 0)
+        if source_boolean_id:
+            if not move_boolean_input(
+                self.document,
+                source_boolean_id,
+                target_boolean_id,
+                dragged_operation_id,
+                insert_index,
+            ):
+                return
+        elif not add_boolean_input(self.document, target_boolean_id, dragged_operation_id, insert_index):
+            return
+        self._finish_tree_drop(dragged_operation_id, f"Moved input in {target_boolean_id[:10]}")
+
+    def _finish_tree_drop(self, operation_id: str, status: str) -> None:
+        self.selected_node_data = ("operation", operation_id)
+        self.refresh_tree()
+        self.request_preview_rebuild()
+        self._set_status(status)
+        log.info(f"[CsgCad] tree drop applied selection='{operation_id}' status='{status}'")
+
+    def _tree_node_data(self, node: TreeNode | None) -> tuple[str, str] | None:
+        if node is None:
+            return None
+        data = node.data
+        if not isinstance(data, tuple) or len(data) != 2:
+            return None
+        return (str(data[0]), str(data[1]))
+
+    def _boolean_operation_id_for_tree_node(self, node: TreeNode | None) -> str:
+        data = self._tree_node_data(node)
+        if data is None or data[0] != "operation":
+            return ""
+        operation = self.document.find_operation(data[1])
+        if operation is None or operation.kind not in BOOLEAN_OPERATION_KINDS:
+            return ""
+        return operation.id
+
+    def _boolean_parent_id_for_tree_node(self, node: TreeNode | None) -> str:
+        if node is None:
+            return ""
+        data = self._tree_node_data(node)
+        if data is None:
+            return ""
+        parent = self.tree._find_parent(node)
+        parent_boolean_id = self._boolean_operation_id_for_tree_node(parent)
+        if not parent_boolean_id:
+            return ""
+        parent_operation = self.document.find_operation(parent_boolean_id)
+        if parent_operation is None:
+            return ""
+        if data[1] not in parent_operation.inputs:
+            return ""
+        return parent_operation.id
+
     def _on_scene_mouse_down(self, x: float, y: float, width: int, height: int) -> bool:
         drag = self._pick_selected_contour_point(x, y, width, height)
         if drag is None:
@@ -1134,27 +1322,15 @@ class CadApp:
         if operation is None:
             self._set_operation_params_visible(False)
             return
-        if operation.kind != "extrude":
+        if operation.kind == PRIMITIVE_OPERATION_KIND:
             self._set_operation_params_visible(False)
             return
-        source_sketch_id = str(operation.params.get("source_sketch_id", ""))
-        sketch = self.document.find_sketch(source_sketch_id)
-        if sketch is None:
+        if operation.kind != "extrude" and operation.kind not in BOOLEAN_OPERATION_KINDS:
             self._set_operation_params_visible(False)
-            log.error(
-                "[CsgCad] cannot show extrude parameters: "
-                f"source sketch not found '{source_sketch_id}'"
-            )
             return
-
-        vector = extrude_vector_for_operation(sketch, operation)
-        self.operation_params_title.text = operation.name
-        self.operation_params_kind.text = f"Kind: {operation.kind}"
-        self._syncing_operation_params = True
-        self.extrude_vector_inputs["x"].value = vector[0]
-        self.extrude_vector_inputs["y"].value = vector[1]
-        self.extrude_vector_inputs["z"].value = vector[2]
-        self._syncing_operation_params = False
+        if not self._rebuild_operation_params_panel(operation):
+            self._set_operation_params_visible(False)
+            return
         self._set_operation_params_visible(True)
 
     def _refresh_primitive_params_panel(self) -> None:
@@ -1298,6 +1474,24 @@ class CadApp:
             f"operation='{operation.id}' vector=({vector[0]:.3f}, {vector[1]:.3f}, {vector[2]:.3f})"
         )
 
+    def _on_operation_transform_changed(self, _value: float) -> None:
+        if self._syncing_operation_params:
+            return
+        operation = self._selected_operation()
+        if operation is None:
+            log.error("[CsgCad] cannot update operation transform: no operation is selected")
+            return
+        center = self._operation_transform_vec("center")
+        rotation = self._operation_transform_vec("rotation")
+        if not set_operation_transform(self.document, operation.id, center, rotation):
+            return
+        self.refresh_tree()
+        self.request_preview_rebuild()
+        log.info(
+            "[CsgCad] operation transform changed "
+            f"operation='{operation.id}' center={center} rotation={rotation}"
+        )
+
     def _on_primitive_param_changed(self, _value: float) -> None:
         if self._syncing_primitive_params:
             return
@@ -1339,6 +1533,13 @@ class CadApp:
         self.refresh_tree()
         self.request_preview_rebuild()
         log.info(f"[CsgCad] primitive params changed operation='{operation.id}' params={params}")
+
+    def _operation_transform_vec(self, group: str) -> tuple[float, float, float]:
+        return (
+            float(self.operation_transform_inputs[f"{group}.x"].value),
+            float(self.operation_transform_inputs[f"{group}.y"].value),
+            float(self.operation_transform_inputs[f"{group}.z"].value),
+        )
 
     def _on_plane_param_changed(self, _value: float) -> None:
         if self._syncing_plane_params:

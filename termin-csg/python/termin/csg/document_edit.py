@@ -12,6 +12,7 @@ from termin.csg.document_raycast import (
     sketch_plane_from_hit,
 )
 from termin.csg.procedural_document import (
+    BOOLEAN_OPERATION_KINDS,
     CONTOUR_ROLE_OUTER,
     PRIMITIVE_OPERATION_KIND,
     ContourDocument,
@@ -206,6 +207,115 @@ def add_boolean_for_selection(
     return DocumentEditResult(True, ("operation", operation.id), operation=operation)
 
 
+def add_boolean_input(
+    document: ProceduralMeshDocument,
+    boolean_operation_id: str,
+    input_operation_id: str,
+    insert_index: int | None = None,
+) -> bool:
+    boolean_operation = _find_boolean_operation(document, boolean_operation_id, "add boolean input")
+    if boolean_operation is None:
+        return False
+    input_operation = document.find_operation(input_operation_id)
+    if input_operation is None:
+        log.error(f"[CsgDocumentEdit] cannot add boolean input: operation not found '{input_operation_id}'")
+        return False
+    if boolean_operation.id == input_operation.id:
+        log.error(f"[CsgDocumentEdit] cannot add boolean input: operation cannot contain itself '{input_operation_id}'")
+        return False
+    if input_operation.id in boolean_operation.inputs:
+        log.error(
+            "[CsgDocumentEdit] cannot add boolean input: "
+            f"duplicate input operation='{boolean_operation.id}' input='{input_operation.id}'"
+        )
+        return False
+    if _operation_depends_on(document, input_operation.id, boolean_operation.id, set()):
+        log.error(
+            "[CsgDocumentEdit] cannot add boolean input: "
+            f"cycle detected operation='{boolean_operation.id}' input='{input_operation.id}'"
+        )
+        return False
+
+    index = _clamped_insert_index(insert_index, len(boolean_operation.inputs))
+    boolean_operation.inputs.insert(index, input_operation.id)
+    return True
+
+
+def remove_boolean_input(
+    document: ProceduralMeshDocument,
+    boolean_operation_id: str,
+    input_operation_id: str,
+) -> bool:
+    boolean_operation = _find_boolean_operation(document, boolean_operation_id, "remove boolean input")
+    if boolean_operation is None:
+        return False
+    if input_operation_id not in boolean_operation.inputs:
+        log.error(
+            "[CsgDocumentEdit] cannot remove boolean input: "
+            f"input not found operation='{boolean_operation.id}' input='{input_operation_id}'"
+        )
+        return False
+    if len(boolean_operation.inputs) <= 2:
+        log.error(
+            "[CsgDocumentEdit] cannot remove boolean input: "
+            f"boolean operation needs at least 2 inputs operation='{boolean_operation.id}'"
+        )
+        return False
+    boolean_operation.inputs.remove(input_operation_id)
+    return True
+
+
+def move_boolean_input(
+    document: ProceduralMeshDocument,
+    source_boolean_operation_id: str,
+    target_boolean_operation_id: str,
+    input_operation_id: str,
+    insert_index: int | None = None,
+) -> bool:
+    source_operation = _find_boolean_operation(document, source_boolean_operation_id, "move boolean input")
+    target_operation = _find_boolean_operation(document, target_boolean_operation_id, "move boolean input")
+    if source_operation is None or target_operation is None:
+        return False
+    if input_operation_id not in source_operation.inputs:
+        log.error(
+            "[CsgDocumentEdit] cannot move boolean input: "
+            f"input not found operation='{source_operation.id}' input='{input_operation_id}'"
+        )
+        return False
+    if source_operation.id != target_operation.id and len(source_operation.inputs) <= 2:
+        log.error(
+            "[CsgDocumentEdit] cannot move boolean input: "
+            f"source boolean operation needs at least 2 inputs operation='{source_operation.id}'"
+        )
+        return False
+
+    source_index = source_operation.inputs.index(input_operation_id)
+    index = _clamped_insert_index(insert_index, len(target_operation.inputs))
+    source_operation.inputs.pop(source_index)
+    if source_operation.id == target_operation.id:
+        if index > source_index:
+            index -= 1
+        source_operation.inputs.insert(index, input_operation_id)
+        return True
+
+    if input_operation_id in target_operation.inputs:
+        source_operation.inputs.insert(source_index, input_operation_id)
+        log.error(
+            "[CsgDocumentEdit] cannot move boolean input: "
+            f"duplicate input operation='{target_operation.id}' input='{input_operation_id}'"
+        )
+        return False
+    if _operation_depends_on(document, input_operation_id, target_operation.id, set()):
+        source_operation.inputs.insert(source_index, input_operation_id)
+        log.error(
+            "[CsgDocumentEdit] cannot move boolean input: "
+            f"cycle detected operation='{target_operation.id}' input='{input_operation_id}'"
+        )
+        return False
+    target_operation.inputs.insert(index, input_operation_id)
+    return True
+
+
 def add_primitive_operation(
     document: ProceduralMeshDocument,
     kind: str,
@@ -251,6 +361,21 @@ def set_primitive_params(
         )
         return False
     operation.params.update(dict(params))
+    return True
+
+
+def set_operation_transform(
+    document: ProceduralMeshDocument,
+    operation_id: str,
+    center: Vec3Data,
+    rotation: Vec3Data,
+) -> bool:
+    operation = document.find_operation(operation_id)
+    if operation is None:
+        log.error(f"[CsgDocumentEdit] cannot set operation transform: operation not found '{operation_id}'")
+        return False
+    operation.params["center"] = [float(center[0]), float(center[1]), float(center[2])]
+    operation.params["rotation"] = [float(rotation[0]), float(rotation[1]), float(rotation[2])]
     return True
 
 
@@ -317,6 +442,52 @@ def _boolean_input_ids_for_selection(
     return [enabled_operations[selected_index - 1].id, selected_id]
 
 
+def _find_boolean_operation(
+    document: ProceduralMeshDocument,
+    operation_id: str,
+    action: str,
+) -> OperationDocument | None:
+    operation = document.find_operation(operation_id)
+    if operation is None:
+        log.error(f"[CsgDocumentEdit] cannot {action}: operation not found '{operation_id}'")
+        return None
+    if operation.kind not in BOOLEAN_OPERATION_KINDS:
+        log.error(
+            f"[CsgDocumentEdit] cannot {action}: "
+            f"operation '{operation_id}' has kind '{operation.kind}'"
+        )
+        return None
+    return operation
+
+
+def _operation_depends_on(
+    document: ProceduralMeshDocument,
+    operation_id: str,
+    target_operation_id: str,
+    visited: set[str],
+) -> bool:
+    if operation_id == target_operation_id:
+        return True
+    if operation_id in visited:
+        return False
+    visited.add(operation_id)
+    operation = document.find_operation(operation_id)
+    if operation is None:
+        return False
+    if operation.kind not in BOOLEAN_OPERATION_KINDS:
+        return False
+    for input_id in operation.inputs:
+        if _operation_depends_on(document, input_id, target_operation_id, visited):
+            return True
+    return False
+
+
+def _clamped_insert_index(index: int | None, length: int) -> int:
+    if index is None:
+        return length
+    return max(0, min(int(index), length))
+
+
 def _find_contour(document: ProceduralMeshDocument, contour_id: str) -> ContourDocument | None:
     for sketch in document.items:
         for contour in sketch.contours:
@@ -342,6 +513,7 @@ __all__ = [
     "DrawPointResult",
     "SelectionData",
     "SketchDraft",
+    "add_boolean_input",
     "add_boolean_for_selection",
     "add_draft_point_from_ray",
     "add_extrude_for_selection",
@@ -350,8 +522,11 @@ __all__ = [
     "close_draft_contour",
     "selected_sketch_id",
     "selected_operation_id",
+    "move_boolean_input",
+    "remove_boolean_input",
     "set_contour_point",
     "set_extrude_vector",
+    "set_operation_transform",
     "set_primitive_params",
     "set_sketch_plane",
     "start_sketch_draft",

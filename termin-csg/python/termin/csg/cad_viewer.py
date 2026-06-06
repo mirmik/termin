@@ -374,9 +374,13 @@ class ImmediateGeometry:
 def build_document_solid_meshes(document: ProceduralMeshDocument) -> list[TcMesh]:
     solid_meshes: list[TcMesh] = []
     for index, evaluated in enumerate(evaluate_document(document)):
+        if evaluated.solid.is_empty:
+            continue
         try:
             mesh = to_mesh3(evaluated.solid, f"cad-solid-{index}", "", True)
-            vertices = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 3)
+            vertices = _mesh_vertices_array(mesh, f"cad-solid-{index}")
+            if vertices is None:
+                continue
             transformed = np.array(
                 [evaluated.point_transform((float(v[0]), float(v[1]), float(v[2]))) for v in vertices],
                 dtype=np.float32,
@@ -400,13 +404,17 @@ def build_document_immediate_geometry(
 
     if show_wireframe:
         for evaluated in evaluate_document(document):
+            if evaluated.solid.is_empty:
+                continue
             if selected_node_data == ("operation", evaluated.operation_id):
                 edge_color = (0.85, 1.0, 1.0, 1.0)
             else:
                 edge_color = (0.0, 0.95, 0.95, 0.85)
             try:
                 mesh = to_mesh3(evaluated.solid, "cad-solid-wire", "", True)
-                vertices = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 3)
+                vertices = _mesh_vertices_array(mesh, "cad-solid-wire")
+                if vertices is None:
+                    continue
                 transformed = [
                     evaluated.point_transform((float(v[0]), float(v[1]), float(v[2])))
                     for v in vertices
@@ -466,9 +474,13 @@ def build_document_line_meshes(
 
 
 def _build_evaluated_solid_edge_mesh(evaluated, name: str) -> TcMesh | None:
+    if evaluated.solid.is_empty:
+        return None
     try:
         mesh = to_mesh3(evaluated.solid, name, "", True)
-        vertices = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 3)
+        vertices = _mesh_vertices_array(mesh, name)
+        if vertices is None:
+            return None
         transformed = np.array(
             [evaluated.point_transform((float(v[0]), float(v[1]), float(v[2]))) for v in vertices],
             dtype=np.float32,
@@ -565,9 +577,24 @@ def document_bounds(document: ProceduralMeshDocument):
 
 
 def _collect_mesh_vertices(mesh: TcMesh, vertices: list[tuple[float, float, float]]) -> None:
-    arr = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 3)
+    arr = _mesh_vertices_array(mesh, mesh.name)
+    if arr is None:
+        return
     for v in arr:
         vertices.append((float(v[0]), float(v[1]), float(v[2])))
+
+
+def _mesh_vertices_array(mesh, name: str) -> np.ndarray | None:
+    arr = np.asarray(mesh.vertices, dtype=np.float32)
+    if arr.size == 0:
+        return None
+    if arr.size % 3 != 0:
+        log.error(
+            "[CsgCad] cannot collect mesh vertices: "
+            f"vertex array size is not divisible by 3 mesh='{name}' size={arr.size}"
+        )
+        return None
+    return arr.reshape(-1, 3)
 
 
 def _build_triangle_mesh(vertices: np.ndarray, indices: np.ndarray, name: str) -> TcMesh:
