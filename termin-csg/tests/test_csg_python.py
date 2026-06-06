@@ -10,6 +10,8 @@ from termin.csg import (
 from termin.csg.cad import box, circle, mesh, rect
 from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
+from termin.csg.document_tree_model import build_document_tree
+from termin.csg.document_edit import set_sketch_plane
 from termin.csg.procedural_document import ProceduralPlane
 from termin.csg.viewer_camera import OrbitCamera
 
@@ -120,6 +122,118 @@ def test_procedural_document_extrudes_along_oblique_and_downward_vectors():
     assert isclose(max(ys), 1.25, abs_tol=1.0e-6)
 
 
+def test_procedural_document_boolean_operations_evaluate_as_root_operations():
+    document = ProceduralMeshDocument()
+    first = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (0.0, 2.0, 0.0),
+        ]
+    )
+    second = document.add_contour_from_points(
+        [
+            (1.0, 0.0, 0.0),
+            (3.0, 0.0, 0.0),
+            (3.0, 2.0, 0.0),
+            (1.0, 2.0, 0.0),
+        ]
+    )
+    assert first is not None
+    assert second is not None
+
+    first_sketch_id = document.find_sketch_id_for_contour(first.id)
+    second_sketch_id = document.find_sketch_id_for_contour(second.id)
+    first_extrude = document.add_extrude_operation_for_sketch(first_sketch_id, height=1.0)
+    second_extrude = document.add_extrude_operation_for_sketch(second_sketch_id, height=1.0)
+    assert first_extrude is not None
+    assert second_extrude is not None
+
+    union = document.add_boolean_operation("union", [first_extrude.id, second_extrude.id])
+    assert union is not None
+
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert evaluated[0].operation_id == union.id
+    assert isclose(evaluated[0].solid.volume, 6.0, abs_tol=1.0e-6)
+
+    roots = build_document_tree(document)
+    assert len(roots) == 1
+    assert roots[0].kind == "operation"
+    assert roots[0].item_id == union.id
+    assert roots[0].text.startswith("[Union]")
+    assert len(roots[0].children) == 2
+
+
+def test_procedural_document_boolean_subtract_and_intersect_volumes():
+    document = ProceduralMeshDocument()
+    first = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (0.0, 2.0, 0.0),
+        ]
+    )
+    second = document.add_contour_from_points(
+        [
+            (1.0, 0.0, 0.0),
+            (3.0, 0.0, 0.0),
+            (3.0, 2.0, 0.0),
+            (1.0, 2.0, 0.0),
+        ]
+    )
+    assert first is not None
+    assert second is not None
+    first_op = document.add_extrude_operation_for_sketch(document.find_sketch_id_for_contour(first.id), height=1.0)
+    second_op = document.add_extrude_operation_for_sketch(document.find_sketch_id_for_contour(second.id), height=1.0)
+    assert first_op is not None
+    assert second_op is not None
+
+    subtract_op = document.add_boolean_operation("subtract", [first_op.id, second_op.id])
+    assert subtract_op is not None
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert isclose(evaluated[0].solid.volume, 2.0, abs_tol=1.0e-6)
+
+    document.operations.pop()
+    intersect_op = document.add_boolean_operation("intersect", [first_op.id, second_op.id])
+    assert intersect_op is not None
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert isclose(evaluated[0].solid.volume, 2.0, abs_tol=1.0e-6)
+
+
+def test_set_sketch_plane_updates_contour_document_space_points():
+    document = ProceduralMeshDocument()
+    contour = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+    sketch_id = document.find_sketch_id_for_contour(contour.id)
+
+    assert set_sketch_plane(
+        document,
+        sketch_id,
+        ProceduralPlane(
+            origin=(0.0, 0.0, 2.0),
+            x_axis=(0.0, 1.0, 0.0),
+            y_axis=(1.0, 0.0, 0.0),
+        ),
+    )
+    sketch = document.find_sketch(sketch_id)
+    assert sketch is not None
+    points = sketch.contour_points(contour)
+    assert points[0] == (0.0, 0.0, 2.0)
+    assert points[2] == (1.0, 1.0, 2.0)
+
+
 def test_document_raycast_uses_evaluated_solids_in_document_space():
     document = ProceduralMeshDocument()
     contour = document.add_contour_from_points(
@@ -223,6 +337,35 @@ def test_cad_app_operation_parameter_panel_updates_extrude_vector():
     app._on_extrude_vector_changed(-2.0)
 
     assert operation.params["vector"] == [0.25, 0.0, -2.0]
+
+
+def test_cad_app_plane_parameter_panel_updates_sketch_plane():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    app._build_plane_params_panel()
+    contour = app.document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+
+    sketch_id = app.document.find_sketch_id_for_contour(contour.id)
+    app.selected_node_data = ("plane", sketch_id)
+    app._refresh_plane_params_panel()
+    assert app.plane_params_panel.visible is True
+    assert app.plane_inputs["origin.z"].value == 0.0
+
+    app.plane_inputs["origin.z"].value = 2.5
+    app._on_plane_param_changed(2.5)
+
+    sketch = app.document.find_sketch(sketch_id)
+    assert sketch is not None
+    assert sketch.plane.origin == (0.0, 0.0, 2.5)
 
 
 def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():
