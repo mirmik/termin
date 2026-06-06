@@ -35,11 +35,18 @@ from termin.csg.document_eval import extrude_vector_for_operation
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController
 from termin.csg.document_raycast import ray_plane_intersection
 from termin.csg.document_tree_model import DocumentTreeNode, build_document_tree, document_summary
-from termin.csg.procedural_document import (
+from termin.csg.operation_specs import (
     BOOLEAN_OPERATION_KINDS,
+    PRIMITIVE_OPERATION_KIND,
+    OperationParamSpec,
+    ordered_boolean_operation_specs,
+    ordered_primitive_specs,
+    primitive_label,
+    primitive_spec,
+)
+from termin.csg.procedural_document import (
     CONTOUR_ROLE_HOLE,
     CONTOUR_ROLE_OUTER,
-    PRIMITIVE_OPERATION_KIND,
     ProceduralMeshDocument,
     ProceduralPlane,
 )
@@ -261,18 +268,15 @@ class CadApp:
         row3 = HStack()
         row3.spacing = 4
         row3.preferred_height = px(28)
-        row3.add_child(self._button("Union", lambda: self.add_boolean_operation("union")))
-        row3.add_child(self._button("Subtract", lambda: self.add_boolean_operation("subtract")))
-        row3.add_child(self._button("Intersect", lambda: self.add_boolean_operation("intersect")))
+        for spec in ordered_boolean_operation_specs():
+            row3.add_child(self._button(spec.label, lambda k=spec.kind: self.add_boolean_operation(k)))
         root.add_child(row3)
 
         primitive_row = HStack()
         primitive_row.spacing = 4
         primitive_row.preferred_height = px(28)
-        primitive_row.add_child(self._button("Box", lambda: self.add_primitive("box")))
-        primitive_row.add_child(self._button("Sphere", lambda: self.add_primitive("sphere")))
-        primitive_row.add_child(self._button("Cylinder", lambda: self.add_primitive("cylinder")))
-        primitive_row.add_child(self._button("Cone", lambda: self.add_primitive("cone")))
+        for spec in ordered_primitive_specs():
+            primitive_row.add_child(self._button(spec.label, lambda k=spec.kind: self.add_primitive(k)))
         root.add_child(primitive_row)
 
         view_row = HStack()
@@ -516,7 +520,8 @@ class CadApp:
         body.spacing = 5
 
         primitive_kind = str(operation.params.get("primitive_kind", ""))
-        self.primitive_params_title.text = f"{_primitive_kind_label(primitive_kind)}: {operation.name}"
+        spec = primitive_spec(primitive_kind)
+        self.primitive_params_title.text = f"{primitive_label(primitive_kind)}: {operation.name}"
         self.primitive_params_title.color = (0.84, 0.88, 0.94, 1.0)
         body.add_child(self.primitive_params_title)
 
@@ -525,67 +530,60 @@ class CadApp:
         body.add_child(separator)
 
         self._syncing_primitive_params = True
-        self._append_primitive_kind_rows(body, primitive_kind, operation.params)
-        self._append_primitive_vector_rows(body, "center", "Center", operation.params, (0.0, 0.0, 0.0))
-        self._append_primitive_vector_rows(body, "rotation", "Rotation", operation.params, (0.0, 0.0, 0.0))
+        if spec is None:
+            log.error(f"[CsgCad] cannot build primitive params: unknown primitive kind '{primitive_kind}'")
+        else:
+            self._append_primitive_schema_rows(body, spec.param_schema, operation.params)
         self._syncing_primitive_params = False
 
         self.primitive_params_panel.add_child(body)
 
-    def _append_primitive_kind_rows(self, body: VStack, primitive_kind: str, params: dict) -> None:
-        if primitive_kind == "box":
-            self._append_primitive_vector_rows(body, "size", "Size", params, (1.0, 1.0, 1.0), min_value=0.001)
-            self._append_primitive_bool_row(body, "centered", "Centered", params, True)
-            return
-        if primitive_kind == "sphere":
-            body.add_child(self._build_primitive_number_row("radius", "Radius", params, 0.5, min_value=0.001))
-            body.add_child(
-                self._build_primitive_number_row(
-                    "circular_segments",
-                    "Segments",
+    def _append_primitive_schema_rows(
+        self,
+        body: VStack,
+        param_schema: tuple[OperationParamSpec, ...],
+        params: dict,
+    ) -> None:
+        for param in param_schema:
+            if param.kind == "vec3":
+                default_vec = _param_vec3({"value": param.default}, "value", (0.0, 0.0, 0.0))
+                min_value = -1000000.0 if param.min_value is None else float(param.min_value)
+                self._append_primitive_vector_rows(
+                    body,
+                    param.key,
+                    param.label,
                     params,
-                    32.0,
-                    decimals=0,
-                    step=1.0,
-                    min_value=3.0,
-                    max_value=256.0,
+                    default_vec,
+                    min_value=min_value,
                 )
-            )
-            return
-        if primitive_kind == "cylinder":
-            body.add_child(self._build_primitive_number_row("radius", "Radius", params, 0.5, min_value=0.001))
-            body.add_child(self._build_primitive_number_row("height", "Height", params, 1.0, min_value=0.001))
-            body.add_child(
-                self._build_primitive_number_row(
-                    "circular_segments",
-                    "Segments",
-                    params,
-                    32.0,
-                    decimals=0,
-                    step=1.0,
-                    min_value=3.0,
-                    max_value=256.0,
+            elif param.kind == "bool":
+                self._append_primitive_bool_row(body, param.key, param.label, params, bool(param.default))
+            elif param.kind == "int":
+                body.add_child(
+                    self._build_primitive_number_row(
+                        param.key,
+                        param.label,
+                        params,
+                        float(param.default),
+                        decimals=0,
+                        step=1.0,
+                        min_value=-1000000.0 if param.min_value is None else float(param.min_value),
+                        max_value=1000000.0 if param.max_value is None else float(param.max_value),
+                    )
                 )
-            )
-            self._append_primitive_bool_row(body, "centered", "Centered", params, True)
-            return
-        if primitive_kind == "cone":
-            body.add_child(self._build_primitive_number_row("radius_low", "Radius low", params, 0.5, min_value=0.001))
-            body.add_child(self._build_primitive_number_row("radius_high", "Radius high", params, 0.0, min_value=0.0))
-            body.add_child(self._build_primitive_number_row("height", "Height", params, 1.0, min_value=0.001))
-            body.add_child(
-                self._build_primitive_number_row(
-                    "circular_segments",
-                    "Segments",
-                    params,
-                    32.0,
-                    decimals=0,
-                    step=1.0,
-                    min_value=3.0,
-                    max_value=256.0,
+            elif param.kind == "float":
+                body.add_child(
+                    self._build_primitive_number_row(
+                        param.key,
+                        param.label,
+                        params,
+                        float(param.default),
+                        min_value=-1000000.0 if param.min_value is None else float(param.min_value),
+                        max_value=1000000.0 if param.max_value is None else float(param.max_value),
+                    )
                 )
-            )
-            self._append_primitive_bool_row(body, "centered", "Centered", params, True)
+            else:
+                log.error(f"[CsgCad] unsupported primitive param kind '{param.kind}' key='{param.key}'")
 
     def _append_primitive_vector_rows(
         self,
@@ -927,7 +925,7 @@ class CadApp:
 
     def add_primitive(self, kind: str) -> None:
         result = self.controller.add_primitive(kind)
-        if not self._apply_controller_result(result, default_status=f"{_primitive_kind_label(kind)} added"):
+        if not self._apply_controller_result(result, default_status=f"{primitive_label(kind)} added"):
             return
         log.info(f"[CsgCad] primitive added kind='{kind}' selection='{self.selected_node_data}'")
 
@@ -991,6 +989,7 @@ class CadApp:
         label.color = (0.70, 0.74, 0.80, 1.0)
         node = TreeNode(label)
         node.data = (source.kind, source.item_id)
+        node.csg_document_node = source
         node.expanded = True
         for child in source.children:
             node.add_node(self._to_tree_node(child))
@@ -1070,27 +1069,19 @@ class CadApp:
             log.error(f"[CsgCad] cannot drop tree node: unsupported drop position '{position}'")
             return
 
-        target_boolean_id = self._boolean_parent_id_for_tree_node(target_node)
-        if not target_boolean_id:
+        target_model = self._tree_node_model(target_node)
+        if target_model is None or not target_model.accepts_drop_above_below:
             log.error("[CsgCad] cannot reorder boolean input: drop above or below an input inside a boolean operation")
             return
-        target_data = self._tree_node_data(target_node)
-        if target_data is None:
-            log.error("[CsgCad] cannot reorder boolean input: target node has no document data")
-            return
-        target_operation_id = target_data[1]
+        target_boolean_id = target_model.parent_operation_id
         target_operation = self.document.find_operation(target_boolean_id)
         if target_operation is None:
             log.error(f"[CsgCad] cannot reorder boolean input: boolean operation not found '{target_boolean_id}'")
             return
-        if target_operation_id not in target_operation.inputs:
-            log.error(
-                "[CsgCad] cannot reorder boolean input: "
-                f"target input not found operation='{target_boolean_id}' input='{target_operation_id}'"
-            )
+        if target_model.input_index < 0 or target_model.input_index >= len(target_operation.inputs):
+            log.error(f"[CsgCad] cannot reorder boolean input: invalid target input index {target_model.input_index}")
             return
-        target_index = target_operation.inputs.index(target_operation_id)
-        insert_index = target_index + (1 if position == "below" else 0)
+        insert_index = target_model.input_index + (1 if position == "below" else 0)
         if source_boolean_id:
             result = self.controller.move_boolean_input(
                 source_boolean_id,
@@ -1115,29 +1106,34 @@ class CadApp:
             return None
         return (str(data[0]), str(data[1]))
 
+    def _tree_node_model(self, node: TreeNode | None) -> DocumentTreeNode | None:
+        if node is None:
+            return None
+        try:
+            model = node.csg_document_node
+        except AttributeError:
+            return None
+        if not isinstance(model, DocumentTreeNode):
+            return None
+        return model
+
     def _boolean_operation_id_for_tree_node(self, node: TreeNode | None) -> str:
-        data = self._tree_node_data(node)
-        if data is None or data[0] != "operation":
+        model = self._tree_node_model(node)
+        if model is None or not model.accepts_drop_inside:
             return ""
-        operation = self.document.find_operation(data[1])
+        operation = self.document.find_operation(model.item_id)
         if operation is None or operation.kind not in BOOLEAN_OPERATION_KINDS:
             return ""
         return operation.id
 
     def _boolean_parent_id_for_tree_node(self, node: TreeNode | None) -> str:
-        if node is None:
+        model = self._tree_node_model(node)
+        if model is None or not model.is_boolean_input:
             return ""
-        data = self._tree_node_data(node)
-        if data is None:
-            return ""
-        parent = self.tree._find_parent(node)
-        parent_boolean_id = self._boolean_operation_id_for_tree_node(parent)
-        if not parent_boolean_id:
-            return ""
-        parent_operation = self.document.find_operation(parent_boolean_id)
+        parent_operation = self.document.find_operation(model.parent_operation_id)
         if parent_operation is None:
             return ""
-        if data[1] not in parent_operation.inputs:
+        if model.input_index < 0 or model.input_index >= len(parent_operation.inputs):
             return ""
         return parent_operation.id
 
@@ -1469,24 +1465,34 @@ class CadApp:
         if operation is None:
             log.error("[CsgCad] cannot update primitive params: no primitive operation is selected")
             return
+        primitive_kind = str(operation.params.get("primitive_kind", ""))
+        spec = primitive_spec(primitive_kind)
+        if spec is None:
+            log.error(f"[CsgCad] cannot update primitive params: unknown primitive kind '{primitive_kind}'")
+            return
+        integer_param_keys = {param.key for param in spec.param_schema if param.kind == "int"}
         params: dict = {}
+        vector_groups: dict[str, dict[str, float]] = {}
         for key, spin in self.primitive_param_inputs.items():
             if "." in key:
+                group, axis = key.split(".", 1)
+                vector_group = vector_groups.get(group)
+                if vector_group is None:
+                    vector_group = {}
+                    vector_groups[group] = vector_group
+                vector_group[axis] = float(spin.value)
                 continue
             value = float(spin.value)
-            if key == "circular_segments":
+            if key in integer_param_keys:
                 params[key] = int(round(value))
             else:
                 params[key] = value
-        for group in ("size", "center", "rotation"):
-            x_key = f"{group}.x"
-            y_key = f"{group}.y"
-            z_key = f"{group}.z"
-            if x_key in self.primitive_param_inputs and y_key in self.primitive_param_inputs and z_key in self.primitive_param_inputs:
+        for group, values in vector_groups.items():
+            if "x" in values and "y" in values and "z" in values:
                 params[group] = [
-                    float(self.primitive_param_inputs[x_key].value),
-                    float(self.primitive_param_inputs[y_key].value),
-                    float(self.primitive_param_inputs[z_key].value),
+                    values["x"],
+                    values["y"],
+                    values["z"],
                 ]
         for key, checkbox in self.primitive_bool_inputs.items():
             params[key] = bool(checkbox.checked)
@@ -1699,18 +1705,6 @@ def _contour_role_label(role: str) -> str:
     if role == CONTOUR_ROLE_HOLE:
         return "Hole"
     return "Outer"
-
-
-def _primitive_kind_label(kind: str) -> str:
-    if kind == "box":
-        return "Box"
-    if kind == "sphere":
-        return "Sphere"
-    if kind == "cylinder":
-        return "Cylinder"
-    if kind == "cone":
-        return "Cone"
-    return "Primitive"
 
 
 def _param_vec3(params: dict, key: str, default: tuple[float, float, float]) -> tuple[float, float, float]:

@@ -6,6 +6,10 @@ from termin.csg import (
     evaluate_document,
     extrude,
     make_box,
+    operation_spec,
+    ordered_boolean_operation_specs,
+    ordered_primitive_specs,
+    primitive_spec,
     to_mesh3,
 )
 from termin.csg.cad import box, circle, mesh, rect
@@ -211,6 +215,64 @@ def test_procedural_document_evaluates_primitive_operations_and_booleans():
     assert roots[0].text.startswith("[Subtract]")
     assert roots[0].children[0].text.startswith("[Base] [Box]")
     assert roots[0].children[1].text.startswith("[Cut] [Cylinder]")
+
+
+def test_operation_specs_drive_primitive_defaults_and_button_order():
+    primitive_labels = [spec.label for spec in ordered_primitive_specs()]
+    boolean_labels = [spec.label for spec in ordered_boolean_operation_specs()]
+    assert primitive_labels == ["Box", "Sphere", "Cylinder", "Cone"]
+    assert boolean_labels == ["Union", "Subtract", "Intersect"]
+
+    box_spec = primitive_spec("box")
+    subtract_spec = operation_spec("subtract")
+    assert box_spec is not None
+    assert subtract_spec is not None
+    assert [param.key for param in box_spec.param_schema] == [
+        "size",
+        "centered",
+        "center",
+        "rotation",
+    ]
+    assert subtract_spec.input_policy == "base_then_cutters"
+
+    document = ProceduralMeshDocument()
+    first = document.add_primitive_operation("box")
+    second = document.add_primitive_operation("box")
+    assert first is not None
+    assert second is not None
+    assert first.params["size"] == [1.0, 1.0, 1.0]
+    assert first.params["center"] == [0.0, 0.0, 0.0]
+
+    first.params["size"][0] = 7.0
+    assert second.params["size"] == [1.0, 1.0, 1.0]
+
+
+def test_document_tree_model_exposes_boolean_input_metadata():
+    document = ProceduralMeshDocument()
+    first = document.add_primitive_operation("box")
+    second = document.add_primitive_operation("sphere")
+    assert first is not None
+    assert second is not None
+    operation = document.add_boolean_operation("subtract", [first.id, second.id])
+    assert operation is not None
+
+    roots = build_document_tree(document)
+    assert len(roots) == 1
+    root = roots[0]
+    assert root.item_id == operation.id
+    assert root.accepts_drop_inside is True
+    assert root.is_boolean_input is False
+
+    base_node = root.children[0]
+    cut_node = root.children[1]
+    assert base_node.parent_operation_id == operation.id
+    assert base_node.input_index == 0
+    assert base_node.input_role == "[Base]"
+    assert base_node.is_boolean_input is True
+    assert base_node.accepts_drop_above_below is True
+    assert cut_node.parent_operation_id == operation.id
+    assert cut_node.input_index == 1
+    assert cut_node.input_role == "[Cut]"
 
 
 def test_cad_viewer_handles_empty_boolean_result_bounds():

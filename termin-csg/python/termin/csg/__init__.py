@@ -33,6 +33,17 @@ from termin.csg.procedural_document import (  # noqa: E402
 )
 from termin.csg.document_eval import EvaluatedSolid, evaluate_document  # noqa: E402
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController  # noqa: E402
+from termin.csg.operation_specs import (  # noqa: E402
+    OPERATION_SPECS_BY_KIND,
+    OperationParamSpec,
+    OperationSpec,
+    PRIMITIVE_SPECS_BY_KIND,
+    PrimitiveSpec,
+    operation_spec,
+    ordered_boolean_operation_specs,
+    ordered_primitive_specs,
+    primitive_spec,
+)
 
 
 def _point2(value):
@@ -81,6 +92,11 @@ __all__ = [
     "EvaluatedSolid",
     "CsgEditorCommandResult",
     "CsgEditorController",
+    "OPERATION_SPECS_BY_KIND",
+    "OperationParamSpec",
+    "OperationSpec",
+    "PRIMITIVE_SPECS_BY_KIND",
+    "PrimitiveSpec",
     "Solid",
     "evaluate_document",
     "extrude",
@@ -94,4 +110,8 @@ __all__ = [
     "to_mesh3",
     "to_tc_mesh",
     "unite",
+    "operation_spec",
+    "ordered_boolean_operation_specs",
+    "ordered_primitive_specs",
+    "primitive_spec",
 ]

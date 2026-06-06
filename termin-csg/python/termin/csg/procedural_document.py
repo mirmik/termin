@@ -8,14 +8,22 @@ from uuid import uuid4
 
 from tcbase import log
 
+from termin.csg.operation_specs import (
+    BOOLEAN_OPERATION_KINDS,
+    PRIMITIVE_KINDS,
+    PRIMITIVE_OPERATION_KIND,
+    boolean_operation_label,
+    extrude_default_params,
+    operation_transform_defaults,
+    primitive_default_params,
+    primitive_label,
+)
+
 Vec2Data = tuple[float, float]
 Vec3Data = tuple[float, float, float]
-BOOLEAN_OPERATION_KINDS = {"union", "subtract", "intersect"}
 CONTOUR_ROLE_OUTER = "outer"
 CONTOUR_ROLE_HOLE = "hole"
 CONTOUR_ROLES = {CONTOUR_ROLE_OUTER, CONTOUR_ROLE_HOLE}
-PRIMITIVE_OPERATION_KIND = "primitive"
-PRIMITIVE_KINDS = {"box", "sphere", "cylinder", "cone"}
 
 
 def _new_id(prefix: str) -> str:
@@ -65,10 +73,6 @@ def _as_vec2(value) -> Vec2Data:
     return (float(value[0]), float(value[1]))
 
 
-def _v_list(value: Vec3Data) -> list[float]:
-    return [float(value[0]), float(value[1]), float(value[2])]
-
-
 def _validated_contour_role(role: str) -> str:
     contour_role = str(role)
     if contour_role not in CONTOUR_ROLES:
@@ -83,63 +87,6 @@ def _validated_primitive_kind(kind: str) -> str:
         log.error(f"[ProceduralMeshDocument] invalid primitive kind '{kind}'")
         return ""
     return primitive_kind
-
-
-def _primitive_defaults(kind: str) -> dict:
-    transform = _operation_transform_defaults()
-    if kind == "box":
-        return {
-            "primitive_kind": kind,
-            "size": [1.0, 1.0, 1.0],
-            "centered": True,
-            **transform,
-        }
-    if kind == "sphere":
-        return {
-            "primitive_kind": kind,
-            "radius": 0.5,
-            "circular_segments": 32,
-            **transform,
-        }
-    if kind == "cylinder":
-        return {
-            "primitive_kind": kind,
-            "radius": 0.5,
-            "height": 1.0,
-            "circular_segments": 32,
-            "centered": True,
-            **transform,
-        }
-    if kind == "cone":
-        return {
-            "primitive_kind": kind,
-            "radius_low": 0.5,
-            "radius_high": 0.0,
-            "height": 1.0,
-            "circular_segments": 32,
-            "centered": True,
-            **transform,
-        }
-    return {}
-
-
-def _operation_transform_defaults() -> dict:
-    return {
-        "center": [0.0, 0.0, 0.0],
-        "rotation": [0.0, 0.0, 0.0],
-    }
-
-
-def _primitive_label(kind: str) -> str:
-    if kind == "box":
-        return "Box"
-    if kind == "sphere":
-        return "Sphere"
-    if kind == "cylinder":
-        return "Cylinder"
-    if kind == "cone":
-        return "Cone"
-    return kind.capitalize()
 
 
 @dataclass
@@ -444,11 +391,7 @@ class ProceduralMeshDocument:
             name=f"Extrude {len(self.operations) + 1}",
             kind="extrude",
             inputs=inputs[:],
-            params={
-                "vector": _v_list(extrusion_vector),
-                "mode": "new_body",
-                **_operation_transform_defaults(),
-            },
+            params=extrude_default_params(extrusion_vector),
         )
         self.operations.append(operation)
         return operation
@@ -486,11 +429,11 @@ class ProceduralMeshDocument:
         primitive_kind = _validated_primitive_kind(kind)
         if not primitive_kind:
             return None
-        operation_params = _primitive_defaults(primitive_kind)
+        operation_params = primitive_default_params(primitive_kind)
         if params:
             operation_params.update(dict(params))
             operation_params["primitive_kind"] = primitive_kind
-        label = _primitive_label(primitive_kind)
+        label = primitive_label(primitive_kind)
         operation = OperationDocument(
             name=f"{label} {len(self.operations) + 1}",
             kind=PRIMITIVE_OPERATION_KIND,
@@ -520,16 +463,12 @@ class ProceduralMeshDocument:
         if missing:
             log.error(f"[ProceduralMeshDocument] cannot create boolean operation: missing inputs {missing}")
             return None
-        label = {
-            "union": "Union",
-            "subtract": "Subtract",
-            "intersect": "Intersect",
-        }[operation_kind]
+        label = boolean_operation_label(operation_kind)
         operation = OperationDocument(
             name=f"{label} {len(self.operations) + 1}",
             kind=operation_kind,
             inputs=input_operation_ids[:],
-            params=_operation_transform_defaults(),
+            params=operation_transform_defaults(),
         )
         self.operations.append(operation)
         return operation
