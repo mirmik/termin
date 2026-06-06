@@ -3,6 +3,8 @@ from math import isclose
 from termin.csg import (
     CsgEditorController,
     ProceduralMeshDocument,
+    document_to_mesh3,
+    document_to_tc_mesh,
     evaluate_document,
     extrude,
     make_box,
@@ -326,6 +328,45 @@ def test_operation_transform_moves_extrude_and_boolean_results_after_evaluation(
     mesh = to_mesh3(evaluated[0].solid, "moved-subtract")
     xs = [float(vertex[0]) for vertex in mesh.vertices]
     assert min(xs) > 9.0
+
+
+def test_document_mesh_converts_evaluated_root_solids_to_runtime_meshes():
+    document = ProceduralMeshDocument()
+    first = document.add_primitive_operation(
+        "box",
+        {
+            "size": [2.0, 2.0, 2.0],
+            "center": [-2.0, 0.0, 0.0],
+            "rotation": [0.0, 0.0, 45.0],
+        },
+    )
+    second = document.add_primitive_operation(
+        "sphere",
+        {
+            "radius": 0.5,
+            "center": [2.0, 0.0, 0.0],
+            "circular_segments": 16,
+        },
+    )
+    assert first is not None
+    assert second is not None
+
+    mesh3 = document_to_mesh3(document, "combined-csg")
+    assert mesh3 is not None
+    assert mesh3.is_valid()
+    assert mesh3.has_normals()
+    assert mesh3.vertex_count > 0
+    assert mesh3.triangle_count > 0
+
+    xs = [float(vertex[0]) for vertex in mesh3.vertices]
+    assert min(xs) < -2.0
+    assert max(xs) > 2.0
+
+    tc_mesh = document_to_tc_mesh(document, "combined-csg")
+    assert tc_mesh is not None
+    assert tc_mesh.is_valid
+    assert tc_mesh.vertex_count == mesh3.vertex_count
+    assert tc_mesh.triangle_count == mesh3.triangle_count
 
 
 def test_procedural_document_boolean_operations_evaluate_as_root_operations():

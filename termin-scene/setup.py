@@ -22,7 +22,7 @@ setup(
     python_requires=">=3.8",
     packages=["termin.scene"],
     package_dir={"termin.scene": "python/termin/scene"},
-    install_requires=["termin-nanobind"],
+    install_requires=["termin-nanobind", "termin-inspect"],
     ext_modules=[
         Extension("termin.scene._scene_native", sources=[]),
     ],

@@ -13,6 +13,16 @@ class _ComponentRef:
 class _Component:
     def __init__(self):
         self.document = ProceduralMeshDocument()
+        self.auto_regenerate = True
+        self.dirty_count = 0
+        self.regenerate_count = 0
+
+    def mark_dirty(self):
+        self.dirty_count += 1
+
+    def regenerate_if_needed(self):
+        self.regenerate_count += 1
+        return True
 
 
 class _Editor:
@@ -48,6 +58,8 @@ def test_procedural_mesh_editor_extension_uses_shared_controller_for_document_co
     assert component.document is extension._controller.document
     assert extension._controller.selection == ("operation", first_operation_id)
     assert editor.viewport_updates == 1
+    assert component.dirty_count == 1
+    assert component.regenerate_count == 1
 
     extension._add_primitive_operation("sphere")
     extension._add_boolean_operation("subtract")
@@ -63,3 +75,5 @@ def test_procedural_mesh_editor_extension_uses_shared_controller_for_document_co
     assert component.document is extension._controller.document
     assert component.document is not old_document
     assert component.document.operations == []
+    assert component.dirty_count == 4
+    assert component.regenerate_count == 4
