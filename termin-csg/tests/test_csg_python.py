@@ -472,8 +472,28 @@ def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():
     from termin.csg.cad_viewer import build_document_immediate_geometry, build_reference_geometry
 
     reference = build_reference_geometry()
-    assert len(reference.lines or []) == 45
+    assert len(reference.lines or []) == 43
     assert all(line.depth_test for line in reference.lines or [])
+    assert (
+        sum(
+            1
+            for line in reference.lines or []
+            if line.start == (-10, 0.0, 0.0)
+            and line.end == (10, 0.0, 0.0)
+            and line.color == (0.92, 0.18, 0.18, 1.0)
+        )
+        == 1
+    )
+    assert (
+        sum(
+            1
+            for line in reference.lines or []
+            if line.start == (0.0, -10, 0.0)
+            and line.end == (0.0, 10, 0.0)
+            and line.color == (0.18, 0.82, 0.22, 1.0)
+        )
+        == 1
+    )
 
     document = ProceduralMeshDocument()
     contour = document.add_contour_from_points(
