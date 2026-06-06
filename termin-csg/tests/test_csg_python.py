@@ -454,6 +454,20 @@ def test_cad_app_contour_parameter_panel_updates_contour_points():
     assert contour.points[2] == (1.75, 1.25)
 
 
+def test_cad_app_wireframe_toggle_updates_preview_state():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    assert app.show_wireframe is True
+    assert app.preview_revision == 0
+
+    app._on_wireframe_changed(False)
+
+    assert app.show_wireframe is False
+    assert app.preview_revision == 1
+    assert app.dirty is True
+
+
 def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():
     from termin.csg.cad_viewer import build_document_immediate_geometry, build_reference_geometry
 
@@ -482,3 +496,11 @@ def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():
     assert len(geometry.lines or []) > 0
     assert len(vertices) > 0
     assert all(line.color == (0.85, 1.0, 1.0, 1.0) for line in geometry.lines or [])
+
+    without_wireframe = build_document_immediate_geometry(
+        document,
+        None,
+        ("operation", operation.id),
+        show_wireframe=False,
+    )
+    assert without_wireframe.lines == []
