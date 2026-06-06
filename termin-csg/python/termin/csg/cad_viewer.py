@@ -457,15 +457,15 @@ def build_reference_geometry() -> ImmediateGeometry:
     grid_color = (0.23, 0.25, 0.29, 1.0)
     for i in range(-extent, extent + 1):
         value = float(i)
-        lines.append(ImmediateLineSegment((-extent, value, 0.0), (extent, value, 0.0), grid_color))
-        lines.append(ImmediateLineSegment((value, -extent, 0.0), (value, extent, 0.0), grid_color))
+        lines.append(ImmediateLineSegment((-extent, value, 0.0), (extent, value, 0.0), grid_color, True))
+        lines.append(ImmediateLineSegment((value, -extent, 0.0), (value, extent, 0.0), grid_color, True))
 
     axis_len = float(extent)
     lines.extend(
         [
-            ImmediateLineSegment((-axis_len, 0.0, 0.0), (axis_len, 0.0, 0.0), (0.92, 0.18, 0.18, 1.0)),
-            ImmediateLineSegment((0.0, -axis_len, 0.0), (0.0, axis_len, 0.0), (0.18, 0.82, 0.22, 1.0)),
-            ImmediateLineSegment((0.0, 0.0, 0.0), (0.0, 0.0, axis_len * 0.5), (0.25, 0.45, 1.0, 1.0)),
+            ImmediateLineSegment((-axis_len, 0.0, 0.0), (axis_len, 0.0, 0.0), (0.92, 0.18, 0.18, 1.0), True),
+            ImmediateLineSegment((0.0, -axis_len, 0.0), (0.0, axis_len, 0.0), (0.18, 0.82, 0.22, 1.0), True),
+            ImmediateLineSegment((0.0, 0.0, 0.0), (0.0, 0.0, axis_len * 0.5), (0.25, 0.45, 1.0, 1.0), True),
         ]
     )
     return ImmediateGeometry(lines=lines)

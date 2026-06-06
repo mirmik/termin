@@ -473,6 +473,7 @@ def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():
 
     reference = build_reference_geometry()
     assert len(reference.lines or []) == 45
+    assert all(line.depth_test for line in reference.lines or [])
 
     document = ProceduralMeshDocument()
     contour = document.add_contour_from_points(
