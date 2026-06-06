@@ -808,6 +808,19 @@ def test_cad_app_drags_selected_contour_point_in_viewport_without_drawing():
     assert app.draft.points == []
 
 
+def test_cad_app_draw_sketch_scene_click_uses_controller_draft_state():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    app.start_draw_sketch()
+
+    assert app._on_scene_click(400.0, 300.0, 800, 600) is True
+
+    assert app.mode == "draw_sketch"
+    assert len(app.draft.points) == 1
+    assert app.preview_revision == 2
+
+
 def test_cad_app_close_contour_leaves_draw_sketch_mode():
     from termin.csg.cad_app import CadApp
     from termin.csg.document_edit import start_sketch_draft

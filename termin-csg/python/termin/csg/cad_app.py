@@ -1176,23 +1176,21 @@ class CadApp:
             return False
         ray_origin, ray_direction = self.camera.screen_ray(x, y, width, height)
         fallback_point = self.camera.world_point_on_z_plane(x, y, width, height, 0.0)
-        result = add_draft_point_from_ray(
-            self.document,
-            self.draft,
+        result = self.controller.add_draft_point_from_ray(
             ray_origin,
             ray_direction,
             fallback_point=fallback_point,
             fallback_plane=ProceduralPlane(),
             fallback_kind="oxy",
         )
-        if not result.success or result.point is None:
+        if not self._apply_controller_result(result):
             return True
-        self._refresh_labels()
-        self.request_preview_rebuild()
-        point = result.point
+        if not self.draft.points:
+            log.error("[CsgCad] cannot add draft point: controller did not append a point")
+            return True
+        point = self.draft.points[-1]
         log.info(
             "[CsgCad] draft point added "
-            f"kind={result.kind} "
             f"point=({point[0]:.3f}, {point[1]:.3f}, {point[2]:.3f}) "
             f"count={len(self.draft.points)}"
         )

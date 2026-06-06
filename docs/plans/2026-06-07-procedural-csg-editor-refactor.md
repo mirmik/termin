@@ -2,7 +2,12 @@
 
 Дата: 2026-06-07
 
-Статус: план рефакторинга. `csg_cad.py` уже используется как быстрый standalone-полигон, но целевая логика редактора должна жить в общем слое `termin.csg` и переиспользоваться в `termin-app`.
+Статус: план рефакторинга, выполнение начато. `csg_cad.py` уже используется как быстрый standalone-полигон, но целевая логика редактора должна жить в общем слое `termin.csg` и переиспользоваться в `termin-app`.
+
+## Прогресс
+
+- 2026-06-07: Phase 1 выполнена. Добавлен `termin.csg.editor_controller`, основные workflow-команды `CadApp` переведены на общий controller.
+- 2026-06-07: Phase 2 начата. `ProceduralMeshEditorExtension` переведен на общий controller для mode/draft/selection/document commands; добавлены embedded-кнопки primitives и boolean operations через тот же controller.
 
 ## Контекст
 
@@ -202,4 +207,3 @@ Tree должен оставаться projection, но projection должна 
 4. Переписать inspector panels на schema-driven generation.
 5. Обогатить tree metadata и упростить DnD.
 6. После стабилизации заняться mesh regeneration и undo/redo в `termin-app`.
-
