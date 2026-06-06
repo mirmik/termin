@@ -52,28 +52,69 @@ def evaluate_document(document: ProceduralMeshDocument) -> list[EvaluatedSolid]:
     entity transforms after this point.
     """
 
+    operations_by_id = {operation.id: operation for operation in document.operations}
     operation_results: dict[str, list[EvaluatedSolid]] = {}
-    for operation in document.operations:
+    visiting_operation_ids: set[str] = set()
+
+    def evaluate_operation(operation) -> list[EvaluatedSolid] | None:
+        cached_result = operation_results.get(operation.id)
+        if cached_result is not None:
+            return cached_result
         if not operation.enabled:
-            continue
+            log.error(
+                "[ProceduralMeshDocument] cannot evaluate operation: "
+                f"operation is disabled operation='{operation.id}'"
+            )
+            return None
+        if operation.id in visiting_operation_ids:
+            log.error(
+                "[ProceduralMeshDocument] cannot evaluate operation: "
+                f"cycle detected operation='{operation.id}'"
+            )
+            return None
+
+        visiting_operation_ids.add(operation.id)
         if operation.kind == "extrude":
-            operation_results[operation.id] = _evaluate_extrude(document, operation)
+            result = _evaluate_extrude(document, operation)
         elif operation.kind == PRIMITIVE_OPERATION_KIND:
-            operation_results[operation.id] = _evaluate_primitive(operation)
+            result = _evaluate_primitive(operation)
         elif operation.kind in BOOLEAN_OPERATION_KINDS:
-            operation_results[operation.id] = _evaluate_boolean(operation, operation_results)
+            result = _evaluate_boolean(
+                operation,
+                lambda input_id: evaluate_input_operation(operation.id, input_id),
+            )
         else:
             log.error(
                 "[ProceduralMeshDocument] cannot evaluate operation: "
                 f"unknown kind '{operation.kind}' operation='{operation.id}'"
             )
+            result = []
+        visiting_operation_ids.remove(operation.id)
+        if result is not None:
+            operation_results[operation.id] = result
+        return result
+
+    def evaluate_input_operation(
+        requester_operation_id: str,
+        input_operation_id: str,
+    ) -> list[EvaluatedSolid] | None:
+        input_operation = operations_by_id.get(input_operation_id)
+        if input_operation is None:
+            log.error(
+                "[ProceduralMeshDocument] cannot evaluate boolean operation: "
+                f"input operation not found operation='{requester_operation_id}' input='{input_operation_id}'"
+            )
+            return None
+        return evaluate_operation(input_operation)
 
     consumed_operation_ids = document.used_input_operation_ids()
     results: list[EvaluatedSolid] = []
     for operation in document.operations:
         if not operation.enabled or operation.id in consumed_operation_ids:
             continue
-        results.extend(operation_results.get(operation.id, []))
+        evaluated_items = evaluate_operation(operation)
+        if evaluated_items is not None:
+            results.extend(evaluated_items)
     return results
 
 
@@ -189,16 +230,12 @@ def _evaluate_extrude(document: ProceduralMeshDocument, operation) -> list[Evalu
 
 def _evaluate_boolean(
     operation,
-    operation_results: dict[str, list[EvaluatedSolid]],
+    evaluate_input_operation: Callable[[str], list[EvaluatedSolid] | None],
 ) -> list[EvaluatedSolid]:
     operands: list[Solid] = []
     for input_id in operation.inputs:
-        evaluated_items = operation_results.get(input_id)
+        evaluated_items = evaluate_input_operation(input_id)
         if evaluated_items is None:
-            log.error(
-                "[ProceduralMeshDocument] cannot evaluate boolean operation: "
-                f"input operation not evaluated operation='{operation.id}' input='{input_id}'"
-            )
             return []
         operand = _combine_evaluated_solids(evaluated_items, operation.id, input_id)
         if operand is None:
