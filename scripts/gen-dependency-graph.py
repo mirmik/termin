@@ -88,7 +88,6 @@ PYTHON_IMPORT_TO_DIR = {
     "termin_modules": "termin-modules",
     "termin_nanobind": "termin-nanobind-sdk",
     "termin_assets": "termin-assets",
-    "diffusion_editor": "diffusion-editor",
     "tcplot": "tcplot",
     # termin.* submodules → actual library
     "termin.assets": "termin-app",
@@ -146,10 +145,8 @@ termin_native_cmake = os.path.join(ROOT, "termin-app", "cpp", "CMakeLists.txt")
 if os.path.exists(termin_native_cmake):
     CMAKE_DIRS.append(("termin-app", termin_native_cmake))
 
-# Pure-Python packages (no CMakeLists.txt) — will be scanned via import analysis
-PYTHON_ONLY_DIRS = {
-    "diffusion-editor": os.path.join(ROOT, "diffusion-editor"),
-}
+# Pure-Python packages (no CMakeLists.txt) — will be scanned via import analysis.
+PYTHON_ONLY_DIRS = {}
 
 # Dependencies that are structural but not reliably visible from setup.py or
 # CMake parsing. `termin` is the namespace root; packages extending termin.*
@@ -379,7 +376,7 @@ def main():
     # Node groups (rendered as subgraph clusters with border)
     GROUPS = {
         "UI": ["termin-gui", "termin-nodegraph", "tcplot"],
-        "Application": ["termin-app", "diffusion-editor"],
+        "Application": ["termin-app"],
         "Namespace": ["termin"],
         "Native Interop": ["termin-csharp"],
         "Python Support": ["termin-assets", "termin-nanobind-sdk"],

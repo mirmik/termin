@@ -376,8 +376,8 @@ class UIRenderer:
         ctx.set_depth_test(False)
         ctx.set_blend(True)
         # Explicit blend func — don't rely on defaults. Other renderers
-        # on the same shared Tgfx2Context (the diffusion-editor's
-        # GPUCompositor) set their own blend func to One / OneMinusSrcAlpha
+        # on the same shared Tgfx2Context can set their own blend func
+        # to One / OneMinusSrcAlpha
         # for premultiplied-alpha compositing, and that leaks into the
         # UIRenderer pass if we don't reassert ours. Symptom was white
         # halos around text and red-tinted image after the compositor

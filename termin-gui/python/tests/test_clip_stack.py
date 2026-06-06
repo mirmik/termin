@@ -166,7 +166,7 @@ def test_nested_clip_intersects():
 
 
 def test_left_container_with_scroll_area():
-    """Reproduce the diffusion-editor clip chain:
+    """Reproduce an editor sidebar clip chain:
     left_container(clip=True) > DiffusionPanel(ScrollArea)
 
     After ScrollArea's end_clip, left_container's scissor must still be active.

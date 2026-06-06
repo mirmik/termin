@@ -211,6 +211,4 @@ Application-level code не должен протекать вниз в graphics
 
 ### diffusion-editor
 
-Source of truth: [Architecture](../diffusion-editor/ARCHITECTURE.md)
-
-Внешний consumer внутри монорепозитория. Хороший smoke-test публичности API: если diffusion-editor вынужден лезть во внутренности, вероятно граница модуля описана или реализована плохо.
+Внешний consumer в отдельном репозитории. Он подключается к Termin через SDK и wheelhouse (`sdk/wheels`) и остаётся полезным smoke-test публичности API: если diffusion-editor вынужден лезть во внутренности Termin, вероятно граница модуля описана или реализована плохо.

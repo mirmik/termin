@@ -1,8 +1,8 @@
-"""Test that reproduces the full diffusion-editor UI layout.
+"""Test an editor-style multi-panel UI layout.
 
-Builds the exact widget tree from editor_window._build_ui() and verifies
-that all panels, canvas, splitters, menu, toolbar, and statusbar are
-positioned and sized correctly at various viewport sizes.
+Builds a representative widget tree with panels, canvas, splitters, menu,
+toolbar, and statusbar, then verifies that it is positioned and sized
+correctly at various viewport sizes.
 """
 
 from tcgui.widgets.vstack import VStack
@@ -22,7 +22,7 @@ MENUBAR_H = FONT_SIZE + 6.0 * 2        # 26
 TOOLBAR_H = 32.0 + 4.0 * 2             # 40
 STATUSBAR_H = FONT_SIZE_SMALL + 4.0 * 2  # 19
 
-# Panel widths from diffusion-editor
+# Panel widths from a representative external editor layout.
 LEFT_CONTAINER_W = 260
 LAYER_PANEL_W = 220
 SPLITTER_W = 5
@@ -33,7 +33,7 @@ INSTRUCT_PANEL_W = 280
 
 
 def _build_editor_ui(viewport_w=1280, viewport_h=800):
-    """Build the exact UI tree from diffusion-editor's editor_window._build_ui().
+    """Build a representative editor UI tree.
 
     Returns dict with named widgets for assertions.
     """
