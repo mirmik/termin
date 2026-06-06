@@ -187,6 +187,7 @@ class CsgSceneRenderer:
         height: int,
         draft_points: list[tuple[float, float, float]] | None = None,
         selected_node_data: tuple[str, str] | None = None,
+        show_wireframe: bool = True,
         preview_key=None,
     ):
         width = max(int(width), 1)
@@ -206,7 +207,7 @@ class CsgSceneRenderer:
         ctx.set_cull(CULL_NONE)
         ctx.bind_shader(self.vs, self.fs)
 
-        self._ensure_preview_meshes(document, draft_points, selected_node_data, preview_key)
+        self._ensure_preview_meshes(document, draft_points, selected_node_data, show_wireframe, preview_key)
 
         ctx.set_depth_test(True)
         ctx.set_depth_write(True)
@@ -233,13 +234,19 @@ class CsgSceneRenderer:
         document: ProceduralMeshDocument,
         draft_points: list[tuple[float, float, float]] | None,
         selected_node_data: tuple[str, str] | None,
+        show_wireframe: bool,
         preview_key,
     ) -> None:
         if preview_key is not None and preview_key == self._preview_key:
             return
 
         solid_meshes = build_document_solid_meshes(document)
-        immediate_geometry = build_document_immediate_geometry(document, draft_points, selected_node_data)
+        immediate_geometry = build_document_immediate_geometry(
+            document,
+            draft_points,
+            selected_node_data,
+            show_wireframe=show_wireframe,
+        )
         self._solid_meshes = solid_meshes
         self._immediate_geometry = immediate_geometry
         self._preview_key = preview_key
@@ -354,28 +361,30 @@ def build_document_immediate_geometry(
     document: ProceduralMeshDocument,
     draft_points: list[tuple[float, float, float]] | None,
     selected_node_data: tuple[str, str] | None,
+    show_wireframe: bool = True,
 ) -> ImmediateGeometry:
     lines: list[ImmediateLineSegment] = []
     polylines: list[ImmediatePolyline] = []
     points: list[ImmediatePointMarker] = []
 
-    for evaluated in evaluate_document(document):
-        if selected_node_data == ("operation", evaluated.operation_id):
-            edge_color = (0.85, 1.0, 1.0, 1.0)
-        else:
-            edge_color = (0.0, 0.95, 0.95, 0.85)
-        try:
-            mesh = to_mesh3(evaluated.solid, "cad-solid-wire", "", True)
-            vertices = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 3)
-            transformed = [
-                evaluated.point_transform((float(v[0]), float(v[1]), float(v[2])))
-                for v in vertices
-            ]
-            triangles = np.asarray(mesh.triangles, dtype=np.uint32).reshape(-1)
-            for start, end in _edge_segments_from_triangles(transformed, triangles):
-                lines.append(ImmediateLineSegment(start, end, edge_color, False))
-        except Exception as e:
-            log.error(f"[CsgCad] failed to build solid edge immediate preview: {e}")
+    if show_wireframe:
+        for evaluated in evaluate_document(document):
+            if selected_node_data == ("operation", evaluated.operation_id):
+                edge_color = (0.85, 1.0, 1.0, 1.0)
+            else:
+                edge_color = (0.0, 0.95, 0.95, 0.85)
+            try:
+                mesh = to_mesh3(evaluated.solid, "cad-solid-wire", "", True)
+                vertices = np.asarray(mesh.vertices, dtype=np.float32).reshape(-1, 3)
+                transformed = [
+                    evaluated.point_transform((float(v[0]), float(v[1]), float(v[2])))
+                    for v in vertices
+                ]
+                triangles = np.asarray(mesh.triangles, dtype=np.uint32).reshape(-1)
+                for start, end in _edge_segments_from_triangles(transformed, triangles):
+                    lines.append(ImmediateLineSegment(start, end, edge_color, False))
+            except Exception as e:
+                log.error(f"[CsgCad] failed to build solid edge immediate preview: {e}")
 
     visual_model = build_document_visual_model(document, draft_points, selected_node_data)
     for polyline in visual_model.polylines:

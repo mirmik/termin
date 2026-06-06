@@ -9,6 +9,7 @@ import sdl2
 
 from tcbase import Key, Mods, MouseButton, log
 from tcgui.widgets.button import Button
+from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.file_dialog_overlay import show_open_file_dialog, show_save_file_dialog
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
@@ -74,12 +75,14 @@ class CadApp:
         self.selected_node_data: tuple[str, str] | None = None
         self.current_path: Path | None = None
         self.last_directory = Path.cwd()
+        self.show_wireframe = True
 
         self.mode_label = Label()
         self.file_label = Label()
         self.summary_label = Label()
         self.selection_label = Label()
         self.status_label = Label()
+        self.wireframe_checkbox = Checkbox()
         self.tree = TreeWidget()
         self.operation_params_panel = Panel()
         self.operation_params_title = Label()
@@ -160,7 +163,8 @@ class CadApp:
             height,
             self.draft.points,
             self.selected_node_data,
-            self.preview_revision,
+            self.show_wireframe,
+            (self.preview_revision, self.show_wireframe),
         )
         self.viewport.texture = texture
         self.viewport.texture_size = (width, height)
@@ -172,6 +176,11 @@ class CadApp:
     def request_preview_rebuild(self) -> None:
         self.preview_revision += 1
         self.request_render()
+
+    def _on_wireframe_changed(self, checked: bool) -> None:
+        self.show_wireframe = bool(checked)
+        self.request_preview_rebuild()
+        log.info(f"[CsgCad] wireframe visible={self.show_wireframe}")
 
     def _build_side_panel(self):
         root = VStack()
@@ -210,6 +219,15 @@ class CadApp:
         row3.add_child(self._button("Subtract", lambda: self.add_boolean_operation("subtract")))
         row3.add_child(self._button("Intersect", lambda: self.add_boolean_operation("intersect")))
         root.add_child(row3)
+
+        view_row = HStack()
+        view_row.spacing = 4
+        view_row.preferred_height = px(24)
+        self.wireframe_checkbox.text = "Wireframe"
+        self.wireframe_checkbox.checked = self.show_wireframe
+        self.wireframe_checkbox.on_changed = self._on_wireframe_changed
+        view_row.add_child(self.wireframe_checkbox)
+        root.add_child(view_row)
 
         self.summary_label.color = (0.58, 0.64, 0.72, 1.0)
         root.add_child(self.summary_label)
