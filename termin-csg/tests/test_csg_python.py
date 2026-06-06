@@ -348,6 +348,26 @@ def test_procedural_document_boolean_subtract_and_intersect_volumes():
     assert isclose(evaluated[0].solid.volume, 2.0, abs_tol=1.0e-6)
 
 
+def test_procedural_document_boolean_can_consume_later_operation_input():
+    document = ProceduralMeshDocument()
+    base = document.add_primitive_operation("box", {"size": [4.0, 4.0, 4.0]})
+    first_cut = document.add_primitive_operation("box", {"size": [1.0, 1.0, 1.0], "center": [-1.0, 0.0, 0.0]})
+    assert base is not None
+    assert first_cut is not None
+    subtract_op = document.add_boolean_operation("subtract", [base.id, first_cut.id])
+    assert subtract_op is not None
+    later_cut = document.add_primitive_operation("box", {"size": [1.0, 1.0, 1.0], "center": [1.0, 0.0, 0.0]})
+    assert later_cut is not None
+
+    assert add_boolean_input(document, subtract_op.id, later_cut.id)
+    assert subtract_op.inputs == [base.id, first_cut.id, later_cut.id]
+
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert evaluated[0].operation_id == subtract_op.id
+    assert isclose(evaluated[0].solid.volume, 62.0, abs_tol=1.0e-6)
+
+
 def test_document_edit_adds_reorders_and_removes_boolean_inputs():
     document = ProceduralMeshDocument()
     first = document.add_primitive_operation("box")
@@ -619,12 +639,12 @@ def test_cad_app_tree_drop_adds_and_reorders_boolean_inputs():
     app = CadApp()
     first = app.document.add_primitive_operation("box")
     second = app.document.add_primitive_operation("sphere")
-    third = app.document.add_primitive_operation("cylinder")
     assert first is not None
     assert second is not None
-    assert third is not None
     operation = app.document.add_boolean_operation("subtract", [first.id, second.id])
     assert operation is not None
+    third = app.document.add_primitive_operation("cylinder")
+    assert third is not None
     app.refresh_tree()
 
     subtract_node = _first_tree_node(app.tree.root_nodes, ("operation", operation.id))
@@ -634,6 +654,7 @@ def test_cad_app_tree_drop_adds_and_reorders_boolean_inputs():
 
     app._on_tree_drop(third_root_node, subtract_node, "inside")
     assert operation.inputs == [first.id, second.id, third.id]
+    assert len(evaluate_document(app.document)) == 1
 
     second_node = _first_tree_node(app.tree.root_nodes, ("operation", second.id))
     third_node = _first_tree_node(app.tree.root_nodes, ("operation", third.id))
