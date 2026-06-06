@@ -1,6 +1,7 @@
 from math import isclose
 
 from termin.csg import (
+    CsgEditorController,
     ProceduralMeshDocument,
     evaluate_document,
     extrude,
@@ -412,6 +413,35 @@ def test_document_edit_rejects_boolean_input_cycles_and_invalid_removal():
     assert inner.inputs == [first.id, second.id]
     assert not remove_boolean_input(document, inner.id, first.id)
     assert inner.inputs == [first.id, second.id]
+
+
+def test_csg_editor_controller_owns_selection_and_boolean_input_workflow():
+    controller = CsgEditorController()
+
+    assert controller.add_primitive("box").success
+    first_id = controller.selection[1]
+    assert controller.add_primitive("sphere").success
+    second_id = controller.selection[1]
+
+    boolean_result = controller.add_boolean_operation("subtract")
+    assert boolean_result.success
+    assert boolean_result.fit_camera
+    subtract_id = controller.selection[1]
+    subtract_op = controller.document.find_operation(subtract_id)
+    assert subtract_op is not None
+    assert subtract_op.inputs == [first_id, second_id]
+
+    assert controller.add_primitive("cylinder").success
+    third_id = controller.selection[1]
+    add_input_result = controller.add_boolean_input(subtract_id, third_id)
+    assert add_input_result.success
+    assert controller.selection == ("operation", third_id)
+    assert subtract_op.inputs == [first_id, second_id, third_id]
+
+    move_result = controller.move_boolean_input(subtract_id, subtract_id, third_id, 1)
+    assert move_result.success
+    assert subtract_op.inputs == [first_id, third_id, second_id]
+    assert len(evaluate_document(controller.document)) == 1
 
 
 def test_procedural_document_subtracts_downward_extrude_as_cutting_tool():

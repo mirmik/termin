@@ -30,26 +30,9 @@ from tgfx import Tgfx2Context
 
 from termin.csg.cad_viewer import CadViewportWidget, CsgSceneRenderer, document_bounds
 from termin.csg.cad_state import CAD_STATE_FILTER, CadState, load_cad_state, save_cad_state
-from termin.csg.document_edit import (
-    SketchDraft,
-    add_boolean_input,
-    add_boolean_for_selection,
-    add_draft_point_from_ray,
-    add_extrude_for_selection,
-    add_primitive_operation,
-    clear_document,
-    close_draft_contour,
-    move_boolean_input,
-    remove_boolean_input,
-    selected_sketch_id,
-    set_contour_point,
-    set_extrude_vector,
-    set_operation_transform,
-    set_primitive_params,
-    set_sketch_plane,
-    start_sketch_draft,
-)
+from termin.csg.document_edit import SketchDraft
 from termin.csg.document_eval import extrude_vector_for_operation
+from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController
 from termin.csg.document_raycast import ray_plane_intersection
 from termin.csg.document_tree_model import DocumentTreeNode, build_document_tree, document_summary
 from termin.csg.procedural_document import (
@@ -91,12 +74,9 @@ class ContourPointDrag:
 class CadApp:
     def __init__(self) -> None:
         self.ui: UI | None = None
-        self.document = ProceduralMeshDocument()
+        self.controller = CsgEditorController()
         self.camera = OrbitCamera()
         self.viewport = CadViewportWidget(self.camera)
-        self.mode = "idle"
-        self.draft: SketchDraft = start_sketch_draft()
-        self.selected_node_data: tuple[str, str] | None = None
         self.current_path: Path | None = None
         self.last_directory = Path.cwd()
         self.show_wireframe = True
@@ -130,6 +110,38 @@ class CadApp:
         self._syncing_contour_params = False
         self.dirty = True
         self.preview_revision = 0
+
+    @property
+    def document(self) -> ProceduralMeshDocument:
+        return self.controller.document
+
+    @document.setter
+    def document(self, value: ProceduralMeshDocument) -> None:
+        self.controller.document = value
+
+    @property
+    def draft(self) -> SketchDraft:
+        return self.controller.draft
+
+    @draft.setter
+    def draft(self, value: SketchDraft) -> None:
+        self.controller.draft = value
+
+    @property
+    def selected_node_data(self) -> tuple[str, str] | None:
+        return self.controller.selection
+
+    @selected_node_data.setter
+    def selected_node_data(self, value: tuple[str, str] | None) -> None:
+        self.controller.selection = value
+
+    @property
+    def mode(self) -> str:
+        return self.controller.mode
+
+    @mode.setter
+    def mode(self, value: str) -> None:
+        self.controller.mode = str(value)
 
     def build_ui(self, ui: UI):
         self.ui = ui
@@ -784,15 +796,9 @@ class CadApp:
         return row
 
     def new_document(self) -> None:
-        self.document = clear_document()
-        self.draft = start_sketch_draft()
-        self.selected_node_data = None
+        result = self.controller.new_document()
         self.current_path = None
-        self.mode = "idle"
-        self.refresh_tree()
-        self.fit_camera()
-        self.request_preview_rebuild()
-        self._set_status("New document")
+        self._apply_controller_result(result, default_status="New document")
         log.info("[CsgCad] new document")
 
     def open_state_dialog(self) -> None:
@@ -857,11 +863,9 @@ class CadApp:
             log.error(f"[CsgCad] failed to load state path='{path}': {e}")
             return False
 
-        self.document = state.document
+        self.controller.replace_document(state.document)
         state.camera.apply_to(self.camera)
         self.selected_node_data = self._validated_selection(state.selection)
-        self.draft = start_sketch_draft()
-        self.mode = "idle"
         self.current_path = Path(path).expanduser()
         self.last_directory = self.current_path.parent
         self.refresh_tree()
@@ -883,103 +887,49 @@ class CadApp:
         self.save_state_to_path(path)
 
     def start_draw_sketch(self) -> None:
-        self.mode = "draw_sketch"
-        self.draft = start_sketch_draft()
-        self._refresh_labels()
-        self.request_preview_rebuild()
+        result = self.controller.start_draw_sketch()
+        self._apply_controller_result(result)
         log.info("[CsgCad] mode=draw_sketch")
 
     def start_add_outer_contour(self) -> None:
-        sketch = self._selected_sketch()
-        if sketch is None:
-            log.error("[CsgCad] cannot add outer contour: select a sketch")
+        result = self.controller.start_add_outer_contour()
+        if not self._apply_controller_result(result):
             return
-        self.mode = "draw_sketch"
-        self.draft = start_sketch_draft(
-            sketch_id=sketch.id,
-            plane=sketch.plane,
-            contour_role=CONTOUR_ROLE_OUTER,
-        )
-        self._refresh_labels()
-        self.request_preview_rebuild()
-        self._set_status(f"Adding outer contour to {sketch.name}")
-        log.info(f"[CsgCad] add outer contour started sketch='{sketch.id}'")
+        log.info(f"[CsgCad] add outer contour started sketch='{self.draft.sketch_id}'")
 
     def start_add_hole_contour(self) -> None:
-        contour_ref = self._selected_contour_ref()
-        if contour_ref is None:
-            log.error("[CsgCad] cannot add hole contour: select an outer contour")
+        result = self.controller.start_add_hole_contour()
+        if not self._apply_controller_result(result):
             return
-        sketch, contour = contour_ref
-        if contour.role != CONTOUR_ROLE_OUTER:
-            log.error(f"[CsgCad] cannot add hole contour: selected contour is not outer '{contour.id}'")
-            return
-        self.mode = "draw_sketch"
-        self.draft = start_sketch_draft(
-            sketch_id=sketch.id,
-            plane=sketch.plane,
-            contour_role=CONTOUR_ROLE_HOLE,
-            parent_contour_id=contour.id,
+        log.info(
+            "[CsgCad] add hole contour started "
+            f"sketch='{self.draft.sketch_id}' outer='{self.draft.parent_contour_id}'"
         )
-        self._refresh_labels()
-        self.request_preview_rebuild()
-        self._set_status(f"Adding hole to {contour.name}")
-        log.info(f"[CsgCad] add hole contour started sketch='{sketch.id}' outer='{contour.id}'")
 
     def close_contour(self) -> None:
-        result = close_draft_contour(self.document, self.draft)
-        if not result.success:
+        result = self.controller.close_contour()
+        if not self._apply_controller_result(result):
             return
-        self.mode = "idle"
-        self.selected_node_data = result.selection
-        self.refresh_tree()
-        self.request_preview_rebuild()
-        contour_id = ""
-        if result.contour is not None:
-            contour_id = result.contour.id
-        log.info(f"[CsgCad] contour closed id='{contour_id}'")
+        log.info(f"[CsgCad] contour closed selection='{self.selected_node_data}'")
 
     def extrude_selected(self) -> None:
-        sketch_id = selected_sketch_id(self.document, self.selected_node_data)
-        result = add_extrude_for_selection(self.document, self.selected_node_data, 1.0)
-        if not result.success:
+        previous_selection = self.selected_node_data
+        result = self.controller.extrude_selected()
+        if not self._apply_controller_result(result):
             return
-        self.selected_node_data = result.selection
-        self.refresh_tree()
-        self.fit_camera()
-        self.request_preview_rebuild()
-        operation_id = ""
-        if result.operation is not None:
-            operation_id = result.operation.id
-        log.info(f"[CsgCad] extrude added id='{operation_id}' sketch='{sketch_id}'")
+        log.info(f"[CsgCad] extrude added selection='{self.selected_node_data}' previous='{previous_selection}'")
 
     def add_boolean_operation(self, kind: str) -> None:
-        result = add_boolean_for_selection(self.document, self.selected_node_data, kind)
-        if not result.success:
+        result = self.controller.add_boolean_operation(kind)
+        if not self._apply_controller_result(result):
             return
-        self.selected_node_data = result.selection
-        self.refresh_tree()
-        self.fit_camera()
-        self.request_preview_rebuild()
-        operation_id = ""
-        if result.operation is not None:
-            operation_id = result.operation.id
-        self._set_status(f"{kind.capitalize()} added")
-        log.info(f"[CsgCad] boolean added kind='{kind}' id='{operation_id}'")
+        log.info(f"[CsgCad] boolean added kind='{kind}' selection='{self.selected_node_data}'")
 
     def add_primitive(self, kind: str) -> None:
-        result = add_primitive_operation(self.document, kind)
-        if not result.success:
+        result = self.controller.add_primitive(kind)
+        if not self._apply_controller_result(result, default_status=f"{_primitive_kind_label(kind)} added"):
             return
-        self.selected_node_data = result.selection
-        self.refresh_tree()
-        self.fit_camera()
-        self.request_preview_rebuild()
-        operation_id = ""
-        if result.operation is not None:
-            operation_id = result.operation.id
-        self._set_status(f"{_primitive_kind_label(kind)} added")
-        log.info(f"[CsgCad] primitive added kind='{kind}' id='{operation_id}'")
+        log.info(f"[CsgCad] primitive added kind='{kind}' selection='{self.selected_node_data}'")
 
     def fit_camera(self) -> None:
         lo, hi = document_bounds(self.document)
@@ -987,16 +937,38 @@ class CadApp:
         self.request_render()
 
     def clear_document(self) -> None:
-        self.document = clear_document()
-        self.draft = start_sketch_draft()
-        self.selected_node_data = None
+        result = self.controller.new_document()
         self.current_path = None
-        self.mode = "idle"
-        self.refresh_tree()
-        self.fit_camera()
-        self.request_preview_rebuild()
-        self._set_status("Cleared")
+        self._apply_controller_result(result, default_status="Cleared")
         log.info("[CsgCad] document cleared")
+
+    def _apply_controller_result(
+        self,
+        result: CsgEditorCommandResult,
+        default_status: str = "",
+    ) -> bool:
+        if not result.success:
+            if result.message:
+                self._set_status(result.message)
+            return False
+        if result.tree_changed:
+            self.refresh_tree()
+        else:
+            self._refresh_labels()
+            if result.selection_changed:
+                self._rebuild_context_actions_panel()
+                self._refresh_operation_params_panel()
+                self._refresh_primitive_params_panel()
+                self._refresh_plane_params_panel()
+                self._refresh_contour_params_panel()
+        if result.fit_camera:
+            self.fit_camera()
+        if result.preview_changed:
+            self.request_preview_rebuild()
+        status = result.message if result.message else default_status
+        if status:
+            self._set_status(status)
+        return True
 
     def refresh_tree(self) -> None:
         self.tree.clear()
@@ -1067,9 +1039,8 @@ class CadApp:
         if position == "root":
             if not source_boolean_id:
                 return
-            if not remove_boolean_input(self.document, source_boolean_id, dragged_operation_id):
-                return
-            self._finish_tree_drop(dragged_operation_id, f"Removed input from {source_boolean_id[:10]}")
+            result = self.controller.remove_boolean_input(source_boolean_id, dragged_operation_id)
+            self._finish_tree_drop(result)
             return
 
         if target_node is None:
@@ -1085,16 +1056,14 @@ class CadApp:
                 if source_boolean_id == target_boolean_id:
                     log.error("[CsgCad] cannot drop tree node inside target: input is already in this boolean operation")
                     return
-                if not move_boolean_input(
-                    self.document,
+                result = self.controller.move_boolean_input(
                     source_boolean_id,
                     target_boolean_id,
                     dragged_operation_id,
-                ):
-                    return
-            elif not add_boolean_input(self.document, target_boolean_id, dragged_operation_id):
-                return
-            self._finish_tree_drop(dragged_operation_id, f"Added input to {target_boolean_id[:10]}")
+                )
+            else:
+                result = self.controller.add_boolean_input(target_boolean_id, dragged_operation_id)
+            self._finish_tree_drop(result)
             return
 
         if position not in ("above", "below"):
@@ -1123,24 +1092,20 @@ class CadApp:
         target_index = target_operation.inputs.index(target_operation_id)
         insert_index = target_index + (1 if position == "below" else 0)
         if source_boolean_id:
-            if not move_boolean_input(
-                self.document,
+            result = self.controller.move_boolean_input(
                 source_boolean_id,
                 target_boolean_id,
                 dragged_operation_id,
                 insert_index,
-            ):
-                return
-        elif not add_boolean_input(self.document, target_boolean_id, dragged_operation_id, insert_index):
-            return
-        self._finish_tree_drop(dragged_operation_id, f"Moved input in {target_boolean_id[:10]}")
+            )
+        else:
+            result = self.controller.add_boolean_input(target_boolean_id, dragged_operation_id, insert_index)
+        self._finish_tree_drop(result)
 
-    def _finish_tree_drop(self, operation_id: str, status: str) -> None:
-        self.selected_node_data = ("operation", operation_id)
-        self.refresh_tree()
-        self.request_preview_rebuild()
-        self._set_status(status)
-        log.info(f"[CsgCad] tree drop applied selection='{operation_id}' status='{status}'")
+    def _finish_tree_drop(self, result: CsgEditorCommandResult) -> None:
+        if not self._apply_controller_result(result):
+            return
+        log.info(f"[CsgCad] tree drop applied selection='{self.selected_node_data}' status='{result.message}'")
 
     def _tree_node_data(self, node: TreeNode | None) -> tuple[str, str] | None:
         if node is None:
@@ -1279,7 +1244,8 @@ class CadApp:
             )
             return True
         local_point = sketch.plane.project(point)
-        if not set_contour_point(self.document, contour.id, drag.point_index, local_point):
+        result = self.controller.set_contour_point(contour.id, drag.point_index, local_point)
+        if not result.success:
             return True
         self._sync_contour_point_inputs(drag.point_index, local_point)
         self.request_preview_rebuild()
@@ -1465,10 +1431,9 @@ class CadApp:
             float(self.extrude_vector_inputs["y"].value),
             float(self.extrude_vector_inputs["z"].value),
         )
-        if not set_extrude_vector(self.document, operation.id, vector):
+        result = self.controller.set_extrude_vector(operation.id, vector)
+        if not self._apply_controller_result(result):
             return
-        self.refresh_tree()
-        self.request_preview_rebuild()
         log.info(
             "[CsgCad] extrude vector changed "
             f"operation='{operation.id}' vector=({vector[0]:.3f}, {vector[1]:.3f}, {vector[2]:.3f})"
@@ -1483,10 +1448,9 @@ class CadApp:
             return
         center = self._operation_transform_vec("center")
         rotation = self._operation_transform_vec("rotation")
-        if not set_operation_transform(self.document, operation.id, center, rotation):
+        result = self.controller.set_operation_transform(operation.id, center, rotation)
+        if not self._apply_controller_result(result):
             return
-        self.refresh_tree()
-        self.request_preview_rebuild()
         log.info(
             "[CsgCad] operation transform changed "
             f"operation='{operation.id}' center={center} rotation={rotation}"
@@ -1528,10 +1492,9 @@ class CadApp:
                 ]
         for key, checkbox in self.primitive_bool_inputs.items():
             params[key] = bool(checkbox.checked)
-        if not set_primitive_params(self.document, operation.id, params):
+        result = self.controller.set_primitive_params(operation.id, params)
+        if not self._apply_controller_result(result):
             return
-        self.refresh_tree()
-        self.request_preview_rebuild()
         log.info(f"[CsgCad] primitive params changed operation='{operation.id}' params={params}")
 
     def _operation_transform_vec(self, group: str) -> tuple[float, float, float]:
@@ -1553,10 +1516,9 @@ class CadApp:
             x_axis=self._plane_input_vec("x_axis"),
             y_axis=self._plane_input_vec("y_axis"),
         )
-        if not set_sketch_plane(self.document, sketch.id, plane):
+        result = self.controller.set_sketch_plane(sketch.id, plane)
+        if not self._apply_controller_result(result):
             return
-        self.refresh_tree()
-        self.request_preview_rebuild()
         log.info(
             "[CsgCad] plane changed "
             f"sketch='{sketch.id}' origin={plane.origin} x_axis={plane.x_axis} y_axis={plane.y_axis}"
@@ -1582,9 +1544,9 @@ class CadApp:
             float(self.contour_point_inputs[x_key].value),
             float(self.contour_point_inputs[y_key].value),
         )
-        if not set_contour_point(self.document, contour.id, point_index, point):
+        result = self.controller.set_contour_point(contour.id, point_index, point)
+        if not self._apply_controller_result(result):
             return
-        self.request_preview_rebuild()
         log.info(
             "[CsgCad] contour point changed "
             f"contour='{contour.id}' index={point_index} point=({point[0]:.3f}, {point[1]:.3f})"

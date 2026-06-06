@@ -32,6 +32,7 @@ from termin.csg.procedural_document import (  # noqa: E402
     SketchItemDocument,
 )
 from termin.csg.document_eval import EvaluatedSolid, evaluate_document  # noqa: E402
+from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController  # noqa: E402
 
 
 def _point2(value):
@@ -78,6 +79,8 @@ __all__ = [
     "ProceduralPlane",
     "SketchItemDocument",
     "EvaluatedSolid",
+    "CsgEditorCommandResult",
+    "CsgEditorController",
     "Solid",
     "evaluate_document",
     "extrude",
