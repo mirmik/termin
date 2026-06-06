@@ -26,7 +26,6 @@ digraph termin_dependencies {
 		color="#999999";
 		fontname="DejaVu Sans";
 		fontsize=12;
-		"diffusion-editor";
 		"termin-app";
 	}
 
@@ -134,8 +133,11 @@ digraph termin_dependencies {
 	}
 
 	"termin-android";
+	"termin-components-foliage";
 	"termin-materials";
 	"termin-openxr";
+	"termin-pga";
+	"termin-qopt";
 	"termin-render-passes";
 	"termin-runtime";
 
@@ -145,14 +147,17 @@ digraph termin_dependencies {
 	"termin-animation" -> "termin-components-animation";
 	"termin-app" -> "termin-csharp";
 	"termin-assets" -> "termin-app";
+	"termin-base" -> "termin-assets";
 	"termin-base" -> "termin-inspect";
 	"termin-base" -> "termin-lighting";
 	"termin-base" -> "termin-mesh";
 	"termin-base" -> "termin-modules";
 	"termin-base" -> "termin-navmesh";
-	"termin-base" -> "termin-openxr";
+	"termin-base" -> "termin-pga";
+	"termin-base" -> "termin-qopt";
 	"termin-collision" -> "termin-android";
 	"termin-collision" -> "termin-components-collision";
+	"termin-collision" -> "termin-openxr";
 	"termin-collision" -> "termin-physics";
 	"termin-components-animation" -> "termin-app";
 	"termin-components-collision" -> "termin-components-physics";
@@ -164,16 +169,15 @@ digraph termin_dependencies {
 	"termin-components-render" -> "termin-runtime";
 	"termin-components-skeleton" -> "termin-components-animation";
 	"termin-csg" -> "termin-app";
-	"termin-display" -> "diffusion-editor";
 	"termin-display" -> "termin-components-render";
 	"termin-display" -> "termin-engine";
 	"termin-engine" -> "termin-android";
 	"termin-engine" -> "termin-app";
+	"termin-engine" -> "termin-openxr";
 	"termin-engine" -> "termin-runtime";
 	"termin-graphics" -> "termin-gui";
 	"termin-graphics" -> "termin-materials";
 	"termin-graphics" -> "termin-render";
-	"termin-gui" -> "diffusion-editor";
 	"termin-gui" -> "tcplot";
 	"termin-gui" -> "termin-csg";
 	"termin-gui" -> "termin-nodegraph";
@@ -187,9 +191,11 @@ digraph termin_dependencies {
 	"termin-navmesh" -> "termin-app";
 	"termin-nodegraph" -> "termin-app";
 	"termin-physics" -> "termin-components-physics";
+	"termin-render" -> "termin-components-foliage";
 	"termin-render" -> "termin-display";
 	"termin-render-passes" -> "termin-android";
 	"termin-render-passes" -> "termin-app";
+	"termin-render-passes" -> "termin-openxr";
 	"termin-scene" -> "termin-collision";
 	"termin-scene" -> "termin-components-kinematic";
 	"termin-scene" -> "termin-components-mesh";
