@@ -7,17 +7,15 @@ from dataclasses import dataclass
 from tcbase import log
 from tcbase._geom_native import Vec3
 from tgfx._tgfx_native import Color4
-from tcgui.widgets.button import Button
-from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.vstack import VStack
-from tcgui.widgets.units import px
 
 from termin.editor_tcgui.component_editor_extension import (
     register_component_editor_extension,
 )
 from termin.csg.cad_tree_adapter import restore_tree_selection, to_tree_node, tree_node_data
+from termin.csg.csg_editor_panel import CsgEditorPanel
 from termin.csg.document_eval import evaluate_document
 from termin.csg.document_tree_model import (
     build_document_tree,
@@ -25,7 +23,6 @@ from termin.csg.document_tree_model import (
 )
 from termin.csg.document_visual_model import build_document_visual_model
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController
-from termin.csg.operation_specs import ordered_boolean_operation_specs, ordered_primitive_specs
 from termin.csg.procedural_document import ProceduralPlane
 from termin.csg.solid_render import (
     PointTransform,
@@ -48,10 +45,19 @@ class ProceduralMeshEditorExtension:
         self._component_ref = None
         self._component = None
         self._controller = CsgEditorController()
-        self._mode_label = Label()
+        self._editor_panel = self._create_editor_panel()
         self._document_summary_label = Label()
         self._selection_label = Label()
         self._document_tree = TreeWidget()
+
+    def _create_editor_panel(self) -> CsgEditorPanel:
+        return CsgEditorPanel(
+            self._controller,
+            self._apply_controller_result,
+            log_prefix="[ProceduralMeshEditor]",
+            clear_callback=self._clear_document,
+            request_layout=self._request_layout,
+        )
 
     def attach(self, editor, entity, component_ref) -> None:
         self._editor = editor
@@ -76,6 +82,7 @@ class ProceduralMeshEditorExtension:
         self._component_ref = None
         self._component = None
         self._controller = CsgEditorController()
+        self._editor_panel = self._create_editor_panel()
         log.info("[ProceduralMeshEditor] extension detached")
 
     def build_panel(self):
@@ -85,58 +92,7 @@ class ProceduralMeshEditorExtension:
         title = Label()
         title.text = "Procedural Geometry"
         root.add_child(title)
-
-        self._mode_label.text = self._mode_text()
-        self._mode_label.color = (0.55, 0.60, 0.68, 1.0)
-        root.add_child(self._mode_label)
-
-        row = HStack()
-        row.spacing = 4
-        row.preferred_height = px(28)
-        row.add_child(self._make_button("Draw Sketch", "draw_sketch"))
-        close_btn = Button()
-        close_btn.text = "Close Contour"
-        close_btn.on_click = self._close_contour
-        row.add_child(close_btn)
-        root.add_child(row)
-
-        row2 = HStack()
-        row2.spacing = 4
-        row2.preferred_height = px(28)
-        extrude_btn = Button()
-        extrude_btn.text = "Extrude"
-        extrude_btn.on_click = self._add_extrude_operation
-        row2.add_child(extrude_btn)
-        clear_btn = Button()
-        clear_btn.text = "Clear Sketch"
-        clear_btn.on_click = self._clear_sketch
-        row2.add_child(clear_btn)
-        row2.add_child(self._make_button("Clear Tool", "idle"))
-        root.add_child(row2)
-
-        primitive_row = HStack()
-        primitive_row.spacing = 4
-        primitive_row.preferred_height = px(28)
-        for spec in ordered_primitive_specs():
-            primitive_row.add_child(
-                self._make_command_button(
-                    spec.label,
-                    lambda k=spec.kind: self._add_primitive_operation(k),
-                )
-            )
-        root.add_child(primitive_row)
-
-        boolean_row = HStack()
-        boolean_row.spacing = 4
-        boolean_row.preferred_height = px(28)
-        for spec in ordered_boolean_operation_specs():
-            boolean_row.add_child(
-                self._make_command_button(
-                    spec.label,
-                    lambda k=spec.kind: self._add_boolean_operation(k),
-                )
-            )
-        root.add_child(boolean_row)
+        root.add_child(self._editor_panel.build())
 
         return root
 
@@ -168,18 +124,6 @@ class ProceduralMeshEditorExtension:
 
         return root
 
-    def _make_button(self, text: str, mode: str) -> Button:
-        btn = Button()
-        btn.text = text
-        btn.on_click = lambda m=mode: self._set_mode(m)
-        return btn
-
-    def _make_command_button(self, text: str, callback) -> Button:
-        btn = Button()
-        btn.text = text
-        btn.on_click = callback
-        return btn
-
     def _set_mode(self, mode: str) -> None:
         if mode == "draw_sketch":
             result = self._controller.start_draw_sketch()
@@ -199,7 +143,7 @@ class ProceduralMeshEditorExtension:
         )
 
     def _refresh_mode_label(self) -> None:
-        self._mode_label.text = self._mode_text()
+        self._editor_panel.refresh_labels()
 
     def _close_contour(self) -> None:
         if not self._ensure_controller_document():
@@ -244,6 +188,9 @@ class ProceduralMeshEditorExtension:
         )
 
     def _clear_sketch(self) -> None:
+        self._clear_document()
+
+    def _clear_document(self) -> None:
         if not self._ensure_controller_document():
             return
         result = self._controller.new_document()
@@ -305,7 +252,11 @@ class ProceduralMeshEditorExtension:
             self._controller.replace_document(component.document, self._controller.selection)
         return True
 
-    def _apply_controller_result(self, result: CsgEditorCommandResult) -> bool:
+    def _apply_controller_result(
+        self,
+        result: CsgEditorCommandResult,
+        default_status: str = "",
+    ) -> bool:
         if not result.success:
             if result.message:
                 log.error(f"[ProceduralMeshEditor] command failed: {result.message}")
@@ -316,11 +267,14 @@ class ProceduralMeshEditorExtension:
             component.mark_dirty()
             if component.auto_regenerate:
                 component.regenerate_if_needed()
-        self._refresh_mode_label()
         if result.tree_changed or result.selection_changed:
             self._refresh_document_tree()
         else:
             self._refresh_selection_label()
+        self._editor_panel.refresh_all()
+        status = result.message if result.message else default_status
+        if status:
+            self._editor_panel.set_status(status)
         if result.preview_changed:
             self._request_viewport_update()
         return True
@@ -334,6 +288,10 @@ class ProceduralMeshEditorExtension:
         editor = self._editor
         if editor is not None:
             editor.request_viewport_update()
+
+    def _request_layout(self) -> None:
+        if self._editor_panel.operation_params_panel._ui is not None:
+            self._editor_panel.operation_params_panel._ui.request_layout()
 
     def _on_viewport_click(
         self,

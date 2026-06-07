@@ -25,6 +25,7 @@ from tcgui.widgets.units import px
 from tcgui.widgets.vstack import VStack
 
 from termin.csg.cad_viewer import CadViewportWidget, CsgSceneRenderer, document_bounds
+from termin.csg.csg_editor_panel import CsgEditorPanel
 from termin.csg.cad_state import CAD_STATE_FILTER, CadState, load_cad_state, save_cad_state
 from termin.csg.document_edit import SketchDraft
 from termin.csg.document_eval import extrude_vector_for_operation
@@ -78,34 +79,44 @@ class CadApp:
         self.last_directory = Path.cwd()
         self.show_wireframe = True
         self._sketch_point_drag: SketchPointDrag | None = None
+        self.editor_panel = CsgEditorPanel(
+            self.controller,
+            self._apply_controller_result,
+            log_prefix="[CsgCad]",
+            fit_callback=self.fit_camera,
+            clear_callback=self.clear_document,
+            request_layout=self._request_layout,
+            wireframe_getter=self._wireframe_visible,
+            wireframe_setter=self._set_wireframe_visible,
+        )
 
-        self.mode_label = Label()
         self.file_label = Label()
-        self.summary_label = Label()
-        self.selection_label = Label()
-        self.status_label = Label()
-        self.wireframe_checkbox = Checkbox()
+        self.mode_label = self.editor_panel.mode_label
+        self.summary_label = self.editor_panel.summary_label
+        self.selection_label = self.editor_panel.selection_label
+        self.status_label = self.editor_panel.status_label
+        self.wireframe_checkbox = self.editor_panel.wireframe_checkbox
         self.tree = TreeWidget()
-        self.context_actions_panel = Panel()
-        self.operation_params_panel = Panel()
-        self.operation_params_title = Label()
-        self.operation_params_kind = Label()
-        self.extrude_vector_inputs: dict[str, SpinBox] = {}
-        self.wall_param_inputs: dict[str, SpinBox] = {}
-        self.wall_alignment_label = Label()
-        self.operation_transform_inputs: dict[str, SpinBox] = {}
+        self.context_actions_panel = self.editor_panel.context_actions_panel
+        self.operation_params_panel = self.editor_panel.operation_params_panel
+        self.operation_params_title = self.editor_panel.operation_params_title
+        self.operation_params_kind = self.editor_panel.operation_params_kind
+        self.extrude_vector_inputs = self.editor_panel.extrude_vector_inputs
+        self.wall_param_inputs = self.editor_panel.wall_param_inputs
+        self.wall_alignment_label = self.editor_panel.wall_alignment_label
+        self.operation_transform_inputs = self.editor_panel.operation_transform_inputs
         self._syncing_operation_params = False
-        self.primitive_params_panel = Panel()
-        self.primitive_params_title = Label()
-        self.primitive_param_inputs: dict[str, SpinBox] = {}
-        self.primitive_bool_inputs: dict[str, Checkbox] = {}
+        self.primitive_params_panel = self.editor_panel.primitive_params_panel
+        self.primitive_params_title = self.editor_panel.primitive_params_title
+        self.primitive_param_inputs = self.editor_panel.primitive_param_inputs
+        self.primitive_bool_inputs = self.editor_panel.primitive_bool_inputs
         self._syncing_primitive_params = False
-        self.plane_params_panel = Panel()
-        self.plane_params_title = Label()
-        self.plane_inputs: dict[str, SpinBox] = {}
+        self.plane_params_panel = self.editor_panel.plane_params_panel
+        self.plane_params_title = self.editor_panel.plane_params_title
+        self.plane_inputs = self.editor_panel.plane_inputs
         self._syncing_plane_params = False
-        self.contour_params_panel = Panel()
-        self.contour_point_inputs: dict[tuple[int, str], SpinBox] = {}
+        self.contour_params_panel = self.editor_panel.contour_params_panel
+        self.contour_point_inputs = self.editor_panel.contour_point_inputs
         self._syncing_contour_params = False
         self.dirty = True
         self.preview_revision = 0
@@ -224,9 +235,19 @@ class CadApp:
         self.request_render()
 
     def _on_wireframe_changed(self, checked: bool) -> None:
-        self.show_wireframe = bool(checked)
+        self._set_wireframe_visible(bool(checked))
+
+    def _wireframe_visible(self) -> bool:
+        return self.show_wireframe
+
+    def _set_wireframe_visible(self, visible: bool) -> None:
+        self.show_wireframe = bool(visible)
         self.request_preview_rebuild()
         log.info(f"[CsgCad] wireframe visible={self.show_wireframe}")
+
+    def _request_layout(self) -> None:
+        if self.ui is not None:
+            self.ui.request_layout()
 
     def _build_side_panel(self):
         root = VStack()
@@ -239,63 +260,7 @@ class CadApp:
         self.file_label.color = (0.58, 0.64, 0.72, 1.0)
         root.add_child(self.file_label)
 
-        self.mode_label.text = self._mode_text()
-        self.mode_label.color = (0.58, 0.64, 0.72, 1.0)
-        root.add_child(self.mode_label)
-
-        row = HStack()
-        row.spacing = 4
-        row.preferred_height = px(28)
-        row.add_child(self._button("Draw Sketch", self.start_draw_sketch))
-        row.add_child(self._button("Close Contour", self.close_contour))
-        row.add_child(self._button("Finish Path", self.finish_wall_path))
-        root.add_child(row)
-
-        row2 = HStack()
-        row2.spacing = 4
-        row2.preferred_height = px(28)
-        row2.add_child(self._button("Fit", self.fit_camera))
-        row2.add_child(self._button("Clear", self.clear_document))
-        root.add_child(row2)
-
-        row3 = HStack()
-        row3.spacing = 4
-        row3.preferred_height = px(28)
-        for spec in ordered_boolean_operation_specs():
-            row3.add_child(self._button(spec.label, lambda k=spec.kind: self.add_boolean_operation(k)))
-        root.add_child(row3)
-
-        primitive_row = HStack()
-        primitive_row.spacing = 4
-        primitive_row.preferred_height = px(28)
-        for spec in ordered_primitive_specs():
-            primitive_row.add_child(self._button(spec.label, lambda k=spec.kind: self.add_primitive(k)))
-        root.add_child(primitive_row)
-
-        view_row = HStack()
-        view_row.spacing = 4
-        view_row.preferred_height = px(24)
-        self.wireframe_checkbox.text = "Wireframe"
-        self.wireframe_checkbox.checked = self.show_wireframe
-        self.wireframe_checkbox.on_changed = self._on_wireframe_changed
-        view_row.add_child(self.wireframe_checkbox)
-        root.add_child(view_row)
-
-        self.summary_label.color = (0.58, 0.64, 0.72, 1.0)
-        root.add_child(self.summary_label)
-
-        self.selection_label.color = (0.58, 0.64, 0.72, 1.0)
-        root.add_child(self.selection_label)
-
-        self.status_label.text = "Ready"
-        self.status_label.color = (0.58, 0.64, 0.72, 1.0)
-        root.add_child(self.status_label)
-
-        root.add_child(self._build_context_actions_panel())
-        root.add_child(self._build_operation_params_panel())
-        root.add_child(self._build_primitive_params_panel())
-        root.add_child(self._build_plane_params_panel())
-        root.add_child(self._build_contour_params_panel())
+        root.add_child(self.editor_panel.build())
 
         return root
 
