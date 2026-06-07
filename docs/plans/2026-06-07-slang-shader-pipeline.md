@@ -32,6 +32,15 @@ Initial Slang support should use external tools:
   tool location.
 - D3D11 artifact generation is Windows-only and requires Windows SDK `fxc.exe`
   unless a later Slang/toolchain update gives us a better DXBC path.
+- Matrix layout must be explicit for Slang command-line compilation. Termin
+  accepts both row-major and column-major layouts where a shader/backend path
+  can support them, but the preferred default is column-major because the
+  existing GLSL/Vulkan shader ABI and transform code are written in
+  `mat4 * vec4` style. This policy is expressed in Termin artifact/ABI terms;
+  if a Slang release uses target-specific or inverted CLI flag semantics, the
+  `termin_shaderc` wrapper must adapt those details. Row-major remains an
+  opt-in compatibility mode and must be validated with render smoke coverage
+  before use in built-ins.
 
 The first implementation should not vendor Slang. Vendoring can be considered
 after the command-line integration and artifact contracts are stable.
@@ -142,6 +151,8 @@ Status:
   `glsl`, and `glsl -> vulkan` still uses the in-process shaderc path.
 - `slang -> vulkan` invokes external `slangc` with `-target spirv`.
 - `slang -> opengl` invokes external `slangc` with `-target glsl`.
+- Slang compilation now passes an explicit matrix layout flag; column-major is
+  the default and row-major is available through an opt-in CLI switch.
 - `slang -> d3d11` is intentionally rejected until the Windows FXC/DXBC phase.
 - Tests use a fake `slangc` and cover Vulkan/OpenGL invocation, missing tool
   diagnostics, compiler failure propagation, unsupported GLSL targets, and the
@@ -231,8 +242,15 @@ Status:
 - Real `termin_shaderc` smoke checks compile the default shader to Vulkan SPIR-V
   and OpenGL GLSL, and runtime package export succeeds with
   `default_shader_language="slang"`.
-- Remaining work: hook one smoke path that actually consumes the generated
-  OpenGL/Vulkan artifacts and validates the matrix convention at render time.
+- OpenGL `tgfx2_smoke` now covers the runtime artifact-consumption contract:
+  a `TC_SHADER_LANGUAGE_SLANG` shader with `TC_SHADER_ARTIFACT_REQUIRED` loads
+  backend artifacts from `TERMIN_SHADER_ARTIFACT_ROOT`, builds a pipeline, and
+  renders from the artifact sources instead of fallback sources.
+- Remaining work: add a render smoke that consumes artifacts generated from
+  real Slang source and validates the matrix convention at render time. The
+  current OpenGL smoke uses a GL 3.3 context while Slang 2026.5.2 emits GLSL
+  450 for the OpenGL target, so this should be done either through a suitable
+  Vulkan smoke path or after resolving OpenGL target/profile handling.
 
 ## Phase 7: Minimal Built-In Migration
 
@@ -271,7 +289,13 @@ Acceptance:
 
 ## Immediate Next Steps
 
-1. Finish the ABI/doc cleanup.
-2. Generalize artifact lookup without changing shader source language.
-3. Add shader language metadata.
-4. Add Slang-aware `termin_shaderc` command-line path.
+1. Decide how generated Slang OpenGL artifacts should target the existing GL
+   smoke environment: request a GL 4.5 context, lower Slang GLSL output if the
+   toolchain supports it, or cover generated-artifact rendering first through a
+   Vulkan smoke.
+2. Add a render smoke that consumes artifacts generated from real Slang source
+   and validates the preferred column-major matrix convention.
+3. Start Phase 7 with the fullscreen/present path once generated Slang artifact
+   rendering is covered.
+4. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
+   Linux-side generation and runtime-consumption contract.
