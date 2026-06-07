@@ -101,3 +101,28 @@ def test_procedural_mesh_editor_extension_builds_left_document_tree_panel():
     root_node = extension._document_tree.root_nodes[0]
     assert root_node.data == ("operation", operation.id)
     assert extension._document_tree.selected_node is root_node
+
+
+def test_procedural_mesh_editor_extension_right_panel_edits_shared_primitive_params():
+    component = _Component()
+    editor = _Editor()
+    extension = ProceduralMeshEditorExtension()
+    extension.attach(editor, None, _ComponentRef(component))
+    extension.build_panel()
+    extension.build_left_panel()
+
+    extension._add_primitive_operation("box")
+
+    operation = component.document.operations[0]
+    panel = extension._editor_panel
+    assert panel.primitive_params_panel.visible is True
+    assert panel.primitive_param_inputs["size.x"].value == 1.0
+
+    panel.primitive_param_inputs["size.x"].value = 2.5
+    panel.primitive_param_inputs["center.z"].value = 1.25
+    panel._on_primitive_param_changed(2.5)
+
+    assert operation.params["size"] == [2.5, 1.0, 1.0]
+    assert operation.params["center"] == [0.0, 0.0, 1.25]
+    assert component.dirty_count == 2
+    assert component.regenerate_count == 2
