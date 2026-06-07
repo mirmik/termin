@@ -28,7 +28,8 @@ the shader. Do not silently squat on an unused descriptor slot.
 
 Single `VkDescriptorSetLayout` used by every graphics pipeline the engine
 creates. On OpenGL each UBO binding maps directly to a GL UBO binding point;
-samplers map to texture units by the same number.
+samplers map to texture units by the same number. Slang/HLSL sources must use
+the same numeric contract through explicit `register(bN/tN/sN)` annotations.
 
 | Binding | Type | Count | Stages | Name | Owner / writer |
 |---|---|---|---|---|---|
@@ -43,6 +44,21 @@ samplers map to texture units by the same number.
 | 17–23 | COMBINED_IMAGE_SAMPLER | 1 each | FS | extra FS samplers (debug overlays, posteffect inputs) | caller-supplied |
 | push | push-constants | 128 B | ALL_GRAPHICS | per-pass push block | per-pass writer |
 
+### Cross-backend shader annotations
+
+| Resource | GLSL / Vulkan / OpenGL spelling | Slang / HLSL spelling |
+|---|---|---|
+| `LightingBlock` | `layout(std140, binding = 0) uniform LightingBlock` | `cbuffer LightingBlock : register(b0)` |
+| `MaterialParams` | `layout(std140, binding = 1) uniform MaterialParams` | `cbuffer MaterialParams : register(b1)` |
+| `PerFrame` | `layout(std140, binding = 2) uniform PerFrame` | `cbuffer PerFrame : register(b2)` |
+| `ShadowBlock` | `layout(std140, binding = 3) uniform ShadowBlock` | `cbuffer ShadowBlock : register(b3)` |
+| material textures 0–3 | `layout(binding = 4..7) uniform sampler2D ...` | `Texture2D ... : register(t4..t7)` |
+| shadow map array | `layout(binding = 8) uniform sampler2DShadow u_shadow_map[16]` | `Texture2DArray`/shadow texture binding at `register(t8)`; sampler at `sN` |
+| material textures 4–10 | `layout(binding = 9..15) uniform sampler2D ...` | `Texture2D ... : register(t9..t15)` |
+| `BoneBlock` | `layout(std140, binding = 16) uniform BoneBlock` | `cbuffer BoneBlock : register(b16)` |
+| extra FS samplers | `layout(binding = 17..23) uniform sampler2D ...` | `Texture2D ... : register(t17..t23)` |
+| push block | Vulkan `layout(push_constant)`, OpenGL UBO binding 14 | D3D11 emulated cbuffer; reserve `b14` unless a backend-specific layout says otherwise |
+
 **Notes:**
 
 - Binding 8 is a single **array descriptor** with `descriptorCount = 16`. In
@@ -52,9 +68,10 @@ samplers map to texture units by the same number.
 - OpenGL push constants ride a ring UBO at `TGFX2_PUSH_CONSTANTS_BINDING = 14`
   (GL's UBO binding space is disjoint from the sampler/texture-unit space,
   so reusing 14 there doesn't collide with sampler 14 on Vulkan).
-- Bindings higher than 16 are not declared in the universal layout. If you
-  need one, extend `create_shared_layouts()` first — otherwise SPIR-V pipeline
-  creation fails with "binding N not declared in pipeline layout".
+- Bindings 17..23 are declared as extra fragment sampler slots. Bindings above
+  23 are not declared in the universal Vulkan layout. If you need one, extend
+  `create_shared_layouts()` first — otherwise SPIR-V pipeline creation fails
+  with "binding N not declared in pipeline layout".
 
 ---
 
@@ -211,11 +228,16 @@ the CPU side and the shader stay in sync:
 | Text2D | `Text2DPushBlock` | `mat4 u_projection`, `vec4 u_color` | 80 B |
 | UIRenderer | `UIPushBlock` | `mat4 u_projection`, `vec4 u_tint`, flags | ≤80 B |
 
-**GL emulation:** on OpenGL the push-constant range is backed by a ring UBO
+**OpenGL emulation:** on OpenGL the push-constant range is backed by a ring UBO
 at binding **14** (`TGFX2_PUSH_CONSTANTS_BINDING`). Parser converts
 `layout(push_constant) uniform XxxPushBlock { ... }` to
 `layout(std140, binding = 14) uniform XxxPushBlock { ... }` under the
 `#ifndef VULKAN` branch.
+
+**D3D11 emulation:** D3D11 has no native push constants. Slang/HLSL targets
+must receive the same data through a small per-draw cbuffer. Reserve
+`register(b14)` for that emulation so it mirrors the OpenGL UBO binding and
+does not collide with shared engine cbuffers.
 
 ---
 

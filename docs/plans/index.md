@@ -22,3 +22,4 @@
 
 - [procedural CSG editor refactor](2026-06-07-procedural-csg-editor-refactor.md)
 - [build system refactor](2026-06-07-build-system-refactor.md)
+- [Slang shader pipeline](2026-06-07-slang-shader-pipeline.md)
