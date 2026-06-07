@@ -21,7 +21,7 @@ from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.cad_viewer import build_document_solid_meshes, document_bounds
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
 from termin.csg.document_tree_model import build_document_tree
-from termin.csg.document_visual_model import build_document_visual_model
+from termin.csg.document_visual_model import PATH_SELECTED_COLOR, build_document_visual_model
 from termin.csg.document_edit import (
     add_boolean_input,
     finish_draft_path,
@@ -34,6 +34,7 @@ from termin.csg.document_edit import (
     start_sketch_draft,
 )
 from termin.csg.procedural_document import CONTOUR_ROLE_HOLE, CONTOUR_ROLE_OUTER, ProceduralPlane
+from termin.csg.sketch_point_interaction import pick_selected_sketch_point
 from termin.csg.viewer_camera import OrbitCamera
 
 
@@ -361,6 +362,58 @@ def test_wall_corner_offset_rejects_non_positive_effective_height():
 
     assert not set_wall_corner_offset(document, operation.id, path.id, 0, -2.0)
     assert "corner_height_offsets" not in operation.params
+
+
+def test_wall_operation_selection_exposes_source_path_points_for_dragging():
+    document = ProceduralMeshDocument()
+    path = document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+    sketch_id = document.find_sketch_id_for_path(path.id)
+    operation = document.add_wall_operation_for_sketch(sketch_id, height=3.0, thickness=0.2)
+    assert operation is not None
+
+    drag = pick_selected_sketch_point(
+        document,
+        ("operation", operation.id),
+        lambda point: (point[0] * 100.0, point[1] * 100.0),
+        200.0,
+        0.0,
+    )
+
+    assert drag is not None
+    assert drag.kind == "path"
+    assert drag.item_id == path.id
+    assert drag.point_index == 1
+
+
+def test_wall_operation_visual_model_highlights_source_path():
+    document = ProceduralMeshDocument()
+    path = document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+    sketch_id = document.find_sketch_id_for_path(path.id)
+    operation = document.add_wall_operation_for_sketch(sketch_id, height=3.0, thickness=0.2)
+    assert operation is not None
+
+    visual = build_document_visual_model(document, selected_node_data=("operation", operation.id))
+    selected_paths = [polyline for polyline in visual.polylines if polyline.color == PATH_SELECTED_COLOR]
+
+    assert len(selected_paths) == 1
+    assert selected_paths[0].closed is False
+    assert selected_paths[0].points == [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0)]
 
 
 def test_procedural_document_evaluates_wall_operation_from_contour_without_holes():

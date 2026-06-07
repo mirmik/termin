@@ -111,6 +111,7 @@ def _append_selected_item(
     if kind == "operation":
         operation = document.find_operation(item_id)
         if operation is not None and operation.kind == OPERATION_KIND_WALL:
+            _append_wall_source_geometry(model, document, operation)
             _append_wall_height_handles(model, document, operation)
 
 
@@ -128,6 +129,42 @@ def _append_sketch(model: DocumentVisualModel, sketch, line_color: ColorData, po
 def _append_points(model: DocumentVisualModel, points: list[Vec3Data], color: ColorData) -> None:
     for point in points:
         model.points.append(VisualPoint(point=point, color=color))
+
+
+def _append_wall_source_geometry(model: DocumentVisualModel, document: ProceduralMeshDocument, operation) -> None:
+    source_sketch_id = str(operation.params.get("source_sketch_id", ""))
+    sketch = document.find_sketch(source_sketch_id)
+    if sketch is None:
+        return
+    input_ids = set(operation.inputs)
+    for path in sketch.paths:
+        if path.id not in input_ids:
+            continue
+        points = sketch.path_points(path)
+        model.polylines.append(
+            VisualPolyline(
+                points=points,
+                color=PATH_SELECTED_COLOR,
+                closed=path.closed,
+                depth_test=False,
+            )
+        )
+        _append_points(model, points, PATH_SELECTED_COLOR)
+    for contour in sketch.outer_contours():
+        if contour.id not in input_ids:
+            continue
+        if sketch.hole_contours_for_outer(contour.id):
+            continue
+        points = sketch.contour_points(contour)
+        model.polylines.append(
+            VisualPolyline(
+                points=points,
+                color=CONTOUR_SELECTED_COLOR,
+                closed=True,
+                depth_test=False,
+            )
+        )
+        _append_points(model, points, CONTOUR_SELECTED_COLOR)
 
 
 def _append_wall_height_handles(model: DocumentVisualModel, document: ProceduralMeshDocument, operation) -> None:

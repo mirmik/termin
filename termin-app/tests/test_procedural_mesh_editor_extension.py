@@ -264,3 +264,37 @@ def test_procedural_mesh_editor_extension_drags_selected_wall_height_in_viewport
     assert isclose(extension._editor_panel.wall_offset_inputs[(path.id, 1)].value, 1.25, abs_tol=1.0e-6)
     assert component.dirty_count == 1
     assert component.regenerate_count == 1
+
+
+def test_procedural_mesh_editor_extension_drags_wall_source_path_point_when_wall_selected():
+    component = _Component()
+    path = component.document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+    sketch_id = component.document.find_sketch_id_for_path(path.id)
+    operation = component.document.add_wall_operation_for_sketch(sketch_id, height=3.0, thickness=0.2)
+    assert operation is not None
+
+    editor = _Editor()
+    extension = ProceduralMeshEditorExtension()
+    extension.attach(editor, _Entity(), _ComponentRef(component))
+    extension.build_panel()
+    extension.build_left_panel()
+    extension._apply_controller_result(extension._controller.select_node(("operation", operation.id)))
+
+    assert extension._on_viewport_pointer("down", 200.0, 100.0, 0.0, 0.0, 0, 1, 0) is True
+    assert editor.viewport_tool_count == 1
+    assert extension._on_viewport_pointer("up", 250.0, 125.0, 0.0, 0.0, 0, 0, 0) is True
+
+    assert editor.viewport_tool_count == 0
+    assert isclose(path.points[1][0], 1.5, abs_tol=1.0e-6)
+    assert isclose(path.points[1][1], 0.25, abs_tol=1.0e-6)
+    assert "corner_height_offsets" not in operation.params
+    assert component.dirty_count == 1
+    assert component.regenerate_count == 1

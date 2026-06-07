@@ -44,25 +44,23 @@ def pick_selected_sketch_point(
     *,
     hit_radius_px: float = DEFAULT_SKETCH_POINT_HIT_RADIUS_PX,
 ) -> SketchPointDrag | None:
-    selected = selected_sketch_point_source(document, selection)
-    if selected is None:
+    sources = selected_sketch_point_sources(document, selection)
+    if not sources:
         return None
-    kind, item_id, points = selected
-    best_index = -1
+    best_drag: SketchPointDrag | None = None
     best_distance_sq = hit_radius_px * hit_radius_px
-    for index, point in enumerate(points):
-        screen_point = project_point(point)
-        if screen_point is None:
-            continue
-        dx = screen_point[0] - float(x)
-        dy = screen_point[1] - float(y)
-        distance_sq = dx * dx + dy * dy
-        if distance_sq <= best_distance_sq:
-            best_distance_sq = distance_sq
-            best_index = index
-    if best_index < 0:
-        return None
-    return SketchPointDrag(kind, item_id, best_index)
+    for kind, item_id, points in sources:
+        for index, point in enumerate(points):
+            screen_point = project_point(point)
+            if screen_point is None:
+                continue
+            dx = screen_point[0] - float(x)
+            dy = screen_point[1] - float(y)
+            distance_sq = dx * dx + dy * dy
+            if distance_sq <= best_distance_sq:
+                best_distance_sq = distance_sq
+                best_drag = SketchPointDrag(kind, item_id, index)
+    return best_drag
 
 
 def pick_selected_wall_height_point(
@@ -82,6 +80,12 @@ def pick_selected_wall_height_point(
         screen_point = project_point(top_point)
         if screen_point is None:
             continue
+        base_screen_point = project_point(handle.base_point)
+        if base_screen_point is not None:
+            base_dx = screen_point[0] - base_screen_point[0]
+            base_dy = screen_point[1] - base_screen_point[1]
+            if base_dx * base_dx + base_dy * base_dy < 16.0:
+                continue
         dx = screen_point[0] - float(x)
         dy = screen_point[1] - float(y)
         distance_sq = dx * dx + dy * dy
@@ -135,22 +139,51 @@ def selected_sketch_point_source(
     document: ProceduralMeshDocument,
     selection: tuple[str, str] | None,
 ):
-    if selection is None:
+    sources = selected_sketch_point_sources(document, selection)
+    if not sources:
         return None
+    return sources[0]
+
+
+def selected_sketch_point_sources(
+    document: ProceduralMeshDocument,
+    selection: tuple[str, str] | None,
+):
+    if selection is None:
+        return []
     kind, item_id = selection
     if kind == "contour":
         contour_ref = document.find_contour_ref(item_id)
         if contour_ref is None:
-            return None
+            return []
         sketch, contour = contour_ref
-        return ("contour", contour.id, sketch.contour_points(contour))
+        return [("contour", contour.id, sketch.contour_points(contour))]
     if kind == "path":
         path_ref = document.find_path_ref(item_id)
         if path_ref is None:
-            return None
+            return []
         sketch, path = path_ref
-        return ("path", path.id, sketch.path_points(path))
-    return None
+        return [("path", path.id, sketch.path_points(path))]
+    if kind == "operation":
+        operation = document.find_operation(item_id)
+        if operation is None or operation.kind != OPERATION_KIND_WALL:
+            return []
+        sketch = document.find_sketch(str(operation.params.get("source_sketch_id", "")))
+        if sketch is None:
+            return []
+        input_ids = set(operation.inputs)
+        sources = []
+        for path in sketch.paths:
+            if path.id in input_ids:
+                sources.append(("path", path.id, sketch.path_points(path)))
+        for contour in sketch.outer_contours():
+            if contour.id not in input_ids:
+                continue
+            if sketch.hole_contours_for_outer(contour.id):
+                continue
+            sources.append(("contour", contour.id, sketch.contour_points(contour)))
+        return sources
+    return []
 
 
 def selected_wall_height_handles(
@@ -278,6 +311,7 @@ __all__ = [
     "pick_selected_sketch_point",
     "pick_selected_wall_height_point",
     "selected_sketch_point_source",
+    "selected_sketch_point_sources",
     "selected_wall_height_handles",
     "sketch_point_ref_by_drag",
     "wall_height_handle_top_point",
