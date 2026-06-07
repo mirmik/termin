@@ -4,7 +4,7 @@
 #include <termin/render/skeleton_controller.hpp>
 #include "termin/render/render.hpp"
 #include <termin/entity/entity.hpp>
-#include "termin/mesh/tc_mesh_handle.hpp"
+#include <tgfx/tgfx_mesh_handle.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <termin/bindings/entity_helpers.hpp>
 

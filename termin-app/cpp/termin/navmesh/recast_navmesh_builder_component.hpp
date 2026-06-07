@@ -6,7 +6,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/render/drawable.hpp>
-#include "../mesh/tc_mesh_handle.hpp"
+#include <tgfx/tgfx_mesh_handle.hpp>
 #include "../material/tc_material_handle.hpp"
 #include "recast_debug_data.hpp"
 #include "navmesh_keeper_component.hpp"

@@ -2,7 +2,7 @@
 #pragma once
 
 #include <nanobind/nanobind.h>
-#include "trent/trent.h"
+#include <tcbase/trent/trent.h>
 
 namespace nb = nanobind;
 

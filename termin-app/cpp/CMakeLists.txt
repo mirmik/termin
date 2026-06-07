@@ -12,10 +12,6 @@ include(GNUInstallDirs)
 if(NOT DEFINED TERMIN_ROOT)
     set(TERMIN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
 endif()
-if(COMMAND termin_add_alias_if_missing)
-    termin_add_alias_if_missing(termin::trent trent)
-endif()
-
 # Standalone build mode (C++ app with embedded Python)
 option(BUILD_STANDALONE "Build as standalone C++ application" OFF)
 if(BUILD_EDITOR_MINIMAL)
@@ -82,43 +78,6 @@ string(REPLACE ";" "|" TERMIN_HOST_PYTHON_PATHS_STR "${TERMIN_HOST_PYTHON_PATHS}
 
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
-# ============== Trent library ==============
-# trent library - STATIC on Windows (avoids DLL import library issues), SHARED on Linux
-if(WIN32)
-    add_library(trent STATIC
-        trent/trent.cpp
-        trent/trent_path.cpp
-        trent/string_ext.cpp
-        trent/yaml.cpp
-        trent/json.cpp
-    )
-else()
-    add_library(trent SHARED
-        trent/trent.cpp
-        trent/trent_path.cpp
-        trent/string_ext.cpp
-        trent/yaml.cpp
-        trent/json.cpp
-    )
-endif()
-target_compile_options(trent PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-set_target_properties(trent PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-    ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin
-    ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-    LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin
-    LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
-    INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
-)
-if(COMMAND termin_enable_unity_build_for)
-    termin_enable_unity_build_for(trent)
-endif()
-if(COMMAND termin_enable_pch_for)
-    termin_enable_pch_for(trent)
-endif()
 
 # ============== External dependencies ==============
 
@@ -280,7 +239,6 @@ set(ENTITY_LIB_SOURCES
     termin/camera/orbit_camera_controller.cpp
     ${TERMIN_ROOT}/core_c/src/tc_inspect_component_adapter.cpp
     ${TERMIN_ROOT}/core_c/src/tc_editor_interaction_instance.cpp
-    termin/render/tc_value_trent.cpp
 )
 
 if(NOT TC_EXTERNAL_INSPECT_ACTIVE)
@@ -306,11 +264,11 @@ target_include_directories(entity_lib PUBLIC
 )
 if(TERMIN_BUILD_PYTHON)
     find_package(nanobind CONFIG REQUIRED)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_components_render::termin_components_render termin_render::termin_render termin_display::termin_display PRIVATE trent nanobind Python::Python)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_components_render::termin_components_render termin_render::termin_render termin_display::termin_display PRIVATE nanobind Python::Python)
     target_link_libraries(entity_lib PUBLIC termin_inspect::termin_inspect_python)
     target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
 else()
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_components_render::termin_components_render termin_render::termin_render termin_display::termin_display PRIVATE trent)
+    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_components_render::termin_components_render termin_render::termin_render termin_display::termin_display)
 endif()
 target_compile_definitions(entity_lib PRIVATE TERMIN_SCENE_EXPORTS ENTITY_LIB_EXPORTS TC_EXPORTS)
 target_compile_options(entity_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
@@ -350,7 +308,7 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_link_libraries(render_lib PUBLIC entity_lib trent tgfx::termin_graphics tgfx::termin_graphics2 termin_materials::termin_materials termin_render::termin_render termin_render_passes::termin_render_passes termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
+target_link_libraries(render_lib PUBLIC entity_lib tcbase::termin_base tgfx::termin_graphics tgfx::termin_graphics2 termin_materials::termin_materials termin_render::termin_render termin_render_passes::termin_render_passes termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
 if(TGFX2_ENABLE_OPENGL)
     target_link_libraries(render_lib PUBLIC OpenGL::GL)
 endif()
@@ -563,7 +521,7 @@ if(BUILD_TESTS)
 endif()
 
 # ============== Install shared libraries ==============
-set(TERMIN_INSTALL_TARGETS trent entity_lib termin_core render_lib)
+set(TERMIN_INSTALL_TARGETS entity_lib termin_core render_lib)
 if(TERMIN_HAS_RECAST)
     list(APPEND TERMIN_INSTALL_TARGETS navmesh_lib Recast Detour)
 endif()
@@ -671,11 +629,6 @@ if(TERMIN_HAS_RECAST)
         FILES_MATCHING PATTERN "*.h"
     )
 endif()
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/trent
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-)
-
 # ============== CMake Package Export ==============
 include(CMakePackageConfigHelpers)
 

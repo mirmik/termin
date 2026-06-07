@@ -11,7 +11,7 @@
 #include <termin/entity/entity.hpp>
 #include <termin/geom/general_transform3.hpp>
 #include <termin/material/tc_material_handle.hpp>
-#include <termin/mesh/tc_mesh_handle.hpp>
+#include <tgfx/tgfx_mesh_handle.hpp>
 #include <termin/render/drawable.hpp>
 #include <termin/materials/shader_parser.hpp>
 #include <tc_log.h>

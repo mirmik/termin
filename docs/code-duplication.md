@@ -62,3 +62,24 @@ The largest findings are migration leftovers rather than small local copy/paste:
 
 These should be handled as module ownership cleanup. Smaller local clones can be
 triaged after the obsolete architectural copies are removed.
+
+## Cleanup Progress
+
+After removing obsolete first-party copies from `termin-app/cpp`, the current
+baseline from 2026-06-07 is:
+
+- Sources: 1693
+- Lines: 266127
+- Clones: 362
+- Duplicated lines: 8697
+- Duplicated line percentage: 3.27%
+- Duplicated token percentage: 4.69%
+
+Removed or redirected so far:
+
+- `termin-app/cpp/trent/**` now comes from `termin-base`
+- `termin-app/cpp/termin/texture/tc_texture_handle.*` now comes from
+  `termin-graphics`
+- `termin-app/cpp/termin/mesh/**` and stale app mesh bindings now come from
+  `termin-mesh`
+- `termin-app/cpp/termin/render/tc_value_trent.*` now comes from `termin-base`
