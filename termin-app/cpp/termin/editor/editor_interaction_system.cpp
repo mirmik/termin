@@ -142,7 +142,13 @@ void EditorInteractionSystem::on_mouse_button(
     int button, int action, int mods,
     float x, float y, tc_viewport_handle vp, tc_display* display)
 {
-    (void)mods;
+    if (on_viewport_pointer_event) {
+        const std::string phase = action == TC_INPUT_PRESS ? "down" : "up";
+        if (on_viewport_pointer_event(phase, x, y, 0.0f, 0.0f, button, action, mods)) {
+            _request_update();
+            return;
+        }
+    }
 
     if (button == 0) { // LEFT
         if (action == TC_INPUT_PRESS) {
@@ -170,8 +176,12 @@ void EditorInteractionSystem::on_mouse_move(
     float x, float y, float dx, float dy,
     tc_viewport_handle vp, tc_display* display)
 {
-    (void)dx;
-    (void)dy;
+    if (on_viewport_pointer_event) {
+        if (on_viewport_pointer_event("move", x, y, dx, dy, -1, -1, 0)) {
+            _request_update();
+            return;
+        }
+    }
 
     _pending_hover = {x, y, vp, display, true};
 

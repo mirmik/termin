@@ -92,6 +92,7 @@ public:
     std::function<void(const GeneralPose3&, const GeneralPose3&)> on_transform_end;
     std::function<void(const KeyEvent&)> on_key;
     std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double, bool, double, double, double, double, double, double, uint32_t, uint32_t, uint32_t, uint32_t)> on_entity_click;
+    std::function<bool(const std::string&, float, float, float, float, int, int, int)> on_viewport_pointer_event;
 
 public:
     EditorInteractionSystem();

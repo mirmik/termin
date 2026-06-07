@@ -24,6 +24,11 @@ from termin.csg.document_tree_model import (
 from termin.csg.document_visual_model import build_document_visual_model
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController
 from termin.csg.procedural_document import ProceduralPlane
+from termin.csg.sketch_point_interaction import (
+    SketchPointDrag,
+    drag_point_to_ray,
+    pick_selected_sketch_point,
+)
 from termin.csg.solid_render import (
     PointTransform,
     SolidRenderStyle,
@@ -49,6 +54,7 @@ class ProceduralMeshEditorExtension:
         self._document_summary_label = Label()
         self._selection_label = Label()
         self._document_tree = TreeWidget()
+        self._sketch_point_drag: SketchPointDrag | None = None
 
     def _create_editor_panel(self) -> CsgEditorPanel:
         return CsgEditorPanel(
@@ -69,6 +75,7 @@ class ProceduralMeshEditorExtension:
         else:
             self._controller.replace_document(self._component.document)
         editor.add_viewport_click_interceptor(self._on_viewport_click)
+        editor.add_viewport_pointer_handler(self._on_viewport_pointer)
         editor.add_viewport_overlay_drawer(self._draw_overlay)
         log.info("[ProceduralMeshEditor] extension attached")
 
@@ -76,11 +83,15 @@ class ProceduralMeshEditorExtension:
         editor = self._editor
         if editor is not None:
             editor.remove_viewport_click_interceptor(self._on_viewport_click)
+            editor.remove_viewport_pointer_handler(self._on_viewport_pointer)
             editor.remove_viewport_overlay_drawer(self._draw_overlay)
+            if self._sketch_point_drag is not None:
+                editor.end_viewport_tool()
         self._editor = None
         self._entity = None
         self._component_ref = None
         self._component = None
+        self._sketch_point_drag = None
         self._controller = CsgEditorController()
         self._editor_panel = self._create_editor_panel()
         log.info("[ProceduralMeshEditor] extension detached")
@@ -377,6 +388,106 @@ class ProceduralMeshEditorExtension:
             f"tri={triangle_index} draft_points={len(self._controller.draft.points)}"
         )
         return True
+
+    def _on_viewport_pointer(
+        self,
+        phase: str,
+        x: float,
+        y: float,
+        dx: float,
+        dy: float,
+        button: int,
+        action: int,
+        mods: int,
+    ) -> bool:
+        del dx, dy, action, mods
+        if phase == "move":
+            if self._sketch_point_drag is None:
+                return False
+            return self._drag_sketch_point_to_viewport(x, y)
+        if phase == "down":
+            if button != 0:
+                return False
+            drag = self._pick_selected_sketch_point(x, y)
+            if drag is None:
+                return False
+            self._sketch_point_drag = drag
+            editor = self._editor
+            if editor is not None:
+                editor.begin_viewport_tool()
+            self._editor_panel.set_status(f"Dragging {drag.kind} point P{drag.point_index}")
+            log.info(
+                "[ProceduralMeshEditor] sketch point drag started "
+                f"kind='{drag.kind}' item='{drag.item_id}' index={drag.point_index}"
+            )
+            return True
+        if phase == "up":
+            drag = self._sketch_point_drag
+            if drag is None:
+                return False
+            self._drag_sketch_point_to_viewport(x, y)
+            self._sketch_point_drag = None
+            editor = self._editor
+            if editor is not None:
+                editor.end_viewport_tool()
+            self._editor_panel.set_status(f"{drag.kind.capitalize()} point P{drag.point_index} moved")
+            log.info(
+                "[ProceduralMeshEditor] sketch point drag finished "
+                f"kind='{drag.kind}' item='{drag.item_id}' index={drag.point_index}"
+            )
+            return True
+        return False
+
+    def _pick_selected_sketch_point(self, x: float, y: float) -> SketchPointDrag | None:
+        if not self._ensure_controller_document():
+            return None
+        return pick_selected_sketch_point(
+            self._controller.document,
+            self._controller.selection,
+            self._project_document_point_to_viewport,
+            x,
+            y,
+        )
+
+    def _drag_sketch_point_to_viewport(self, x: float, y: float) -> bool:
+        drag = self._sketch_point_drag
+        if drag is None:
+            return False
+        if not self._ensure_controller_document():
+            self._sketch_point_drag = None
+            return True
+        local_ray = self._local_ray_from_viewport(x, y)
+        if local_ray is None:
+            log.error("[ProceduralMeshEditor] cannot drag sketch point: viewport ray is not available")
+            return True
+        ray_origin, ray_direction = local_ray
+        local_point = drag_point_to_ray(self._controller.document, drag, ray_origin, ray_direction)
+        if local_point is None:
+            return True
+        if drag.kind == "contour":
+            result = self._controller.set_contour_point(drag.item_id, drag.point_index, local_point)
+        elif drag.kind == "path":
+            result = self._controller.set_path_point(drag.item_id, drag.point_index, local_point)
+        else:
+            log.error(f"[ProceduralMeshEditor] cannot drag sketch point: unsupported kind '{drag.kind}'")
+            return True
+        if not self._apply_controller_result(result):
+            return True
+        if drag.kind == "contour":
+            self._editor_panel.sync_contour_point_inputs(drag.point_index, local_point)
+        return True
+
+    def _project_document_point_to_viewport(
+        self,
+        point: tuple[float, float, float],
+    ) -> tuple[float, float] | None:
+        editor = self._editor
+        if editor is None:
+            return None
+        world_point = self._world_point_from_local(point)
+        if world_point is None:
+            return None
+        return editor.project_world_point_to_viewport(world_point)
 
     def _local_ray_from_viewport(
         self,
