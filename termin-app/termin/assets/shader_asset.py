@@ -30,6 +30,19 @@ def make_phase_uuid(shader_uuid: str, phase_mark: str) -> str:
         return shader_uuid
 
 
+def shader_language_enum(language: str):
+    table = {
+        "glsl": 0,
+        "slang": 1,
+        "hlsl": 2,
+    }
+    key = language.lower()
+    if key not in table:
+        log.error(f"[ShaderAsset] Unsupported shader language: {language}")
+        raise ValueError(f"Unsupported shader language: {language}")
+    return table[key]
+
+
 def update_material_shader(material, program, shader_name: str, shader_uuid: str) -> None:
     """Update material's shader with proper phase UUIDs for hot-reload.
 
@@ -55,6 +68,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
     material.shader_name = shader_name or program.program
 
     rm = ResourceManager.instance()
+    shader_language = shader_language_enum(program.language)
 
     for shader_phase in program.phases:
         # Get shader sources
@@ -89,6 +103,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
             priority=shader_phase.priority,
             state=state,
             shader_uuid=phase_uuid,
+            language=shader_language,
         )
 
         if phase is None:
@@ -197,6 +212,7 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
 
             # Update sources in tc_shader (bumps version if changed)
             tc.set_sources(vertex_src, fragment_src, geometry_src, self._name, str(self._source_path) if self._source_path else "")
+            tc.set_language(shader_language_enum(self._data.language))
 
             # Push the std140 material UBO layout computed by the parser
             # (if any) so runtime pass code can query tc_shader->material_ubo_*
