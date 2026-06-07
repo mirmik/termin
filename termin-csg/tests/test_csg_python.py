@@ -19,12 +19,15 @@ from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.cad_viewer import build_document_solid_meshes, document_bounds
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
 from termin.csg.document_tree_model import build_document_tree
+from termin.csg.document_visual_model import build_document_visual_model
 from termin.csg.document_edit import (
     add_boolean_input,
+    finish_draft_path,
     move_boolean_input,
     remove_boolean_input,
     set_contour_point,
     set_sketch_plane,
+    start_sketch_draft,
 )
 from termin.csg.procedural_document import CONTOUR_ROLE_HOLE, CONTOUR_ROLE_OUTER, ProceduralPlane
 from termin.csg.viewer_camera import OrbitCamera
@@ -180,6 +183,79 @@ def test_procedural_document_extrudes_outer_contours_with_holes():
     assert outer_node.text.startswith("[Outer]")
     assert len(outer_node.children) == 1
     assert outer_node.children[0].text.startswith("[Hole]")
+
+
+def test_procedural_document_stores_open_sketch_paths_separately_from_contours():
+    document = ProceduralMeshDocument()
+    path = document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (2.0, 1.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+
+    assert path is not None
+    assert document.contour_count() == 0
+    assert document.path_count() == 1
+    sketch_id = document.find_sketch_id_for_path(path.id)
+    assert sketch_id
+    path_ref = document.find_path_ref(path.id)
+    assert path_ref is not None
+    sketch, restored_path = path_ref
+    assert restored_path.closed is False
+    assert sketch.path_points(restored_path)[1] == (2.0, 0.0, 0.0)
+
+    restored = ProceduralMeshDocument.from_dict(document.to_dict())
+    assert restored.path_count() == 1
+    restored_ref = restored.find_path_ref(path.id)
+    assert restored_ref is not None
+    assert restored_ref[1].purpose == "wall"
+
+
+def test_finish_draft_path_requires_two_points_and_selects_path():
+    document = ProceduralMeshDocument()
+    draft = start_sketch_draft(plane=ProceduralPlane(), purpose="wall")
+    draft.points = [(0.0, 0.0, 0.0)]
+
+    failed = finish_draft_path(document, draft, purpose="wall")
+
+    assert failed.success is False
+    assert document.path_count() == 0
+
+    draft.points.append((1.0, 0.0, 0.0))
+    result = finish_draft_path(document, draft, purpose="wall")
+
+    assert result.success is True
+    assert result.selection is not None
+    assert result.selection[0] == "path"
+    assert result.path is not None
+    assert result.path.closed is False
+    assert document.path_count() == 1
+    assert draft.points == []
+
+
+def test_document_tree_and_visual_model_show_open_paths():
+    document = ProceduralMeshDocument()
+    path = document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+
+    roots = build_document_tree(document)
+    assert "[Path]" in roots[0].children[1].text
+
+    visual = build_document_visual_model(document, selected_node_data=("path", path.id))
+    selected = visual.polylines[-1]
+    assert selected.closed is False
+    assert selected.points == [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]
 
 
 def test_procedural_document_evaluates_primitive_operations_and_booleans():
@@ -943,6 +1019,42 @@ def test_cad_app_close_contour_leaves_draw_sketch_mode():
     assert app.mode == "idle"
     assert app.draft.points == []
     assert app.document.contour_count() == 1
+
+
+def test_cad_app_add_wall_path_action_finishes_open_path():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    contour = app.document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (2.0, 2.0, 0.0),
+        ]
+    )
+    assert contour is not None
+
+    sketch_id = app.document.find_sketch_id_for_contour(contour.id)
+    app.selected_node_data = ("sketch", sketch_id)
+    app.start_add_wall_path()
+
+    assert app.mode == "draw_sketch"
+    assert app.draft.sketch_id == sketch_id
+    assert app.draft.purpose == "wall"
+
+    app.draft.points = [
+        (0.0, 0.0, 0.0),
+        (1.0, 0.0, 0.0),
+    ]
+    app.finish_wall_path()
+
+    assert app.mode == "idle"
+    assert app.selected_node_data is not None
+    assert app.selected_node_data[0] == "path"
+    assert app.document.path_count() == 1
+    path_ref = app.document.find_path_ref(app.selected_node_data[1])
+    assert path_ref is not None
+    assert path_ref[1].closed is False
 
 
 def test_cad_app_add_hole_action_closes_contour_inside_selected_outer():

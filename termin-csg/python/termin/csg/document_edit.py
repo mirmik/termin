@@ -19,6 +19,7 @@ from termin.csg.procedural_document import (
     OperationDocument,
     ProceduralMeshDocument,
     ProceduralPlane,
+    SketchPathDocument,
 )
 
 Vec2Data = tuple[float, float]
@@ -33,6 +34,7 @@ class SketchDraft:
     sketch_id: str = ""
     contour_role: str = CONTOUR_ROLE_OUTER
     parent_contour_id: str | None = None
+    purpose: str = "contour"
 
 
 @dataclass
@@ -48,6 +50,7 @@ class DocumentEditResult:
     selection: SelectionData | None = None
     contour: ContourDocument | None = None
     operation: OperationDocument | None = None
+    path: SketchPathDocument | None = None
 
 
 def start_sketch_draft(
@@ -55,12 +58,14 @@ def start_sketch_draft(
     plane: ProceduralPlane | None = None,
     contour_role: str = CONTOUR_ROLE_OUTER,
     parent_contour_id: str | None = None,
+    purpose: str = "contour",
 ) -> SketchDraft:
     return SketchDraft(
         plane=plane,
         sketch_id=str(sketch_id),
         contour_role=str(contour_role),
         parent_contour_id=parent_contour_id,
+        purpose=str(purpose),
     )
 
 
@@ -143,7 +148,51 @@ def close_draft_contour(
     draft.sketch_id = ""
     draft.parent_contour_id = None
     draft.contour_role = CONTOUR_ROLE_OUTER
+    draft.purpose = "contour"
     return DocumentEditResult(True, selection, contour=contour)
+
+
+def finish_draft_path(
+    document: ProceduralMeshDocument,
+    draft: SketchDraft,
+    purpose: str = "wall",
+) -> DocumentEditResult:
+    if len(draft.points) < 2:
+        log.error(
+            "[CsgDocumentEdit] cannot finish path: "
+            f"need at least 2 points, got {len(draft.points)}"
+        )
+        return DocumentEditResult(False)
+
+    plane = draft.plane
+    if plane is None:
+        plane = ProceduralPlane.from_points(draft.points)
+    path_purpose = str(purpose or draft.purpose or "wall")
+    if draft.sketch_id:
+        path = document.add_path_to_sketch_from_points(
+            draft.sketch_id,
+            draft.points[:],
+            purpose=path_purpose,
+            closed=False,
+        )
+        selection = ("path", path.id) if path is not None else None
+    else:
+        path = document.add_path_on_plane_from_points(
+            draft.points[:],
+            plane,
+            purpose=path_purpose,
+            closed=False,
+        )
+        selection = ("path", path.id) if path is not None else None
+    if path is None:
+        return DocumentEditResult(False)
+    draft.points = []
+    draft.plane = None
+    draft.sketch_id = ""
+    draft.parent_contour_id = None
+    draft.contour_role = CONTOUR_ROLE_OUTER
+    draft.purpose = "contour"
+    return DocumentEditResult(True, selection, path=path)
 
 
 def selected_sketch_id(
@@ -158,6 +207,8 @@ def selected_sketch_id(
         return selection[1]
     if selection[0] == "contour":
         return document.find_sketch_id_for_contour(selection[1])
+    if selection[0] == "path":
+        return document.find_sketch_id_for_path(selection[1])
     if selection[0] == "operation":
         operation = document.find_operation(selection[1])
         if operation is not None:
@@ -520,6 +571,7 @@ __all__ = [
     "add_primitive_operation",
     "clear_document",
     "close_draft_contour",
+    "finish_draft_path",
     "selected_sketch_id",
     "selected_operation_id",
     "move_boolean_input",

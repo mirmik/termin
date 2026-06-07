@@ -30,6 +30,7 @@ from termin.csg.procedural_document import (  # noqa: E402
     ProceduralMeshDocument,
     ProceduralPlane,
     SketchItemDocument,
+    SketchPathDocument,
 )
 from termin.csg.document_eval import EvaluatedSolid, evaluate_document  # noqa: E402
 from termin.csg.document_mesh import document_to_mesh3, document_to_tc_mesh  # noqa: E402
@@ -90,6 +91,7 @@ __all__ = [
     "ProceduralMeshDocument",
     "ProceduralPlane",
     "SketchItemDocument",
+    "SketchPathDocument",
     "EvaluatedSolid",
     "CsgEditorCommandResult",
     "CsgEditorController",

@@ -11,6 +11,8 @@ ColorData = tuple[float, float, float, float]
 
 CONTOUR_COLOR: ColorData = (0.0, 0.95, 0.95, 1.0)
 CONTOUR_SELECTED_COLOR: ColorData = (1.0, 1.0, 1.0, 1.0)
+PATH_COLOR: ColorData = (0.95, 0.42, 0.18, 1.0)
+PATH_SELECTED_COLOR: ColorData = (1.0, 0.86, 0.38, 1.0)
 DRAFT_COLOR: ColorData = (1.0, 0.78, 0.12, 1.0)
 POINT_COLOR: ColorData = (1.0, 1.0, 1.0, 1.0)
 
@@ -88,6 +90,21 @@ def _append_selected_item(
             )
         )
         _append_points(model, points, CONTOUR_SELECTED_COLOR)
+    if kind == "path":
+        path_ref = _find_path(document, item_id)
+        if path_ref is None:
+            return
+        sketch, path = path_ref
+        points = sketch.path_points(path)
+        model.polylines.append(
+            VisualPolyline(
+                points=points,
+                color=PATH_SELECTED_COLOR,
+                closed=path.closed,
+                depth_test=False,
+            )
+        )
+        _append_points(model, points, PATH_SELECTED_COLOR)
 
 
 def _append_sketch(model: DocumentVisualModel, sketch, line_color: ColorData, point_color: ColorData) -> None:
@@ -95,6 +112,10 @@ def _append_sketch(model: DocumentVisualModel, sketch, line_color: ColorData, po
         points = sketch.contour_points(contour)
         model.polylines.append(VisualPolyline(points=points, color=line_color, closed=True))
         _append_points(model, points, point_color)
+    for path in sketch.paths:
+        points = sketch.path_points(path)
+        model.polylines.append(VisualPolyline(points=points, color=PATH_COLOR, closed=path.closed))
+        _append_points(model, points, PATH_COLOR)
 
 
 def _append_points(model: DocumentVisualModel, points: list[Vec3Data], color: ColorData) -> None:
@@ -110,10 +131,20 @@ def _find_contour(document: ProceduralMeshDocument, contour_id: str):
     return None
 
 
+def _find_path(document: ProceduralMeshDocument, path_id: str):
+    for sketch in document.items:
+        for path in sketch.paths:
+            if path.id == path_id:
+                return (sketch, path)
+    return None
+
+
 __all__ = [
     "CONTOUR_COLOR",
     "CONTOUR_SELECTED_COLOR",
     "DRAFT_COLOR",
+    "PATH_COLOR",
+    "PATH_SELECTED_COLOR",
     "POINT_COLOR",
     "DocumentVisualModel",
     "VisualPoint",

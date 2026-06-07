@@ -177,11 +177,40 @@ class ContourDocument:
 
 
 @dataclass
+class SketchPathDocument:
+    id: str = field(default_factory=lambda: _new_id("path"))
+    name: str = "Path"
+    points: list[Vec2Data] = field(default_factory=list)
+    closed: bool = False
+    purpose: str = "wall"
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "points": [[p[0], p[1]] for p in self.points],
+            "closed": bool(self.closed),
+            "purpose": self.purpose,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SketchPathDocument":
+        return cls(
+            id=str(data.get("id", _new_id("path"))),
+            name=str(data.get("name", "Path")),
+            points=[_as_vec2(p) for p in data.get("points", [])],
+            closed=bool(data.get("closed", False)),
+            purpose=str(data.get("purpose", "wall")),
+        )
+
+
+@dataclass
 class SketchItemDocument:
     id: str = field(default_factory=lambda: _new_id("sketch"))
     name: str = "Sketch"
     plane: ProceduralPlane = field(default_factory=ProceduralPlane)
     contours: list[ContourDocument] = field(default_factory=list)
+    paths: list[SketchPathDocument] = field(default_factory=list)
 
     def add_contour_from_points(
         self,
@@ -216,10 +245,37 @@ class SketchItemDocument:
     def contour_points(self, contour: ContourDocument) -> list[Vec3Data]:
         return [self.plane.unproject(point) for point in contour.points]
 
+    def add_path_from_points(
+        self,
+        points: list[Vec3Data],
+        purpose: str = "wall",
+        closed: bool = False,
+    ) -> SketchPathDocument | None:
+        if len(points) < 2:
+            log.error(f"[ProceduralMeshDocument] path needs at least 2 points, got {len(points)}")
+            return None
+        path = SketchPathDocument(
+            name=f"Path {len(self.paths) + 1}",
+            points=[self.plane.project(point) for point in points],
+            closed=bool(closed),
+            purpose=str(purpose),
+        )
+        self.paths.append(path)
+        return path
+
+    def path_points(self, path: SketchPathDocument) -> list[Vec3Data]:
+        return [self.plane.unproject(point) for point in path.points]
+
     def find_contour(self, contour_id: str) -> ContourDocument | None:
         for contour in self.contours:
             if contour.id == contour_id:
                 return contour
+        return None
+
+    def find_path(self, path_id: str) -> SketchPathDocument | None:
+        for path in self.paths:
+            if path.id == path_id:
+                return path
         return None
 
     def outer_contours(self) -> list[ContourDocument]:
@@ -239,6 +295,7 @@ class SketchItemDocument:
             "kind": "sketch",
             "plane": self.plane.to_dict(),
             "contours": [contour.to_dict() for contour in self.contours],
+            "paths": [path.to_dict() for path in self.paths],
         }
 
     @classmethod
@@ -248,6 +305,7 @@ class SketchItemDocument:
             name=str(data.get("name", "Sketch")),
             plane=ProceduralPlane.from_dict(data.get("plane", {})),
             contours=[ContourDocument.from_dict(c) for c in data.get("contours", [])],
+            paths=[SketchPathDocument.from_dict(p) for p in data.get("paths", [])],
         )
 
 
@@ -321,6 +379,36 @@ class ProceduralMeshDocument:
             return None
         return sketch.add_contour_from_points(points, role=role, parent_contour_id=parent_contour_id)
 
+    def add_path_on_plane_from_points(
+        self,
+        points: list[Vec3Data],
+        plane: ProceduralPlane,
+        purpose: str = "wall",
+        closed: bool = False,
+    ) -> SketchPathDocument | None:
+        sketch = SketchItemDocument(
+            name=f"Sketch {len(self.items) + 1}",
+            plane=plane,
+        )
+        path = sketch.add_path_from_points(points, purpose=purpose, closed=closed)
+        if path is None:
+            return None
+        self.items.append(sketch)
+        return path
+
+    def add_path_to_sketch_from_points(
+        self,
+        sketch_id: str,
+        points: list[Vec3Data],
+        purpose: str = "wall",
+        closed: bool = False,
+    ) -> SketchPathDocument | None:
+        sketch = self.find_sketch(sketch_id)
+        if sketch is None:
+            log.error(f"[ProceduralMeshDocument] cannot add path: sketch not found '{sketch_id}'")
+            return None
+        return sketch.add_path_from_points(points, purpose=purpose, closed=closed)
+
     def find_sketch_id_for_contour(self, contour_id: str) -> str:
         for item in self.items:
             for contour in item.contours:
@@ -335,8 +423,25 @@ class ProceduralMeshDocument:
                     return (item, contour)
         return None
 
+    def find_sketch_id_for_path(self, path_id: str) -> str:
+        for item in self.items:
+            for path in item.paths:
+                if path.id == path_id:
+                    return item.id
+        return ""
+
+    def find_path_ref(self, path_id: str) -> tuple[SketchItemDocument, SketchPathDocument] | None:
+        for item in self.items:
+            for path in item.paths:
+                if path.id == path_id:
+                    return (item, path)
+        return None
+
     def contour_count(self) -> int:
         return sum(len(item.contours) for item in self.items)
+
+    def path_count(self) -> int:
+        return sum(len(item.paths) for item in self.items)
 
     def contour_ids(self) -> list[str]:
         ids: list[str] = []
@@ -505,4 +610,5 @@ __all__ = [
     "ProceduralMeshDocument",
     "ProceduralPlane",
     "SketchItemDocument",
+    "SketchPathDocument",
 ]

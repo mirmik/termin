@@ -12,6 +12,7 @@
 - 2026-06-07: Phase 4 начата. `DocumentTreeNode` получил metadata для boolean inputs/drop semantics; standalone CAD DnD больше не восстанавливает parent/input index через внутреннюю структуру `TreeWidget`.
 - 2026-06-07: Phase 5 начата. Добавлен `termin.csg.document_mesh` для сборки evaluated root solids в `Mesh3`/`TcMesh`; `ProceduralMeshComponent` получил dirty state, auto-regenerate policy и запись результата в соседний `MeshComponent`.
 - 2026-06-07: Начата декомпозиция `cad_app.py`: standalone SDL loop вынесен в `termin.csg.cad_runtime`, tcgui bridge для document tree вынесен в `termin.csg.cad_tree_adapter`.
+- 2026-06-07: В sketch model добавлены открытые `SketchPathDocument` для незамкнутых ломаных. Это подготовительный слой для операций вроде стен: path уже сохраняется, отображается в tree/viewport и создаётся через draft, а генерация solid-стены остаётся следующим отдельным этапом.
 
 ## Контекст
 

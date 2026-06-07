@@ -16,6 +16,7 @@ from termin.csg.document_edit import (
     add_primitive_operation,
     clear_document,
     close_draft_contour,
+    finish_draft_path,
     move_boolean_input,
     remove_boolean_input,
     set_contour_point,
@@ -157,6 +158,19 @@ class CsgEditorController:
         )
         return CsgEditorCommandResult(True, f"Adding hole to {contour.name}", preview_changed=True)
 
+    def start_add_wall_path(self) -> CsgEditorCommandResult:
+        sketch = self.selected_sketch()
+        if sketch is None:
+            log.error("[CsgEditorController] cannot add wall path: select a sketch")
+            return CsgEditorCommandResult.failed("Select a sketch")
+        self.mode = "draw_sketch"
+        self.draft = start_sketch_draft(
+            sketch_id=sketch.id,
+            plane=sketch.plane,
+            purpose="wall",
+        )
+        return CsgEditorCommandResult(True, f"Adding wall path to {sketch.name}", preview_changed=True)
+
     def add_draft_point_from_ray(
         self,
         ray_origin: Vec3Data,
@@ -186,6 +200,19 @@ class CsgEditorController:
         self.selection = result.selection
         return CsgEditorCommandResult.changed(
             "Contour closed",
+            selection_changed=True,
+            tree_changed=True,
+            preview_changed=True,
+        )
+
+    def finish_wall_path(self) -> CsgEditorCommandResult:
+        result = finish_draft_path(self.document, self.draft, purpose="wall")
+        if not result.success:
+            return CsgEditorCommandResult.failed()
+        self.mode = "idle"
+        self.selection = result.selection
+        return CsgEditorCommandResult.changed(
+            "Wall path finished",
             selection_changed=True,
             tree_changed=True,
             preview_changed=True,
@@ -329,6 +356,10 @@ class CsgEditorController:
             contour_ref = self.document.find_contour_ref(item_id)
             if contour_ref is not None:
                 return contour_ref[0]
+        if kind == "path":
+            path_ref = self.document.find_path_ref(item_id)
+            if path_ref is not None:
+                return path_ref[0]
         return None
 
     def selected_contour_ref(self) -> tuple[SketchItemDocument, ContourDocument] | None:

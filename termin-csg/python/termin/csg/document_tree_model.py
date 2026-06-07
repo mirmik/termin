@@ -56,7 +56,8 @@ def build_document_tree(document: ProceduralMeshDocument) -> list[DocumentTreeNo
 def document_summary(document: ProceduralMeshDocument) -> str:
     return (
         f"Document v{document.version}: sketches={len(document.items)}, "
-        f"contours={document.contour_count()}, operations={len(document.operations)}"
+        f"contours={document.contour_count()}, paths={document.path_count()}, "
+        f"operations={len(document.operations)}"
     )
 
 
@@ -190,7 +191,10 @@ def _with_input_role(text: str, input_role: str) -> str:
 
 def _sketch_node(sketch) -> DocumentTreeNode:
     node = DocumentTreeNode(
-        text=f"[Sketch] {sketch.name} {_short_id(sketch.id)} contours={len(sketch.contours)}",
+        text=(
+            f"[Sketch] {sketch.name} {_short_id(sketch.id)} "
+            f"contours={len(sketch.contours)} paths={len(sketch.paths)}"
+        ),
         kind="sketch",
         item_id=sketch.id,
     )
@@ -211,6 +215,8 @@ def _sketch_node(sketch) -> DocumentTreeNode:
     for contour in sketch.contours:
         if contour.role == CONTOUR_ROLE_HOLE and _hole_parent_outer(sketch, contour) is None:
             node.children.append(_orphan_hole_node(contour))
+    for path in sketch.paths:
+        node.children.append(_path_node(path))
     return node
 
 
@@ -239,6 +245,17 @@ def _orphan_hole_node(contour) -> DocumentTreeNode:
         ),
         kind="contour",
         item_id=contour.id,
+    )
+
+
+def _path_node(path) -> DocumentTreeNode:
+    return DocumentTreeNode(
+        text=(
+            f"[Path] {path.name} {_short_id(path.id)} "
+            f"purpose={path.purpose} points={len(path.points)}"
+        ),
+        kind="path",
+        item_id=path.id,
     )
 
 
