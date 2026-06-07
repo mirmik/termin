@@ -26,9 +26,7 @@ endif()
 
 # ============== Main unified module ==============
 
-# SDL platform bindings moved to termin-display/_platform_native
-
-nanobind_add_module(_native NB_SHARED
+set(TERMIN_APP_NATIVE_SOURCES
     # Python bindings entry point + per-subsystem registration files.
     # The actual C++ pass / renderer implementations live in render_lib —
     # linking PUBLIC against render_lib below pulls their symbols in
@@ -57,7 +55,6 @@ nanobind_add_module(_native NB_SHARED
     termin/editor/transform_gizmo.cpp
     termin/editor/editor_viewport_input_manager.cpp
     termin/editor/editor_interaction_system.cpp
-    termin/navmesh/off_mesh_link_editor_visual.cpp
     termin/bindings/modules/term_modules_integration_bindings.cpp
     termin/tc_component_python_bindings.cpp
     termin/skeleton_bindings.cpp
@@ -78,6 +75,16 @@ nanobind_add_module(_native NB_SHARED
     termin/tc_scene_bindings.cpp
     termin/tc_scene_lighting_bindings.cpp
 )
+
+if(TERMIN_HAS_RECAST)
+    list(APPEND TERMIN_APP_NATIVE_SOURCES
+        termin/navmesh/off_mesh_link_editor_visual.cpp
+    )
+endif()
+
+# SDL platform bindings moved to termin-display/_platform_native
+
+nanobind_add_module(_native NB_SHARED ${TERMIN_APP_NATIVE_SOURCES})
 target_link_libraries(_native PRIVATE
     tcbase::termin_base
     entity_lib

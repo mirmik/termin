@@ -21,6 +21,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -1159,7 +1160,7 @@ def _compile_shader_stage(
     output_path: Path,
     debug_name: str,
 ) -> None:
-    cmd = [
+    cmd = _executable_command(compiler) + [
         str(compiler),
         "compile",
         "--target",
@@ -1181,6 +1182,12 @@ def _compile_shader_stage(
         raise RuntimeError(f"Shader compilation failed for {input_path.name}: {message}")
     if not output_path.exists():
         raise RuntimeError(f"Shader compiler did not produce expected output: {output_path}")
+
+
+def _executable_command(path: Path) -> list[str]:
+    if os.name == "nt" and path.suffix.lower() == ".py":
+        return [sys.executable]
+    return []
 
 
 def _flat_number_list(values: Any, converter: Any) -> list[Any]:

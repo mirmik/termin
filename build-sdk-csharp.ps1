@@ -9,7 +9,25 @@ $SdkPrefix = if ($env:SDK_PREFIX) { $env:SDK_PREFIX } else { Join-Path $ScriptDi
 
 $BuildType = "Release"
 $Clean = $false
-$UseParallel = $false
+$NoParallel = $false
+$OpenGlMode = "on"
+$BuildJobs = if ($env:BUILD_JOBS) { [int]$env:BUILD_JOBS } else { [Environment]::ProcessorCount }
+
+function Get-CMakeGeneratorFromCache {
+    param([string]$BuildDir)
+
+    $cachePath = Join-Path $BuildDir "CMakeCache.txt"
+    if (-not (Test-Path $cachePath)) {
+        return ""
+    }
+
+    $generatorLine = Get-Content $cachePath | Where-Object { $_ -like "CMAKE_GENERATOR:INTERNAL=*" } | Select-Object -First 1
+    if (-not $generatorLine) {
+        return ""
+    }
+
+    return ($generatorLine -split "=", 2)[1]
+}
 
 foreach ($arg in $args) {
     switch ($arg) {
@@ -17,9 +35,10 @@ foreach ($arg in $args) {
         "-d"       { $BuildType = "Debug" }
         "--clean"  { $Clean = $true }
         "-c"       { $Clean = $true }
-        "--no-parallel" { $UseParallel = $false }
+        "--no-parallel" { $NoParallel = $true }
         "--ccache"      { }
         "--no-ccache"   { }
+        "--ninja"       { }
         "--unity"       { }
         "--no-unity"    { }
         "--pch"         { }
@@ -28,10 +47,23 @@ foreach ($arg in $args) {
         "--vulkan"      { }
         "--no-sdl"      { }
         "--sdl"         { }
-        "--help"   { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--ccache|--no-ccache] [--unity|--no-unity] [--pch|--no-pch] [--no-vulkan|--vulkan] [--no-sdl|--sdl]"; exit 0 }
-        "-h"       { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--ccache|--no-ccache] [--unity|--no-unity] [--pch|--no-pch] [--no-vulkan|--vulkan] [--no-sdl|--sdl]"; exit 0 }
+        "--no-opengl"   { $OpenGlMode = "off" }
+        "--opengl"      { $OpenGlMode = "on" }
+        "--help"   { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--ccache|--no-ccache] [--ninja] [--unity|--no-unity] [--pch|--no-pch] [--no-vulkan|--vulkan] [--no-sdl|--sdl] [--no-opengl|--opengl]"; exit 0 }
+        "-h"       { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--ccache|--no-ccache] [--ninja] [--unity|--no-unity] [--pch|--no-pch] [--no-vulkan|--vulkan] [--no-sdl|--sdl] [--no-opengl|--opengl]"; exit 0 }
         default    { Write-Error "Unknown option: $arg"; exit 1 }
     }
+}
+
+if ($OpenGlMode -eq "off") {
+    Write-Host ""
+    Write-Host "========================================"
+    Write-Host "  Skipping termin-csharp"
+    Write-Host "========================================"
+    Write-Host ""
+    Write-Host "C# native bindings currently depend on render_lib/OpenGL."
+    Write-Host "Re-run without --no-opengl when the OpenGL-backed SDK is available."
+    exit 0
 }
 
 if (-not (Get-Command swig -ErrorAction SilentlyContinue)) {
@@ -71,11 +103,19 @@ try {
     & cmake @cmakeArgs
     if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
 
-    $buildArgs = @("--build", $buildDir, "--config", $BuildType)
-    if ($UseParallel) {
-        $buildArgs += "--parallel"
+    $actualGenerator = Get-CMakeGeneratorFromCache $buildDir
+    if ($actualGenerator -like "Visual Studio*") {
+        Write-Host "Visual Studio generator detected; using MSBuild /m:1 to avoid parallel custom-target races"
+        & cmake --build $buildDir --config $BuildType -- /m:1
+    } else {
+        $buildArgs = @("--build", $buildDir, "--config", $BuildType)
+        if ($NoParallel) {
+            $buildArgs += @("--parallel", "1")
+        } else {
+            $buildArgs += @("--parallel", $BuildJobs)
+        }
+        & cmake @buildArgs
     }
-    & cmake @buildArgs
     if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
 }
 finally { Pop-Location }

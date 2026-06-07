@@ -141,7 +141,7 @@ clip/window.
 второй — `vp.height = -h` + CCW, но он ломает inter-pass sampling и
 у нас удалён.
 
-Direct3D 11/12 по умолчанию тоже использует CW = front, так что
+Direct3D 11 по умолчанию тоже использует CW = front, так что
 convention одинакова с ним.
 
 ### Backend-specific mapping для FrontFace
