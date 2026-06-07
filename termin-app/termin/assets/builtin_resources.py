@@ -31,47 +31,10 @@ def register_pbr_shader(rm: "ResourceManager") -> None:
     if "PBRShader" in rm.shaders:
         return
 
-    from termin.visualization.render.materials.pbr_material import (
-        PBR_VERT,
-        PBR_FRAG,
-    )
-    from termin.materials import (
-        ShaderMultyPhaseProgramm,
-        ShaderPhase,
-        ShasderStage,
-        MaterialProperty,
-    )
+    from termin.visualization.render.materials.pbr_material import PBR_SHADER_TEXT
+    from termin.materials import parse_shader_text
 
-    vertex_stage = ShasderStage("vertex", PBR_VERT)
-    fragment_stage = ShasderStage("fragment", PBR_FRAG)
-    properties = [
-        MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
-        MaterialProperty("u_albedo_texture", "Texture", None),
-        MaterialProperty("u_metallic_roughness_texture", "Texture", None),
-        MaterialProperty("u_occlusion_texture", "Texture", None),
-        MaterialProperty("u_emissive_texture", "Texture", None),
-        MaterialProperty("u_metallic", "Float", 0.0, 0.0, 1.0),
-        MaterialProperty("u_roughness", "Float", 0.5, 0.0, 1.0),
-        MaterialProperty("u_emission_color", "Color", (0.0, 0.0, 0.0, 1.0)),
-        MaterialProperty("u_emission_intensity", "Float", 0.0, 0.0, 100.0),
-    ]
-
-    phase = ShaderPhase(
-        phase_mark="opaque",
-        priority=0,
-        gl_depth_mask=True,
-        gl_depth_test=True,
-        gl_blend=False,
-        gl_cull=True,
-        stages={"vertex": vertex_stage, "fragment": fragment_stage},
-        uniforms=properties,
-    )
-
-    program = ShaderMultyPhaseProgramm(
-        program="PBRShader",
-        phases=[phase],
-        material_properties=properties,
-    )
+    program = parse_shader_text(PBR_SHADER_TEXT)
     rm.register_shader("PBRShader", program, uuid=BUILTIN_UUIDS["PBRShader"])
 
 

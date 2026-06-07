@@ -1,5 +1,6 @@
 #include "guard_main.h"
 #include "termin/materials/shader_parser.hpp"
+#include "termin/render/shader_skinning.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -17,6 +18,8 @@ using termin::std140_pack;
 using termin::std140_size_align;
 using termin::strip_uniform_decls;
 using termin::synthesize_material_ubo_glsl;
+using termin::TcShader;
+using termin::get_skinned_shader;
 
 static MaterialProperty mk(const char* name, const char* type) {
     return MaterialProperty(name, type, std::monostate{});
@@ -265,6 +268,65 @@ TEST_CASE("raw material engine uniform rewrite is idempotent")
     CHECK_EQ(twice.find("uniform PerFrame"), twice.rfind("uniform PerFrame"));
     CHECK_EQ(twice.find("struct ColorPushData"), twice.rfind("struct ColorPushData"));
     CHECK_EQ(twice.find("#define u_model pc._u_model"), twice.rfind("#define u_model pc._u_model"));
+}
+
+TEST_CASE("skinned shader variants rewrite legacy engine uniforms for Vulkan")
+{
+    std::string vertex =
+        "#version 330 core\n"
+        "layout(location = 0) in vec3 a_position;\n"
+        "layout(location = 1) in vec3 a_normal;\n"
+        "layout(location = 2) in vec2 a_uv;\n"
+        "uniform mat4 u_model;\n"
+        "uniform mat4 u_view;\n"
+        "uniform mat4 u_projection;\n"
+        "out vec3 v_normal;\n"
+        "void main() {\n"
+        "    vec4 world = u_model * vec4(a_position, 1.0);\n"
+        "    v_normal = mat3(transpose(inverse(u_model))) * a_normal;\n"
+        "    gl_Position = u_projection * u_view * world;\n"
+        "}\n";
+    std::string fragment =
+        "#version 330 core\n"
+        "out vec4 FragColor;\n"
+        "void main() { FragColor = vec4(1.0); }\n";
+
+    tc_shader_handle original_handle = tc_shader_from_sources_ex(
+        vertex.c_str(),
+        fragment.c_str(),
+        nullptr,
+        "PBRShader/opaque",
+        nullptr,
+        "skinning-rewrite-original",
+        TC_SHADER_LANGUAGE_GLSL,
+        TC_SHADER_ARTIFACT_OPTIONAL);
+    CHECK(!tc_shader_handle_is_invalid(original_handle));
+
+    tc_shader_handle skinned_handle = tc_shader_handle_invalid();
+    {
+        TcShader original(original_handle);
+        TcShader skinned = get_skinned_shader(original);
+        CHECK(skinned.is_valid());
+        skinned_handle = skinned.handle;
+
+        std::string out = skinned.vertex_source();
+        CHECK(out.find("#version 450 core") != std::string::npos);
+        CHECK(out.find("uniform mat4 u_model;") == std::string::npos);
+        CHECK(out.find("uniform mat4 u_view;") == std::string::npos);
+        CHECK(out.find("uniform mat4 u_projection;") == std::string::npos);
+        CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
+        CHECK(out.find("layout(push_constant) uniform ColorPushBlock") != std::string::npos);
+        CHECK(out.find("#define u_model pc._u_model") != std::string::npos);
+        CHECK(out.find("layout(std140, binding = 16) uniform BoneBlock") != std::string::npos);
+        CHECK(out.find("_applySkinning(_skinned_position, _skinned_normal)") != std::string::npos);
+        CHECK(skinned.is_variant());
+        CHECK(skinned.variant_op() == TC_SHADER_VARIANT_SKINNING);
+    }
+
+    if (!tc_shader_handle_is_invalid(skinned_handle)) {
+        tc_shader_destroy(skinned_handle);
+    }
+    tc_shader_destroy(original_handle);
 }
 
 TEST_CASE("parse_shader_text: material_ubo feature rewrites stage sources")

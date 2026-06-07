@@ -1,6 +1,7 @@
 // shader_skinning.cpp - Shader skinning injection implementation
 
 #include "termin/render/shader_skinning.hpp"
+#include "termin/materials/shader_parser.hpp"
 #include <tcbase/tc_log.hpp>
 #include <regex>
 #include <sstream>
@@ -268,8 +269,21 @@ TcShader get_skinned_shader(TcShader original_shader) {
         return TcShader();
     }
 
-    // Inject skinning
-    std::string skinned_vertex = inject_skinning_into_vertex_shader(vertex_source);
+    // Inject skinning, then normalize legacy engine uniforms through the same
+    // parser rewrite used by .shader material sources. Skinned variants are
+    // created at runtime and bypass the parser, but Vulkan still requires
+    // u_view/u_projection in the PerFrame UBO and u_model in push constants.
+    std::string skinned_vertex = rewrite_engine_uniforms_for_stage_source(
+        inject_skinning_into_vertex_shader(vertex_source),
+        "vertex");
+    fragment_source = rewrite_engine_uniforms_for_stage_source(
+        fragment_source,
+        "fragment");
+    if (!geometry_source.empty()) {
+        geometry_source = rewrite_engine_uniforms_for_stage_source(
+            geometry_source,
+            "geometry");
+    }
 
     // Create skinned variant
     std::string orig_name = original_shader.name();

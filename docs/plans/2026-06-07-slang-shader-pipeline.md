@@ -207,6 +207,49 @@ Status:
 - Remaining work: parse/author `.shader` or `.slang` assets with language
   metadata instead of only setting it through live `TcShader`.
 
+## Phase 5.5: Editor Lazy Dev Compilation
+
+Keep packaged runtimes artifact-only, but let the editor work lazily while
+shader sources are being authored.
+
+Ownership:
+
+- `termin-graphics` owns the runtime decision: load an artifact, check whether
+  it matches the current `tc_shader` identity, or invoke `termin_shaderc` in
+  dev mode.
+- Backends only ask for a backend/stage artifact and consume the resulting
+  bytes or source.
+- Python/editor code only configures runtime paths and policy: artifact root,
+  cache root, `termin_shaderc` path, and whether dev compilation is enabled.
+- Build/package scripts still produce deterministic artifacts for SDK/runtime
+  packages and must not rely on runtime compilation.
+
+Status:
+
+- `tgfx2_load_or_compile_shader_artifact_for_backend()` now lives in
+  `termin-graphics` and is used by Vulkan and OpenGL `ensure_tc_shader()`.
+- Dev compilation is disabled by default. It can be enabled through C++ API or
+  `TERMIN_SHADER_DEV_COMPILE=1`.
+- Runtime configuration can come from explicit C++/Python calls or env vars:
+  `TERMIN_SHADER_ARTIFACT_ROOT`, `TERMIN_SHADER_CACHE_ROOT`, and
+  `TERMIN_SHADERC`.
+- The dev compiler writes source snapshots under `cache/source/`, backend
+  artifacts under the configured artifact root, and a sidecar metadata file
+  containing shader hash, language, target, stage, UUID, and version.
+- Metadata is used to avoid recompiling unchanged shader/stage/target
+  artifacts on repeated editor draws.
+- `tgfx2_device_factory_test` covers the lazy compile path with a fake
+  `termin_shaderc` and verifies that a second load reuses the cached artifact.
+
+Remaining work:
+
+- Wire editor/project open code to call `configure_shader_runtime()` with a
+  project-specific cache and artifact root.
+- Decide whether hot reload should remove stale artifacts eagerly or rely on
+  metadata mismatch and overwrite-on-demand.
+- Extend the lazy path to future D3D11 artifacts after the Windows
+  `termin_shaderc --target d3d11` phase exists.
+
 ## Phase 6: First Slang Shader
 
 Start with a small engine shader, not the material pipeline.
@@ -317,14 +360,16 @@ Acceptance:
 
 ## Immediate Next Steps
 
-1. Promote the FSQ Slang source from test-only smoke coverage into a canonical
+1. Wire the editor to configure `termin-graphics` shader runtime paths on
+   project open and enable dev compilation only for editor/dev sessions.
+2. Promote the FSQ Slang source from test-only smoke coverage into a canonical
    built-in shader source and decide where built-in engine shader artifacts are
    generated for SDK/runtime packages.
-2. Migrate the fullscreen/present fragment path after the FSQ vertex source has
+3. Migrate the fullscreen/present fragment path after the FSQ vertex source has
    a canonical artifact producer.
-3. Decide later how generated Slang OpenGL artifacts should target the existing
+4. Decide later how generated Slang OpenGL artifacts should target the existing
    GL smoke environment: request a GL 4.5 context, lower Slang GLSL output if
    the toolchain supports it, or keep OpenGL generated-artifact rendering as a
    separate higher-requirement smoke.
-4. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
+5. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
    Linux-side generation and runtime-consumption contract.
