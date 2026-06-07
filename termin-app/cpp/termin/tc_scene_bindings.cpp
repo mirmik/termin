@@ -19,7 +19,7 @@
 #include <termin/geom/ray3.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/vec4.hpp>
-#include "render/tc_value_trent.hpp"
+#include <tcbase/tc_value_trent.hpp>
 #include "core/tc_scene_render_state.h"
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_extension.h"

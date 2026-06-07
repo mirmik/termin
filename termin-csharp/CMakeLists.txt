@@ -139,7 +139,7 @@ endif()
 
     target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         OpenGL::GL
-        termin::trent
+        tcbase::termin_base
         termin::entity_lib
         termin::render_lib
         termin_scene::termin_scene
@@ -158,7 +158,6 @@ endif()
     # ABI-mismatch source. To verify: dumpbin /DEPENDENTS termin.dll
     # after a build and diff against the files in runtimes/win-x64/native/.
     set(_termin_csharp_runtime_targets
-        termin::trent
         termin::entity_lib
         termin::render_lib
         termin::termin_core

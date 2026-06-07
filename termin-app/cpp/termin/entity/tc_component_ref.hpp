@@ -3,14 +3,14 @@
 
 #include <string>
 #include <cstring>
-#include <trent/trent.h>
+#include <tcbase/trent/trent.h>
 #include "core/tc_component.h"
 #include "core/tc_drawable_protocol.h"
 #include "core/tc_input_component.h"
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_inspect_context.h"
 #include "core/tc_scene.h"
-#include "../render/tc_value_trent.hpp"
+#include <tcbase/tc_value_trent.hpp>
 #include <termin/entity/component.hpp>
 
 namespace termin {

@@ -4,7 +4,7 @@
 #include "termin/render/tc_pass.hpp"
 
 #include <string>
-#include <trent/json.h>
+#include <tcbase/trent/json.h>
 
 extern "C" {
 #include "core/tc_scene.h"

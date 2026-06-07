@@ -5,7 +5,7 @@
 #include <DetourNavMesh.h>
 #include <DetourStatus.h>
 #include <inspect/tc_kind_cpp.hpp>
-#include <trent/json.h>
+#include <tcbase/trent/json.h>
 #include <algorithm>
 #include <any>
 #include <cmath>

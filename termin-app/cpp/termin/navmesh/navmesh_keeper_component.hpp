@@ -7,7 +7,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/render/drawable.hpp>
 #include "../material/tc_material_handle.hpp"
-#include "../mesh/tc_mesh_handle.hpp"
+#include <tgfx/tgfx_mesh_handle.hpp>
 
 namespace termin {
 

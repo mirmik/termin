@@ -4,7 +4,7 @@
 #include "entity/tc_component_ref.hpp"
 #include <termin/render/rendering_manager.hpp>
 #include <termin/render/scene_pipeline_template.hpp>
-#include "render/tc_value_trent.hpp"
+#include <tcbase/tc_value_trent.hpp>
 #include "core/tc_scene_extension.h"
 #include "core/tc_scene_extension_ids.h"
 #include <tcbase/tc_log.hpp>
