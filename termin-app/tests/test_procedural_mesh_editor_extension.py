@@ -120,7 +120,7 @@ def test_procedural_mesh_editor_extension_right_panel_edits_shared_primitive_par
 
     panel.primitive_param_inputs["size.x"].value = 2.5
     panel.primitive_param_inputs["center.z"].value = 1.25
-    panel._on_primitive_param_changed(2.5)
+    panel.primitive_params._on_param_changed(2.5)
 
     assert operation.params["size"] == [2.5, 1.0, 1.0]
     assert operation.params["center"] == [0.0, 0.0, 1.25]

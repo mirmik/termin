@@ -919,7 +919,7 @@ def test_csg_editor_panel_updates_extrude_vector():
 
     panel.extrude_vector_inputs["x"].value = 0.25
     panel.extrude_vector_inputs["z"].value = -2.0
-    panel._on_extrude_vector_changed(-2.0)
+    panel.operation_params._on_extrude_vector_changed(-2.0)
 
     assert operation.params["vector"] == [0.25, 0.0, -2.0]
 
@@ -943,7 +943,7 @@ def test_csg_editor_panel_updates_boolean_transform():
 
     panel.operation_transform_inputs["center.x"].value = 3.0
     panel.operation_transform_inputs["rotation.z"].value = 45.0
-    panel._on_operation_transform_changed(3.0)
+    panel.operation_params._on_operation_transform_changed(3.0)
 
     assert operation.params["center"] == [3.0, 0.0, 0.0]
     assert operation.params["rotation"] == [0.0, 0.0, 45.0]
@@ -1016,7 +1016,7 @@ def test_csg_editor_panel_updates_sketch_plane():
     assert panel.plane_inputs["origin.z"].value == 0.0
 
     panel.plane_inputs["origin.z"].value = 2.5
-    panel._on_plane_param_changed(2.5)
+    panel.plane_params._on_param_changed(2.5)
 
     sketch = controller.document.find_sketch(sketch_id)
     assert sketch is not None
@@ -1044,7 +1044,7 @@ def test_csg_editor_panel_updates_contour_points():
 
     panel.contour_point_inputs[(2, "x")].value = 1.75
     panel.contour_point_inputs[(2, "y")].value = 1.25
-    panel._on_contour_point_changed(2, "y", 1.25)
+    panel.contour_params._on_point_changed(2, "y", 1.25)
 
     assert contour.points[2] == (1.75, 1.25)
 
@@ -1302,7 +1302,7 @@ def test_csg_editor_panel_updates_primitive_operation_params():
 
     panel.primitive_param_inputs["size.x"].value = 2.5
     panel.primitive_param_inputs["center.z"].value = 1.25
-    panel._on_primitive_param_changed(2.5)
+    panel.primitive_params._on_param_changed(2.5)
 
     assert operation.params["size"] == [2.5, 1.0, 1.0]
     assert operation.params["center"] == [0.0, 0.0, 1.25]
