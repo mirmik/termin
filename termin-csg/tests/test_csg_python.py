@@ -16,6 +16,7 @@ from termin.csg import (
     to_mesh3,
 )
 from termin.csg.cad import box, circle, mesh, rect
+from termin.csg.csg_editor_panel import CsgEditorPanel
 from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.cad_viewer import build_document_solid_meshes, document_bounds
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
@@ -33,6 +34,16 @@ from termin.csg.document_edit import (
 )
 from termin.csg.procedural_document import CONTOUR_ROLE_HOLE, CONTOUR_ROLE_OUTER, ProceduralPlane
 from termin.csg.viewer_camera import OrbitCamera
+
+
+def _test_editor_panel(controller: CsgEditorController) -> CsgEditorPanel:
+    panel = CsgEditorPanel(
+        controller,
+        lambda result, default_status="": result.success,
+        log_prefix="[CsgEditorPanelTest]",
+    )
+    panel.build()
+    return panel
 
 
 def test_native_primitives_and_extrude_are_importable_from_python():
@@ -884,12 +895,10 @@ def test_cad_state_roundtrip_preserves_document_camera_and_selection(tmp_path):
     assert isclose(restored.camera.pitch, 0.5, abs_tol=1.0e-6)
 
 
-def test_cad_app_operation_parameter_panel_updates_extrude_vector():
-    from termin.csg.cad_app import CadApp
-
-    app = CadApp()
-    app._build_operation_params_panel()
-    contour = app.document.add_contour_from_points(
+def test_csg_editor_panel_updates_extrude_vector():
+    controller = CsgEditorController()
+    panel = _test_editor_panel(controller)
+    contour = controller.document.add_contour_from_points(
         [
             (0.0, 0.0, 0.0),
             (1.0, 0.0, 0.0),
@@ -899,44 +908,42 @@ def test_cad_app_operation_parameter_panel_updates_extrude_vector():
     )
     assert contour is not None
 
-    sketch_id = app.document.find_sketch_id_for_contour(contour.id)
-    operation = app.document.add_extrude_operation_for_sketch(sketch_id, height=1.0)
+    sketch_id = controller.document.find_sketch_id_for_contour(contour.id)
+    operation = controller.document.add_extrude_operation_for_sketch(sketch_id, height=1.0)
     assert operation is not None
 
-    app.selected_node_data = ("operation", operation.id)
-    app._refresh_operation_params_panel()
-    assert app.operation_params_panel.visible is True
-    assert app.extrude_vector_inputs["z"].value == 1.0
+    controller.selection = ("operation", operation.id)
+    panel.refresh_operation_params_panel()
+    assert panel.operation_params_panel.visible is True
+    assert panel.extrude_vector_inputs["z"].value == 1.0
 
-    app.extrude_vector_inputs["x"].value = 0.25
-    app.extrude_vector_inputs["z"].value = -2.0
-    app._on_extrude_vector_changed(-2.0)
+    panel.extrude_vector_inputs["x"].value = 0.25
+    panel.extrude_vector_inputs["z"].value = -2.0
+    panel._on_extrude_vector_changed(-2.0)
 
     assert operation.params["vector"] == [0.25, 0.0, -2.0]
 
 
-def test_cad_app_operation_parameter_panel_updates_boolean_transform():
-    from termin.csg.cad_app import CadApp
-
-    app = CadApp()
-    app._build_operation_params_panel()
-    first = app.document.add_primitive_operation("box", {"size": [2.0, 2.0, 2.0]})
-    second = app.document.add_primitive_operation("sphere", {"radius": 0.75})
+def test_csg_editor_panel_updates_boolean_transform():
+    controller = CsgEditorController()
+    panel = _test_editor_panel(controller)
+    first = controller.document.add_primitive_operation("box", {"size": [2.0, 2.0, 2.0]})
+    second = controller.document.add_primitive_operation("sphere", {"radius": 0.75})
     assert first is not None
     assert second is not None
-    operation = app.document.add_boolean_operation("subtract", [first.id, second.id])
+    operation = controller.document.add_boolean_operation("subtract", [first.id, second.id])
     assert operation is not None
 
-    app.selected_node_data = ("operation", operation.id)
-    app._refresh_operation_params_panel()
-    assert app.operation_params_panel.visible is True
-    assert "center.x" in app.operation_transform_inputs
-    assert "rotation.z" in app.operation_transform_inputs
-    assert app.extrude_vector_inputs == {}
+    controller.selection = ("operation", operation.id)
+    panel.refresh_operation_params_panel()
+    assert panel.operation_params_panel.visible is True
+    assert "center.x" in panel.operation_transform_inputs
+    assert "rotation.z" in panel.operation_transform_inputs
+    assert panel.extrude_vector_inputs == {}
 
-    app.operation_transform_inputs["center.x"].value = 3.0
-    app.operation_transform_inputs["rotation.z"].value = 45.0
-    app._on_operation_transform_changed(3.0)
+    panel.operation_transform_inputs["center.x"].value = 3.0
+    panel.operation_transform_inputs["rotation.z"].value = 45.0
+    panel._on_operation_transform_changed(3.0)
 
     assert operation.params["center"] == [3.0, 0.0, 0.0]
     assert operation.params["rotation"] == [0.0, 0.0, 45.0]
@@ -989,12 +996,10 @@ def _first_tree_node(nodes, data):
     return None
 
 
-def test_cad_app_plane_parameter_panel_updates_sketch_plane():
-    from termin.csg.cad_app import CadApp
-
-    app = CadApp()
-    app._build_plane_params_panel()
-    contour = app.document.add_contour_from_points(
+def test_csg_editor_panel_updates_sketch_plane():
+    controller = CsgEditorController()
+    panel = _test_editor_panel(controller)
+    contour = controller.document.add_contour_from_points(
         [
             (0.0, 0.0, 0.0),
             (1.0, 0.0, 0.0),
@@ -1004,26 +1009,24 @@ def test_cad_app_plane_parameter_panel_updates_sketch_plane():
     )
     assert contour is not None
 
-    sketch_id = app.document.find_sketch_id_for_contour(contour.id)
-    app.selected_node_data = ("plane", sketch_id)
-    app._refresh_plane_params_panel()
-    assert app.plane_params_panel.visible is True
-    assert app.plane_inputs["origin.z"].value == 0.0
+    sketch_id = controller.document.find_sketch_id_for_contour(contour.id)
+    controller.selection = ("plane", sketch_id)
+    panel.refresh_plane_params_panel()
+    assert panel.plane_params_panel.visible is True
+    assert panel.plane_inputs["origin.z"].value == 0.0
 
-    app.plane_inputs["origin.z"].value = 2.5
-    app._on_plane_param_changed(2.5)
+    panel.plane_inputs["origin.z"].value = 2.5
+    panel._on_plane_param_changed(2.5)
 
-    sketch = app.document.find_sketch(sketch_id)
+    sketch = controller.document.find_sketch(sketch_id)
     assert sketch is not None
     assert sketch.plane.origin == (0.0, 0.0, 2.5)
 
 
-def test_cad_app_contour_parameter_panel_updates_contour_points():
-    from termin.csg.cad_app import CadApp
-
-    app = CadApp()
-    app._build_contour_params_panel()
-    contour = app.document.add_contour_from_points(
+def test_csg_editor_panel_updates_contour_points():
+    controller = CsgEditorController()
+    panel = _test_editor_panel(controller)
+    contour = controller.document.add_contour_from_points(
         [
             (0.0, 0.0, 0.0),
             (1.0, 0.0, 0.0),
@@ -1033,15 +1036,15 @@ def test_cad_app_contour_parameter_panel_updates_contour_points():
     )
     assert contour is not None
 
-    app.selected_node_data = ("contour", contour.id)
-    app._refresh_contour_params_panel()
-    assert app.contour_params_panel.visible is True
-    assert app.contour_point_inputs[(2, "x")].value == 1.0
-    assert app.contour_point_inputs[(2, "y")].value == 1.0
+    controller.selection = ("contour", contour.id)
+    panel.refresh_contour_params_panel()
+    assert panel.contour_params_panel.visible is True
+    assert panel.contour_point_inputs[(2, "x")].value == 1.0
+    assert panel.contour_point_inputs[(2, "y")].value == 1.0
 
-    app.contour_point_inputs[(2, "x")].value = 1.75
-    app.contour_point_inputs[(2, "y")].value = 1.25
-    app._on_contour_point_changed(2, "y", 1.25)
+    panel.contour_point_inputs[(2, "x")].value = 1.75
+    panel.contour_point_inputs[(2, "y")].value = 1.25
+    panel._on_contour_point_changed(2, "y", 1.25)
 
     assert contour.points[2] == (1.75, 1.25)
 
@@ -1050,7 +1053,7 @@ def test_cad_app_drags_selected_contour_point_in_viewport_without_drawing():
     from termin.csg.cad_app import CadApp
 
     app = CadApp()
-    app._build_contour_params_panel()
+    app.editor_panel.build_contour_params_panel()
     contour = app.document.add_contour_from_points(
         [
             (0.0, 0.0, 0.0),
@@ -1065,7 +1068,7 @@ def test_cad_app_drags_selected_contour_point_in_viewport_without_drawing():
     assert sketch is not None
 
     app.selected_node_data = ("contour", contour.id)
-    app._refresh_contour_params_panel()
+    app.editor_panel.refresh_contour_params_panel()
     app.mode = "draw_sketch"
 
     width = 800
@@ -1082,8 +1085,8 @@ def test_cad_app_drags_selected_contour_point_in_viewport_without_drawing():
 
     assert isclose(contour.points[2][0], 1.5, abs_tol=1.0e-3)
     assert isclose(contour.points[2][1], 1.25, abs_tol=1.0e-3)
-    assert isclose(app.contour_point_inputs[(2, "x")].value, 1.5, abs_tol=1.0e-3)
-    assert isclose(app.contour_point_inputs[(2, "y")].value, 1.25, abs_tol=1.0e-3)
+    assert isclose(app.editor_panel.contour_point_inputs[(2, "x")].value, 1.5, abs_tol=1.0e-3)
+    assert isclose(app.editor_panel.contour_point_inputs[(2, "y")].value, 1.25, abs_tol=1.0e-3)
     assert app.draft.points == []
 
 
@@ -1227,15 +1230,14 @@ def test_cad_app_wall_action_and_params_update_operation():
     assert operation.params["source_sketch_id"] == sketch_id
     assert operation.inputs == [path.id]
 
-    app._build_operation_params_panel()
-    app._refresh_operation_params_panel()
-    assert app.operation_params_panel.visible is True
-    assert app.wall_param_inputs["height"].value == 3.0
-    assert app.wall_param_inputs["thickness"].value == 0.2
+    app.editor_panel.refresh_operation_params_panel()
+    assert app.editor_panel.operation_params_panel.visible is True
+    assert app.editor_panel.wall_param_inputs["height"].value == 3.0
+    assert app.editor_panel.wall_param_inputs["thickness"].value == 0.2
 
-    app.wall_param_inputs["height"].value = 2.5
-    app.wall_param_inputs["thickness"].value = 0.4
-    app._set_wall_alignment("left")
+    app.editor_panel.wall_param_inputs["height"].value = 2.5
+    app.editor_panel.wall_param_inputs["thickness"].value = 0.4
+    app.editor_panel.set_wall_alignment("left")
 
     assert operation.params["height"] == 2.5
     assert operation.params["thickness"] == 0.4
@@ -1284,29 +1286,27 @@ def test_cad_app_add_hole_action_closes_contour_inside_selected_outer():
     assert hole.parent_contour_id == outer.id
 
 
-def test_cad_app_primitive_parameter_panel_updates_operation_params():
-    from termin.csg.cad_app import CadApp
+def test_csg_editor_panel_updates_primitive_operation_params():
+    controller = CsgEditorController()
+    panel = _test_editor_panel(controller)
+    panel.add_primitive("box")
 
-    app = CadApp()
-    app._build_primitive_params_panel()
-    app.add_primitive("box")
-
-    assert app.selected_node_data is not None
-    operation = app.document.find_operation(app.selected_node_data[1])
+    assert controller.selection is not None
+    operation = controller.document.find_operation(controller.selection[1])
     assert operation is not None
     assert operation.kind == "primitive"
 
-    app._refresh_primitive_params_panel()
-    assert app.primitive_params_panel.visible is True
-    assert app.primitive_param_inputs["size.x"].value == 1.0
+    panel.refresh_primitive_params_panel()
+    assert panel.primitive_params_panel.visible is True
+    assert panel.primitive_param_inputs["size.x"].value == 1.0
 
-    app.primitive_param_inputs["size.x"].value = 2.5
-    app.primitive_param_inputs["center.z"].value = 1.25
-    app._on_primitive_param_changed(2.5)
+    panel.primitive_param_inputs["size.x"].value = 2.5
+    panel.primitive_param_inputs["center.z"].value = 1.25
+    panel._on_primitive_param_changed(2.5)
 
     assert operation.params["size"] == [2.5, 1.0, 1.0]
     assert operation.params["center"] == [0.0, 0.0, 1.25]
-    evaluated = evaluate_document(app.document)
+    evaluated = evaluate_document(controller.document)
     assert len(evaluated) == 1
     assert isclose(evaluated[0].solid.volume, 2.5, abs_tol=1.0e-6)
 
