@@ -139,6 +139,16 @@ class _FakeShader:
     geometry_source = ""
 
 
+class _FakeSlangShader:
+    is_valid = True
+    uuid = "slang-shader-phase-uuid"
+    name = "TestSlangShader"
+    language = "slang"
+    vertex_source = "[shader(\"vertex\")] void main() {}\n"
+    fragment_source = "[shader(\"fragment\")] void main() {}\n"
+    geometry_source = ""
+
+
 def test_build_project_compiles_shader_usages(tmp_path: Path) -> None:
     project = tmp_path / "ShaderGame"
     project.mkdir()
@@ -178,3 +188,64 @@ def test_build_project_compiles_shader_usages(tmp_path: Path) -> None:
         "assets/shaders/vulkan/shader-phase-uuid.vert.spv",
         "assets/shaders/vulkan/shader-phase-uuid.frag.spv",
     }
+
+
+def test_build_project_compiles_slang_shader_usages_for_vulkan_and_opengl(tmp_path: Path) -> None:
+    project = tmp_path / "SlangShaderGame"
+    project.mkdir()
+    _write_json(project / "game.terminproj", {"version": 1, "name": "SlangShaderGame"})
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+
+    calls_path = tmp_path / "shaderc_calls.jsonl"
+    compiler = tmp_path / "fake_termin_shaderc.py"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, pathlib, sys\n"
+        f"calls = pathlib.Path({str(calls_path)!r})\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "target = sys.argv[sys.argv.index('--target') + 1]\n"
+        "out.parent.mkdir(parents=True, exist_ok=True)\n"
+        "out.write_bytes(('ARTIFACT-' + target).encode('ascii'))\n"
+        "with calls.open('a', encoding='utf-8') as f:\n"
+        "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+
+    result = build_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "SlangShaderGame",
+        compile_shaders=True,
+        shader_usages=[_FakeSlangShader()],
+        shader_compiler=compiler,
+    )
+
+    source_root = result.output_dir / ".build" / "shaders" / "source"
+    assert (source_root / "slang-shader-phase-uuid.vert.slang").exists()
+    assert (source_root / "slang-shader-phase-uuid.frag.slang").exists()
+    assert (
+        result.output_dir / "assets" / "shaders" / "vulkan" / "slang-shader-phase-uuid.vert.spv"
+    ).read_bytes() == b"ARTIFACT-vulkan"
+    assert (
+        result.output_dir / "assets" / "shaders" / "opengl" / "slang-shader-phase-uuid.frag.glsl"
+    ).read_bytes() == b"ARTIFACT-opengl"
+
+    by_type = {}
+    for resource in result.manifest.resources:
+        by_type.setdefault(resource.type, set()).add(resource.build_path)
+    assert by_type["shader_spirv"] == {
+        "assets/shaders/vulkan/slang-shader-phase-uuid.vert.spv",
+        "assets/shaders/vulkan/slang-shader-phase-uuid.frag.spv",
+    }
+    assert by_type["shader_glsl"] == {
+        "assets/shaders/opengl/slang-shader-phase-uuid.vert.glsl",
+        "assets/shaders/opengl/slang-shader-phase-uuid.frag.glsl",
+    }
+
+    calls = [
+        json.loads(line)
+        for line in calls_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert all("--language" in call and call[call.index("--language") + 1] == "slang" for call in calls)
+    assert {call[call.index("--target") + 1] for call in calls} == {"vulkan", "opengl"}
