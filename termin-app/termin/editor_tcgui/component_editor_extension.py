@@ -20,6 +20,9 @@ class ComponentEditorExtension(Protocol):
     def build_panel(self) -> Widget | None:
         ...
 
+    def build_left_panel(self) -> Widget | None:
+        ...
+
 
 ComponentEditorExtensionFactory = Callable[[], ComponentEditorExtension]
 

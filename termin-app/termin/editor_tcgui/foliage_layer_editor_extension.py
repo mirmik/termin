@@ -124,6 +124,9 @@ class FoliageLayerEditorExtension:
         self._refresh_panel()
         return root
 
+    def build_left_panel(self):
+        return None
+
     def _button(self, text: str, callback) -> Button:
         btn = Button()
         btn.text = text

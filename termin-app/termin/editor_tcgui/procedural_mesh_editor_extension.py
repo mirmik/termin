@@ -17,9 +17,9 @@ from tcgui.widgets.units import px
 from termin.editor_tcgui.component_editor_extension import (
     register_component_editor_extension,
 )
+from termin.csg.cad_tree_adapter import restore_tree_selection, to_tree_node, tree_node_data
 from termin.csg.document_eval import evaluate_document
 from termin.csg.document_tree_model import (
-    DocumentTreeNode,
     build_document_tree,
     document_summary,
 )
@@ -138,21 +138,29 @@ class ProceduralMeshEditorExtension:
             )
         root.add_child(boolean_row)
 
-        doc_title = Label()
-        doc_title.text = "Document Tree"
-        root.add_child(doc_title)
+        return root
 
+    def build_left_panel(self):
+        root = VStack()
+        root.spacing = 4
+
+        title = Label()
+        title.text = "Document Tree"
+        root.add_child(title)
+
+        self._document_summary_label = Label()
         self._document_summary_label.text = "Document: <empty>"
         self._document_summary_label.color = (0.55, 0.60, 0.68, 1.0)
         root.add_child(self._document_summary_label)
 
+        self._selection_label = Label()
         self._selection_label.text = "Selection: <none>"
         self._selection_label.color = (0.55, 0.60, 0.68, 1.0)
         root.add_child(self._selection_label)
 
+        self._document_tree = TreeWidget()
         self._document_tree.row_height = 22
         self._document_tree.indent_size = 22
-        self._document_tree.preferred_height = px(180)
         self._document_tree.stretch = True
         self._document_tree.on_select = self._on_document_node_selected
         root.add_child(self._document_tree)
@@ -257,11 +265,11 @@ class ProceduralMeshEditorExtension:
             self._controller.replace_document(component.document, self._controller.selection)
 
         self._document_summary_label.text = document_summary(self._controller.document)
-        roots = [self._to_tree_node(root) for root in build_document_tree(self._controller.document)]
+        roots = [to_tree_node(root) for root in build_document_tree(self._controller.document)]
 
         for node in roots:
             self._document_tree.add_root(node)
-        self._restore_tree_selection(roots)
+        restore_tree_selection(self._document_tree, roots, self._controller.selection)
         self._refresh_selection_label()
         if self._document_tree._ui is not None:
             self._document_tree._ui.request_layout()
@@ -274,35 +282,12 @@ class ProceduralMeshEditorExtension:
         node.data = data
         return node
 
-    def _to_tree_node(self, source: DocumentTreeNode) -> TreeNode:
-        node = self._tree_node(source.text, (source.kind, source.item_id))
-        node.csg_document_node = source
-        node.expanded = True
-        for child in source.children:
-            node.add_node(self._to_tree_node(child))
-        return node
-
-    def _restore_tree_selection(self, roots: list[TreeNode]) -> None:
-        for root in roots:
-            selected = self._find_tree_node(root, self._controller.selection)
-            if selected is not None:
-                self._document_tree.selected_node = selected
-                selected._selected = True
-                return
-
-    def _find_tree_node(self, root: TreeNode, data: tuple[str, str] | None) -> TreeNode | None:
-        if data is None:
-            return None
-        if root.data == data:
-            return root
-        for child in root.subnodes:
-            found = self._find_tree_node(child, data)
-            if found is not None:
-                return found
-        return None
-
     def _on_document_node_selected(self, node: TreeNode) -> None:
-        self._apply_controller_result(self._controller.select_node(node.data))
+        node_data = tree_node_data(node)
+        if node_data is None:
+            log.error("[ProceduralMeshEditor] document tree node has invalid selection data")
+            return
+        self._apply_controller_result(self._controller.select_node(node_data))
 
     def _refresh_selection_label(self) -> None:
         node_data = self._controller.selection
