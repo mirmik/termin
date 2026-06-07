@@ -21,3 +21,4 @@
 ## 2026-06
 
 - [procedural CSG editor refactor](2026-06-07-procedural-csg-editor-refactor.md)
+- [build system refactor](2026-06-07-build-system-refactor.md)
