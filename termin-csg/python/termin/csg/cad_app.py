@@ -244,6 +244,7 @@ class CadApp:
         row.preferred_height = px(28)
         row.add_child(self._button("Draw Sketch", self.start_draw_sketch))
         row.add_child(self._button("Close Contour", self.close_contour))
+        row.add_child(self._button("Finish Path", self.finish_wall_path))
         root.add_child(row)
 
         row2 = HStack()
@@ -422,8 +423,14 @@ class CadApp:
                 return []
             return [
                 ("Add Outer Contour", self.start_add_outer_contour),
+                ("Add Wall Path", self.start_add_wall_path),
                 ("Extrude Sketch", self.extrude_selected),
             ]
+        if kind == "path":
+            path_ref = self._path_ref_by_id(item_id)
+            if path_ref is None:
+                return []
+            return []
         if kind == "contour":
             contour_ref = self._contour_ref_by_id(item_id)
             if contour_ref is None:
@@ -892,11 +899,23 @@ class CadApp:
             f"sketch='{self.draft.sketch_id}' outer='{self.draft.parent_contour_id}'"
         )
 
+    def start_add_wall_path(self) -> None:
+        result = self.controller.start_add_wall_path()
+        if not self._apply_controller_result(result):
+            return
+        log.info(f"[CsgCad] add wall path started sketch='{self.draft.sketch_id}'")
+
     def close_contour(self) -> None:
         result = self.controller.close_contour()
         if not self._apply_controller_result(result):
             return
         log.info(f"[CsgCad] contour closed selection='{self.selected_node_data}'")
+
+    def finish_wall_path(self) -> None:
+        result = self.controller.finish_wall_path()
+        if not self._apply_controller_result(result):
+            return
+        log.info(f"[CsgCad] wall path finished selection='{self.selected_node_data}'")
 
     def extrude_selected(self) -> None:
         previous_selection = self.selected_node_data
@@ -1331,6 +1350,13 @@ class CadApp:
                     return (sketch, contour)
         return None
 
+    def _path_ref_by_id(self, path_id: str):
+        for sketch in self.document.items:
+            for path in sketch.paths:
+                if path.id == path_id:
+                    return (sketch, path)
+        return None
+
     def _on_extrude_vector_changed(self, _value: float) -> None:
         if self._syncing_operation_params:
             return
@@ -1523,6 +1549,11 @@ class CadApp:
             for item in self.document.items:
                 for contour in item.contours:
                     if contour.id == item_id:
+                        return selection
+        if kind == "path":
+            for item in self.document.items:
+                for path in item.paths:
+                    if path.id == item_id:
                         return selection
         log.error(f"[CsgCad] saved selection is missing kind='{kind}' id='{item_id}'")
         return None
