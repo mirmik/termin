@@ -2,12 +2,22 @@
 
 Дата: 2026-06-07
 
-Статус: начато. Phase 0 выполнена: добавлен первый машинно-читаемый manifest
-Python-пакетов и валидатор. Phase 1 начата: совместимые Bash/PowerShell
-package-list shim'ы читают порядок пакетов из manifest. Phase 2 начата:
-preflight submodule/tool checks переезжают в `termin_build.sdk doctor`.
-Phase 3 начата: SDK bindings stage генерирует `termin-artifacts.json`, а
-`cmake_ext.py` предпочитает artifact manifest перед legacy search.
+Статус: основные фазы миграции выполнены для Linux SDK build path. Phase 0-5
+доведены до рабочего состояния и проверены полным
+`./build-sdk.sh --wheels --no-parallel`: manifest стал source of truth для
+порядка пакетов и native extension declarations, Linux/PowerShell
+`build-sdk.*` переведены в wrappers на `termin_build.sdk`, bindings stage
+генерирует `termin-artifacts.json`, а `setup.py` пакетов с native bindings
+читают extensions из manifest через `termin_build.setup_helpers`.
+Wheelhouse stage также перенесен в Python orchestrator; `build-sdk-wheels.sh`
+оставлен совместимым wrapper. Python package install stage перенесен в
+`termin_build.sdk install-packages`; `install-pip-packages.sh` и
+`install-pip-packages.ps1` также оставлены совместимыми wrappers.
+
+Ограничение проверки: Windows scripts обновлены статически, но runtime smoke
+в текущем Linux окружении не выполнен, потому что `pwsh` отсутствует. Для
+этого добавлен CI job `smoke-build-system-windows` на `windows-latest`; CI
+запускается на `push`, `pull_request` и вручную через `workflow_dispatch`.
 
 ## Цель
 
@@ -80,14 +90,14 @@ build-system/
 
 termin-build-tools/termin_build/
   package_manifest.py        # load/validate manifest
-  sdk.py                     # future orchestrator CLI
+  sdk.py                     # orchestrator CLI
 
 scripts/*.sh, *.ps1
   compatibility wrappers
 
 CMake
   builds and installs native artifacts
-  future: emits sdk/termin-artifacts.json
+  emits sdk/termin-artifacts.json through termin_build.sdk write-artifacts
 ```
 
 ## Phases
@@ -116,9 +126,12 @@ Verification:
 
 Goal: stop maintaining independent package order lists.
 
-Status 2026-06-07: started. `scripts/termin-python-packages.sh` and
+Status 2026-06-07: done. `scripts/termin-python-packages.sh` and
 `scripts/termin-python-packages.ps1` now read `build-system/packages.json`,
 while keeping the old exported variable/function names for existing callers.
+`install-pip-packages.sh`, `install-pip-packages.ps1`, and
+`build-sdk-wheels.sh` delegate to the Python orchestrator, which reads the
+same manifest directly.
 
 Tasks:
 
@@ -139,11 +152,13 @@ Verification:
 
 Goal: move preflight checks into one cross-platform implementation.
 
-Status 2026-06-07: started. Added `termin_build.sdk doctor` profiles for
-`sdk-cpp`, `sdk-bindings`, and `cpp-tests`. Linux `build-sdk-cpp.sh`,
+Status 2026-06-07: done. Added `termin_build.sdk doctor` profiles for
+`sdk`, `sdk-cpp`, `sdk-bindings`, and `cpp-tests`. The full `sdk` profile
+checks git, cmake, nanobind, pip, POSIX copy backend, required submodules,
+SDK prefix writability, and pip-cache warnings. Linux `build-sdk-cpp.sh`,
 `build-sdk-bindings.sh`, and `run-tests-cpp.sh` call the Python doctor.
-Compatibility `ensure-thirdparty-submodules` wrappers delegate to the same
-Python backend.
+PowerShell bindings stage also calls the Python doctor. Compatibility
+`ensure-thirdparty-submodules` wrappers delegate to the same Python backend.
 
 Tasks:
 
@@ -155,18 +170,22 @@ Tasks:
 
 Verification:
 
-- `python3 -m termin_build.sdk doctor --profile sdk`
-- `build-sdk-bindings.sh` and `.ps1` call doctor before CMake configure.
+- done: `python3 -m termin_build.sdk doctor --profile sdk --sdk-prefix sdk`
+- done: `python3 -m termin_build.sdk doctor --profile sdk-cpp --sdk-prefix sdk`
+- done: `python3 -m termin_build.sdk doctor --profile sdk-bindings --sdk-prefix sdk`
+- done: `python3 -m termin_build.sdk doctor --profile cpp-tests --vulkan OFF --sdk-prefix sdk`
+- done: `build-sdk-bindings.sh` and `.ps1` call doctor before CMake configure.
 
 ### Phase 3: artifact manifest
 
 Goal: replace native artifact path guessing with a producer/consumer contract.
 
-Status 2026-06-07: started. Added `termin_build.sdk write-artifacts`, wired it
-after `build-sdk-bindings.sh` CMake install, and taught
+Status 2026-06-07: done. Added `termin_build.sdk write-artifacts`, wired it
+after Linux and PowerShell bindings CMake install, and taught
 `TerminCMakeBuildExt` to prefer `sdk/termin-artifacts.json` when locating a
-native extension. Legacy directory search remains as fallback for stale or
-portable SDK layouts.
+native extension. Artifact entries record build path, install path, runtime
+library dependencies and feature gates. Legacy directory search remains as
+fallback for stale or portable SDK layouts.
 
 Tasks:
 
@@ -179,13 +198,27 @@ Tasks:
 
 Verification:
 
-- `termin-navmesh` wheel fails early if `_navmesh_native` target is missing.
-- Wheel build can run from SDK artifact manifest without scanning unrelated
+- done: `termin-navmesh` wheel fails early if `_navmesh_native` target is missing.
+- done: `termin-artifacts.json` records `install_path` and `runtime_dependencies`
+  for `termin.navmesh._navmesh_native`.
+- done: wheel build can run from SDK artifact manifest without scanning unrelated
   directories.
 
 ### Phase 4: Python SDK orchestrator
 
 Goal: make `build-sdk.sh` and `build-sdk.ps1` wrappers.
+
+Status 2026-06-07: done for the shared orchestration layer. Added
+`termin_build.sdk build`, `install-python`, `install-packages`, `wheels`, and
+`verify-sdk`.
+`build-sdk.sh` is a thin wrapper. `build-sdk.ps1` is a thin wrapper and keeps
+the historical Windows default of skipping wheelhouse unless `--wheels` is
+explicitly requested. The orchestrator selects Bash stage scripts on POSIX and
+PowerShell stage scripts on Windows. `build-sdk-wheels.sh` now delegates to
+the Python `wheels` command; the wheelhouse loop itself is cross-platform
+Python code. `install-pip-packages.sh` and `.ps1` now delegate to
+`install-packages`; host install remains sequential, while `--target` install
+remains one pip invocation to preserve namespace package merge behavior.
 
 Tasks:
 
@@ -202,13 +235,35 @@ Tasks:
 
 Verification:
 
-- `./build-sdk.sh --no-wheels`
-- `./build-sdk.ps1 -NoWheels` or equivalent final spelling
-- CI matrix for Linux and Windows.
+- done: `./build-sdk.sh --wheels --no-parallel`
+- done: `./build-sdk.sh --no-wheels --no-parallel`
+- done: `python3 -m termin_build.sdk --repo-root . build --no-wheels --no-parallel --dry-run`
+- done: `python3 -m termin_build.sdk --repo-root . install-python`
+- done: `./install-pip-packages.sh --force --target /tmp/termin-sdk-install-python-native`
+- done: `python3 -m termin_build.sdk --repo-root . wheels --wheel-dir /tmp/termin-sdk-wheels-orchestrator`
+- done: `./build-sdk-wheels.sh --wheel-dir /tmp/termin-sdk-wheels-python-native`
+- done: `python3 -m termin_build.sdk --repo-root . verify-sdk`
+- done: `PYTHONPATH=termin-build-tools python3 -m pytest termin-build-tools/tests/ -v` (13 tests, including negative `doctor` coverage for missing pip/copy backend, missing required native artifact, Windows `.pyd` artifact layout, and SDK duplicate-library rules)
+- done: `./run-tests-python.sh --no-venv termin-build-tools/tests/`
+- done: `PYTHONPATH=termin-build-tools python3 -m termin_build.package_manifest --repo-root . --check`
+- done: `python3 -m py_compile termin-build-tools/termin_build/sdk.py termin-build-tools/termin_build/setup_helpers.py termin-build-tools/termin_build/package_manifest.py termin-build-tools/termin_build/cmake_ext.py termin-build-tools/tests/test_sdk_orchestrator.py`
+- done: `.github/workflows/ci.yml` parses as YAML.
+- done: `git diff --check`
+- added CI gate: `smoke-build-system-windows` runs manifest validation,
+  build-tools tests, and `.\build-sdk.ps1 --no-wheels --no-parallel --dry-run`
+  on `windows-latest`; workflow can run on PRs and via `workflow_dispatch`.
+- pending external result: next GitHub Actions run must confirm the Windows
+  smoke job.
 
 ### Phase 5: setup.py simplification
 
 Goal: remove duplicated native extension declarations.
+
+Status 2026-06-07: done for packages currently listed in
+`build-system/packages.json`. Added `termin_build.setup_helpers` and migrated
+all setup.py files with native bindings to `native_extensions_for_source(_DIR)`.
+`termin-display` optional `_platform_native` is now controlled by manifest
+metadata plus artifact presence instead of local setup.py search code.
 
 Tasks:
 
@@ -220,8 +275,10 @@ Tasks:
 
 Verification:
 
-- All wheels still build.
-- Validator rejects a manifest/setup mismatch.
+- done: all wheels still build through `termin_build.sdk wheels`.
+- done: bundled SDK install still works through `termin_build.sdk install-python`.
+- done: validator accepts helper-backed setup.py files and still validates
+  package order/native extension coverage.
 
 ## Feature model
 
@@ -238,10 +295,10 @@ the package explicitly declares them optional.
 
 ## Current risks
 
-- The manifest can drift if it is not wired into scripts soon.
-- `setup.py` files contain dynamic logic such as optional `_platform_native`;
-  the validator must understand optional entries before it becomes strict.
 - Windows layout differs intentionally (`sdk/python/Lib` vs Linux
   `sdk/lib/pythonX.Y`), so path normalization must remain explicit.
 - C# and Android SDK layouts have legitimate duplicate native libraries; SDK
   duplicate checks must keep these exceptions narrow.
+- Windows runtime verification still needs to run on an actual Windows host or
+  CI worker. Current Linux environment has no `pwsh`; CI now contains a
+  dedicated `windows-latest` smoke job for this.

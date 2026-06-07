@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-from setuptools import Extension, setup
+from setuptools import setup
 from termin_build.cmake_ext import TerminCMakeBuild, TerminCMakeBuildExt
+from termin_build.setup_helpers import native_extensions_for_source
 
 
 import os
@@ -9,7 +10,6 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    module_names = ["_termin_modules_native"]
     upstream_packages = {"tcbase": "libtermin_base", "termin_nanobind": "libnanobind"}
     source_dir = _DIR
 
@@ -25,7 +25,7 @@ setup(
     packages=["termin_modules"],
     package_dir={"termin_modules": "python/termin_modules"},
     install_requires=["tcbase", "termin-nanobind"],
-    ext_modules=[Extension("termin_modules._termin_modules_native", sources=[])],
+    ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,
 )

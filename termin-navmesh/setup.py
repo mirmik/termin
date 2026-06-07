@@ -13,15 +13,15 @@
 # They depend on higher-level termin modules (visualization.core, etc.) and
 # may not be usable in environments without main termin installed.
 
-from setuptools import setup, Extension, find_packages
+from setuptools import setup, find_packages
 from termin_build.cmake_ext import TerminCMakeBuild, TerminCMakeBuildExt
+from termin_build.setup_helpers import native_extensions_for_source
 
 import os
 _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    module_names = ["_navmesh_native"]
     source_dir = _DIR
 
 
@@ -36,9 +36,7 @@ setup(
     packages=["termin.navmesh"],
     package_dir={"termin.navmesh": "python/termin/navmesh"},
     install_requires=["termin-nanobind"],
-    ext_modules=[
-        Extension("termin.navmesh._navmesh_native", sources=[]),
-    ],
+    ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,
 )

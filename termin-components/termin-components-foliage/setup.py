@@ -2,15 +2,15 @@
 
 import os
 
-from setuptools import Extension, setup
+from setuptools import setup
 from termin_build.cmake_ext import TerminCMakeBuild, TerminCMakeBuildExt
+from termin_build.setup_helpers import native_extensions_for_source
 
 
 _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    module_names = ["_foliage_native"]
     source_dir = _DIR
 
 
@@ -25,9 +25,7 @@ setup(
     packages=["termin.foliage"],
     package_dir={"termin.foliage": "python/termin/foliage"},
     install_requires=["termin-assets", "termin-nanobind", "termin-scene", "tmesh", "tgfx"],
-    ext_modules=[
-        Extension("termin.foliage._foliage_native", sources=[]),
-    ],
+    ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     entry_points={
         "termin.asset_import_plugins": [

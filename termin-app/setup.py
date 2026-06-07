@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-from setuptools import setup, find_namespace_packages, Extension
+from setuptools import setup, find_namespace_packages
 from termin_build.cmake_ext import TerminCMakeBuild, TerminCMakeBuildExt
+from termin_build.setup_helpers import native_extensions_for_source
 import os
 
 _DIR = os.path.dirname(os.path.realpath(__file__))
@@ -16,7 +17,6 @@ class BuildExt(TerminCMakeBuildExt):
     # copies their pre-built .so files from TERMIN_BINDINGS_DIR/build/.../bin
     # into the wheel. The actual CMake build is driven by termin/build.sh and
     # build-sdk-bindings.sh, not by pip.
-    module_names = ["_native", "_voxels_native"]
     source_dir = _DIR
 
 
@@ -107,10 +107,7 @@ if __name__ == "__main__":
             "Pillow>=9.0",
             "scipy",
         ],
-        ext_modules=[
-            Extension("termin._native", sources=[]),
-            Extension("termin.voxels._voxels_native", sources=[]),
-        ],
+        ext_modules=native_extensions_for_source(_DIR),
         cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
         zip_safe=False,
     )
