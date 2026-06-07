@@ -271,9 +271,10 @@ def test_procedural_document_evaluates_wall_operation_from_open_path():
         purpose="wall",
     )
     assert path is not None
+    sketch_id = document.find_sketch_id_for_path(path.id)
 
-    operation = document.add_wall_operation_for_path(
-        path.id,
+    operation = document.add_wall_operation_for_sketch(
+        sketch_id,
         height=3.0,
         thickness=0.5,
         alignment="center",
@@ -292,6 +293,47 @@ def test_procedural_document_evaluates_wall_operation_from_open_path():
     assert len(roots) == 1
     assert roots[0].text.startswith("[Wall]")
     assert roots[0].children[0].text.startswith("[Sketch]")
+
+
+def test_procedural_document_evaluates_wall_operation_from_contour_without_holes():
+    document = ProceduralMeshDocument()
+    contour = document.add_contour_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (0.0, 2.0, 0.0),
+        ]
+    )
+    assert contour is not None
+    sketch_id = document.find_sketch_id_for_contour(contour.id)
+
+    operation = document.add_wall_operation_for_sketch(sketch_id, height=3.0, thickness=0.5)
+
+    assert operation is not None
+    assert operation.inputs == [contour.id]
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert evaluated[0].contour_id == contour.id
+    assert isclose(evaluated[0].solid.volume, 12.0, abs_tol=1.0e-6)
+
+
+def test_procedural_document_rejects_extrude_for_sketch_with_open_paths():
+    document = ProceduralMeshDocument()
+    path = document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+    sketch_id = document.find_sketch_id_for_path(path.id)
+
+    operation = document.add_extrude_operation_for_sketch(sketch_id, height=1.0)
+
+    assert operation is None
 
 
 def test_procedural_document_evaluates_primitive_operations_and_booleans():
@@ -350,7 +392,7 @@ def test_operation_specs_drive_primitive_defaults_and_button_order():
         "rotation",
     ]
     assert subtract_spec.input_policy == "base_then_cutters"
-    assert wall_spec.input_policy == "sketch_path"
+    assert wall_spec.input_policy == "sketch_wall_sources"
 
     document = ProceduralMeshDocument()
     first = document.add_primitive_operation("box")
@@ -1062,7 +1104,7 @@ def test_cad_app_drags_selected_path_point_in_viewport_without_drawing():
     sketch_id = app.document.find_sketch_id_for_path(path.id)
     sketch = app.document.find_sketch(sketch_id)
     assert sketch is not None
-    operation = app.document.add_wall_operation_for_path(path.id, height=2.0, thickness=0.5)
+    operation = app.document.add_wall_operation_for_sketch(sketch_id, height=2.0, thickness=0.5)
     assert operation is not None
 
     app.selected_node_data = ("path", path.id)
@@ -1172,8 +1214,9 @@ def test_cad_app_wall_action_and_params_update_operation():
         purpose="wall",
     )
     assert path is not None
+    sketch_id = app.document.find_sketch_id_for_path(path.id)
 
-    app.selected_node_data = ("path", path.id)
+    app.selected_node_data = ("sketch", sketch_id)
     app.wall_selected()
 
     assert app.selected_node_data is not None
@@ -1181,7 +1224,8 @@ def test_cad_app_wall_action_and_params_update_operation():
     operation = app.document.find_operation(app.selected_node_data[1])
     assert operation is not None
     assert operation.kind == OPERATION_KIND_WALL
-    assert operation.params["source_path_id"] == path.id
+    assert operation.params["source_sketch_id"] == sketch_id
+    assert operation.inputs == [path.id]
 
     app._build_operation_params_panel()
     app._refresh_operation_params_panel()

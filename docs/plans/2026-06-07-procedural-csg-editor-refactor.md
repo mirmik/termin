@@ -15,6 +15,7 @@
 - 2026-06-07: В sketch model добавлены открытые `SketchPathDocument` для незамкнутых ломаных. Это подготовительный слой для операций вроде стен: path уже сохраняется, отображается в tree/viewport и создаётся через draft, а генерация solid-стены остаётся следующим отдельным этапом.
 - 2026-06-07: Добавлена операция `wall` над `SketchPathDocument`: создание из выбранного path, параметры `height`/`thickness`/`alignment`, tree/inspector отображение и evaluation в solid для boolean operations.
 - 2026-06-07: Viewport dragging точек обобщён с contour на sketch geometry: выбранные `Path` теперь редактируются на экране так же, как `Contour`, без перехвата кликов режимом Draw Sketch.
+- 2026-06-07: `Wall` перенесён на уровень `Sketch`: операция строит стены по open paths и outer contours без holes, а `Extrude Sketch` теперь отказывает для sketch с незамкнутыми paths.
 
 ## Контекст
 

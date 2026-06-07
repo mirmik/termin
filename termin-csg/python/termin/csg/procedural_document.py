@@ -470,11 +470,6 @@ class ProceduralMeshDocument:
             source_id = operation.params.get("source_sketch_id", "")
             if operation.enabled and source_id:
                 ids.add(str(source_id))
-            source_path_id = operation.params.get("source_path_id", "")
-            if operation.enabled and source_path_id:
-                sketch_id = self.find_sketch_id_for_path(str(source_path_id))
-                if sketch_id:
-                    ids.add(sketch_id)
         return ids
 
     def used_input_operation_ids(self) -> set[str]:
@@ -518,6 +513,12 @@ class ProceduralMeshDocument:
         if sketch is None:
             log.error(f"[ProceduralMeshDocument] cannot create extrude operation: sketch not found '{sketch_id}'")
             return None
+        if sketch.paths:
+            log.error(
+                "[ProceduralMeshDocument] cannot create extrude operation: "
+                f"sketch has open paths sketch='{sketch_id}' paths={len(sketch.paths)}"
+            )
+            return None
         contour_ids = [contour.id for contour in sketch.outer_contours()]
         if not contour_ids:
             log.error(f"[ProceduralMeshDocument] cannot create extrude operation: sketch has no outer contours '{sketch_id}'")
@@ -533,31 +534,36 @@ class ProceduralMeshDocument:
         operation.params["source_sketch_id"] = sketch.id
         return operation
 
-    def add_wall_operation_for_path(
+    def add_wall_operation_for_sketch(
         self,
-        path_id: str,
+        sketch_id: str,
         height: float = 3.0,
         thickness: float = 0.2,
         alignment: str = "center",
     ) -> OperationDocument | None:
-        path_ref = self.find_path_ref(path_id)
-        if path_ref is None:
-            log.error(f"[ProceduralMeshDocument] cannot create wall operation: path not found '{path_id}'")
+        sketch = self.find_sketch(sketch_id)
+        if sketch is None:
+            log.error(f"[ProceduralMeshDocument] cannot create wall operation: sketch not found '{sketch_id}'")
             return None
-        sketch, path = path_ref
-        if len(path.points) < 2:
+        inputs: list[str] = []
+        for path in sketch.paths:
+            if len(path.points) >= 2:
+                inputs.append(path.id)
+        for contour in sketch.outer_contours():
+            if not sketch.hole_contours_for_outer(contour.id):
+                inputs.append(contour.id)
+        if not inputs:
             log.error(
                 "[ProceduralMeshDocument] cannot create wall operation: "
-                f"path needs at least 2 points path='{path.id}'"
+                f"sketch has no open paths or outer contours without holes sketch='{sketch_id}'"
             )
             return None
         operation = OperationDocument(
             name=f"Wall {len(self.operations) + 1}",
             kind=OPERATION_KIND_WALL,
-            inputs=[path.id],
+            inputs=inputs,
             params={
                 **wall_default_params(height=height, thickness=thickness, alignment=alignment),
-                "source_path_id": path.id,
                 "source_sketch_id": sketch.id,
             },
         )
