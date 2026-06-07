@@ -4,7 +4,10 @@
 
 Статус: начато. Phase 0 выполнена: добавлен первый машинно-читаемый manifest
 Python-пакетов и валидатор. Phase 1 начата: совместимые Bash/PowerShell
-package-list shim'ы читают порядок пакетов из manifest.
+package-list shim'ы читают порядок пакетов из manifest. Phase 2 начата:
+preflight submodule/tool checks переезжают в `termin_build.sdk doctor`.
+Phase 3 начата: SDK bindings stage генерирует `termin-artifacts.json`, а
+`cmake_ext.py` предпочитает artifact manifest перед legacy search.
 
 ## Цель
 
@@ -136,6 +139,12 @@ Verification:
 
 Goal: move preflight checks into one cross-platform implementation.
 
+Status 2026-06-07: started. Added `termin_build.sdk doctor` profiles for
+`sdk-cpp`, `sdk-bindings`, and `cpp-tests`. Linux `build-sdk-cpp.sh`,
+`build-sdk-bindings.sh`, and `run-tests-cpp.sh` call the Python doctor.
+Compatibility `ensure-thirdparty-submodules` wrappers delegate to the same
+Python backend.
+
 Tasks:
 
 - Add `python -m termin_build.sdk doctor`.
@@ -152,6 +161,12 @@ Verification:
 ### Phase 3: artifact manifest
 
 Goal: replace native artifact path guessing with a producer/consumer contract.
+
+Status 2026-06-07: started. Added `termin_build.sdk write-artifacts`, wired it
+after `build-sdk-bindings.sh` CMake install, and taught
+`TerminCMakeBuildExt` to prefer `sdk/termin-artifacts.json` when locating a
+native extension. Legacy directory search remains as fallback for stale or
+portable SDK layouts.
 
 Tasks:
 
