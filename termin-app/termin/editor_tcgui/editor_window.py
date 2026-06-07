@@ -8,6 +8,8 @@ import shutil
 from pathlib import Path
 from typing import Callable, Optional
 
+import numpy as np
+
 from tcbase import log
 from tcbase._geom_native import Vec3
 
@@ -193,6 +195,7 @@ class EditorWindowTcgui:
             bool,
         ] | None = None
         self._viewport_click_interceptors: list[Callable] = []
+        self._viewport_pointer_handlers: list[Callable[[str, float, float, float, float, int, int, int], bool]] = []
         self._viewport_key_handlers: list[Callable[[object], bool]] = []
         self._viewport_overlay_drawers: list[Callable[[], None]] = []
         self._active_viewport_tool_count: int = 0
@@ -575,6 +578,7 @@ class EditorWindowTcgui:
             self._interaction_system.selection.on_hover_changed = self._on_hover_changed
             self._interaction_system.on_request_update = self._request_viewport_update
             self._interaction_system.on_entity_click = self._on_editor_viewport_click
+            self._interaction_system.on_viewport_pointer_event = self._dispatch_viewport_pointer
             self._interaction_system.on_key = self._on_editor_key
             # Transform gizmo drag-end -> push an undo command.
             self._interaction_system.on_transform_end = self._on_transform_end
@@ -887,6 +891,19 @@ class EditorWindowTcgui:
                 kept.append(existing)
         self._viewport_click_interceptors = kept
 
+    def add_viewport_pointer_handler(self, callback: Callable[[str, float, float, float, float, int, int, int], bool]) -> None:
+        for existing in self._viewport_pointer_handlers:
+            if existing == callback:
+                return
+        self._viewport_pointer_handlers.append(callback)
+
+    def remove_viewport_pointer_handler(self, callback: Callable[[str, float, float, float, float, int, int, int], bool]) -> None:
+        kept = []
+        for existing in self._viewport_pointer_handlers:
+            if existing != callback:
+                kept.append(existing)
+        self._viewport_pointer_handlers = kept
+
     def add_viewport_key_handler(self, callback: Callable[[object], bool]) -> None:
         for existing in self._viewport_key_handlers:
             if existing == callback:
@@ -1136,6 +1153,44 @@ class EditorWindowTcgui:
             log.error(f"[EditorWindowTcgui] viewport ray failed: {e}")
             return None
 
+    def project_world_point_to_viewport(
+        self,
+        point: tuple[float, float, float],
+    ) -> tuple[float, float] | None:
+        if self.camera is None or self.camera.entity is None:
+            log.error("[EditorWindowTcgui] viewport projection failed: editor camera is not available")
+            return None
+        if self._viewport_widget is None:
+            log.error("[EditorWindowTcgui] viewport projection failed: viewport widget is not available")
+            return None
+        width = float(max(1.0, self._viewport_widget.width))
+        height = float(max(1.0, self._viewport_widget.height))
+        previous_aspect = float(self.camera.aspect)
+        try:
+            self.camera.set_aspect(width / height)
+            view = self.camera.get_view_matrix().to_numpy()
+            projection = self.camera.get_projection_matrix().to_numpy()
+            clip = projection @ view @ np.array(
+                (float(point[0]), float(point[1]), float(point[2]), 1.0),
+                dtype=np.float64,
+            )
+        except Exception as e:
+            log.error(f"[EditorWindowTcgui] viewport projection failed: {e}")
+            return None
+        finally:
+            try:
+                self.camera.set_aspect(previous_aspect)
+            except Exception as e:
+                log.error(f"[EditorWindowTcgui] viewport projection aspect restore failed: {e}")
+        w = float(clip[3])
+        if abs(w) <= 1.0e-8:
+            return None
+        ndc = clip[:3] / w
+        return (
+            float((ndc[0] + 1.0) * 0.5 * width),
+            float((ndc[1] + 1.0) * 0.5 * height),
+        )
+
     def world_point_on_plane(
         self,
         x: float,
@@ -1340,6 +1395,28 @@ class EditorWindowTcgui:
                     return True
             except Exception as e:
                 log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
+                return False
+        return False
+
+    def _dispatch_viewport_pointer(
+        self,
+        phase: str,
+        x: float,
+        y: float,
+        dx: float,
+        dy: float,
+        button: int,
+        action: int,
+        mods: int,
+    ) -> bool:
+        handlers = list(self._viewport_pointer_handlers)
+        handlers.reverse()
+        for callback in handlers:
+            try:
+                if bool(callback(phase, x, y, dx, dy, button, action, mods)):
+                    return True
+            except Exception as e:
+                log.error(f"[EditorWindowTcgui] viewport pointer handler failed: {e}")
                 return False
         return False
 

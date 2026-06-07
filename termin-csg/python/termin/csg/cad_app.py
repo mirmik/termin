@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -25,8 +24,12 @@ from termin.csg.csg_editor_panel import CsgEditorPanel
 from termin.csg.cad_state import CAD_STATE_FILTER, CadState, load_cad_state, save_cad_state
 from termin.csg.document_edit import SketchDraft
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController
-from termin.csg.document_raycast import ray_plane_intersection
 from termin.csg.document_tree_model import build_document_tree
+from termin.csg.sketch_point_interaction import (
+    SketchPointDrag,
+    drag_point_to_ray,
+    pick_selected_sketch_point,
+)
 from termin.csg.cad_tree_adapter import (
     boolean_operation_id_for_tree_node,
     boolean_parent_id_for_tree_node,
@@ -40,16 +43,6 @@ from termin.csg.procedural_document import (
     ProceduralPlane,
 )
 from termin.csg.viewer_camera import OrbitCamera
-
-
-_CONTOUR_POINT_HIT_RADIUS_PX = 14.0
-
-
-@dataclass
-class SketchPointDrag:
-    kind: str
-    item_id: str
-    point_index: int
 
 
 class CadApp:
@@ -547,48 +540,22 @@ class CadApp:
         width: int,
         height: int,
     ) -> SketchPointDrag | None:
-        selected = self._selected_sketch_point_source()
-        if selected is None:
-            return None
-        kind, item_id, points = selected
-        best_index = -1
-        best_distance_sq = _CONTOUR_POINT_HIT_RADIUS_PX * _CONTOUR_POINT_HIT_RADIUS_PX
-        for index, point in enumerate(points):
-            screen_point = self._project_world_to_screen(point, width, height)
-            if screen_point is None:
-                continue
-            dx = screen_point[0] - float(x)
-            dy = screen_point[1] - float(y)
-            distance_sq = dx * dx + dy * dy
-            if distance_sq <= best_distance_sq:
-                best_distance_sq = distance_sq
-                best_index = index
-        if best_index < 0:
-            return None
-        return SketchPointDrag(kind, item_id, best_index)
+        return pick_selected_sketch_point(
+            self.document,
+            self.selected_node_data,
+            lambda point: self._project_world_to_screen(point, width, height),
+            x,
+            y,
+        )
 
     def _drag_sketch_point_to_screen(self, x: float, y: float, width: int, height: int) -> bool:
         drag = self._sketch_point_drag
         if drag is None:
             return False
-        point_ref = self._sketch_point_ref_by_drag(drag)
-        if point_ref is None:
-            log.error(
-                "[CsgCad] cannot drag sketch point: "
-                f"item not found kind='{drag.kind}' id='{drag.item_id}'"
-            )
-            self._sketch_point_drag = None
-            return True
-        sketch = point_ref[0]
         ray_origin, ray_direction = self.camera.screen_ray(x, y, width, height)
-        point = ray_plane_intersection(ray_origin, ray_direction, sketch.plane)
-        if point is None:
-            log.error(
-                "[CsgCad] cannot drag sketch point: "
-                f"ray does not hit sketch plane kind='{drag.kind}' id='{drag.item_id}' index={drag.point_index}"
-            )
+        local_point = drag_point_to_ray(self.document, drag, ray_origin, ray_direction)
+        if local_point is None:
             return True
-        local_point = sketch.plane.project(point)
         if drag.kind == "contour":
             result = self.controller.set_contour_point(drag.item_id, drag.point_index, local_point)
         elif drag.kind == "path":
@@ -602,31 +569,6 @@ class CadApp:
             self.editor_panel.sync_contour_point_inputs(drag.point_index, local_point)
         self.request_preview_rebuild()
         return True
-
-    def _selected_sketch_point_source(self):
-        if self.selected_node_data is None:
-            return None
-        kind, item_id = self.selected_node_data
-        if kind == "contour":
-            contour_ref = self.document.find_contour_ref(item_id)
-            if contour_ref is None:
-                return None
-            sketch, contour = contour_ref
-            return ("contour", contour.id, sketch.contour_points(contour))
-        if kind == "path":
-            path_ref = self.document.find_path_ref(item_id)
-            if path_ref is None:
-                return None
-            sketch, path = path_ref
-            return ("path", path.id, sketch.path_points(path))
-        return None
-
-    def _sketch_point_ref_by_drag(self, drag: SketchPointDrag):
-        if drag.kind == "contour":
-            return self.document.find_contour_ref(drag.item_id)
-        if drag.kind == "path":
-            return self.document.find_path_ref(drag.item_id)
-        return None
 
     def _project_world_to_screen(
         self,

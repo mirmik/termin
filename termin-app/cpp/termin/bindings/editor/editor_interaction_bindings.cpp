@@ -148,6 +148,12 @@ void bind_editor_interaction(nb::module_& m) {
             [](EditorInteractionSystem& s,
                std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double, bool, double, double, double, double, double, double, uint32_t, uint32_t, uint32_t, uint32_t)> cb) {
                 s.on_entity_click = cb;
+            })
+        .def_prop_rw("on_viewport_pointer_event",
+            [](EditorInteractionSystem& s) { return s.on_viewport_pointer_event; },
+            [](EditorInteractionSystem& s,
+               std::function<bool(const std::string&, float, float, float, float, int, int, int)> cb) {
+                s.on_viewport_pointer_event = cb;
             });
 }
 

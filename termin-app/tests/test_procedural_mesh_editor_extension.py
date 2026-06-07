@@ -1,4 +1,9 @@
+from math import isclose
+
+from tcbase._geom_native import Vec3
+
 from termin.csg.procedural_document import ProceduralMeshDocument
+from termin.csg.procedural_document import ProceduralPlane
 from termin.editor_tcgui.procedural_mesh_editor_extension import ProceduralMeshEditorExtension
 
 
@@ -29,13 +34,21 @@ class _Editor:
     def __init__(self):
         self.viewport_updates = 0
         self.click_interceptors = []
+        self.pointer_handlers = []
         self.overlay_drawers = []
+        self.viewport_tool_count = 0
 
     def add_viewport_click_interceptor(self, callback):
         self.click_interceptors.append(callback)
 
     def remove_viewport_click_interceptor(self, callback):
         self.click_interceptors.remove(callback)
+
+    def add_viewport_pointer_handler(self, callback):
+        self.pointer_handlers.append(callback)
+
+    def remove_viewport_pointer_handler(self, callback):
+        self.pointer_handlers.remove(callback)
 
     def add_viewport_overlay_drawer(self, callback):
         self.overlay_drawers.append(callback)
@@ -45,6 +58,50 @@ class _Editor:
 
     def request_viewport_update(self):
         self.viewport_updates += 1
+
+    def begin_viewport_tool(self):
+        self.viewport_tool_count += 1
+
+    def end_viewport_tool(self):
+        self.viewport_tool_count -= 1
+
+    def world_ray_from_viewport_point(self, x, y):
+        return (
+            ((float(x) - 100.0) / 100.0, (float(y) - 100.0) / 100.0, 1.0),
+            (0.0, 0.0, -1.0),
+        )
+
+    def project_world_point_to_viewport(self, point):
+        return (
+            100.0 + float(point[0]) * 100.0,
+            100.0 + float(point[1]) * 100.0,
+        )
+
+
+class _Pose:
+    def point_to_global(self, point):
+        return Vec3(point.x, point.y, point.z)
+
+    def point_to_local(self, point):
+        return Vec3(point.x, point.y, point.z)
+
+    def vector_to_local(self, vector):
+        return Vec3(vector.x, vector.y, vector.z)
+
+
+class _Transform:
+    def global_pose(self):
+        return _Pose()
+
+
+class _Entity:
+    name = "ProceduralMesh"
+
+    def __init__(self):
+        self.transform = _Transform()
+
+    def valid(self):
+        return True
 
 
 def test_procedural_mesh_editor_extension_uses_shared_controller_for_document_commands():
@@ -126,3 +183,36 @@ def test_procedural_mesh_editor_extension_right_panel_edits_shared_primitive_par
     assert operation.params["center"] == [0.0, 0.0, 1.25]
     assert component.dirty_count == 2
     assert component.regenerate_count == 2
+
+
+def test_procedural_mesh_editor_extension_drags_selected_contour_point_in_viewport():
+    component = _Component()
+    contour = component.document.add_contour_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+        ],
+        ProceduralPlane(),
+    )
+    assert contour is not None
+
+    editor = _Editor()
+    extension = ProceduralMeshEditorExtension()
+    extension.attach(editor, _Entity(), _ComponentRef(component))
+    extension.build_panel()
+    extension.build_left_panel()
+    extension._apply_controller_result(extension._controller.select_node(("contour", contour.id)))
+
+    assert editor.pointer_handlers == [extension._on_viewport_pointer]
+    assert extension._on_viewport_pointer("down", 200.0, 200.0, 0.0, 0.0, 0, 1, 0) is True
+    assert editor.viewport_tool_count == 1
+    assert extension._on_viewport_pointer("up", 250.0, 225.0, 0.0, 0.0, 0, 0, 0) is True
+
+    assert editor.viewport_tool_count == 0
+    assert isclose(contour.points[2][0], 1.5, abs_tol=1.0e-6)
+    assert isclose(contour.points[2][1], 1.25, abs_tol=1.0e-6)
+    assert isclose(extension._editor_panel.contour_point_inputs[(2, "x")].value, 1.5, abs_tol=1.0e-6)
+    assert isclose(extension._editor_panel.contour_point_inputs[(2, "y")].value, 1.25, abs_tol=1.0e-6)
+    assert component.dirty_count == 1
+    assert component.regenerate_count == 1
