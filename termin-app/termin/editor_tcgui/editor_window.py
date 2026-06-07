@@ -145,6 +145,7 @@ class EditorWindowTcgui:
         self._editor_state_io: EditorStateIO | None = None
         self._viewport_list = None
         self._left_tabs: TabView | None = None
+        self._component_left_tab_index: int = -1
         self._right_scroll: ScrollArea | None = None
         self._bottom_tabs: TabView | None = None
         self._menu_bar_widget: MenuBar | None = None
@@ -960,6 +961,7 @@ class EditorWindowTcgui:
         try:
             extension.attach(self, entity, component_ref)
             panel = extension.build_panel()
+            left_panel = extension.build_left_panel()
         except Exception as e:
             log.error(
                 "[EditorWindowTcgui] component editor extension attach failed "
@@ -975,12 +977,14 @@ class EditorWindowTcgui:
             return
 
         self._active_component_editor_extension = extension
+        self._set_component_left_panel(self._component_extension_left_tab_title(type_name), left_panel)
         if self._inspector_controller is not None:
             self._inspector_controller.set_component_extension_panel(panel)
 
     def _clear_component_editor_extension(self) -> None:
         extension = self._active_component_editor_extension
         self._active_component_editor_extension = None
+        self._clear_component_left_panel()
         if self._inspector_controller is not None:
             self._inspector_controller.clear_component_extension_panel()
         if extension is None:
@@ -989,6 +993,40 @@ class EditorWindowTcgui:
             extension.detach()
         except Exception as e:
             log.error(f"[EditorWindowTcgui] component editor extension detach failed: {e}")
+
+    def _set_component_left_panel(self, title: str, panel) -> None:
+        self._clear_component_left_panel()
+        if panel is None:
+            return
+        left_tabs = self._left_tabs
+        if left_tabs is None:
+            log.error("[EditorWindowTcgui] cannot attach component left panel before left tabs exist")
+            return
+        left_tabs.add_tab(title, panel)
+        self._component_left_tab_index = len(left_tabs.pages) - 1
+        left_tabs.selected_index = self._component_left_tab_index
+        if left_tabs._ui is not None:
+            left_tabs._ui.request_layout()
+
+    def _clear_component_left_panel(self) -> None:
+        left_tabs = self._left_tabs
+        if left_tabs is None:
+            self._component_left_tab_index = -1
+            return
+        if 0 <= self._component_left_tab_index < len(left_tabs.pages):
+            left_tabs.remove_tab(self._component_left_tab_index)
+            if left_tabs.pages:
+                left_tabs.selected_index = min(left_tabs.selected_index, len(left_tabs.pages) - 1)
+        self._component_left_tab_index = -1
+        if left_tabs._ui is not None:
+            left_tabs._ui.request_layout()
+
+    def _component_extension_left_tab_title(self, type_name: str) -> str:
+        if type_name == "ProceduralMeshComponent":
+            return "CSG"
+        if type_name.endswith("Component"):
+            return type_name[:-9]
+        return type_name
 
     def _toggle_surface_edge_debug_tool(self) -> None:
         if self._surface_edge_debug_tool is None:

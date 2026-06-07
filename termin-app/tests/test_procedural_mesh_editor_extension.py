@@ -52,6 +52,7 @@ def test_procedural_mesh_editor_extension_uses_shared_controller_for_document_co
     editor = _Editor()
     extension = ProceduralMeshEditorExtension()
     extension.attach(editor, None, _ComponentRef(component))
+    extension.build_left_panel()
 
     extension._add_primitive_operation("box")
     first_operation_id = component.document.operations[0].id
@@ -77,3 +78,26 @@ def test_procedural_mesh_editor_extension_uses_shared_controller_for_document_co
     assert component.document.operations == []
     assert component.dirty_count == 4
     assert component.regenerate_count == 4
+
+
+def test_procedural_mesh_editor_extension_builds_left_document_tree_panel():
+    component = _Component()
+    editor = _Editor()
+    extension = ProceduralMeshEditorExtension()
+    extension.attach(editor, None, _ComponentRef(component))
+
+    right_panel = extension.build_panel()
+    left_panel = extension.build_left_panel()
+
+    assert right_panel is not None
+    assert left_panel is not None
+    assert len(extension._document_tree.root_nodes) == 1
+    assert extension._document_tree.root_nodes[0].data == ("info", "empty")
+
+    extension._add_primitive_operation("box")
+
+    operation = component.document.operations[0]
+    assert len(extension._document_tree.root_nodes) == 1
+    root_node = extension._document_tree.root_nodes[0]
+    assert root_node.data == ("operation", operation.id)
+    assert extension._document_tree.selected_node is root_node
