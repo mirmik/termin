@@ -192,15 +192,47 @@ Status:
 
 Start with a small engine shader, not the material pipeline.
 
-Recommended candidate:
+Original recommended candidate:
 
 - fullscreen quad / blit / present shader.
+
+Implemented first candidate:
+
+- runtime default color fallback shader.
+
+Rationale:
+
+- It already flows through runtime package shader JSON and the backend artifact
+  map introduced in Phase 5.
+- It can be enabled explicitly by packaging code/tests without making Linux or
+  Android builds require a host `slangc` by default.
+- The default pipeline engine shaders are still GLSL/Vulkan-only and should be
+  migrated as a separate renderer-facing step.
 
 Acceptance:
 
 - One `.slang` source produces OpenGL GLSL and Vulkan SPIR-V artifacts.
 - OpenGL and Vulkan smoke paths render matching output.
 - Legacy GLSL remains available until enough built-ins are migrated.
+
+Status:
+
+- Added Slang sources for `termin-runtime-default-color` under
+  `termin-app/termin/resources/stdlib/slang/`.
+- Runtime package export has an opt-in `default_shader_language="slang"` mode.
+- Slang default export writes `.slang` source files plus Vulkan SPIR-V and
+  OpenGL GLSL artifact paths through `termin_shaderc`.
+- Android and Quest/OpenXR build wrappers forward the default shader language
+  option, while keeping `glsl` as the default.
+- Tests cover Slang default artifact layout and explicit rejection of an
+  unsupported default shader language.
+- Verified with `slangc` 2026.5.2 from the official GitHub release, installed
+  as an external host tool under `~/soft` and exposed through `TERMIN_SLANGC`.
+- Real `termin_shaderc` smoke checks compile the default shader to Vulkan SPIR-V
+  and OpenGL GLSL, and runtime package export succeeds with
+  `default_shader_language="slang"`.
+- Remaining work: hook one smoke path that actually consumes the generated
+  OpenGL/Vulkan artifacts and validates the matrix convention at render time.
 
 ## Phase 7: Minimal Built-In Migration
 

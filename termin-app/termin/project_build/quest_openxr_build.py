@@ -53,6 +53,7 @@ def build_quest_openxr_project(
     build_script: str | Path | None = None,
     gradle: str | Path | None = None,
     shader_compiler: str | Path | None = None,
+    default_shader_language: str = "glsl",
     abi: str = "arm64-v8a",
     platform: str = "android-26",
     log_callback: Callable[[str], None] | None = None,
@@ -73,6 +74,7 @@ def build_quest_openxr_project(
         entry_scene=entry_scene,
         output_dir=package_dir,
         shader_compiler=shader_compiler,
+        default_shader_language=default_shader_language,
     )
 
     termin_root_path = _resolve_termin_root(termin_root)

@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from termin.project_build import build_android_project, export_runtime_package
 
@@ -129,10 +130,16 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
             "path": "materials/material-uuid.tmat.json",
         },
     ]
-    assert [diagnostic["level"] for diagnostic in manifest["diagnostics"]] == [
-        "warning",
-        "warning",
-    ]
+    assert all(diagnostic["level"] == "warning" for diagnostic in manifest["diagnostics"])
+    diagnostic_messages = [diagnostic["message"] for diagnostic in manifest["diagnostics"]]
+    assert (
+        "Runtime exporter used fallback mesh because registry entry is unavailable"
+        in diagnostic_messages
+    )
+    assert (
+        "Runtime exporter used fallback material because registry entry is unavailable"
+        in diagnostic_messages
+    )
 
 
 def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
@@ -150,6 +157,65 @@ def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
 
     scene_data = json.loads(result.scene_path.read_text(encoding="utf-8"))
     assert scene_data == {"uuid": "root-scene", "entities": []}
+
+
+def test_export_runtime_package_can_use_slang_default_shader(tmp_path: Path) -> None:
+    project = tmp_path / "SlangDefaultGame"
+    project.mkdir()
+    _write_json(project / "Main.scene", {"uuid": "root-scene", "entities": []})
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "package",
+        shader_compiler=_write_target_marking_shader_compiler(tmp_path),
+        default_shader_language="slang",
+    )
+
+    shader_data = json.loads(
+        (result.package_dir / "shaders" / "termin-runtime-default-color.shader.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert shader_data["language"] == "slang"
+    assert shader_data["vertex_source_path"] == (
+        "shaders/vulkan/termin-runtime-default-color.vert.slang"
+    )
+    assert shader_data["fragment_source_path"] == (
+        "shaders/vulkan/termin-runtime-default-color.frag.slang"
+    )
+    assert shader_data["artifacts"] == {
+        "vulkan": {
+            "vertex": "shaders/vulkan/termin-runtime-default-color.vert.spv",
+            "fragment": "shaders/vulkan/termin-runtime-default-color.frag.spv",
+        },
+        "opengl": {
+            "vertex": "shaders/opengl/termin-runtime-default-color.vert.glsl",
+            "fragment": "shaders/opengl/termin-runtime-default-color.frag.glsl",
+        },
+    }
+    assert (
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.vert.spv"
+    ).read_bytes() == b"ARTIFACT-vulkan"
+    assert (
+        result.package_dir / "shaders" / "opengl" / "termin-runtime-default-color.frag.glsl"
+    ).read_bytes() == b"ARTIFACT-opengl"
+    assert result.diagnostics == []
+
+
+def test_export_runtime_package_rejects_unknown_default_shader_language(tmp_path: Path) -> None:
+    project = tmp_path / "BadDefaultLanguageGame"
+    project.mkdir()
+    _write_json(project / "Main.scene", {"uuid": "root-scene", "entities": []})
+
+    with pytest.raises(ValueError, match="Unsupported default shader language"):
+        export_runtime_package(
+            project_root=project,
+            entry_scene="Main.scene",
+            output_dir=project / "dist" / "package",
+            shader_compiler=_write_target_marking_shader_compiler(tmp_path),
+            default_shader_language="hlsl",
+        )
 
 
 def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Path) -> None:
