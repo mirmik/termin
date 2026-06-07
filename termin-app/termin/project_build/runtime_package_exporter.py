@@ -424,6 +424,7 @@ class _ShaderSpec:
     vertex_source: str
     fragment_source: str
     geometry_source: str = ""
+    language: str = "glsl"
     allow_precompiled_default: bool = False
 
 
@@ -559,19 +560,26 @@ def _write_shader(
     shader: _ShaderSpec,
     compiler: Path | None,
 ) -> None:
+    if shader.language not in {"glsl", "slang"}:
+        raise ValueError(f"Shader '{shader.uuid}' has unsupported language: {shader.language}")
+
     shader_dir = package_dir / "shaders"
     vulkan_dir = shader_dir / "vulkan"
+    opengl_dir = shader_dir / "opengl"
     shader_dir.mkdir(parents=True, exist_ok=True)
     vulkan_dir.mkdir(parents=True, exist_ok=True)
+    if shader.language == "slang":
+        opengl_dir.mkdir(parents=True, exist_ok=True)
 
-    vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.glsl"
-    fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.glsl"
+    source_ext = "slang" if shader.language == "slang" else "glsl"
+    vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.{source_ext}"
+    fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.{source_ext}"
     vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
     fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
 
     geometry_source_path = None
     if shader.geometry_source != "":
-        geometry_source_path = vulkan_dir / f"{shader.uuid}.geom.glsl"
+        geometry_source_path = vulkan_dir / f"{shader.uuid}.geom.{source_ext}"
         geometry_source_path.write_text(shader.geometry_source, encoding="utf-8")
 
     if compiler is None and shader.allow_precompiled_default:
@@ -592,6 +600,8 @@ def _write_shader(
             )
         _compile_shader_stage(
             compiler,
+            shader.language,
+            "vulkan",
             "vertex",
             vertex_source_path,
             vulkan_dir / f"{shader.uuid}.vert.spv",
@@ -599,6 +609,8 @@ def _write_shader(
         )
         _compile_shader_stage(
             compiler,
+            shader.language,
+            "vulkan",
             "fragment",
             fragment_source_path,
             vulkan_dir / f"{shader.uuid}.frag.spv",
@@ -607,21 +619,68 @@ def _write_shader(
         if geometry_source_path is not None:
             _compile_shader_stage(
                 compiler,
+                shader.language,
+                "vulkan",
                 "geometry",
                 geometry_source_path,
                 vulkan_dir / f"{shader.uuid}.geom.spv",
                 f"{shader.name or shader.uuid}:geometry",
             )
 
+        if shader.language == "slang":
+            _compile_shader_stage(
+                compiler,
+                shader.language,
+                "opengl",
+                "vertex",
+                vertex_source_path,
+                opengl_dir / f"{shader.uuid}.vert.glsl",
+                f"{shader.name or shader.uuid}:vertex",
+            )
+            _compile_shader_stage(
+                compiler,
+                shader.language,
+                "opengl",
+                "fragment",
+                fragment_source_path,
+                opengl_dir / f"{shader.uuid}.frag.glsl",
+                f"{shader.name or shader.uuid}:fragment",
+            )
+            if geometry_source_path is not None:
+                _compile_shader_stage(
+                    compiler,
+                    shader.language,
+                    "opengl",
+                    "geometry",
+                    geometry_source_path,
+                    opengl_dir / f"{shader.uuid}.geom.glsl",
+                    f"{shader.name or shader.uuid}:geometry",
+                )
+
     shader_spec: dict[str, Any] = {
         "uuid": shader.uuid,
         "name": shader.name or shader.uuid,
-        "vertex_source_path": f"shaders/vulkan/{shader.uuid}.vert.glsl",
-        "fragment_source_path": f"shaders/vulkan/{shader.uuid}.frag.glsl",
+        "language": shader.language,
+        "vertex_source_path": f"shaders/vulkan/{shader.uuid}.vert.{source_ext}",
+        "fragment_source_path": f"shaders/vulkan/{shader.uuid}.frag.{source_ext}",
         "source_path": shader.source_path,
+        "artifacts": {
+            "vulkan": {
+                "vertex": f"shaders/vulkan/{shader.uuid}.vert.spv",
+                "fragment": f"shaders/vulkan/{shader.uuid}.frag.spv",
+            }
+        },
     }
     if geometry_source_path is not None:
-        shader_spec["geometry_source_path"] = f"shaders/vulkan/{shader.uuid}.geom.glsl"
+        shader_spec["geometry_source_path"] = f"shaders/vulkan/{shader.uuid}.geom.{source_ext}"
+        shader_spec["artifacts"]["vulkan"]["geometry"] = f"shaders/vulkan/{shader.uuid}.geom.spv"
+    if shader.language == "slang":
+        shader_spec["artifacts"]["opengl"] = {
+            "vertex": f"shaders/opengl/{shader.uuid}.vert.glsl",
+            "fragment": f"shaders/opengl/{shader.uuid}.frag.glsl",
+        }
+        if geometry_source_path is not None:
+            shader_spec["artifacts"]["opengl"]["geometry"] = f"shaders/opengl/{shader.uuid}.geom.glsl"
 
     shader_spec_path = shader_dir / f"{shader.uuid}.shader.json"
     _write_json(shader_spec_path, shader_spec)
@@ -735,6 +794,8 @@ def _write_engine_shader_artifact(
         vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
         _compile_shader_stage(
             compiler,
+            "glsl",
+            "vulkan",
             "vertex",
             vertex_source_path,
             vulkan_dir / f"{shader.uuid}.vert.spv",
@@ -748,6 +809,8 @@ def _write_engine_shader_artifact(
     fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
     _compile_shader_stage(
         compiler,
+        "glsl",
+        "vulkan",
         "fragment",
         fragment_source_path,
         vulkan_dir / f"{shader.uuid}.frag.spv",
@@ -1126,7 +1189,31 @@ def _shader_to_spec(shader: Any) -> _ShaderSpec:
         vertex_source=shader.vertex_source,
         fragment_source=shader.fragment_source,
         geometry_source=shader.geometry_source,
+        language=_shader_language(shader),
     )
+
+
+def _shader_language(shader: Any) -> str:
+    try:
+        language = shader.language
+    except AttributeError:
+        return "glsl"
+
+    if isinstance(language, str):
+        text = language
+    else:
+        try:
+            text = language.name
+        except AttributeError:
+            text = str(language)
+    text = text.lower()
+    if text.endswith(".glsl") or text == "glsl":
+        return "glsl"
+    if text.endswith(".slang") or text == "slang":
+        return "slang"
+    if text.endswith(".hlsl") or text == "hlsl":
+        return "hlsl"
+    return text
 
 
 def _resolve_shader_compiler(shader_compiler: Path | None) -> Path | None:
@@ -1155,6 +1242,8 @@ def _resolve_shader_compiler(shader_compiler: Path | None) -> Path | None:
 
 def _compile_shader_stage(
     compiler: Path,
+    language: str,
+    target: str,
     stage: str,
     input_path: Path,
     output_path: Path,
@@ -1163,8 +1252,10 @@ def _compile_shader_stage(
     cmd = _executable_command(compiler) + [
         str(compiler),
         "compile",
+        "--language",
+        language,
         "--target",
-        "vulkan",
+        target,
         "--stage",
         stage,
         "--input",

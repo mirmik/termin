@@ -26,6 +26,21 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
     return compiler
 
 
+def _write_target_marking_shader_compiler(tmp_path: Path) -> Path:
+    compiler = tmp_path / "fake_target_termin_shaderc.py"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import pathlib, sys\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "target = sys.argv[sys.argv.index('--target') + 1]\n"
+        "out.parent.mkdir(parents=True, exist_ok=True)\n"
+        "out.write_bytes(('ARTIFACT-' + target).encode('ascii'))\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+    return compiler
+
+
 def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     project = tmp_path / "RuntimeGame"
     project.mkdir()
@@ -293,8 +308,92 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
         {"mark": "opaque", "shader": shader_uuid, "priority": 7},
     ]
     assert shader_data["uuid"] == shader_uuid
+    assert shader_data["language"] == "glsl"
+    assert shader_data["artifacts"] == {
+        "vulkan": {
+            "vertex": f"shaders/vulkan/{shader_uuid}.vert.spv",
+            "fragment": f"shaders/vulkan/{shader_uuid}.frag.spv",
+        }
+    }
     assert (result.package_dir / "shaders" / "vulkan" / f"{shader_uuid}.vert.spv").read_bytes() == b"SPIRV"
     assert (result.package_dir / "shaders" / "vulkan" / f"{shader_uuid}.frag.spv").read_bytes() == b"SPIRV"
+    assert result.diagnostics == []
+
+
+def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -> None:
+    import tgfx
+    from termin.materials import TcMaterial
+
+    project = tmp_path / "SlangRuntimeGame"
+    project.mkdir()
+    material_uuid = "live-slang-material-uuid"
+    shader_uuid = "live-slang-shader-uuid"
+
+    material = TcMaterial.create("Live Slang Material", material_uuid)
+    phase = material.add_phase_from_sources(
+        "[shader(\"vertex\")] void main() {}\n",
+        "[shader(\"fragment\")] void main() {}\n",
+        "",
+        "LiveSlangShader",
+        "opaque",
+        3,
+        shader_uuid=shader_uuid,
+    )
+    assert phase is not None
+
+    shader = tgfx.TcShader.from_uuid(shader_uuid)
+    assert shader.is_valid
+    shader.set_language(tgfx.ShaderLanguage.SLANG)
+    shader.set_artifact_policy(tgfx.ShaderArtifactPolicy.REQUIRED)
+
+    _write_json(
+        project / "Main.scene",
+        {
+            "uuid": "scene-uuid",
+            "entities": [
+                {
+                    "uuid": "entity-uuid",
+                    "components": [
+                        {
+                            "type": "MeshRenderer",
+                            "data": {
+                                "material": {
+                                    "uuid": material_uuid,
+                                    "name": "Live Slang Material",
+                                    "type": "uuid",
+                                },
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "package",
+        shader_compiler=_write_target_marking_shader_compiler(tmp_path),
+    )
+
+    shader_data = json.loads((result.package_dir / "shaders" / f"{shader_uuid}.shader.json").read_text(encoding="utf-8"))
+    assert shader_data["uuid"] == shader_uuid
+    assert shader_data["language"] == "slang"
+    assert shader_data["vertex_source_path"] == f"shaders/vulkan/{shader_uuid}.vert.slang"
+    assert shader_data["fragment_source_path"] == f"shaders/vulkan/{shader_uuid}.frag.slang"
+    assert shader_data["artifacts"] == {
+        "vulkan": {
+            "vertex": f"shaders/vulkan/{shader_uuid}.vert.spv",
+            "fragment": f"shaders/vulkan/{shader_uuid}.frag.spv",
+        },
+        "opengl": {
+            "vertex": f"shaders/opengl/{shader_uuid}.vert.glsl",
+            "fragment": f"shaders/opengl/{shader_uuid}.frag.glsl",
+        },
+    }
+    assert (result.package_dir / "shaders" / "vulkan" / f"{shader_uuid}.vert.spv").read_bytes() == b"ARTIFACT-vulkan"
+    assert (result.package_dir / "shaders" / "opengl" / f"{shader_uuid}.frag.glsl").read_bytes() == b"ARTIFACT-opengl"
     assert result.diagnostics == []
 
 

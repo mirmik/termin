@@ -18,6 +18,11 @@ _STAGES: tuple[tuple[str, str, str], ...] = (
     ("geometry", "geom", "geometry_source"),
 )
 
+_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
+    "glsl": ("vulkan",),
+    "slang": ("vulkan", "opengl"),
+}
+
 
 def compile_shader_usages(
     shader_usages: Iterable[object],
@@ -26,12 +31,10 @@ def compile_shader_usages(
 ) -> list[BuildResource]:
     compiler = _resolve_shader_compiler(shader_compiler)
     source_dir = output_dir / ".build" / "shaders" / "source"
-    artifact_dir = output_dir / "assets" / "shaders" / "vulkan"
     source_dir.mkdir(parents=True, exist_ok=True)
-    artifact_dir.mkdir(parents=True, exist_ok=True)
 
     resources: list[BuildResource] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
 
     for shader in shader_usages:
         if not shader.is_valid:
@@ -41,41 +44,96 @@ def compile_shader_usages(
         if shader_uuid == "":
             raise ValueError(f"Shader '{shader.name}' has empty uuid")
 
+        language = _shader_language(shader)
+        targets = _TARGETS_BY_LANGUAGE.get(language)
+        if targets is None:
+            raise ValueError(f"Shader '{shader.name}' has unsupported language: {language}")
+
         for stage_name, stage_ext, attr_name in _STAGES:
             source = _shader_stage_source(shader, attr_name)
             if source == "":
                 continue
 
-            key = (shader_uuid, stage_ext)
-            if key in seen:
-                continue
-            seen.add(key)
-
-            source_path = source_dir / f"{shader_uuid}.{stage_ext}.glsl"
-            artifact_path = artifact_dir / f"{shader_uuid}.{stage_ext}.spv"
+            source_path = source_dir / f"{shader_uuid}.{stage_ext}.{_source_extension(language)}"
             source_path.write_text(source, encoding="utf-8")
 
-            _run_shader_compiler(
-                compiler=compiler,
-                stage=stage_name,
-                input_path=source_path,
-                output_path=artifact_path,
-                debug_name=_shader_debug_name(shader, stage_name),
-            )
+            for target in targets:
+                key = (shader_uuid, target, stage_ext)
+                if key in seen:
+                    continue
+                seen.add(key)
 
-            resources.append(
-                BuildResource(
-                    kind="generated",
-                    type="shader_spirv",
-                    source_path=_output_relative(output_dir, source_path),
-                    build_path=_output_relative(output_dir, artifact_path),
-                    uuid=shader_uuid,
-                    name=shader.name or shader_uuid,
-                    size=artifact_path.stat().st_size,
+                artifact_dir = output_dir / "assets" / "shaders" / target
+                artifact_path = artifact_dir / f"{shader_uuid}.{stage_ext}.{_artifact_extension(target)}"
+
+                _run_shader_compiler(
+                    compiler=compiler,
+                    language=language,
+                    target=target,
+                    stage=stage_name,
+                    input_path=source_path,
+                    output_path=artifact_path,
+                    debug_name=_shader_debug_name(shader, stage_name),
                 )
-            )
+
+                resources.append(
+                    BuildResource(
+                        kind="generated",
+                        type=_resource_type(target),
+                        source_path=_output_relative(output_dir, source_path),
+                        build_path=_output_relative(output_dir, artifact_path),
+                        uuid=shader_uuid,
+                        name=shader.name or shader_uuid,
+                        size=artifact_path.stat().st_size,
+                    )
+                )
 
     return resources
+
+
+def _shader_language(shader: object) -> str:
+    try:
+        language = shader.language
+    except AttributeError:
+        return "glsl"
+
+    if isinstance(language, str):
+        text = language
+    else:
+        try:
+            text = language.name
+        except AttributeError:
+            text = str(language)
+    text = text.lower()
+    if text.endswith(".glsl") or text == "glsl":
+        return "glsl"
+    if text.endswith(".slang") or text == "slang":
+        return "slang"
+    if text.endswith(".hlsl") or text == "hlsl":
+        return "hlsl"
+    return text
+
+
+def _source_extension(language: str) -> str:
+    if language == "slang":
+        return "slang"
+    return "glsl"
+
+
+def _artifact_extension(target: str) -> str:
+    if target == "vulkan":
+        return "spv"
+    if target == "opengl":
+        return "glsl"
+    raise ValueError(f"Unsupported shader target: {target}")
+
+
+def _resource_type(target: str) -> str:
+    if target == "vulkan":
+        return "shader_spirv"
+    if target == "opengl":
+        return "shader_glsl"
+    raise ValueError(f"Unsupported shader target: {target}")
 
 
 def _shader_stage_source(shader: object, attr_name: str) -> str:
@@ -120,6 +178,8 @@ def _resolve_shader_compiler(shader_compiler: Path | None) -> Path:
 
 def _run_shader_compiler(
     compiler: Path,
+    language: str,
+    target: str,
     stage: str,
     input_path: Path,
     output_path: Path,
@@ -129,8 +189,10 @@ def _run_shader_compiler(
     cmd = _executable_command(compiler) + [
         str(compiler),
         "compile",
+        "--language",
+        language,
         "--target",
-        "vulkan",
+        target,
         "--stage",
         stage,
         "--input",

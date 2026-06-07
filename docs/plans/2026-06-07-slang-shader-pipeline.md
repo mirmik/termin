@@ -135,6 +135,18 @@ Acceptance:
   propagation.
 - Fake compiler tests cover all targets without requiring Slang in CI.
 
+Status:
+
+- Initial wrapper is implemented.
+- Existing callers remain compatible: omitting `--language` defaults to
+  `glsl`, and `glsl -> vulkan` still uses the in-process shaderc path.
+- `slang -> vulkan` invokes external `slangc` with `-target spirv`.
+- `slang -> opengl` invokes external `slangc` with `-target glsl`.
+- `slang -> d3d11` is intentionally rejected until the Windows FXC/DXBC phase.
+- Tests use a fake `slangc` and cover Vulkan/OpenGL invocation, missing tool
+  diagnostics, compiler failure propagation, unsupported GLSL targets, and the
+  reserved D3D11 path.
+
 ## Phase 5: Project Build And Runtime Export
 
 Extend project/runtime packaging to record language and artifacts.
@@ -163,6 +175,18 @@ Acceptance:
 
 - Existing runtime package tests still pass.
 - New tests assert backend artifact paths and language metadata.
+
+Status:
+
+- Project build shader usage export recognizes `shader.language`.
+- GLSL usages preserve the existing Vulkan-only SPIR-V artifact layout.
+- Slang usages generate Vulkan SPIR-V and OpenGL GLSL artifacts through
+  `termin_shaderc`.
+- Runtime package shader JSON now records `language` and an `artifacts` map.
+- Runtime export writes Slang source files with `.slang` extension and emits
+  both `shaders/vulkan` and `shaders/opengl` artifacts.
+- Remaining work: parse/author `.shader` or `.slang` assets with language
+  metadata instead of only setting it through live `TcShader`.
 
 ## Phase 6: First Slang Shader
 
