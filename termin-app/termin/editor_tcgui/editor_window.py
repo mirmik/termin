@@ -83,6 +83,36 @@ def _resolve_termin_shaderc() -> Path | None:
     return None
 
 
+def _resolve_slangc() -> Path | None:
+    settings_path = EditorSettings.instance().get_slang_compiler()
+    if settings_path:
+        path = Path(settings_path)
+        if path.is_file():
+            return path
+        log.error(f"[ShaderRuntime] configured Slang compiler is missing: {settings_path}")
+        return None
+
+    configured = os.environ.get("TERMIN_SLANGC")
+    if configured:
+        path = Path(configured)
+        if path.is_file():
+            return path
+        log.error(f"[ShaderRuntime] TERMIN_SLANGC points to missing file: {configured}")
+        return None
+
+    found = shutil.which("slangc")
+    if found:
+        return Path(found)
+
+    sdk = os.environ.get("TERMIN_SDK")
+    if sdk:
+        candidate = Path(sdk) / "bin" / "slangc"
+        if candidate.is_file():
+            return candidate
+
+    return None
+
+
 class EditorWindowTcgui:
     """Main editor window for the tcgui frontend.
 
@@ -1875,9 +1905,19 @@ class EditorWindowTcgui:
                 "shader compilation is unavailable. Set TERMIN_SHADERC or TERMIN_SDK."
             )
             return
+        slangc = _resolve_slangc()
+        if slangc is None:
+            log.error(
+                "[ShaderRuntime] slangc not found; Slang runtime shader "
+                "compilation is unavailable. Set TERMIN_SLANGC, add slangc to PATH, "
+                "install it under TERMIN_SDK/bin, or configure Shader/slangCompiler "
+                "in editor settings."
+            )
+            return
 
         artifact_root.mkdir(parents=True, exist_ok=True)
         cache_root.mkdir(parents=True, exist_ok=True)
+        os.environ["TERMIN_SLANGC"] = str(slangc)
 
         try:
             import tgfx
@@ -1891,7 +1931,7 @@ class EditorWindowTcgui:
             log.info(
                 "[ShaderRuntime] configured: "
                 f"artifact_root='{artifact_root}' cache_root='{cache_root}' "
-                f"compiler='{compiler}' dev_compile=True"
+                f"compiler='{compiler}' slangc='{slangc}' dev_compile=True"
             )
         except Exception as e:
             log.error(f"[ShaderRuntime] configure_shader_runtime failed: {e}")

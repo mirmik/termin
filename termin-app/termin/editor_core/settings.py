@@ -29,6 +29,7 @@ class EditorSettings:
     KEY_TEXT_EDITOR = "Editor/textEditor"
     KEY_FONT_SIZE = "Editor/fontSize"
     KEY_FONT_SIZE_SMALL = "Editor/fontSizeSmall"
+    KEY_SLANG_COMPILER = "Shader/slangCompiler"
 
     # Значения по умолчанию
     DEFAULT_FONT_SIZE: float = 14.0
@@ -149,6 +150,14 @@ class EditorSettings:
     def set_text_editor(self, editor_path: str | None) -> None:
         """Сохранить путь к текстовому редактору."""
         self.set(self.KEY_TEXT_EDITOR, editor_path or "")
+
+    def get_slang_compiler(self) -> str | None:
+        """Получить путь к компилятору Slang."""
+        return self.get(self.KEY_SLANG_COMPILER) or None
+
+    def set_slang_compiler(self, compiler_path: str | None) -> None:
+        """Сохранить путь к компилятору Slang."""
+        self.set(self.KEY_SLANG_COMPILER, compiler_path or "")
 
     def get_font_size(self) -> float:
         """Получить базовый размер шрифта."""

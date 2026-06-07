@@ -1,4 +1,4 @@
-"""Settings dialog — configure external text editor and font sizes."""
+"""Settings dialog — configure editor tools and font sizes."""
 
 from __future__ import annotations
 
@@ -69,6 +69,39 @@ def show_settings_dialog(ui) -> None:
     row.add_child(browse_btn)
     content.add_child(row)
 
+    # Slang compiler
+    slang_lbl = Label()
+    slang_lbl.text = "Slang Compiler:"
+    content.add_child(slang_lbl)
+
+    slang_row = HStack()
+    slang_row.spacing = 4
+
+    slang_input = TextInput()
+    slang_input.text = settings.get_slang_compiler() or ""
+    slang_input.stretch = True
+    slang_row.add_child(slang_input)
+
+    slang_browse_btn = Button()
+    slang_browse_btn.text = "Browse..."
+    slang_browse_btn.padding = 6
+
+    def _browse_slang():
+        from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
+        show_open_file_dialog(
+            ui,
+            on_result=lambda path: _set_slang_path(path) if path else None,
+            title="Select slangc",
+            windowed=True,
+        )
+
+    def _set_slang_path(path: str):
+        slang_input.text = path
+
+    slang_browse_btn.on_click = _browse_slang
+    slang_row.add_child(slang_browse_btn)
+    content.add_child(slang_row)
+
     # Font sizes
     from tcgui.widgets.theme import current_theme as _t
 
@@ -112,7 +145,9 @@ def show_settings_dialog(ui) -> None:
     def _on_result(btn: str):
         if btn == "OK":
             text = editor_input.text.strip()
+            slang_text = slang_input.text.strip()
             settings.set_text_editor(text if text else None)
+            settings.set_slang_compiler(slang_text if slang_text else None)
             settings.set_font_size(font_spin.value)
             settings.set_font_size_small(font_small_spin.value)
             settings.sync()
