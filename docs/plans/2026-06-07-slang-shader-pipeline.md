@@ -41,6 +41,12 @@ Initial Slang support should use external tools:
   `termin_shaderc` wrapper must adapt those details. Row-major remains an
   opt-in compatibility mode and must be validated with render smoke coverage
   before use in built-ins.
+- Slang/HLSL `mul` syntax must be treated as a separate convention from
+  storage layout. For Termin's preferred GLSL-style `M * v` transform semantics
+  with column-major host matrices, Slang shaders should write `mul(M, v)`.
+  Generated GLSL/SPIR-V may express this as a transposed-looking operation plus
+  a target-specific matrix layout decoration; do not infer Termin's host ABI
+  from emitted `RowMajor`/`ColMajor` decorations alone.
 
 The first implementation should not vendor Slang. Vendoring can be considered
 after the command-line integration and artifact contracts are stable.
@@ -246,11 +252,14 @@ Status:
   a `TC_SHADER_LANGUAGE_SLANG` shader with `TC_SHADER_ARTIFACT_REQUIRED` loads
   backend artifacts from `TERMIN_SHADER_ARTIFACT_ROOT`, builds a pipeline, and
   renders from the artifact sources instead of fallback sources.
-- Remaining work: add a render smoke that consumes artifacts generated from
-  real Slang source and validates the matrix convention at render time. The
-  current OpenGL smoke uses a GL 3.3 context while Slang 2026.5.2 emits GLSL
-  450 for the OpenGL target, so this should be done either through a suitable
-  Vulkan smoke path or after resolving OpenGL target/profile handling.
+- Vulkan `tgfx2_vulkan_smoke` now has an optional generated-Slang artifact
+  render path. When `termin_shaderc` and `slangc` are available, it writes a
+  temporary Slang vertex/fragment pair, compiles Vulkan SPIR-V artifacts, loads
+  them through `TC_SHADER_ARTIFACT_REQUIRED`, binds a column-major matrix UBO,
+  and validates the expected rendered pixels.
+- Remaining work: decide whether Vulkan smoke coverage should be part of the
+  regular Linux test profile or stay in an explicit Vulkan profile. The current
+  default `run-tests.sh` profile still runs with Vulkan disabled.
 
 ## Phase 7: Minimal Built-In Migration
 
@@ -289,13 +298,13 @@ Acceptance:
 
 ## Immediate Next Steps
 
-1. Decide how generated Slang OpenGL artifacts should target the existing GL
-   smoke environment: request a GL 4.5 context, lower Slang GLSL output if the
-   toolchain supports it, or cover generated-artifact rendering first through a
-   Vulkan smoke.
-2. Add a render smoke that consumes artifacts generated from real Slang source
-   and validates the preferred column-major matrix convention.
-3. Start Phase 7 with the fullscreen/present path once generated Slang artifact
-   rendering is covered.
+1. Decide whether to add a first-class Vulkan test profile to `run-tests.sh` or
+   keep `tgfx2_vulkan_smoke` as an explicit opt-in check.
+2. Start Phase 7 with the fullscreen/present path now that generated Slang
+   artifact rendering is covered on Vulkan.
+3. Decide later how generated Slang OpenGL artifacts should target the existing
+   GL smoke environment: request a GL 4.5 context, lower Slang GLSL output if
+   the toolchain supports it, or keep OpenGL generated-artifact rendering as a
+   separate higher-requirement smoke.
 4. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
    Linux-side generation and runtime-consumption contract.
