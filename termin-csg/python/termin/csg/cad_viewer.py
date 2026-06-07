@@ -76,6 +76,8 @@ void main() {
 }
 """
 
+CSG_CAD_MSAA_SAMPLES = 4
+
 
 class CadViewportWidget(Widget):
     """tcgui widget that displays a pre-rendered CSG scene texture."""
@@ -202,8 +204,10 @@ class CsgSceneRenderer:
         self.vs = graphics.device.create_shader(Tgfx2ShaderStage.Vertex, _VERT_SRC)
         self.fs = graphics.device.create_shader(Tgfx2ShaderStage.Fragment, _FRAG_SRC)
         self.color_tex = None
+        self.color_msaa_tex = None
         self.depth_tex = None
         self.size = (0, 0)
+        self.msaa_samples = CSG_CAD_MSAA_SAMPLES
         self.reference_geometry = build_reference_geometry()
         self.immediate_renderer = ImmediateRenderer()
         self._preview_key = None
@@ -230,7 +234,8 @@ class CsgSceneRenderer:
         opened_frame = not ctx.in_frame
         if opened_frame:
             ctx.begin_frame()
-        ctx.begin_pass(self.color_tex, self.depth_tex, True, 0.10, 0.10, 0.12, 1.0, 1.0, True)
+        render_color = self.color_msaa_tex if self.color_msaa_tex is not None else self.color_tex
+        ctx.begin_pass(render_color, self.depth_tex, True, 0.10, 0.10, 0.12, 1.0, 1.0, True)
         ctx.set_viewport(0, 0, width, height)
         ctx.set_depth_test(True)
         ctx.set_depth_write(True)
@@ -256,6 +261,8 @@ class CsgSceneRenderer:
         immediate.flush_depth(ctx, view, projection, True)
 
         ctx.end_pass()
+        if self.color_msaa_tex is not None and self.color_tex is not None:
+            ctx.blit(self.color_msaa_tex, self.color_tex)
         if opened_frame:
             ctx.end_frame()
         return self.color_tex
@@ -286,6 +293,9 @@ class CsgSceneRenderer:
         if self.color_tex is not None:
             self.graphics.destroy_texture(self.color_tex)
             self.color_tex = None
+        if self.color_msaa_tex is not None:
+            self.graphics.destroy_texture(self.color_msaa_tex)
+            self.color_msaa_tex = None
         if self.depth_tex is not None:
             self.graphics.destroy_texture(self.depth_tex)
             self.depth_tex = None
@@ -297,10 +307,13 @@ class CsgSceneRenderer:
             return
         if self.color_tex is not None:
             self.graphics.destroy_texture(self.color_tex)
+        if self.color_msaa_tex is not None:
+            self.graphics.destroy_texture(self.color_msaa_tex)
         if self.depth_tex is not None:
             self.graphics.destroy_texture(self.depth_tex)
-        self.color_tex = self.graphics.create_color_attachment(width, height, PIXEL_RGBA8)
-        self.depth_tex = self.graphics.create_depth_attachment(width, height, PIXEL_D32F)
+        self.color_tex = self.graphics.create_color_attachment(width, height, PIXEL_RGBA8, 1)
+        self.color_msaa_tex = self.graphics.create_color_attachment(width, height, PIXEL_RGBA8, self.msaa_samples)
+        self.depth_tex = self.graphics.create_depth_attachment(width, height, PIXEL_D32F, self.msaa_samples)
         self.size = (width, height)
 
 
