@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from termin.materials import TcMaterial, TcRenderState
+from termin.materials import TcMaterial
 
 
 PBR_VERT = """#version 330 core
@@ -35,6 +35,104 @@ in vec3 v_world_pos;
 in vec3 v_normal;
 in vec2 v_uv;
 
+const int LIGHT_TYPE_DIRECTIONAL = 0;
+const int LIGHT_TYPE_POINT = 1;
+const int LIGHT_TYPE_SPOT = 2;
+const int MAX_LIGHTS = 8;
+const int MAX_SHADOW_MAPS = 16;
+
+struct LightData {
+    vec4 color_intensity;
+    vec4 direction_range;
+    vec4 position_type;
+    vec4 attenuation_inner;
+    vec4 outer_cascade;
+};
+
+layout(std140, binding = 0) uniform LightingBlock {
+    LightData u_lights[MAX_LIGHTS];
+    vec4 u_ambient_data;
+    vec4 u_camera_light_count;
+    vec4 u_shadow_settings;
+};
+
+layout(std140, binding = 3) uniform ShadowBlock {
+    int u_shadow_map_count;
+    mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
+    int u_shadow_light_index[MAX_SHADOW_MAPS];
+    int u_shadow_cascade_index[MAX_SHADOW_MAPS];
+    float u_shadow_split_near[MAX_SHADOW_MAPS];
+    float u_shadow_split_far[MAX_SHADOW_MAPS];
+};
+
+layout(binding = 8) uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
+
+int get_light_count() { return int(u_camera_light_count.w); }
+int get_light_type(int i) { return int(u_lights[i].position_type.w); }
+vec3 get_light_color(int i) { return u_lights[i].color_intensity.rgb; }
+float get_light_intensity(int i) { return u_lights[i].color_intensity.w; }
+vec3 get_light_direction(int i) { return u_lights[i].direction_range.xyz; }
+vec3 get_light_position(int i) { return u_lights[i].position_type.xyz; }
+float get_light_range(int i) { return u_lights[i].direction_range.w; }
+vec3 get_light_attenuation(int i) { return u_lights[i].attenuation_inner.xyz; }
+float get_light_inner_angle(int i) { return u_lights[i].attenuation_inner.w; }
+float get_light_outer_angle(int i) { return u_lights[i].outer_cascade.x; }
+vec3 get_ambient_color() { return u_ambient_data.rgb; }
+float get_ambient_intensity() { return u_ambient_data.w; }
+vec3 get_camera_position() { return u_camera_light_count.xyz; }
+float get_shadow_bias() { return u_shadow_settings.z; }
+
+float shadow_bias_depth(int sm) {
+    float depth_range = max(u_shadow_split_far[sm] - u_shadow_split_near[sm], 0.0001);
+    return max(get_shadow_bias(), 0.0) / depth_range;
+}
+
+float compute_distance_attenuation(vec3 attenuation, float range, float dist) {
+    float denom = attenuation.x + attenuation.y * dist + attenuation.z * dist * dist;
+    if (denom <= 0.0) {
+        return 1.0;
+    }
+    float w = 1.0 / denom;
+    if (range > 0.0 && dist > range) {
+        w = 0.0;
+    }
+    return w;
+}
+
+float compute_spot_weight(vec3 light_dir, vec3 L, float inner_angle, float outer_angle) {
+    float cos_theta = dot(light_dir, -L);
+    float cos_outer = cos(outer_angle);
+    float cos_inner = cos(inner_angle);
+
+    if (cos_theta <= cos_outer) return 0.0;
+    if (cos_theta >= cos_inner) return 1.0;
+
+    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);
+    return t * t * (3.0 - 2.0 * t);
+}
+
+float compute_shadow_auto(int light_index) {
+    for (int sm = 0; sm < u_shadow_map_count; ++sm) {
+        if (u_shadow_light_index[sm] != light_index) {
+            continue;
+        }
+
+        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
+        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
+        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
+
+        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
+            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
+            proj_coords.z < 0.0 || proj_coords.z > 1.0) {
+            continue;
+        }
+
+        return texture(u_shadow_map[sm], vec3(proj_coords.xy, proj_coords.z - shadow_bias_depth(sm)));
+    }
+
+    return 1.0;
+}
+
 // Material parameters
 uniform vec4 u_color;
 uniform sampler2D u_albedo_texture;
@@ -46,47 +144,7 @@ uniform float u_roughness;
 uniform vec4 u_emission_color;
 uniform float u_emission_intensity;
 
-// Camera
-uniform vec3 u_camera_position;
-
-// Lighting
-const int MAX_LIGHTS = 8;
-const int LIGHT_TYPE_DIRECTIONAL = 0;
-const int LIGHT_TYPE_POINT = 1;
-const int LIGHT_TYPE_SPOT = 2;
-
-uniform vec3  u_ambient_color;
-uniform float u_ambient_intensity;
-
-uniform int   u_light_count;
-uniform int   u_light_type[MAX_LIGHTS];
-uniform vec3  u_light_color[MAX_LIGHTS];
-uniform float u_light_intensity[MAX_LIGHTS];
-uniform vec3  u_light_direction[MAX_LIGHTS];
-uniform vec3  u_light_position[MAX_LIGHTS];
-uniform float u_light_range[MAX_LIGHTS];
-uniform vec3  u_light_attenuation[MAX_LIGHTS];
-uniform float u_light_inner_angle[MAX_LIGHTS];
-uniform float u_light_outer_angle[MAX_LIGHTS];
-
-// Shadow Mapping (hardware PCF)
-const int MAX_SHADOW_MAPS = 4;
-const float SHADOW_BIAS = 0.005;
-uniform int u_shadow_map_count;
-uniform sampler2DShadow u_shadow_map[MAX_SHADOW_MAPS];
-uniform mat4 u_light_space_matrix[MAX_SHADOW_MAPS];
-uniform int u_shadow_light_index[MAX_SHADOW_MAPS];
-
 out vec4 FragColor;
-
-// GLSL 1.30+ forbids dynamic indexing of sampler arrays
-float sample_shadow_map(int idx, vec3 coords) {
-    if (idx == 0) return texture(u_shadow_map[0], coords);
-    if (idx == 1) return texture(u_shadow_map[1], coords);
-    if (idx == 2) return texture(u_shadow_map[2], coords);
-    if (idx == 3) return texture(u_shadow_map[3], coords);
-    return 1.0;
-}
 
 const float PI = 3.14159265359;
 
@@ -112,49 +170,9 @@ vec3 F_Schlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-float compute_distance_attenuation(int idx, float dist) {
-    vec3 att = u_light_attenuation[idx];
-    float denom = att.x + att.y * dist + att.z * dist * dist;
-    if (denom <= 0.0) return 1.0;
-    float w = 1.0 / denom;
-    float range = u_light_range[idx];
-    if (range > 0.0 && dist > range) w = 0.0;
-    return w;
-}
-
-float compute_spot_weight(int idx, vec3 L) {
-    float cos_theta = dot(u_light_direction[idx], -L);
-    float cos_outer = cos(u_light_outer_angle[idx]);
-    float cos_inner = cos(u_light_inner_angle[idx]);
-    if (cos_theta <= cos_outer) return 0.0;
-    if (cos_theta >= cos_inner) return 1.0;
-    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);
-    return t * t * (3.0 - 2.0 * t);
-}
-
-float compute_shadow(int light_index) {
-    for (int sm = 0; sm < u_shadow_map_count; ++sm) {
-        if (u_shadow_light_index[sm] != light_index) continue;
-
-        vec4 light_space_pos = u_light_space_matrix[sm] * vec4(v_world_pos, 1.0);
-        vec3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
-
-        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
-            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
-            proj_coords.z < 0.0 || proj_coords.z > 1.0) {
-            continue;
-        }
-
-        // Hardware PCF: texture() делает depth comparison автоматически
-        return sample_shadow_map(sm, vec3(proj_coords.xy, proj_coords.z - SHADOW_BIAS));
-    }
-    return 1.0;
-}
-
 void main() {
     vec3 N = normalize(v_normal);
-    vec3 V = normalize(u_camera_position - v_world_pos);
+    vec3 V = normalize(get_camera_position() - v_world_pos);
 
     // Sample albedo
     vec4 tex_color = texture(u_albedo_texture, v_uv);
@@ -167,33 +185,91 @@ void main() {
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
     // Ambient
-    vec3 ambient = u_ambient_color * u_ambient_intensity * albedo * (1.0 - metallic * 0.5) * occlusion;
+    vec3 ambient = get_ambient_color() * get_ambient_intensity() * albedo * (1.0 - metallic * 0.5) * occlusion;
 
-    // Single directional light (working version)
-    vec3 L = normalize(-u_light_direction[0]);
-    float NdotL = max(dot(N, L), 0.0);
-    float NdotV = max(dot(N, V), 0.001);
-    vec3 H = normalize(V + L);
-    float NdotH = max(dot(N, H), 0.0);
-    float HdotV = max(dot(H, V), 0.0);
+    vec3 Lo = vec3(0.0);
+    for (int i = 0; i < get_light_count(); ++i) {
+        int type = get_light_type(i);
+        vec3 radiance = get_light_color(i) * get_light_intensity(i);
 
-    // Cook-Torrance BRDF
-    float D = D_GGX(NdotH, roughness);
-    float G = G_Smith(NdotV, NdotL, roughness);
-    vec3 F = F_Schlick(HdotV, F0);
+        vec3 L;
+        float dist;
+        float weight = 1.0;
 
-    vec3 numerator = D * G * F;
-    float denominator = 4.0 * NdotV * NdotL + 0.0001;
-    vec3 specular = numerator / denominator;
+        if (type == LIGHT_TYPE_DIRECTIONAL) {
+            L = normalize(-get_light_direction(i));
+            dist = 1e9;
+        } else {
+            vec3 to_light = get_light_position(i) - v_world_pos;
+            dist = length(to_light);
+            L = dist > 0.0001 ? to_light / dist : vec3(0.0, 1.0, 0.0);
+            weight *= compute_distance_attenuation(
+                get_light_attenuation(i),
+                get_light_range(i),
+                dist
+            );
 
-    vec3 kD = (1.0 - F) * (1.0 - metallic);
-    vec3 radiance = u_light_color[0] * u_light_intensity[0];
-    float shadow = compute_shadow(0);
-    vec3 Lo = (kD * albedo + specular) * radiance * NdotL * shadow;
+            if (type == LIGHT_TYPE_SPOT) {
+                weight *= compute_spot_weight(
+                    get_light_direction(i),
+                    L,
+                    get_light_inner_angle(i),
+                    get_light_outer_angle(i)
+                );
+            }
+        }
+
+        float NdotL = max(dot(N, L), 0.0);
+        float NdotV = max(dot(N, V), 0.001);
+        vec3 H = normalize(V + L);
+        float NdotH = max(dot(N, H), 0.0);
+        float HdotV = max(dot(H, V), 0.0);
+
+        // Cook-Torrance BRDF
+        float D = D_GGX(NdotH, roughness);
+        float G = G_Smith(NdotV, NdotL, roughness);
+        vec3 F = F_Schlick(HdotV, F0);
+
+        vec3 numerator = D * G * F;
+        float denominator = 4.0 * NdotV * NdotL + 0.0001;
+        vec3 specular = numerator / denominator;
+
+        vec3 kD = (1.0 - F) * (1.0 - metallic);
+        float shadow = (type == LIGHT_TYPE_DIRECTIONAL) ? compute_shadow_auto(i) : 1.0;
+        Lo += (kD * albedo + specular) * radiance * NdotL * weight * shadow;
+    }
 
     vec3 color = ambient + Lo + texture(u_emissive_texture, v_uv).rgb * u_emission_color.rgb * u_emission_intensity;
     FragColor = vec4(color, 1.0);
 }
+"""
+
+PBR_SHADER_TEXT = """@program PBRShader
+@features lighting_ubo
+
+@phase opaque
+@priority 0
+@glDepthTest true
+@glDepthMask true
+@glCull true
+
+@property Color u_color = Color(1.0, 1.0, 1.0, 1.0)
+@property Texture u_albedo_texture = "white"
+@property Texture u_metallic_roughness_texture = "white"
+@property Texture u_occlusion_texture = "white"
+@property Texture u_emissive_texture = "white"
+@property Float u_metallic = 0.0 range(0.0, 1.0)
+@property Float u_roughness = 0.5 range(0.0, 1.0)
+@property Color u_emission_color = Color(0.0, 0.0, 0.0, 1.0)
+@property Float u_emission_intensity = 0.0 range(0.0, 100.0)
+
+@stage vertex
+""" + PBR_VERT + """@endstage
+
+@stage fragment
+""" + PBR_FRAG + """@endstage
+
+@endphase
 """
 
 
@@ -215,41 +291,31 @@ def create_pbr_material(
     Returns:
         TcMaterial with PBR shader.
     """
-    from termin.visualization.render.texture import get_white_texture
     from termin.geombase import Vec4
-
-    mat = TcMaterial.create(name, "")
-    mat.shader_name = "PBRShader"
-
-    state = TcRenderState.opaque()
-    phase = mat.add_phase_from_sources(
-        vertex_source=PBR_VERT,
-        fragment_source=PBR_FRAG,
-        geometry_source="",
-        shader_name="PBRShader",
-        phase_mark="opaque",
-        priority=0,
-        state=state,
+    from termin.materials import create_material_from_parsed, parse_shader_text
+    from termin.assets.texture_handle import (
+        get_normal_texture_handle,
+        get_white_texture_handle,
     )
 
-    if phase is not None:
-        # Set color
-        c = color or (1.0, 1.0, 1.0, 1.0)
-        phase.set_color(c[0], c[1], c[2], c[3])
+    white_tex = get_white_texture_handle().get()
+    normal_tex = get_normal_texture_handle().get()
 
+    mat = create_material_from_parsed(
+        parse_shader_text(PBR_SHADER_TEXT),
+        color=color or (1.0, 1.0, 1.0, 1.0),
+        name=name,
+        default_white_texture=white_tex,
+        default_normal_texture=normal_tex,
+    )
+
+    phase = mat.default_phase()
+    if phase is not None:
         # Set PBR parameters
         phase.set_uniform_float("u_metallic", metallic)
         phase.set_uniform_float("u_roughness", roughness)
         phase.set_uniform_vec4("u_emission_color", Vec4(0.0, 0.0, 0.0, 1.0))
         phase.set_uniform_float("u_emission_intensity", 0.0)
-
-        # Set white texture as default albedo
-        white_tex = get_white_texture()
-        if white_tex and white_tex.texture_data:
-            phase.set_texture("u_albedo_texture", white_tex.texture_data)
-            phase.set_texture("u_metallic_roughness_texture", white_tex.texture_data)
-            phase.set_texture("u_occlusion_texture", white_tex.texture_data)
-            phase.set_texture("u_emissive_texture", white_tex.texture_data)
 
     return mat
 

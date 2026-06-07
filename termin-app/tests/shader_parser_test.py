@@ -380,3 +380,40 @@ def test_property_outside_phase_accepted():
     assert len(result.phases) == 0
     assert len(result.material_properties) == 1
     assert result.material_properties[0].name == "u_value"
+
+
+def test_builtin_pbr_shader_is_vulkan_normalized():
+    from termin.visualization.render.materials.pbr_material import PBR_SHADER_TEXT
+
+    program = parse_shader_text(PBR_SHADER_TEXT)
+    assert program.program == "PBRShader"
+    assert "lighting_ubo" in program.features
+    assert len(program.phases) == 1
+
+    phase = program.phases[0]
+    assert phase.phase_mark == "opaque"
+    assert not phase.material_ubo_layout.empty()
+
+    vertex = phase.stages["vertex"].source
+    assert "#version 450 core" in vertex
+    assert "layout(std140, binding = 2) uniform PerFrame" in vertex
+    assert "layout(push_constant) uniform ColorPushBlock" in vertex
+    assert "uniform mat4 u_model;" not in vertex
+    assert "uniform mat4 u_view;" not in vertex
+    assert "uniform mat4 u_projection;" not in vertex
+
+    fragment = phase.stages["fragment"].source
+    assert "#version 450 core" in fragment
+    assert "layout(std140, binding = 1) uniform MaterialParams" in fragment
+    assert "layout(std140, binding = 0) uniform LightingBlock" in fragment
+    assert "layout(std140, binding = 3) uniform ShadowBlock" in fragment
+    assert "layout(binding = 4) uniform sampler2D u_albedo_texture;" in fragment
+    assert "layout(binding = 8) uniform sampler2DShadow u_shadow_map" in fragment
+    assert "get_camera_position() - v_world_pos" in fragment
+
+    assert "uniform vec4 u_color;" not in fragment
+    assert "uniform float u_metallic;" not in fragment
+    assert "uniform float u_roughness;" not in fragment
+    assert "uniform vec3  u_ambient_color;" not in fragment
+    assert "uniform int u_shadow_map_count;" not in fragment
+    assert "uniform mat4 u_light_space_matrix" not in fragment
