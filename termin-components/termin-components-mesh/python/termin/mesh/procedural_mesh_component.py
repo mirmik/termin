@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from tcbase import log
 from termin.inspect import InspectField
-from termin.csg.document_mesh import document_to_tc_mesh
+from tmesh import TcMesh
+
+from termin.csg.document_mesh import document_to_mesh3
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
 from termin.mesh.mesh_component import MeshComponent
 from termin.scene.python_component import PythonComponent
@@ -202,8 +204,8 @@ class ProceduralMeshComponent(PythonComponent):
 
     def regenerate(self) -> bool:
         build_key = self._build_key()
-        tc_mesh = document_to_tc_mesh(self.document, self.document_name)
-        if tc_mesh is None:
+        mesh3 = document_to_mesh3(self.document, self.document_name)
+        if mesh3 is None:
             log.error(
                 "[ProceduralMeshComponent] regenerate failed "
                 f"document='{self.document_name}' message='{self.debug_message}'"
@@ -214,11 +216,24 @@ class ProceduralMeshComponent(PythonComponent):
         if mesh_component is None:
             return False
 
-        mesh_component.set_mesh(tc_mesh)
+        tc_mesh = mesh_component.mesh
+        if tc_mesh is not None and tc_mesh.is_valid:
+            if not tc_mesh.set_from_mesh3(mesh3):
+                log.error(
+                    "[ProceduralMeshComponent] regenerate failed to update existing mesh "
+                    f"document='{self.document_name}' uuid='{tc_mesh.uuid}'"
+                )
+                return False
+        else:
+            tc_mesh = TcMesh.from_mesh3(mesh3, self.document_name, "")
+            if not tc_mesh.is_valid:
+                log.error(f"[ProceduralMeshComponent] failed to create TcMesh name='{self.document_name}'")
+                return False
+            mesh_component.set_mesh(tc_mesh)
         self._last_build_key = build_key
         self._dirty = False
         log.info(
-            "[ProceduralMeshComponent] regenerated mesh "
+            "[ProceduralMeshComponent] updated mesh "
             f"document='{self.document_name}' vertices={tc_mesh.vertex_count} triangles={tc_mesh.triangle_count}"
         )
         return True
