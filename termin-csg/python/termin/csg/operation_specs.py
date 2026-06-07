@@ -257,7 +257,7 @@ OPERATION_SPECS_BY_KIND = {
             OperationParamSpec("alignment", "Alignment", "enum", "center"),
             *_TRANSFORM_PARAM_SCHEMA,
         ),
-        input_policy="sketch_path",
+        input_policy="sketch_wall_sources",
     ),
     PRIMITIVE_OPERATION_KIND: OperationSpec(
         kind=PRIMITIVE_OPERATION_KIND,

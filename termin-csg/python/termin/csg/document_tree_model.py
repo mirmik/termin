@@ -96,8 +96,8 @@ def _operation_node(
         return node
 
     if operation.kind == OPERATION_KIND_WALL:
-        source_path_id = str(operation.params.get("source_path_id", ""))
-        path_ref = document.find_path_ref(source_path_id) if source_path_id else None
+        source_sketch_id = str(operation.params.get("source_sketch_id", ""))
+        sketch = document.find_sketch(source_sketch_id) if source_sketch_id else None
         param_text = (
             f" height={_param_float(operation.params, 'height', 3.0):.2f}"
             f" thickness={_param_float(operation.params, 'thickness', 0.2):.2f}"
@@ -115,8 +115,7 @@ def _operation_node(
             is_boolean_input=bool(parent_operation_id),
             accepts_drop_above_below=bool(parent_operation_id),
         )
-        if path_ref is not None:
-            sketch, _path = path_ref
+        if sketch is not None:
             node.children.append(_sketch_node(sketch))
         return node
 

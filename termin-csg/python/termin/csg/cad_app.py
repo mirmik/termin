@@ -377,13 +377,13 @@ class CadApp:
                 self.extrude_vector_inputs[axis].value = vector[("x", "y", "z").index(axis)]
                 body.add_child(row)
         if operation.kind == OPERATION_KIND_WALL:
-            source_path_id = str(operation.params.get("source_path_id", ""))
-            path_ref = self.document.find_path_ref(source_path_id)
-            if path_ref is None:
+            source_sketch_id = str(operation.params.get("source_sketch_id", ""))
+            sketch = self.document.find_sketch(source_sketch_id)
+            if sketch is None:
                 self._syncing_operation_params = False
                 log.error(
                     "[CsgCad] cannot show wall parameters: "
-                    f"source path not found '{source_path_id}'"
+                    f"source sketch not found '{source_sketch_id}'"
                 )
                 return False
             wall_label = Label()
@@ -470,13 +470,14 @@ class CadApp:
             return [
                 ("Add Outer Contour", self.start_add_outer_contour),
                 ("Add Wall Path", self.start_add_wall_path),
+                ("Wall", self.wall_selected),
                 ("Extrude Sketch", self.extrude_selected),
             ]
         if kind == "path":
             path_ref = self._path_ref_by_id(item_id)
             if path_ref is None:
                 return []
-            return [("Wall", self.wall_selected)]
+            return []
         if kind == "contour":
             contour_ref = self._contour_ref_by_id(item_id)
             if contour_ref is None:

@@ -233,15 +233,14 @@ def _evaluate_extrude(document: ProceduralMeshDocument, operation) -> list[Evalu
 
 
 def _evaluate_wall(document: ProceduralMeshDocument, operation) -> list[EvaluatedSolid]:
-    source_path_id = str(operation.params.get("source_path_id", ""))
-    path_ref = document.find_path_ref(source_path_id)
-    if path_ref is None:
+    source_sketch_id = str(operation.params.get("source_sketch_id", ""))
+    sketch = document.find_sketch(source_sketch_id)
+    if sketch is None:
         log.error(
             "[ProceduralMeshDocument] cannot evaluate wall operation: "
-            f"path not found '{source_path_id}' operation='{operation.id}'"
+            f"sketch not found '{source_sketch_id}' operation='{operation.id}'"
         )
         return []
-    sketch, path = path_ref
 
     height = _param_float(operation.params, "height", 3.0)
     thickness = _param_float(operation.params, "thickness", 0.2)
@@ -259,10 +258,6 @@ def _evaluate_wall(document: ProceduralMeshDocument, operation) -> list[Evaluate
         )
         return []
 
-    profile = _wall_profile_from_path(path.points, thickness, alignment, operation.id)
-    if not profile:
-        return []
-
     extrusion_vector = (
         sketch.plane.normal[0] * height,
         sketch.plane.normal[1] * height,
@@ -272,28 +267,56 @@ def _evaluate_wall(document: ProceduralMeshDocument, operation) -> list[Evaluate
         sketch_extrude_point_transform(sketch, extrusion_vector, height),
         operation,
     )
-    try:
-        solid = _extrude_pairs(profile, height, [])
-    except Exception as e:
+    input_ids = set(operation.inputs)
+    results: list[EvaluatedSolid] = []
+    for path in sketch.paths:
+        if path.id not in input_ids:
+            continue
+        profile = _wall_profile_from_open_path(path.points, thickness, alignment, operation.id)
+        if not profile:
+            continue
+        solid = _extrude_wall_profile(profile, [], height, operation.id, "path", path.id)
+        if solid is None:
+            continue
+        results.append(
+            EvaluatedSolid(
+                operation_id=operation.id,
+                contour_id=path.id,
+                solid=solid,
+                point_transform=point_transform,
+            )
+        )
+    for contour in sketch.outer_contours():
+        if contour.id not in input_ids:
+            continue
+        holes = sketch.hole_contours_for_outer(contour.id)
+        if holes:
+            log.error(
+                "[ProceduralMeshDocument] cannot evaluate wall operation: "
+                f"contour has holes operation='{operation.id}' contour='{contour.id}' holes={len(holes)}"
+            )
+            continue
+        profile = _wall_profile_from_closed_contour(contour.points, thickness, alignment, operation.id, contour.id)
+        if profile is None:
+            continue
+        outer, hole = profile
+        solid = _extrude_wall_profile(outer, [hole], height, operation.id, "contour", contour.id)
+        if solid is None:
+            continue
+        results.append(
+            EvaluatedSolid(
+                operation_id=operation.id,
+                contour_id=contour.id,
+                solid=solid,
+                point_transform=point_transform,
+            )
+        )
+    if not results:
         log.error(
-            "[ProceduralMeshDocument] failed to evaluate wall "
-            f"operation='{operation.id}' path='{path.id}': {e}"
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"source sketch produced no wall solids operation='{operation.id}' sketch='{sketch.id}'"
         )
-        return []
-
-    if solid.status != "No Error":
-        log.error(
-            "[ProceduralMeshDocument] wall operation returned invalid solid "
-            f"operation='{operation.id}' path='{path.id}' status='{solid.status}'"
-        )
-    return [
-        EvaluatedSolid(
-            operation_id=operation.id,
-            contour_id=path.id,
-            solid=solid,
-            point_transform=point_transform,
-        )
-    ]
+    return results
 
 
 def _evaluate_boolean(
@@ -459,7 +482,31 @@ def _v_add(a: Vec3Data, b: Vec3Data) -> Vec3Data:
     return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
 
 
-def _wall_profile_from_path(
+def _extrude_wall_profile(
+    outer: list[Vec2Data],
+    holes: list[list[Vec2Data]],
+    height: float,
+    operation_id: str,
+    source_kind: str,
+    source_id: str,
+) -> Solid | None:
+    try:
+        solid = _extrude_pairs(outer, height, holes)
+    except Exception as e:
+        log.error(
+            "[ProceduralMeshDocument] failed to evaluate wall "
+            f"operation='{operation_id}' {source_kind}='{source_id}': {e}"
+        )
+        return None
+    if solid.status != "No Error":
+        log.error(
+            "[ProceduralMeshDocument] wall operation returned invalid solid "
+            f"operation='{operation_id}' {source_kind}='{source_id}' status='{solid.status}'"
+        )
+    return solid
+
+
+def _wall_profile_from_open_path(
     points: list[Vec2Data],
     thickness: float,
     alignment: str,
@@ -496,6 +543,57 @@ def _wall_profile_from_path(
     return profile
 
 
+def _wall_profile_from_closed_contour(
+    points: list[Vec2Data],
+    thickness: float,
+    alignment: str,
+    operation_id: str,
+    contour_id: str,
+) -> tuple[list[Vec2Data], list[Vec2Data]] | None:
+    clean_points = _clean_path_points(points)
+    if len(clean_points) < 3:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"contour needs at least 3 unique points operation='{operation_id}' contour='{contour_id}'"
+        )
+        return None
+    if abs(_signed_area_2d(clean_points)) < 1.0e-9:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"contour has zero area operation='{operation_id}' contour='{contour_id}'"
+        )
+        return None
+    if alignment == "center":
+        left_distance = thickness * 0.5
+        right_distance = -thickness * 0.5
+    elif alignment == "left":
+        left_distance = thickness
+        right_distance = 0.0
+    else:
+        left_distance = 0.0
+        right_distance = -thickness
+
+    left = _offset_closed_polyline(clean_points, left_distance)
+    right = _offset_closed_polyline(clean_points, right_distance)
+    if not left or not right:
+        return None
+    left_area = abs(_signed_area_2d(left))
+    right_area = abs(_signed_area_2d(right))
+    if left_area < 1.0e-9 or right_area < 1.0e-9 or abs(left_area - right_area) < 1.0e-9:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"closed wall profile has zero thickness operation='{operation_id}' contour='{contour_id}'"
+        )
+        return None
+    outer = left if left_area > right_area else right
+    hole = right if left_area > right_area else left
+    if _signed_area_2d(outer) < 0.0:
+        outer = list(reversed(outer))
+    if _signed_area_2d(hole) < 0.0:
+        hole = list(reversed(hole))
+    return (outer, hole)
+
+
 def _clean_path_points(points: list[Vec2Data]) -> list[Vec2Data]:
     result: list[Vec2Data] = []
     for point in points:
@@ -503,6 +601,31 @@ def _clean_path_points(points: list[Vec2Data]) -> list[Vec2Data]:
         if result and _distance_2d(result[-1], item) < 1.0e-9:
             continue
         result.append(item)
+    return result
+
+
+def _offset_closed_polyline(points: list[Vec2Data], distance: float) -> list[Vec2Data]:
+    if abs(distance) < 1.0e-12:
+        return points[:]
+    count = len(points)
+    result: list[Vec2Data] = []
+    for index, point in enumerate(points):
+        prev_point = points[(index - 1) % count]
+        next_point = points[(index + 1) % count]
+        prev_dir = _normalized_2d(_sub_2d(point, prev_point))
+        next_dir = _normalized_2d(_sub_2d(next_point, point))
+        prev_normal = (-prev_dir[1], prev_dir[0])
+        next_normal = (-next_dir[1], next_dir[0])
+        prev_offset = _add_2d(point, _mul_2d(prev_normal, distance))
+        next_offset = _add_2d(point, _mul_2d(next_normal, distance))
+        intersection = _line_intersection_2d(prev_offset, prev_dir, next_offset, next_dir)
+        if intersection is None or _distance_2d(point, intersection) > max(abs(distance) * 12.0, 1.0e-6):
+            normal = _normalized_2d(_add_2d(prev_normal, next_normal))
+            if _length_2d(normal) < 1.0e-9:
+                normal = next_normal
+            result.append(_add_2d(point, _mul_2d(normal, distance)))
+        else:
+            result.append(intersection)
     return result
 
 

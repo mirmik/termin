@@ -238,10 +238,10 @@ def add_wall_for_selection(
     thickness: float = 0.2,
     alignment: str = "center",
 ) -> DocumentEditResult:
-    if selection is None or selection[0] != "path":
-        log.error("[CsgDocumentEdit] cannot create wall: select a path")
+    if selection is None or selection[0] != "sketch":
+        log.error("[CsgDocumentEdit] cannot create wall: select a sketch")
         return DocumentEditResult(False)
-    operation = document.add_wall_operation_for_path(
+    operation = document.add_wall_operation_for_sketch(
         selection[1],
         height=height,
         thickness=thickness,
