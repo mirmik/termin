@@ -270,6 +270,72 @@ TEST_CASE("raw material engine uniform rewrite is idempotent")
     CHECK_EQ(twice.find("#define u_model pc._u_model"), twice.rfind("#define u_model pc._u_model"));
 }
 
+TEST_CASE("raw material engine uniform rewrite ignores push-constant struct fields")
+{
+    std::string src =
+        "#version 330 core\n"
+        "struct IdPushData {\n"
+        "    mat4 u_model;\n"
+        "    vec4 u_pickColor;\n"
+        "};\n"
+        "#ifdef VULKAN\n"
+        "layout(push_constant) uniform IdPushBlock { IdPushData pc; };\n"
+        "#else\n"
+        "layout(std140, binding = 14) uniform IdPushBlock { IdPushData pc; };\n"
+        "#endif\n"
+        "layout(location=0) out vec4 fragColor;\n"
+        "void main() { fragColor = vec4(pc.u_pickColor.rgb, 1.0); }\n";
+
+    std::string out = rewrite_engine_uniforms_for_stage_source(src, "fragment");
+
+    CHECK(out.find("#version 450 core") != std::string::npos);
+    CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") == std::string::npos);
+    CHECK(out.find("layout(push_constant) uniform ColorPushBlock") == std::string::npos);
+    CHECK(out.find("#define u_model pc._u_model") == std::string::npos);
+    CHECK(out.find("mat4 u_model;") != std::string::npos);
+    CHECK(out.find("pc._u_model") == std::string::npos);
+}
+
+TEST_CASE("raw material engine uniform rewrite only injects model macro for model uniform decl")
+{
+    std::string src =
+        "#version 330 core\n"
+        "uniform vec3 u_camera_position;\n"
+        "struct LocalData { mat4 u_model; };\n"
+        "out vec4 FragColor;\n"
+        "void main() { FragColor = vec4(u_camera_position, 1.0); }\n";
+
+    std::string out = rewrite_engine_uniforms_for_stage_source(src, "fragment");
+
+    CHECK(out.find("#version 450 core") != std::string::npos);
+    CHECK(out.find("uniform vec3 u_camera_position;") == std::string::npos);
+    CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
+    CHECK(out.find("layout(push_constant) uniform ColorPushBlock") == std::string::npos);
+    CHECK(out.find("#define u_model pc._u_model") == std::string::npos);
+    CHECK(out.find("mat4 u_model;") != std::string::npos);
+}
+
+TEST_CASE("raw material engine uniform rewrite injects PerFrame for stdlib u_view usage")
+{
+    std::string src =
+        "#version 330 core\n"
+        "in vec3 v_world_pos;\n"
+        "out vec4 FragColor;\n"
+        "float view_depth() {\n"
+        "    vec4 view_pos = u_view * vec4(v_world_pos, 1.0);\n"
+        "    return view_pos.y;\n"
+        "}\n"
+        "void main() { FragColor = vec4(view_depth()); }\n";
+
+    std::string out = rewrite_engine_uniforms_for_stage_source(src, "fragment");
+
+    CHECK(out.find("#version 450 core") != std::string::npos);
+    CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
+    CHECK(out.find("mat4 u_view;") != std::string::npos);
+    CHECK(out.find("layout(push_constant) uniform ColorPushBlock") == std::string::npos);
+    CHECK(out.find("#define u_model pc._u_model") == std::string::npos);
+}
+
 TEST_CASE("skinned shader variants rewrite legacy engine uniforms for Vulkan")
 {
     std::string vertex =
