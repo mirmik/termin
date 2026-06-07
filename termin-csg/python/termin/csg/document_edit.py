@@ -231,6 +231,27 @@ def add_extrude_for_selection(
     return DocumentEditResult(True, ("operation", operation.id), operation=operation)
 
 
+def add_wall_for_selection(
+    document: ProceduralMeshDocument,
+    selection: SelectionData | None,
+    height: float = 3.0,
+    thickness: float = 0.2,
+    alignment: str = "center",
+) -> DocumentEditResult:
+    if selection is None or selection[0] != "path":
+        log.error("[CsgDocumentEdit] cannot create wall: select a path")
+        return DocumentEditResult(False)
+    operation = document.add_wall_operation_for_path(
+        selection[1],
+        height=height,
+        thickness=thickness,
+        alignment=alignment,
+    )
+    if operation is None:
+        return DocumentEditResult(False)
+    return DocumentEditResult(True, ("operation", operation.id), operation=operation)
+
+
 def selected_operation_id(
     document: ProceduralMeshDocument,
     selection: SelectionData | None,
@@ -415,6 +436,42 @@ def set_primitive_params(
     return True
 
 
+def set_wall_params(
+    document: ProceduralMeshDocument,
+    operation_id: str,
+    height: float,
+    thickness: float,
+    alignment: str,
+) -> bool:
+    operation = document.find_operation(operation_id)
+    if operation is None:
+        log.error(f"[CsgDocumentEdit] cannot set wall params: operation not found '{operation_id}'")
+        return False
+    if operation.kind != "wall":
+        log.error(
+            "[CsgDocumentEdit] cannot set wall params: "
+            f"operation '{operation_id}' has kind '{operation.kind}'"
+        )
+        return False
+    if float(height) <= 0.0 or float(thickness) <= 0.0:
+        log.error(
+            "[CsgDocumentEdit] cannot set wall params: "
+            f"height and thickness must be positive operation='{operation_id}'"
+        )
+        return False
+    alignment_value = str(alignment)
+    if alignment_value not in {"center", "left", "right"}:
+        log.error(
+            "[CsgDocumentEdit] cannot set wall params: "
+            f"invalid alignment '{alignment}' operation='{operation_id}'"
+        )
+        return False
+    operation.params["height"] = float(height)
+    operation.params["thickness"] = float(thickness)
+    operation.params["alignment"] = alignment_value
+    return True
+
+
 def set_operation_transform(
     document: ProceduralMeshDocument,
     operation_id: str,
@@ -465,6 +522,28 @@ def set_contour_point(
         )
         return False
     contour.points[index] = (float(point[0]), float(point[1]))
+    return True
+
+
+def set_path_point(
+    document: ProceduralMeshDocument,
+    path_id: str,
+    point_index: int,
+    point: Vec2Data,
+) -> bool:
+    path_ref = document.find_path_ref(path_id)
+    if path_ref is None:
+        log.error(f"[CsgDocumentEdit] cannot set path point: path not found '{path_id}'")
+        return False
+    _sketch, path = path_ref
+    index = int(point_index)
+    if index < 0 or index >= len(path.points):
+        log.error(
+            "[CsgDocumentEdit] cannot set path point: "
+            f"index out of range path='{path_id}' index={index} points={len(path.points)}"
+        )
+        return False
+    path.points[index] = (float(point[0]), float(point[1]))
     return True
 
 
@@ -569,6 +648,7 @@ __all__ = [
     "add_draft_point_from_ray",
     "add_extrude_for_selection",
     "add_primitive_operation",
+    "add_wall_for_selection",
     "clear_document",
     "close_draft_contour",
     "finish_draft_path",
@@ -579,7 +659,9 @@ __all__ = [
     "set_contour_point",
     "set_extrude_vector",
     "set_operation_transform",
+    "set_path_point",
     "set_primitive_params",
+    "set_wall_params",
     "set_sketch_plane",
     "start_sketch_draft",
 ]

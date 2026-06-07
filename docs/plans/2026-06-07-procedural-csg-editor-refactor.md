@@ -13,6 +13,8 @@
 - 2026-06-07: Phase 5 начата. Добавлен `termin.csg.document_mesh` для сборки evaluated root solids в `Mesh3`/`TcMesh`; `ProceduralMeshComponent` получил dirty state, auto-regenerate policy и запись результата в соседний `MeshComponent`.
 - 2026-06-07: Начата декомпозиция `cad_app.py`: standalone SDL loop вынесен в `termin.csg.cad_runtime`, tcgui bridge для document tree вынесен в `termin.csg.cad_tree_adapter`.
 - 2026-06-07: В sketch model добавлены открытые `SketchPathDocument` для незамкнутых ломаных. Это подготовительный слой для операций вроде стен: path уже сохраняется, отображается в tree/viewport и создаётся через draft, а генерация solid-стены остаётся следующим отдельным этапом.
+- 2026-06-07: Добавлена операция `wall` над `SketchPathDocument`: создание из выбранного path, параметры `height`/`thickness`/`alignment`, tree/inspector отображение и evaluation в solid для boolean operations.
+- 2026-06-07: Viewport dragging точек обобщён с contour на sketch geometry: выбранные `Path` теперь редактируются на экране так же, как `Contour`, без перехвата кликов режимом Draw Sketch.
 
 ## Контекст
 

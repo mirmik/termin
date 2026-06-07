@@ -26,11 +26,13 @@ from termin.csg.procedural_document import (
     BOOLEAN_OPERATION_KINDS,
     CONTOUR_ROLE_HOLE,
     CONTOUR_ROLE_OUTER,
+    OPERATION_KIND_WALL,
     PRIMITIVE_OPERATION_KIND,
     ProceduralMeshDocument,
     SketchItemDocument,
 )
 
+Vec2Data = tuple[float, float]
 Vec3Data = tuple[float, float, float]
 PointTransform = Callable[[Vec3Data], Vec3Data]
 
@@ -76,6 +78,8 @@ def evaluate_document(document: ProceduralMeshDocument) -> list[EvaluatedSolid]:
         visiting_operation_ids.add(operation.id)
         if operation.kind == "extrude":
             result = _evaluate_extrude(document, operation)
+        elif operation.kind == OPERATION_KIND_WALL:
+            result = _evaluate_wall(document, operation)
         elif operation.kind == PRIMITIVE_OPERATION_KIND:
             result = _evaluate_primitive(operation)
         elif operation.kind in BOOLEAN_OPERATION_KINDS:
@@ -226,6 +230,70 @@ def _evaluate_extrude(document: ProceduralMeshDocument, operation) -> list[Evalu
             )
         )
     return results
+
+
+def _evaluate_wall(document: ProceduralMeshDocument, operation) -> list[EvaluatedSolid]:
+    source_path_id = str(operation.params.get("source_path_id", ""))
+    path_ref = document.find_path_ref(source_path_id)
+    if path_ref is None:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"path not found '{source_path_id}' operation='{operation.id}'"
+        )
+        return []
+    sketch, path = path_ref
+
+    height = _param_float(operation.params, "height", 3.0)
+    thickness = _param_float(operation.params, "thickness", 0.2)
+    alignment = str(operation.params.get("alignment", "center"))
+    if height <= 0.0 or thickness <= 0.0:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"height and thickness must be positive operation='{operation.id}'"
+        )
+        return []
+    if alignment not in {"center", "left", "right"}:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"invalid alignment '{alignment}' operation='{operation.id}'"
+        )
+        return []
+
+    profile = _wall_profile_from_path(path.points, thickness, alignment, operation.id)
+    if not profile:
+        return []
+
+    extrusion_vector = (
+        sketch.plane.normal[0] * height,
+        sketch.plane.normal[1] * height,
+        sketch.plane.normal[2] * height,
+    )
+    point_transform = _compose_operation_point_transform(
+        sketch_extrude_point_transform(sketch, extrusion_vector, height),
+        operation,
+    )
+    try:
+        solid = _extrude_pairs(profile, height, [])
+    except Exception as e:
+        log.error(
+            "[ProceduralMeshDocument] failed to evaluate wall "
+            f"operation='{operation.id}' path='{path.id}': {e}"
+        )
+        return []
+
+    if solid.status != "No Error":
+        log.error(
+            "[ProceduralMeshDocument] wall operation returned invalid solid "
+            f"operation='{operation.id}' path='{path.id}' status='{solid.status}'"
+        )
+    return [
+        EvaluatedSolid(
+            operation_id=operation.id,
+            contour_id=path.id,
+            solid=solid,
+            point_transform=point_transform,
+        )
+    ]
 
 
 def _evaluate_boolean(
@@ -389,6 +457,132 @@ def _is_zero_vec3(value: Vec3Data) -> bool:
 
 def _v_add(a: Vec3Data, b: Vec3Data) -> Vec3Data:
     return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def _wall_profile_from_path(
+    points: list[Vec2Data],
+    thickness: float,
+    alignment: str,
+    operation_id: str,
+) -> list[Vec2Data]:
+    clean_points = _clean_path_points(points)
+    if len(clean_points) < 2:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"path needs at least 2 unique points operation='{operation_id}'"
+        )
+        return []
+    if alignment == "center":
+        left_distance = thickness * 0.5
+        right_distance = -thickness * 0.5
+    elif alignment == "left":
+        left_distance = thickness
+        right_distance = 0.0
+    else:
+        left_distance = 0.0
+        right_distance = -thickness
+
+    left = _offset_open_polyline(clean_points, left_distance)
+    right = _offset_open_polyline(clean_points, right_distance)
+    profile = left + list(reversed(right))
+    if abs(_signed_area_2d(profile)) < 1.0e-9:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"wall profile has zero area operation='{operation_id}'"
+        )
+        return []
+    if _signed_area_2d(profile) < 0.0:
+        profile.reverse()
+    return profile
+
+
+def _clean_path_points(points: list[Vec2Data]) -> list[Vec2Data]:
+    result: list[Vec2Data] = []
+    for point in points:
+        item = (float(point[0]), float(point[1]))
+        if result and _distance_2d(result[-1], item) < 1.0e-9:
+            continue
+        result.append(item)
+    return result
+
+
+def _offset_open_polyline(points: list[Vec2Data], distance: float) -> list[Vec2Data]:
+    if abs(distance) < 1.0e-12:
+        return points[:]
+    result: list[Vec2Data] = []
+    segment_dirs = [_normalized_2d(_sub_2d(points[index + 1], points[index])) for index in range(len(points) - 1)]
+    segment_normals = [(-direction[1], direction[0]) for direction in segment_dirs]
+    for index, point in enumerate(points):
+        if index == 0:
+            result.append(_add_2d(point, _mul_2d(segment_normals[0], distance)))
+            continue
+        if index == len(points) - 1:
+            result.append(_add_2d(point, _mul_2d(segment_normals[-1], distance)))
+            continue
+        prev_point = _add_2d(point, _mul_2d(segment_normals[index - 1], distance))
+        next_point = _add_2d(point, _mul_2d(segment_normals[index], distance))
+        intersection = _line_intersection_2d(prev_point, segment_dirs[index - 1], next_point, segment_dirs[index])
+        if intersection is None or _distance_2d(point, intersection) > max(abs(distance) * 12.0, 1.0e-6):
+            normal = _normalized_2d(_add_2d(segment_normals[index - 1], segment_normals[index]))
+            if _length_2d(normal) < 1.0e-9:
+                normal = segment_normals[index]
+            result.append(_add_2d(point, _mul_2d(normal, distance)))
+        else:
+            result.append(intersection)
+    return result
+
+
+def _line_intersection_2d(
+    point_a: Vec2Data,
+    dir_a: Vec2Data,
+    point_b: Vec2Data,
+    dir_b: Vec2Data,
+) -> Vec2Data | None:
+    cross = _cross_2d(dir_a, dir_b)
+    if abs(cross) < 1.0e-9:
+        return None
+    rel = _sub_2d(point_b, point_a)
+    t = _cross_2d(rel, dir_b) / cross
+    return _add_2d(point_a, _mul_2d(dir_a, t))
+
+
+def _signed_area_2d(points: list[Vec2Data]) -> float:
+    area = 0.0
+    for index, point in enumerate(points):
+        next_point = points[(index + 1) % len(points)]
+        area += point[0] * next_point[1] - next_point[0] * point[1]
+    return area * 0.5
+
+
+def _normalized_2d(value: Vec2Data) -> Vec2Data:
+    length = _length_2d(value)
+    if length < 1.0e-12:
+        return (0.0, 0.0)
+    return (value[0] / length, value[1] / length)
+
+
+def _length_2d(value: Vec2Data) -> float:
+    return (value[0] * value[0] + value[1] * value[1]) ** 0.5
+
+
+def _distance_2d(a: Vec2Data, b: Vec2Data) -> float:
+    return _length_2d(_sub_2d(a, b))
+
+
+def _add_2d(a: Vec2Data, b: Vec2Data) -> Vec2Data:
+    return (a[0] + b[0], a[1] + b[1])
+
+
+def _sub_2d(a: Vec2Data, b: Vec2Data) -> Vec2Data:
+    return (a[0] - b[0], a[1] - b[1])
+
+
+def _mul_2d(a: Vec2Data, scale: float) -> Vec2Data:
+    return (a[0] * scale, a[1] * scale)
+
+
+def _cross_2d(a: Vec2Data, b: Vec2Data) -> float:
+    return a[0] * b[1] - a[1] * b[0]
 
 
 def _mesh_signed_volume(vertices: np.ndarray, triangles: np.ndarray) -> float:
