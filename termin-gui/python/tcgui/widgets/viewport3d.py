@@ -23,6 +23,7 @@ from tcgui.widgets.events import DragEvent, MouseEvent, MouseWheelEvent, KeyEven
 
 if TYPE_CHECKING:
     from termin.visualization.platform.backends.fbo_backend import FBOSurface
+    from tcgui.widgets.renderer import UIRenderer
 
 
 class Viewport3D(Widget):

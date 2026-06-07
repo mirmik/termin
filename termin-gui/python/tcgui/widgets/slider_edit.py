@@ -1,12 +1,15 @@
 """SliderEdit widget."""
 
 from __future__ import annotations
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.slider import Slider
 from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.theme import current_theme as _t
+
+if TYPE_CHECKING:
+    from tcgui.widgets.renderer import UIRenderer
 
 
 class SliderEdit(Widget):

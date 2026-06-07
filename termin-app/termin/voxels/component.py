@@ -11,6 +11,7 @@ from termin.voxels.grid import VoxelGrid
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
+    from termin.voxels.visualization import VoxelVisualizer
 
 
 class VoxelGridComponent(PythonComponent):

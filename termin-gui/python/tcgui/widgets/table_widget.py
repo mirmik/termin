@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent
 from tcgui.widgets.theme import current_theme as _t
+
+if TYPE_CHECKING:
+    from tcgui.widgets.renderer import UIRenderer
 
 
 class TableColumn:

@@ -22,6 +22,7 @@ from termin.inspect import InspectField
 from tcbase import log
 
 if TYPE_CHECKING:
+    from termin.navmesh.types import NavMesh
     from termin.visualization.core.scene import Scene
     from termin.visualization.render.render_context import RenderContext
     from termin.voxels.grid import VoxelGrid

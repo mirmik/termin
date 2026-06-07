@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 
@@ -21,6 +21,9 @@ from tcgui.widgets.units import px
 from termin.editor_core.editor_commands import ScenePropertyEditCommand, SkyboxTypeEditCommand
 from termin.visualization.core.scene import Scene, scene_render_state, scene_render_mount
 from tcbase import log
+
+if TYPE_CHECKING:
+    from termin.editor_core.undo_stack import UndoCommand
 
 
 def _color_to_rgba255(value) -> tuple[int, int, int, int]:

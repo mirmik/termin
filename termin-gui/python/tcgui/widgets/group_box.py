@@ -1,11 +1,14 @@
 """GroupBox container."""
 
 from __future__ import annotations
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent
 from tcgui.widgets.theme import current_theme as _t
+
+if TYPE_CHECKING:
+    from tcgui.widgets.renderer import UIRenderer
 
 
 class GroupBox(Widget):

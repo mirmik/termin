@@ -39,7 +39,7 @@ class EditorCameraManager:
     def __init__(self, scene: "Scene | None" = None):
         self._scene: "Scene | None" = None
         self.editor_entities: Entity | None = None
-        self.camera: PerspectiveCameraComponent | None = None
+        self.camera: CameraComponent | None = None
 
         # Legacy: if scene provided, attach immediately
         if scene is not None:
@@ -88,7 +88,7 @@ class EditorCameraManager:
         if self.editor_entities is not None:
             for child in self.editor_entities.transform.children:
                 if child.entity and child.entity.name == "camera":
-                    camera = child.entity.get_component(PerspectiveCameraComponent)
+                    camera = child.entity.get_component(CameraComponent)
                     if camera is not None:
                         self.camera = camera
                         print(f"[DEBUG] _ensure_editor_camera: FOUND existing camera={camera}", flush=True)
