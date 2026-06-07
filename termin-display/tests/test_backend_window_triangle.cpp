@@ -169,7 +169,8 @@ void main() {
     return 0;
 } catch (const std::exception& e) {
     fprintf(stderr, "backend_window_triangle failed: %s\n", e.what());
-    if (std::strstr(e.what(), "No available video device")) {
+    if (std::strstr(e.what(), "No available video device") ||
+        std::strstr(e.what(), "Vulkan support is either not configured in SDL")) {
         return 77;
     }
     return 1;

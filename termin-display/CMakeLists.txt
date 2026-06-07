@@ -315,7 +315,7 @@ if(TERMIN_DISPLAY_HAS_SDL)
         set_tests_properties(backend_window_triangle PROPERTIES
             TIMEOUT 10
             SKIP_RETURN_CODE 77
-            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device")
+            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL")
     endif()
 endif()
 
