@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.menu import Menu
 from tcgui.widgets.events import MouseEvent, KeyEvent
 from tcgui.widgets.theme import current_theme as _t
+
+if TYPE_CHECKING:
+    from tcgui.widgets.renderer import UIRenderer
 
 
 class MenuBar(Widget):

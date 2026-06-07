@@ -3,6 +3,7 @@
 
 import sys
 import traceback
+import unittest
 import motor_test
 
 def execute_test(test):
@@ -16,4 +17,3 @@ def execute_test(test):
 
 if __name__ == "__main__":
     execute_test(motor_test)
-    

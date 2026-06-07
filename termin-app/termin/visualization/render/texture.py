@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
 from termin.assets.texture_asset import TextureAsset
 from termin.assets.texture_handle import TextureHandle
+
+if TYPE_CHECKING:
+    from tgfx import TcTexture
 
 class Texture:
     """

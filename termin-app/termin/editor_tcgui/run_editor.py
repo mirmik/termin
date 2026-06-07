@@ -166,7 +166,7 @@ def _dispatch_sdl_file_drop(event, target_ui: UI) -> bool:
     return target_ui.external_drop(float(mx.value), float(my.value), payload, mods)
 
 
-def _dispatch_sdl_events(bw: BackendWindow, ui: UI, wm=None) -> tuple[bool, int]:
+def _dispatch_sdl_events(bw: SDLBackendWindow, ui: UI, wm=None) -> tuple[bool, int]:
     """Pump SDL events, forward to the UI of the window each event is for.
 
     We poll SDL directly (bypassing BackendWindow.poll_events) because

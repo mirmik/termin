@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from tcgui.widgets.widget import Widget
+
+if TYPE_CHECKING:
+    from tcgui.widgets.renderer import UIRenderer
 
 
 class ImageWidget(Widget):

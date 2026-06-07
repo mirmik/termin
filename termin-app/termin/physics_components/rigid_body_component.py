@@ -8,9 +8,12 @@ from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase import GeneralPose3
 from termin.inspect import InspectField
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 import warnings
 import numpy as np
+
+if TYPE_CHECKING:
+    from termin.visualization.core.scene import Scene
 
 
 class RigidBodyComponent(PythonComponent):

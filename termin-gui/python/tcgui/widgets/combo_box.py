@@ -1,12 +1,15 @@
 """ComboBox widget."""
 
 from __future__ import annotations
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from tcbase import MouseButton
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent
 from tcgui.widgets.theme import current_theme as _t
+
+if TYPE_CHECKING:
+    from tcgui.widgets.renderer import UIRenderer
 
 
 class ComboBox(Widget):
