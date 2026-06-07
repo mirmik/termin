@@ -284,6 +284,21 @@ Acceptance:
 - No shader asset mixes hand-written GLSL and Slang as parallel source
   variants.
 
+Status:
+
+- First Vulkan FSQ artifact smoke is in place. `tgfx2_vulkan_smoke` now
+  generates a temporary Slang vertex shader artifact at
+  `shaders/vulkan/termin-engine-fsq.vert.spv`, sets
+  `TERMIN_SHADER_ARTIFACT_ROOT`, and verifies that
+  `RenderContext2::draw_fullscreen_quad()` consumes that artifact instead of
+  the built-in GLSL fallback. The test uses a deliberate UV override so the
+  readback pixel distinguishes the Slang artifact path from the legacy shader.
+- This proves the smallest built-in path works through
+  `slangc -> termin_shaderc -> Vulkan SPIR-V -> RenderContext2 artifact load`.
+  The next step is to replace the test-only FSQ Slang source with a canonical
+  engine FSQ Slang source and wire artifact generation from the build/package
+  layer.
+
 ## Phase 8: D3D11 Artifact Preparation
 
 This phase starts only when working under Windows.
@@ -302,11 +317,14 @@ Acceptance:
 
 ## Immediate Next Steps
 
-1. Start Phase 7 with the fullscreen/present path now that generated Slang
-   artifact rendering is covered on Vulkan.
-2. Decide later how generated Slang OpenGL artifacts should target the existing
+1. Promote the FSQ Slang source from test-only smoke coverage into a canonical
+   built-in shader source and decide where built-in engine shader artifacts are
+   generated for SDK/runtime packages.
+2. Migrate the fullscreen/present fragment path after the FSQ vertex source has
+   a canonical artifact producer.
+3. Decide later how generated Slang OpenGL artifacts should target the existing
    GL smoke environment: request a GL 4.5 context, lower Slang GLSL output if
    the toolchain supports it, or keep OpenGL generated-artifact rendering as a
    separate higher-requirement smoke.
-3. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
+4. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
    Linux-side generation and runtime-consumption contract.
