@@ -23,6 +23,13 @@ struct PerFrame
 
 ConstantBuffer<PerFrame> per_frame : register(b2, space0);
 
+struct SlangDrawData
+{
+    column_major float4x4 u_model;
+};
+
+ConstantBuffer<SlangDrawData> draw_data : register(b24, space0);
+
 struct VertexInput
 {
     float3 position : POSITION;
@@ -39,9 +46,9 @@ struct VertexOutput
 VertexOutput main(VertexInput input)
 {
     VertexOutput output;
-    float4 world = float4(input.position, 1.0);
+    float4 world = mul(draw_data.u_model, float4(input.position, 1.0));
     output.position = mul(per_frame.u_projection, mul(per_frame.u_view, world));
-    output.normal_world = input.normal;
+    output.normal_world = mul((float3x3)draw_data.u_model, input.normal);
     return output;
 }
 @endstage

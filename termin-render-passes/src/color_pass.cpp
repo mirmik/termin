@@ -910,6 +910,9 @@ void ColorPass::execute_with_data(
         ColorPushData push{};
         std::memcpy(push.u_model, model.data, sizeof(push.u_model));
         ctx2->set_push_constants(&push, sizeof(push));
+        if (tc_shader_get_language(raw_shader) != TC_SHADER_LANGUAGE_GLSL) {
+            ctx2->bind_uniform_buffer_ring(24, &push, sizeof(push));
+        }
 
         // Per-draw uniforms that can't live in push-constants or the
         // material UBO yet — skinning bone matrices are the main case.

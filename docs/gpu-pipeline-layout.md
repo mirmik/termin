@@ -45,6 +45,7 @@ Vulkan SPIR-V or OpenGL GLSL, so `register(b2, space0)` maps to descriptor set
 | 9–15 | COMBINED_IMAGE_SAMPLER | 1 each | FS | material textures 4–10 | `ColorPass::execute_with_data` + `apply_material_phase_ubo` |
 | 16 | UBO | 1 | VS | `BoneBlock` | `SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2` |
 | 17–23 | COMBINED_IMAGE_SAMPLER | 1 each | FS | extra FS samplers (debug overlays, posteffect inputs) | caller-supplied |
+| 24 | UBO | 1 | VS | `SlangDrawBlock` | `ColorPass::execute_with_data` |
 | push | push-constants | 128 B | ALL_GRAPHICS | per-pass push block | per-pass writer |
 
 ### Cross-backend shader annotations
@@ -60,6 +61,7 @@ Vulkan SPIR-V or OpenGL GLSL, so `register(b2, space0)` maps to descriptor set
 | material textures 4–10 | `layout(binding = 9..15) uniform sampler2D ...` | `Texture2D ... : register(t9..t15)` |
 | `BoneBlock` | `layout(std140, binding = 16) uniform BoneBlock` | `cbuffer BoneBlock : register(b16)` |
 | extra FS samplers | `layout(binding = 17..23) uniform sampler2D ...` | `Texture2D ... : register(t17..t23)` |
+| `SlangDrawBlock` | n/a for GLSL material shaders | `ConstantBuffer<SlangDrawData> ... : register(b24, space0)` |
 | push block | Vulkan `layout(push_constant)`, OpenGL UBO binding 14 | D3D11 emulated cbuffer; reserve `b14` unless a backend-specific layout says otherwise |
 
 **Notes:**
@@ -71,8 +73,9 @@ Vulkan SPIR-V or OpenGL GLSL, so `register(b2, space0)` maps to descriptor set
 - OpenGL push constants ride a ring UBO at `TGFX2_PUSH_CONSTANTS_BINDING = 14`
   (GL's UBO binding space is disjoint from the sampler/texture-unit space,
   so reusing 14 there doesn't collide with sampler 14 on Vulkan).
-- Bindings 17..23 are declared as extra fragment sampler slots. Bindings above
-  23 are not declared in the universal Vulkan layout. If you need one, extend
+- Bindings 17..23 are declared as extra fragment sampler slots. Binding 24 is
+  a dynamic UBO for Slang/HLSL per-draw material data. Bindings above 24 are
+  not declared in the universal Vulkan layout. If you need one, extend
   `create_shared_layouts()` first — otherwise SPIR-V pipeline creation fails
   with "binding N not declared in pipeline layout".
 

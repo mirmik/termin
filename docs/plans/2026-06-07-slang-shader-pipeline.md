@@ -161,10 +161,11 @@ Status:
   `stdlib/shaders/SlangNormalColor.shader` plus
   `stdlib/materials/SlangNormalColor.material`.
 - The first material is intentionally small: it uses HLSL/Slang resource
-  syntax (`register(b2, space0)`) for the ColorPass `PerFrame` UBO and colors
-  fragments from normals. It intentionally avoids per-draw model data for now,
-  because Vulkan push constants and D3D11 cbuffer emulation need a proper
-  cross-backend Slang ABI decision.
+  syntax for the ColorPass `PerFrame` UBO (`register(b2, space0)`) and
+  per-draw model data (`SlangDrawData` at `register(b24, space0)`), then
+  colors fragments from transformed normals. Binding 24 is a dedicated dynamic
+  UBO slot for Slang/HLSL material draw data, separate from legacy GLSL
+  push-constant injection.
 - `termin_shaderc` maps HLSL `register(b/t/sN, spaceM)` declarations to
   Vulkan/OpenGL descriptor bindings with zero `-fvk-*-shift` values, so stdlib
   Slang sources do not need `[[vk::binding]]` for ordinary resources.
