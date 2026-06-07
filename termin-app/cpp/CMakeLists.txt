@@ -230,6 +230,11 @@ if(EXISTS "${TERMIN_RECAST_DIR}/CMakeLists.txt" AND EXISTS "${TERMIN_DETOUR_DIR}
     )
     set(TERMIN_HAS_RECAST ON)
 else()
+    if(TERMIN_BUILD_PYTHON)
+        message(FATAL_ERROR
+            "TERMIN_BUILD_PYTHON=ON requires the recastnavigation submodule. "
+            "Run: git submodule update --init --recursive termin-thirdparty/recastnavigation")
+    endif()
     message(WARNING "Recast/Detour submodules not found; navmesh support will be disabled.")
 endif()
 
