@@ -78,6 +78,20 @@ class _Editor:
         )
 
 
+class _HeightEditor(_Editor):
+    def world_ray_from_viewport_point(self, x, y):
+        return (
+            ((float(x) - 100.0) / 100.0 - 1.0, 0.0, (float(y) - 100.0) / 100.0),
+            (1.0, 0.0, 0.0),
+        )
+
+    def project_world_point_to_viewport(self, point):
+        return (
+            100.0 + float(point[0]) * 100.0,
+            100.0 + float(point[2]) * 100.0,
+        )
+
+
 class _Pose:
     def point_to_global(self, point):
         return Vec3(point.x, point.y, point.z)
@@ -214,5 +228,39 @@ def test_procedural_mesh_editor_extension_drags_selected_contour_point_in_viewpo
     assert isclose(contour.points[2][1], 1.25, abs_tol=1.0e-6)
     assert isclose(extension._editor_panel.contour_point_inputs[(2, "x")].value, 1.5, abs_tol=1.0e-6)
     assert isclose(extension._editor_panel.contour_point_inputs[(2, "y")].value, 1.25, abs_tol=1.0e-6)
+    assert component.dirty_count == 1
+    assert component.regenerate_count == 1
+
+
+def test_procedural_mesh_editor_extension_drags_selected_wall_height_in_viewport():
+    component = _Component()
+    path = component.document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+    sketch_id = component.document.find_sketch_id_for_path(path.id)
+    operation = component.document.add_wall_operation_for_sketch(sketch_id, height=3.0, thickness=0.2)
+    assert operation is not None
+
+    editor = _HeightEditor()
+    extension = ProceduralMeshEditorExtension()
+    extension.attach(editor, _Entity(), _ComponentRef(component))
+    extension.build_panel()
+    extension.build_left_panel()
+    extension._apply_controller_result(extension._controller.select_node(("operation", operation.id)))
+
+    assert extension._on_viewport_pointer("down", 200.0, 400.0, 0.0, 0.0, 0, 1, 0) is True
+    assert editor.viewport_tool_count == 1
+    assert extension._on_viewport_pointer("up", 200.0, 525.0, 0.0, 0.0, 0, 0, 0) is True
+
+    offsets = operation.params["corner_height_offsets"][path.id]
+    assert editor.viewport_tool_count == 0
+    assert isclose(offsets[1], 1.25, abs_tol=1.0e-6)
+    assert isclose(extension._editor_panel.wall_offset_inputs[(path.id, 1)].value, 1.25, abs_tol=1.0e-6)
     assert component.dirty_count == 1
     assert component.regenerate_count == 1

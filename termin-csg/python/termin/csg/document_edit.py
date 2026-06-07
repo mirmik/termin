@@ -21,6 +21,7 @@ from termin.csg.procedural_document import (
     ProceduralPlane,
     SketchPathDocument,
 )
+from termin.csg.wall_height_offsets import set_wall_corner_height_offset
 
 Vec2Data = tuple[float, float]
 Vec3Data = tuple[float, float, float]
@@ -472,6 +473,16 @@ def set_wall_params(
     return True
 
 
+def set_wall_corner_offset(
+    document: ProceduralMeshDocument,
+    operation_id: str,
+    source_id: str,
+    point_index: int,
+    offset: float,
+) -> bool:
+    return set_wall_corner_height_offset(document, operation_id, source_id, point_index, offset)
+
+
 def set_operation_transform(
     document: ProceduralMeshDocument,
     operation_id: str,
@@ -661,6 +672,7 @@ __all__ = [
     "set_operation_transform",
     "set_path_point",
     "set_primitive_params",
+    "set_wall_corner_offset",
     "set_wall_params",
     "set_sketch_plane",
     "start_sketch_draft",

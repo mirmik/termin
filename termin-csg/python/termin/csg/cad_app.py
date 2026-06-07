@@ -27,8 +27,11 @@ from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorContro
 from termin.csg.document_tree_model import build_document_tree
 from termin.csg.sketch_point_interaction import (
     SketchPointDrag,
+    WallHeightDrag,
     drag_point_to_ray,
+    drag_wall_height_offset_to_ray,
     pick_selected_sketch_point,
+    pick_selected_wall_height_point,
 )
 from termin.csg.cad_tree_adapter import (
     boolean_operation_id_for_tree_node,
@@ -55,6 +58,7 @@ class CadApp:
         self.last_directory = Path.cwd()
         self.show_wireframe = True
         self._sketch_point_drag: SketchPointDrag | None = None
+        self._wall_height_drag: WallHeightDrag | None = None
         self.editor_panel = CsgEditorPanel(
             self.controller,
             self._apply_controller_result,
@@ -479,6 +483,15 @@ class CadApp:
         log.info(f"[CsgCad] tree drop applied selection='{self.selected_node_data}' status='{result.message}'")
 
     def _on_scene_mouse_down(self, x: float, y: float, width: int, height: int) -> bool:
+        wall_drag = self._pick_selected_wall_height_point(x, y, width, height)
+        if wall_drag is not None:
+            self._wall_height_drag = wall_drag
+            self._set_status(f"Dragging wall height P{wall_drag.point_index}")
+            log.info(
+                "[CsgCad] wall height drag started "
+                f"operation='{wall_drag.operation_id}' source='{wall_drag.source_id}' index={wall_drag.point_index}"
+            )
+            return True
         drag = self._pick_selected_sketch_point(x, y, width, height)
         if drag is None:
             return False
@@ -491,11 +504,23 @@ class CadApp:
         return True
 
     def _on_scene_mouse_move(self, x: float, y: float, width: int, height: int) -> bool:
+        if self._wall_height_drag is not None:
+            return self._drag_wall_height_to_screen(x, y, width, height)
         if self._sketch_point_drag is None:
             return False
         return self._drag_sketch_point_to_screen(x, y, width, height)
 
     def _on_scene_mouse_up(self, x: float, y: float, width: int, height: int) -> bool:
+        wall_drag = self._wall_height_drag
+        if wall_drag is not None:
+            self._drag_wall_height_to_screen(x, y, width, height)
+            self._wall_height_drag = None
+            self._set_status(f"Wall height P{wall_drag.point_index} moved")
+            log.info(
+                "[CsgCad] wall height drag finished "
+                f"operation='{wall_drag.operation_id}' source='{wall_drag.source_id}' index={wall_drag.point_index}"
+            )
+            return True
         drag = self._sketch_point_drag
         if drag is None:
             return False
@@ -548,6 +573,21 @@ class CadApp:
             y,
         )
 
+    def _pick_selected_wall_height_point(
+        self,
+        x: float,
+        y: float,
+        width: int,
+        height: int,
+    ) -> WallHeightDrag | None:
+        return pick_selected_wall_height_point(
+            self.document,
+            self.selected_node_data,
+            lambda point: self._project_world_to_screen(point, width, height),
+            x,
+            y,
+        )
+
     def _drag_sketch_point_to_screen(self, x: float, y: float, width: int, height: int) -> bool:
         drag = self._sketch_point_drag
         if drag is None:
@@ -567,6 +607,19 @@ class CadApp:
             return True
         if drag.kind == "contour":
             self.editor_panel.sync_contour_point_inputs(drag.point_index, local_point)
+        self.request_preview_rebuild()
+        return True
+
+    def _drag_wall_height_to_screen(self, x: float, y: float, width: int, height: int) -> bool:
+        drag = self._wall_height_drag
+        if drag is None:
+            return False
+        ray_origin, ray_direction = self.camera.screen_ray(x, y, width, height)
+        offset = drag_wall_height_offset_to_ray(drag, ray_origin, ray_direction)
+        result = self.controller.set_wall_corner_offset(drag.operation_id, drag.source_id, drag.point_index, offset)
+        if not result.success:
+            return True
+        self.editor_panel.sync_wall_corner_offset_input(drag.source_id, drag.point_index, offset)
         self.request_preview_rebuild()
         return True
 

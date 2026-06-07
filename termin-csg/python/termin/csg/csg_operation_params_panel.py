@@ -30,6 +30,7 @@ from termin.csg.document_eval import extrude_vector_for_operation
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController
 from termin.csg.operation_specs import BOOLEAN_OPERATION_KINDS, PRIMITIVE_OPERATION_KIND
 from termin.csg.procedural_document import OPERATION_KIND_WALL
+from termin.csg.wall_height_offsets import MIN_WALL_CORNER_HEIGHT, wall_corner_height_offsets
 
 
 DispatchResult = Callable[[CsgEditorCommandResult, str], bool]
@@ -54,6 +55,7 @@ class CsgOperationParamsPanel:
         self.kind_label = Label()
         self.extrude_vector_inputs: dict[str, SpinBox] = {}
         self.wall_param_inputs: dict[str, SpinBox] = {}
+        self.wall_offset_inputs: dict[tuple[str, int], SpinBox] = {}
         self.wall_alignment_label = Label()
         self.transform_inputs: dict[str, SpinBox] = {}
         self._syncing = False
@@ -70,6 +72,7 @@ class CsgOperationParamsPanel:
         clear_children(self.panel)
         self.extrude_vector_inputs.clear()
         self.wall_param_inputs.clear()
+        self.wall_offset_inputs.clear()
         self.transform_inputs.clear()
         style_param_panel(self.panel)
         return self.panel
@@ -99,6 +102,7 @@ class CsgOperationParamsPanel:
         clear_children(self.panel)
         self.extrude_vector_inputs.clear()
         self.wall_param_inputs.clear()
+        self.wall_offset_inputs.clear()
         self.transform_inputs.clear()
 
         body = VStack()
@@ -181,6 +185,7 @@ class CsgOperationParamsPanel:
         alignment_row.add_child(make_button("Left", lambda: self.set_wall_alignment("left")))
         alignment_row.add_child(make_button("Right", lambda: self.set_wall_alignment("right")))
         body.add_child(alignment_row)
+        self._append_wall_corner_offset_rows(body, operation, sketch)
         return True
 
     def _build_vector_row(self, axis: str) -> HStack:
@@ -208,6 +213,47 @@ class CsgOperationParamsPanel:
         )
         self.wall_param_inputs[key] = spin
         return row
+
+    def _append_wall_corner_offset_rows(self, body: VStack, operation, sketch) -> None:
+        base_height = param_float(operation.params, "height", 3.0)
+        min_offset = MIN_WALL_CORNER_HEIGHT - base_height
+        input_ids = set(operation.inputs)
+        body.add_child(make_label("Corner offsets", COLOR_GROUP))
+        for path in sketch.paths:
+            if path.id not in input_ids:
+                continue
+            self._append_wall_source_offset_rows(body, operation, path.id, "Path", len(path.points), min_offset)
+        for contour in sketch.outer_contours():
+            if contour.id not in input_ids:
+                continue
+            if sketch.hole_contours_for_outer(contour.id):
+                continue
+            self._append_wall_source_offset_rows(body, operation, contour.id, "Contour", len(contour.points), min_offset)
+
+    def _append_wall_source_offset_rows(
+        self,
+        body: VStack,
+        operation,
+        source_id: str,
+        source_label: str,
+        point_count: int,
+        min_offset: float,
+    ) -> None:
+        offsets = wall_corner_height_offsets(
+            operation.params,
+            source_id,
+            point_count,
+            operation_id=operation.id,
+        )
+        for index, offset in enumerate(offsets):
+            row, spin = make_number_row(
+                f"{source_label} P{index}",
+                offset,
+                lambda value, s=source_id, i=index: self._on_wall_corner_offset_changed(s, i, value),
+                min_value=min_offset,
+            )
+            self.wall_offset_inputs[(source_id, index)] = spin
+            body.add_child(row)
 
     def _append_transform_rows(self, body: VStack, group: str, label_text: str, params: dict) -> None:
         body.add_child(make_label(label_text, COLOR_GROUP))
@@ -248,6 +294,21 @@ class CsgOperationParamsPanel:
             return
         self._apply_wall_params_from_inputs()
 
+    def _on_wall_corner_offset_changed(self, source_id: str, point_index: int, value: float) -> None:
+        if self._syncing:
+            return
+        operation = self._selected_operation()
+        if operation is None:
+            log.error(f"{self._log_prefix} cannot update wall corner offset: no operation is selected")
+            return
+        result = self.controller.set_wall_corner_offset(operation.id, source_id, point_index, float(value))
+        if not self._dispatch_result(result, ""):
+            return
+        log.info(
+            f"{self._log_prefix} wall corner offset changed "
+            f"operation='{operation.id}' source='{source_id}' index={point_index} offset={float(value):.3f}"
+        )
+
     def _apply_wall_params_from_inputs(self, alignment: str | None = None) -> None:
         operation = self._selected_operation()
         if operation is None:
@@ -273,6 +334,14 @@ class CsgOperationParamsPanel:
             f"{self._log_prefix} wall params changed "
             f"operation='{operation.id}' height={height:.3f} thickness={thickness:.3f} alignment='{next_alignment}'"
         )
+
+    def sync_wall_corner_offset_input(self, source_id: str, point_index: int, offset: float) -> None:
+        spin = self.wall_offset_inputs.get((source_id, int(point_index)))
+        if spin is None:
+            return
+        self._syncing = True
+        spin.value = float(offset)
+        self._syncing = False
 
     def _on_operation_transform_changed(self, _value: float) -> None:
         if self._syncing:

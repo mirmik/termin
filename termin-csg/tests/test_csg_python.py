@@ -30,6 +30,7 @@ from termin.csg.document_edit import (
     set_contour_point,
     set_path_point,
     set_sketch_plane,
+    set_wall_corner_offset,
     start_sketch_draft,
 )
 from termin.csg.procedural_document import CONTOUR_ROLE_HOLE, CONTOUR_ROLE_OUTER, ProceduralPlane
@@ -304,6 +305,62 @@ def test_procedural_document_evaluates_wall_operation_from_open_path():
     assert len(roots) == 1
     assert roots[0].text.startswith("[Wall]")
     assert roots[0].children[0].text.startswith("[Sketch]")
+
+
+def test_procedural_document_evaluates_variable_height_wall_from_open_path():
+    document = ProceduralMeshDocument()
+    path = document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+    sketch_id = document.find_sketch_id_for_path(path.id)
+    operation = document.add_wall_operation_for_sketch(
+        sketch_id,
+        height=3.0,
+        thickness=0.5,
+        alignment="center",
+    )
+    assert operation is not None
+
+    assert set_wall_corner_offset(document, operation.id, path.id, 1, 2.0)
+    restored = ProceduralMeshDocument.from_dict(document.to_dict())
+    restored_operation = restored.find_operation(operation.id)
+    assert restored_operation is not None
+    assert restored_operation.params["corner_height_offsets"][path.id] == [0.0, 2.0]
+
+    evaluated = evaluate_document(restored)
+    assert len(evaluated) == 1
+    assert evaluated[0].contour_id == path.id
+    assert isclose(evaluated[0].solid.volume, 4.0, abs_tol=1.0e-6)
+
+    visual = build_document_visual_model(restored, selected_node_data=("operation", operation.id))
+    handle_points = [point.point for point in visual.points if point.color == (0.36, 0.72, 1.0, 1.0)]
+    assert (0.0, 0.0, 3.0) in handle_points
+    assert (2.0, 0.0, 5.0) in handle_points
+
+
+def test_wall_corner_offset_rejects_non_positive_effective_height():
+    document = ProceduralMeshDocument()
+    path = document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+    sketch_id = document.find_sketch_id_for_path(path.id)
+    operation = document.add_wall_operation_for_sketch(sketch_id, height=2.0, thickness=0.2)
+    assert operation is not None
+
+    assert not set_wall_corner_offset(document, operation.id, path.id, 0, -2.0)
+    assert "corner_height_offsets" not in operation.params
 
 
 def test_procedural_document_evaluates_wall_operation_from_contour_without_holes():

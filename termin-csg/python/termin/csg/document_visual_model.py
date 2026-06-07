@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from termin.csg.procedural_document import ProceduralMeshDocument
+from termin.csg.procedural_document import OPERATION_KIND_WALL, ProceduralMeshDocument
+from termin.csg.wall_height_offsets import wall_effective_corner_heights
 
 Vec3Data = tuple[float, float, float]
 ColorData = tuple[float, float, float, float]
@@ -15,6 +16,7 @@ PATH_COLOR: ColorData = (0.95, 0.42, 0.18, 1.0)
 PATH_SELECTED_COLOR: ColorData = (1.0, 0.86, 0.38, 1.0)
 DRAFT_COLOR: ColorData = (1.0, 0.78, 0.12, 1.0)
 POINT_COLOR: ColorData = (1.0, 1.0, 1.0, 1.0)
+WALL_HEIGHT_COLOR: ColorData = (0.36, 0.72, 1.0, 1.0)
 
 
 @dataclass
@@ -105,6 +107,11 @@ def _append_selected_item(
             )
         )
         _append_points(model, points, PATH_SELECTED_COLOR)
+        return
+    if kind == "operation":
+        operation = document.find_operation(item_id)
+        if operation is not None and operation.kind == OPERATION_KIND_WALL:
+            _append_wall_height_handles(model, document, operation)
 
 
 def _append_sketch(model: DocumentVisualModel, sketch, line_color: ColorData, point_color: ColorData) -> None:
@@ -121,6 +128,61 @@ def _append_sketch(model: DocumentVisualModel, sketch, line_color: ColorData, po
 def _append_points(model: DocumentVisualModel, points: list[Vec3Data], color: ColorData) -> None:
     for point in points:
         model.points.append(VisualPoint(point=point, color=color))
+
+
+def _append_wall_height_handles(model: DocumentVisualModel, document: ProceduralMeshDocument, operation) -> None:
+    source_sketch_id = str(operation.params.get("source_sketch_id", ""))
+    sketch = document.find_sketch(source_sketch_id)
+    if sketch is None:
+        return
+    base_height = _param_float(operation.params, "height", 3.0)
+    normal = sketch.plane.normal
+    input_ids = set(operation.inputs)
+    for path in sketch.paths:
+        if path.id not in input_ids:
+            continue
+        base_points = sketch.path_points(path)
+        _append_wall_source_height_handles(model, operation, path.id, base_points, base_height, normal)
+    for contour in sketch.outer_contours():
+        if contour.id not in input_ids:
+            continue
+        if sketch.hole_contours_for_outer(contour.id):
+            continue
+        base_points = sketch.contour_points(contour)
+        _append_wall_source_height_handles(model, operation, contour.id, base_points, base_height, normal)
+
+
+def _append_wall_source_height_handles(
+    model: DocumentVisualModel,
+    operation,
+    source_id: str,
+    base_points: list[Vec3Data],
+    base_height: float,
+    normal: Vec3Data,
+) -> None:
+    heights = wall_effective_corner_heights(
+        operation.params,
+        source_id,
+        len(base_points),
+        base_height,
+        operation_id=operation.id,
+    )
+    for index, base_point in enumerate(base_points):
+        height = heights[index]
+        top_point = (
+            base_point[0] + normal[0] * height,
+            base_point[1] + normal[1] * height,
+            base_point[2] + normal[2] * height,
+        )
+        model.polylines.append(VisualPolyline(points=[base_point, top_point], color=WALL_HEIGHT_COLOR, closed=False))
+        model.points.append(VisualPoint(point=top_point, color=WALL_HEIGHT_COLOR, radius=0.07, depth_test=False))
+
+
+def _param_float(params: dict, key: str, default: float) -> float:
+    try:
+        return float(params.get(key, default))
+    except Exception:
+        return float(default)
 
 
 def _find_contour(document: ProceduralMeshDocument, contour_id: str):
@@ -146,6 +208,7 @@ __all__ = [
     "PATH_COLOR",
     "PATH_SELECTED_COLOR",
     "POINT_COLOR",
+    "WALL_HEIGHT_COLOR",
     "DocumentVisualModel",
     "VisualPoint",
     "VisualPolyline",
