@@ -90,6 +90,7 @@ class CsgEditorPanel:
         self.operation_params_kind = self.operation_params.kind_label
         self.extrude_vector_inputs = self.operation_params.extrude_vector_inputs
         self.wall_param_inputs = self.operation_params.wall_param_inputs
+        self.wall_offset_inputs = self.operation_params.wall_offset_inputs
         self.wall_alignment_label = self.operation_params.wall_alignment_label
         self.operation_transform_inputs = self.operation_params.transform_inputs
 
@@ -337,6 +338,9 @@ class CsgEditorPanel:
 
     def sync_contour_point_inputs(self, point_index: int, point: tuple[float, float]) -> None:
         self.contour_params.sync_point_inputs(point_index, point)
+
+    def sync_wall_corner_offset_input(self, source_id: str, point_index: int, offset: float) -> None:
+        self.operation_params.sync_wall_corner_offset_input(source_id, point_index, offset)
 
     def _dispatch_result(self, result: CsgEditorCommandResult, default_status: str = "") -> bool:
         ok = self._apply_result_callback(result, default_status)

@@ -26,6 +26,7 @@ from termin.csg.document_edit import (
     set_path_point,
     set_primitive_params,
     set_sketch_plane,
+    set_wall_corner_offset,
     set_wall_params,
     start_sketch_draft,
 )
@@ -357,6 +358,17 @@ class CsgEditorController:
         if not set_wall_params(self.document, operation_id, height, thickness, alignment):
             return CsgEditorCommandResult.failed()
         return CsgEditorCommandResult.changed(tree_changed=True, preview_changed=True)
+
+    def set_wall_corner_offset(
+        self,
+        operation_id: str,
+        source_id: str,
+        point_index: int,
+        offset: float,
+    ) -> CsgEditorCommandResult:
+        if not set_wall_corner_offset(self.document, operation_id, source_id, point_index, offset):
+            return CsgEditorCommandResult.failed()
+        return CsgEditorCommandResult.changed(tree_changed=False, preview_changed=True)
 
     def set_sketch_plane(self, sketch_id: str, plane: ProceduralPlane) -> CsgEditorCommandResult:
         if not set_sketch_plane(self.document, sketch_id, plane):

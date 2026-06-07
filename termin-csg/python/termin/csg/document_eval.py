@@ -31,6 +31,7 @@ from termin.csg.procedural_document import (
     ProceduralMeshDocument,
     SketchItemDocument,
 )
+from termin.csg.wall_height_offsets import MIN_WALL_CORNER_HEIGHT, wall_effective_corner_heights
 
 Vec2Data = tuple[float, float]
 Vec3Data = tuple[float, float, float]
@@ -258,13 +259,8 @@ def _evaluate_wall(document: ProceduralMeshDocument, operation) -> list[Evaluate
         )
         return []
 
-    extrusion_vector = (
-        sketch.plane.normal[0] * height,
-        sketch.plane.normal[1] * height,
-        sketch.plane.normal[2] * height,
-    )
     point_transform = _compose_operation_point_transform(
-        sketch_extrude_point_transform(sketch, extrusion_vector, height),
+        sketch_extrude_point_transform(sketch, sketch.plane.normal, 1.0),
         operation,
     )
     input_ids = set(operation.inputs)
@@ -272,10 +268,14 @@ def _evaluate_wall(document: ProceduralMeshDocument, operation) -> list[Evaluate
     for path in sketch.paths:
         if path.id not in input_ids:
             continue
-        profile = _wall_profile_from_open_path(path.points, thickness, alignment, operation.id)
-        if not profile:
-            continue
-        solid = _extrude_wall_profile(profile, [], height, operation.id, "path", path.id)
+        heights = wall_effective_corner_heights(
+            operation.params,
+            path.id,
+            len(path.points),
+            height,
+            operation_id=operation.id,
+        )
+        solid = _build_open_wall_solid(path.points, heights, thickness, alignment, operation.id, path.id)
         if solid is None:
             continue
         results.append(
@@ -296,11 +296,14 @@ def _evaluate_wall(document: ProceduralMeshDocument, operation) -> list[Evaluate
                 f"contour has holes operation='{operation.id}' contour='{contour.id}' holes={len(holes)}"
             )
             continue
-        profile = _wall_profile_from_closed_contour(contour.points, thickness, alignment, operation.id, contour.id)
-        if profile is None:
-            continue
-        outer, hole = profile
-        solid = _extrude_wall_profile(outer, [hole], height, operation.id, "contour", contour.id)
+        heights = wall_effective_corner_heights(
+            operation.params,
+            contour.id,
+            len(contour.points),
+            height,
+            operation_id=operation.id,
+        )
+        solid = _build_closed_wall_solid(contour.points, heights, thickness, alignment, operation.id, contour.id)
         if solid is None:
             continue
         results.append(
@@ -482,19 +485,133 @@ def _v_add(a: Vec3Data, b: Vec3Data) -> Vec3Data:
     return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
 
 
-def _extrude_wall_profile(
-    outer: list[Vec2Data],
-    holes: list[list[Vec2Data]],
-    height: float,
+def _build_open_wall_solid(
+    points: list[Vec2Data],
+    heights: list[float],
+    thickness: float,
+    alignment: str,
+    operation_id: str,
+    path_id: str,
+) -> Solid | None:
+    clean = _clean_indexed_path_points(points, closed=False)
+    if len(clean) < 2:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"path needs at least 2 unique points operation='{operation_id}' path='{path_id}'"
+        )
+        return None
+    clean_points = [point for _index, point in clean]
+    clean_heights = [_height_for_clean_point(heights, index, operation_id, "path", path_id) for index, _point in clean]
+    if not _validate_wall_corner_heights(clean_heights, operation_id, "path", path_id):
+        return None
+
+    left_distance, right_distance = _wall_profile_distances(thickness, alignment)
+    left = _offset_open_polyline(clean_points, left_distance)
+    right = _offset_open_polyline(clean_points, right_distance)
+    if len(left) != len(right) or len(left) != len(clean_heights):
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"open wall rails have inconsistent sizes operation='{operation_id}' path='{path_id}'"
+        )
+        return None
+
+    vertices: list[Vec3Data] = []
+    triangles: list[tuple[int, int, int]] = []
+    left_base: list[int] = []
+    right_base: list[int] = []
+    left_top: list[int] = []
+    right_top: list[int] = []
+    for index, height in enumerate(clean_heights):
+        left_base.append(_append_vertex(vertices, (left[index][0], left[index][1], 0.0)))
+        right_base.append(_append_vertex(vertices, (right[index][0], right[index][1], 0.0)))
+        left_top.append(_append_vertex(vertices, (left[index][0], left[index][1], height)))
+        right_top.append(_append_vertex(vertices, (right[index][0], right[index][1], height)))
+
+    for index in range(len(clean_heights) - 1):
+        next_index = index + 1
+        _append_quad(triangles, left_base[index], left_base[next_index], right_base[next_index], right_base[index])
+        _append_quad(triangles, left_top[index], right_top[index], right_top[next_index], left_top[next_index])
+        _append_quad(triangles, left_base[index], left_top[index], left_top[next_index], left_base[next_index])
+        _append_quad(triangles, right_base[index], right_base[next_index], right_top[next_index], right_top[index])
+
+    _append_quad(triangles, left_base[0], right_base[0], right_top[0], left_top[0])
+    _append_quad(triangles, left_base[-1], left_top[-1], right_top[-1], right_base[-1])
+    return _solid_from_wall_mesh(vertices, triangles, operation_id, "path", path_id)
+
+
+def _build_closed_wall_solid(
+    points: list[Vec2Data],
+    heights: list[float],
+    thickness: float,
+    alignment: str,
+    operation_id: str,
+    contour_id: str,
+) -> Solid | None:
+    clean = _clean_indexed_path_points(points, closed=True)
+    if len(clean) < 3:
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"contour needs at least 3 unique points operation='{operation_id}' contour='{contour_id}'"
+        )
+        return None
+    clean_points = [point for _index, point in clean]
+    clean_heights = [_height_for_clean_point(heights, index, operation_id, "contour", contour_id) for index, _point in clean]
+    if not _validate_wall_corner_heights(clean_heights, operation_id, "contour", contour_id):
+        return None
+    profile = _wall_profile_from_closed_contour(clean_points, thickness, alignment, operation_id, contour_id)
+    if profile is None:
+        return None
+    outer, inner = profile
+    if len(outer) != len(inner) or len(outer) != len(clean_heights):
+        log.error(
+            "[ProceduralMeshDocument] cannot evaluate wall operation: "
+            f"closed wall rails have inconsistent sizes operation='{operation_id}' contour='{contour_id}'"
+        )
+        return None
+
+    vertices: list[Vec3Data] = []
+    triangles: list[tuple[int, int, int]] = []
+    outer_base: list[int] = []
+    inner_base: list[int] = []
+    outer_top: list[int] = []
+    inner_top: list[int] = []
+    for index, height in enumerate(clean_heights):
+        outer_base.append(_append_vertex(vertices, (outer[index][0], outer[index][1], 0.0)))
+        inner_base.append(_append_vertex(vertices, (inner[index][0], inner[index][1], 0.0)))
+        outer_top.append(_append_vertex(vertices, (outer[index][0], outer[index][1], height)))
+        inner_top.append(_append_vertex(vertices, (inner[index][0], inner[index][1], height)))
+
+    for index in range(len(clean_heights)):
+        next_index = (index + 1) % len(clean_heights)
+        _append_quad(triangles, outer_base[index], inner_base[index], inner_base[next_index], outer_base[next_index])
+        _append_quad(triangles, outer_top[index], outer_top[next_index], inner_top[next_index], inner_top[index])
+        _append_quad(triangles, outer_base[index], outer_base[next_index], outer_top[next_index], outer_top[index])
+        _append_quad(triangles, inner_base[index], inner_top[index], inner_top[next_index], inner_base[next_index])
+    return _solid_from_wall_mesh(vertices, triangles, operation_id, "contour", contour_id)
+
+
+def _solid_from_wall_mesh(
+    vertices: list[Vec3Data],
+    triangles: list[tuple[int, int, int]],
     operation_id: str,
     source_kind: str,
     source_id: str,
 ) -> Solid | None:
     try:
-        solid = _extrude_pairs(outer, height, holes)
+        vertex_array = np.ascontiguousarray(vertices, dtype=np.float32)
+        triangle_array = np.ascontiguousarray(triangles, dtype=np.uint32)
+        if _mesh_signed_volume(vertex_array, triangle_array) < 0.0:
+            triangle_array = np.ascontiguousarray(triangle_array[:, [0, 2, 1]], dtype=np.uint32)
+        solid = from_mesh3(
+            Mesh3(
+                name=f"wall-{source_id}",
+                vertices=vertex_array,
+                triangles=triangle_array,
+            )
+        )
     except Exception as e:
         log.error(
-            "[ProceduralMeshDocument] failed to evaluate wall "
+            "[ProceduralMeshDocument] failed to evaluate wall mesh "
             f"operation='{operation_id}' {source_kind}='{source_id}': {e}"
         )
         return None
@@ -506,41 +623,67 @@ def _extrude_wall_profile(
     return solid
 
 
-def _wall_profile_from_open_path(
-    points: list[Vec2Data],
-    thickness: float,
-    alignment: str,
-    operation_id: str,
-) -> list[Vec2Data]:
-    clean_points = _clean_path_points(points)
-    if len(clean_points) < 2:
-        log.error(
-            "[ProceduralMeshDocument] cannot evaluate wall operation: "
-            f"path needs at least 2 unique points operation='{operation_id}'"
-        )
-        return []
-    if alignment == "center":
-        left_distance = thickness * 0.5
-        right_distance = -thickness * 0.5
-    elif alignment == "left":
-        left_distance = thickness
-        right_distance = 0.0
-    else:
-        left_distance = 0.0
-        right_distance = -thickness
+def _append_vertex(vertices: list[Vec3Data], point: Vec3Data) -> int:
+    vertices.append(point)
+    return len(vertices) - 1
 
-    left = _offset_open_polyline(clean_points, left_distance)
-    right = _offset_open_polyline(clean_points, right_distance)
-    profile = left + list(reversed(right))
-    if abs(_signed_area_2d(profile)) < 1.0e-9:
-        log.error(
-            "[ProceduralMeshDocument] cannot evaluate wall operation: "
-            f"wall profile has zero area operation='{operation_id}'"
-        )
-        return []
-    if _signed_area_2d(profile) < 0.0:
-        profile.reverse()
-    return profile
+
+def _append_quad(triangles: list[tuple[int, int, int]], a: int, b: int, c: int, d: int) -> None:
+    triangles.append((a, b, c))
+    triangles.append((a, c, d))
+
+
+def _clean_indexed_path_points(points: list[Vec2Data], closed: bool) -> list[tuple[int, Vec2Data]]:
+    result: list[tuple[int, Vec2Data]] = []
+    for index, point in enumerate(points):
+        item = (float(point[0]), float(point[1]))
+        if result and _distance_2d(result[-1][1], item) < 1.0e-9:
+            continue
+        result.append((index, item))
+    if closed and len(result) > 1 and _distance_2d(result[0][1], result[-1][1]) < 1.0e-9:
+        result.pop()
+    return result
+
+
+def _height_for_clean_point(
+    heights: list[float],
+    source_index: int,
+    operation_id: str,
+    source_kind: str,
+    source_id: str,
+) -> float:
+    if source_index < len(heights):
+        return float(heights[source_index])
+    log.error(
+        "[ProceduralMeshDocument] wall height missing for source point "
+        f"operation='{operation_id}' {source_kind}='{source_id}' index={source_index}"
+    )
+    return 0.0
+
+
+def _validate_wall_corner_heights(
+    heights: list[float],
+    operation_id: str,
+    source_kind: str,
+    source_id: str,
+) -> bool:
+    for index, height in enumerate(heights):
+        if height < MIN_WALL_CORNER_HEIGHT:
+            log.error(
+                "[ProceduralMeshDocument] cannot evaluate wall operation: "
+                f"corner height must be positive operation='{operation_id}' "
+                f"{source_kind}='{source_id}' index={index} height={height:.6f}"
+            )
+            return False
+    return True
+
+
+def _wall_profile_distances(thickness: float, alignment: str) -> tuple[float, float]:
+    if alignment == "center":
+        return (thickness * 0.5, -thickness * 0.5)
+    if alignment == "left":
+        return (thickness, 0.0)
+    return (0.0, -thickness)
 
 
 def _wall_profile_from_closed_contour(
