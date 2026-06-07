@@ -58,6 +58,31 @@ SceneMode = engine_scene.SceneMode
 _GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")
 
 
+def _resolve_termin_shaderc() -> Path | None:
+    configured = os.environ.get("TERMIN_SHADERC")
+    if configured:
+        path = Path(configured)
+        if path.is_file():
+            return path
+        log.error(f"[ShaderRuntime] TERMIN_SHADERC points to missing file: {configured}")
+        return None
+
+    sdk = os.environ.get("TERMIN_SDK")
+    if sdk:
+        candidate = Path(sdk) / "bin" / "termin_shaderc"
+        if candidate.is_file():
+            return candidate
+
+    local_sdk = Path(__file__).resolve().parents[3] / "sdk" / "bin" / "termin_shaderc"
+    if local_sdk.is_file():
+        return local_sdk
+
+    found = shutil.which("termin_shaderc")
+    if found:
+        return Path(found)
+    return None
+
+
 class EditorWindowTcgui:
     """Main editor window for the tcgui frontend.
 
@@ -1823,6 +1848,7 @@ class EditorWindowTcgui:
         self._current_project_path = project_dir
         self._project_name = Path(path).stem
         self._log_to_console(f"Project: {project_dir}")
+        self._configure_shader_runtime_for_project(project_root)
 
         # Initialize project settings
         from termin.project.settings import ProjectSettingsManager
@@ -1838,6 +1864,37 @@ class EditorWindowTcgui:
         self._rescan_file_resources()
         if self._project_browser is not None:
             self._project_browser.set_root(project_dir)
+
+    def _configure_shader_runtime_for_project(self, project_root: Path) -> None:
+        artifact_root = project_root / ".termin" / "shader-artifacts"
+        cache_root = project_root / ".termin" / "shader-cache"
+        compiler = _resolve_termin_shaderc()
+        if compiler is None:
+            log.error(
+                "[ShaderRuntime] termin_shaderc not found; Slang runtime "
+                "shader compilation is unavailable. Set TERMIN_SHADERC or TERMIN_SDK."
+            )
+            return
+
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        cache_root.mkdir(parents=True, exist_ok=True)
+
+        try:
+            import tgfx
+
+            tgfx.configure_shader_runtime(
+                artifact_root=str(artifact_root),
+                cache_root=str(cache_root),
+                shader_compiler=str(compiler),
+                dev_compile=True,
+            )
+            log.info(
+                "[ShaderRuntime] configured: "
+                f"artifact_root='{artifact_root}' cache_root='{cache_root}' "
+                f"compiler='{compiler}' dev_compile=True"
+            )
+        except Exception as e:
+            log.error(f"[ShaderRuntime] configure_shader_runtime failed: {e}")
 
     def _load_project_modules(self, project_root: Path) -> None:
         from termin.modules import get_project_modules_runtime

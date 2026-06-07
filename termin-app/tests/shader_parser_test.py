@@ -457,6 +457,8 @@ def test_stdlib_slang_material_creates_slang_tc_shader():
     assert phase.shader.language == ShaderLanguage.SLANG
     assert "[shader(\"vertex\")]" in phase.shader.vertex_source
     assert "#version" not in phase.shader.vertex_source
+    assert "[[vk::" not in phase.shader.vertex_source
+    assert "register(b2, space0)" in phase.shader.vertex_source
 
 
 def test_builtin_pbr_shader_is_vulkan_normalized():

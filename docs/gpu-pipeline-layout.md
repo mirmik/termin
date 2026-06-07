@@ -30,6 +30,9 @@ Single `VkDescriptorSetLayout` used by every graphics pipeline the engine
 creates. On OpenGL each UBO binding maps directly to a GL UBO binding point;
 samplers map to texture units by the same number. Slang/HLSL sources must use
 the same numeric contract through explicit `register(bN/tN/sN)` annotations.
+`termin_shaderc` passes zero `-fvk-*-shift` values when compiling Slang to
+Vulkan SPIR-V or OpenGL GLSL, so `register(b2, space0)` maps to descriptor set
+0 / binding 2 without requiring `[[vk::binding]]` in engine shaders.
 
 | Binding | Type | Count | Stages | Name | Owner / writer |
 |---|---|---|---|---|---|

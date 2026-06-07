@@ -160,9 +160,14 @@ Status:
 - Added first stdlib material shader written in Slang:
   `stdlib/shaders/SlangNormalColor.shader` plus
   `stdlib/materials/SlangNormalColor.material`.
-- The first material is intentionally small: it uses the ColorPass ABI
-  directly (`PerFrame` UBO at binding 2 and model push constants) and colors
-  fragments from transformed normals.
+- The first material is intentionally small: it uses HLSL/Slang resource
+  syntax (`register(b2, space0)`) for the ColorPass `PerFrame` UBO and colors
+  fragments from normals. It intentionally avoids per-draw model data for now,
+  because Vulkan push constants and D3D11 cbuffer emulation need a proper
+  cross-backend Slang ABI decision.
+- `termin_shaderc` maps HLSL `register(b/t/sN, spaceM)` declarations to
+  Vulkan/OpenGL descriptor bindings with zero `-fvk-*-shift` values, so stdlib
+  Slang sources do not need `[[vk::binding]]` for ordinary resources.
 - Slang `.shader` stages bypass GLSL include/preprocess/material-UBO rewrite.
   `@property` on Slang `.shader` files is rejected for now so we do not
   accidentally synthesize a GLSL ABI into Slang source.
@@ -175,6 +180,11 @@ Remaining:
 
 - Define the Slang-native material property/UBO contract instead of relying on
   the GLSL rewriter.
+- Resolve the Slang matrix ABI before porting real materials: with
+  `slangc 2026.5.2`, generated Vulkan artifacts currently decorate
+  `ConstantBuffer` matrices as `RowMajor` even when the source and CLI request
+  column-major. Keep `mul(M, v)` in source, but verify the runtime data layout
+  before relying on this for PBR/skinning.
 - Add runtime/editor artifact generation for stdlib `.shader` assets so this
   material can be used without manual lazy compilation setup.
 - Add render smoke coverage that actually draws `SlangNormalColor` through
@@ -266,11 +276,18 @@ Status:
   artifacts on repeated editor draws.
 - `tgfx2_device_factory_test` covers the lazy compile path with a fake
   `termin_shaderc` and verifies that a second load reuses the cached artifact.
+- The tcgui editor now configures shader runtime on project load:
+  project-local artifacts go under `.termin/shader-artifacts`, source/cache data
+  under `.termin/shader-cache`, `termin_shaderc` is resolved from
+  `TERMIN_SHADERC`, `TERMIN_SDK`, local SDK, or `PATH`, and dev compilation is
+  enabled for the editor session.
+- Vulkan/OpenGL `ensure_tc_shader()` no longer falls back to compiling non-GLSL
+  source directly when artifact/lazy compilation fails; that path now reports a
+  non-GLSL artifact/dev-compile error instead of surfacing misleading GLSL
+  syntax errors on Slang tokens.
 
 Remaining work:
 
-- Wire editor/project open code to call `configure_shader_runtime()` with a
-  project-specific cache and artifact root.
 - Decide whether hot reload should remove stale artifacts eagerly or rely on
   metadata mismatch and overwrite-on-demand.
 - Extend the lazy path to future D3D11 artifacts after the Windows
