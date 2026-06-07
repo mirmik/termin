@@ -324,15 +324,15 @@ class PlayerRuntime:
             )
 
     def _configure_backend_default(self) -> None:
-        """Use the player backend default that is known to be stable."""
+        """Use the project-wide primary graphics backend unless overridden."""
         from tcbase import log
 
         if "TERMIN_BACKEND" in os.environ:
             log.info(f"[PlayerRuntime] Using TERMIN_BACKEND={os.environ['TERMIN_BACKEND']}")
             return
 
-        os.environ["TERMIN_BACKEND"] = "opengl"
-        log.info("[PlayerRuntime] TERMIN_BACKEND not set; using opengl for standalone player")
+        os.environ["TERMIN_BACKEND"] = "vulkan"
+        log.info("[PlayerRuntime] TERMIN_BACKEND not set; using vulkan for standalone player")
 
     def _ensure_texture_registry(self) -> None:
         """Load the tgfx texture registry before app-native modules."""

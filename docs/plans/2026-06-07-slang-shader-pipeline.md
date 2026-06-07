@@ -10,7 +10,8 @@ tooling and runtime contracts needed before D3D11 can consume compiled shader
 artifacts.
 
 Runtime graphics backends must consume generated artifacts. They must not
-compile Slang at runtime.
+compile Slang at runtime. Vulkan is the primary Linux development and test
+path; OpenGL coverage is kept as compatibility/legacy coverage.
 
 ## Current State
 
@@ -18,7 +19,8 @@ compile Slang at runtime.
 - `termin_shaderc` compiles GLSL to Vulkan SPIR-V through shaderc.
 - Runtime/project export writes Vulkan artifacts under `shaders/vulkan/*.spv`.
 - Vulkan can load precompiled SPIR-V through `TERMIN_SHADER_ARTIFACT_ROOT`.
-- OpenGL compiles inline GLSL sources and does not load generated GLSL artifacts.
+- OpenGL compiles inline GLSL sources and is no longer the primary Slang
+  validation path.
 - `slangc`, Slang libraries, DXC, and FXC are not currently vendored into the
   repo or SDK.
 - D3D11 already exists as a `BackendType` enum value and env alias, but the
@@ -229,7 +231,8 @@ Rationale:
 Acceptance:
 
 - One `.slang` source produces OpenGL GLSL and Vulkan SPIR-V artifacts.
-- OpenGL and Vulkan smoke paths render matching output.
+- Vulkan smoke renders the generated Slang artifact path. OpenGL coverage is
+  compatibility coverage and must not block Vulkan-first Slang migration.
 - Legacy GLSL remains available until enough built-ins are migrated.
 
 Status:
@@ -248,7 +251,7 @@ Status:
 - Real `termin_shaderc` smoke checks compile the default shader to Vulkan SPIR-V
   and OpenGL GLSL, and runtime package export succeeds with
   `default_shader_language="slang"`.
-- OpenGL `tgfx2_smoke` now covers the runtime artifact-consumption contract:
+- OpenGL `tgfx2_smoke` covers the legacy runtime artifact-consumption contract:
   a `TC_SHADER_LANGUAGE_SLANG` shader with `TC_SHADER_ARTIFACT_REQUIRED` loads
   backend artifacts from `TERMIN_SHADER_ARTIFACT_ROOT`, builds a pipeline, and
   renders from the artifact sources instead of fallback sources.
@@ -257,9 +260,10 @@ Status:
   temporary Slang vertex/fragment pair, compiles Vulkan SPIR-V artifacts, loads
   them through `TC_SHADER_ARTIFACT_REQUIRED`, binds a column-major matrix UBO,
   and validates the expected rendered pixels.
-- Remaining work: decide whether Vulkan smoke coverage should be part of the
-  regular Linux test profile or stay in an explicit Vulkan profile. The current
-  default `run-tests.sh` profile still runs with Vulkan disabled.
+- Vulkan is now the default `run-tests.sh` C++ profile, so
+  `tgfx2_vulkan_smoke` is part of the regular Linux test loop when Vulkan
+  dependencies are installed. `--no-vulkan` remains available for explicit
+  OpenGL/legacy compatibility checks.
 
 ## Phase 7: Minimal Built-In Migration
 
@@ -298,13 +302,11 @@ Acceptance:
 
 ## Immediate Next Steps
 
-1. Decide whether to add a first-class Vulkan test profile to `run-tests.sh` or
-   keep `tgfx2_vulkan_smoke` as an explicit opt-in check.
-2. Start Phase 7 with the fullscreen/present path now that generated Slang
+1. Start Phase 7 with the fullscreen/present path now that generated Slang
    artifact rendering is covered on Vulkan.
-3. Decide later how generated Slang OpenGL artifacts should target the existing
+2. Decide later how generated Slang OpenGL artifacts should target the existing
    GL smoke environment: request a GL 4.5 context, lower Slang GLSL output if
    the toolchain supports it, or keep OpenGL generated-artifact rendering as a
    separate higher-requirement smoke.
-4. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
+3. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
    Linux-side generation and runtime-consumption contract.
