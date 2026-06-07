@@ -55,7 +55,7 @@ static fs::path get_executable_dir() {
 
 static fs::path find_python_stdlib(const fs::path& install_root) {
 #ifdef _WIN32
-    fs::path lib_dir = install_root / "Lib";
+    fs::path lib_dir = install_root / "python" / "Lib";
     if (fs::exists(lib_dir) && fs::exists(lib_dir / "os.py")) {
         return lib_dir;
     }
@@ -125,7 +125,12 @@ int main(int argc, char* argv[]) {
 #endif
         }
 
-        static std::string python_home_str = install_root.string();
+        static std::string python_home_str =
+#ifdef _WIN32
+            python_stdlib.parent_path().string();
+#else
+            install_root.string();
+#endif
         static std::wstring python_home_wstr(python_home_str.begin(), python_home_str.end());
         Py_SetPythonHome(python_home_wstr.c_str());
 

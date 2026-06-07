@@ -7,7 +7,7 @@ from termin.geombase import GeneralPose3
 from termin.mesh.mesh import CubeMesh
 from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.core.entity import Entity
-from termin.visualization.core.material import Material
+from termin.materials import TcMaterial as Material
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.visualization.core.scene import create_scene
 from termin.render_components import LightComponent, MeshRenderer

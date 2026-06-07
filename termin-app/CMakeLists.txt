@@ -76,7 +76,7 @@ if(BUNDLE_PYTHON)
     # Normalize path to CMake format (forward slashes)
     file(TO_CMAKE_PATH "${PYTHON_PREFIX_RAW}" PYTHON_PREFIX)
 
-    # Platform-specific paths:
+    # Platform-specific host paths:
     # Linux: {prefix}/lib/python3.12/, libpython3.12.so
     # Windows: {prefix}/Lib/, python312.dll (DLL is in prefix, not lib)
     if(WIN32)
@@ -107,20 +107,25 @@ if(BUNDLE_PYTHON)
         install(FILES ${PYTHON_DLLS}
             DESTINATION bin
         )
+        # Windows: keep the bundled Python home under sdk/python/.  The SDK
+        # native libraries live in sdk/lib/, and Windows path lookup is
+        # case-insensitive, so sdk/Lib would collide with sdk/lib.
+        set(WINDOWS_PYTHON_HOME_INSTALL_DIR "python")
+
         # Windows: Install DLLs/ directory (C extension modules)
         if(EXISTS "${PYTHON_PREFIX}/DLLs")
             install(DIRECTORY "${PYTHON_PREFIX}/DLLs"
-                DESTINATION .
+                DESTINATION ${WINDOWS_PYTHON_HOME_INSTALL_DIR}
             )
         endif()
         # Windows: Install Tcl/Tk runtime for tkinter dialogs
         if(EXISTS "${PYTHON_PREFIX}/tcl")
             install(DIRECTORY "${PYTHON_PREFIX}/tcl"
-                DESTINATION .
+                DESTINATION ${WINDOWS_PYTHON_HOME_INSTALL_DIR}
             )
         endif()
-        # Windows expects stdlib in {prefix}/Lib/ (capital L, no version)
-        set(STDLIB_INSTALL_DIR "Lib")
+        # Windows expects stdlib in {python-home}/Lib/ (capital L, no version).
+        set(STDLIB_INSTALL_DIR "${WINDOWS_PYTHON_HOME_INSTALL_DIR}/Lib")
         set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")
     endif()
 
@@ -186,7 +191,7 @@ if(BUNDLE_PYTHON)
         "termin_modules | ${ENV_DIR}/termin-modules/python/termin_modules"
     )
 
-    set(LOCAL_PYTHON_DIR "lib/python")
+    set(LOCAL_PYTHON_DIR "${SITEPACKAGES_INSTALL_DIR}")
     foreach(entry ${BUNDLE_PACKAGES_LOCAL})
         string(REPLACE "|" ";" parts "${entry}")
         list(GET parts 0 pkg)

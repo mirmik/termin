@@ -203,6 +203,22 @@ def register_builtin_materials(rm: "ResourceManager") -> None:
             mat.color = (0.8, 0.8, 0.8, 1.0)
             rm.register_material("PBRMaterial", mat, uuid=BUILTIN_UUIDS["PBRMaterial"])
 
+    # NormalizedPBR is the material contract used by default scenes and GLB
+    # instantiation. Keep it registered as a first-class builtin, not as a
+    # lazy missing-material fallback.
+    if "NormalizedPBR" not in rm.materials:
+        shader = rm.shaders.get("PBRShader")
+        if shader is not None:
+            mat = create_material_from_parsed(
+                shader,
+                textures={"u_albedo_texture": white_tex},
+                default_white_texture=white_tex,
+                default_normal_texture=normal_tex,
+            )
+            mat.name = "NormalizedPBR"
+            mat.color = (0.8, 0.8, 0.8, 1.0)
+            rm.register_material("NormalizedPBR", mat, uuid=BUILTIN_UUIDS["NormalizedPBR"])
+
     # GridMaterial (calibration grid)
     if "GridMaterial" not in rm.materials:
         from termin.visualization.render.materials.grid_material import GridMaterial

@@ -110,7 +110,7 @@ sdk/lib/python3.10/site-packages/termin/
 ~/.pyenv/versions/3.10.19/lib/python3.10/site-packages/termin/
 ```
 
-Актуальный SDK layout не должен содержать `sdk/lib/python/termin/`: bundled запуск берет пакеты из `sdk/lib/python3.x/site-packages/termin/`, а editable/test окружение берет Python-код из исходников.
+Актуальный SDK layout не должен содержать `sdk/lib/python/termin/`: bundled запуск берет пакеты из `sdk/lib/python3.x/site-packages/termin/` на Linux и `sdk/python/Lib/site-packages/termin/` на Windows, а editable/test окружение берет Python-код из исходников. Windows не использует `sdk/Lib/`, потому что этот путь конфликтует с native `sdk/lib/` на case-insensitive filesystem.
 
 (См. заметку в `memory/termin_lib_sync_locations.md`.)
 

@@ -6,6 +6,7 @@ import ctypes
 import json
 import os
 import subprocess
+import sys
 import time
 
 import sdl2
@@ -101,19 +102,50 @@ def _ask_open_project() -> str:
 
 def _find_editor_executable() -> str | None:
     """Find the termin_editor executable next to this launcher."""
-    try:
-        exe_dir = os.path.dirname(os.readlink("/proc/self/exe"))
-    except (OSError, AttributeError):
-        log.debug("Cannot resolve /proc/self/exe — falling back to PATH lookup for termin_editor")
-        exe_dir = None
+    candidate_names = ["termin_editor.exe", "termin_editor"] if os.name == "nt" else ["termin_editor"]
+    candidate_dirs: list[str] = []
 
-    if exe_dir:
-        editor = os.path.join(exe_dir, "termin_editor")
-        if os.path.isfile(editor):
-            return editor
+    termin_sdk = os.environ.get("TERMIN_SDK")
+    if termin_sdk:
+        candidate_dirs.append(os.path.join(termin_sdk, "bin"))
+
+    if os.name == "nt":
+        try:
+            buffer = ctypes.create_unicode_buffer(32768)
+            size = ctypes.windll.kernel32.GetModuleFileNameW(None, buffer, len(buffer))
+            if size:
+                candidate_dirs.append(os.path.dirname(buffer.value))
+        except Exception:
+            log.debug("Cannot resolve executable path via GetModuleFileNameW")
+    else:
+        try:
+            candidate_dirs.append(os.path.dirname(os.readlink("/proc/self/exe")))
+        except (OSError, AttributeError):
+            log.debug("Cannot resolve /proc/self/exe")
+
+    argv0 = sys.argv[0] if sys.argv else ""
+    if argv0 and argv0 not in {"-c", ""}:
+        candidate_dirs.append(os.path.dirname(os.path.abspath(argv0)))
+
+    seen_dirs = set()
+    for candidate_dir in candidate_dirs:
+        if not candidate_dir:
+            continue
+        normalized_dir = os.path.normcase(os.path.abspath(candidate_dir))
+        if normalized_dir in seen_dirs:
+            continue
+        seen_dirs.add(normalized_dir)
+        for name in candidate_names:
+            editor = os.path.join(candidate_dir, name)
+            if os.path.isfile(editor):
+                return editor
 
     import shutil
-    return shutil.which("termin_editor")
+    for name in candidate_names:
+        editor = shutil.which(name)
+        if editor:
+            return editor
+    return None
 
 
 # ---------------------------------------------------------------------------
