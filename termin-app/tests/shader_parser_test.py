@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 
 from termin.materials import (
     ShasderStage,
@@ -380,6 +381,82 @@ def test_property_outside_phase_accepted():
     assert len(result.phases) == 0
     assert len(result.material_properties) == 1
     assert result.material_properties[0].name == "u_value"
+
+
+def test_parse_slang_shader_keeps_source_unrewritten():
+    shader_text = "\n".join([
+        "@program SlangSample",
+        "@language slang",
+        "@phase opaque",
+        "@stage vertex",
+        "struct VertexOutput { float4 position : SV_Position; };",
+        "[shader(\"vertex\")] VertexOutput main() { VertexOutput o; o.position = float4(0, 0, 0, 1); return o; }",
+        "@endstage",
+        "@stage fragment",
+        "struct FragmentOutput { [[vk::location(0)]] float4 color : SV_Target0; };",
+        "[shader(\"fragment\")] FragmentOutput main() { FragmentOutput o; o.color = float4(1, 0, 0, 1); return o; }",
+        "@endstage",
+        "@endphase",
+    ])
+
+    program = parse_shader_text(shader_text)
+    assert program.language == "slang"
+    vertex = program.phases[0].stages["vertex"].source
+    assert "[shader(\"vertex\")]" in vertex
+    assert "#version" not in vertex
+    assert "uniform PerFrame" not in vertex
+
+
+def test_slang_shader_rejects_material_properties_until_ubo_contract_exists():
+    shader_text = "\n".join([
+        "@program SlangWithProps",
+        "@language slang",
+        "@property Color u_color = Color(1, 1, 1, 1)",
+        "@phase opaque",
+        "@stage fragment",
+        "[shader(\"fragment\")] void main() {}",
+        "@endstage",
+        "@endphase",
+    ])
+
+    with pytest.raises(RuntimeError, match="Slang .shader material properties are not wired yet"):
+        parse_shader_text(shader_text)
+
+
+def test_stdlib_slang_material_creates_slang_tc_shader():
+    from tgfx import ShaderLanguage
+    from termin.assets.material_asset import MaterialAsset
+    from termin.assets.shader_asset import ShaderAsset
+    from termin.assets.resources import ResourceManager
+
+    ResourceManager._reset_for_testing()
+    rm = ResourceManager.instance()
+    stdlib = Path(__file__).resolve().parents[1] / "termin" / "resources" / "stdlib"
+
+    shader_asset = ShaderAsset.from_file(
+        stdlib / "shaders" / "SlangNormalColor.shader",
+        name="SlangNormalColor",
+    )
+    rm.register_shader(
+        "SlangNormalColor",
+        shader_asset.program,
+        source_path=str(shader_asset.source_path),
+        uuid="00000000-0000-0000-0001-000000000007",
+    )
+
+    material_asset = MaterialAsset.from_file(
+        stdlib / "materials" / "SlangNormalColor.material",
+        name="SlangNormalColor",
+    )
+    material = material_asset.material
+
+    assert material is not None
+    assert material.phase_count == 1
+    phase = material.get_phase(0)
+    assert phase is not None
+    assert phase.shader.language == ShaderLanguage.SLANG
+    assert "[shader(\"vertex\")]" in phase.shader.vertex_source
+    assert "#version" not in phase.shader.vertex_source
 
 
 def test_builtin_pbr_shader_is_vulkan_normalized():

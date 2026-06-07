@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
 from termin.assets.data_asset import DataAsset
-from termin.assets.shader_asset import make_phase_uuid
+from termin.assets.shader_asset import make_phase_uuid, shader_language_enum
 from tcbase import log
 
 if TYPE_CHECKING:
@@ -374,6 +374,7 @@ def _parse_material_content(
         mat.source_path = source_path
 
     # Create phases from shader
+    shader_language = shader_language_enum(program.language)
     for i, shader_phase in enumerate(program.phases):
         # Get shader sources
         vertex_source = ""
@@ -414,6 +415,7 @@ def _parse_material_content(
             priority=shader_phase.priority,
             state=state,
             shader_uuid=phase_uuid,
+            language=shader_language,
         )
 
         if phase is None:

@@ -154,6 +154,32 @@ Acceptance:
 
 Status:
 
+- Added `@language glsl|slang` to the `.shader` DSL and carried the parsed
+  language through `ShaderMultyPhaseProgramm`, `ShaderAsset`, `MaterialAsset`,
+  and `TcMaterial.add_phase_from_sources()`.
+- Added first stdlib material shader written in Slang:
+  `stdlib/shaders/SlangNormalColor.shader` plus
+  `stdlib/materials/SlangNormalColor.material`.
+- The first material is intentionally small: it uses the ColorPass ABI
+  directly (`PerFrame` UBO at binding 2 and model push constants) and colors
+  fragments from transformed normals.
+- Slang `.shader` stages bypass GLSL include/preprocess/material-UBO rewrite.
+  `@property` on Slang `.shader` files is rejected for now so we do not
+  accidentally synthesize a GLSL ABI into Slang source.
+- Tests cover language parsing, rejection of Slang material properties, and
+  stdlib material creation producing `TC_SHADER_LANGUAGE_SLANG`.
+- Real `termin_shaderc` smoke checks compile the extracted Slang stages to
+  Vulkan SPIR-V and OpenGL GLSL with the external `slangc`.
+
+Remaining:
+
+- Define the Slang-native material property/UBO contract instead of relying on
+  the GLSL rewriter.
+- Add runtime/editor artifact generation for stdlib `.shader` assets so this
+  material can be used without manual lazy compilation setup.
+- Add render smoke coverage that actually draws `SlangNormalColor` through
+  ColorPass on Vulkan.
+
 - Initial wrapper is implemented.
 - Existing callers remain compatible: omitting `--language` defaults to
   `glsl`, and `glsl -> vulkan` still uses the in-process shaderc path.
