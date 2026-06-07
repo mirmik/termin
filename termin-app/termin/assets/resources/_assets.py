@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.core.material import Material
+    from termin.materials import TcMaterial as Material
     from termin.assets.material_asset import MaterialAsset
     from termin.assets.mesh_asset import MeshAsset
     from termin.mesh import TcMesh

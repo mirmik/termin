@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, List, Optional, Set, Tuple
 import numpy as np
 
 from termin.render import DrawableComponent
-from termin.visualization.core.material import Material
+from termin.materials import TcMaterial as Material
 from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.voxels.voxel_mesh import create_voxel_mesh

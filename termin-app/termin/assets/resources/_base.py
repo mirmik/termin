@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from termin.visualization.core.material import Material
+    from termin.materials import TcMaterial as Material
     from termin.assets.material_asset import MaterialAsset
     from termin.assets.mesh_asset import MeshAsset
     from termin.assets.texture_asset import TextureAsset
