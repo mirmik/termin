@@ -2,6 +2,7 @@ from math import isclose
 
 from termin.csg import (
     CsgEditorController,
+    OPERATION_KIND_WALL,
     ProceduralMeshDocument,
     document_to_mesh3,
     document_to_tc_mesh,
@@ -26,6 +27,7 @@ from termin.csg.document_edit import (
     move_boolean_input,
     remove_boolean_input,
     set_contour_point,
+    set_path_point,
     set_sketch_plane,
     start_sketch_draft,
 )
@@ -258,6 +260,40 @@ def test_document_tree_and_visual_model_show_open_paths():
     assert selected.points == [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]
 
 
+def test_procedural_document_evaluates_wall_operation_from_open_path():
+    document = ProceduralMeshDocument()
+    path = document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+
+    operation = document.add_wall_operation_for_path(
+        path.id,
+        height=3.0,
+        thickness=0.5,
+        alignment="center",
+    )
+
+    assert operation is not None
+    assert operation.kind == OPERATION_KIND_WALL
+    assert operation.inputs == [path.id]
+    evaluated = evaluate_document(document)
+    assert len(evaluated) == 1
+    assert evaluated[0].operation_id == operation.id
+    assert evaluated[0].contour_id == path.id
+    assert isclose(evaluated[0].solid.volume, 3.0, abs_tol=1.0e-6)
+
+    roots = build_document_tree(document)
+    assert len(roots) == 1
+    assert roots[0].text.startswith("[Wall]")
+    assert roots[0].children[0].text.startswith("[Sketch]")
+
+
 def test_procedural_document_evaluates_primitive_operations_and_booleans():
     document = ProceduralMeshDocument()
     box_operation = document.add_primitive_operation(
@@ -302,8 +338,10 @@ def test_operation_specs_drive_primitive_defaults_and_button_order():
     assert boolean_labels == ["Union", "Subtract", "Intersect"]
 
     box_spec = primitive_spec("box")
+    wall_spec = operation_spec("wall")
     subtract_spec = operation_spec("subtract")
     assert box_spec is not None
+    assert wall_spec is not None
     assert subtract_spec is not None
     assert [param.key for param in box_spec.param_schema] == [
         "size",
@@ -312,6 +350,7 @@ def test_operation_specs_drive_primitive_defaults_and_button_order():
         "rotation",
     ]
     assert subtract_spec.input_policy == "base_then_cutters"
+    assert wall_spec.input_policy == "sketch_path"
 
     document = ProceduralMeshDocument()
     first = document.add_primitive_operation("box")
@@ -710,6 +749,25 @@ def test_set_contour_point_updates_local_contour_coordinates():
     assert not set_contour_point(document, "missing", 0, (0.0, 0.0))
 
 
+def test_set_path_point_updates_local_path_coordinates():
+    document = ProceduralMeshDocument()
+    path = document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+
+    assert set_path_point(document, path.id, 2, (2.0, 1.5))
+    assert path.points[2] == (2.0, 1.5)
+    assert not set_path_point(document, path.id, 99, (0.0, 0.0))
+    assert not set_path_point(document, "missing", 0, (0.0, 0.0))
+
+
 def test_document_raycast_uses_evaluated_solids_in_document_space():
     document = ProceduralMeshDocument()
     contour = document.add_contour_from_points(
@@ -987,6 +1045,50 @@ def test_cad_app_drags_selected_contour_point_in_viewport_without_drawing():
     assert app.draft.points == []
 
 
+def test_cad_app_drags_selected_path_point_in_viewport_without_drawing():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    path = app.document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 1.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+    sketch_id = app.document.find_sketch_id_for_path(path.id)
+    sketch = app.document.find_sketch(sketch_id)
+    assert sketch is not None
+    operation = app.document.add_wall_operation_for_path(path.id, height=2.0, thickness=0.5)
+    assert operation is not None
+
+    app.selected_node_data = ("path", path.id)
+    app.mode = "draw_sketch"
+
+    width = 800
+    height = 600
+    start_screen = app._project_world_to_screen(sketch.plane.unproject(path.points[2]), width, height)
+    target_screen = app._project_world_to_screen(sketch.plane.unproject((1.5, 1.25)), width, height)
+    assert start_screen is not None
+    assert target_screen is not None
+
+    assert app._on_scene_mouse_down(start_screen[0], start_screen[1], width, height) is True
+    assert app.draft.points == []
+    assert app._on_scene_mouse_move(target_screen[0], target_screen[1], width, height) is True
+    assert app._on_scene_mouse_up(target_screen[0], target_screen[1], width, height) is True
+
+    assert isclose(path.points[2][0], 1.5, abs_tol=1.0e-3)
+    assert isclose(path.points[2][1], 1.25, abs_tol=1.0e-3)
+    evaluated = evaluate_document(app.document)
+    assert len(evaluated) == 1
+    assert evaluated[0].operation_id == operation.id
+    assert evaluated[0].solid.volume > 1.0
+    assert app.draft.points == []
+
+
 def test_cad_app_draw_sketch_scene_click_uses_controller_draft_state():
     from termin.csg.cad_app import CadApp
 
@@ -1055,6 +1157,48 @@ def test_cad_app_add_wall_path_action_finishes_open_path():
     path_ref = app.document.find_path_ref(app.selected_node_data[1])
     assert path_ref is not None
     assert path_ref[1].closed is False
+
+
+def test_cad_app_wall_action_and_params_update_operation():
+    from termin.csg.cad_app import CadApp
+
+    app = CadApp()
+    path = app.document.add_path_on_plane_from_points(
+        [
+            (0.0, 0.0, 0.0),
+            (2.0, 0.0, 0.0),
+        ],
+        ProceduralPlane(),
+        purpose="wall",
+    )
+    assert path is not None
+
+    app.selected_node_data = ("path", path.id)
+    app.wall_selected()
+
+    assert app.selected_node_data is not None
+    assert app.selected_node_data[0] == "operation"
+    operation = app.document.find_operation(app.selected_node_data[1])
+    assert operation is not None
+    assert operation.kind == OPERATION_KIND_WALL
+    assert operation.params["source_path_id"] == path.id
+
+    app._build_operation_params_panel()
+    app._refresh_operation_params_panel()
+    assert app.operation_params_panel.visible is True
+    assert app.wall_param_inputs["height"].value == 3.0
+    assert app.wall_param_inputs["thickness"].value == 0.2
+
+    app.wall_param_inputs["height"].value = 2.5
+    app.wall_param_inputs["thickness"].value = 0.4
+    app._set_wall_alignment("left")
+
+    assert operation.params["height"] == 2.5
+    assert operation.params["thickness"] == 0.4
+    assert operation.params["alignment"] == "left"
+    evaluated = evaluate_document(app.document)
+    assert len(evaluated) == 1
+    assert isclose(evaluated[0].solid.volume, 2.0, abs_tol=1.0e-6)
 
 
 def test_cad_app_add_hole_action_closes_contour_inside_selected_outer():

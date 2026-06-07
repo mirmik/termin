@@ -14,6 +14,7 @@ from termin.csg.document_edit import (
     add_draft_point_from_ray,
     add_extrude_for_selection,
     add_primitive_operation,
+    add_wall_for_selection,
     clear_document,
     close_draft_contour,
     finish_draft_path,
@@ -22,8 +23,10 @@ from termin.csg.document_edit import (
     set_contour_point,
     set_extrude_vector,
     set_operation_transform,
+    set_path_point,
     set_primitive_params,
     set_sketch_plane,
+    set_wall_params,
     start_sketch_draft,
 )
 from termin.csg.procedural_document import (
@@ -231,6 +234,19 @@ class CsgEditorController:
             fit_camera=True,
         )
 
+    def wall_selected(self) -> CsgEditorCommandResult:
+        result = add_wall_for_selection(self.document, self.selection)
+        if not result.success:
+            return CsgEditorCommandResult.failed()
+        self.selection = result.selection
+        return CsgEditorCommandResult.changed(
+            "Wall added",
+            selection_changed=True,
+            tree_changed=True,
+            preview_changed=True,
+            fit_camera=True,
+        )
+
     def add_boolean_operation(self, kind: str) -> CsgEditorCommandResult:
         result = add_boolean_for_selection(self.document, self.selection, kind)
         if not result.success:
@@ -331,6 +347,17 @@ class CsgEditorController:
             return CsgEditorCommandResult.failed()
         return CsgEditorCommandResult.changed(tree_changed=True, preview_changed=True)
 
+    def set_wall_params(
+        self,
+        operation_id: str,
+        height: float,
+        thickness: float,
+        alignment: str,
+    ) -> CsgEditorCommandResult:
+        if not set_wall_params(self.document, operation_id, height, thickness, alignment):
+            return CsgEditorCommandResult.failed()
+        return CsgEditorCommandResult.changed(tree_changed=True, preview_changed=True)
+
     def set_sketch_plane(self, sketch_id: str, plane: ProceduralPlane) -> CsgEditorCommandResult:
         if not set_sketch_plane(self.document, sketch_id, plane):
             return CsgEditorCommandResult.failed()
@@ -343,6 +370,16 @@ class CsgEditorController:
         point: Vec2Data,
     ) -> CsgEditorCommandResult:
         if not set_contour_point(self.document, contour_id, point_index, point):
+            return CsgEditorCommandResult.failed()
+        return CsgEditorCommandResult.changed(tree_changed=False, preview_changed=True)
+
+    def set_path_point(
+        self,
+        path_id: str,
+        point_index: int,
+        point: Vec2Data,
+    ) -> CsgEditorCommandResult:
+        if not set_path_point(self.document, path_id, point_index, point):
             return CsgEditorCommandResult.failed()
         return CsgEditorCommandResult.changed(tree_changed=False, preview_changed=True)
 

@@ -8,6 +8,7 @@ from termin.csg.document_eval import extrude_vector_for_operation
 from termin.csg.procedural_document import (
     CONTOUR_ROLE_HOLE,
     CONTOUR_ROLE_OUTER,
+    OPERATION_KIND_WALL,
     PRIMITIVE_OPERATION_KIND,
     ProceduralMeshDocument,
 )
@@ -91,6 +92,31 @@ def _operation_node(
             accepts_drop_above_below=bool(parent_operation_id),
         )
         if sketch is not None:
+            node.children.append(_sketch_node(sketch))
+        return node
+
+    if operation.kind == OPERATION_KIND_WALL:
+        source_path_id = str(operation.params.get("source_path_id", ""))
+        path_ref = document.find_path_ref(source_path_id) if source_path_id else None
+        param_text = (
+            f" height={_param_float(operation.params, 'height', 3.0):.2f}"
+            f" thickness={_param_float(operation.params, 'thickness', 0.2):.2f}"
+        )
+        node = DocumentTreeNode(
+            text=_with_input_role(
+                f"[Wall] {operation.name}{param_text} inputs={len(operation.inputs)}",
+                input_role,
+            ),
+            kind="operation",
+            item_id=operation.id,
+            parent_operation_id=parent_operation_id,
+            input_index=input_index,
+            input_role=input_role,
+            is_boolean_input=bool(parent_operation_id),
+            accepts_drop_above_below=bool(parent_operation_id),
+        )
+        if path_ref is not None:
+            sketch, _path = path_ref
             node.children.append(_sketch_node(sketch))
         return node
 
@@ -274,6 +300,13 @@ def _short_id(value: str) -> str:
 
 def _format_vec3(value: tuple[float, float, float]) -> str:
     return f"({value[0]:.2f},{value[1]:.2f},{value[2]:.2f})"
+
+
+def _param_float(params: dict, key: str, default: float) -> float:
+    try:
+        return float(params.get(key, default))
+    except Exception:
+        return default
 
 
 

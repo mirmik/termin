@@ -10,6 +10,7 @@ from tcbase import log
 
 from termin.csg.operation_specs import (
     BOOLEAN_OPERATION_KINDS,
+    OPERATION_KIND_WALL,
     PRIMITIVE_KINDS,
     PRIMITIVE_OPERATION_KIND,
     boolean_operation_label,
@@ -17,6 +18,7 @@ from termin.csg.operation_specs import (
     operation_transform_defaults,
     primitive_default_params,
     primitive_label,
+    wall_default_params,
 )
 
 Vec2Data = tuple[float, float]
@@ -468,6 +470,11 @@ class ProceduralMeshDocument:
             source_id = operation.params.get("source_sketch_id", "")
             if operation.enabled and source_id:
                 ids.add(str(source_id))
+            source_path_id = operation.params.get("source_path_id", "")
+            if operation.enabled and source_path_id:
+                sketch_id = self.find_sketch_id_for_path(str(source_path_id))
+                if sketch_id:
+                    ids.add(sketch_id)
         return ids
 
     def used_input_operation_ids(self) -> set[str]:
@@ -524,6 +531,37 @@ class ProceduralMeshDocument:
         if operation is None:
             return None
         operation.params["source_sketch_id"] = sketch.id
+        return operation
+
+    def add_wall_operation_for_path(
+        self,
+        path_id: str,
+        height: float = 3.0,
+        thickness: float = 0.2,
+        alignment: str = "center",
+    ) -> OperationDocument | None:
+        path_ref = self.find_path_ref(path_id)
+        if path_ref is None:
+            log.error(f"[ProceduralMeshDocument] cannot create wall operation: path not found '{path_id}'")
+            return None
+        sketch, path = path_ref
+        if len(path.points) < 2:
+            log.error(
+                "[ProceduralMeshDocument] cannot create wall operation: "
+                f"path needs at least 2 points path='{path.id}'"
+            )
+            return None
+        operation = OperationDocument(
+            name=f"Wall {len(self.operations) + 1}",
+            kind=OPERATION_KIND_WALL,
+            inputs=[path.id],
+            params={
+                **wall_default_params(height=height, thickness=thickness, alignment=alignment),
+                "source_path_id": path.id,
+                "source_sketch_id": sketch.id,
+            },
+        )
+        self.operations.append(operation)
         return operation
 
     def add_primitive_operation(
@@ -605,6 +643,7 @@ __all__ = [
     "CONTOUR_ROLE_OUTER",
     "CONTOUR_ROLES",
     "OperationDocument",
+    "OPERATION_KIND_WALL",
     "PRIMITIVE_KINDS",
     "PRIMITIVE_OPERATION_KIND",
     "ProceduralMeshDocument",

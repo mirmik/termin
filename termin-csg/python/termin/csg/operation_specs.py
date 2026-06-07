@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 OPERATION_KIND_EXTRUDE = "extrude"
+OPERATION_KIND_WALL = "wall"
 PRIMITIVE_OPERATION_KIND = "primitive"
 BOOLEAN_OPERATION_KINDS = {"union", "subtract", "intersect"}
 PRIMITIVE_KINDS = {"box", "sphere", "cylinder", "cone"}
@@ -51,6 +52,15 @@ def extrude_default_params(vector: tuple[float, float, float]) -> dict:
     return {
         "vector": [float(vector[0]), float(vector[1]), float(vector[2])],
         "mode": "new_body",
+        **operation_transform_defaults(),
+    }
+
+
+def wall_default_params(height: float = 3.0, thickness: float = 0.2, alignment: str = "center") -> dict:
+    return {
+        "height": float(height),
+        "thickness": float(thickness),
+        "alignment": str(alignment),
         **operation_transform_defaults(),
     }
 
@@ -237,6 +247,18 @@ OPERATION_SPECS_BY_KIND = {
         input_policy="sketch_outer_contours",
         context_actions=("add_outer_contour",),
     ),
+    OPERATION_KIND_WALL: OperationSpec(
+        kind=OPERATION_KIND_WALL,
+        label="Wall",
+        default_params=wall_default_params(),
+        param_schema=(
+            OperationParamSpec("height", "Height", "float", 3.0, min_value=0.001),
+            OperationParamSpec("thickness", "Thickness", "float", 0.2, min_value=0.001),
+            OperationParamSpec("alignment", "Alignment", "enum", "center"),
+            *_TRANSFORM_PARAM_SCHEMA,
+        ),
+        input_policy="sketch_path",
+    ),
     PRIMITIVE_OPERATION_KIND: OperationSpec(
         kind=PRIMITIVE_OPERATION_KIND,
         label="Primitive",
@@ -271,6 +293,7 @@ OPERATION_SPECS_BY_KIND = {
 __all__ = [
     "BOOLEAN_OPERATION_KINDS",
     "OPERATION_KIND_EXTRUDE",
+    "OPERATION_KIND_WALL",
     "OPERATION_SPECS_BY_KIND",
     "OperationParamSpec",
     "OperationSpec",
@@ -289,4 +312,5 @@ __all__ = [
     "primitive_label",
     "primitive_param_summary",
     "primitive_spec",
+    "wall_default_params",
 ]

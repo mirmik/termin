@@ -51,6 +51,7 @@ from termin.csg.operation_specs import (
 from termin.csg.procedural_document import (
     CONTOUR_ROLE_HOLE,
     CONTOUR_ROLE_OUTER,
+    OPERATION_KIND_WALL,
     ProceduralMeshDocument,
     ProceduralPlane,
 )
@@ -61,8 +62,9 @@ _CONTOUR_POINT_HIT_RADIUS_PX = 14.0
 
 
 @dataclass
-class ContourPointDrag:
-    contour_id: str
+class SketchPointDrag:
+    kind: str
+    item_id: str
     point_index: int
 
 
@@ -75,7 +77,7 @@ class CadApp:
         self.current_path: Path | None = None
         self.last_directory = Path.cwd()
         self.show_wireframe = True
-        self._contour_point_drag: ContourPointDrag | None = None
+        self._sketch_point_drag: SketchPointDrag | None = None
 
         self.mode_label = Label()
         self.file_label = Label()
@@ -89,6 +91,8 @@ class CadApp:
         self.operation_params_title = Label()
         self.operation_params_kind = Label()
         self.extrude_vector_inputs: dict[str, SpinBox] = {}
+        self.wall_param_inputs: dict[str, SpinBox] = {}
+        self.wall_alignment_label = Label()
         self.operation_transform_inputs: dict[str, SpinBox] = {}
         self._syncing_operation_params = False
         self.primitive_params_panel = Panel()
@@ -322,6 +326,7 @@ class CadApp:
         for child in self.operation_params_panel.children[:]:
             self.operation_params_panel.remove_child(child)
         self.extrude_vector_inputs.clear()
+        self.wall_param_inputs.clear()
         self.operation_transform_inputs.clear()
 
         self.operation_params_panel.padding = 8
@@ -333,6 +338,7 @@ class CadApp:
         for child in self.operation_params_panel.children[:]:
             self.operation_params_panel.remove_child(child)
         self.extrude_vector_inputs.clear()
+        self.wall_param_inputs.clear()
         self.operation_transform_inputs.clear()
 
         body = VStack()
@@ -370,6 +376,46 @@ class CadApp:
                 row = self._build_vector_row(axis)
                 self.extrude_vector_inputs[axis].value = vector[("x", "y", "z").index(axis)]
                 body.add_child(row)
+        if operation.kind == OPERATION_KIND_WALL:
+            source_path_id = str(operation.params.get("source_path_id", ""))
+            path_ref = self.document.find_path_ref(source_path_id)
+            if path_ref is None:
+                self._syncing_operation_params = False
+                log.error(
+                    "[CsgCad] cannot show wall parameters: "
+                    f"source path not found '{source_path_id}'"
+                )
+                return False
+            wall_label = Label()
+            wall_label.text = "Wall"
+            wall_label.color = (0.70, 0.74, 0.80, 1.0)
+            body.add_child(wall_label)
+            body.add_child(
+                self._build_wall_number_row(
+                    "height",
+                    "Height",
+                    _param_float(operation.params, "height", 3.0),
+                    min_value=0.001,
+                )
+            )
+            body.add_child(
+                self._build_wall_number_row(
+                    "thickness",
+                    "Thickness",
+                    _param_float(operation.params, "thickness", 0.2),
+                    min_value=0.001,
+                )
+            )
+            self.wall_alignment_label.text = f"Alignment: {operation.params.get('alignment', 'center')}"
+            self.wall_alignment_label.color = (0.58, 0.64, 0.72, 1.0)
+            body.add_child(self.wall_alignment_label)
+            alignment_row = HStack()
+            alignment_row.spacing = 4
+            alignment_row.preferred_height = px(28)
+            alignment_row.add_child(self._button("Center", lambda: self._set_wall_alignment("center")))
+            alignment_row.add_child(self._button("Left", lambda: self._set_wall_alignment("left")))
+            alignment_row.add_child(self._button("Right", lambda: self._set_wall_alignment("right")))
+            body.add_child(alignment_row)
 
         self._append_operation_transform_rows(body, "center", "Center", operation.params)
         self._append_operation_transform_rows(body, "rotation", "Rotation", operation.params)
@@ -430,7 +476,7 @@ class CadApp:
             path_ref = self._path_ref_by_id(item_id)
             if path_ref is None:
                 return []
-            return []
+            return [("Wall", self.wall_selected)]
         if kind == "contour":
             contour_ref = self._contour_ref_by_id(item_id)
             if contour_ref is None:
@@ -460,6 +506,36 @@ class CadApp:
         spin.stretch = True
         spin.on_changed = self._on_extrude_vector_changed
         self.extrude_vector_inputs[axis] = spin
+        row.add_child(spin)
+        return row
+
+    def _build_wall_number_row(
+        self,
+        key: str,
+        label_text: str,
+        value: float,
+        min_value: float = -1000000.0,
+    ) -> HStack:
+        row = HStack()
+        row.spacing = 6
+        row.preferred_height = px(26)
+
+        label = Label()
+        label.text = label_text
+        label.color = (0.58, 0.64, 0.72, 1.0)
+        label.preferred_width = px(82)
+        row.add_child(label)
+
+        spin = SpinBox()
+        spin.decimals = 3
+        spin.step = 0.1
+        spin.min_value = min_value
+        spin.max_value = 1000000.0
+        spin.preferred_height = px(24)
+        spin.stretch = True
+        spin.value = value
+        spin.on_changed = self._on_wall_param_changed
+        self.wall_param_inputs[key] = spin
         row.add_child(spin)
         return row
 
@@ -924,6 +1000,13 @@ class CadApp:
             return
         log.info(f"[CsgCad] extrude added selection='{self.selected_node_data}' previous='{previous_selection}'")
 
+    def wall_selected(self) -> None:
+        previous_selection = self.selected_node_data
+        result = self.controller.wall_selected()
+        if not self._apply_controller_result(result):
+            return
+        log.info(f"[CsgCad] wall added selection='{self.selected_node_data}' previous='{previous_selection}'")
+
     def add_boolean_operation(self, kind: str) -> None:
         result = self.controller.add_boolean_operation(kind)
         if not self._apply_controller_result(result):
@@ -1075,32 +1158,32 @@ class CadApp:
         log.info(f"[CsgCad] tree drop applied selection='{self.selected_node_data}' status='{result.message}'")
 
     def _on_scene_mouse_down(self, x: float, y: float, width: int, height: int) -> bool:
-        drag = self._pick_selected_contour_point(x, y, width, height)
+        drag = self._pick_selected_sketch_point(x, y, width, height)
         if drag is None:
             return False
-        self._contour_point_drag = drag
-        self._set_status(f"Dragging contour point P{drag.point_index}")
+        self._sketch_point_drag = drag
+        self._set_status(f"Dragging {drag.kind} point P{drag.point_index}")
         log.info(
-            "[CsgCad] contour point drag started "
-            f"contour='{drag.contour_id}' index={drag.point_index}"
+            "[CsgCad] sketch point drag started "
+            f"kind='{drag.kind}' item='{drag.item_id}' index={drag.point_index}"
         )
         return True
 
     def _on_scene_mouse_move(self, x: float, y: float, width: int, height: int) -> bool:
-        if self._contour_point_drag is None:
+        if self._sketch_point_drag is None:
             return False
-        return self._drag_contour_point_to_screen(x, y, width, height)
+        return self._drag_sketch_point_to_screen(x, y, width, height)
 
     def _on_scene_mouse_up(self, x: float, y: float, width: int, height: int) -> bool:
-        drag = self._contour_point_drag
+        drag = self._sketch_point_drag
         if drag is None:
             return False
-        self._drag_contour_point_to_screen(x, y, width, height)
-        self._contour_point_drag = None
-        self._set_status(f"Contour point P{drag.point_index} moved")
+        self._drag_sketch_point_to_screen(x, y, width, height)
+        self._sketch_point_drag = None
+        self._set_status(f"{drag.kind.capitalize()} point P{drag.point_index} moved")
         log.info(
-            "[CsgCad] contour point drag finished "
-            f"contour='{drag.contour_id}' index={drag.point_index}"
+            "[CsgCad] sketch point drag finished "
+            f"kind='{drag.kind}' item='{drag.item_id}' index={drag.point_index}"
         )
         return True
 
@@ -1129,20 +1212,20 @@ class CadApp:
         )
         return True
 
-    def _pick_selected_contour_point(
+    def _pick_selected_sketch_point(
         self,
         x: float,
         y: float,
         width: int,
         height: int,
-    ) -> ContourPointDrag | None:
-        contour_ref = self._selected_contour_ref()
-        if contour_ref is None:
+    ) -> SketchPointDrag | None:
+        selected = self._selected_sketch_point_source()
+        if selected is None:
             return None
-        sketch, contour = contour_ref
+        kind, item_id, points = selected
         best_index = -1
         best_distance_sq = _CONTOUR_POINT_HIT_RADIUS_PX * _CONTOUR_POINT_HIT_RADIUS_PX
-        for index, point in enumerate(sketch.contour_points(contour)):
+        for index, point in enumerate(points):
             screen_point = self._project_world_to_screen(point, width, height)
             if screen_point is None:
                 continue
@@ -1154,33 +1237,68 @@ class CadApp:
                 best_index = index
         if best_index < 0:
             return None
-        return ContourPointDrag(contour.id, best_index)
+        return SketchPointDrag(kind, item_id, best_index)
 
-    def _drag_contour_point_to_screen(self, x: float, y: float, width: int, height: int) -> bool:
-        drag = self._contour_point_drag
+    def _drag_sketch_point_to_screen(self, x: float, y: float, width: int, height: int) -> bool:
+        drag = self._sketch_point_drag
         if drag is None:
             return False
-        contour_ref = self._contour_ref_by_id(drag.contour_id)
-        if contour_ref is None:
-            log.error(f"[CsgCad] cannot drag contour point: contour not found '{drag.contour_id}'")
-            self._contour_point_drag = None
+        point_ref = self._sketch_point_ref_by_drag(drag)
+        if point_ref is None:
+            log.error(
+                "[CsgCad] cannot drag sketch point: "
+                f"item not found kind='{drag.kind}' id='{drag.item_id}'"
+            )
+            self._sketch_point_drag = None
             return True
-        sketch, contour = contour_ref
+        sketch = point_ref[0]
         ray_origin, ray_direction = self.camera.screen_ray(x, y, width, height)
         point = ray_plane_intersection(ray_origin, ray_direction, sketch.plane)
         if point is None:
             log.error(
-                "[CsgCad] cannot drag contour point: "
-                f"ray does not hit sketch plane contour='{contour.id}' index={drag.point_index}"
+                "[CsgCad] cannot drag sketch point: "
+                f"ray does not hit sketch plane kind='{drag.kind}' id='{drag.item_id}' index={drag.point_index}"
             )
             return True
         local_point = sketch.plane.project(point)
-        result = self.controller.set_contour_point(contour.id, drag.point_index, local_point)
+        if drag.kind == "contour":
+            result = self.controller.set_contour_point(drag.item_id, drag.point_index, local_point)
+        elif drag.kind == "path":
+            result = self.controller.set_path_point(drag.item_id, drag.point_index, local_point)
+        else:
+            log.error(f"[CsgCad] cannot drag sketch point: unsupported kind '{drag.kind}'")
+            return True
         if not result.success:
             return True
-        self._sync_contour_point_inputs(drag.point_index, local_point)
+        if drag.kind == "contour":
+            self._sync_contour_point_inputs(drag.point_index, local_point)
         self.request_preview_rebuild()
         return True
+
+    def _selected_sketch_point_source(self):
+        if self.selected_node_data is None:
+            return None
+        kind, item_id = self.selected_node_data
+        if kind == "contour":
+            contour_ref = self._contour_ref_by_id(item_id)
+            if contour_ref is None:
+                return None
+            sketch, contour = contour_ref
+            return ("contour", contour.id, sketch.contour_points(contour))
+        if kind == "path":
+            path_ref = self._path_ref_by_id(item_id)
+            if path_ref is None:
+                return None
+            sketch, path = path_ref
+            return ("path", path.id, sketch.path_points(path))
+        return None
+
+    def _sketch_point_ref_by_drag(self, drag: SketchPointDrag):
+        if drag.kind == "contour":
+            return self._contour_ref_by_id(drag.item_id)
+        if drag.kind == "path":
+            return self._path_ref_by_id(drag.item_id)
+        return None
 
     def _project_world_to_screen(
         self,
@@ -1222,7 +1340,7 @@ class CadApp:
         if operation.kind == PRIMITIVE_OPERATION_KIND:
             self._set_operation_params_visible(False)
             return
-        if operation.kind != "extrude" and operation.kind not in BOOLEAN_OPERATION_KINDS:
+        if operation.kind not in {"extrude", OPERATION_KIND_WALL} and operation.kind not in BOOLEAN_OPERATION_KINDS:
             self._set_operation_params_visible(False)
             return
         if not self._rebuild_operation_params_panel(operation):
@@ -1375,6 +1493,42 @@ class CadApp:
         log.info(
             "[CsgCad] extrude vector changed "
             f"operation='{operation.id}' vector=({vector[0]:.3f}, {vector[1]:.3f}, {vector[2]:.3f})"
+        )
+
+    def _on_wall_param_changed(self, _value: float) -> None:
+        if self._syncing_operation_params:
+            return
+        self._apply_wall_params_from_inputs()
+
+    def _set_wall_alignment(self, alignment: str) -> None:
+        if self._syncing_operation_params:
+            return
+        self._apply_wall_params_from_inputs(alignment=alignment)
+
+    def _apply_wall_params_from_inputs(self, alignment: str | None = None) -> None:
+        operation = self._selected_operation()
+        if operation is None:
+            log.error("[CsgCad] cannot update wall params: no operation is selected")
+            return
+        if operation.kind != OPERATION_KIND_WALL:
+            log.error(
+                "[CsgCad] cannot update wall params: "
+                f"operation '{operation.id}' has kind '{operation.kind}'"
+            )
+            return
+        if "height" not in self.wall_param_inputs or "thickness" not in self.wall_param_inputs:
+            log.error(f"[CsgCad] cannot update wall params: input widgets are missing operation='{operation.id}'")
+            return
+        next_alignment = str(alignment if alignment is not None else operation.params.get("alignment", "center"))
+        height = float(self.wall_param_inputs["height"].value)
+        thickness = float(self.wall_param_inputs["thickness"].value)
+        result = self.controller.set_wall_params(operation.id, height, thickness, next_alignment)
+        if not self._apply_controller_result(result):
+            return
+        self.wall_alignment_label.text = f"Alignment: {next_alignment}"
+        log.info(
+            "[CsgCad] wall params changed "
+            f"operation='{operation.id}' height={height:.3f} thickness={thickness:.3f} alignment='{next_alignment}'"
         )
 
     def _on_operation_transform_changed(self, _value: float) -> None:
@@ -1575,6 +1729,13 @@ def _param_vec3(params: dict, key: str, default: tuple[float, float, float]) -> 
     value = params.get(key, default)
     try:
         return (float(value[0]), float(value[1]), float(value[2]))
+    except Exception:
+        return default
+
+
+def _param_float(params: dict, key: str, default: float) -> float:
+    try:
+        return float(params.get(key, default))
     except Exception:
         return default
 
