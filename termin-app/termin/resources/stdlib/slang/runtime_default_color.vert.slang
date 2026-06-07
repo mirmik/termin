@@ -1,0 +1,44 @@
+struct CameraUBO
+{
+    float4x4 view;
+    float4x4 proj;
+    float4x4 view_proj;
+    float4 camera_pos;
+};
+
+[[vk::binding(0, 0)]]
+ConstantBuffer<CameraUBO> u_camera;
+
+struct PushConstants
+{
+    float4x4 model;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<PushConstants> pc;
+
+struct VertexInput
+{
+    [[vk::location(0)]]
+    float3 position : POSITION;
+
+    [[vk::location(1)]]
+    float3 color : COLOR0;
+};
+
+struct VertexOutput
+{
+    [[vk::location(0)]]
+    float3 color : COLOR0;
+
+    float4 position : SV_Position;
+};
+
+[shader("vertex")]
+VertexOutput main(VertexInput input)
+{
+    VertexOutput output;
+    output.color = input.color;
+    output.position = mul(u_camera.view_proj, mul(pc.model, float4(input.position, 1.0)));
+    return output;
+}

@@ -29,6 +29,8 @@ from typing import Any
 
 DEFAULT_SHADER_UUID = "termin-runtime-default-color"
 DEFAULT_SHADER_NAME = "TerminRuntimeDefaultColor"
+DEFAULT_SHADER_SOURCE_PATH = "termin-runtime/default-color"
+DEFAULT_SHADER_LANGUAGE = "glsl"
 
 
 DEFAULT_VERTEX_SOURCE = """#version 450
@@ -359,6 +361,7 @@ def export_runtime_package(
     entry_scene: str | Path,
     output_dir: str | Path,
     shader_compiler: str | Path | None = None,
+    default_shader_language: str = DEFAULT_SHADER_LANGUAGE,
 ) -> RuntimePackageExportResult:
     project_root_path = Path(project_root).resolve()
     entry_scene_path = _resolve_entry_scene(project_root_path, Path(entry_scene))
@@ -375,18 +378,17 @@ def export_runtime_package(
     resources: list[dict[str, str]] = []
     shaders: dict[str, _ShaderSpec] = {}
     _write_meshes(output_dir_path, refs.meshes, resources, diagnostics)
-    _write_materials(output_dir_path, refs.materials, resources, diagnostics, shaders)
+    _write_materials(
+        output_dir_path,
+        refs.materials,
+        resources,
+        diagnostics,
+        shaders,
+        default_shader_language,
+    )
     _write_pipelines(project_root_path, output_dir_path, refs.pipelines, resources, diagnostics)
     if not shaders:
-        shaders[DEFAULT_SHADER_UUID] = _ShaderSpec(
-            uuid=DEFAULT_SHADER_UUID,
-            name=DEFAULT_SHADER_NAME,
-            source_path="termin-runtime/default-color",
-            vertex_source=DEFAULT_VERTEX_SOURCE,
-            fragment_source=DEFAULT_FRAGMENT_SOURCE,
-            geometry_source="",
-            allow_precompiled_default=True,
-        )
+        shaders[DEFAULT_SHADER_UUID] = _default_shader_spec(default_shader_language)
     _write_shaders(output_dir_path, shaders, resources, diagnostics, shader_compiler)
     _write_default_pipeline_shader_artifacts(output_dir_path, diagnostics, shader_compiler)
     resources.sort(key=_resource_sort_key)
@@ -426,6 +428,52 @@ class _ShaderSpec:
     geometry_source: str = ""
     language: str = "glsl"
     allow_precompiled_default: bool = False
+
+
+def _default_shader_spec(language: str) -> _ShaderSpec:
+    normalized = _normalize_default_shader_language(language)
+    if normalized == "glsl":
+        return _ShaderSpec(
+            uuid=DEFAULT_SHADER_UUID,
+            name=DEFAULT_SHADER_NAME,
+            source_path=DEFAULT_SHADER_SOURCE_PATH,
+            vertex_source=DEFAULT_VERTEX_SOURCE,
+            fragment_source=DEFAULT_FRAGMENT_SOURCE,
+            geometry_source="",
+            language="glsl",
+            allow_precompiled_default=True,
+        )
+    if normalized == "slang":
+        return _ShaderSpec(
+            uuid=DEFAULT_SHADER_UUID,
+            name=DEFAULT_SHADER_NAME,
+            source_path=DEFAULT_SHADER_SOURCE_PATH,
+            vertex_source=_stdlib_shader_text("slang", "runtime_default_color.vert.slang"),
+            fragment_source=_stdlib_shader_text("slang", "runtime_default_color.frag.slang"),
+            geometry_source="",
+            language="slang",
+            allow_precompiled_default=False,
+        )
+    raise ValueError(f"Unsupported default shader language: {language}")
+
+
+def _normalize_default_shader_language(language: str) -> str:
+    text = language.strip().lower()
+    if text.endswith(".glsl") or text == "glsl":
+        return "glsl"
+    if text.endswith(".slang") or text == "slang":
+        return "slang"
+    raise ValueError(f"Unsupported default shader language: {language}")
+
+
+def _stdlib_shader_text(*relative_path: str) -> str:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "resources"
+        / "stdlib"
+        / Path(*relative_path)
+    )
+    return path.read_text(encoding="utf-8")
 
 
 def _resolve_entry_scene(project_root: Path, entry_scene: Path) -> Path:
@@ -983,13 +1031,20 @@ def _write_materials(
     resources: list[dict[str, str]],
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, _ShaderSpec],
+    default_shader_language: str,
 ) -> None:
     material_dir = package_dir / "materials"
     material_dir.mkdir(parents=True, exist_ok=True)
 
     for uuid_value, name in sorted(materials.items()):
         path = material_dir / f"{uuid_value}.tmat.json"
-        material_spec = _export_material_spec(uuid_value, name, diagnostics, shaders)
+        material_spec = _export_material_spec(
+            uuid_value,
+            name,
+            diagnostics,
+            shaders,
+            default_shader_language,
+        )
         _write_json(path, material_spec)
         resources.append(
             {
@@ -1103,6 +1158,7 @@ def _export_material_spec(
     name: str,
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, _ShaderSpec],
+    default_shader_language: str,
 ) -> dict[str, Any]:
     try:
         from termin.materials import TcMaterial
@@ -1126,15 +1182,7 @@ def _export_material_spec(
             message="Runtime exporter used fallback material because registry entry is unavailable",
         )
     )
-    shaders[DEFAULT_SHADER_UUID] = _ShaderSpec(
-        uuid=DEFAULT_SHADER_UUID,
-        name=DEFAULT_SHADER_NAME,
-        source_path="termin-runtime/default-color",
-        vertex_source=DEFAULT_VERTEX_SOURCE,
-        fragment_source=DEFAULT_FRAGMENT_SOURCE,
-        geometry_source="",
-        allow_precompiled_default=True,
-    )
+    shaders[DEFAULT_SHADER_UUID] = _default_shader_spec(default_shader_language)
     return _fallback_material_spec(uuid_value, name)
 
 
