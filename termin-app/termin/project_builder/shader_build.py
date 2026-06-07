@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import os
+import sys
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -125,7 +126,7 @@ def _run_shader_compiler(
     debug_name: str,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [
+    cmd = _executable_command(compiler) + [
         str(compiler),
         "compile",
         "--target",
@@ -156,6 +157,12 @@ def _run_shader_compiler(
         raise RuntimeError(
             f"Shader compiler did not produce expected output: {output_path}"
         )
+
+
+def _executable_command(path: Path) -> list[str]:
+    if os.name == "nt" and path.suffix.lower() == ".py":
+        return [sys.executable]
+    return []
 
 
 def _output_relative(output_dir: Path, path: Path) -> str:

@@ -92,7 +92,7 @@ def test_audio_clip_register_file_uses_asset_plugin() -> None:
     assert asset is not None
     assert asset.uuid == "audio-plugin-test-uuid"
     assert asset.source_path is not None
-    assert str(asset.source_path) == "/tmp/plugin_probe.wav"
+    assert asset.source_path == Path("/tmp/plugin_probe.wav")
     assert rm.get_asset_by_uuid("audio-plugin-test-uuid") is asset
 
 
@@ -119,7 +119,7 @@ def test_glb_register_file_creates_spec_child_assets() -> None:
     assert glb_asset is not None
     assert glb_asset.uuid == "glb-plugin-test-uuid"
     assert glb_asset.source_path is not None
-    assert str(glb_asset.source_path) == "/tmp/robot.glb"
+    assert glb_asset.source_path == Path("/tmp/robot.glb")
     assert rm.get_asset_by_uuid("glb-plugin-test-uuid") is glb_asset
 
     mesh_asset = rm.get_mesh_asset_by_uuid("glb-mesh-child-uuid")

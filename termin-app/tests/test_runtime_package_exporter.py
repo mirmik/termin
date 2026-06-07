@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,20 @@ from termin.project_build import build_android_project, export_runtime_package
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _write_fake_shader_compiler(tmp_path: Path) -> Path:
+    compiler = tmp_path / "fake_termin_shaderc.py"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import pathlib, sys\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "out.parent.mkdir(parents=True, exist_ok=True)\n"
+        "out.write_bytes(b'SPIRV')\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+    return compiler
 
 
 def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
@@ -63,6 +78,7 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
         project_root=project,
         entry_scene=Path("Scenes") / "Main.scene",
         output_dir=project / "dist" / "android" / "RuntimeGame" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
 
     assert result.manifest_path.exists()
@@ -114,6 +130,7 @@ def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
         project_root=project,
         entry_scene="Main.scene",
         output_dir=project / "dist" / "android" / "RootSceneGame" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
 
     scene_data = json.loads(result.scene_path.read_text(encoding="utf-8"))
@@ -161,6 +178,7 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
         project_root=project,
         entry_scene="Main.scene",
         output_dir=project / "dist" / "quest_openxr" / "PipelineGame" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
 
     pipeline_path = result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline.json"
@@ -252,16 +270,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
             ],
         },
     )
-    compiler = tmp_path / "fake_termin_shaderc.py"
-    compiler.write_text(
-        "#!/usr/bin/env python3\n"
-        "import pathlib, sys\n"
-        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
-        "out.parent.mkdir(parents=True, exist_ok=True)\n"
-        "out.write_bytes(b'SPIRV')\n",
-        encoding="utf-8",
-    )
-    compiler.chmod(0o755)
+    compiler = _write_fake_shader_compiler(tmp_path)
 
     result = export_runtime_package(
         project_root=project,
@@ -297,16 +306,27 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path) ->
 
     termin_root = tmp_path / "termin-root"
     apk_source = termin_root / "build" / "android-gradle" / "app" / "outputs" / "apk" / "debug" / "app-debug.apk"
-    build_script = termin_root / "build-android-apk.sh"
+    build_script = termin_root / ("build-android-apk.cmd" if os.name == "nt" else "build-android-apk.sh")
+    marker_script = termin_root / "build-android-apk.sh"
     build_script.parent.mkdir(parents=True)
-    build_script.write_text(
-        "#!/bin/sh\n"
-        "set -e\n"
-        f"mkdir -p '{apk_source.parent}'\n"
-        f"printf APK > '{apk_source}'\n"
-        "printf '%s\\n' \"$@\"\n",
-        encoding="utf-8",
-    )
+    if os.name == "nt":
+        marker_script.write_text("# marker for termin root discovery\n", encoding="utf-8")
+        build_script.write_text(
+            "@echo off\n"
+            f"mkdir \"{apk_source.parent}\" >NUL 2>NUL\n"
+            f"<NUL set /p dummy=APK>\"{apk_source}\"\n"
+            "echo %*\n",
+            encoding="utf-8",
+        )
+    else:
+        build_script.write_text(
+            "#!/bin/sh\n"
+            "set -e\n"
+            f"mkdir -p '{apk_source.parent}'\n"
+            f"printf APK > '{apk_source}'\n"
+            "printf '%s\\n' \"$@\"\n",
+            encoding="utf-8",
+        )
     build_script.chmod(0o755)
 
     result = build_android_project(
@@ -315,6 +335,7 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path) ->
         termin_root=termin_root,
         build_script=build_script,
         gradle="/tmp/fake-gradle",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
 
     assert result.apk_path == project / "dist" / "android" / "AndroidGame" / "apk" / "AndroidGame-debug.apk"

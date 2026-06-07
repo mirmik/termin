@@ -15,6 +15,7 @@
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $ScriptDir "scripts\termin-python-packages.ps1")
 $Editable = $false
 $TargetDir = ""
 $Force = $false
@@ -127,62 +128,16 @@ if ($env:PYTHON_BIN) {
 }
 Write-Host "Using pip: $PythonBin -m pip"
 
-# List of termin packages to install, in topological dependency order.
-# Each entry is a path relative to ScriptDir.
-#
-# Note: several "components-*" C++ targets install into the same Python
-# namespace as their parent subproject. Those are merged into the parent
-# pip package rather than shipped separately to avoid filesystem overlap
-# at install time.
-# Packages are ordered by dependency: each package is listed after its
-# install_requires. termin-app owns the termin namespace root and comes
-# near the end, after all subpackages that extend termin.*.
-$Packages = @(
-    "termin-build-tools",
-    "termin-nanobind-sdk",
-    "termin-base",
-    "termin-assets",
-    "termin-mesh",
-    "termin-graphics",
-    "termin-materials",
-    "termin-gui",
-    "termin-display",
-    "termin-csg",
-    "termin-modules",
-    "termin-inspect",
-    "termin-components/termin-components-kinematic",
-    "termin-scene",
-    "termin-lighting",
-    "termin-components/termin-components-mesh",
-    "termin-input",
-    "termin-collision",
-    "termin-render",
-    "termin-components/termin-components-render",
-    "termin-render-passes",
-    "termin-navmesh",
-    "termin-qopt",
-    "termin-pga",
-    "termin-physics",
-    "termin-engine",
-    "termin-skeleton",
-    "termin-animation",
-    "termin-nodegraph",
-    "termin-app",
-    "tcplot"
-)
+$PipTempRoot = Join-Path (Join-Path $ScriptDir "build") "pip-temp"
+$PipTempDir = Join-Path $PipTempRoot ([System.Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $PipTempDir -Force | Out-Null
+$env:TEMP = $PipTempDir
+$env:TMP = $PipTempDir
+Write-Host "Using pip temp: $PipTempDir"
 
 if ($Force) {
     Write-Host "--force: clearing per-package pip build caches before install"
-    foreach ($pkg in $Packages) {
-        $pkgDir = Join-Path $ScriptDir $pkg
-        if (-not (Test-Path $pkgDir)) { continue }
-
-        Get-ChildItem -Path (Join-Path $pkgDir "build") -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "lib.*" -or $_.Name -like "bdist.*" } |
-            Remove-Item -Recurse -Force
-        Get-ChildItem -Path $pkgDir -Directory -Filter "*.egg-info" -ErrorAction SilentlyContinue |
-            Remove-Item -Recurse -Force
-    }
+    Clear-TerminPythonPackageBuildCaches $ScriptDir
 }
 
 $ForceFlags = @()
@@ -203,13 +158,13 @@ if ($TargetDir) {
 
     Write-Host ""
     Write-Host "========================================"
-    Write-Host "  Installing $($Packages.Count) packages into $TargetDir"
+    Write-Host "  Installing $($TerminPythonPackages.Count) packages into $TargetDir"
     Write-Host "========================================"
     Write-Host ""
     Write-Host "Install mode: --target $TargetDir (single pip invocation, no-deps)"
 
     $pipArgs = @("install", "--no-build-isolation", "--no-deps", "--upgrade", "--target", $TargetDir) + $ForceFlags
-    foreach ($pkg in $Packages) {
+    foreach ($pkg in $TerminPythonPackages) {
         $pipArgs += (Join-Path $ScriptDir $pkg)
     }
 
@@ -240,7 +195,7 @@ if ($TargetDir) {
         $NoDepsFlag = @("--no-deps")
     }
 
-    foreach ($pkg in $Packages) {
+    foreach ($pkg in $TerminPythonPackages) {
         Write-Host ""
         Write-Host "========================================"
         $Mode = if ($Editable) { " (editable)" } else { "" }

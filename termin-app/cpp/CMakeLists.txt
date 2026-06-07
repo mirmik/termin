@@ -207,8 +207,11 @@ set(SOVERSION 1)
 set(LIB_VERSION 1.6.0)
 set(RECASTNAVIGATION_ENABLE_ASSERTS OFF)
 set(SKIP_INSTALL_ALL ON)  # Don't use recast's own install rules
-set(TERMIN_RECAST_DIR "${TERMIN_ROOT}/third/recastnavigation/Recast")
-set(TERMIN_DETOUR_DIR "${TERMIN_ROOT}/third/recastnavigation/Detour")
+set(TERMIN_RECASTNAVIGATION_DIR
+    "${CMAKE_CURRENT_LIST_DIR}/../../termin-thirdparty/recastnavigation"
+    CACHE PATH "RecastNavigation source directory")
+set(TERMIN_RECAST_DIR "${TERMIN_RECASTNAVIGATION_DIR}/Recast")
+set(TERMIN_DETOUR_DIR "${TERMIN_RECASTNAVIGATION_DIR}/Detour")
 set(TERMIN_HAS_RECAST OFF)
 if(EXISTS "${TERMIN_RECAST_DIR}/CMakeLists.txt" AND EXISTS "${TERMIN_DETOUR_DIR}/CMakeLists.txt")
     add_subdirectory(${TERMIN_RECAST_DIR} ${CMAKE_CURRENT_BINARY_DIR}/Recast EXCLUDE_FROM_ALL)
@@ -620,11 +623,11 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
     PATTERN "bindings" EXCLUDE
 )
 if(TERMIN_HAS_RECAST)
-    install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Recast/Include/
+    install(DIRECTORY ${TERMIN_RECAST_DIR}/Include/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/recastnavigation
         FILES_MATCHING PATTERN "*.h"
     )
-    install(DIRECTORY ${TERMIN_ROOT}/third/recastnavigation/Detour/Include/
+    install(DIRECTORY ${TERMIN_DETOUR_DIR}/Include/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/recastnavigation
         FILES_MATCHING PATTERN "*.h"
     )

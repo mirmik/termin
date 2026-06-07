@@ -120,7 +120,11 @@ void test_descriptor_parsing_and_discovery() {
     auto alpha_config = std::dynamic_pointer_cast<CppModuleConfig>(alpha->spec.config);
     expect(alpha_config != nullptr, "alpha config type");
     expect(alpha_config->build_command.find("alpha") != std::string::npos, "alpha command template resolved");
+#ifdef _WIN32
+    expect(alpha_config->artifact_path.filename().string() == "alpha.dll", "alpha windows artifact path");
+#else
     expect(alpha_config->artifact_path.filename().string() == "libalpha.so", "alpha linux artifact path");
+#endif
 
     const ModuleRecord* beta = runtime.find("beta");
     expect(beta != nullptr, "beta should be discovered");
