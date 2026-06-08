@@ -52,6 +52,8 @@ from termin.editor_tcgui.editor_window_layout import (
     EditorWindowLayoutCallbacks,
     build_editor_window_layout,
 )
+from termin.editor_tcgui.viewport_interaction_hub import ViewportInteractionHub
+from termin.editor_tcgui.debug_panel_controller import DebugPanelController
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
@@ -236,31 +238,19 @@ class EditorWindowTcgui:
         self._debug_splitter: Splitter | None = None
         self._profiler_panel = None
         self._modules_panel = None
-        self._profiler_visible: bool = False
-        self._modules_visible: bool = False
-        self._last_profiler_update: float = 0.0
-        self._last_modules_update: float = 0.0
+        self._debug_panels = DebugPanelController(
+            get_ui=lambda: self._ui,
+            update_profiler_action=self._update_profiler_action,
+            update_modules_action=self._update_modules_action,
+        )
         self._framegraph_debugger = None
         self._surface_edge_debug_tool = None
         self._scene_event_subscription = None
         self._scene_tree_rebuild_pending: bool = False
-        self._viewport_click_interceptor: Callable[
-            [
-                object,
-                float, float,
-                bool, float, float, float,
-                float, float, float, float,
-                bool, float, float, float,
-                float, float, float,
-                int, int, int, int,
-            ],
-            bool,
-        ] | None = None
-        self._viewport_click_interceptors: list[Callable] = []
-        self._viewport_pointer_handlers: list[Callable[[str, float, float, float, float, int, int, int], bool]] = []
-        self._viewport_key_handlers: list[Callable[[object], bool]] = []
-        self._viewport_overlay_drawers: list[Callable[[], None]] = []
-        self._active_viewport_tool_count: int = 0
+        self._viewport_interactions = ViewportInteractionHub(
+            request_viewport_update=self._request_viewport_update,
+            on_tool_activity_changed=self._sync_gizmo_target,
+        )
         self._active_component_editor_extension = None
 
         # Setup ResourceLoader and ProjectFileWatcher
@@ -360,6 +350,12 @@ class EditorWindowTcgui:
         self._profiler_panel = widgets.profiler_panel
         self._modules_panel = widgets.modules_panel
         self._debug_splitter = widgets.debug_splitter
+        self._debug_panels.set_widgets(
+            debug_panel=widgets.debug_panel,
+            debug_splitter=widgets.debug_splitter,
+            profiler_panel=widgets.profiler_panel,
+            modules_panel=widgets.modules_panel,
+        )
         self._bottom_tabs = widgets.bottom_tabs
         self._bottom_splitter = widgets.bottom_splitter
         self._console_area = widgets.console_area
@@ -758,8 +754,8 @@ class EditorWindowTcgui:
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
             is_fullscreen=lambda: self._is_fullscreen,
-            is_profiler_visible=lambda: self._profiler_visible,
-            is_modules_visible=lambda: self._modules_visible,
+            is_profiler_visible=lambda: self._debug_panels.profiler_visible,
+            is_modules_visible=lambda: self._debug_panels.modules_visible,
         )
 
     # ------------------------------------------------------------------
@@ -790,82 +786,44 @@ class EditorWindowTcgui:
             bool,
         ] | None,
     ) -> None:
-        self._viewport_click_interceptor = callback
+        self._viewport_interactions.set_click_interceptor(callback)
 
     def add_viewport_click_interceptor(self, callback: Callable) -> None:
-        for existing in self._viewport_click_interceptors:
-            if existing == callback:
-                return
-        self._viewport_click_interceptors.append(callback)
+        self._viewport_interactions.add_click_interceptor(callback)
 
     def remove_viewport_click_interceptor(self, callback: Callable) -> None:
-        kept = []
-        for existing in self._viewport_click_interceptors:
-            if existing != callback:
-                kept.append(existing)
-        self._viewport_click_interceptors = kept
+        self._viewport_interactions.remove_click_interceptor(callback)
 
     def add_viewport_pointer_handler(self, callback: Callable[[str, float, float, float, float, int, int, int], bool]) -> None:
-        for existing in self._viewport_pointer_handlers:
-            if existing == callback:
-                return
-        self._viewport_pointer_handlers.append(callback)
+        self._viewport_interactions.add_pointer_handler(callback)
 
     def remove_viewport_pointer_handler(self, callback: Callable[[str, float, float, float, float, int, int, int], bool]) -> None:
-        kept = []
-        for existing in self._viewport_pointer_handlers:
-            if existing != callback:
-                kept.append(existing)
-        self._viewport_pointer_handlers = kept
+        self._viewport_interactions.remove_pointer_handler(callback)
 
     def add_viewport_key_handler(self, callback: Callable[[object], bool]) -> None:
-        for existing in self._viewport_key_handlers:
-            if existing == callback:
-                return
-        self._viewport_key_handlers.append(callback)
+        self._viewport_interactions.add_key_handler(callback)
 
     def remove_viewport_key_handler(self, callback: Callable[[object], bool]) -> None:
-        kept = []
-        for existing in self._viewport_key_handlers:
-            if existing != callback:
-                kept.append(existing)
-        self._viewport_key_handlers = kept
+        self._viewport_interactions.remove_key_handler(callback)
 
     def add_viewport_overlay_drawer(self, callback: Callable[[], None]) -> None:
-        for existing in self._viewport_overlay_drawers:
-            if existing == callback:
-                return
-        self._viewport_overlay_drawers.append(callback)
-        self._request_viewport_update()
+        self._viewport_interactions.add_overlay_drawer(callback)
 
     def remove_viewport_overlay_drawer(self, callback: Callable[[], None]) -> None:
-        kept = []
-        for existing in self._viewport_overlay_drawers:
-            if existing != callback:
-                kept.append(existing)
-        self._viewport_overlay_drawers = kept
-        self._request_viewport_update()
+        self._viewport_interactions.remove_overlay_drawer(callback)
 
     def begin_viewport_tool(self) -> None:
-        self._active_viewport_tool_count += 1
-        if self._active_viewport_tool_count == 1:
-            self._sync_gizmo_target()
+        self._viewport_interactions.begin_tool()
 
     def end_viewport_tool(self) -> None:
-        if self._active_viewport_tool_count <= 0:
-            log.error("[EditorWindowTcgui] viewport tool release without matching begin")
-            self._active_viewport_tool_count = 0
-            return
-        self._active_viewport_tool_count -= 1
-        if self._active_viewport_tool_count == 0:
-            self._sync_gizmo_target()
+        self._viewport_interactions.end_tool()
 
     def _sync_gizmo_target(self) -> None:
         sys = self._interaction_system
         if sys is None:
             return
 
-        if self._active_viewport_tool_count > 0:
+        if self._viewport_interactions.active_tool_count > 0:
             sys.set_gizmo_target(None)
             self._request_viewport_update()
             return
@@ -1296,21 +1254,7 @@ class EditorWindowTcgui:
             normal_x, normal_y, normal_z,
             triangle_index, index0, index1, index2
         )
-        if self._viewport_click_interceptor is not None:
-            try:
-                if bool(self._viewport_click_interceptor(*args)):
-                    return True
-            except Exception as e:
-                log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
-                return False
-        for callback in self._viewport_click_interceptors:
-            try:
-                if bool(callback(*args)):
-                    return True
-            except Exception as e:
-                log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
-                return False
-        return False
+        return self._viewport_interactions.dispatch_click(*args)
 
     def _dispatch_viewport_pointer(
         self,
@@ -1323,27 +1267,12 @@ class EditorWindowTcgui:
         action: int,
         mods: int,
     ) -> bool:
-        handlers = list(self._viewport_pointer_handlers)
-        handlers.reverse()
-        for callback in handlers:
-            try:
-                if bool(callback(phase, x, y, dx, dy, button, action, mods)):
-                    return True
-            except Exception as e:
-                log.error(f"[EditorWindowTcgui] viewport pointer handler failed: {e}")
-                return False
-        return False
+        return self._viewport_interactions.dispatch_pointer(
+            phase, x, y, dx, dy, button, action, mods
+        )
 
     def _on_editor_key(self, event) -> None:
-        handlers = list(self._viewport_key_handlers)
-        handlers.reverse()
-        for callback in handlers:
-            try:
-                if bool(callback(event)):
-                    return
-            except Exception as e:
-                log.error(f"[EditorWindowTcgui] viewport key handler failed: {e}")
-                return
+        self._viewport_interactions.dispatch_key(event)
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
         """C++ TransformGizmo drag-end callback — push an undo command."""
@@ -1891,29 +1820,21 @@ class EditorWindowTcgui:
     # ------------------------------------------------------------------
 
     def _toggle_profiler(self) -> None:
-        self._profiler_visible = not self._profiler_visible
-        self._update_debug_panel_visibility()
-        self._menu_bar_controller.update_profiler_action()
+        self._debug_panels.toggle_profiler()
 
     def _toggle_modules(self) -> None:
-        self._modules_visible = not self._modules_visible
-        self._update_debug_panel_visibility()
-        self._menu_bar_controller.update_modules_action()
+        self._debug_panels.toggle_modules()
 
     def _update_debug_panel_visibility(self) -> None:
-        visible = self._profiler_visible or self._modules_visible
-        if self._debug_panel is not None:
-            self._debug_panel.visible = visible
-        if self._debug_splitter is not None:
-            self._debug_splitter.visible = visible
-        # Switch to the relevant tab
-        if visible and self._debug_panel is not None:
-            if self._profiler_visible and not self._modules_visible:
-                self._debug_panel.selected_index = 0
-            elif self._modules_visible and not self._profiler_visible:
-                self._debug_panel.selected_index = 1
-        if self._ui is not None:
-            self._ui.request_layout()
+        self._debug_panels.update_visibility()
+
+    def _update_profiler_action(self) -> None:
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_profiler_action()
+
+    def _update_modules_action(self) -> None:
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_modules_action()
 
     def _toggle_fullscreen(self) -> None:
         panels = [
@@ -2193,15 +2114,7 @@ class EditorWindowTcgui:
         """Process pending file system changes and update debug panels. Call from main loop."""
         self._project_file_watcher.poll()
 
-        now = time.monotonic()
-        if self._profiler_visible and self._profiler_panel is not None:
-            if now - self._last_profiler_update > 0.1:
-                self._profiler_panel.update_display()
-                self._last_profiler_update = now
-        if self._modules_visible and self._modules_panel is not None:
-            if now - self._last_modules_update > 1.0:
-                self._modules_panel.update_display()
-                self._last_modules_update = now
+        self._debug_panels.poll(time.monotonic())
         if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
             self._framegraph_debugger.update()
         self._process_pending_scene_tree_rebuild()
@@ -2211,13 +2124,7 @@ class EditorWindowTcgui:
             self._spacemouse.poll()
         if self._interaction_system is not None:
             self._interaction_system.after_render()
-        has_overlay_drawers = False
-        for drawer in self._viewport_overlay_drawers:
-            has_overlay_drawers = True
-            try:
-                drawer()
-            except Exception as e:
-                log.error(f"[EditorWindowTcgui] viewport overlay drawer failed: {e}")
+        has_overlay_drawers = self._viewport_interactions.draw_overlays()
         if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
             self._framegraph_debugger.update()
         self._process_pending_scene_tree_rebuild()
