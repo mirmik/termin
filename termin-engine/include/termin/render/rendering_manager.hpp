@@ -25,7 +25,6 @@ extern "C" {
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
 #include "render/tc_render_target.h"
-#include "render/tc_render_surface.h"
 }
 
 #include <vector>
@@ -366,9 +365,6 @@ private:
 
     // Callback to activate GL context before rendering
     MakeCurrentCallback make_current_callback_;
-
-    // Last offscreen share-group key observed by the push model.
-    uintptr_t offscreen_share_group_key_ = 0;
 
     // Factory for creating displays on demand
     DisplayFactory display_factory_;
