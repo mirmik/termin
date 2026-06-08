@@ -395,11 +395,6 @@ private:
     // Special target providers, keyed by tc_render_target_kind.
     std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
     std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
-
-    // Helper to make key from render target handle
-    static uint64_t render_target_key(tc_render_target_handle h) {
-        return (static_cast<uint64_t>(h.index) << 32) | h.generation;
-    }
 };
 
 } // namespace termin
