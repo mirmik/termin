@@ -5,7 +5,10 @@ generation path.
 
 ## Source of truth
 
-- Runtime metadata lives in `termin-graphics/include/tgfx2/engine_shader_catalog.hpp`.
+- Package/export metadata lives in
+  `termin-graphics/resources/builtin_shaders/engine-shader-catalog.json`.
+- Runtime metadata for built-ins that are consumed directly by tgfx2 lives in
+  `termin-graphics/include/tgfx2/engine_shader_catalog.hpp`.
 - Built-in source files live in `termin-graphics/resources/builtin_shaders/`.
 - SDK installs those source files to `share/termin/builtin_shaders/`.
 - Runtime/package exporters resolve built-in sources from the repo first, then
@@ -26,17 +29,37 @@ shaders/opengl/<uuid>.frag.glsl
 GLSL built-ins currently generate Vulkan SPIR-V only. Slang built-ins generate
 Vulkan SPIR-V and OpenGL GLSL.
 
+Built-in shader layout metadata is written to:
+
+```text
+shaders/layout/<uuid>.shader-layout.json
+```
+
+The current sidecar is catalog-derived metadata, not Slang reflection output
+yet. It is intentionally named as a layout sidecar so the runtime can migrate
+toward the bind-by-name plan without changing the package shape later.
+
 ## Current entries
 
 | UUID | Name | Stage | Language | Source |
 |---|---|---|---|---|
 | `termin-engine-fsq` | `FullscreenQuadEngineVS` | vertex | Slang | `builtin_shaders/termin-engine-fsq.vert.slang` |
+| `termin-engine-bloom-bright` | `BloomBrightFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-bright.frag.glsl` |
+| `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-downsample.frag.glsl` |
+| `termin-engine-bloom-upsample` | `BloomUpsampleFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-upsample.frag.glsl` |
+| `termin-engine-bloom-composite` | `BloomCompositeFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-composite.frag.glsl` |
+| `termin-engine-tonemap` | `TonemapEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-tonemap.frag.glsl` |
 
 ## Migration rule
 
 Do not add new inline engine shader strings in package/export code. Add a
 catalog entry and a source file, then let the exporter generate backend
 artifacts from that source.
+
+Slang sources should not add new `[[vk::...]]` attributes. Stage IO should use
+Slang/HLSL semantics. Texture-using post-process shaders remain catalog-managed
+GLSL until the runtime can bind resources by logical name or consume generated
+layout metadata.
 
 Runtime fallback GLSL is allowed only for legacy/editor compatibility when no
 artifact root is configured. It must stay next to the catalog entry, not in a

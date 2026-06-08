@@ -142,6 +142,48 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     )
 
 
+def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path: Path) -> None:
+    project = tmp_path / "BuiltinShaderCatalogGame"
+    project.mkdir()
+    _write_json(project / "Main.scene", {"uuid": "root-scene", "entities": []})
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    fsq_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-engine-fsq.vert.slang"
+    ).read_text(encoding="utf-8")
+    assert "vk::" not in fsq_source
+    assert "POSITION" in fsq_source
+    assert "TEXCOORD0" in fsq_source
+
+    tonemap_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-engine-tonemap.frag.glsl"
+    ).read_text(encoding="utf-8")
+    assert "TonemapParams" in tonemap_source
+    assert "u_input" in tonemap_source
+
+    tonemap_layout = json.loads(
+        (
+            result.package_dir
+            / "shaders"
+            / "layout"
+            / "termin-engine-tonemap.shader-layout.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert tonemap_layout["binding_model"] == "legacy_numeric_bridge"
+    assert {
+        "name": "u_input",
+        "logical_name": "input_texture",
+        "kind": "combined_sampler2d",
+        "legacy_binding": 4,
+    } in tonemap_layout["resources"]
+
+
 def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
     project = tmp_path / "RootSceneGame"
     project.mkdir()
