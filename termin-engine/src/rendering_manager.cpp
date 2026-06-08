@@ -816,29 +816,6 @@ void RenderingManager::render_all_offscreen() {
         make_current_callback_();
     }
 
-    // Set offscreen GPU context (lazy-create). OpenGL tc_texture wrapping
-    // uses legacy share-group slots; render and present must therefore
-    // use the same share-group key or present will wrap a fresh, blank
-    // texture instead of the one rendered offscreen.
-    uintptr_t share_group_key = 0;
-    for (tc_display* display : display_registry_->displays()) {
-        tc_render_surface* surface = tc_display_get_surface(display);
-        if (surface) {
-            share_group_key = tc_render_surface_share_group_key(surface);
-            break;
-        }
-    }
-    if (share_group_key == 0) {
-        for (tc_display* display : display_registry_->editor_displays()) {
-            tc_render_surface* surface = tc_display_get_surface(display);
-            if (surface) {
-                share_group_key = tc_render_surface_share_group_key(surface);
-                break;
-            }
-        }
-    }
-    offscreen_share_group_key_ = share_group_key;
-
     RenderEngine* engine = render_engine();
     if (!engine) {
         tc_log(TC_LOG_WARN, "[RenderingManager] render_all_offscreen: no render engine");
@@ -1233,8 +1210,6 @@ void RenderingManager::shutdown() {
     if (display_registry_) {
         display_registry_->clear();
     }
-
-    offscreen_share_group_key_ = 0;
 
     // Clear callbacks
     make_current_callback_ = nullptr;
