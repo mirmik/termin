@@ -121,20 +121,16 @@ void BloomPass::ensure_tgfx2_shaders() {
     // across pass re-creations — see ShadowPass for the matching
     // pattern on VS+FS passes, and GrayscalePass for the FS-only variant.
     if (tc_shader_handle_is_invalid(bright_shader_handle_)) {
-        bright_shader_handle_ = register_builtin_fragment_shader(
-            "termin-engine-bloom-bright.frag.glsl", "BloomBrightFS", BLOOM_BRIGHT_SHADER_UUID);
+        bright_shader_handle_ = register_builtin_shader_from_catalog(BLOOM_BRIGHT_SHADER_UUID);
     }
     if (tc_shader_handle_is_invalid(downsample_shader_handle_)) {
-        downsample_shader_handle_ = register_builtin_fragment_shader(
-            "termin-engine-bloom-downsample.frag.glsl", "BloomDownsampleFS", BLOOM_DOWNSAMPLE_SHADER_UUID);
+        downsample_shader_handle_ = register_builtin_shader_from_catalog(BLOOM_DOWNSAMPLE_SHADER_UUID);
     }
     if (tc_shader_handle_is_invalid(upsample_shader_handle_)) {
-        upsample_shader_handle_ = register_builtin_fragment_shader(
-            "termin-engine-bloom-upsample.frag.glsl", "BloomUpsampleFS", BLOOM_UPSAMPLE_SHADER_UUID);
+        upsample_shader_handle_ = register_builtin_shader_from_catalog(BLOOM_UPSAMPLE_SHADER_UUID);
     }
     if (tc_shader_handle_is_invalid(composite_shader_handle_)) {
-        composite_shader_handle_ = register_builtin_fragment_shader(
-            "termin-engine-bloom-composite.frag.glsl", "BloomCompositeFS", BLOOM_COMPOSITE_SHADER_UUID);
+        composite_shader_handle_ = register_builtin_shader_from_catalog(BLOOM_COMPOSITE_SHADER_UUID);
     }
 
     auto make_ubo = [&](uint64_t size) -> tgfx::BufferHandle {

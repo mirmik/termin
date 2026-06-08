@@ -121,3 +121,145 @@ TEST_CASE("built-in vertex-fragment shader registration reads both source files"
     clear_builtin_root();
     std::filesystem::remove_all(root);
 }
+
+TEST_CASE("built-in shader catalog registration resolves fragment-only entry by uuid") {
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path()
+        / ("termin-render-passes-catalog-fragment-test-" + std::to_string(unique));
+    std::filesystem::remove_all(root);
+
+    write_text(
+        root / "engine-shader-catalog.json",
+        R"({
+  "version": 1,
+  "shaders": [
+    {
+      "uuid": "test-catalog-fragment",
+      "name": "TestCatalogFragmentFS",
+      "language": "glsl",
+      "stages": {
+        "fragment": {"path": "test-catalog-fragment.frag.glsl"}
+      },
+      "resources": []
+    }
+  ]
+})");
+    write_text(
+        root / "test-catalog-fragment.frag.glsl",
+        "#version 450 core\n"
+        "// TEST_CATALOG_FRAGMENT_MARKER\n"
+        "layout(location = 0) out vec4 FragColor;\n"
+        "void main() { FragColor = vec4(1.0); }\n");
+
+    set_builtin_root(root);
+    tc_shader_init();
+
+    tc_shader_handle handle =
+        termin::register_builtin_shader_from_catalog("test-catalog-fragment");
+    REQUIRE(!tc_shader_handle_is_invalid(handle));
+
+    tc_shader* shader = tc_shader_get(handle);
+    REQUIRE(shader != nullptr);
+    CHECK(shader->vertex_source == nullptr);
+    REQUIRE(shader->fragment_source != nullptr);
+    CHECK(std::strstr(shader->fragment_source, "TEST_CATALOG_FRAGMENT_MARKER") != nullptr);
+    CHECK(std::strcmp(shader->name, "TestCatalogFragmentFS") == 0);
+
+    tc_shader_shutdown();
+    clear_builtin_root();
+    std::filesystem::remove_all(root);
+}
+
+TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry by uuid") {
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path()
+        / ("termin-render-passes-catalog-vsfs-test-" + std::to_string(unique));
+    std::filesystem::remove_all(root);
+
+    write_text(
+        root / "engine-shader-catalog.json",
+        R"({
+  "version": 1,
+  "shaders": [
+    {
+      "uuid": "test-catalog-vsfs",
+      "name": "TestCatalogVSFS",
+      "language": "glsl",
+      "stages": {
+        "vertex": {"path": "test-catalog.vert.glsl"},
+        "fragment": {"path": "test-catalog.frag.glsl"}
+      },
+      "resources": []
+    }
+  ]
+})");
+    write_text(
+        root / "test-catalog.vert.glsl",
+        "#version 450 core\n"
+        "// TEST_CATALOG_VERTEX_MARKER\n"
+        "layout(location = 0) in vec3 a_position;\n"
+        "void main() { gl_Position = vec4(a_position, 1.0); }\n");
+    write_text(
+        root / "test-catalog.frag.glsl",
+        "#version 450 core\n"
+        "// TEST_CATALOG_FRAGMENT_MARKER\n"
+        "void main() {}\n");
+
+    set_builtin_root(root);
+    tc_shader_init();
+
+    tc_shader_handle handle = termin::register_builtin_shader_from_catalog("test-catalog-vsfs");
+    REQUIRE(!tc_shader_handle_is_invalid(handle));
+
+    tc_shader* shader = tc_shader_get(handle);
+    REQUIRE(shader != nullptr);
+    REQUIRE(shader->vertex_source != nullptr);
+    REQUIRE(shader->fragment_source != nullptr);
+    CHECK(std::strstr(shader->vertex_source, "TEST_CATALOG_VERTEX_MARKER") != nullptr);
+    CHECK(std::strstr(shader->fragment_source, "TEST_CATALOG_FRAGMENT_MARKER") != nullptr);
+    CHECK(std::strcmp(shader->name, "TestCatalogVSFS") == 0);
+
+    tc_shader_shutdown();
+    clear_builtin_root();
+    std::filesystem::remove_all(root);
+}
+
+TEST_CASE("built-in shader catalog resolves shader program source by uuid") {
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path()
+        / ("termin-render-passes-catalog-program-test-" + std::to_string(unique));
+    std::filesystem::remove_all(root);
+
+    write_text(
+        root / "engine-shader-catalog.json",
+        R"({
+  "version": 1,
+  "shaders": [
+    {
+      "uuid": "test-catalog-program",
+      "name": "TestCatalogProgram",
+      "language": "shader",
+      "program": {"path": "test-catalog-program.shader"},
+      "resources": []
+    }
+  ]
+})");
+    write_text(
+        root / "test-catalog-program.shader",
+        "@program TestCatalogProgram\n"
+        "// TEST_CATALOG_PROGRAM_MARKER\n");
+
+    set_builtin_root(root);
+
+    termin::BuiltinShaderProgramSource program =
+        termin::load_builtin_shader_program_from_catalog("test-catalog-program");
+    CHECK(program.name == "TestCatalogProgram");
+    REQUIRE(!program.source.empty());
+    CHECK(program.source.find("TEST_CATALOG_PROGRAM_MARKER") != std::string::npos);
+
+    clear_builtin_root();
+    std::filesystem::remove_all(root);
+}

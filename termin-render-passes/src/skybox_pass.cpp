@@ -1,6 +1,7 @@
 // skybox_pass.cpp - Skybox rendered fully through RenderContext2 + material UBO.
 #include "termin/render/skybox_pass.hpp"
 
+#include "builtin_shader_sources.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/materials/shader_parser.hpp"
@@ -32,75 +33,15 @@ constexpr const char* SKYBOX_ENGINE_SHADER_UUID = "termin-engine-skybox";
 // Shader source
 // ============================================================================
 //
-// Full @program .shader text. The parser processes it at load time and
+// Full @program .shader text is loaded from the built-in shader resources.
+// The parser processes it at load time and
 // synthesizes a std140 MaterialParams block from the @property entries,
 // strips the corresponding `uniform` decls from the stage sources, and
 // injects the block declaration after #version. The layout, block size,
-// and rewritten stage sources all come out of parse_shader_text()
-// below — zero hand-coded duplication.
+// and rewritten stage sources all come out of parse_shader_text() below.
 //
 // A single fragment stage branches on u_skybox_type to cover both solid
 // and gradient variants, so the program compiles to one pipeline.
-
-static const char* SKYBOX_SHADER_TEXT = R"(
-@program Skybox
-
-@phase opaque
-@priority 0
-@glDepthTest true
-@glDepthMask false
-@glCull false
-
-@property Mat4  u_view
-@property Mat4  u_projection
-@property Int   u_skybox_type
-@property Color u_skybox_color        = Color(0.5, 0.5, 0.5, 1.0)
-@property Color u_skybox_top_color    = Color(0.3, 0.5, 1.0, 1.0)
-@property Color u_skybox_bottom_color = Color(0.1, 0.1, 0.3, 1.0)
-
-@stage vertex
-#version 450 core
-layout(location = 0) in vec3 a_position;
-
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-layout(location = 0) out vec3 v_dir;
-
-void main() {
-    mat4 view_no_translation = mat4(mat3(u_view));
-    v_dir = a_position;
-    gl_Position = u_projection * view_no_translation * vec4(a_position, 1.0);
-}
-@endstage
-
-@stage fragment
-#version 450 core
-
-layout(location = 0) in vec3 v_dir;
-layout(location = 0) out vec4 FragColor;
-
-uniform int  u_skybox_type;
-uniform vec4 u_skybox_color;
-uniform vec4 u_skybox_top_color;
-uniform vec4 u_skybox_bottom_color;
-
-void main() {
-    // 0 = gradient, 1 = solid — matches the TC_SKYBOX_* enum values in
-    // core/tc_scene_skybox.h (TC_SKYBOX_GRADIENT=0, TC_SKYBOX_SOLID=1;
-    // TC_SKYBOX_NONE is filtered out by the C++ caller before dispatch).
-    if (u_skybox_type == 1) {
-        FragColor = vec4(u_skybox_color.rgb, 1.0);
-    } else {
-        float t = normalize(v_dir).z * 0.5 + 0.5;
-        vec3 c = mix(u_skybox_bottom_color.rgb, u_skybox_top_color.rgb, t);
-        FragColor = vec4(c, 1.0);
-    }
-}
-@endstage
-
-@endphase
-)";
 
 // ============================================================================
 // Cube geometry (position-only) — identical to tc_scene_skybox's mesh.
@@ -173,7 +114,12 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
     // std140 MaterialParams block from the @property entries, rewrites
     // the stage sources to include the block declaration, and returns a
     // layout we can use directly for std140_pack / block_size sizing.
-    ShaderMultyPhaseProgramm parsed = parse_shader_text(SKYBOX_SHADER_TEXT);
+    const BuiltinShaderProgramSource shader_program =
+        load_builtin_shader_program_from_catalog(SKYBOX_ENGINE_SHADER_UUID);
+    if (shader_program.source.empty()) {
+        return;
+    }
+    ShaderMultyPhaseProgramm parsed = parse_shader_text(shader_program.source);
     if (parsed.phases.empty()) {
         tc::Log::error("[SkyBoxPass] failed to parse shader text");
         return;
@@ -196,7 +142,7 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
     // across pass re-creations, compiled VkShaderModule stays cached.
     skybox_shader_handle_ = tc_shader_register_static_uuid(
         vs_it->second.source.c_str(), fs_it->second.source.c_str(),
-        nullptr, "SkyboxEngineVSFS", SKYBOX_ENGINE_SHADER_UUID);
+        nullptr, shader_program.name.c_str(), SKYBOX_ENGINE_SHADER_UUID);
 
     tgfx::BufferDesc vbo_desc;
     vbo_desc.size = sizeof(CUBE_VERTICES);

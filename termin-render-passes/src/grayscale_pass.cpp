@@ -24,7 +24,6 @@ extern "C" {
 namespace termin {
 
 constexpr const char* GRAYSCALE_ENGINE_SHADER_UUID = "termin-engine-grayscale";
-constexpr const char* GRAYSCALE_FRAGMENT_SOURCE_FILE = "termin-engine-grayscale.frag.glsl";
 
 GrayscalePass::GrayscalePass(
     const std::string& input,
@@ -87,8 +86,7 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     // the shader is FS-only and vertex_source stays NULL).
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = register_builtin_fragment_shader(
-            GRAYSCALE_FRAGMENT_SOURCE_FILE, "GrayscaleEngineFS", GRAYSCALE_ENGINE_SHADER_UUID);
+        shader_handle_ = register_builtin_shader_from_catalog(GRAYSCALE_ENGINE_SHADER_UUID);
         if (tc_shader_handle_is_invalid(shader_handle_)) return;
     }
 
