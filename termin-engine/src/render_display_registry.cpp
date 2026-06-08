@@ -1,0 +1,169 @@
+#include "render_display_registry.hpp"
+
+#include <algorithm>
+
+namespace termin::rendering_manager_detail {
+
+void RenderDisplayRegistry::add_display(tc_display* display) {
+    if (!display) return;
+
+    auto it = std::find(displays_.begin(), displays_.end(), display);
+    if (it != displays_.end()) return;
+
+    displays_.push_back(display);
+}
+
+void RenderDisplayRegistry::remove_display(
+    tc_display* display,
+    const ViewportCleanupCallback& cleanup_viewport,
+    const DisplayRemovedCallback& removed_callback
+) {
+    if (!display) return;
+
+    auto it = std::find(displays_.begin(), displays_.end(), display);
+    bool is_editor = false;
+    if (it == displays_.end()) {
+        it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
+        if (it == editor_displays_.end()) return;
+        is_editor = true;
+    }
+
+    cleanup_viewport_states(display, cleanup_viewport);
+    display_routers_.erase(display);
+
+    if (is_editor) {
+        editor_displays_.erase(it);
+    } else {
+        displays_.erase(it);
+    }
+
+    if (removed_callback) {
+        removed_callback(display);
+    }
+}
+
+void RenderDisplayRegistry::add_editor_display(tc_display* display) {
+    if (!display) return;
+
+    auto it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
+    if (it != editor_displays_.end()) return;
+
+    editor_displays_.push_back(display);
+}
+
+void RenderDisplayRegistry::remove_editor_display(
+    tc_display* display,
+    const ViewportCleanupCallback& cleanup_viewport
+) {
+    if (!display) return;
+
+    auto it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
+    if (it == editor_displays_.end()) return;
+
+    cleanup_viewport_states(display, cleanup_viewport);
+    display_routers_.erase(display);
+    editor_displays_.erase(it);
+}
+
+bool RenderDisplayRegistry::try_auto_remove_display(
+    tc_display* display,
+    const ViewportCleanupCallback& cleanup_viewport,
+    const DisplayRemovedCallback& removed_callback
+) {
+    if (!display) return false;
+    if (!tc_display_get_auto_remove_when_empty(display)) return false;
+    if (tc_display_get_viewport_count(display) > 0) return false;
+
+    remove_display(display, cleanup_viewport, removed_callback);
+    return true;
+}
+
+tc_input_manager* RenderDisplayRegistry::ensure_display_router(tc_display* display) {
+    if (!display) return nullptr;
+
+    auto it = display_routers_.find(display);
+    if (it != display_routers_.end()) {
+        return it->second->input_manager_ptr();
+    }
+
+    auto router = std::make_unique<DisplayInputRouter>(display);
+    tc_input_manager* im = router->input_manager_ptr();
+    display_routers_[display] = std::move(router);
+    return im;
+}
+
+tc_display* RenderDisplayRegistry::get_display_by_name(const std::string& name) const {
+    for (tc_display* d : displays_) {
+        const char* dname = tc_display_get_name(d);
+        if (dname && name == dname) {
+            return d;
+        }
+    }
+    for (tc_display* d : editor_displays_) {
+        const char* dname = tc_display_get_name(d);
+        if (dname && name == dname) {
+            return d;
+        }
+    }
+    return nullptr;
+}
+
+tc_display* RenderDisplayRegistry::get_or_create_display(
+    const std::string& name,
+    const DisplayFactory& factory
+) {
+    tc_display* display = get_display_by_name(name);
+    if (display) {
+        return display;
+    }
+
+    if (factory) {
+        display = factory(name);
+        if (display) {
+            add_display(display);
+            return display;
+        }
+    }
+
+    return nullptr;
+}
+
+std::unordered_map<std::string, tc_viewport_handle> RenderDisplayRegistry::collect_all_viewports() const {
+    std::unordered_map<std::string, tc_viewport_handle> result;
+    auto collect_from = [&result](const std::vector<tc_display*>& disp_list) {
+        for (tc_display* display : disp_list) {
+            tc_viewport_handle vp = tc_display_get_first_viewport(display);
+            while (tc_viewport_handle_valid(vp)) {
+                const char* name = tc_viewport_get_name(vp);
+                if (name && name[0] != '\0') {
+                    result[name] = vp;
+                }
+                vp = tc_viewport_get_display_next(vp);
+            }
+        }
+    };
+    collect_from(displays_);
+    collect_from(editor_displays_);
+    return result;
+}
+
+void RenderDisplayRegistry::clear() {
+    display_routers_.clear();
+    displays_.clear();
+    editor_displays_.clear();
+}
+
+void RenderDisplayRegistry::cleanup_viewport_states(
+    tc_display* display,
+    const ViewportCleanupCallback& cleanup_viewport
+) {
+    if (!cleanup_viewport) return;
+
+    tc_viewport_handle vp = tc_display_get_first_viewport(display);
+    while (tc_viewport_handle_valid(vp)) {
+        cleanup_viewport(vp);
+        vp = tc_viewport_get_display_next(vp);
+    }
+}
+
+} // namespace termin::rendering_manager_detail
