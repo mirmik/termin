@@ -17,7 +17,6 @@
 #include "termin/render/viewport_render_state.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
-#include "termin/input/display_input_router.hpp"
 
 extern "C" {
 #include "core/tc_scene.h"
@@ -41,7 +40,9 @@ namespace termin {
 class RenderingManager;
 
 namespace rendering_manager_detail {
+class RenderDisplayRegistry;
 class RenderStateStore;
+class ScenePipelineManager;
 }
 
 // Factory callback types
@@ -146,7 +147,7 @@ public:
     void remove_display(tc_display* display);
 
     // Get all managed scene displays
-    const std::vector<tc_display*>& displays() const { return displays_; }
+    const std::vector<tc_display*>& displays() const;
 
     // Add editor display (skipped by detach_scene_full/unmount_scene)
     void add_editor_display(tc_display* display);
@@ -155,7 +156,7 @@ public:
     void remove_editor_display(tc_display* display);
 
     // Get all editor displays
-    const std::vector<tc_display*>& editor_displays() const { return editor_displays_; }
+    const std::vector<tc_display*>& editor_displays() const;
 
     // Find display by name (searches both scene and editor displays)
     tc_display* get_display_by_name(const std::string& name) const;
@@ -349,21 +350,9 @@ private:
     // Collect all viewports from all displays by name
     std::unordered_map<std::string, tc_viewport_handle> collect_all_viewports() const;
 
-    // Destroy compiled pipelines for a scene. The public
-    // clear_scene_pipelines() API preserves the legacy notify-detach behavior;
-    // attach/detach internals use this helper to avoid duplicate lifecycle
-    // notifications.
-    void destroy_scene_pipelines(tc_scene_handle scene, bool notify_detach);
-
 private:
-    // Managed scene displays (cleaned up by detach_scene_full)
-    std::vector<tc_display*> displays_;
-
-    // Editor displays (skipped by detach_scene_full)
-    std::vector<tc_display*> editor_displays_;
-
-    // Per-display input routers (owned)
-    std::unordered_map<tc_display*, std::unique_ptr<DisplayInputRouter>> display_routers_;
+    // Scene/editor display lists and per-display input routers.
+    std::unique_ptr<rendering_manager_detail::RenderDisplayRegistry> display_registry_;
 
     // Render engine (owned if created internally)
     RenderEngine* render_engine_ = nullptr;
@@ -371,6 +360,9 @@ private:
 
     // Runtime GPU output state for viewports and render targets.
     std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
+
+    // Compiled scene pipeline handles and target viewport mappings.
+    std::unique_ptr<rendering_manager_detail::ScenePipelineManager> scene_pipelines_;
 
     // Callback to activate GL context before rendering
     MakeCurrentCallback make_current_callback_;
@@ -393,14 +385,6 @@ private:
     // Attached scenes (for scene pipeline execution)
     std::vector<tc_scene_handle> attached_scenes_;
 
-    // Scene pipelines: scene_handle -> (pipeline_name -> owning pointer)
-    // RenderingManager owns compiled pipelines
-    // Key is (scene.index << 32 | scene.generation)
-    std::unordered_map<uint64_t, std::unordered_map<std::string, tc_pipeline_handle>> scene_pipelines_;
-
-    // Pipeline targets: pipeline_name -> list of viewport names
-    std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;
-
     // Render targets managed by this RenderingManager.
     // Used for offscreen rendering, viewport target lookup, and scene-detach cleanup.
     // RenderingManager code must use this list as the ownership boundary and
@@ -411,11 +395,6 @@ private:
     // Special target providers, keyed by tc_render_target_kind.
     std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
     std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
-
-    // Helper to make key from scene handle
-    static uint64_t scene_key(tc_scene_handle h) {
-        return (static_cast<uint64_t>(h.index) << 32) | h.generation;
-    }
 
     // Helper to make key from render target handle
     static uint64_t render_target_key(tc_render_target_handle h) {

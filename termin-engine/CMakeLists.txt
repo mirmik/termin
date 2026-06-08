@@ -47,10 +47,12 @@ set(TERMIN_ENGINE_SOURCES
     src/display_presenter.cpp
     src/engine_core.cpp
     src/default_pipeline_factory.cpp
+    src/render_display_registry.cpp
     src/scene_manager.cpp
     src/scene_light_collector.cpp
     src/render_state_store.cpp
     src/rendering_manager.cpp
+    src/scene_pipeline_manager.cpp
     src/pull_rendering_manager.cpp
     src/tc_scene_manager_instance.cpp
     src/tc_rendering_manager_instance.cpp

@@ -6,7 +6,9 @@
 
 - `include/termin/render/rendering_manager.hpp`
 - `src/rendering_manager.cpp` - публичный фасад и orchestration.
+- `src/render_display_registry.cpp` - scene/editor display списки и display input routers.
 - `src/render_state_store.cpp` - runtime GPU output state для viewport/render target.
+- `src/scene_pipeline_manager.cpp` - compiled scene pipelines и target viewport mappings.
 - `src/display_presenter.cpp` - presentation/blit display surfaces.
 - `src/default_pipeline_factory.cpp` - builtin default pipeline.
 - `src/scene_light_collector.cpp` - сбор light data через capability system.

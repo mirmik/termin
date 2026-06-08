@@ -2,9 +2,11 @@
 #include "termin/render/rendering_manager.hpp"
 #include "default_pipeline_factory.hpp"
 #include "display_presenter.hpp"
+#include "render_display_registry.hpp"
 #include "rendering_manager_utils.hpp"
 #include "render_state_store.hpp"
 #include "scene_light_collector.hpp"
+#include "scene_pipeline_manager.hpp"
 #include "termin/render/scene_pipeline_template.hpp"
 #include "termin/render/render_camera.hpp"
 #include <termin/entity/entity.hpp>
@@ -260,7 +262,9 @@ void RenderingManager::reset_for_testing() {
 }
 
 RenderingManager::RenderingManager() {
+    display_registry_ = std::make_unique<rendering_manager_detail::RenderDisplayRegistry>();
     render_states_ = std::make_unique<rendering_manager_detail::RenderStateStore>();
+    scene_pipelines_ = std::make_unique<rendering_manager_detail::ScenePipelineManager>();
     set_instance(this);
 }
 
@@ -492,136 +496,59 @@ void RenderingManager::set_display_removed_callback(DisplayRemovedCallback callb
     display_removed_callback_ = std::move(callback);
 }
 
+const std::vector<tc_display*>& RenderingManager::displays() const {
+    return display_registry_->displays();
+}
+
+const std::vector<tc_display*>& RenderingManager::editor_displays() const {
+    return display_registry_->editor_displays();
+}
+
 // ============================================================================
 // Display Management
 // ============================================================================
 
 void RenderingManager::add_display(tc_display* display) {
-    if (!display) return;
-
-    // Check if already managed
-    auto it = std::find(displays_.begin(), displays_.end(), display);
-    if (it != displays_.end()) return;
-
-    displays_.push_back(display);
+    display_registry_->add_display(display);
 }
 
 void RenderingManager::remove_display(tc_display* display) {
-    if (!display) return;
-
-    // Search in both scene and editor display lists
-    auto it = std::find(displays_.begin(), displays_.end(), display);
-    bool is_editor = false;
-    if (it == displays_.end()) {
-        it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
-        if (it == editor_displays_.end()) return;
-        is_editor = true;
-    }
-
-    // Clean up viewport states for viewports on this display
-    tc_viewport_handle vp = tc_display_get_first_viewport(display);
-    while (tc_viewport_handle_valid(vp)) {
-        remove_viewport_state(vp);
-        vp = tc_viewport_get_display_next(vp);
-    }
-
-    // Remove display router if exists
-    display_routers_.erase(display);
-
-    if (is_editor) {
-        editor_displays_.erase(it);
-    } else {
-        displays_.erase(it);
-    }
-
-    // Notify callback (e.g., editor cleanup of Qt tabs)
-    if (display_removed_callback_) {
-        display_removed_callback_(display);
-    }
+    display_registry_->remove_display(
+        display,
+        [this](tc_viewport_handle viewport) { remove_viewport_state(viewport); },
+        display_removed_callback_
+    );
 }
 
 void RenderingManager::add_editor_display(tc_display* display) {
-    if (!display) return;
-
-    auto it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
-    if (it != editor_displays_.end()) return;
-
-    editor_displays_.push_back(display);
+    display_registry_->add_editor_display(display);
 }
 
 void RenderingManager::remove_editor_display(tc_display* display) {
-    if (!display) return;
-
-    auto it = std::find(editor_displays_.begin(), editor_displays_.end(), display);
-    if (it == editor_displays_.end()) return;
-
-    // Clean up viewport states for viewports on this display
-    tc_viewport_handle vp = tc_display_get_first_viewport(display);
-    while (tc_viewport_handle_valid(vp)) {
-        remove_viewport_state(vp);
-        vp = tc_viewport_get_display_next(vp);
-    }
-
-    display_routers_.erase(display);
-    editor_displays_.erase(it);
+    display_registry_->remove_editor_display(
+        display,
+        [this](tc_viewport_handle viewport) { remove_viewport_state(viewport); }
+    );
 }
 
 bool RenderingManager::try_auto_remove_display(tc_display* display) {
-    if (!display) return false;
-    if (!tc_display_get_auto_remove_when_empty(display)) return false;
-    if (tc_display_get_viewport_count(display) > 0) return false;
-
-    remove_display(display);
-    return true;
+    return display_registry_->try_auto_remove_display(
+        display,
+        [this](tc_viewport_handle viewport) { remove_viewport_state(viewport); },
+        display_removed_callback_
+    );
 }
 
 tc_input_manager* RenderingManager::ensure_display_router(tc_display* display) {
-    if (!display) return nullptr;
-
-    auto it = display_routers_.find(display);
-    if (it != display_routers_.end()) {
-        return it->second->input_manager_ptr();
-    }
-
-    auto router = std::make_unique<DisplayInputRouter>(display);
-    tc_input_manager* im = router->input_manager_ptr();
-    display_routers_[display] = std::move(router);
-    return im;
+    return display_registry_->ensure_display_router(display);
 }
 
 tc_display* RenderingManager::get_display_by_name(const std::string& name) const {
-    for (tc_display* d : displays_) {
-        const char* dname = tc_display_get_name(d);
-        if (dname && name == dname) {
-            return d;
-        }
-    }
-    for (tc_display* d : editor_displays_) {
-        const char* dname = tc_display_get_name(d);
-        if (dname && name == dname) {
-            return d;
-        }
-    }
-    return nullptr;
+    return display_registry_->get_display_by_name(name);
 }
 
 tc_display* RenderingManager::get_or_create_display(const std::string& name) {
-    // Check existing displays
-    tc_display* display = get_display_by_name(name);
-    if (display) {
-        return display;
-    }
-
-    // Try factory
-    if (display_factory_) {
-        display = display_factory_(name);
-        if (display) {
-            add_display(display);
-            return display;
-        }
-    }
-
-    return nullptr;
+    return display_registry_->get_or_create_display(name, display_factory_);
 }
 
 // ============================================================================
@@ -712,9 +639,9 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
                 }
             }
         };
-        scan_display_list(displays_);
+        scan_display_list(display_registry_->displays());
         if (!still_referenced) {
-            scan_display_list(editor_displays_);
+            scan_display_list(display_registry_->editor_displays());
         }
 
         if (tc_render_target_handle_valid(rt) && !registered_managed && !still_referenced) {
@@ -918,7 +845,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
 
 void RenderingManager::detach_scene_full(tc_scene_handle scene) {
     // Unmount from all displays
-    for (tc_display* display : displays_) {
+    for (tc_display* display : display_registry_->displays()) {
         unmount_scene(scene, display);
     }
 
@@ -967,23 +894,12 @@ void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::v
         }
     }
 
-    // Also check all displays (scene + editor) for viewports
-    auto collect_from = [&viewport_by_name](const std::vector<tc_display*>& disp_list) {
-        for (tc_display* display : disp_list) {
-            tc_viewport_handle vp = tc_display_get_first_viewport(display);
-            while (tc_viewport_handle_valid(vp)) {
-                const char* name = tc_viewport_get_name(vp);
-                if (name && name[0] != '\0') {
-                    if (viewport_by_name.find(name) == viewport_by_name.end()) {
-                        viewport_by_name[name] = vp;
-                    }
-                }
-                vp = tc_viewport_get_display_next(vp);
-            }
+    // Also check all displays (scene + editor) for viewports.
+    for (const auto& [name, viewport] : display_registry_->collect_all_viewports()) {
+        if (viewport_by_name.find(name) == viewport_by_name.end()) {
+            viewport_by_name[name] = viewport;
         }
-    };
-    collect_from(displays_);
-    collect_from(editor_displays_);
+    }
 
     // Mark viewports as managed by their scene pipeline
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
@@ -1011,22 +927,7 @@ void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::v
 }
 
 std::unordered_map<std::string, tc_viewport_handle> RenderingManager::collect_all_viewports() const {
-    std::unordered_map<std::string, tc_viewport_handle> result;
-    auto collect_from = [&result](const std::vector<tc_display*>& disp_list) {
-        for (tc_display* display : disp_list) {
-            tc_viewport_handle vp = tc_display_get_first_viewport(display);
-            while (tc_viewport_handle_valid(vp)) {
-                const char* name = tc_viewport_get_name(vp);
-                if (name && name[0] != '\0') {
-                    result[name] = vp;
-                }
-                vp = tc_viewport_get_display_next(vp);
-            }
-        }
-    };
-    collect_from(displays_);
-    collect_from(editor_displays_);
-    return result;
+    return display_registry_->collect_all_viewports();
 }
 
 // ============================================================================
@@ -1114,7 +1015,7 @@ void RenderingManager::render_all_offscreen() {
     // use the same share-group key or present will wrap a fresh, blank
     // texture instead of the one rendered offscreen.
     uintptr_t share_group_key = 0;
-    for (tc_display* display : displays_) {
+    for (tc_display* display : display_registry_->displays()) {
         tc_render_surface* surface = tc_display_get_surface(display);
         if (surface) {
             share_group_key = tc_render_surface_share_group_key(surface);
@@ -1122,7 +1023,7 @@ void RenderingManager::render_all_offscreen() {
         }
     }
     if (share_group_key == 0) {
-        for (tc_display* display : editor_displays_) {
+        for (tc_display* display : display_registry_->editor_displays()) {
             tc_render_surface* surface = tc_display_get_surface(display);
             if (surface) {
                 share_group_key = tc_render_surface_share_group_key(surface);
@@ -1157,8 +1058,8 @@ void RenderingManager::render_all_offscreen() {
             }
         }
     };
-    update_viewport_rects(displays_);
-    update_viewport_rects(editor_displays_);
+    update_viewport_rects(display_registry_->displays());
+    update_viewport_rects(display_registry_->editor_displays());
 
     // 0. Sync dynamic-resolution render targets from their attached viewport.
     sync_viewport_resolutions();
@@ -1213,8 +1114,8 @@ void RenderingManager::render_all_offscreen() {
             }
         }
     };
-    collect_viewport_render_targets(displays_);
-    collect_viewport_render_targets(editor_displays_);
+    collect_viewport_render_targets(display_registry_->displays());
+    collect_viewport_render_targets(display_registry_->editor_displays());
 
     // 1. Render standalone managed render targets first. RTs attached to
     // viewports are intentionally delayed because we do not yet have a
@@ -1270,8 +1171,8 @@ void RenderingManager::render_all_offscreen() {
             }
         }
     };
-    render_unmanaged(displays_);
-    render_unmanaged(editor_displays_);
+    render_unmanaged(display_registry_->displays());
+    render_unmanaged(display_registry_->editor_displays());
 }
 
 void RenderingManager::render_scene_pipeline_offscreen(
@@ -1566,8 +1467,8 @@ void RenderingManager::sync_viewport_resolutions() {
             }
         }
     };
-    sync_list(displays_);
-    sync_list(editor_displays_);
+    sync_list(display_registry_->displays());
+    sync_list(display_registry_->editor_displays());
 }
 
 void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt) {
@@ -1619,12 +1520,12 @@ void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt
 }
 
 void RenderingManager::present_all() {
-    for (tc_display* display : displays_) {
+    for (tc_display* display : display_registry_->displays()) {
         if (tc_display_get_enabled(display)) {
             present_display(display);
         }
     }
-    for (tc_display* display : editor_displays_) {
+    for (tc_display* display : display_registry_->editor_displays()) {
         if (tc_display_get_enabled(display)) {
             present_display(display);
         }
@@ -1640,51 +1541,12 @@ void RenderingManager::present_display(tc_display* display) {
 // ============================================================================
 
 void RenderingManager::attach_scene(tc_scene_handle scene) {
-    if (!tc_scene_handle_valid(scene)) return;
-
-    // Clear existing pipelines (without notify_render_detach — attach will notify attach)
-    destroy_scene_pipelines(scene, false);
-
-    tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
-    size_t template_count = mount ? mount->pipeline_template_count : 0;
-    uint64_t key = scene_key(scene);
-
-    for (size_t i = 0; i < template_count; i++) {
-        tc_spt_handle spt_handle = mount->pipeline_templates[i];
-        if (!tc_spt_is_valid(spt_handle)) continue;
-
-        TcScenePipelineTemplate templ(spt_handle);
-        if (!templ.is_loaded()) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Template not loaded: '%s'", templ.name().c_str());
-            continue;
-        }
-
-        RenderPipeline* compiled = templ.compile();
-        if (!compiled) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Failed to compile template: '%s'", templ.name().c_str());
-            continue;
-        }
-
-        std::string name = templ.name();
-        tc_pipeline_handle ph = compiled->handle();
-        tc_pipeline_set_name(ph, name.c_str());
-        delete compiled; // RenderPipeline no longer owns — handle stays in pool
-
-        // Store handle
-        scene_pipelines_[key][name] = ph;
-
-        // Store targets
-        pipeline_targets_[name] = templ.target_viewports();
-    }
-
-    // Notify components that rendering is attached
-    tc_scene_notify_render_attach(scene);
+    scene_pipelines_->attach_scene(scene);
 }
 
 void RenderingManager::detach_scene(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
-    tc_scene_notify_render_detach(scene);
-    destroy_scene_pipelines(scene, false);
+    scene_pipelines_->detach_scene(scene);
 
     auto it = std::find_if(attached_scenes_.begin(), attached_scenes_.end(),
         [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
@@ -1694,100 +1556,31 @@ void RenderingManager::detach_scene(tc_scene_handle scene) {
 }
 
 tc_pipeline_handle RenderingManager::get_scene_pipeline(tc_scene_handle scene, const std::string& name) const {
-    if (!tc_scene_handle_valid(scene)) return TC_PIPELINE_HANDLE_INVALID;
-    uint64_t key = scene_key(scene);
-    auto scene_it = scene_pipelines_.find(key);
-    if (scene_it == scene_pipelines_.end()) return TC_PIPELINE_HANDLE_INVALID;
-    auto pipe_it = scene_it->second.find(name);
-    return (pipe_it != scene_it->second.end()) ? pipe_it->second : TC_PIPELINE_HANDLE_INVALID;
+    return scene_pipelines_->get_scene_pipeline(scene, name);
 }
 
 tc_pipeline_handle RenderingManager::get_scene_pipeline(const std::string& name) const {
-    for (const auto& [key, pipelines] : scene_pipelines_) {
-        auto it = pipelines.find(name);
-        if (it != pipelines.end()) {
-            return it->second;
-        }
-    }
-    tc_log(TC_LOG_WARN, "[RenderingManager] get_scene_pipeline NOT FOUND: '%s'", name.c_str());
-    return TC_PIPELINE_HANDLE_INVALID;
+    return scene_pipelines_->get_scene_pipeline(name);
 }
 
 void RenderingManager::set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets) {
-    pipeline_targets_[pipeline_name] = targets;
+    scene_pipelines_->set_pipeline_targets(pipeline_name, targets);
 }
 
-static const std::vector<std::string> empty_targets;
-
 const std::vector<std::string>& RenderingManager::get_pipeline_targets(const std::string& pipeline_name) const {
-    auto it = pipeline_targets_.find(pipeline_name);
-    return (it != pipeline_targets_.end()) ? it->second : empty_targets;
+    return scene_pipelines_->get_pipeline_targets(pipeline_name);
 }
 
 std::vector<std::string> RenderingManager::get_pipeline_names(tc_scene_handle scene) const {
-    std::vector<std::string> names;
-    if (!tc_scene_handle_valid(scene)) return names;
-
-    uint64_t key = scene_key(scene);
-    auto scene_it = scene_pipelines_.find(key);
-    if (scene_it != scene_pipelines_.end()) {
-        for (const auto& [name, ptr] : scene_it->second) {
-            (void)ptr;
-            names.push_back(name);
-        }
-    }
-    return names;
+    return scene_pipelines_->get_pipeline_names(scene);
 }
 
 void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
-    destroy_scene_pipelines(scene, true);
-}
-
-void RenderingManager::destroy_scene_pipelines(tc_scene_handle scene, bool notify_detach) {
-    if (!tc_scene_handle_valid(scene)) return;
-    uint64_t key = scene_key(scene);
-
-    auto scene_it = scene_pipelines_.find(key);
-    if (scene_it == scene_pipelines_.end()) return;
-
-    if (notify_detach) {
-        // Notify components that rendering is detaching (before destroying pipelines).
-        tc_scene_notify_render_detach(scene);
-    }
-
-    // Remove pipeline targets for this scene's pipelines
-    for (const auto& [name, ptr] : scene_it->second) {
-        (void)ptr;
-        pipeline_targets_.erase(name);
-    }
-
-    // Destroy pipelines in pool, then erase
-    for (const auto& [name, ph] : scene_it->second) {
-        tc_pipeline_destroy(ph);
-    }
-    scene_pipelines_.erase(key);
+    scene_pipelines_->clear_scene_pipelines(scene);
 }
 
 void RenderingManager::clear_all_scene_pipelines() {
-    // Notify all scenes that rendering is detaching
-    for (const auto& [key, pipelines] : scene_pipelines_) {
-        // Reconstruct scene handle from key
-        tc_scene_handle scene;
-        scene.index = static_cast<uint32_t>(key >> 32);
-        scene.generation = static_cast<uint32_t>(key & 0xFFFFFFFF);
-        if (tc_scene_handle_valid(scene)) {
-            tc_scene_notify_render_detach(scene);
-        }
-    }
-
-    // Destroy all pipelines, then clear
-    for (auto& [key, pipelines] : scene_pipelines_) {
-        for (auto& [name, ph] : pipelines) {
-            tc_pipeline_destroy(ph);
-        }
-    }
-    scene_pipelines_.clear();
-    pipeline_targets_.clear();
+    scene_pipelines_->clear_all_scene_pipelines();
 }
 
 // ============================================================================
@@ -1808,12 +1601,9 @@ void RenderingManager::shutdown() {
     // Clear scene pipelines (deletes owned pipelines)
     clear_all_scene_pipelines();
 
-    // Clear display routers (before displays, since routers reference displays)
-    display_routers_.clear();
-
-    // Clear displays (don't free them - we don't own them)
-    displays_.clear();
-    editor_displays_.clear();
+    if (display_registry_) {
+        display_registry_->clear();
+    }
 
     offscreen_share_group_key_ = 0;
 
