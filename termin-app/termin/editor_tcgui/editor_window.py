@@ -54,6 +54,8 @@ from termin.editor_tcgui.editor_window_layout import (
 )
 from termin.editor_tcgui.viewport_interaction_hub import ViewportInteractionHub
 from termin.editor_tcgui.debug_panel_controller import DebugPanelController
+from termin.editor_tcgui.fullscreen_controller import FullscreenController
+from termin.editor_tcgui.prefab_toolbar_controller import PrefabToolbarController
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
@@ -206,8 +208,10 @@ class EditorWindowTcgui:
         self._display_routers: dict[int, object] = {}
         self._current_project_path: str | None = None
         self._project_name: str | None = None
-        self._is_fullscreen: bool = False
-        self._pre_fullscreen_state: dict | None = None
+        self._fullscreen = FullscreenController(
+            get_panels=self._fullscreen_panels,
+            update_fullscreen_action=self._update_fullscreen_action,
+        )
         self._editor_state_io: EditorStateIO | None = None
         self._viewport_list = None
         self._left_tabs: TabView | None = None
@@ -225,6 +229,7 @@ class EditorWindowTcgui:
         self._prefab_toolbar_label: Label | None = None
         self._save_prefab_button = None
         self._exit_prefab_button = None
+        self._prefab_toolbar_controller = PrefabToolbarController()
         self._pre_prefab_scene_name: str | None = None
         self.prefab_edit_controller: PrefabEditController | None = None
         # Game mode state + transitions live in GameModeModel. The model is
@@ -342,6 +347,11 @@ class EditorWindowTcgui:
         self._prefab_toolbar_label = widgets.prefab_toolbar_label
         self._save_prefab_button = widgets.save_prefab_button
         self._exit_prefab_button = widgets.exit_prefab_button
+        self._prefab_toolbar_controller.set_widgets(
+            prefab_toolbar=widgets.prefab_toolbar,
+            prefab_toolbar_label=widgets.prefab_toolbar_label,
+            play_button=widgets.play_button,
+        )
         self._center_tabs = widgets.center_tabs
         self._viewport_widget = widgets.viewport_widget
         self._right_scroll = widgets.right_scroll
@@ -753,7 +763,7 @@ class EditorWindowTcgui:
             is_surface_edge_debug_tool_enabled=self._is_surface_edge_debug_tool_enabled,
             can_undo=lambda: self.undo_stack.can_undo,
             can_redo=lambda: self.undo_stack.can_redo,
-            is_fullscreen=lambda: self._is_fullscreen,
+            is_fullscreen=lambda: self._fullscreen.is_fullscreen,
             is_profiler_visible=lambda: self._debug_panels.profiler_visible,
             is_modules_visible=lambda: self._debug_panels.modules_visible,
         )
@@ -1837,30 +1847,20 @@ class EditorWindowTcgui:
             self._menu_bar_controller.update_modules_action()
 
     def _toggle_fullscreen(self) -> None:
-        panels = [
+        self._fullscreen.toggle()
+
+    def _fullscreen_panels(self) -> list[object | None]:
+        return [
             self._left_tabs, self._left_splitter,
             self._right_scroll, self._right_splitter,
             self._bottom_tabs, self._bottom_splitter,
             self._menu_bar_widget, self._status_bar,
             self._debug_panel, self._debug_splitter,
         ]
-        if self._is_fullscreen:
-            # Restore panels
-            if self._pre_fullscreen_state is not None:
-                for w in panels:
-                    if w is not None and id(w) in self._pre_fullscreen_state:
-                        w.visible = self._pre_fullscreen_state[id(w)]
-            self._is_fullscreen = False
-            self._pre_fullscreen_state = None
-        else:
-            # Save state and hide panels
-            self._pre_fullscreen_state = {}
-            for w in panels:
-                if w is not None:
-                    self._pre_fullscreen_state[id(w)] = w.visible
-                    w.visible = False
-            self._is_fullscreen = True
-        self._menu_bar_controller.update_fullscreen_action()
+
+    def _update_fullscreen_action(self) -> None:
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_fullscreen_action()
 
     def _load_material_from_file(self) -> None:
         if self._ui is None:
@@ -2082,20 +2082,11 @@ class EditorWindowTcgui:
         self.prefab_edit_controller.exit()
 
     def _on_prefab_mode_changed(self, is_editing: bool, prefab_name: str | None) -> None:
+        self._prefab_toolbar_controller.set_editing(is_editing, prefab_name)
         if is_editing:
-            if self._prefab_toolbar is not None:
-                self._prefab_toolbar.visible = True
-            if self._prefab_toolbar_label is not None:
-                self._prefab_toolbar_label.text = f"Editing Prefab: {prefab_name or ''}"
-            if self._play_button is not None:
-                self._play_button.enabled = False
             self.attach_editor_to_scene("prefab", restore_state=False)
             self.attach_scene_to_render("prefab")
         else:
-            if self._prefab_toolbar is not None:
-                self._prefab_toolbar.visible = False
-            if self._play_button is not None:
-                self._play_button.enabled = True
             previous_scene_name = self._pre_prefab_scene_name
             self._pre_prefab_scene_name = None
             if previous_scene_name and self.scene_manager.has_scene(previous_scene_name):

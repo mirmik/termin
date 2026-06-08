@@ -72,6 +72,8 @@ UI-agnostic слой. Модели состояния + сервисы.
 - `editor_window_layout.py` — создание widget tree главного окна без wiring контроллеров.
 - `viewport_interaction_hub.py` — viewport click/pointer/key handlers, overlay drawers, active tool counter.
 - `debug_panel_controller.py` — Profiler/Modules panel visibility and throttled refresh.
+- `fullscreen_controller.py` — сохранение/восстановление visibility состояния панелей fullscreen mode.
+- `prefab_toolbar_controller.py` — presentation state toolbar-а prefab editing.
 - `viewport_list_widget.py` — tcgui TreeWidget + toolbar; Signal-based API через `editor_core.Signal`.
 - `editor_window.py`
 
