@@ -56,6 +56,7 @@ from termin.editor_tcgui.viewport_interaction_hub import ViewportInteractionHub
 from termin.editor_tcgui.debug_panel_controller import DebugPanelController
 from termin.editor_tcgui.fullscreen_controller import FullscreenController
 from termin.editor_tcgui.prefab_toolbar_controller import PrefabToolbarController
+from termin.editor_tcgui.resource_actions_controller import ResourceActionsController
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
@@ -267,6 +268,13 @@ class EditorWindowTcgui:
             log_message=self._log_to_console,
         )
         self._resource_loader.scan_builtin_components()
+        self._resource_actions = ResourceActionsController(
+            get_ui=lambda: self._ui,
+            get_project_path=self._get_project_path,
+            resource_loader=self._resource_loader,
+            get_inspector_controller=lambda: self._inspector_controller,
+            request_viewport_update=self._request_viewport_update,
+        )
 
         self._project_file_watcher = ProjectFileWatcher(
             on_resource_reloaded=self._on_resource_reloaded,
@@ -1863,98 +1871,16 @@ class EditorWindowTcgui:
             self._menu_bar_controller.update_fullscreen_action()
 
     def _load_material_from_file(self) -> None:
-        if self._ui is None:
-            return
-        from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
-        show_open_file_dialog(
-            self._ui,
-            title="Load Material",
-            directory=self._get_project_path() or str(Path.home()),
-            filter_str="Shader Files (*.shader);;All Files (*)",
-            on_result=self._on_material_file_selected,
-            windowed=True,
-        )
+        self._resource_actions.load_material_from_file()
 
     def _load_components_from_file(self) -> None:
-        if self._ui is None:
-            return
-        from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
-        show_open_file_dialog(
-            self._ui,
-            title="Load Components",
-            directory=self._get_project_path() or str(Path.home()),
-            filter_str="Python Files (*.py);;All Files (*)",
-            on_result=self._on_components_file_selected,
-            windowed=True,
-        )
+        self._resource_actions.load_components_from_file()
 
     def _deploy_stdlib(self) -> None:
-        if self._ui is None:
-            return
-        import termin
-
-        # termin is a namespace package → __file__ is None; use __path__[0]
-        stdlib_src = Path(termin.__path__[0]) / "resources" / "stdlib"
-        if not stdlib_src.exists():
-            MessageBox.error(
-                self._ui,
-                "Standard Library Not Found",
-                f"Path not found:\n{stdlib_src}",
-            )
-            return
-
-        from tcgui.widgets.file_dialog_overlay import show_open_directory_dialog
-        show_open_directory_dialog(
-            self._ui,
-            title="Select Directory for Standard Library",
-            directory=self._get_project_path() or str(Path.home()),
-            on_result=lambda path: self._deploy_stdlib_to(path, stdlib_src),
-            windowed=True,
-        )
+        self._resource_actions.deploy_stdlib()
 
     def _migrate_spec_to_meta(self) -> None:
-        if self._ui is None:
-            return
-        project = self._get_project_path()
-        if not project:
-            MessageBox.warning(
-                self._ui,
-                "No Project",
-                "Open a project first to migrate .spec files.",
-            )
-            return
-        spec_files = list(Path(project).rglob("*.spec"))
-        if not spec_files:
-            MessageBox.info(
-                self._ui,
-                "No Files to Migrate",
-                "No .spec files found in the current project.",
-            )
-            return
-
-        migrated = 0
-        errors: list[str] = []
-        for spec_path in spec_files:
-            meta_path = spec_path.with_suffix(".meta")
-            try:
-                spec_path.rename(meta_path)
-                migrated += 1
-            except Exception as e:
-                errors.append(f"{spec_path.name}: {e}")
-
-        if errors:
-            MessageBox.warning(
-                self._ui,
-                "Migration Completed with Errors",
-                f"Migrated {migrated} files.\nErrors: {len(errors)}",
-            )
-            log.error("Spec->meta migration completed with errors:\n" + "\n".join(errors))
-        else:
-            MessageBox.info(
-                self._ui,
-                "Migration Complete",
-                f"Successfully migrated {migrated} files.",
-            )
+        self._resource_actions.migrate_spec_to_meta()
 
     def close(self) -> None:
         self._should_close = True
@@ -2123,33 +2049,10 @@ class EditorWindowTcgui:
             self._request_viewport_update()
 
     def _on_material_file_selected(self, path: str | None) -> None:
-        if not path:
-            return
-        self._resource_loader.load_material_from_path(path)
-        if self._inspector_controller is not None:
-            self._inspector_controller.show_material_inspector_for_file(path)
-        self._request_viewport_update()
+        self._resource_actions.on_material_file_selected(path)
 
     def _on_components_file_selected(self, path: str | None) -> None:
-        if not path:
-            return
-        self._resource_loader.load_components_from_path(path)
+        self._resource_actions.on_components_file_selected(path)
 
     def _deploy_stdlib_to(self, path: str | None, stdlib_src: Path) -> None:
-        if not path or self._ui is None:
-            return
-        target_path = Path(path) / "stdlib"
-        try:
-            shutil.copytree(stdlib_src, target_path, dirs_exist_ok=True)
-            MessageBox.info(
-                self._ui,
-                "Standard Library Deployed",
-                f"Deployed to:\n{target_path}",
-            )
-            log.info(f"[Editor] Standard library deployed to {target_path}")
-        except Exception as e:
-            MessageBox.error(
-                self._ui,
-                "Deployment Failed",
-                f"Failed to deploy standard library:\n{e}",
-            )
+        self._resource_actions.deploy_stdlib_to(path, stdlib_src)
