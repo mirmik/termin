@@ -47,6 +47,7 @@ from termin.editor_core.editor_state_io import EditorStateIO
 from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
 from termin.editor_tcgui.project_build_controller import ProjectBuildController
 from termin.editor_tcgui.project_session_controller import ProjectSessionController
+from termin.editor_tcgui.scene_file_controller import SceneFileController
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
@@ -281,6 +282,27 @@ class EditorWindowTcgui:
             get_init_script_editor=lambda: self,
             resolve_termin_shaderc=_resolve_termin_shaderc,
             resolve_slangc=_resolve_slangc,
+        )
+        self._scene_file_controller = SceneFileController(
+            scene_manager=self.scene_manager,
+            get_ui=lambda: self._ui,
+            get_editor_scene_name=lambda: self._editor_scene_name,
+            set_editor_scene_name=self._set_editor_scene_name,
+            get_scene=lambda: self.scene,
+            get_project_path=self._get_project_path,
+            get_editor_state_io=lambda: self._editor_state_io,
+            has_editor_attachment=lambda: self._editor_attachment is not None,
+            detach_editor_from_scene=self.detach_editor_from_scene,
+            detach_scene_from_render=self.detach_scene_from_render,
+            attach_editor_to_scene=self.attach_editor_to_scene,
+            attach_scene_to_render=self.attach_scene_to_render,
+            get_scene_tree_controller=lambda: self.scene_tree_controller,
+            get_inspector_controller=lambda: self._inspector_controller,
+            observe_scene_events=self._observe_scene_events,
+            on_rendering_changed=self._on_rendering_changed,
+            request_viewport_update=self._request_viewport_update,
+            update_window_title=self._update_window_title,
+            log_to_console=self._log_to_console,
         )
         self._project_build_controller = ProjectBuildController(
             scene_manager=self.scene_manager,
@@ -1634,186 +1656,34 @@ class EditorWindowTcgui:
     # ------------------------------------------------------------------
 
     def _new_scene(self) -> None:
-        if self._ui is None:
-            self._do_new_scene()
-            return
-        MessageBox.question(
-            self._ui,
-            "New Scene",
-            "Create a new scene?\n\nThis will remove all entities and resources.",
-            on_result=lambda result: self._do_new_scene() if result == "Yes" else None,
-        )
+        self._scene_file_controller.new_scene()
 
     def _do_new_scene(self) -> None:
-        old_scene_name = self._editor_scene_name
-        if old_scene_name and self.scene_manager.has_scene(old_scene_name):
-            self.detach_editor_from_scene(save_state=True, clear_editor_scene_name=False)
-            self.detach_scene_from_render(old_scene_name, save_state=True)
-            self.scene_manager.close_scene(old_scene_name)
-        self._editor_scene_name = "untitled"
-        self.scene_manager.create_scene(self._editor_scene_name, default_scene_extensions())
-        self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
-        if self._editor_attachment is not None:
-            self.attach_editor_to_scene(self._editor_scene_name, restore_state=False)
-            self.attach_scene_to_render(self._editor_scene_name)
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.set_scene(self.scene)
-            self.scene_tree_controller.rebuild()
-        self._observe_scene_events(self.scene)
-        self._update_window_title()
+        self._scene_file_controller.do_new_scene()
 
     def _save_scene(self) -> None:
-        scene_name = self._editor_scene_name
-        scene_path = self.scene_manager.get_scene_path(scene_name) if scene_name else None
-        if scene_path is not None:
-            self._save_scene_to_file(scene_path)
-        else:
-            self._save_scene_as()
+        self._scene_file_controller.save_scene()
 
     def _save_scene_as(self) -> None:
-        if self._ui is None:
-            return
-        project_path = self._get_project_path()
-        directory = project_path or str(Path.home())
-        from tcgui.widgets.file_dialog_overlay import show_save_file_dialog
-        show_save_file_dialog(
-            self._ui,
-            title="Save Scene As",
-            directory=directory,
-            filter_str="Scene Files (*.tc_scene);;All Files (*)",
-            on_result=lambda path: self._save_scene_to_file(path) if path else None,
-            windowed=True,
-        )
+        self._scene_file_controller.save_scene_as()
 
     def _load_scene(self) -> None:
-        if self._ui is None:
-            return
-        project_path = self._get_project_path()
-        directory = project_path or str(Path.home())
-        from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
-        show_open_file_dialog(
-            self._ui,
-            title="Load Scene",
-            directory=directory,
-            filter_str="Scene Files (*.tc_scene);;All Files (*)",
-            on_result=lambda path: self._load_scene_from_file(path) if path else None,
-            windowed=True,
-        )
+        self._scene_file_controller.load_scene()
 
     def _close_scene(self) -> None:
-        if self._editor_scene_name:
-            self.scene_manager.close_scene(self._editor_scene_name)
-            self.scene_manager.create_scene(self._editor_scene_name, default_scene_extensions())
-            self.scene_manager.set_mode(self._editor_scene_name, SceneMode.STOP)
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.set_scene(self.scene)
-            self.scene_tree_controller.rebuild()
-        self._observe_scene_events(self.scene)
-        self._update_window_title()
+        self._scene_file_controller.close_scene()
 
     def _save_scene_to_file(self, path: str) -> None:
-        if not path:
-            return
-        if not self._validate_scene_path(path):
-            return
-        scene_name = self._editor_scene_name
-        if scene_name is None:
-            return
-        try:
-            editor_data = self._editor_state_io.collect() if self._editor_state_io else None
-            self.scene_manager.save_scene(scene_name, path, editor_data)
-            EditorSettings.instance().set_last_scene_path(path)
-            from termin.project.settings import ProjectSettingsManager
-            ProjectSettingsManager.instance().set_last_scene(path)
-            self._log_to_console(f"Saved: {path}")
-            self._update_window_title()
-        except Exception as e:
-            log.error(f"Failed to save scene: {e}")
-            self._log_to_console(f"Error saving: {e}")
+        self._scene_file_controller.save_scene_to_file(path)
 
     def _load_scene_from_file(self, path: str) -> None:
-        if not path:
-            return
-        if not self._validate_scene_path(path):
-            return
-        try:
-            from termin.editor_core import scene_name_from_file_path
-            old_scene_name = self._editor_scene_name
-            scene_name = scene_name_from_file_path(path)
-
-            # Close existing scene
-            if old_scene_name and self.scene_manager.has_scene(old_scene_name):
-                self.scene_manager.close_scene(old_scene_name)
-
-            self._editor_scene_name = scene_name
-
-            self.scene_manager.load_scene(scene_name, path)
-            from termin.modules import upgrade_scene_unknown_components
-            upgrade_scene_unknown_components(self.scene_manager.get_scene(scene_name))
-            self.scene_manager.set_mode(scene_name, SceneMode.STOP)
-
-            EditorSettings.instance().set_last_scene_path(path)
-            from termin.project.settings import ProjectSettingsManager
-            ProjectSettingsManager.instance().set_last_scene(path)
-
-            self._log_to_console(f"Loaded: {path}")
-            if self.scene_tree_controller is not None:
-                self.scene_tree_controller.set_scene(self.scene)
-                self.scene_tree_controller.rebuild()
-            self._observe_scene_events(self.scene)
-            if self._inspector_controller is not None:
-                self._inspector_controller.set_scene(self.scene)
-                self._inspector_controller.clear()
-            # Extract editor data from file before attach
-            editor_data = EditorStateIO.extract_from_file(path)
-
-            if self._editor_attachment is not None:
-                self.attach_editor_to_scene(scene_name, restore_state=False)
-                self.attach_scene_to_render(scene_name)
-
-            # Apply editor state (camera, selection, etc.)
-            if self._editor_state_io is not None:
-                self._editor_state_io.apply(editor_data)
-            self._on_rendering_changed()
-            self._request_viewport_update()
-            self._update_window_title()
-        except Exception as e:
-            log.error(f"Failed to load scene: {e}")
-            self._log_to_console(f"Error loading: {e}")
+        self._scene_file_controller.load_scene_from_file(path)
 
     def _validate_scene_path(self, path: str) -> bool:
-        project_path = self._get_project_path()
-        if not project_path:
-            return True
-        import os
-        real_file = os.path.realpath(path)
-        real_project = os.path.realpath(project_path)
-        if real_file.startswith(real_project + os.sep) or real_file == real_project:
-            return True
-        if self._ui is not None:
-            MessageBox.warning(
-                self._ui,
-                "Scene Outside Project",
-                f"The scene file must be inside the project directory.\n\n"
-                f"Scene: {path}\n"
-                f"Project: {project_path}",
-            )
-        log.error(f"Scene path outside project: scene={path} project={project_path}")
-        return False
+        return self._scene_file_controller.validate_scene_path(path)
 
     def _load_last_scene(self) -> None:
-        # Per-project last scene has priority
-        from termin.project.settings import ProjectSettingsManager
-        psm = ProjectSettingsManager.instance()
-        project_scene = psm.get_last_scene()
-        if project_scene is not None and Path(project_scene).is_file():
-            self._load_scene_from_file(project_scene)
-            return
-
-        # Fallback to global editor settings
-        last_path = EditorSettings.instance().get_last_scene_path()
-        if last_path is not None:
-            self._load_scene_from_file(str(last_path))
+        self._scene_file_controller.load_last_scene()
 
     # ------------------------------------------------------------------
     # Project restore on startup
@@ -2391,6 +2261,9 @@ class EditorWindowTcgui:
 
     def _get_project_path(self) -> str | None:
         return self._current_project_path
+
+    def _set_editor_scene_name(self, scene_name: str | None) -> None:
+        self._editor_scene_name = scene_name
 
     def _set_project_state(self, project_dir: str, project_name: str) -> None:
         self._current_project_path = project_dir
