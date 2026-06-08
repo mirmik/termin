@@ -14,6 +14,10 @@ generation path.
 - Runtime/package exporters resolve built-in sources from the repo first, then
   from `TERMIN_SDK/share/termin/builtin_shaders`, then from
   `sys.prefix/share/termin/builtin_shaders`.
+- C++ render passes resolve live built-in fragment sources from
+  `TERMIN_BUILTIN_SHADER_ROOT`, then from
+  `TERMIN_SDK/share/termin/builtin_shaders`, then from the build-tree
+  `termin-graphics/resources/builtin_shaders` directory.
 
 ## Artifact layout
 
@@ -64,3 +68,7 @@ layout metadata.
 Runtime fallback GLSL is allowed only for legacy/editor compatibility when no
 artifact root is configured. It must stay next to the catalog entry, not in a
 caller-specific copy.
+
+Live render passes that register engine shaders by stable UUID should load the
+source file through the built-in shader source loader instead of embedding a
+second copy of the shader string.

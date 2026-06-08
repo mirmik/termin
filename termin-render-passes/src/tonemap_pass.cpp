@@ -6,6 +6,7 @@
 // removed in Stage 8.1.
 #include <termin/render/tonemap_pass.hpp>
 #include "termin/render/execute_context.hpp"
+#include "builtin_shader_sources.hpp"
 
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -24,49 +25,7 @@ namespace termin {
 
 constexpr const char* TONEMAP_ENGINE_SHADER_UUID = "termin-engine-tonemap";
 
-// Backend-neutral: `#version 450 core` compiles directly on GL 4.3+ and
-// via shaderc for Vulkan. UBO at binding 0, sampler at binding 4 — matches
-// the shared descriptor set layout (UBO 0-3, COMBINED_IMAGE_SAMPLER 4-7).
-// Varying name `v_uv` matches the built-in FSQ vertex shader from
-// RenderContext2 — mismatch silently drops the connection and produces
-// a solid-color result.
-static const char* TONEMAP_FRAG_UBO = R"(
-#version 450 core
-layout(location=0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform TonemapParams {
-    float u_exposure;
-    int u_method;
-};
-
-layout(binding = 4) uniform sampler2D u_input;
-
-layout(location=0) out vec4 FragColor;
-
-vec3 aces_tonemap(vec3 x) {
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
-vec3 reinhard_tonemap(vec3 x) {
-    return x / (x + vec3(1.0));
-}
-
-void main() {
-    vec3 color = texture(u_input, v_uv).rgb;
-    color *= u_exposure;
-    if (u_method == 0) {
-        color = aces_tonemap(color);
-    } else if (u_method == 1) {
-        color = reinhard_tonemap(color);
-    }
-    FragColor = vec4(color, 1.0);
-}
-)";
+constexpr const char* TONEMAP_FRAGMENT_SOURCE_FILE = "termin-engine-tonemap.frag.glsl";
 
 // std140 layout for TonemapParams. Float at 0 (size 4), int at 4 (size 4),
 // block padded to 16-byte vec4 boundary.
@@ -144,9 +103,9 @@ void TonemapPass::execute(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = tc_shader_register_static_uuid(
-            /*vertex=*/nullptr, TONEMAP_FRAG_UBO, nullptr,
-            "TonemapEngineFS", TONEMAP_ENGINE_SHADER_UUID);
+        shader_handle_ = register_builtin_fragment_shader(
+            TONEMAP_FRAGMENT_SOURCE_FILE, "TonemapEngineFS", TONEMAP_ENGINE_SHADER_UUID);
+        if (tc_shader_handle_is_invalid(shader_handle_)) return;
     }
     if (!params_ubo_) {
         tgfx::BufferDesc ubo_desc;

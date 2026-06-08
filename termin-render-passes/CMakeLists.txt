@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(TERMIN_RENDER_PASSES_BUILD_SHARED "Build shared library" ON)
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-render-passes" OFF)
+option(TERMIN_RENDER_PASSES_BUILD_TESTS "Build termin-render-passes tests" ON)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -55,6 +56,7 @@ include(TerminRpath)
 
 set(TERMIN_RENDER_PASSES_SOURCES
     src/termin_render_passes_version.c
+    src/builtin_shader_sources.cpp
     src/bloom_pass.cpp
     src/color_pass.cpp
     src/debug_triangle_pass.cpp
@@ -127,7 +129,11 @@ target_link_libraries(termin_render_passes PUBLIC
     termin_components_mesh::termin_components_mesh
     termin_lighting::termin_lighting
 )
-target_compile_definitions(termin_render_passes PRIVATE TERMIN_RENDER_EXPORTS TC_EXPORTS)
+target_compile_definitions(termin_render_passes PRIVATE
+    TERMIN_RENDER_EXPORTS
+    TC_EXPORTS
+    TERMIN_GRAPHICS_SOURCE_DIR="${CMAKE_CURRENT_LIST_DIR}/../termin-graphics"
+)
 
 if(MSVC)
     target_compile_options(termin_render_passes PRIVATE /W3 /wd4251 /wd4275)
@@ -174,6 +180,28 @@ if(TERMIN_BUILD_PYTHON)
         PATTERN "*.pyc" EXCLUDE
         PATTERN "*.so" EXCLUDE
         PATTERN "lib" EXCLUDE
+    )
+endif()
+
+if(TERMIN_RENDER_PASSES_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(termin_render_passes_builtin_shader_sources_test
+        tests/test_builtin_shader_sources.cpp
+    )
+    target_include_directories(termin_render_passes_builtin_shader_sources_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(termin_render_passes_builtin_shader_sources_test PRIVATE
+        termin_render_passes
+    )
+    set_target_properties(termin_render_passes_builtin_shader_sources_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_builtin_shader_sources_test
+        COMMAND termin_render_passes_builtin_shader_sources_test
     )
 endif()
 

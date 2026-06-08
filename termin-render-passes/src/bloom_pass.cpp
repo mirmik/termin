@@ -7,6 +7,7 @@
 // removed in Stage 8.1.
 #include <termin/render/bloom_pass.hpp>
 #include "termin/render/execute_context.hpp"
+#include "builtin_shader_sources.hpp"
 
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -28,129 +29,9 @@ constexpr const char* BLOOM_DOWNSAMPLE_SHADER_UUID = "termin-engine-bloom-downsa
 constexpr const char* BLOOM_UPSAMPLE_SHADER_UUID = "termin-engine-bloom-upsample";
 constexpr const char* BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composite";
 
-// ================================================================
-// tgfx2 GLSL shader sources
-//
-// Paired with RenderContext2's built-in FSQ vertex shader → varying
-// name is `v_uv` — mismatches silently drop the connection.
-// Multi-sampler shaders use `layout(binding = N)` with the
-// GL_ARB_shading_language_420pack extension so explicit texture-unit
-// binding works without a post-link glUniform1i.
-// ================================================================
-
-static const char* BRIGHT_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform BloomBrightParams {
-    float u_threshold;
-    float u_soft_threshold;
-};
-
-layout(binding = 4) uniform sampler2D u_texture;
-
-layout(location = 0) out vec4 FragColor;
-
-void main() {
-    vec3 color = texture(u_texture, v_uv).rgb;
-    float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
-    float knee = u_threshold * u_soft_threshold;
-    float soft = brightness - u_threshold + knee;
-    soft = clamp(soft, 0.0, 2.0 * knee);
-    soft = soft * soft / (4.0 * knee + 0.00001);
-    float contribution = max(soft, brightness - u_threshold) / max(brightness, 0.00001);
-    contribution = max(contribution, 0.0);
-    FragColor = vec4(color * contribution, 1.0);
-}
-)";
-
-static const char* DOWNSAMPLE_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform BloomDownsampleParams {
-    vec2 u_texel_size;
-};
-
-layout(binding = 4) uniform sampler2D u_texture;
-
-layout(location = 0) out vec4 FragColor;
-
-void main() {
-    vec2 ts = u_texel_size;
-    vec3 a = texture(u_texture, v_uv + vec2(-2.0, -2.0) * ts).rgb;
-    vec3 b = texture(u_texture, v_uv + vec2( 0.0, -2.0) * ts).rgb;
-    vec3 c = texture(u_texture, v_uv + vec2( 2.0, -2.0) * ts).rgb;
-    vec3 d = texture(u_texture, v_uv + vec2(-2.0,  0.0) * ts).rgb;
-    vec3 e = texture(u_texture, v_uv + vec2( 0.0,  0.0) * ts).rgb;
-    vec3 f = texture(u_texture, v_uv + vec2( 2.0,  0.0) * ts).rgb;
-    vec3 g = texture(u_texture, v_uv + vec2(-2.0,  2.0) * ts).rgb;
-    vec3 h = texture(u_texture, v_uv + vec2( 0.0,  2.0) * ts).rgb;
-    vec3 i = texture(u_texture, v_uv + vec2( 2.0,  2.0) * ts).rgb;
-    vec3 j = texture(u_texture, v_uv + vec2(-1.0, -1.0) * ts).rgb;
-    vec3 k = texture(u_texture, v_uv + vec2( 1.0, -1.0) * ts).rgb;
-    vec3 l = texture(u_texture, v_uv + vec2(-1.0,  1.0) * ts).rgb;
-    vec3 m = texture(u_texture, v_uv + vec2( 1.0,  1.0) * ts).rgb;
-    vec3 result = e * 0.125;
-    result += (a + c + g + i) * 0.03125;
-    result += (b + d + f + h) * 0.0625;
-    result += (j + k + l + m) * 0.125;
-    FragColor = vec4(result, 1.0);
-}
-)";
-
-// Upsample outputs only the blended delta; `u_higher_mip` read has been
-// removed. Caller enables additive blending (ONE, ONE) so the existing
-// mip[i] content is preserved and summed in the framebuffer — avoids
-// the self-sampling feedback loop that Vulkan forbids inside a render pass.
-static const char* UPSAMPLE_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform BloomUpsampleParams {
-    vec2 u_texel_size;
-    float u_blend_factor;
-};
-
-layout(binding = 4) uniform sampler2D u_texture;
-
-layout(location = 0) out vec4 FragColor;
-
-void main() {
-    vec2 ts = u_texel_size;
-    vec3 a = texture(u_texture, v_uv + vec2(-1.0, -1.0) * ts).rgb;
-    vec3 b = texture(u_texture, v_uv + vec2( 0.0, -1.0) * ts).rgb;
-    vec3 c = texture(u_texture, v_uv + vec2( 1.0, -1.0) * ts).rgb;
-    vec3 d = texture(u_texture, v_uv + vec2(-1.0,  0.0) * ts).rgb;
-    vec3 e = texture(u_texture, v_uv + vec2( 0.0,  0.0) * ts).rgb;
-    vec3 f = texture(u_texture, v_uv + vec2( 1.0,  0.0) * ts).rgb;
-    vec3 g = texture(u_texture, v_uv + vec2(-1.0,  1.0) * ts).rgb;
-    vec3 h = texture(u_texture, v_uv + vec2( 0.0,  1.0) * ts).rgb;
-    vec3 i = texture(u_texture, v_uv + vec2( 1.0,  1.0) * ts).rgb;
-    vec3 upsampled = e * 4.0;
-    upsampled += (b + d + f + h) * 2.0;
-    upsampled += (a + c + g + i);
-    upsampled /= 16.0;
-    FragColor = vec4(upsampled * u_blend_factor, 1.0);
-}
-)";
-
-static const char* COMPOSITE_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform BloomCompositeParams {
-    float u_intensity;
-};
-
-layout(binding = 4) uniform sampler2D u_original;
-layout(binding = 5) uniform sampler2D u_bloom;
-
-layout(location = 0) out vec4 FragColor;
-
-void main() {
-    vec3 original = texture(u_original, v_uv).rgb;
-    vec3 bloom = texture(u_bloom, v_uv).rgb;
-    vec3 result = original + bloom * u_intensity;
-    FragColor = vec4(result, 1.0);
-}
-)";
+// Shader source lives in termin-graphics/resources/builtin_shaders and is
+// registered here by UUID so editor/runtime draws consume the same source that
+// package export uses for artifact generation.
 
 // ================================================================
 // std140-packed UBO structs
@@ -240,20 +121,20 @@ void BloomPass::ensure_tgfx2_shaders() {
     // across pass re-creations — see ShadowPass for the matching
     // pattern on VS+FS passes, and GrayscalePass for the FS-only variant.
     if (tc_shader_handle_is_invalid(bright_shader_handle_)) {
-        bright_shader_handle_ = tc_shader_register_static_uuid(
-            nullptr, BRIGHT_FRAG_UBO, nullptr, "BloomBrightFS", BLOOM_BRIGHT_SHADER_UUID);
+        bright_shader_handle_ = register_builtin_fragment_shader(
+            "termin-engine-bloom-bright.frag.glsl", "BloomBrightFS", BLOOM_BRIGHT_SHADER_UUID);
     }
     if (tc_shader_handle_is_invalid(downsample_shader_handle_)) {
-        downsample_shader_handle_ = tc_shader_register_static_uuid(
-            nullptr, DOWNSAMPLE_FRAG_UBO, nullptr, "BloomDownsampleFS", BLOOM_DOWNSAMPLE_SHADER_UUID);
+        downsample_shader_handle_ = register_builtin_fragment_shader(
+            "termin-engine-bloom-downsample.frag.glsl", "BloomDownsampleFS", BLOOM_DOWNSAMPLE_SHADER_UUID);
     }
     if (tc_shader_handle_is_invalid(upsample_shader_handle_)) {
-        upsample_shader_handle_ = tc_shader_register_static_uuid(
-            nullptr, UPSAMPLE_FRAG_UBO, nullptr, "BloomUpsampleFS", BLOOM_UPSAMPLE_SHADER_UUID);
+        upsample_shader_handle_ = register_builtin_fragment_shader(
+            "termin-engine-bloom-upsample.frag.glsl", "BloomUpsampleFS", BLOOM_UPSAMPLE_SHADER_UUID);
     }
     if (tc_shader_handle_is_invalid(composite_shader_handle_)) {
-        composite_shader_handle_ = tc_shader_register_static_uuid(
-            nullptr, COMPOSITE_FRAG_UBO, nullptr, "BloomCompositeFS", BLOOM_COMPOSITE_SHADER_UUID);
+        composite_shader_handle_ = register_builtin_fragment_shader(
+            "termin-engine-bloom-composite.frag.glsl", "BloomCompositeFS", BLOOM_COMPOSITE_SHADER_UUID);
     }
 
     auto make_ubo = [&](uint64_t size) -> tgfx::BufferHandle {
