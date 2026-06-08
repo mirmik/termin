@@ -57,6 +57,11 @@ from termin.editor_tcgui.debug_panel_controller import DebugPanelController
 from termin.editor_tcgui.fullscreen_controller import FullscreenController
 from termin.editor_tcgui.prefab_toolbar_controller import PrefabToolbarController
 from termin.editor_tcgui.resource_actions_controller import ResourceActionsController
+from termin.editor_tcgui.editor_dialog_launcher import EditorDialogLauncher
+from termin.editor_tcgui.component_extension_panel_controller import (
+    ComponentExtensionPanelController,
+)
+from termin.editor_tcgui.project_file_action_controller import ProjectFileActionController
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
@@ -216,7 +221,16 @@ class EditorWindowTcgui:
         self._editor_state_io: EditorStateIO | None = None
         self._viewport_list = None
         self._left_tabs: TabView | None = None
-        self._component_left_tab_index: int = -1
+        self._component_extension_panels = ComponentExtensionPanelController(
+            get_editor=lambda: self,
+            get_left_tabs=lambda: self._left_tabs,
+            get_inspector_controller=lambda: self._inspector_controller,
+        )
+        self._project_file_actions = ProjectFileActionController(
+            load_scene_from_file=self._load_scene_from_file,
+            open_prefab=self._open_prefab,
+            get_inspector_controller=lambda: self._inspector_controller,
+        )
         self._right_scroll: ScrollArea | None = None
         self._bottom_tabs: TabView | None = None
         self._menu_bar_widget: MenuBar | None = None
@@ -238,6 +252,28 @@ class EditorWindowTcgui:
         self._game_mode_model = None
         self._saved_tree_expanded_uuids: list[str] | None = None
         self._spacemouse = None
+        self._dialog_launcher = EditorDialogLauncher(
+            get_ui=lambda: self._ui,
+            get_scene=lambda: self.scene,
+            scene_manager=self.scene_manager,
+            get_game_scene_name=lambda: self._game_scene_name,
+            get_project_path=self._get_project_path,
+            get_rendering_controller=lambda: self._rendering_controller,
+            get_fbo_surface=lambda: self._fbo_surface,
+            get_project_file_watcher=lambda: self._project_file_watcher,
+            get_editor_attachment=lambda: self._editor_attachment,
+            attach_scene_to_render=self.attach_scene_to_render,
+            detach_scene_from_render=self.detach_scene_from_render,
+            attach_editor_to_scene=self.attach_editor_to_scene,
+            detach_editor_from_scene=self.detach_editor_from_scene,
+            request_viewport_update=self._request_viewport_update,
+            push_undo_command=self.push_undo_command,
+            undo_stack=self.undo_stack,
+            undo_stack_changed=self.undo_stack_changed,
+            log_to_console=self._log_to_console,
+            get_spacemouse=lambda: self._spacemouse,
+            set_spacemouse=self._set_spacemouse,
+        )
 
         # Debug panels (Profiler / Modules)
         self._debug_panel: TabView | None = None
@@ -249,7 +285,6 @@ class EditorWindowTcgui:
             update_profiler_action=self._update_profiler_action,
             update_modules_action=self._update_modules_action,
         )
-        self._framegraph_debugger = None
         self._surface_edge_debug_tool = None
         self._scene_event_subscription = None
         self._scene_tree_rebuild_pending: bool = False
@@ -257,7 +292,6 @@ class EditorWindowTcgui:
             request_viewport_update=self._request_viewport_update,
             on_tool_activity_changed=self._sync_gizmo_target,
         )
-        self._active_component_editor_extension = None
 
         # Setup ResourceLoader and ProjectFileWatcher
         self._resource_loader = ResourceLoader(
@@ -855,85 +889,10 @@ class EditorWindowTcgui:
         self._request_viewport_update()
 
     def _on_inspector_component_selected(self, entity, component_ref) -> None:
-        self._clear_component_editor_extension()
-        type_name = component_ref.type_name
-        from termin.editor_tcgui.component_editor_extension import (
-            create_component_editor_extension,
-        )
-
-        extension = create_component_editor_extension(type_name)
-        if extension is None:
-            return
-
-        try:
-            extension.attach(self, entity, component_ref)
-            panel = extension.build_panel()
-            left_panel = extension.build_left_panel()
-        except Exception as e:
-            log.error(
-                "[EditorWindowTcgui] component editor extension attach failed "
-                f"for '{type_name}': {e}"
-            )
-            try:
-                extension.detach()
-            except Exception as detach_error:
-                log.error(
-                    "[EditorWindowTcgui] component editor extension detach failed "
-                    f"after attach error for '{type_name}': {detach_error}"
-                )
-            return
-
-        self._active_component_editor_extension = extension
-        self._set_component_left_panel(self._component_extension_left_tab_title(type_name), left_panel)
-        if self._inspector_controller is not None:
-            self._inspector_controller.set_component_extension_panel(panel)
+        self._component_extension_panels.select_component(entity, component_ref)
 
     def _clear_component_editor_extension(self) -> None:
-        extension = self._active_component_editor_extension
-        self._active_component_editor_extension = None
-        self._clear_component_left_panel()
-        if self._inspector_controller is not None:
-            self._inspector_controller.clear_component_extension_panel()
-        if extension is None:
-            return
-        try:
-            extension.detach()
-        except Exception as e:
-            log.error(f"[EditorWindowTcgui] component editor extension detach failed: {e}")
-
-    def _set_component_left_panel(self, title: str, panel) -> None:
-        self._clear_component_left_panel()
-        if panel is None:
-            return
-        left_tabs = self._left_tabs
-        if left_tabs is None:
-            log.error("[EditorWindowTcgui] cannot attach component left panel before left tabs exist")
-            return
-        left_tabs.add_tab(title, panel)
-        self._component_left_tab_index = len(left_tabs.pages) - 1
-        left_tabs.selected_index = self._component_left_tab_index
-        if left_tabs._ui is not None:
-            left_tabs._ui.request_layout()
-
-    def _clear_component_left_panel(self) -> None:
-        left_tabs = self._left_tabs
-        if left_tabs is None:
-            self._component_left_tab_index = -1
-            return
-        if 0 <= self._component_left_tab_index < len(left_tabs.pages):
-            left_tabs.remove_tab(self._component_left_tab_index)
-            if left_tabs.pages:
-                left_tabs.selected_index = min(left_tabs.selected_index, len(left_tabs.pages) - 1)
-        self._component_left_tab_index = -1
-        if left_tabs._ui is not None:
-            left_tabs._ui.request_layout()
-
-    def _component_extension_left_tab_title(self, type_name: str) -> str:
-        if type_name == "ProceduralMeshComponent":
-            return "CSG"
-        if type_name.endswith("Component"):
-            return type_name[:-9]
-        return type_name
+        self._component_extension_panels.clear()
 
     def _toggle_surface_edge_debug_tool(self) -> None:
         if self._surface_edge_debug_tool is None:
@@ -1529,40 +1488,10 @@ class EditorWindowTcgui:
         self._menu_bar_widget.add_menu(menu_name, menu)
 
     def _on_project_file_activated(self, path: str) -> None:
-        """Called when a file is double-clicked in the project browser."""
-        p = Path(path)
-        ext = p.suffix.lower()
-        if ext == ".tc_scene":
-            self._load_scene_from_file(path)
-        elif ext == ".tc_prefab":
-            self._open_prefab(path)
-        else:
-            from termin.editor_core.external_editor import open_in_text_editor
-            try:
-                open_in_text_editor(path)
-            except Exception as e:
-                log.error(f"Failed to open file in text editor: {e}")
+        self._project_file_actions.activate_file(path)
 
     def _on_project_file_selected(self, path: str) -> None:
-        if self._inspector_controller is None:
-            return
-
-        ext = Path(path).suffix.lower()
-        if ext in (".tc_mat", ".material"):
-            self._inspector_controller.show_material_inspector_for_file(path)
-            return
-        if ext in (".pipeline", ".tc_pipeline", ".scene_pipeline"):
-            self._inspector_controller.show_pipeline_inspector_for_file(path)
-            return
-        if ext in (".png", ".jpg", ".jpeg", ".bmp", ".hdr", ".exr"):
-            self._inspector_controller.show_texture_inspector_for_file(path)
-            return
-        if ext == ".obj":
-            self._inspector_controller.show_mesh_inspector_for_file(path)
-            return
-        if ext in (".glb", ".gltf"):
-            self._inspector_controller.show_glb_inspector_for_file(path)
-            return
+        self._project_file_actions.select_file(path)
 
     # ------------------------------------------------------------------
     # Menu action stubs / helpers
@@ -1572,172 +1501,58 @@ class EditorWindowTcgui:
         pass
 
     def _show_settings(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.settings_dialog import show_settings_dialog
-        show_settings_dialog(self._ui)
+        self._dialog_launcher.show_settings()
 
     def _show_project_settings(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.project_settings_dialog import show_project_settings_dialog
-        show_project_settings_dialog(self._ui, on_changed=self._request_viewport_update)
+        self._dialog_launcher.show_project_settings()
 
     def _show_scene_properties(self) -> None:
-        if self._ui is None or self.scene is None:
-            return
-        from termin.editor_tcgui.dialogs.scene_inspector import show_scene_properties_dialog
-        show_scene_properties_dialog(
-            self._ui,
-            self.scene,
-            push_undo_command=self.push_undo_command,
-            on_changed=self._request_viewport_update,
-        )
+        self._dialog_launcher.show_scene_properties()
 
     def _show_layers_settings(self) -> None:
-        if self._ui is None or self.scene is None:
-            return
-        from termin.editor_tcgui.dialogs.layers_dialog import show_layers_dialog
-        show_layers_dialog(self._ui, self.scene)
+        self._dialog_launcher.show_layers_settings()
 
     def _show_shadow_settings(self) -> None:
-        if self._ui is None or self.scene is None:
-            return
-        from termin.editor_tcgui.dialogs.shadow_settings_dialog import show_shadow_settings_dialog
-        scene = self.scene
-        mirror_scenes = []
-        game_scene_name = self._game_scene_name
-        if game_scene_name is not None:
-            game_scene = self.scene_manager.get_scene(game_scene_name)
-            if game_scene is not None:
-                scene = game_scene
-                mirror_scenes.append(self.scene)
-        show_shadow_settings_dialog(
-            self._ui,
-            scene,
-            mirror_scenes=mirror_scenes,
-            on_changed=self._request_viewport_update,
-        )
+        self._dialog_launcher.show_shadow_settings()
 
     def _show_agent_types(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.agent_types_dialog import show_agent_types_dialog
-        show_agent_types_dialog(self._ui)
+        self._dialog_launcher.show_agent_types()
 
     def _show_navmesh_areas(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.navmesh_areas_dialog import show_navmesh_areas_dialog
-        show_navmesh_areas_dialog(self._ui, on_changed=self._request_viewport_update)
+        self._dialog_launcher.show_navmesh_areas()
 
     def _show_spacemouse_settings(self) -> None:
-        if self._ui is None:
-            return
-        if self._spacemouse is None:
-            self._init_spacemouse()
-        if self._spacemouse is None:
-            from tcbase import log
-            log.warn("SpaceMouse not available")
-            return
-        from termin.editor_tcgui.dialogs.spacemouse_settings_dialog import show_spacemouse_settings_dialog
-        show_spacemouse_settings_dialog(self._ui, self._spacemouse)
+        self._dialog_launcher.show_spacemouse_settings()
 
     def _init_spacemouse(self) -> None:
-        """Initialize SpaceMouse controller if device available."""
-        from termin.editor_core.spacemouse_controller import SpaceMouseController
-        spacemouse = SpaceMouseController()
-        if spacemouse.open(self._editor_attachment, self._request_viewport_update):
-            self._spacemouse = spacemouse
-            self._log_to_console("[SpaceMouse] Device connected")
-        else:
-            self._spacemouse = None
+        self._dialog_launcher.init_spacemouse()
 
     def _show_resource_manager_viewer(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.resource_manager_viewer import show_resource_manager_viewer
-        show_resource_manager_viewer(self._ui, project_file_watcher=self._project_file_watcher)
+        self._dialog_launcher.show_resource_manager_viewer()
 
     def _show_core_registry_viewer(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.core_registry_viewer import show_core_registry_viewer
-        show_core_registry_viewer(self._ui)
+        self._dialog_launcher.show_core_registry_viewer()
 
     def _show_inspect_registry_viewer(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.inspect_registry_viewer import show_inspect_registry_viewer
-        show_inspect_registry_viewer(self._ui)
+        self._dialog_launcher.show_inspect_registry_viewer()
 
     def _show_navmesh_registry_viewer(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.navmesh_registry_viewer import show_navmesh_registry_viewer
-        show_navmesh_registry_viewer(self._ui)
+        self._dialog_launcher.show_navmesh_registry_viewer()
 
     def _show_framegraph_debugger(self) -> None:
-        if self._ui is None:
-            return
-        if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
-            return
-        from termin.editor_tcgui.dialogs.framegraph_debugger import show_framegraph_debugger
-        self._framegraph_debugger = show_framegraph_debugger(
-            self._ui, self._rendering_controller, self._fbo_surface,
-            on_request_update=self._request_viewport_update)
+        self._dialog_launcher.show_framegraph_debugger()
 
     def _show_audio_debugger(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.audio_debugger import show_audio_debugger
-        show_audio_debugger(self._ui)
+        self._dialog_launcher.show_audio_debugger()
 
     def _show_scene_manager_viewer(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.scene_manager_viewer import show_scene_manager_viewer
-
-        show_scene_manager_viewer(
-            self._ui,
-            self.scene_manager,
-            get_editor_attachment=lambda: self._editor_attachment,
-            on_render_attach=lambda name: self.attach_scene_to_render(name),
-            on_render_detach=lambda name: self.detach_scene_from_render(name, save_state=True),
-            on_editor_attach=lambda name: self.attach_editor_to_scene(
-                name,
-                restore_state=True,
-                transfer_camera_state=False,
-            ),
-            on_editor_detach=lambda: self.detach_editor_from_scene(save_state=True),
-        )
+        self._dialog_launcher.show_scene_manager_viewer()
 
     def _show_pipeline_editor(self) -> None:
-        if self._ui is None:
-            return
-        try:
-            from termin.editor_tcgui.pipeline_editor_window import open_pipeline_editor_window
-            open_pipeline_editor_window(
-                self._ui,
-                directory=self._get_project_path() or str(Path.home()),
-            )
-        except Exception as e:
-            log.error(f"[EditorWindowTcgui] Failed to open Pipeline Editor: {e}")
-            self._log_to_console(f"Pipeline Editor error: {e}")
+        self._dialog_launcher.show_pipeline_editor()
 
     def _open_pipeline_file_for_edit(self, file_path: str) -> None:
-        if self._ui is None:
-            return
-        try:
-            from termin.editor_tcgui.pipeline_editor_window import open_pipeline_editor_window
-            open_pipeline_editor_window(
-                self._ui,
-                directory=str(Path(file_path).parent),
-                initial_file=file_path,
-            )
-        except Exception as e:
-            log.error(f"[EditorWindowTcgui] Failed to open Pipeline Editor for {file_path}: {e}")
-            self._log_to_console(f"Pipeline Editor error: {e}")
+        self._dialog_launcher.open_pipeline_file_for_edit(file_path)
 
     @property
     def _game_scene_name(self) -> str | None:
@@ -1824,14 +1639,7 @@ class EditorWindowTcgui:
         self._project_build_controller.run_build()
 
     def _show_undo_stack_viewer(self) -> None:
-        if self._ui is None:
-            return
-        from termin.editor_tcgui.dialogs.undo_stack_viewer import show_undo_stack_viewer
-        show_undo_stack_viewer(
-            self._ui,
-            self.undo_stack,
-            stack_changed_signal=self.undo_stack_changed,
-        )
+        self._dialog_launcher.show_undo_stack_viewer()
 
     # ------------------------------------------------------------------
     # Debug panels (Profiler / Modules)
@@ -1925,6 +1733,9 @@ class EditorWindowTcgui:
 
     def _get_project_path(self) -> str | None:
         return self._current_project_path
+
+    def _set_spacemouse(self, spacemouse) -> None:
+        self._spacemouse = spacemouse
 
     def _set_editor_scene_name(self, scene_name: str | None) -> None:
         self._editor_scene_name = scene_name
@@ -2032,8 +1843,7 @@ class EditorWindowTcgui:
         self._project_file_watcher.poll()
 
         self._debug_panels.poll(time.monotonic())
-        if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
-            self._framegraph_debugger.update()
+        self._dialog_launcher.update_framegraph_debugger()
         self._process_pending_scene_tree_rebuild()
 
     def _after_render(self) -> None:
@@ -2042,8 +1852,7 @@ class EditorWindowTcgui:
         if self._interaction_system is not None:
             self._interaction_system.after_render()
         has_overlay_drawers = self._viewport_interactions.draw_overlays()
-        if self._framegraph_debugger is not None and self._framegraph_debugger.visible:
-            self._framegraph_debugger.update()
+        self._dialog_launcher.update_framegraph_debugger()
         self._process_pending_scene_tree_rebuild()
         if has_overlay_drawers:
             self._request_viewport_update()
