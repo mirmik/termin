@@ -135,17 +135,6 @@ void main() {
 """
 
 
-ENGINE_FSQ_VERTEX_SOURCE = """#version 450 core
-layout(location = 0) in vec2 aPos;
-layout(location = 1) in vec2 aUV;
-layout(location = 0) out vec2 v_uv;
-void main() {
-    gl_Position = vec4(aPos, 0.0, 1.0);
-    v_uv = aUV;
-}
-"""
-
-
 ENGINE_SHADOW_VERTEX_SOURCE = """#version 450 core
 layout(location = 0) in vec3 a_position;
 
@@ -745,6 +734,7 @@ def _write_shader(
 class _EngineShaderArtifact:
     uuid: str
     name: str
+    language: str = "glsl"
     vertex_source: str = ""
     fragment_source: str = ""
 
@@ -771,7 +761,8 @@ def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
         _EngineShaderArtifact(
             uuid=ENGINE_FSQ_SHADER_UUID,
             name="FullscreenQuadEngineVS",
-            vertex_source=ENGINE_FSQ_VERTEX_SOURCE,
+            language="slang",
+            vertex_source=_builtin_shader_source("termin-engine-fsq.vert.slang"),
         ),
         _EngineShaderArtifact(
             uuid=ENGINE_SKYBOX_SHADER_UUID,
@@ -834,36 +825,93 @@ def _write_engine_shader_artifact(
     compiler: Path,
 ) -> None:
     del diagnostics
+    if shader.language not in {"glsl", "slang"}:
+        raise ValueError(f"Engine shader '{shader.uuid}' has unsupported language: {shader.language}")
+
     vulkan_dir = package_dir / "shaders" / "vulkan"
+    opengl_dir = package_dir / "shaders" / "opengl"
     vulkan_dir.mkdir(parents=True, exist_ok=True)
+    if shader.language == "slang":
+        opengl_dir.mkdir(parents=True, exist_ok=True)
 
     if shader.vertex_source != "":
-        vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.glsl"
+        vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.{_source_extension_for_language(shader.language)}"
         vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
         _compile_shader_stage(
             compiler,
-            "glsl",
+            shader.language,
             "vulkan",
             "vertex",
             vertex_source_path,
             vulkan_dir / f"{shader.uuid}.vert.spv",
             f"{shader.name}:vertex",
         )
+        if shader.language == "slang":
+            _compile_shader_stage(
+                compiler,
+                shader.language,
+                "opengl",
+                "vertex",
+                vertex_source_path,
+                opengl_dir / f"{shader.uuid}.vert.glsl",
+                f"{shader.name}:vertex",
+            )
 
     if shader.fragment_source == "":
         return
 
-    fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.glsl"
+    fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.{_source_extension_for_language(shader.language)}"
     fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
     _compile_shader_stage(
         compiler,
-        "glsl",
+        shader.language,
         "vulkan",
         "fragment",
         fragment_source_path,
         vulkan_dir / f"{shader.uuid}.frag.spv",
         f"{shader.name}:fragment",
     )
+    if shader.language == "slang":
+        _compile_shader_stage(
+            compiler,
+            shader.language,
+            "opengl",
+            "fragment",
+            fragment_source_path,
+            opengl_dir / f"{shader.uuid}.frag.glsl",
+            f"{shader.name}:fragment",
+        )
+
+
+def _source_extension_for_language(language: str) -> str:
+    if language == "slang":
+        return "slang"
+    if language == "glsl":
+        return "glsl"
+    raise ValueError(f"Unsupported shader language: {language}")
+
+
+def _builtin_shader_source(filename: str) -> str:
+    for root in _builtin_shader_roots():
+        path = root / filename
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    roots = ", ".join(str(root) for root in _builtin_shader_roots())
+    raise FileNotFoundError(f"Built-in shader source '{filename}' was not found in: {roots}")
+
+
+def _builtin_shader_roots() -> list[Path]:
+    repo_root = Path(__file__).resolve().parents[3]
+    roots = [
+        repo_root / "termin-graphics" / "resources" / "builtin_shaders",
+    ]
+
+    sdk_env = os.environ.get("TERMIN_SDK")
+    if sdk_env:
+        roots.append(Path(sdk_env).resolve() / "share" / "termin" / "builtin_shaders")
+
+    roots.append(Path(sys.prefix).resolve() / "share" / "termin" / "builtin_shaders")
+    return roots
 
 
 def _copy_default_spirv(target_path: Path, source_name: str) -> None:
