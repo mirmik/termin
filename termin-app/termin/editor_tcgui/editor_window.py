@@ -8,10 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Callable, Optional
 
-import numpy as np
-
 from tcbase import log
-from tcbase._geom_native import Vec3
 
 from tcgui.widgets.ui import UI
 from tcgui.widgets.vstack import VStack
@@ -27,11 +24,6 @@ from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.message_box import MessageBox
 
 from termin.editor_core.undo_stack import UndoStack, UndoCommand
-from termin.editor_core.editor_commands import (
-    AddEntityCommand,
-    DeleteEntityCommand,
-    RenameEntityCommand,
-)
 from termin.engine import SceneManager, scene as engine_scene
 from termin.editor_core.resource_loader import ResourceLoader
 from termin.editor_core.project_file_watcher import ProjectFileWatcher
@@ -53,9 +45,17 @@ from termin.editor_tcgui.editor_window_layout import (
     build_editor_window_layout,
 )
 from termin.editor_tcgui.viewport_interaction_hub import ViewportInteractionHub
+from termin.editor_tcgui.viewport_geometry_controller import (
+    ViewportGeometryController,
+    is_gltf_project_file_drag,
+)
+from termin.editor_tcgui.editor_interaction_coordinator import (
+    EditorInteractionCoordinator,
+)
 from termin.editor_tcgui.debug_panel_controller import DebugPanelController
 from termin.editor_tcgui.fullscreen_controller import FullscreenController
 from termin.editor_tcgui.prefab_toolbar_controller import PrefabToolbarController
+from termin.editor_tcgui.game_mode_ui_controller import GameModeUiController
 from termin.editor_tcgui.resource_actions_controller import ResourceActionsController
 from termin.editor_tcgui.editor_dialog_launcher import EditorDialogLauncher
 from termin.editor_tcgui.component_extension_panel_controller import (
@@ -71,8 +71,6 @@ from termin.editor_tcgui.default_component_editor_extensions import (
 from termin.editor_tcgui.editor_camera_ui_controller import EditorCameraUIController
 
 SceneMode = engine_scene.SceneMode
-
-_GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")
 
 
 def _resolve_termin_shaderc() -> Path | None:
@@ -238,13 +236,16 @@ class EditorWindowTcgui:
         self._right_splitter: Splitter | None = None
         self._bottom_splitter: Splitter | None = None
         self._center_tabs: TabView | None = None
-        self._play_button = None
-        self._pause_button = None
         self._prefab_toolbar: HStack | None = None
         self._prefab_toolbar_label: Label | None = None
         self._save_prefab_button = None
         self._exit_prefab_button = None
         self._prefab_toolbar_controller = PrefabToolbarController()
+        self._game_mode_ui = GameModeUiController(
+            update_play_action=self._update_play_action,
+            update_window_title=self._update_window_title,
+            request_viewport_update=self._request_viewport_update,
+        )
         self._pre_prefab_scene_name: str | None = None
         self.prefab_edit_controller: PrefabEditController | None = None
         # Game mode state + transitions live in GameModeModel. The model is
@@ -291,6 +292,29 @@ class EditorWindowTcgui:
         self._viewport_interactions = ViewportInteractionHub(
             request_viewport_update=self._request_viewport_update,
             on_tool_activity_changed=self._sync_gizmo_target,
+        )
+        self._interaction_coordinator = EditorInteractionCoordinator(
+            undo_stack=self.undo_stack,
+            undo_stack_changed=self.undo_stack_changed,
+            get_interaction_system=lambda: self._interaction_system,
+            get_scene_tree_controller=lambda: self.scene_tree_controller,
+            get_inspector_controller=lambda: self._inspector_controller,
+            get_menu_bar_controller=lambda: self._menu_bar_controller,
+            get_editor_display=lambda: self._editor_display,
+            get_active_viewport_tool_count=lambda: (
+                self._viewport_interactions.active_tool_count
+            ),
+            dispatch_viewport_click=self._viewport_interactions.dispatch_click,
+            dispatch_viewport_pointer=self._viewport_interactions.dispatch_pointer,
+            dispatch_viewport_key=self._viewport_interactions.dispatch_key,
+            request_viewport_update=self._request_viewport_update,
+        )
+        self._viewport_geometry = ViewportGeometryController(
+            get_camera=lambda: self.camera,
+            get_viewport_widget=lambda: self._viewport_widget,
+            get_interaction_system=lambda: self._interaction_system,
+            get_editor_display=lambda: self._editor_display,
+            get_scene_tree_controller=lambda: self.scene_tree_controller,
         )
 
         # Setup ResourceLoader and ProjectFileWatcher
@@ -383,12 +407,15 @@ class EditorWindowTcgui:
         self._left_tabs = widgets.left_tabs
         self._viewport_list = widgets.viewport_list
         self._left_splitter = widgets.left_splitter
-        self._play_button = widgets.play_button
-        self._pause_button = widgets.pause_button
         self._prefab_toolbar = widgets.prefab_toolbar
         self._prefab_toolbar_label = widgets.prefab_toolbar_label
         self._save_prefab_button = widgets.save_prefab_button
         self._exit_prefab_button = widgets.exit_prefab_button
+        self._game_mode_ui.set_widgets(
+            play_button=widgets.play_button,
+            pause_button=widgets.pause_button,
+            status_bar=widgets.status_bar,
+        )
         self._prefab_toolbar_controller.set_widgets(
             prefab_toolbar=widgets.prefab_toolbar,
             prefab_toolbar_label=widgets.prefab_toolbar_label,
@@ -871,22 +898,7 @@ class EditorWindowTcgui:
         self._viewport_interactions.end_tool()
 
     def _sync_gizmo_target(self) -> None:
-        sys = self._interaction_system
-        if sys is None:
-            return
-
-        if self._viewport_interactions.active_tool_count > 0:
-            sys.set_gizmo_target(None)
-            self._request_viewport_update()
-            return
-
-        selected = sys.selection.selected
-        if selected is not None and selected.valid():
-            sys.set_gizmo_target(selected)
-            self._update_gizmo_screen_scale()
-        else:
-            sys.set_gizmo_target(None)
-        self._request_viewport_update()
+        self._interaction_coordinator.sync_gizmo_target()
 
     def _on_inspector_component_selected(self, entity, component_ref) -> None:
         self._component_extension_panels.select_component(entity, component_ref)
@@ -908,137 +920,32 @@ class EditorWindowTcgui:
         return self._surface_edge_debug_tool.enabled()
 
     def _on_viewport_external_drag(self, event) -> bool:
-        if event.payload.kind != "project_file":
-            return False
-        data = event.payload.data
-        if not isinstance(data, dict):
-            return False
-        return data.get("extension") in _GLTF_MODEL_EXTENSIONS
+        return is_gltf_project_file_drag(event)
 
     def _on_viewport_external_drop(self, event) -> bool:
-        if not self._on_viewport_external_drag(event):
-            return False
-        data = event.payload.data
-        if not isinstance(data, dict):
-            return False
-        path = data.get("path")
-        if not isinstance(path, str):
-            return False
-        if self.scene_tree_controller is None:
-            log.error("[EditorWindowTcgui] GLTF viewport drop failed: scene tree controller is not available")
-            return False
-        world_pos = self._world_position_for_viewport_drop(event.x, event.y)
-        self.scene_tree_controller.operations.drop_glb(path, None, world_position=world_pos)
-        return True
+        return self._viewport_geometry.on_external_drop(event)
 
     def _world_position_for_viewport_drop(self, x: float, y: float) -> tuple[float, float, float]:
-        fallback = self._fallback_drop_position()
-        if self._interaction_system is None or self._editor_display is None:
-            return fallback
-        if not self._editor_display.viewports:
-            return fallback
-        if self._viewport_widget is None:
-            return fallback
-
-        viewport = self._editor_display.viewports[0]
-        vp_idx, vp_gen = viewport._viewport_handle()
-        local_x = float(x - self._viewport_widget.x)
-        local_y = float(y - self._viewport_widget.y)
-        try:
-            pick = self._interaction_system.pick_surface_at(
-                local_x, local_y, vp_idx, vp_gen, self._editor_display.tc_display_ptr,
-            )
-        except Exception as e:
-            log.error(f"[EditorWindowTcgui] GLB viewport drop pick failed: {e}")
-            return fallback
-        if bool(pick["has_world_point"]):
-            point = pick["world_point"]
-            return (float(point[0]), float(point[1]), float(point[2]))
-        return fallback
+        return self._viewport_geometry.world_position_for_viewport_drop(x, y)
 
     def _fallback_drop_position(self) -> tuple[float, float, float]:
-        if self.camera is None or self.camera.entity is None:
-            return (0.0, 0.0, 0.0)
-        cam_pose = self.camera.entity.transform.global_pose()
-        cam_pos = cam_pose.lin
-        rot = cam_pose.rotation_matrix()
-        forward = rot[:, 1]
-        return (
-            float(cam_pos[0] + forward[0] * 5.0),
-            float(cam_pos[1] + forward[1] * 5.0),
-            float(cam_pos[2] + forward[2] * 5.0),
-        )
+        return self._viewport_geometry.fallback_drop_position()
 
     def world_point_on_oxy_plane(self, x: float, y: float) -> tuple[float, float, float] | None:
-        return self.world_point_on_plane(x, y, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), "OXY plane")
+        return self._viewport_geometry.world_point_on_oxy_plane(x, y)
 
     def world_ray_from_viewport_point(
         self,
         x: float,
         y: float,
     ) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
-        if self.camera is None or self.camera.entity is None:
-            log.error("[EditorWindowTcgui] viewport ray failed: editor camera is not available")
-            return None
-        if self._viewport_widget is None:
-            log.error("[EditorWindowTcgui] viewport ray failed: viewport widget is not available")
-            return None
-
-        viewport_rect = (
-            0,
-            0,
-            int(max(1.0, self._viewport_widget.width)),
-            int(max(1.0, self._viewport_widget.height)),
-        )
-        try:
-            ray = self.camera.screen_point_to_ray(float(x), float(y), viewport_rect)
-            origin = ray.origin
-            direction = ray.direction
-            return (
-                (float(origin[0]), float(origin[1]), float(origin[2])),
-                (float(direction[0]), float(direction[1]), float(direction[2])),
-            )
-        except Exception as e:
-            log.error(f"[EditorWindowTcgui] viewport ray failed: {e}")
-            return None
+        return self._viewport_geometry.world_ray_from_viewport_point(x, y)
 
     def project_world_point_to_viewport(
         self,
         point: tuple[float, float, float],
     ) -> tuple[float, float] | None:
-        if self.camera is None or self.camera.entity is None:
-            log.error("[EditorWindowTcgui] viewport projection failed: editor camera is not available")
-            return None
-        if self._viewport_widget is None:
-            log.error("[EditorWindowTcgui] viewport projection failed: viewport widget is not available")
-            return None
-        width = float(max(1.0, self._viewport_widget.width))
-        height = float(max(1.0, self._viewport_widget.height))
-        previous_aspect = float(self.camera.aspect)
-        try:
-            self.camera.set_aspect(width / height)
-            view = self.camera.get_view_matrix().to_numpy()
-            projection = self.camera.get_projection_matrix().to_numpy()
-            clip = projection @ view @ np.array(
-                (float(point[0]), float(point[1]), float(point[2]), 1.0),
-                dtype=np.float64,
-            )
-        except Exception as e:
-            log.error(f"[EditorWindowTcgui] viewport projection failed: {e}")
-            return None
-        finally:
-            try:
-                self.camera.set_aspect(previous_aspect)
-            except Exception as e:
-                log.error(f"[EditorWindowTcgui] viewport projection aspect restore failed: {e}")
-        w = float(clip[3])
-        if abs(w) <= 1.0e-8:
-            return None
-        ndc = clip[:3] / w
-        return (
-            float((ndc[0] + 1.0) * 0.5 * width),
-            float((ndc[1] + 1.0) * 0.5 * height),
-        )
+        return self._viewport_geometry.project_world_point_to_viewport(point)
 
     def world_point_on_plane(
         self,
@@ -1048,58 +955,24 @@ class EditorWindowTcgui:
         plane_normal: tuple[float, float, float],
         label: str = "plane",
     ) -> tuple[float, float, float] | None:
-        if self.camera is None or self.camera.entity is None:
-            log.error(f"[EditorWindowTcgui] {label} pick failed: editor camera is not available")
-            return None
-        if self._viewport_widget is None:
-            log.error(f"[EditorWindowTcgui] {label} pick failed: viewport widget is not available")
-            return None
-
-        viewport_rect = (
-            0,
-            0,
-            int(max(1.0, self._viewport_widget.width)),
-            int(max(1.0, self._viewport_widget.height)),
-        )
-        try:
-            ray = self.camera.screen_point_to_ray(float(x), float(y), viewport_rect)
-            origin = ray.origin
-            direction = ray.direction
-            denom = (
-                float(direction[0]) * plane_normal[0]
-                + float(direction[1]) * plane_normal[1]
-                + float(direction[2]) * plane_normal[2]
-            )
-            if abs(denom) < 1e-9:
-                log.error(f"[EditorWindowTcgui] {label} pick failed: ray is parallel to plane")
-                return None
-            t = (
-                (plane_origin[0] - float(origin[0])) * plane_normal[0]
-                + (plane_origin[1] - float(origin[1])) * plane_normal[1]
-                + (plane_origin[2] - float(origin[2])) * plane_normal[2]
-            ) / denom
-            return (
-                float(origin[0] + direction[0] * t),
-                float(origin[1] + direction[1] * t),
-                float(origin[2] + direction[2] * t),
-            )
-        except Exception as e:
-            log.error(f"[EditorWindowTcgui] {label} pick failed: {e}")
-            return None
-
-    def world_point_on_entity_local_oxy_plane(self, x: float, y: float, entity) -> tuple[float, float, float] | None:
-        if entity is None or not entity.valid():
-            log.error("[EditorWindowTcgui] entity local OXY plane pick failed: entity is not available")
-            return None
-        pose = entity.transform.global_pose()
-        origin = pose.point_to_global(Vec3(0.0, 0.0, 0.0))
-        normal = pose.vector_to_global(Vec3(0.0, 0.0, 1.0))
-        return self.world_point_on_plane(
+        return self._viewport_geometry.world_point_on_plane(
             x,
             y,
-            (float(origin.x), float(origin.y), float(origin.z)),
-            (float(normal.x), float(normal.y), float(normal.z)),
-            "entity local OXY plane",
+            plane_origin,
+            plane_normal,
+            label,
+        )
+
+    def world_point_on_entity_local_oxy_plane(
+        self,
+        x: float,
+        y: float,
+        entity,
+    ) -> tuple[float, float, float] | None:
+        return self._viewport_geometry.world_point_on_entity_local_oxy_plane(
+            x,
+            y,
+            entity,
         )
 
     # ------------------------------------------------------------------
@@ -1107,60 +980,19 @@ class EditorWindowTcgui:
     # ------------------------------------------------------------------
 
     def push_undo_command(self, cmd: UndoCommand, merge: bool = False) -> None:
-        self.undo_stack.push(cmd, merge=merge)
-        self._request_viewport_update()
-        self._update_undo_redo_actions()
-        self.undo_stack_changed.emit()
+        self._interaction_coordinator.push_undo_command(cmd, merge=merge)
 
     def undo(self) -> None:
-        cmd = self.undo_stack.undo()
-        select_obj = None
-        if isinstance(cmd, AddEntityCommand):
-            select_obj = cmd.parent_entity
-        elif isinstance(cmd, DeleteEntityCommand):
-            select_obj = cmd.entity
-        elif isinstance(cmd, RenameEntityCommand):
-            select_obj = cmd.entity
-
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.rebuild(select_obj=select_obj)
-
-        self._request_viewport_update()
-        self._resync_inspector_from_selection()
-        self._update_undo_redo_actions()
-        if cmd is not None:
-            self.undo_stack_changed.emit()
+        self._interaction_coordinator.undo()
 
     def redo(self) -> None:
-        cmd = self.undo_stack.redo()
-        select_obj = None
-        if isinstance(cmd, AddEntityCommand):
-            select_obj = cmd.entity
-        elif isinstance(cmd, DeleteEntityCommand):
-            select_obj = cmd.parent_entity
-        elif isinstance(cmd, RenameEntityCommand):
-            select_obj = cmd.entity
-
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.rebuild(select_obj=select_obj)
-
-        self._request_viewport_update()
-        self._resync_inspector_from_selection()
-        self._update_undo_redo_actions()
-        if cmd is not None:
-            self.undo_stack_changed.emit()
+        self._interaction_coordinator.redo()
 
     def _resync_inspector_from_selection(self) -> None:
-        if self._interaction_system is None or self._inspector_controller is None:
-            return
-        selected = self._interaction_system.selection.selected
-        if selected is None or not selected.valid():
-            return
-        self._inspector_controller.show_entity_inspector(selected)
+        self._interaction_coordinator.resync_inspector_from_selection()
 
     def _update_undo_redo_actions(self) -> None:
-        if self._menu_bar_controller is not None:
-            self._menu_bar_controller.update_undo_redo_actions()
+        self._interaction_coordinator.update_undo_redo_actions()
 
     # ------------------------------------------------------------------
     # Selection / Inspector callbacks
@@ -1168,36 +1000,16 @@ class EditorWindowTcgui:
 
     def _on_entity_selected_from_state(self, entity) -> None:
         """Called by EditorStateIO when restoring selection from file."""
-        if self.scene_tree_controller is not None:
-            self.scene_tree_controller.select_object(entity)
-        if self._inspector_controller is not None:
-            self._inspector_controller.show_entity_inspector(entity)
+        self._interaction_coordinator.on_entity_selected_from_state(entity)
 
     def _on_tree_object_selected(self, obj) -> None:
-        if self._inspector_controller is not None:
-            self._inspector_controller.resync_from_tree_selection(obj)
-
-        if self._interaction_system is not None:
-            from termin.visualization.core.entity import Entity
-            if isinstance(obj, Entity):
-                self._interaction_system.selection.select(obj)
-            else:
-                self._interaction_system.selection.clear()
+        self._interaction_coordinator.on_tree_object_selected(obj)
 
     def _on_selection_changed(self, entity) -> None:
-        # The C++ UnifiedGizmoPass pulls its draw target from
-        # EditorInteractionSystem::transform_gizmo, which is empty until
-        # set_gizmo_target is called. Without this line the gizmo stays
-        # invisible even after a successful selection.
-        self._sync_gizmo_target()
-        if self.scene_tree_controller is not None and entity and entity.valid():
-            self.scene_tree_controller.select_object(entity)
-        if self._inspector_controller is not None:
-            if entity and entity.valid():
-                self._inspector_controller.show_entity_inspector(entity)
+        self._interaction_coordinator.on_selection_changed(entity)
 
     def _on_hover_changed(self, entity) -> None:
-        self._request_viewport_update()
+        self._interaction_coordinator.on_hover_changed(entity)
 
     def _on_editor_viewport_click(
         self,
@@ -1231,7 +1043,7 @@ class EditorWindowTcgui:
             normal_x, normal_y, normal_z,
             triangle_index, index0, index1, index2
         )
-        return self._viewport_interactions.dispatch_click(*args)
+        return self._interaction_coordinator.on_editor_viewport_click(*args)
 
     def _dispatch_viewport_pointer(
         self,
@@ -1244,47 +1056,18 @@ class EditorWindowTcgui:
         action: int,
         mods: int,
     ) -> bool:
-        return self._viewport_interactions.dispatch_pointer(
+        return self._interaction_coordinator.dispatch_viewport_pointer(
             phase, x, y, dx, dy, button, action, mods
         )
 
     def _on_editor_key(self, event) -> None:
-        self._viewport_interactions.dispatch_key(event)
+        self._interaction_coordinator.on_editor_key(event)
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
-        """C++ TransformGizmo drag-end callback — push an undo command."""
-        from termin.editor_core.editor_commands import TransformEditCommand
-        tg = self._interaction_system.transform_gizmo if self._interaction_system else None
-        if tg is None or not tg.target.valid():
-            return
-        cmd = TransformEditCommand(
-            transform=tg.target.transform,
-            old_pose=old_pose,
-            new_pose=new_pose,
-        )
-        self.push_undo_command(cmd, False)
+        self._interaction_coordinator.on_transform_end(old_pose, new_pose)
 
     def _update_gizmo_screen_scale(self) -> None:
-        """Update gizmo size based on camera distance to target."""
-        sys = self._interaction_system
-        if sys is None:
-            return
-        tg = sys.transform_gizmo
-        if tg is None or not tg.target.valid():
-            return
-        display = self._editor_display
-        if display is None or not display.viewports:
-            return
-        viewport = display.viewports[0]
-        render_target = viewport.render_target if viewport is not None else None
-        camera = render_target.camera if render_target is not None else None
-        if camera is None or camera.entity is None:
-            return
-        import numpy as np
-        camera_pos = camera.entity.transform.global_pose().lin
-        gizmo_pos = tg.target.transform.global_pose().lin
-        distance = np.linalg.norm(np.array(camera_pos) - np.array(gizmo_pos))
-        tg.set_screen_scale(max(0.1, distance * 0.1))
+        self._interaction_coordinator.update_gizmo_screen_scale()
 
     def _on_inspector_transform_changed(self) -> None:
         self._request_viewport_update()
@@ -1565,16 +1348,7 @@ class EditorWindowTcgui:
     def _toggle_pause(self) -> None:
         if self._game_mode_model is None:
             return
-        self._game_mode_model.toggle_pause()
-        from tcgui.widgets.theme import current_theme as _t
-        if self._pause_button is not None:
-            if self._game_mode_model.is_game_paused:
-                self._pause_button.text = "Resume"
-                self._pause_button.background_color = (0.85, 0.63, 0.29, 1.0)
-            else:
-                self._pause_button.text = "Pause"
-                self._pause_button.background_color = _t.bg_surface
-        self._request_viewport_update()
+        self._game_mode_ui.toggle_pause(self._game_mode_model)
 
     def _on_game_mode_entered(self, is_playing: bool, scene, expanded_uuids) -> None:
         """GameModeModel.mode_entered handler — post-attach view setup."""
@@ -1594,31 +1368,15 @@ class EditorWindowTcgui:
         if self._inspector_controller is not None:
             self._inspector_controller.clear()
 
-        self._update_game_mode_ui(is_playing)
+        self._game_mode_ui.update_mode(is_playing)
         self._request_viewport_update()
 
     def _update_game_mode_ui(self, is_playing: bool) -> None:
-        from tcgui.widgets.theme import current_theme as _t
-        if self._play_button is not None:
-            self._play_button.text = "Stop" if is_playing else "Play"
-            self._play_button.background_color = _t.accent if is_playing else _t.bg_surface
+        self._game_mode_ui.update_mode(is_playing)
 
-        if self._pause_button is not None:
-            self._pause_button.visible = is_playing
-            if not is_playing:
-                self._pause_button.background_color = _t.bg_surface
-                self._pause_button.text = "Pause"
-
+    def _update_play_action(self, is_playing: bool) -> None:
         if self._menu_bar_controller is not None:
             self._menu_bar_controller.update_play_action(is_playing)
-
-        self._update_window_title()
-
-        if self._status_bar is not None:
-            if is_playing:
-                self._status_bar.text = "Game mode"
-            else:
-                self._status_bar.text = "Editor mode"
 
     def _run_standalone(self) -> None:
         self._project_build_controller.run_standalone()
