@@ -1,12 +1,16 @@
 #include "guard_main.h"
 #include "termin/render/rendering_manager.hpp"
 #include "termin/render/graph_compiler.hpp"
+#include "termin/render/scene_pipeline_template.hpp"
 #include "termin/render/tc_pass.hpp"
 
 #include <string>
 #include <tcbase/trent/json.h>
 
 extern "C" {
+#include "core/tc_component.h"
+#include "core/tc_entity_pool.h"
+#include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
 #include "render/tc_display.h"
@@ -26,6 +30,57 @@ extern "C" {
 using termin::RenderingManager;
 using termin::RenderPipeline;
 using termin::ResourceSpec;
+using termin::TcScenePipelineTemplate;
+
+namespace {
+
+struct RenderLifecycleCounter {
+    tc_component component;
+    int attach_count = 0;
+    int detach_count = 0;
+};
+
+void lifecycle_counter_on_render_attach(tc_component* component)
+{
+    auto* counter = reinterpret_cast<RenderLifecycleCounter*>(component);
+    counter->attach_count++;
+}
+
+void lifecycle_counter_on_render_detach(tc_component* component)
+{
+    auto* counter = reinterpret_cast<RenderLifecycleCounter*>(component);
+    counter->detach_count++;
+}
+
+const tc_component_vtable lifecycle_counter_vtable = {
+    .on_render_attach = lifecycle_counter_on_render_attach,
+    .on_render_detach = lifecycle_counter_on_render_detach,
+};
+
+RenderLifecycleCounter make_render_lifecycle_counter()
+{
+    RenderLifecycleCounter counter;
+    tc_component_init(&counter.component, &lifecycle_counter_vtable);
+    return counter;
+}
+
+TcScenePipelineTemplate make_empty_scene_pipeline_template(const std::string& name)
+{
+    TcScenePipelineTemplate templ = TcScenePipelineTemplate::declare(name + "-uuid", name);
+    templ.set_from_json(R"JSON(
+{
+  "name": "lifecycle_pipeline",
+  "nodes": [
+    { "type": "PipelineOutput", "x": 0.0, "y": 0.0, "node_type": "pipeline_output" }
+  ],
+  "connections": [],
+  "viewport_frames": []
+}
+)JSON");
+    return templ;
+}
+
+} // namespace
 
 TEST_CASE("Graph compiler preserves FBO resource params on generated names")
 {
@@ -680,6 +735,44 @@ TEST_CASE("RenderingManager detach_scene removes attached scene")
     manager.detach_scene_full(scene);
     CHECK_EQ(manager.attached_scenes().size(), 0u);
 
+    tc_scene_free(scene);
+}
+
+TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
+{
+    RenderingManager manager;
+    tc_scene_render_mount_extension_init();
+
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+    tc_scene_set_name(scene, "rendering-manager-lifecycle-test");
+
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    REQUIRE(pool != nullptr);
+    tc_entity_id entity = tc_entity_pool_alloc(pool, "LifecycleEntity");
+    REQUIRE(tc_entity_id_valid(entity));
+
+    RenderLifecycleCounter counter = make_render_lifecycle_counter();
+    tc_entity_pool_add_component(pool, entity, &counter.component);
+
+    TcScenePipelineTemplate templ = make_empty_scene_pipeline_template("lifecycle-template");
+    REQUIRE(templ.is_valid());
+    REQUIRE(templ.is_loaded());
+    tc_scene_add_pipeline_template(scene, templ.handle());
+
+    manager.attach_scene(scene);
+    CHECK_EQ(counter.attach_count, 1);
+    CHECK_EQ(counter.detach_count, 0);
+
+    manager.attach_scene(scene);
+    CHECK_EQ(counter.attach_count, 2);
+    CHECK_EQ(counter.detach_count, 0);
+
+    manager.detach_scene(scene);
+    CHECK_EQ(counter.attach_count, 2);
+    CHECK_EQ(counter.detach_count, 1);
+
+    tc_spt_free(templ.handle());
     tc_scene_free(scene);
 }
 

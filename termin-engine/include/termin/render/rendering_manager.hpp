@@ -40,6 +40,10 @@ namespace termin {
 
 class RenderingManager;
 
+namespace rendering_manager_detail {
+class RenderStateStore;
+}
+
 // Factory callback types
 using DisplayFactory = std::function<tc_display*(const std::string& name)>;
 using PipelineFactory = std::function<tc_pipeline_handle(const std::string& name)>;
@@ -345,6 +349,12 @@ private:
     // Collect all viewports from all displays by name
     std::unordered_map<std::string, tc_viewport_handle> collect_all_viewports() const;
 
+    // Destroy compiled pipelines for a scene. The public
+    // clear_scene_pipelines() API preserves the legacy notify-detach behavior;
+    // attach/detach internals use this helper to avoid duplicate lifecycle
+    // notifications.
+    void destroy_scene_pipelines(tc_scene_handle scene, bool notify_detach);
+
 private:
     // Managed scene displays (cleaned up by detach_scene_full)
     std::vector<tc_display*> displays_;
@@ -355,12 +365,12 @@ private:
     // Per-display input routers (owned)
     std::unordered_map<tc_display*, std::unique_ptr<DisplayInputRouter>> display_routers_;
 
-    // Viewport render states (key = viewport handle as uint64)
-    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
-
     // Render engine (owned if created internally)
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
+
+    // Runtime GPU output state for viewports and render targets.
+    std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
 
     // Callback to activate GL context before rendering
     MakeCurrentCallback make_current_callback_;
@@ -397,9 +407,6 @@ private:
     // must not scan the global render-target pool for lookup or rebinding:
     // the pool may contain stale, foreign, or duplicate editor/game targets.
     std::vector<tc_render_target_handle> managed_render_targets_;
-
-    // Render target states (key = render_target handle as uint64)
-    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> render_target_states_;
 
     // Special target providers, keyed by tc_render_target_kind.
     std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;

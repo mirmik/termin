@@ -5,7 +5,11 @@
 Исходники:
 
 - `include/termin/render/rendering_manager.hpp`
-- `src/rendering_manager.cpp`
+- `src/rendering_manager.cpp` - публичный фасад и orchestration.
+- `src/render_state_store.cpp` - runtime GPU output state для viewport/render target.
+- `src/display_presenter.cpp` - presentation/blit display surfaces.
+- `src/default_pipeline_factory.cpp` - builtin default pipeline.
+- `src/scene_light_collector.cpp` - сбор light data через capability system.
 - `bindings/rendering_manager_bindings.cpp`
 
 ## Роль
@@ -76,6 +80,16 @@ Detach scene должен быть зеркалом attach:
 5. уведомить render-detach callbacks.
 
 Editor displays отслеживаются отдельно и не удаляются при scene detach.
+
+Render lifecycle notifications должны приходить строго один раз на явное
+подключение/отключение render state:
+
+- `attach_scene()` перекомпилирует старые scene pipelines без
+  `on_render_detach`, затем вызывает `on_render_attach`;
+- `detach_scene()` вызывает `on_render_detach` один раз и затем уничтожает
+  compiled pipelines;
+- публичный `clear_scene_pipelines()` сохраняет поведение cleanup API и
+  вызывает `on_render_detach` перед уничтожением pipeline-ов.
 
 ## Кадр рендера
 

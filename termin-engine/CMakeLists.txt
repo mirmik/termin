@@ -44,8 +44,12 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
 set(TERMIN_ENGINE_SOURCES
+    src/display_presenter.cpp
     src/engine_core.cpp
+    src/default_pipeline_factory.cpp
     src/scene_manager.cpp
+    src/scene_light_collector.cpp
+    src/render_state_store.cpp
     src/rendering_manager.cpp
     src/pull_rendering_manager.cpp
     src/tc_scene_manager_instance.cpp
