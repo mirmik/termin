@@ -45,6 +45,8 @@ from termin.visualization.core.scene import default_scene_extensions
 
 from termin.editor_core.editor_state_io import EditorStateIO
 from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
+from termin.editor_tcgui.project_build_controller import ProjectBuildController
+from termin.editor_tcgui.project_session_controller import ProjectSessionController
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
@@ -270,6 +272,24 @@ class EditorWindowTcgui:
             on_resource_reloaded=self._on_resource_reloaded,
         )
         self._register_file_processors()
+        self._project_session_controller = ProjectSessionController(
+            get_ui=lambda: self._ui,
+            set_project_state=self._set_project_state,
+            log_to_console=self._log_to_console,
+            rescan_file_resources=self._rescan_file_resources,
+            set_project_browser_root=self._set_project_browser_root,
+            get_init_script_editor=lambda: self,
+            resolve_termin_shaderc=_resolve_termin_shaderc,
+            resolve_slangc=_resolve_slangc,
+        )
+        self._project_build_controller = ProjectBuildController(
+            scene_manager=self.scene_manager,
+            get_current_project_path=self._get_project_path,
+            get_editor_scene_name=lambda: self._editor_scene_name,
+            get_ui=lambda: self._ui,
+            save_scene=self._save_scene,
+            log_to_console=self._log_to_console,
+        )
 
         # Editor interaction system
         from termin._native.editor import EditorInteractionSystem
@@ -1800,27 +1820,7 @@ class EditorWindowTcgui:
     # ------------------------------------------------------------------
 
     def _restore_project(self) -> None:
-        """Restore project from launcher or last session."""
-        from termin.launcher.recent import read_launch_project
-
-        project_file: str | None = None
-
-        # 1. Check launch_project.json (written by launcher)
-        launch_path = read_launch_project()
-        if launch_path is not None:
-            p = Path(launch_path)
-            if p.exists() and p.is_file() and p.suffix == ".terminproj":
-                project_file = str(p)
-
-        # 2. Fallback: last project from editor settings
-        if project_file is None:
-            last = EditorSettings.instance().get("last_project_file")
-            if last and Path(last).exists():
-                project_file = last
-
-        if project_file is not None:
-            self._load_project(project_file)
-            EditorSettings.instance().set("last_project_file", project_file)
+        self._project_session_controller.restore_project()
 
     # ------------------------------------------------------------------
     # Project operations (stub — file dialogs via tcgui)
@@ -1852,157 +1852,23 @@ class EditorWindowTcgui:
         )
 
     def _create_project_file(self, path: str) -> None:
-        if not path:
-            return
-        project_file = Path(path)
-        if project_file.suffix != ".terminproj":
-            project_file = project_file.with_suffix(".terminproj")
-        try:
-            import json
-            project_data = {
-                "version": 1,
-                "name": project_file.stem,
-            }
-            project_file.parent.mkdir(parents=True, exist_ok=True)
-            project_file.write_text(json.dumps(project_data, indent=2), encoding="utf-8")
-        except Exception as e:
-            log.error(f"Failed to create project file {project_file}: {e}")
-            if self._ui is not None:
-                MessageBox.error(self._ui, "Create Project Failed", f"Failed to create project:\n{e}")
-            return
-        self._load_project(str(project_file))
+        self._project_session_controller.create_project_file(path)
 
     def _load_project(self, path: str) -> None:
-        project_root = Path(path).parent
-        project_dir = str(project_root)
-        self._current_project_path = project_dir
-        self._project_name = Path(path).stem
-        self._log_to_console(f"Project: {project_dir}")
-        self._configure_shader_runtime_for_project(project_root)
-
-        # Initialize project settings
-        from termin.project.settings import ProjectSettingsManager
-        ProjectSettingsManager.instance().set_project_path(project_root)
-
-        from termin.navmesh.settings import NavigationSettingsManager
-        NavigationSettingsManager.instance().set_project_path(project_root)
-
-        EditorSettings.instance().set("last_project_file", path)
-
-        self._load_project_modules(project_root)
-        self._run_project_init_script(project_root)
-        self._rescan_file_resources()
-        if self._project_browser is not None:
-            self._project_browser.set_root(project_dir)
+        self._project_session_controller.load_project(path)
 
     def _configure_shader_runtime_for_project(self, project_root: Path) -> None:
-        artifact_root = project_root / ".termin" / "shader-artifacts"
-        cache_root = project_root / ".termin" / "shader-cache"
-        compiler = _resolve_termin_shaderc()
-        if compiler is None:
-            log.error(
-                "[ShaderRuntime] termin_shaderc not found; Slang runtime "
-                "shader compilation is unavailable. Set TERMIN_SHADERC or TERMIN_SDK."
-            )
-            return
-        slangc = _resolve_slangc()
-        if slangc is None:
-            log.error(
-                "[ShaderRuntime] slangc not found; Slang runtime shader "
-                "compilation is unavailable. Set TERMIN_SLANGC, add slangc to PATH, "
-                "install it under TERMIN_SDK/bin, or configure Shader/slangCompiler "
-                "in editor settings."
-            )
-            return
-
-        artifact_root.mkdir(parents=True, exist_ok=True)
-        cache_root.mkdir(parents=True, exist_ok=True)
-        os.environ["TERMIN_SLANGC"] = str(slangc)
-
-        try:
-            import tgfx
-
-            tgfx.configure_shader_runtime(
-                artifact_root=str(artifact_root),
-                cache_root=str(cache_root),
-                shader_compiler=str(compiler),
-                dev_compile=True,
-            )
-            log.info(
-                "[ShaderRuntime] configured: "
-                f"artifact_root='{artifact_root}' cache_root='{cache_root}' "
-                f"compiler='{compiler}' slangc='{slangc}' dev_compile=True"
-            )
-        except Exception as e:
-            log.error(f"[ShaderRuntime] configure_shader_runtime failed: {e}")
+        ProjectSessionController.configure_shader_runtime_for_project(
+            project_root,
+            resolve_termin_shaderc=_resolve_termin_shaderc,
+            resolve_slangc=_resolve_slangc,
+        )
 
     def _load_project_modules(self, project_root: Path) -> None:
-        from termin.modules import get_project_modules_runtime
-        from termin_modules import ModuleKind, ModuleState
-
-        runtime = get_project_modules_runtime()
-        success = runtime.load_project(project_root)
-        if not success and runtime.last_error:
-            self._log_to_console(f"Module load error: {runtime.last_error}")
-
-        cpp_loaded = 0
-        cpp_failed = 0
-        py_loaded = 0
-        py_failed = 0
-
-        for record in runtime.records():
-            if record.kind == ModuleKind.Cpp:
-                if record.state == ModuleState.Loaded:
-                    cpp_loaded += 1
-                    self._log_to_console(f"Loaded C++ module: {record.id}")
-                elif record.state == ModuleState.Failed:
-                    cpp_failed += 1
-                    self._log_to_console(f"Failed to load C++ module {record.id}: {record.error_message}")
-            else:
-                if record.state == ModuleState.Loaded:
-                    py_loaded += 1
-                    self._log_to_console(f"Loaded Python module: {record.id}")
-                elif record.state == ModuleState.Failed:
-                    py_failed += 1
-                    self._log_to_console(f"Failed to load Python module {record.id}: {record.error_message}")
-
-        if cpp_loaded > 0:
-            self._log_to_console(f"Loaded {cpp_loaded} C++ module(s)")
-        if cpp_failed > 0:
-            self._log_to_console(f"Failed to load {cpp_failed} C++ module(s)")
-        if py_loaded > 0:
-            self._log_to_console(f"Loaded {py_loaded} Python module(s)")
-        if py_failed > 0:
-            self._log_to_console(f"Failed to load {py_failed} Python module(s)")
+        self._project_session_controller.load_project_modules(project_root)
 
     def _run_project_init_script(self, project_root: Path) -> None:
-        init_script = project_root / "InitScript.py"
-        if not init_script.is_file():
-            return
-
-        import runpy
-        import sys
-
-        project_path = str(project_root)
-        inserted_project_path = False
-        if project_path not in sys.path:
-            sys.path.insert(0, project_path)
-            inserted_project_path = True
-
-        try:
-            runpy.run_path(
-                str(init_script),
-                init_globals={
-                    "editor": self,
-                    "project_root": project_root,
-                },
-            )
-        except Exception as e:
-            log.error(f"Project init script failed: {init_script}: {e}")
-            self._log_to_console(f"Project init script failed: {e}")
-        finally:
-            if inserted_project_path:
-                sys.path.remove(project_path)
+        self._project_session_controller.run_project_init_script(project_root)
 
     @property
     def ui(self) -> UI | None:
@@ -2306,183 +2172,22 @@ class EditorWindowTcgui:
                 self._status_bar.text = "Editor mode"
 
     def _run_standalone(self) -> None:
-        if self._current_project_path is None:
-            self._log_to_console("No project open — cannot run standalone.")
-            return
-        self._save_scene()
-        import subprocess
-        import sys
-        cmd = [sys.executable, "-m", "termin.main", "--project", self._current_project_path]
-        last_scene = EditorSettings.instance().get("last_scene_file")
-        if last_scene:
-            cmd.extend(["--scene", last_scene])
-        self._log_to_console(f"Launching standalone: {' '.join(cmd)}")
-        try:
-            subprocess.Popen(cmd)
-        except Exception as e:
-            log.error(f"Failed to launch standalone: {e}")
-            self._log_to_console(f"Error: {e}")
+        self._project_build_controller.run_standalone()
 
     def _build_project(self) -> None:
-        self._build_project_to_default_dist()
+        self._project_build_controller.build_project()
 
     def _build_android(self) -> None:
-        if self._current_project_path is None:
-            self._log_to_console("No project open - cannot build Android APK.")
-            return
-
-        self._save_scene()
-
-        scene_name = self._editor_scene_name
-        scene_path = self.scene_manager.get_scene_path(scene_name) if scene_name else None
-        if scene_path is None:
-            self._log_to_console("No saved scene - cannot build Android APK.")
-            return
-
-        project_root = Path(self._current_project_path).resolve()
-        scene_path_obj = Path(scene_path).resolve()
-        try:
-            scene_rel_path = scene_path_obj.relative_to(project_root)
-        except ValueError:
-            self._log_to_console("Android build entry scene must be inside the current project.")
-            return
-
-        from termin.project.settings import ProjectSettingsManager
-        build_output_dir = ProjectSettingsManager.instance().settings.build_output_dir
-        output_dir = project_root / build_output_dir / "android" / project_root.name
-
-        self._log_to_console(f"Android build started: {scene_rel_path}")
-        try:
-            from termin.project_build import build_android_project
-
-            result = build_android_project(
-                project_root=project_root,
-                entry_scene=scene_rel_path,
-                output_dir=output_dir,
-            )
-        except Exception as e:
-            log.error(f"Android build failed: {e}", exc_info=True)
-            self._log_to_console(f"Android build failed: {e}")
-            return
-
-        self._log_to_console(f"Android APK: {result.apk_path}")
-        self._log_to_console(f"Android applicationId: {result.application_id}")
-        self._log_to_console(f"Android launch: {result.application_id}/{result.launch_activity}")
-        self._log_to_console(f"Android package: {result.package_result.package_dir}")
-        self._log_to_console(f"Android build log: {result.log_path}")
-        for diagnostic in result.diagnostics:
-            self._log_to_console(f"Android build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
+        self._project_build_controller.build_android()
 
     def _show_quest_openxr_build_dialog(self) -> None:
-        if self._current_project_path is None:
-            self._log_to_console("No project open - cannot build Quest/OpenXR APK.")
-            return
-
-        self._save_scene()
-
-        scene_name = self._editor_scene_name
-        scene_path = self.scene_manager.get_scene_path(scene_name) if scene_name else None
-        if scene_path is None:
-            self._log_to_console("No saved scene - cannot build Quest/OpenXR APK.")
-            return
-
-        project_root = Path(self._current_project_path).resolve()
-        scene_path_obj = Path(scene_path).resolve()
-        try:
-            scene_rel_path = scene_path_obj.relative_to(project_root)
-        except ValueError:
-            self._log_to_console("Quest/OpenXR build entry scene must be inside the current project.")
-            return
-
-        from termin.project.settings import ProjectSettingsManager
-        build_output_dir = ProjectSettingsManager.instance().settings.build_output_dir
-        output_dir = project_root / build_output_dir / "quest_openxr" / project_root.name
-
-        from termin.editor_tcgui.dialogs.quest_openxr_build_dialog import show_quest_openxr_build_dialog
-        show_quest_openxr_build_dialog(
-            self._ui,
-            project_root=project_root,
-            entry_scene=scene_rel_path,
-            output_dir=output_dir,
-            on_log=self._log_to_console,
-        )
+        self._project_build_controller.show_quest_openxr_build_dialog()
 
     def _build_project_to_default_dist(self):
-        if self._current_project_path is None:
-            self._log_to_console("No project open - cannot build.")
-            return None
-
-        self._save_scene()
-
-        scene_name = self._editor_scene_name
-        scene_path = self.scene_manager.get_scene_path(scene_name) if scene_name else None
-        if scene_path is None:
-            self._log_to_console("No saved scene - cannot build.")
-            return None
-
-        project_root = Path(self._current_project_path).resolve()
-        scene_path_obj = Path(scene_path).resolve()
-        try:
-            scene_rel_path = scene_path_obj.relative_to(project_root)
-        except ValueError:
-            self._log_to_console("Build entry scene must be inside the current project.")
-            return None
-
-        from termin.project.settings import ProjectSettingsManager
-        build_output_dir = ProjectSettingsManager.instance().settings.build_output_dir
-        output_dir = project_root / build_output_dir / project_root.name
-
-        try:
-            from termin.project_builder import build_project
-            from termin.render_framework import collect_scene_shader_usages
-
-            scene = self.scene_manager.get_scene(scene_name)
-            if scene is None:
-                self._log_to_console("No loaded scene - cannot collect shader usages.")
-                return None
-            shader_usages = collect_scene_shader_usages(scene.scene_handle())
-
-            result = build_project(
-                project_root=project_root,
-                entry_scene=scene_rel_path,
-                output_dir=output_dir,
-                compile_shaders=True,
-                shader_usages=shader_usages,
-            )
-        except Exception as e:
-            log.error(f"Build failed: {e}")
-            self._log_to_console(f"Build failed: {e}")
-            return None
-
-        resource_count = len(result.manifest.resources)
-        diagnostic_count = len(result.manifest.diagnostics)
-        self._log_to_console(f"Build complete: {result.build_json_path}")
-        self._log_to_console(f"Build manifest: {resource_count} resource(s), {diagnostic_count} diagnostic(s)")
-        for diagnostic in result.manifest.diagnostics:
-            self._log_to_console(f"Build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
-        return result
+        return self._project_build_controller.build_project_to_default_dist()
 
     def _run_build(self) -> None:
-        result = self._build_project_to_default_dist()
-        if result is None:
-            return
-
-        import subprocess
-        import sys
-
-        cmd = [
-            sys.executable,
-            "-m",
-            "termin.player",
-            "--build",
-            str(result.build_json_path),
-        ]
-        self._log_to_console(f"Launching build: {' '.join(cmd)}")
-        try:
-            subprocess.Popen(cmd, cwd=str(result.output_dir))
-        except Exception as e:
-            log.error(f"Failed to launch build: {e}")
-            self._log_to_console(f"Run build failed: {e}")
+        self._project_build_controller.run_build()
 
     def _show_undo_stack_viewer(self) -> None:
         if self._ui is None:
@@ -2686,6 +2391,14 @@ class EditorWindowTcgui:
 
     def _get_project_path(self) -> str | None:
         return self._current_project_path
+
+    def _set_project_state(self, project_dir: str, project_name: str) -> None:
+        self._current_project_path = project_dir
+        self._project_name = project_name
+
+    def _set_project_browser_root(self, project_dir: str) -> None:
+        if self._project_browser is not None:
+            self._project_browser.set_root(project_dir)
 
     def _on_resource_reloaded(self, name: str, kind: str) -> None:
         self._request_viewport_update()
