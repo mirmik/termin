@@ -29,8 +29,6 @@ extern "C" {
 namespace termin {
 
 constexpr const char* SHADOW_ENGINE_SHADER_UUID = "termin-engine-shadow";
-constexpr const char* SHADOW_VERTEX_SOURCE_FILE = "termin-engine-shadow.vert.glsl";
-constexpr const char* SHADOW_FRAGMENT_SOURCE_FILE = "termin-engine-shadow.frag.glsl";
 
 namespace {
 
@@ -97,11 +95,7 @@ void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
         // Process-lifetime engine shader: never destroyed (transient
         // TcShader wrappers from material phases / Python bindings
         // can't bounce ref_count through zero and take it down).
-        shadow_shader_handle_ = register_builtin_vertex_fragment_shader(
-            SHADOW_VERTEX_SOURCE_FILE,
-            SHADOW_FRAGMENT_SOURCE_FILE,
-            "ShadowEngineVSFS",
-            SHADOW_ENGINE_SHADER_UUID);
+        shadow_shader_handle_ = register_builtin_shader_from_catalog(SHADOW_ENGINE_SHADER_UUID);
     }
 }
 

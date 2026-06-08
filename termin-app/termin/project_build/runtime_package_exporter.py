@@ -78,64 +78,6 @@ ENGINE_BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composite"
 ENGINE_TONEMAP_SHADER_UUID = "termin-engine-tonemap"
 
 
-ENGINE_SKYBOX_SHADER_TEXT = """
-@program Skybox
-
-@phase opaque
-@priority 0
-@glDepthTest true
-@glDepthMask false
-@glCull false
-
-@property Mat4  u_view
-@property Mat4  u_projection
-@property Int   u_skybox_type
-@property Color u_skybox_color        = Color(0.5, 0.5, 0.5, 1.0)
-@property Color u_skybox_top_color    = Color(0.3, 0.5, 1.0, 1.0)
-@property Color u_skybox_bottom_color = Color(0.1, 0.1, 0.3, 1.0)
-
-@stage vertex
-#version 450 core
-layout(location = 0) in vec3 a_position;
-
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-layout(location = 0) out vec3 v_dir;
-
-void main() {
-    mat4 view_no_translation = mat4(mat3(u_view));
-    v_dir = a_position;
-    gl_Position = u_projection * view_no_translation * vec4(a_position, 1.0);
-}
-@endstage
-
-@stage fragment
-#version 450 core
-
-layout(location = 0) in vec3 v_dir;
-layout(location = 0) out vec4 FragColor;
-
-uniform int  u_skybox_type;
-uniform vec4 u_skybox_color;
-uniform vec4 u_skybox_top_color;
-uniform vec4 u_skybox_bottom_color;
-
-void main() {
-    if (u_skybox_type == 1) {
-        FragColor = vec4(u_skybox_color.rgb, 1.0);
-    } else {
-        float t = normalize(v_dir).z * 0.5 + 0.5;
-        vec3 c = mix(u_skybox_bottom_color.rgb, u_skybox_top_color.rgb, t);
-        FragColor = vec4(c, 1.0);
-    }
-}
-@endstage
-
-@endphase
-"""
-
-
 PLACEHOLDER_MESH_VERTICES = [
     0.0, 0.65, 0.0, 1.0, 0.05, 0.05,
     -0.75, -0.55, 0.0, 0.05, 1.0, 0.05,
@@ -577,15 +519,9 @@ def _write_default_pipeline_shader_artifacts(
 
 
 def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
-    skybox_vertex, skybox_fragment = _parse_skybox_engine_shader()
     return [
         _builtin_engine_shader_artifact(ENGINE_FSQ_SHADER_UUID),
-        _EngineShaderArtifact(
-            uuid=ENGINE_SKYBOX_SHADER_UUID,
-            name="SkyboxEngineVSFS",
-            vertex_source=skybox_vertex,
-            fragment_source=skybox_fragment,
-        ),
+        _builtin_engine_shader_artifact(ENGINE_SKYBOX_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_SHADOW_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_GRAYSCALE_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_BLOOM_BRIGHT_SHADER_UUID),
@@ -599,6 +535,17 @@ def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
 def _builtin_engine_shader_artifact(uuid_value: str) -> _EngineShaderArtifact:
     entry = _builtin_shader_catalog_entry(uuid_value)
     language = str(entry.get("language", "glsl"))
+    if language == "shader":
+        vertex_source, fragment_source = _builtin_engine_shader_program_stages(uuid_value, entry)
+        return _EngineShaderArtifact(
+            uuid=uuid_value,
+            name=str(entry.get("name", uuid_value)),
+            language="glsl",
+            vertex_source=vertex_source,
+            fragment_source=fragment_source,
+            layout=_builtin_engine_shader_layout(entry, artifact_language="glsl"),
+        )
+
     stages = entry.get("stages")
     if not isinstance(stages, dict):
         raise ValueError(f"Built-in shader '{uuid_value}' has no stage map")
@@ -635,29 +582,50 @@ def _builtin_engine_stage_source(
     return _builtin_shader_source(source_name)
 
 
-def _builtin_engine_shader_layout(entry: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _builtin_engine_shader_layout(
+    entry: dict[str, Any],
+    *,
+    artifact_language: str | None = None,
+) -> dict[str, Any]:
+    source_language = entry.get("language", "glsl")
+    layout = {
         "version": 1,
         "uuid": entry["uuid"],
         "name": entry.get("name", entry["uuid"]),
-        "language": entry.get("language", "glsl"),
-        "stages": entry.get("stages", {}),
+        "language": artifact_language or source_language,
         "resources": entry.get("resources", []),
         "binding_model": "legacy_numeric_bridge",
     }
+    if artifact_language is not None and artifact_language != source_language:
+        layout["source_language"] = source_language
+    if "stages" in entry:
+        layout["stages"] = entry.get("stages", {})
+    if "program" in entry:
+        layout["program"] = entry.get("program", {})
+    return layout
 
 
-def _parse_skybox_engine_shader() -> tuple[str, str]:
+def _builtin_engine_shader_program_stages(
+    uuid_value: str,
+    entry: dict[str, Any],
+) -> tuple[str, str]:
     from termin.materials import parse_shader_text
 
-    program = parse_shader_text(ENGINE_SKYBOX_SHADER_TEXT)
+    program_entry = entry.get("program")
+    if not isinstance(program_entry, dict):
+        raise ValueError(f"Built-in shader '{uuid_value}' has no program source")
+    path = program_entry.get("path")
+    if not isinstance(path, str):
+        raise ValueError(f"Built-in shader '{uuid_value}' program has no source path")
+
+    program = parse_shader_text(_builtin_shader_source(path))
     if len(program.phases) == 0:
-        raise RuntimeError("Default pipeline skybox shader parser returned no phases")
+        raise RuntimeError(f"Built-in shader '{uuid_value}' parser returned no phases")
     phase = program.phases[0]
     vertex_stage = phase.stages.get("vertex")
     fragment_stage = phase.stages.get("fragment")
     if vertex_stage is None or fragment_stage is None:
-        raise RuntimeError("Default pipeline skybox shader parser returned incomplete stages")
+        raise RuntimeError(f"Built-in shader '{uuid_value}' parser returned incomplete stages")
     return vertex_stage.source, fragment_stage.source
 
 

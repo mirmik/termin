@@ -25,8 +25,6 @@ namespace termin {
 
 constexpr const char* TONEMAP_ENGINE_SHADER_UUID = "termin-engine-tonemap";
 
-constexpr const char* TONEMAP_FRAGMENT_SOURCE_FILE = "termin-engine-tonemap.frag.glsl";
-
 // std140 layout for TonemapParams. Float at 0 (size 4), int at 4 (size 4),
 // block padded to 16-byte vec4 boundary.
 struct TonemapParamsStd140 {
@@ -103,8 +101,7 @@ void TonemapPass::execute(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = register_builtin_fragment_shader(
-            TONEMAP_FRAGMENT_SOURCE_FILE, "TonemapEngineFS", TONEMAP_ENGINE_SHADER_UUID);
+        shader_handle_ = register_builtin_shader_from_catalog(TONEMAP_ENGINE_SHADER_UUID);
         if (tc_shader_handle_is_invalid(shader_handle_)) return;
     }
     if (!params_ubo_) {

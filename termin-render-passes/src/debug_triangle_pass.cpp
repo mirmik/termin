@@ -17,10 +17,6 @@ extern "C" {
 namespace termin {
 
 constexpr const char* DEBUG_TRIANGLE_ENGINE_SHADER_UUID = "termin-engine-debug-triangle";
-constexpr const char* DEBUG_TRIANGLE_VERTEX_SOURCE_FILE =
-    "termin-engine-debug-triangle.vert.glsl";
-constexpr const char* DEBUG_TRIANGLE_FRAGMENT_SOURCE_FILE =
-    "termin-engine-debug-triangle.frag.glsl";
 
 DebugTrianglePass::DebugTrianglePass(
     const std::string& output,
@@ -59,11 +55,7 @@ void DebugTrianglePass::execute(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = register_builtin_vertex_fragment_shader(
-            DEBUG_TRIANGLE_VERTEX_SOURCE_FILE,
-            DEBUG_TRIANGLE_FRAGMENT_SOURCE_FILE,
-            "DebugTrianglePassVSFS",
-            DEBUG_TRIANGLE_ENGINE_SHADER_UUID);
+        shader_handle_ = register_builtin_shader_from_catalog(DEBUG_TRIANGLE_ENGINE_SHADER_UUID);
         if (tc_shader_handle_is_invalid(shader_handle_)) return;
     }
 

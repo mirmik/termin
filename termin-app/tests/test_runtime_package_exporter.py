@@ -161,6 +161,13 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert "POSITION" in fsq_source
     assert "TEXCOORD0" in fsq_source
 
+    skybox_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-engine-skybox.vert.glsl"
+    ).read_text(encoding="utf-8")
+    assert "MaterialParams" in skybox_source
+    assert "u_view" in skybox_source
+    assert "u_projection" in skybox_source
+
     shadow_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-engine-shadow.vert.glsl"
     ).read_text(encoding="utf-8")
@@ -226,6 +233,24 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         "kind": "push_constant",
         "legacy_binding": 14,
     } in shadow_layout["resources"]
+
+    skybox_layout = json.loads(
+        (
+            result.package_dir
+            / "shaders"
+            / "layout"
+            / "termin-engine-skybox.shader-layout.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert skybox_layout["language"] == "glsl"
+    assert skybox_layout["source_language"] == "shader"
+    assert skybox_layout["program"] == {"path": "termin-engine-skybox.shader"}
+    assert {
+        "name": "MaterialParams",
+        "logical_name": "material_params",
+        "kind": "constant_buffer",
+        "legacy_binding": 1,
+    } in skybox_layout["resources"]
 
 
 def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
