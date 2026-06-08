@@ -3,22 +3,19 @@
 #include "default_pipeline_factory.hpp"
 #include "display_presenter.hpp"
 #include "render_display_registry.hpp"
+#include "render_frame_planner.hpp"
 #include "rendering_manager_utils.hpp"
 #include "render_state_store.hpp"
+#include "render_target_context_builder.hpp"
 #include "scene_light_collector.hpp"
 #include "scene_pipeline_manager.hpp"
 #include "termin/render/scene_pipeline_template.hpp"
-#include "termin/render/render_camera.hpp"
 #include <termin/entity/entity.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
-
-#include <tgfx2/i_render_device.hpp>
-#include "tgfx/handles.hpp"
 
 extern "C" {
 #include <tcbase/tc_log.h>
 #include "tc_profiler.h"
-#include "core/tc_camera_capability.h"
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_pool.h"
@@ -30,202 +27,11 @@ extern "C" {
 #include "render/tc_rendering_manager.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_render_target.h"
-#include "tgfx/resources/tc_texture_registry.h"
 }
-
-// C++ header — must NOT be inside the extern "C" block above; otherwise
-// `termin::wrap_tc_texture_as_tgfx2` would be declared as a C symbol on
-// the call-site, and the C++-mangled definition in libtermin_render
-// wouldn't match at link time.
-#include "termin/render/tgfx2_bridge.hpp"
 
 #include <algorithm>
-#include <cstring>
 
 namespace termin {
-
-// Convert tc_camera_data to RenderCamera
-static RenderCamera render_camera_from_cap(const tc_camera_data& cd) {
-    RenderCamera rc;
-    std::memcpy(rc.view.data, cd.view, sizeof(cd.view));
-    std::memcpy(rc.projection.data, cd.projection, sizeof(cd.projection));
-    rc.position = Vec3(cd.position[0], cd.position[1], cd.position[2]);
-    rc.near_clip = cd.near_clip;
-    rc.far_clip = cd.far_clip;
-    return rc;
-}
-
-static uint64_t effective_layer_mask(uint64_t camera_mask, tc_render_target_handle rt) {
-    uint64_t target_mask = tc_render_target_handle_valid(rt)
-        ? tc_render_target_get_layer_mask(rt)
-        : 0xFFFFFFFFFFFFFFFFULL;
-    return camera_mask & target_mask;
-}
-
-static void fill_render_target_clear_settings(RenderTargetContext& ctx, tc_render_target_handle rt) {
-    if (!tc_render_target_handle_valid(rt)) return;
-    ctx.clear_color_enabled = tc_render_target_get_clear_color_enabled(rt);
-    tc_render_target_get_clear_color_value(rt, ctx.clear_color);
-    ctx.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(rt);
-    ctx.clear_depth = tc_render_target_get_clear_depth_value(rt);
-}
-
-static void resolve_render_target_size_for_viewport(
-    tc_render_target_handle rt,
-    int viewport_width,
-    int viewport_height,
-    int& render_width,
-    int& render_height
-) {
-    render_width = viewport_width;
-    render_height = viewport_height;
-
-    if (!tc_render_target_handle_valid(rt)) {
-        return;
-    }
-
-    if (tc_render_target_get_dynamic_resolution(rt)) {
-        tc_render_target_set_width(rt, viewport_width);
-        tc_render_target_set_height(rt, viewport_height);
-        return;
-    }
-
-    int fixed_width = tc_render_target_get_width(rt);
-    int fixed_height = tc_render_target_get_height(rt);
-    if (fixed_width > 0 && fixed_height > 0) {
-        render_width = fixed_width;
-        render_height = fixed_height;
-    }
-}
-
-struct RenderTargetNameLookup {
-    const char* name = nullptr;
-    tc_scene_handle preferred_scene = TC_SCENE_HANDLE_INVALID;
-    tc_render_target_handle result = TC_RENDER_TARGET_HANDLE_INVALID;
-};
-
-static tc_render_target_handle find_render_target_by_name(
-    const char* name,
-    tc_scene_handle preferred_scene,
-    const std::vector<tc_render_target_handle>& render_targets
-) {
-    if (!name || name[0] == '\0') {
-        return TC_RENDER_TARGET_HANDLE_INVALID;
-    }
-    RenderTargetNameLookup lookup;
-    lookup.name = name;
-    lookup.preferred_scene = preferred_scene;
-
-    // RenderingManager must never resolve render targets by scanning the
-    // global render-target pool. The pool can contain stale/editor/game
-    // duplicates outside this manager's ownership boundary; only the
-    // manager's registered render_targets list is authoritative here.
-    for (tc_render_target_handle rt : render_targets) {
-        if (!tc_render_target_handle_valid(rt)) {
-            continue;
-        }
-        const char* candidate = tc_render_target_get_name(rt);
-        if (!candidate || std::strcmp(candidate, lookup.name) != 0) {
-            continue;
-        }
-
-        if (tc_scene_handle_valid(lookup.preferred_scene)) {
-            tc_scene_handle scene = tc_render_target_get_scene(rt);
-            if (!tc_scene_handle_eq(scene, lookup.preferred_scene)) {
-                continue;
-            }
-        }
-        lookup.result = rt;
-        break;
-    }
-
-    if (tc_render_target_handle_valid(lookup.result)) {
-        return lookup.result;
-    }
-    return TC_RENDER_TARGET_HANDLE_INVALID;
-}
-
-static tgfx::TextureHandle resolve_pipeline_texture_ref(
-    tgfx::IRenderDevice& device,
-    tc_scene_handle preferred_scene,
-    const std::vector<tc_render_target_handle>& render_targets,
-    const char* ref
-) {
-    if (!ref || ref[0] == '\0') {
-        return {};
-    }
-
-    constexpr const char* file_prefix = "file:";
-    const char* texture_name = ref;
-    if (std::strncmp(ref, file_prefix, std::strlen(file_prefix)) == 0) {
-        texture_name = ref + std::strlen(file_prefix);
-        tc_texture_handle tex = tc_texture_find(texture_name);
-        if (tc_texture_handle_is_invalid(tex)) {
-            tex = tc_texture_find_by_name(texture_name);
-        }
-        if (tc_texture_handle_is_invalid(tex)) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] pipeline texture ref '%s' not found", ref);
-            return {};
-        }
-        return wrap_tc_texture_as_tgfx2(device, tex);
-    } else {
-        tc_render_target_handle rt = find_render_target_by_name(ref, preferred_scene, render_targets);
-        if (tc_render_target_handle_valid(rt)) {
-            tc_render_target_ensure_textures(rt);
-            return wrap_tc_texture_as_tgfx2(device, tc_render_target_get_color_texture(rt));
-        }
-    }
-
-    tc_texture_handle tex = tc_texture_find_by_name(texture_name);
-    if (tc_texture_handle_is_invalid(tex)) {
-        tex = tc_texture_find(texture_name);
-    }
-    if (tc_texture_handle_is_invalid(tex)) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] pipeline texture ref '%s' not found", ref);
-        return {};
-    }
-    return wrap_tc_texture_as_tgfx2(device, tex);
-}
-
-static void fill_external_textures_from_render_target(
-    RenderTargetContext& ctx,
-    tc_render_target_handle rt,
-    tgfx::IRenderDevice& device,
-    const std::vector<tc_render_target_handle>& render_targets
-) {
-    const tc_value* params = tc_render_target_get_pipeline_params(rt);
-    if (!params || params->type != TC_VALUE_DICT) {
-        return;
-    }
-
-    for (size_t i = 0; i < params->data.dict.count; i++) {
-        const char* slot = params->data.dict.entries[i].key;
-        tc_value* value = params->data.dict.entries[i].value;
-        if (!slot || slot[0] == '\0' || !value || value->type != TC_VALUE_STRING) {
-            continue;
-        }
-
-        tc_scene_handle scene = tc_render_target_get_scene(rt);
-        tgfx::TextureHandle tex = resolve_pipeline_texture_ref(device, scene, render_targets, value->data.s);
-        if (tex) {
-            ctx.external_textures[slot] = tex;
-        }
-    }
-}
-
-// Get RenderCamera from tc_component* via camera capability.
-// Returns false if component has no camera capability.
-static bool get_render_camera(tc_component* cam_comp, double aspect, RenderCamera* out, uint64_t* layer_mask) {
-    const tc_camera_capability* cap = tc_camera_capability_get(cam_comp);
-    if (!cap || !cap->vtable || !cap->vtable->get_camera_data) return false;
-    tc_camera_data cd{};
-    if (!cap->vtable->get_camera_data(cam_comp, aspect, &cd)) return false;
-    *out = render_camera_from_cap(cd);
-    if (layer_mask) {
-        *layer_mask = cd.layer_mask;
-    }
-    return true;
-}
 
 // ============================================================================
 // Global instance - set by EngineCore, accessed via C API for cross-DLL safety
@@ -1039,89 +845,24 @@ void RenderingManager::render_all_offscreen() {
         return;
     }
 
-    auto update_viewport_rects = [](const std::vector<tc_display*>& disp_list) {
-        for (tc_display* display : disp_list) {
-            if (!tc_display_get_enabled(display)) continue;
-
-            tc_render_surface* surface = tc_display_get_surface(display);
-            if (!surface) continue;
-
-            int width = 0;
-            int height = 0;
-            tc_render_surface_get_size(surface, &width, &height);
-            if (width <= 0 || height <= 0) continue;
-
-            tc_viewport_handle vp = tc_display_get_first_viewport(display);
-            while (tc_viewport_handle_valid(vp)) {
-                tc_viewport_update_pixel_rect(vp, width, height);
-                vp = tc_viewport_get_display_next(vp);
-            }
-        }
-    };
-    update_viewport_rects(display_registry_->displays());
-    update_viewport_rects(display_registry_->editor_displays());
+    rendering_manager_detail::update_viewport_rects_for_displays(display_registry_->displays());
+    rendering_manager_detail::update_viewport_rects_for_displays(display_registry_->editor_displays());
 
     // 0. Sync dynamic-resolution render targets from their attached viewport.
     sync_viewport_resolutions();
 
-    auto append_unique_rt = [](std::vector<tc_render_target_handle>& targets, tc_render_target_handle rt) {
-        if (!tc_render_target_handle_valid(rt)) return;
-        auto it = std::find_if(
-            targets.begin(),
-            targets.end(),
-            [rt](tc_render_target_handle candidate) {
-                return tc_render_target_handle_eq(candidate, rt);
-            }
+    rendering_manager_detail::OffscreenRenderPlan render_plan =
+        rendering_manager_detail::build_offscreen_render_plan(
+            display_registry_->displays(),
+            display_registry_->editor_displays()
         );
-        if (it == targets.end()) {
-            targets.push_back(rt);
-        }
-    };
-
-    auto contains_rt = [](const std::vector<tc_render_target_handle>& targets, tc_render_target_handle rt) {
-        return std::find_if(
-            targets.begin(),
-            targets.end(),
-            [rt](tc_render_target_handle candidate) {
-                return tc_render_target_handle_eq(candidate, rt);
-            }
-        ) != targets.end();
-    };
-
-    std::vector<tc_render_target_handle> viewport_render_targets;
-    std::vector<tc_render_target_handle> scene_pipeline_render_targets;
-    std::vector<tc_viewport_handle> rt_viewports;
-
-    auto collect_viewport_render_targets = [&](const std::vector<tc_display*>& disp_list) {
-        for (tc_display* display : disp_list) {
-            if (!tc_display_get_enabled(display)) continue;
-
-            tc_viewport_handle vp = tc_display_get_first_viewport(display);
-            while (tc_viewport_handle_valid(vp)) {
-                if (tc_viewport_get_enabled(vp)) {
-                    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-                    if (tc_render_target_handle_valid(rt)) {
-                        append_unique_rt(viewport_render_targets, rt);
-                        const char* managed_by = tc_viewport_get_managed_by(vp);
-                        if (managed_by && managed_by[0] != '\0') {
-                            append_unique_rt(scene_pipeline_render_targets, rt);
-                        } else if (!contains_rt(scene_pipeline_render_targets, rt)) {
-                            rt_viewports.push_back(vp);
-                        }
-                    }
-                }
-                vp = tc_viewport_get_display_next(vp);
-            }
-        }
-    };
-    collect_viewport_render_targets(display_registry_->displays());
-    collect_viewport_render_targets(display_registry_->editor_displays());
 
     // 1. Render standalone managed render targets first. RTs attached to
     // viewports are intentionally delayed because we do not yet have a
     // dependency graph between render targets.
     for (tc_render_target_handle rt : managed_render_targets_) {
-        if (tc_render_target_handle_valid(rt) && !contains_rt(viewport_render_targets, rt)) {
+        if (tc_render_target_handle_valid(rt)
+                && !rendering_manager_detail::contains_render_target(render_plan.viewport_render_targets, rt)) {
             render_render_target_offscreen(rt);
         }
     }
@@ -1143,13 +884,14 @@ void RenderingManager::render_all_offscreen() {
     // 3. Render viewport-bound render targets not owned by a scene pipeline.
     // Dedupe by RenderTarget: multiple viewports may display the same target,
     // but rendering it twice in one frame would race the same output textures.
-    std::vector<tc_render_target_handle> rendered_viewport_targets = scene_pipeline_render_targets;
-    for (tc_viewport_handle vp : rt_viewports) {
+    std::vector<tc_render_target_handle> rendered_viewport_targets =
+        render_plan.scene_pipeline_render_targets;
+    for (tc_viewport_handle vp : render_plan.viewport_render_target_viewports) {
         tc_render_target_handle rt = tc_viewport_get_render_target(vp);
         if (!tc_render_target_handle_valid(rt)) continue;
-        if (contains_rt(rendered_viewport_targets, rt)) continue;
+        if (rendering_manager_detail::contains_render_target(rendered_viewport_targets, rt)) continue;
         render_viewport_offscreen(vp);
-        append_unique_rt(rendered_viewport_targets, rt);
+        rendering_manager_detail::append_unique_render_target(rendered_viewport_targets, rt);
     }
 
     // 4. Render legacy viewports without render targets. RT-backed viewports
@@ -1229,7 +971,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
 
         int rw = pw;
         int rh = ph;
-        resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
+        rendering_manager_detail::resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
 
         std::string default_context;
         if (build_render_target_contexts(
@@ -1274,111 +1016,20 @@ bool RenderingManager::build_render_target_contexts(
     std::unordered_map<std::string, RenderTargetContext>& contexts,
     std::string& default_context_name
 ) {
-    if (!tc_render_target_handle_valid(rt)) {
-        return false;
-    }
-    if (!tc_render_target_get_enabled(rt)) {
-        return false;
-    }
-
-    const tc_render_target_kind kind = tc_render_target_get_kind(rt);
-    if (kind != TC_RENDER_TARGET_TEXTURE_2D) {
-        auto it = render_target_context_providers_.find((int)kind);
-        if (it == render_target_context_providers_.end() || !it->second) {
-            const char* rt_name = tc_render_target_get_name(rt);
-            const uint64_t warning_key = render_target_key(rt);
-            if (missing_render_target_provider_warnings_.insert(warning_key).second) {
-                tc_log(
-                    TC_LOG_WARN,
-                    "[RenderingManager] render target '%s' kind '%s' has no context provider",
-                    rt_name ? rt_name : "(unnamed)",
-                    tc_render_target_kind_to_string(kind)
-                );
-            }
-            return false;
-        }
-        const bool ok = it->second(
-            *this,
-            rt,
-            base_context_name,
-            internal_entities,
-            contexts,
-            default_context_name
-        );
-        if (ok && default_context_name.empty() && !contexts.empty()) {
-            default_context_name = contexts.begin()->first;
-        }
-        return ok;
-    }
-
-    const char* rt_name = tc_render_target_get_name(rt);
-    tc_component* camera_comp = tc_render_target_get_camera(rt);
-    if (!camera_comp) {
-        return false;
-    }
-
-    if (render_width <= 0 || render_height <= 0) {
-        tc_log(
-            TC_LOG_WARN,
-            "[RenderingManager] RT '%s': invalid size %dx%d",
-            rt_name ? rt_name : "?",
-            render_width,
-            render_height
-        );
-        return false;
-    }
-
-    double aspect = static_cast<double>(render_width) / std::max(1, render_height);
-    RenderCamera render_camera;
-    uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
-    if (!get_render_camera(camera_comp, aspect, &render_camera, &camera_layer_mask)) {
-        tc_log(
-            TC_LOG_WARN,
-            "[RenderingManager] render target '%s': no camera capability",
-            rt_name ? rt_name : "(null)"
-        );
-        return false;
-    }
-
-    RenderEngine* engine = render_engine();
-    if (engine) engine->ensure_tgfx2();
-    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
-    if (!device) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable",
-               rt_name ? rt_name : "?");
-        return false;
-    }
-
-    tc_render_target_ensure_textures(rt);
-    tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_color_texture(rt));
-    tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_depth_texture(rt));
-
-    const std::string context_name = base_context_name.empty()
-        ? (rt_name ? rt_name : "")
-        : base_context_name;
-
-    RenderTargetContext ctx;
-    ctx.name = context_name;
-    ctx.camera = render_camera;
-    ctx.render_rect = {0, 0, render_width, render_height};
-    ctx.internal_entities = internal_entities;
-    ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
-    ctx.output_color_tex = out_color;
-    ctx.output_depth_tex = out_depth;
-    ctx.output_color_format = render_target_format_to_tgfx2(
-        tc_render_target_get_color_format(rt));
-    ctx.output_depth_format = render_target_format_to_tgfx2(
-        tc_render_target_get_depth_format(rt));
-    fill_render_target_clear_settings(ctx, rt);
-    fill_external_textures_from_render_target(ctx, rt, *device, managed_render_targets_);
-    contexts[context_name] = std::move(ctx);
-
-    if (default_context_name.empty()) {
-        default_context_name = context_name;
-    }
-    return true;
+    return rendering_manager_detail::build_render_target_contexts(
+        *this,
+        render_engine(),
+        rt,
+        base_context_name,
+        internal_entities,
+        render_width,
+        render_height,
+        managed_render_targets_,
+        render_target_context_providers_,
+        missing_render_target_provider_warnings_,
+        contexts,
+        default_context_name
+    );
 }
 
 void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
@@ -1418,7 +1069,7 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 
     int rw = pw;
     int rh = ph;
-    resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
+    rendering_manager_detail::resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
 
     // Collect lights
     std::vector<Light> lights = collect_lights(scene);
@@ -1445,30 +1096,8 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 }
 
 void RenderingManager::sync_viewport_resolutions() {
-    auto sync_list = [this](const std::vector<tc_display*>& disp_list) {
-        for (tc_display* display : disp_list) {
-            if (!tc_display_get_enabled(display)) continue;
-
-            tc_viewport_handle vp = tc_display_get_first_viewport(display);
-            while (tc_viewport_handle_valid(vp)) {
-                tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-                if (tc_render_target_handle_valid(rt)) {
-                    if (tc_render_target_get_kind(rt) == TC_RENDER_TARGET_TEXTURE_2D
-                            && tc_render_target_get_dynamic_resolution(rt)) {
-                        int px, py, pw, ph;
-                        tc_viewport_get_pixel_rect(vp, &px, &py, &pw, &ph);
-                        if (pw > 0 && ph > 0) {
-                            tc_render_target_set_width(rt, pw);
-                            tc_render_target_set_height(rt, ph);
-                        }
-                    }
-                }
-                vp = tc_viewport_get_display_next(vp);
-            }
-        }
-    };
-    sync_list(display_registry_->displays());
-    sync_list(display_registry_->editor_displays());
+    rendering_manager_detail::sync_viewport_render_target_resolutions(display_registry_->displays());
+    rendering_manager_detail::sync_viewport_render_target_resolutions(display_registry_->editor_displays());
 }
 
 void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt) {
