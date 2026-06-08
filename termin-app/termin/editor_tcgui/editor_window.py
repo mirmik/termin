@@ -48,6 +48,10 @@ from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
 from termin.editor_tcgui.project_build_controller import ProjectBuildController
 from termin.editor_tcgui.project_session_controller import ProjectSessionController
 from termin.editor_tcgui.scene_file_controller import SceneFileController
+from termin.editor_tcgui.editor_window_layout import (
+    EditorWindowLayoutCallbacks,
+    build_editor_window_layout,
+)
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
@@ -327,228 +331,41 @@ class EditorWindowTcgui:
         """Create and attach the tcgui widget tree to ui."""
         self._ui = ui
 
-        from tcgui.widgets.units import pct
+        widgets = build_editor_window_layout(
+            EditorWindowLayoutCallbacks(
+                toggle_game_mode=self._toggle_game_mode,
+                toggle_pause=self._toggle_pause,
+                save_prefab=self._save_prefab,
+                exit_prefab_editing=self._exit_prefab_editing,
+                viewport_external_drag=self._on_viewport_external_drag,
+                viewport_external_drop=self._on_viewport_external_drop,
+            )
+        )
 
-        root = VStack()
-        root.preferred_width = pct(100)
-        root.preferred_height = pct(100)
-        root.spacing = 0
+        self._menu_bar_widget = widgets.menu_bar
+        self._left_tabs = widgets.left_tabs
+        self._viewport_list = widgets.viewport_list
+        self._left_splitter = widgets.left_splitter
+        self._play_button = widgets.play_button
+        self._pause_button = widgets.pause_button
+        self._prefab_toolbar = widgets.prefab_toolbar
+        self._prefab_toolbar_label = widgets.prefab_toolbar_label
+        self._save_prefab_button = widgets.save_prefab_button
+        self._exit_prefab_button = widgets.exit_prefab_button
+        self._center_tabs = widgets.center_tabs
+        self._viewport_widget = widgets.viewport_widget
+        self._right_scroll = widgets.right_scroll
+        self._right_splitter = widgets.right_splitter
+        self._debug_panel = widgets.debug_panel
+        self._profiler_panel = widgets.profiler_panel
+        self._modules_panel = widgets.modules_panel
+        self._debug_splitter = widgets.debug_splitter
+        self._bottom_tabs = widgets.bottom_tabs
+        self._bottom_splitter = widgets.bottom_splitter
+        self._console_area = widgets.console_area
+        self._status_bar = widgets.status_bar
 
-        # Menu bar
-        menu_bar = MenuBar()
-        self._menu_bar_widget = menu_bar
-        root.add_child(menu_bar)
-
-        # Main area: HStack with Splitter handles
-        # Left: TabView [Scene | Rendering]
-        # Center: Viewport3D (stretches)
-        # Right: ScrollArea > VStack [Inspector]
-        from tcgui.widgets.units import px
-        main_area = HStack()
-        main_area.stretch = True
-        main_area.spacing = 0
-
-        # --- Left panel ---
-        left_tabs = TabView()
-        self._left_tabs = left_tabs
-        left_tabs.preferred_width = px(280)
-
-        scene_tab_content = VStack()
-        scene_tab_content.spacing = 4
-
-        from tcgui.widgets.tree import TreeWidget
-        scene_tree = TreeWidget()
-        scene_tree.stretch = True
-        scene_tab_content.add_child(scene_tree)
-        left_tabs.add_tab("Scene", scene_tab_content)
-
-        from termin.editor_tcgui.viewport_list_widget import ViewportListWidgetTcgui
-        self._viewport_list = ViewportListWidgetTcgui()
-        self._viewport_list.stretch = True
-        left_tabs.add_tab("Rendering", self._viewport_list)
-
-        main_area.add_child(left_tabs)
-        self._left_splitter = Splitter(target=left_tabs, side="right")
-        main_area.add_child(self._left_splitter)
-
-        # --- Center: toolbar + TabView ---
-        from tcgui.widgets.button import Button
-
-        center_area = VStack()
-        center_area.stretch = True
-        center_area.spacing = 0
-
-        # Toolbar with Play/Stop and Pause buttons
-        toolbar = HStack()
-        toolbar.preferred_height = px(32)
-        toolbar.spacing = 4
-        toolbar.alignment = "center"
-
-        spacer_left = Label()
-        spacer_left.stretch = True
-        spacer_left.mouse_transparent = True
-        toolbar.add_child(spacer_left)
-
-        play_btn = Button()
-        play_btn.text = "Play"
-        play_btn.preferred_width = px(60)
-        play_btn.preferred_height = px(24)
-        play_btn.on_click = self._toggle_game_mode
-        self._play_button = play_btn
-        toolbar.add_child(play_btn)
-
-        pause_btn = Button()
-        pause_btn.text = "Pause"
-        pause_btn.preferred_width = px(60)
-        pause_btn.preferred_height = px(24)
-        pause_btn.visible = False
-        pause_btn.on_click = self._toggle_pause
-        self._pause_button = pause_btn
-        toolbar.add_child(pause_btn)
-
-        prefab_toolbar = HStack()
-        prefab_toolbar.spacing = 4
-        prefab_toolbar.visible = False
-        self._prefab_toolbar = prefab_toolbar
-
-        prefab_label = Label()
-        prefab_label.text = "Editing Prefab"
-        prefab_label.mouse_transparent = True
-        self._prefab_toolbar_label = prefab_label
-        prefab_toolbar.add_child(prefab_label)
-
-        save_prefab_btn = Button()
-        save_prefab_btn.text = "Save"
-        save_prefab_btn.preferred_width = px(60)
-        save_prefab_btn.preferred_height = px(24)
-        save_prefab_btn.on_click = self._save_prefab
-        self._save_prefab_button = save_prefab_btn
-        prefab_toolbar.add_child(save_prefab_btn)
-
-        exit_prefab_btn = Button()
-        exit_prefab_btn.text = "Exit"
-        exit_prefab_btn.preferred_width = px(60)
-        exit_prefab_btn.preferred_height = px(24)
-        exit_prefab_btn.on_click = self._exit_prefab_editing
-        self._exit_prefab_button = exit_prefab_btn
-        prefab_toolbar.add_child(exit_prefab_btn)
-
-        toolbar.add_child(prefab_toolbar)
-
-        spacer_right = Label()
-        spacer_right.stretch = True
-        spacer_right.mouse_transparent = True
-        toolbar.add_child(spacer_right)
-
-        center_area.add_child(toolbar)
-
-        # Center tabs: Editor + dynamic display tabs
-        center_tabs = TabView()
-        center_tabs.stretch = True
-        self._center_tabs = center_tabs
-
-        self._viewport_widget = Viewport3D()
-        self._viewport_widget.stretch = True
-        self._viewport_widget.on_external_drag = self._on_viewport_external_drag
-        self._viewport_widget.on_external_drop = self._on_viewport_external_drop
-        center_tabs.add_tab("Editor", self._viewport_widget)
-
-        center_area.add_child(center_tabs)
-        main_area.add_child(center_area)
-
-        # --- Right panel: Inspector ---
-        right_scroll = ScrollArea()
-        self._right_scroll = right_scroll
-        right_scroll.preferred_width = px(430)
-        inspector_container = VStack()
-        inspector_container.spacing = 4
-        right_scroll.add_child(inspector_container)
-        self._right_splitter = Splitter(target=right_scroll, side="left")
-        main_area.add_child(self._right_splitter)
-        main_area.add_child(right_scroll)
-
-        # --- Debug panel: Profiler / Modules (right of inspector, hidden) ---
-        from termin.editor_tcgui.profiler_panel import ProfilerPanel
-        from termin.editor_tcgui.modules_panel import ModulesPanel
-
-        debug_panel = TabView()
-        debug_panel.preferred_width = px(350)
-        debug_panel.visible = False
-        self._debug_panel = debug_panel
-
-        self._profiler_panel = ProfilerPanel()
-        debug_panel.add_tab("Profiler", self._profiler_panel)
-
-        self._modules_panel = ModulesPanel()
-        debug_panel.add_tab("Modules", self._modules_panel)
-
-        self._debug_splitter = Splitter(target=debug_panel, side="left")
-        self._debug_splitter.visible = False
-        main_area.add_child(self._debug_splitter)
-        main_area.add_child(debug_panel)
-
-        root.add_child(main_area)
-
-        # --- Bottom: TabView [Project | Console] ---
-        bottom_tabs = TabView()
-        self._bottom_tabs = bottom_tabs
-        bottom_tabs.preferred_height = px(380)
-        self._bottom_splitter = Splitter(target=bottom_tabs, side="top")
-        root.add_child(self._bottom_splitter)
-
-        from tcgui.widgets.hstack import HStack as HStackInner
-        from tcgui.widgets.vstack import VStack as VStackInner
-        from tcgui.widgets.tree import TreeWidget as TreeWidgetInner
-        from tcgui.widgets.file_grid_widget import FileGridWidget
-        from tcgui.widgets.units import px as pxu
-
-        project_tab_content = HStackInner()
-        project_tab_content.spacing = 0
-        project_tab_content.stretch = True
-
-        project_dir_tree = TreeWidgetInner()
-        project_dir_tree.preferred_width = pxu(200)
-        project_dir_tree.stretch = True
-
-        from tcgui.widgets.splitter import Splitter as SplitterInner
-        from tcgui.widgets.scroll_area import ScrollArea as ScrollAreaInner
-
-        dir_tree_scroll = ScrollAreaInner()
-        dir_tree_scroll.preferred_width = pxu(200)
-        dir_tree_scroll.add_child(project_dir_tree)
-
-        project_file_list = FileGridWidget()
-        project_file_list.stretch = True
-        project_file_list.preferred_height = pxu(0)
-        project_file_list.empty_text = "Select a directory"
-
-        project_file_column = VStackInner()
-        project_file_column.stretch = True
-        project_file_column.spacing = 4
-
-        project_breadcrumb = HStackInner()
-        project_breadcrumb.preferred_height = pxu(24)
-        project_breadcrumb.spacing = 2
-
-        project_file_column.add_child(project_breadcrumb)
-        project_file_column.add_child(project_file_list)
-
-        project_tab_content.add_child(dir_tree_scroll)
-        project_tab_content.add_child(SplitterInner(target=dir_tree_scroll, side="right"))
-        project_tab_content.add_child(project_file_column)
-
-        bottom_tabs.add_tab("Project", project_tab_content)
-
-        self._console_area = TextArea()
-        self._console_area.read_only = True
-        bottom_tabs.add_tab("Console", self._console_area)
-        root.add_child(bottom_tabs)
-
-        # --- Status bar ---
-        self._status_bar = StatusBar()
-        root.add_child(self._status_bar)
-
-        ui.root = root
+        ui.root = widgets.root
 
         # Setup FBO surface and Viewport3D
         self._setup_viewport()
@@ -560,7 +377,7 @@ class EditorWindowTcgui:
 
         # Setup scene tree controller
         self.scene_tree_controller = SceneTreeControllerTcgui(
-            tree_widget=scene_tree,
+            tree_widget=widgets.scene_tree,
             scene=self.scene,
             undo_handler=self.push_undo_command,
             dialog_service=self._dialog_service,
@@ -570,7 +387,7 @@ class EditorWindowTcgui:
 
         # Setup inspector controller
         self._inspector_controller = InspectorControllerTcgui(
-            container=inspector_container,
+            container=widgets.inspector_container,
             resource_manager=self.resource_manager,
             push_undo_command=self.push_undo_command,
             on_transform_changed=self._on_inspector_transform_changed,
@@ -597,9 +414,9 @@ class EditorWindowTcgui:
 
         # Setup project browser
         self._project_browser = ProjectBrowserTcgui(
-            dir_tree=project_dir_tree,
-            file_list=project_file_list,
-            breadcrumb=project_breadcrumb,
+            dir_tree=widgets.project_dir_tree,
+            file_list=widgets.project_file_list,
+            breadcrumb=widgets.project_breadcrumb,
             dialog_service=self._dialog_service,
             on_file_activated=self._on_project_file_activated,
             on_file_selected=self._on_project_file_selected,
@@ -683,8 +500,8 @@ class EditorWindowTcgui:
         self._on_rendering_changed()
 
         # Setup menu bar (after scene tree and inspector are ready)
-        self._setup_menu_bar(menu_bar)
-        menu_bar.register_shortcuts(ui)
+        self._setup_menu_bar(widgets.menu_bar)
+        widgets.menu_bar.register_shortcuts(ui)
 
         # Load settings and last scene
         EditorSettings.instance().init_text_editor_if_empty()
