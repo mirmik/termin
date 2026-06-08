@@ -48,6 +48,7 @@ toward the bind-by-name plan without changing the package shape later.
 | UUID | Name | Stage | Language | Source |
 |---|---|---|---|---|
 | `termin-engine-fsq` | `FullscreenQuadEngineVS` | vertex | Slang | `builtin_shaders/termin-engine-fsq.vert.slang` |
+| `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-grayscale.frag.glsl` |
 | `termin-engine-bloom-bright` | `BloomBrightFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-bright.frag.glsl` |
 | `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-downsample.frag.glsl` |
 | `termin-engine-bloom-upsample` | `BloomUpsampleFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-upsample.frag.glsl` |

@@ -167,6 +167,12 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert "TonemapParams" in tonemap_source
     assert "u_input" in tonemap_source
 
+    grayscale_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-engine-grayscale.frag.glsl"
+    ).read_text(encoding="utf-8")
+    assert "GrayscaleParams" in grayscale_source
+    assert "u_input" in grayscale_source
+
     tonemap_layout = json.loads(
         (
             result.package_dir
@@ -182,6 +188,22 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         "kind": "combined_sampler2d",
         "legacy_binding": 4,
     } in tonemap_layout["resources"]
+
+    grayscale_layout = json.loads(
+        (
+            result.package_dir
+            / "shaders"
+            / "layout"
+            / "termin-engine-grayscale.shader-layout.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert grayscale_layout["binding_model"] == "legacy_numeric_bridge"
+    assert {
+        "name": "u_input",
+        "logical_name": "input_texture",
+        "kind": "combined_sampler2d",
+        "legacy_binding": 4,
+    } in grayscale_layout["resources"]
 
 
 def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
