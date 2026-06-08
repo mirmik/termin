@@ -398,6 +398,9 @@ Status:
   logical resource metadata and explicit `legacy_binding` values. They are not
   migrated to Slang yet because their texture resources still depend on the
   current numeric binding bridge.
+- `BloomPass` and `TonemapPass` now register their live fragment shaders from
+  the built-in shader resource files, so editor/runtime draws and package
+  artifact generation consume the same source files.
 
 ## Phase 8: D3D11 Artifact Preparation
 
