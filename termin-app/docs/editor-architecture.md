@@ -74,10 +74,13 @@ UI-agnostic слой. Модели состояния + сервисы.
 - `debug_panel_controller.py` — Profiler/Modules panel visibility and throttled refresh.
 - `fullscreen_controller.py` — сохранение/восстановление visibility состояния панелей fullscreen mode.
 - `prefab_toolbar_controller.py` — presentation state toolbar-а prefab editing.
+- `game_mode_ui_controller.py` — presentation state Play/Pause buttons, game-mode status и menu action sync.
 - `resource_actions_controller.py` — material/components file loading, stdlib deploy, `.spec` to `.meta` migration.
 - `editor_dialog_launcher.py` — запуск settings/viewer/debugger/pipeline диалогов и хранение их view-specific state.
 - `component_extension_panel_controller.py` — lifecycle component editor extensions и их inspector/left-tab panels.
 - `project_file_action_controller.py` — dispatch активации/выбора файлов project browser к scene/prefab/inspector/text editor actions.
+- `viewport_geometry_controller.py` — viewport drag/drop, picking ray/plane helpers и world↔screen projection.
+- `editor_interaction_coordinator.py` — undo/redo, selection↔tree/inspector sync, gizmo target и viewport event dispatch.
 - `viewport_list_widget.py` — tcgui TreeWidget + toolbar; Signal-based API через `editor_core.Signal`.
 - `editor_window.py`
 
