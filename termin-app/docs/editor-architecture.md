@@ -74,6 +74,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 - `debug_panel_controller.py` — Profiler/Modules panel visibility and throttled refresh.
 - `fullscreen_controller.py` — сохранение/восстановление visibility состояния панелей fullscreen mode.
 - `prefab_toolbar_controller.py` — presentation state toolbar-а prefab editing.
+- `resource_actions_controller.py` — material/components file loading, stdlib deploy, `.spec` to `.meta` migration.
 - `viewport_list_widget.py` — tcgui TreeWidget + toolbar; Signal-based API через `editor_core.Signal`.
 - `editor_window.py`
 
