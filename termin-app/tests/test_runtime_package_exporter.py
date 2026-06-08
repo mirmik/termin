@@ -161,6 +161,12 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert "POSITION" in fsq_source
     assert "TEXCOORD0" in fsq_source
 
+    shadow_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-engine-shadow.vert.glsl"
+    ).read_text(encoding="utf-8")
+    assert "PerFrame" in shadow_source
+    assert "ShadowPushBlock" in shadow_source
+
     tonemap_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-engine-tonemap.frag.glsl"
     ).read_text(encoding="utf-8")
@@ -204,6 +210,22 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         "kind": "combined_sampler2d",
         "legacy_binding": 4,
     } in grayscale_layout["resources"]
+
+    shadow_layout = json.loads(
+        (
+            result.package_dir
+            / "shaders"
+            / "layout"
+            / "termin-engine-shadow.shader-layout.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert shadow_layout["binding_model"] == "legacy_numeric_bridge"
+    assert {
+        "name": "ShadowPushBlock",
+        "logical_name": "push_constants",
+        "kind": "push_constant",
+        "legacy_binding": 14,
+    } in shadow_layout["resources"]
 
 
 def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:

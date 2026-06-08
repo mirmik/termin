@@ -1,4 +1,5 @@
 #include "termin/render/shadow_pass.hpp"
+#include "builtin_shader_sources.hpp"
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 #include "termin/camera/camera_component.hpp"
@@ -28,6 +29,8 @@ extern "C" {
 namespace termin {
 
 constexpr const char* SHADOW_ENGINE_SHADER_UUID = "termin-engine-shadow";
+constexpr const char* SHADOW_VERTEX_SOURCE_FILE = "termin-engine-shadow.vert.glsl";
+constexpr const char* SHADOW_FRAGMENT_SOURCE_FILE = "termin-engine-shadow.frag.glsl";
 
 namespace {
 
@@ -50,40 +53,6 @@ struct ShadowPushStd140 {
 };
 static_assert(sizeof(ShadowPushStd140) == 64,
               "ShadowPushStd140 must be mat4");
-
-// Per-frame view+proj on binding 0 (UBO set from ctx2 per cascade).
-// Per-object model matrix rides push_constants on Vulkan / std140 UBO at
-// slot 14 on GL (tgfx2's emulation ring). Same `ShadowPushData` struct
-// on both sides, so the CPU packer doesn't need to fork.
-constexpr const char* SHADOW_VS_UBO = R"(#version 450 core
-layout(location = 0) in vec3 a_position;
-
-layout(std140, binding = 0) uniform PerFrame {
-    mat4 u_view;
-    mat4 u_projection;
-};
-
-struct ShadowPushData {
-    mat4 u_model;
-};
-#ifdef VULKAN
-layout(push_constant) uniform ShadowPushBlock { ShadowPushData pc; };
-#else
-layout(std140, binding = 14) uniform ShadowPushBlock { ShadowPushData pc; };
-#endif
-
-void main() {
-    vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
-    gl_Position = u_projection * u_view * world_pos;
-}
-)";
-
-constexpr const char* SHADOW_FS_UBO = R"(#version 450 core
-void main() {
-    // Depth-only pass: fragment shader output is irrelevant because
-    // the FBO has no color attachment.
-}
-)";
 
 } // anonymous namespace
 
@@ -128,11 +97,11 @@ void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
         // Process-lifetime engine shader: never destroyed (transient
         // TcShader wrappers from material phases / Python bindings
         // can't bounce ref_count through zero and take it down).
-        shadow_shader_handle_ = tc_shader_register_static_uuid(
-            SHADOW_VS_UBO, SHADOW_FS_UBO,
-            /*geometry=*/nullptr,
-            /*name=*/"ShadowEngineVSFS",
-            /*uuid=*/SHADOW_ENGINE_SHADER_UUID);
+        shadow_shader_handle_ = register_builtin_vertex_fragment_shader(
+            SHADOW_VERTEX_SOURCE_FILE,
+            SHADOW_FRAGMENT_SOURCE_FILE,
+            "ShadowEngineVSFS",
+            SHADOW_ENGINE_SHADER_UUID);
     }
 }
 
@@ -540,8 +509,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     tc_shader_handle_eq(dc.final_shader, shadow_shader_handle_);
 
                 // Both paths share the same push_constants + PerFrame UBO
-                // layout (the skinned variant is just SHADOW_VS_UBO with
-                // injected BoneBlock). Bias is applied receiver-side while
+                // layout (the skinned variant injects BoneBlock into the
+                // canonical shadow vertex source). Bias is applied receiver-side while
                 // sampling so the caster's projected XY footprint stays stable.
                 ShadowPushStd140 push{};
                 std::memcpy(push.u_model, model.data, sizeof(float) * 16);
