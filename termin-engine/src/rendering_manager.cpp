@@ -1,6 +1,10 @@
 // rendering_manager.cpp - Global rendering manager implementation
 #include "termin/render/rendering_manager.hpp"
+#include "default_pipeline_factory.hpp"
+#include "display_presenter.hpp"
 #include "rendering_manager_utils.hpp"
+#include "render_state_store.hpp"
+#include "scene_light_collector.hpp"
 #include "termin/render/scene_pipeline_template.hpp"
 #include "termin/render/render_camera.hpp"
 #include <termin/entity/entity.hpp>
@@ -12,7 +16,6 @@
 extern "C" {
 #include <tcbase/tc_log.h>
 #include "tc_profiler.h"
-#include "core/tc_light_capability.h"
 #include "core/tc_camera_capability.h"
 #include "core/tc_scene.h"
 #include "core/tc_scene_render_mount.h"
@@ -23,12 +26,9 @@ extern "C" {
 #include "render/tc_viewport_pool.h"
 #include "render/tc_viewport_input_manager.h"
 #include "render/tc_rendering_manager.h"
-#include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_render_target.h"
 #include "tgfx/resources/tc_texture_registry.h"
-#include "inspect/tc_inspect.h"
-#include "inspect/tc_inspect_pass_adapter.h"
 }
 
 // C++ header — must NOT be inside the extern "C" block above; otherwise
@@ -260,6 +260,7 @@ void RenderingManager::reset_for_testing() {
 }
 
 RenderingManager::RenderingManager() {
+    render_states_ = std::make_unique<rendering_manager_detail::RenderStateStore>();
     set_instance(this);
 }
 
@@ -483,122 +484,8 @@ size_t RenderingManager::recreate_scene_pipelines_for_asset(
     return rebound;
 }
 
-// Helper: create pass by type name, set pass_name and string fields via inspect
-static tc_pass* create_and_configure_pass(
-    const char* type_name,
-    const char* pass_name,
-    std::initializer_list<std::pair<const char*, const char*>> fields
-) {
-    if (!tc_pass_registry_has(type_name)) {
-        tc_log(TC_LOG_WARN, "[make_default_pipeline] Pass type is not registered: '%s'", type_name);
-        return nullptr;
-    }
-    tc_pass* pass = tc_pass_registry_create(type_name);
-    if (!pass) {
-        tc_log(TC_LOG_WARN, "[make_default_pipeline] Failed to create pass '%s'", type_name);
-        return nullptr;
-    }
-    tc_pass_set_name(pass, pass_name);
-    for (auto& [field, value] : fields) {
-        tc_value v = tc_value_string(value);
-        tc_pass_inspect_set(pass, field, v, nullptr);
-        tc_value_free(&v);
-    }
-    return pass;
-}
-
 tc_pipeline_handle RenderingManager::make_default_pipeline() {
-    tc_pipeline_handle ph = tc_pipeline_create("Default");
-    RenderPipeline pipeline(ph);
-
-    // 1. ShadowPass
-    if (tc_pass* p = create_and_configure_pass("ShadowPass", "Shadow", {
-            {"output_res", "shadow_maps"}
-        })) {
-        tc_pipeline_add_pass(ph, p);
-    }
-
-    // 2. SkyBoxPass
-    if (tc_pass* p = create_and_configure_pass("SkyBoxPass", "Skybox", {
-            {"input_res", "empty"},
-            {"output_res", "skybox"}
-        })) {
-        tc_pipeline_add_pass(ph, p);
-    }
-
-    // 3. ColorPass (opaque)
-    if (tc_pass* p = create_and_configure_pass("ColorPass", "Color", {
-            {"input_res", "skybox"},
-            {"output_res", "color_opaque"},
-            {"shadow_res", "shadow_maps"},
-            {"phase_mark", "opaque"}
-        })) {
-        tc_pipeline_add_pass(ph, p);
-    }
-
-    // 4. ColorPass (transparent)
-    if (tc_pass* p = create_and_configure_pass("ColorPass", "Transparent", {
-            {"input_res", "color_opaque"},
-            {"output_res", "color"},
-            {"shadow_res", ""},
-            {"phase_mark", "transparent"},
-            {"sort_mode", "far_to_near"}
-        })) {
-        tc_pipeline_add_pass(ph, p);
-    }
-
-    if (tc_pass* p = create_and_configure_pass("ResolvePass", "Resolve", {
-        {"input_res", "color"},
-        {"output_res", "color_resolved"},
-    })) {
-        tc_pipeline_add_pass(ph, p);
-    }
-
-    if (tc_pass* p = create_and_configure_pass("BloomPass", "Bloom", {
-        {"input_res", "color_resolved"},
-        {"output_res", "color_bloom"},
-    })) {
-        tc_pipeline_add_pass(ph, p);
-    }
-
-    // 5. UIWidgetPass
-    if (tc_pass* p = create_and_configure_pass("UIWidgetPass", "UIWidgets", {
-            {"input_res", "color_bloom"},
-            {"output_res", "color+widgets"}
-        })) {
-        tc_pipeline_add_pass(ph, p);
-    }
-
-    // 7. PresentToScreenPass
-    if (tc_pass* p = create_and_configure_pass("PresentToScreenPass", "Present", {
-            {"input_res", "color+widgets"}
-        })) {
-        tc_pipeline_add_pass(ph, p);
-    }
-
-    const char* color_resources[] = {
-        "empty",
-        "skybox",
-        "color_opaque",
-        "color",
-        "color_resolved",
-        "color_bloom",
-        "color+widgets",
-    };
-    for (const char* resource : color_resources) {
-        ResourceSpec spec;
-        spec.resource = resource;
-        spec.format = "render_target";
-        if (std::string(resource) == "empty" ||
-            std::string(resource) == "skybox" ||
-            std::string(resource) == "color_opaque" ||
-            std::string(resource) == "color") {
-            spec.samples = 4;
-        }
-        pipeline.add_spec(spec);
-    }
-
-    return ph;
+    return rendering_manager_detail::make_default_pipeline();
 }
 
 void RenderingManager::set_display_removed_callback(DisplayRemovedCallback callback) {
@@ -831,12 +718,7 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
         }
 
         if (tc_render_target_handle_valid(rt) && !registered_managed && !still_referenced) {
-            uint64_t rt_key = render_target_key(rt);
-            auto rt_it = render_target_states_.find(rt_key);
-            if (rt_it != render_target_states_.end()) {
-                rt_it->second->clear_all();
-                render_target_states_.erase(rt_it);
-            }
+            render_states_->remove_render_target_state(rt, make_current_callback_);
             tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
             if (tc_pipeline_handle_valid(pipeline)) {
                 tc_render_target_set_pipeline(rt, TC_PIPELINE_HANDLE_INVALID);
@@ -1052,12 +934,7 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene) {
     }
     for (tc_render_target_handle rt : to_free) {
         unregister_managed_render_target(rt);
-        uint64_t rt_key = render_target_key(rt);
-        auto rt_it = render_target_states_.find(rt_key);
-        if (rt_it != render_target_states_.end()) {
-            rt_it->second->clear_all();
-            render_target_states_.erase(rt_it);
-        }
+        render_states_->remove_render_target_state(rt, make_current_callback_);
         tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
         if (tc_pipeline_handle_valid(pipeline)) {
             tc_render_target_set_pipeline(rt, TC_PIPELINE_HANDLE_INVALID);
@@ -1157,34 +1034,15 @@ std::unordered_map<std::string, tc_viewport_handle> RenderingManager::collect_al
 // ============================================================================
 
 ViewportRenderState* RenderingManager::get_viewport_state(tc_viewport_handle viewport) {
-    if (!tc_viewport_handle_valid(viewport)) return nullptr;
-    uint64_t key = viewport_key(viewport);
-    auto it = viewport_states_.find(key);
-    return (it != viewport_states_.end()) ? it->second.get() : nullptr;
+    return render_states_->get_viewport_state(viewport);
 }
 
 ViewportRenderState* RenderingManager::get_or_create_viewport_state(tc_viewport_handle viewport) {
-    if (!tc_viewport_handle_valid(viewport)) return nullptr;
-    uint64_t key = viewport_key(viewport);
-    auto& state = viewport_states_[key];
-    if (!state) {
-        state = std::make_unique<ViewportRenderState>();
-    }
-    return state.get();
+    return render_states_->get_or_create_viewport_state(viewport);
 }
 
 void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
-    if (!tc_viewport_handle_valid(viewport)) return;
-    uint64_t key = viewport_key(viewport);
-    auto it = viewport_states_.find(key);
-    if (it != viewport_states_.end()) {
-        // Ensure the host context is current before deleting device resources.
-        if (make_current_callback_) {
-            make_current_callback_();
-        }
-        it->second->clear_all();
-        viewport_states_.erase(it);
-    }
+    render_states_->remove_viewport_state(viewport, make_current_callback_);
 }
 
 // ============================================================================
@@ -1192,18 +1050,11 @@ void RenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
 // ============================================================================
 
 ViewportRenderState* RenderingManager::get_render_target_state(tc_render_target_handle rt) {
-    uint64_t key = render_target_key(rt);
-    auto it = render_target_states_.find(key);
-    return it != render_target_states_.end() ? it->second.get() : nullptr;
+    return render_states_->get_render_target_state(rt);
 }
 
 ViewportRenderState* RenderingManager::get_or_create_render_target_state(tc_render_target_handle rt) {
-    uint64_t key = render_target_key(rt);
-    auto it = render_target_states_.find(key);
-    if (it != render_target_states_.end()) return it->second.get();
-    auto& state = render_target_states_[key];
-    state = std::make_unique<ViewportRenderState>();
-    return state.get();
+    return render_states_->get_or_create_render_target_state(rt);
 }
 
 // ============================================================================
@@ -1781,132 +1632,7 @@ void RenderingManager::present_all() {
 }
 
 void RenderingManager::present_display(tc_display* display) {
-    if (!display) return;
-    bool profile = tc_profiler_enabled();
-    if (profile) tc_profiler_begin_section("Present Display");
-
-    tc_render_surface* surface = tc_display_get_surface(display);
-    if (!surface) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] present_display: surface is null");
-        if (profile) tc_profiler_end_section();
-        return;
-    }
-
-    // Make display context current; tgfx2 resources are owned by IRenderDevice.
-    tc_render_surface_make_current(surface);
-
-    int width, height;
-    tc_render_surface_get_size(surface, &width, &height);
-    if (width <= 0 || height <= 0) {
-        if (profile) tc_profiler_end_section();
-        return;
-    }
-
-    // Backend-neutral composite target. Surfaces must expose a tgfx2
-    // TextureHandle; raw FBO presentation is intentionally not supported
-    // through tgfx2 anymore.
-    tgfx::TextureHandle display_color_tex{
-        tc_render_surface_get_tgfx_color_tex_id(surface)
-    };
-    if (!display_color_tex) {
-        tc_log(TC_LOG_ERROR,
-               "[RenderingManager] present_display: render surface has no tgfx2 color texture target");
-        if (profile) tc_profiler_end_section();
-        return;
-    }
-
-    RenderEngine* engine = render_engine();
-    if (engine) {
-        engine->ensure_tgfx2();
-    }
-    tgfx::IRenderDevice* dev = engine ? engine->tgfx2_device() : nullptr;
-    if (!dev) {
-        tc_log(TC_LOG_WARN, "[RenderingManager] present_display: tgfx2 device not available");
-        if (profile) tc_profiler_end_section();
-        return;
-    }
-
-    if (profile) tc_profiler_begin_section("Present Clear");
-    dev->clear_texture(
-        display_color_tex,
-        0.1f, 0.1f, 0.1f, 1.0f,
-        0, 0, width, height
-    );
-    if (profile) tc_profiler_end_section();
-
-    // Collect viewports sorted by depth
-    if (profile) tc_profiler_begin_section("Present Collect Viewports");
-    std::vector<tc_viewport_handle> viewports;
-    tc_viewport_handle vp = tc_display_get_first_viewport(display);
-    while (tc_viewport_handle_valid(vp)) {
-        if (tc_viewport_get_enabled(vp)) {
-            viewports.push_back(vp);
-        }
-        vp = tc_viewport_get_display_next(vp);
-    }
-    std::sort(viewports.begin(), viewports.end(), [](tc_viewport_handle a, tc_viewport_handle b) {
-        return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
-    });
-    if (profile) tc_profiler_end_section();
-
-    // Blit viewports
-    if (profile) tc_profiler_begin_section("Present Blit Viewports");
-    for (tc_viewport_handle viewport : viewports) {
-        tc_viewport_update_pixel_rect(viewport, width, height);
-
-        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
-
-        tgfx::TextureHandle src_color{};
-        int src_w = 0, src_h = 0;
-
-        if (tc_render_target_handle_valid(rt)) {
-            if (!tc_render_target_get_enabled(rt)) {
-                continue;
-            }
-            if (tc_render_target_get_kind(rt) != TC_RENDER_TARGET_TEXTURE_2D) {
-                continue;
-            }
-            // RT-owned tc_texture (Phase 4). The render path has already
-            // ensure_textures'd these and rendered into them; here we
-            // just wrap them into a tgfx2 handle for the blit.
-            src_color = wrap_tc_texture_as_tgfx2(
-                *dev, tc_render_target_get_color_texture(rt));
-            src_w = tc_render_target_get_width(rt);
-            src_h = tc_render_target_get_height(rt);
-        } else {
-            // Legacy non-RT viewport: ViewportRenderState still owns
-            // its tgfx2 textures.
-            ViewportRenderState* state = get_viewport_state(viewport);
-            if (!state || !state->has_output()) {
-                continue;
-            }
-            src_color = state->output_color_tex;
-            src_w = state->output_width;
-            src_h = state->output_height;
-        }
-
-        if (!src_color || src_w == 0 || src_h == 0) {
-            continue;
-        }
-
-        // Get viewport position on display
-        int px, py, pw, ph;
-        tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
-
-        // Blit the viewport's color texture to the surface texture target.
-        dev->blit_to_texture(
-            display_color_tex, src_color,
-            0, 0, src_w, src_h,
-            px, py, pw, ph
-        );
-    }
-    if (profile) tc_profiler_end_section();
-
-    // Swap buffers
-    if (profile) tc_profiler_begin_section("Present Swap Buffers");
-    tc_render_surface_swap_buffers(surface);
-    if (profile) tc_profiler_end_section();
-    if (profile) tc_profiler_end_section();
+    rendering_manager_detail::present_display(*this, display);
 }
 
 // ============================================================================
@@ -1917,7 +1643,7 @@ void RenderingManager::attach_scene(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
 
     // Clear existing pipelines (without notify_render_detach — attach will notify attach)
-    clear_scene_pipelines(scene);
+    destroy_scene_pipelines(scene, false);
 
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
     size_t template_count = mount ? mount->pipeline_template_count : 0;
@@ -1958,7 +1684,7 @@ void RenderingManager::attach_scene(tc_scene_handle scene) {
 void RenderingManager::detach_scene(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
     tc_scene_notify_render_detach(scene);
-    clear_scene_pipelines(scene);
+    destroy_scene_pipelines(scene, false);
 
     auto it = std::find_if(attached_scenes_.begin(), attached_scenes_.end(),
         [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
@@ -2014,14 +1740,20 @@ std::vector<std::string> RenderingManager::get_pipeline_names(tc_scene_handle sc
 }
 
 void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
+    destroy_scene_pipelines(scene, true);
+}
+
+void RenderingManager::destroy_scene_pipelines(tc_scene_handle scene, bool notify_detach) {
     if (!tc_scene_handle_valid(scene)) return;
     uint64_t key = scene_key(scene);
 
     auto scene_it = scene_pipelines_.find(key);
     if (scene_it == scene_pipelines_.end()) return;
 
-    // Notify components that rendering is detaching (before destroying pipelines)
-    tc_scene_notify_render_detach(scene);
+    if (notify_detach) {
+        // Notify components that rendering is detaching (before destroying pipelines).
+        tc_scene_notify_render_detach(scene);
+    }
 
     // Remove pipeline targets for this scene's pipelines
     for (const auto& [name, ptr] : scene_it->second) {
@@ -2063,16 +1795,9 @@ void RenderingManager::clear_all_scene_pipelines() {
 // ============================================================================
 
 void RenderingManager::shutdown() {
-    // Ensure the host context is current before deleting device resources.
-    if (make_current_callback_) {
-        make_current_callback_();
+    if (render_states_) {
+        render_states_->clear_all(make_current_callback_);
     }
-
-    // Clear viewport states
-    for (auto& pair : viewport_states_) {
-        pair.second->clear_all();
-    }
-    viewport_states_.clear();
 
     // Clear managed render targets list (don't free — we don't own them)
     managed_render_targets_.clear();
@@ -2107,49 +1832,8 @@ void RenderingManager::shutdown() {
 // Helpers
 // ============================================================================
 
-// Light collection via capability system
-static bool collect_lights_cap_cb(tc_component* c, void* user_data) {
-    std::vector<Light>* lights = static_cast<std::vector<Light>*>(user_data);
-    const tc_light_capability* cap = tc_light_capability_get(c);
-    if (!cap || !cap->vtable || !cap->vtable->get_light_data) return true;
-
-    tc_light_data ld;
-    if (!cap->vtable->get_light_data(c, &ld)) return true;
-
-    Light light;
-    light.type = static_cast<LightType>(ld.type);
-    light.color = Vec3(ld.color[0], ld.color[1], ld.color[2]);
-    light.intensity = ld.intensity;
-    light.direction = Vec3(ld.direction[0], ld.direction[1], ld.direction[2]);
-    light.position = Vec3(ld.position[0], ld.position[1], ld.position[2]);
-    if (ld.has_range) light.range = ld.range;
-    light.inner_angle = ld.inner_angle;
-    light.outer_angle = ld.outer_angle;
-    light.shadows.enabled = ld.shadows.enabled;
-    light.shadows.bias = ld.shadows.bias;
-    light.shadows.normal_bias = ld.shadows.normal_bias;
-    light.shadows.map_resolution = ld.shadows.map_resolution;
-    light.shadows.cascade_count = ld.shadows.cascade_count;
-    light.shadows.max_distance = ld.shadows.max_distance;
-    light.shadows.split_lambda = ld.shadows.split_lambda;
-    light.shadows.cascade_blend = ld.shadows.cascade_blend;
-    light.shadows.blend_distance = ld.shadows.blend_distance;
-    lights->push_back(std::move(light));
-    return true;
-}
-
 std::vector<Light> RenderingManager::collect_lights(tc_scene_handle scene) {
-    std::vector<Light> lights;
-    if (!tc_scene_handle_valid(scene)) return lights;
-
-    tc_component_cap_id light_cap = tc_light_capability_id();
-    if (light_cap == TC_COMPONENT_CAPABILITY_INVALID_ID) return lights;
-
-    tc_scene_foreach_with_capability(
-        scene, light_cap, collect_lights_cap_cb, &lights,
-        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
-
-    return lights;
+    return rendering_manager_detail::collect_lights(scene);
 }
 
 } // namespace termin
