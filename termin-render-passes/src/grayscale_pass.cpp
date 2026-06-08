@@ -6,6 +6,7 @@
 #include <termin/render/grayscale_pass.hpp>
 #include "termin/render/execute_context.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
+#include "builtin_shader_sources.hpp"
 
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -22,28 +23,8 @@ extern "C" {
 
 namespace termin {
 
-// Backend-neutral: `#version 450 core` compiles directly on GL 4.3+ and
-// via shaderc for Vulkan. UBO at binding 0, sampler at binding 4 — matches
-// the shared descriptor set layout (UBO 0-3, COMBINED_IMAGE_SAMPLER 4-7).
-static const char* GRAYSCALE_FRAG_UBO = R"(
-#version 450 core
-layout(location=0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform GrayscaleParams {
-    float u_strength;
-};
-
-layout(binding = 4) uniform sampler2D u_input;
-
-layout(location=0) out vec4 FragColor;
-
-void main() {
-    vec3 color = texture(u_input, v_uv).rgb;
-    float gray = dot(color, vec3(0.2126, 0.7152, 0.0722));
-    vec3 result = mix(color, vec3(gray), u_strength);
-    FragColor = vec4(result, 1.0);
-}
-)";
+constexpr const char* GRAYSCALE_ENGINE_SHADER_UUID = "termin-engine-grayscale";
+constexpr const char* GRAYSCALE_FRAGMENT_SOURCE_FILE = "termin-engine-grayscale.frag.glsl";
 
 GrayscalePass::GrayscalePass(
     const std::string& input,
@@ -106,8 +87,9 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     // the shader is FS-only and vertex_source stays NULL).
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = tc_shader_register_static(
-            /*vertex=*/nullptr, GRAYSCALE_FRAG_UBO, nullptr, "GrayscaleEngineFS");
+        shader_handle_ = register_builtin_fragment_shader(
+            GRAYSCALE_FRAGMENT_SOURCE_FILE, "GrayscaleEngineFS", GRAYSCALE_ENGINE_SHADER_UUID);
+        if (tc_shader_handle_is_invalid(shader_handle_)) return;
     }
 
     if (!params_ubo_) {

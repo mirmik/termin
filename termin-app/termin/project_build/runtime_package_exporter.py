@@ -70,6 +70,7 @@ void main() {
 ENGINE_SKYBOX_SHADER_UUID = "termin-engine-skybox"
 ENGINE_FSQ_SHADER_UUID = "termin-engine-fsq"
 ENGINE_SHADOW_SHADER_UUID = "termin-engine-shadow"
+ENGINE_GRAYSCALE_SHADER_UUID = "termin-engine-grayscale"
 ENGINE_BLOOM_BRIGHT_SHADER_UUID = "termin-engine-bloom-bright"
 ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID = "termin-engine-bloom-downsample"
 ENGINE_BLOOM_UPSAMPLE_SHADER_UUID = "termin-engine-bloom-upsample"
@@ -620,6 +621,7 @@ def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
             vertex_source=ENGINE_SHADOW_VERTEX_SOURCE,
             fragment_source=ENGINE_SHADOW_FRAGMENT_SOURCE,
         ),
+        _builtin_engine_shader_artifact(ENGINE_GRAYSCALE_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_BLOOM_BRIGHT_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_BLOOM_UPSAMPLE_SHADER_UUID),
