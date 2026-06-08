@@ -378,13 +378,20 @@ Status:
   `shaders/vulkan/termin-engine-fsq.vert.spv`, sets
   `TERMIN_SHADER_ARTIFACT_ROOT`, and verifies that
   `RenderContext2::draw_fullscreen_quad()` consumes that artifact instead of
-  the built-in GLSL fallback. The test uses a deliberate UV override so the
-  readback pixel distinguishes the Slang artifact path from the legacy shader.
+  the built-in GLSL fallback. The test compiles the canonical built-in FSQ
+  Slang source and validates the expected center UV output.
 - This proves the smallest built-in path works through
   `slangc -> termin_shaderc -> Vulkan SPIR-V -> RenderContext2 artifact load`.
-  The next step is to replace the test-only FSQ Slang source with a canonical
-  engine FSQ Slang source and wire artifact generation from the build/package
-  layer.
+  The first canonical source/export wiring now follows the same path.
+- Added a built-in shader catalog contract in `docs/builtin-shader-catalog.md`.
+  Runtime metadata for the first entry lives in
+  `tgfx2/engine_shader_catalog.hpp`, and the canonical FSQ Slang source lives
+  under `termin-graphics/resources/builtin_shaders/`.
+- Runtime package export now treats the FSQ built-in as a Slang engine shader:
+  it writes the `.slang` source snapshot, generates Vulkan SPIR-V, and also
+  generates the OpenGL GLSL artifact for that stage.
+- The Vulkan smoke now compiles the canonical FSQ Slang source instead of a
+  test-only source string.
 
 ## Phase 8: D3D11 Artifact Preparation
 
@@ -404,16 +411,18 @@ Acceptance:
 
 ## Immediate Next Steps
 
-1. Wire the editor to configure `termin-graphics` shader runtime paths on
-   project open and enable dev compilation only for editor/dev sessions.
-2. Promote the FSQ Slang source from test-only smoke coverage into a canonical
-   built-in shader source and decide where built-in engine shader artifacts are
-   generated for SDK/runtime packages.
-3. Migrate the fullscreen/present fragment path after the FSQ vertex source has
-   a canonical artifact producer.
-4. Decide later how generated Slang OpenGL artifacts should target the existing
+1. Move the fullscreen/present fragment path into the built-in shader catalog
+   and generate artifacts from the same source path as FSQ.
+2. Migrate simple post-process built-ins through the catalog:
+   grayscale, tonemap, then bloom stages.
+3. Replace remaining runtime exporter inline engine shader strings with catalog
+   entries as each source migrates.
+4. Define the Slang-native material ABI before enabling `@property` on Slang
+   `.shader` files: generated `MaterialParams : register(b1)`, texture register
+   mapping, and include/module support in `termin_shaderc`.
+5. Decide later how generated Slang OpenGL artifacts should target the existing
    GL smoke environment: request a GL 4.5 context, lower Slang GLSL output if
    the toolchain supports it, or keep OpenGL generated-artifact rendering as a
    separate higher-requirement smoke.
-5. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
+6. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
    Linux-side generation and runtime-consumption contract.
