@@ -69,6 +69,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 - `scene_file_controller.py` — scene new/save/load/close и валидация scene path относительно проекта.
 - `project_session_controller.py` — open/restore project, shader runtime setup, project modules, `InitScript.py`.
 - `project_build_controller.py` — run standalone, build package, Android/Quest build entry preparation.
+- `editor_window_layout.py` — создание widget tree главного окна без wiring контроллеров.
 - `viewport_list_widget.py` — tcgui TreeWidget + toolbar; Signal-based API через `editor_core.Signal`.
 - `editor_window.py`
 
