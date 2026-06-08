@@ -394,14 +394,15 @@ Status:
   test-only source string.
 - The FSQ Slang source now relies on Slang/HLSL semantics rather than
   `[[vk::location]]`, keeping the source backend-neutral for this safe stage.
-- Shadow, grayscale, bloom, and tonemap built-ins are now catalog-managed GLSL
-  sources with logical resource metadata and explicit `legacy_binding` values.
-  They are not migrated to Slang yet because texture resources and the current
-  GL push-constant bridge still depend on numeric binding slots.
-- `ShadowPass`, `GrayscalePass`, `BloomPass`, and `TonemapPass` now register
-  their live shaders from the built-in shader resource files, so
-  editor/runtime draws and package artifact generation consume the same source
-  files.
+- Shadow, debug triangle, grayscale, bloom, and tonemap built-ins are now
+  catalog-managed GLSL sources. The resource-using entries carry logical
+  resource metadata and explicit `legacy_binding` values. They are not migrated
+  to Slang yet because texture resources and the current GL push-constant
+  bridge still depend on numeric binding slots.
+- `ShadowPass`, `DebugTrianglePass`, `GrayscalePass`, `BloomPass`, and
+  `TonemapPass` now register their live shaders from the built-in shader
+  resource files, so editor/runtime draws and package artifact generation
+  consume the same source files.
 
 ## Phase 8: D3D11 Artifact Preparation
 

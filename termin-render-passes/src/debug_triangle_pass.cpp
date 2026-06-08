@@ -1,6 +1,7 @@
 // debug_triangle_pass.cpp - Built-in pass that draws a diagnostic triangle.
 #include <termin/render/debug_triangle_pass.hpp>
 
+#include "builtin_shader_sources.hpp"
 #include "termin/render/execute_context.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -15,34 +16,11 @@ extern "C" {
 
 namespace termin {
 
-namespace {
-
-const char* DEBUG_TRIANGLE_VERT = R"(
-#version 450 core
-
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec4 a_color;
-
-layout(location = 0) out vec4 v_color;
-
-void main() {
-    v_color = a_color;
-    gl_Position = vec4(a_position, 1.0);
-}
-)";
-
-const char* DEBUG_TRIANGLE_FRAG = R"(
-#version 450 core
-
-layout(location = 0) in vec4 v_color;
-layout(location = 0) out vec4 fragColor;
-
-void main() {
-    fragColor = v_color;
-}
-)";
-
-} // namespace
+constexpr const char* DEBUG_TRIANGLE_ENGINE_SHADER_UUID = "termin-engine-debug-triangle";
+constexpr const char* DEBUG_TRIANGLE_VERTEX_SOURCE_FILE =
+    "termin-engine-debug-triangle.vert.glsl";
+constexpr const char* DEBUG_TRIANGLE_FRAGMENT_SOURCE_FILE =
+    "termin-engine-debug-triangle.frag.glsl";
 
 DebugTrianglePass::DebugTrianglePass(
     const std::string& output,
@@ -81,8 +59,12 @@ void DebugTrianglePass::execute(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = tc_shader_register_static(
-            DEBUG_TRIANGLE_VERT, DEBUG_TRIANGLE_FRAG, nullptr, "DebugTrianglePassVSFS");
+        shader_handle_ = register_builtin_vertex_fragment_shader(
+            DEBUG_TRIANGLE_VERTEX_SOURCE_FILE,
+            DEBUG_TRIANGLE_FRAGMENT_SOURCE_FILE,
+            "DebugTrianglePassVSFS",
+            DEBUG_TRIANGLE_ENGINE_SHADER_UUID);
+        if (tc_shader_handle_is_invalid(shader_handle_)) return;
     }
 
     tgfx::ShaderHandle vs;
