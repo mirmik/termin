@@ -392,6 +392,12 @@ Status:
   generates the OpenGL GLSL artifact for that stage.
 - The Vulkan smoke now compiles the canonical FSQ Slang source instead of a
   test-only source string.
+- The FSQ Slang source now relies on Slang/HLSL semantics rather than
+  `[[vk::location]]`, keeping the source backend-neutral for this safe stage.
+- Bloom and tonemap built-ins are now catalog-managed GLSL sources with
+  logical resource metadata and explicit `legacy_binding` values. They are not
+  migrated to Slang yet because their texture resources still depend on the
+  current numeric binding bridge.
 
 ## Phase 8: D3D11 Artifact Preparation
 
@@ -413,8 +419,8 @@ Acceptance:
 
 1. Move the fullscreen/present fragment path into the built-in shader catalog
    and generate artifacts from the same source path as FSQ.
-2. Migrate simple post-process built-ins through the catalog:
-   grayscale, tonemap, then bloom stages.
+2. Keep texture-using post-process built-ins catalog-managed as GLSL until the
+   bind-by-name/runtime layout plan can carry their resource metadata.
 3. Replace remaining runtime exporter inline engine shader strings with catalog
    entries as each source migrates.
 4. Define the Slang-native material ABI before enabling `@property` on Slang

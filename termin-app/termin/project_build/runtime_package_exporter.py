@@ -164,158 +164,6 @@ void main() {
 """
 
 
-ENGINE_BLOOM_BRIGHT_FRAGMENT_SOURCE = """#version 450 core
-layout(location = 0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform BloomBrightParams {
-    float u_threshold;
-    float u_soft_threshold;
-};
-
-layout(binding = 4) uniform sampler2D u_texture;
-
-layout(location = 0) out vec4 FragColor;
-
-void main() {
-    vec3 color = texture(u_texture, v_uv).rgb;
-    float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
-    float knee = u_threshold * u_soft_threshold;
-    float soft = brightness - u_threshold + knee;
-    soft = clamp(soft, 0.0, 2.0 * knee);
-    soft = soft * soft / (4.0 * knee + 0.00001);
-    float contribution = max(soft, brightness - u_threshold) / max(brightness, 0.00001);
-    contribution = max(contribution, 0.0);
-    FragColor = vec4(color * contribution, 1.0);
-}
-"""
-
-
-ENGINE_BLOOM_DOWNSAMPLE_FRAGMENT_SOURCE = """#version 450 core
-layout(location = 0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform BloomDownsampleParams {
-    vec2 u_texel_size;
-};
-
-layout(binding = 4) uniform sampler2D u_texture;
-
-layout(location = 0) out vec4 FragColor;
-
-void main() {
-    vec2 ts = u_texel_size;
-    vec3 a = texture(u_texture, v_uv + vec2(-2.0, -2.0) * ts).rgb;
-    vec3 b = texture(u_texture, v_uv + vec2( 0.0, -2.0) * ts).rgb;
-    vec3 c = texture(u_texture, v_uv + vec2( 2.0, -2.0) * ts).rgb;
-    vec3 d = texture(u_texture, v_uv + vec2(-2.0,  0.0) * ts).rgb;
-    vec3 e = texture(u_texture, v_uv + vec2( 0.0,  0.0) * ts).rgb;
-    vec3 f = texture(u_texture, v_uv + vec2( 2.0,  0.0) * ts).rgb;
-    vec3 g = texture(u_texture, v_uv + vec2(-2.0,  2.0) * ts).rgb;
-    vec3 h = texture(u_texture, v_uv + vec2( 0.0,  2.0) * ts).rgb;
-    vec3 i = texture(u_texture, v_uv + vec2( 2.0,  2.0) * ts).rgb;
-    vec3 j = texture(u_texture, v_uv + vec2(-1.0, -1.0) * ts).rgb;
-    vec3 k = texture(u_texture, v_uv + vec2( 1.0, -1.0) * ts).rgb;
-    vec3 l = texture(u_texture, v_uv + vec2(-1.0,  1.0) * ts).rgb;
-    vec3 m = texture(u_texture, v_uv + vec2( 1.0,  1.0) * ts).rgb;
-    vec3 result = e * 0.125;
-    result += (a + c + g + i) * 0.03125;
-    result += (b + d + f + h) * 0.0625;
-    result += (j + k + l + m) * 0.125;
-    FragColor = vec4(result, 1.0);
-}
-"""
-
-
-ENGINE_BLOOM_UPSAMPLE_FRAGMENT_SOURCE = """#version 450 core
-layout(location = 0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform BloomUpsampleParams {
-    vec2 u_texel_size;
-    float u_blend_factor;
-};
-
-layout(binding = 4) uniform sampler2D u_texture;
-
-layout(location = 0) out vec4 FragColor;
-
-void main() {
-    vec2 ts = u_texel_size;
-    vec3 a = texture(u_texture, v_uv + vec2(-1.0, -1.0) * ts).rgb;
-    vec3 b = texture(u_texture, v_uv + vec2( 0.0, -1.0) * ts).rgb;
-    vec3 c = texture(u_texture, v_uv + vec2( 1.0, -1.0) * ts).rgb;
-    vec3 d = texture(u_texture, v_uv + vec2(-1.0,  0.0) * ts).rgb;
-    vec3 e = texture(u_texture, v_uv + vec2( 0.0,  0.0) * ts).rgb;
-    vec3 f = texture(u_texture, v_uv + vec2( 1.0,  0.0) * ts).rgb;
-    vec3 g = texture(u_texture, v_uv + vec2(-1.0,  1.0) * ts).rgb;
-    vec3 h = texture(u_texture, v_uv + vec2( 0.0,  1.0) * ts).rgb;
-    vec3 i = texture(u_texture, v_uv + vec2( 1.0,  1.0) * ts).rgb;
-    vec3 upsampled = e * 4.0;
-    upsampled += (b + d + f + h) * 2.0;
-    upsampled += (a + c + g + i);
-    upsampled /= 16.0;
-    FragColor = vec4(upsampled * u_blend_factor, 1.0);
-}
-"""
-
-
-ENGINE_BLOOM_COMPOSITE_FRAGMENT_SOURCE = """#version 450 core
-layout(location = 0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform BloomCompositeParams {
-    float u_intensity;
-};
-
-layout(binding = 4) uniform sampler2D u_original;
-layout(binding = 5) uniform sampler2D u_bloom;
-
-layout(location = 0) out vec4 FragColor;
-
-void main() {
-    vec3 original = texture(u_original, v_uv).rgb;
-    vec3 bloom = texture(u_bloom, v_uv).rgb;
-    vec3 result = original + bloom * u_intensity;
-    FragColor = vec4(result, 1.0);
-}
-"""
-
-
-ENGINE_TONEMAP_FRAGMENT_SOURCE = """#version 450 core
-layout(location=0) in vec2 v_uv;
-
-layout(std140, binding = 0) uniform TonemapParams {
-    float u_exposure;
-    int u_method;
-};
-
-layout(binding = 4) uniform sampler2D u_input;
-
-layout(location=0) out vec4 FragColor;
-
-vec3 aces_tonemap(vec3 x) {
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
-vec3 reinhard_tonemap(vec3 x) {
-    return x / (x + vec3(1.0));
-}
-
-void main() {
-    vec3 color = texture(u_input, v_uv).rgb;
-    color *= u_exposure;
-    if (u_method == 0) {
-        color = aces_tonemap(color);
-    } else if (u_method == 1) {
-        color = reinhard_tonemap(color);
-    }
-    FragColor = vec4(color, 1.0);
-}
-"""
-
-
 PLACEHOLDER_MESH_VERTICES = [
     0.0, 0.65, 0.0, 1.0, 0.05, 0.05,
     -0.75, -0.55, 0.0, 0.05, 1.0, 0.05,
@@ -737,6 +585,7 @@ class _EngineShaderArtifact:
     language: str = "glsl"
     vertex_source: str = ""
     fragment_source: str = ""
+    layout: dict[str, Any] = field(default_factory=dict)
 
 
 def _write_default_pipeline_shader_artifacts(
@@ -758,12 +607,7 @@ def _write_default_pipeline_shader_artifacts(
 def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
     skybox_vertex, skybox_fragment = _parse_skybox_engine_shader()
     return [
-        _EngineShaderArtifact(
-            uuid=ENGINE_FSQ_SHADER_UUID,
-            name="FullscreenQuadEngineVS",
-            language="slang",
-            vertex_source=_builtin_shader_source("termin-engine-fsq.vert.slang"),
-        ),
+        _builtin_engine_shader_artifact(ENGINE_FSQ_SHADER_UUID),
         _EngineShaderArtifact(
             uuid=ENGINE_SKYBOX_SHADER_UUID,
             name="SkyboxEngineVSFS",
@@ -776,32 +620,63 @@ def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
             vertex_source=ENGINE_SHADOW_VERTEX_SOURCE,
             fragment_source=ENGINE_SHADOW_FRAGMENT_SOURCE,
         ),
-        _EngineShaderArtifact(
-            uuid=ENGINE_BLOOM_BRIGHT_SHADER_UUID,
-            name="BloomBrightFS",
-            fragment_source=ENGINE_BLOOM_BRIGHT_FRAGMENT_SOURCE,
-        ),
-        _EngineShaderArtifact(
-            uuid=ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID,
-            name="BloomDownsampleFS",
-            fragment_source=ENGINE_BLOOM_DOWNSAMPLE_FRAGMENT_SOURCE,
-        ),
-        _EngineShaderArtifact(
-            uuid=ENGINE_BLOOM_UPSAMPLE_SHADER_UUID,
-            name="BloomUpsampleFS",
-            fragment_source=ENGINE_BLOOM_UPSAMPLE_FRAGMENT_SOURCE,
-        ),
-        _EngineShaderArtifact(
-            uuid=ENGINE_BLOOM_COMPOSITE_SHADER_UUID,
-            name="BloomCompositeFS",
-            fragment_source=ENGINE_BLOOM_COMPOSITE_FRAGMENT_SOURCE,
-        ),
-        _EngineShaderArtifact(
-            uuid=ENGINE_TONEMAP_SHADER_UUID,
-            name="TonemapEngineFS",
-            fragment_source=ENGINE_TONEMAP_FRAGMENT_SOURCE,
-        ),
+        _builtin_engine_shader_artifact(ENGINE_BLOOM_BRIGHT_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_BLOOM_UPSAMPLE_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_BLOOM_COMPOSITE_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_TONEMAP_SHADER_UUID),
     ]
+
+
+def _builtin_engine_shader_artifact(uuid_value: str) -> _EngineShaderArtifact:
+    entry = _builtin_shader_catalog_entry(uuid_value)
+    language = str(entry.get("language", "glsl"))
+    stages = entry.get("stages")
+    if not isinstance(stages, dict):
+        raise ValueError(f"Built-in shader '{uuid_value}' has no stage map")
+
+    vertex_source = _builtin_engine_stage_source(uuid_value, stages, "vertex")
+    fragment_source = _builtin_engine_stage_source(uuid_value, stages, "fragment")
+    return _EngineShaderArtifact(
+        uuid=uuid_value,
+        name=str(entry.get("name", uuid_value)),
+        language=language,
+        vertex_source=vertex_source,
+        fragment_source=fragment_source,
+        layout=_builtin_engine_shader_layout(entry),
+    )
+
+
+def _builtin_engine_stage_source(
+    uuid_value: str,
+    stages: dict[str, Any],
+    stage_name: str,
+) -> str:
+    stage = stages.get(stage_name)
+    if stage is None:
+        return ""
+    if isinstance(stage, str):
+        source_name = stage
+    elif isinstance(stage, dict):
+        source_name_raw = stage.get("path")
+        if not isinstance(source_name_raw, str):
+            raise ValueError(f"Built-in shader '{uuid_value}' stage '{stage_name}' has no source path")
+        source_name = source_name_raw
+    else:
+        raise ValueError(f"Built-in shader '{uuid_value}' stage '{stage_name}' has invalid catalog data")
+    return _builtin_shader_source(source_name)
+
+
+def _builtin_engine_shader_layout(entry: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "version": 1,
+        "uuid": entry["uuid"],
+        "name": entry.get("name", entry["uuid"]),
+        "language": entry.get("language", "glsl"),
+        "stages": entry.get("stages", {}),
+        "resources": entry.get("resources", []),
+        "binding_model": "legacy_numeric_bridge",
+    }
 
 
 def _parse_skybox_engine_shader() -> tuple[str, str]:
@@ -830,9 +705,16 @@ def _write_engine_shader_artifact(
 
     vulkan_dir = package_dir / "shaders" / "vulkan"
     opengl_dir = package_dir / "shaders" / "opengl"
+    layout_dir = package_dir / "shaders" / "layout"
     vulkan_dir.mkdir(parents=True, exist_ok=True)
     if shader.language == "slang":
         opengl_dir.mkdir(parents=True, exist_ok=True)
+    if shader.layout:
+        layout_dir.mkdir(parents=True, exist_ok=True)
+        (layout_dir / f"{shader.uuid}.shader-layout.json").write_text(
+            json.dumps(shader.layout, indent=2),
+            encoding="utf-8",
+        )
 
     if shader.vertex_source != "":
         vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.{_source_extension_for_language(shader.language)}"
@@ -889,6 +771,38 @@ def _source_extension_for_language(language: str) -> str:
     if language == "glsl":
         return "glsl"
     raise ValueError(f"Unsupported shader language: {language}")
+
+
+def _builtin_shader_catalog_entry(uuid_value: str) -> dict[str, Any]:
+    catalog = _builtin_shader_catalog()
+    shaders = catalog.get("shaders")
+    if not isinstance(shaders, list):
+        raise ValueError("Built-in shader catalog has no shader list")
+    for entry in shaders:
+        if isinstance(entry, dict) and entry.get("uuid") == uuid_value:
+            return entry
+    raise KeyError(f"Built-in shader catalog has no entry for '{uuid_value}'")
+
+
+def _builtin_shader_catalog() -> dict[str, Any]:
+    catalog_path = _builtin_shader_catalog_path()
+    data = json.loads(catalog_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"Built-in shader catalog is not an object: {catalog_path}")
+    version = data.get("version")
+    if version != 1:
+        raise ValueError(f"Built-in shader catalog has unsupported version: {version}")
+    return data
+
+
+def _builtin_shader_catalog_path() -> Path:
+    filename = "engine-shader-catalog.json"
+    for root in _builtin_shader_roots():
+        path = root / filename
+        if path.exists():
+            return path
+    roots = ", ".join(str(root) for root in _builtin_shader_roots())
+    raise FileNotFoundError(f"Built-in shader catalog '{filename}' was not found in: {roots}")
 
 
 def _builtin_shader_source(filename: str) -> str:
