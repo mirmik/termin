@@ -136,35 +136,6 @@ void main() {
 """
 
 
-ENGINE_SHADOW_VERTEX_SOURCE = """#version 450 core
-layout(location = 0) in vec3 a_position;
-
-layout(std140, binding = 0) uniform PerFrame {
-    mat4 u_view;
-    mat4 u_projection;
-};
-
-struct ShadowPushData {
-    mat4 u_model;
-};
-#ifdef VULKAN
-layout(push_constant) uniform ShadowPushBlock { ShadowPushData pc; };
-#else
-layout(std140, binding = 14) uniform ShadowPushBlock { ShadowPushData pc; };
-#endif
-
-void main() {
-    gl_Position = u_projection * u_view * pc.u_model * vec4(a_position, 1.0);
-}
-"""
-
-
-ENGINE_SHADOW_FRAGMENT_SOURCE = """#version 450 core
-void main() {
-}
-"""
-
-
 PLACEHOLDER_MESH_VERTICES = [
     0.0, 0.65, 0.0, 1.0, 0.05, 0.05,
     -0.75, -0.55, 0.0, 0.05, 1.0, 0.05,
@@ -615,12 +586,7 @@ def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
             vertex_source=skybox_vertex,
             fragment_source=skybox_fragment,
         ),
-        _EngineShaderArtifact(
-            uuid=ENGINE_SHADOW_SHADER_UUID,
-            name="ShadowEngineVSFS",
-            vertex_source=ENGINE_SHADOW_VERTEX_SOURCE,
-            fragment_source=ENGINE_SHADOW_FRAGMENT_SOURCE,
-        ),
+        _builtin_engine_shader_artifact(ENGINE_SHADOW_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_GRAYSCALE_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_BLOOM_BRIGHT_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID),

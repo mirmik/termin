@@ -101,4 +101,24 @@ tc_shader_handle register_builtin_fragment_shader(
     return tc_shader_register_static_uuid(nullptr, source.c_str(), nullptr, name, uuid);
 }
 
+tc_shader_handle register_builtin_vertex_fragment_shader(
+    const char* vertex_filename,
+    const char* fragment_filename,
+    const char* name,
+    const char* uuid)
+{
+    const std::string vertex_source = load_builtin_shader_source(vertex_filename, name);
+    if (vertex_source.empty()) {
+        return tc_shader_handle_invalid();
+    }
+
+    const std::string fragment_source = load_builtin_shader_source(fragment_filename, name);
+    if (fragment_source.empty()) {
+        return tc_shader_handle_invalid();
+    }
+
+    return tc_shader_register_static_uuid(
+        vertex_source.c_str(), fragment_source.c_str(), nullptr, name, uuid);
+}
+
 } // namespace termin

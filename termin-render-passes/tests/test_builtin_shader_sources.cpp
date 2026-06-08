@@ -76,3 +76,48 @@ TEST_CASE("built-in fragment shader registration reads source file from resource
     clear_builtin_root();
     std::filesystem::remove_all(root);
 }
+
+TEST_CASE("built-in vertex-fragment shader registration reads both source files") {
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path()
+        / ("termin-render-passes-builtin-vsfs-test-" + std::to_string(unique));
+    std::filesystem::remove_all(root);
+
+    constexpr const char* kVertexFilename = "termin-engine-shadow.vert.glsl";
+    constexpr const char* kFragmentFilename = "termin-engine-shadow.frag.glsl";
+    constexpr const char* kVertexMarker = "TEST_BUILTIN_VERTEX_SHADER_SOURCE_MARKER";
+    constexpr const char* kFragmentMarker = "TEST_BUILTIN_FRAGMENT_SHADER_SOURCE_MARKER";
+    write_text(
+        root / kVertexFilename,
+        "#version 450 core\n"
+        "// TEST_BUILTIN_VERTEX_SHADER_SOURCE_MARKER\n"
+        "layout(location = 0) in vec3 a_position;\n"
+        "void main() { gl_Position = vec4(a_position, 1.0); }\n");
+    write_text(
+        root / kFragmentFilename,
+        "#version 450 core\n"
+        "// TEST_BUILTIN_FRAGMENT_SHADER_SOURCE_MARKER\n"
+        "void main() {}\n");
+
+    set_builtin_root(root);
+    tc_shader_init();
+
+    tc_shader_handle handle = termin::register_builtin_vertex_fragment_shader(
+        kVertexFilename,
+        kFragmentFilename,
+        "TestBuiltinShaderVSFS",
+        "test-builtin-vsfs-source-uuid");
+    REQUIRE(!tc_shader_handle_is_invalid(handle));
+
+    tc_shader* shader = tc_shader_get(handle);
+    REQUIRE(shader != nullptr);
+    REQUIRE(shader->vertex_source != nullptr);
+    REQUIRE(shader->fragment_source != nullptr);
+    CHECK(std::strstr(shader->vertex_source, kVertexMarker) != nullptr);
+    CHECK(std::strstr(shader->fragment_source, kFragmentMarker) != nullptr);
+
+    tc_shader_shutdown();
+    clear_builtin_root();
+    std::filesystem::remove_all(root);
+}
