@@ -70,6 +70,8 @@ UI-agnostic слой. Модели состояния + сервисы.
 - `project_session_controller.py` — open/restore project, shader runtime setup, project modules, `InitScript.py`.
 - `project_build_controller.py` — run standalone, build package, Android/Quest build entry preparation.
 - `editor_window_layout.py` — создание widget tree главного окна без wiring контроллеров.
+- `viewport_interaction_hub.py` — viewport click/pointer/key handlers, overlay drawers, active tool counter.
+- `debug_panel_controller.py` — Profiler/Modules panel visibility and throttled refresh.
 - `viewport_list_widget.py` — tcgui TreeWidget + toolbar; Signal-based API через `editor_core.Signal`.
 - `editor_window.py`
 
