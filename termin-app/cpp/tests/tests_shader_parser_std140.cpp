@@ -637,7 +637,7 @@ TEST_CASE("parse_shader_text: Slang scalar properties synthesize material consta
     CHECK(vertex.find("struct MaterialParams") == std::string::npos);
 }
 
-TEST_CASE("parse_shader_text: Slang texture properties fail explicitly")
+TEST_CASE("parse_shader_text: Slang texture properties synthesize Sampler2D declarations")
 {
     const std::string shader_text =
         "@program SlangTexture\n"
@@ -646,20 +646,24 @@ TEST_CASE("parse_shader_text: Slang texture properties fail explicitly")
         "@property Texture2D albedo = \"white\"\n"
         "@stage fragment\n"
         "[shader(\"fragment\")]\n"
-        "float4 main() : SV_Target0 { return albedo.Sample(default_sampler, float2(0.0)); }\n"
+        "float4 main() : SV_Target0 { return albedo.Sample(float2(0.0)); }\n"
         "@endstage\n"
         "@endphase\n";
 
-    bool threw = false;
-    try {
-        (void)parse_shader_text(shader_text);
-    } catch (const std::runtime_error& e) {
-        threw = true;
-        CHECK_EQ(
-            std::string(e.what()),
-            std::string("Slang .shader texture @property is not wired yet; use scalar/vector @property or explicit Slang Texture2D resources for now"));
-    }
-    CHECK(threw);
+    ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
+    REQUIRE_EQ(prog.phases.size(), 1u);
+
+    const auto& phase = prog.phases[0];
+    REQUIRE_EQ(phase.uniforms.size(), 1u);
+    CHECK_EQ(phase.uniforms[0].name, "albedo");
+    CHECK_EQ(phase.uniforms[0].property_type, "Texture");
+    CHECK(phase.material_ubo_layout.empty());
+
+    const auto& frag = phase.stages.at("fragment").source;
+    CHECK(frag.find("Sampler2D albedo;") != std::string::npos);
+    CHECK(frag.find("register(") == std::string::npos);
+    CHECK(frag.find("Sampler2D albedo;") < frag.find("[shader(\"fragment\")]"));
+    CHECK(frag.find("return albedo.Sample(float2(0.0));") != std::string::npos);
 }
 
 // ============================================================================
