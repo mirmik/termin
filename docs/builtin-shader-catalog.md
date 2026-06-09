@@ -85,6 +85,9 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-off-mesh-link-debug` | `OffMeshLinkDebugVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-off-mesh-link-debug.vert.glsl`, `builtin_shaders/termin-engine-off-mesh-link-debug.frag.glsl` |
 | `termin-engine-voxel-display` | `VoxelDisplay` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-voxel-display.vert.glsl`, `builtin_shaders/termin-engine-voxel-display.frag.glsl` |
 | `termin-engine-voxelizer-line` | `VoxelizerLine` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-voxelizer-line.vert.glsl`, `builtin_shaders/termin-engine-voxelizer-line.frag.glsl` |
+| `termin-engine-pick-material` | `PickShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-pick-material.vert.glsl`, `builtin_shaders/termin-engine-pick-material.frag.glsl` |
+| `termin-engine-shadow-material` | `ShadowShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-shadow-material.vert.glsl`, `builtin_shaders/termin-engine-shadow-material.frag.glsl` |
+| `termin-engine-depth-material` | `DepthShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-depth-material.vert.glsl`, `builtin_shaders/termin-engine-depth-material.frag.glsl` |
 | `termin-engine-foliage-instanced` | `FoliageInstancedVariantVS` | vertex template | GLSL | `builtin_shaders/termin-engine-foliage-instanced.vert.glsl` |
 | `termin-engine-foliage-shadow` | `FoliageShadowVariantVS` | vertex template | GLSL | `builtin_shaders/termin-engine-foliage-shadow.vert.glsl` |
 | `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-id.vert.glsl`, `builtin_shaders/termin-engine-id.frag.glsl` |
