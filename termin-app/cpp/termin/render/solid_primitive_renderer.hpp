@@ -7,6 +7,10 @@
 #include "tgfx/types.hpp"
 #include "tgfx2/handles.hpp"
 
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
+
 namespace tgfx {
 class RenderContext2;
 class IRenderDevice;
@@ -39,6 +43,7 @@ public:
     MeshRes _quad;
 
     bool _initialized = false;
+    tc_shader_handle _shader_handle = tc_shader_handle_invalid();
     tgfx::ShaderHandle _vs;
     tgfx::ShaderHandle _fs;
     tgfx::IRenderDevice* _device = nullptr;
@@ -104,7 +109,7 @@ public:
     );
 
 private:
-    void _ensure_initialized(tgfx::IRenderDevice* device);
+    bool _ensure_initialized(tgfx::IRenderDevice* device);
     void _push_and_draw(const Mat44f& model, const Color4& color, const MeshRes& mesh);
 };
 

@@ -6,6 +6,12 @@
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
 #include <tgfx2/vertex_layout.hpp>
+#include <tgfx2/builtin_shader_sources.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+}
 
 #include <vector>
 #include <cmath>
@@ -20,51 +26,8 @@ namespace termin {
 
 namespace {
 
-// Push constants (80 bytes: mat4 mvp + vec4 color) fit Vulkan's guaranteed
-// 128-byte minimum. Caller pre-multiplies proj * view * model on CPU so
-// the vertex shader only needs one matrix. `#ifdef VULKAN` selects the
-// native push_constant block; on GL we fall back to the std140 UBO at
-// binding 14 (the ring buffer tgfx2 uses to emulate push constants).
-const char* SOLID_COMMON_PUSH = R"(
-struct SolidPushData {
-    mat4 u_mvp;
-    vec4 u_color;
-};
-#ifdef VULKAN
-layout(push_constant) uniform SolidPushBlock { SolidPushData pc; };
-#else
-layout(std140, binding = 14) uniform SolidPushBlock { SolidPushData pc; };
-#endif
-)";
-
-const char* SOLID_VERT = R"(#version 450 core
-struct SolidPushData {
-    mat4 u_mvp;
-    vec4 u_color;
-};
-#ifdef VULKAN
-layout(push_constant) uniform SolidPushBlock { SolidPushData pc; };
-#else
-layout(std140, binding = 14) uniform SolidPushBlock { SolidPushData pc; };
-#endif
-
-layout(location = 0) in vec3 a_position;
-layout(location = 0) out vec4 v_color;
-
-void main() {
-    v_color = pc.u_color;
-    gl_Position = pc.u_mvp * vec4(a_position, 1.0);
-}
-)";
-
-const char* SOLID_FRAG = R"(#version 450 core
-layout(location = 0) in vec4 v_color;
-layout(location = 0) out vec4 fragColor;
-
-void main() {
-    fragColor = v_color;
-}
-)";
+constexpr const char* SOLID_PRIMITIVE_ENGINE_SHADER_UUID =
+    "termin-engine-solid-primitive";
 
 struct SolidPushData {
     float u_mvp[16];
@@ -341,8 +304,7 @@ SolidPrimitiveRenderer::~SolidPrimitiveRenderer() {
         destroy_mesh(_cylinder);
         destroy_mesh(_cone);
         destroy_mesh(_quad);
-        if (_vs) _device->destroy(_vs);
-        if (_fs) _device->destroy(_fs);
+        // Shader handles are owned by the tgfx2 tc_shader device cache.
         _vs = {};
         _fs = {};
     }
@@ -359,6 +321,7 @@ SolidPrimitiveRenderer& SolidPrimitiveRenderer::operator=(SolidPrimitiveRenderer
         _cone = other._cone;         other._cone = {};
         _quad = other._quad;         other._quad = {};
         _initialized = other._initialized;
+        _shader_handle = other._shader_handle;
         _vs = other._vs; other._vs = {};
         _fs = other._fs; other._fs = {};
         _device = other._device;
@@ -366,17 +329,23 @@ SolidPrimitiveRenderer& SolidPrimitiveRenderer::operator=(SolidPrimitiveRenderer
         _vp = other._vp;
 
         other._initialized = false;
+        other._shader_handle = tc_shader_handle_invalid();
         other._device = nullptr;
         other._ctx2 = nullptr;
     }
     return *this;
 }
 
-void SolidPrimitiveRenderer::_ensure_initialized(tgfx::IRenderDevice* device) {
-    if (_initialized && _device == device) return;
+bool SolidPrimitiveRenderer::_ensure_initialized(tgfx::IRenderDevice* device) {
+    if (!device) {
+        tc::Log::error("[SolidPrimitiveRenderer] device is null");
+        return false;
+    }
+    if (_initialized && _device == device) return true;
 
     // New device — release previous resources (if any).
     if (_device && _device != device) {
+        _initialized = false;
         if (_torus.vbo) _device->destroy(_torus.vbo);
         if (_torus.ibo) _device->destroy(_torus.ibo);
         if (_cylinder.vbo) _device->destroy(_cylinder.vbo);
@@ -385,25 +354,22 @@ void SolidPrimitiveRenderer::_ensure_initialized(tgfx::IRenderDevice* device) {
         if (_cone.ibo) _device->destroy(_cone.ibo);
         if (_quad.vbo) _device->destroy(_quad.vbo);
         if (_quad.ibo) _device->destroy(_quad.ibo);
-        if (_vs) _device->destroy(_vs);
-        if (_fs) _device->destroy(_fs);
         _torus = _cylinder = _cone = _quad = {};
         _vs = {};
         _fs = {};
     }
     _device = device;
 
-    if (!_vs) {
-        tgfx::ShaderDesc vs_desc;
-        vs_desc.stage = tgfx::ShaderStage::Vertex;
-        vs_desc.source = SOLID_VERT;
-        _vs = device->create_shader(vs_desc);
+    if (tc_shader_handle_is_invalid(_shader_handle)) {
+        _shader_handle =
+            tgfx::register_builtin_shader_from_catalog(SOLID_PRIMITIVE_ENGINE_SHADER_UUID);
     }
-    if (!_fs) {
-        tgfx::ShaderDesc fs_desc;
-        fs_desc.stage = tgfx::ShaderStage::Fragment;
-        fs_desc.source = SOLID_FRAG;
-        _fs = device->create_shader(fs_desc);
+    tc_shader* raw = tc_shader_get(_shader_handle);
+    if (!raw || !tc_shader_ensure_tgfx2(raw, device, &_vs, &_fs)) {
+        tc::Log::error(
+            "[SolidPrimitiveRenderer] failed to load built-in shader '%s'",
+            SOLID_PRIMITIVE_ENGINE_SHADER_UUID);
+        return false;
     }
 
     // Upload unit primitives as tgfx2 buffers (pos-only, vec3 at loc 0).
@@ -414,6 +380,7 @@ void SolidPrimitiveRenderer::_ensure_initialized(tgfx::IRenderDevice* device) {
     _quad     = upload_mesh_tgfx2(*device, build_unit_quad());
 
     _initialized = true;
+    return true;
 }
 
 void SolidPrimitiveRenderer::begin(
@@ -428,7 +395,10 @@ void SolidPrimitiveRenderer::begin(
         return;
     }
     _ctx2 = ctx2;
-    _ensure_initialized(&ctx2->device());
+    if (!_ensure_initialized(&ctx2->device())) {
+        _ctx2 = nullptr;
+        return;
+    }
 
     _vp = proj * view;
 
