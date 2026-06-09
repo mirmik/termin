@@ -61,6 +61,7 @@ void bind_material_ubo(
     const std::vector<MaterialProperty>& values,
     const std::vector<MaterialTextureBinding>& textures,
     uint32_t ubo_slot,
+    uint32_t set,
     tgfx::RenderContext2& ctx);
 
 // Dispatch entry point: if `shader` declares a material UBO layout,

@@ -291,6 +291,7 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
         values,
         {},
         material_ubo_binding_for_shader(raw),
+        0,  // set=0: skybox is GLSL in the shared layout
         *ctx.ctx2);
 
     ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx::IndexType::Uint32);

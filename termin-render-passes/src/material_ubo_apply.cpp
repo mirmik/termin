@@ -37,11 +37,22 @@ uint32_t material_ubo_binding_for_shader(
     return binding->binding;
 }
 
+// Look up the descriptor set index for the material resource binding.
+// Returns 0 for legacy GLSL shaders (shared layout); returns 1 for Slang
+// shaders in the two-set scheme.
+static uint32_t material_ubo_set_for_shader(const tc_shader* shader) {
+    const tc_shader_resource_binding* binding =
+        tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL);
+    if (!binding) return 0;  // legacy: no resource metadata → set=0
+    return binding->set;
+}
+
 void bind_material_ubo(
     const MaterialUboLayout& layout,
     const std::vector<MaterialProperty>& values,
     const std::vector<MaterialTextureBinding>& textures,
     uint32_t ubo_slot,
+    uint32_t set,
     tgfx::RenderContext2& ctx)
 {
     if (!layout.empty()) {
@@ -56,11 +67,12 @@ void bind_material_ubo(
         // allocate a deferred transient UBO. Material phases therefore do
         // not need to carry GPU buffer handles.
         ctx.bind_uniform_buffer_ring(ubo_slot, staging.data(),
-                                     static_cast<uint32_t>(staging.size()));
+                                     static_cast<uint32_t>(staging.size()),
+                                     set);
     }
 
     for (const auto& tex : textures) {
-        ctx.bind_sampled_texture(tex.slot, tex.texture, tex.sampler);
+        ctx.bind_sampled_texture(tex.slot, tex.texture, tex.sampler, set);
     }
 }
 
@@ -192,7 +204,8 @@ bool apply_material_phase_ubo(
         }
     }
 
-    bind_material_ubo(layout, values, textures, resolved_ubo_slot, ctx);
+    bind_material_ubo(layout, values, textures, resolved_ubo_slot,
+                      material_ubo_set_for_shader(shader), ctx);
     return !layout.empty() || !textures.empty();
 }
 
