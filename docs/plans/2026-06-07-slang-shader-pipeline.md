@@ -396,8 +396,8 @@ Status:
   `[[vk::location]]`, keeping the source backend-neutral for this safe stage.
 - Shadow, debug triangle, present blit, immediate renderer, Canvas2D, Text2D,
   Text3D, screen-space lines, world-space lines, world tube lines, base id,
-  skybox, highlight, gizmo mask, ground grid, grayscale, bloom, and tonemap
-  built-ins are now catalog-managed sources.
+  skybox, highlight, gizmo mask, ground grid, editor solid primitives,
+  grayscale, bloom, and tonemap built-ins are now catalog-managed sources.
   Skybox remains a `.shader`
   program so the existing material UBO parser owns its generated GLSL stage
   layout. The resource-using entries carry logical resource metadata and

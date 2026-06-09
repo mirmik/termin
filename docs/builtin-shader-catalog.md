@@ -80,6 +80,7 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-highlight` | `HighlightEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-highlight.frag.glsl` |
 | `termin-engine-gizmo-mask` | `GizmoMaskVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-gizmo-mask.vert.glsl`, `builtin_shaders/termin-engine-gizmo-mask.frag.glsl` |
 | `termin-engine-ground-grid` | `GroundGridEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-ground-grid.vert.glsl`, `builtin_shaders/termin-engine-ground-grid.frag.glsl` |
+| `termin-engine-solid-primitive` | `SolidPrimitiveEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-solid-primitive.vert.glsl`, `builtin_shaders/termin-engine-solid-primitive.frag.glsl` |
 | `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-downsample.frag.glsl` |
 | `termin-engine-bloom-upsample` | `BloomUpsampleFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-upsample.frag.glsl` |
 | `termin-engine-bloom-composite` | `BloomCompositeFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-composite.frag.glsl` |
