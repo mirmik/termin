@@ -196,14 +196,22 @@ does not know binding numbers.
 ## Phase 1: Reflection And Layout Capture
 
 Teach `termin_shaderc` or a companion layout tool to produce sidecar shader
-layout metadata for Slang stages.
+layout metadata for compiled shader artifacts.
+
+Status 2026-06-09: partial runtime bridge is in place. `termin_shaderc` now
+writes `<artifact>.layout.json` next to generated artifacts and records the
+currently synthesized `material` constant buffer binding when it can infer it
+from GLSL/Slang source. `tgfx2_load_or_compile_shader_artifact_for_backend`
+loads that sidecar and merges it into `TcShader` resource metadata, preserving
+the parser-owned material UBO byte layout. Full Slang reflection and automatic
+binding assignment are still pending.
 
 Tasks:
 
 - Invoke Slang reflection for every compiled Slang stage.
 - Capture entry point, stage, inputs, outputs, resources, resource kind,
   semantic names, and generated backend binding information.
-- Write `*.shader-layout.json` next to generated artifacts.
+- Write `<artifact>.layout.json` next to generated artifacts.
 - Validate that generated stage IO matches the source semantics expected by
   the engine.
 - Keep existing artifact generation behavior unchanged while layout metadata is
@@ -211,8 +219,8 @@ Tasks:
 
 Acceptance:
 
-- A Slang shader compiled for Vulkan and OpenGL produces artifacts plus one
-  layout JSON file.
+- A Slang shader compiled for Vulkan and OpenGL produces artifacts plus layout
+  JSON sidecars.
 - Tests assert that `TEXCOORD0` maps to fragment input location `0` without
   `[[vk::location]]` in source.
 - Tests assert that resource names appear in the layout metadata.
