@@ -79,6 +79,7 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-world-tube-line` | `WorldTubeLineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line.vert.glsl`, `builtin_shaders/termin-engine-world-tube-line.frag.glsl` |
 | `termin-engine-world-tube-line-cap` | `WorldTubeLineCapVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line-cap.vert.glsl`, `builtin_shaders/termin-engine-world-tube-line.frag.glsl` |
 | `termin-engine-world-tube-line-lit` | `WorldTubeLineLitFS` | fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line-lit.frag.glsl` |
+| `termin-engine-line-default` | `DefaultLineShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-line-default.vert.glsl`, `builtin_shaders/termin-engine-line-default.frag.glsl` |
 | `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-id.vert.glsl`, `builtin_shaders/termin-engine-id.frag.glsl` |
 | `termin-engine-normal` | `NormalEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-normal.vert.glsl`, `builtin_shaders/termin-engine-normal.frag.glsl` |
 | `termin-engine-depth` | `DepthEngineVSFS_Encoding` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-depth.vert.glsl`, `builtin_shaders/termin-engine-depth.frag.glsl` |
@@ -107,6 +108,11 @@ Slang sources should not add new `[[vk::...]]` attributes. Stage IO should use
 Slang/HLSL semantics. Texture-using post-process shaders remain catalog-managed
 GLSL until the runtime can bind resources by logical name or consume generated
 layout metadata.
+
+Legacy material fallback shaders may stay catalog-managed GLSL with
+`legacy_uniform` resources while they still run through the old material uniform
+path. The catalog owns their source location, but they are not Slang-ready until
+the material ABI moves to named resources/constant buffers.
 
 Built-in `.shader` program entries are allowed when the current engine path
 still needs the material shader parser to synthesize `MaterialParams` GLSL.

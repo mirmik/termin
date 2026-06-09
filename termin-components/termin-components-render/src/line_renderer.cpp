@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include <tcbase/tc_log.hpp>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/line_mesh_builder.hpp>
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/screen_space_line_renderer.hpp>
@@ -18,33 +19,10 @@ extern "C" {
 }
 
 namespace termin {
+
+constexpr const char* DEFAULT_LINE_SHADER_UUID = "termin-engine-line-default";
+
 namespace {
-
-const char* kDefaultLineVert = R"(
-#version 330 core
-
-layout(location = 0) in vec3 a_position;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-)";
-
-const char* kDefaultLineFrag = R"(
-#version 330 core
-
-uniform vec4 u_color;
-
-out vec4 FragColor;
-
-void main() {
-    FragColor = u_color;
-}
-)";
 
 double value_as_double(const tc_value* value) {
     if (!value) {
@@ -270,32 +248,27 @@ TcMaterial LineRenderer::default_material() {
     mat.set_shader_name("DefaultLineShader");
     tc_render_state state = tc_render_state_opaque();
     state.cull = 0;
-    tc_material_phase* phase = mat.add_phase_from_sources(
-        kDefaultLineVert,
-        kDefaultLineFrag,
-        "",
-        "DefaultLineShader",
-        "opaque",
-        0,
-        state);
+    tc_shader_handle shader_handle =
+        tgfx::register_builtin_shader_from_catalog(DEFAULT_LINE_SHADER_UUID);
+    if (tc_shader_handle_is_invalid(shader_handle)) {
+        tc::Log::error("[LineRenderer] failed to register default line shader");
+        return mat;
+    }
+
+    tc_material_phase* phase = mat.add_phase(shader_handle, "opaque", 0);
     if (!phase) {
         tc::Log::error("[LineRenderer] failed to create default material phase");
         return mat;
     }
+    phase->state = state;
     tc_material_phase_set_color(phase, 1.0f, 1.0f, 1.0f, 1.0f);
 
-    tc_material_phase* shadow_phase = mat.add_phase_from_sources(
-        kDefaultLineVert,
-        kDefaultLineFrag,
-        "",
-        "DefaultLineShadowShader",
-        "shadow",
-        0,
-        state);
+    tc_material_phase* shadow_phase = mat.add_phase(shader_handle, "shadow", 0);
     if (!shadow_phase) {
         tc::Log::error("[LineRenderer] failed to create default shadow material phase");
         return mat;
     }
+    shadow_phase->state = state;
     tc_material_phase_set_color(shadow_phase, 1.0f, 1.0f, 1.0f, 1.0f);
     return mat;
 }
