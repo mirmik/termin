@@ -276,7 +276,7 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         bool has_fragment;
     };
 
-    constexpr std::array<ExpectedShader, 43> kExpectedShaders{{
+    constexpr std::array<ExpectedShader, 46> kExpectedShaders{{
         {"termin-engine-immediate", "ImmediateEngineVSFS", true, true},
         {"termin-engine-present-blit", "PresentBlitVSFS", true, true},
         {"termin-engine-canvas2d-solid", "Canvas2DSolidVSFS", true, true},
@@ -301,6 +301,9 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         {"termin-engine-off-mesh-link-debug", "OffMeshLinkDebugVSFS", true, true},
         {"termin-engine-voxel-display", "VoxelDisplay", true, true},
         {"termin-engine-voxelizer-line", "VoxelizerLine", true, true},
+        {"termin-engine-pick-material", "PickShader", true, true},
+        {"termin-engine-shadow-material", "ShadowShader", true, true},
+        {"termin-engine-depth-material", "DepthShader", true, true},
         {"termin-runtime-default-color", "TerminRuntimeDefaultColor", true, true},
         {"termin-engine-shadow", "ShadowEngineVSFS", true, true},
         {"termin-engine-debug-triangle", "DebugTrianglePassVSFS", true, true},

@@ -3,51 +3,30 @@
 from __future__ import annotations
 
 from termin.materials import TcMaterial, TcRenderState
+from tgfx import TcShader
 
-PICK_VERT = """
-#version 330 core
+PICK_SHADER_UUID = "termin-engine-pick-material"
 
-layout(location=0) in vec3 a_position;
-layout(location=1) in vec3 a_normal;
-layout(location=2) in vec2 a_texcoord;
 
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-"""
-
-PICK_FRAG = """
-#version 330 core
-uniform vec3 u_pickColor;
-out vec4 fragColor;
-
-void main() {
-    fragColor = vec4(u_pickColor, 1.0);
-}
-"""
+def _load_pick_shader() -> TcShader:
+    shader = TcShader.from_builtin_catalog(PICK_SHADER_UUID)
+    if not shader.is_valid:
+        raise RuntimeError(f"Failed to load built-in shader '{PICK_SHADER_UUID}'")
+    return shader
 
 
 def create_pick_material(name: str = "PickMaterial") -> TcMaterial:
     """Create a pick material for object selection pass."""
-    mat = TcMaterial.create(name, "")
-    mat.shader_name = "PickShader"
-
     state = TcRenderState.opaque()
-    phase = mat.add_phase_from_sources(
-        vertex_source=PICK_VERT,
-        fragment_source=PICK_FRAG,
-        geometry_source="",
-        shader_name="PickShader",
+    shader = _load_pick_shader()
+    return TcMaterial(
+        name=name,
+        shader=shader,
+        render_state=state,
         phase_mark="pick",
         priority=0,
-        state=state,
+        shader_name="PickShader",
     )
-
-    return mat
 
 
 class PickMaterial(TcMaterial):

@@ -241,6 +241,14 @@ Status:
 - Runtime package shader JSON now records `language` and an `artifacts` map.
 - Runtime export writes Slang source files with `.slang` extension and emits
   both `shaders/vulkan` and `shaders/opengl` artifacts.
+- Legacy Python material helpers `PickMaterial`, `ShadowMaterial`, and
+  `DepthMaterial` no longer carry inline GLSL strings. They now create phases
+  from catalog-managed GLSL built-ins with `legacy_uniform` metadata, which
+  keeps them on the old material uniform ABI while making the source location
+  canonical.
+- Removed the unused Python `visualization.render.skybox` shader/string module;
+  live skybox rendering is owned by the catalog-managed `termin-engine-skybox`
+  program path.
 - Remaining work: parse/author `.shader` or `.slang` assets with language
   metadata instead of only setting it through live `TcShader`.
 
