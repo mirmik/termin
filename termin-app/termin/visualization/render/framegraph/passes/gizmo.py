@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Set, Tuple
-
-from typing import TYPE_CHECKING
+from typing import Callable, List, Optional, Set, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -14,46 +12,7 @@ if TYPE_CHECKING:
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
     from termin.visualization.core.entity import Entity
 
-GIZMO_MASK_VERT = """
-#version 450 core
-layout(location = 0) in vec3 a_position;
-
-struct GizmoPushData {
-    mat4 u_mvp;
-    vec4 u_color;
-};
-#ifdef VULKAN
-layout(push_constant) uniform GizmoPushBlock { GizmoPushData pc; };
-#else
-layout(std140, binding = 14) uniform GizmoPushBlock { GizmoPushData pc; };
-#endif
-
-void main() {
-    gl_Position = pc.u_mvp * vec4(a_position, 1.0);
-}
-"""
-
-GIZMO_MASK_FRAG = """
-#version 450 core
-struct GizmoPushData {
-    mat4 u_mvp;
-    vec4 u_color;
-};
-#ifdef VULKAN
-layout(push_constant) uniform GizmoPushBlock { GizmoPushData pc; };
-#else
-layout(std140, binding = 14) uniform GizmoPushBlock { GizmoPushData pc; };
-#endif
-layout(location = 0) out vec4 fragColor;
-
-void main() {
-    // RGB нам не важен, только альфа
-    fragColor = vec4(0.0, 0.0, 0.0, pc.u_color.a);
-}
-"""
-
-
-from typing import Callable
+_GIZMO_MASK_SHADER_UUID = "termin-engine-gizmo-mask"
 
 class GizmoPass(PythonFramePass):
     category = "ID/Picking"
@@ -96,7 +55,7 @@ class GizmoPass(PythonFramePass):
 
     def _ensure_shader(self) -> TcShader:
         if self._shader is None:
-            self._shader = TcShader.from_sources(GIZMO_MASK_VERT, GIZMO_MASK_FRAG, "", "GizmoMask")
+            self._shader = TcShader.from_builtin_catalog(_GIZMO_MASK_SHADER_UUID)
         # tgfx2 path compiles lazily via tc_shader_ensure_tgfx2 in execute().
         return self._shader
 
