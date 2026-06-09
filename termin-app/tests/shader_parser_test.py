@@ -563,9 +563,50 @@ def test_stdlib_slang_material_creates_slang_tc_shader():
     assert "[shader(\"vertex\")]" in phase.shader.vertex_source
     assert "#version" not in phase.shader.vertex_source
     assert "[[vk::" not in phase.shader.vertex_source
-    assert "register(b2, space0)" in phase.shader.vertex_source
-    assert "register(b24, space0)" in phase.shader.vertex_source
+    assert "register(" not in phase.shader.vertex_source
     assert "draw_data.u_model" in phase.shader.vertex_source
+
+
+def test_stdlib_slang_textured_normal_material_uses_texture_property():
+    from tgfx import ShaderLanguage
+    from termin.assets.material_asset import MaterialAsset
+    from termin.assets.shader_asset import ShaderAsset
+    from termin.assets.resources import ResourceManager
+
+    ResourceManager._reset_for_testing()
+    rm = ResourceManager.instance()
+    stdlib = Path(__file__).resolve().parents[1] / "termin" / "resources" / "stdlib"
+
+    shader_asset = ShaderAsset.from_file(
+        stdlib / "shaders" / "SlangTexturedNormal.shader",
+        name="SlangTexturedNormal",
+    )
+    rm.register_shader(
+        "SlangTexturedNormal",
+        shader_asset.program,
+        source_path=str(shader_asset.source_path),
+        uuid="00000000-0000-0000-0001-000000000008",
+    )
+
+    material_asset = MaterialAsset.from_file(
+        stdlib / "materials" / "SlangTexturedNormal.material",
+        name="SlangTexturedNormal",
+    )
+    material = material_asset.material
+
+    assert material is not None
+    assert material.phase_count == 1
+    phase = material.get_phase(0)
+    assert phase is not None
+    assert phase.shader.language == ShaderLanguage.SLANG
+    assert "register(" not in phase.shader.vertex_source
+    assert "register(" not in phase.shader.fragment_source
+    assert "ConstantBuffer<MaterialParams> material;" in phase.shader.fragment_source
+    assert "material.u_tint_color" in phase.shader.fragment_source
+    assert "Sampler2D u_tint_texture;" in phase.shader.fragment_source
+    assert "u_tint_texture.Sample(input.uv)" in phase.shader.fragment_source
+    assert phase.uniform_count == 1
+    assert phase.texture_count == 1
 
 
 def test_builtin_pbr_shader_is_vulkan_normalized():

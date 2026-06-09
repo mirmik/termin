@@ -203,9 +203,12 @@ writes `<artifact>.layout.json` next to generated artifacts. For Slang it asks
 `slangc` for reflection JSON, records reflected constant buffers, textures,
 samplers, storage textures, bindings, and buffer sizes where available, and
 falls back to source inference for fake/offline compiler paths. The generated
-Slang `MaterialParams` declaration no longer contains `register(...)`; while
-the shared-layout bridge exists, `termin_shaderc` shifts inferred constant
-buffers so `material` lands on binding 1. For Vulkan, clean Slang `Sampler2D`
+Slang `MaterialParams`, `per_frame`, and `draw_data` declarations no longer
+need `register(...)`; while the shared-layout bridge exists,
+`termin_shaderc` uses temporary non-overlapping Slang compiler bindings,
+assigns known constant-buffer names to the shared layout (`material -> 1`,
+`per_frame -> 2`, `draw_data -> 24`), and patches SPIR-V decorations to
+match the sidecar. For Vulkan, clean Slang `Sampler2D`
 resources are assigned to the current combined-image sampler slots
 (`4,5,6,7,9..15,17..23`) and the compiled SPIR-V binding decorations are patched
 to match the sidecar. Split `Texture2D` + `SamplerState` and storage textures

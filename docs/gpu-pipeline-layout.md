@@ -34,8 +34,9 @@ not spell backend layout in source; `termin_shaderc` captures Slang reflection
 into `<artifact>.layout.json`, including constant buffers, textures, samplers,
 and storage textures. Runtime upload code resolves resource bindings through
 `TcShader` metadata. While the shared-layout bridge is still in place,
-`termin_shaderc` shifts inferred Slang constant-buffer bindings by 1 so the
-backend-neutral `material` constant buffer lands on binding 1.
+`termin_shaderc` uses temporary non-overlapping Slang compiler bindings,
+then assigns known Slang resource names to the shared Vulkan layout and
+patches SPIR-V decorations to match the sidecar.
 
 | Binding | Type | Count | Stages | Name | Owner / writer |
 |---|---|---|---|---|---|
@@ -57,14 +58,14 @@ backend-neutral `material` constant buffer lands on binding 1.
 |---|---|---|
 | `LightingBlock` | `layout(std140, binding = 0) uniform LightingBlock` | `cbuffer LightingBlock : register(b0)` |
 | `MaterialParams` | `layout(std140, binding = 1) uniform MaterialParams` | `ConstantBuffer<MaterialParams> material;` with binding from `<artifact>.layout.json` |
-| `PerFrame` | `layout(std140, binding = 2) uniform PerFrame` | `cbuffer PerFrame : register(b2)` |
+| `PerFrame` | `layout(std140, binding = 2) uniform PerFrame` | `ConstantBuffer<PerFrame> per_frame;` with binding from `<artifact>.layout.json` |
 | `ShadowBlock` | `layout(std140, binding = 3) uniform ShadowBlock` | `cbuffer ShadowBlock : register(b3)` |
 | material textures 0–3 | `layout(binding = 4..7) uniform sampler2D ...` | `Sampler2D ...;` with binding assigned by `termin_shaderc` and recorded in `<artifact>.layout.json` |
 | shadow map array | `layout(binding = 8) uniform sampler2DShadow u_shadow_map[16]` | Pending Slang shadow policy; split `Texture2D` + `SamplerState` is not supported by the current Vulkan shared layout |
 | material textures 4–10 | `layout(binding = 9..15) uniform sampler2D ...` | `Sampler2D ...;` with binding assigned by `termin_shaderc` and recorded in `<artifact>.layout.json` |
 | `BoneBlock` | `layout(std140, binding = 16) uniform BoneBlock` | `cbuffer BoneBlock : register(b16)` |
 | extra FS samplers | `layout(binding = 17..23) uniform sampler2D ...` | `Sampler2D ...;` with binding assigned by `termin_shaderc` and recorded in `<artifact>.layout.json` |
-| `SlangDrawBlock` | n/a for GLSL material shaders | `ConstantBuffer<SlangDrawData> ... : register(b24, space0)` |
+| `SlangDrawBlock` | n/a for GLSL material shaders | `ConstantBuffer<SlangDrawData> draw_data;` with binding from `<artifact>.layout.json` |
 | push block | Vulkan `layout(push_constant)`, OpenGL UBO binding 14 | D3D11 emulated cbuffer; reserve `b14` unless a backend-specific layout says otherwise |
 
 **Notes:**

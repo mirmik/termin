@@ -160,12 +160,14 @@ Status:
 - Added first stdlib material shader written in Slang:
   `stdlib/shaders/SlangNormalColor.shader` plus
   `stdlib/materials/SlangNormalColor.material`.
-- The first material is intentionally small: it uses HLSL/Slang resource
-  syntax for the ColorPass `PerFrame` UBO (`register(b2, space0)`) and
-  per-draw model data (`SlangDrawData` at `register(b24, space0)`), then
-  colors fragments from transformed normals. Binding 24 is a dedicated dynamic
-  UBO slot for Slang/HLSL material draw data, separate from legacy GLSL
-  push-constant injection.
+- The first material is intentionally small: it uses clean Slang
+  `ConstantBuffer<PerFrame> per_frame;` and
+  `ConstantBuffer<SlangDrawData> draw_data;` declarations, then colors
+  fragments from transformed normals. `termin_shaderc` assigns those resource
+  names to the current shared Vulkan layout and patches SPIR-V decorations to
+  match the sidecar. Binding 24 is a dedicated dynamic UBO slot for
+  Slang/HLSL material draw data, separate from legacy GLSL push-constant
+  injection.
 - `termin_shaderc` records Slang reflection into artifact layout sidecars.
   Generated Slang material constant buffers no longer carry `register(...)`;
   current Vulkan shared-layout texture properties use generated `Sampler2D`
