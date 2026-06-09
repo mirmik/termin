@@ -1,4 +1,4 @@
-@program SlangNormalColor
+@program SlangTexturedNormal
 @language slang
 
 @phase opaque
@@ -6,6 +6,9 @@
 @glDepthTest true
 @glDepthMask true
 @glCull true
+
+@property Color u_tint_color = Color(1.0, 1.0, 1.0, 1.0)
+@property Texture2D u_tint_texture = "white"
 
 @stage vertex
 struct PerFrame
@@ -34,12 +37,14 @@ struct VertexInput
 {
     float3 position : POSITION;
     float3 normal : NORMAL;
+    float2 uv : TEXCOORD0;
 };
 
 struct VertexOutput
 {
     float4 position : SV_Position;
     float3 normal_world : NORMAL;
+    float2 uv : TEXCOORD0;
 };
 
 [shader("vertex")]
@@ -49,6 +54,7 @@ VertexOutput main(VertexInput input)
     float4 world = mul(draw_data.u_model, float4(input.position, 1.0));
     output.position = mul(per_frame.u_projection, mul(per_frame.u_view, world));
     output.normal_world = mul((float3x3)draw_data.u_model, input.normal);
+    output.uv = input.uv;
     return output;
 }
 @endstage
@@ -57,6 +63,7 @@ VertexOutput main(VertexInput input)
 struct FragmentInput
 {
     float3 normal_world : NORMAL;
+    float2 uv : TEXCOORD0;
 };
 
 struct FragmentOutput
@@ -69,7 +76,8 @@ FragmentOutput main(FragmentInput input)
 {
     FragmentOutput output;
     float3 n = normalize(input.normal_world);
-    output.color = float4(n * 0.5 + 0.5, 1.0);
+    float4 tint = u_tint_texture.Sample(input.uv);
+    output.color = float4(n * 0.5 + 0.5, 1.0) * material.u_tint_color * tint;
     return output;
 }
 @endstage
