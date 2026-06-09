@@ -109,6 +109,8 @@ CSHARP_SDK="$SDK_PREFIX/csharp"
 echo "Installing C# artifacts to $CSHARP_SDK..."
 mkdir -p "$CSHARP_SDK/runtimes/linux-x64/native"
 mkdir -p "$CSHARP_SDK/lib"
+BUILTIN_SHADER_SOURCE="$SDK_PREFIX/share/termin/builtin_shaders"
+BUILTIN_SHADER_DEST="$CSHARP_SDK/share/termin/builtin_shaders"
 
 # Native bridge and runtime dependencies
 cp -P "$SCRIPT_DIR/termin-csharp/Termin.Native/runtimes/linux-x64/native/"*.so* "$CSHARP_SDK/runtimes/linux-x64/native/" 2>/dev/null || true
@@ -119,6 +121,17 @@ if [[ -n "$MANAGED_DLL" ]]; then
     cp "$MANAGED_DLL" "$CSHARP_SDK/lib/"
     echo "  Copied $(basename "$MANAGED_DLL") to $CSHARP_SDK/lib/"
 fi
+
+# Built-in shader resources used by tgfx2 renderers and tcplot.
+if [[ ! -d "$BUILTIN_SHADER_SOURCE" ]]; then
+    echo "ERROR: built-in shader resources missing: $BUILTIN_SHADER_SOURCE" >&2
+    echo "Build/install termin-graphics before build-sdk-csharp." >&2
+    exit 1
+fi
+rm -rf "$BUILTIN_SHADER_DEST"
+mkdir -p "$BUILTIN_SHADER_DEST"
+cp -R "$BUILTIN_SHADER_SOURCE"/. "$BUILTIN_SHADER_DEST/"
+echo "  Copied built-in shaders to $BUILTIN_SHADER_DEST"
 
 echo ""
 echo "========================================"

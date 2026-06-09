@@ -126,6 +126,8 @@ Write-Host "Installing C# artifacts to $CsharpSdk..."
 
 $runtimeDir = Join-Path (Join-Path (Join-Path $CsharpSdk "runtimes") "win-x64") "native"
 $libDir = Join-Path $CsharpSdk "lib"
+$builtinShaderSource = Join-Path (Join-Path (Join-Path $SdkPrefix "share") "termin") "builtin_shaders"
+$builtinShaderDest = Join-Path (Join-Path (Join-Path $CsharpSdk "share") "termin") "builtin_shaders"
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 New-Item -ItemType Directory -Path $libDir -Force | Out-Null
 
@@ -145,6 +147,17 @@ if ($dllPath) {
     Copy-Item -Force $dllPath.FullName $libDir
     Write-Host "  Copied $($dllPath.Name) to $libDir"
 }
+
+# Built-in shader resources used by tgfx2 renderers and tcplot.
+if (-not (Test-Path $builtinShaderSource)) {
+    throw "Built-in shader resources missing: $builtinShaderSource. Build/install termin-graphics before build-sdk-csharp."
+}
+if (Test-Path $builtinShaderDest) {
+    Remove-Item -Recurse -Force $builtinShaderDest
+}
+New-Item -ItemType Directory -Path $builtinShaderDest -Force | Out-Null
+Copy-Item -Recurse -Force (Join-Path $builtinShaderSource "*") $builtinShaderDest
+Write-Host "  Copied built-in shaders to $builtinShaderDest"
 
 Write-Host ""
 Write-Host "========================================"
