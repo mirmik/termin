@@ -77,6 +77,7 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-skybox` | `SkyboxEngineVSFS` | vertex + fragment | shader program | `builtin_shaders/termin-engine-skybox.shader` |
 | `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-grayscale.frag.glsl` |
 | `termin-engine-bloom-bright` | `BloomBrightFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-bright.frag.glsl` |
+| `termin-engine-highlight` | `HighlightEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-highlight.frag.glsl` |
 | `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-downsample.frag.glsl` |
 | `termin-engine-bloom-upsample` | `BloomUpsampleFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-upsample.frag.glsl` |
 | `termin-engine-bloom-composite` | `BloomCompositeFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-composite.frag.glsl` |
