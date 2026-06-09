@@ -18,6 +18,7 @@ using termin::std140_pack;
 using termin::std140_size_align;
 using termin::strip_uniform_decls;
 using termin::synthesize_material_ubo_glsl;
+using termin::synthesize_material_ubo_slang;
 using termin::TcShader;
 using termin::get_skinned_shader;
 
@@ -182,10 +183,30 @@ TEST_CASE("synthesize: emits GLSL block with correct types and order")
     CHECK(glsl.find("u_strength") < glsl.find("u_tint"));
 }
 
+TEST_CASE("synthesize: emits Slang MaterialParams block with correct types and order")
+{
+    std::vector<MaterialProperty> props = {
+        mk("u_strength", "Float"),
+        mk("u_tint",     "Color"),
+        mk("u_enabled",  "Bool"),
+    };
+    MaterialUboLayout layout = compute_std140_layout(props);
+    std::string slang = synthesize_material_ubo_slang(layout);
+
+    CHECK(slang.find("struct MaterialParams") != std::string::npos);
+    CHECK(slang.find("ConstantBuffer<MaterialParams> material : register(b1, space0);") != std::string::npos);
+    CHECK(slang.find("float u_strength;") != std::string::npos);
+    CHECK(slang.find("float4 u_tint;") != std::string::npos);
+    CHECK(slang.find("int u_enabled;") != std::string::npos);
+    CHECK(slang.find("u_strength") < slang.find("u_tint"));
+    CHECK(slang.find("u_tint") < slang.find("u_enabled"));
+}
+
 TEST_CASE("synthesize: empty layout yields empty string")
 {
     MaterialUboLayout layout;
     CHECK_EQ(synthesize_material_ubo_glsl(layout), std::string{});
+    CHECK_EQ(synthesize_material_ubo_slang(layout), std::string{});
 }
 
 TEST_CASE("strip_uniform_decls: removes named uniforms but keeps others")
@@ -522,6 +543,78 @@ TEST_CASE("parse_shader_text: texture properties keep declaration order in bindi
     CHECK(frag.find("layout(binding = 7) uniform sampler2D u_roughness;") != std::string::npos);
     CHECK(frag.find("layout(binding = 9) uniform sampler2D u_emissive;") != std::string::npos);
     CHECK(frag.find("layout(binding = 8) uniform sampler2D u_emissive;") == std::string::npos);
+}
+
+TEST_CASE("parse_shader_text: Slang scalar properties synthesize material constant buffer")
+{
+    const std::string shader_text =
+        "@program SlangTint\n"
+        "@language slang\n"
+        "@phase opaque\n"
+        "@property Color tint = Color(1.0, 0.5, 0.25, 1.0)\n"
+        "@stage vertex\n"
+        "struct VertexInput { float3 position : POSITION; };\n"
+        "struct VertexOutput { float4 position : SV_Position; };\n"
+        "[shader(\"vertex\")]\n"
+        "VertexOutput main(VertexInput input) {\n"
+        "    VertexOutput output;\n"
+        "    output.position = float4(input.position, 1.0);\n"
+        "    return output;\n"
+        "}\n"
+        "@endstage\n"
+        "@stage fragment\n"
+        "struct FragmentOutput { float4 color : SV_Target0; };\n"
+        "[shader(\"fragment\")]\n"
+        "FragmentOutput main() {\n"
+        "    FragmentOutput output;\n"
+        "    output.color = material.tint;\n"
+        "    return output;\n"
+        "}\n"
+        "@endstage\n"
+        "@endphase\n";
+
+    ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
+    CHECK_EQ(prog.language, "slang");
+    CHECK_EQ(prog.phases.size(), 1u);
+
+    const auto& phase = prog.phases[0];
+    CHECK_EQ(phase.material_ubo_layout.entries.size(), 1u);
+    CHECK_EQ(phase.material_ubo_layout.entries[0].name, "tint");
+
+    const auto& frag = phase.stages.at("fragment").source;
+    CHECK(frag.find("struct MaterialParams") != std::string::npos);
+    CHECK(frag.find("float4 tint;") != std::string::npos);
+    CHECK(frag.find("ConstantBuffer<MaterialParams> material : register(b1, space0);") != std::string::npos);
+    CHECK(frag.find("output.color = material.tint;") != std::string::npos);
+    CHECK(frag.find("struct MaterialParams") < frag.find("[shader(\"fragment\")]"));
+
+    const auto& vertex = phase.stages.at("vertex").source;
+    CHECK(vertex.find("struct MaterialParams") == std::string::npos);
+}
+
+TEST_CASE("parse_shader_text: Slang texture properties fail explicitly")
+{
+    const std::string shader_text =
+        "@program SlangTexture\n"
+        "@language slang\n"
+        "@phase opaque\n"
+        "@property Texture2D albedo = \"white\"\n"
+        "@stage fragment\n"
+        "[shader(\"fragment\")]\n"
+        "float4 main() : SV_Target0 { return albedo.Sample(default_sampler, float2(0.0)); }\n"
+        "@endstage\n"
+        "@endphase\n";
+
+    bool threw = false;
+    try {
+        (void)parse_shader_text(shader_text);
+    } catch (const std::runtime_error& e) {
+        threw = true;
+        CHECK_EQ(
+            std::string(e.what()),
+            std::string("Slang .shader texture @property is not wired yet; use scalar/vector @property or explicit Slang Texture2D resources for now"));
+    }
+    CHECK(threw);
 }
 
 // ============================================================================
