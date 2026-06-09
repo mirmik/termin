@@ -394,17 +394,18 @@ Status:
   test-only source string.
 - The FSQ Slang source now relies on Slang/HLSL semantics rather than
   `[[vk::location]]`, keeping the source backend-neutral for this safe stage.
-- Shadow, debug triangle, skybox, grayscale, bloom, and tonemap built-ins are
-  now catalog-managed sources. Skybox remains a `.shader` program so the
-  existing material UBO parser owns its generated GLSL stage layout. The
-  resource-using entries carry logical resource metadata and explicit
-  `legacy_binding` values. They are not migrated to Slang yet because texture
-  resources, material UBO generation, and the current GL push-constant bridge
-  still depend on numeric binding slots.
-- `ShadowPass`, `DebugTrianglePass`, `SkyBoxPass`, `GrayscalePass`,
-  `BloomPass`, and `TonemapPass` now register their live shaders from the
-  built-in shader resource files, so editor/runtime draws and package artifact
-  generation consume the same source files.
+- Shadow, debug triangle, base id, skybox, grayscale, bloom, and tonemap
+  built-ins are now catalog-managed sources. Skybox remains a `.shader`
+  program so the existing material UBO parser owns its generated GLSL stage
+  layout. The resource-using entries carry logical resource metadata and
+  explicit `legacy_binding` values. They are not migrated to Slang yet because
+  texture resources, material UBO generation, and the current GL push-constant
+  bridge still depend on numeric binding slots.
+- `ShadowPass`, `DebugTrianglePass`, `IdPass` base shader, `SkyBoxPass`,
+  `GrayscalePass`, `BloomPass`, and `TonemapPass` now register their live
+  shaders from the built-in shader resource files. Default-pipeline package
+  artifact generation uses the same catalog source files for built-ins that it
+  exports.
 - Those passes now resolve live shader names, source filenames, and stage
   shapes from `engine-shader-catalog.json` by stable UUID. Individual passes no
   longer duplicate catalog metadata for migrated built-ins.

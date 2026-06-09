@@ -4,6 +4,7 @@ GUARD_TEST_MAIN();
 
 #include "builtin_shader_sources.hpp"
 
+#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
@@ -262,4 +263,48 @@ TEST_CASE("built-in shader catalog resolves shader program source by uuid") {
 
     clear_builtin_root();
     std::filesystem::remove_all(root);
+}
+
+TEST_CASE("built-in shader catalog resolves migrated live engine shaders from canonical resources") {
+    clear_builtin_root();
+    tc_shader_init();
+
+    struct ExpectedShader {
+        const char* uuid;
+        const char* name;
+        bool has_vertex;
+        bool has_fragment;
+    };
+
+    constexpr std::array<ExpectedShader, 9> kExpectedShaders{{
+        {"termin-engine-shadow", "ShadowEngineVSFS", true, true},
+        {"termin-engine-debug-triangle", "DebugTrianglePassVSFS", true, true},
+        {"termin-engine-id", "IdEngineVSFS", true, true},
+        {"termin-engine-grayscale", "GrayscaleEngineFS", false, true},
+        {"termin-engine-bloom-bright", "BloomBrightFS", false, true},
+        {"termin-engine-bloom-downsample", "BloomDownsampleFS", false, true},
+        {"termin-engine-bloom-upsample", "BloomUpsampleFS", false, true},
+        {"termin-engine-bloom-composite", "BloomCompositeFS", false, true},
+        {"termin-engine-tonemap", "TonemapEngineFS", false, true},
+    }};
+
+    for (const ExpectedShader& expected : kExpectedShaders) {
+        tc_shader_handle handle = termin::register_builtin_shader_from_catalog(expected.uuid);
+        REQUIRE(!tc_shader_handle_is_invalid(handle));
+
+        tc_shader* shader = tc_shader_get(handle);
+        REQUIRE(shader != nullptr);
+        REQUIRE(shader->name != nullptr);
+        CHECK(std::strcmp(shader->name, expected.name) == 0);
+        CHECK((shader->vertex_source != nullptr) == expected.has_vertex);
+        CHECK((shader->fragment_source != nullptr) == expected.has_fragment);
+    }
+
+    termin::BuiltinShaderProgramSource skybox =
+        termin::load_builtin_shader_program_from_catalog("termin-engine-skybox");
+    CHECK(skybox.name == "SkyboxEngineVSFS");
+    REQUIRE(!skybox.source.empty());
+    CHECK(skybox.source.find("@program Skybox") != std::string::npos);
+
+    tc_shader_shutdown();
 }
