@@ -28,11 +28,13 @@ the shader. Do not silently squat on an unused descriptor slot.
 
 Single `VkDescriptorSetLayout` used by every graphics pipeline the engine
 creates. On OpenGL each UBO binding maps directly to a GL UBO binding point;
-samplers map to texture units by the same number. Slang/HLSL sources must use
-the same numeric contract through explicit `register(bN/tN/sN)` annotations.
-`termin_shaderc` passes zero `-fvk-*-shift` values when compiling Slang to
-Vulkan SPIR-V or OpenGL GLSL, so `register(b2, space0)` maps to descriptor set
-0 / binding 2 without requiring `[[vk::binding]]` in engine shaders.
+samplers map to texture units by the same number. Legacy GLSL sources still
+spell this contract with `layout(binding = N)`. Slang material sources should
+not spell backend layout in source; `termin_shaderc` captures Slang reflection
+into `<artifact>.layout.json`, and runtime upload code resolves resource
+bindings through `TcShader` metadata. While the shared-layout bridge is still
+in place, `termin_shaderc` shifts inferred Slang constant-buffer bindings by 1
+so the backend-neutral `material` constant buffer lands on binding 1.
 
 | Binding | Type | Count | Stages | Name | Owner / writer |
 |---|---|---|---|---|---|
@@ -53,7 +55,7 @@ Vulkan SPIR-V or OpenGL GLSL, so `register(b2, space0)` maps to descriptor set
 | Resource | GLSL / Vulkan / OpenGL spelling | Slang / HLSL spelling |
 |---|---|---|
 | `LightingBlock` | `layout(std140, binding = 0) uniform LightingBlock` | `cbuffer LightingBlock : register(b0)` |
-| `MaterialParams` | `layout(std140, binding = 1) uniform MaterialParams` | `cbuffer MaterialParams : register(b1)` |
+| `MaterialParams` | `layout(std140, binding = 1) uniform MaterialParams` | `ConstantBuffer<MaterialParams> material;` with binding from `<artifact>.layout.json` |
 | `PerFrame` | `layout(std140, binding = 2) uniform PerFrame` | `cbuffer PerFrame : register(b2)` |
 | `ShadowBlock` | `layout(std140, binding = 3) uniform ShadowBlock` | `cbuffer ShadowBlock : register(b3)` |
 | material textures 0–3 | `layout(binding = 4..7) uniform sampler2D ...` | `Texture2D ... : register(t4..t7)` |
@@ -109,8 +111,11 @@ Per-light `LightData` (80 B):
 ### `MaterialParams` (binding 1, variable size)
 
 **Synthesised per-shader.** The parser scans `@property` lines in `.shader`,
-packs them std140, and writes the block declaration into both GLSL and the
-`tc_material_ubo_entry[]` metadata on `tc_shader`. Runtime uploaders
+packs them std140, writes the block declaration into GLSL/Slang source, and
+stores the byte layout in `tc_material_ubo_entry[]` metadata on `tc_shader`.
+For Slang, backend binding is not authored into the source; `termin_shaderc`
+writes it into the compiled artifact sidecar and the runtime merges that into
+`tc_shader_resource_binding[]`. Runtime uploaders
 (`material_ubo_apply.cpp` in `termin-app` and `material_ubo_runtime.cpp` in
 `termin-render`) walk those entries and copy values from `phase->uniforms[]`
 into the right offsets.

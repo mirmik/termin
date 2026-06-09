@@ -440,7 +440,8 @@ def test_slang_shader_synthesizes_material_params_for_scalar_properties():
     fragment = phase.stages["fragment"].source
     assert "struct MaterialParams" in fragment
     assert "float4 u_color;" in fragment
-    assert "ConstantBuffer<MaterialParams> material : register(b1, space0);" in fragment
+    assert "ConstantBuffer<MaterialParams> material;" in fragment
+    assert "register(" not in fragment
     assert "output.color = material.u_color;" in fragment
     assert "struct MaterialParams" not in phase.stages["vertex"].source
 

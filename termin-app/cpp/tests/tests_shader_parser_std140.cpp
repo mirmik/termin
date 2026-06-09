@@ -194,7 +194,8 @@ TEST_CASE("synthesize: emits Slang MaterialParams block with correct types and o
     std::string slang = synthesize_material_ubo_slang(layout);
 
     CHECK(slang.find("struct MaterialParams") != std::string::npos);
-    CHECK(slang.find("ConstantBuffer<MaterialParams> material : register(b1, space0);") != std::string::npos);
+    CHECK(slang.find("ConstantBuffer<MaterialParams> material;") != std::string::npos);
+    CHECK(slang.find("register(") == std::string::npos);
     CHECK(slang.find("float u_strength;") != std::string::npos);
     CHECK(slang.find("float4 u_tint;") != std::string::npos);
     CHECK(slang.find("int u_enabled;") != std::string::npos);
@@ -627,7 +628,8 @@ TEST_CASE("parse_shader_text: Slang scalar properties synthesize material consta
     const auto& frag = phase.stages.at("fragment").source;
     CHECK(frag.find("struct MaterialParams") != std::string::npos);
     CHECK(frag.find("float4 tint;") != std::string::npos);
-    CHECK(frag.find("ConstantBuffer<MaterialParams> material : register(b1, space0);") != std::string::npos);
+    CHECK(frag.find("ConstantBuffer<MaterialParams> material;") != std::string::npos);
+    CHECK(frag.find("register(") == std::string::npos);
     CHECK(frag.find("output.color = material.tint;") != std::string::npos);
     CHECK(frag.find("struct MaterialParams") < frag.find("[shader(\"fragment\")]"));
 
