@@ -9,9 +9,6 @@ extern "C" {
 
 namespace termin {
 
-extern ENTITY_API const char* NORMAL_PASS_VERT;
-extern ENTITY_API const char* NORMAL_PASS_FRAG;
-
 class NormalPass : public GeometryPassBase {
 private:
     // Lazy tgfx2 resources used by execute_with_data_tgfx2. Shader lives
@@ -54,8 +51,6 @@ public:
     }
 
 protected:
-    const char* vertex_shader_source() const override { return NORMAL_PASS_VERT; }
-    const char* fragment_shader_source() const override { return NORMAL_PASS_FRAG; }
     std::array<float, 4> clear_color() const override { return {0.5f, 0.5f, 0.5f, 1.0f}; }
     const char* phase_name() const override { return "normal"; }
 };

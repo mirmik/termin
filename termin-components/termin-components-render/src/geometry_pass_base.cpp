@@ -35,7 +35,6 @@ std::vector<std::pair<std::string, std::string>> GeometryPassBase::get_inplace_a
 }
 
 void GeometryPassBase::destroy() {
-    _shader = TcShader();
 }
 
 CameraComponent* GeometryPassBase::find_camera_by_name(tc_scene_handle scene, const std::string& name) const {
@@ -64,21 +63,6 @@ bool GeometryPassBase::entity_filter(const Entity& ent) const {
 int GeometryPassBase::get_pick_id(const Entity& ent) const {
     (void)ent;
     return 0;
-}
-
-TcShader& GeometryPassBase::get_shader() {
-    if (!_shader.is_valid()) {
-        _shader = TcShader::from_sources(
-            vertex_shader_source(),
-            fragment_shader_source(),
-            "",
-            get_pass_name()
-        );
-        // tgfx2 path compiles lazily via tc_shader_ensure_tgfx2; the
-        // _shader here is only used for its handle (as base shader key
-        // for per-draw override matching).
-    }
-    return _shader;
 }
 
 void GeometryPassBase::collect_draw_calls(

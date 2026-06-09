@@ -57,7 +57,6 @@ public:
     ))
 
 protected:
-    TcShader _shader;
     mutable std::vector<DrawCall> cached_draw_calls_;
 
 protected:
@@ -76,8 +75,6 @@ public:
     CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name) const;
 
 protected:
-    virtual const char* vertex_shader_source() const = 0;
-    virtual const char* fragment_shader_source() const = 0;
     virtual std::array<float, 4> clear_color() const = 0;
     virtual const char* phase_name() const = 0;
     virtual std::optional<std::string> fbo_format() const;
@@ -85,7 +82,6 @@ protected:
     virtual bool entity_filter(const Entity& ent) const;
     virtual int get_pick_id(const Entity& ent) const;
 
-    TcShader& get_shader();
     void collect_draw_calls(
         tc_scene_handle scene,
         uint64_t layer_mask,

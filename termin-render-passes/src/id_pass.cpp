@@ -51,37 +51,7 @@ static_assert(sizeof(IdPushStd140) == 80,
 static_assert(sizeof(IdPushStd140) <= 128,
               "IdPushStd140 must fit within Vulkan min push constant size");
 
-// ID_PASS_VERT / ID_PASS_FRAG — referenced via vertex_shader_source() /
-// fragment_shader_source() for legacy override keying (GeometryPassBase
-// uses the source pointer as a registry key). Never actually compiled
-// on the tgfx2 path — kept here so the sentinel values stay stable.
-constexpr const char* ID_PASS_VERT = R"(#version 450 core
-layout(location=0) in vec3 a_position;
-layout(location=1) in vec3 a_normal;
-layout(location=2) in vec2 a_texcoord;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-)";
-
-constexpr const char* ID_PASS_FRAG = R"(#version 450 core
-uniform vec3 u_pickColor;
-layout(location=0) out vec4 fragColor;
-
-void main() {
-    fragColor = vec4(u_pickColor, 1.0);
-}
-)";
-
 } // anonymous namespace
-
-const char* IdPass::vertex_shader_source() const { return ID_PASS_VERT; }
-const char* IdPass::fragment_shader_source() const { return ID_PASS_FRAG; }
 
 void IdPass::id_to_rgb(int id, float& r, float& g, float& b) {
     tc_picking_id_to_rgb_float(id, &r, &g, &b);
