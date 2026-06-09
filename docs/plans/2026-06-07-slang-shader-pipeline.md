@@ -401,6 +401,12 @@ Status:
 - Runtime package export now treats the FSQ built-in as a Slang engine shader:
   it writes the `.slang` source snapshot, generates Vulkan SPIR-V, and also
   generates the OpenGL GLSL artifact for that stage.
+- Live `RenderContext2` FSQ creation now uses the same lazy dev artifact
+  compiler path for catalog-managed single-stage engine shaders. With editor
+  dev compilation enabled, a missing project-local
+  `shaders/vulkan/termin-engine-fsq.vert.spv` is generated from the installed
+  built-in Slang source instead of logging a read-only artifact miss and
+  immediately falling back to GLSL.
 - The Vulkan smoke now compiles the canonical FSQ Slang source instead of a
   test-only source string.
 - The FSQ Slang source now relies on Slang/HLSL semantics rather than
