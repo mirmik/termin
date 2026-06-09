@@ -57,6 +57,8 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-immediate` | `ImmediateEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-immediate.vert.glsl`, `builtin_shaders/termin-engine-immediate.frag.glsl` |
 | `termin-engine-canvas2d-solid` | `Canvas2DSolidVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-canvas2d.vert.glsl`, `builtin_shaders/termin-engine-canvas2d-solid.frag.glsl` |
 | `termin-engine-canvas2d-texture` | `Canvas2DTextureVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-canvas2d.vert.glsl`, `builtin_shaders/termin-engine-canvas2d-texture.frag.glsl` |
+| `termin-engine-text2d` | `Text2DEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-text2d.vert.glsl`, `builtin_shaders/termin-engine-text2d.frag.glsl` |
+| `termin-engine-text2d-sdf` | `Text2DEngineSdfVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-text2d-sdf.vert.glsl`, `builtin_shaders/termin-engine-text2d-sdf.frag.glsl` |
 | `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-id.vert.glsl`, `builtin_shaders/termin-engine-id.frag.glsl` |
 | `termin-engine-skybox` | `SkyboxEngineVSFS` | vertex + fragment | shader program | `builtin_shaders/termin-engine-skybox.shader` |
 | `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-grayscale.frag.glsl` |

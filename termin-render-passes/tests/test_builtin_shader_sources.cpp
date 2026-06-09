@@ -276,10 +276,12 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         bool has_fragment;
     };
 
-    constexpr std::array<ExpectedShader, 12> kExpectedShaders{{
+    constexpr std::array<ExpectedShader, 14> kExpectedShaders{{
         {"termin-engine-immediate", "ImmediateEngineVSFS", true, true},
         {"termin-engine-canvas2d-solid", "Canvas2DSolidVSFS", true, true},
         {"termin-engine-canvas2d-texture", "Canvas2DTextureVSFS", true, true},
+        {"termin-engine-text2d", "Text2DEngineVSFS", true, true},
+        {"termin-engine-text2d-sdf", "Text2DEngineSdfVSFS", true, true},
         {"termin-engine-shadow", "ShadowEngineVSFS", true, true},
         {"termin-engine-debug-triangle", "DebugTrianglePassVSFS", true, true},
         {"termin-engine-id", "IdEngineVSFS", true, true},
