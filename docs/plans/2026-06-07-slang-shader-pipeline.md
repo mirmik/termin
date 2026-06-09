@@ -394,7 +394,7 @@ Status:
   test-only source string.
 - The FSQ Slang source now relies on Slang/HLSL semantics rather than
   `[[vk::location]]`, keeping the source backend-neutral for this safe stage.
-- Shadow, debug triangle, immediate renderer, Canvas2D, base id, skybox,
+- Shadow, debug triangle, immediate renderer, Canvas2D, Text2D, base id, skybox,
   grayscale, bloom, and tonemap built-ins are now catalog-managed sources.
   Skybox remains a `.shader`
   program so the existing material UBO parser owns its generated GLSL stage
@@ -438,8 +438,7 @@ Acceptance:
 
 1. Move the fullscreen/present fragment path into the built-in shader catalog
    and generate artifacts from the same source path as FSQ.
-2. Continue moving tgfx2 utility renderers (`Text2D`, line renderers) into the
-   built-in shader catalog.
+2. Continue moving tgfx2 line renderers into the built-in shader catalog.
 3. Keep texture-using post-process built-ins catalog-managed as GLSL until the
    bind-by-name/runtime layout plan can carry their resource metadata.
 4. Replace remaining runtime exporter inline engine shader strings with catalog
