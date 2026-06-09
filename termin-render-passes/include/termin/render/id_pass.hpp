@@ -42,8 +42,6 @@ public:
     }
 
 protected:
-    const char* vertex_shader_source() const override;
-    const char* fragment_shader_source() const override;
     std::array<float, 4> clear_color() const override { return {0.0f, 0.0f, 0.0f, 0.0f}; }
     const char* phase_name() const override { return "pick"; }
 

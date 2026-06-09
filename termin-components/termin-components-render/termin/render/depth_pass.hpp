@@ -9,9 +9,6 @@ extern "C" {
 
 namespace termin {
 
-extern ENTITY_API const char* DEPTH_PASS_VERT;
-extern ENTITY_API const char* DEPTH_PASS_FRAG;
-
 class DepthPass : public GeometryPassBase {
 private:
     float _near_plane = 0.1f;
@@ -73,8 +70,6 @@ public:
     }
 
 protected:
-    const char* vertex_shader_source() const override { return DEPTH_PASS_VERT; }
-    const char* fragment_shader_source() const override { return DEPTH_PASS_FRAG; }
     std::array<float, 4> clear_color() const override;
     const char* phase_name() const override { return "depth"; }
     std::optional<std::string> fbo_format() const override { return "r16f"; }

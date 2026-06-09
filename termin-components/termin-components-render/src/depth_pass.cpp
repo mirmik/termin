@@ -205,69 +205,6 @@ bool depth_encoding_is_inverse(const std::string& encoding) {
 
 } // anonymous namespace
 
-const char* DEPTH_PASS_VERT = R"(
-#version 330 core
-
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-layout(location = 2) in vec2 a_texcoord;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-uniform float u_near;
-uniform float u_far;
-uniform float u_depth_encoding;
-
-out float v_linear_depth;
-out float v_perspective_depth;
-out float v_log_depth;
-
-void main()
-{
-    vec4 world_pos = u_model * vec4(a_position, 1.0);
-    vec4 view_pos  = u_view * world_pos;
-
-    float view_depth = view_pos.y;
-    float depth = (view_depth - u_near) / (u_far - u_near);
-
-    vec4 clip_pos = u_projection * view_pos;
-    float ndc_depth = clip_pos.z / max(abs(clip_pos.w), 1e-6);
-
-    v_linear_depth = depth;
-    v_perspective_depth = ndc_depth;
-    v_log_depth = log2(max(view_depth, 0.0) + 1.0) / log2(max(u_far, 1e-6) + 1.0);
-    gl_Position = clip_pos;
-}
-)";
-
-const char* DEPTH_PASS_FRAG = R"(
-#version 330 core
-
-in float v_linear_depth;
-in float v_perspective_depth;
-in float v_log_depth;
-out vec4 FragColor;
-
-uniform float u_depth_encoding;
-
-void main()
-{
-    int mode = int(u_depth_encoding + 0.5);
-    float d = v_linear_depth;
-    if (mode == 2 || mode == 3) {
-        d = v_perspective_depth;
-    } else if (mode == 4 || mode == 5) {
-        d = v_log_depth;
-    }
-    d = clamp(d, 0.0, 1.0);
-    if (mode == 1 || mode == 3 || mode == 5) {
-        d = 1.0 - d;
-    }
-    FragColor = vec4(d, d, d, 1.0);
-}
-)";
-
 void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
 
@@ -334,10 +271,9 @@ void DepthPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(device);
 
-    // Use the UBO-based engine shader as base_shader for skinning override —
-    // the legacy `#version 330 core` source (referenced by get_shader()) is
-    // not Vulkan-compilable and trips shaderc when the skinning injector
-    // wraps it. Matches the pattern in ShadowPass.
+    // Use the UBO-based engine shader as base_shader for skinning override.
+    // The old source-based GeometryPassBase shader path has been removed;
+    // this handle is the only base shader key for depth overrides.
     collect_draw_calls(scene, layer_mask, depth_shader_handle_);
     sort_draw_calls_by_shader();
 
