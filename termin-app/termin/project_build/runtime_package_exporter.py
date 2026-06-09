@@ -33,40 +33,6 @@ DEFAULT_SHADER_SOURCE_PATH = "termin-runtime/default-color"
 DEFAULT_SHADER_LANGUAGE = "glsl"
 
 
-DEFAULT_VERTEX_SOURCE = """#version 450
-layout(location = 0) in vec3 in_position;
-layout(location = 1) in vec3 in_color;
-
-layout(location = 0) out vec3 v_color;
-
-layout(set = 0, binding = 0) uniform CameraUBO {
-    mat4 view;
-    mat4 proj;
-    mat4 view_proj;
-    vec4 camera_pos;
-} u_camera;
-
-layout(push_constant) uniform PushConstants {
-    mat4 model;
-} pc;
-
-void main() {
-    v_color = in_color;
-    gl_Position = u_camera.view_proj * pc.model * vec4(in_position, 1.0);
-}
-"""
-
-
-DEFAULT_FRAGMENT_SOURCE = """#version 450
-layout(location = 0) in vec3 v_color;
-layout(location = 0) out vec4 out_color;
-
-void main() {
-    out_color = vec4(v_color, 1.0);
-}
-"""
-
-
 ENGINE_SKYBOX_SHADER_UUID = "termin-engine-skybox"
 ENGINE_FSQ_SHADER_UUID = "termin-engine-fsq"
 ENGINE_SHADOW_SHADER_UUID = "termin-engine-shadow"
@@ -184,12 +150,16 @@ class _ShaderSpec:
 def _default_shader_spec(language: str) -> _ShaderSpec:
     normalized = _normalize_default_shader_language(language)
     if normalized == "glsl":
+        entry = _builtin_shader_catalog_entry(DEFAULT_SHADER_UUID)
+        stages = entry.get("stages")
+        if not isinstance(stages, dict):
+            raise ValueError(f"Built-in shader '{DEFAULT_SHADER_UUID}' has no stage map")
         return _ShaderSpec(
             uuid=DEFAULT_SHADER_UUID,
-            name=DEFAULT_SHADER_NAME,
+            name=str(entry.get("name", DEFAULT_SHADER_NAME)),
             source_path=DEFAULT_SHADER_SOURCE_PATH,
-            vertex_source=DEFAULT_VERTEX_SOURCE,
-            fragment_source=DEFAULT_FRAGMENT_SOURCE,
+            vertex_source=_builtin_engine_stage_source(DEFAULT_SHADER_UUID, stages, "vertex"),
+            fragment_source=_builtin_engine_stage_source(DEFAULT_SHADER_UUID, stages, "fragment"),
             geometry_source="",
             language="glsl",
             allow_precompiled_default=True,

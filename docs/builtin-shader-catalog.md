@@ -58,6 +58,7 @@ toward the bind-by-name plan without changing the package shape later.
 | UUID | Name | Stage | Language | Source |
 |---|---|---|---|---|
 | `termin-engine-fsq` | `FullscreenQuadEngineVS` | vertex | Slang | `builtin_shaders/termin-engine-fsq.vert.slang` |
+| `termin-runtime-default-color` | `TerminRuntimeDefaultColor` | vertex + fragment | GLSL | `builtin_shaders/termin-runtime-default-color.vert.glsl`, `builtin_shaders/termin-runtime-default-color.frag.glsl` |
 | `termin-engine-shadow` | `ShadowEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-shadow.vert.glsl`, `builtin_shaders/termin-engine-shadow.frag.glsl` |
 | `termin-engine-debug-triangle` | `DebugTrianglePassVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-debug-triangle.vert.glsl`, `builtin_shaders/termin-engine-debug-triangle.frag.glsl` |
 | `termin-engine-present-blit` | `PresentBlitVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-present-blit.vert.glsl`, `builtin_shaders/termin-engine-present-blit.frag.glsl` |

@@ -104,6 +104,15 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     assert (result.package_dir / "shaders" / "termin-runtime-default-color.shader.json").exists()
     assert (result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.vert.spv").exists()
     assert (result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.frag.spv").exists()
+    default_vertex_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.vert.glsl"
+    ).read_text(encoding="utf-8")
+    default_fragment_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.frag.glsl"
+    ).read_text(encoding="utf-8")
+    assert "CameraUBO" in default_vertex_source
+    assert "PushConstants" in default_vertex_source
+    assert "out_color" in default_fragment_source
 
     scene_data = json.loads(result.scene_path.read_text(encoding="utf-8"))
     assert scene_data["uuid"] == "scene-uuid"
@@ -173,6 +182,12 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     ).read_text(encoding="utf-8")
     assert "PerFrame" in shadow_source
     assert "ShadowPushBlock" in shadow_source
+
+    default_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.vert.glsl"
+    ).read_text(encoding="utf-8")
+    assert "CameraUBO" in default_source
+    assert "PushConstants" in default_source
 
     tonemap_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-engine-tonemap.frag.glsl"
