@@ -24,7 +24,7 @@ class RenderContext2;
 
 namespace termin {
 
-// Reserved UBO binding slot for the per-material std140 block.
+// Fallback UBO binding slot for the per-material std140 block.
 // Convention:
 //   slot 0  — per-frame / lighting (LIGHTING_UBO_BINDING in ColorPass;
 //             PerFrame view/proj in ShadowPass/DepthPass/NormalPass/IdPass)
@@ -41,6 +41,13 @@ struct MaterialTextureBinding {
     tgfx::TextureHandle texture;
     tgfx::SamplerHandle sampler;  // may be {} for default sampling
 };
+
+// Resolve the per-material UBO binding from shader resource metadata. The
+// fallback keeps legacy shaders working until every load path populates
+// ShaderResourceLayout from compiled artifacts/reflection.
+uint32_t material_ubo_binding_for_shader(
+    const tc_shader* shader,
+    uint32_t fallback_binding = MATERIAL_UBO_BINDING);
 
 // Pack, upload, and bind one material UBO + its textures.
 //

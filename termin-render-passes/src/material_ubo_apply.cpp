@@ -5,6 +5,7 @@
 
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/render_context.hpp"
+#include "tcbase/tc_log.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -15,6 +16,26 @@ extern "C" {
 }
 
 namespace termin {
+
+uint32_t material_ubo_binding_for_shader(
+    const tc_shader* shader,
+    uint32_t fallback_binding)
+{
+    const tc_shader_resource_binding* binding =
+        tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL);
+    if (!binding) {
+        return fallback_binding;
+    }
+    if (binding->kind != TC_SHADER_RESOURCE_CONSTANT_BUFFER) {
+        tc::Log::error(
+            "Shader resource '%s' has kind %u, expected constant buffer; using fallback binding %u",
+            TC_SHADER_RESOURCE_MATERIAL,
+            binding->kind,
+            fallback_binding);
+        return fallback_binding;
+    }
+    return binding->binding;
+}
 
 void bind_material_ubo(
     const MaterialUboLayout& layout,
@@ -146,6 +167,8 @@ bool apply_material_phase_ubo(
 
     // Build the layout view on the tc_shader C-side entries.
     MaterialUboLayout layout = layout_from_tc_shader(shader);
+    uint32_t resolved_ubo_slot =
+        material_ubo_binding_for_shader(shader, ubo_slot);
 
     // Wrap each phase texture as a tgfx::TextureHandle. The active
     // IRenderDevice owns the bridge cache; callers must not defer-destroy
@@ -169,7 +192,7 @@ bool apply_material_phase_ubo(
         }
     }
 
-    bind_material_ubo(layout, values, textures, ubo_slot, ctx);
+    bind_material_ubo(layout, values, textures, resolved_ubo_slot, ctx);
     return !layout.empty() || !textures.empty();
 }
 

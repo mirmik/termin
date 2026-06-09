@@ -22,6 +22,7 @@ extern "C" {
 
 #include <tcbase/tc_log.hpp>
 
+#include <cstring>
 #include <span>
 #include <vector>
 
@@ -143,6 +144,28 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
     skybox_shader_handle_ = tc_shader_register_static_uuid(
         vs_it->second.source.c_str(), fs_it->second.source.c_str(),
         nullptr, shader_program.name.c_str(), SKYBOX_ENGINE_SHADER_UUID);
+    if (tc_shader* raw = tc_shader_get(skybox_shader_handle_)) {
+        std::vector<tc_material_ubo_entry> entries;
+        entries.reserve(skybox_layout_.entries.size());
+        for (const auto& src : skybox_layout_.entries) {
+            tc_material_ubo_entry entry{};
+            std::strncpy(entry.name, src.name.c_str(), TC_MATERIAL_UBO_NAME_MAX - 1);
+            entry.name[TC_MATERIAL_UBO_NAME_MAX - 1] = '\0';
+            std::strncpy(
+                entry.property_type,
+                src.property_type.c_str(),
+                TC_MATERIAL_UBO_TYPE_MAX - 1);
+            entry.property_type[TC_MATERIAL_UBO_TYPE_MAX - 1] = '\0';
+            entry.offset = src.offset;
+            entry.size = src.size;
+            entries.push_back(entry);
+        }
+        tc_shader_set_material_ubo_layout(
+            raw,
+            entries.data(),
+            static_cast<uint32_t>(entries.size()),
+            skybox_layout_.block_size);
+    }
 
     tgfx::BufferDesc vbo_desc;
     vbo_desc.size = sizeof(CUBE_VERTICES);
@@ -262,13 +285,13 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     };
     ctx.ctx2->set_vertex_layout(cube_layout);
 
-    // MaterialParams lands on MATERIAL_UBO_BINDING = 1 — the parser bakes
-    // that explicit `layout(std140, binding = 1)` into the synthesized
-    // block. Binding 0 belongs to LightingBlock; passing 0 here used to
-    // work back when the block was declared without an explicit binding
-    // and GL reassigned it at link time, but since the move to fixed
-    // bindings the slot has to match MATERIAL_UBO_BINDING.
-    bind_material_ubo(skybox_layout_, values, {}, MATERIAL_UBO_BINDING, *ctx.ctx2);
+    tc_shader* raw = tc_shader_get(skybox_shader_handle_);
+    bind_material_ubo(
+        skybox_layout_,
+        values,
+        {},
+        material_ubo_binding_for_shader(raw),
+        *ctx.ctx2);
 
     ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx::IndexType::Uint32);
     ctx.ctx2->end_pass();
