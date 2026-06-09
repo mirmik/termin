@@ -396,10 +396,11 @@ Status:
   `[[vk::location]]`, keeping the source backend-neutral for this safe stage.
 - Shadow, debug triangle, present blit, immediate renderer, Canvas2D, Text2D,
   Text3D, screen-space lines, world-space lines, world tube lines, base id,
-  `LineRenderer` default material, `FoliageLayerComponent` instanced vertex
-  templates, normal, depth/depth-only, depth/color conversion, skybox,
-  highlight, gizmo mask, ground grid, editor solid primitives, grayscale,
-  bloom, and tonemap built-ins are now catalog-managed sources.
+  `LineRenderer` default material, runtime package default color,
+  `FoliageLayerComponent` instanced vertex templates, normal, depth/depth-only,
+  depth/color conversion, skybox, highlight, gizmo mask, ground grid, editor
+  solid primitives, grayscale, bloom, and tonemap built-ins are now
+  catalog-managed sources.
   Skybox remains a `.shader`
   program so the existing material UBO parser owns its generated GLSL stage
   layout. The resource-using entries carry logical resource metadata and
@@ -421,6 +422,8 @@ Status:
 - `FoliageLayerComponent` foliage variants now load their engine-authored
   vertex stage templates from the catalog and still combine them with the active
   material fragment source at runtime.
+- `runtime_package_exporter` now builds the GLSL default color shader from the
+  built-in shader catalog instead of keeping inline GLSL strings in Python.
 - ResolvePass no longer has min/max shader variants. It resolves through the
   backend average path only; `strategy` remains as a serialized compatibility
   field and logs when an obsolete value is used.
