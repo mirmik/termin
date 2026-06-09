@@ -2,6 +2,7 @@
 #include <tgfx/tgfx_shader_handle.hpp>
 
 #include <termin/render/id_pass.hpp>
+#include "builtin_shader_sources.hpp"
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -26,6 +27,8 @@ extern "C" {
 
 namespace termin {
 
+constexpr const char* ID_ENGINE_SHADER_UUID = "termin-engine-id";
+
 namespace {
 
 // PerFrame UBO (binding 0): view + projection. 128 bytes std140.
@@ -47,53 +50,6 @@ static_assert(sizeof(IdPushStd140) == 80,
               "IdPushStd140 must be mat4 + vec4");
 static_assert(sizeof(IdPushStd140) <= 128,
               "IdPushStd140 must fit within Vulkan min push constant size");
-
-// PerFrame UBO at binding 0 (view+proj, uploaded once per pass).
-// Per-draw data (model + pickColor, 80 bytes) rides on push_constants in
-// Vulkan; under GL the same bytes land in the std140 emulation UBO at
-// binding 14 managed by tgfx2's ring buffer.
-constexpr const char* ID_PASS_VERT_UBO = R"(#version 450 core
-layout(location=0) in vec3 a_position;
-layout(location=1) in vec3 a_normal;
-layout(location=2) in vec2 a_texcoord;
-
-layout(std140, binding = 0) uniform PerFrame {
-    mat4 u_view;
-    mat4 u_projection;
-};
-
-struct IdPushData {
-    mat4 u_model;
-    vec4 u_pickColor;  // w ignored
-};
-#ifdef VULKAN
-layout(push_constant) uniform IdPushBlock { IdPushData pc; };
-#else
-layout(std140, binding = 14) uniform IdPushBlock { IdPushData pc; };
-#endif
-
-void main() {
-    gl_Position = u_projection * u_view * pc.u_model * vec4(a_position, 1.0);
-}
-)";
-
-constexpr const char* ID_PASS_FRAG_UBO = R"(#version 450 core
-struct IdPushData {
-    mat4 u_model;
-    vec4 u_pickColor;
-};
-#ifdef VULKAN
-layout(push_constant) uniform IdPushBlock { IdPushData pc; };
-#else
-layout(std140, binding = 14) uniform IdPushBlock { IdPushData pc; };
-#endif
-
-layout(location=0) out vec4 fragColor;
-
-void main() {
-    fragColor = vec4(pc.u_pickColor.rgb, 1.0);
-}
-)";
 
 // ID_PASS_VERT / ID_PASS_FRAG — referenced via vertex_shader_source() /
 // fragment_shader_source() for legacy override keying (GeometryPassBase
@@ -139,9 +95,7 @@ void IdPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     // re-creations, and the render device cache keeps compiled shader
     // modules live for zero-compile subsequent binds.
     if (tc_shader_handle_is_invalid(id_shader_handle_)) {
-        id_shader_handle_ = tc_shader_register_static(
-            ID_PASS_VERT_UBO, ID_PASS_FRAG_UBO,
-            nullptr, "IdEngineVSFS");
+        id_shader_handle_ = register_builtin_shader_from_catalog(ID_ENGINE_SHADER_UUID);
     }
 
 }
@@ -293,8 +247,8 @@ void IdPass::execute_with_data_tgfx2(
             tc_shader_handle_eq(dc.final_shader, id_shader_handle_);
 
         // Push constants (u_model + u_pickColor) are shared between the
-        // base and skinned paths — the skinned variant is just
-        // ID_PASS_VERT_UBO with injected BoneBlock, same push layout.
+        // base and skinned paths — the skinned variant injects BoneBlock into
+        // the canonical id vertex source, same push layout.
         IdPushStd140 push{};
         std::memcpy(push.u_model, model.data, sizeof(float) * 16);
         push.u_pickColor[0] = pick_r;
