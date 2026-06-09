@@ -394,7 +394,7 @@ Status:
   test-only source string.
 - The FSQ Slang source now relies on Slang/HLSL semantics rather than
   `[[vk::location]]`, keeping the source backend-neutral for this safe stage.
-- Shadow, debug triangle, base id, skybox, grayscale, bloom, and tonemap
+- Shadow, debug triangle, immediate renderer, base id, skybox, grayscale, bloom, and tonemap
   built-ins are now catalog-managed sources. Skybox remains a `.shader`
   program so the existing material UBO parser owns its generated GLSL stage
   layout. The resource-using entries carry logical resource metadata and
@@ -412,6 +412,10 @@ Status:
 - ResolvePass no longer has min/max shader variants. It resolves through the
   backend average path only; `strategy` remains as a serialized compatibility
   field and logs when an obsolete value is used.
+- The live catalog/source loader moved down into `termin_graphics2`
+  (`tgfx2/builtin_shader_sources.hpp`) so both engine renderers and
+  render-passes use one shared catalog API instead of a render-pass-local
+  helper.
 
 ## Phase 8: D3D11 Artifact Preparation
 
@@ -433,16 +437,18 @@ Acceptance:
 
 1. Move the fullscreen/present fragment path into the built-in shader catalog
    and generate artifacts from the same source path as FSQ.
-2. Keep texture-using post-process built-ins catalog-managed as GLSL until the
+2. Continue moving tgfx2 utility renderers (`Canvas2D`, `Text2D`, line
+   renderers) into the built-in shader catalog.
+3. Keep texture-using post-process built-ins catalog-managed as GLSL until the
    bind-by-name/runtime layout plan can carry their resource metadata.
-3. Replace remaining runtime exporter inline engine shader strings with catalog
+4. Replace remaining runtime exporter inline engine shader strings with catalog
    entries as each source migrates.
-4. Define the Slang-native material ABI before enabling `@property` on Slang
+5. Define the Slang-native material ABI before enabling `@property` on Slang
    `.shader` files: generated `MaterialParams : register(b1)`, texture register
    mapping, and include/module support in `termin_shaderc`.
-5. Decide later how generated Slang OpenGL artifacts should target the existing
+6. Decide later how generated Slang OpenGL artifacts should target the existing
    GL smoke environment: request a GL 4.5 context, lower Slang GLSL output if
    the toolchain supports it, or keep OpenGL generated-artifact rendering as a
    separate higher-requirement smoke.
-6. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
+7. Keep D3D11 work Windows-only and start it after Slang artifacts have a stable
    Linux-side generation and runtime-consumption contract.

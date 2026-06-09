@@ -2,10 +2,10 @@
 #include <tgfx/tgfx_shader_handle.hpp>
 
 #include <termin/render/id_pass.hpp>
-#include "builtin_shader_sources.hpp"
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
+#include "tgfx2/builtin_shader_sources.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
@@ -95,7 +95,7 @@ void IdPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     // re-creations, and the render device cache keeps compiled shader
     // modules live for zero-compile subsequent binds.
     if (tc_shader_handle_is_invalid(id_shader_handle_)) {
-        id_shader_handle_ = register_builtin_shader_from_catalog(ID_ENGINE_SHADER_UUID);
+        id_shader_handle_ = tgfx::register_builtin_shader_from_catalog(ID_ENGINE_SHADER_UUID);
     }
 
 }

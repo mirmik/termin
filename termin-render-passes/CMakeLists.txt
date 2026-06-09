@@ -56,7 +56,6 @@ include(TerminRpath)
 
 set(TERMIN_RENDER_PASSES_SOURCES
     src/termin_render_passes_version.c
-    src/builtin_shader_sources.cpp
     src/bloom_pass.cpp
     src/color_pass.cpp
     src/debug_triangle_pass.cpp
@@ -189,9 +188,8 @@ if(TERMIN_RENDER_PASSES_BUILD_TESTS)
     add_executable(termin_render_passes_builtin_shader_sources_test
         tests/test_builtin_shader_sources.cpp
     )
-    target_include_directories(termin_render_passes_builtin_shader_sources_test PRIVATE
+target_include_directories(termin_render_passes_builtin_shader_sources_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     target_link_libraries(termin_render_passes_builtin_shader_sources_test PRIVATE
         termin_render_passes

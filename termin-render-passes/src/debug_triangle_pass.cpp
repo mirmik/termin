@@ -1,12 +1,12 @@
 // debug_triangle_pass.cpp - Built-in pass that draws a diagnostic triangle.
 #include <termin/render/debug_triangle_pass.hpp>
 
-#include "builtin_shader_sources.hpp"
 #include "termin/render/execute_context.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
+#include "tgfx2/builtin_shader_sources.hpp"
 
 extern "C" {
 #include <tgfx/resources/tc_shader.h>
@@ -55,7 +55,7 @@ void DebugTrianglePass::execute(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = register_builtin_shader_from_catalog(DEBUG_TRIANGLE_ENGINE_SHADER_UUID);
+        shader_handle_ = tgfx::register_builtin_shader_from_catalog(DEBUG_TRIANGLE_ENGINE_SHADER_UUID);
         if (tc_shader_handle_is_invalid(shader_handle_)) return;
     }
 

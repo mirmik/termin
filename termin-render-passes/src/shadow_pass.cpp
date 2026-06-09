@@ -1,9 +1,9 @@
 #include "termin/render/shadow_pass.hpp"
-#include "builtin_shader_sources.hpp"
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 #include "termin/camera/camera_component.hpp"
 
+#include "tgfx2/builtin_shader_sources.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -95,7 +95,7 @@ void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
         // Process-lifetime engine shader: never destroyed (transient
         // TcShader wrappers from material phases / Python bindings
         // can't bounce ref_count through zero and take it down).
-        shadow_shader_handle_ = register_builtin_shader_from_catalog(SHADOW_ENGINE_SHADER_UUID);
+        shadow_shader_handle_ = tgfx::register_builtin_shader_from_catalog(SHADOW_ENGINE_SHADER_UUID);
     }
 }
 
