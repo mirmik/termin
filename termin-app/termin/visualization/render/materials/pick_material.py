@@ -19,14 +19,11 @@ def create_pick_material(name: str = "PickMaterial") -> TcMaterial:
     """Create a pick material for object selection pass."""
     state = TcRenderState.opaque()
     shader = _load_pick_shader()
-    return TcMaterial(
-        name=name,
-        shader=shader,
-        render_state=state,
-        phase_mark="pick",
-        priority=0,
-        shader_name="PickShader",
-    )
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "PickShader"
+    phase = mat.add_phase(shader, "pick", 0)
+    phase.state = state
+    return mat
 
 
 class PickMaterial(TcMaterial):

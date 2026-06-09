@@ -24,14 +24,11 @@ def create_shadow_material(name: str = "ShadowMaterial") -> TcMaterial:
     """Create a shadow pass material."""
     state = TcRenderState.opaque()
     shader = _load_shadow_shader()
-    return TcMaterial(
-        name=name,
-        shader=shader,
-        render_state=state,
-        phase_mark="shadow",
-        priority=0,
-        shader_name="ShadowShader",
-    )
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "ShadowShader"
+    phase = mat.add_phase(shader, "shadow", 0)
+    phase.state = state
+    return mat
 
 
 class ShadowMaterial(TcMaterial):
