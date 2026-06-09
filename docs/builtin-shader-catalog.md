@@ -60,6 +60,10 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-text2d` | `Text2DEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-text2d.vert.glsl`, `builtin_shaders/termin-engine-text2d.frag.glsl` |
 | `termin-engine-text2d-sdf` | `Text2DEngineSdfVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-text2d-sdf.vert.glsl`, `builtin_shaders/termin-engine-text2d-sdf.frag.glsl` |
 | `termin-engine-text3d` | `Text3DEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-text3d.vert.glsl`, `builtin_shaders/termin-engine-text3d.frag.glsl` |
+| `termin-engine-screen-line` | `ScreenSpaceLineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-screen-line.vert.glsl`, `builtin_shaders/termin-engine-screen-line.frag.glsl` |
+| `termin-engine-screen-line-cap` | `ScreenSpaceLineCapVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-screen-line-cap.vert.glsl`, `builtin_shaders/termin-engine-screen-line.frag.glsl` |
+| `termin-engine-screen-line-join` | `ScreenSpaceLineJoinVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-screen-line-join.vert.glsl`, `builtin_shaders/termin-engine-screen-line.frag.glsl` |
+| `termin-engine-screen-line-round-join` | `ScreenSpaceLineRoundJoinVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-screen-line-round-join.vert.glsl`, `builtin_shaders/termin-engine-screen-line.frag.glsl` |
 | `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-id.vert.glsl`, `builtin_shaders/termin-engine-id.frag.glsl` |
 | `termin-engine-skybox` | `SkyboxEngineVSFS` | vertex + fragment | shader program | `builtin_shaders/termin-engine-skybox.shader` |
 | `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-grayscale.frag.glsl` |
