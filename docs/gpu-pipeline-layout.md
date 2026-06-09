@@ -59,11 +59,11 @@ backend-neutral `material` constant buffer lands on binding 1.
 | `MaterialParams` | `layout(std140, binding = 1) uniform MaterialParams` | `ConstantBuffer<MaterialParams> material;` with binding from `<artifact>.layout.json` |
 | `PerFrame` | `layout(std140, binding = 2) uniform PerFrame` | `cbuffer PerFrame : register(b2)` |
 | `ShadowBlock` | `layout(std140, binding = 3) uniform ShadowBlock` | `cbuffer ShadowBlock : register(b3)` |
-| material textures 0–3 | `layout(binding = 4..7) uniform sampler2D ...` | Transitional sources may still use `Texture2D ... : register(t4..t7)`; clean Slang texture slots come from reflection sidecar |
-| shadow map array | `layout(binding = 8) uniform sampler2DShadow u_shadow_map[16]` | Transitional sources may still use `Texture2DArray`/shadow texture binding at `register(t8)`; sampler at `sN` |
-| material textures 4–10 | `layout(binding = 9..15) uniform sampler2D ...` | Transitional sources may still use `Texture2D ... : register(t9..t15)`; clean Slang texture slots come from reflection sidecar |
+| material textures 0–3 | `layout(binding = 4..7) uniform sampler2D ...` | `Sampler2D ...;` with binding assigned by `termin_shaderc` and recorded in `<artifact>.layout.json` |
+| shadow map array | `layout(binding = 8) uniform sampler2DShadow u_shadow_map[16]` | Pending Slang shadow policy; split `Texture2D` + `SamplerState` is not supported by the current Vulkan shared layout |
+| material textures 4–10 | `layout(binding = 9..15) uniform sampler2D ...` | `Sampler2D ...;` with binding assigned by `termin_shaderc` and recorded in `<artifact>.layout.json` |
 | `BoneBlock` | `layout(std140, binding = 16) uniform BoneBlock` | `cbuffer BoneBlock : register(b16)` |
-| extra FS samplers | `layout(binding = 17..23) uniform sampler2D ...` | `Texture2D ... : register(t17..t23)` |
+| extra FS samplers | `layout(binding = 17..23) uniform sampler2D ...` | `Sampler2D ...;` with binding assigned by `termin_shaderc` and recorded in `<artifact>.layout.json` |
 | `SlangDrawBlock` | n/a for GLSL material shaders | `ConstantBuffer<SlangDrawData> ... : register(b24, space0)` |
 | push block | Vulkan `layout(push_constant)`, OpenGL UBO binding 14 | D3D11 emulated cbuffer; reserve `b14` unless a backend-specific layout says otherwise |
 
