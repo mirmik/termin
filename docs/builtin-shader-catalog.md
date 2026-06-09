@@ -54,6 +54,7 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-fsq` | `FullscreenQuadEngineVS` | vertex | Slang | `builtin_shaders/termin-engine-fsq.vert.slang` |
 | `termin-engine-shadow` | `ShadowEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-shadow.vert.glsl`, `builtin_shaders/termin-engine-shadow.frag.glsl` |
 | `termin-engine-debug-triangle` | `DebugTrianglePassVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-debug-triangle.vert.glsl`, `builtin_shaders/termin-engine-debug-triangle.frag.glsl` |
+| `termin-engine-present-blit` | `PresentBlitVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-present-blit.vert.glsl`, `builtin_shaders/termin-engine-present-blit.frag.glsl` |
 | `termin-engine-immediate` | `ImmediateEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-immediate.vert.glsl`, `builtin_shaders/termin-engine-immediate.frag.glsl` |
 | `termin-engine-canvas2d-solid` | `Canvas2DSolidVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-canvas2d.vert.glsl`, `builtin_shaders/termin-engine-canvas2d-solid.frag.glsl` |
 | `termin-engine-canvas2d-texture` | `Canvas2DTextureVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-canvas2d.vert.glsl`, `builtin_shaders/termin-engine-canvas2d-texture.frag.glsl` |
