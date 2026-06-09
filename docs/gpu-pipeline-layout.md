@@ -31,10 +31,11 @@ creates. On OpenGL each UBO binding maps directly to a GL UBO binding point;
 samplers map to texture units by the same number. Legacy GLSL sources still
 spell this contract with `layout(binding = N)`. Slang material sources should
 not spell backend layout in source; `termin_shaderc` captures Slang reflection
-into `<artifact>.layout.json`, and runtime upload code resolves resource
-bindings through `TcShader` metadata. While the shared-layout bridge is still
-in place, `termin_shaderc` shifts inferred Slang constant-buffer bindings by 1
-so the backend-neutral `material` constant buffer lands on binding 1.
+into `<artifact>.layout.json`, including constant buffers, textures, samplers,
+and storage textures. Runtime upload code resolves resource bindings through
+`TcShader` metadata. While the shared-layout bridge is still in place,
+`termin_shaderc` shifts inferred Slang constant-buffer bindings by 1 so the
+backend-neutral `material` constant buffer lands on binding 1.
 
 | Binding | Type | Count | Stages | Name | Owner / writer |
 |---|---|---|---|---|---|
@@ -58,9 +59,9 @@ so the backend-neutral `material` constant buffer lands on binding 1.
 | `MaterialParams` | `layout(std140, binding = 1) uniform MaterialParams` | `ConstantBuffer<MaterialParams> material;` with binding from `<artifact>.layout.json` |
 | `PerFrame` | `layout(std140, binding = 2) uniform PerFrame` | `cbuffer PerFrame : register(b2)` |
 | `ShadowBlock` | `layout(std140, binding = 3) uniform ShadowBlock` | `cbuffer ShadowBlock : register(b3)` |
-| material textures 0–3 | `layout(binding = 4..7) uniform sampler2D ...` | `Texture2D ... : register(t4..t7)` |
-| shadow map array | `layout(binding = 8) uniform sampler2DShadow u_shadow_map[16]` | `Texture2DArray`/shadow texture binding at `register(t8)`; sampler at `sN` |
-| material textures 4–10 | `layout(binding = 9..15) uniform sampler2D ...` | `Texture2D ... : register(t9..t15)` |
+| material textures 0–3 | `layout(binding = 4..7) uniform sampler2D ...` | Transitional sources may still use `Texture2D ... : register(t4..t7)`; clean Slang texture slots come from reflection sidecar |
+| shadow map array | `layout(binding = 8) uniform sampler2DShadow u_shadow_map[16]` | Transitional sources may still use `Texture2DArray`/shadow texture binding at `register(t8)`; sampler at `sN` |
+| material textures 4–10 | `layout(binding = 9..15) uniform sampler2D ...` | Transitional sources may still use `Texture2D ... : register(t9..t15)`; clean Slang texture slots come from reflection sidecar |
 | `BoneBlock` | `layout(std140, binding = 16) uniform BoneBlock` | `cbuffer BoneBlock : register(b16)` |
 | extra FS samplers | `layout(binding = 17..23) uniform sampler2D ...` | `Texture2D ... : register(t17..t23)` |
 | `SlangDrawBlock` | n/a for GLSL material shaders | `ConstantBuffer<SlangDrawData> ... : register(b24, space0)` |

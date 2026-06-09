@@ -200,20 +200,21 @@ layout metadata for compiled shader artifacts.
 
 Status 2026-06-09: partial runtime bridge is in place. `termin_shaderc` now
 writes `<artifact>.layout.json` next to generated artifacts. For Slang it asks
-`slangc` for reflection JSON, records reflected resource kind/binding/size, and
+`slangc` for reflection JSON, records reflected constant buffers, textures,
+samplers, storage textures, bindings, and buffer sizes where available, and
 falls back to source inference for fake/offline compiler paths. The generated
 Slang `MaterialParams` declaration no longer contains `register(...)`; while
 the shared-layout bridge exists, `termin_shaderc` shifts inferred constant
 buffers so `material` lands on binding 1. `tgfx2_load_or_compile_shader_artifact_for_backend`
 loads that sidecar and merges it into `TcShader` resource metadata, preserving
-the parser-owned material UBO byte layout. Full multi-resource reflection,
-collision diagnostics, and general automatic binding assignment are still
+the parser-owned material UBO byte layout. Resource collision diagnostics,
+entry-point IO metadata, and general automatic binding assignment are still
 pending.
 
 Tasks:
 
 - Invoke Slang reflection for every compiled Slang stage. (Started for
-  constant-buffer resources.)
+  constant buffers, textures, samplers, and storage textures.)
 - Capture entry point, stage, inputs, outputs, resources, resource kind,
   semantic names, and generated backend binding information.
 - Write `<artifact>.layout.json` next to generated artifacts.
