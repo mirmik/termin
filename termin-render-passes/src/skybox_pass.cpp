@@ -1,12 +1,12 @@
 // skybox_pass.cpp - Skybox rendered fully through RenderContext2 + material UBO.
 #include "termin/render/skybox_pass.hpp"
 
-#include "builtin_shader_sources.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/materials/shader_parser.hpp"
 #include "termin/render/render_camera.hpp"
 
+#include "tgfx2/builtin_shader_sources.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -114,8 +114,8 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
     // std140 MaterialParams block from the @property entries, rewrites
     // the stage sources to include the block declaration, and returns a
     // layout we can use directly for std140_pack / block_size sizing.
-    const BuiltinShaderProgramSource shader_program =
-        load_builtin_shader_program_from_catalog(SKYBOX_ENGINE_SHADER_UUID);
+    const tgfx::BuiltinShaderProgramSource shader_program =
+        tgfx::load_builtin_shader_program_from_catalog(SKYBOX_ENGINE_SHADER_UUID);
     if (shader_program.source.empty()) {
         return;
     }

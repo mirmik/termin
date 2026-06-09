@@ -6,8 +6,8 @@
 // removed in Stage 8.1.
 #include <termin/render/tonemap_pass.hpp>
 #include "termin/render/execute_context.hpp"
-#include "builtin_shader_sources.hpp"
 
+#include "tgfx2/builtin_shader_sources.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -101,7 +101,7 @@ void TonemapPass::execute(ExecuteContext& ctx) {
 
     device2_ = &ctx.ctx2->device();
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = register_builtin_shader_from_catalog(TONEMAP_ENGINE_SHADER_UUID);
+        shader_handle_ = tgfx::register_builtin_shader_from_catalog(TONEMAP_ENGINE_SHADER_UUID);
         if (tc_shader_handle_is_invalid(shader_handle_)) return;
     }
     if (!params_ubo_) {

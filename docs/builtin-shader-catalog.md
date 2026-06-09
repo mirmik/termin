@@ -11,10 +11,14 @@ generation path.
   `termin-graphics/include/tgfx2/engine_shader_catalog.hpp`.
 - Built-in source files live in `termin-graphics/resources/builtin_shaders/`.
 - SDK installs those source files to `share/termin/builtin_shaders/`.
+- The live C++ catalog/source loader is owned by `termin_graphics2` and exposed
+  through `tgfx2/builtin_shader_sources.hpp`, so engine renderers and render
+  passes resolve built-ins through the same API.
 - Runtime/package exporters resolve built-in sources from the repo first, then
   from `TERMIN_SDK/share/termin/builtin_shaders`, then from
   `sys.prefix/share/termin/builtin_shaders`.
-- C++ render passes register live built-in shaders by stable catalog UUID.
+- C++ engine renderers and render passes register live built-in shaders by
+  stable catalog UUID.
   The catalog/source loader resolves files from `TERMIN_BUILTIN_SHADER_ROOT`,
   then from `TERMIN_SDK/share/termin/builtin_shaders`, then from the
   build-tree `termin-graphics/resources/builtin_shaders` directory.
@@ -50,6 +54,7 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-fsq` | `FullscreenQuadEngineVS` | vertex | Slang | `builtin_shaders/termin-engine-fsq.vert.slang` |
 | `termin-engine-shadow` | `ShadowEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-shadow.vert.glsl`, `builtin_shaders/termin-engine-shadow.frag.glsl` |
 | `termin-engine-debug-triangle` | `DebugTrianglePassVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-debug-triangle.vert.glsl`, `builtin_shaders/termin-engine-debug-triangle.frag.glsl` |
+| `termin-engine-immediate` | `ImmediateEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-immediate.vert.glsl`, `builtin_shaders/termin-engine-immediate.frag.glsl` |
 | `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-id.vert.glsl`, `builtin_shaders/termin-engine-id.frag.glsl` |
 | `termin-engine-skybox` | `SkyboxEngineVSFS` | vertex + fragment | shader program | `builtin_shaders/termin-engine-skybox.shader` |
 | `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-grayscale.frag.glsl` |
@@ -79,9 +84,9 @@ Runtime fallback GLSL is allowed only for legacy/editor compatibility when no
 artifact root is configured. It must stay next to the catalog entry, not in a
 caller-specific copy.
 
-Live render passes should call the built-in catalog loader with only the stable
-shader UUID. Filenames, shader names, and stage shape belong in
-`engine-shader-catalog.json`, not in individual pass implementations.
+Live engine renderers and render passes should call the built-in catalog loader
+with only the stable shader UUID. Filenames, shader names, and stage shape
+belong in `engine-shader-catalog.json`, not in individual pass implementations.
 The current C++ live registration helper accepts catalog-managed GLSL stage
 entries and `.shader` program entries; Slang built-ins are consumed through
 generated artifacts until the live runtime path can bind by reflected layout.

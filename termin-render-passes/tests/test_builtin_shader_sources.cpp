@@ -2,7 +2,7 @@
 
 GUARD_TEST_MAIN();
 
-#include "builtin_shader_sources.hpp"
+#include "tgfx2/builtin_shader_sources.hpp"
 
 #include <array>
 #include <cstdlib>
@@ -62,7 +62,7 @@ TEST_CASE("built-in fragment shader registration reads source file from resource
     set_builtin_root(root);
     tc_shader_init();
 
-    tc_shader_handle handle = termin::register_builtin_fragment_shader(
+    tc_shader_handle handle = tgfx::register_builtin_fragment_shader(
         kFilename,
         "TestBuiltinShaderFS",
         "test-builtin-shader-source-uuid");
@@ -104,7 +104,7 @@ TEST_CASE("built-in vertex-fragment shader registration reads both source files"
     set_builtin_root(root);
     tc_shader_init();
 
-    tc_shader_handle handle = termin::register_builtin_vertex_fragment_shader(
+    tc_shader_handle handle = tgfx::register_builtin_vertex_fragment_shader(
         kVertexFilename,
         kFragmentFilename,
         "TestBuiltinShaderVSFS",
@@ -157,7 +157,7 @@ TEST_CASE("built-in shader catalog registration resolves fragment-only entry by 
     tc_shader_init();
 
     tc_shader_handle handle =
-        termin::register_builtin_shader_from_catalog("test-catalog-fragment");
+        tgfx::register_builtin_shader_from_catalog("test-catalog-fragment");
     REQUIRE(!tc_shader_handle_is_invalid(handle));
 
     tc_shader* shader = tc_shader_get(handle);
@@ -211,7 +211,7 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
     set_builtin_root(root);
     tc_shader_init();
 
-    tc_shader_handle handle = termin::register_builtin_shader_from_catalog("test-catalog-vsfs");
+    tc_shader_handle handle = tgfx::register_builtin_shader_from_catalog("test-catalog-vsfs");
     REQUIRE(!tc_shader_handle_is_invalid(handle));
 
     tc_shader* shader = tc_shader_get(handle);
@@ -255,8 +255,8 @@ TEST_CASE("built-in shader catalog resolves shader program source by uuid") {
 
     set_builtin_root(root);
 
-    termin::BuiltinShaderProgramSource program =
-        termin::load_builtin_shader_program_from_catalog("test-catalog-program");
+    tgfx::BuiltinShaderProgramSource program =
+        tgfx::load_builtin_shader_program_from_catalog("test-catalog-program");
     CHECK(program.name == "TestCatalogProgram");
     REQUIRE(!program.source.empty());
     CHECK(program.source.find("TEST_CATALOG_PROGRAM_MARKER") != std::string::npos);
@@ -276,7 +276,8 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         bool has_fragment;
     };
 
-    constexpr std::array<ExpectedShader, 9> kExpectedShaders{{
+    constexpr std::array<ExpectedShader, 10> kExpectedShaders{{
+        {"termin-engine-immediate", "ImmediateEngineVSFS", true, true},
         {"termin-engine-shadow", "ShadowEngineVSFS", true, true},
         {"termin-engine-debug-triangle", "DebugTrianglePassVSFS", true, true},
         {"termin-engine-id", "IdEngineVSFS", true, true},
@@ -289,7 +290,7 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
     }};
 
     for (const ExpectedShader& expected : kExpectedShaders) {
-        tc_shader_handle handle = termin::register_builtin_shader_from_catalog(expected.uuid);
+        tc_shader_handle handle = tgfx::register_builtin_shader_from_catalog(expected.uuid);
         REQUIRE(!tc_shader_handle_is_invalid(handle));
 
         tc_shader* shader = tc_shader_get(handle);
@@ -300,8 +301,8 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         CHECK((shader->fragment_source != nullptr) == expected.has_fragment);
     }
 
-    termin::BuiltinShaderProgramSource skybox =
-        termin::load_builtin_shader_program_from_catalog("termin-engine-skybox");
+    tgfx::BuiltinShaderProgramSource skybox =
+        tgfx::load_builtin_shader_program_from_catalog("termin-engine-skybox");
     CHECK(skybox.name == "SkyboxEngineVSFS");
     REQUIRE(!skybox.source.empty());
     CHECK(skybox.source.find("@program Skybox") != std::string::npos);

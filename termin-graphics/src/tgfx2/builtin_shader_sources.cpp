@@ -1,4 +1,4 @@
-#include "builtin_shader_sources.hpp"
+#include "tgfx2/builtin_shader_sources.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -11,7 +11,7 @@
 #include <tcbase/tc_log.hpp>
 #include <tcbase/trent/json.h>
 
-namespace termin {
+namespace tgfx {
 
 namespace {
 
@@ -291,4 +291,4 @@ BuiltinShaderProgramSource load_builtin_shader_program_from_catalog(const char* 
     return result;
 }
 
-} // namespace termin
+} // namespace tgfx
