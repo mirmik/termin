@@ -182,11 +182,11 @@ bool apply_material_phase_ubo(
     uint32_t resolved_ubo_slot =
         material_ubo_binding_for_shader(shader, ubo_slot);
 
-    // Wrap each phase texture as a tgfx::TextureHandle. The active
-    // IRenderDevice owns the bridge cache; callers must not defer-destroy
-    // these handles. Sampler slots start at tex_slot_start and increment
-    // in declaration order; shader_parser emits matching layout(binding=N)
-    // qualifiers for .shader @property Texture entries.
+    // Wrap each phase texture as a tgfx::TextureHandle and resolve its
+    // binding slot from the shader's resource layout metadata. For Slang
+    // shaders the binding comes from the compiled artifact / slangc
+    // reflection; for legacy GLSL shaders without resource metadata we
+    // fall back to the index-based slot assignment.
     std::vector<MaterialTextureBinding> textures;
     textures.reserve(phase->texture_count);
     for (size_t i = 0; i < phase->texture_count; i++) {
@@ -198,7 +198,16 @@ bool apply_material_phase_ubo(
             wrap_tc_texture_as_tgfx2(device, mat_tex.texture);
         if (tex2) {
             MaterialTextureBinding b;
-            b.slot = material_texture_binding_for_index(static_cast<uint32_t>(i));
+            // Try name-based lookup first (Slang / new layout metadata).
+            const tc_shader_resource_binding* rb =
+                tc_shader_find_resource_binding(shader, mat_tex.name);
+            if (rb && rb->kind == TC_SHADER_RESOURCE_TEXTURE) {
+                b.slot = rb->binding;
+            } else {
+                // Legacy fallback: index-based slot assignment.
+                b.slot = material_texture_binding_for_index(
+                    static_cast<uint32_t>(i));
+            }
             b.texture = tex2;
             textures.push_back(b);
         }
