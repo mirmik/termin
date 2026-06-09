@@ -12,6 +12,7 @@
 #include <termin/geom/general_transform3.hpp>
 #include <termin/material/tc_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <termin/render/drawable.hpp>
 #include <termin/materials/shader_parser.hpp>
 #include <tc_log.h>
@@ -19,6 +20,7 @@
 namespace termin {
 
 inline constexpr const char* OFF_MESH_LINK_DEBUG_PHASE = "editor_debug_transparent";
+inline constexpr const char* OFF_MESH_LINK_DEBUG_SHADER_UUID = "termin-engine-off-mesh-link-debug";
 
 enum class OffMeshLinkType : int {
     Generic = 0,
@@ -296,29 +298,21 @@ private:
             return true;
         }
 
-        const char* vertex_source = R"(
-#version 330 core
-
-layout(location = 0) in vec3 a_position;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-)";
-
-        const char* fragment_source = R"(
-#version 330 core
-
-out vec4 frag_color;
-
-void main() {
-    frag_color = vec4(1.0, 0.55, 0.08, 0.9);
-}
-)";
+        const std::string vertex_source =
+            tgfx::load_builtin_shader_stage_source_from_catalog(
+                OFF_MESH_LINK_DEBUG_SHADER_UUID,
+                "vertex");
+        const std::string fragment_source =
+            tgfx::load_builtin_shader_stage_source_from_catalog(
+                OFF_MESH_LINK_DEBUG_SHADER_UUID,
+                "fragment");
+        if (vertex_source.empty() || fragment_source.empty()) {
+            tc_log(
+                TC_LOG_ERROR,
+                "[OffMeshLinkComponent] failed to load debug shader '%s'",
+                OFF_MESH_LINK_DEBUG_SHADER_UUID);
+            return false;
+        }
 
         tc_render_state state = tc_render_state_transparent();
         state.depth_test = 1;
