@@ -4,6 +4,7 @@
 #include <termin/camera/render_camera_utils.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
@@ -22,6 +23,11 @@
 #include <span>
 
 namespace termin {
+
+constexpr const char* DEPTH_ENGINE_SHADER_UUID = "termin-engine-depth";
+constexpr const char* DEPTH_ONLY_ENGINE_SHADER_UUID = "termin-engine-depth-only";
+constexpr const char* DEPTH_TO_COLOR_ENGINE_SHADER_UUID = "termin-engine-depth-to-color";
+constexpr const char* COLOR_TO_DEPTH_ENGINE_SHADER_UUID = "termin-engine-color-to-depth";
 
 namespace {
 
@@ -53,136 +59,6 @@ struct DepthPushStd140 {
 static_assert(sizeof(DepthPushStd140) == 64,
               "DepthPushStd140 must be exactly one mat4");
 
-constexpr const char* DEPTH_PASS_VERT_UBO = R"(#version 450 core
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-layout(location = 2) in vec2 a_texcoord;
-
-layout(std140, binding = 0) uniform PerFrame {
-    mat4  u_view;
-    mat4  u_projection;
-    float u_near;
-    float u_far;
-    float u_depth_encoding;
-};
-
-struct DepthPushData {
-    mat4 u_model;
-};
-#ifdef VULKAN
-layout(push_constant) uniform DepthPushBlock { DepthPushData pc; };
-#else
-layout(std140, binding = 14) uniform DepthPushBlock { DepthPushData pc; };
-#endif
-
-layout(location = 0) out float v_linear_depth;
-layout(location = 1) out float v_perspective_depth;
-layout(location = 2) out float v_log_depth;
-
-void main() {
-    vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
-    vec4 view_pos  = u_view * world_pos;
-
-    float view_depth = view_pos.y;
-    float depth = (view_depth - u_near) / (u_far - u_near);
-
-    vec4 clip_pos = u_projection * view_pos;
-    float ndc_depth = clip_pos.z / max(abs(clip_pos.w), 1e-6);
-    float perspective_depth = ndc_depth;
-
-    v_linear_depth = depth;
-    v_perspective_depth = perspective_depth;
-    v_log_depth = log2(max(view_depth, 0.0) + 1.0) / log2(max(u_far, 1e-6) + 1.0);
-    gl_Position = clip_pos;
-}
-)";
-
-constexpr const char* DEPTH_PASS_FRAG_UBO = R"(#version 450 core
-layout(location = 0) in float v_linear_depth;
-layout(location = 1) in float v_perspective_depth;
-layout(location = 2) in float v_log_depth;
-layout(location = 0) out vec4 FragColor;
-
-layout(std140, binding = 0) uniform PerFrame {
-    mat4  u_view;
-    mat4  u_projection;
-    float u_near;
-    float u_far;
-    float u_depth_encoding;
-};
-
-void main() {
-    int mode = int(u_depth_encoding + 0.5);
-    float d = v_linear_depth;
-    if (mode == 2 || mode == 3) {
-        d = v_perspective_depth;
-    } else if (mode == 4 || mode == 5) {
-        d = v_log_depth;
-    }
-    d = clamp(d, 0.0, 1.0);
-    if (mode == 1 || mode == 3 || mode == 5) {
-        d = 1.0 - d;
-    }
-    FragColor = vec4(d, d, d, 1.0);
-}
-)";
-
-constexpr const char* DEPTH_ONLY_VERT_UBO = R"(#version 450 core
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-layout(location = 2) in vec2 a_texcoord;
-
-layout(std140, binding = 0) uniform PerFrame {
-    mat4  u_view;
-    mat4  u_projection;
-    float u_near;
-    float u_far;
-};
-
-struct DepthPushData {
-    mat4 u_model;
-};
-#ifdef VULKAN
-layout(push_constant) uniform DepthPushBlock { DepthPushData pc; };
-#else
-layout(std140, binding = 14) uniform DepthPushBlock { DepthPushData pc; };
-#endif
-
-void main() {
-    vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
-    vec4 view_pos  = u_view * world_pos;
-    gl_Position = u_projection * view_pos;
-}
-)";
-
-constexpr const char* DEPTH_ONLY_FRAG_UBO = R"(#version 450 core
-void main() {
-}
-)";
-
-constexpr const char* DEPTH_TO_COLOR_FRAG = R"(
-#version 330 core
-in vec2 v_uv;
-layout(binding = 9) uniform sampler2D u_depth_tex;
-out vec4 FragColor;
-
-void main() {
-    float d = texture(u_depth_tex, v_uv).r;
-    FragColor = vec4(vec3(d), 1.0);
-}
-)";
-
-constexpr const char* COLOR_TO_DEPTH_FRAG = R"(
-#version 330 core
-in vec2 v_uv;
-layout(binding = 9) uniform sampler2D u_color_tex;
-
-void main() {
-    float d = texture(u_color_tex, v_uv).r;
-    gl_FragDepth = clamp(d, 0.0, 1.0);
-}
-)";
-
 float depth_encoding_mode(const std::string& encoding) {
     if (encoding == "linear") return 0.0f;
     if (encoding == "linear_inverse") return 1.0f;
@@ -210,9 +86,8 @@ void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
 
     // Engine-shader: process-lifetime ownership via tc_shader registry.
     if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
-        depth_shader_handle_ = tc_shader_register_static(
-            DEPTH_PASS_VERT_UBO, DEPTH_PASS_FRAG_UBO,
-            nullptr, "DepthEngineVSFS_Encoding");
+        depth_shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(DEPTH_ENGINE_SHADER_UUID);
     }
 
 }
@@ -340,7 +215,7 @@ void DepthPass::execute_with_data_tgfx2(
             tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
 
         // Both paths share push_constants + PerFrame UBO — the skinned
-        // variant is just DEPTH_PASS_VERT_UBO with injected BoneBlock.
+        // variant is the catalog depth vertex shader with injected BoneBlock.
         DepthPushStd140 push{};
         std::memcpy(push.u_model, model.data, sizeof(float) * 16);
         ctx.ctx2->set_push_constants(&push, sizeof(push));
@@ -443,9 +318,8 @@ void DepthPass::execute(ExecuteContext& ctx) {
 void DepthOnlyPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
     if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
-        depth_shader_handle_ = tc_shader_register_static(
-            DEPTH_ONLY_VERT_UBO, DEPTH_ONLY_FRAG_UBO,
-            nullptr, "DepthOnlyEngineVSFS");
+        depth_shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(DEPTH_ONLY_ENGINE_SHADER_UUID);
     }
 }
 
@@ -671,8 +545,8 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 void DepthToColorPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = tc_shader_register_static(
-            nullptr, DEPTH_TO_COLOR_FRAG, nullptr, "DepthToColorFS");
+        shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(DEPTH_TO_COLOR_ENGINE_SHADER_UUID);
     }
 }
 
@@ -740,8 +614,8 @@ void DepthToColorPass::execute(ExecuteContext& ctx) {
 void ColorToDepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
     if (tc_shader_handle_is_invalid(shader_handle_)) {
-        shader_handle_ = tc_shader_register_static(
-            nullptr, COLOR_TO_DEPTH_FRAG, nullptr, "ColorToDepthFS");
+        shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(COLOR_TO_DEPTH_ENGINE_SHADER_UUID);
     }
 }
 

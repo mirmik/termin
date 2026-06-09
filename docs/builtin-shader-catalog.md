@@ -74,6 +74,11 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-world-tube-line-cap` | `WorldTubeLineCapVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line-cap.vert.glsl`, `builtin_shaders/termin-engine-world-tube-line.frag.glsl` |
 | `termin-engine-world-tube-line-lit` | `WorldTubeLineLitFS` | fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line-lit.frag.glsl` |
 | `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-id.vert.glsl`, `builtin_shaders/termin-engine-id.frag.glsl` |
+| `termin-engine-normal` | `NormalEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-normal.vert.glsl`, `builtin_shaders/termin-engine-normal.frag.glsl` |
+| `termin-engine-depth` | `DepthEngineVSFS_Encoding` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-depth.vert.glsl`, `builtin_shaders/termin-engine-depth.frag.glsl` |
+| `termin-engine-depth-only` | `DepthOnlyEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-depth-only.vert.glsl`, `builtin_shaders/termin-engine-depth-only.frag.glsl` |
+| `termin-engine-depth-to-color` | `DepthToColorFS` | fragment | GLSL | `builtin_shaders/termin-engine-depth-to-color.frag.glsl` |
+| `termin-engine-color-to-depth` | `ColorToDepthFS` | fragment | GLSL | `builtin_shaders/termin-engine-color-to-depth.frag.glsl` |
 | `termin-engine-skybox` | `SkyboxEngineVSFS` | vertex + fragment | shader program | `builtin_shaders/termin-engine-skybox.shader` |
 | `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-grayscale.frag.glsl` |
 | `termin-engine-bloom-bright` | `BloomBrightFS` | fragment | GLSL | `builtin_shaders/termin-engine-bloom-bright.frag.glsl` |
