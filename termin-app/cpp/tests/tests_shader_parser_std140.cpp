@@ -209,6 +209,49 @@ TEST_CASE("synthesize: empty layout yields empty string")
     CHECK_EQ(synthesize_material_ubo_slang(layout), std::string{});
 }
 
+TEST_CASE("tc_shader: material UBO layout registers material resource binding")
+{
+    tc_shader_handle handle = tc_shader_from_sources_ex(
+        "#version 450 core\nvoid main() { gl_Position = vec4(0.0); }\n",
+        "#version 450 core\nlayout(location=0) out vec4 FragColor; void main() { FragColor = vec4(1.0); }\n",
+        nullptr,
+        "resource-layout-test",
+        nullptr,
+        "00000000-0000-0000-0001-000000000099",
+        TC_SHADER_LANGUAGE_GLSL,
+        TC_SHADER_ARTIFACT_OPTIONAL);
+    CHECK(!tc_shader_handle_is_invalid(handle));
+
+    tc_shader* shader = tc_shader_get(handle);
+    CHECK(shader != nullptr);
+
+    tc_material_ubo_entry entry{};
+    std::strncpy(entry.name, "tint", TC_MATERIAL_UBO_NAME_MAX - 1);
+    std::strncpy(entry.property_type, "Color", TC_MATERIAL_UBO_TYPE_MAX - 1);
+    entry.offset = 0;
+    entry.size = 16;
+    tc_shader_set_material_ubo_layout(shader, &entry, 1, 16);
+
+    CHECK_EQ(tc_shader_resource_binding_count(shader), 1u);
+    const tc_shader_resource_binding* binding =
+        tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL);
+    CHECK(binding != nullptr);
+    if (binding) {
+        CHECK_EQ(std::string(binding->name), std::string(TC_SHADER_RESOURCE_MATERIAL));
+        CHECK_EQ(binding->kind, static_cast<uint32_t>(TC_SHADER_RESOURCE_CONSTANT_BUFFER));
+        CHECK_EQ(binding->set, TC_SHADER_RESOURCE_SET_DEFAULT);
+        CHECK_EQ(binding->binding, TC_SHADER_RESOURCE_BINDING_MATERIAL);
+        CHECK_EQ(binding->stage_mask, static_cast<uint32_t>(TC_SHADER_STAGE_ALL_GRAPHICS));
+        CHECK_EQ(binding->size, 16u);
+    }
+
+    tc_shader_set_material_ubo_layout(shader, nullptr, 0, 0);
+    CHECK_EQ(tc_shader_resource_binding_count(shader), 0u);
+    CHECK(tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL) == nullptr);
+
+    tc_shader_destroy(handle);
+}
+
 TEST_CASE("strip_uniform_decls: removes named uniforms but keeps others")
 {
     std::string src =

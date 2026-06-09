@@ -6,6 +6,7 @@ from termin.materials import (
     ShaderMultyPhaseProgramm,
     ShaderPhase,
     MaterialProperty,
+    create_material_from_parsed,
     parse_shader_text,
     parse_property_directive,
 )
@@ -442,6 +443,44 @@ def test_slang_shader_synthesizes_material_params_for_scalar_properties():
     assert "ConstantBuffer<MaterialParams> material : register(b1, space0);" in fragment
     assert "output.color = material.u_color;" in fragment
     assert "struct MaterialParams" not in phase.stages["vertex"].source
+
+
+def test_slang_material_resource_binding_surfaces_on_tc_shader():
+    import tgfx  # Registers TcShader before TcMaterialPhase.shader casts it.
+
+    shader_text = "\n".join([
+        "@program SlangWithRuntimeLayout",
+        "@language slang",
+        "@property Color tint = Color(1, 1, 1, 1)",
+        "@phase opaque",
+        "@stage vertex",
+        "struct VertexOutput { float4 position : SV_Position; };",
+        "[shader(\"vertex\")] VertexOutput main() {",
+        "    VertexOutput output;",
+        "    output.position = float4(0, 0, 0, 1);",
+        "    return output;",
+        "}",
+        "@endstage",
+        "@stage fragment",
+        "struct FragmentOutput { float4 color : SV_Target0; };",
+        "[shader(\"fragment\")] FragmentOutput main() {",
+        "    FragmentOutput output;",
+        "    output.color = material.tint;",
+        "    return output;",
+        "}",
+        "@endstage",
+        "@endphase",
+    ])
+
+    material = create_material_from_parsed(parse_shader_text(shader_text))
+    shader = material.get_phase(0).shader
+    binding = shader.find_resource_binding("material")
+
+    assert binding is not None
+    assert binding["kind"] == 1
+    assert binding["set"] == 0
+    assert binding["binding"] == 1
+    assert binding["size"] == 16
 
 
 def test_slang_shader_rejects_texture_properties_until_binding_by_name_exists():
