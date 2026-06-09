@@ -205,7 +205,12 @@ samplers, storage textures, bindings, and buffer sizes where available, and
 falls back to source inference for fake/offline compiler paths. The generated
 Slang `MaterialParams` declaration no longer contains `register(...)`; while
 the shared-layout bridge exists, `termin_shaderc` shifts inferred constant
-buffers so `material` lands on binding 1. `tgfx2_load_or_compile_shader_artifact_for_backend`
+buffers so `material` lands on binding 1. For Vulkan, clean Slang `Sampler2D`
+resources are assigned to the current combined-image sampler slots
+(`4,5,6,7,9..15,17..23`) and the compiled SPIR-V binding decorations are patched
+to match the sidecar. Split `Texture2D` + `SamplerState` and storage textures
+are rejected until a non-shared descriptor layout path exists.
+`tgfx2_load_or_compile_shader_artifact_for_backend`
 loads that sidecar and merges it into `TcShader` resource metadata, preserving
 the parser-owned material UBO byte layout. Resource collision diagnostics,
 entry-point IO metadata, and general automatic binding assignment are still
