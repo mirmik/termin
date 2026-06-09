@@ -2,6 +2,7 @@
 
 #include <termin/materials/shader_parser.hpp>
 #include <termin/tc_scene.hpp>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <DetourNavMesh.h>
 #include <DetourStatus.h>
 #include <inspect/tc_kind_cpp.hpp>
@@ -20,6 +21,8 @@ namespace termin {
 const char* const NAVMESH_DEBUG_PHASE = "editor_debug";
 
 namespace {
+
+constexpr const char* NAVMESH_DEBUG_SHADER_UUID = "termin-engine-navmesh-debug";
 
 struct NavMeshHandleKindRegistrar {
     NavMeshHandleKindRegistrar() {
@@ -265,34 +268,18 @@ TcMaterial get_or_create_navmesh_debug_material(TcMaterial& material) {
         return material;
     }
 
-    const char* vertex_source = R"(
-#version 330 core
-
-layout(location = 0) in vec3 a_position;
-layout(location = 5) in vec4 a_color;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-out vec4 v_color;
-
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-    v_color = a_color;
-}
-)";
-
-    const char* fragment_source = R"(
-#version 330 core
-
-in vec4 v_color;
-out vec4 frag_color;
-
-void main() {
-    frag_color = v_color;
-}
-)";
+    const std::string vertex_source =
+        tgfx::load_builtin_shader_stage_source_from_catalog(
+            NAVMESH_DEBUG_SHADER_UUID,
+            "vertex");
+    const std::string fragment_source =
+        tgfx::load_builtin_shader_stage_source_from_catalog(
+            NAVMESH_DEBUG_SHADER_UUID,
+            "fragment");
+    if (vertex_source.empty() || fragment_source.empty()) {
+        tc_log_error("[NavMesh] Failed to load debug shader '%s'", NAVMESH_DEBUG_SHADER_UUID);
+        return material;
+    }
 
     tc_render_state state = tc_render_state_opaque();
     state.depth_test = 1;
