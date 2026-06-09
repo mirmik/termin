@@ -21,19 +21,12 @@ def create_depth_material(
     """Create a depth material that writes linear depth to color channel."""
     state = TcRenderState.opaque()
     shader = _load_depth_shader()
-    mat = TcMaterial(
-        name=name,
-        shader=shader,
-        render_state=state,
-        phase_mark="depth",
-        priority=0,
-        shader_name="DepthShader",
-    )
-
-    phase = mat.default_phase()
-    if phase is not None:
-        phase.set_uniform_float("u_near", near)
-        phase.set_uniform_float("u_far", far)
+    mat = TcMaterial.create(name, "")
+    mat.shader_name = "DepthShader"
+    phase = mat.add_phase(shader, "depth", 0)
+    phase.state = state
+    phase.set_uniform_float("u_near", near)
+    phase.set_uniform_float("u_far", far)
 
     return mat
 
