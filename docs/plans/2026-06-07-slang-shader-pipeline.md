@@ -409,6 +409,9 @@ Status:
 - Those passes now resolve live shader names, source filenames, and stage
   shapes from `engine-shader-catalog.json` by stable UUID. Individual passes no
   longer duplicate catalog metadata for migrated built-ins.
+- ResolvePass no longer has min/max shader variants. It resolves through the
+  backend average path only; `strategy` remains as a serialized compatibility
+  field and logs when an obsolete value is used.
 
 ## Phase 8: D3D11 Artifact Preparation
 
