@@ -1,12 +1,10 @@
 struct FragmentInput
 {
-    [[vk::location(0)]]
     float3 color : COLOR0;
 };
 
 struct FragmentOutput
 {
-    [[vk::location(0)]]
     float4 color : SV_Target0;
 };
 

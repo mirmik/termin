@@ -326,6 +326,17 @@ def test_export_runtime_package_can_use_slang_default_shader(tmp_path: Path) -> 
     assert (
         result.package_dir / "shaders" / "opengl" / "termin-runtime-default-color.frag.glsl"
     ).read_bytes() == b"ARTIFACT-opengl"
+    slang_vertex_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.vert.slang"
+    ).read_text(encoding="utf-8")
+    slang_fragment_source = (
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.frag.slang"
+    ).read_text(encoding="utf-8")
+    assert "vk::location" not in slang_vertex_source
+    assert "vk::location" not in slang_fragment_source
+    assert "POSITION" in slang_vertex_source
+    assert "COLOR0" in slang_vertex_source
+    assert "SV_Target0" in slang_fragment_source
     assert result.diagnostics == []
 
 

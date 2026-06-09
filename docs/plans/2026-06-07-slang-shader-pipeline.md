@@ -329,6 +329,9 @@ Status:
 - Runtime package export has an opt-in `default_shader_language="slang"` mode.
 - Slang default export writes `.slang` source files plus Vulkan SPIR-V and
   OpenGL GLSL artifact paths through `termin_shaderc`.
+- The opt-in Slang default shader now uses Slang semantics for stage
+  inputs/outputs instead of `[[vk::location]]`. Resource binding attributes
+  remain until the Slang resource layout ABI is defined.
 - Android and Quest/OpenXR build wrappers forward the default shader language
   option, while keeping `glsl` as the default.
 - Tests cover Slang default artifact layout and explicit rejection of an
