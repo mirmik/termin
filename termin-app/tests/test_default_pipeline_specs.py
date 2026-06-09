@@ -35,10 +35,10 @@ def test_builtin_default_pipeline_resolves_msaa_before_postfx():
     assert pass_names.index("Resolve") < pass_names.index("Bloom")
 
 
-def test_resolve_pass_strategy_deserializes_as_string_choice():
+def test_resolve_pass_strategy_defaults_to_average():
     frame_pass = ResolvePass()
 
-    frame_pass._tc_pass.deserialize_data({"strategy": "min"})
+    frame_pass._tc_pass.deserialize_data({"strategy": "average"})
 
-    assert frame_pass.strategy == "min"
-    assert frame_pass._tc_pass.serialize_data()["strategy"] == "min"
+    assert frame_pass.strategy == "average"
+    assert frame_pass._tc_pass.serialize_data()["strategy"] == "average"
