@@ -393,7 +393,7 @@ def test_parse_slang_shader_keeps_source_unrewritten():
         "[shader(\"vertex\")] VertexOutput main() { VertexOutput o; o.position = float4(0, 0, 0, 1); return o; }",
         "@endstage",
         "@stage fragment",
-        "struct FragmentOutput { [[vk::location(0)]] float4 color : SV_Target0; };",
+        "struct FragmentOutput { float4 color : SV_Target0; };",
         "[shader(\"fragment\")] FragmentOutput main() { FragmentOutput o; o.color = float4(1, 0, 0, 1); return o; }",
         "@endstage",
         "@endphase",
@@ -407,19 +407,56 @@ def test_parse_slang_shader_keeps_source_unrewritten():
     assert "uniform PerFrame" not in vertex
 
 
-def test_slang_shader_rejects_material_properties_until_ubo_contract_exists():
+def test_slang_shader_synthesizes_material_params_for_scalar_properties():
     shader_text = "\n".join([
         "@program SlangWithProps",
         "@language slang",
         "@property Color u_color = Color(1, 1, 1, 1)",
         "@phase opaque",
+        "@stage vertex",
+        "struct VertexOutput { float4 position : SV_Position; };",
+        "[shader(\"vertex\")] VertexOutput main() {",
+        "    VertexOutput output;",
+        "    output.position = float4(0, 0, 0, 1);",
+        "    return output;",
+        "}",
+        "@endstage",
         "@stage fragment",
-        "[shader(\"fragment\")] void main() {}",
+        "struct FragmentOutput { float4 color : SV_Target0; };",
+        "[shader(\"fragment\")] FragmentOutput main() {",
+        "    FragmentOutput output;",
+        "    output.color = material.u_color;",
+        "    return output;",
+        "}",
         "@endstage",
         "@endphase",
     ])
 
-    with pytest.raises(RuntimeError, match="Slang .shader material properties are not wired yet"):
+    program = parse_shader_text(shader_text)
+    phase = program.phases[0]
+    assert [entry.name for entry in phase.material_ubo_layout.entries] == ["u_color"]
+
+    fragment = phase.stages["fragment"].source
+    assert "struct MaterialParams" in fragment
+    assert "float4 u_color;" in fragment
+    assert "ConstantBuffer<MaterialParams> material : register(b1, space0);" in fragment
+    assert "output.color = material.u_color;" in fragment
+    assert "struct MaterialParams" not in phase.stages["vertex"].source
+
+
+def test_slang_shader_rejects_texture_properties_until_binding_by_name_exists():
+    shader_text = "\n".join([
+        "@program SlangWithTexture",
+        "@language slang",
+        "@property Texture2D albedo = \"white\"",
+        "@phase opaque",
+        "@stage fragment",
+        "[shader(\"fragment\")] float4 main() : SV_Target0 { return albedo.Sample(default_sampler, float2(0)); }",
+        "@endstage",
+        "@endphase",
+    ])
+
+    with pytest.raises(RuntimeError, match="Slang .shader texture @property is not wired yet"):
         parse_shader_text(shader_text)
 
 
