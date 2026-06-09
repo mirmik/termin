@@ -4,6 +4,7 @@
 #include <termin/camera/render_camera_utils.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
@@ -20,6 +21,8 @@
 #include <span>
 
 namespace termin {
+
+constexpr const char* NORMAL_ENGINE_SHADER_UUID = "termin-engine-normal";
 
 namespace {
 
@@ -39,59 +42,14 @@ struct NormalPushStd140 {
 static_assert(sizeof(NormalPushStd140) == 64,
               "NormalPushStd140 must be exactly one mat4");
 
-constexpr const char* NORMAL_PASS_VERT_UBO = R"(
-#version 450 core
-#extension GL_ARB_shading_language_420pack : require
-
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-
-layout(std140, binding = 0) uniform PerFrame {
-    mat4 u_view;
-    mat4 u_projection;
-};
-
-struct NormalPushData {
-    mat4 u_model;
-};
-#ifdef VULKAN
-layout(push_constant) uniform NormalPushBlock { NormalPushData pc; };
-#else
-layout(std140, binding = 14) uniform NormalPushBlock { NormalPushData pc; };
-#endif
-
-layout(location = 0) out vec3 v_world_normal;
-
-void main() {
-    mat3 normal_matrix = transpose(inverse(mat3(pc.u_model)));
-    v_world_normal = normalize(normal_matrix * a_normal);
-
-    vec4 world_pos = pc.u_model * vec4(a_position, 1.0);
-    gl_Position = u_projection * u_view * world_pos;
-}
-)";
-
-constexpr const char* NORMAL_PASS_FRAG_UBO = R"(
-#version 450 core
-
-layout(location = 0) in vec3 v_world_normal;
-layout(location = 0) out vec4 FragColor;
-
-void main() {
-    vec3 encoded = normalize(v_world_normal) * 0.5 + 0.5;
-    FragColor = vec4(encoded, 1.0);
-}
-)";
-
 } // anonymous namespace
 
 void NormalPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
 
     if (tc_shader_handle_is_invalid(normal_shader_handle_)) {
-        normal_shader_handle_ = tc_shader_register_static(
-            NORMAL_PASS_VERT_UBO, NORMAL_PASS_FRAG_UBO,
-            nullptr, "NormalEngineVSFS");
+        normal_shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(NORMAL_ENGINE_SHADER_UUID);
     }
 
 }
