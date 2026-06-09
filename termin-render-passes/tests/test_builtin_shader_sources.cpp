@@ -337,3 +337,21 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
 
     tc_shader_shutdown();
 }
+
+TEST_CASE("built-in shader catalog resolves vertex-only variant templates") {
+    clear_builtin_root();
+
+    std::string foliage_vertex =
+        tgfx::load_builtin_shader_stage_source_from_catalog(
+            "termin-engine-foliage-instanced", "vertex");
+    REQUIRE(!foliage_vertex.empty());
+    CHECK(foliage_vertex.find("FoliagePushBlock") != std::string::npos);
+    CHECK(foliage_vertex.find("i_seed") != std::string::npos);
+
+    std::string foliage_shadow_vertex =
+        tgfx::load_builtin_shader_stage_source_from_catalog(
+            "termin-engine-foliage-shadow", "vertex");
+    REQUIRE(!foliage_shadow_vertex.empty());
+    CHECK(foliage_shadow_vertex.find("FoliagePushBlock") != std::string::npos);
+    CHECK(foliage_shadow_vertex.find("i_position") != std::string::npos);
+}
