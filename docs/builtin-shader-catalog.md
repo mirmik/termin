@@ -22,8 +22,9 @@ generation path.
   The catalog/source loader resolves files from `TERMIN_BUILTIN_SHADER_ROOT`,
   then from `TERMIN_SDK/share/termin/builtin_shaders`, then from
   `share/termin/builtin_shaders` next to the loaded native library, its parent
-  SDK directories, or the process working directory, then from the build-tree
-  `termin-graphics/resources/builtin_shaders` directory.
+  SDK directories, or the process working directory.
+- Build-tree CTest/local binaries use the same runtime layout: `termin-graphics`
+  stages built-ins once into `${CMAKE_BINARY_DIR}/share/termin/builtin_shaders`.
 - C# SDK staging copies installed built-ins from
   `share/termin/builtin_shaders/` into the C# SDK drop so `Termin.Wpf`/tcplot
   consumers can run without a termin source checkout on the target machine.
