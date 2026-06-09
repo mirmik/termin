@@ -210,6 +210,9 @@ resources are assigned to the current combined-image sampler slots
 (`4,5,6,7,9..15,17..23`) and the compiled SPIR-V binding decorations are patched
 to match the sidecar. Split `Texture2D` + `SamplerState` and storage textures
 are rejected until a non-shared descriptor layout path exists.
+Slang `.shader` texture properties now synthesize `Sampler2D` declarations
+for stages that reference them, so material texture slots can flow through the
+same reflection/sidecar path as explicitly written Slang resources.
 `tgfx2_load_or_compile_shader_artifact_for_backend`
 loads that sidecar and merges it into `TcShader` resource metadata, preserving
 the parser-owned material UBO byte layout. Resource collision diagnostics,
@@ -246,7 +249,8 @@ Tasks:
 - For built-ins, store logical resource requirements in the built-in shader
   catalog.
 - For material shaders, derive logical resource requirements from material
-  properties and Slang reflection.
+  properties and Slang reflection. (Started for scalar/vector MaterialParams
+  and `Sampler2D` texture properties.)
 - Assign backend bindings from a deterministic allocator.
 - Detect collisions before artifacts reach runtime.
 

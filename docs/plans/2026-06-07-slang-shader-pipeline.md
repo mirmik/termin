@@ -166,14 +166,15 @@ Status:
   colors fragments from transformed normals. Binding 24 is a dedicated dynamic
   UBO slot for Slang/HLSL material draw data, separate from legacy GLSL
   push-constant injection.
-- `termin_shaderc` maps HLSL `register(b/t/sN, spaceM)` declarations to
-  Vulkan/OpenGL descriptor bindings with zero `-fvk-*-shift` values, so stdlib
-  Slang sources do not need `[[vk::binding]]` for ordinary resources.
-- Slang `.shader` stages bypass GLSL include/preprocess/material-UBO rewrite.
-  `@property` on Slang `.shader` files is rejected for now so we do not
-  accidentally synthesize a GLSL ABI into Slang source.
-- Tests cover language parsing, rejection of Slang material properties, and
-  stdlib material creation producing `TC_SHADER_LANGUAGE_SLANG`.
+- `termin_shaderc` records Slang reflection into artifact layout sidecars.
+  Generated Slang material constant buffers no longer carry `register(...)`;
+  current Vulkan shared-layout texture properties use generated `Sampler2D`
+  declarations and sidecar/SPIR-V binding assignment.
+- Slang `.shader` stages bypass GLSL include/preprocess rewriting, but now use
+  a Slang-native material rewrite for scalar/vector `MaterialParams` and
+  texture `Sampler2D` properties.
+- Tests cover language parsing, Slang material property synthesis, and stdlib
+  material creation producing `TC_SHADER_LANGUAGE_SLANG`.
 - Real `termin_shaderc` smoke checks compile the extracted Slang stages to
   Vulkan SPIR-V and OpenGL GLSL with the external `slangc`.
 
@@ -474,13 +475,13 @@ Acceptance:
 
 1. Audit the remaining runtime/exporter inline engine shader strings and move
    the next isolated one into the built-in shader catalog.
-2. Keep texture-using post-process built-ins catalog-managed as GLSL until the
-   bind-by-name/runtime layout plan can carry their resource metadata.
+2. Keep split texture/sampler and storage-texture shaders catalog-managed as
+   GLSL until the bind-by-name/runtime layout plan can carry non-shared
+   descriptor layouts.
 3. Replace remaining runtime exporter inline engine shader strings with catalog
    entries as each source migrates.
-4. Define the Slang-native material ABI before enabling `@property` on Slang
-   `.shader` files: generated `MaterialParams : register(b1)`, texture register
-   mapping, and include/module support in `termin_shaderc`.
+4. Continue replacing transition shared-layout policy with general Slang
+   resource assignment and include/module support in `termin_shaderc`.
 5. Decide later how generated Slang OpenGL artifacts should target the existing
    GL smoke environment: request a GL 4.5 context, lower Slang GLSL output if
    the toolchain supports it, or keep OpenGL generated-artifact rendering as a

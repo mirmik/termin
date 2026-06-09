@@ -484,20 +484,48 @@ def test_slang_material_resource_binding_surfaces_on_tc_shader():
     assert binding["size"] == 16
 
 
-def test_slang_shader_rejects_texture_properties_until_binding_by_name_exists():
+def test_slang_shader_synthesizes_sampler2d_for_texture_properties():
     shader_text = "\n".join([
         "@program SlangWithTexture",
         "@language slang",
         "@property Texture2D albedo = \"white\"",
         "@phase opaque",
         "@stage fragment",
-        "[shader(\"fragment\")] float4 main() : SV_Target0 { return albedo.Sample(default_sampler, float2(0)); }",
+        "[shader(\"fragment\")] float4 main() : SV_Target0 { return albedo.Sample(float2(0)); }",
         "@endstage",
         "@endphase",
     ])
 
-    with pytest.raises(RuntimeError, match="Slang .shader texture @property is not wired yet"):
-        parse_shader_text(shader_text)
+    program = parse_shader_text(shader_text)
+    phase = program.phases[0]
+    fragment = phase.stages["fragment"].source
+
+    assert phase.uniforms[0].name == "albedo"
+    assert phase.uniforms[0].property_type == "Texture"
+    assert phase.material_ubo_layout.entries == []
+    assert "Sampler2D albedo;" in fragment
+    assert "register(" not in fragment
+    assert fragment.index("Sampler2D albedo;") < fragment.index("[shader(\"fragment\")]")
+
+
+def test_slang_texture_property_does_not_duplicate_existing_sampler2d_declaration():
+    shader_text = "\n".join([
+        "@program SlangWithTexture",
+        "@language slang",
+        "@property Texture2D albedo = \"white\"",
+        "@phase opaque",
+        "@stage fragment",
+        "Sampler2D albedo;",
+        "[shader(\"fragment\")] float4 main(float2 uv : TEXCOORD0) : SV_Target0 { return albedo.Sample(uv); }",
+        "@endstage",
+        "@endphase",
+    ])
+
+    program = parse_shader_text(shader_text)
+    fragment = program.phases[0].stages["fragment"].source
+
+    assert fragment.count("Sampler2D albedo;") == 1
+    assert fragment.index("Sampler2D albedo;") < fragment.index("[shader(\"fragment\")]")
 
 
 def test_stdlib_slang_material_creates_slang_tc_shader():
