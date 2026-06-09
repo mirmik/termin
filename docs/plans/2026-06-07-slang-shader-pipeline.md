@@ -394,8 +394,8 @@ Status:
   test-only source string.
 - The FSQ Slang source now relies on Slang/HLSL semantics rather than
   `[[vk::location]]`, keeping the source backend-neutral for this safe stage.
-- Shadow, debug triangle, immediate renderer, Canvas2D, Text2D, base id, skybox,
-  grayscale, bloom, and tonemap built-ins are now catalog-managed sources.
+- Shadow, debug triangle, immediate renderer, Canvas2D, Text2D, Text3D, base id,
+  skybox, grayscale, bloom, and tonemap built-ins are now catalog-managed sources.
   Skybox remains a `.shader`
   program so the existing material UBO parser owns its generated GLSL stage
   layout. The resource-using entries carry logical resource metadata and
