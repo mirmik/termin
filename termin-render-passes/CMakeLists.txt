@@ -131,7 +131,6 @@ target_link_libraries(termin_render_passes PUBLIC
 target_compile_definitions(termin_render_passes PRIVATE
     TERMIN_RENDER_EXPORTS
     TC_EXPORTS
-    TERMIN_GRAPHICS_SOURCE_DIR="${CMAKE_CURRENT_LIST_DIR}/../termin-graphics"
 )
 
 if(MSVC)
