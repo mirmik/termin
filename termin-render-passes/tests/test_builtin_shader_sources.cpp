@@ -276,7 +276,7 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         bool has_fragment;
     };
 
-    constexpr std::array<ExpectedShader, 32> kExpectedShaders{{
+    constexpr std::array<ExpectedShader, 38> kExpectedShaders{{
         {"termin-engine-immediate", "ImmediateEngineVSFS", true, true},
         {"termin-engine-present-blit", "PresentBlitVSFS", true, true},
         {"termin-engine-canvas2d-solid", "Canvas2DSolidVSFS", true, true},
@@ -296,9 +296,15 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         {"termin-engine-world-tube-line", "WorldTubeLineVSFS", true, true},
         {"termin-engine-world-tube-line-cap", "WorldTubeLineCapVSFS", true, true},
         {"termin-engine-world-tube-line-lit", "WorldTubeLineLitFS", false, true},
+        {"termin-engine-line-default", "DefaultLineShader", true, true},
         {"termin-engine-shadow", "ShadowEngineVSFS", true, true},
         {"termin-engine-debug-triangle", "DebugTrianglePassVSFS", true, true},
         {"termin-engine-id", "IdEngineVSFS", true, true},
+        {"termin-engine-normal", "NormalEngineVSFS", true, true},
+        {"termin-engine-depth", "DepthEngineVSFS_Encoding", true, true},
+        {"termin-engine-depth-only", "DepthOnlyEngineVSFS", true, true},
+        {"termin-engine-depth-to-color", "DepthToColorFS", false, true},
+        {"termin-engine-color-to-depth", "ColorToDepthFS", false, true},
         {"termin-engine-grayscale", "GrayscaleEngineFS", false, true},
         {"termin-engine-bloom-bright", "BloomBrightFS", false, true},
         {"termin-engine-highlight", "HighlightEngineFS", false, true},

@@ -396,9 +396,10 @@ Status:
   `[[vk::location]]`, keeping the source backend-neutral for this safe stage.
 - Shadow, debug triangle, present blit, immediate renderer, Canvas2D, Text2D,
   Text3D, screen-space lines, world-space lines, world tube lines, base id,
-  normal, depth/depth-only, depth/color conversion, skybox, highlight, gizmo
-  mask, ground grid, editor solid primitives, grayscale, bloom, and tonemap
-  built-ins are now catalog-managed sources.
+  `LineRenderer` default material, normal, depth/depth-only, depth/color
+  conversion, skybox, highlight, gizmo mask, ground grid, editor solid
+  primitives, grayscale, bloom, and tonemap built-ins are now catalog-managed
+  sources.
   Skybox remains a `.shader`
   program so the existing material UBO parser owns its generated GLSL stage
   layout. The resource-using entries carry logical resource metadata and
@@ -407,13 +408,16 @@ Status:
   bridge still depend on numeric binding slots.
 - `ShadowPass`, `DebugTrianglePass`, `IdPass` base shader, `NormalPass`,
   `DepthPass`, `DepthOnlyPass`, `DepthToColorPass`, `ColorToDepthPass`,
-  `SkyBoxPass`, `GrayscalePass`, `BloomPass`, and `TonemapPass` now register
-  their live shaders from the built-in shader resource files. Default-pipeline
-  package artifact generation uses the same catalog source files for built-ins
-  that it exports.
+  `LineRenderer` default material, `SkyBoxPass`, `GrayscalePass`, `BloomPass`,
+  and `TonemapPass` now register their live shaders from the built-in shader
+  resource files. Default-pipeline package artifact generation uses the same
+  catalog source files for built-ins that it exports.
 - Those passes now resolve live shader names, source filenames, and stage
   shapes from `engine-shader-catalog.json` by stable UUID. Individual passes no
   longer duplicate catalog metadata for migrated built-ins.
+- `LineRenderer` material fragment variants still derive from the active
+  material fragment source at runtime. That remains material-pipeline work, not
+  an engine built-in shader source migration.
 - ResolvePass no longer has min/max shader variants. It resolves through the
   backend average path only; `strategy` remains as a serialized compatibility
   field and logs when an obsolete value is used.
