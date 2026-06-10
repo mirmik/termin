@@ -16,11 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Patterns that must NOT appear in .slang files
 FORBIDDEN = [
-    # Vulkan-specific annotations
     (r"\[\[vk::", "[[vk::...]] — Vulkan-specific annotation"),
-    # D3D register without a corresponding vk:: binding (warn only)
-    # We flag ALL register() usage — it's D3D-centric syntax
-    # but sometimes needed for resource binding. Flag as warning.
 ]
 
 # Warning patterns — should be reviewed
