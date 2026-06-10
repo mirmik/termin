@@ -1,317 +1,210 @@
-# Slang Two-Set Material Layout Transition
+# Shader-Driven Pipeline Layout (Godot-style per-pipeline single-set)
 
 Date: 2026-06-09
+Updated: 2026-06-10 — switched from two-set to per-pipeline single-set after review.
 
 ## Goal
 
-Move from the current forced shared Vulkan descriptor layout to a two-set scheme:
+Replace the fixed shared Vulkan descriptor layout with per-pipeline layouts
+derived from shader reflection. The shader declares what it needs; the pipeline
+builds its `VkDescriptorSetLayout` to match. No hardcoded binding table.
 
-- **set = 0** — Engine resources. Fixed layout, shared across all shaders in a pass.
-  One descriptor set allocated per frame/pass, bound once.
-- **set = 1** — Material resources. Free layout, defined by per-shader specification.
-  Binding numbers come from shader layout metadata, not hardcoded constants.
+This is the same architecture Godot 4 uses: a single descriptor set per
+pipeline, with binding numbers and types determined by SPIR-V reflection.
 
-This unlocks:
+## What this unlocks
 
-- Arbitrary UBO/texture binding numbers for material resources.
-- Split `Texture2D` + `SamplerState` (currently rejected by shared layout policy).
-- `RWTexture` (storage textures) — currently rejected.
-- Cleaner Slang source without bind-by-name being fully implemented first.
-- Future multi-set resource organisation (e.g., set=2 for per-draw, set=3 for
-  global samplers).
+- Arbitrary UBO/texture binding numbers — shader chooses, not `termin_shaderc`.
+- Split `Texture2D<T>` + `SamplerState` — no combined-sampler restriction.
+- `RWTexture` / storage textures — not blocked by a shared layout.
+- No default-texture fillers — the pipeline only declares what the shader uses.
+- Slang material shaders with clean `[[vk::binding(N, 0)]]` or auto-assigned
+  bindings.
 
-This plan is an **implementation bridge** toward the symbolic binding model
-described in [Slang bind-by-name runtime](2026-06-09-slang-bind-by-name-runtime.md).
-It makes per-shader material layouts real before the symbolic binding API exists.
-
-## Current State
-
-### Shared layout policy (`termin_shaderc.cpp:527-585`)
-
-`apply_slang_vulkan_shared_layout_policy()` forcibly remaps ALL Slang resources
-to a fixed numeric ABI:
+## Architecture
 
 ```
-material  → set=0, binding=1  (constant_buffer)
-per_frame → set=0, binding=2  (constant_buffer)
-draw_data → set=0, binding=24 (constant_buffer)
-samplers  → set=0, binding ∈ {4,5,6,7, 9..15, 17..23}
+┌──────────────────────────────────────────┐
+│ Shader (SPIR-V)                          │
+│   OpDecorate %ubo Binding 0              │
+│   OpDecorate %tex Binding 4              │
+│   OpDecorate %samp Binding 5             │
+└──────────────┬───────────────────────────┘
+               │ reflect bindings from SPIR-V
+               ▼
+┌──────────────────────────────────────────┐
+│ VkDescriptorSetLayout (per pipeline)     │
+│   binding 0: UNIFORM_BUFFER_DYNAMIC      │
+│   binding 4: SAMPLED_IMAGE               │
+│   binding 5: SAMPLER                     │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│ VkPipelineLayout (1 set)                 │
+│   + VkPushConstantRange (128 bytes)      │
+└──────────────────────────────────────────┘
 ```
 
-Split textures, separate samplers, and storage textures are rejected with errors.
+### Render pass code — unchanged
 
-### Hardcoded runtime bindings
+Engine passes bind resources at numeric slots. The shader declares matching
+slots. No `set` parameter anywhere — there is only set=0.
 
-C++ render passes bind engine resources at hardcoded numeric slots:
-
-| Resource | Constant | Value | Location |
-|---|---|---|---|
-| Lighting UBO | `LIGHTING_UBO_BINDING` | `0` | `lighting_ubo.hpp` |
-| Material UBO | `MATERIAL_UBO_BINDING` | `1` | `material_ubo_apply.hpp` |
-| PerFrame UBO | `ENGINE_PER_FRAME_UBO_BINDING` | `2` | `frame_uniforms.hpp` |
-| Shadow UBO | `SHADOW_UBO_BINDING` | `3` | `color_pass.cpp` (local) |
-| Material textures | `material_texture_binding_for_index(i)` | `4,5,6,7,9,...` | `shader_parser.hpp` |
-| Shadow textures | `SHADOW_SLOT_BASE` | `8` | `color_pass.cpp` (local) |
-| Draw/push data | (implicit) | `24` | `termin_shaderc` policy |
-
-Only **Material UBO** already resolves its binding from `tc_shader.resource_bindings[]`
-via `material_ubo_binding_for_shader()` — everything else ignores the layout sidecar.
-
-### What already works
-
-- `.layout.json` sidecars are generated for every compiled Slang stage.
-- Sidecars are parsed and merged into `tc_shader.resource_bindings[]` at load time.
-- `material_ubo_binding_for_shader()` already demonstrates the lookup pattern.
-- Slang and Vulkan natively support multiple descriptor sets (`space` in Slang =
-  `set` in Vulkan).
-
-## Proposed Architecture
-
-### Set assignments
-
-```
-set = 0  Engine resources (shared layout, bound per pass):
-        [0]  lighting_ubo          (optional, only if shader needs it)
-        [1]  (reserved / unused)
-        [2]  per_frame
-        [3]  shadow_ubo
-        [8]  shadow_map_array     (array of combined shadow samplers)
-        ...  (other engine-global resources)
-
-set = 1  Material resources (per-shader layout, from specification):
-        [*]  material             (ConstantBuffer<MaterialParams>)
-        [*]  texture0, texture1, ...
-        [*]  draw_data            (ConstantBuffer, per-draw transforms)
+```cpp
+ctx2->bind_uniform_buffer_ring(0, &pf, sizeof(pf));     // per_frame
+ctx2->bind_uniform_buffer_ring(3, &sb, sizeof(sb));     // shadow_ubo
+ctx2->bind_sampled_texture(4, albedo_tex);              // material texture
+ctx2->bind_sampled_texture(8, shadow_map, sampler);     // shadow map array
 ```
 
-Material shaders declare resources in set=1. Engine passes bind set=0 resources
-at stable slots regardless of which material shader is active. Material resources
-in set=1 are bound per-draw according to the active shader's layout metadata.
+Eventually the symbolic binding API (bind-by-name) replaces numeric slots, but
+this plan does not require it.
 
 ### Slang source convention
 
-Material shaders place engine resources in set=0 and material resources in set=1:
+Material shaders declare bindings naturally. No forced remapping into a shared
+slot array:
 
 ```slang
-// set = 0 — engine (will be bound by pass, not by material system)
-[[vk::binding(2, 0)]]
+// Engine resources — at the slots the render pass expects
+[[vk::binding(0, 0)]]
 ConstantBuffer<PerFrame> per_frame;
 
-// set = 1 — material (binding assigned by specification / compiler)
-[[vk::binding(0, 1)]]
-ConstantBuffer<MaterialParams> material;
+// Material resources — any binding numbers, no collision with engine
+[[vk::binding(0, 0)]]
+ConstantBuffer<MaterialParams> material;   // binding 0 in this shader is material, not per_frame
 
-[[vk::binding(1, 1)]]
-Sampler2D albedo_texture;
+[[vk::binding(1, 0)]]
+Texture2D<float4> albedo;
+
+[[vk::binding(2, 0)]]
+SamplerState albedo_sampler;
 ```
 
-Once the two-set scheme is stable, the `[[vk::binding(..., 0)]]` on engine resources
-can be replaced by named bindings when the symbolic API is ready. Material resources
-in set=1 may keep explicit bindings assigned by the build system, or move to
-auto-assignment from reflection.
+Note: `per_frame` and `material` both use `binding(0, 0)` — they are in
+**different shader stages** or different pipelines. The pipeline is built
+for a specific VS+FS pair; bindings are scoped to that pair.
 
-### Build system changes
+## Implementation
 
-1. `termin_shaderc` stops applying `apply_slang_vulkan_shared_layout_policy()` for
-   material shaders (those with `@property` and `@language slang`).
-2. Instead, `termin_shaderc` (or a companion layout tool) reads Slang reflection
-   and validates that:
-   - Engine resources (`per_frame`, shadow-related) are in set=0 with expected bindings.
-   - Material resources are in set=1.
-   - No collisions within each set.
-3. The `.layout.json` sidecar records the final binding assignment for both sets.
+### Phase 1: Per-pipeline VkDescriptorSetLayout
 
-### Runtime changes
+**Task:** Replace `create_shared_layouts()` with per-pipeline layout creation.
 
-Engine passes continue to bind set=0 resources at hardcoded slots — this
-does not change.
+- [ ] `create_shader()` reflects descriptor bindings from SPIR-V bytecode
+      (descriptor type, binding number, stage flags). Stored in
+      `VkShaderResource::bindings`.
 
-Material binding code (`material_ubo_apply.cpp`) already resolves material UBO
-from layout metadata. It must be extended to also resolve texture binding slots
-from layout metadata instead of using `material_texture_binding_for_index()`.
+- [ ] `create_pipeline()` collects bindings from VS + FS, merges them into
+      one `VkDescriptorSetLayout`, caches layouts by FNV-1a hash.
 
-`RenderContext2` (or its Vulkan backend) must be taught to support two descriptor
-sets: set=0 is shared and pre-bound, set=1 is per-draw and allocated from a
-per-shader `VkDescriptorSetLayout`.
+- [ ] `create_resource_set()` accepts `VkDescriptorSetLayout` parameter.
+      Removes all default-texture filler logic. Allocates exactly the
+      bindings the caller provides, validated against the layout.
 
-## Non-Goals
+- [ ] `PipelineCacheKey` includes the descriptor layout hash so pipelines
+      with different reflection signatures do not collide.
 
-- Full symbolic bind-by-name API. That is tracked in
-  [2026-06-09-slang-bind-by-name-runtime.md](2026-06-09-slang-bind-by-name-runtime.md).
-  This plan is the layout infrastructure that makes symbolic binding possible later.
-- Removing hardcoded engine resource bindings from C++ passes. Engine resources
-  stay on set=0 with fixed bindings until symbolic binding is available.
-- Migrating all built-in shaders to Slang. Engine shaders continue to work with
-  the current shared layout or can opt into set=0-only usage.
+- [ ] Remove: `create_shared_layouts()`, `descriptor_set_layouts_[]`,
+      `shared_pipeline_layout_`, `kMaxDescriptorSets`, `set1_layout`,
+      `set_count`, `descriptor_set_layout_cache_`.
 
-## Phases
+- [ ] Remove `set` parameter from `RenderContext2::bind_*` methods and
+      `ResourceBinding::set` / `ResourceSetDesc::set` field.
 
-### Phase 1: Vulkan Multi-Set Backend Support
-
-Teach the Vulkan backend to allocate and bind multiple descriptor sets.
-
-Tasks:
-
-- Extend `VulkanRenderDevice` / pipeline layout creation to support a
-  `VkDescriptorSetLayout` per set.
-- `RenderContext2` gains internal tracking of which set a binding targets.
-- Numeric binding slots are qualified by set: `ctx2->bind_uniform_buffer(set=0,
-  slot=2, ...)` or `ctx2->bind_uniform_buffer(set=1, slot=0, ...)`.
-- Default behaviour when no set is specified: set=0 (backward compatible).
-
-Acceptance:
-
-- Existing shaders continue to render with all resources in set=0.
-- A test shader with resources in set=1 renders correctly through Vulkan.
+**Acceptance:** Existing shaders render through per-pipeline layouts.
+A new shader with split `Texture2D` + `SamplerState` compiles and renders.
 
 Status: not started.
 
-### Phase 2: Material Shader Set-1 Generation
+### Phase 2: Slang stops using shared layout policy
 
-Stop remapping material resources into set=0.
+**Task:** `termin_shaderc` stops forcing Slang resources into the hardcoded
+slot table. SPIR-V bindings are left as-is from reflection or specification.
 
-Tasks:
+- [ ] Add a `--layout-scheme per-pipeline` flag (default for new shaders).
+- [ ] In per-pipeline mode, skip `apply_slang_vulkan_shared_layout_policy()`
+      and `patch_slang_vulkan_spirv_bindings()`.
+- [ ] Validate no collision: engine-named resources (`per_frame`,
+      shadow-related) must not overlap with material resource bindings.
 
-- Add a `--layout-scheme two-set` (or similar) flag to `termin_shaderc`.
-- In two-set mode, skip `apply_slang_vulkan_shared_layout_policy()` and
-  `patch_slang_vulkan_spirv_bindings()` for set=1 resources.
-- Validate that engine-named resources (`per_frame`, shadow-related) are in set=0
-  with the expected bindings.
-- Record final bindings in `.layout.json` with set information.
-- Keep the shared layout policy as default until two-set is proven.
-
-Acceptance:
-
-- A Slang `.shader` with `@language slang` and `@property` compiles to SPIR-V
-  with material resources in set=1.
-- `.layout.json` records correct set/binding per resource.
-- Vulkan smoke renders the shader through the two-set pipeline layout.
+**Acceptance:** Slang material compiles to SPIR-V with its natural binding
+numbers. `.layout.json` records them.
 
 Status: not started.
 
-### Phase 3: Runtime Material Texture Binding from Layout
+### Phase 3: Runtime material texture binding from layout
 
-Replace hardcoded texture slot computation with layout lookup.
+**Task:** Passes look up texture binding slots from `tc_shader.resource_bindings[]`
+instead of using `material_texture_binding_for_index()`.
 
-Tasks:
-
-- Extend `apply_material_phase_ubo()` / `bind_material_ubo()` to look up texture
-  binding slots from `tc_shader.resource_bindings[]` by texture name, instead of
-  using `material_texture_binding_for_index(i)`.
-- The lookup key is the texture property name (e.g., `"albedo_texture"`).
-- Fallback to index-based computation for legacy shaders without layout metadata.
-- Remove `MATERIAL_TEX_SLOT_BASE` and `material_texture_binding_for_index()`
-  dependence from the material UBO path.
-
-Acceptance:
-
-- `SlangTexturedNormal` material renders with texture bound at the slot specified
-  in its `.layout.json`, not at a hardcoded index slot.
-- Legacy GLSL materials continue to work through the fallback path.
+Same as the original Phase 3 — unchanged from the previous plan.
 
 Status: not started.
 
-### Phase 4: Unlock Rejected Resource Types
+### Phase 4: Unlock rejected resource types
 
-Remove the shared-layout restrictions for set=1 resources.
-
-Once material resources live in their own set, the shared layout policy no longer
-needs to reject:
-
-- Split `Texture2D<T>` + `SamplerState` (currently blocked with "does not support
-  split Slang Texture*/SamplerState" errors).
-- `RWTexture` / storage textures (currently blocked with "does not support storage
-  texture" errors).
-- Sampler count beyond the shared slot array.
-
-Tasks:
-
-- Remove or gate the rejection logic in `apply_slang_vulkan_shared_layout_policy`
-  to only apply to set=0 resources.
-- Material shaders in set=1 can use any Slang resource type that the Vulkan
-  backend supports.
-- Test coverage for split texture + sampler in a material shader.
-
-Acceptance:
-
-- A material shader using `Texture2D<float4> tex` + `SamplerState samp` in set=1
-  compiles and renders on Vulkan.
-- A material shader using `RWTexture2D<float4>` in set=1 compiles and renders.
+**Task:** Remove shared-layout policy restrictions. Slang material shaders
+can use split textures, separate samplers, storage textures.
 
 Status: not started.
 
-### Phase 5: OpenGL and D3D Compatibility
+### Phase 5: OpenGL compatibility
 
-Ensure the two-set scheme does not break non-Vulkan backends.
-
-Tasks:
-
-- Verify that Slang GLSL output for two-set slangc invocation maps set=1
-  resources into a binding range that does not collide with set=0 engine resources.
-- Adjust `-fvk-b-shift`, `-fvk-t-shift`, `-fvk-s-shift` flags or add set-specific
-  shift ranges.
-- Document the generated GLSL binding layout for two-set shaders.
-- For D3D11 (future Windows path), verify that `space0` → standard registers,
-  `space1` → offset register range.
-
-Acceptance:
-
-- A two-set Slang material compiles to valid GLSL with non-colliding bindings.
-- OpenGL smoke renders the material through the GL backend.
+**Task:** GLSL output from Slang for per-pipeline shaders maps bindings
+without the shared layout policy. GLSL has a flat namespace — no set
+qualifiers needed. Binding numbers from SPIR-V reflection carry through
+to GLSL `layout(binding=N)`.
 
 Status: not started.
 
-### Phase 6: Remove Shared-Layout Default
+### Phase 6: Remove shared-layout default
 
-After all material shaders use the two-set scheme and the old path has no
-active consumers:
-
-Tasks:
-
-- Make two-set the default for `@language slang` `.shader` files.
-- Remove `apply_slang_vulkan_shared_layout_policy()`.
-- Remove `patch_slang_vulkan_spirv_bindings()`.
-- Remove dead code in `termin_shaderc` that infers bindings from regex-based
-  source scanning (replaced by reflection).
-- Clean up the sampled slot array `{4,5,6,7,9,10,...}`.
-
-Acceptance:
-
-- `termin_shaderc` no longer contains a hardcoded binding map.
-- All Slang shaders compile with bindings from their specification/reflection.
+**Task:** After all shaders use per-pipeline layouts, remove the shared
+layout policy code from `termin_shaderc`.
 
 Status: not started.
 
 ## Risks
 
-- **Vulkan pipeline layout explosion**: Each material shader with a unique set=1
-  layout needs its own `VkPipelineLayout`. Modern drivers handle thousands of
-  layouts, but descriptor set allocation must be cached. Mitigation: share set=1
-  layouts where two shaders have identical material resource signatures.
+- **Pipeline layout count:** each VS+FS pair with unique bindings produces
+  a new `VkDescriptorSetLayout`. Modern drivers handle thousands. Layouts
+  with identical binding signatures (same types and numbers) are cached
+  and shared. Mitigation: FNV-1a hash of bindings as cache key.
 
-- **OpenGL binding collision**: Slang GLSL output maps set=1 to a shifted binding
-  range. If the range overlaps with engine resources in set=0, the GL backend
-  will misbind. Mitigation: choose a large shift offset (e.g., +32 for all set=1
-  resources) and validate in smoke tests.
+- **OpenGL binding collision:** GLSL has a flat namespace. Two shaders
+  that declare `layout(binding=0)` for different things must not be active
+  simultaneously. This is already true today.
 
-- **Descriptor set allocation overhead**: Currently one descriptor set per frame
-  contains all bindings. With two sets, set=0 stays per-frame; set=1 is per-draw
-  and needs per-draw allocation. Mitigation: pool/reuse set=1 allocations, or
-  use push descriptors for small material UBOs.
+- **Transition from shared layout:** built-in GLSL shaders currently rely
+  on `create_shared_layouts()` filling 25 binding slots. After removal,
+  each pipeline declares only its used bindings. Missing bindings become
+  visible as Vulkan validation errors instead of silent default-texture
+  fallback. This is a feature, not a bug — it catches binding mismatches
+  that the shared layout was hiding.
 
-- **Existing material shaders**: Current Slang material `.shader` files
-  (SlangNormalColor, SlangTexturedNormal) manually declare `per_frame` and
-  `draw_data` ConstantBuffers in the stage source without set qualifiers.
-  They default to set=0. These need to be updated to either:
-  - Move material resources to set=1 (draw_data, material)
-  - Or keep everything in set=0 as a compatibility mode
-  Decision needed per shader.
+## Design Decision: One set, not two
+
+Reviewed 2026-06-10. After comparing Godot 4 (per-pipeline single-set),
+The Forge (three-set), Filament (bindless), and Unreal 5 (moving to
+bindless):
+
+- Two descriptor sets provide per-pass engine binding as the sole
+  architectural advantage over a single set. This saves one
+  `vkCmdBindDescriptorSets` call per pass — negligible.
+
+- Per-pipeline single-set is simpler: fewer abstractions, less code,
+  no `set_index` parameter anywhere in the API, OpenGL trivially
+  compatible.
+
+- Bindless (descriptor indexing) is the right long-term horizon, but
+  requires Vulkan 1.2+ and a larger rework. Single-set is the natural
+  stepping stone.
 
 ## Related Documents
 
 - [Slang bind-by-name runtime](2026-06-09-slang-bind-by-name-runtime.md) —
-  long-term symbolic binding API that this plan enables.
+  long-term symbolic binding API.
 - [Slang shader pipeline](2026-06-07-slang-shader-pipeline.md) —
   Slang toolchain and artifact pipeline.
-- [Slang shader support](2026-05-25-slang-shader-support-plan.md) —
-  initial Slang integration plan.
