@@ -18,7 +18,6 @@ pipeline, with binding numbers and types determined by SPIR-V reflection.
 - Split `Texture2D<T>` + `SamplerState` — no combined-sampler restriction.
 - `RWTexture` / storage textures — not blocked by a shared layout.
 - No default-texture fillers — the pipeline only declares what the shader uses.
-- Slang material shaders with clean `[[vk::binding(N, 0)]]` or auto-assigned
   bindings.
 
 ## Architecture
@@ -68,17 +67,13 @@ slot array:
 
 ```slang
 // Engine resources — at the slots the render pass expects
-[[vk::binding(0, 0)]]
 ConstantBuffer<PerFrame> per_frame;
 
 // Material resources — any binding numbers, no collision with engine
-[[vk::binding(0, 0)]]
 ConstantBuffer<MaterialParams> material;   // binding 0 in this shader is material, not per_frame
 
-[[vk::binding(1, 0)]]
 Texture2D<float4> albedo;
 
-[[vk::binding(2, 0)]]
 SamplerState albedo_sampler;
 ```
 
