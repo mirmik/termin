@@ -163,6 +163,7 @@ void IdPass::execute_with_data_tgfx2(
         ctx.ctx2->set_blend(false);
         ctx.ctx2->set_cull(tgfx::CullMode::Back);
         ctx.ctx2->bind_shader(id_vs2, id_fs2);
+        ctx.ctx2->use_shader_resource_layout(id_raw);
     };
 
     const std::string& debug_symbol = get_debug_internal_point();
@@ -210,6 +211,8 @@ void IdPass::execute_with_data_tgfx2(
 
             drawable->draw_tgfx2(*ctx.ctx2, direct_context, phase_name(), nullptr, dc.geometry_id);
             restore_id_raster_state();
+            ctx.ctx2->clear_resource_bindings();
+            ctx.ctx2->bind_uniform_data("u_per_frame", &per_frame, sizeof(per_frame));
             continue;
         }
 
@@ -249,6 +252,8 @@ void IdPass::execute_with_data_tgfx2(
 
             ctx.ctx2->bind_shader(id_vs2, id_fs2);
             ctx.ctx2->use_shader_resource_layout(id_raw);
+            ctx.ctx2->clear_resource_bindings();
+            ctx.ctx2->bind_uniform_data("u_per_frame", &per_frame, sizeof(per_frame));
             ctx.ctx2->bind_uniform_data("u_push", &push, sizeof(push));
         }
     }

@@ -416,6 +416,10 @@ void SolidPrimitiveRenderer::begin(
     ctx2->set_cull(tgfx::CullMode::Back);
 
     ctx2->bind_shader(_vs, _fs);
+    {
+        tc_shader* raw = tc_shader_get(_shader_handle);
+        if (raw) ctx2->use_shader_resource_layout(raw);
+    }
 
     // Vertex layout: single vec3 position at location 0, tightly packed.
     tgfx::VertexBufferLayout layout;
@@ -440,7 +444,7 @@ void SolidPrimitiveRenderer::_push_and_draw(const Mat44f& model,
     push.u_color[1] = color.g;
     push.u_color[2] = color.b;
     push.u_color[3] = color.a;
-    _ctx2->set_push_constants(&push, static_cast<uint32_t>(sizeof(push)));
+    _ctx2->bind_uniform_data("u_push", &push, static_cast<uint32_t>(sizeof(push)));
     _ctx2->draw(mesh.vbo, mesh.ibo, mesh.index_count);
 }
 
