@@ -147,9 +147,11 @@ void BloomPass::ensure_tgfx2_shaders() {
 }
 
 static tgfx::ShaderHandle bloom_resolve_fs(
-    tc_shader_handle h, tgfx::IRenderDevice* device, const char* name)
+    tc_shader_handle h, tgfx::IRenderDevice* device, const char* name,
+    ::tc_shader** out_raw = nullptr)
 {
     tc_shader* raw = tc_shader_get(h);
+    if (out_raw) *out_raw = raw;
     tgfx::ShaderHandle fs;
     if (!raw || !tc_shader_ensure_tgfx2(raw, device, nullptr, &fs)) {
         tc::Log::error("BloomPass: tc_shader_ensure_tgfx2 failed for %s", name);
@@ -259,11 +261,27 @@ void BloomPass::execute(ExecuteContext& ctx) {
 
     auto& c2 = *ctx.ctx2;
 
-    tgfx::ShaderHandle bright_fs     = bloom_resolve_fs(bright_shader_handle_,     device2_, "bright");
-    tgfx::ShaderHandle downsample_fs = bloom_resolve_fs(downsample_shader_handle_, device2_, "downsample");
-    tgfx::ShaderHandle upsample_fs   = bloom_resolve_fs(upsample_shader_handle_,   device2_, "upsample");
-    tgfx::ShaderHandle composite_fs  = bloom_resolve_fs(composite_shader_handle_,  device2_, "composite");
+    tc_shader* bright_raw = nullptr;
+    tc_shader* downsample_raw = nullptr;
+    tc_shader* upsample_raw = nullptr;
+    tc_shader* composite_raw = nullptr;
+    tgfx::ShaderHandle bright_fs     = bloom_resolve_fs(bright_shader_handle_,     device2_, "bright",     &bright_raw);
+    tgfx::ShaderHandle downsample_fs = bloom_resolve_fs(downsample_shader_handle_, device2_, "downsample", &downsample_raw);
+    tgfx::ShaderHandle upsample_fs   = bloom_resolve_fs(upsample_shader_handle_,   device2_, "upsample",   &upsample_raw);
+    tgfx::ShaderHandle composite_fs  = bloom_resolve_fs(composite_shader_handle_,  device2_, "composite",  &composite_raw);
     if (!bright_fs || !downsample_fs || !upsample_fs || !composite_fs) return;
+
+    // Resolve bindings from shader layout metadata.
+    // The shader source is the single source of truth for binding numbers.
+    const uint32_t params_binding = engine_shader_binding(bright_raw, "u_params", 0);
+    const uint32_t texture_binding = engine_shader_binding(bright_raw, "u_texture", 4);
+    const uint32_t ds_params_binding = engine_shader_binding(downsample_raw, "u_params", 0);
+    const uint32_t ds_texture_binding = engine_shader_binding(downsample_raw, "u_texture", 4);
+    const uint32_t us_params_binding = engine_shader_binding(upsample_raw, "u_params", 0);
+    const uint32_t us_texture_binding = engine_shader_binding(upsample_raw, "u_texture", 4);
+    const uint32_t comp_params_binding = engine_shader_binding(composite_raw, "u_params", 0);
+    const uint32_t comp_original_binding = engine_shader_binding(composite_raw, "u_original", 4);
+    const uint32_t comp_bloom_binding = engine_shader_binding(composite_raw, "u_bloom", 5);
 
     // === 1. Bright Pass -> mip[0] ===
     {
@@ -277,8 +295,8 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.begin_pass(mip_textures_[0]);
         c2.set_viewport(0, 0, w, h);
         setup_fsq_state(c2, bright_fs);
-        c2.bind_uniform_buffer(0, bright_ubo_);
-        c2.bind_sampled_texture(4, input_tex2);
+        c2.bind_uniform_buffer(params_binding, bright_ubo_);
+        c2.bind_sampled_texture(texture_binding, input_tex2);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -300,8 +318,8 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.begin_pass(mip_textures_[i]);
         c2.set_viewport(0, 0, dst_w, dst_h);
         setup_fsq_state(c2, downsample_fs);
-        c2.bind_uniform_buffer(0, downsample_ubo_);
-        c2.bind_sampled_texture(4, mip_textures_[i - 1]);
+        c2.bind_uniform_buffer(ds_params_binding, downsample_ubo_);
+        c2.bind_sampled_texture(ds_texture_binding, mip_textures_[i - 1]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -332,8 +350,8 @@ void BloomPass::execute(ExecuteContext& ctx) {
         setup_fsq_state(c2, upsample_fs);
         c2.set_blend(true);
         c2.set_blend_func(tgfx::BlendFactor::One, tgfx::BlendFactor::One);
-        c2.bind_uniform_buffer(0, upsample_ubo_);
-        c2.bind_sampled_texture(4, mip_textures_[i + 1]);
+        c2.bind_uniform_buffer(us_params_binding, upsample_ubo_);
+        c2.bind_sampled_texture(us_texture_binding, mip_textures_[i + 1]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
@@ -349,9 +367,9 @@ void BloomPass::execute(ExecuteContext& ctx) {
         c2.begin_pass(output_tex2);
         c2.set_viewport(0, 0, w, h);
         setup_fsq_state(c2, composite_fs);
-        c2.bind_uniform_buffer(0, composite_ubo_);
-        c2.bind_sampled_texture(4, input_tex2);
-        c2.bind_sampled_texture(5, mip_textures_[0]);
+        c2.bind_uniform_buffer(comp_params_binding, composite_ubo_);
+        c2.bind_sampled_texture(comp_original_binding, input_tex2);
+        c2.bind_sampled_texture(comp_bloom_binding, mip_textures_[0]);
         c2.draw_fullscreen_quad();
         c2.end_pass();
     }
