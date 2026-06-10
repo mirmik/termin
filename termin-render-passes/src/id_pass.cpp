@@ -134,26 +134,28 @@ void IdPass::execute_with_data_tgfx2(
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
 
     tgfx::ShaderHandle id_vs2, id_fs2;
+    tc_shader* id_raw = nullptr;
     {
-        tc_shader* raw = tc_shader_get(id_shader_handle_);
-        if (!raw) {
+        id_raw = tc_shader_get(id_shader_handle_);
+        if (!id_raw) {
             tc::Log::error("IdPass: id_shader_handle_ stale (index=%u gen=%u)",
                            id_shader_handle_.index, id_shader_handle_.generation);
             return;
         }
-        if (!tc_shader_ensure_tgfx2(raw, &device, &id_vs2, &id_fs2)) {
+        if (!tc_shader_ensure_tgfx2(id_raw, &device, &id_vs2, &id_fs2)) {
             tc::Log::error("IdPass: tc_shader_ensure_tgfx2 failed for '%s'",
-                           raw->name ? raw->name : raw->uuid);
+                           id_raw->name ? id_raw->name : id_raw->uuid);
             return;
         }
     }
     ctx.ctx2->bind_shader(id_vs2, id_fs2);
+    ctx.ctx2->use_shader_resource_layout(id_raw);
 
     // PerFrame UBO: view + projection, one write per pass via the ring.
     IdPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
-    ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
+    ctx.ctx2->bind_uniform_data("u_per_frame", &per_frame, sizeof(per_frame));
 
     auto restore_id_raster_state = [&]() {
         ctx.ctx2->set_depth_test(true);
@@ -225,34 +227,29 @@ void IdPass::execute_with_data_tgfx2(
         push.u_pickColor[1] = pick_g;
         push.u_pickColor[2] = pick_b;
         push.u_pickColor[3] = 1.0f;
-        ctx.ctx2->set_push_constants(&push, sizeof(push));
+
+        ctx.ctx2->bind_uniform_data("u_push", &push, sizeof(push));
 
         if (override_is_base) {
-            // The base id VS only reads a_position (loc 0). shaderc strips
-            // declared-but-unused a_normal / a_texcoord, so the SPIR-V
-            // inputs are a_position only — trim the pipeline's vertex
-            // layout to match, otherwise Vulkan logs performance warnings
-            // about loc 1/2/3 for every pipeline variant.
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
         } else {
-            // Skinning variant: compile via bridge, bind, rely on
-            // SkinnedMeshRenderer to upload BoneBlock UBO.
-            tc_shader* raw = tc_shader_get(dc.final_shader);
-            if (!raw) {
+            tc_shader* skinned_raw = tc_shader_get(dc.final_shader);
+            if (!skinned_raw) {
                 continue;
             }
             tgfx::ShaderHandle vs2, fs2;
-            if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
+            if (!tc_shader_ensure_tgfx2(skinned_raw, &device, &vs2, &fs2)) {
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            // a_position (0) + a_normal (1) used by skinning function + joints/weights.
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
             ctx.ctx2->bind_shader(id_vs2, id_fs2);
+            ctx.ctx2->use_shader_resource_layout(id_raw);
+            ctx.ctx2->bind_uniform_data("u_push", &push, sizeof(push));
         }
     }
 
