@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import struct
-from typing import Callable, Set
+from typing import Any, Callable, Set
 
 import numpy as np
 
@@ -13,8 +13,37 @@ from tgfx._tgfx_native import CULL_NONE, Tgfx2ShaderHandle, tc_shader_ensure_tgf
 
 
 _HIGHLIGHT_SHADER_UUID = "termin-engine-highlight"
-_HIGHLIGHT_PUSH_FMT = "=12f"
-assert struct.calcsize(_HIGHLIGHT_PUSH_FMT) == 48
+
+
+def _pack_uniform_fields(layout: dict[str, Any], values: dict[str, Any]) -> bytes:
+    """Pack values into a byte buffer using the shader's field layout.
+
+    `layout` is a dict with `size` (total bytes) and `fields` (list of
+    {name, offset, size}). `values` maps field names to floats or tuples
+    of floats. Missing fields are zero-filled.
+    """
+    total_size = layout.get("size", 0)
+    buf = bytearray(total_size)
+    for field in layout.get("fields", []):
+        name = field["name"]
+        offset = field["offset"]
+        field_size = field["size"]
+        if name not in values:
+            continue
+        val = values[name]
+        if isinstance(val, (int, float)):
+            if field_size == 4:
+                struct.pack_into("=f", buf, offset, float(val))
+            elif field_size == 8:
+                struct.pack_into("=f", buf, offset, 0.0)
+            elif field_size == 12:
+                struct.pack_into("=f", buf, offset, float(val))
+        elif isinstance(val, (tuple, list)):
+            if field_size == 8:
+                struct.pack_into("=2f", buf, offset, *val)
+            elif field_size == 12:
+                struct.pack_into("=3f", buf, offset, *val)
+    return bytes(buf)
 
 
 class HighlightPass(PythonFramePass):
@@ -31,6 +60,7 @@ class HighlightPass(PythonFramePass):
     }
 
     _shader: TcShader | None = None
+    _params_layout: dict[str, Any] | None = None  # cached field metadata
 
     def __init__(
         self,
@@ -55,12 +85,34 @@ class HighlightPass(PythonFramePass):
         return {self.output_res}
 
     @classmethod
+    def _ensure_params_layout(cls) -> dict[str, Any] | None:
+        """Extract the u_params buffer field layout from the compiled shader."""
+        if cls._params_layout is not None:
+            return cls._params_layout
+        if cls._shader is None or not cls._shader.is_valid:
+            return None
+        binding = cls._shader.find_resource_binding("u_params")
+        if binding is None:
+            return None
+        # The fields are in the sidecar .layout.json, loaded into resource_bindings
+        # but the C-side tc_shader_resource_binding doesn't carry fields yet.
+        # For now, binding dict has: name, kind, set, binding, stage_mask, size.
+        # Fields will be available once the C struct is extended.
+        cls._params_layout = {
+            "size": binding.get("size", 48),
+            "fields": binding.get("fields", []),
+        }
+        return cls._params_layout
+
+    @classmethod
     def _ensure_fragment_shader(cls, ctx2) -> Tgfx2ShaderHandle:
         if cls._shader is None:
             cls._shader = TcShader.from_builtin_catalog(_HIGHLIGHT_SHADER_UUID)
         if not cls._shader.is_valid:
             return Tgfx2ShaderHandle()
-        return tc_shader_ensure_tgfx2(ctx2, cls._shader).fs
+        shader_result = tc_shader_ensure_tgfx2(ctx2, cls._shader)
+        cls._ensure_params_layout()
+        return shader_result.fs
 
     def _selected_id(self) -> int:
         if self._get_id is None:
@@ -103,16 +155,19 @@ class HighlightPass(PythonFramePass):
         texel_x = 1.0 / max(1, int(w))
         texel_y = 1.0 / max(1, int(h))
         outline = self.color
-        push_bytes = struct.pack(
-            _HIGHLIGHT_PUSH_FMT,
-            sel_r, sel_g, sel_b,
-            1.0 if enabled else 0.0,
-            float(outline[0]), float(outline[1]), float(outline[2]),
-            0.0,
-            texel_x, texel_y,
-            0.0, 0.0,
-        )
-        push_buf = np.asarray(bytearray(push_bytes), dtype=np.uint8)
+
+        layout = self._ensure_params_layout()
+        if layout and layout.get("fields"):
+            params_bytes = _pack_uniform_fields(layout, {
+                "selected_color": (sel_r, sel_g, sel_b),
+                "enabled": 1.0 if enabled else 0.0,
+                "outline_color": (float(outline[0]), float(outline[1]), float(outline[2])),
+                "texel_size": (texel_x, texel_y),
+            })
+        else:
+            log.error("[HighlightPass] no u_params layout metadata from shader")
+            return
+        push_buf = np.asarray(bytearray(params_bytes), dtype=np.uint8)
 
         ctx2.begin_pass(target_tex2)
         ctx2.set_viewport(0, 0, int(w), int(h))
@@ -122,10 +177,11 @@ class HighlightPass(PythonFramePass):
         ctx2.set_cull(CULL_NONE)
         try:
             ctx2.bind_shader(Tgfx2ShaderHandle(), fs)
-            ctx2.bind_sampled_texture(4, color_tex2)
+            ctx2.use_shader_resource_layout(self._shader)
+            ctx2.bind_texture_by_name("u_color", color_tex2)
             id_bind = tex_id2 if tex_id2 is not None else color_tex2
-            ctx2.bind_sampled_texture(5, id_bind)
-            ctx2.set_push_constants(push_buf)
+            ctx2.bind_texture_by_name("u_id", id_bind)
+            ctx2.bind_uniform_by_name("u_params", push_buf)
             ctx2.draw_fullscreen_quad()
         finally:
             ctx2.end_pass()
