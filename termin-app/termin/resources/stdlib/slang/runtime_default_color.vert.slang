@@ -6,7 +6,6 @@ struct CameraUBO
     float4 camera_pos;
 };
 
-[[vk::binding(0, 0)]]
 ConstantBuffer<CameraUBO> u_camera;
 
 struct PushConstants

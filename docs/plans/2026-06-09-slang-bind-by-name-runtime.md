@@ -10,7 +10,6 @@ Slang/reflection-driven symbolic bindings.
 The target state is:
 
 - Slang source files do not contain backend-specific layout attributes such as
-  `[[vk::binding]]` or `[[vk::location]]`.
 - Shader stage IO is expressed through Slang/HLSL semantics:
   `POSITION`, `TEXCOORD0`, `COLOR0`, `SV_Position`, `SV_Target0`, etc.
 - Shader resources are expressed by logical names:
@@ -35,12 +34,10 @@ Current tgfx2 code assumes a shared numeric descriptor ABI:
 This works for GLSL because source files explicitly write
 `layout(binding = N)`. It does not map cleanly to backend-neutral Slang.
 
-If we remove `[[vk::binding]]` from Slang without changing the runtime model,
 Slang can compile successfully but infer bindings that do not match tgfx2's
 runtime slots. That creates silent runtime breakage: the pass binds a texture
 to slot `4`, while the generated shader reads another slot.
 
-`[[vk::binding]]` fixes the immediate problem but leaks Vulkan layout into the
 source language. HLSL-style `register(...)` is also only a bridge, not the
 desired engine model: it still makes shader authors manage backend/resource
 slots directly.
@@ -96,7 +93,6 @@ The source should not contain:
 
 ```slang
 [[vk::location(...)]]
-[[vk::binding(...)]]
 ```
 
 Stage IO locations are derived from semantics and validated through reflection.
@@ -259,7 +255,6 @@ Tasks:
 
 Acceptance:
 
-- Built-in Slang source can omit `[[vk::binding]]`.
 - The layout sidecar records where each resource landed for Vulkan/OpenGL.
 - Collision diagnostics include shader UUID, stage, resource name, target, and
   requested/generated binding.
@@ -358,7 +353,6 @@ Tasks:
 Acceptance:
 
 - A simple material with one constant buffer and one texture renders on Vulkan
-  without `[[vk::binding]]`.
 - Material package artifacts include layout metadata.
 - Runtime package loading preserves enough metadata to bind material resources
   symbolically.
@@ -379,7 +373,6 @@ Tasks:
 
 Acceptance:
 
-- No migrated Slang source contains `[[vk::binding]]` or
   `[[vk::location]]`.
 - New render passes do not need to know texture slot numbers.
 - Numeric binding call sites are either legacy GLSL paths or backend internals.
@@ -434,4 +427,3 @@ The first slice should be small but architectural:
    binding resolution are tested.
 
 This keeps source cleanup and runtime binding migration connected, without
-pretending that simply deleting `[[vk::binding]]` is safe.

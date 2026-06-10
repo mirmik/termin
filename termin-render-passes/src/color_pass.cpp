@@ -692,7 +692,9 @@ void ColorPass::execute_with_data(
             if (wireframe) state.polygon_mode = PolygonMode::Line;
 
             ctx2->clear_resource_bindings();
-            bind_engine_per_frame_uniforms(*ctx2, pf);
+
+            tc_shader* direct_shader = tc_shader_get(final_shader);
+            bind_engine_per_frame_uniforms(*ctx2, pf, direct_shader);
             ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING, &sb, sizeof(sb));
 
             ctx2->set_depth_test(state.depth_test);
@@ -705,7 +707,6 @@ void ColorPass::execute_with_data(
                                    ? tgfx::PolygonMode::Line
                                    : tgfx::PolygonMode::Fill);
 
-            tc_shader* direct_shader = tc_shader_get(final_shader);
             if (lighting_ubo_tgfx2 &&
                 (drawable->needs_lighting_ubo_tgfx2(phase_mark, dc.geometry_id) ||
                  (direct_shader && tc_shader_has_feature(direct_shader, TC_SHADER_FEATURE_LIGHTING_UBO)))) {
