@@ -133,8 +133,9 @@ void TonemapPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_cull(tgfx::CullMode::None);
 
     tgfx::ShaderHandle tm_fs;
+    tc_shader* raw = nullptr;
     {
-        tc_shader* raw = tc_shader_get(shader_handle_);
+        raw = tc_shader_get(shader_handle_);
         if (!raw || !tc_shader_ensure_tgfx2(raw, device2_, nullptr, &tm_fs)) {
             tc::Log::error("TonemapPass: tc_shader_ensure_tgfx2 failed");
             ctx.ctx2->end_pass();
@@ -151,8 +152,9 @@ void TonemapPass::execute(ExecuteContext& ctx) {
     };
     ctx.ctx2->set_vertex_layout(fsq_layout);
 
-    ctx.ctx2->bind_uniform_buffer(0, params_ubo_);
-    ctx.ctx2->bind_sampled_texture(4, input_tex2);
+    ctx.ctx2->use_shader_resource_layout(raw);
+    ctx.ctx2->bind_uniform("u_params", params_ubo_);
+    ctx.ctx2->bind_texture("u_input", input_tex2);
 
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
