@@ -1,12 +1,20 @@
 # GPU pipeline layout
 
-Single source of truth for descriptor set bindings, UBO field offsets, vertex
-input locations, and push constants across all engine passes.
+Reference for UBO struct layouts, vertex input locations, and push constants
+across all engine passes.
+
+**Pipeline layout architecture** is documented separately in
+`termin-graphics/docs/architecture/pipeline-layout.md`. The short version:
+descriptor set layouts are now **per-pipeline**, derived from SPIR-V reflection.
+There is no universal binding table. The shader declares what it needs; the
+pipeline builds its `VkDescriptorSetLayout` to match. Godot 4 uses the same
+model.
 
 **Authoritative C++ locations (verify here before changing anything):**
 
-- `termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp` — `create_shared_layouts()`
-  builds the universal `VkDescriptorSetLayout` / `VkPipelineLayout`.
+- `termin-graphics/docs/architecture/pipeline-layout.md` — architecture and data flow.
+- `termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp` — per-pipeline
+  `VkDescriptorSetLayout` built from SPIR-V reflection at `create_pipeline()` time.
 - `termin-render-passes/include/termin/lighting/lighting_ubo.hpp` — `LightingUBOData`.
 - `termin-render/include/termin/render/frame_uniforms.hpp` — `EnginePerFrameStd140`.
 - `termin-render-passes/src/color_pass.cpp` — `ShadowBlockStd140`.
@@ -18,79 +26,19 @@ input locations, and push constants across all engine passes.
   `BoneBlock`.
 - `termin-mesh/src/tgfx_types.c` — `tgfx_vertex_layout_*`.
 
-Rule of thumb: **if you need a new UBO, add a new binding to
-`create_shared_layouts()` first**, then mention the slot here, then use it in
-the shader. Do not silently squat on an unused descriptor slot.
+Rule of thumb: **the shader defines its descriptor set layout.** If a shader
+declares `layout(binding=7)`, that is where the resource lands. No remapping.
+Two pipelines with the same binding signature share one `VkDescriptorSetLayout`
+(cached by FNV-1a hash).
 
 ---
 
-## 1. Descriptor set 0 (shared pipeline layout)
-
-Single `VkDescriptorSetLayout` used by every graphics pipeline the engine
-creates. On OpenGL each UBO binding maps directly to a GL UBO binding point;
-samplers map to texture units by the same number. Legacy GLSL sources still
-spell this contract with `layout(binding = N)`. Slang material sources should
-not spell backend layout in source; `termin_shaderc` captures Slang reflection
-into `<artifact>.layout.json`, including constant buffers, textures, samplers,
-and storage textures. Runtime upload code resolves resource bindings through
-`TcShader` metadata. While the shared-layout bridge is still in place,
-`termin_shaderc` uses temporary non-overlapping Slang compiler bindings,
-then assigns known Slang resource names to the shared Vulkan layout and
-patches SPIR-V decorations to match the sidecar.
-
-| Binding | Type | Count | Stages | Name | Owner / writer |
-|---|---|---|---|---|---|
-| 0 | UBO | 1 | ALL | `LightingBlock` | `LightingUBO` (`lighting_ubo.hpp`) |
-| 1 | UBO | 1 | ALL | `MaterialParams` | Synthesized per-shader by `shader_parser.cpp` from `@property` declarations; uploaded by `material_ubo_apply.cpp` |
-| 2 | UBO | 1 | ALL | `PerFrame` | `EnginePerFrameStd140` (`frame_uniforms.hpp`) for parser-generated material shaders; per-pass layouts for standalone built-in passes |
-| 3 | UBO | 1 | ALL | `ShadowBlock` | `ColorPass::execute_with_data` |
-| 4–7 | COMBINED_IMAGE_SAMPLER | 1 each | FS | material textures 0–3 (`MATERIAL_TEX_SLOT_BASE = 4`) | `ColorPass::execute_with_data` + `apply_material_phase_ubo` |
-| 8 | COMBINED_IMAGE_SAMPLER | `MAX_SHADOW_MAPS = 16` | FS | `u_shadow_map[16]` (array descriptor) | `ColorPass::execute_with_data` |
-| 9–15 | COMBINED_IMAGE_SAMPLER | 1 each | FS | material textures 4–10 | `ColorPass::execute_with_data` + `apply_material_phase_ubo` |
-| 16 | UBO | 1 | VS | `BoneBlock` | `SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2` |
-| 17–23 | COMBINED_IMAGE_SAMPLER | 1 each | FS | extra FS samplers (debug overlays, posteffect inputs) | caller-supplied |
-| 24 | UBO | 1 | VS | `SlangDrawBlock` | `ColorPass::execute_with_data` |
-| push | push-constants | 128 B | ALL_GRAPHICS | per-pass push block | per-pass writer |
-
-### Cross-backend shader annotations
-
-| Resource | GLSL / Vulkan / OpenGL spelling | Slang / HLSL spelling |
-|---|---|---|
-| `LightingBlock` | `layout(std140, binding = 0) uniform LightingBlock` | `cbuffer LightingBlock : register(b0)` |
-| `MaterialParams` | `layout(std140, binding = 1) uniform MaterialParams` | `ConstantBuffer<MaterialParams> material;` with binding from `<artifact>.layout.json` |
-| `PerFrame` | `layout(std140, binding = 2) uniform PerFrame` | `ConstantBuffer<PerFrame> per_frame;` with binding from `<artifact>.layout.json` |
-| `ShadowBlock` | `layout(std140, binding = 3) uniform ShadowBlock` | `cbuffer ShadowBlock : register(b3)` |
-| material textures 0–3 | `layout(binding = 4..7) uniform sampler2D ...` | `Sampler2D ...;` with binding assigned by `termin_shaderc` and recorded in `<artifact>.layout.json` |
-| shadow map array | `layout(binding = 8) uniform sampler2DShadow u_shadow_map[16]` | Pending Slang shadow policy; split `Texture2D` + `SamplerState` is not supported by the current Vulkan shared layout |
-| material textures 4–10 | `layout(binding = 9..15) uniform sampler2D ...` | `Sampler2D ...;` with binding assigned by `termin_shaderc` and recorded in `<artifact>.layout.json` |
-| `BoneBlock` | `layout(std140, binding = 16) uniform BoneBlock` | `cbuffer BoneBlock : register(b16)` |
-| extra FS samplers | `layout(binding = 17..23) uniform sampler2D ...` | `Sampler2D ...;` with binding assigned by `termin_shaderc` and recorded in `<artifact>.layout.json` |
-| `SlangDrawBlock` | n/a for GLSL material shaders | `ConstantBuffer<SlangDrawData> draw_data;` with binding from `<artifact>.layout.json` |
-| push block | Vulkan `layout(push_constant)`, OpenGL UBO binding 14 | D3D11 emulated cbuffer; reserve `b14` unless a backend-specific layout says otherwise |
-
-**Notes:**
-
-- Binding 8 is a single **array descriptor** with `descriptorCount = 16`. In
-  GLSL: `layout(binding = 8) uniform sampler2DShadow u_shadow_map[16]`. No
-  bindings 9..23 are consumed by it; 9..15 are reserved for material textures
-  and 17..23 are free for extra samplers.
-- OpenGL push constants ride a ring UBO at `TGFX2_PUSH_CONSTANTS_BINDING = 14`
-  (GL's UBO binding space is disjoint from the sampler/texture-unit space,
-  so reusing 14 there doesn't collide with sampler 14 on Vulkan).
-- Bindings 17..23 are declared as extra fragment sampler slots. Binding 24 is
-  a dynamic UBO for Slang/HLSL per-draw material data. Bindings above 24 are
-  not declared in the universal Vulkan layout. If you need one, extend
-  `create_shared_layouts()` first — otherwise SPIR-V pipeline creation fails
-  with "binding N not declared in pipeline layout".
-
----
-
-## 2. UBO structures (std140)
+## 1. UBO structures (std140)
 
 All offsets are in bytes. `static_assert` in the C++ source pins the size;
 any mismatch will fail to compile.
 
-### `LightingBlock` (binding 0, 688 B)
+### `LightingBlock` (688 B)
 
 ```
 Offset  Size  Type          Field
@@ -110,7 +58,7 @@ Per-light `LightData` (80 B):
 64  vec4  outer_angle + cascade_count + cascade_blend + blend_distance
 ```
 
-### `MaterialParams` (binding 1, variable size)
+### `MaterialParams` (variable size)
 
 **Synthesised per-shader.** The parser scans `@property` lines in `.shader`,
 packs them std140, writes the block declaration into GLSL/Slang source, and
@@ -125,7 +73,7 @@ into the right offsets.
 Block size is available from `shader->material_ubo_block_size`; fields from
 `shader->material_ubo_entries[]`. Don't hardcode it.
 
-### `PerFrame` (binding 2)
+### `PerFrame`
 
 For parser-generated material shaders, `shader_parser.cpp` injects this
 shared block and `frame_uniforms.cpp` uploads it. This is what `ColorPass`
@@ -147,9 +95,9 @@ and `MaterialPass` bind for ordinary `.shader` materials.
 
 #### Standalone geometry/debug passes
 
-Some built-in passes compile their own shaders and still use smaller binding-2
-or binding-0 `PerFrame` blocks. Those layouts are local to those passes and
-must stay matched with their shader strings:
+Some built-in passes compile their own shaders and use smaller `PerFrame`
+blocks. Those layouts are local to those passes and must stay matched with
+their shader sources:
 
 #### ShadowPass / IdPass / NormalPass `*PerFrameStd140` (128 B)
 
@@ -168,7 +116,7 @@ must stay matched with their shader strings:
 136  _pad[8]
 ```
 
-### `ShadowBlock` (binding 3, 2064 B)
+### `ShadowBlock` (2064 B)
 
 ```
 0      int       u_shadow_map_count
@@ -183,7 +131,7 @@ must stay matched with their shader strings:
 The shader sees the `[16]` arrays as scalar arrays — it reads only the `.x`
 (or `[0]`) component of each 16-byte slot.
 
-### `BoneBlock` (binding 16, 8208 B)
+### `BoneBlock` (8208 B)
 
 ```
 0      mat4[128]  u_bone_matrices           # 128 * 64 = 8192 B
@@ -197,7 +145,7 @@ transpose).
 
 ---
 
-## 3. Vertex input locations
+## 2. Vertex input locations
 
 Same numbers across all vertex layouts in `tgfx_types.c`. A mesh whose
 layout doesn't declare a given slot leaves that input unconsumed; shaders
@@ -220,7 +168,7 @@ PBR shader's `length(a_tangent.xyz) > 0.001` check handles that case.
 
 ---
 
-## 4. Push constants (128 B max)
+## 3. Push constants (128 B max)
 
 All graphics stages share a single push-constant range of **128 bytes**. This
 is the Vulkan 1.0 minimum guaranteed by `maxPushConstantsSize` — don't exceed
@@ -249,18 +197,18 @@ at binding **14** (`TGFX2_PUSH_CONSTANTS_BINDING`). Parser converts
 
 **D3D11 emulation:** D3D11 has no native push constants. Slang/HLSL targets
 must receive the same data through a small per-draw cbuffer. Reserve
-`register(b14)` for that emulation so it mirrors the OpenGL UBO binding and
-does not collide with shared engine cbuffers.
+`register(b14)` for that emulation so it mirrors the OpenGL UBO binding.
 
 ---
 
-## 5. Rules for adding a new UBO / sampler
+## 4. Rules for adding a new UBO / sampler
 
-1. **Check this document.** If your slot already has an owner, reuse the
-   UBO instead of doubling up.
-2. **Extend `VulkanRenderDevice::create_shared_layouts()`** with the new
-   binding (type, count, stage flags). Without this step, Vulkan pipeline
-   creation fails with "binding N not declared".
+1. **Check this document** for existing struct layouts — reuse a UBO instead
+   of doubling up.
+2. **Add the binding in shader source** — `layout(binding=N)` in GLSL or
+   through `termin_shaderc` layout assignment for Slang. The per-pipeline
+   `VkDescriptorSetLayout` is built from SPIR-V reflection; it will pick up
+   whatever the shader declares.
 3. **Pick the narrowest `stageFlags`** you can. Skinning only writes from
    VS, so `BoneBlock` is `VK_SHADER_STAGE_VERTEX_BIT` only.
 4. **Document the struct here** with offsets and a `static_assert(sizeof(...)

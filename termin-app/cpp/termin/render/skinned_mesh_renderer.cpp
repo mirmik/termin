@@ -20,9 +20,9 @@ extern "C" {
 
 namespace termin {
 
-// Must match `layout(std140, binding = 16) uniform BoneBlock` in
-// shader_skinning.cpp SKINNING_INPUTS and the VK_SHADER_STAGE_VERTEX_BIT
-// entry added in VulkanRenderDevice::create_shared_layouts. std140:
+// Must match the BoneBlock declaration in shader_skinning.cpp
+// SKINNING_INPUTS. The binding number is declared in the shader source;
+// the Vulkan descriptor set layout is built from SPIR-V reflection. std140:
 // mat4[] is tightly packed (4 vec4 per matrix), the int after the array
 // needs vec4 alignment → 16-byte stride. Total 128*64 + 16 = 8208.
 static constexpr uint32_t BONE_BLOCK_MAX_BONES = 128;
