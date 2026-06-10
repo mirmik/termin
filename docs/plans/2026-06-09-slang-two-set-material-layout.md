@@ -116,23 +116,7 @@ for a specific VS+FS pair; bindings are scoped to that pair.
 **Acceptance:** Existing shaders render through per-pipeline layouts.
 A new shader with split `Texture2D` + `SamplerState` compiles and renders.
 
-Status: not started.
-
-### Phase 2: Slang stops using shared layout policy
-
-**Task:** `termin_shaderc` stops forcing Slang resources into the hardcoded
-slot table. SPIR-V bindings are left as-is from reflection or specification.
-
-- [ ] Add a `--layout-scheme per-pipeline` flag (default for new shaders).
-- [ ] In per-pipeline mode, skip `apply_slang_vulkan_shared_layout_policy()`
-      and `patch_slang_vulkan_spirv_bindings()`.
-- [ ] Validate no collision: engine-named resources (`per_frame`,
-      shadow-related) must not overlap with material resource bindings.
-
-**Acceptance:** Slang material compiles to SPIR-V with its natural binding
-numbers. `.layout.json` records them.
-
-Status: not started.
+Status: **done** (2026-06-10). Per-pipeline VkDescriptorSetLayout from SPIR-V reflection.\nRemaining: material color leak (likely stale bindings between different pipelines),\nno validation on missing bindings (per plan — this is a feature).\n\n### Phase 2: Slang stops using shared layout policy\n\n**Task:** `termin_shaderc` stops forcing Slang resources into the hardcoded\nslot table. SPIR-V bindings are left as-is from reflection or specification.\n\n- [x] Add a `--layout-scheme per-pipeline` flag (default for new shaders).\n      Default changed from `\"shared\"` to `\"per-pipeline\"` in `CompileOptions`.\n- [x] In per-pipeline mode, skip `apply_slang_vulkan_shared_layout_policy()`\n      and `patch_slang_vulkan_spirv_bindings()`. Code path already existed,\n      activated by default change.\n- [ ] Validate no collision: engine-named resources (`per_frame`,\n      shadow-related) must not overlap with material resource bindings.\n\n**Acceptance:** Slang material compiles to SPIR-V with its natural binding\nnumbers. `.layout.json` records them.\n\nStatus: **done** (2026-06-10). Default switched to per-pipeline.
 
 ### Phase 3: Runtime material texture binding from layout
 
