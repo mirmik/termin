@@ -97,7 +97,7 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-depth-to-color` | `DepthToColorFS` | fragment | GLSL | `builtin_shaders/termin-engine-depth-to-color.frag.glsl` |
 | `termin-engine-color-to-depth` | `ColorToDepthFS` | fragment | GLSL | `builtin_shaders/termin-engine-color-to-depth.frag.glsl` |
 | `termin-engine-skybox` | `SkyboxEngineVSFS` | vertex + fragment | shader program | `builtin_shaders/termin-engine-skybox.shader` |
-| `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-grayscale.frag.glsl` |
+| `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-grayscale.frag.slang` |
 | `termin-engine-bloom-bright` | `BloomBrightFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-bright.frag.slang` |
 | `termin-engine-highlight` | `HighlightEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-highlight.frag.glsl` |
 | `termin-engine-gizmo-mask` | `GizmoMaskVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-gizmo-mask.vert.glsl`, `builtin_shaders/termin-engine-gizmo-mask.frag.glsl` |
@@ -106,7 +106,7 @@ toward the bind-by-name plan without changing the package shape later.
 | `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-downsample.frag.slang` |
 | `termin-engine-bloom-upsample` | `BloomUpsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-upsample.frag.slang` |
 | `termin-engine-bloom-composite` | `BloomCompositeFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-composite.frag.slang` |
-| `termin-engine-tonemap` | `TonemapEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-tonemap.frag.glsl` |
+| `termin-engine-tonemap` | `TonemapEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-tonemap.frag.slang` |
 
 ## Migration rule
 
