@@ -38,13 +38,10 @@ uint32_t material_ubo_binding_for_shader(
 }
 
 // Look up the descriptor set index for the material resource binding.
-// Returns 0 for legacy GLSL shaders (shared layout); returns 1 for Slang
-// shaders in the two-set scheme.
+// Returns 0 — single-set per-pipeline model; set parameter is vestigial.
 static uint32_t material_ubo_set_for_shader(const tc_shader* shader) {
-    const tc_shader_resource_binding* binding =
-        tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL);
-    if (!binding) return 0;  // legacy: no resource metadata → set=0
-    return binding->set;
+    (void)shader;
+    return 0;
 }
 
 void bind_material_ubo(
