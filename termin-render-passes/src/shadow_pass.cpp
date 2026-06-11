@@ -395,7 +395,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             // Render back faces into the shadow map. For closed meshes this
             // avoids front-face self-shadow acne without moving caster geometry
             // in light space; receiver bias remains a pure compare-depth offset
-            // in shadows.glsl.
+            // in the shader shadow helper.
             ctx.ctx2->set_cull(tgfx::CullMode::Front);
             ctx.ctx2->set_depth_bias(depth_bias_slope != 0.0f,
                                      0.0f,

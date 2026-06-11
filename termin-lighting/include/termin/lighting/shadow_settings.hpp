@@ -11,7 +11,7 @@ public:
     int method = METHOD_PCF;
     double softness = 1.0;
     // World-space offset along the light depth axis, converted to
-    // normalized shadow-map depth per cascade in shadows.glsl.
+    // normalized shadow-map depth per cascade by shader shadow helpers.
     double bias = 0.0;
 
 public:

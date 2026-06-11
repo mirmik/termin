@@ -730,10 +730,10 @@ def test_builtin_pbr_shader_uses_slang_scope_model():
     assert "Sampler2D u_albedo_texture;" in fragment
     assert "Sampler2D u_normal_texture;" in fragment
     assert "Sampler2D u_metallic_roughness_texture;" in fragment
-    assert "[[TerminScope(\"pass\")]]" in fragment
-    assert "ConstantBuffer<LightingBlock> lighting;" in fragment
-    assert "ConstantBuffer<ShadowBlock> shadow_block;" in fragment
-    assert "Sampler2DShadow shadow_maps[MAX_SHADOW_MAPS];" in fragment
+    assert "import termin_lighting;" in fragment
+    assert "import termin_shadows;" in fragment
+    assert "struct LightingBlock" not in fragment
+    assert "struct ShadowBlock" not in fragment
     assert "get_camera_position() - input.world_pos" in fragment
     assert "material.u_metallic" in fragment
     assert "#version" not in fragment
