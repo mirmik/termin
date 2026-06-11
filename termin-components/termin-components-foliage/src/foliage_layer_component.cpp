@@ -3,6 +3,7 @@
 #include <any>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <limits>
@@ -38,7 +39,7 @@ constexpr const char* FOLIAGE_VARIANT_SHADER_UUID = "termin-engine-foliage-insta
 constexpr const char* FOLIAGE_SHADOW_VARIANT_SHADER_UUID = "termin-engine-foliage-shadow";
 constexpr const char* FOLIAGE_SHADOW_FRAGMENT_SOURCE =
     "[shader(\"fragment\")]\n"
-    "void main() {}\n";
+    "void fs_main() {}\n";
 
 struct FoliageGpuInstance {
     float position[3];
@@ -51,6 +52,15 @@ struct UploadedBuffer {
     tgfx::BufferHandle buffer;
     uint64_t offset = 0;
 };
+
+char* duplicate_c_string(const char* value) {
+    if (!value) return nullptr;
+    const size_t size = std::strlen(value) + 1;
+    char* copy = static_cast<char*>(std::malloc(size));
+    if (!copy) return nullptr;
+    std::memcpy(copy, value, size);
+    return copy;
+}
 
 struct TcShaderHash {
     size_t operator()(const TcShader& shader) const {
@@ -169,6 +179,30 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
     tc_shader* original_raw = original_shader.get();
     tc_shader* variant_raw = variant.get();
     if (original_raw && variant_raw) {
+        free(variant_raw->vertex_entry);
+        variant_raw->vertex_entry = duplicate_c_string("vs_main");
+        if (!variant_raw->vertex_entry) {
+            tc::Log::error(
+                "[FoliageLayerComponent] failed to assign vertex entry for foliage shader variant '%s'",
+                variant_name.c_str()
+            );
+            return TcShader();
+        }
+
+        const char* fragment_entry = shadow_variant ? "fs_main" : original_raw->fragment_entry;
+        if (!fragment_entry || fragment_entry[0] == '\0') {
+            fragment_entry = "main";
+        }
+        free(variant_raw->fragment_entry);
+        variant_raw->fragment_entry = duplicate_c_string(fragment_entry);
+        if (!variant_raw->fragment_entry) {
+            tc::Log::error(
+                "[FoliageLayerComponent] failed to assign fragment entry for foliage shader variant '%s'",
+                variant_name.c_str()
+            );
+            return TcShader();
+        }
+
         tc_shader_set_material_ubo_layout(
             variant_raw,
             original_raw->material_ubo_entries,

@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import sdl2
 
@@ -16,6 +17,7 @@ from tcgui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
 from tcgui.widgets.containers import HStack, VStack, Panel
 from tcgui.widgets.units import px, pct
 from tcbase import Key, log
+from termin.editor_tcgui.shader_runtime import configure_sdk_shader_runtime
 from termin.launcher.recent import RecentProjects, create_project, write_launch_project
 
 
@@ -598,6 +600,8 @@ def run():
         env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
         subprocess.Popen([editor_exe], env=env)
         return
+
+    configure_sdk_shader_runtime("launcher")
 
     # Route the window through BackendWindow so the launcher runs on
     # whichever backend TERMIN_BACKEND selects (OpenGL or Vulkan).

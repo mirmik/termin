@@ -110,8 +110,9 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     default_fragment_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.slang"
     ).read_text(encoding="utf-8")
-    assert "CameraUBO" in default_vertex_source
-    assert "PushConstants" in default_vertex_source
+    assert "vk::" not in default_vertex_source
+    assert "per_frame" in default_vertex_source
+    assert "draw_data" in default_vertex_source
     assert "SV_Target0" in default_fragment_source
 
     scene_data = json.loads(result.scene_path.read_text(encoding="utf-8"))
@@ -180,14 +181,17 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     shadow_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-engine-shadow.slang"
     ).read_text(encoding="utf-8")
+    assert "vk::" not in shadow_source
     assert "PerFrame" in shadow_source
     assert "ShadowPushData" in shadow_source
+    assert "shadow_draw" in shadow_source
 
     default_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.slang"
     ).read_text(encoding="utf-8")
-    assert "CameraUBO" in default_source
-    assert "PushConstants" in default_source
+    assert "vk::" not in default_source
+    assert "per_frame" in default_source
+    assert "draw_data" in default_source
 
     tonemap_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-engine-tonemap.frag.slang"
@@ -241,10 +245,16 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     )
     assert shadow_layout["binding_model"] == "legacy_numeric_bridge"
     assert {
-        "name": "ShadowPushBlock",
-        "logical_name": "push_constants",
-        "kind": "push_constant",
-        "legacy_binding": 14,
+        "name": "per_frame",
+        "logical_name": "per_frame",
+        "kind": "constant_buffer",
+        "scope": "frame",
+    } in shadow_layout["resources"]
+    assert {
+        "name": "shadow_draw",
+        "logical_name": "draw",
+        "kind": "constant_buffer",
+        "scope": "draw",
     } in shadow_layout["resources"]
 
     skybox_layout = json.loads(

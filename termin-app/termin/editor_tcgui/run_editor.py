@@ -23,6 +23,7 @@ from tcgui.widgets.ui import UI
 from tgfx import Tgfx2Context
 from termin.display._platform_native import SDLBackendWindow
 from termin.editor_tcgui.backend_window_manager import BackendWindowManager
+from termin.editor_tcgui.shader_runtime import configure_sdk_shader_runtime
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +260,8 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     engine = EngineCore.instance()
     if engine is None:
         raise RuntimeError("EngineCore not created. Must be called from C++ entry point.")
+
+    configure_sdk_shader_runtime("editor")
 
     # BackendWindow inits SDL and creates its own window + tgfx2 device
     # based on TERMIN_BACKEND. No manual SDL_Init / SDL_GL_CreateContext.
