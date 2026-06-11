@@ -16,6 +16,15 @@ extern "C" {
 }
 
 namespace termin {
+namespace {
+
+bool shader_uses_layout_only_bindings(const tc_shader* shader) {
+    return shader
+        && tc_shader_has_resource_layout(shader)
+        && tc_shader_get_language(shader) != TC_SHADER_LANGUAGE_GLSL;
+}
+
+} // namespace
 
 uint32_t material_ubo_binding_for_shader(
     const tc_shader* shader,
@@ -192,7 +201,7 @@ bool apply_material_phase_ubo(
                 staging.data(),
                 static_cast<uint32_t>(staging.size()));
             bound_any = true;
-        } else if (!tc_shader_has_resource_layout(shader)) {
+        } else if (!shader_uses_layout_only_bindings(shader)) {
             ctx.bind_uniform_buffer_ring(
                 resolved_ubo_slot,
                 staging.data(),
@@ -221,7 +230,7 @@ bool apply_material_phase_ubo(
             if (rb && rb->kind == TC_SHADER_RESOURCE_TEXTURE) {
                 ctx.bind_texture(mat_tex.name, tex2);
                 bound_any = true;
-            } else if (!tc_shader_has_resource_layout(shader)) {
+            } else if (!shader_uses_layout_only_bindings(shader)) {
                 MaterialTextureBinding b;
                 b.slot = material_texture_binding_for_index(
                     static_cast<uint32_t>(i));
