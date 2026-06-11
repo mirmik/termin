@@ -29,7 +29,9 @@ const tc_shader_resource_binding* find_resource(
 }
 
 bool allow_legacy_fallback(const tc_shader* shader) {
-    return !tc_shader_has_resource_layout(shader);
+    return !shader
+        || !tc_shader_has_resource_layout(shader)
+        || tc_shader_get_language(shader) == TC_SHADER_LANGUAGE_GLSL;
 }
 
 } // namespace

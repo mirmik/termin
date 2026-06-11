@@ -826,13 +826,6 @@ void ColorPass::execute_with_data(
         // striped materials after resize/post-processing passes.
         ctx2->clear_resource_bindings();
         ctx2->use_shader_resource_layout(raw_shader);
-        bind_engine_per_frame_uniforms(*ctx2, pf, raw_shader);
-        bind_shadow_block_for_shader(
-            *ctx2,
-            raw_shader,
-            &sb,
-            sizeof(sb),
-            SHADOW_UBO_BINDING);
 
         // Material storage is handle-addressable but not pointer-stable:
         // tc_material_create() may grow the pool and move existing materials.
@@ -876,6 +869,14 @@ void ColorPass::execute_with_data(
         ctx2->use_shader_resource_layout(raw_shader);
 
         // --- UBO bindings ---
+        bind_engine_per_frame_uniforms(*ctx2, pf, raw_shader);
+        bind_shadow_block_for_shader(
+            *ctx2,
+            raw_shader,
+            &sb,
+            sizeof(sb),
+            SHADOW_UBO_BINDING);
+
         // Lighting UBO at slot 0.
         if (lighting_ubo_tgfx2 &&
             tc_shader_has_feature(raw_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
