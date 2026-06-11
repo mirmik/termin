@@ -487,6 +487,47 @@ def test_slang_material_resource_binding_surfaces_on_tc_shader():
     assert binding["size"] == 16
 
 
+def test_slang_shader_synthesizes_engine_scope_blocks_for_compact_names():
+    shader_text = "\n".join([
+        "@program SlangEngineScopes",
+        "@language slang",
+        "@phase opaque",
+        "@stage vertex",
+        "struct VertexInput { float3 position : POSITION; };",
+        "struct VertexOutput { float4 position : SV_Position; };",
+        "[shader(\"vertex\")] VertexOutput main(VertexInput input) {",
+        "    VertexOutput output;",
+        "    float4 world = mul(u_model, float4(input.position, 1.0));",
+        "    output.position = mul(u_projection, mul(u_view, world));",
+        "    return output;",
+        "}",
+        "@endstage",
+        "@stage fragment",
+        "struct FragmentOutput { float4 color : SV_Target0; };",
+        "[shader(\"fragment\")] FragmentOutput main() {",
+        "    FragmentOutput output;",
+        "    output.color = float4(1, 1, 1, 1);",
+        "    return output;",
+        "}",
+        "@endstage",
+        "@endphase",
+    ])
+
+    program = parse_shader_text(shader_text)
+    vertex = program.phases[0].stages["vertex"].source
+
+    assert "import termin_prelude;" in vertex
+    assert "[[TerminScope(\"frame\")]]" in vertex
+    assert "ConstantBuffer<PerFrame> per_frame;" in vertex
+    assert "#define u_view per_frame.u_view" in vertex
+    assert "#define u_projection per_frame.u_projection" in vertex
+    assert "[[TerminScope(\"draw\")]]" in vertex
+    assert "ConstantBuffer<DrawData> draw_data;" in vertex
+    assert "#define u_model draw_data._u_model" in vertex
+    assert vertex.count("ConstantBuffer<PerFrame> per_frame;") == 1
+    assert vertex.count("ConstantBuffer<DrawData> draw_data;") == 1
+
+
 def test_slang_shader_synthesizes_sampler2d_for_texture_properties():
     shader_text = "\n".join([
         "@program SlangWithTexture",

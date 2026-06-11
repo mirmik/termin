@@ -1,38 +1,66 @@
 from __future__ import annotations
 
-from termin.materials import TcMaterial, TcRenderState
+from termin.materials import TcMaterial
 
-ColorMaterial_VERT = """
-#version 330 core
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
+COLOR_SHADER_TEXT = """@program ColorShader
+@language slang
 
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
+@phase opaque
+@priority 0
+@glDepthTest true
+@glDepthMask true
+@glCull true
 
-out vec3 v_normal;
+@property Color u_color = Color(1.0, 1.0, 1.0, 1.0)
 
-void main() {
-    v_normal = mat3(transpose(inverse(u_model))) * a_normal;
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+@stage vertex
+struct VertexInput
+{
+    float3 position : POSITION;
+    float3 normal : NORMAL;
+};
+
+struct VertexOutput
+{
+    float4 position : SV_Position;
+    float3 normal_world : NORMAL;
+};
+
+[shader("vertex")]
+VertexOutput main(VertexInput input)
+{
+    VertexOutput output;
+    output.normal_world = mul((float3x3)u_model, input.normal);
+    float4 world = mul(u_model, float4(input.position, 1.0));
+    output.position = mul(u_projection, mul(u_view, world));
+    return output;
 }
-"""
+@endstage
 
+@stage fragment
+struct FragmentInput
+{
+    float3 normal_world : NORMAL;
+};
 
-ColorMaterial_FRAG = """
-#version 330 core
-in vec3 v_normal;
-uniform vec4 u_color;
+struct FragmentOutput
+{
+    float4 color : SV_Target0;
+};
 
-out vec4 FragColor;
-
-void main() {
-    vec3 n = normalize(v_normal);
-    float ndotl = max(dot(n, vec3(0.2, 0.6, 0.5)), 0.0);
-    vec3 color = u_color.rgb * (0.25 + 0.75 * ndotl);
-    FragColor = vec4(color, u_color.a);
+[shader("fragment")]
+FragmentOutput main(FragmentInput input)
+{
+    FragmentOutput output;
+    float3 n = normalize(input.normal_world);
+    float ndotl = max(dot(n, float3(0.2, 0.6, 0.5)), 0.0);
+    float3 color = material.u_color.rgb * (0.25 + 0.75 * ndotl);
+    output.color = float4(color, material.u_color.a);
+    return output;
 }
+@endstage
+
+@endphase
 """
 
 
@@ -41,20 +69,14 @@ def create_color_material(
     name: str = "ColorMaterial",
 ) -> TcMaterial:
     """Create a simple colored material with basic lighting."""
-    mat = TcMaterial.create(name, "")
-    mat.shader_name = "ColorShader"
+    from termin.materials import create_material_from_parsed, parse_shader_text
 
-    state = TcRenderState.opaque()
-    phase = mat.add_phase_from_sources(
-        vertex_source=ColorMaterial_VERT,
-        fragment_source=ColorMaterial_FRAG,
-        geometry_source="",
-        shader_name="ColorShader",
-        phase_mark="opaque",
-        priority=0,
-        state=state,
+    mat = create_material_from_parsed(
+        parse_shader_text(COLOR_SHADER_TEXT),
+        name=name,
     )
 
+    phase = mat.default_phase()
     if phase is not None:
         phase.set_color(color[0], color[1], color[2], color[3])
 
@@ -68,29 +90,54 @@ class ColorMaterial(TcMaterial):
         return create_color_material(color=color)
 
 
-# Unlit shader - просто цвет без освещения
-UNLIT_VERT = """
-#version 330 core
-layout(location = 0) in vec3 a_position;
+UNLIT_SHADER_TEXT = """@program UnlitShader
+@language slang
 
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
+@phase opaque
+@priority 0
+@glDepthTest true
+@glDepthMask true
+@glCull true
 
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+@property Color u_color = Color(1.0, 1.0, 1.0, 1.0)
+
+@stage vertex
+struct VertexInput
+{
+    float3 position : POSITION;
+};
+
+struct VertexOutput
+{
+    float4 position : SV_Position;
+};
+
+[shader("vertex")]
+VertexOutput main(VertexInput input)
+{
+    VertexOutput output;
+    float4 world = mul(u_model, float4(input.position, 1.0));
+    output.position = mul(u_projection, mul(u_view, world));
+    return output;
 }
-"""
+@endstage
 
-UNLIT_FRAG = """
-#version 330 core
-uniform vec4 u_color;
+@stage fragment
+struct FragmentOutput
+{
+    float4 color : SV_Target0;
+};
 
-out vec4 FragColor;
-
-void main() {
-    FragColor = u_color;
+[shader("fragment")]
+FragmentOutput main()
+{
+    FragmentOutput output;
+    output.color = material.u_color;
+    return output;
 }
+@endstage
+
+@endphase
 """
 
 
@@ -99,20 +146,14 @@ def create_unlit_material(
     name: str = "UnlitMaterial",
 ) -> TcMaterial:
     """Create an unlit material (no lighting, just solid color)."""
-    mat = TcMaterial.create(name, "")
-    mat.shader_name = "UnlitShader"
+    from termin.materials import create_material_from_parsed, parse_shader_text
 
-    state = TcRenderState.opaque()
-    phase = mat.add_phase_from_sources(
-        vertex_source=UNLIT_VERT,
-        fragment_source=UNLIT_FRAG,
-        geometry_source="",
-        shader_name="UnlitShader",
-        phase_mark="opaque",
-        priority=0,
-        state=state,
+    mat = create_material_from_parsed(
+        parse_shader_text(UNLIT_SHADER_TEXT),
+        name=name,
     )
 
+    phase = mat.default_phase()
     if phase is not None:
         phase.set_color(color[0], color[1], color[2], color[3])
 

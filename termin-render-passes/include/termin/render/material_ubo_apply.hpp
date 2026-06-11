@@ -26,10 +26,10 @@ namespace termin {
 
 // Fallback UBO binding slot for the per-material std140 block.
 // Convention:
-//   slot 0  — per-frame / lighting (LIGHTING_UBO_BINDING in ColorPass;
-//             PerFrame view/proj in ShadowPass/DepthPass/NormalPass/IdPass)
 //   slot 1  — per-material (this)
+//   slot 2  — per-frame view/proj data
 //   slot 14 — per-object push constants (TGFX2_PUSH_CONSTANTS_BINDING)
+//   slot 24 — per-draw data (TC_SHADER_RESOURCE_BINDING_DRAW_DATA)
 constexpr uint32_t MATERIAL_UBO_BINDING = 1;
 
 struct MaterialProperty;
