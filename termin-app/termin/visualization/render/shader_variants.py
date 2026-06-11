@@ -20,7 +20,11 @@ from __future__ import annotations
 
 from typing import Callable, Dict, Tuple
 
-from tgfx import TcShader, ShaderVariantOp as NativeShaderVariantOp
+from tgfx import (
+    TcShader,
+    ShaderLanguage,
+    ShaderVariantOp as NativeShaderVariantOp,
+)
 
 
 # Re-export variant op for consistency
@@ -152,6 +156,11 @@ def _register_default_transforms(registry: ShaderVariantRegistry) -> None:
 
     def skinning_transform(shader: TcShader) -> TcShader:
         """Transform shader to add skinning support."""
+        if shader.language != ShaderLanguage.GLSL:
+            raise ValueError(
+                f"Skinning transform supports GLSL shaders only; "
+                f"shader '{shader.name}' uses {shader.language}"
+            )
         skinned_vert = inject_skinning_into_vertex_shader(shader.vertex_source)
         variant = TcShader.from_sources(
             vertex=skinned_vert,

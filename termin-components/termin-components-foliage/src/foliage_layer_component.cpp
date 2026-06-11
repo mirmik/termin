@@ -14,6 +14,7 @@
 
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/geom/general_pose3.hpp>
+#include <termin/render/frame_uniforms.hpp>
 #include <termin/render/material_ubo_runtime.hpp>
 #include <inspect/tc_kind_cpp.hpp>
 #include <tcbase/tc_log.hpp>
@@ -35,6 +36,9 @@ namespace {
 constexpr int FOLIAGE_GEOMETRY_ID = 0;
 constexpr const char* FOLIAGE_VARIANT_SHADER_UUID = "termin-engine-foliage-instanced";
 constexpr const char* FOLIAGE_SHADOW_VARIANT_SHADER_UUID = "termin-engine-foliage-shadow";
+constexpr const char* FOLIAGE_SHADOW_FRAGMENT_SOURCE =
+    "[shader(\"fragment\")]\n"
+    "void main() {}\n";
 
 struct FoliageGpuInstance {
     float position[3];
@@ -43,7 +47,7 @@ struct FoliageGpuInstance {
     float seed;
 };
 
-struct UploadedVertexStream {
+struct UploadedBuffer {
     tgfx::BufferHandle buffer;
     uint64_t offset = 0;
 };
@@ -81,6 +85,14 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
     if (original_shader.variant_op() == variant_op) {
         return original_shader;
     }
+    if (!shadow_variant && original_shader.language() != TC_SHADER_LANGUAGE_SLANG) {
+        tc::Log::error(
+            "[FoliageLayerComponent] cannot create foliage shader variant for '%s': "
+            "foliage rendering requires Slang material shaders",
+            original_shader.name()
+        );
+        return TcShader();
+    }
 
     auto& cache = shadow_variant ? foliage_shadow_shader_cache() : foliage_shader_cache();
     auto it = cache.find(original_shader);
@@ -92,7 +104,8 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
         cache.erase(it);
     }
 
-    const char* fragment_source = original_shader.fragment_source();
+    const char* fragment_source =
+        shadow_variant ? FOLIAGE_SHADOW_FRAGMENT_SOURCE : original_shader.fragment_source();
     if (!fragment_source || fragment_source[0] == '\0') {
         tc::Log::error(
             "[FoliageLayerComponent] cannot create foliage shader variant for '%s': fragment source is empty",
@@ -132,13 +145,15 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
         return TcShader();
     }
 
-    tc_shader_handle handle = tc_shader_from_sources(
+    tc_shader_handle handle = tc_shader_from_sources_ex(
         vertex_source.c_str(),
         fragment_source,
         nullptr,
         variant_name.c_str(),
         original_shader.source_path(),
-        variant_uuid
+        variant_uuid,
+        TC_SHADER_LANGUAGE_SLANG,
+        TC_SHADER_ARTIFACT_REQUIRED
     );
     if (tc_shader_handle_is_invalid(handle)) {
         tc::Log::error(
@@ -163,6 +178,10 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
     }
 
     variant.set_variant_info(original_shader, variant_op);
+    if (shadow_variant) {
+        variant.set_language(TC_SHADER_LANGUAGE_SLANG);
+        variant.set_artifact_policy(TC_SHADER_ARTIFACT_REQUIRED);
+    }
     cache[original_shader] = variant;
     return variant;
 }
@@ -217,32 +236,7 @@ bool convert_foliage_vertex_layout(const tc_mesh* mesh, tgfx::VertexBufferLayout
     return true;
 }
 
-tgfx::VertexBufferLayout foliage_instance_layout() {
-    tgfx::VertexBufferLayout layout;
-    layout.stride = sizeof(FoliageGpuInstance);
-    layout.per_instance = true;
-    layout.attributes = {
-        {8, tgfx::VertexFormat::Float3, static_cast<uint32_t>(offsetof(FoliageGpuInstance, position))},
-        {9, tgfx::VertexFormat::Float, static_cast<uint32_t>(offsetof(FoliageGpuInstance, yaw))},
-        {10, tgfx::VertexFormat::Float3, static_cast<uint32_t>(offsetof(FoliageGpuInstance, normal))},
-        {11, tgfx::VertexFormat::Float, static_cast<uint32_t>(offsetof(FoliageGpuInstance, seed))},
-    };
-    return layout;
-}
-
-tgfx::VertexBufferLayout foliage_instance_shadow_layout() {
-    tgfx::VertexBufferLayout layout;
-    layout.stride = sizeof(FoliageGpuInstance);
-    layout.per_instance = true;
-    layout.attributes = {
-        {8, tgfx::VertexFormat::Float3, static_cast<uint32_t>(offsetof(FoliageGpuInstance, position))},
-        {9, tgfx::VertexFormat::Float, static_cast<uint32_t>(offsetof(FoliageGpuInstance, yaw))},
-        {10, tgfx::VertexFormat::Float3, static_cast<uint32_t>(offsetof(FoliageGpuInstance, normal))},
-    };
-    return layout;
-}
-
-UploadedVertexStream upload_vertex_stream(
+UploadedBuffer upload_storage_buffer(
     tgfx::RenderContext2& ctx2,
     const void* data,
     uint32_t size
@@ -252,17 +246,12 @@ UploadedVertexStream upload_vertex_stream(
     }
 
     tgfx::IRenderDevice& device = ctx2.device();
-    uint64_t offset = device.transient_vertex_write(data, size);
-    if (offset != std::numeric_limits<uint64_t>::max()) {
-        return {device.transient_vertex_buffer(), offset};
-    }
-
     tgfx::BufferDesc desc;
     desc.size = size;
-    desc.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
+    desc.usage = tgfx::BufferUsage::Storage | tgfx::BufferUsage::CopyDst;
     tgfx::BufferHandle buffer = device.create_buffer(desc);
     if (!buffer) {
-        tc::Log::error("[FoliageLayerComponent] failed to allocate temporary vertex stream (%u bytes)", size);
+        tc::Log::error("[FoliageLayerComponent] failed to allocate temporary storage buffer (%u bytes)", size);
         return {};
     }
 
@@ -523,6 +512,9 @@ TcShader FoliageLayerComponent::override_shader(
     if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
         return original_shader;
     }
+    if (phase_mark == "depth") {
+        return original_shader;
+    }
 
     TcShader variant = get_foliage_instanced_shader(original_shader, phase_mark == "shadow");
     if (!variant.is_valid()) {
@@ -543,6 +535,9 @@ void FoliageLayerComponent::collect_shader_usages(
 ) {
     emit(original_shader);
     if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
+        return;
+    }
+    if (phase_mark == "depth") {
         return;
     }
 
@@ -629,12 +624,12 @@ bool FoliageLayerComponent::draw_tgfx2(
         instances.push_back(make_gpu_instance(instance));
     }
 
-    UploadedVertexStream instance_stream = upload_vertex_stream(
+    UploadedBuffer instance_buffer = upload_storage_buffer(
         ctx2,
         instances.data(),
         static_cast<uint32_t>(instances.size() * sizeof(FoliageGpuInstance))
     );
-    if (!instance_stream.buffer) {
+    if (!instance_buffer.buffer) {
         return false;
     }
 
@@ -673,7 +668,25 @@ bool FoliageLayerComponent::draw_tgfx2(
     std::memcpy(push.u_position_model, position_model.data, sizeof(push.u_position_model));
     std::memcpy(push.u_vector_model, vector_model.data, sizeof(push.u_vector_model));
 
+    EnginePerFrameStd140 per_frame = make_engine_per_frame_uniforms(
+        context.view,
+        context.projection,
+        context.camera_position,
+        static_cast<float>(context.viewport_width),
+        static_cast<float>(context.viewport_height),
+        context.camera ? static_cast<float>(context.camera->near_clip) : 0.1f,
+        context.camera ? static_cast<float>(context.camera->far_clip) : 100.0f);
+
     ctx2.bind_shader(vs2, fs2);
+    ctx2.clear_resource_bindings();
+    ctx2.use_shader_resource_layout(raw_shader);
+    bind_engine_per_frame_uniforms(ctx2, per_frame, raw_shader);
+    ctx2.bind_uniform_data("foliage_draw", &push, sizeof(push));
+    ctx2.bind_storage_buffer(
+        "foliage_instances",
+        instance_buffer.buffer,
+        instance_buffer.offset,
+        static_cast<uint32_t>(instances.size() * sizeof(FoliageGpuInstance)));
     apply_material_phase_ubo_runtime(
         phase,
         raw_shader,
@@ -682,21 +695,17 @@ bool FoliageLayerComponent::draw_tgfx2(
         ctx2.device(),
         ctx2
     );
-    ctx2.set_push_constants(&push, sizeof(push));
     ctx2.set_topology(mesh->draw_mode == TC_DRAW_LINES
         ? tgfx::PrimitiveTopology::LineList
         : tgfx::PrimitiveTopology::TriangleList);
-    ctx2.set_vertex_layouts({
-        vertex_layout,
-        phase_mark == "shadow" ? foliage_instance_shadow_layout() : foliage_instance_layout()
-    });
+    ctx2.set_vertex_layout(vertex_layout);
     ctx2.draw_indexed_instanced(
         vertex_buffer,
         0,
         index_buffer,
         0,
-        instance_stream.buffer,
-        instance_stream.offset,
+        {},
+        0,
         static_cast<uint32_t>(mesh->index_count),
         static_cast<uint32_t>(instances.size())
     );

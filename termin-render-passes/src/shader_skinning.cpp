@@ -242,6 +242,13 @@ TcShader get_skinned_shader(TcShader original_shader) {
     if (!original_shader.is_valid()) {
         return TcShader();
     }
+    if (original_shader.language() != TC_SHADER_LANGUAGE_GLSL) {
+        tc::Log::error(
+            "[get_skinned_shader] Shader '%s' uses non-GLSL source language; "
+            "Slang skinning variants require a dedicated transform",
+            original_shader.name());
+        return TcShader();
+    }
 
     // Check if already has skinning
     const char* vert_src = original_shader.vertex_source();
