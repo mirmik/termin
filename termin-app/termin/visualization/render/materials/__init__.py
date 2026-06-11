@@ -8,10 +8,6 @@ from termin.visualization.render.materials.default_material import (
     DefaultMaterial,
     create_default_material,
 )
-from termin.visualization.render.materials.pbr_material import (
-    PBRMaterial,
-    create_pbr_material,
-)
 from termin.visualization.render.materials.pick_material import (
     PickMaterial,
     create_pick_material,
@@ -46,7 +42,6 @@ from termin.visualization.render.materials.skinned_material import (
 __all__ = [
     # Material classes (return TcMaterial)
     "DefaultMaterial",
-    "PBRMaterial",
     "PickMaterial",
     "ColorMaterial",
     "UnlitMaterial",
@@ -57,7 +52,6 @@ __all__ = [
     "SkinnedMaterial",
     # Factory functions
     "create_default_material",
-    "create_pbr_material",
     "create_pick_material",
     "create_color_material",
     "create_unlit_material",

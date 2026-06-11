@@ -434,7 +434,7 @@ def test_slang_shader_synthesizes_material_params_for_scalar_properties():
     ])
 
     program = parse_shader_text(shader_text)
-    phase = program.phases[0]
+    phase = next(phase for phase in program.phases if phase.phase_mark == "opaque")
     assert [entry.name for entry in phase.material_ubo_layout.entries] == ["u_color"]
 
     fragment = phase.stages["fragment"].source
@@ -694,38 +694,52 @@ def test_stdlib_slang_textured_normal_material_uses_texture_property():
     assert phase.texture_count == 1
 
 
-def test_builtin_pbr_shader_is_vulkan_normalized():
-    from termin.visualization.render.materials.pbr_material import PBR_SHADER_TEXT
+def test_builtin_pbr_shader_uses_slang_scope_model():
+    from termin.assets.shader_asset import ShaderAsset
 
-    program = parse_shader_text(PBR_SHADER_TEXT)
-    assert program.program == "PBRShader"
+    stdlib = Path(__file__).resolve().parents[1] / "termin" / "resources" / "stdlib"
+    shader_asset = ShaderAsset.from_file(
+        stdlib / "shaders" / "CookTorrancePBR.shader",
+        name="CookTorrancePBR",
+    )
+    program = shader_asset.program
+    assert program is not None
+    assert program.program == "CookTorrancePBR"
+    assert program.language == "slang"
     assert "lighting_ubo" in program.features
-    assert len(program.phases) == 1
+    assert len(program.phases) == 2
 
-    phase = program.phases[0]
+    phase = next(phase for phase in program.phases if phase.phase_mark == "opaque")
     assert phase.phase_mark == "opaque"
+    assert phase.available_marks == ["opaque", "transparent"]
     assert not phase.material_ubo_layout.empty()
 
     vertex = phase.stages["vertex"].source
-    assert "#version 450 core" in vertex
-    assert "layout(std140, binding = 2) uniform PerFrame" in vertex
-    assert "layout(push_constant) uniform ColorPushBlock" in vertex
-    assert "uniform mat4 u_model;" not in vertex
-    assert "uniform mat4 u_view;" not in vertex
-    assert "uniform mat4 u_projection;" not in vertex
+    assert "import termin_prelude;" in vertex
+    assert "[[TerminScope(\"frame\")]]" in vertex
+    assert "ConstantBuffer<PerFrame> per_frame;" in vertex
+    assert "[[TerminScope(\"draw\")]]" in vertex
+    assert "ConstantBuffer<DrawData> draw_data;" in vertex
+    assert "#version" not in vertex
+    assert "layout(" not in vertex
 
     fragment = phase.stages["fragment"].source
-    assert "#version 450 core" in fragment
-    assert "layout(std140, binding = 1) uniform MaterialParams" in fragment
-    assert "layout(std140, binding = 0) uniform LightingBlock" in fragment
-    assert "layout(std140, binding = 3) uniform ShadowBlock" in fragment
-    assert "layout(binding = 4) uniform sampler2D u_albedo_texture;" in fragment
-    assert "layout(binding = 8) uniform sampler2DShadow u_shadow_map" in fragment
-    assert "get_camera_position() - v_world_pos" in fragment
+    assert "import termin_prelude;" in fragment
+    assert "[[TerminScope(\"material\")]]" in fragment
+    assert "ConstantBuffer<MaterialParams> material;" in fragment
+    assert "Sampler2D u_albedo_texture;" in fragment
+    assert "Sampler2D u_normal_texture;" in fragment
+    assert "Sampler2D u_metallic_roughness_texture;" in fragment
+    assert "[[TerminScope(\"pass\")]]" in fragment
+    assert "ConstantBuffer<LightingBlock> lighting;" in fragment
+    assert "ConstantBuffer<ShadowBlock> shadow_block;" in fragment
+    assert "Sampler2DShadow shadow_maps[MAX_SHADOW_MAPS];" in fragment
+    assert "get_camera_position() - input.world_pos" in fragment
+    assert "material.u_metallic" in fragment
+    assert "#version" not in fragment
+    assert "layout(" not in fragment
 
-    assert "uniform vec4 u_color;" not in fragment
-    assert "uniform float u_metallic;" not in fragment
-    assert "uniform float u_roughness;" not in fragment
-    assert "uniform vec3  u_ambient_color;" not in fragment
-    assert "uniform int u_shadow_map_count;" not in fragment
-    assert "uniform mat4 u_light_space_matrix" not in fragment
+    shadow_phase = next(phase for phase in program.phases if phase.phase_mark == "shadow")
+    assert shadow_phase.phase_mark == "shadow"
+    assert "[[TerminScope(\"frame\")]]" in shadow_phase.stages["vertex"].source
+    assert "[[TerminScope(\"draw\")]]" in shadow_phase.stages["vertex"].source

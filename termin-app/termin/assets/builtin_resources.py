@@ -6,6 +6,7 @@ Contains functions to register built-in shaders, materials, meshes, and pipeline
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
@@ -28,14 +29,27 @@ def register_default_shader(rm: "ResourceManager") -> None:
 
 def register_pbr_shader(rm: "ResourceManager") -> None:
     """Register built-in PBR shader."""
-    if "PBRShader" in rm.shaders:
+    if "CookTorrancePBR" in rm.shaders:
         return
 
-    from termin.visualization.render.materials.pbr_material import PBR_SHADER_TEXT
-    from termin.materials import parse_shader_text
+    from termin.assets.shader_asset import ShaderAsset
 
-    program = parse_shader_text(PBR_SHADER_TEXT)
-    rm.register_shader("PBRShader", program, uuid=BUILTIN_UUIDS["PBRShader"])
+    shader_path = (
+        Path(__file__).resolve().parents[1]
+        / "resources"
+        / "stdlib"
+        / "shaders"
+        / "CookTorrancePBR.shader"
+    )
+    shader_asset = ShaderAsset.from_file(shader_path, name="CookTorrancePBR")
+    if shader_asset.program is None:
+        raise RuntimeError(f"Failed to load builtin shader: {shader_path}")
+    rm.register_shader(
+        "CookTorrancePBR",
+        shader_asset.program,
+        source_path=str(shader_path),
+        uuid=BUILTIN_UUIDS["CookTorrancePBR"],
+    )
 
 
 def register_skinned_shader(rm: "ResourceManager") -> None:
@@ -154,7 +168,7 @@ def register_builtin_materials(rm: "ResourceManager") -> None:
 
     # PBRMaterial
     if "PBRMaterial" not in rm.materials:
-        shader = rm.shaders.get("PBRShader")
+        shader = rm.shaders.get("CookTorrancePBR")
         if shader is not None:
             mat = create_material_from_parsed(
                 shader,
@@ -170,7 +184,7 @@ def register_builtin_materials(rm: "ResourceManager") -> None:
     # instantiation. Keep it registered as a first-class builtin, not as a
     # lazy missing-material fallback.
     if "NormalizedPBR" not in rm.materials:
-        shader = rm.shaders.get("PBRShader")
+        shader = rm.shaders.get("CookTorrancePBR")
         if shader is not None:
             mat = create_material_from_parsed(
                 shader,

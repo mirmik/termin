@@ -1,4 +1,5 @@
 @program CookTorrancePBR
+@language slang
 @features lighting_ubo
 
 // ============================================================
@@ -8,19 +9,6 @@
 // Physically-based rendering with metallic-roughness workflow.
 //
 // BRDF: f = kD * (albedo/PI) + (D * G * F) / (4 * NdotV * NdotL)
-//
-// Components:
-//   D - GGX/Trowbridge-Reitz Normal Distribution Function
-//   G - Smith's Geometry Function
-//   F - Fresnel-Schlick Approximation
-//
-// Features:
-//   - Metallic-Roughness workflow
-//   - Subsurface scattering approximation (wrap lighting)
-//   - Emission (HDR)
-//   - ACES tone mapping
-//   - Shadow mapping with cascades
-//   - Normal mapping with TBN matrix
 //
 // TODO: IBL - Image-Based Lighting (environment cubemap)
 // TODO: Clearcoat layer
@@ -49,94 +37,178 @@
 @property Float u_normal_strength = 1.0 range(0.0, 2.0)
 
 @stage vertex
-#version 330 core
+struct VertexInput {
+    float3 position : POSITION;
+    float3 normal : NORMAL;
+    float2 uv : TEXCOORD0;
+    float4 tangent : TANGENT;
+};
 
-layout(location = 0) in vec3 a_position;
-layout(location = 1) in vec3 a_normal;
-layout(location = 2) in vec2 a_uv;
-layout(location = 3) in vec4 a_tangent;  // xyz = tangent, w = handedness
+struct VertexOutput {
+    float4 position : SV_Position;
+    float3 world_pos : TEXCOORD0;
+    float3 normal_world : TEXCOORD1;
+    float2 uv : TEXCOORD2;
+    float3 tangent_world : TEXCOORD3;
+    float3 bitangent_world : TEXCOORD4;
+    float tbn_valid : TEXCOORD5;
+};
 
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
+[shader("vertex")]
+VertexOutput main(VertexInput input) {
+    VertexOutput output;
+    float4 world = mul(u_model, float4(input.position, 1.0));
+    float3x3 normal_matrix = (float3x3)u_model;
+    float3 N = normalize(mul(normal_matrix, input.normal));
 
-out vec3 v_world_pos;
-out vec3 v_normal;
-out vec2 v_uv;
-out mat3 v_TBN;
-out vec3 v_tangent;
+    output.world_pos = world.xyz;
+    output.normal_world = N;
+    output.uv = input.uv;
+    output.tangent_world = float3(0.0, 0.0, 0.0);
+    output.bitangent_world = float3(0.0, 0.0, 0.0);
+    output.tbn_valid = 0.0;
 
-void main() {
-    vec4 world = u_model * vec4(a_position, 1.0);
-    v_world_pos = world.xyz;
-
-    // Transform normal to world space
-    mat3 normal_matrix = transpose(inverse(mat3(u_model)));
-    vec3 N = normalize(normal_matrix * a_normal);
-
-    // Check if tangent data is valid (non-zero length)
-    float tangent_len = length(a_tangent.xyz);
+    float tangent_len = length(input.tangent.xyz);
     if (tangent_len > 0.001) {
-        // Transform tangent to world space
-        vec3 T = normalize(normal_matrix * a_tangent.xyz);
-
-        // Re-orthogonalize T with respect to N (Gram-Schmidt)
+        float3 T = normalize(mul(normal_matrix, input.tangent.xyz));
         T = normalize(T - dot(T, N) * N);
+        float3 B = cross(N, T) * input.tangent.w;
 
-        // Bitangent = cross(N, T) * handedness
-        vec3 B = cross(N, T) * a_tangent.w;
-
-        // TBN matrix transforms from tangent space to world space
-        v_TBN = mat3(T, B, N);
-    } else {
-        // No tangent data - set TBN to zero matrix (will be detected in fragment shader)
-        v_TBN = mat3(0.0);
+        output.tangent_world = T;
+        output.bitangent_world = B;
+        output.tbn_valid = 1.0;
     }
 
-    v_normal = N;
-    v_uv = a_uv;
-    v_tangent = a_tangent.xyz;
-    gl_Position = u_projection * u_view * world;
+    output.position = mul(u_projection, mul(u_view, world));
+    return output;
 }
 @endstage
 
 @stage fragment
-#version 330 core
+static const int LIGHT_TYPE_DIRECTIONAL = 0;
+static const int LIGHT_TYPE_POINT = 1;
+static const int LIGHT_TYPE_SPOT = 2;
+static const int MAX_LIGHTS = 8;
+static const int MAX_SHADOW_MAPS = 16;
+static const float PI = 3.14159265359;
 
-in vec3 v_world_pos;
-in vec3 v_normal;
-in vec2 v_uv;
-in mat3 v_TBN;
-in vec3 v_tangent;
+struct LightData {
+    float4 color_intensity;
+    float4 direction_range;
+    float4 position_type;
+    float4 attenuation_inner;
+    float4 outer_cascade;
+};
 
-#include "lighting.glsl"
-#include "shadows.glsl"
+struct LightingBlock {
+    LightData u_lights[MAX_LIGHTS];
+    float4 u_ambient_data;
+    float4 u_camera_light_count;
+    float4 u_shadow_settings;
+};
 
-// Material parameters
-uniform vec4 u_color;
-uniform sampler2D u_albedo_texture;
-uniform sampler2D u_normal_texture;
-uniform sampler2D u_metallic_roughness_texture;
-uniform sampler2D u_occlusion_texture;
-uniform sampler2D u_emissive_texture;
-uniform float u_normal_strength;
-uniform float u_metallic;
-uniform float u_roughness;
-uniform float u_subsurface;
-uniform float u_diffuse_mul;
+[[TerminScope("pass")]]
+ConstantBuffer<LightingBlock> lighting;
 
-// Emission
-uniform vec4 u_emission_color;
-uniform float u_emission_intensity;
+struct ShadowBlock {
+    int u_shadow_map_count;
+    column_major float4x4 u_light_space_matrix[MAX_SHADOW_MAPS];
+    int u_shadow_light_index[MAX_SHADOW_MAPS];
+    int u_shadow_cascade_index[MAX_SHADOW_MAPS];
+    float u_shadow_split_near[MAX_SHADOW_MAPS];
+    float u_shadow_split_far[MAX_SHADOW_MAPS];
+};
 
-out vec4 FragColor;
+[[TerminScope("pass")]]
+ConstantBuffer<ShadowBlock> shadow_block;
 
-const float PI = 3.14159265359;
+[[TerminScope("pass")]]
+Sampler2DShadow shadow_maps[MAX_SHADOW_MAPS];
 
-// ============== PBR Functions ==============
+struct FragmentInput {
+    float3 world_pos : TEXCOORD0;
+    float3 normal_world : TEXCOORD1;
+    float2 uv : TEXCOORD2;
+    float3 tangent_world : TEXCOORD3;
+    float3 bitangent_world : TEXCOORD4;
+    float tbn_valid : TEXCOORD5;
+};
 
-// Normal Distribution Function (GGX/Trowbridge-Reitz)
-// Models microfacet distribution on the surface
+struct FragmentOutput {
+    float4 color : SV_Target0;
+};
+
+int get_light_count() { return int(lighting.u_camera_light_count.w); }
+int get_light_type(int i) { return int(lighting.u_lights[i].position_type.w); }
+float3 get_light_color(int i) { return lighting.u_lights[i].color_intensity.rgb; }
+float get_light_intensity(int i) { return lighting.u_lights[i].color_intensity.w; }
+float3 get_light_direction(int i) { return lighting.u_lights[i].direction_range.xyz; }
+float3 get_light_position(int i) { return lighting.u_lights[i].position_type.xyz; }
+float get_light_range(int i) { return lighting.u_lights[i].direction_range.w; }
+float3 get_light_attenuation(int i) { return lighting.u_lights[i].attenuation_inner.xyz; }
+float get_light_inner_angle(int i) { return lighting.u_lights[i].attenuation_inner.w; }
+float get_light_outer_angle(int i) { return lighting.u_lights[i].outer_cascade.x; }
+float3 get_ambient_color() { return lighting.u_ambient_data.rgb; }
+float get_ambient_intensity() { return lighting.u_ambient_data.w; }
+float3 get_camera_position() { return lighting.u_camera_light_count.xyz; }
+float get_shadow_bias() { return lighting.u_shadow_settings.z; }
+
+float shadow_bias_depth(int sm) {
+    float depth_range = max(
+        shadow_block.u_shadow_split_far[sm] - shadow_block.u_shadow_split_near[sm],
+        0.0001);
+    return max(get_shadow_bias(), 0.0) / depth_range;
+}
+
+float compute_shadow_auto(int light_index, float3 world_pos) {
+    for (int sm = 0; sm < shadow_block.u_shadow_map_count; ++sm) {
+        if (shadow_block.u_shadow_light_index[sm] != light_index) {
+            continue;
+        }
+
+        float4 light_space_pos =
+            mul(shadow_block.u_light_space_matrix[sm], float4(world_pos, 1.0));
+        float3 proj_coords = light_space_pos.xyz / light_space_pos.w;
+        proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
+
+        if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
+            proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
+            proj_coords.z < 0.0 || proj_coords.z > 1.0) {
+            continue;
+        }
+
+        return shadow_maps[sm].SampleCmp(
+            proj_coords.xy,
+            proj_coords.z - shadow_bias_depth(sm));
+    }
+
+    return 1.0;
+}
+
+float compute_distance_attenuation(float3 attenuation, float range, float dist) {
+    float denom = attenuation.x + attenuation.y * dist + attenuation.z * dist * dist;
+    if (denom <= 0.0) {
+        return 1.0;
+    }
+    float w = 1.0 / denom;
+    if (range > 0.0 && dist > range) {
+        w = 0.0;
+    }
+    return w;
+}
+
+float compute_spot_weight(float3 light_dir, float3 L, float inner_angle, float outer_angle) {
+    float cos_theta = dot(light_dir, -L);
+    float cos_outer = cos(outer_angle);
+    float cos_inner = cos(inner_angle);
+
+    if (cos_theta <= cos_outer) return 0.0;
+    if (cos_theta >= cos_inner) return 1.0;
+
+    float t = (cos_theta - cos_outer) / (cos_inner - cos_outer);
+    return t * t * (3.0 - 2.0 * t);
+}
+
 float D_GGX(float NdotH, float roughness) {
     float a = roughness * roughness;
     float a2 = a * a;
@@ -144,8 +216,6 @@ float D_GGX(float NdotH, float roughness) {
     return a2 / (PI * denom * denom);
 }
 
-// Geometry Function (Smith's method with GGX)
-// Models microfacet self-shadowing
 float G_Smith(float NdotV, float NdotL, float roughness) {
     float r = roughness + 1.0;
     float k = (r * r) / 8.0;
@@ -154,105 +224,85 @@ float G_Smith(float NdotV, float NdotL, float roughness) {
     return G1_V * G1_L;
 }
 
-// Fresnel (Schlick approximation)
-// Models increased reflectance at grazing angles
-vec3 F_Schlick(float cosTheta, vec3 F0) {
+float3 F_Schlick(float cosTheta, float3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-// ============== SSS Approximation ==============
-
-// Wrap lighting: softens the terminator
 float wrap_diffuse(float NdotL, float wrap) {
     return max(0.0, (NdotL + wrap) / (1.0 + wrap));
 }
 
-// Subsurface color shift (warm tones for skin)
-vec3 subsurface_color(vec3 albedo) {
-    return albedo * vec3(1.0, 0.4, 0.25);
+float3 subsurface_color(float3 albedo) {
+    return albedo * float3(1.0, 0.4, 0.25);
 }
 
-// ============== Normal Mapping ==============
-
-vec3 get_normal_from_map() {
-    // Sample normal map (stored in tangent space)
-    vec3 normal_sample = texture(u_normal_texture, v_uv).rgb;
-
-    // Convert from [0,1] to [-1,1] range
-    vec3 tangent_normal = normal_sample * 2.0 - 1.0;
-
-    // Apply normal strength (blend between (0,0,1) and sampled normal)
-    tangent_normal.xy *= u_normal_strength;
+float3 get_normal_from_map(FragmentInput input) {
+    float3 normal_sample = u_normal_texture.Sample(input.uv).rgb;
+    float3 tangent_normal = normal_sample * 2.0 - 1.0;
+    tangent_normal.xy *= material.u_normal_strength;
     tangent_normal = normalize(tangent_normal);
 
-    // Transform from tangent space to world space using TBN matrix
-    return normalize(v_TBN * tangent_normal);
+    float3 T = normalize(input.tangent_world);
+    float3 B = normalize(input.bitangent_world);
+    float3 N = normalize(input.normal_world);
+    return normalize(T * tangent_normal.x + B * tangent_normal.y + N * tangent_normal.z);
 }
 
-// ============== Main ==============
+[shader("fragment")]
+FragmentOutput main(FragmentInput input) {
+    FragmentOutput output;
 
-void main() {
-    // Get normal from normal map if available, otherwise use vertex normal
-    // Note: If mesh has no tangents, v_TBN will be invalid - we detect this
-    // by checking if the TBN columns are valid (non-zero length)
-    vec3 N;
-    float tbn_valid = length(v_TBN[0]) * length(v_TBN[1]) * length(v_TBN[2]);
-    if (tbn_valid > 0.001 && u_normal_strength > 0.0) {
-        N = get_normal_from_map();
+    float3 N;
+    if (input.tbn_valid > 0.001 && material.u_normal_strength > 0.0) {
+        N = get_normal_from_map(input);
     } else {
-        N = normalize(v_normal);
+        N = normalize(input.normal_world);
     }
 
-    vec3 V = normalize(get_camera_position() - v_world_pos);
+    float3 V = normalize(get_camera_position() - input.world_pos);
 
-    // // DEBUG
-    // vec3 normals_by_map = texture(u_normal_texture, v_uv).rgb;
-    // vec3 bitangent = normalize(v_TBN[1]);
-    // vec3 normal = normalize(v_TBN[2]);
-    // //FragColor = vec4(normals_by_map, 1.0);
-    // FragColor = vec4(v_tangent * 0.5 + 0.5, 1.0);
-    // return;
-    // // DEBUG
+    float4 tex_color = u_albedo_texture.Sample(input.uv);
+    float3 albedo = material.u_color.rgb * tex_color.rgb;
+    float alpha = material.u_color.a * tex_color.a;
 
-    // Sample albedo
-    vec4 tex_color = texture(u_albedo_texture, v_uv);
-    vec3 albedo = u_color.rgb * tex_color.rgb;
-    float alpha = u_color.a * tex_color.a;
+    float4 metallic_roughness_sample = u_metallic_roughness_texture.Sample(input.uv);
+    float metallic = clamp(material.u_metallic * metallic_roughness_sample.b, 0.0, 1.0);
+    float roughness = max(
+        clamp(material.u_roughness * metallic_roughness_sample.g, 0.0, 1.0),
+        0.04);
+    float subsurface = material.u_subsurface;
+    float occlusion = u_occlusion_texture.Sample(input.uv).r;
 
-    vec4 metallic_roughness_sample = texture(u_metallic_roughness_texture, v_uv);
-    float metallic = clamp(u_metallic * metallic_roughness_sample.b, 0.0, 1.0);
-    float roughness = max(clamp(u_roughness * metallic_roughness_sample.g, 0.0, 1.0), 0.04);
-    float subsurface = u_subsurface;
-    float occlusion = texture(u_occlusion_texture, v_uv).r;
+    float3 F0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
+    float3 ambient =
+        get_ambient_color() * get_ambient_intensity() * albedo *
+        (1.0 - metallic * 0.5) * occlusion;
 
-    // F0: reflectance at normal incidence
-    // Dielectrics ~0.04, metals use albedo
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
-
-    // Ambient term
-    // TODO: Replace with IBL (irradiance map)
-    vec3 ambient = get_ambient_color() * get_ambient_intensity() * albedo * (1.0 - metallic * 0.5) * occlusion;
-
-    vec3 Lo = vec3(0.0);
+    float3 Lo = float3(0.0, 0.0, 0.0);
 
     for (int i = 0; i < get_light_count(); ++i) {
-        vec3 L;
+        float3 L;
         float attenuation = 1.0;
 
         if (get_light_type(i) == LIGHT_TYPE_DIRECTIONAL) {
             L = normalize(-get_light_direction(i));
         } else {
-            vec3 to_light = get_light_position(i) - v_world_pos;
+            float3 to_light = get_light_position(i) - input.world_pos;
             float dist = length(to_light);
             L = to_light / max(dist, 0.0001);
-            attenuation = compute_distance_attenuation(get_light_attenuation(i), get_light_range(i), dist);
+            attenuation =
+                compute_distance_attenuation(get_light_attenuation(i), get_light_range(i), dist);
 
             if (get_light_type(i) == LIGHT_TYPE_SPOT) {
-                attenuation *= compute_spot_weight(get_light_direction(i), L, get_light_inner_angle(i), get_light_outer_angle(i));
+                attenuation *= compute_spot_weight(
+                    get_light_direction(i),
+                    L,
+                    get_light_inner_angle(i),
+                    get_light_outer_angle(i));
             }
         }
 
-        vec3 H = normalize(V + L);
+        float3 H = normalize(V + L);
 
         float NdotL_raw = dot(N, L);
         float NdotL = max(NdotL_raw, 0.0);
@@ -260,50 +310,46 @@ void main() {
         float NdotH = max(dot(N, H), 0.0);
         float HdotV = max(dot(H, V), 0.0);
 
-        // Cook-Torrance specular BRDF
         float D = D_GGX(NdotH, roughness);
         float G = G_Smith(NdotV, NdotL, roughness);
-        vec3 F = F_Schlick(HdotV, F0);
+        float3 F = F_Schlick(HdotV, F0);
 
-        vec3 numerator = D * G * F;
+        float3 numerator = D * G * F;
         float denominator = 4.0 * NdotV * NdotL + 0.0001;
-        vec3 specular = numerator / denominator;
+        float3 specular = numerator / denominator;
 
-        // Diffuse with energy conservation
-        // Metals have no diffuse, energy reflected = F
-        vec3 kD = (1.0 - F) * (1.0 - metallic);
+        float3 kD = (1.0 - F) * (1.0 - metallic);
+        float3 diffuse_standard = kD * albedo / PI * material.u_diffuse_mul;
 
-        // Standard Lambertian diffuse
-        vec3 diffuse_standard = kD * albedo / PI * u_diffuse_mul;
-
-        // SSS: wrap lighting + color shift
         float wrap_amount = subsurface * 0.5;
         float diffuse_wrap = wrap_diffuse(NdotL_raw, wrap_amount);
-        vec3 sss_color = subsurface_color(albedo);
+        float3 sss_color = subsurface_color(albedo);
 
         float sss_mask = max(0.0, diffuse_wrap - NdotL) * 2.0;
-        vec3 diffuse_sss = kD * mix(albedo, sss_color, sss_mask * subsurface) / PI * u_diffuse_mul;
+        float3 diffuse_sss =
+            kD * lerp(albedo, sss_color, sss_mask * subsurface) /
+            PI * material.u_diffuse_mul;
 
-        // Blend standard and SSS diffuse
-        vec3 diffuse_final = mix(diffuse_standard * NdotL, diffuse_sss * diffuse_wrap, subsurface);
+        float3 diffuse_final =
+            lerp(diffuse_standard * NdotL, diffuse_sss * diffuse_wrap, subsurface);
 
-        // Shadow
         float shadow = 1.0;
         if (get_light_type(i) == LIGHT_TYPE_DIRECTIONAL) {
-            shadow = compute_shadow_auto(i);
+            shadow = compute_shadow_auto(i, input.world_pos);
         }
 
-        // Combine
-        vec3 radiance = get_light_color(i) * get_light_intensity(i) * attenuation;
+        float3 radiance = get_light_color(i) * get_light_intensity(i) * attenuation;
         Lo += (diffuse_final + specular * NdotL) * radiance * shadow;
     }
 
-    vec3 color = ambient + Lo;
+    float3 color = ambient + Lo;
+    color +=
+        u_emissive_texture.Sample(input.uv).rgb *
+        material.u_emission_color.rgb *
+        material.u_emission_intensity;
 
-    // Emission (HDR - will be tonemapped in post-process)
-    color += texture(u_emissive_texture, v_uv).rgb * u_emission_color.rgb * u_emission_intensity;
-
-    FragColor = vec4(color, alpha);
+    output.color = float4(color, alpha);
+    return output;
 }
 @endstage
 
@@ -318,26 +364,37 @@ void main() {
 @glCull true
 
 @stage vertex
-#version 330 core
+struct ShadowVertexInput {
+    float3 position : POSITION;
+};
 
-layout(location = 0) in vec3 a_position;
+struct ShadowVertexOutput {
+    float4 position : SV_Position;
+};
 
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
+[shader("vertex")]
+ShadowVertexOutput main(ShadowVertexInput input) {
+    ShadowVertexOutput output;
+    float4 world = mul(u_model, float4(input.position, 1.0));
+    output.position = mul(u_projection, mul(u_view, world));
+    return output;
 }
 @endstage
 
 @stage fragment
-#version 330 core
+struct ShadowFragmentInput {
+    float4 position : SV_Position;
+};
 
-out vec4 FragColor;
+struct ShadowFragmentOutput {
+    float4 color : SV_Target0;
+};
 
-void main() {
-    FragColor = vec4(gl_FragCoord.z, 0.0, 0.0, 1.0);
+[shader("fragment")]
+ShadowFragmentOutput main(ShadowFragmentInput input) {
+    ShadowFragmentOutput output;
+    output.color = float4(input.position.z, 0.0, 0.0, 1.0);
+    return output;
 }
 @endstage
 
