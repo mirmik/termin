@@ -1,18 +1,22 @@
 # GPU pipeline layout
 
-Reference for UBO struct layouts, vertex input locations, and push constants
-across all engine passes.
+Reference for CPU-side UBO struct layouts, vertex input locations, and push
+constant payloads across engine passes.
 
 **Pipeline layout architecture** is documented separately in
 `termin-graphics/docs/architecture/pipeline-layout.md`. The short version:
-descriptor set layouts are now **per-pipeline**, derived from SPIR-V reflection.
-There is no universal binding table. The shader declares what it needs; the
-pipeline builds its `VkDescriptorSetLayout` to match. Godot 4 uses the same
-model.
+there is no universal binding table. Slang migration target is
+**scope-first bind-by-name**: shader resources are identified by logical names
+and scopes, while backend set/binding numbers are generated layout metadata.
+
+The current Vulkan backend still flattens reflected shader resources into one
+per-pipeline descriptor set. Treat that as implementation state, not a shader
+authoring rule.
 
 **Authoritative C++ locations (verify here before changing anything):**
 
 - `termin-graphics/docs/architecture/pipeline-layout.md` — architecture and data flow.
+- `docs/plans/2026-06-11-slang-scope-first-binding.md` — active migration plan.
 - `termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp` — per-pipeline
   `VkDescriptorSetLayout` built from SPIR-V reflection at `create_pipeline()` time.
 - `termin-render-passes/include/termin/lighting/lighting_ubo.hpp` — `LightingUBOData`.
@@ -26,10 +30,10 @@ model.
   `BoneBlock`.
 - `termin-mesh/src/tgfx_types.c` — `tgfx_vertex_layout_*`.
 
-Rule of thumb: **the shader defines its descriptor set layout.** If a shader
-declares `layout(binding=7)`, that is where the resource lands. No remapping.
-Two pipelines with the same binding signature share one `VkDescriptorSetLayout`
-(cached by FNV-1a hash).
+Rule of thumb: **new Slang code declares named resources, not backend slots.**
+Legacy GLSL can still carry `layout(binding=N)` while it remains on the old
+numeric path. Migrated code should bind by logical name and let the generated
+layout sidecar describe backend placement.
 
 ---
 
@@ -63,9 +67,11 @@ Per-light `LightData` (80 B):
 **Synthesised per-shader.** The parser scans `@property` lines in `.shader`,
 packs them std140, writes the block declaration into GLSL/Slang source, and
 stores the byte layout in `tc_material_ubo_entry[]` metadata on `tc_shader`.
-For Slang, backend binding is not authored into the source; `termin_shaderc`
-writes it into the compiled artifact sidecar and the runtime merges that into
-`tc_shader_resource_binding[]`. Runtime uploaders
+For Slang, backend binding is not authored into the source. `termin_shaderc`
+writes resource metadata into the compiled artifact sidecar and the runtime
+merges that into `tc_shader_resource_binding[]`. The next migration step is to
+record resource scope (`frame`, `pass`, `material`, `draw`, `transient`) there
+as well. Runtime uploaders
 (`material_ubo_apply.cpp` in `termin-app` and `material_ubo_runtime.cpp` in
 `termin-render`) walk those entries and copy values from `phase->uniforms[]`
 into the right offsets.
@@ -205,17 +211,19 @@ must receive the same data through a small per-draw cbuffer. Reserve
 
 1. **Check this document** for existing struct layouts — reuse a UBO instead
    of doubling up.
-2. **Add the binding in shader source** — `layout(binding=N)` in GLSL or
-   through `termin_shaderc` layout assignment for Slang. The per-pipeline
-   `VkDescriptorSetLayout` is built from SPIR-V reflection; it will pick up
-   whatever the shader declares.
-3. **Pick the narrowest `stageFlags`** you can. Skinning only writes from
+2. **Pick a logical resource name and scope.** Examples: `per_frame` is
+   `frame`, shadow resources are `pass`, material properties/textures are
+   `material`, large object constants are `draw`.
+3. **For new Slang, do not author backend layout attributes.** Add the resource
+   declaration by name and let artifact layout metadata carry backend
+   placement. Legacy GLSL may still use `layout(binding=N)` until migrated.
+4. **Pick the narrowest `stageFlags`** you can. Skinning only writes from
    VS, so `BoneBlock` is `VK_SHADER_STAGE_VERTEX_BIT` only.
-4. **Document the struct here** with offsets and a `static_assert(sizeof(...)
+5. **Document the struct here** with offsets and a `static_assert(sizeof(...)
    == ...)` in the C++ source.
-5. **Mirror GL.** If the UBO needs an explicit `set_block_binding`, make
+6. **Mirror GL.** If a legacy GLSL UBO needs an explicit `set_block_binding`, make
    sure it's called after `bind_shader`; the `layout(std140, binding = N)`
    qualifier is honoured by most GL 4.2+ drivers but some need the
    explicit glUniformBlockBinding hook as belt-and-suspenders.
-6. **Update this doc in the same commit as the C++ change.** Future
+7. **Update this doc in the same commit as the C++ change.** Future
    debugging depends on the table matching reality.

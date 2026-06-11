@@ -49,9 +49,10 @@ Built-in shader layout metadata is written to:
 shaders/layout/<uuid>.shader-layout.json
 ```
 
-The current sidecar is catalog-derived metadata, not Slang reflection output
-yet. It is intentionally named as a layout sidecar so the runtime can migrate
-toward the bind-by-name plan without changing the package shape later.
+The current sidecar is catalog-derived metadata for some entries and
+reflection-derived metadata for generated Slang artifacts. It is intentionally
+named as a layout sidecar so the runtime can migrate toward the scope-first
+bind-by-name model without changing the package shape later.
 
 ## Current entries
 
@@ -115,9 +116,9 @@ catalog entry and a source file, then let the exporter generate backend
 artifacts from that source.
 
 Slang sources should not add new `[[vk::...]]` attributes. Stage IO should use
-Slang/HLSL semantics. Texture-using post-process shaders remain catalog-managed
-GLSL until the runtime can bind resources by logical name or consume generated
-layout metadata.
+Slang/HLSL semantics. Texture-using post-process shaders should use generated
+layout metadata and bind resources by logical name when they are migrated to
+Slang.
 
 Legacy material fallback shaders may stay catalog-managed GLSL with
 `legacy_uniform` resources while they still run through the old material uniform
@@ -141,6 +142,6 @@ caller-specific copy.
 Live engine renderers and render passes should call the built-in catalog loader
 with only the stable shader UUID. Filenames, shader names, and stage shape
 belong in `engine-shader-catalog.json`, not in individual pass implementations.
-The current C++ live registration helper accepts catalog-managed GLSL stage
-entries and `.shader` program entries; Slang built-ins are consumed through
-generated artifacts until the live runtime path can bind by reflected layout.
+Migrated Slang built-ins should consume generated artifacts plus layout
+metadata, then bind resources by logical name. Legacy GLSL built-ins may keep
+numeric bindings until their pass/runtime path is migrated.
