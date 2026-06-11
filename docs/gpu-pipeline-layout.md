@@ -69,9 +69,8 @@ packs them std140, writes the block declaration into GLSL/Slang source, and
 stores the byte layout in `tc_material_ubo_entry[]` metadata on `tc_shader`.
 For Slang, backend binding is not authored into the source. `termin_shaderc`
 writes resource metadata into the compiled artifact sidecar and the runtime
-merges that into `tc_shader_resource_binding[]`. The next migration step is to
-record resource scope (`frame`, `pass`, `material`, `draw`, `transient`) there
-as well. Runtime uploaders
+merges that into `tc_shader_resource_binding[]`, including resource scope
+(`frame`, `pass`, `material`, `draw`, `transient`). Runtime uploaders
 (`material_ubo_apply.cpp` in `termin-app` and `material_ubo_runtime.cpp` in
 `termin-render`) walk those entries and copy values from `phase->uniforms[]`
 into the right offsets.
@@ -215,8 +214,10 @@ must receive the same data through a small per-draw cbuffer. Reserve
    `frame`, shadow resources are `pass`, material properties/textures are
    `material`, large object constants are `draw`.
 3. **For new Slang, do not author backend layout attributes.** Add the resource
-   declaration by name and let artifact layout metadata carry backend
-   placement. Legacy GLSL may still use `layout(binding=N)` until migrated.
+   declaration by name, annotate explicit scope with `[[TerminScope("...")]]`
+   from the Termin Slang prelude, and let artifact layout metadata carry
+   backend placement. Legacy GLSL may still use `layout(binding=N)` until
+   migrated.
 4. **Pick the narrowest `stageFlags`** you can. Skinning only writes from
    VS, so `BoneBlock` is `VK_SHADER_STAGE_VERTEX_BIT` only.
 5. **Document the struct here** with offsets and a `static_assert(sizeof(...)
