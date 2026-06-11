@@ -79,6 +79,60 @@ Missing names, kind mismatches, and scope/backend layout mismatches must log
 clear errors. Migrated Slang shaders marked artifact-required should fail
 loudly when layout metadata is absent.
 
+## Slang Scope Attributes
+
+The preferred authored Slang spelling for explicit resource scope is a
+Termin-provided user attribute imported from an engine prelude:
+
+```slang
+import termin_prelude;
+
+[[TerminScope("frame")]]
+ConstantBuffer<FrameData> per_frame;
+
+[[TerminScope("material")]]
+Texture2D albedo_texture;
+```
+
+Slang user-defined attributes are declared as attribute structs:
+
+```slang
+[__AttributeUsage(_AttributeTargets.Var)]
+public struct TerminScopeAttribute
+{
+    string value;
+}
+```
+
+This was verified with `slangc 2026.1-52-gc8ddf20bb` from Vulkan SDK
+`1.4.341.1`. `slangc -reflection-json` emits the annotation on reflected
+resource parameters as:
+
+```json
+"userAttribs": [
+  {
+    "name": "TerminScope",
+    "arguments": ["frame"]
+  }
+]
+```
+
+Both `[TerminScope("frame")]` and `[[TerminScope("frame")]]` work. The
+double-bracket form matches the style already used for some Slang/Vulkan
+attributes, but it is still a Slang user attribute, not a backend layout
+attribute.
+
+Do **not** document or implement `[[termin::scope("frame")]]` as the target
+syntax. A probe with a namespaced attribute definition compiled with warning
+`unknown attribute 'termin_Scope'`, and the attribute was not present in
+reflection JSON. If namespacing becomes important later, verify it against a
+newer Slang release before changing the contract.
+
+`termin_shaderc` should eventually read `userAttribs` from Slang reflection and
+use `TerminScope` as the explicit source of truth. During migration it may also
+accept `Scope` as a temporary alias and fall back to the current conservative
+name/kind inference when no explicit scope attribute is present.
+
 ## Current State
 
 - Author-authored `.slang` files should remain free of `[[vk::...]]` and
@@ -90,6 +144,9 @@ loudly when layout metadata is absent.
   bindings, and generated `.layout.json` sidecars. Old sidecars without
   `scope` are still accepted and classified by conservative name/kind
   inference.
+- A real `slangc` probe confirmed that Slang user attributes can carry
+  resource scope through reflection JSON. The target explicit spelling is
+  `[[TerminScope("frame")]]`, provided by an engine Slang prelude.
 - `RenderContext2` already has initial symbolic binding methods.
 - `RenderContext2` pending numeric/symbolic bindings are internally grouped
   by scope, then flattened back into the existing `ResourceSetDesc` backend
@@ -103,20 +160,22 @@ loudly when layout metadata is absent.
 
 ## Immediate Tasks
 
-1. Broaden or replace default scope inference for known engine names:
+1. Add a Termin Slang prelude that defines `TerminScopeAttribute`, and teach
+   `termin_shaderc` to read `TerminScope` from reflection `userAttribs`.
+2. Broaden or replace default scope inference for known engine names:
    `per_frame -> frame`, lighting/shadows -> pass, `material` and material
    textures -> material, `draw_data` -> draw.
-2. Add dirty-per-scope tracking on top of the scoped buckets. Existing backends
+3. Add dirty-per-scope tracking on top of the scoped buckets. Existing backends
    may still receive a flattened resource set until Vulkan scoped sets land.
-3. Update Slang/material generation so generated resource declarations do not
+4. Update Slang/material generation so generated resource declarations do not
    encode Vulkan-only attributes. Push-constant use must become metadata or a
    backend-specific artifact decision, not authored/generated Slang source
    magic.
-4. Migrate `ColorPass` and material UBO/texture binding to name-first lookup.
+5. Migrate `ColorPass` and material UBO/texture binding to name-first lookup.
    Numeric fallback remains only for legacy GLSL paths.
-5. Add validation for duplicate backend bindings with incompatible resource
+6. Add validation for duplicate backend bindings with incompatible resource
    type/count/stage.
-6. After the above is stable, introduce multiple Vulkan descriptor set layouts
+7. After the above is stable, introduce multiple Vulkan descriptor set layouts
    by scope and bind only dirty scopes.
 
 ## Retired Direction
