@@ -74,6 +74,23 @@ descriptor-set noise around unrelated drawables.
   layout metadata as layout-only. GLSL layout metadata remains transitional and
   may use legacy fallbacks until GLSL ColorPass shaders are retired.
 - `draw_data` is strict for layout-only shaders: missing `draw_data` is logged
-  as an error instead of silently falling back to slot 24.
-- Remaining migration work is to port the ColorPass material shader set to
-  Slang so GLSL sidecars no longer define the compatibility path.
+  as an error instead of silently falling back to
+  `TC_SHADER_RESOURCE_BINDING_DRAW_DATA`.
+- `ColorMaterial` and `UnlitMaterial` now use parsed Slang shader text instead
+  of hand-authored GLSL source. They rely on compact engine identifiers
+  (`u_view`, `u_projection`, `u_model`) and parser-owned scoped blocks.
+- The Slang parser now synthesizes canonical `per_frame` and `draw_data`
+  resources for compact engine identifier use. Shader text should not declare
+  duplicate per-frame/per-draw blocks for these built-in resources.
+- `termin_shaderc` now applies the Termin scoped Vulkan binding contract to
+  canonical Slang resources before writing sidecars and patches the SPIR-V
+  decorations to match:
+  - `material` constant buffer: set 0, binding 1;
+  - `per_frame` constant buffer: set 0, binding 2;
+  - `draw_data` constant buffer: set 0,
+    `TC_SHADER_RESOURCE_BINDING_DRAW_DATA`;
+  - material textures with compiler-assigned set 0 bindings: material texture
+    binding range starting at 4, skipping the shadow slot.
+- Remaining migration work is to port the rest of the ColorPass material shader
+  set and built-in GLSL shaders to Slang so GLSL sidecars no longer define the
+  compatibility path.

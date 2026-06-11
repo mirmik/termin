@@ -957,7 +957,11 @@ void ColorPass::execute_with_data(
         std::memcpy(push.u_model, model.data, sizeof(push.u_model));
         ctx2->set_push_constants(&push, sizeof(push));
         if (tc_shader_get_language(raw_shader) != TC_SHADER_LANGUAGE_GLSL) {
-            bind_draw_data_for_shader(*ctx2, raw_shader, push, 24);
+            bind_draw_data_for_shader(
+                *ctx2,
+                raw_shader,
+                push,
+                TC_SHADER_RESOURCE_BINDING_DRAW_DATA);
         }
 
         // Per-draw uniforms that can't live in push-constants or the
