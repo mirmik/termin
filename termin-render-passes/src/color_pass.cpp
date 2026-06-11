@@ -2,6 +2,7 @@
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_ubo_apply.hpp"
+#include "termin/render/shader_binding_policy.hpp"
 #include "termin/render/shader_resource_apply.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -101,6 +102,12 @@ void bind_draw_data_for_shader(
             ctx.bind_uniform_data(name, &payload, sizeof(payload));
             return;
         }
+    }
+    if (shader_uses_layout_only_bindings(shader)) {
+        tc::Log::error(
+            "[ColorPass/tgfx2] layout-only shader '%s' is missing draw_data resource",
+            shader && shader->name ? shader->name : "<unnamed>");
+        return;
     }
     ctx.bind_uniform_buffer_ring(fallback_binding, &payload, sizeof(payload));
 }
