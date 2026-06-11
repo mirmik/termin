@@ -1,6 +1,7 @@
 // material_ubo_apply.cpp - Implementation of bind_material_ubo.
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/materials/shader_parser.hpp"
+#include "termin/render/shader_binding_policy.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include "tgfx2/i_render_device.hpp"
@@ -16,15 +17,6 @@ extern "C" {
 }
 
 namespace termin {
-namespace {
-
-bool shader_uses_layout_only_bindings(const tc_shader* shader) {
-    return shader
-        && tc_shader_has_resource_layout(shader)
-        && tc_shader_get_language(shader) != TC_SHADER_LANGUAGE_GLSL;
-}
-
-} // namespace
 
 uint32_t material_ubo_binding_for_shader(
     const tc_shader* shader,

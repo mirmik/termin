@@ -59,3 +59,21 @@ This plan refines the broader scope-first plan in
 `2026-06-11-slang-scope-first-binding.md`. It is intentionally narrower: finish
 the `ColorPass` vertical slice first so runtime regressions stop appearing as
 descriptor-set noise around unrelated drawables.
+
+## Status: 2026-06-11
+
+- `RenderContext2` now tracks descriptor-set-layout changes and rebuilds the
+  resource set for the current pipeline layout, including default-filled sets
+  when a layout has no explicit per-draw bindings.
+- Vulkan resource set creation now normalizes sparse bindings to the full
+  descriptor-set layout signature and supplies default descriptors for absent
+  UBO/texture/sampler resources.
+- `ColorPass` binds material draws in layout order:
+  `clear -> bind_shader -> use_shader_resource_layout -> bind resources -> draw`.
+- A shared shader binding policy now treats non-GLSL shaders with loaded
+  layout metadata as layout-only. GLSL layout metadata remains transitional and
+  may use legacy fallbacks until GLSL ColorPass shaders are retired.
+- `draw_data` is strict for layout-only shaders: missing `draw_data` is logged
+  as an error instead of silently falling back to slot 24.
+- Remaining migration work is to port the ColorPass material shader set to
+  Slang so GLSL sidecars no longer define the compatibility path.

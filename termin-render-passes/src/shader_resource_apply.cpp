@@ -1,4 +1,5 @@
 #include "termin/render/shader_resource_apply.hpp"
+#include "termin/render/shader_binding_policy.hpp"
 
 #include <algorithm>
 #include <iterator>
@@ -29,15 +30,13 @@ const tc_shader_resource_binding* find_resource(
 }
 
 bool allow_legacy_fallback(const tc_shader* shader) {
-    return !shader
-        || !tc_shader_has_resource_layout(shader)
-        || tc_shader_get_language(shader) == TC_SHADER_LANGUAGE_GLSL;
+    return shader_allows_legacy_resource_fallback(shader);
 }
 
 } // namespace
 
 bool shader_layout_present(const tc_shader* shader) {
-    return tc_shader_has_resource_layout(shader);
+    return shader_has_layout_metadata(shader);
 }
 
 bool bind_lighting_ubo_for_shader(
