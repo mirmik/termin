@@ -141,9 +141,9 @@ Slang paths should not add numeric binding usage.
   `tc_shader_resource_binding[]`.
 - Layout sidecars and `tc_shader_resource_binding` now carry resource `scope`;
   old sidecars without that field are accepted through conservative inference.
-- A Slang user-attribute probe confirmed that `[[TerminScope("...")]]` can be
-  read from `slangc -reflection-json`; `termin_shaderc` still needs to consume
-  that explicit metadata.
+- `termin_shaderc` consumes `[[TerminScope("...")]]` from Slang reflection
+  `userAttribs` and treats invalid values as hard errors. The temporary
+  `[[Scope("...")]]` alias is accepted during migration.
 - `RenderContext2` has initial `bind_uniform(name)` and `bind_texture(name)`
   methods.
 - `RenderContext2` stores pending bindings in scope buckets and flattens them
@@ -154,8 +154,8 @@ Slang paths should not add numeric binding usage.
 
 ## Next Tasks
 
-1. Add a Termin Slang prelude with `TerminScopeAttribute`, and parse
-   `TerminScope` from reflection `userAttribs` in `termin_shaderc`.
+1. Add a Termin Slang prelude with `TerminScopeAttribute` and make generated or
+   authored Slang sources import it where explicit scopes are used.
 2. Add dirty-per-scope tracking on top of the scoped buckets.
 3. Convert `ColorPass` and material UBO/texture upload to bind by name where
    layout metadata exists.
