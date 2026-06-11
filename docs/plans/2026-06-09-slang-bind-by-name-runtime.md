@@ -130,14 +130,15 @@ Slang paths should not add numeric binding usage.
   old sidecars without that field are accepted through conservative inference.
 - `RenderContext2` has initial `bind_uniform(name)` and `bind_texture(name)`
   methods.
+- `RenderContext2` stores pending bindings in scope buckets and flattens them
+  for the current backend resource-set API.
 - Grayscale, tonemap, and bloom use symbolic resource binding.
 - Material/color rendering still has numeric ABI debt for per-frame, shadows,
   material UBO/textures, and draw data.
 
 ## Next Tasks
 
-1. Split `RenderContext2` pending state by scope, initially flattening to the
-   existing backend resource set shape.
+1. Add dirty-per-scope tracking on top of the scoped buckets.
 2. Convert `ColorPass` and material UBO/texture upload to bind by name where
    layout metadata exists.
 3. Remove generated Slang backend attributes such as `[[vk::push_constant]]`
