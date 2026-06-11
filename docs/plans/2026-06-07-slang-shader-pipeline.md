@@ -2,6 +2,13 @@
 
 Date: 2026-06-07
 
+Binding/layout note, updated 2026-06-11: the resource binding direction in
+this historical plan has been superseded by
+`2026-06-11-slang-scope-first-binding.md`. Slang source should stay
+backend-neutral, runtime code should bind by logical name, and scope metadata
+is the active migration target. Any references below to shared-layout bridge
+work describe earlier transition state, not the current target architecture.
+
 ## Goal
 
 Prepare the shader system for Slang-authored backend-neutral shaders. DirectX
@@ -57,19 +64,12 @@ after the command-line integration and artifact contracts are stable.
 
 Make the shared shader ABI a live contract before introducing Slang.
 
-Tasks:
+Status:
 
-- Update `docs/gpu-pipeline-layout.md` with explicit D3D11 register mapping.
-- Keep the Vulkan/OpenGL binding table in sync with
-  `VulkanRenderDevice::create_shared_layouts()`.
-- Document push-constant emulation for OpenGL and D3D11.
-- Remove stale comments that mention old bindings.
-
-Acceptance:
-
-- One document maps every shared UBO/texture/sampler slot to GLSL/Vulkan and
-  Slang/HLSL register syntax.
-- The document no longer contradicts the Vulkan shared layout.
+- Superseded by the scope-first bind-by-name direction. `docs/gpu-pipeline-layout.md`
+  now documents CPU/std140 layouts and legacy numeric slots only where they
+  still exist. New Slang resources should be named and scoped, with backend
+  placement generated into layout metadata.
 
 ## Phase 2: Backend-Aware Artifact Loader
 
@@ -163,15 +163,13 @@ Status:
 - The first material is intentionally small: it uses clean Slang
   `ConstantBuffer<PerFrame> per_frame;` and
   `ConstantBuffer<SlangDrawData> draw_data;` declarations, then colors
-  fragments from transformed normals. `termin_shaderc` assigns those resource
-  names to the current shared Vulkan layout and patches SPIR-V decorations to
-  match the sidecar. Binding 24 is a dedicated dynamic UBO slot for
-  Slang/HLSL material draw data, separate from legacy GLSL push-constant
-  injection.
+  fragments from transformed normals. Earlier transition builds assigned those
+  names into the old numeric Vulkan layout. The active target is now
+  scope-first metadata plus bind-by-name, not fixed shared slots.
 - `termin_shaderc` records Slang reflection into artifact layout sidecars.
   Generated Slang material constant buffers no longer carry `register(...)`;
-  current Vulkan shared-layout texture properties use generated `Sampler2D`
-  declarations and sidecar/SPIR-V binding assignment.
+  texture properties use generated `Sampler2D` declarations and sidecar
+  resource metadata.
 - Slang `.shader` stages bypass GLSL include/preprocess rewriting, but now use
   a Slang-native material rewrite for scalar/vector `MaterialParams` and
   texture `Sampler2D` properties.
@@ -478,12 +476,13 @@ Acceptance:
 1. Audit the remaining runtime/exporter inline engine shader strings and move
    the next isolated one into the built-in shader catalog.
 2. Keep split texture/sampler and storage-texture shaders catalog-managed as
-   GLSL until the bind-by-name/runtime layout plan can carry non-shared
-   descriptor layouts.
+   GLSL until scope-first layout metadata and bind-by-name runtime paths can
+   carry those resources without numeric slot assumptions.
 3. Replace remaining runtime exporter inline engine shader strings with catalog
    entries as each source migrates.
-4. Continue replacing transition shared-layout policy with general Slang
-   resource assignment and include/module support in `termin_shaderc`.
+4. Continue replacing transition numeric binding policy with scope-aware Slang
+   resource metadata, bind-by-name runtime usage, and include/module support in
+   `termin_shaderc`.
 5. Decide later how generated Slang OpenGL artifacts should target the existing
    GL smoke environment: request a GL 4.5 context, lower Slang GLSL output if
    the toolchain supports it, or keep OpenGL generated-artifact rendering as a
