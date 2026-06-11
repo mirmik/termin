@@ -353,13 +353,27 @@ TEST_CASE("built-in shader catalog resolves vertex-only variant templates") {
         tgfx::load_builtin_shader_stage_source_from_catalog(
             "termin-engine-foliage-instanced", "vertex");
     REQUIRE(!foliage_vertex.empty());
-    CHECK(foliage_vertex.find("FoliagePushBlock") != std::string::npos);
-    CHECK(foliage_vertex.find("i_seed") != std::string::npos);
+    CHECK(foliage_vertex.find("import termin_prelude") != std::string::npos);
+    CHECK(foliage_vertex.find("[[TerminScope(\"frame\")]]") != std::string::npos);
+    CHECK(foliage_vertex.find("[[TerminScope(\"draw\")]]") != std::string::npos);
+    CHECK(foliage_vertex.find("ConstantBuffer<FoliagePushData> foliage_draw") != std::string::npos);
+    CHECK(foliage_vertex.find("StructuredBuffer<FoliageInstance> foliage_instances") != std::string::npos);
+    CHECK(foliage_vertex.find("SV_InstanceID") != std::string::npos);
+    CHECK(foliage_vertex.find("tangent_world : TEXCOORD3") != std::string::npos);
+    CHECK(foliage_vertex.find("bitangent_world : TEXCOORD4") != std::string::npos);
+    CHECK(foliage_vertex.find("tbn_valid : TEXCOORD5") != std::string::npos);
+    CHECK(foliage_vertex.find("out mat3 v_TBN") == std::string::npos);
+    CHECK(foliage_vertex.find("layout(") == std::string::npos);
 
     std::string foliage_shadow_vertex =
         tgfx::load_builtin_shader_stage_source_from_catalog(
             "termin-engine-foliage-shadow", "vertex");
     REQUIRE(!foliage_shadow_vertex.empty());
-    CHECK(foliage_shadow_vertex.find("FoliagePushBlock") != std::string::npos);
-    CHECK(foliage_shadow_vertex.find("i_position") != std::string::npos);
+    CHECK(foliage_shadow_vertex.find("import termin_prelude") != std::string::npos);
+    CHECK(foliage_shadow_vertex.find("[[TerminScope(\"frame\")]]") != std::string::npos);
+    CHECK(foliage_shadow_vertex.find("[[TerminScope(\"draw\")]]") != std::string::npos);
+    CHECK(foliage_shadow_vertex.find("ConstantBuffer<FoliagePushData> foliage_draw") != std::string::npos);
+    CHECK(foliage_shadow_vertex.find("StructuredBuffer<FoliageInstance> foliage_instances") != std::string::npos);
+    CHECK(foliage_shadow_vertex.find("SV_InstanceID") != std::string::npos);
+    CHECK(foliage_shadow_vertex.find("layout(") == std::string::npos);
 }

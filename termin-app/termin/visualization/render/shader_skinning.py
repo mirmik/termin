@@ -264,6 +264,13 @@ def get_skinned_shader(shader: "TcShader") -> "TcShader":
     # Check if already has skinning (avoid double-injection)
     if 'u_bone_matrices' in shader.vertex_source:
         return shader
+    from tgfx import ShaderLanguage
+
+    if shader.language != ShaderLanguage.GLSL:
+        raise ValueError(
+            f"Skinning transform supports GLSL shaders only; "
+            f"shader '{shader.name}' uses {shader.language}"
+        )
 
     from termin.visualization.render.shader_variants import (
         get_variant_registry,
@@ -286,13 +293,19 @@ def get_skinned_shader_handle(original_handle):
     Returns:
         TcShader of skinned variant, or None if injection fails
     """
-    from tgfx import TcShader, ShaderVariantOp
+    from tgfx import TcShader, ShaderLanguage, ShaderVariantOp
     from termin.visualization.render.glsl_preprocessor import preprocess_glsl, has_includes
     from tcbase import log
 
     # Create TcShader from handle
     original = TcShader(original_handle)
     if not original.is_valid:
+        return None
+    if original.language != ShaderLanguage.GLSL:
+        log.error(
+            f"[get_skinned_shader_handle] Shader '{original.name}' uses non-GLSL "
+            "source language; Slang skinning variants require a dedicated transform"
+        )
         return None
 
     # Check if already has skinning

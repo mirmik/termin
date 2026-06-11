@@ -461,6 +461,46 @@ TEST_CASE("skinned shader variants rewrite legacy engine uniforms for Vulkan")
     tc_shader_destroy(original_handle);
 }
 
+TEST_CASE("skinned shader variants reject Slang until a Slang transform exists")
+{
+    std::string vertex =
+        "struct VIn { float3 position : POSITION; };\n"
+        "struct VOut { float4 position : SV_Position; };\n"
+        "[shader(\"vertex\")]\n"
+        "VOut main(VIn input) {\n"
+        "    VOut output;\n"
+        "    output.position = float4(input.position, 1.0);\n"
+        "    return output;\n"
+        "}\n";
+    std::string fragment =
+        "struct FOut { float4 color : SV_Target0; };\n"
+        "[shader(\"fragment\")]\n"
+        "FOut main() {\n"
+        "    FOut output;\n"
+        "    output.color = float4(1.0);\n"
+        "    return output;\n"
+        "}\n";
+
+    tc_shader_handle original_handle = tc_shader_from_sources_ex(
+        vertex.c_str(),
+        fragment.c_str(),
+        nullptr,
+        "SlangPBR/opaque",
+        nullptr,
+        "skinning-rewrite-slang-original",
+        TC_SHADER_LANGUAGE_SLANG,
+        TC_SHADER_ARTIFACT_REQUIRED);
+    CHECK(!tc_shader_handle_is_invalid(original_handle));
+
+    {
+        TcShader original(original_handle);
+        TcShader skinned = get_skinned_shader(original);
+        CHECK(!skinned.is_valid());
+    }
+
+    tc_shader_destroy(original_handle);
+}
+
 TEST_CASE("parse_shader_text: material_ubo feature rewrites stage sources")
 {
     const std::string shader_text =
