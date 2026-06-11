@@ -105,14 +105,14 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     assert (result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.vert.spv").exists()
     assert (result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.frag.spv").exists()
     default_vertex_source = (
-        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.vert.glsl"
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.slang"
     ).read_text(encoding="utf-8")
     default_fragment_source = (
-        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.frag.glsl"
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.slang"
     ).read_text(encoding="utf-8")
     assert "CameraUBO" in default_vertex_source
     assert "PushConstants" in default_vertex_source
-    assert "out_color" in default_fragment_source
+    assert "SV_Target0" in default_fragment_source
 
     scene_data = json.loads(result.scene_path.read_text(encoding="utf-8"))
     assert scene_data["uuid"] == "scene-uuid"
@@ -178,13 +178,13 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert "u_projection" in skybox_source
 
     shadow_source = (
-        result.package_dir / "shaders" / "vulkan" / "termin-engine-shadow.vert.glsl"
+        result.package_dir / "shaders" / "vulkan" / "termin-engine-shadow.slang"
     ).read_text(encoding="utf-8")
     assert "PerFrame" in shadow_source
-    assert "ShadowPushBlock" in shadow_source
+    assert "ShadowPushData" in shadow_source
 
     default_source = (
-        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.vert.glsl"
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.slang"
     ).read_text(encoding="utf-8")
     assert "CameraUBO" in default_source
     assert "PushConstants" in default_source
@@ -303,10 +303,10 @@ def test_export_runtime_package_can_use_slang_default_shader(tmp_path: Path) -> 
     )
     assert shader_data["language"] == "slang"
     assert shader_data["vertex_source_path"] == (
-        "shaders/vulkan/termin-runtime-default-color.vert.slang"
+        "shaders/vulkan/termin-runtime-default-color.slang"
     )
     assert shader_data["fragment_source_path"] == (
-        "shaders/vulkan/termin-runtime-default-color.frag.slang"
+        "shaders/vulkan/termin-runtime-default-color.slang"
     )
     assert shader_data["artifacts"] == {
         "vulkan": {
@@ -325,10 +325,10 @@ def test_export_runtime_package_can_use_slang_default_shader(tmp_path: Path) -> 
         result.package_dir / "shaders" / "opengl" / "termin-runtime-default-color.frag.glsl"
     ).read_bytes() == b"ARTIFACT-opengl"
     slang_vertex_source = (
-        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.vert.slang"
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.slang"
     ).read_text(encoding="utf-8")
     slang_fragment_source = (
-        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.frag.slang"
+        result.package_dir / "shaders" / "vulkan" / "termin-runtime-default-color.slang"
     ).read_text(encoding="utf-8")
     assert "vk::location" not in slang_vertex_source
     assert "vk::location" not in slang_fragment_source
@@ -336,6 +336,21 @@ def test_export_runtime_package_can_use_slang_default_shader(tmp_path: Path) -> 
     assert "COLOR0" in slang_vertex_source
     assert "SV_Target0" in slang_fragment_source
     assert result.diagnostics == []
+
+
+def test_export_runtime_package_rejects_glsl_default_shader(tmp_path: Path) -> None:
+    project = tmp_path / "GlslDefaultGame"
+    project.mkdir()
+    _write_json(project / "Main.scene", {"uuid": "root-scene", "entities": []})
+
+    with pytest.raises(ValueError, match="runtime default shader is Slang-only"):
+        export_runtime_package(
+            project_root=project,
+            entry_scene="Main.scene",
+            output_dir=project / "dist" / "package",
+            shader_compiler=_write_target_marking_shader_compiler(tmp_path),
+            default_shader_language="glsl",
+        )
 
 
 def test_export_runtime_package_rejects_unknown_default_shader_language(tmp_path: Path) -> None:

@@ -166,31 +166,34 @@ void DepthPass::execute_with_data_tgfx2(
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
 
     tgfx::ShaderHandle depth_vs2, depth_fs2;
+    tc_shader* depth_raw = nullptr;
     {
-        tc_shader* raw = tc_shader_get(depth_shader_handle_);
-        if (!raw) {
+        depth_raw = tc_shader_get(depth_shader_handle_);
+        if (!depth_raw) {
             tc::Log::error("DepthPass: depth_shader_handle_ stale (index=%u gen=%u)",
                            depth_shader_handle_.index,
                            depth_shader_handle_.generation);
             return;
         }
-        if (!tc_shader_ensure_tgfx2(raw, &device, &depth_vs2, &depth_fs2)) {
+        if (!tc_shader_ensure_tgfx2(depth_raw, &device, &depth_vs2, &depth_fs2)) {
             tc::Log::error("DepthPass: tc_shader_ensure_tgfx2 failed for '%s'",
-                           raw->name ? raw->name : raw->uuid);
+                           depth_raw->name ? depth_raw->name : depth_raw->uuid);
             return;
         }
     }
     ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
+    ctx.ctx2->use_shader_resource_layout(depth_raw);
 
     // PerFrame UBO — uploaded ONCE per execute. view + projection +
-    // near/far plane. Bound at slot 0.
+    // near/far plane. Bound by shader resource name so Slang scope metadata
+    // owns the physical binding.
     DepthPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     per_frame.u_near = near_plane;
     per_frame.u_far = far_plane;
     per_frame.u_depth_encoding = depth_encoding_mode(depth_encoding);
-    ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
+    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
 
     const std::string& debug_symbol = get_debug_internal_point();
 
@@ -236,6 +239,8 @@ void DepthPass::execute_with_data_tgfx2(
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
+            ctx.ctx2->use_shader_resource_layout(raw);
+            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
             // Skinned depth VS uses a_position (0), a_normal (1),
             // a_joints (3), a_weights (4). a_texcoord (2) stays unused.
 
@@ -244,6 +249,8 @@ void DepthPass::execute_with_data_tgfx2(
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
             ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
+            ctx.ctx2->use_shader_resource_layout(depth_raw);
+            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
         }
     }
 
@@ -471,28 +478,30 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
 
     tgfx::ShaderHandle depth_vs2, depth_fs2;
+    tc_shader* depth_raw = nullptr;
     {
-        tc_shader* raw = tc_shader_get(depth_shader_handle_);
-        if (!raw) {
+        depth_raw = tc_shader_get(depth_shader_handle_);
+        if (!depth_raw) {
             tc::Log::error("DepthOnlyPass: depth_shader_handle_ stale (index=%u gen=%u)",
                            depth_shader_handle_.index,
                            depth_shader_handle_.generation);
             return;
         }
-        if (!tc_shader_ensure_tgfx2(raw, &device, &depth_vs2, &depth_fs2)) {
+        if (!tc_shader_ensure_tgfx2(depth_raw, &device, &depth_vs2, &depth_fs2)) {
             tc::Log::error("DepthOnlyPass: tc_shader_ensure_tgfx2 failed for '%s'",
-                           raw->name ? raw->name : raw->uuid);
+                           depth_raw->name ? depth_raw->name : depth_raw->uuid);
             return;
         }
     }
     ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
+    ctx.ctx2->use_shader_resource_layout(depth_raw);
 
     DepthPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     per_frame.u_near = near_plane;
     per_frame.u_far = far_plane;
-    ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
+    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
 
     for (const auto& dc : cached_draw_calls_) {
         Drawable* drawable = nullptr;
@@ -530,12 +539,16 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
+            ctx.ctx2->use_shader_resource_layout(raw);
+            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
             ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
+            ctx.ctx2->use_shader_resource_layout(depth_raw);
+            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
         }
     }
 

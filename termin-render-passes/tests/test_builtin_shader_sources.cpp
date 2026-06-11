@@ -85,28 +85,24 @@ TEST_CASE("built-in vertex-fragment shader registration reads both source files"
         / ("termin-render-passes-builtin-vsfs-test-" + std::to_string(unique));
     std::filesystem::remove_all(root);
 
-    constexpr const char* kVertexFilename = "termin-engine-shadow.vert.glsl";
-    constexpr const char* kFragmentFilename = "termin-engine-shadow.frag.glsl";
+    constexpr const char* kProgramFilename = "termin-engine-shadow.slang";
     constexpr const char* kVertexMarker = "TEST_BUILTIN_VERTEX_SHADER_SOURCE_MARKER";
     constexpr const char* kFragmentMarker = "TEST_BUILTIN_FRAGMENT_SHADER_SOURCE_MARKER";
     write_text(
-        root / kVertexFilename,
-        "#version 450 core\n"
+        root / kProgramFilename,
         "// TEST_BUILTIN_VERTEX_SHADER_SOURCE_MARKER\n"
-        "layout(location = 0) in vec3 a_position;\n"
-        "void main() { gl_Position = vec4(a_position, 1.0); }\n");
-    write_text(
-        root / kFragmentFilename,
-        "#version 450 core\n"
         "// TEST_BUILTIN_FRAGMENT_SHADER_SOURCE_MARKER\n"
-        "void main() {}\n");
+        "struct In { float3 position : POSITION; };\n"
+        "struct Out { float4 position : SV_Position; };\n"
+        "[shader(\"vertex\")] Out vs_main(In input) { Out output; output.position = float4(input.position, 1.0); return output; }\n"
+        "[shader(\"fragment\")] void fs_main() {}\n");
 
     set_builtin_root(root);
     tc_shader_init();
 
     tc_shader_handle handle = tgfx::register_builtin_vertex_fragment_shader(
-        kVertexFilename,
-        kFragmentFilename,
+        kProgramFilename,
+        kProgramFilename,
         "TestBuiltinShaderVSFS",
         "test-builtin-vsfs-source-uuid");
     REQUIRE(!tc_shader_handle_is_invalid(handle));
@@ -342,6 +338,26 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
     CHECK(skybox.name == "SkyboxEngineVSFS");
     REQUIRE(!skybox.source.empty());
     CHECK(skybox.source.find("@program Skybox") != std::string::npos);
+
+    tc_shader_shutdown();
+}
+
+TEST_CASE("built-in slang shader catalog registers explicit stage entry points") {
+    clear_builtin_root();
+    tc_shader_init();
+
+    tc_shader_handle handle = tgfx::register_builtin_shader_from_catalog("termin-engine-shadow");
+    REQUIRE(!tc_shader_handle_is_invalid(handle));
+
+    tc_shader* shader = tc_shader_get(handle);
+    REQUIRE(shader != nullptr);
+    REQUIRE(shader->vertex_source != nullptr);
+    REQUIRE(shader->fragment_source != nullptr);
+    CHECK(shader->vertex_source != shader->fragment_source);
+    REQUIRE(shader->vertex_entry != nullptr);
+    REQUIRE(shader->fragment_entry != nullptr);
+    CHECK(std::strcmp(shader->vertex_entry, "vs_main") == 0);
+    CHECK(std::strcmp(shader->fragment_entry, "fs_main") == 0);
 
     tc_shader_shutdown();
 }

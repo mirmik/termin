@@ -422,23 +422,25 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             // First call on a fresh device compiles via shaderc; every
             // subsequent ShadowPass lifetime hits the slot cache.
             tgfx::ShaderHandle shadow_vs2, shadow_fs2;
+            tc_shader* shadow_raw = nullptr;
             {
-                tc_shader* raw = tc_shader_get(shadow_shader_handle_);
-                if (!raw) {
+                shadow_raw = tc_shader_get(shadow_shader_handle_);
+                if (!shadow_raw) {
                     tc::Log::error("ShadowPass: shadow_shader_handle_ stale (index=%u gen=%u)",
                                    shadow_shader_handle_.index,
                                    shadow_shader_handle_.generation);
                     end_shadow_pass();
                     continue;
                 }
-                if (!tc_shader_ensure_tgfx2(raw, &device, &shadow_vs2, &shadow_fs2)) {
+                if (!tc_shader_ensure_tgfx2(shadow_raw, &device, &shadow_vs2, &shadow_fs2)) {
                     tc::Log::error("ShadowPass: tc_shader_ensure_tgfx2 failed for '%s'",
-                                   raw->name ? raw->name : raw->uuid);
+                                   shadow_raw->name ? shadow_raw->name : shadow_raw->uuid);
                     end_shadow_pass();
                     continue;
                 }
             }
             ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
+            ctx.ctx2->use_shader_resource_layout(shadow_raw);
 
             // PerFrame UBO through the ring: a fresh offset per cascade,
             // so the per-cascade matrices survive into draw-execute time
@@ -448,7 +450,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ShadowPerFrameStd140 per_frame{};
             std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
             std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
-            ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
+            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
 
             if (cached_draw_calls_.empty()) {
                 end_shadow_pass();
@@ -494,6 +496,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         *ctx.ctx2, direct_context, "shadow", phase, dc.geometry_id);
                     restore_shadow_raster_state();
                     ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
+                    ctx.ctx2->use_shader_resource_layout(shadow_raw);
+                    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
                     continue;
                 }
 
@@ -528,6 +532,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         continue;
                     }
                     ctx.ctx2->bind_shader(vs2, fs2);
+                    ctx.ctx2->use_shader_resource_layout(raw);
+                    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
 
                     drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
@@ -538,6 +544,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // shader; skinning variant left its own program bound.
                     last_shader = dc.final_shader;
                     ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
+                    ctx.ctx2->use_shader_resource_layout(shadow_raw);
+                    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
                 }
             }
             (void)last_shader;

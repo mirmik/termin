@@ -53,7 +53,7 @@ def build_quest_openxr_project(
     build_script: str | Path | None = None,
     gradle: str | Path | None = None,
     shader_compiler: str | Path | None = None,
-    default_shader_language: str = "glsl",
+    default_shader_language: str = "slang",
     abi: str = "arm64-v8a",
     platform: str = "android-26",
     log_callback: Callable[[str], None] | None = None,

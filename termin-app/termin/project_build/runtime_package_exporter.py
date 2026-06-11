@@ -30,7 +30,7 @@ from typing import Any
 DEFAULT_SHADER_UUID = "termin-runtime-default-color"
 DEFAULT_SHADER_NAME = "TerminRuntimeDefaultColor"
 DEFAULT_SHADER_SOURCE_PATH = "termin-runtime/default-color"
-DEFAULT_SHADER_LANGUAGE = "glsl"
+DEFAULT_SHADER_LANGUAGE = "slang"
 
 
 ENGINE_SKYBOX_SHADER_UUID = "termin-engine-skybox"
@@ -150,6 +150,8 @@ class _ShaderSpec:
 def _default_shader_spec(language: str) -> _ShaderSpec:
     normalized = _normalize_default_shader_language(language)
     if normalized == "glsl":
+        raise ValueError("The runtime default shader is Slang-only")
+    if normalized == "slang":
         entry = _builtin_shader_catalog_entry(DEFAULT_SHADER_UUID)
         stages = entry.get("stages")
         if not isinstance(stages, dict):
@@ -160,17 +162,6 @@ def _default_shader_spec(language: str) -> _ShaderSpec:
             source_path=DEFAULT_SHADER_SOURCE_PATH,
             vertex_source=_builtin_engine_stage_source(DEFAULT_SHADER_UUID, stages, "vertex"),
             fragment_source=_builtin_engine_stage_source(DEFAULT_SHADER_UUID, stages, "fragment"),
-            geometry_source="",
-            language="glsl",
-            allow_precompiled_default=True,
-        )
-    if normalized == "slang":
-        return _ShaderSpec(
-            uuid=DEFAULT_SHADER_UUID,
-            name=DEFAULT_SHADER_NAME,
-            source_path=DEFAULT_SHADER_SOURCE_PATH,
-            vertex_source=_stdlib_shader_text("slang", "runtime_default_color.vert.slang"),
-            fragment_source=_stdlib_shader_text("slang", "runtime_default_color.frag.slang"),
             geometry_source="",
             language="slang",
             allow_precompiled_default=False,
@@ -341,10 +332,20 @@ def _write_shader(
         opengl_dir.mkdir(parents=True, exist_ok=True)
 
     source_ext = "slang" if shader.language == "slang" else "glsl"
-    vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.{source_ext}"
-    fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.{source_ext}"
+    shared_stage_source = (
+        shader.language == "slang"
+        and shader.geometry_source == ""
+        and shader.vertex_source == shader.fragment_source
+    )
+    if shared_stage_source:
+        vertex_source_path = vulkan_dir / f"{shader.uuid}.{source_ext}"
+        fragment_source_path = vertex_source_path
+    else:
+        vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.{source_ext}"
+        fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.{source_ext}"
     vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
-    fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
+    if fragment_source_path != vertex_source_path:
+        fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
 
     geometry_source_path = None
     if shader.geometry_source != "":
@@ -430,8 +431,16 @@ def _write_shader(
         "uuid": shader.uuid,
         "name": shader.name or shader.uuid,
         "language": shader.language,
-        "vertex_source_path": f"shaders/vulkan/{shader.uuid}.vert.{source_ext}",
-        "fragment_source_path": f"shaders/vulkan/{shader.uuid}.frag.{source_ext}",
+        "vertex_source_path": (
+            f"shaders/vulkan/{shader.uuid}.{source_ext}"
+            if shared_stage_source
+            else f"shaders/vulkan/{shader.uuid}.vert.{source_ext}"
+        ),
+        "fragment_source_path": (
+            f"shaders/vulkan/{shader.uuid}.{source_ext}"
+            if shared_stage_source
+            else f"shaders/vulkan/{shader.uuid}.frag.{source_ext}"
+        ),
         "source_path": shader.source_path,
         "artifacts": {
             "vulkan": {
@@ -622,8 +631,20 @@ def _write_engine_shader_artifact(
             encoding="utf-8",
         )
 
+    source_ext = _source_extension_for_language(shader.language)
+    shared_stage_source = (
+        shader.language == "slang"
+        and shader.vertex_source != ""
+        and shader.fragment_source != ""
+        and shader.vertex_source == shader.fragment_source
+    )
+    vertex_source_path: Path | None = None
     if shader.vertex_source != "":
-        vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.{_source_extension_for_language(shader.language)}"
+        vertex_source_path = (
+            vulkan_dir / f"{shader.uuid}.{source_ext}"
+            if shared_stage_source
+            else vulkan_dir / f"{shader.uuid}.vert.{source_ext}"
+        )
         vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
         _compile_shader_stage(
             compiler,
@@ -648,8 +669,13 @@ def _write_engine_shader_artifact(
     if shader.fragment_source == "":
         return
 
-    fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.{_source_extension_for_language(shader.language)}"
-    fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
+    fragment_source_path = (
+        vulkan_dir / f"{shader.uuid}.{source_ext}"
+        if shared_stage_source
+        else vulkan_dir / f"{shader.uuid}.frag.{source_ext}"
+    )
+    if vertex_source_path is None or fragment_source_path != vertex_source_path:
+        fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
     _compile_shader_stage(
         compiler,
         shader.language,

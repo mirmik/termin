@@ -59,11 +59,11 @@ bind-by-name model without changing the package shape later.
 | UUID | Name | Stage | Language | Source |
 |---|---|---|---|---|
 | `termin-engine-fsq` | `FullscreenQuadEngineVS` | vertex | Slang | `builtin_shaders/termin-engine-fsq.vert.slang` |
-| `termin-runtime-default-color` | `TerminRuntimeDefaultColor` | vertex + fragment | GLSL | `builtin_shaders/termin-runtime-default-color.vert.glsl`, `builtin_shaders/termin-runtime-default-color.frag.glsl` |
-| `termin-engine-shadow` | `ShadowEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-shadow.vert.glsl`, `builtin_shaders/termin-engine-shadow.frag.glsl` |
-| `termin-engine-debug-triangle` | `DebugTrianglePassVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-debug-triangle.vert.glsl`, `builtin_shaders/termin-engine-debug-triangle.frag.glsl` |
-| `termin-engine-present-blit` | `PresentBlitVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-present-blit.vert.glsl`, `builtin_shaders/termin-engine-present-blit.frag.glsl` |
-| `termin-engine-immediate` | `ImmediateEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-immediate.vert.glsl`, `builtin_shaders/termin-engine-immediate.frag.glsl` |
+| `termin-runtime-default-color` | `TerminRuntimeDefaultColor` | vertex + fragment | Slang | `builtin_shaders/termin-runtime-default-color.slang` |
+| `termin-engine-shadow` | `ShadowEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-shadow.slang` |
+| `termin-engine-debug-triangle` | `DebugTrianglePassVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-debug-triangle.slang` |
+| `termin-engine-present-blit` | `PresentBlitVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-present-blit.slang` |
+| `termin-engine-immediate` | `ImmediateEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-immediate.slang` |
 | `termin-engine-canvas2d-solid` | `Canvas2DSolidVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-canvas2d.vert.glsl`, `builtin_shaders/termin-engine-canvas2d-solid.frag.glsl` |
 | `termin-engine-canvas2d-texture` | `Canvas2DTextureVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-canvas2d.vert.glsl`, `builtin_shaders/termin-engine-canvas2d-texture.frag.glsl` |
 | `termin-engine-text2d` | `Text2DEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-text2d.vert.glsl`, `builtin_shaders/termin-engine-text2d.frag.glsl` |
@@ -89,21 +89,21 @@ bind-by-name model without changing the package shape later.
 | `termin-engine-pick-material` | `PickShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-pick-material.vert.glsl`, `builtin_shaders/termin-engine-pick-material.frag.glsl` |
 | `termin-engine-shadow-material` | `ShadowShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-shadow-material.vert.glsl`, `builtin_shaders/termin-engine-shadow-material.frag.glsl` |
 | `termin-engine-depth-material` | `DepthShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-depth-material.vert.glsl`, `builtin_shaders/termin-engine-depth-material.frag.glsl` |
-| `termin-engine-foliage-instanced` | `FoliageInstancedVariantVS` | vertex template | GLSL | `builtin_shaders/termin-engine-foliage-instanced.vert.glsl` |
-| `termin-engine-foliage-shadow` | `FoliageShadowVariantVS` | vertex template | GLSL | `builtin_shaders/termin-engine-foliage-shadow.vert.glsl` |
-| `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-id.vert.glsl`, `builtin_shaders/termin-engine-id.frag.glsl` |
-| `termin-engine-normal` | `NormalEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-normal.vert.glsl`, `builtin_shaders/termin-engine-normal.frag.glsl` |
-| `termin-engine-depth` | `DepthEngineVSFS_Encoding` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-depth.vert.glsl`, `builtin_shaders/termin-engine-depth.frag.glsl` |
-| `termin-engine-depth-only` | `DepthOnlyEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-depth-only.vert.glsl`, `builtin_shaders/termin-engine-depth-only.frag.glsl` |
-| `termin-engine-depth-to-color` | `DepthToColorFS` | fragment | GLSL | `builtin_shaders/termin-engine-depth-to-color.frag.glsl` |
-| `termin-engine-color-to-depth` | `ColorToDepthFS` | fragment | GLSL | `builtin_shaders/termin-engine-color-to-depth.frag.glsl` |
+| `termin-engine-foliage-instanced` | `FoliageInstancedVariantVS` | vertex template | Slang | `builtin_shaders/termin-engine-foliage-instanced.vert.slang` |
+| `termin-engine-foliage-shadow` | `FoliageShadowVariantVS` | vertex template | Slang | `builtin_shaders/termin-engine-foliage-shadow.vert.slang` |
+| `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-id.slang` |
+| `termin-engine-normal` | `NormalEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-normal.slang` |
+| `termin-engine-depth` | `DepthEngineVSFS_Encoding` | vertex + fragment | Slang | `builtin_shaders/termin-engine-depth.slang` |
+| `termin-engine-depth-only` | `DepthOnlyEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-depth-only.slang` |
+| `termin-engine-depth-to-color` | `DepthToColorFS` | fragment | Slang | `builtin_shaders/termin-engine-depth-to-color.frag.slang` |
+| `termin-engine-color-to-depth` | `ColorToDepthFS` | fragment | Slang | `builtin_shaders/termin-engine-color-to-depth.frag.slang` |
 | `termin-engine-skybox` | `SkyboxEngineVSFS` | vertex + fragment | shader program | `builtin_shaders/termin-engine-skybox.shader` |
 | `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-grayscale.frag.slang` |
 | `termin-engine-bloom-bright` | `BloomBrightFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-bright.frag.slang` |
-| `termin-engine-highlight` | `HighlightEngineFS` | fragment | GLSL | `builtin_shaders/termin-engine-highlight.frag.glsl` |
+| `termin-engine-highlight` | `HighlightEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-highlight.frag.slang` |
 | `termin-engine-gizmo-mask` | `GizmoMaskVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-gizmo-mask.vert.glsl`, `builtin_shaders/termin-engine-gizmo-mask.frag.glsl` |
 | `termin-engine-ground-grid` | `GroundGridEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-ground-grid.vert.glsl`, `builtin_shaders/termin-engine-ground-grid.frag.glsl` |
-| `termin-engine-solid-primitive` | `SolidPrimitiveEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-solid-primitive.vert.glsl`, `builtin_shaders/termin-engine-solid-primitive.frag.glsl` |
+| `termin-engine-solid-primitive` | `SolidPrimitiveEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-solid-primitive.slang` |
 | `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-downsample.frag.slang` |
 | `termin-engine-bloom-upsample` | `BloomUpsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-upsample.frag.slang` |
 | `termin-engine-bloom-composite` | `BloomCompositeFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-composite.frag.slang` |

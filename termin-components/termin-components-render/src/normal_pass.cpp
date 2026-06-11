@@ -110,19 +110,21 @@ void NormalPass::execute_with_data_tgfx2(
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
 
     tgfx::ShaderHandle normal_vs2, normal_fs2;
+    tc_shader* normal_raw = nullptr;
     {
-        tc_shader* raw = tc_shader_get(normal_shader_handle_);
-        if (!raw || !tc_shader_ensure_tgfx2(raw, &device, &normal_vs2, &normal_fs2)) {
+        normal_raw = tc_shader_get(normal_shader_handle_);
+        if (!normal_raw || !tc_shader_ensure_tgfx2(normal_raw, &device, &normal_vs2, &normal_fs2)) {
             tc::Log::error("NormalPass: tc_shader_ensure_tgfx2 failed for engine normal shader");
             return;
         }
     }
     ctx.ctx2->bind_shader(normal_vs2, normal_fs2);
+    ctx.ctx2->use_shader_resource_layout(normal_raw);
 
     NormalPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
-    ctx.ctx2->bind_uniform_buffer_ring(0, &per_frame, sizeof(per_frame));
+    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
 
     const std::string& debug_symbol = get_debug_internal_point();
 
@@ -164,12 +166,16 @@ void NormalPass::execute_with_data_tgfx2(
                 continue;
             }
             ctx.ctx2->bind_shader(vs2, fs2);
+            ctx.ctx2->use_shader_resource_layout(raw);
+            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
             ctx.ctx2->bind_shader(normal_vs2, normal_fs2);
+            ctx.ctx2->use_shader_resource_layout(normal_raw);
+            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
         }
     }
 
