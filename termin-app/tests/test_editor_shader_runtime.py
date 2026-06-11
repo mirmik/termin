@@ -1,9 +1,8 @@
 import os
 from pathlib import Path
 
-from termin.editor_tcgui import editor_window
 from termin.editor_tcgui.editor_window import EditorWindowTcgui
-from termin.editor_core.settings import EditorSettings
+from termin.editor_tcgui import editor_window
 
 
 def test_editor_project_load_configures_shader_runtime(monkeypatch, tmp_path: Path):
@@ -19,8 +18,8 @@ def test_editor_project_load_configures_shader_runtime(monkeypatch, tmp_path: Pa
     def fake_configure_shader_runtime(**kwargs):
         calls.append(kwargs)
 
-    monkeypatch.setattr(editor_window, "_resolve_termin_shaderc", lambda: compiler)
-    monkeypatch.setattr(EditorSettings.instance(), "get_slang_compiler", lambda: str(slangc))
+    monkeypatch.setattr(editor_window, "resolve_termin_shaderc", lambda: compiler)
+    monkeypatch.setattr(editor_window, "resolve_slangc", lambda: slangc)
     monkeypatch.delenv("TERMIN_SLANGC", raising=False)
     monkeypatch.setattr("tgfx.configure_shader_runtime", fake_configure_shader_runtime)
 
@@ -48,12 +47,8 @@ def test_editor_shader_runtime_rejects_missing_configured_slangc(monkeypatch, tm
 
     calls: list[dict] = []
 
-    monkeypatch.setattr(editor_window, "_resolve_termin_shaderc", lambda: compiler)
-    monkeypatch.setattr(
-        EditorSettings.instance(),
-        "get_slang_compiler",
-        lambda: str(tmp_path / "missing-slangc"),
-    )
+    monkeypatch.setattr(editor_window, "resolve_termin_shaderc", lambda: compiler)
+    monkeypatch.setattr(editor_window, "resolve_slangc", lambda: None)
     monkeypatch.setattr("tgfx.configure_shader_runtime", lambda **kwargs: calls.append(kwargs))
 
     win = EditorWindowTcgui.__new__(EditorWindowTcgui)

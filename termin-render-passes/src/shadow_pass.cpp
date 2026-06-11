@@ -42,10 +42,8 @@ struct ShadowPerFrameStd140 {
 static_assert(sizeof(ShadowPerFrameStd140) == 128,
               "ShadowPerFrameStd140 must be 2 * mat4");
 
-// PushConstants (binding 14, slot TGFX2_PUSH_CONSTANTS_BINDING): the
-// per-object model matrix. Written per-draw via
-// RenderContext2::set_push_constants. 64 bytes, well under the
-// TGFX2_PUSH_CONSTANTS_MAX_BYTES (128 byte) Vulkan-compat cap.
+// Draw-scope per-object model matrix. The shader resource layout maps it to
+// the backend-specific storage, while this pass binds by resource name.
 struct ShadowPushStd140 {
     float u_model[16];
 };
@@ -506,13 +504,12 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 bool override_is_base =
                     tc_shader_handle_eq(dc.final_shader, shadow_shader_handle_);
 
-                // Both paths share the same push_constants + PerFrame UBO
-                // layout (the skinned variant injects BoneBlock into the
-                // canonical shadow vertex source). Bias is applied receiver-side while
-                // sampling so the caster's projected XY footprint stays stable.
+                // Both paths share the same draw-scope model matrix + PerFrame UBO
+                // layout. Bias is applied receiver-side while sampling so the
+                // caster's projected XY footprint stays stable.
                 ShadowPushStd140 push{};
                 std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-                ctx.ctx2->set_push_constants(&push, sizeof(push));
+                ctx.ctx2->bind_uniform_data("shadow_draw", &push, sizeof(push));
 
                 if (override_is_base) {
                     // Non-skinned fast path. Shadow VS only reads

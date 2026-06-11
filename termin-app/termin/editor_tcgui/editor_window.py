@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import time
-import shutil
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -39,6 +37,7 @@ from termin.editor_core.editor_state_io import EditorStateIO
 from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
 from termin.editor_tcgui.project_build_controller import ProjectBuildController
 from termin.editor_tcgui.project_session_controller import ProjectSessionController
+from termin.editor_tcgui.shader_runtime import resolve_slangc, resolve_termin_shaderc
 from termin.editor_tcgui.scene_file_controller import SceneFileController
 from termin.editor_tcgui.editor_window_layout import (
     EditorWindowLayoutCallbacks,
@@ -71,61 +70,6 @@ from termin.editor_tcgui.default_component_editor_extensions import (
 from termin.editor_tcgui.editor_camera_ui_controller import EditorCameraUIController
 
 SceneMode = engine_scene.SceneMode
-
-
-def _resolve_termin_shaderc() -> Path | None:
-    configured = os.environ.get("TERMIN_SHADERC")
-    if configured:
-        path = Path(configured)
-        if path.is_file():
-            return path
-        log.error(f"[ShaderRuntime] TERMIN_SHADERC points to missing file: {configured}")
-        return None
-
-    sdk = os.environ.get("TERMIN_SDK")
-    if sdk:
-        candidate = Path(sdk) / "bin" / "termin_shaderc"
-        if candidate.is_file():
-            return candidate
-
-    local_sdk = Path(__file__).resolve().parents[3] / "sdk" / "bin" / "termin_shaderc"
-    if local_sdk.is_file():
-        return local_sdk
-
-    found = shutil.which("termin_shaderc")
-    if found:
-        return Path(found)
-    return None
-
-
-def _resolve_slangc() -> Path | None:
-    settings_path = EditorSettings.instance().get_slang_compiler()
-    if settings_path:
-        path = Path(settings_path)
-        if path.is_file():
-            return path
-        log.error(f"[ShaderRuntime] configured Slang compiler is missing: {settings_path}")
-        return None
-
-    configured = os.environ.get("TERMIN_SLANGC")
-    if configured:
-        path = Path(configured)
-        if path.is_file():
-            return path
-        log.error(f"[ShaderRuntime] TERMIN_SLANGC points to missing file: {configured}")
-        return None
-
-    found = shutil.which("slangc")
-    if found:
-        return Path(found)
-
-    sdk = os.environ.get("TERMIN_SDK")
-    if sdk:
-        candidate = Path(sdk) / "bin" / "slangc"
-        if candidate.is_file():
-            return candidate
-
-    return None
 
 
 class EditorWindowTcgui:
@@ -345,8 +289,8 @@ class EditorWindowTcgui:
             rescan_file_resources=self._rescan_file_resources,
             set_project_browser_root=self._set_project_browser_root,
             get_init_script_editor=lambda: self,
-            resolve_termin_shaderc=_resolve_termin_shaderc,
-            resolve_slangc=_resolve_slangc,
+            resolve_termin_shaderc=resolve_termin_shaderc,
+            resolve_slangc=resolve_slangc,
         )
         self._scene_file_controller = SceneFileController(
             scene_manager=self.scene_manager,
@@ -1236,8 +1180,8 @@ class EditorWindowTcgui:
     def _configure_shader_runtime_for_project(self, project_root: Path) -> None:
         ProjectSessionController.configure_shader_runtime_for_project(
             project_root,
-            resolve_termin_shaderc=_resolve_termin_shaderc,
-            resolve_slangc=_resolve_slangc,
+            resolve_termin_shaderc=resolve_termin_shaderc,
+            resolve_slangc=resolve_slangc,
         )
 
     def _load_project_modules(self, project_root: Path) -> None:

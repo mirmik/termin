@@ -942,27 +942,29 @@ void ColorPass::execute_with_data(
 
         // --- Per-draw data ---
         //
-        // u_model goes through push_constants — tgfx2 maps this to
-        // `layout(push_constant)` on Vulkan and to the emulation UBO at
-        // binding TGFX2_PUSH_CONSTANTS_BINDING=14 on GL. shader_parser
-        // injects a `ColorPushBlock { mat4 _u_model; }` + `#define
-        // u_model pc._u_model` into any stage that references u_model,
-        // so stage bodies keep writing `u_model * vec4(...)`.
-        //
-        // u_view / u_projection / u_view_projection / u_camera_position
-        // come from the PerFrame UBO (binding 2) bound once per pass.
+        // Layout-only shaders receive the model matrix through their draw
+        // scope resource. Legacy GLSL still uses the push-constant bridge
+        // until those sources are ported.
         struct ColorPushData {
             float u_model[16];
         };
         ColorPushData push{};
         std::memcpy(push.u_model, model.data, sizeof(push.u_model));
-        ctx2->set_push_constants(&push, sizeof(push));
-        if (tc_shader_get_language(raw_shader) != TC_SHADER_LANGUAGE_GLSL) {
+        if (shader_uses_layout_only_bindings(raw_shader)) {
             bind_draw_data_for_shader(
                 *ctx2,
                 raw_shader,
                 push,
                 TC_SHADER_RESOURCE_BINDING_DRAW_DATA);
+        } else {
+            ctx2->set_push_constants(&push, sizeof(push));
+            if (tc_shader_get_language(raw_shader) != TC_SHADER_LANGUAGE_GLSL) {
+                bind_draw_data_for_shader(
+                    *ctx2,
+                    raw_shader,
+                    push,
+                    TC_SHADER_RESOURCE_BINDING_DRAW_DATA);
+            }
         }
 
         // Per-draw uniforms that can't live in push-constants or the
