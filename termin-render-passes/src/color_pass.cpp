@@ -490,11 +490,10 @@ void ColorPass::execute_with_data(
         ctx.camera ? static_cast<float>(ctx.camera->far_clip) : 100.0f);
 
     // --- Shadow metadata UBO (binding 3) ------------------------------
-    // Packs the plain shadow uniforms shadows.glsl used to read through
-    // glUniform* (u_shadow_map_count, u_light_space_matrix[N], ...) into
-    // a std140 block so Vulkan's "no non-opaque uniforms outside a
-    // block" rule is satisfied. The same layout also works on GL —
-    // shadows.glsl is rewritten to read from this block on both paths.
+    // Packs shadow metadata (u_shadow_map_count, u_light_space_matrix[N], ...)
+    // into a std140 block so Vulkan's "no non-opaque uniforms outside a block"
+    // rule is satisfied. The same layout also works on GL and is mirrored by
+    // the Slang termin_shadows module.
     //
     // std140 pads each scalar-in-array to 16 bytes and each mat4 to 64.
     // MAX_SHADOW_MAPS = 16 (from lighting_upload.hpp) — hardcoded here
@@ -914,8 +913,8 @@ void ColorPass::execute_with_data(
         // paired with the depth-compare sampler (sampler2DShadow needs
         // compareEnable=true on Vulkan and GL_TEXTURE_COMPARE_MODE on
         // OpenGL's bound sampler object). Filtering is explicit in
-        // shadows.glsl; keep the sampler point-filtered so PCF/Poisson do
-        // not get an extra hardware PCF pass underneath.
+        // shader code; keep the sampler point-filtered so PCF/Poisson do not
+        // get an extra hardware PCF pass underneath.
         if (!shadow_sampler_) {
             tgfx::SamplerDesc sd;
             sd.min_filter = tgfx::FilterMode::Nearest;
