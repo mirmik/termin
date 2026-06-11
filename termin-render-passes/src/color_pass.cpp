@@ -543,7 +543,8 @@ void ColorPass::execute_with_data(
     // ResourceSet bindings are attached to the next pipeline flush
     // anyway. These stay bound for the whole pass; per-draw bindings
     // (material UBO, lighting UBO, shadow samplers) are set below.
-    constexpr uint32_t SHADOW_UBO_BINDING    = 3;
+    constexpr uint32_t SHADOW_UBO_BINDING =
+        TC_SHADER_RESOURCE_BINDING_SHADOW_BLOCK;
     bind_engine_per_frame_uniforms(*ctx2, pf);
 
     // Collect + sort draw calls. Reuses the legacy helpers —
@@ -612,7 +613,8 @@ void ColorPass::execute_with_data(
     // SHADOW_MAP_TEXTURE_UNIT_START so .shader files that still
     // declare `uniform sampler2D u_shadow_map_N` at binding N keep
     // reading from the right slot.
-    constexpr uint32_t SHADOW_SLOT_BASE = 8;
+    constexpr uint32_t SHADOW_SLOT_BASE =
+        TC_SHADER_RESOURCE_BINDING_SHADOW_MAPS;
     // Vulkan descriptor set layout reserves bindings 0..3 for UBOs
     // (lighting, material, per-frame, shadow-block), 4..7 and 9..15
     // for material samplers, 8 for shadows — see VulkanRenderDevice's
