@@ -126,6 +126,8 @@ Slang paths should not add numeric binding usage.
 - `termin_shaderc` writes `.layout.json` sidecars for Slang artifacts.
 - Runtime shader loading merges sidecar resources into
   `tc_shader_resource_binding[]`.
+- Layout sidecars and `tc_shader_resource_binding` now carry resource `scope`;
+  old sidecars without that field are accepted through conservative inference.
 - `RenderContext2` has initial `bind_uniform(name)` and `bind_texture(name)`
   methods.
 - Grayscale, tonemap, and bloom use symbolic resource binding.
@@ -134,17 +136,15 @@ Slang paths should not add numeric binding usage.
 
 ## Next Tasks
 
-1. Add `scope` to layout sidecars and `tc_shader_resource_binding`.
-2. Add scope inference for known engine/material resource names.
-3. Split `RenderContext2` pending state by scope, initially flattening to the
+1. Split `RenderContext2` pending state by scope, initially flattening to the
    existing backend resource set shape.
-4. Convert `ColorPass` and material UBO/texture upload to bind by name where
+2. Convert `ColorPass` and material UBO/texture upload to bind by name where
    layout metadata exists.
-5. Remove generated Slang backend attributes such as `[[vk::push_constant]]`
+3. Remove generated Slang backend attributes such as `[[vk::push_constant]]`
    from material shader synthesis.
-6. Add validation for duplicate backend bindings with incompatible resource
+4. Add validation for duplicate backend bindings with incompatible resource
    type/count.
-7. Later, map scopes to multiple Vulkan descriptor sets and bind only dirty
+5. Later, map scopes to multiple Vulkan descriptor sets and bind only dirty
    scopes.
 
 ## Non-Goals
