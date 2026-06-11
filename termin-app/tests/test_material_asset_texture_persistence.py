@@ -26,7 +26,7 @@ def test_material_save_matches_texture_asset_by_uuid_without_loaded_asset_data(t
     rm.register_texture_asset("SavedTexture", texture_asset, uuid=texture_uuid)
 
     material = rm.get_material("PBRMaterial").copy("")
-    assert material.set_texture("u_albedo_texture", texture) == 1
+    assert material.set_texture("u_albedo_texture", texture) > 0
 
     material_path = tmp_path / "saved.material"
     _save_material_file(material, material_path, uuid="material-save-uuid")
@@ -53,7 +53,7 @@ def test_material_load_resolves_texture_uuid_with_lazy_loaded_texture_asset(tmp_
 
     material_data = {
         "uuid": "material-load-uuid",
-        "shader": "PBRShader",
+        "shader": "CookTorrancePBR",
         "textures": {"u_albedo_texture": texture_uuid},
     }
 

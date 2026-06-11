@@ -427,7 +427,7 @@ TEST_CASE("skinned shader variants rewrite legacy engine uniforms for Vulkan")
         vertex.c_str(),
         fragment.c_str(),
         nullptr,
-        "PBRShader/opaque",
+        "CookTorrancePBR/opaque",
         nullptr,
         "skinning-rewrite-original",
         TC_SHADER_LANGUAGE_GLSL,
