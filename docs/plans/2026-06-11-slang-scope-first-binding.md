@@ -128,10 +128,11 @@ syntax. A probe with a namespaced attribute definition compiled with warning
 reflection JSON. If namespacing becomes important later, verify it against a
 newer Slang release before changing the contract.
 
-`termin_shaderc` should eventually read `userAttribs` from Slang reflection and
-use `TerminScope` as the explicit source of truth. During migration it may also
-accept `Scope` as a temporary alias and fall back to the current conservative
-name/kind inference when no explicit scope attribute is present.
+`termin_shaderc` reads `userAttribs` from Slang reflection and uses
+`TerminScope` as the explicit source of truth. During migration it also accepts
+`Scope` as a temporary alias and falls back to the current conservative
+name/kind inference when no explicit scope attribute is present. Invalid or
+conflicting scope attributes fail compilation and remove the generated artifact.
 
 ## Current State
 
@@ -144,9 +145,8 @@ name/kind inference when no explicit scope attribute is present.
   bindings, and generated `.layout.json` sidecars. Old sidecars without
   `scope` are still accepted and classified by conservative name/kind
   inference.
-- A real `slangc` probe confirmed that Slang user attributes can carry
-  resource scope through reflection JSON. The target explicit spelling is
-  `[[TerminScope("frame")]]`, provided by an engine Slang prelude.
+- `termin_shaderc` consumes `TerminScope`/temporary `Scope` from Slang
+  reflection JSON `userAttribs`; invalid values are hard errors.
 - `RenderContext2` already has initial symbolic binding methods.
 - `RenderContext2` pending numeric/symbolic bindings are internally grouped
   by scope, then flattened back into the existing `ResourceSetDesc` backend
@@ -160,8 +160,8 @@ name/kind inference when no explicit scope attribute is present.
 
 ## Immediate Tasks
 
-1. Add a Termin Slang prelude that defines `TerminScopeAttribute`, and teach
-   `termin_shaderc` to read `TerminScope` from reflection `userAttribs`.
+1. Add a Termin Slang prelude that defines `TerminScopeAttribute` and make
+   generated/authored Slang sources import it where explicit scopes are used.
 2. Broaden or replace default scope inference for known engine names:
    `per_frame -> frame`, lighting/shadows -> pass, `material` and material
    textures -> material, `draw_data` -> draw.
