@@ -91,6 +91,9 @@ loudly when layout metadata is absent.
   `scope` are still accepted and classified by conservative name/kind
   inference.
 - `RenderContext2` already has initial symbolic binding methods.
+- `RenderContext2` pending numeric/symbolic bindings are internally grouped
+  by scope, then flattened back into the existing `ResourceSetDesc` backend
+  shape at flush time.
 - Grayscale, tonemap, and bloom use name-based bindings for their Slang
   post-process resources.
 - Material/color rendering still contains numeric binding ABI for per-frame,
@@ -100,12 +103,11 @@ loudly when layout metadata is absent.
 
 ## Immediate Tasks
 
-1. Split `RenderContext2` pending symbolic and numeric bindings into scoped
-   buckets. In the first implementation, flatten buckets back into one
-   `ResourceSetDesc` for existing Vulkan/OpenGL backends.
-2. Broaden or replace default scope inference for known engine names:
+1. Broaden or replace default scope inference for known engine names:
    `per_frame -> frame`, lighting/shadows -> pass, `material` and material
    textures -> material, `draw_data` -> draw.
+2. Add dirty-per-scope tracking on top of the scoped buckets. Existing backends
+   may still receive a flattened resource set until Vulkan scoped sets land.
 3. Update Slang/material generation so generated resource declarations do not
    encode Vulkan-only attributes. Push-constant use must become metadata or a
    backend-specific artifact decision, not authored/generated Slang source
