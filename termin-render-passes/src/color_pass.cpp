@@ -2,6 +2,7 @@
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_ubo_apply.hpp"
+#include "termin/render/shader_resource_apply.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include <optional>
@@ -83,6 +84,25 @@ inline uint32_t float_to_sortable_uint(float f) {
     // If negative, flip all bits; if positive, flip sign bit only
     uint32_t mask = -int32_t(bits >> 31) | 0x80000000;
     return bits ^ mask;
+}
+
+template <typename T>
+void bind_draw_data_for_shader(
+    tgfx::RenderContext2& ctx,
+    const tc_shader* shader,
+    const T& payload,
+    uint32_t fallback_binding)
+{
+    const char* names[] = {"draw_data", TC_SHADER_RESOURCE_DRAW};
+    for (const char* name : names) {
+        const tc_shader_resource_binding* rb =
+            tc_shader_find_resource_binding(shader, name);
+        if (rb && rb->kind == TC_SHADER_RESOURCE_CONSTANT_BUFFER) {
+            ctx.bind_uniform_data(name, &payload, sizeof(payload));
+            return;
+        }
+    }
+    ctx.bind_uniform_buffer_ring(fallback_binding, &payload, sizeof(payload));
 }
 
 } // anonymous namespace
@@ -518,7 +538,6 @@ void ColorPass::execute_with_data(
     // (material UBO, lighting UBO, shadow samplers) are set below.
     constexpr uint32_t SHADOW_UBO_BINDING    = 3;
     bind_engine_per_frame_uniforms(*ctx2, pf);
-    ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING,    &sb, sizeof(sb));
 
     // Collect + sort draw calls. Reuses the legacy helpers —
     // gathering logic is backend-agnostic.
@@ -694,8 +713,14 @@ void ColorPass::execute_with_data(
             ctx2->clear_resource_bindings();
 
             tc_shader* direct_shader = tc_shader_get(final_shader);
+            ctx2->use_shader_resource_layout(direct_shader);
             bind_engine_per_frame_uniforms(*ctx2, pf, direct_shader);
-            ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING, &sb, sizeof(sb));
+            bind_shadow_block_for_shader(
+                *ctx2,
+                direct_shader,
+                &sb,
+                sizeof(sb),
+                SHADOW_UBO_BINDING);
 
             ctx2->set_depth_test(state.depth_test);
             ctx2->set_depth_write(state.depth_write);
@@ -710,7 +735,11 @@ void ColorPass::execute_with_data(
             if (lighting_ubo_tgfx2 &&
                 (drawable->needs_lighting_ubo_tgfx2(phase_mark, dc.geometry_id) ||
                  (direct_shader && tc_shader_has_feature(direct_shader, TC_SHADER_FEATURE_LIGHTING_UBO)))) {
-                ctx2->bind_uniform_buffer(LIGHTING_UBO_BINDING, lighting_ubo_tgfx2);
+                termin::bind_lighting_ubo_for_shader(
+                    *ctx2,
+                    direct_shader,
+                    lighting_ubo_tgfx2,
+                    LIGHTING_UBO_BINDING);
             }
 
             if (direct_shader) {
@@ -736,15 +765,13 @@ void ColorPass::execute_with_data(
                 sd.compare_op = tgfx::CompareOp::LessEqual;
                 shadow_sampler_ = device.create_sampler(sd);
             }
-            for (size_t i = 0; i < shadow_tex2s.size() && i < MAX_SHADOW_MAPS; i++) {
-                if (!shadow_tex2s[i]) continue;
-                ctx2->bind_sampled_texture_array_element(
-                    SHADOW_SLOT_BASE,
-                    static_cast<uint32_t>(i),
-                    shadow_tex2s[i],
-                    shadow_sampler_
-                );
-            }
+            bind_shadow_maps_for_shader(
+                *ctx2,
+                direct_shader,
+                std::span<const tgfx::TextureHandle>(shadow_tex2s.data(), shadow_tex2s.size()),
+                shadow_sampler_,
+                SHADOW_SLOT_BASE,
+                MAX_SHADOW_MAPS);
 
             RenderContext direct_context;
             direct_context.view = view;
@@ -798,8 +825,14 @@ void ColorPass::execute_with_data(
         // slot kept the previous draw/pass texture bound and produced
         // striped materials after resize/post-processing passes.
         ctx2->clear_resource_bindings();
-        bind_engine_per_frame_uniforms(*ctx2, pf);
-        ctx2->bind_uniform_buffer_ring(SHADOW_UBO_BINDING, &sb, sizeof(sb));
+        ctx2->use_shader_resource_layout(raw_shader);
+        bind_engine_per_frame_uniforms(*ctx2, pf, raw_shader);
+        bind_shadow_block_for_shader(
+            *ctx2,
+            raw_shader,
+            &sb,
+            sizeof(sb),
+            SHADOW_UBO_BINDING);
 
         // Material storage is handle-addressable but not pointer-stable:
         // tc_material_create() may grow the pool and move existing materials.
@@ -821,6 +854,7 @@ void ColorPass::execute_with_data(
                 ++draw_index;
                 continue;
             }
+            ctx2->use_shader_resource_layout(raw_shader);
             ensured_shader = final_shader;
         }
 
@@ -839,12 +873,17 @@ void ColorPass::execute_with_data(
                                : tgfx::PolygonMode::Fill);
 
         ctx2->bind_shader(vs2, fs2);
+        ctx2->use_shader_resource_layout(raw_shader);
 
         // --- UBO bindings ---
         // Lighting UBO at slot 0.
         if (lighting_ubo_tgfx2 &&
             tc_shader_has_feature(raw_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
-            ctx2->bind_uniform_buffer(LIGHTING_UBO_BINDING, lighting_ubo_tgfx2);
+            termin::bind_lighting_ubo_for_shader(
+                *ctx2,
+                raw_shader,
+                lighting_ubo_tgfx2,
+                LIGHTING_UBO_BINDING);
         }
 
         // Material UBO + material textures through the dispatcher.
@@ -884,15 +923,13 @@ void ColorPass::execute_with_data(
             sd.compare_op = tgfx::CompareOp::LessEqual;
             shadow_sampler_ = device.create_sampler(sd);
         }
-        for (size_t i = 0; i < shadow_tex2s.size() && i < MAX_SHADOW_MAPS; i++) {
-            if (!shadow_tex2s[i]) continue;
-            ctx2->bind_sampled_texture_array_element(
-                SHADOW_SLOT_BASE,
-                static_cast<uint32_t>(i),
-                shadow_tex2s[i],
-                shadow_sampler_
-            );
-        }
+        bind_shadow_maps_for_shader(
+            *ctx2,
+            raw_shader,
+            std::span<const tgfx::TextureHandle>(shadow_tex2s.data(), shadow_tex2s.size()),
+            shadow_sampler_,
+            SHADOW_SLOT_BASE,
+            MAX_SHADOW_MAPS);
 
         // --- Per-draw data ---
         //
@@ -912,7 +949,7 @@ void ColorPass::execute_with_data(
         std::memcpy(push.u_model, model.data, sizeof(push.u_model));
         ctx2->set_push_constants(&push, sizeof(push));
         if (tc_shader_get_language(raw_shader) != TC_SHADER_LANGUAGE_GLSL) {
-            ctx2->bind_uniform_buffer_ring(24, &push, sizeof(push));
+            bind_draw_data_for_shader(*ctx2, raw_shader, push, 24);
         }
 
         // Per-draw uniforms that can't live in push-constants or the

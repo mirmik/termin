@@ -194,6 +194,7 @@ TEST_CASE("synthesize: emits Slang MaterialParams block with correct types and o
     std::string slang = synthesize_material_ubo_slang(layout);
 
     CHECK(slang.find("struct MaterialParams") != std::string::npos);
+    CHECK(slang.find("[[TerminScope(\"material\")]]") != std::string::npos);
     CHECK(slang.find("ConstantBuffer<MaterialParams> material;") != std::string::npos);
     CHECK(slang.find("register(") == std::string::npos);
     CHECK(slang.find("float u_strength;") != std::string::npos);
@@ -628,6 +629,7 @@ TEST_CASE("parse_shader_text: Slang scalar properties synthesize material consta
     const auto& frag = phase.stages.at("fragment").source;
     CHECK(frag.find("struct MaterialParams") != std::string::npos);
     CHECK(frag.find("float4 tint;") != std::string::npos);
+    CHECK(frag.find("[[TerminScope(\"material\")]]") != std::string::npos);
     CHECK(frag.find("ConstantBuffer<MaterialParams> material;") != std::string::npos);
     CHECK(frag.find("register(") == std::string::npos);
     CHECK(frag.find("output.color = material.tint;") != std::string::npos);
@@ -660,6 +662,7 @@ TEST_CASE("parse_shader_text: Slang texture properties synthesize Sampler2D decl
     CHECK(phase.material_ubo_layout.empty());
 
     const auto& frag = phase.stages.at("fragment").source;
+    CHECK(frag.find("[[TerminScope(\"material\")]]") != std::string::npos);
     CHECK(frag.find("Sampler2D albedo;") != std::string::npos);
     CHECK(frag.find("register(") == std::string::npos);
     CHECK(frag.find("Sampler2D albedo;") < frag.find("[shader(\"fragment\")]"));

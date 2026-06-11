@@ -25,3 +25,4 @@
 - [Slang shader pipeline](2026-06-07-slang-shader-pipeline.md)
 - [Slang bind-by-name runtime](2026-06-09-slang-bind-by-name-runtime.md)
 - [Slang scope-first binding migration](2026-06-11-slang-scope-first-binding.md)
+- [Layout-only ColorPass binding migration](2026-06-11-layout-only-color-pass-binding.md)

@@ -438,8 +438,10 @@ def test_slang_shader_synthesizes_material_params_for_scalar_properties():
     assert [entry.name for entry in phase.material_ubo_layout.entries] == ["u_color"]
 
     fragment = phase.stages["fragment"].source
+    assert "import termin_prelude;" in fragment
     assert "struct MaterialParams" in fragment
     assert "float4 u_color;" in fragment
+    assert "[[TerminScope(\"material\")]]" in fragment
     assert "ConstantBuffer<MaterialParams> material;" in fragment
     assert "register(" not in fragment
     assert "output.color = material.u_color;" in fragment
@@ -504,6 +506,8 @@ def test_slang_shader_synthesizes_sampler2d_for_texture_properties():
     assert phase.uniforms[0].name == "albedo"
     assert phase.uniforms[0].property_type == "Texture"
     assert phase.material_ubo_layout.entries == []
+    assert "import termin_prelude;" in fragment
+    assert "[[TerminScope(\"material\")]]" in fragment
     assert "Sampler2D albedo;" in fragment
     assert "register(" not in fragment
     assert fragment.index("Sampler2D albedo;") < fragment.index("[shader(\"fragment\")]")
@@ -561,6 +565,9 @@ def test_stdlib_slang_material_creates_slang_tc_shader():
     phase = material.get_phase(0)
     assert phase is not None
     assert phase.shader.language == ShaderLanguage.SLANG
+    assert "import termin_prelude;" in phase.shader.vertex_source
+    assert "[[TerminScope(\"frame\")]]" in phase.shader.vertex_source
+    assert "[[TerminScope(\"draw\")]]" in phase.shader.vertex_source
     assert "[shader(\"vertex\")]" in phase.shader.vertex_source
     assert "#version" not in phase.shader.vertex_source
     assert "[[vk::" not in phase.shader.vertex_source
@@ -602,7 +609,12 @@ def test_stdlib_slang_textured_normal_material_uses_texture_property():
     assert phase.shader.language == ShaderLanguage.SLANG
     assert "register(" not in phase.shader.vertex_source
     assert "register(" not in phase.shader.fragment_source
+    assert "import termin_prelude;" in phase.shader.vertex_source
+    assert "[[TerminScope(\"frame\")]]" in phase.shader.vertex_source
+    assert "[[TerminScope(\"draw\")]]" in phase.shader.vertex_source
+    assert "import termin_prelude;" in phase.shader.fragment_source
     assert "ConstantBuffer<MaterialParams> material;" in phase.shader.fragment_source
+    assert "[[TerminScope(\"material\")]]" in phase.shader.fragment_source
     assert "material.u_tint_color" in phase.shader.fragment_source
     assert "Sampler2D u_tint_texture;" in phase.shader.fragment_source
     assert "u_tint_texture.Sample(input.uv)" in phase.shader.fragment_source
