@@ -11,6 +11,8 @@
 @property Texture2D u_tint_texture = "white"
 
 @stage vertex
+import termin_prelude;
+
 struct PerFrame
 {
     column_major float4x4 u_view;
@@ -24,6 +26,7 @@ struct PerFrame
     float u_far;
 };
 
+[[TerminScope("frame")]]
 ConstantBuffer<PerFrame> per_frame;
 
 struct SlangDrawData
@@ -31,6 +34,7 @@ struct SlangDrawData
     column_major float4x4 u_model;
 };
 
+[[TerminScope("draw")]]
 ConstantBuffer<SlangDrawData> draw_data;
 
 struct VertexInput

@@ -190,13 +190,13 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert "PushConstants" in default_source
 
     tonemap_source = (
-        result.package_dir / "shaders" / "vulkan" / "termin-engine-tonemap.frag.glsl"
+        result.package_dir / "shaders" / "vulkan" / "termin-engine-tonemap.frag.slang"
     ).read_text(encoding="utf-8")
     assert "TonemapParams" in tonemap_source
     assert "u_input" in tonemap_source
 
     grayscale_source = (
-        result.package_dir / "shaders" / "vulkan" / "termin-engine-grayscale.frag.glsl"
+        result.package_dir / "shaders" / "vulkan" / "termin-engine-grayscale.frag.slang"
     ).read_text(encoding="utf-8")
     assert "GrayscaleParams" in grayscale_source
     assert "u_input" in grayscale_source
@@ -214,7 +214,6 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         "name": "u_input",
         "logical_name": "input_texture",
         "kind": "combined_sampler2d",
-        "legacy_binding": 4,
     } in tonemap_layout["resources"]
 
     grayscale_layout = json.loads(
@@ -230,7 +229,6 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         "name": "u_input",
         "logical_name": "input_texture",
         "kind": "combined_sampler2d",
-        "legacy_binding": 4,
     } in grayscale_layout["resources"]
 
     shadow_layout = json.loads(

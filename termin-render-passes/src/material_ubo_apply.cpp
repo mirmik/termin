@@ -178,12 +178,34 @@ bool apply_material_phase_ubo(
     MaterialUboLayout layout = layout_from_tc_shader(shader);
     uint32_t resolved_ubo_slot =
         material_ubo_binding_for_shader(shader, ubo_slot);
+    const tc_shader_resource_binding* material_rb =
+        tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL);
 
-    // Wrap each phase texture as a tgfx::TextureHandle and resolve its
-    // binding slot from the shader's resource layout metadata. For Slang
-    // shaders the binding comes from the compiled artifact / slangc
-    // reflection; for legacy GLSL shaders without resource metadata we
-    // fall back to the index-based slot assignment.
+    bool bound_any = false;
+    if (!layout.empty()) {
+        std::vector<uint8_t> staging(layout.block_size, 0);
+        std140_pack(layout, values, staging.data());
+
+        if (material_rb && material_rb->kind == TC_SHADER_RESOURCE_CONSTANT_BUFFER) {
+            ctx.bind_uniform_data(
+                TC_SHADER_RESOURCE_MATERIAL,
+                staging.data(),
+                static_cast<uint32_t>(staging.size()));
+            bound_any = true;
+        } else if (!tc_shader_has_resource_layout(shader)) {
+            ctx.bind_uniform_buffer_ring(
+                resolved_ubo_slot,
+                staging.data(),
+                static_cast<uint32_t>(staging.size()),
+                material_ubo_set_for_shader(shader));
+            bound_any = true;
+        }
+    }
+
+    // Wrap each phase texture as a tgfx::TextureHandle. New layout-backed
+    // shaders bind by material property name so RenderContext2 can resolve
+    // kind/scope/backend placement from tc_shader_resource_binding. Legacy
+    // shaders without resource metadata keep the old index-based slots.
     std::vector<MaterialTextureBinding> textures;
     textures.reserve(phase->texture_count);
     for (size_t i = 0; i < phase->texture_count; i++) {
@@ -194,25 +216,27 @@ bool apply_material_phase_ubo(
         tgfx::TextureHandle tex2 =
             wrap_tc_texture_as_tgfx2(device, mat_tex.texture);
         if (tex2) {
-            MaterialTextureBinding b;
-            // Try name-based lookup first (Slang / new layout metadata).
             const tc_shader_resource_binding* rb =
                 tc_shader_find_resource_binding(shader, mat_tex.name);
             if (rb && rb->kind == TC_SHADER_RESOURCE_TEXTURE) {
-                b.slot = rb->binding;
-            } else {
-                // Legacy fallback: index-based slot assignment.
+                ctx.bind_texture(mat_tex.name, tex2);
+                bound_any = true;
+            } else if (!tc_shader_has_resource_layout(shader)) {
+                MaterialTextureBinding b;
                 b.slot = material_texture_binding_for_index(
                     static_cast<uint32_t>(i));
+                b.texture = tex2;
+                textures.push_back(b);
+                bound_any = true;
             }
-            b.texture = tex2;
-            textures.push_back(b);
         }
     }
 
-    bind_material_ubo(layout, values, textures, resolved_ubo_slot,
-                      material_ubo_set_for_shader(shader), ctx);
-    return !layout.empty() || !textures.empty();
+    for (const auto& tex : textures) {
+        ctx.bind_sampled_texture(tex.slot, tex.texture, tex.sampler,
+                                 material_ubo_set_for_shader(shader));
+    }
+    return bound_any;
 }
 
 } // namespace termin

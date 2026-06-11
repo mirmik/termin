@@ -65,6 +65,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/present_pass.cpp
     src/resolve_pass.cpp
     src/shader_skinning.cpp
+    src/shader_resource_apply.cpp
     src/shadow_camera.cpp
     src/shadow_pass.cpp
     src/skybox_pass.cpp
@@ -86,6 +87,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/present_pass.hpp
     include/termin/render/resolve_pass.hpp
     include/termin/render/shader_skinning.hpp
+    include/termin/render/shader_resource_apply.hpp
     include/termin/render/shadow_camera.hpp
     include/termin/render/shadow_pass.hpp
     include/termin/render/skybox_pass.hpp
