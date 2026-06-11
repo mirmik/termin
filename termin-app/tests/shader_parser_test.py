@@ -479,6 +479,7 @@ def test_slang_material_resource_binding_surfaces_on_tc_shader():
 
     assert binding is not None
     assert binding["kind"] == 1
+    assert binding["scope"] == 3
     assert binding["set"] == 0
     assert binding["binding"] == 1
     assert binding["size"] == 16

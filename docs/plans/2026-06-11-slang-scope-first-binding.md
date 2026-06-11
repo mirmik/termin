@@ -86,6 +86,10 @@ loudly when layout metadata is absent.
 - `termin_shaderc` emits `.layout.json` resource metadata beside generated
   artifacts.
 - `tc_shader` can carry resource layout metadata loaded from sidecars.
+- Scope metadata has been added to `tc_shader_resource_binding`, Python
+  bindings, and generated `.layout.json` sidecars. Old sidecars without
+  `scope` are still accepted and classified by conservative name/kind
+  inference.
 - `RenderContext2` already has initial symbolic binding methods.
 - Grayscale, tonemap, and bloom use name-based bindings for their Slang
   post-process resources.
@@ -96,22 +100,21 @@ loudly when layout metadata is absent.
 
 ## Immediate Tasks
 
-1. Extend layout sidecars and `tc_shader_resource_binding` with `scope`.
-2. Define default scope inference for known engine names:
-   `per_frame -> frame`, lighting/shadows -> pass, `material` and material
-   textures -> material, `draw_data` -> draw.
-3. Split `RenderContext2` pending symbolic and numeric bindings into scoped
+1. Split `RenderContext2` pending symbolic and numeric bindings into scoped
    buckets. In the first implementation, flatten buckets back into one
    `ResourceSetDesc` for existing Vulkan/OpenGL backends.
-4. Update Slang/material generation so generated resource declarations do not
+2. Broaden or replace default scope inference for known engine names:
+   `per_frame -> frame`, lighting/shadows -> pass, `material` and material
+   textures -> material, `draw_data` -> draw.
+3. Update Slang/material generation so generated resource declarations do not
    encode Vulkan-only attributes. Push-constant use must become metadata or a
    backend-specific artifact decision, not authored/generated Slang source
    magic.
-5. Migrate `ColorPass` and material UBO/texture binding to name-first lookup.
+4. Migrate `ColorPass` and material UBO/texture binding to name-first lookup.
    Numeric fallback remains only for legacy GLSL paths.
-6. Add validation for duplicate backend bindings with incompatible resource
+5. Add validation for duplicate backend bindings with incompatible resource
    type/count/stage.
-7. After the above is stable, introduce multiple Vulkan descriptor set layouts
+6. After the above is stable, introduce multiple Vulkan descriptor set layouts
    by scope and bind only dirty scopes.
 
 ## Retired Direction
