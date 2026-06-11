@@ -96,6 +96,7 @@ class GizmoPass(PythonFramePass):
         # Пишем только в альфу (id gizmo'а)
         ctx2.set_color_mask(False, False, False, True)
         ctx2.bind_shader(pair.vs, pair.fs)
+        ctx2.use_shader_resource_layout(shader)
 
         from termin.render_components import MeshRenderer
 
@@ -117,7 +118,7 @@ class GizmoPass(PythonFramePass):
             mvp_data = np.asarray(list(mvp.data), dtype=np.float32)
             color_data = np.asarray([0.0, 0.0, 0.0, alpha], dtype=np.float32)
             push_data = np.concatenate((mvp_data, color_data)).view(np.uint8)
-            ctx2.set_push_constants(np.ascontiguousarray(push_data, dtype=np.uint8))
+            ctx2.bind_uniform_by_name("gizmo_push", np.ascontiguousarray(push_data, dtype=np.uint8))
 
             tc_mesh = mr.mesh
             if tc_mesh is not None and tc_mesh.is_valid:
