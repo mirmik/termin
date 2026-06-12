@@ -87,6 +87,7 @@ class EditorMcpServer:
                 "capture_editor_screenshot",
                 "inspect_framegraph",
                 "capture_framegraph_resource",
+                "capture_framegraph_pass_symbol",
             ],
         }
         try:
@@ -237,6 +238,11 @@ class EditorMcpServer:
             return self._handle_framegraph_tool_call(request_id, params)
         if name == "capture_framegraph_resource":
             return self._handle_framegraph_capture_tool_call(request_id, params)
+        if name == "capture_framegraph_pass_symbol":
+            return self._handle_framegraph_pass_symbol_capture_tool_call(
+                request_id,
+                params,
+            )
         if name != "execute_python_script":
             return self._rpc_error(request_id, -32602, f"Unknown tool: {name}")
         arguments = params.get("arguments")
@@ -368,6 +374,110 @@ class EditorMcpServer:
                 "text": (
                     f"Captured framegraph resource '{resource}': "
                     f"{path} ({width}x{height})"
+                ),
+            }
+        ]
+        image_data = result.get("base64")
+        if isinstance(image_data, str):
+            content.append(
+                {
+                    "type": "image",
+                    "data": image_data,
+                    "mimeType": str(result.get("mime_type", "image/png")),
+                }
+            )
+        return self._rpc_result(
+            request_id,
+            {
+                "content": content,
+                "isError": False,
+                "structuredContent": result,
+            },
+        )
+
+    def _handle_framegraph_pass_symbol_capture_tool_call(
+        self,
+        request_id: object,
+        params: dict[str, object],
+    ) -> dict[str, object]:
+        arguments = params.get("arguments")
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return self._rpc_error(request_id, -32602, "Tool arguments must be an object")
+
+        target_index = arguments.get("target_index")
+        if target_index is not None:
+            try:
+                target_index = int(target_index)
+            except (TypeError, ValueError):
+                return self._rpc_error(request_id, -32602, "target_index must be an integer")
+
+        pass_index = arguments.get("pass_index")
+        if pass_index is not None:
+            try:
+                pass_index = int(pass_index)
+            except (TypeError, ValueError):
+                return self._rpc_error(request_id, -32602, "pass_index must be an integer")
+
+        pass_name = arguments.get("pass_name")
+        if pass_name is not None and not isinstance(pass_name, str):
+            return self._rpc_error(request_id, -32602, "pass_name must be a string")
+
+        symbol_index = arguments.get("symbol_index")
+        if symbol_index is not None:
+            try:
+                symbol_index = int(symbol_index)
+            except (TypeError, ValueError):
+                return self._rpc_error(request_id, -32602, "symbol_index must be an integer")
+
+        symbol = arguments.get("symbol")
+        if symbol is not None and not isinstance(symbol, str):
+            return self._rpc_error(request_id, -32602, "symbol must be a string")
+
+        output_path = arguments.get("path")
+        if output_path is not None and not isinstance(output_path, str):
+            return self._rpc_error(request_id, -32602, "path must be a string")
+
+        capture_kind = str(arguments.get("capture_kind", "main"))
+        include_image = bool(arguments.get("include_image", False))
+        flip_y = bool(arguments.get("flip_y", True))
+        timeout = float(arguments.get("timeout", 30.0))
+
+        result = self._capture_framegraph_pass_symbol(
+            target_index=target_index,
+            pass_index=pass_index,
+            pass_name=pass_name,
+            symbol=symbol,
+            symbol_index=symbol_index,
+            output_path=output_path,
+            include_image=include_image,
+            flip_y=flip_y,
+            capture_kind=capture_kind,
+            timeout=timeout,
+        )
+        if not result.get("ok", False):
+            error = str(result.get("error", "Framegraph pass symbol capture failed"))
+            return self._rpc_result(
+                request_id,
+                {
+                    "content": [{"type": "text", "text": error}],
+                    "isError": True,
+                    "structuredContent": result,
+                },
+            )
+
+        path = str(result.get("path", ""))
+        width = int(result.get("width", 0))
+        height = int(result.get("height", 0))
+        pass_label = str(result.get("pass_name", ""))
+        symbol_label = str(result.get("symbol", ""))
+        content: list[dict[str, object]] = [
+            {
+                "type": "text",
+                "text": (
+                    f"Captured framegraph pass symbol "
+                    f"'{pass_label}/{symbol_label}': {path} ({width}x{height})"
                 ),
             }
         ]
@@ -560,6 +670,67 @@ class EditorMcpServer:
             payload["last_result"] = last_result
         return payload
 
+    def _capture_framegraph_pass_symbol(
+        self,
+        *,
+        target_index: int | None,
+        pass_index: int | None,
+        pass_name: str | None,
+        symbol: str | None,
+        symbol_index: int | None,
+        output_path: str | None,
+        include_image: bool,
+        flip_y: bool,
+        capture_kind: str,
+        timeout: float,
+    ) -> dict[str, object]:
+        prepare = self._prepare_framegraph_pass_symbol_capture(
+            target_index=target_index,
+            pass_index=pass_index,
+            pass_name=pass_name,
+            symbol=symbol,
+            symbol_index=symbol_index,
+            timeout=min(timeout, 5.0),
+        )
+        if not prepare.get("ok", False):
+            return prepare
+
+        deadline = time.monotonic() + timeout
+        last_result: dict[str, object] | None = None
+        while time.monotonic() < deadline:
+            result = self._export_framegraph_resource_capture(
+                output_path=output_path,
+                include_image=include_image,
+                flip_y=flip_y,
+                capture_kind=capture_kind,
+                timeout=min(max(deadline - time.monotonic(), 0.1), 5.0),
+            )
+            last_result = result
+            if not result.get("ok", False):
+                return result
+            if result.get("ready", False):
+                merged = dict(result)
+                for key in (
+                    "pass_index",
+                    "pass_name",
+                    "pass_type",
+                    "symbol",
+                    "symbol_index",
+                    "symbols",
+                ):
+                    merged[key] = prepare.get(key)
+                return merged
+            time.sleep(0.05)
+
+        payload: dict[str, object] = {
+            "ok": False,
+            "error": "Timed out waiting for framegraph pass symbol capture",
+            "prepare": prepare,
+        }
+        if last_result is not None:
+            payload["last_result"] = last_result
+        return payload
+
     def _prepare_framegraph_resource_capture(
         self,
         *,
@@ -590,6 +761,40 @@ class EditorMcpServer:
             marker=marker,
             timeout=timeout,
             error_label="Framegraph capture prepare",
+        )
+
+    def _prepare_framegraph_pass_symbol_capture(
+        self,
+        *,
+        target_index: int | None,
+        pass_index: int | None,
+        pass_name: str | None,
+        symbol: str | None,
+        symbol_index: int | None,
+        timeout: float,
+    ) -> dict[str, object]:
+        marker = "__TERMIN_MCP_FRAMEGRAPH_PASS_SYMBOL_PREPARE__"
+        script = "\n".join(
+            [
+                "import json",
+                "_termin_mcp_framegraph_pass_symbol_prepare = framegraph_debugger.prepare_pass_symbol_capture(",
+                f"    target_index={target_index!r},",
+                f"    pass_index={pass_index!r},",
+                f"    pass_name={pass_name!r},",
+                f"    symbol={symbol!r},",
+                f"    symbol_index={symbol_index!r},",
+                ")",
+                (
+                    f"print({json.dumps(marker)} + "
+                    "json.dumps(_termin_mcp_framegraph_pass_symbol_prepare, ensure_ascii=False))"
+                ),
+            ]
+        )
+        return self._execute_json_marker_script(
+            script,
+            marker=marker,
+            timeout=timeout,
+            error_label="Framegraph pass symbol capture prepare",
         )
 
     def _export_framegraph_resource_capture(
@@ -728,6 +933,7 @@ class EditorMcpServer:
             self._screenshot_tool_schema(),
             self._framegraph_tool_schema(),
             self._framegraph_capture_tool_schema(),
+            self._framegraph_pass_symbol_capture_tool_schema(),
         ]
 
     def _execute_python_tool_schema(self) -> dict[str, object]:
@@ -855,6 +1061,65 @@ class EditorMcpServer:
                         "type": "boolean",
                         "description": "Apply the framegraph debugger HDR highlight preview to color captures.",
                         "default": False,
+                    },
+                    "flip_y": {
+                        "type": "boolean",
+                        "description": "Flip framebuffer rows vertically before writing PNG.",
+                        "default": True,
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Seconds to wait for a render frame to produce the capture.",
+                        "default": 30,
+                    },
+                },
+                "additionalProperties": False,
+            },
+        }
+
+    def _framegraph_pass_symbol_capture_tool_schema(self) -> dict[str, object]:
+        return {
+            "name": "capture_framegraph_pass_symbol",
+            "description": (
+                "Capture the framebuffer state immediately after an internal "
+                "symbol draw inside a framegraph pass and write it as PNG."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "target_index": {
+                        "type": "integer",
+                        "description": "Optional framegraph target index from inspect_framegraph.",
+                    },
+                    "pass_index": {
+                        "type": "integer",
+                        "description": "Stable pass index from inspect_framegraph. Preferred over pass_name.",
+                    },
+                    "pass_name": {
+                        "type": "string",
+                        "description": "Pass name from inspect_framegraph. Must be unique unless pass_index is provided.",
+                    },
+                    "symbol": {
+                        "type": "string",
+                        "description": "Internal symbol/entity name. Defaults to the last symbol in the pass.",
+                    },
+                    "symbol_index": {
+                        "type": "integer",
+                        "description": "Internal symbol index. Use when symbol names are duplicated.",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Optional output PNG path. Defaults to /tmp/termin-framegraph-captures/.",
+                    },
+                    "include_image": {
+                        "type": "boolean",
+                        "description": "Return base64 PNG data as MCP image content.",
+                        "default": False,
+                    },
+                    "capture_kind": {
+                        "type": "string",
+                        "description": "'main' for selected symbol capture, or 'depth' for associated depth capture.",
+                        "default": "main",
                     },
                     "flip_y": {
                         "type": "boolean",

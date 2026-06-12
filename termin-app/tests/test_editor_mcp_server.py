@@ -47,11 +47,13 @@ def test_editor_mcp_server_exposes_editor_tools(tmp_path):
         assert tools[1]["name"] == "capture_editor_screenshot"
         assert tools[2]["name"] == "inspect_framegraph"
         assert tools[3]["name"] == "capture_framegraph_resource"
+        assert tools[4]["name"] == "capture_framegraph_pass_symbol"
         assert session["tools"] == [
             "execute_python_script",
             "capture_editor_screenshot",
             "inspect_framegraph",
             "capture_framegraph_resource",
+            "capture_framegraph_pass_symbol",
         ]
 
         result_holder = {}
@@ -260,6 +262,124 @@ def test_editor_mcp_server_captures_framegraph_resource_tool(tmp_path):
         assert result["structuredContent"]["ok"] is True
         assert result["structuredContent"]["ready"] is True
         assert result["structuredContent"]["path"] == "/tmp/framegraph-color.png"
+    finally:
+        server.stop()
+
+
+def test_editor_mcp_server_captures_framegraph_pass_symbol_tool(tmp_path):
+    class FakeFramegraphDebugger:
+        def __init__(self):
+            self.prepared = False
+
+        def prepare_pass_symbol_capture(
+            self,
+            *,
+            target_index=None,
+            pass_index=None,
+            pass_name=None,
+            symbol=None,
+            symbol_index=None,
+        ):
+            assert target_index == 1
+            assert pass_index == 4
+            assert pass_name == "Color"
+            assert symbol == "Cube"
+            assert symbol_index == 2
+            self.prepared = True
+            return {
+                "target_index": 1,
+                "target_label": "Display 0",
+                "pass_index": 4,
+                "pass_name": "Color",
+                "pass_type": "ColorPass",
+                "symbol": "Cube",
+                "symbol_index": 2,
+                "symbols": ["Ground", "Lines", "Cube"],
+                "capture": {"has_capture": False},
+            }
+
+        def export_capture(
+            self,
+            *,
+            output_path=None,
+            include_image=False,
+            flip_y=True,
+            capture_kind="main",
+        ):
+            assert self.prepared is True
+            assert output_path == "/tmp/framegraph-pass-color-cube.png"
+            assert include_image is True
+            assert flip_y is False
+            assert capture_kind == "main"
+            return {
+                "ready": True,
+                "path": "/tmp/framegraph-pass-color-cube.png",
+                "width": 128,
+                "height": 64,
+                "mime_type": "image/png",
+                "base64": "ZmFrZQ==",
+                "resource": "",
+            }
+
+    fake_debugger = FakeFramegraphDebugger()
+    executor = EditorPythonExecutor(lambda: {"framegraph_debugger": fake_debugger})
+    config = EditorMcpConfig(
+        host="127.0.0.1",
+        port=0,
+        token="test-token",
+        session_file=tmp_path / "editor-mcp.json",
+    )
+    server = EditorMcpServer(executor, config)
+    server.start()
+    try:
+        session = json.loads(config.session_file.read_text(encoding="utf-8"))
+        result_holder = {}
+
+        def call_tool():
+            result_holder["response"] = _post(
+                session,
+                "tools/call",
+                {
+                    "name": "capture_framegraph_pass_symbol",
+                    "arguments": {
+                        "target_index": 1,
+                        "pass_index": 4,
+                        "pass_name": "Color",
+                        "symbol": "Cube",
+                        "symbol_index": 2,
+                        "path": "/tmp/framegraph-pass-color-cube.png",
+                        "include_image": True,
+                        "flip_y": False,
+                        "timeout": 2.0,
+                    },
+                },
+            )
+
+        thread = threading.Thread(target=call_tool)
+        thread.start()
+        deadline = time.monotonic() + 2.0
+        while thread.is_alive() and time.monotonic() < deadline:
+            executor.process_pending()
+            thread.join(timeout=0.01)
+        thread.join(timeout=0.1)
+
+        response = result_holder["response"]
+        result = response["result"]
+        assert result["isError"] is False
+        assert result["content"][0]["text"] == (
+            "Captured framegraph pass symbol 'Color/Cube': "
+            "/tmp/framegraph-pass-color-cube.png (128x64)"
+        )
+        assert result["content"][1] == {
+            "type": "image",
+            "data": "ZmFrZQ==",
+            "mimeType": "image/png",
+        }
+        assert result["structuredContent"]["ok"] is True
+        assert result["structuredContent"]["ready"] is True
+        assert result["structuredContent"]["pass_index"] == 4
+        assert result["structuredContent"]["symbol_index"] == 2
+        assert result["structuredContent"]["path"] == "/tmp/framegraph-pass-color-cube.png"
     finally:
         server.stop()
 

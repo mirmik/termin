@@ -87,6 +87,7 @@ class FramegraphDebuggerModel:
 
         self._mode: str = "inside"
         self._selected_pass: str | None = None
+        self._selected_pass_index: int | None = None
         self._selected_symbol: str | None = None
         self._debug_source_res: str = ""
         self._debug_paused: bool = False
@@ -132,6 +133,10 @@ class FramegraphDebuggerModel:
     @property
     def selected_pass(self) -> str | None:
         return self._selected_pass
+
+    @property
+    def selected_pass_index(self) -> int | None:
+        return self._selected_pass_index
 
     @property
     def selected_symbol(self) -> str | None:
@@ -283,14 +288,25 @@ class FramegraphDebuggerModel:
         return result
 
     def get_symbols(self) -> list[str]:
-        pipeline = self.get_current_pipeline()
-        if pipeline is None or self._selected_pass is None:
+        frame_pass = self._selected_frame_pass()
+        if frame_pass is None:
             return []
+        return list(frame_pass.get_internal_symbols())
+
+    def _selected_frame_pass(self):
+        pipeline = self.get_current_pipeline()
+        if pipeline is None:
+            return None
+        if self._selected_pass_index is not None:
+            if 0 <= self._selected_pass_index < len(pipeline.passes):
+                return pipeline.passes[self._selected_pass_index]
+            return None
+        if self._selected_pass is None:
+            return None
         for p in pipeline.passes:
-            if p.pass_name != self._selected_pass:
-                continue
-            return list(p.get_internal_symbols())
-        return []
+            if p.pass_name == self._selected_pass:
+                return p
+        return None
 
     # ------------------------------------------------------------------
     # Info-text formatters (view displays verbatim)
@@ -367,35 +383,28 @@ class FramegraphDebuggerModel:
         return lines
 
     def format_pass_json(self) -> str:
-        if self._selected_pass is None:
+        if self._selected_pass is None and self._selected_pass_index is None:
             return ""
-        pipeline = self.get_current_pipeline()
-        if pipeline is None:
+        frame_pass = self._selected_frame_pass()
+        if frame_pass is None:
             return "<no pipeline>"
-        for p in pipeline.passes:
-            if p.pass_name == self._selected_pass:
-                try:
-                    return json.dumps(p.serialize(), indent=2, ensure_ascii=False)
-                except Exception as e:
-                    return f"<error: {e}>"
-        return f"<pass '{self._selected_pass}' not found>"
+        try:
+            return json.dumps(frame_pass.serialize(), indent=2, ensure_ascii=False)
+        except Exception as e:
+            return f"<error: {e}>"
 
     def format_timing(self) -> str:
         if self._selected_pass is None or self._selected_symbol is None:
             return ""
-        pipeline = self.get_current_pipeline()
-        if pipeline is None:
+        frame_pass = self._selected_frame_pass()
+        if frame_pass is None:
             return ""
-        for p in pipeline.passes:
-            if p.pass_name != self._selected_pass:
-                continue
-            timings = p.get_internal_symbols_with_timing()
-            for t in timings:
-                if t.name == self._selected_symbol:
-                    gpu_str = f"{t.gpu_time_ms:.3f}ms" if t.gpu_time_ms >= 0 else "pending..."
-                    return f"CPU: {t.cpu_time_ms:.3f}ms | GPU: {gpu_str}"
-            return "Timing: no data"
-        return ""
+        timings = frame_pass.get_internal_symbols_with_timing()
+        for t in timings:
+            if t.name == self._selected_symbol:
+                gpu_str = f"{t.gpu_time_ms:.3f}ms" if t.gpu_time_ms >= 0 else "pending..."
+                return f"CPU: {t.cpu_time_ms:.3f}ms | GPU: {gpu_str}"
+        return "Timing: no data"
 
     def format_render_stats(self) -> str:
         from termin.visualization.render.manager import RenderingManager
@@ -437,10 +446,31 @@ class FramegraphDebuggerModel:
         self.info_changed.emit(self)
 
     def set_selected_pass(self, pass_name: str | None) -> None:
-        if pass_name == self._selected_pass:
+        if pass_name == self._selected_pass and self._selected_pass_index is None:
             return
         self._selected_pass = pass_name
+        self._selected_pass_index = None
         # Auto-select last symbol in the new pass if any
+        symbols = self.get_symbols()
+        self._selected_symbol = symbols[-1] if symbols else None
+        self.lists_changed.emit(self)
+        self.selection_changed.emit(self)
+        self._reconnect()
+        self.info_changed.emit(self)
+
+    def set_selected_pass_by_index(self, pass_index: int | None) -> None:
+        if pass_index == self._selected_pass_index:
+            return
+        pipeline = self.get_current_pipeline()
+        if pass_index is None:
+            self._selected_pass_index = None
+            self._selected_pass = None
+        elif pipeline is None or pass_index < 0 or pass_index >= len(pipeline.passes):
+            self._selected_pass_index = None
+            self._selected_pass = None
+        else:
+            self._selected_pass_index = int(pass_index)
+            self._selected_pass = pipeline.passes[pass_index].pass_name
         symbols = self.get_symbols()
         self._selected_symbol = symbols[-1] if symbols else None
         self.lists_changed.emit(self)
@@ -606,16 +636,17 @@ class FramegraphDebuggerModel:
         if self._mode == "inside":
             if not self._selected_pass or not self._selected_symbol:
                 return
-            for p in pipeline.passes:
-                if p.pass_name == self._selected_pass:
-                    p.set_debug_internal_point(self._selected_symbol)
-                    p.set_debug_capture(self._core.capture)
-                    log.info(
-                        f"[FrameDebugger] Connected: inside mode, "
-                        f"pass='{self._selected_pass}', "
-                        f"symbol='{self._selected_symbol}'"
-                    )
-                    return
+            p = self._selected_frame_pass()
+            if p is not None:
+                p.set_debug_internal_point(self._selected_symbol)
+                p.set_debug_capture(self._core.capture)
+                log.info(
+                    f"[FrameDebugger] Connected: inside mode, "
+                    f"pass='{self._selected_pass}', "
+                    f"pass_index={self._selected_pass_index}, "
+                    f"symbol='{self._selected_symbol}'"
+                )
+                return
             log.warn(f"[FrameDebugger] Pass '{self._selected_pass}' not found")
 
     # ------------------------------------------------------------------
