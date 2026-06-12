@@ -42,6 +42,11 @@ else()
     find_package(termin_render REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_materials termin_materials::termin_materials)
+else()
+    find_package(termin_materials REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_display termin_display::termin_display)
 else()
     find_package(termin_display REQUIRED)
@@ -50,6 +55,11 @@ if(COMMAND termin_require_package)
     termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
 else()
     find_package(termin_components_mesh REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_skeleton termin_components_skeleton::termin_components_skeleton)
+else()
+    find_package(termin_components_skeleton REQUIRED)
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/../cmake/TerminModule.cmake)
@@ -65,6 +75,8 @@ termin_add_module(
         src/xr_thumbstick_locomotion_component.cpp
         src/line_renderer.cpp
         src/mesh_renderer.cpp
+        src/skinned_mesh_renderer.cpp
+        src/shader_skinning.cpp
         src/material_pass.cpp
         src/depth_pass.cpp
         src/normal_pass.cpp
@@ -77,8 +89,10 @@ termin_add_module(
         termin_scene::termin_scene
         termin_input::termin_input
         termin_render::termin_render
+        termin_materials::termin_materials
         termin_display::termin_display
         termin_components_mesh::termin_components_mesh
+        termin_components_skeleton::termin_components_skeleton
     FIND_DEPS
         termin_base
         termin_mesh
@@ -87,8 +101,10 @@ termin_add_module(
         termin_scene
         termin_input
         termin_render
+        termin_materials
         termin_display
         termin_components_mesh
+        termin_components_skeleton
     INSTALL_HEADERS
         termin
 )

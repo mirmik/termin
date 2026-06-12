@@ -66,7 +66,6 @@ set(TERMIN_APP_NATIVE_SOURCES
     # Renderer sources unique to _native (NOT in RENDER_LIB_SOURCES).
     # Keep this list tight — every file here compiled twice = duplicate symbols.
     termin/render/solid_primitive_renderer.cpp
-    termin/render/skinned_mesh_renderer.cpp
 
     # Entity domain bindings (migrated from _entity_native)
     termin/bindings/entity/entity_native_to_native.cpp

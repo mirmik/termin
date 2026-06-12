@@ -1,4 +1,4 @@
-#include "skinned_mesh_renderer.hpp"
+#include <termin/render/skinned_mesh_renderer.hpp>
 #include <termin/render/shader_binding_policy.hpp>
 #include <termin/render/skeleton_controller.hpp>
 #include <termin/render/shader_skinning.hpp>
