@@ -4,6 +4,7 @@
 #include "termin/camera/camera_component.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
+#include "termin/render/frame_graph_debugger_core.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx2/render_context.hpp"
@@ -463,6 +464,41 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             }
 
             tc_shader_handle last_shader = tc_shader_handle_invalid();
+            const std::string& debug_symbol = get_debug_internal_point();
+            auto capture_debug_symbol = [&](const char* entity_name) {
+                if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
+                    return;
+                }
+                FrameGraphCapture* capture = debug_capture();
+                if (!capture) {
+                    return;
+                }
+
+                end_shadow_pass();
+                capture->capture_direct_via_ctx2(
+                    ctx.ctx2,
+                    depth_tex2,
+                    resolution,
+                    resolution,
+                    tgfx::PixelFormat::D32F);
+                ctx.ctx2->begin_pass(
+                    tgfx::TextureHandle{},
+                    depth_tex2,
+                    nullptr,
+                    1.0f,
+                    false);
+                ctx.ctx2->set_viewport(0, 0, resolution, resolution);
+                restore_shadow_raster_state();
+                ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
+                ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
+                prepare_material_pipeline_resources(
+                    *ctx.ctx2,
+                    device,
+                    shadow_shader.shader,
+                    nullptr,
+                    shadow_resources,
+                    shadow_fallback);
+            };
 
             for (const auto& dc : cached_draw_calls_) {
                 tc_material_phase* phase = dc.resolve_phase();
@@ -496,6 +532,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                     drawable->draw_tgfx2(
                         *ctx.ctx2, direct_context, "shadow", phase, dc.geometry_id);
+                    capture_debug_symbol(dc.entity.name());
                     restore_shadow_raster_state();
                     ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
                     ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
@@ -538,6 +575,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // a_position — filter unused attrs so Vulkan doesn't
                     // complain about loc 1/2/3 per pipeline creation.
                     termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
+                    capture_debug_symbol(dc.entity.name());
                 } else {
                     // Skinning variant: compile via bridge, bind, upload
                     // BoneBlock UBO (SkinnedMeshRenderer takes care of
@@ -566,6 +604,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         mesh,
                         {0, 4, 5},
                         true);
+                    capture_debug_symbol(dc.entity.name());
 
                     // Next mesh-backed draw must re-bind the base shadow
                     // shader; skinning variant left its own program bound.

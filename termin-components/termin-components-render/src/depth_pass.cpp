@@ -2,6 +2,7 @@
 
 #include <termin/camera/camera_component.hpp>
 #include <termin/camera/render_camera_utils.hpp>
+#include <termin/render/frame_graph_debugger_core.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
@@ -201,6 +202,42 @@ void DepthPass::execute_with_data_tgfx2(
         depth_fallback);
 
     const std::string& debug_symbol = get_debug_internal_point();
+    auto capture_debug_symbol = [&](const char* entity_name) {
+        if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
+            return;
+        }
+        FrameGraphCapture* capture = debug_capture();
+        if (!capture) {
+            return;
+        }
+
+        tgfx::TextureHandle capture_tex = color_tex2 ? color_tex2 : depth_tex2;
+        if (!capture_tex) {
+            return;
+        }
+
+        ctx.ctx2->end_pass();
+        capture->capture_direct_via_ctx2(
+            ctx.ctx2,
+            capture_tex,
+            rect.width,
+            rect.height);
+        ctx.ctx2->begin_pass(color_tex2, depth_tex2, clear_rgba, 1.0f, false);
+        ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
+        ctx.ctx2->set_depth_test(true);
+        ctx.ctx2->set_depth_write(true);
+        ctx.ctx2->set_blend(false);
+        ctx.ctx2->set_cull(tgfx::CullMode::Back);
+        ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
+        ctx.ctx2->use_shader_resource_layout(depth_shader.shader);
+        prepare_material_pipeline_resources(
+            *ctx.ctx2,
+            device,
+            depth_shader.shader,
+            nullptr,
+            depth_resources,
+            depth_fallback);
+    };
 
     for (const auto& dc : cached_draw_calls_) {
         Drawable* drawable = nullptr;
@@ -232,6 +269,7 @@ void DepthPass::execute_with_data_tgfx2(
             // Base depth VS only reads a_position. See IdPass / ShadowPass
             // for the rationale of stripping unused attributes.
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
+            capture_debug_symbol(name);
         } else {
             // Skinning variant: compile via bridge, bind, upload BoneBlock
             // UBO from SkinnedMeshRenderer, draw.
@@ -258,6 +296,7 @@ void DepthPass::execute_with_data_tgfx2(
                 mesh,
                 {0, 4, 5},
                 true);
+            capture_debug_symbol(name);
 
             ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
             ctx.ctx2->use_shader_resource_layout(depth_shader.shader);
@@ -523,6 +562,39 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         depth_resources,
         depth_fallback);
 
+    const std::string& debug_symbol = get_debug_internal_point();
+    auto capture_debug_symbol = [&](const char* entity_name) {
+        if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
+            return;
+        }
+        FrameGraphCapture* capture = debug_capture();
+        if (!capture || !depth_tex2) {
+            return;
+        }
+
+        ctx.ctx2->end_pass();
+        capture->capture_direct_via_ctx2(
+            ctx.ctx2,
+            depth_tex2,
+            rect.width,
+            rect.height);
+        ctx.ctx2->begin_pass({}, depth_tex2, nullptr, 1.0f, false);
+        ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
+        ctx.ctx2->set_depth_test(true);
+        ctx.ctx2->set_depth_write(true);
+        ctx.ctx2->set_blend(false);
+        ctx.ctx2->set_cull(tgfx::CullMode::Back);
+        ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
+        ctx.ctx2->use_shader_resource_layout(depth_shader.shader);
+        prepare_material_pipeline_resources(
+            *ctx.ctx2,
+            device,
+            depth_shader.shader,
+            nullptr,
+            depth_resources,
+            depth_fallback);
+    };
+
     for (const auto& dc : cached_draw_calls_) {
         Drawable* drawable = nullptr;
         if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
@@ -549,6 +621,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
         if (override_is_base) {
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
+            capture_debug_symbol(name);
         } else {
             MaterialPipelineShaderBinding skinned_shader{};
             if (!ensure_material_pipeline_shader(
@@ -574,6 +647,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 mesh,
                 {0, 4, 5},
                 true);
+            capture_debug_symbol(name);
 
             ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
             ctx.ctx2->use_shader_resource_layout(depth_shader.shader);

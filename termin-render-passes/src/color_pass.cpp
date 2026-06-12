@@ -619,6 +619,27 @@ void ColorPass::execute_with_data(
     if (debug_symbol.empty()) {
         selected_symbol_timing = {};
     }
+    auto capture_debug_symbol = [&](const char* entity_name) {
+        if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
+            return;
+        }
+        FrameGraphCapture* capture = debug_capture();
+        if (!capture) {
+            return;
+        }
+
+        ctx2->end_pass();
+        capture->capture_direct_via_ctx2(ctx2, color_tex2, rect.width, rect.height);
+        selected_symbol_timing = {};
+        selected_symbol_timing.name = debug_symbol;
+
+        ctx2->begin_pass(color_tex2, depth_tex2,
+                         /*clear_color=*/nullptr,
+                         /*clear_depth=*/1.0f,
+                         /*clear_depth_enabled=*/false);
+        ctx2->set_viewport(0, 0, rect.width, rect.height);
+        ctx2->set_depth_bias(false);
+    };
 
     // Base offset for shadow sampler slots — matches legacy
     // SHADOW_MAP_TEXTURE_UNIT_START so .shader files that still
@@ -841,6 +862,7 @@ void ColorPass::execute_with_data(
                 };
 
             if (drawable->draw_tgfx2(*ctx2, direct_context, phase_mark, phase, dc.geometry_id)) {
+                capture_debug_symbol(ename);
                 ++draw_index;
                 continue;
             }
@@ -1004,6 +1026,7 @@ void ColorPass::execute_with_data(
         // current backend, submits ctx2->draw(), then releases transient
         // bindings.
         termin::draw_tc_mesh(*ctx2, mesh);
+        capture_debug_symbol(ename);
         ++draw_index;
     }
 
