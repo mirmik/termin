@@ -13,10 +13,6 @@ def _load_pick_shader() -> TcShader:
     shader = TcShader.from_builtin_catalog(PICK_SHADER_UUID)
     if not shader.is_valid:
         raise RuntimeError(f"Failed to load built-in shader '{PICK_SHADER_UUID}'")
-    shader.set_material_ubo_layout(
-        [("u_pickColor", "Vec4", 0, 16)],
-        16,
-    )
     return shader
 
 

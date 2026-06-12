@@ -27,11 +27,13 @@ def _get_voxel_layout() -> TcVertexLayout:
     global _voxel_layout
     if _voxel_layout is None:
         layout = TcVertexLayout()
-        # Standard locations: 0=position, 1=normal, 2=uv, 5=color
+        # Numeric locations are fallback metadata. Slang/Vulkan uses the
+        # compiled shader input layout and maps these attributes by order.
         layout.add("position", 3, TcAttribType.FLOAT32, 0)
         layout.add("normal", 3, TcAttribType.FLOAT32, 1)
         layout.add("uv", 2, TcAttribType.FLOAT32, 2)
         layout.add("color", 3, TcAttribType.FLOAT32, 5)
+        layout.use_shader_input_locations = 1
         _voxel_layout = layout
     return _voxel_layout
 

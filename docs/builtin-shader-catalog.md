@@ -84,7 +84,7 @@ bind-by-name model without changing the package shape later.
 | `termin-engine-line-default` | `DefaultLineShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-line-default.vert.glsl`, `builtin_shaders/termin-engine-line-default.frag.glsl` |
 | `termin-engine-navmesh-debug` | `NavMeshDebugVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-navmesh-debug.slang` |
 | `termin-engine-off-mesh-link-debug` | `OffMeshLinkDebugVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-off-mesh-link-debug.slang` |
-| `termin-engine-voxel-display` | `VoxelDisplay` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-voxel-display.vert.glsl`, `builtin_shaders/termin-engine-voxel-display.frag.glsl` |
+| `termin-engine-voxel-display` | `VoxelDisplay` | vertex + fragment | Slang | `builtin_shaders/termin-engine-voxel-display.slang` |
 | `termin-engine-voxelizer-line` | `VoxelizerLine` | vertex + fragment | Slang | `builtin_shaders/termin-engine-voxelizer-line.slang` |
 | `termin-engine-pick-material` | `PickShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-pick-material.slang` |
 | `termin-engine-shadow-material` | `ShadowShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-shadow-material.slang` |

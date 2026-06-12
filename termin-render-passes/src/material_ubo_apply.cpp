@@ -140,13 +140,48 @@ MaterialProperty property_from_uniform(const tc_uniform_value& u) {
 MaterialUboLayout layout_from_tc_shader(const tc_shader* shader) {
     MaterialUboLayout layout;
     if (!shader) return layout;
-    layout.block_size = shader->material_ubo_block_size;
-    layout.entries.reserve(shader->material_ubo_entry_count);
-    for (uint32_t i = 0; i < shader->material_ubo_entry_count; i++) {
-        const tc_material_ubo_entry& src = shader->material_ubo_entries[i];
+
+    if (shader->material_ubo_entry_count > 0) {
+        layout.block_size = shader->material_ubo_block_size;
+        layout.entries.reserve(shader->material_ubo_entry_count);
+        for (uint32_t i = 0; i < shader->material_ubo_entry_count; i++) {
+            const tc_material_ubo_entry& src = shader->material_ubo_entries[i];
+            MaterialUboEntry e;
+            e.name = src.name;
+            e.property_type = src.property_type;
+            e.offset = src.offset;
+            e.size = src.size;
+            layout.entries.push_back(std::move(e));
+        }
+        return layout;
+    }
+
+    const tc_shader_resource_binding* material_rb =
+        tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL);
+    if (!material_rb ||
+        material_rb->kind != TC_SHADER_RESOURCE_CONSTANT_BUFFER ||
+        material_rb->field_count == 0 ||
+        !material_rb->fields) {
+        return layout;
+    }
+
+    layout.block_size = material_rb->size;
+    layout.entries.reserve(material_rb->field_count);
+    for (uint32_t i = 0; i < material_rb->field_count; i++) {
+        const tc_shader_resource_field& src = material_rb->fields[i];
+        if (src.type[0] == '\0') {
+            tc::Log::error(
+                "Material UBO field '%s' in shader '%s' has no reflected type",
+                src.name,
+                shader->name ? shader->name : shader->uuid);
+            layout.entries.clear();
+            layout.block_size = 0;
+            return layout;
+        }
+
         MaterialUboEntry e;
         e.name = src.name;
-        e.property_type = src.property_type;
+        e.property_type = src.type;
         e.offset = src.offset;
         e.size = src.size;
         layout.entries.push_back(std::move(e));
