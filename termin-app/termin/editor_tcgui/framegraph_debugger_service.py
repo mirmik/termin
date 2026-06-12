@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import tempfile
+import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
+import numpy as np
+from PIL import Image
 from tcbase import log
 
 
@@ -87,6 +93,127 @@ class EditorFramegraphDebuggerService:
             "capture": _capture_summary(model),
         }
 
+    def prepare_resource_capture(
+        self,
+        *,
+        target_index: int | None = None,
+        resource_name: str | None = None,
+        channel_mode: int = 0,
+        highlight_hdr: bool = False,
+    ) -> dict[str, object]:
+        """Connect the debugger pass so a following render frame captures a resource."""
+        model = self._ensure_model()
+        model.refresh_viewports()
+        if target_index is not None:
+            model.set_viewport_by_index(int(target_index))
+
+        resources = list(model.get_resources())
+        if not resources:
+            raise RuntimeError("Current framegraph target has no capturable resources")
+        selected_resource = resource_name or resources[0]
+        if selected_resource not in resources:
+            raise ValueError(
+                f"Framegraph resource '{selected_resource}' is not available"
+            )
+
+        model.core.capture.reset_capture()
+        model.core.depth_capture.reset_capture()
+        model.set_channel_mode(int(channel_mode))
+        model.set_highlight_hdr(bool(highlight_hdr))
+        model.set_mode("between")
+        model.set_source_resource(selected_resource)
+        if self._on_request_update is not None:
+            self._on_request_update()
+
+        return {
+            "target_index": _index_of_target_source(model.targets, model.current_viewport),
+            "target_label": _current_target_label(model),
+            "resource": selected_resource,
+            "resources": resources,
+            "capture": _capture_summary(model),
+        }
+
+    def export_capture(
+        self,
+        *,
+        output_path: str | None = None,
+        include_image: bool = False,
+        flip_y: bool = True,
+        capture_kind: str = "main",
+    ) -> dict[str, object]:
+        """Write the current framegraph capture to PNG if a capture is ready."""
+        model = self._ensure_model()
+        capture = _select_capture(model, capture_kind)
+        if not capture.has_capture():
+            return {
+                "ready": False,
+                "capture_kind": capture_kind,
+                "capture": _capture_summary_for(capture),
+            }
+
+        from termin.visualization.render.manager import RenderingManager
+
+        render_engine = RenderingManager.instance().render_engine
+        if render_engine is None:
+            raise RuntimeError("No render engine is available")
+        render_engine.ensure_tgfx2()
+        device = render_engine.tgfx2_device
+        if device is None:
+            raise RuntimeError("No tgfx2 device is available")
+
+        path = _resolve_capture_path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        width = int(capture.width)
+        height = int(capture.height)
+        if width <= 0 or height <= 0:
+            raise RuntimeError(f"Invalid framegraph capture size {width}x{height}")
+
+        if bool(capture.is_depth):
+            result = model.core.presenter.read_depth_normalized(
+                device,
+                capture.capture_tex,
+            )
+            if result is None:
+                raise RuntimeError("Failed to read framegraph depth capture")
+            data, width, height = result
+            image_array = np.frombuffer(data, dtype=np.uint8).reshape(
+                (int(height), int(width))
+            )
+            if flip_y:
+                image_array = image_array[::-1, :].copy()
+            Image.fromarray(image_array, mode="L").save(path)
+        else:
+            pixels = np.empty(width * height * 4, dtype=np.float32)
+            if not device.read_texture_rgba_float(capture.capture_tex, pixels):
+                raise RuntimeError("Failed to read framegraph color capture")
+            rgba = pixels.reshape((height, width, 4))
+            rgba = _apply_preview_params(
+                rgba,
+                channel_mode=model.channel_mode,
+                highlight_hdr=model.highlight_hdr,
+            )
+            if flip_y:
+                rgba = rgba[::-1, :, :].copy()
+            rgba8 = np.clip(rgba * 255.0, 0.0, 255.0).astype(np.uint8)
+            Image.fromarray(rgba8, mode="RGBA").save(path)
+
+        log.info(f"[FramegraphDebuggerService] exported framegraph capture: {path}")
+        payload: dict[str, object] = {
+            "ready": True,
+            "path": str(path),
+            "width": int(width),
+            "height": int(height),
+            "mime_type": "image/png",
+            "capture_kind": capture_kind,
+            "capture": _capture_summary_for(capture),
+            "resource": model.debug_source_res,
+            "target_index": _index_of_target_source(model.targets, model.current_viewport),
+            "target_label": _current_target_label(model),
+        }
+        if include_image:
+            payload["base64"] = base64.b64encode(path.read_bytes()).decode("ascii")
+        return payload
+
     def disconnect(self) -> None:
         if self._model is not None:
             self._model.disconnect()
@@ -128,6 +255,14 @@ def _target_summary(index: int, target: object) -> dict[str, object]:
         "label": target.label,
         "source_type": type(source).__name__,
     }
+
+
+def _current_target_label(model: object) -> str | None:
+    targets = model.targets
+    index = _index_of_target_source(targets, model.current_viewport)
+    if index is None:
+        return None
+    return targets[index].label
 
 
 def _pass_details(
@@ -205,7 +340,10 @@ def _schedule_details(
 
 
 def _capture_summary(model: object) -> dict[str, object]:
-    capture = model.core.capture
+    return _capture_summary_for(model.core.capture)
+
+
+def _capture_summary_for(capture: object) -> dict[str, object]:
     has_capture = bool(capture.has_capture())
     result: dict[str, object] = {
         "has_capture": has_capture,
@@ -220,6 +358,63 @@ def _capture_summary(model: object) -> dict[str, object]:
             }
         )
     return result
+
+
+def _select_capture(model: object, capture_kind: str) -> object:
+    normalized = capture_kind.strip().lower()
+    if normalized in ("", "main", "color", "capture"):
+        return model.core.capture
+    if normalized in ("depth", "depth_capture"):
+        return model.core.depth_capture
+    raise ValueError("capture_kind must be 'main' or 'depth'")
+
+
+def _apply_preview_params(
+    rgba: np.ndarray,
+    *,
+    channel_mode: int,
+    highlight_hdr: bool,
+) -> np.ndarray:
+    if channel_mode == 1:
+        result_rgb = np.repeat(rgba[:, :, 0:1], 3, axis=2)
+    elif channel_mode == 2:
+        result_rgb = np.repeat(rgba[:, :, 1:2], 3, axis=2)
+    elif channel_mode == 3:
+        result_rgb = np.repeat(rgba[:, :, 2:3], 3, axis=2)
+    elif channel_mode == 4:
+        result_rgb = np.repeat(rgba[:, :, 3:4], 3, axis=2)
+    else:
+        result_rgb = rgba[:, :, :3].copy()
+
+    if highlight_hdr:
+        max_value = np.max(rgba[:, :, :3], axis=2)
+        hdr_mask = max_value > 1.0
+        if np.any(hdr_mask):
+            intensity = np.clip((max_value - 1.0) / 2.0, 0.0, 1.0)
+            mix = 0.5 + intensity * 0.5
+            magenta = np.array([1.0, 0.0, 1.0], dtype=np.float32)
+            result_rgb[hdr_mask] = (
+                result_rgb[hdr_mask] * (1.0 - mix[hdr_mask, None])
+                + magenta * mix[hdr_mask, None]
+            )
+
+    alpha = np.ones((*result_rgb.shape[:2], 1), dtype=result_rgb.dtype)
+    return np.concatenate((result_rgb, alpha), axis=2)
+
+
+def _resolve_capture_path(output_path: str | None) -> Path:
+    if output_path:
+        path = Path(output_path).expanduser()
+        if path.suffix.lower() != ".png":
+            if path.exists() and path.is_dir():
+                return path / _default_capture_name()
+            return path.with_suffix(".png")
+        return path
+    return Path(tempfile.gettempdir()) / "termin-framegraph-captures" / _default_capture_name()
+
+
+def _default_capture_name() -> str:
+    return f"termin-framegraph-{time.strftime('%Y%m%d-%H%M%S')}.png"
 
 
 def _sorted_strings(values: object) -> list[str]:

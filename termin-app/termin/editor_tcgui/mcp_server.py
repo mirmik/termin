@@ -86,6 +86,7 @@ class EditorMcpServer:
                 "execute_python_script",
                 "capture_editor_screenshot",
                 "inspect_framegraph",
+                "capture_framegraph_resource",
             ],
         }
         try:
@@ -234,6 +235,8 @@ class EditorMcpServer:
             return self._handle_screenshot_tool_call(request_id, params)
         if name == "inspect_framegraph":
             return self._handle_framegraph_tool_call(request_id, params)
+        if name == "capture_framegraph_resource":
+            return self._handle_framegraph_capture_tool_call(request_id, params)
         if name != "execute_python_script":
             return self._rpc_error(request_id, -32602, f"Unknown tool: {name}")
         arguments = params.get("arguments")
@@ -295,6 +298,92 @@ class EditorMcpServer:
             request_id,
             {
                 "content": [{"type": "text", "text": text}],
+                "isError": False,
+                "structuredContent": result,
+            },
+        )
+
+    def _handle_framegraph_capture_tool_call(
+        self,
+        request_id: object,
+        params: dict[str, object],
+    ) -> dict[str, object]:
+        arguments = params.get("arguments")
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return self._rpc_error(request_id, -32602, "Tool arguments must be an object")
+
+        target_index = arguments.get("target_index")
+        if target_index is not None:
+            try:
+                target_index = int(target_index)
+            except (TypeError, ValueError):
+                return self._rpc_error(request_id, -32602, "target_index must be an integer")
+
+        resource_name = arguments.get("resource")
+        if resource_name is not None and not isinstance(resource_name, str):
+            return self._rpc_error(request_id, -32602, "resource must be a string")
+
+        output_path = arguments.get("path")
+        if output_path is not None and not isinstance(output_path, str):
+            return self._rpc_error(request_id, -32602, "path must be a string")
+
+        capture_kind = str(arguments.get("capture_kind", "main"))
+        include_image = bool(arguments.get("include_image", False))
+        flip_y = bool(arguments.get("flip_y", True))
+        highlight_hdr = bool(arguments.get("highlight_hdr", False))
+        channel_mode = int(arguments.get("channel_mode", 0))
+        timeout = float(arguments.get("timeout", 30.0))
+
+        result = self._capture_framegraph_resource(
+            target_index=target_index,
+            resource_name=resource_name,
+            output_path=output_path,
+            include_image=include_image,
+            flip_y=flip_y,
+            capture_kind=capture_kind,
+            channel_mode=channel_mode,
+            highlight_hdr=highlight_hdr,
+            timeout=timeout,
+        )
+        if not result.get("ok", False):
+            error = str(result.get("error", "Framegraph capture failed"))
+            return self._rpc_result(
+                request_id,
+                {
+                    "content": [{"type": "text", "text": error}],
+                    "isError": True,
+                    "structuredContent": result,
+                },
+            )
+
+        path = str(result.get("path", ""))
+        width = int(result.get("width", 0))
+        height = int(result.get("height", 0))
+        resource = str(result.get("resource", ""))
+        content: list[dict[str, object]] = [
+            {
+                "type": "text",
+                "text": (
+                    f"Captured framegraph resource '{resource}': "
+                    f"{path} ({width}x{height})"
+                ),
+            }
+        ]
+        image_data = result.get("base64")
+        if isinstance(image_data, str):
+            content.append(
+                {
+                    "type": "image",
+                    "data": image_data,
+                    "mimeType": str(result.get("mime_type", "image/png")),
+                }
+            )
+        return self._rpc_result(
+            request_id,
+            {
+                "content": content,
                 "isError": False,
                 "structuredContent": result,
             },
@@ -422,6 +511,161 @@ class EditorMcpServer:
             "error": "Framegraph result marker not found",
         }
 
+    def _capture_framegraph_resource(
+        self,
+        *,
+        target_index: int | None,
+        resource_name: str | None,
+        output_path: str | None,
+        include_image: bool,
+        flip_y: bool,
+        capture_kind: str,
+        channel_mode: int,
+        highlight_hdr: bool,
+        timeout: float,
+    ) -> dict[str, object]:
+        prepare = self._prepare_framegraph_resource_capture(
+            target_index=target_index,
+            resource_name=resource_name,
+            channel_mode=channel_mode,
+            highlight_hdr=highlight_hdr,
+            timeout=min(timeout, 5.0),
+        )
+        if not prepare.get("ok", False):
+            return prepare
+
+        deadline = time.monotonic() + timeout
+        last_result: dict[str, object] | None = None
+        while time.monotonic() < deadline:
+            result = self._export_framegraph_resource_capture(
+                output_path=output_path,
+                include_image=include_image,
+                flip_y=flip_y,
+                capture_kind=capture_kind,
+                timeout=min(max(deadline - time.monotonic(), 0.1), 5.0),
+            )
+            last_result = result
+            if not result.get("ok", False):
+                return result
+            if result.get("ready", False):
+                return result
+            time.sleep(0.05)
+
+        payload: dict[str, object] = {
+            "ok": False,
+            "error": "Timed out waiting for framegraph capture",
+            "prepare": prepare,
+        }
+        if last_result is not None:
+            payload["last_result"] = last_result
+        return payload
+
+    def _prepare_framegraph_resource_capture(
+        self,
+        *,
+        target_index: int | None,
+        resource_name: str | None,
+        channel_mode: int,
+        highlight_hdr: bool,
+        timeout: float,
+    ) -> dict[str, object]:
+        marker = "__TERMIN_MCP_FRAMEGRAPH_CAPTURE_PREPARE__"
+        script = "\n".join(
+            [
+                "import json",
+                "_termin_mcp_framegraph_capture_prepare = framegraph_debugger.prepare_resource_capture(",
+                f"    target_index={target_index!r},",
+                f"    resource_name={resource_name!r},",
+                f"    channel_mode={channel_mode!r},",
+                f"    highlight_hdr={highlight_hdr!r},",
+                ")",
+                (
+                    f"print({json.dumps(marker)} + "
+                    "json.dumps(_termin_mcp_framegraph_capture_prepare, ensure_ascii=False))"
+                ),
+            ]
+        )
+        return self._execute_json_marker_script(
+            script,
+            marker=marker,
+            timeout=timeout,
+            error_label="Framegraph capture prepare",
+        )
+
+    def _export_framegraph_resource_capture(
+        self,
+        *,
+        output_path: str | None,
+        include_image: bool,
+        flip_y: bool,
+        capture_kind: str,
+        timeout: float,
+    ) -> dict[str, object]:
+        marker = "__TERMIN_MCP_FRAMEGRAPH_CAPTURE_EXPORT__"
+        script = "\n".join(
+            [
+                "import json",
+                "_termin_mcp_framegraph_capture_export = framegraph_debugger.export_capture(",
+                f"    output_path={output_path!r},",
+                f"    include_image={include_image!r},",
+                f"    flip_y={flip_y!r},",
+                f"    capture_kind={capture_kind!r},",
+                ")",
+                (
+                    f"print({json.dumps(marker)} + "
+                    "json.dumps(_termin_mcp_framegraph_capture_export, ensure_ascii=False))"
+                ),
+            ]
+        )
+        return self._execute_json_marker_script(
+            script,
+            marker=marker,
+            timeout=timeout,
+            error_label="Framegraph capture export",
+        )
+
+    def _execute_json_marker_script(
+        self,
+        script: str,
+        *,
+        marker: str,
+        timeout: float,
+        error_label: str,
+    ) -> dict[str, object]:
+        result = self._execute_python(script, timeout=timeout)
+        if not result.ok:
+            return {
+                "ok": False,
+                "output": result.output,
+                "error": result.error or f"{error_label} script failed",
+            }
+
+        for line in result.output.splitlines():
+            if not line.startswith(marker):
+                continue
+            try:
+                payload = json.loads(line[len(marker):])
+            except json.JSONDecodeError as exc:
+                return {
+                    "ok": False,
+                    "output": result.output,
+                    "error": f"Invalid {error_label} result JSON: {exc}",
+                }
+            if isinstance(payload, dict):
+                payload["ok"] = True
+                return payload
+            return {
+                "ok": False,
+                "output": result.output,
+                "error": f"{error_label} result payload is not an object",
+            }
+
+        return {
+            "ok": False,
+            "output": result.output,
+            "error": f"{error_label} result marker not found",
+        }
+
     def _capture_editor_screenshot(
         self,
         *,
@@ -483,6 +727,7 @@ class EditorMcpServer:
             self._execute_python_tool_schema(),
             self._screenshot_tool_schema(),
             self._framegraph_tool_schema(),
+            self._framegraph_capture_tool_schema(),
         ]
 
     def _execute_python_tool_schema(self) -> dict[str, object]:
@@ -562,6 +807,63 @@ class EditorMcpServer:
                     "timeout": {
                         "type": "number",
                         "description": "Seconds to wait for the editor thread to inspect the framegraph.",
+                        "default": 30,
+                    },
+                },
+                "additionalProperties": False,
+            },
+        }
+
+    def _framegraph_capture_tool_schema(self) -> dict[str, object]:
+        return {
+            "name": "capture_framegraph_resource",
+            "description": (
+                "Capture a framegraph resource through the running editor "
+                "FrameDebugger pass and write it as a PNG image."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "target_index": {
+                        "type": "integer",
+                        "description": "Optional framegraph target index from inspect_framegraph.",
+                    },
+                    "resource": {
+                        "type": "string",
+                        "description": "Optional resource name. Defaults to the first capturable resource.",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Optional output PNG path. Defaults to /tmp/termin-framegraph-captures/.",
+                    },
+                    "include_image": {
+                        "type": "boolean",
+                        "description": "Return base64 PNG data as MCP image content.",
+                        "default": False,
+                    },
+                    "capture_kind": {
+                        "type": "string",
+                        "description": "'main' for selected resource capture, or 'depth' for associated depth capture.",
+                        "default": "main",
+                    },
+                    "channel_mode": {
+                        "type": "integer",
+                        "description": "Color preview channel: 0=RGBA, 1=R, 2=G, 3=B, 4=A.",
+                        "default": 0,
+                    },
+                    "highlight_hdr": {
+                        "type": "boolean",
+                        "description": "Apply the framegraph debugger HDR highlight preview to color captures.",
+                        "default": False,
+                    },
+                    "flip_y": {
+                        "type": "boolean",
+                        "description": "Flip framebuffer rows vertically before writing PNG.",
+                        "default": True,
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Seconds to wait for a render frame to produce the capture.",
                         "default": 30,
                     },
                 },

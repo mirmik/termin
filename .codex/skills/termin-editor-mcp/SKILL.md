@@ -25,6 +25,7 @@ scripts/termin-editor-mcp exec 'print(scene, selected)'
 scripts/termin-editor-mcp exec-file /tmp/script.py
 scripts/termin-editor-mcp screenshot --path /tmp/editor.png
 scripts/termin-editor-mcp framegraph --include-pass-json --include-debugger-pass
+scripts/termin-editor-mcp framegraph-capture --target-index 0 --resource OUTPUT --path /tmp/output.png
 ```
 
 ## Editor Namespace
@@ -40,8 +41,12 @@ helpers available in the namespace when appropriate.
 
 ## Framegraph Notes
 
-Current MCP framegraph support is metadata-first: it can list targets, passes,
-resources, schedule, duplicate pass names, internal symbols, and serialized pass
-data. It does not yet provide full parity with the UI framegraph debugger:
-resource capture, pass selection, per-resource preview images, channel/depth/HDR
-visualization, and image export still need dedicated MCP access.
+Current MCP framegraph support can list targets, passes, resources, schedule,
+duplicate pass names, internal symbols, and serialized pass data. It can also
+capture a resource image through `framegraph-capture`, which connects the same
+FrameDebugger resource-capture pass used by the UI and waits for a render frame
+before exporting PNG.
+
+Remaining gaps: pass/internal-symbol capture still uses duplicate-prone
+`pass_name` in the debugger model, and full UI parity for every preview mode
+still needs explicit MCP surface.
