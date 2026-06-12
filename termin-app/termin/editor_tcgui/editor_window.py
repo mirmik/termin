@@ -198,6 +198,7 @@ class EditorWindowTcgui:
         self._saved_tree_expanded_uuids: list[str] | None = None
         self._spacemouse = None
         self._dialog_launcher = EditorDialogLauncher(
+            get_editor=lambda: self,
             get_ui=lambda: self._ui,
             get_scene=lambda: self.scene,
             scene_manager=self.scene_manager,
@@ -772,6 +773,8 @@ class EditorWindowTcgui:
             on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
             on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=self._show_scene_manager_viewer,
+            on_show_python_console=self._show_python_console,
+            on_show_about=self._show_about,
             on_toggle_surface_edge_debug_tool=self._toggle_surface_edge_debug_tool,
             is_surface_edge_debug_tool_enabled=self._is_surface_edge_debug_tool_enabled,
             can_undo=lambda: self.undo_stack.can_undo,
@@ -1274,6 +1277,12 @@ class EditorWindowTcgui:
 
     def _show_scene_manager_viewer(self) -> None:
         self._dialog_launcher.show_scene_manager_viewer()
+
+    def _show_python_console(self) -> None:
+        self._dialog_launcher.show_python_console()
+
+    def _show_about(self) -> None:
+        self._dialog_launcher.show_about()
 
     def _show_pipeline_editor(self) -> None:
         self._dialog_launcher.show_pipeline_editor()
