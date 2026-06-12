@@ -461,7 +461,7 @@ TEST_CASE("skinned shader variants rewrite legacy engine uniforms for Vulkan")
     tc_shader_destroy(original_handle);
 }
 
-TEST_CASE("skinned shader variants reject Slang until a Slang transform exists")
+TEST_CASE("skinned shader variants create Slang vertex-stage variants")
 {
     std::string vertex =
         "struct VIn { float3 position : POSITION; };\n"
@@ -494,8 +494,16 @@ TEST_CASE("skinned shader variants reject Slang until a Slang transform exists")
 
     {
         TcShader original(original_handle);
-        TcShader skinned = get_skinned_shader(original);
-        CHECK(!skinned.is_valid());
+        TcShader skinned = get_skinned_shader("opaque", original);
+        CHECK(skinned.is_valid());
+        CHECK(skinned.language() == TC_SHADER_LANGUAGE_SLANG);
+        CHECK(skinned.is_variant());
+        CHECK(skinned.variant_op() == TC_SHADER_VARIANT_SKINNING);
+
+        std::string out = skinned.vertex_source();
+        CHECK(out.find("import termin_vertex_transform;") != std::string::npos);
+        CHECK(out.find("ConstantBuffer<TerminBoneBlock> bone_block") != std::string::npos);
+        CHECK(out.find("termin_skinned_vertex") != std::string::npos);
     }
 
     tc_shader_destroy(original_handle);

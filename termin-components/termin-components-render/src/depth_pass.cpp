@@ -251,12 +251,13 @@ void DepthPass::execute_with_data_tgfx2(
                 nullptr,
                 depth_resources,
                 depth_fallback);
-            // Skinned depth VS uses a_position (0), a_normal (1),
-            // a_joints (3), a_weights (4). a_texcoord (2) stays unused.
-
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
+            termin::draw_tc_mesh(
+                *ctx.ctx2,
+                mesh,
+                {0, 4, 5},
+                true);
 
             ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
             ctx.ctx2->use_shader_resource_layout(depth_shader.shader);
@@ -568,7 +569,11 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
+            termin::draw_tc_mesh(
+                *ctx.ctx2,
+                mesh,
+                {0, 4, 5},
+                true);
 
             ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
             ctx.ctx2->use_shader_resource_layout(depth_shader.shader);

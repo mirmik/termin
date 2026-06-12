@@ -279,7 +279,11 @@ void IdPass::execute_with_data_tgfx2(
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
+            termin::draw_tc_mesh(
+                *ctx.ctx2,
+                mesh,
+                {0, 4, 5},
+                true);
 
             ctx.ctx2->bind_shader(id_shader.vertex, id_shader.fragment);
             ctx.ctx2->use_shader_resource_layout(id_shader.shader);
