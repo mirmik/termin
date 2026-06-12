@@ -45,9 +45,11 @@ def test_editor_mcp_server_exposes_editor_tools(tmp_path):
         tools = listed["result"]["tools"]
         assert tools[0]["name"] == "execute_python_script"
         assert tools[1]["name"] == "capture_editor_screenshot"
+        assert tools[2]["name"] == "inspect_framegraph"
         assert session["tools"] == [
             "execute_python_script",
             "capture_editor_screenshot",
+            "inspect_framegraph",
         ]
 
         result_holder = {}
@@ -148,6 +150,73 @@ def test_editor_mcp_server_captures_screenshot_tool(monkeypatch, tmp_path):
         }
         assert result["structuredContent"]["ok"] is True
         assert result["structuredContent"]["path"] == "/tmp/editor-shot.png"
+    finally:
+        server.stop()
+
+
+def test_editor_mcp_server_inspects_framegraph_tool(tmp_path):
+    class FakeFramegraphDebugger:
+        def inspect(
+            self,
+            *,
+            target_index=None,
+            include_pass_json=False,
+            include_debugger_pass=False,
+        ):
+            assert target_index == 2
+            assert include_pass_json is True
+            assert include_debugger_pass is False
+            return {
+                "targets": [{"index": 2, "label": "Editor / Viewport 0"}],
+                "resources": ["hdr", "ldr"],
+                "passes": [{"name": "Color", "internal_symbols": ["after_color"]}],
+            }
+
+    executor = EditorPythonExecutor(
+        lambda: {"framegraph_debugger": FakeFramegraphDebugger()}
+    )
+    config = EditorMcpConfig(
+        host="127.0.0.1",
+        port=0,
+        token="test-token",
+        session_file=tmp_path / "editor-mcp.json",
+    )
+    server = EditorMcpServer(executor, config)
+    server.start()
+    try:
+        session = json.loads(config.session_file.read_text(encoding="utf-8"))
+        result_holder = {}
+
+        def call_tool():
+            result_holder["response"] = _post(
+                session,
+                "tools/call",
+                {
+                    "name": "inspect_framegraph",
+                    "arguments": {
+                        "target_index": 2,
+                        "include_pass_json": True,
+                        "timeout": 2.0,
+                    },
+                },
+            )
+
+        thread = threading.Thread(target=call_tool)
+        thread.start()
+        deadline = time.monotonic() + 2.0
+        while thread.is_alive() and time.monotonic() < deadline:
+            executor.process_pending()
+            thread.join(timeout=0.01)
+        thread.join(timeout=0.1)
+
+        response = result_holder["response"]
+        result = response["result"]
+        assert result["isError"] is False
+        assert result["structuredContent"]["ok"] is True
+        assert result["structuredContent"]["resources"] == ["hdr", "ldr"]
+        assert result["structuredContent"]["passes"] == [
+            {"name": "Color", "internal_symbols": ["after_color"]}
+        ]
     finally:
         server.stop()
 

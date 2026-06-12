@@ -82,7 +82,11 @@ class EditorMcpServer:
             "url": self.url,
             "token": self._config.token,
             "started_at": time.time(),
-            "tools": ["execute_python_script", "capture_editor_screenshot"],
+            "tools": [
+                "execute_python_script",
+                "capture_editor_screenshot",
+                "inspect_framegraph",
+            ],
         }
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -228,6 +232,8 @@ class EditorMcpServer:
         name = params.get("name")
         if name == "capture_editor_screenshot":
             return self._handle_screenshot_tool_call(request_id, params)
+        if name == "inspect_framegraph":
+            return self._handle_framegraph_tool_call(request_id, params)
         if name != "execute_python_script":
             return self._rpc_error(request_id, -32602, f"Unknown tool: {name}")
         arguments = params.get("arguments")
@@ -243,6 +249,54 @@ class EditorMcpServer:
                 "content": [{"type": "text", "text": result.output or ""}],
                 "isError": not result.ok,
                 "structuredContent": self._result_payload(result),
+            },
+        )
+
+    def _handle_framegraph_tool_call(
+        self,
+        request_id: object,
+        params: dict[str, object],
+    ) -> dict[str, object]:
+        arguments = params.get("arguments")
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return self._rpc_error(request_id, -32602, "Tool arguments must be an object")
+
+        target_index = arguments.get("target_index")
+        if target_index is not None:
+            try:
+                target_index = int(target_index)
+            except (TypeError, ValueError):
+                return self._rpc_error(request_id, -32602, "target_index must be an integer")
+        include_pass_json = bool(arguments.get("include_pass_json", False))
+        include_debugger_pass = bool(arguments.get("include_debugger_pass", False))
+        timeout = float(arguments.get("timeout", 30.0))
+
+        result = self._inspect_framegraph(
+            target_index=target_index,
+            include_pass_json=include_pass_json,
+            include_debugger_pass=include_debugger_pass,
+            timeout=timeout,
+        )
+        if not result.get("ok", False):
+            error = str(result.get("error", "Framegraph inspection failed"))
+            return self._rpc_result(
+                request_id,
+                {
+                    "content": [{"type": "text", "text": error}],
+                    "isError": True,
+                    "structuredContent": result,
+                },
+            )
+
+        text = json.dumps(result, indent=2, ensure_ascii=False)
+        return self._rpc_result(
+            request_id,
+            {
+                "content": [{"type": "text", "text": text}],
+                "isError": False,
+                "structuredContent": result,
             },
         )
 
@@ -314,6 +368,60 @@ class EditorMcpServer:
     def _execute_python(self, script: str, *, timeout: float) -> PythonExecutionResult:
         return self._executor.execute_script_from_any_thread(script, timeout=timeout)
 
+    def _inspect_framegraph(
+        self,
+        *,
+        target_index: int | None,
+        include_pass_json: bool,
+        include_debugger_pass: bool,
+        timeout: float,
+    ) -> dict[str, object]:
+        marker = "__TERMIN_MCP_FRAMEGRAPH_RESULT__"
+        script = "\n".join(
+            [
+                "import json",
+                "_termin_mcp_framegraph_result = framegraph_debugger.inspect(",
+                f"    target_index={target_index!r},",
+                f"    include_pass_json={include_pass_json!r},",
+                f"    include_debugger_pass={include_debugger_pass!r},",
+                ")",
+                f"print({json.dumps(marker)} + json.dumps(_termin_mcp_framegraph_result, ensure_ascii=False))",
+            ]
+        )
+        result = self._execute_python(script, timeout=timeout)
+        if not result.ok:
+            return {
+                "ok": False,
+                "output": result.output,
+                "error": result.error or "Framegraph inspection script failed",
+            }
+
+        for line in result.output.splitlines():
+            if not line.startswith(marker):
+                continue
+            try:
+                payload = json.loads(line[len(marker):])
+            except json.JSONDecodeError as exc:
+                return {
+                    "ok": False,
+                    "output": result.output,
+                    "error": f"Invalid framegraph result JSON: {exc}",
+                }
+            if isinstance(payload, dict):
+                payload["ok"] = True
+                return payload
+            return {
+                "ok": False,
+                "output": result.output,
+                "error": "Framegraph result payload is not an object",
+            }
+
+        return {
+            "ok": False,
+            "output": result.output,
+            "error": "Framegraph result marker not found",
+        }
+
     def _capture_editor_screenshot(
         self,
         *,
@@ -374,6 +482,7 @@ class EditorMcpServer:
         return [
             self._execute_python_tool_schema(),
             self._screenshot_tool_schema(),
+            self._framegraph_tool_schema(),
         ]
 
     def _execute_python_tool_schema(self) -> dict[str, object]:
@@ -422,6 +531,37 @@ class EditorMcpServer:
                     "timeout": {
                         "type": "number",
                         "description": "Seconds to wait for the editor thread to capture the screenshot.",
+                        "default": 30,
+                    },
+                },
+                "additionalProperties": False,
+            },
+        }
+
+    def _framegraph_tool_schema(self) -> dict[str, object]:
+        return {
+            "name": "inspect_framegraph",
+            "description": "Inspect the running editor framegraph debugger model without opening its dialog.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "target_index": {
+                        "type": "integer",
+                        "description": "Optional framegraph target index from the previous snapshot.",
+                    },
+                    "include_pass_json": {
+                        "type": "boolean",
+                        "description": "Include serialized pass data when available.",
+                        "default": False,
+                    },
+                    "include_debugger_pass": {
+                        "type": "boolean",
+                        "description": "Include the FrameDebugger pass in pass and schedule lists.",
+                        "default": False,
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Seconds to wait for the editor thread to inspect the framegraph.",
                         "default": 30,
                     },
                 },
