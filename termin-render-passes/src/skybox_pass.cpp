@@ -2,7 +2,6 @@
 #include "termin/render/skybox_pass.hpp"
 
 #include "termin/render/execute_context.hpp"
-#include "termin/render/material_ubo_apply.hpp"
 #include "termin/materials/shader_parser.hpp"
 #include "termin/render/render_camera.hpp"
 
@@ -268,15 +267,16 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_cull(tgfx::CullMode::None);
 
     tgfx::ShaderHandle sky_vs, sky_fs;
-    {
-        tc_shader* raw = tc_shader_get(skybox_shader_handle_);
-        if (!raw || !tc_shader_ensure_tgfx2(raw, device2_, &sky_vs, &sky_fs)) {
-            tc::Log::error("SkyBoxPass: tc_shader_ensure_tgfx2 failed for engine skybox shader");
-            ctx.ctx2->end_pass();
-            return;
-        }
+    tc_shader* raw = tc_shader_get(skybox_shader_handle_);
+    if (!raw || !tc_shader_ensure_tgfx2(raw, device2_, &sky_vs, &sky_fs)) {
+        tc::Log::error("SkyBoxPass: tc_shader_ensure_tgfx2 failed for engine skybox shader");
+        ctx.ctx2->end_pass();
+        return;
     }
+
+    ctx.ctx2->clear_resource_bindings();
     ctx.ctx2->bind_shader(sky_vs, sky_fs);
+    ctx.ctx2->use_shader_resource_layout(raw);
 
     tgfx::VertexBufferLayout cube_layout;
     cube_layout.stride = 3 * sizeof(float);
@@ -285,14 +285,12 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     };
     ctx.ctx2->set_vertex_layout(cube_layout);
 
-    tc_shader* raw = tc_shader_get(skybox_shader_handle_);
-    bind_material_ubo(
-        skybox_layout_,
-        values,
-        {},
-        material_ubo_binding_for_shader(raw),
-        0,  // set=0: skybox is GLSL in the shared layout
-        *ctx.ctx2);
+    std::vector<uint8_t> material_data(skybox_layout_.block_size, 0);
+    std140_pack(skybox_layout_, values, material_data.data());
+    ctx.ctx2->bind_uniform_data(
+        TC_SHADER_RESOURCE_MATERIAL,
+        material_data.data(),
+        static_cast<uint32_t>(material_data.size()));
 
     ctx.ctx2->draw(cube_vbo_, cube_ibo_, 36, tgfx::IndexType::Uint32);
     ctx.ctx2->end_pass();
