@@ -301,7 +301,7 @@ def _parse_material_content(
     data = json.loads(content)
 
     shader_uuid = data.get("shader_uuid")
-    shader_name = data.get("shader", "DefaultShader")
+    shader_name = data.get("shader", "BlinnPhong")
     file_uuid = data.get("uuid")
     phase_marks = data.get("phase_marks", [])  # Per-phase mark overrides
 

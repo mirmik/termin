@@ -574,18 +574,23 @@ def test_slang_texture_property_does_not_duplicate_existing_sampler2d_declaratio
     assert fragment.index("Sampler2D albedo;") < fragment.index("[shader(\"fragment\")]")
 
 
-def test_default_material_uses_slang_scope_model():
-    from tgfx import ShaderLanguage
-    from termin.visualization.render.materials.default_material import create_default_material
+def test_stdlib_blinn_phong_uses_slang_scope_model():
+    from termin.assets.shader_asset import ShaderAsset
 
-    material = create_default_material()
-    phase = material.default_phase()
-    assert phase is not None
+    shader_path = (
+        Path(__file__).resolve().parents[1]
+        / "termin"
+        / "resources"
+        / "stdlib"
+        / "shaders"
+        / "BlinnPhong.shader"
+    )
+    shader_asset = ShaderAsset.from_file(shader_path, name="BlinnPhong")
+    program = shader_asset.program
+    assert program is not None
 
-    shader = phase.shader
-    assert shader.language == ShaderLanguage.SLANG
-
-    vertex = shader.vertex_source
+    phase = program.phases[0]
+    vertex = phase.stages["vertex"].source
     assert "[[TerminScope(\"frame\")]]" in vertex
     assert "ConstantBuffer<PerFrame> per_frame;" in vertex
     assert "[[TerminScope(\"draw\")]]" in vertex
@@ -593,14 +598,12 @@ def test_default_material_uses_slang_scope_model():
     assert "#version" not in vertex
     assert "layout(" not in vertex
 
-    fragment = shader.fragment_source
-    assert "[[TerminScope(\"pass\")]]" in fragment
-    assert "ConstantBuffer<LightingBlock> lighting;" in fragment
-    assert "ConstantBuffer<ShadowBlock> shadow_block;" in fragment
-    assert "Sampler2DShadow shadow_maps[MAX_SHADOW_MAPS];" in fragment
+    fragment = phase.stages["fragment"].source
+    assert "import termin_lighting;" in fragment
+    assert "import termin_shadows;" in fragment
     assert "[[TerminScope(\"material\")]]" in fragment
     assert "ConstantBuffer<MaterialParams> material;" in fragment
-    assert "Sampler2D u_albedo_texture;" in fragment
+    assert "Sampler2D u_diffuse_texture;" in fragment
     assert "#version" not in fragment
     assert "layout(" not in fragment
 
