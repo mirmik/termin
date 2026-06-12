@@ -46,10 +46,12 @@ def test_editor_mcp_server_exposes_editor_tools(tmp_path):
         assert tools[0]["name"] == "execute_python_script"
         assert tools[1]["name"] == "capture_editor_screenshot"
         assert tools[2]["name"] == "inspect_framegraph"
+        assert tools[3]["name"] == "capture_framegraph_resource"
         assert session["tools"] == [
             "execute_python_script",
             "capture_editor_screenshot",
             "inspect_framegraph",
+            "capture_framegraph_resource",
         ]
 
         result_holder = {}
@@ -150,6 +152,114 @@ def test_editor_mcp_server_captures_screenshot_tool(monkeypatch, tmp_path):
         }
         assert result["structuredContent"]["ok"] is True
         assert result["structuredContent"]["path"] == "/tmp/editor-shot.png"
+    finally:
+        server.stop()
+
+
+def test_editor_mcp_server_captures_framegraph_resource_tool(tmp_path):
+    class FakeFramegraphDebugger:
+        def __init__(self):
+            self.prepared = False
+
+        def prepare_resource_capture(
+            self,
+            *,
+            target_index=None,
+            resource_name=None,
+            channel_mode=0,
+            highlight_hdr=False,
+        ):
+            assert target_index == 1
+            assert resource_name == "ColorPass_3_output_res"
+            assert channel_mode == 2
+            assert highlight_hdr is True
+            self.prepared = True
+            return {
+                "target_index": 1,
+                "target_label": "Display 0",
+                "resource": resource_name,
+                "capture": {"has_capture": False},
+            }
+
+        def export_capture(
+            self,
+            *,
+            output_path=None,
+            include_image=False,
+            flip_y=True,
+            capture_kind="main",
+        ):
+            assert self.prepared is True
+            assert output_path == "/tmp/framegraph-color.png"
+            assert include_image is True
+            assert flip_y is False
+            assert capture_kind == "main"
+            return {
+                "ready": True,
+                "path": "/tmp/framegraph-color.png",
+                "width": 128,
+                "height": 64,
+                "mime_type": "image/png",
+                "base64": "ZmFrZQ==",
+                "resource": "ColorPass_3_output_res",
+            }
+
+    fake_debugger = FakeFramegraphDebugger()
+    executor = EditorPythonExecutor(lambda: {"framegraph_debugger": fake_debugger})
+    config = EditorMcpConfig(
+        host="127.0.0.1",
+        port=0,
+        token="test-token",
+        session_file=tmp_path / "editor-mcp.json",
+    )
+    server = EditorMcpServer(executor, config)
+    server.start()
+    try:
+        session = json.loads(config.session_file.read_text(encoding="utf-8"))
+        result_holder = {}
+
+        def call_tool():
+            result_holder["response"] = _post(
+                session,
+                "tools/call",
+                {
+                    "name": "capture_framegraph_resource",
+                    "arguments": {
+                        "target_index": 1,
+                        "resource": "ColorPass_3_output_res",
+                        "path": "/tmp/framegraph-color.png",
+                        "include_image": True,
+                        "flip_y": False,
+                        "channel_mode": 2,
+                        "highlight_hdr": True,
+                        "timeout": 2.0,
+                    },
+                },
+            )
+
+        thread = threading.Thread(target=call_tool)
+        thread.start()
+        deadline = time.monotonic() + 2.0
+        while thread.is_alive() and time.monotonic() < deadline:
+            executor.process_pending()
+            thread.join(timeout=0.01)
+        thread.join(timeout=0.1)
+
+        response = result_holder["response"]
+        result = response["result"]
+        assert result["isError"] is False
+        assert result["content"][0]["text"] == (
+            "Captured framegraph resource 'ColorPass_3_output_res': "
+            "/tmp/framegraph-color.png (128x64)"
+        )
+        assert result["content"][1] == {
+            "type": "image",
+            "data": "ZmFrZQ==",
+            "mimeType": "image/png",
+        }
+        assert result["structuredContent"]["ok"] is True
+        assert result["structuredContent"]["ready"] is True
+        assert result["structuredContent"]["path"] == "/tmp/framegraph-color.png"
     finally:
         server.stop()
 
