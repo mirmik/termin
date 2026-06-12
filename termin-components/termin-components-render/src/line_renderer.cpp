@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <cstring>
 #include <unordered_map>
 
+#include <termin/render/material_pipeline.hpp>
 #include <tcbase/tc_log.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/line_mesh_builder.hpp>
@@ -152,6 +154,25 @@ std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_fragme
     return cache;
 }
 
+std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_tube_body_shader_cache() {
+    static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
+    return cache;
+}
+
+std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_tube_cap_shader_cache() {
+    static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
+    return cache;
+}
+
+char* duplicate_c_string(const char* value) {
+    if (!value) return nullptr;
+    const size_t size = std::strlen(value) + 1;
+    char* copy = static_cast<char*>(std::malloc(size));
+    if (!copy) return nullptr;
+    std::memcpy(copy, value, size);
+    return copy;
+}
+
 TcShader get_line_material_fragment_shader(TcShader original_shader) {
     if (!original_shader.is_valid()) {
         return TcShader();
@@ -219,6 +240,124 @@ TcShader get_line_material_fragment_shader(TcShader original_shader) {
     }
 
     variant.set_variant_info(original_shader, TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT);
+    cache[original_shader] = variant;
+    return variant;
+}
+
+TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_variant) {
+    if (!original_shader.is_valid()) {
+        return TcShader();
+    }
+    const tc_shader_variant_op variant_op = cap_variant
+        ? TC_SHADER_VARIANT_LINE_TUBE_CAP
+        : TC_SHADER_VARIANT_LINE_TUBE_BODY;
+    if (original_shader.variant_op() == variant_op) {
+        return original_shader;
+    }
+
+    auto& cache = cap_variant
+        ? line_tube_cap_shader_cache()
+        : line_tube_body_shader_cache();
+    auto it = cache.find(original_shader);
+    if (it != cache.end()) {
+        TcShader& cached = it->second;
+        if (!cached.variant_is_stale()) {
+            return cached;
+        }
+        cache.erase(it);
+    }
+
+    const char* fragment_source = original_shader.fragment_source();
+    if (!fragment_source || fragment_source[0] == '\0') {
+        tc::Log::error(
+            "[LineRenderer] cannot create line tube material shader variant for '%s': fragment source is empty",
+            original_shader.name()
+        );
+        return TcShader();
+    }
+
+    const char* vertex_uuid = cap_variant
+        ? "termin-engine-world-tube-line-cap"
+        : "termin-engine-world-tube-line";
+    std::string vertex_source =
+        tgfx::load_builtin_shader_stage_source_from_catalog(vertex_uuid, "vertex");
+    if (vertex_source.empty()) {
+        tc::Log::error(
+            "[LineRenderer] failed to load line tube vertex shader template '%s'",
+            vertex_uuid
+        );
+        return TcShader();
+    }
+
+    std::string variant_name = std::string(original_shader.name())
+        + (cap_variant ? "_LineTubeCap" : "_LineTubeBody");
+    char variant_uuid[40];
+    tc_shader_make_variant_uuid(
+        variant_uuid,
+        sizeof(variant_uuid),
+        original_shader.uuid(),
+        variant_op
+    );
+
+    tc_shader_handle handle = tc_shader_from_sources_ex(
+        vertex_source.c_str(),
+        fragment_source,
+        nullptr,
+        variant_name.c_str(),
+        original_shader.source_path(),
+        variant_uuid,
+        TC_SHADER_LANGUAGE_SLANG,
+        TC_SHADER_ARTIFACT_REQUIRED
+    );
+    if (tc_shader_handle_is_invalid(handle)) {
+        tc::Log::error(
+            "[LineRenderer] failed to create line tube material shader variant for '%s'",
+            original_shader.name()
+        );
+        return TcShader();
+    }
+
+    TcShader variant(handle);
+    variant.set_features(original_shader.features());
+    variant.set_language(TC_SHADER_LANGUAGE_SLANG);
+    variant.set_artifact_policy(TC_SHADER_ARTIFACT_REQUIRED);
+
+    tc_shader* original_raw = original_shader.get();
+    tc_shader* variant_raw = variant.get();
+    if (original_raw && variant_raw) {
+        free(variant_raw->vertex_entry);
+        variant_raw->vertex_entry = duplicate_c_string(cap_variant ? "vs_cap_main" : "vs_main");
+        if (!variant_raw->vertex_entry) {
+            tc::Log::error(
+                "[LineRenderer] failed to assign vertex entry for line tube shader variant '%s'",
+                variant_name.c_str()
+            );
+            return TcShader();
+        }
+
+        const char* fragment_entry = original_raw->fragment_entry;
+        if (!fragment_entry || fragment_entry[0] == '\0') {
+            fragment_entry = "main";
+        }
+        free(variant_raw->fragment_entry);
+        variant_raw->fragment_entry = duplicate_c_string(fragment_entry);
+        if (!variant_raw->fragment_entry) {
+            tc::Log::error(
+                "[LineRenderer] failed to assign fragment entry for line tube shader variant '%s'",
+                variant_name.c_str()
+            );
+            return TcShader();
+        }
+
+        tc_shader_set_material_ubo_layout(
+            variant_raw,
+            original_raw->material_ubo_entries,
+            original_raw->material_ubo_entry_count,
+            original_raw->material_ubo_block_size
+        );
+    }
+
+    variant.set_variant_info(original_shader, variant_op);
     cache[original_shader] = variant;
     return variant;
 }
@@ -530,6 +669,11 @@ TcShader LineRenderer::override_shader(
         return original_shader;
     }
 
+    if (mode == LineRenderMode::WorldTube) {
+        TcShader variant = get_line_tube_material_shader(original_shader, false);
+        return variant.is_valid() ? variant : original_shader;
+    }
+
     TcShader variant = get_line_material_fragment_shader(original_shader);
     return variant.is_valid() ? variant : original_shader;
 }
@@ -545,6 +689,18 @@ void LineRenderer::collect_shader_usages(
     const LineRenderMode mode = effective_render_mode();
     if (!uses_material_fragment_variant(mode, phase_mark)
         || !accepts_phase(mode, phase_mark, cast_shadow)) {
+        return;
+    }
+
+    if (mode == LineRenderMode::WorldTube) {
+        TcShader body = get_line_tube_material_shader(original_shader, false);
+        if (body.is_valid()) {
+            emit(body);
+        }
+        TcShader cap = get_line_tube_material_shader(original_shader, true);
+        if (cap.is_valid()) {
+            emit(cap);
+        }
         return;
     }
 
@@ -600,7 +756,34 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
     }
 
     tgfx::ShaderHandle material_fragment_shader{};
-    if (!context.has_override_color && uses_material_fragment_variant(mode, phase_mark)) {
+    MaterialPipelineShaderBinding tube_body_shader{};
+    MaterialPipelineShaderBinding tube_cap_shader{};
+    if (!context.has_override_color && mode == LineRenderMode::WorldTube
+        && uses_material_fragment_variant(mode, phase_mark)) {
+        TcShader material_shader(phase ? phase->shader : tc_shader_handle_invalid());
+        TcShader body_variant = get_line_tube_material_shader(material_shader, false);
+        TcShader cap_variant = get_line_tube_material_shader(material_shader, true);
+        if (!body_variant.is_valid() || !cap_variant.is_valid()) {
+            tc::Log::error("[LineRenderer] failed to create line tube material shader variants");
+            return false;
+        }
+
+        if (!ensure_material_pipeline_shader(
+                ctx2,
+                ctx2.device(),
+                body_variant.handle,
+                "LineRenderer/WorldTubeBody",
+                tube_body_shader) ||
+            !ensure_material_pipeline_shader(
+                ctx2,
+                ctx2.device(),
+                cap_variant.handle,
+                "LineRenderer/WorldTubeCap",
+                tube_cap_shader)) {
+            tc::Log::error("[LineRenderer] failed to prepare line tube material shader variants");
+            return false;
+        }
+    } else if (!context.has_override_color && uses_material_fragment_variant(mode, phase_mark)) {
         tc_shader* shader = context.current_tc_shader.get();
         if (!shader) {
             tc::Log::error(
@@ -630,6 +813,20 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
         params.view_projection = to_tgfx_matrix(view_projection);
         params.lighting_enabled = !context.has_override_color;
         params.fragment_shader = material_fragment_shader;
+        if (tube_body_shader.shader && tube_cap_shader.shader) {
+            params.body_vertex_shader = tube_body_shader.vertex;
+            params.body_fragment_shader = tube_body_shader.fragment;
+            params.body_shader_layout = tube_body_shader.shader;
+            params.cap_vertex_shader = tube_cap_shader.vertex;
+            params.cap_fragment_shader = tube_cap_shader.fragment;
+            params.cap_shader_layout = tube_cap_shader.shader;
+            params.bind_resources =
+                [&context, phase](tgfx::RenderContext2& line_ctx, const tc_shader* shader_layout) {
+                    if (context.prepare_tgfx2_material_resources) {
+                        context.prepare_tgfx2_material_resources(line_ctx, shader_layout, phase);
+                    }
+                };
+        }
 
         world_tube_renderer_->draw_polyline(ctx2, world_points, style, params);
         return true;
