@@ -28,6 +28,35 @@ if TYPE_CHECKING:
     from termin.voxels.grid import VoxelGrid
 
 
+def _apply_voxel_display_params(
+    phase,
+    color_below: np.ndarray,
+    color_above: np.ndarray,
+    slice_axis: np.ndarray,
+    fill_percent: float,
+    bounds_min: np.ndarray,
+    bounds_max: np.ndarray,
+) -> None:
+    slice_axis_fill = np.array(
+        [slice_axis[0], slice_axis[1], slice_axis[2], fill_percent],
+        dtype=np.float32,
+    )
+    padded_bounds_min = np.array(
+        [bounds_min[0], bounds_min[1], bounds_min[2], 0.0],
+        dtype=np.float32,
+    )
+    padded_bounds_max = np.array(
+        [bounds_max[0], bounds_max[1], bounds_max[2], 0.0],
+        dtype=np.float32,
+    )
+
+    phase.set_param("u_color_below", color_below)
+    phase.set_param("u_color_above", color_above)
+    phase.set_param("u_slice_axis_fill_percent", slice_axis_fill)
+    phase.set_param("u_bounds_min", padded_bounds_min)
+    phase.set_param("u_bounds_max", padded_bounds_max)
+
+
 class VoxelizeMode(IntEnum):
     """Режимы вокселизации (стадии пайплайна)."""
     SHELL = 0           # Только поверхность меша
@@ -372,16 +401,17 @@ class VoxelizerComponent(DrawableComponent):
 
             # Используем vertex colors (UV.x = 2.0)
             white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+            z_axis = np.array([0.0, 0.0, 1.0], dtype=np.float32)
             for phase in phases:
-                phase.set_param("u_color_below", white_color)
-                phase.set_param("u_color_above", white_color)
-                phase.set_param("u_color_surface", white_color)
-                phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
-                phase.set_param("u_fill_percent", 1.0)
-                phase.set_param("u_bounds_min", self._debug_bounds_min)
-                phase.set_param("u_bounds_max", self._debug_bounds_max)
-                phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
-                phase.set_param("u_ambient_intensity", 0.5)
+                _apply_voxel_display_params(
+                    phase,
+                    white_color,
+                    white_color,
+                    z_axis,
+                    1.0,
+                    self._debug_bounds_min,
+                    self._debug_bounds_max,
+                )
 
             phases.sort(key=lambda p: p.priority)
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_REGIONS) for p in phases)
@@ -396,16 +426,17 @@ class VoxelizerComponent(DrawableComponent):
 
             # Используем vertex colors
             white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+            z_axis = np.array([0.0, 0.0, 1.0], dtype=np.float32)
             for phase in phases:
-                phase.set_param("u_color_below", white_color)
-                phase.set_param("u_color_above", white_color)
-                phase.set_param("u_color_surface", white_color)
-                phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
-                phase.set_param("u_fill_percent", 1.0)
-                phase.set_param("u_bounds_min", self._debug_bounds_min)
-                phase.set_param("u_bounds_max", self._debug_bounds_max)
-                phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
-                phase.set_param("u_ambient_intensity", 0.5)
+                _apply_voxel_display_params(
+                    phase,
+                    white_color,
+                    white_color,
+                    z_axis,
+                    1.0,
+                    self._debug_bounds_min,
+                    self._debug_bounds_max,
+                )
 
             phases.sort(key=lambda p: p.priority)
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_SPARSE_BOUNDARY) for p in phases)
@@ -418,13 +449,18 @@ class VoxelizerComponent(DrawableComponent):
             else:
                 phases = [p for p in mat.phases if p.phase_mark == phase_mark]
 
+            color = np.array([1.0, 0.5, 0.0, 0.5], dtype=np.float32)
+            z_axis = np.array([0.0, 0.0, 1.0], dtype=np.float32)
             for phase in phases:
-                phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
-                phase.set_param("u_fill_percent", 1.0)
-                phase.set_param("u_bounds_min", self._debug_bounds_min)
-                phase.set_param("u_bounds_max", self._debug_bounds_max)
-                phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
-                phase.set_param("u_ambient_intensity", 0.5)
+                _apply_voxel_display_params(
+                    phase,
+                    color,
+                    color,
+                    z_axis,
+                    1.0,
+                    self._debug_bounds_min,
+                    self._debug_bounds_max,
+                )
 
             phases.sort(key=lambda p: p.priority)
             result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_INNER_CONTOUR) for p in phases)

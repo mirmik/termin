@@ -273,14 +273,30 @@ class VoxelDisplayComponent(DrawableComponent):
         color_below_arr = np.array(self.color_below, dtype=np.float32)
         color_above_arr = np.array(self.color_above, dtype=np.float32)
         slice_axis_arr = np.array(self.slice_axis, dtype=np.float32)
+        slice_axis_fill = np.array(
+            [
+                slice_axis_arr[0],
+                slice_axis_arr[1],
+                slice_axis_arr[2],
+                self.fill_percent / 100.0,
+            ],
+            dtype=np.float32,
+        )
+        bounds_min = np.array(
+            [self._bounds_min[0], self._bounds_min[1], self._bounds_min[2], 0.0],
+            dtype=np.float32,
+        )
+        bounds_max = np.array(
+            [self._bounds_max[0], self._bounds_max[1], self._bounds_max[2], 0.0],
+            dtype=np.float32,
+        )
 
         for phase in phases:
             phase.set_param("u_color_below", color_below_arr)
             phase.set_param("u_color_above", color_above_arr)
-            phase.set_param("u_slice_axis", slice_axis_arr)
-            phase.set_param("u_fill_percent", self.fill_percent / 100.0)
-            phase.set_param("u_bounds_min", self._bounds_min)
-            phase.set_param("u_bounds_max", self._bounds_max)
+            phase.set_param("u_slice_axis_fill_percent", slice_axis_fill)
+            phase.set_param("u_bounds_min", bounds_min)
+            phase.set_param("u_bounds_max", bounds_max)
 
         phases.sort(key=lambda p: p.priority)
         return [GeometryDrawCall(phase=p) for p in phases]
