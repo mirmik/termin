@@ -67,6 +67,9 @@ def build_editor_menu_spec(
     on_show_inspect_registry_viewer: Callable[[], None],
     on_show_navmesh_registry_viewer: Callable[[], None],
     on_show_scene_manager_viewer: Callable[[], None],
+    on_show_python_console: Callable[[], None],
+    # Help
+    on_show_about: Callable[[], None],
     # Handle setters (called by the controller with native widget handles)
     set_undo_handle: Callable[[object], None],
     set_redo_handle: Callable[[object], None],
@@ -99,6 +102,8 @@ def build_editor_menu_spec(
         MenuItemSpec("Inspect Registry...", on_show_inspect_registry_viewer),
         MenuItemSpec("NavMesh Registry...", on_show_navmesh_registry_viewer),
         MenuItemSpec("Scene Manager...", on_show_scene_manager_viewer),
+        None,
+        MenuItemSpec("Python Console...", on_show_python_console),
     ]
     if on_toggle_surface_edge_debug_tool is not None:
         debug_items.extend([
@@ -204,5 +209,12 @@ def build_editor_menu_spec(
         MenuSpec(
             name="Debug",
             items=debug_items,
+        ),
+        # ── Help ───────────────────────────────────────────────────────
+        MenuSpec(
+            name="Help",
+            items=[
+                MenuItemSpec("About Termin...", on_show_about),
+            ],
         ),
     ]

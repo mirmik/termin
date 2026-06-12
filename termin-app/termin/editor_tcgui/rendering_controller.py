@@ -110,6 +110,10 @@ class RenderingControllerTcgui:
     def offscreen_context(self) -> "OffscreenContext":
         return self._offscreen_context
 
+    def backend_name(self) -> str:
+        """Return the active rendering backend name for diagnostics."""
+        return self._ctx.backend
+
     @property
     def displays(self) -> list["Display"]:
         return self._manager.displays

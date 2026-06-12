@@ -72,6 +72,9 @@ class MenuBarControllerTcgui:
         on_show_inspect_registry_viewer: Callable,
         on_show_navmesh_registry_viewer: Callable,
         on_show_scene_manager_viewer: Callable,
+        on_show_python_console: Callable,
+        # Help
+        on_show_about: Callable,
         on_toggle_surface_edge_debug_tool: Callable,
         is_surface_edge_debug_tool_enabled: Callable[[], bool],
         # State getters
@@ -143,6 +146,8 @@ class MenuBarControllerTcgui:
             on_show_inspect_registry_viewer=on_show_inspect_registry_viewer,
             on_show_navmesh_registry_viewer=on_show_navmesh_registry_viewer,
             on_show_scene_manager_viewer=on_show_scene_manager_viewer,
+            on_show_python_console=on_show_python_console,
+            on_show_about=on_show_about,
             on_toggle_surface_edge_debug_tool=on_toggle_surface_edge_debug_tool,
             is_surface_edge_debug_tool_enabled=is_surface_edge_debug_tool_enabled,
             # Handle setters — direct assignment, no reflection

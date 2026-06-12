@@ -12,6 +12,7 @@ class EditorDialogLauncher:
     def __init__(
         self,
         *,
+        get_editor: Callable[[], object],
         get_ui: Callable[[], object | None],
         get_scene: Callable[[], object | None],
         scene_manager,
@@ -33,6 +34,7 @@ class EditorDialogLauncher:
         get_spacemouse: Callable[[], object | None],
         set_spacemouse: Callable[[object | None], None],
     ) -> None:
+        self._get_editor = get_editor
         self._get_ui = get_ui
         self._get_scene = get_scene
         self._scene_manager = scene_manager
@@ -62,6 +64,31 @@ class EditorDialogLauncher:
         from termin.editor_tcgui.dialogs.settings_dialog import show_settings_dialog
 
         show_settings_dialog(ui)
+
+    def show_about(self) -> None:
+        ui = self._get_ui()
+        if ui is None:
+            return
+        rendering_controller = self._get_rendering_controller()
+        backend_name = None
+        if rendering_controller is not None:
+            backend_name = rendering_controller.backend_name()
+        from termin.editor_tcgui.dialogs.about_dialog import show_about_dialog
+
+        show_about_dialog(ui, backend_name=backend_name)
+
+    def show_python_console(self) -> None:
+        ui = self._get_ui()
+        if ui is None:
+            return
+        from termin.editor_tcgui.dialogs.python_console_dialog import show_python_console_dialog
+
+        show_python_console_dialog(
+            ui,
+            editor=self._get_editor(),
+            get_scene=self._get_scene,
+            get_project_path=self._get_project_path,
+        )
 
     def show_project_settings(self) -> None:
         ui = self._get_ui()
