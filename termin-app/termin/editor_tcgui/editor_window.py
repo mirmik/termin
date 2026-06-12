@@ -57,6 +57,7 @@ from termin.editor_tcgui.prefab_toolbar_controller import PrefabToolbarControlle
 from termin.editor_tcgui.game_mode_ui_controller import GameModeUiController
 from termin.editor_tcgui.resource_actions_controller import ResourceActionsController
 from termin.editor_tcgui.editor_dialog_launcher import EditorDialogLauncher
+from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
 from termin.editor_tcgui.component_extension_panel_controller import (
     ComponentExtensionPanelController,
 )
@@ -156,6 +157,7 @@ class EditorWindowTcgui:
         self._display_routers: dict[int, object] = {}
         self._current_project_path: str | None = None
         self._project_name: str | None = None
+        self._python_executor = EditorPythonExecutor(self._build_python_context)
         self._fullscreen = FullscreenController(
             get_panels=self._fullscreen_panels,
             update_fullscreen_action=self._update_fullscreen_action,
@@ -204,6 +206,7 @@ class EditorWindowTcgui:
             scene_manager=self.scene_manager,
             get_game_scene_name=lambda: self._game_scene_name,
             get_project_path=self._get_project_path,
+            get_python_executor=lambda: self._python_executor,
             get_rendering_controller=lambda: self._rendering_controller,
             get_fbo_surface=lambda: self._fbo_surface,
             get_project_file_watcher=lambda: self._project_file_watcher,
@@ -794,8 +797,37 @@ class EditorWindowTcgui:
             return self.scene_manager.get_scene(self._editor_scene_name)
         return None
 
+    @property
+    def editor_scene_name(self) -> str | None:
+        return self._editor_scene_name
+
+    @property
+    def current_scene_name(self) -> str | None:
+        return self._editor_scene_name
+
+    @property
+    def current_scene(self):
+        return self.scene
+
+    @property
+    def selected_entity(self):
+        if self._interaction_system is None:
+            return None
+        return self._interaction_system.selection.selected
+
+    @property
+    def selected(self):
+        return self.selected_entity
+
     def should_close(self) -> bool:
         return self._should_close
+
+    @property
+    def python_executor(self) -> EditorPythonExecutor:
+        return self._python_executor
+
+    def process_python_requests(self) -> int:
+        return self._python_executor.process_pending()
 
     def set_viewport_click_interceptor(
         self,
@@ -1444,6 +1476,20 @@ class EditorWindowTcgui:
 
     def _get_project_path(self) -> str | None:
         return self._current_project_path
+
+    def _build_python_context(self) -> dict[str, object | None]:
+        return {
+            "editor": self,
+            "scene": self.scene,
+            "scene_name": self._editor_scene_name,
+            "editor_scene_name": self._editor_scene_name,
+            "current_scene": self.scene,
+            "current_scene_name": self._editor_scene_name,
+            "selected": self.selected_entity,
+            "selected_entity": self.selected_entity,
+            "scene_manager": self.scene_manager,
+            "project_path": self._get_project_path(),
+        }
 
     def _set_spacemouse(self, spacemouse) -> None:
         self._spacemouse = spacemouse

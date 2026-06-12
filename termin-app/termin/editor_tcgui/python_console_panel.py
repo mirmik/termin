@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import code
-import contextlib
-import io
 from collections.abc import Callable
 
-from tcbase import log
 from tcgui.widgets.button import Button
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
@@ -15,6 +11,8 @@ from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.units import px
 from tcgui.widgets.vstack import VStack
+
+from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
 
 
 class PythonConsolePanel(VStack):
@@ -27,7 +25,7 @@ class PythonConsolePanel(VStack):
         self._editor = None
         self._get_scene: Callable[[], object | None] | None = None
         self._get_project_path: Callable[[], str | None] | None = None
-        self._console = code.InteractiveConsole(locals={})
+        self._executor: EditorPythonExecutor | None = None
 
         self._output = TextArea()
         self._output.read_only = True
@@ -70,28 +68,34 @@ class PythonConsolePanel(VStack):
         editor: object,
         get_scene: Callable[[], object | None],
         get_project_path: Callable[[], str | None],
+        executor: EditorPythonExecutor | None = None,
     ) -> None:
         self._editor = editor
         self._get_scene = get_scene
         self._get_project_path = get_project_path
-        self._refresh_context()
+        self._executor = executor or EditorPythonExecutor(self._build_context)
 
     def clear(self) -> None:
         self._output.text = ""
 
-    def _refresh_context(self) -> None:
-        namespace = self._console.locals
-        namespace["editor"] = self._editor
-        namespace["scene"] = self._get_scene() if self._get_scene is not None else None
-        namespace["scene_manager"] = self._editor.scene_manager if self._editor is not None else None
-        namespace["project_path"] = self._get_project_path() if self._get_project_path is not None else None
-
-        from termin.assets.resources import ResourceManager
-        import termin
-
-        namespace["rm"] = ResourceManager.instance()
-        namespace["resource_manager"] = namespace["rm"]
-        namespace["termin"] = termin
+    def _build_context(self) -> dict[str, object | None]:
+        scene = self._get_scene() if self._get_scene is not None else None
+        scene_name = self._editor.editor_scene_name if self._editor is not None else None
+        selected = self._editor.selected_entity if self._editor is not None else None
+        return {
+            "editor": self._editor,
+            "scene": scene,
+            "scene_name": scene_name,
+            "editor_scene_name": scene_name,
+            "current_scene": scene,
+            "current_scene_name": scene_name,
+            "selected": selected,
+            "selected_entity": selected,
+            "scene_manager": self._editor.scene_manager if self._editor is not None else None,
+            "project_path": (
+                self._get_project_path() if self._get_project_path is not None else None
+            ),
+        }
 
     def _append(self, text: str) -> None:
         if not text:
@@ -115,20 +119,13 @@ class PythonConsolePanel(VStack):
 
         prompt = self._prompt.text
         self._append(f"{prompt} {text}")
-        self._refresh_context()
+        if self._executor is None:
+            self._executor = EditorPythonExecutor(self._build_context)
 
-        stdout = io.StringIO()
-        try:
-            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stdout):
-                wants_more = self._console.push(text)
-        except Exception:
-            log.error("[PythonConsolePanel] internal console execution failure", exc_info=True)
-            self._append("Internal console error; see log.")
-            self._prompt.text = ">>>"
-            return
+        result = self._executor.execute_repl_line(text)
+        if result.output:
+            self._append(result.output)
+        if result.error:
+            self._append(result.error)
 
-        captured = stdout.getvalue()
-        if captured:
-            self._append(captured)
-
-        self._prompt.text = "..." if wants_more else ">>>"
+        self._prompt.text = "..." if result.wants_more else ">>>"

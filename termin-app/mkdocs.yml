@@ -27,3 +27,4 @@ nav:
     - Расширения сцены: scene_extensions_architecture.md
     - Архитектура редактора: editor-architecture.md
     - Flat Viewport/RenderTarget: rendering-flat-viewport-target-model.md
+    - Editor MCP diagnostics: editor-mcp.md

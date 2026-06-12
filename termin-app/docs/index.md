@@ -8,6 +8,7 @@ tcgui является единственным поддерживаемым UI 
 
 - [Архитектура редактора](editor-architecture.md)
 - [Project build manifest](project-build-manifest.md)
+- [Editor MCP diagnostics](editor-mcp.md)
 - [Плоская модель Viewport / RenderTarget](rendering-flat-viewport-target-model.md)
 - [Scene extensions architecture](scene_extensions_architecture.md)
 
@@ -20,6 +21,7 @@ getting-started
 concepts
 editor-architecture
 project-build-manifest
+editor-mcp
 rendering-flat-viewport-target-model
 scene_extensions_architecture
 api/index

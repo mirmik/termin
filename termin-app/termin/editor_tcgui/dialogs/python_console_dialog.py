@@ -14,6 +14,7 @@ def show_python_console_dialog(
     editor: object,
     get_scene,
     get_project_path,
+    executor=None,
 ) -> Dialog:
     panel = PythonConsolePanel()
     panel.preferred_width = px(880)
@@ -22,6 +23,7 @@ def show_python_console_dialog(
         editor=editor,
         get_scene=get_scene,
         get_project_path=get_project_path,
+        executor=executor,
     )
 
     dlg = Dialog()
