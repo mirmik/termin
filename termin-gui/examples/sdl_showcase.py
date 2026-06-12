@@ -48,7 +48,7 @@ from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.frame_time_graph import FrameTimeGraph
 
 from termin.display import SDLBackendWindow
-from tgfx import Tgfx2Context
+from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
 # ── SDL helpers ──────────────────────────────────────────────────────────
@@ -719,6 +719,7 @@ def _get_event_window_id(event):
 
 
 def main():
+    configure_default_shader_runtime("examples")
     window = SDLBackendWindow("tcgui — Widget Showcase", 900, 680)
 
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())

@@ -22,7 +22,7 @@ from tcgui.widgets.panel import Panel
 from tcgui.widgets.status_bar import StatusBar
 from tcgui.widgets.units import px, pct
 from termin.display import SDLBackendWindow
-from tgfx import Tgfx2Context
+from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
 _KEY_MAP = {
@@ -275,6 +275,7 @@ def build_ui(graphics):
 # --- Main ---
 
 def main():
+    configure_default_shader_runtime("examples")
     window = SDLBackendWindow("tcgui — Canvas Demo", 800, 600)
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 

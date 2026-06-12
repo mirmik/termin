@@ -23,7 +23,7 @@ from tcgui.widgets.containers import VStack, HStack, Panel
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.units import px, pct
 from termin.display import SDLBackendWindow
-from tgfx import Tgfx2Context
+from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
 _KEY_MAP = {
@@ -383,6 +383,7 @@ def build_main_ui(wm, graphics):
 # ---------------------------------------------------------------------------
 
 def main():
+    configure_default_shader_runtime("examples")
     window = SDLBackendWindow("tcgui Multi-Window", 600, 400)
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
