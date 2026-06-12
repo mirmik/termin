@@ -14,7 +14,6 @@ extern "C" {
 }
 
 #include <cstring>
-#include <span>
 
 namespace termin {
 
@@ -52,11 +51,8 @@ GroundGridPass::GroundGridPass(
 }
 
 GroundGridPass::~GroundGridPass() {
-    if (_device) {
-        // Shader handles live on the tc_shader registry (see `_shader_handle`),
-        // shared across pass re-creations.
-        if (_params_ubo) _device->destroy(_params_ubo);
-    }
+    // Shader handles live on the tc_shader registry (see `_shader_handle`),
+    // shared across pass re-creations.
 }
 
 std::set<const char*> GroundGridPass::compute_reads() const {
@@ -77,13 +73,6 @@ void GroundGridPass::_ensure_resources(tgfx::IRenderDevice* device) {
     if (tc_shader_handle_is_invalid(_shader_handle)) {
         _shader_handle =
             tgfx::register_builtin_shader_from_catalog(GROUND_GRID_ENGINE_SHADER_UUID);
-    }
-
-    if (!_params_ubo) {
-        tgfx::BufferDesc ubo_desc;
-        ubo_desc.size = sizeof(GridParamsStd140);
-        ubo_desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-        _params_ubo = device->create_buffer(ubo_desc);
     }
 }
 
@@ -114,30 +103,24 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     float far_clip  = static_cast<float>(ctx.camera->far_clip);
 
     _ensure_resources(&ctx2->device());
-    if (tc_shader_handle_is_invalid(_shader_handle) || !_params_ubo) return;
+    if (tc_shader_handle_is_invalid(_shader_handle)) return;
 
     tgfx::ShaderHandle grid_vs, grid_fs;
+    tc_shader* raw = nullptr;
     {
-        tc_shader* raw = tc_shader_get(_shader_handle);
+        raw = tc_shader_get(_shader_handle);
         if (!raw || !tc_shader_ensure_tgfx2(raw, _device, &grid_vs, &grid_fs)) {
             tc::Log::error("GroundGridPass: tc_shader_ensure_tgfx2 failed for engine grid shader");
             return;
         }
     }
 
-    // Upload the param block BEFORE begin_pass — Vulkan forbids
-    // vkCmdCopyBuffer inside a render pass, and tgfx2's upload_buffer
-    // on the GL path is a trivial glBufferSubData so either order is fine.
     GridParamsStd140 params{};
     std::memcpy(params.u_inv_vp,     inv_vp.data, sizeof(params.u_inv_vp));
     std::memcpy(params.u_view,       view.data,   sizeof(params.u_view));
     std::memcpy(params.u_projection, proj.data,   sizeof(params.u_projection));
     params.u_near = near_clip;
     params.u_far  = far_clip;
-    ctx2->device().upload_buffer(
-        _params_ubo,
-        std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(&params),
-                                 sizeof(params)));
 
     auto out_desc = ctx2->device().texture_desc(color_tex2);
     const int w = static_cast<int>(out_desc.width);
@@ -158,13 +141,12 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     ctx2->set_cull(tgfx::CullMode::None);
 
     // Bind our grid VS/FS (NOT the built-in FSQ VS) and draw the
-    // built-in fullscreen quad. The grid VS declares `a_pos` at
-    // location 0 — compatible with ctx2's FSQ VBO layout (aPos/aUV);
-    // aUV at location 1 is simply ignored by the VS.
+    // built-in fullscreen quad.
     ctx2->bind_shader(grid_vs, grid_fs);
-    ctx2->bind_uniform_buffer(0, _params_ubo);
+    ctx2->use_shader_resource_layout(raw);
+    ctx2->bind_uniform_data("GridParams", &params, sizeof(params));
 
-    ctx2->draw_fullscreen_quad();
+    ctx2->draw_fullscreen_quad_with_bound_shader();
     ctx2->end_pass();
 }
 

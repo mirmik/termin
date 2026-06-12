@@ -102,7 +102,7 @@ bind-by-name model without changing the package shape later.
 | `termin-engine-bloom-bright` | `BloomBrightFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-bright.frag.slang` |
 | `termin-engine-highlight` | `HighlightEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-highlight.frag.slang` |
 | `termin-engine-gizmo-mask` | `GizmoMaskVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-gizmo-mask.vert.glsl`, `builtin_shaders/termin-engine-gizmo-mask.frag.glsl` |
-| `termin-engine-ground-grid` | `GroundGridEngineVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-ground-grid.vert.glsl`, `builtin_shaders/termin-engine-ground-grid.frag.glsl` |
+| `termin-engine-ground-grid` | `GroundGridEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-ground-grid.slang` |
 | `termin-engine-solid-primitive` | `SolidPrimitiveEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-solid-primitive.slang` |
 | `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-downsample.frag.slang` |
 | `termin-engine-bloom-upsample` | `BloomUpsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-upsample.frag.slang` |
