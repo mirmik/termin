@@ -1,38 +1,29 @@
 // material_pass.cpp - Post-processing pass using a Material.
 //
 // Fully migrated to tgfx2: wraps the output FBO as a tgfx2 texture,
-// opens a ctx2 render pass, binds the material's own VS/FS through
-// tc_shader_ensure_tgfx2, applies @property UBO via
-// apply_material_phase_ubo_runtime (backend-neutral tgfx2 path), and draws the
-// built-in fullscreen quad. No legacy GraphicsBackend draw calls.
+// opens a ctx2 render pass, binds the material's own VS/FS through the shared
+// material pipeline helpers, applies @property UBO via shader-reflected
+// resources, and draws the built-in fullscreen quad. No legacy GraphicsBackend
+// draw calls.
 
 #include <tcbase/tc_log.hpp>
 
-#include <termin/render/frame_uniforms.hpp>
+#include <termin/render/material_pipeline.hpp>
 #include <termin/render/material_pass.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/i_render_device.hpp>
-#include <tgfx2/tc_shader_bridge.hpp>
-#include <termin/render/material_ubo_runtime.hpp>
 
-#include <optional>
+extern "C" {
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace termin {
 
 namespace {
 
 constexpr uint32_t MATERIAL_TEXTURE_BINDING_BASE = 4;
-constexpr uint32_t MATERIAL_TEXTURE_BINDING_SHADOW_SLOT = 8;
-
-uint32_t material_texture_binding_for_index(uint32_t index) {
-    uint32_t binding = MATERIAL_TEXTURE_BINDING_BASE + index;
-    if (binding >= MATERIAL_TEXTURE_BINDING_SHADOW_SLOT) {
-        binding += 1;
-    }
-    return binding;
-}
 
 } // namespace
 
@@ -197,20 +188,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     }
 
     tc_material_phase* phase = &mat->phases[0];
-    tc_shader* shader = tc_shader_get(phase->shader);
-    if (!shader) {
-        tc::Log::warn("[MaterialPass] '%s': material has no valid shader",
-                      get_pass_name().c_str());
-        return;
-    }
-
-    tgfx::ShaderHandle vs2, fs2;
-    if (!tc_shader_ensure_tgfx2(shader, &device, &vs2, &fs2)) {
-        tc::Log::error("[MaterialPass] '%s': tc_shader_ensure_tgfx2 failed for shader '%s'",
-                       get_pass_name().c_str(),
-                       shader->name ? shader->name : shader->uuid);
-        return;
-    }
 
     ctx2->begin_pass(color_tex2, /*depth=*/{},
                      /*clear_color=*/nullptr,
@@ -222,62 +199,58 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     ctx2->set_blend(false);
     ctx2->set_cull(tgfx::CullMode::None);
 
-    ctx2->bind_shader(vs2, fs2);
-    bind_engine_per_frame_uniforms(*ctx2, ctx);
+    MaterialPipelineShaderBinding shader_binding{};
+    if (!ensure_material_pipeline_shader(
+            *ctx2,
+            device,
+            phase->shader,
+            "MaterialPass",
+            shader_binding)) {
+        ctx2->end_pass();
+        return;
+    }
 
-    constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
-    constexpr uint32_t EXTRA_TEX_SLOT_BASE = 17;
-    uint32_t graph_tex_slot = EXTRA_TEX_SLOT_BASE;
+    EnginePerFrameStd140 per_frame = make_engine_per_frame_uniforms(ctx);
+    MaterialPipelineResourceContext material_resources{};
+    material_resources.per_frame = &per_frame;
+    MaterialPipelineFallbackBindings material_fallback{};
+    material_fallback.material_ubo = TC_MATERIAL_UBO_BINDING_SLOT;
+    material_fallback.material_texture_base = MATERIAL_TEXTURE_BINDING_BASE;
+    prepare_material_pipeline_resources(
+        *ctx2,
+        device,
+        shader_binding.shader,
+        phase,
+        material_resources,
+        material_fallback);
 
-    auto material_texture_slot = [&](const std::string& uniform_name) -> std::optional<uint32_t> {
-        for (size_t i = 0; i < phase->texture_count; ++i) {
-            if (uniform_name == phase->textures[i].name) {
-                return material_texture_binding_for_index(static_cast<uint32_t>(i));
-            }
+    auto bind_graph_texture = [&](
+        const std::string& res_name,
+        const std::string& uniform_name) {
+        if (res_name.empty() || uniform_name.empty()) {
+            return;
         }
-        return std::nullopt;
-    };
 
-    auto bind_graph_texture = [&](const std::string& res_name, const std::string& uniform_name) {
-        if (res_name.empty() || uniform_name.empty()) return;
+        const tc_shader_resource_binding* rb =
+            tc_shader_find_resource_binding(shader_binding.shader, uniform_name.c_str());
+        if (!rb || rb->kind != TC_SHADER_RESOURCE_TEXTURE) {
+            tc::Log::error(
+                "[MaterialPass] '%s': texture uniform '%s' is not declared as a shader "
+                "Texture2D resource; graph textures are bind-by-name only",
+                get_pass_name().c_str(),
+                uniform_name.c_str());
+            return;
+        }
+
         auto res_it = ctx.tex2_reads.find(res_name);
-        if (res_it != ctx.tex2_reads.end() && res_it->second) {
-            uint32_t slot = graph_tex_slot;
-            std::optional<uint32_t> material_slot = material_texture_slot(uniform_name);
-            if (material_slot.has_value()) {
-                slot = *material_slot;
-            } else {
-                if (graph_tex_slot > 23) {
-                    tc::Log::error("[MaterialPass] '%s': no Vulkan descriptor slot left for '%s'",
-                        get_pass_name().c_str(), uniform_name.c_str());
-                    return;
-                }
-                graph_tex_slot++;
-            }
-            ctx2->bind_sampled_texture(slot, res_it->second);
-            if (!material_slot.has_value()) {
-                tc::Log::error(
-                    "[MaterialPass] '%s': texture uniform '%s' is not a material Texture2D property; "
-                    "cannot bind it backend-neutrally. Add an @property Texture2D with this name "
-                    "so shader_parser assigns an explicit descriptor binding.",
-                    get_pass_name().c_str(),
-                    uniform_name.c_str());
-            }
-        } else {
+        if (res_it == ctx.tex2_reads.end() || !res_it->second) {
             tc::Log::warn("[MaterialPass] '%s': tgfx2 input texture for '%s' not available",
                 get_pass_name().c_str(), res_name.c_str());
+            return;
         }
-    };
 
-    if (shader->material_ubo_block_size > 0) {
-        apply_material_phase_ubo_runtime(
-            phase,
-            shader,
-            TC_MATERIAL_UBO_BINDING_SLOT,
-            MATERIAL_TEX_SLOT_BASE,
-            device,
-            *ctx2);
-    }
+        ctx2->bind_texture(uniform_name, res_it->second);
+    };
 
     // extra_resources: pull tgfx2 color textures directly from ctx.tex2_reads.
     for (const auto& [res_name, uniform_name] : extra_resources) {

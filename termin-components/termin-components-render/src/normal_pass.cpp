@@ -2,6 +2,7 @@
 
 #include <termin/camera/camera_component.hpp>
 #include <termin/camera/render_camera_utils.hpp>
+#include <termin/render/material_pipeline.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -15,6 +16,7 @@
 
 #include <tcbase/tc_log.hpp>
 
+#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
@@ -109,22 +111,32 @@ void NormalPass::execute_with_data_tgfx2(
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
 
-    tgfx::ShaderHandle normal_vs2, normal_fs2;
-    tc_shader* normal_raw = nullptr;
-    {
-        normal_raw = tc_shader_get(normal_shader_handle_);
-        if (!normal_raw || !tc_shader_ensure_tgfx2(normal_raw, &device, &normal_vs2, &normal_fs2)) {
-            tc::Log::error("NormalPass: tc_shader_ensure_tgfx2 failed for engine normal shader");
-            return;
-        }
+    MaterialPipelineShaderBinding normal_shader{};
+    if (!ensure_material_pipeline_shader(
+            *ctx.ctx2,
+            device,
+            normal_shader_handle_,
+            "NormalPass",
+            normal_shader)) {
+        return;
     }
-    ctx.ctx2->bind_shader(normal_vs2, normal_fs2);
-    ctx.ctx2->use_shader_resource_layout(normal_raw);
 
     NormalPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
-    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+    std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
+        {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+    }};
+    MaterialPipelineResourceContext normal_resources{};
+    normal_resources.uniforms = per_frame_uniforms;
+    MaterialPipelineFallbackBindings normal_fallback{};
+    prepare_material_pipeline_resources(
+        *ctx.ctx2,
+        device,
+        normal_shader.shader,
+        nullptr,
+        normal_resources,
+        normal_fallback);
 
     const std::string& debug_symbol = get_debug_internal_point();
 
@@ -157,25 +169,36 @@ void NormalPass::execute_with_data_tgfx2(
         } else {
             // Skinning variant: compile via bridge, bind, rely on
             // SkinnedMeshRenderer to upload BoneBlock UBO.
-            tc_shader* raw = tc_shader_get(dc.final_shader);
-            if (!raw) {
+            MaterialPipelineShaderBinding skinned_shader{};
+            if (!ensure_material_pipeline_shader(
+                    *ctx.ctx2,
+                    device,
+                    dc.final_shader,
+                    "NormalPass/skinned",
+                    skinned_shader)) {
                 continue;
             }
-            tgfx::ShaderHandle vs2, fs2;
-            if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
-                continue;
-            }
-            ctx.ctx2->bind_shader(vs2, fs2);
-            ctx.ctx2->use_shader_resource_layout(raw);
-            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                skinned_shader.shader,
+                nullptr,
+                normal_resources,
+                normal_fallback);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
-            ctx.ctx2->bind_shader(normal_vs2, normal_fs2);
-            ctx.ctx2->use_shader_resource_layout(normal_raw);
-            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+            ctx.ctx2->bind_shader(normal_shader.vertex, normal_shader.fragment);
+            ctx.ctx2->use_shader_resource_layout(normal_shader.shader);
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                normal_shader.shader,
+                nullptr,
+                normal_resources,
+                normal_fallback);
         }
     }
 

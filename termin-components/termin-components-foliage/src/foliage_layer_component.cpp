@@ -16,7 +16,7 @@
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/geom/general_pose3.hpp>
 #include <termin/render/frame_uniforms.hpp>
-#include <termin/render/material_ubo_runtime.hpp>
+#include <termin/render/material_pipeline.hpp>
 #include <inspect/tc_kind_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <tc_inspect_cpp.hpp>
@@ -28,7 +28,6 @@
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/render_context.hpp>
-#include <tgfx2/tc_shader_bridge.hpp>
 #include <tgfx2/vertex_layout.hpp>
 
 namespace termin {
@@ -684,10 +683,13 @@ bool FoliageLayerComponent::draw_tgfx2(
         tc::Log::error("[FoliageLayerComponent] cannot draw foliage: shader variant is invalid");
         return false;
     }
-    tc_shader* raw_shader = tc_shader_get(shader.handle);
-    tgfx::ShaderHandle vs2;
-    tgfx::ShaderHandle fs2;
-    if (!raw_shader || !tc_shader_ensure_tgfx2(raw_shader, &ctx2.device(), &vs2, &fs2)) {
+    MaterialPipelineShaderBinding shader_binding{};
+    if (!ensure_material_pipeline_shader(
+            ctx2,
+            ctx2.device(),
+            shader.handle,
+            "FoliageLayerComponent",
+            shader_binding)) {
         tc::Log::error("[FoliageLayerComponent] failed to prepare instanced shader");
         return false;
     }
@@ -711,24 +713,28 @@ bool FoliageLayerComponent::draw_tgfx2(
         context.camera ? static_cast<float>(context.camera->near_clip) : 0.1f,
         context.camera ? static_cast<float>(context.camera->far_clip) : 100.0f);
 
-    ctx2.bind_shader(vs2, fs2);
     ctx2.clear_resource_bindings();
-    ctx2.use_shader_resource_layout(raw_shader);
-    bind_engine_per_frame_uniforms(ctx2, per_frame, raw_shader);
+    ctx2.use_shader_resource_layout(shader_binding.shader);
+
+    MaterialPipelineResourceContext material_resources{};
+    material_resources.per_frame = &per_frame;
+    MaterialPipelineFallbackBindings material_fallback{};
+    material_fallback.material_ubo = TC_MATERIAL_UBO_BINDING_SLOT;
+    material_fallback.material_texture_base = 4;
+    prepare_material_pipeline_resources(
+        ctx2,
+        ctx2.device(),
+        shader_binding.shader,
+        phase,
+        material_resources,
+        material_fallback);
+
     ctx2.bind_uniform_data("foliage_draw", &push, sizeof(push));
     ctx2.bind_storage_buffer(
         "foliage_instances",
         instance_buffer.buffer,
         instance_buffer.offset,
         static_cast<uint32_t>(instances.size() * sizeof(FoliageGpuInstance)));
-    apply_material_phase_ubo_runtime(
-        phase,
-        raw_shader,
-        TC_MATERIAL_UBO_BINDING_SLOT,
-        4,
-        ctx2.device(),
-        ctx2
-    );
     ctx2.set_topology(mesh->draw_mode == TC_DRAW_LINES
         ? tgfx::PrimitiveTopology::LineList
         : tgfx::PrimitiveTopology::TriangleList);
