@@ -1,4 +1,5 @@
 #include "skinned_mesh_renderer.hpp"
+#include <termin/render/shader_binding_policy.hpp>
 #include <termin/render/skeleton_controller.hpp>
 #include <termin/render/shader_skinning.hpp>
 #include <termin/entity/entity.hpp>
@@ -15,6 +16,7 @@
 #include <vector>
 
 extern "C" {
+#include "tgfx/resources/tc_shader.h"
 #include "tgfx/tgfx2_interop.h"
 }
 
@@ -28,7 +30,6 @@ namespace termin {
 static constexpr uint32_t BONE_BLOCK_MAX_BONES = 128;
 static constexpr uint64_t BONE_BLOCK_SIZE =
     BONE_BLOCK_MAX_BONES * 16u * sizeof(float) + 16u;
-static constexpr uint32_t BONE_BLOCK_BINDING = 16;
 
 // Hash for TcShader (uses handle.index)
 struct TcShaderHash {
@@ -45,6 +46,24 @@ struct TcShaderEqual {
 
 // Static cache: original shader -> skinned shader
 static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> s_skinned_shader_cache;
+
+static const tc_shader_resource_binding* find_bone_block_resource(const tc_shader* shader) {
+    if (!shader) {
+        return nullptr;
+    }
+    static constexpr const char* kNames[] = {
+        TC_SHADER_RESOURCE_BONE_BLOCK,
+        "BoneBlock",
+    };
+    for (const char* name : kNames) {
+        const tc_shader_resource_binding* rb =
+            tc_shader_find_resource_binding(shader, name);
+        if (rb && rb->kind == TC_SHADER_RESOURCE_CONSTANT_BUFFER) {
+            return rb;
+        }
+    }
+    return nullptr;
+}
 
 SkinnedMeshRenderer::SkinnedMeshRenderer()
     : MeshRenderer("SkinnedMeshRenderer")
@@ -116,17 +135,27 @@ void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
     std::memcpy(staging.data() + BONE_BLOCK_MAX_BONES * 16u * sizeof(float),
                 &count, sizeof(int32_t));
 
-    // Route BoneBlock through the device ring UBO. One ring shared by
-    // every skinned draw in the frame instead of one VkBuffer per mesh
-    // (see vulkan_ubo_reuse_pitfall for why the per-instance buffer was
-    // needed on the old non-ring path: cmd buffers baked the pointer to
-    // the single UBO at record time, so a shared buffer saw the last
-    // writer's contents). With dynamic descriptor offsets the per-draw
-    // offset is baked into vkCmdBindDescriptorSets and the ring can
-    // safely hold every draw's data side-by-side in one allocation.
-    ctx2.bind_uniform_buffer_ring(BONE_BLOCK_BINDING,
-                                   staging.data(),
-                                   static_cast<uint32_t>(staging.size()));
+    // Route BoneBlock through shader metadata first. Legacy GLSL variants may
+    // still fall back to the historical slot, but layout-only shaders must
+    // declare the draw-scope bone block explicitly.
+    const tc_shader* active_shader = ctx2.active_shader_resource_layout();
+    if (const tc_shader_resource_binding* rb = find_bone_block_resource(active_shader)) {
+        ctx2.bind_uniform_data(rb->name, staging.data(), static_cast<uint32_t>(staging.size()));
+        return;
+    }
+
+    if (shader_uses_layout_only_bindings(active_shader)) {
+        tc::Log::error(
+            "[SkinnedMeshRenderer] shader '%s' has no '%s' resource; cannot bind BoneBlock",
+            active_shader->name ? active_shader->name : active_shader->uuid,
+            TC_SHADER_RESOURCE_BONE_BLOCK);
+        return;
+    }
+
+    ctx2.bind_uniform_buffer_ring(
+        TC_SHADER_RESOURCE_BINDING_BONE_BLOCK,
+        staging.data(),
+        static_cast<uint32_t>(staging.size()));
 }
 
 TcShader SkinnedMeshRenderer::override_shader(

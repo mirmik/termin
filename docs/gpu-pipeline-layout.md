@@ -136,7 +136,7 @@ their shader sources:
 The shader sees the `[16]` arrays as scalar arrays — it reads only the `.x`
 (or `[0]`) component of each 16-byte slot.
 
-### `BoneBlock` (8208 B)
+### `BoneBlock` / `bone_block` (8208 B)
 
 ```
 0      mat4[128]  u_bone_matrices           # 128 * 64 = 8192 B
@@ -147,6 +147,11 @@ The shader sees the `[16]` arrays as scalar arrays — it reads only the `.x`
 `MAX_BONES = 128`. Matrices are column-major (matches the C++ `Mat44f`
 memory layout, so the CPU side writes straight into the UBO without
 transpose).
+
+Runtime binding is name-first. New Slang shaders should declare a draw-scope
+resource named `bone_block`; legacy GLSL skinned variants still declare
+`BoneBlock` at binding 16, and the renderer accepts that name only as a
+compatibility path.
 
 ---
 
@@ -212,7 +217,8 @@ must receive the same data through a small per-draw cbuffer. Reserve
    of doubling up.
 2. **Pick a logical resource name and scope.** Examples: `per_frame` is
    `frame`, shadow resources are `pass`, material properties/textures are
-   `material`, large object constants are `draw`.
+   `material`, large object constants are `draw`, and skinning data is
+   `bone_block` in `draw`.
 3. **For new Slang, do not author backend layout attributes.** Add the resource
    declaration by name, annotate explicit scope with `[[TerminScope("...")]]`
    from the Termin Slang prelude, and let artifact layout metadata carry

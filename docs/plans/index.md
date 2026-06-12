@@ -26,3 +26,4 @@
 - [Slang bind-by-name runtime](2026-06-09-slang-bind-by-name-runtime.md)
 - [Slang scope-first binding migration](2026-06-11-slang-scope-first-binding.md)
 - [Layout-only ColorPass binding migration](2026-06-11-layout-only-color-pass-binding.md)
+- [Material Pipeline Slang migration](2026-06-12-material-pipeline-slang-plan.md)

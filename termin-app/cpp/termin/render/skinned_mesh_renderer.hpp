@@ -22,7 +22,7 @@ class SkeletonController;
  *
  * Extends MeshRenderer with:
  * - skeleton_controller: Reference to SkeletonController for bone matrices
- * - Per-instance std140 UBO (BoneBlock, binding=5) uploaded before drawing
+ * - Per-instance std140 UBO (bone_block/BoneBlock) uploaded before drawing
  * - Skinned shader variant injection via get_skinned_material()
  */
 class SkinnedMeshRenderer : public MeshRenderer {
@@ -62,8 +62,8 @@ public:
     void update_bone_matrices();
 
     /**
-     * tgfx2 path: push u_bone_matrices and u_bone_count onto the
-     * currently-bound ctx2 program right before ctx2->draw().
+     * tgfx2 path: bind bone matrices to the currently-bound shader layout
+     * right before ctx2->draw().
      */
     void upload_per_draw_uniforms_tgfx2(
         tgfx::RenderContext2& ctx2,
