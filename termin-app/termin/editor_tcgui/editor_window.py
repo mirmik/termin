@@ -147,6 +147,7 @@ class EditorWindowTcgui:
         self.gizmo_manager = None
         self._editor_attachment = None
         self._rendering_controller = None
+        self._framegraph_debugger_service = None
         self._editor_viewport_input_managers: list = []
         # Owns DisplayInputRouter instances that route surface events to the
         # per-viewport EditorViewportInputManagers. Populated by
@@ -819,6 +820,19 @@ class EditorWindowTcgui:
     def selected(self):
         return self.selected_entity
 
+    @property
+    def framegraph_debugger(self):
+        if self._framegraph_debugger_service is None:
+            from termin.editor_tcgui.framegraph_debugger_service import (
+                EditorFramegraphDebuggerService,
+            )
+
+            self._framegraph_debugger_service = EditorFramegraphDebuggerService(
+                get_rendering_controller=lambda: self._rendering_controller,
+                on_request_update=self._request_viewport_update,
+            )
+        return self._framegraph_debugger_service
+
     def should_close(self) -> bool:
         return self._should_close
 
@@ -1487,6 +1501,7 @@ class EditorWindowTcgui:
             "current_scene_name": self._editor_scene_name,
             "selected": self.selected_entity,
             "selected_entity": self.selected_entity,
+            "framegraph_debugger": self.framegraph_debugger,
             "scene_manager": self.scene_manager,
             "project_path": self._get_project_path(),
         }

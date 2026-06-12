@@ -109,6 +109,12 @@ def main() -> int:
     screenshot_parser.add_argument("--no-flip-y", action="store_true")
     screenshot_parser.add_argument("--timeout", type=float, default=30.0)
 
+    framegraph_parser = sub.add_parser("framegraph")
+    framegraph_parser.add_argument("--target-index", type=int, default=None)
+    framegraph_parser.add_argument("--include-pass-json", action="store_true")
+    framegraph_parser.add_argument("--include-debugger-pass", action="store_true")
+    framegraph_parser.add_argument("--timeout", type=float, default=30.0)
+
     args = parser.parse_args()
     session = _load_session(args.session)
 
@@ -156,6 +162,22 @@ def main() -> int:
             "tools/call",
             {
                 "name": "capture_editor_screenshot",
+                "arguments": arguments,
+            },
+        )
+    elif args.command == "framegraph":
+        arguments = {
+            "include_pass_json": args.include_pass_json,
+            "include_debugger_pass": args.include_debugger_pass,
+            "timeout": args.timeout,
+        }
+        if args.target_index is not None:
+            arguments["target_index"] = args.target_index
+        response = _call(
+            session,
+            "tools/call",
+            {
+                "name": "inspect_framegraph",
                 "arguments": arguments,
             },
         )

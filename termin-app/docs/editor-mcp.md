@@ -44,6 +44,7 @@ scripts/termin-editor-mcp tools-list
 scripts/termin-editor-mcp exec 'print(project_path)'
 scripts/termin-editor-mcp exec-file /tmp/probe_editor.py
 scripts/termin-editor-mcp screenshot --path /tmp/editor.png
+scripts/termin-editor-mcp framegraph
 ```
 
 The Python namespace contains:
@@ -54,6 +55,7 @@ The Python namespace contains:
 - `current_scene` / `current_scene_name`: aliases for the current editor scene.
 - `scene_manager`: the engine scene manager.
 - `selected` / `selected_entity`: currently selected editor entity or `None`.
+- `framegraph_debugger`: headless framegraph debugger inspection service.
 - `project_path`: current project path or `None`.
 - `rm` / `resource_manager`: `ResourceManager.instance()`.
 - `termin`: the `termin` package.
@@ -73,3 +75,12 @@ accepts:
 - `include_image`: when true, returns the PNG as MCP image content.
 - `flip_y`: flips framebuffer rows vertically before saving. Enabled by default.
 - `timeout`: seconds to wait for the editor thread to complete the capture.
+
+`inspect_framegraph` returns a JSON snapshot from the headless framegraph
+debugger service. It does not require the Framegraph Debugger dialog to be open
+and is intended for automation/debugging. It accepts:
+
+- `target_index`: optional target index from a previous snapshot.
+- `include_pass_json`: include serialized pass data where available.
+- `include_debugger_pass`: include the debugger pass in pass and schedule lists.
+- `timeout`: seconds to wait for the editor thread to inspect the framegraph.
