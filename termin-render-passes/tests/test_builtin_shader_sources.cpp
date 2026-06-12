@@ -392,4 +392,17 @@ TEST_CASE("built-in shader catalog resolves vertex-only variant templates") {
     CHECK(foliage_shadow_vertex.find("StructuredBuffer<FoliageInstance> foliage_instances") != std::string::npos);
     CHECK(foliage_shadow_vertex.find("SV_InstanceID") != std::string::npos);
     CHECK(foliage_shadow_vertex.find("layout(") == std::string::npos);
+
+    std::string tube_vertex =
+        tgfx::load_builtin_shader_stage_source_from_catalog(
+            "termin-engine-world-tube-line", "vertex");
+    REQUIRE(!tube_vertex.empty());
+    CHECK(tube_vertex.find("world_pos : TEXCOORD0") != std::string::npos);
+    CHECK(tube_vertex.find("normal_world : TEXCOORD1") != std::string::npos);
+    CHECK(tube_vertex.find("uv : TEXCOORD2") != std::string::npos);
+    CHECK(tube_vertex.find("tangent_world : TEXCOORD3") != std::string::npos);
+    CHECK(tube_vertex.find("bitangent_world : TEXCOORD4") != std::string::npos);
+    CHECK(tube_vertex.find("tbn_valid : TEXCOORD5") != std::string::npos);
+    CHECK(tube_vertex.find("world_pos : POSITION1") == std::string::npos);
+    CHECK(tube_vertex.find("normal : NORMAL") == std::string::npos);
 }
