@@ -421,6 +421,19 @@ const char* tc_component_get_type_name(const tc_component* c) {
     return tc_component_type_name(c);
 }
 
+const char* tc_component_get_display_name(const tc_component* c) {
+    return (c && c->display_name) ? c->display_name : "";
+}
+
+void tc_component_set_display_name(tc_component* c, const char* display_name) {
+    if (!c) return;
+    if (!display_name || display_name[0] == '\0') {
+        c->display_name = NULL;
+        return;
+    }
+    c->display_name = tgfx_intern_string(display_name);
+}
+
 bool tc_component_get_enabled(const tc_component* c) {
     return c ? c->enabled : false;
 }

@@ -90,6 +90,9 @@ public:
 
 public:
     // Accessors for tc_component flags
+    std::string display_name() const { return tc_component_get_display_name(&_c); }
+    void set_display_name(const std::string& v) { tc_component_set_display_name(&_c, v.c_str()); }
+
     bool enabled() const { return _c.enabled; }
     void set_enabled(bool v) { _c.enabled = v; }
 
@@ -135,14 +138,33 @@ public:
 
     // Serialization - uses C API tc_inspect for INSPECT_FIELD properties.
     virtual tc_value serialize_data() const {
-        return tc_inspect_serialize(
+        tc_value data = tc_inspect_serialize(
             const_cast<void*>(static_cast<const void*>(this)),
             type_name()
         );
+        const char* name = tc_component_get_display_name(&_c);
+        if (data.type == TC_VALUE_DICT && name && name[0] && !tc_value_dict_has(&data, "display_name")) {
+            tc_value_dict_set(&data, "display_name", tc_value_string(name));
+        }
+        return data;
     }
 
     virtual void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) {
         if (!data) return;
+        if (data->type == TC_VALUE_DICT) {
+            tc_value* display_name = tc_value_dict_get(const_cast<tc_value*>(data), "display_name");
+            if (display_name && display_name->type == TC_VALUE_STRING) {
+                tc_component_set_display_name(&_c, display_name->data.s);
+            }
+            tc_value* enabled = tc_value_dict_get(const_cast<tc_value*>(data), "enabled");
+            if (enabled && enabled->type == TC_VALUE_BOOL) {
+                _c.enabled = enabled->data.b;
+            }
+            tc_value* active_in_editor = tc_value_dict_get(const_cast<tc_value*>(data), "active_in_editor");
+            if (active_in_editor && active_in_editor->type == TC_VALUE_BOOL) {
+                _c.active_in_editor = active_in_editor->data.b;
+            }
+        }
         tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
         tc_inspect_deserialize(
             static_cast<void*>(this),

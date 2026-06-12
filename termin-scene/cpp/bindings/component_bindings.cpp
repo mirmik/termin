@@ -35,6 +35,7 @@ void bind_cxx_component(nb::module_& m) {
         .def("on_scene_inactive", &CxxComponent::on_scene_inactive)
         .def("on_scene_active", &CxxComponent::on_scene_active)
         .def("type_name", &CxxComponent::type_name)
+        .def_prop_rw("display_name", &CxxComponent::display_name, &CxxComponent::set_display_name)
         .def_prop_rw("enabled", &CxxComponent::enabled, &CxxComponent::set_enabled)
         .def_prop_rw("active_in_editor", &CxxComponent::active_in_editor, &CxxComponent::set_active_in_editor)
         .def_prop_ro("started", &CxxComponent::started)

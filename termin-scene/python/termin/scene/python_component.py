@@ -30,6 +30,7 @@ class PythonComponent:
             path="display_name",
             label="Name",
             kind="string",
+            is_serializable=False,
             is_inspectable=False,
         ),
         "enabled": InspectField(path="enabled", label="Enabled", kind="bool"),
@@ -39,12 +40,11 @@ class PythonComponent:
     is_input_handler: bool = False
 
     def __init__(self, enabled: bool = True, display_name: str = ""):
-        self.display_name = display_name
-
         # Create TcComponent wrapper
         type_name = type(self).__name__
         self._tc = TcComponent(self, type_name)
         self._tc.enabled = enabled
+        self._tc.display_name = display_name
 
         # Auto-detect if update/fixed_update are overridden
         cls = type(self)
@@ -105,6 +105,14 @@ class PythonComponent:
     @active_in_editor.setter
     def active_in_editor(self, value: bool) -> None:
         self._tc.active_in_editor = value
+
+    @property
+    def display_name(self) -> str:
+        return self._tc.display_name
+
+    @display_name.setter
+    def display_name(self, value: str) -> None:
+        self._tc.display_name = value
 
     @property
     def is_python_component(self) -> bool:
@@ -244,12 +252,18 @@ class PythonComponent:
     def serialize_data(self) -> Dict[str, Any]:
         """Serialize component data using InspectRegistry."""
         from termin.inspect import InspectRegistry
-        return InspectRegistry.instance().serialize_all(self)
+        data = InspectRegistry.instance().serialize_all(self)
+        if self.display_name:
+            data["display_name"] = self.display_name
+        return data
 
     def deserialize_data(self, data: Dict[str, Any], context: Any = None) -> None:
         """Deserialize component data using InspectRegistry."""
         if not data:
             return
+        display_name = data.get("display_name")
+        if display_name is not None:
+            self.display_name = str(display_name)
         from termin.inspect import InspectRegistry
         InspectRegistry.instance().deserialize_all(self, data)
 

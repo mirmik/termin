@@ -11,6 +11,7 @@
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
 
+#include <utility>
 #include <tcbase/tc_log.hpp>
 
 #include "../camera/orbit_camera_bindings.hpp"
@@ -132,7 +133,24 @@ void bind_entity_domain(nb::module_& m) {
             return nb::make_tuple(py_old_by_uuid, py_old_by_pick_id);
         }, nb::arg("new_by_uuid"), nb::arg("new_by_pick_id"));
 
-    // Register CxxComponent::enabled in InspectRegistry
+    // Register CxxComponent base fields in InspectRegistry.
+    tc::InspectFieldInfo display_name_field;
+    display_name_field.type_name = "Component";
+    display_name_field.path = "display_name";
+    display_name_field.label = "Name";
+    display_name_field.kind = "string";
+    display_name_field.is_serializable = false;
+    display_name_field.is_inspectable = true;
+    display_name_field.getter = [](void* obj) -> tc_value {
+        return tc_value_string(static_cast<CxxComponent*>(obj)->display_name().c_str());
+    };
+    display_name_field.setter = [](void* obj, tc_value value, void*) {
+        if (value.type == TC_VALUE_STRING) {
+            static_cast<CxxComponent*>(obj)->set_display_name(value.data.s ? value.data.s : "");
+        }
+    };
+    tc::InspectRegistry::instance().add_field_with_choices("Component", std::move(display_name_field));
+
     tc::InspectRegistry::instance().add_with_accessors<CxxComponent, bool>(
         "Component", "enabled", "Enabled", "bool",
         [](CxxComponent* c) { return c->enabled(); },

@@ -107,6 +107,7 @@ struct tc_component {
     const char* declared_type_name;
 
     // Flags
+    const char* display_name;
     bool enabled;
     bool active_in_editor;
     bool _started;
@@ -151,6 +152,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->native_language = TC_LANGUAGE_CXX;
     c->body = NULL;
     c->declared_type_name = NULL;
+    c->display_name = NULL;
     c->enabled = true;
     c->active_in_editor = false;
     c->_started = false;
@@ -394,6 +396,8 @@ static inline bool tc_component_is_language(tc_component* c, tc_language lang) {
 // ============================================================================
 
 TC_API const char* tc_component_get_type_name(const tc_component* c);
+TC_API const char* tc_component_get_display_name(const tc_component* c);
+TC_API void tc_component_set_display_name(tc_component* c, const char* display_name);
 TC_API bool tc_component_get_enabled(const tc_component* c);
 TC_API void tc_component_set_enabled(tc_component* c, bool enabled);
 TC_API bool tc_component_get_active_in_editor(const tc_component* c);

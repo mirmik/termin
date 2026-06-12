@@ -39,6 +39,14 @@ public:
     bool active_in_editor() const { return _c ? _c->active_in_editor : false; }
     void set_active_in_editor(bool v) { if (_c) _c->active_in_editor = v; }
 
+    std::string display_name() const {
+        return _c ? tc_component_get_display_name(_c) : "";
+    }
+
+    void set_display_name(const std::string& v) {
+        if (_c) tc_component_set_display_name(_c, v.c_str());
+    }
+
     bool is_drawable() const { return tc_component_is_drawable(_c); }
     bool is_input_handler() const { return tc_component_is_input_handler(_c); }
 
@@ -60,6 +68,7 @@ public:
             CxxComponent* cxx = CxxComponent::from_tc(_c);
             if (!cxx) return nos::trent();
             tc_value v = cxx->serialize_data();
+            write_base_fields_to_data(&v, _c);
             nos::trent result = tc::tc_value_to_trent(v);
             tc_value_free(&v);
             return result;
@@ -67,6 +76,7 @@ public:
             void* obj_ptr = _c->body;
             if (!obj_ptr) return nos::trent();
             tc_value v = tc_inspect_serialize(obj_ptr, tc_component_type_name(_c));
+            write_base_fields_to_data(&v, _c);
             nos::trent result = tc::tc_value_to_trent(v);
             tc_value_free(&v);
             return result;
@@ -114,6 +124,7 @@ public:
             CxxComponent* cxx = CxxComponent::from_tc(_c);
             if (!cxx) return;
             tc_value v = tc::trent_to_tc_value(data);
+            read_base_fields_from_data(_c, &v);
             cxx->deserialize_data(&v, scene);
             tc_value_free(&v);
             return;
@@ -121,6 +132,7 @@ public:
             void* obj_ptr = _c->body;
             if (!obj_ptr) return;
             tc_value v = tc::trent_to_tc_value(data);
+            read_base_fields_from_data(_c, &v);
             tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
             tc_inspect_deserialize(obj_ptr, tc_component_type_name(_c), &v, &inspect_ctx);
             tc_value_free(&v);
@@ -130,6 +142,35 @@ public:
     // Comparison
     bool operator==(const TcComponentRef& other) const { return _c == other._c; }
     bool operator!=(const TcComponentRef& other) const { return _c != other._c; }
+
+private:
+    static void write_base_fields_to_data(tc_value* data, const tc_component* component) {
+        if (!data || data->type != TC_VALUE_DICT || !component) return;
+
+        const char* name = tc_component_get_display_name(component);
+        if (name && name[0] && !tc_value_dict_has(data, "display_name")) {
+            tc_value_dict_set(data, "display_name", tc_value_string(name));
+        }
+    }
+
+    static void read_base_fields_from_data(tc_component* component, const tc_value* data) {
+        if (!component || !data || data->type != TC_VALUE_DICT) return;
+
+        tc_value* display_name = tc_value_dict_get(const_cast<tc_value*>(data), "display_name");
+        if (display_name && display_name->type == TC_VALUE_STRING) {
+            tc_component_set_display_name(component, display_name->data.s);
+        }
+
+        tc_value* enabled = tc_value_dict_get(const_cast<tc_value*>(data), "enabled");
+        if (enabled && enabled->type == TC_VALUE_BOOL) {
+            component->enabled = enabled->data.b;
+        }
+
+        tc_value* active_in_editor = tc_value_dict_get(const_cast<tc_value*>(data), "active_in_editor");
+        if (active_in_editor && active_in_editor->type == TC_VALUE_BOOL) {
+            component->active_in_editor = active_in_editor->data.b;
+        }
+    }
 };
 
 } // namespace termin
