@@ -10,6 +10,13 @@ def _load_depth_shader() -> TcShader:
     shader = TcShader.from_builtin_catalog(DEPTH_SHADER_UUID)
     if not shader.is_valid:
         raise RuntimeError(f"Failed to load built-in shader '{DEPTH_SHADER_UUID}'")
+    shader.set_material_ubo_layout(
+        [
+            ("u_near", "Float", 0, 4),
+            ("u_far", "Float", 4, 4),
+        ],
+        16,
+    )
     return shader
 
 
