@@ -7,7 +7,9 @@ Usage:
 Defaults:
     threshold  2000
     dir        project root
-    exclude    .git, node_modules, __pycache__, .venv, build, dist, thirdparty, termin-thirdparty
+    exclude    .git, node_modules, __pycache__, .venv, build, dist,
+               thirdparty, termin-thirdparty, sdk,
+               termin-csharp/Termin.Native/Generated
 """
 
 import argparse
@@ -26,6 +28,8 @@ DEFAULT_EXCLUDES = (
     "dist",
     "thirdparty",
     "termin-thirdparty",
+    "sdk",
+    "termin-csharp/Termin.Native/Generated",
 )
 
 
@@ -43,8 +47,19 @@ def count_lines(path: Path) -> int:
         return 0
 
 
-def should_skip(dirname: str, excludes: tuple) -> bool:
-    return dirname in excludes or dirname.endswith(".pyc")
+def normalize_exclude(value: str) -> str:
+    return value.replace("\\", "/").strip("/")
+
+
+def should_skip_dir(dirname: str, rel_dir: str, excludes: tuple[str, ...]) -> bool:
+    if dirname.endswith(".pyc"):
+        return True
+    for exclude in excludes:
+        if dirname == exclude or rel_dir == exclude:
+            return True
+        if "/" in exclude and rel_dir.startswith(exclude + "/"):
+            return True
+    return False
 
 
 def main() -> None:
@@ -76,16 +91,22 @@ def main() -> None:
         print(f"Error: {root} is not a directory", file=sys.stderr)
         sys.exit(1)
 
-    excludes = tuple(args.exclude)
+    excludes = tuple(normalize_exclude(value) for value in args.exclude)
     results: list[tuple[Path, int]] = []
 
     for dirpath, dirnames, filenames in os.walk(root):
         # Prune excluded directories in-place
-        dirnames[:] = [d for d in dirnames if not should_skip(d, excludes)]
+        kept_dirnames = []
+        for dirname in dirnames:
+            full_dir = Path(dirpath) / dirname
+            rel_dir = full_dir.relative_to(root).as_posix()
+            if not should_skip_dir(dirname, rel_dir, excludes):
+                kept_dirnames.append(dirname)
+        dirnames[:] = kept_dirnames
 
         for fname in filenames:
             fpath = Path(dirpath) / fname
-            if fpath.suffix in (".pyc", ".png"):
+            if fpath.suffix in (".pyc", ".png", ".so"):
                 continue
             lines = count_lines(fpath)
             if lines >= args.threshold:
