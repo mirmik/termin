@@ -2,6 +2,7 @@
 
 #include <termin/camera/camera_component.hpp>
 #include <termin/camera/render_camera_utils.hpp>
+#include <termin/render/material_pipeline.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -17,6 +18,7 @@
 #include <tcbase/tc_log.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
@@ -165,24 +167,15 @@ void DepthPass::execute_with_data_tgfx2(
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
 
-    tgfx::ShaderHandle depth_vs2, depth_fs2;
-    tc_shader* depth_raw = nullptr;
-    {
-        depth_raw = tc_shader_get(depth_shader_handle_);
-        if (!depth_raw) {
-            tc::Log::error("DepthPass: depth_shader_handle_ stale (index=%u gen=%u)",
-                           depth_shader_handle_.index,
-                           depth_shader_handle_.generation);
-            return;
-        }
-        if (!tc_shader_ensure_tgfx2(depth_raw, &device, &depth_vs2, &depth_fs2)) {
-            tc::Log::error("DepthPass: tc_shader_ensure_tgfx2 failed for '%s'",
-                           depth_raw->name ? depth_raw->name : depth_raw->uuid);
-            return;
-        }
+    MaterialPipelineShaderBinding depth_shader{};
+    if (!ensure_material_pipeline_shader(
+            *ctx.ctx2,
+            device,
+            depth_shader_handle_,
+            "DepthPass",
+            depth_shader)) {
+        return;
     }
-    ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
-    ctx.ctx2->use_shader_resource_layout(depth_raw);
 
     // PerFrame UBO — uploaded ONCE per execute. view + projection +
     // near/far plane. Bound by shader resource name so Slang scope metadata
@@ -193,7 +186,19 @@ void DepthPass::execute_with_data_tgfx2(
     per_frame.u_near = near_plane;
     per_frame.u_far = far_plane;
     per_frame.u_depth_encoding = depth_encoding_mode(depth_encoding);
-    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+    std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
+        {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+    }};
+    MaterialPipelineResourceContext depth_resources{};
+    depth_resources.uniforms = per_frame_uniforms;
+    MaterialPipelineFallbackBindings depth_fallback{};
+    prepare_material_pipeline_resources(
+        *ctx.ctx2,
+        device,
+        depth_shader.shader,
+        nullptr,
+        depth_resources,
+        depth_fallback);
 
     const std::string& debug_symbol = get_debug_internal_point();
 
@@ -230,17 +235,22 @@ void DepthPass::execute_with_data_tgfx2(
         } else {
             // Skinning variant: compile via bridge, bind, upload BoneBlock
             // UBO from SkinnedMeshRenderer, draw.
-            tc_shader* raw = tc_shader_get(dc.final_shader);
-            if (!raw) {
+            MaterialPipelineShaderBinding skinned_shader{};
+            if (!ensure_material_pipeline_shader(
+                    *ctx.ctx2,
+                    device,
+                    dc.final_shader,
+                    "DepthPass/skinned",
+                    skinned_shader)) {
                 continue;
             }
-            tgfx::ShaderHandle vs2, fs2;
-            if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
-                continue;
-            }
-            ctx.ctx2->bind_shader(vs2, fs2);
-            ctx.ctx2->use_shader_resource_layout(raw);
-            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                skinned_shader.shader,
+                nullptr,
+                depth_resources,
+                depth_fallback);
             // Skinned depth VS uses a_position (0), a_normal (1),
             // a_joints (3), a_weights (4). a_texcoord (2) stays unused.
 
@@ -248,9 +258,15 @@ void DepthPass::execute_with_data_tgfx2(
 
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
-            ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
-            ctx.ctx2->use_shader_resource_layout(depth_raw);
-            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+            ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
+            ctx.ctx2->use_shader_resource_layout(depth_shader.shader);
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                depth_shader.shader,
+                nullptr,
+                depth_resources,
+                depth_fallback);
         }
     }
 
@@ -477,31 +493,34 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
 
-    tgfx::ShaderHandle depth_vs2, depth_fs2;
-    tc_shader* depth_raw = nullptr;
-    {
-        depth_raw = tc_shader_get(depth_shader_handle_);
-        if (!depth_raw) {
-            tc::Log::error("DepthOnlyPass: depth_shader_handle_ stale (index=%u gen=%u)",
-                           depth_shader_handle_.index,
-                           depth_shader_handle_.generation);
-            return;
-        }
-        if (!tc_shader_ensure_tgfx2(depth_raw, &device, &depth_vs2, &depth_fs2)) {
-            tc::Log::error("DepthOnlyPass: tc_shader_ensure_tgfx2 failed for '%s'",
-                           depth_raw->name ? depth_raw->name : depth_raw->uuid);
-            return;
-        }
+    MaterialPipelineShaderBinding depth_shader{};
+    if (!ensure_material_pipeline_shader(
+            *ctx.ctx2,
+            device,
+            depth_shader_handle_,
+            "DepthOnlyPass",
+            depth_shader)) {
+        return;
     }
-    ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
-    ctx.ctx2->use_shader_resource_layout(depth_raw);
 
     DepthPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     per_frame.u_near = near_plane;
     per_frame.u_far = far_plane;
-    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+    std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
+        {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+    }};
+    MaterialPipelineResourceContext depth_resources{};
+    depth_resources.uniforms = per_frame_uniforms;
+    MaterialPipelineFallbackBindings depth_fallback{};
+    prepare_material_pipeline_resources(
+        *ctx.ctx2,
+        device,
+        depth_shader.shader,
+        nullptr,
+        depth_resources,
+        depth_fallback);
 
     for (const auto& dc : cached_draw_calls_) {
         Drawable* drawable = nullptr;
@@ -530,25 +549,36 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         if (override_is_base) {
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
         } else {
-            tc_shader* raw = tc_shader_get(dc.final_shader);
-            if (!raw) {
+            MaterialPipelineShaderBinding skinned_shader{};
+            if (!ensure_material_pipeline_shader(
+                    *ctx.ctx2,
+                    device,
+                    dc.final_shader,
+                    "DepthOnlyPass/skinned",
+                    skinned_shader)) {
                 continue;
             }
-            tgfx::ShaderHandle vs2, fs2;
-            if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
-                continue;
-            }
-            ctx.ctx2->bind_shader(vs2, fs2);
-            ctx.ctx2->use_shader_resource_layout(raw);
-            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                skinned_shader.shader,
+                nullptr,
+                depth_resources,
+                depth_fallback);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
-            ctx.ctx2->bind_shader(depth_vs2, depth_fs2);
-            ctx.ctx2->use_shader_resource_layout(depth_raw);
-            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+            ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
+            ctx.ctx2->use_shader_resource_layout(depth_shader.shader);
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                depth_shader.shader,
+                nullptr,
+                depth_resources,
+                depth_fallback);
         }
     }
 

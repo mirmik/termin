@@ -818,13 +818,19 @@ void ColorPass::execute_with_data(
             ++draw_index;
             continue;
         }
-        tgfx::ShaderHandle vs2, fs2;
-        if (!tc_shader_ensure_tgfx2(raw_shader, &device, &vs2, &fs2)) {
-            tc::Log::error("[ColorPass/tgfx2] tc_shader_ensure_tgfx2 failed for shader '%s'",
-                           raw_shader->name ? raw_shader->name : raw_shader->uuid);
+        MaterialPipelineShaderBinding shader_binding;
+        if (!ensure_material_pipeline_shader(
+                *ctx2,
+                device,
+                final_shader,
+                "ColorPass",
+                shader_binding)) {
             ++draw_index;
             continue;
         }
+        tgfx::ShaderHandle vs2 = shader_binding.vertex;
+        tgfx::ShaderHandle fs2 = shader_binding.fragment;
+        raw_shader = shader_binding.shader;
         tc_shader_handle ensured_shader = final_shader;
 
         // Every material draw owns its descriptor set. Material textures are
@@ -849,13 +855,18 @@ void ColorPass::execute_with_data(
                 ++draw_index;
                 continue;
             }
-            if (!tc_shader_ensure_tgfx2(raw_shader, &device, &vs2, &fs2)) {
-                tc::Log::error("[ColorPass/tgfx2] tc_shader_ensure_tgfx2 failed for refreshed shader '%s'",
-                               raw_shader->name ? raw_shader->name : raw_shader->uuid);
+            if (!ensure_material_pipeline_shader(
+                    *ctx2,
+                    device,
+                    final_shader,
+                    "ColorPass/refreshed",
+                    shader_binding)) {
                 ++draw_index;
                 continue;
             }
-            ctx2->use_shader_resource_layout(raw_shader);
+            raw_shader = shader_binding.shader;
+            vs2 = shader_binding.vertex;
+            fs2 = shader_binding.fragment;
             ensured_shader = final_shader;
         }
 

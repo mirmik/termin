@@ -4,6 +4,7 @@
 #include "termin/camera/camera_component.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
+#include "termin/render/material_pipeline.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -21,6 +22,7 @@ extern "C" {
 
 #include <cmath>
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <set>
@@ -419,26 +421,16 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             // Fetch cached VkShaderModule handles from the tc_shader slot.
             // First call on a fresh device compiles via shaderc; every
             // subsequent ShadowPass lifetime hits the slot cache.
-            tgfx::ShaderHandle shadow_vs2, shadow_fs2;
-            tc_shader* shadow_raw = nullptr;
-            {
-                shadow_raw = tc_shader_get(shadow_shader_handle_);
-                if (!shadow_raw) {
-                    tc::Log::error("ShadowPass: shadow_shader_handle_ stale (index=%u gen=%u)",
-                                   shadow_shader_handle_.index,
-                                   shadow_shader_handle_.generation);
-                    end_shadow_pass();
-                    continue;
-                }
-                if (!tc_shader_ensure_tgfx2(shadow_raw, &device, &shadow_vs2, &shadow_fs2)) {
-                    tc::Log::error("ShadowPass: tc_shader_ensure_tgfx2 failed for '%s'",
-                                   shadow_raw->name ? shadow_raw->name : shadow_raw->uuid);
-                    end_shadow_pass();
-                    continue;
-                }
+            MaterialPipelineShaderBinding shadow_shader{};
+            if (!ensure_material_pipeline_shader(
+                    *ctx.ctx2,
+                    device,
+                    shadow_shader_handle_,
+                    "ShadowPass",
+                    shadow_shader)) {
+                end_shadow_pass();
+                continue;
             }
-            ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
-            ctx.ctx2->use_shader_resource_layout(shadow_raw);
 
             // PerFrame UBO through the ring: a fresh offset per cascade,
             // so the per-cascade matrices survive into draw-execute time
@@ -448,7 +440,19 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ShadowPerFrameStd140 per_frame{};
             std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
             std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
-            ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+            std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
+                {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+            }};
+            MaterialPipelineResourceContext shadow_resources{};
+            shadow_resources.uniforms = per_frame_uniforms;
+            MaterialPipelineFallbackBindings shadow_fallback{};
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                shadow_shader.shader,
+                nullptr,
+                shadow_resources,
+                shadow_fallback);
 
             if (cached_draw_calls_.empty()) {
                 end_shadow_pass();
@@ -493,9 +497,15 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     drawable->draw_tgfx2(
                         *ctx.ctx2, direct_context, "shadow", phase, dc.geometry_id);
                     restore_shadow_raster_state();
-                    ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
-                    ctx.ctx2->use_shader_resource_layout(shadow_raw);
-                    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+                    ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
+                    ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
+                    prepare_material_pipeline_resources(
+                        *ctx.ctx2,
+                        device,
+                        shadow_shader.shader,
+                        nullptr,
+                        shadow_resources,
+                        shadow_fallback);
                     continue;
                 }
 
@@ -509,9 +519,21 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 // caster's projected XY footprint stays stable.
                 ShadowPushStd140 push{};
                 std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-                ctx.ctx2->bind_uniform_data("shadow_draw", &push, sizeof(push));
+                std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
+                    {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+                    {"shadow_draw", &push, static_cast<uint32_t>(sizeof(push))},
+                }};
+                MaterialPipelineResourceContext draw_resources{};
+                draw_resources.uniforms = draw_uniforms;
 
                 if (override_is_base) {
+                    prepare_material_pipeline_resources(
+                        *ctx.ctx2,
+                        device,
+                        shadow_shader.shader,
+                        nullptr,
+                        draw_resources,
+                        shadow_fallback);
                     // Non-skinned fast path. Shadow VS only reads
                     // a_position — filter unused attrs so Vulkan doesn't
                     // complain about loc 1/2/3 per pipeline creation.
@@ -520,17 +542,22 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // Skinning variant: compile via bridge, bind, upload
                     // BoneBlock UBO (SkinnedMeshRenderer takes care of
                     // that in upload_per_draw_uniforms_tgfx2), draw.
-                    tc_shader* raw = tc_shader_get(dc.final_shader);
-                    if (!raw) {
+                    MaterialPipelineShaderBinding skinned_shader{};
+                    if (!ensure_material_pipeline_shader(
+                            *ctx.ctx2,
+                            device,
+                            dc.final_shader,
+                            "ShadowPass/skinned",
+                            skinned_shader)) {
                         continue;
                     }
-                    tgfx::ShaderHandle vs2, fs2;
-                    if (!tc_shader_ensure_tgfx2(raw, &device, &vs2, &fs2)) {
-                        continue;
-                    }
-                    ctx.ctx2->bind_shader(vs2, fs2);
-                    ctx.ctx2->use_shader_resource_layout(raw);
-                    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+                    prepare_material_pipeline_resources(
+                        *ctx.ctx2,
+                        device,
+                        skinned_shader.shader,
+                        nullptr,
+                        draw_resources,
+                        shadow_fallback);
 
                     drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
@@ -540,9 +567,15 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // Next mesh-backed draw must re-bind the base shadow
                     // shader; skinning variant left its own program bound.
                     last_shader = dc.final_shader;
-                    ctx.ctx2->bind_shader(shadow_vs2, shadow_fs2);
-                    ctx.ctx2->use_shader_resource_layout(shadow_raw);
-                    ctx.ctx2->bind_uniform_data("per_frame", &per_frame, sizeof(per_frame));
+                    ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
+                    ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
+                    prepare_material_pipeline_resources(
+                        *ctx.ctx2,
+                        device,
+                        shadow_shader.shader,
+                        nullptr,
+                        shadow_resources,
+                        shadow_fallback);
                 }
             }
             (void)last_shader;

@@ -19,8 +19,21 @@ class RenderContext2;
 
 namespace termin {
 
+struct MaterialPipelineShaderBinding {
+    tc_shader* shader = nullptr;
+    tgfx::ShaderHandle vertex;
+    tgfx::ShaderHandle fragment;
+};
+
+struct MaterialPipelineUniformData {
+    const char* name = nullptr;
+    const void* data = nullptr;
+    uint32_t size = 0;
+};
+
 struct MaterialPipelineResourceContext {
     const EnginePerFrameStd140* per_frame = nullptr;
+    std::span<const MaterialPipelineUniformData> uniforms;
     const void* shadow_block = nullptr;
     uint32_t shadow_block_size = 0;
     tgfx::BufferHandle lighting_ubo;
@@ -36,6 +49,13 @@ struct MaterialPipelineFallbackBindings {
     uint32_t shadow_map_base = 0;
     size_t max_shadow_maps = 0;
 };
+
+bool ensure_material_pipeline_shader(
+    tgfx::RenderContext2& ctx,
+    tgfx::IRenderDevice& device,
+    tc_shader_handle shader_handle,
+    const char* debug_context,
+    MaterialPipelineShaderBinding& out);
 
 bool prepare_material_pipeline_resources(
     tgfx::RenderContext2& ctx,

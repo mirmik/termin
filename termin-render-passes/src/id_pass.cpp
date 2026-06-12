@@ -3,6 +3,7 @@
 
 #include <termin/render/id_pass.hpp>
 #include "termin/camera/render_camera_utils.hpp"
+#include "termin/render/material_pipeline.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
@@ -13,6 +14,7 @@
 #include "tgfx2/tc_shader_bridge.hpp"
 
 #include <cstdlib>
+#include <array>
 #include <cstring>
 #include <optional>
 #include <span>
@@ -133,37 +135,41 @@ void IdPass::execute_with_data_tgfx2(
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::Back);
 
-    tgfx::ShaderHandle id_vs2, id_fs2;
-    tc_shader* id_raw = nullptr;
-    {
-        id_raw = tc_shader_get(id_shader_handle_);
-        if (!id_raw) {
-            tc::Log::error("IdPass: id_shader_handle_ stale (index=%u gen=%u)",
-                           id_shader_handle_.index, id_shader_handle_.generation);
-            return;
-        }
-        if (!tc_shader_ensure_tgfx2(id_raw, &device, &id_vs2, &id_fs2)) {
-            tc::Log::error("IdPass: tc_shader_ensure_tgfx2 failed for '%s'",
-                           id_raw->name ? id_raw->name : id_raw->uuid);
-            return;
-        }
+    MaterialPipelineShaderBinding id_shader{};
+    if (!ensure_material_pipeline_shader(
+            *ctx.ctx2,
+            device,
+            id_shader_handle_,
+            "IdPass",
+            id_shader)) {
+        return;
     }
-    ctx.ctx2->bind_shader(id_vs2, id_fs2);
-    ctx.ctx2->use_shader_resource_layout(id_raw);
 
     // PerFrame UBO: view + projection, one write per pass via the ring.
     IdPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
-    ctx.ctx2->bind_uniform_data("u_per_frame", &per_frame, sizeof(per_frame));
+    std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
+        {"u_per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+    }};
+    MaterialPipelineResourceContext id_resources{};
+    id_resources.uniforms = per_frame_uniforms;
+    MaterialPipelineFallbackBindings id_fallback{};
+    prepare_material_pipeline_resources(
+        *ctx.ctx2,
+        device,
+        id_shader.shader,
+        nullptr,
+        id_resources,
+        id_fallback);
 
     auto restore_id_raster_state = [&]() {
         ctx.ctx2->set_depth_test(true);
         ctx.ctx2->set_depth_write(true);
         ctx.ctx2->set_blend(false);
         ctx.ctx2->set_cull(tgfx::CullMode::Back);
-        ctx.ctx2->bind_shader(id_vs2, id_fs2);
-        ctx.ctx2->use_shader_resource_layout(id_raw);
+        ctx.ctx2->bind_shader(id_shader.vertex, id_shader.fragment);
+        ctx.ctx2->use_shader_resource_layout(id_shader.shader);
     };
 
     const std::string& debug_symbol = get_debug_internal_point();
@@ -212,7 +218,13 @@ void IdPass::execute_with_data_tgfx2(
             drawable->draw_tgfx2(*ctx.ctx2, direct_context, phase_name(), nullptr, dc.geometry_id);
             restore_id_raster_state();
             ctx.ctx2->clear_resource_bindings();
-            ctx.ctx2->bind_uniform_data("u_per_frame", &per_frame, sizeof(per_frame));
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                id_shader.shader,
+                nullptr,
+                id_resources,
+                id_fallback);
             continue;
         }
 
@@ -231,30 +243,54 @@ void IdPass::execute_with_data_tgfx2(
         push.u_pickColor[2] = pick_b;
         push.u_pickColor[3] = 1.0f;
 
-        ctx.ctx2->bind_uniform_data("u_push", &push, sizeof(push));
+        std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
+            {"u_per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+            {"u_push", &push, static_cast<uint32_t>(sizeof(push))},
+        }};
+        MaterialPipelineResourceContext draw_resources{};
+        draw_resources.uniforms = draw_uniforms;
 
         if (override_is_base) {
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                id_shader.shader,
+                nullptr,
+                draw_resources,
+                id_fallback);
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
         } else {
-            tc_shader* skinned_raw = tc_shader_get(dc.final_shader);
-            if (!skinned_raw) {
+            MaterialPipelineShaderBinding skinned_shader{};
+            if (!ensure_material_pipeline_shader(
+                    *ctx.ctx2,
+                    device,
+                    dc.final_shader,
+                    "IdPass/skinned",
+                    skinned_shader)) {
                 continue;
             }
-            tgfx::ShaderHandle vs2, fs2;
-            if (!tc_shader_ensure_tgfx2(skinned_raw, &device, &vs2, &fs2)) {
-                continue;
-            }
-            ctx.ctx2->bind_shader(vs2, fs2);
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                skinned_shader.shader,
+                nullptr,
+                draw_resources,
+                id_fallback);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1, 6, 7});
 
-            ctx.ctx2->bind_shader(id_vs2, id_fs2);
-            ctx.ctx2->use_shader_resource_layout(id_raw);
+            ctx.ctx2->bind_shader(id_shader.vertex, id_shader.fragment);
+            ctx.ctx2->use_shader_resource_layout(id_shader.shader);
             ctx.ctx2->clear_resource_bindings();
-            ctx.ctx2->bind_uniform_data("u_per_frame", &per_frame, sizeof(per_frame));
-            ctx.ctx2->bind_uniform_data("u_push", &push, sizeof(push));
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                id_shader.shader,
+                nullptr,
+                draw_resources,
+                id_fallback);
         }
     }
 
