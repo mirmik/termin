@@ -262,6 +262,10 @@ TcMaterial LineRenderer::default_material() {
     }
     phase->state = state;
     tc_material_phase_set_color(phase, 1.0f, 1.0f, 1.0f, 1.0f);
+    {
+        const float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        tc_material_phase_set_uniform(phase, "u_color", TC_UNIFORM_VEC4, color);
+    }
 
     tc_material_phase* shadow_phase = mat.add_phase(shader_handle, "shadow", 0);
     if (!shadow_phase) {
@@ -270,6 +274,10 @@ TcMaterial LineRenderer::default_material() {
     }
     shadow_phase->state = state;
     tc_material_phase_set_color(shadow_phase, 1.0f, 1.0f, 1.0f, 1.0f);
+    {
+        const float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        tc_material_phase_set_uniform(shadow_phase, "u_color", TC_UNIFORM_VEC4, color);
+    }
     return mat;
 }
 
